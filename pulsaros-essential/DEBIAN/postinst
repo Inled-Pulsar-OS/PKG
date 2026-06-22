@@ -1,0 +1,35 @@
+#!/bin/bash
+set -e
+
+echo "🛠️ Configurando utilidades y red de Pulsar OS..."
+
+# Habilitar globalmente el servicio de fildem mediante systemd para todos los usuarios
+if [ -d "/usr/lib/systemd/user" ]; then
+    echo "Configurando Fildem HUD Systemd Service..."
+    mkdir -p /usr/lib/systemd/user/default.target.wants
+    ln -sf "/usr/lib/systemd/user/fildem.service" "/usr/lib/systemd/user/default.target.wants/fildem.service"
+fi
+
+# Configurar variable de entorno global para GTK_MODULES si no está en /etc/environment
+if [ -f "/etc/environment" ]; then
+    if ! grep -q "GTK_MODULES" /etc/environment; then
+        echo "GTK_MODULES=appmenu-gtk-module" >> /etc/environment
+    fi
+fi
+
+# Configuración de locales si locales está instalado
+if command -v locale-gen >/dev/null; then
+    echo "Configurando idiomas y locales regionales..."
+    # Asegurar es_ES y en_US
+    if [ -f "/etc/locale.gen" ]; then
+        sed -i 's/# es_ES.UTF-8 UTF-8/es_ES.UTF-8 UTF-8/' /etc/locale.gen
+        sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
+    else
+        echo "es_ES.UTF-8 UTF-8" >> /etc/locale.gen
+        echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
+    fi
+    locale-gen
+    echo "LANG=es_ES.UTF-8" > /etc/default/locale
+fi
+
+exit 0

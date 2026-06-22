@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+
+echo "⚙️ Configurando instalador Calamares de Pulsar OS..."
+
+if [ -f "/usr/local/bin/launch-calamares" ]; then
+    chmod +x /usr/local/bin/launch-calamares
+fi
+
+exit 0

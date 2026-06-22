@@ -2,20 +2,22 @@
 # ==============================================================================
 # Pulsar OS - Package and Deploy Utility
 # ==============================================================================
-# This script packages a folder under the repository root into a Debian package (.deb)
+# This script packages one or all folders under the repository root into .deb packages
 # and notifies the Inled central APT repository for deployment.
 #
 # Usage:
-#   ./package-and-deploy.sh <package_folder_name> [--deploy]
+#   ./package-and-deploy.sh <package_folder_name | all> [--deploy]
 #
-# Requirements for deploy:
-#   INLED_REPO_PAT environment variable must be set.
+# Examples:
+#   ./package-and-deploy.sh pulsaros-theme            # Compila un paquete en local
+#   ./package-and-deploy.sh all                       # Compila TODOS los paquetes en local
+#   ./package-and-deploy.sh all --deploy              # Compila y despliega TODOS a Inled APT
 # ==============================================================================
 
 set -e
 
 # Configuración básica
-OWNER_REPO="Inled-Pulsar-OS/PKG" # Repositorio de paquetes
+OWNER_REPO="Inled-Pulsar-OS/PKG"
 RELEASE_TAG="packages-repo"
 PKG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$PKG_DIR/build"
@@ -27,164 +29,176 @@ PACKAGE_NAME="$1"
 DEPLOY_FLAG="$2"
 
 if [ -z "$PACKAGE_NAME" ]; then
-    echo "❌ Error: Debes especificar el nombre de la carpeta del paquete a compilar."
+    echo "❌ Error: Debes especificar el nombre de la carpeta del paquete o 'all'."
     echo "Ejemplo: $0 pulsaros-branding"
     exit 1
 fi
 
-SOURCE_FOLDER="$PKG_DIR/$PACKAGE_NAME"
+# Función para compilar y desplegar un único paquete
+build_single_package() {
+    local name="$1"
+    local source_folder="$PKG_DIR/$name"
+    
+    echo "=============================================================================="
+    echo "📦 INICIANDO COMPILACIÓN DE: $name"
+    echo "=============================================================================="
+    
+    if [ ! -d "$source_folder" ]; then
+        echo "❌ Error: La carpeta '$source_folder' no existe."
+        return 1
+    fi
+    
+    if [ ! -f "$source_folder/DEBIAN/control" ]; then
+        echo "❌ Error: No se encontró '$source_folder/DEBIAN/control'."
+        return 1
+    fi
+    
+    # Limpieza previa de staging
+    rm -rf "$STAGING_DIR/$name"
+    mkdir -p "$STAGING_DIR/$name"
+    
+    # Copiar archivos
+    cp -r "$source_folder/." "$STAGING_DIR/$name/"
+    
+    # Hook de preparación
+    local prepare_hook="$source_folder/prepare-assets.sh"
+    if [ -f "$prepare_hook" ]; then
+        echo "🚀 Ejecutando script de preparación del paquete..."
+        bash "$prepare_hook" "$STAGING_DIR/$name"
+    fi
+    
+    # Ajustar permisos
+    echo "⚙️ Ajustando permisos..."
+    if [ -d "$STAGING_DIR/$name/DEBIAN" ]; then
+        find "$STAGING_DIR/$name/DEBIAN" -type f -exec chmod 755 {} \;
+    fi
+    if [ -d "$STAGING_DIR/$name/etc/sudoers.d" ]; then
+        find "$STAGING_DIR/$name/etc/sudoers.d" -type f -exec chmod 0440 {} \;
+    fi
+    if [ -d "$STAGING_DIR/$name/etc/polkit-1" ]; then
+        find "$STAGING_DIR/$name/etc/polkit-1" -type f -exec chmod 0644 {} \;
+    fi
+    
+    # Ejecutar dpkg-deb
+    local deb_file=""
+    echo "🔨 Ejecutando dpkg-deb..."
+    if command -v fakeroot >/dev/null 2>&1; then
+        fakeroot dpkg-deb --build "$STAGING_DIR/$name" "$OUTPUT_DIR/"
+    else
+        echo "⚠️ Advertencia: 'fakeroot' no instalado. Se compilará con los permisos del host."
+        dpkg-deb --build "$STAGING_DIR/$name" "$OUTPUT_DIR/"
+    fi
+    
+    # Obtener el nombre del deb
+    local version=$(grep "^Version:" "$source_folder/DEBIAN/control" | cut -d' ' -f2)
+    local arch=$(grep "^Architecture:" "$source_folder/DEBIAN/control" | cut -d' ' -f2)
+    deb_file="${OUTPUT_DIR}/${name}_${version}_${arch}.deb"
+    
+    if [ ! -f "$deb_file" ]; then
+        deb_file=$(ls "$OUTPUT_DIR/${name}"*.deb | head -n 1)
+    fi
+    
+    echo "✅ Paquete compilado con éxito: $(basename "$deb_file")"
+    
+    # Realizar deploy si está activado
+    if [ "$DEPLOY_FLAG" == "--deploy" ] || [ "$DEPLOY_FLAG" == "-d" ]; then
+        echo "🌐 Desplegando al repositorio central APT..."
+        
+        if [ -z "$INLED_REPO_PAT" ]; then
+            echo "❌ Error: La variable INLED_REPO_PAT no está definida."
+            return 1
+        fi
+        
+        local package_url=""
+        
+        if command -v gh >/dev/null 2>&1 && [ -n "$GITHUB_ACTIONS" ]; then
+            gh release view "$RELEASE_TAG" --repo "$OWNER_REPO" >/dev/null 2>&1 || {
+                gh release create "$RELEASE_TAG" --title "PulsarOS Package Repository Assets" --notes "Repositorio de paquetes deb compilados automáticamente." --repo "$OWNER_REPO"
+            }
+            gh release upload "$RELEASE_TAG" "$deb_file" --clobber --repo "$OWNER_REPO"
+            package_url="https://github.com/${OWNER_REPO}/releases/download/${RELEASE_TAG}/$(basename "$deb_file")"
+        else
+            # Fallback API con curl
+            local release_id=$(curl -s -H "Authorization: token $INLED_REPO_PAT" \
+                "https://api.github.com/repos/${OWNER_REPO}/releases/tags/${RELEASE_TAG}" | jq -r '.id')
+                
+            if [ "$release_id" == "null" ] || [ -z "$release_id" ]; then
+                local release_data=$(curl -s -X POST -H "Authorization: token $INLED_REPO_PAT" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"tag_name\":\"$RELEASE_TAG\",\"title\":\"PulsarOS Package Repository Assets\",\"body\":\"Repositorio de paquetes.\"}" \
+                    "https://api.github.com/repos/${OWNER_REPO}/releases")
+                release_id=$(echo "$release_data" | jq -r '.id')
+            fi
+            
+            local file_name=$(basename "$deb_file")
+            local asset_id=$(curl -s -H "Authorization: token $INLED_REPO_PAT" \
+                "https://api.github.com/repos/${OWNER_REPO}/releases/$release_id" | \
+                jq -r ".assets[] | select(.name==\"$file_name\") | .id")
+                
+            if [ -n "$asset_id" ] && [ "$asset_id" != "null" ]; then
+                curl -s -X DELETE -H "Authorization: token $INLED_REPO_PAT" \
+                    "https://api.github.com/repos/${OWNER_REPO}/releases/assets/$asset_id"
+            fi
+            
+            local upload_url="https://uploads.github.com/repos/${OWNER_REPO}/releases/${release_id}/assets?name=${file_name}"
+            local upload_response=$(curl -s -X POST -H "Authorization: token $INLED_REPO_PAT" \
+                -H "Content-Type: application/vnd.debian.binary-package" \
+                --data-binary @"$deb_file" \
+                "$upload_url")
+            package_url=$(echo "$upload_response" | jq -r '.browser_download_url')
+        fi
+        
+        if [ "$package_url" == "null" ] || [ -z "$package_url" ]; then
+            echo "❌ Error: Falló la subida del asset a la release de GitHub."
+            return 1
+        fi
+        
+        echo "🎉 Subido en: $package_url"
+        echo "📡 Enviando dispatch a repositorio APT central de Inled..."
+        
+        local dispatch_response=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+             -H "Accept: application/vnd.github.v3+json" \
+             -H "Authorization: token $INLED_REPO_PAT" \
+             https://api.github.com/repos/InledGroup/apt/dispatches \
+             -d "{\"event_type\": \"package_upload\", \"client_payload\": {\"package_url\": \"$package_url\"}}")
+             
+        if [ "$dispatch_response" -eq 204 ] || [ "$dispatch_response" -eq 200 ] || [ "$dispatch_response" -eq 201 ]; then
+            echo "🚀 ¡Despliegue notificado con éxito! HTTP $dispatch_response"
+        else
+            echo "❌ Error al notificar al repositorio APT. HTTP $dispatch_response"
+            return 1
+        fi
+    fi
+}
 
-if [ ! -d "$SOURCE_FOLDER" ]; then
-    echo "❌ Error: La carpeta del paquete '$SOURCE_FOLDER' no existe."
-    exit 1
-fi
-
-if [ ! -f "$SOURCE_FOLDER/DEBIAN/control" ]; then
-    echo "❌ Error: No se encontró el archivo de control en '$SOURCE_FOLDER/DEBIAN/control'."
-    exit 1
-fi
-
-# 1. Preparar directorios de salida
+# 1. Preparar carpetas
 mkdir -p "$STAGING_DIR"
 mkdir -p "$OUTPUT_DIR"
 
-# Limpieza previa de staging para este paquete
-rm -rf "$STAGING_DIR/$PACKAGE_NAME"
-mkdir -p "$STAGING_DIR/$PACKAGE_NAME"
-
-echo "📦 Preparando archivos para el paquete: $PACKAGE_NAME..."
-# Copiar estructura
-cp -r "$SOURCE_FOLDER/." "$STAGING_DIR/$PACKAGE_NAME/"
-
-# 2. Hooks dinámicos de preparación por paquete
-# Permite clonar repositorios externos o descargar cosas pesadas en caliente para no subirlas a git.
-PREPARE_HOOK="$SOURCE_FOLDER/prepare-assets.sh"
-if [ -f "$PREPARE_HOOK" ]; then
-    echo "🚀 Ejecutando script de preparación del paquete..."
-    bash "$PREPARE_HOOK" "$STAGING_DIR/$PACKAGE_NAME"
-fi
-
-# 3. Ajustar permisos críticos
-echo "⚙️ Ajustando permisos y propietarios..."
-# El script postinst y otros hooks de debian deben ser ejecutables
-if [ -d "$STAGING_DIR/$PACKAGE_NAME/DEBIAN" ]; then
-    find "$STAGING_DIR/$PACKAGE_NAME/DEBIAN" -type f -exec chmod 755 {} \;
-fi
-
-# Configuración de sudoers y polkit exige permisos estrictos
-if [ -d "$STAGING_DIR/$PACKAGE_NAME/etc/sudoers.d" ]; then
-    find "$STAGING_DIR/$PACKAGE_NAME/etc/sudoers.d" -type f -exec chmod 0440 {} \;
-fi
-if [ -d "$STAGING_DIR/$PACKAGE_NAME/etc/polkit-1" ]; then
-    find "$STAGING_DIR/$PACKAGE_NAME/etc/polkit-1" -type f -exec chmod 0644 {} \;
-fi
-
-# 4. Construir el paquete .deb usando dpkg-deb
-# Usamos fakeroot para que mantenga permisos correctos de root dentro del paquete sin requerir root en el host
-DEB_FILE_NAME=""
-echo "🔨 Compilando paquete debian con dpkg-deb..."
-if command -v fakeroot >/dev/null 2>&1; then
-    fakeroot dpkg-deb --build "$STAGING_DIR/$PACKAGE_NAME" "$OUTPUT_DIR/"
+# 2. Lógica de construcción
+if [ "$PACKAGE_NAME" == "all" ]; then
+    echo "🏗️  MODO COMPILACIÓN TOTAL: Detectando y compilando todos los paquetes..."
+    
+    # Encontrar todos los subdirectorios que tengan un archivo DEBIAN/control
+    # Excluimos directorios del sistema de compilación
+    PACKAGES=()
+    while read -r control_path; do
+        dir_name=$(basename "$(dirname "$(dirname "$control_path")")")
+        # Asegurar que no coja el propio build staging si hay bucles
+        if [[ "$control_path" != *"/pkg-staging/"* ]]; then
+            PACKAGES+=("$dir_name")
+        fi
+    done < <(find "$PKG_DIR" -name "control" -path "*/DEBIAN/control")
+    
+    echo "📋 Paquetes detectados: ${PACKAGES[*]}"
+    
+    for pkg in "${PACKAGES[@]}"; do
+        build_single_package "$pkg"
+    done
+    echo "=============================================================================="
+    echo "🎉 ¡Compilación de todos los paquetes completada!"
+    echo "=============================================================================="
 else
-    echo "⚠️ Advertencia: 'fakeroot' no está instalado. Si se ejecuta como usuario no root, los permisos del paquete debian podrían ser incorrectos."
-    dpkg-deb --build "$STAGING_DIR/$PACKAGE_NAME" "$OUTPUT_DIR/"
-fi
-
-# Leer el nombre exacto del archivo generado basándonos en el control
-PKG_VERSION=$(grep "^Version:" "$SOURCE_FOLDER/DEBIAN/control" | cut -d' ' -f2)
-PKG_ARCH=$(grep "^Architecture:" "$SOURCE_FOLDER/DEBIAN/control" | cut -d' ' -f2)
-DEB_FILE="${OUTPUT_DIR}/${PACKAGE_NAME}_${PKG_VERSION}_${PKG_ARCH}.deb"
-
-if [ ! -f "$DEB_FILE" ]; then
-    # Fallback si dpkg-deb lo nombró diferente
-    DEB_FILE=$(ls "$OUTPUT_DIR/${PACKAGE_NAME}"*.deb | head -n 1)
-fi
-
-echo "✅ Paquete compilado con éxito: $(basename "$DEB_FILE")"
-
-# 5. Desplegar al Repositorio APT de Inled si se solicita
-if [ "$DEPLOY_FLAG" == "--deploy" ] || [ "$DEPLOY_FLAG" == "-d" ]; then
-    echo "🌐 Iniciando proceso de despliegue al repositorio APT..."
-    
-    if [ -z "$INLED_REPO_PAT" ]; then
-        echo "❌ Error: La variable de entorno INLED_REPO_PAT no está definida."
-        echo "Es requerida para interactuar con la API de GitHub y notificar al repositorio."
-        exit 1
-    fi
-    
-    # Si estamos en GitHub Actions, podemos usar 'gh' CLI para subir el asset a una release
-    if command -v gh >/dev/null 2>&1 && [ -n "$GITHUB_ACTIONS" ]; then
-        echo "🖥️ Usando GitHub CLI para subir el paquete..."
-        # Asegurarse de que el tag de la release existe, si no lo crea
-        gh release view "$RELEASE_TAG" --repo "$OWNER_REPO" >/dev/null 2>&1 || {
-            echo "Creando release temporal '$RELEASE_TAG'..."
-            gh release create "$RELEASE_TAG" --title "PulsarOS Package Repository Assets" --notes "Repositorio de paquetes deb compilados automáticamente." --repo "$OWNER_REPO"
-        }
-        
-        # Subir el deb a la release
-        echo "Subiendo $(basename "$DEB_FILE") a la release '$RELEASE_TAG'..."
-        gh release upload "$RELEASE_TAG" "$DEB_FILE" --clobber --repo "$OWNER_REPO"
-        
-        PACKAGE_URL="https://github.com/${OWNER_REPO}/releases/download/${RELEASE_TAG}/$(basename "$DEB_FILE")"
-    else
-        # Si es local y no está 'gh', intentaremos con curl usando la API de GitHub para subir
-        echo "🖥️ Usando la API de GitHub con curl..."
-        
-        # Obtener ID de la release o crearla
-        RELEASE_ID=$(curl -s -H "Authorization: token $INLED_REPO_PAT" \
-            "https://api.github.com/repos/${OWNER_REPO}/releases/tags/${RELEASE_TAG}" | jq -r '.id')
-            
-        if [ "$RELEASE_ID" == "null" ] || [ -z "$RELEASE_ID" ]; then
-            echo "Creando la release '$RELEASE_TAG'..."
-            RELEASE_DATA=$(curl -s -X POST -H "Authorization: token $INLED_REPO_PAT" \
-                -H "Content-Type: application/json" \
-                -d "{\"tag_name\":\"$RELEASE_TAG\",\"title\":\"PulsarOS Package Repository Assets\",\"body\":\"Repositorio de paquetes deb compilados.\"}" \
-                "https://api.github.com/repos/${OWNER_REPO}/releases")
-            RELEASE_ID=$(echo "$RELEASE_DATA" | jq -r '.id')
-        fi
-        
-        # Subir el archivo
-        FILE_NAME=$(basename "$DEB_FILE")
-        echo "Subiendo archivo $FILE_NAME a la release ID: $RELEASE_ID..."
-        
-        # Eliminar asset previo con el mismo nombre si existe
-        ASSET_ID=$(curl -s -H "Authorization: token $INLED_REPO_PAT" \
-            "https://api.github.com/repos/${OWNER_REPO}/releases/$RELEASE_ID" | \
-            jq -r ".assets[] | select(.name==\"$FILE_NAME\") | .id")
-            
-        if [ -n "$ASSET_ID" ] && [ "$ASSET_ID" != "null" ]; then
-            echo "Eliminando asset duplicado anterior (ID: $ASSET_ID)..."
-            curl -s -X DELETE -H "Authorization: token $INLED_REPO_PAT" \
-                "https://api.github.com/repos/${OWNER_REPO}/releases/assets/$ASSET_ID"
-        fi
-        
-        UPLOAD_URL="https://uploads.github.com/repos/${OWNER_REPO}/releases/${RELEASE_ID}/assets?name=${FILE_NAME}"
-        UPLOAD_RESPONSE=$(curl -s -X POST -H "Authorization: token $INLED_REPO_PAT" \
-            -H "Content-Type: application/vnd.debian.binary-package" \
-            --data-binary @"$DEB_FILE" \
-            "$UPLOAD_URL")
-            
-        PACKAGE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.browser_download_url')
-    fi
-    
-    if [ "$PACKAGE_URL" == "null" ] || [ -z "$PACKAGE_URL" ]; then
-        echo "❌ Error: Falló la subida del paquete a la release de GitHub."
-        exit 1
-    fi
-    
-    echo "🎉 Paquete disponible en: $PACKAGE_URL"
-    echo "📡 Enviando evento repository_dispatch al repositorio central de Inled APT..."
-    
-    DISPATCH_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-         -H "Accept: application/vnd.github.v3+json" \
-         -H "Authorization: token $INLED_REPO_PAT" \
-         https://api.github.com/repos/InledGroup/apt/dispatches \
-         -d "{\"event_type\": \"package_upload\", \"client_payload\": {\"package_url\": \"$PACKAGE_URL\"}}")
-         
-    if [ "$DISPATCH_RESPONSE" -eq 204 ] || [ "$DISPATCH_RESPONSE" -eq 200 ] || [ "$DISPATCH_RESPONSE" -eq 201 ]; then
-        echo "🚀 ¡Despliegue notificado con éxito! HTTP $DISPATCH_RESPONSE"
-    else
-        echo "❌ Error al notificar al repositorio APT de Inled. Código HTTP recibido: $DISPATCH_RESPONSE"
-        exit 1
-    fi
+    # Compilar solo el paquete solicitado
+    build_single_package "$PACKAGE_NAME"
 fi

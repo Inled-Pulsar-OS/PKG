@@ -1,0 +1,10 @@
+# Directorio de compilación local (staging y paquetes deb de salida)
+build/
+
+# Archivos de paquetes debian locales
+*.deb
+
+# Logs y archivos temporales
+*.log
+*.tmp
+.DS_Store

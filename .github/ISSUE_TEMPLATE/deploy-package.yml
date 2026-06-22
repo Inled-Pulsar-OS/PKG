@@ -1,5 +1,5 @@
 name: "🚀 Desplegar Paquete Pulsar OS"
-description: "Compila una carpeta del repositorio como paquete .deb y la sube al repositorio central APT de Inled."
+description: "Compila una o todas las carpetas del repositorio como paquete .deb y las sube al repositorio central APT de Inled."
 title: "[Deploy] Package: "
 labels: ["deploy-package"]
 body:
@@ -16,8 +16,9 @@ body:
     id: package_name
     attributes:
       label: "Nombre del Paquete"
-      description: "Selecciona el paquete de Pulsar OS que deseas compilar y desplegar."
+      description: "Selecciona el paquete de Pulsar OS que deseas compilar y desplegar (o selecciona 'all' para compilar y desplegar todos juntos)."
       options:
+        - "all"
         - "pulsaros-branding"
         - "pulsaros-theme"
         - "pulsaros-gnome"

@@ -9,7 +9,7 @@
 
 set -e
 
-STAGE_DIR="$1"
+STAGE_DIR="$(realpath -m "$1")"
 GNOME_VER="47" # Debian 13 Trixie por defecto usa Gnome 47
 
 EGO_EXTENSIONS=(

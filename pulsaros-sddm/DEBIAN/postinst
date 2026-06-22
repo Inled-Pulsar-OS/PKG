@@ -1,0 +1,19 @@
+#!/bin/bash
+set -e
+
+echo "🚫 Purgando GDM3 si existe para evitar conflictos con SDDM..."
+if dpkg -s gdm3 >/dev/null 2>&1; then
+    apt-get purge -y gdm3 || true
+    apt-get autoremove -y || true
+fi
+
+echo "🎨 Habilitando servicio SDDM..."
+systemctl enable sddm.service || true
+
+# Actualizar fc-cache si se instalaron fuentes del tema
+if [ -d "/usr/share/fonts/truetype/tahoe-sddm" ]; then
+    echo "⚙️  Actualizando caché de tipografías del sistema..."
+    fc-cache -f || true
+fi
+
+exit 0

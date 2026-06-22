@@ -1,0 +1,24 @@
+#!/bin/bash
+set -e
+
+echo "🎨 Configurando Tema Plymouth de Pulsar OS..."
+
+# Registrar el tema en update-alternatives
+update-alternatives --install /usr/share/plymouth/themes/default.plymouth default.plymouth /usr/share/plymouth/themes/pulsar-plymouth/pulsar-plymouth.plymouth 150
+
+# Establecer como predeterminado
+update-alternatives --set default.plymouth /usr/share/plymouth/themes/pulsar-plymouth/pulsar-plymouth.plymouth
+plymouth-set-default-theme -R pulsar-plymouth || plymouth-set-default-theme pulsar-plymouth
+
+# Configurar GRUB para que use splash y sea silencioso
+if [ -f "/etc/default/grub" ]; then
+    sed -i "s/GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet splash\"/" /etc/default/grub
+fi
+
+# Regenerar initramfs
+if command -v update-initramfs >/dev/null; then
+    echo "🔄 Actualizando initramfs..."
+    update-initramfs -u -k all || update-initramfs -u
+fi
+
+exit 0

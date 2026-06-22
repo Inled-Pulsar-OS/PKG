@@ -73,8 +73,8 @@ jobs:
           
           echo "Paquete detectado: '$PACKAGE'"
           
-          # Verificar si la carpeta del paquete existe en el repositorio (raíz del repo en este caso)
-          if [ ! -d "$PACKAGE" ]; then
+          # Verificar si la carpeta del paquete existe en el repositorio (excepto si es 'all')
+          if [ "$PACKAGE" != "all" ] && [ ! -d "$PACKAGE" ]; then
             echo "❌ Error: El paquete '$PACKAGE' no existe en el repositorio."
             exit 1
           fi
@@ -87,7 +87,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          gh issue comment "$ISSUE_NUMBER" --body "🏗️ **Comenzando la compilación:** Empaquetando la carpeta \`${{ steps.parse-package.outputs.package_name }}\` como archivo \`.deb\`..."
+          if [ "${{ steps.parse-package.outputs.package_name }}" = "all" ]; then
+            gh issue comment "$ISSUE_NUMBER" --body "🏗️ **Comenzando compilación total:** Empaquetando y desplegando TODOS los paquetes del repositorio de forma masiva..."
+          else
+            gh issue comment "$ISSUE_NUMBER" --body "🏗️ **Comenzando la compilación:** Empaquetando la carpeta \`${{ steps.parse-package.outputs.package_name }}\` como archivo \`.deb\`..."
+          fi
 
       # 7. Compilar y Desplegar el paquete
       - name: Build and Deploy Package
@@ -108,7 +112,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          gh issue comment "$ISSUE_NUMBER" --body "🎉 **¡Despliegue completado con éxito!** El paquete \`${{ steps.parse-package.outputs.package_name }}\` ha sido compilado, subido a los assets de la release del repo PKG y notificado al repositorio APT central de Inled. Estará disponible en breve tras el proceso de firma."
+          if [ "${{ steps.parse-package.outputs.package_name }}" = "all" ]; then
+            gh issue comment "$ISSUE_NUMBER" --body "🎉 **¡Despliegue total completado con éxito!** Todos los paquetes del repositorio han sido compilados, subidos a la release y notificados al repositorio central APT de Inled."
+          else
+            gh issue comment "$ISSUE_NUMBER" --body "🎉 **¡Despliegue completado con éxito!** El paquete \`${{ steps.parse-package.outputs.package_name }}\` ha sido compilado, subido a los assets de la release del repo PKG y notificado al repositorio APT central de Inled. Estará disponible en breve."
+          fi
           gh issue close "$ISSUE_NUMBER" --reason "completed"
 
       # 9. Comentar fallo en caso de error
@@ -118,4 +126,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          gh issue comment "$ISSUE_NUMBER" --body "❌ **Error en la compilación o despliegue:** Ocurrió un error al intentar procesar el paquete. Por favor, revisa los logs de ejecución de GitHub Actions para ver los detalles del fallo."
+          gh issue comment "$ISSUE_NUMBER" --body "❌ **Error en la compilación o despliegue:** Ocurrió un error al intentar procesar el empaquetado. Por favor, revisa los logs de ejecución de GitHub Actions para ver los detalles del fallo."
