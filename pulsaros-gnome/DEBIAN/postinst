@@ -1,0 +1,16 @@
+#!/bin/bash
+set -e
+
+echo "⚙️ Compilando esquemas GSchema para Pulsar OS..."
+glib-compile-schemas /usr/share/glib-2.0/schemas/
+
+echo "🧩 Compilando esquemas locales de extensiones..."
+find /usr/share/gnome-shell/extensions -name schemas -type d -exec glib-compile-schemas {} \; 2>/dev/null || true
+
+# Asegurar que glib-compile-schemas se ejecute en directorios con gschema.xml
+find /usr/share /usr/local/share -name '*.gschema.xml' -printf '%h\n' | sort -u | xargs -n1 glib-compile-schemas 2>/dev/null || true
+
+echo "📊 Actualizando base de datos global Dconf..."
+dconf update || true
+
+exit 0

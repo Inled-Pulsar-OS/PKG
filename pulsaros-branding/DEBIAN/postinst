@@ -1,0 +1,25 @@
+#!/bin/bash
+set -e
+
+# Script de post-instalación para pulsaros-branding
+# Reemplaza logotipos de distribuidor de Debian con el logotipo oficial de Pulsar OS
+
+PULSAR_LOGO="/usr/share/icons/pulsar-logo.png"
+
+# Reemplazar vendor-logos y logos de desktop-base por el logo de Pulsar
+for dir in "/usr/share/images/vendor-logos" "/usr/share/desktop-base/debian-logos"; do
+    if [ -d "$dir" ] && [ -f "$PULSAR_LOGO" ]; then
+        find "$dir" -type f \( -name "*.png" -o -name "*.svg" \) 2>/dev/null | while read -r path; do
+            cp "$PULSAR_LOGO" "$path"
+        done
+    fi
+done
+
+# Iconos de distribuidor (About GNOME, GDM)
+if [ -f "$PULSAR_LOGO" ]; then
+    find "/usr/share/icons" -type f \( -name "distributor-logo*" -o -name "debian-logo*" -o -name "*emblem-debian*" \) 2>/dev/null | while read -r path; do
+        cp "$PULSAR_LOGO" "$path"
+    done
+fi
+
+exit 0

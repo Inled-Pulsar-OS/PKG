@@ -1,0 +1,9 @@
+Package: pulsaros-theme
+Version: 1.0.0
+Section: x11
+Priority: optional
+Architecture: all
+Maintainer: Jaime <info@inled.es>
+Depends: sassc, libglib2.0-dev-bin, libxml2-utils, git, unzip, curl
+Description: GTK Themes and Icons for Pulsar OS.
+ Includes MacTahoe GTK theme and icon theme compiled and packaged for Pulsar OS.

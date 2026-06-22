@@ -1,0 +1,39 @@
+name: "🚀 Desplegar Paquete Pulsar OS"
+description: "Compila una carpeta del repositorio como paquete .deb y la sube al repositorio central APT de Inled."
+title: "[Deploy] Package: "
+labels: ["deploy-package"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### 🚀 Sistema de Despliegue Declarativo de Pulsar OS
+        Este formulario compilará la carpeta especificada dentro del repositorio `PKG` de la rama actual, generará el archivo `.deb` correspondiente y lo enviará al repositorio APT de Inled.
+        
+        > [!IMPORTANT]
+        > **Seguridad:** Este workflow solo puede ser ejecutado por el administrador del sistema. Si es iniciado por otro usuario, se cancelará y cerrará automáticamente.
+  
+  - type: dropdown
+    id: package_name
+    attributes:
+      label: "Nombre del Paquete"
+      description: "Selecciona el paquete de Pulsar OS que deseas compilar y desplegar."
+      options:
+        - "pulsaros-branding"
+        - "pulsaros-theme"
+        - "pulsaros-gnome"
+        - "pulsaros-sddm"
+        - "pulsaros-plymouth"
+        - "pulsaros-grub"
+        - "pulsaros-calamares"
+        - "pulsaros-essential"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Notas de la Versión / Cambios"
+      description: "Describe brevemente qué cambios incluye esta versión del paquete (ej. 'Parche de iconos', 'Ajuste de fondo')."
+      placeholder: "Añadida la extensión X, corregido el bug Y en la barra..."
+    validations:
+      required: false

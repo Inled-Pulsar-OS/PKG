@@ -1,0 +1,8 @@
+PRETTY_NAME="Pulsar OS 13"
+NAME="Pulsar OS"
+VERSION_ID="13"
+VERSION="13"
+ID=pulsaros
+ID_LIKE=debian
+HOME_URL="https://inled.es"
+LOGO="pulsar-logo"
