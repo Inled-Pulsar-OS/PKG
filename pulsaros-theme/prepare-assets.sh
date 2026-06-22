@@ -32,18 +32,18 @@ mkdir -p "$STAGE_DIR/usr/share/icons"
 echo "Instalando temas GTK en staging..."
 cd "$TEMP_BUILD/theme"
 
-# Parchear las validaciones de root en lib-core.sh y otros scripts
-# Reemplazamos la comprobación de escritura en /root para que no exija privilegios de administrador real del host
-if [ -f "libs/lib-core.sh" ]; then
-    echo "Parcheando lib-core.sh para desactivar comprobaciones de root..."
-    sed -i 's/! -w "\/root"/false/g' libs/lib-core.sh
-fi
-
-# Parches adicionales preventivos
+# Parche agresivo: Eliminar la validación de root y la llamada a full_sudo de raíz
+# en install.sh y tweaks.sh para que no salte en modo silent y no exija root en el host.
+sed -i 's/full_sudo "${1}"; //g' install.sh tweaks.sh || true
+sed -i 's/full_sudo "${1}"//g' install.sh tweaks.sh || true
 sed -i 's/UID -ne 0/false/g' install.sh tweaks.sh || true
 sed -i 's/EUID -ne 0/false/g' install.sh tweaks.sh || true
-sed -i 's/full_sudo "${1}"; silent_mode/silent_mode/g' tweaks.sh || true
 sed -i 's/elif \[\[ ! -d "${FIREFOX_DIR_HOME}" && ! -d "${FIREFOX_FLATPAK_DIR_HOME}" && ! -d "${FIREFOX_SNAP_DIR_HOME}" \]\]; then/elif false; then/g' tweaks.sh || true
+
+# También neutralizar en libs/lib-core.sh por seguridad
+if [ -f "libs/lib-core.sh" ]; then
+    sed -i 's/! -w "\/root"/false/g' libs/lib-core.sh || true
+fi
 
 # Ejecutar instalador apuntando al staging
 ./install.sh -b -c dark -l -d "$STAGE_DIR/usr/share/themes" --silent-mode
