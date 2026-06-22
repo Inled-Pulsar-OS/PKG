@@ -65,6 +65,8 @@ build_single_package() {
     if [ -f "$prepare_hook" ]; then
         echo "🚀 Ejecutando script de preparación del paquete..."
         bash "$prepare_hook" "$STAGING_DIR/$name"
+        # Eliminar el script del directorio staging para evitar colisiones en la raíz del deb
+        rm -f "$STAGING_DIR/$name/prepare-assets.sh"
     fi
     
     # Ajustar permisos

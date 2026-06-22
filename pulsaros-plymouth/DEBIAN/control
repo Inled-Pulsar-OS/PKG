@@ -4,6 +4,7 @@ Section: misc
 Priority: optional
 Architecture: all
 Maintainer: Jaime <info@inled.es>
-Depends: plymouth, plymouth-themes, git, convert
+Depends: plymouth, plymouth-themes
+Replaces: plymouth, debconf
 Description: Plymouth boot splash theme for Pulsar OS.
  Packages the macOS-like boot splash screen and replaces default Debian logos.

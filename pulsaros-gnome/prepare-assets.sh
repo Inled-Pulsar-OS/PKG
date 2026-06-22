@@ -18,12 +18,8 @@ EGO_EXTENSIONS=(
     "kiwimenu@kemma"
     "compiz-alike-magic-lamp-effect@hermes83.github.com"
     "fullscreen-to-empty-workspace2@corgijan.dev"
-    "blur-my-shell@aunetx"
-    "dash-to-dock@micxgx.gmail.com"
-    "user-theme@gnome-shell-extensions.gcampax.github.com"
     "appmenu-is-back@fthx"
     "just-perfection-desktop@just-perfection"
-    "appindicatorsupport@rgcjonas.gmail.com"
     "notification-position@drugo.dev"
 )
 

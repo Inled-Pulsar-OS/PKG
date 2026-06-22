@@ -1,0 +1,13 @@
+[SddmGreeterTheme]
+Name=Apple Tahoe
+Description=apple like style
+Author=zayronxio
+Copyright=(c) 2025, zayronxio
+License=gpl3.0
+Type=sddm-theme
+Version=1.0
+Screenshot=screenshot.jpg
+MainScript=Main.qml
+ConfigFile=theme.conf
+Theme-Id=Apple.Tahoe
+QtVersion=6

@@ -20,7 +20,6 @@ fi
 # Configuración de locales si locales está instalado
 if command -v locale-gen >/dev/null; then
     echo "Configurando idiomas y locales regionales..."
-    # Asegurar es_ES y en_US
     if [ -f "/etc/locale.gen" ]; then
         sed -i 's/# es_ES.UTF-8 UTF-8/es_ES.UTF-8 UTF-8/' /etc/locale.gen
         sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
@@ -31,5 +30,19 @@ if command -v locale-gen >/dev/null; then
     locale-gen
     echo "LANG=es_ES.UTF-8" > /etc/default/locale
 fi
+
+# ==============================================================================
+# CONFIGURACIÓN CRÍTICA PARA Arranque en QEMU (9pfs)
+# ==============================================================================
+# Asegurar que el initramfs tenga cargados los módulos necesarios para montar
+# directorios compartidos del host usando 9pfs como sistema de archivos raíz.
+echo "🔌 Añadiendo soporte de módulos 9p al initramfs..."
+mkdir -p /etc/initramfs-tools
+touch /etc/initramfs-tools/modules
+for mod in 9p 9pnet 9pnet_virtio; do
+    if ! grep -q "^$mod$" /etc/initramfs-tools/modules; then
+        echo "$mod" >> /etc/initramfs-tools/modules
+    fi
+done
 
 exit 0

@@ -44,8 +44,8 @@ echo "Generando reemplazo de logo transparente..."
 mkdir -p "$STAGE_DIR/usr/share/plymouth/themes"
 mkdir -p "$STAGE_DIR/usr/share/pixmaps"
 
-# Crear logo transparente de 1x1 usando convert (ImageMagick)
-convert -size 1x1 xc:transparent "$STAGE_DIR/usr/share/plymouth/debian-logo.png"
+# Crear logo transparente de 1x1 usando base64 (nativo en Linux coreutils)
+echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > "$STAGE_DIR/usr/share/plymouth/debian-logo.png"
 
 # Copiar a las rutas estándar
 cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/plymouth/themes/debian-logo.png"
