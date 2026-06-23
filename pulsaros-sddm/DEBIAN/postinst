@@ -1,11 +1,9 @@
 #!/bin/bash
 set -e
 
-echo "🚫 Purgando GDM3 si existe para evitar conflictos con SDDM..."
-if dpkg -s gdm3 >/dev/null 2>&1; then
-    apt-get purge -y gdm3 || true
-    apt-get autoremove -y || true
-fi
+echo "⚙️ Configurando SDDM como el gestor de pantalla predeterminado..."
+mkdir -p /etc/X11
+echo "/usr/sbin/sddm" > /etc/X11/default-display-manager
 
 echo "🎨 Habilitando servicio SDDM..."
 systemctl enable sddm.service || true

@@ -69,4 +69,16 @@ echo "live:live" | chpasswd || echo "⚠️ Advertencia: No se pudo cambiar la c
 # Contraseña de root
 echo "root:pulsar" | chpasswd || echo "⚠️ Advertencia: No se pudo cambiar la contraseña de root"
 
+# English: Set Seafari as the default web browser and apply the Safari icon
+# Español: Establecer Seafari como navegador predeterminado y aplicar el icono de Safari
+echo "🌐 Configurando Seafari como navegador web predeterminado..."
+update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/bin/seafari 150 || true
+update-alternatives --install /usr/bin/gnome-www-browser gnome-www-browser /usr/bin/seafari 150 || true
+update-alternatives --set x-www-browser /usr/bin/seafari || true
+update-alternatives --set gnome-www-browser /usr/bin/seafari || true
+
+if [ -f "/usr/share/applications/seafari.desktop" ]; then
+    sed -i 's/^Icon=.*/Icon=safari/' /usr/share/applications/seafari.desktop
+fi
+
 exit 0

@@ -7,4 +7,25 @@ if [ -f "/usr/local/bin/launch-calamares" ]; then
     chmod +x /usr/local/bin/launch-calamares
 fi
 
+# English: Create system-wide application shortcut to overwrite Debian's default one
+# Español: Crear acceso directo a nivel de sistema para sobrescribir el predeterminado de Debian
+mkdir -p /usr/share/applications
+cat <<EOF > /usr/share/applications/calamares.desktop
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Install PulsarOS
+Name[es]=Instalar PulsarOS
+GenericName=System Installer
+GenericName[es]=Instalador del sistema
+Comment=Install the operating system to your hard drive
+Comment[es]=Instala el sistema operativo en tu disco duro
+Exec=/usr/local/bin/launch-calamares
+Icon=calamares
+Terminal=false
+StartupNotify=true
+Categories=Qt;System;
+EOF
+chmod 644 /usr/share/applications/calamares.desktop
+
 exit 0

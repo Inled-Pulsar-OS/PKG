@@ -4,7 +4,7 @@ Section: x11
 Priority: optional
 Architecture: all
 Maintainer: Jaime <info@inled.es>
-Depends: sddm, curl, gnome-session-xsession
+Depends: sddm, curl, gnome-session-xsession, qt6-image-formats-plugins
 Description: SDDM login theme and configurations for Pulsar OS.
  Packages and configures SDDM as the default display manager using the Apple Tahoe theme.
- Purges gdm3 to prevent screen locking/theme selection conflicts.
+ Sets SDDM as default while keeping gdm3 libraries to maintain GNOME screen locking.
