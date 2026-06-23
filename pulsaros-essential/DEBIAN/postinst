@@ -45,4 +45,28 @@ for mod in 9p 9pnet 9pnet_virtio; do
     fi
 done
 
+# ==============================================================================
+# CREACIÓN DE USUARIOS DE PRUEBA Y LIVE
+# ==============================================================================
+echo "👤 Configurando cuentas de usuario y contraseñas..."
+# Asegurar grupo sudo
+groupadd -f sudo || true
+
+# Crear usuario 'jaime' si no existe
+if ! id -u jaime >/dev/null 2>&1; then
+    echo "Creando usuario 'jaime'..."
+    useradd -m -s /bin/bash -G sudo jaime || true
+fi
+echo "jaime:pulsar" | chpasswd || echo "⚠️ Advertencia: No se pudo cambiar la contraseña de jaime"
+
+# Crear usuario 'live' si no existe
+if ! id -u live >/dev/null 2>&1; then
+    echo "Creando usuario 'live'..."
+    useradd -m -s /bin/bash -G sudo live || true
+fi
+echo "live:live" | chpasswd || echo "⚠️ Advertencia: No se pudo cambiar la contraseña de live"
+
+# Contraseña de root
+echo "root:pulsar" | chpasswd || echo "⚠️ Advertencia: No se pudo cambiar la contraseña de root"
+
 exit 0

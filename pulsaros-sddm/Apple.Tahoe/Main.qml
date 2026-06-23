@@ -3,16 +3,15 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import Qt5Compat.GraphicalEffects
 //import QtQuick.Shapes 1.17
-import org.kde.breeze
 import "components"
 
 
 Rectangle {
-    width: 640
-    height: 480
+    width: parent ? parent.width : 1920
+    height: parent ? parent.height : 1080
     LayoutMirroring.enabled: Qt.locale().textDirection === Qt.RightToLeft
     LayoutMirroring.childrenInherit: true
-    property int sizeAvatar: 80
+    property int sizeAvatar: 110
     property int longitudMasLarga: 0
 
     property int lastIndexUser: user.currentIndex
