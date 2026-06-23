@@ -98,6 +98,7 @@ EGO_EXTENSIONS=(
     "appmenu-is-back@fthx"
     "just-perfection-desktop@just-perfection"
     "notification-position@drugo.dev"
+    "wack-lockscreen-clock@rinzler69-wastaken.github.com"
 )
 
 echo "🧩 Descargando extensiones de GNOME Shell desde Extensions.gnome.org (EGO)..."
@@ -148,17 +149,29 @@ for uuid in "${EGO_EXTENSIONS[@]}"; do
     fi
 done
 
+# Copy all extensions' .gschema.xml files to the global schemas directory so gsettings and dconf can manage them
+# Copiar todos los archivos .gschema.xml de las extensiones al directorio global de esquemas para que gsettings y dconf puedan gestionarlos
+echo "⚙️ [ES] Copiando esquemas xml de extensiones al directorio global..."
+echo "⚙️ [EN] Copying extensions' xml schemas to the global schemas directory..."
+mkdir -p "$STAGE_DIR/usr/share/glib-2.0/schemas"
+find "$STAGE_DIR/usr/share/gnome-shell/extensions" -name "*.gschema.xml" -exec cp {} "$STAGE_DIR/usr/share/glib-2.0/schemas/" \; 2>/dev/null || true
+
 # Compilar esquemas locales de las extensiones dentro de staging para que estén listos
 echo "Compilando esquemas locales de extensiones..."
 find "$STAGE_DIR/usr/share/gnome-shell/extensions" -name schemas -type d 2>/dev/null | while read -r schema_path; do
     glib-compile-schemas "$schema_path" || true
 done
 
-# Ensure correct permissions for all files and folders under extensions directory (avoiding permission denied in Gnome Shell)
-# Asegurar permisos correctos para todos los archivos y carpetas bajo el directorio de extensiones (evitando fallos de permisos en Gnome Shell)
+# Compilar también el directorio global de schemas en staging
+echo "Compilando esquemas globales en staging..."
+glib-compile-schemas "$STAGE_DIR/usr/share/glib-2.0/schemas" || true
+
+# Ensure correct permissions for all files and folders under extensions and schemas directory (avoiding permission denied in Gnome Shell)
+# Asegurar permisos correctos para todos los archivos y carpetas bajo el directorio de extensiones y esquemas (evitando fallos de permisos en Gnome Shell)
 echo "⚙️ [ES] Asegurando permisos de lectura y ejecución para las extensiones..."
 echo "⚙️ [EN] Ensuring read and execute permissions for the extensions..."
 find "$STAGE_DIR/usr/share/gnome-shell/extensions" -type d -exec chmod 755 {} \; 2>/dev/null || true
 find "$STAGE_DIR/usr/share/gnome-shell/extensions" -type f -exec chmod 644 {} \; 2>/dev/null || true
+find "$STAGE_DIR/usr/share/glib-2.0/schemas" -type f -exec chmod 644 {} \; 2>/dev/null || true
 
 echo "✅ Proceso de extensiones finalizado."

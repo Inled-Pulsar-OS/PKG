@@ -174,19 +174,29 @@ dont-chroot: false
 EOF
 
 # ==============================================================================
-# 3. LANZADOR Y AUTO-ARRANQUE EN EL LIVE
+# 3. LANZADOR Y AUTO-ARRANQUE EN EL LIVE / LAUNCHER AND AUTOSTART IN LIVE
 # ==============================================================================
 echo "🖥️ Configurando lanzador y auto-arranque..."
 mkdir -p "$STAGE_DIR/usr/local/bin"
 cat <<'EOF' > "$STAGE_DIR/usr/local/bin/launch-calamares"
 #!/bin/bash
 # Permitir conexiones X11 locales para root en Wayland
+# Allow local X11 connections for root in Wayland
 xhost +local:root > /dev/null 2>&1 || true
+# Forzar a Qt a usar XWayland/X11 para evitar fallos de conexión gráfica como root en Wayland
+# Force Qt to use X11/XWayland to avoid graphical connection failures as root under Wayland
+export QT_QPA_PLATFORM=xcb
 # Lanzar calamares preservando el entorno
+# Launch calamares preserving the environment
 sudo -E DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" WAYLAND_DISPLAY="$WAYLAND_DISPLAY" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" calamares "$@"
 EOF
 
-# Auto-arranque
+# Ensure launch script is executable
+# Asegurar que el script de lanzamiento sea ejecutable
+chmod 755 "$STAGE_DIR/usr/local/bin/launch-calamares"
+
+# User-level autostart (for skeleton / user homes)
+# Auto-arranque a nivel de usuario (para esqueleto / nuevos usuarios)
 mkdir -p "$STAGE_DIR/etc/skel/.config/autostart"
 cat <<EOF > "$STAGE_DIR/etc/skel/.config/autostart/calamares.desktop"
 [Desktop Entry]
@@ -199,5 +209,12 @@ Terminal=false
 Categories=Qt;System;
 X-GNOME-Autostart-enabled=true
 EOF
+chmod 644 "$STAGE_DIR/etc/skel/.config/autostart/calamares.desktop"
+
+# Global-level autostart (ensures it launches for already created live user)
+# Auto-arranque a nivel global (asegura que arranque para el usuario live ya creado)
+mkdir -p "$STAGE_DIR/etc/xdg/autostart"
+cp "$STAGE_DIR/etc/skel/.config/autostart/calamares.desktop" "$STAGE_DIR/etc/xdg/autostart/"
+chmod 644 "$STAGE_DIR/etc/xdg/autostart/calamares.desktop"
 
 echo "✅ Calamares configurado en staging."
