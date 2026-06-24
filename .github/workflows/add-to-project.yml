@@ -19,7 +19,7 @@ jobs:
         if: contains(github.event.issue.labels.*.name, 'bug')
         env:
           GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
-          ITEM_ID: ${{ steps.add-project.outputs.item-id }}
+          ITEM_ID: ${{ steps.add-project.outputs.itemId }}
         run: |
           gh api graphql -f query='
             mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
@@ -45,7 +45,7 @@ jobs:
         if: contains(github.event.issue.labels.*.name, 'idea')
         env:
           GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
-          ITEM_ID: ${{ steps.add-project.outputs.item-id }}
+          ITEM_ID: ${{ steps.add-project.outputs.itemId }}
         run: |
           gh api graphql -f query='
             mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
