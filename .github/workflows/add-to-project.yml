@@ -9,7 +9,60 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Add issue to project
+        id: add-project
         uses: actions/add-to-project@v1.0.1
         with:
           project-url: https://github.com/orgs/Inled-Pulsar-OS/projects/1
           github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+
+      - name: Set Type to Error
+        if: contains(github.event.issue.labels.*.name, 'bug')
+        env:
+          GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          ITEM_ID: ${{ steps.add-project.outputs.item-id }}
+        run: |
+          gh api graphql -f query='
+            mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+              updateProjectV2ItemFieldValue(input: {
+                projectId: $projectId,
+                itemId: $itemId,
+                fieldId: $fieldId,
+                value: {
+                  singleSelectOptionId: $optionId
+                }
+              }) {
+                projectV2Item {
+                  id
+                }
+              }
+            }' \
+            -f projectId="PVT_kwDOEGtWb84Bbe-_" \
+            -f itemId="$ITEM_ID" \
+            -f fieldId="PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" \
+            -f optionId="45a5f370"
+
+      - name: Set Type to Idea
+        if: contains(github.event.issue.labels.*.name, 'idea')
+        env:
+          GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          ITEM_ID: ${{ steps.add-project.outputs.item-id }}
+        run: |
+          gh api graphql -f query='
+            mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+              updateProjectV2ItemFieldValue(input: {
+                projectId: $projectId,
+                itemId: $itemId,
+                fieldId: $fieldId,
+                value: {
+                  singleSelectOptionId: $optionId
+                }
+              }) {
+                projectV2Item {
+                  id
+                }
+              }
+            }' \
+            -f projectId="PVT_kwDOEGtWb84Bbe-_" \
+            -f itemId="$ITEM_ID" \
+            -f fieldId="PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" \
+            -f optionId="b7b66bcf"
