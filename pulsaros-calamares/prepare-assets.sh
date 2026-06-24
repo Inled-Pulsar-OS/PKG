@@ -30,38 +30,158 @@ if [ -d "$LOCAL_BRANDING" ]; then
     sed -i 's/pearOS/PulsarOS/g' "$BRANDING_DEST/branding.desc"
     sed -i 's/version:             26.03/version:             1.0/g' "$BRANDING_DEST/branding.desc"
     sed -i 's/shortVersion:        26.3/shortVersion:        1.0/g' "$BRANDING_DEST/branding.desc"
+    
+    # English: Remove old occurrences of these variables to put them at top-level
+    # Español: Eliminar ocurrencias antiguas de estas variables para ponerlas a nivel raíz
+    sed -i '/productName:/d' "$BRANDING_DEST/branding.desc"
+    sed -i '/shortProductName:/d' "$BRANDING_DEST/branding.desc"
+    sed -i '/productVersion:/d' "$BRANDING_DEST/branding.desc"
+    sed -i '/productUrl:/d' "$BRANDING_DEST/branding.desc"
+    sed -i '/stylesheet:/d' "$BRANDING_DEST/branding.desc"
+    
+    # English: Insert top-level variables right after the YAML frontmatter marker '---'
+    # Español: Insertar variables a nivel raíz justo después del marcador YAML '---'
+    sed -i '/---/a \
+productName:         PulsarOS\
+shortProductName:    PulsarOS\
+productVersion:      1.0\
+productUrl:          https://inled.es\
+stylesheet:          "stylesheet.qss"' "$BRANDING_DEST/branding.desc"
 else
     echo "⚠️ Advertencia: No se encontró el branding en $LOCAL_BRANDING. Usando fallback funcional..."
     
     cat <<EOF > "$BRANDING_DEST/branding.desc"
 ---
-componentName:  pulsaros
-welcomeStyleCalamares:   false
-welcomeExpandingLogo:   true
-strings:
-    productName:         PulsarOS
-    shortProductName:    PulsarOS
-    productVersion:      1.0
-    productUrl:          https://inled.es
+componentName:         pulsaros
+productName:           PulsarOS
+shortProductName:      PulsarOS
+productVersion:        1.0
+productUrl:            https://inled.es
+stylesheet:            "stylesheet.qss"
+welcomeStyleCalamares: false
+welcomeExpandingLogo:  true
 images:
     productLogo:         "logo.png"
     productIcon:         "logo.png"
     productWelcome:      "welcome.png"
 style:
-   sidebarBackground:    "#1f1f1f"
-   sidebarText:          "#e0e0e0"
-   sidebarTextCurrent:       "#1f1f1f"
-   sidebarBackgroundCurrent: "#0a84ff"
+   sidebarBackground:        "#1f1f1f"
+   sidebarText:              "#e0e0e0"
+   sidebarTextCurrent:       "#ffffff"
+   sidebarBackgroundCurrent: "#0071e3"
 slideshowAPI: 2
 EOF
-    # Crear placeholders para que no falle Calamares si no encuentra imágenes
+fi
+
+# English: Download the official Pulsar OS logo
+# Español: Descargar el logo oficial de Pulsar OS
+echo "📥 Descargando logo oficial de Pulsar OS..."
+if ! wget -q -O "$BRANDING_DEST/logo.png" "https://hosted.inled.es/pulsar-logo-simple-sf.png"; then
+    echo "⚠️ No se pudo descargar el logo desde internet, usando un fallback local..."
     if command -v convert >/dev/null 2>&1; then
         convert -size 64x64 xc:blue "$BRANDING_DEST/logo.png"
-        convert -size 400x200 xc:darkgrey "$BRANDING_DEST/welcome.png"
     else
         touch "$BRANDING_DEST/logo.png"
+    fi
+fi
+
+# English: Create welcome placeholder if it doesn't exist
+# Español: Crear marcador de posición welcome si no existe
+if [ ! -f "$BRANDING_DEST/welcome.png" ]; then
+    if command -v convert >/dev/null 2>&1; then
+        convert -size 400x200 xc:darkgrey "$BRANDING_DEST/welcome.png"
+    else
         touch "$BRANDING_DEST/welcome.png"
     fi
+fi
+
+# English: Create a beautiful macOS-like stylesheet for Calamares to fix the selected sidebar item styling
+# Español: Crear una hermosa hoja de estilo tipo macOS para Calamares para solucionar el estilo del elemento seleccionado de la barra lateral
+cat <<EOF > "$BRANDING_DEST/stylesheet.qss"
+/* Pulsar OS Calamares Stylesheet - Modern Dark Theme */
+
+#mainApp {
+    background-color: #1e1e1e;
+}
+
+#sidebarApp {
+    background-color: #1e1e1e;
+    min-width: 220px;
+}
+
+#sidebarApp QListWidget {
+    background-color: #1e1e1e;
+    border: none;
+}
+
+#sidebarApp QListWidget::item {
+    color: #a0a0a0;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+#sidebarApp QListWidget::item:selected {
+    background-color: #0071e3;
+    color: #ffffff;
+    border-radius: 6px;
+}
+
+#sidebarApp QListWidget::item:hover:!selected {
+    background-color: #2c2c2c;
+    color: #ffffff;
+    border-radius: 6px;
+}
+EOF
+
+# English: Ensure slideshow keys are present in branding.desc to prevent Calamares startup crash
+# Español: Asegurar que las claves de la presentación de diapositivas estén en branding.desc para evitar el fallo de arranque
+if [ -f "$BRANDING_DEST/branding.desc" ]; then
+    # Eliminar líneas anteriores para evitar duplicaciones
+    sed -i '/^slideshow:/d' "$BRANDING_DEST/branding.desc"
+    sed -i '/^slideshowAPI:/d' "$BRANDING_DEST/branding.desc"
+    echo "slideshow: \"show.qml\"" >> "$BRANDING_DEST/branding.desc"
+    echo "slideshowAPI: 2" >> "$BRANDING_DEST/branding.desc"
+fi
+
+# English: Create a fallback slideshow QML file if not present
+# Español: Crear un archivo QML de presentación de diapositivas de respaldo si no existe
+if [ ! -f "$BRANDING_DEST/show.qml" ]; then
+    echo "Generating show.qml slideshow fallback..."
+    cat <<'EOF' > "$BRANDING_DEST/show.qml"
+import QtQuick 2.0
+import calamares.slideshow 1.0
+
+Presentation {
+    id: presentation
+
+    Timer {
+        id: advanceTimer
+        interval: 5000
+        running: presentation.activatedInCalamares
+        repeat: true
+        onTriggered: presentation.goToNextSlide()
+    }
+
+    Slide {
+        Text {
+            anchors.centerIn: parent
+            text: "Welcome to Pulsar OS!"
+            font.pixelSize: 22
+            color: "#ffffff"
+        }
+    }
+
+    Slide {
+        Text {
+            anchors.centerIn: parent
+            text: "Setting up a secure and fast environment..."
+            font.pixelSize: 18
+            color: "#e0e0e0"
+        }
+    }
+}
+EOF
 fi
 
 # ==============================================================================

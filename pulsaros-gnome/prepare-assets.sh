@@ -44,7 +44,7 @@ done
 # 2. Fallback a la configuración de la distribución y Madison API si el chroot no existe o está vacío
 if [ -z "$GNOME_VER" ]; then
     DEBIAN_VERSION="trixie" # Default fallback / Fallback por defecto
-    
+
     # Try loading environment variables
     # Intentar cargar variables de entorno
     for env_file in "../../configs/env.sh" "../configs/env.sh" "configs/env.sh"; do
@@ -53,10 +53,10 @@ if [ -z "$GNOME_VER" ]; then
             break
         fi
     done
-    
+
     echo "🔍 [ES] No se encontró chroot. Dediciendo según versión de Debian: $DEBIAN_VERSION"
     echo "🔍 [EN] Chroot not found. Inferring version from Debian suite: $DEBIAN_VERSION"
-    
+
     # Optional online query to Debian Madison API (with quick timeout)
     # Consulta opcional en línea a la API Debian Madison (con timeout rápido)
     if command -v curl >/dev/null 2>&1; then
@@ -66,7 +66,7 @@ if [ -z "$GNOME_VER" ]; then
             bookworm) suite_indicator="deb12" ;;
             sid|unstable) suite_indicator="unstable" ;;
         esac
-        
+
         if [ -n "$suite_indicator" ]; then
             madison_ver=$(curl --max-time 3 -s "https://api.ftp-master.debian.org/madison?package=gnome-shell&text=on" | grep "$suite_indicator" | head -n 1 | cut -d'|' -f2 | tr -d '[:space:]' || true)
             if [ -n "$madison_ver" ]; then
@@ -76,7 +76,7 @@ if [ -z "$GNOME_VER" ]; then
             fi
         fi
     fi
-    
+
     # 3. Final static fallback / Fallback estático final
     if [ -z "$GNOME_VER" ]; then
         case "$DEBIAN_VERSION" in
@@ -105,17 +105,17 @@ echo "🧩 Descargando extensiones de GNOME Shell desde Extensions.gnome.org (EG
 
 for uuid in "${EGO_EXTENSIONS[@]}"; do
     echo "Descargando: $uuid..."
-    
+
     # --- DOWNLOAD WITH BACKWARD FALLBACK / DESCARGA CON FALLBACK HACIA ATRÁS ---
     # We query EGO starting from the target GNOME version and go backward if not found.
     # Consultamos en EGO empezando por la versión de GNOME objetivo y retrocedemos si no se encuentra.
     download_path="null"
     current_ver=$GNOME_VER
-    
+
     while [ "$download_path" = "null" ] || [ -z "$download_path" ]; do
         info_url="https://extensions.gnome.org/extension-info/?uuid=${uuid}&shell_version=${current_ver}"
         download_path=$(curl -s "$info_url" | jq -r '.download_url')
-        
+
         if [ "$download_path" != "null" ] && [ -n "$download_path" ]; then
             if [ "$current_ver" -ne "$GNOME_VER" ]; then
                 echo "⚠️ [ES] Usando fallback compatible con GNOME $current_ver para $uuid"
@@ -123,7 +123,7 @@ for uuid in "${EGO_EXTENSIONS[@]}"; do
             fi
             break
         fi
-        
+
         # Stop at version 40 to avoid checking infinite/ancient versions
         # Detenerse en la versión 40 para evitar comprobar versiones antiguas/infinitas
         if [ "$current_ver" -le 40 ]; then
@@ -135,7 +135,7 @@ for uuid in "${EGO_EXTENSIONS[@]}"; do
     if [ "$download_path" != "null" ] && [ -n "$download_path" ]; then
         full_url="https://extensions.gnome.org${download_path}"
         tmp_zip="/tmp/${uuid}.zip"
-        
+
         if curl -L -s -o "$tmp_zip" "$full_url"; then
             dest_dir="$STAGE_DIR/usr/share/gnome-shell/extensions/${uuid}"
             mkdir -p "$dest_dir"
@@ -165,6 +165,22 @@ done
 # Compilar también el directorio global de schemas en staging
 echo "Compilando esquemas globales en staging..."
 glib-compile-schemas "$STAGE_DIR/usr/share/glib-2.0/schemas" || true
+
+# ==============================================================================
+# KIWI MENU LOGO REPLACEMENT
+# ==============================================================================
+# English: Replace the copyrighted Apple logo in Kiwi Menu with the Pulsar OS logo
+# Español: Reemplazar el logo de Apple con copyright en Kiwi Menu con el logo de Pulsar OS
+KIWI_DIR="$STAGE_DIR/usr/share/gnome-shell/extensions/kiwimenu@kemma"
+if [ -d "$KIWI_DIR" ]; then
+    echo "🍏 Reemplazando el logo de Apple en Kiwi Menu..."
+    # Descargar el logo oficial y guardarlo como apple-icon-symbolic.png
+    wget -q -O "$KIWI_DIR/icons/apple-icon-symbolic.png" "https://hosted.inled.es/pulsar-white-sf.png"
+    # Eliminar el svg original de Apple
+    rm -f "$KIWI_DIR/icons/apple-icon-symbolic.svg"
+    # Modificar src/icons.json y otros archivos si existen para actualizar la extensión a usar el .png
+    find "$KIWI_DIR" -type f -exec sed -i 's/apple-icon-symbolic.svg/apple-icon-symbolic.png/g' {} + || true
+fi
 
 # Ensure correct permissions for all files and folders under extensions and schemas directory (avoiding permission denied in Gnome Shell)
 # Asegurar permisos correctos para todos los archivos y carpetas bajo el directorio de extensiones y esquemas (evitando fallos de permisos en Gnome Shell)

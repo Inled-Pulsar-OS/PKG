@@ -272,6 +272,18 @@ class FallbackMenuButton extends PanelMenu.Button {
 
     _onItemActivated(itemLabel) {
         log(`Fallback item activado: ${itemLabel}`);
+        
+        // Handle web navigation for os.inled.es button without needing a window focus
+        // Manejar navegación web para el botón os.inled.es sin requerir foco de ventana
+        if (itemLabel === 'os.inled.es') {
+            try {
+                Gio.AppInfo.launch_default_for_uri("https://os.inled.es", null);
+            } catch (e) {
+                log(`Error al abrir os.inled.es: ${e}`);
+            }
+            return;
+        }
+
         let win = global.display.get_focus_window();
         if (!win) return;
 
@@ -290,6 +302,43 @@ class FallbackMenuButton extends PanelMenu.Button {
                     win.unmaximize(Meta.MaximizeFlags.BOTH);
                 } else {
                     win.maximize(Meta.MaximizeFlags.BOTH);
+                }
+                break;
+            case 'Resize':
+                // Resize active window using keyboard window-management API
+                // Redimensionar la ventana activa usando la API de gestión de ventanas por teclado
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+                    WindowMenu.WindowMenu.prototype._grabAction(win, Meta.GrabOp.KEYBOARD_RESIZING_UNKNOWN, global.display.get_current_time_roundtrip());
+                });
+                break;
+            case 'Copy':
+                // Simulate Ctrl+C keypress sequence via virtual keyboard device
+                // Simular secuencia de teclas Ctrl+C mediante el dispositivo de teclado virtual
+                try {
+                    let seat = Clutter.get_default_backend().get_default_seat();
+                    let kb = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+                    let time = GLib.get_monotonic_time();
+                    kb.notify_keyval(time, Clutter.KEY_Control_L, Clutter.KeyState.PRESSED);
+                    kb.notify_keyval(time, Clutter.KEY_c, Clutter.KeyState.PRESSED);
+                    kb.notify_keyval(time, Clutter.KEY_c, Clutter.KeyState.RELEASED);
+                    kb.notify_keyval(time, Clutter.KEY_Control_L, Clutter.KeyState.RELEASED);
+                } catch (e) {
+                    log(`Error al simular copiar: ${e}`);
+                }
+                break;
+            case 'Paste':
+                // Simulate Ctrl+V keypress sequence via virtual keyboard device
+                // Simular secuencia de teclas Ctrl+V mediante el dispositivo de teclado virtual
+                try {
+                    let seat = Clutter.get_default_backend().get_default_seat();
+                    let kb = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+                    let time = GLib.get_monotonic_time();
+                    kb.notify_keyval(time, Clutter.KEY_Control_L, Clutter.KeyState.PRESSED);
+                    kb.notify_keyval(time, Clutter.KEY_v, Clutter.KeyState.PRESSED);
+                    kb.notify_keyval(time, Clutter.KEY_v, Clutter.KeyState.RELEASED);
+                    kb.notify_keyval(time, Clutter.KEY_Control_L, Clutter.KeyState.RELEASED);
+                } catch (e) {
+                    log(`Error al simular pegar: ${e}`);
                 }
                 break;
         }
@@ -395,16 +444,33 @@ const MenuBar = class MenuBar {
     setFallbackMenus() {
         this.removeAll();
         
+        // Get the active window/app name for macOS-like dynamic app menu
+        // Obtener el nombre de la aplicación activa para el menú dinámico tipo macOS
+        const focusApp = WinTracker.focus_app;
+        let appName = 'PulsarOS';
+        if (focusApp) {
+            appName = focusApp.get_name();
+        }
+
         // Define standard macOS-like static fallback menus
         // Definir menús de fallback estáticos tipo macOS tradicionales
-        const fallbackData = {
-            'File': ['New Window', 'Open...', 'Save', 'Close Window'],
-            'Edit': ['Undo', 'Redo', 'Cut', 'Copy', 'Paste', 'Select All'],
-            'View': ['Zoom In', 'Zoom Out', 'Actual Size', 'Enter Full Screen'],
-            'Go': ['Back', 'Forward', 'Home'],
-            'Window': ['Minimize', 'Zoom', 'Cycle Through Windows', 'Bring All to Front'],
-            'Help': ['PulsarOS Help', 'About PulsarOS']
-        };
+        const fallbackData = {};
+        
+        // Active Application Menu (Always placed first)
+        // Menú de la Aplicación Activa (Siempre va primero)
+        fallbackData[appName] = [
+            'About ' + appName,
+            'Services',
+            'Hide ' + appName,
+            'Quit ' + appName
+        ];
+
+        fallbackData['File'] = ['New Window', 'Open...', 'Save', 'Close Window'];
+        fallbackData['Edit'] = ['Undo', 'Redo', 'Cut', 'Copy', 'Paste', 'Select All'];
+        fallbackData['View'] = ['Zoom In', 'Zoom Out', 'Actual Size', 'Enter Full Screen'];
+        fallbackData['Go'] = ['Back', 'Forward', 'Home'];
+        fallbackData['Window'] = ['Minimize', 'Zoom', 'Resize', 'Cycle Through Windows', 'Bring All to Front'];
+        fallbackData['Help'] = ['PulsarOS Help', 'os.inled.es', 'About PulsarOS'];
 
         let first = true;
         for (let label in fallbackData) {
@@ -432,11 +498,27 @@ const MenuBar = class MenuBar {
             this._hideMenu();
         }
         this.removeAll();
-        let first = true;
-        for (let menu of menus) {
-            this.addMenuButton(menu, first);
-            first = false;
+
+        // Get the active window/app name for macOS-like dynamic app menu
+        // Obtener el nombre de la aplicación activa para el menú dinámico tipo macOS
+        const focusApp = WinTracker.focus_app;
+        let appName = 'PulsarOS';
+        if (focusApp) {
+            appName = focusApp.get_name();
         }
+
+        // Add the application menu button first
+        // Añadir primero el botón del menú de la aplicación
+        this.addMenuButton(appName, true);
+
+        // Add the rest of the backend-provided menus
+        // Añadir el resto de menús provistos por el backend
+        for (let menu of menus) {
+            if (menu !== appName) {
+                this.addMenuButton(menu, false);
+            }
+        }
+
         if (this._forceShowMenu && !Main.overview.visibleTarget) {
             this._onPanelEnter();
         }

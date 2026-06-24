@@ -10,10 +10,14 @@ if [ -d "/usr/lib/systemd/user" ]; then
     ln -sf "/usr/lib/systemd/user/fildem.service" "/usr/lib/systemd/user/default.target.wants/fildem.service"
 fi
 
-# Configurar variable de entorno global para GTK_MODULES si no está en /etc/environment
+# Configurar variable de entorno global para GTK_MODULES y UBUNTU_MENUPROXY si no están en /etc/environment
+# Configure global environment variables for GTK_MODULES and UBUNTU_MENUPROXY if not present in /etc/environment
 if [ -f "/etc/environment" ]; then
     if ! grep -q "GTK_MODULES" /etc/environment; then
         echo "GTK_MODULES=appmenu-gtk-module" >> /etc/environment
+    fi
+    if ! grep -q "UBUNTU_MENUPROXY" /etc/environment; then
+        echo "UBUNTU_MENUPROXY=1" >> /etc/environment
     fi
 fi
 
@@ -79,6 +83,19 @@ update-alternatives --set gnome-www-browser /usr/bin/seafari || true
 
 if [ -f "/usr/share/applications/seafari.desktop" ]; then
     sed -i 's/^Icon=.*/Icon=safari/' /usr/share/applications/seafari.desktop
+fi
+
+# English: Correct permissions and ownership on home directories to avoid write permission errors (like Calamares log issues)
+# Español: Corregir permisos y propietario en directorios personales para evitar errores de escritura (como Calamares log)
+echo "👤 Asegurando permisos en directorios home..."
+chown -R jaime:jaime /home/jaime || true
+chown -R live:live /home/live || true
+
+# English: Register Flathub repository globally
+# Español: Registrar el repositorio de Flathub de forma global
+echo "📥 Configurando repositorio de Flathub..."
+if command -v flatpak >/dev/null 2>&1; then
+    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || true
 fi
 
 exit 0
