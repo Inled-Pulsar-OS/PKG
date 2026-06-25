@@ -1,0 +1,6 @@
+# PAM configuration for Pulsar OS Lock Screen
+# Permite autenticar al usuario actual desde la pantalla de bloqueo.
+# Compatible with standard Debian PAM stack.
+
+auth     include      common-auth
+account  include      common-account

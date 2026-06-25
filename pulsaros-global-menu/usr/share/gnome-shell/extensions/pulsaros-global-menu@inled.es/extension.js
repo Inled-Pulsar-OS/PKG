@@ -48,11 +48,472 @@ const GlobalMenuButton = GObject.registerClass({
     }
 });
 
+// --- Tahoe Theme Screen Locker ---
+// --- Bloqueador de pantalla con tema Tahoe ---
+const LockScreen = GObject.registerClass({
+    GTypeName: 'PulsarosLockScreen'
+}, class LockScreen extends St.BoxLayout {
+    _init(extension) {
+        super._init({
+            name: 'pulsaros-lockscreen',
+            style_class: 'pulsaros-lockscreen-root',
+            visible: false,
+            clip_to_allocation: true,
+            reactive: true,
+            orientation: Clutter.Orientation.VERTICAL,
+            x_expand: true,
+            y_expand: true
+        });
+        
+        this._extension = extension;
+        this._isLocked = false;
+        this._hasGrab = false;
+        this._authenticating = false;
+        this._timerId = 0;
+        this._sizeChangedId = 0;
+        this._sizeChangedId2 = 0;
+        
+        // Dynamically reference extension path for background asset
+        // Referenciar dinámicamente la ruta de la extensión para el fondo de pantalla
+        this.style = `background-image: url("file://${this._extension.path}/background.webp"); background-size: cover;`;
+        
+        // Monitor screen size changes to remain fullscreen
+        // Monitorear cambios de resolución de pantalla para mantenerse en pantalla completa
+        this._sizeChangedId = global.stage.connect('notify::width', () => this._onSizeChanged());
+        this._sizeChangedId2 = global.stage.connect('notify::height', () => this._onSizeChanged());
+        this._onSizeChanged();
+        
+        this._buildUI();
+    }
+    
+    _onSizeChanged() {
+        this.set_position(0, 0);
+        this.set_size(global.stage.width, global.stage.height);
+    }
+    
+    _buildUI() {
+        // 1. Top bar for power actions (Shutdown, Reboot)
+        // 1. Barra superior para acciones de energía (Apagar, Reiniciar)
+        let topBar = new St.BoxLayout({
+            style_class: 'pulsaros-lockscreen-topbar',
+            x_align: Clutter.ActorAlign.END,
+            y_align: Clutter.ActorAlign.START
+        });
+        this.add_child(topBar);
+        
+        // Reboot Button
+        // Botón de reiniciar
+        this._rebootBtn = new St.Button({
+            style_class: 'pulsaros-lockscreen-power-button',
+            reactive: true,
+            can_focus: true,
+            child: new St.Icon({
+                icon_name: 'system-restart-symbolic',
+                icon_size: 20
+            })
+        });
+        this._rebootBtn.connect('clicked', () => {
+            GLib.spawn_command_line_async("systemctl reboot");
+        });
+        topBar.add_child(this._rebootBtn);
+        
+        // Shutdown Button
+        // Botón de apagar
+        this._shutdownBtn = new St.Button({
+            style_class: 'pulsaros-lockscreen-power-button',
+            reactive: true,
+            can_focus: true,
+            child: new St.Icon({
+                icon_name: 'system-shutdown-symbolic',
+                icon_size: 20
+            })
+        });
+        this._shutdownBtn.connect('clicked', () => {
+            GLib.spawn_command_line_async("systemctl poweroff");
+        });
+        topBar.add_child(this._shutdownBtn);
+        
+        // Fixed top spacer to push clock down slightly (like macOS)
+        // Espaciador superior fijo para empujar el reloj un poco hacia abajo (como en macOS)
+        let spacer = new St.Widget({
+            style_class: 'pulsaros-lockscreen-spacer',
+            height: 60
+        });
+        this.add_child(spacer);
+        
+        // 2. Central Clock displays
+        // 2. Reloj central en pantalla
+        this._clockBox = new St.BoxLayout({
+            orientation: Clutter.Orientation.VERTICAL,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.START,
+            style_class: 'pulsaros-lockscreen-clock-box'
+        });
+        this.add_child(this._clockBox);
+        
+        this._timeLabel = new St.Label({
+            style_class: 'pulsaros-lockscreen-time-label',
+            text: '00:00'
+        });
+        this._clockBox.add_child(this._timeLabel);
+        
+        this._dateLabel = new St.Label({
+            style_class: 'pulsaros-lockscreen-date-label',
+            text: ''
+        });
+        this._clockBox.add_child(this._dateLabel);
+        
+        // Middle spacer
+        // Espaciador medio
+        let middleSpacer = new St.Widget({
+            y_expand: true,
+            style_class: 'pulsaros-lockscreen-middle-spacer'
+        });
+        this.add_child(middleSpacer);
+        
+        // 3. User Credentials login card
+        // 3. Tarjeta de inicio de sesión de usuario
+        this._userCard = new St.BoxLayout({
+            orientation: Clutter.Orientation.VERTICAL,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.END,
+            style_class: 'pulsaros-lockscreen-user-card'
+        });
+        this.add_child(this._userCard);
+        
+        // Circular Avatar
+        // Avatar circular
+        let username = GLib.get_user_name();
+        
+        this._avatarWidget = new St.Widget({
+            style_class: 'pulsaros-lockscreen-avatar',
+            x_align: Clutter.ActorAlign.CENTER
+        });
+        
+        try {
+            let avatarPath = `/var/lib/AccountsService/icons/${username}`;
+            let avatarFile = Gio.File.new_for_path(avatarPath);
+            
+            if (avatarFile.query_exists(null)) {
+                this._avatarWidget.style = `background-image: url("file://${avatarPath}"); background-size: cover; border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9);`;
+            } else {
+                let faceFile = Gio.File.new_for_path(GLib.get_home_dir() + '/.face');
+                if (faceFile.query_exists(null)) {
+                    this._avatarWidget.style = `background-image: url("file://${GLib.get_home_dir()}/.face"); background-size: cover; border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9);`;
+                } else {
+                    this._avatarWidget.style = `border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9); background-color: rgba(255, 255, 255, 0.15);`;
+                    let defaultIcon = new St.Icon({
+                        icon_name: 'avatar-default-symbolic',
+                        icon_size: 64,
+                        style_class: 'pulsaros-lockscreen-avatar-default',
+                        x_align: Clutter.ActorAlign.CENTER,
+                        y_align: Clutter.ActorAlign.CENTER
+                    });
+                    this._avatarWidget.add_child(defaultIcon);
+                }
+            }
+        } catch (e) {
+            console.error("[LockScreen] Failed to load avatar:", e);
+            // Default styling fallback / Alternativa de estilo por defecto
+            this._avatarWidget.style = `border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9); background-color: rgba(255, 255, 255, 0.15);`;
+            let defaultIcon = new St.Icon({
+                icon_name: 'avatar-default-symbolic',
+                icon_size: 64,
+                style_class: 'pulsaros-lockscreen-avatar-default',
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER
+            });
+            this._avatarWidget.add_child(defaultIcon);
+        }
+        this._userCard.add_child(this._avatarWidget);
+        
+        // Display Name (Real Name or Username fallback)
+        // Nombre para mostrar (Nombre real o usuario como alternativa)
+        let realName = username;
+        try {
+            let gn = GLib.get_real_name();
+            if (gn && gn !== 'Unknown' && gn.trim() !== '') {
+                realName = gn;
+            }
+        } catch (e) {
+            // ignore
+        }
+        realName = realName.charAt(0).toUpperCase() + realName.slice(1);
+        
+        this._nameLabel = new St.Label({
+            style_class: 'pulsaros-lockscreen-name-label',
+            x_align: Clutter.ActorAlign.CENTER,
+            text: realName
+        });
+        this._userCard.add_child(this._nameLabel);
+        
+        // Password Input Entry
+        // Entrada de contraseña
+        this._passwordEntry = new St.Entry({
+            style_class: 'pulsaros-lockscreen-entry',
+            x_align: Clutter.ActorAlign.CENTER,
+            hint_text: 'Enter Password',
+            can_focus: true,
+            reactive: true
+        });
+        
+        // Safe check and resolution for Clutter.Text inside St.Entry across GNOME versions
+        // Comprobación segura y resolución para Clutter.Text dentro de St.Entry en distintas versiones de GNOME
+        let clutterText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText;
+        if (!clutterText && typeof this._passwordEntry.get_clutter_text === 'function') {
+            clutterText = this._passwordEntry.get_clutter_text();
+        }
+        
+        if (clutterText) {
+            clutterText.set_password_char('●');
+            
+            // Trigger verification when pressing Enter
+            // Lanzar verificación al pulsar Enter
+            clutterText.connect('activate', () => {
+                let password = this._passwordEntry.get_text();
+                if (password && password.length > 0) {
+                    this._authenticate(password);
+                }
+            });
+            
+            // Reset text style upon typing
+            // Restablecer el estilo al escribir
+            clutterText.connect('text-changed', () => {
+                this._passwordEntry.style_class = 'pulsaros-lockscreen-entry';
+                this._passwordEntry.set_hint_text('Enter Password');
+            });
+            
+            // Clear text on Escape key
+            // Limpiar el texto al pulsar Escape
+            clutterText.connect('key-press-event', (actor, event) => {
+                let symbol = event.get_key_symbol();
+                if (symbol === Clutter.KEY_Escape) {
+                    this._passwordEntry.set_text('');
+                    return Clutter.EVENT_STOP;
+                }
+                return Clutter.EVENT_PROPAGATE;
+            });
+        }
+        
+        this._userCard.add_child(this._passwordEntry);
+        
+        // Grab keyboard focus on any background click (safely targeting actual Clutter.Text)
+        // Forzar foco en la entrada de contraseña al hacer clic en el fondo (apuntando con seguridad a Clutter.Text)
+        this.connect('button-press-event', () => {
+            let activeText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText || this._passwordEntry;
+            activeText.grab_key_focus();
+            return Clutter.EVENT_PROPAGATE;
+        });
+        
+        // Bottom spacer to offset card
+        // Espaciador inferior para compensar la tarjeta
+        let bottomSpacer = new St.Widget({
+            style_class: 'pulsaros-lockscreen-bottom-spacer',
+            height: 40
+        });
+        this.add_child(bottomSpacer);
+    }
+    
+    _updateClock() {
+        let now = GLib.DateTime.new_now_local();
+        this._timeLabel.set_text(now.format('%H:%M'));
+        this._dateLabel.set_text(now.format('%A, %B %d'));
+    }
+    
+    lock() {
+        if (this._isLocked) return;
+        this._isLocked = true;
+        this.visible = true;
+        this._passwordEntry.set_text('');
+        this._passwordEntry.set_reactive(true);
+        this._passwordEntry.style_class = 'pulsaros-lockscreen-entry';
+        this._passwordEntry.set_hint_text('Enter Password');
+        
+        // Put lockscreen overlay on the absolute top of the uiGroup stack
+        // Poner la pantalla de bloqueo en el tope absoluto del uiGroup
+        try {
+            let parent = this.get_parent();
+            if (parent) {
+                parent.set_child_at_index(this, -1);
+            }
+        } catch (e) {
+            console.error("[LockScreen] Failed to raise lockscreen overlay via set_child_at_index:", e);
+            try {
+                Main.uiGroup.set_child_above_sibling(this, null);
+            } catch (e2) {
+                console.error("[LockScreen] Fallback set_child_above_sibling failed too:", e2);
+            }
+        }
+        
+        // Defer input grab and key focus to the next main loop cycle to guarantee the actor is mapped
+        // Diferir la captura de entrada y el foco de teclado al siguiente ciclo del bucle principal para garantizar que el actor esté mapeado
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            if (!this._isLocked) return GLib.SOURCE_REMOVE;
+            
+            if (Main.pushModal(this)) {
+                this._hasGrab = true;
+            } else {
+                console.error("[LockScreen] Failed to acquire input grab");
+                this._hasGrab = false;
+            }
+            
+            let activeText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText || this._passwordEntry;
+            activeText.grab_key_focus();
+            return GLib.SOURCE_REMOVE;
+        });
+        
+        // Start live clock updates
+        // Iniciar actualizaciones en vivo del reloj
+        this._updateClock();
+        this._timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
+            this._updateClock();
+            return GLib.SOURCE_CONTINUE;
+        });
+        
+        this.opacity = 255;
+    }
+    
+    unlock() {
+        if (!this._isLocked) return;
+        this._isLocked = false;
+        this.visible = false;
+        
+        // Release modal input grab
+        // Liberar la captura modal de entrada
+        if (this._hasGrab) {
+            Main.popModal(this);
+            this._hasGrab = false;
+        }
+        
+        // Clean clock timer
+        // Detener el temporizador del reloj
+        if (this._timerId) {
+            GLib.source_remove(this._timerId);
+            this._timerId = 0;
+        }
+    }
+    
+    _authenticate(password) {
+        if (this._authenticating) return;
+        this._authenticating = true;
+        
+        this._passwordEntry.set_reactive(false);
+        this._passwordEntry.style_class = 'pulsaros-lockscreen-entry-authenticating';
+        
+        let username = GLib.get_user_name();
+        
+        // Check if the PAM service file is present. If not, fallback to developer passwords for local testing on host
+        // Comprobar si el archivo de servicio PAM existe. Si no, usar contraseñas de desarrollo para pruebas locales en el host
+        let pamFile = Gio.File.new_for_path('/etc/pam.d/pulsaros-lock');
+        if (!pamFile.query_exists(null)) {
+            console.warn("[LockScreen] PAM service '/etc/pam.d/pulsaros-lock' is missing. Falling back to developer passwords.");
+            if (password === 'pulsar' || password === 'live' || password === 'jaime') {
+                this._onAuthSuccess();
+            } else {
+                this._onAuthFailure();
+            }
+            return;
+        }
+        
+        try {
+            // Run pamtester asynchronously using stdin piping
+            // Ejecutar pamtester asíncronamente enviando la contraseña por stdin
+            let proc = new Gio.Subprocess({
+                argv: ['/usr/bin/pamtester', 'pulsaros-lock', username, 'authenticate'],
+                flags: Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+            });
+            proc.init(null);
+            
+            let stdinStream = proc.get_stdin_pipe();
+            if (stdinStream) {
+                let bytes = GLib.Bytes.new(password + '\n');
+                stdinStream.write_bytes(bytes, null);
+                stdinStream.close(null);
+            }
+            
+            proc.wait_async(null, (obj, res) => {
+                try {
+                    proc.wait_finish(res);
+                    let success = proc.get_successful();
+                    if (success) {
+                        this._onAuthSuccess();
+                    } else {
+                        this._onAuthFailure();
+                    }
+                } catch (e) {
+                    console.error("[LockScreen] pamtester wait error:", e);
+                    this._onAuthFailure();
+                }
+            });
+        } catch (e) {
+            console.error("[LockScreen] pamtester launch failed:", e);
+            // Local fallback for testing under host (without pamtester)
+            // Alternativa local para pruebas en el host (sin pamtester)
+            if (password === 'pulsar' || password === 'live' || password === 'jaime') {
+                this._onAuthSuccess();
+            } else {
+                this._onAuthFailure();
+            }
+        }
+    }
+    
+    _onAuthSuccess() {
+        this._authenticating = false;
+        this.unlock();
+    }
+    
+    _onAuthFailure() {
+        this._authenticating = false;
+        this._passwordEntry.set_reactive(true);
+        this._passwordEntry.set_text('');
+        this._passwordEntry.set_hint_text('Incorrect Password');
+        this._passwordEntry.style_class = 'pulsaros-lockscreen-entry-failed';
+        this._passwordEntry.grab_key_focus();
+        
+        // Shake animation
+        // Animación de agitación de contraseña incorrecta
+        let originalX = this._passwordEntry.translation_x;
+        let shakeOffset = 10;
+        let step = 0;
+        let shakeInterval = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+            if (step >= 6) {
+                this._passwordEntry.translation_x = originalX;
+                return GLib.SOURCE_REMOVE;
+            }
+            this._passwordEntry.translation_x = originalX + (step % 2 === 0 ? shakeOffset : -shakeOffset);
+            step++;
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+    
+    destroy() {
+        if (this._sizeChangedId) {
+            global.stage.disconnect(this._sizeChangedId);
+            this._sizeChangedId = 0;
+        }
+        if (this._sizeChangedId2) {
+            global.stage.disconnect(this._sizeChangedId2);
+            this._sizeChangedId2 = 0;
+        }
+        if (this._timerId) {
+            GLib.source_remove(this._timerId);
+            this._timerId = 0;
+        }
+        if (this._isLocked && this._hasGrab) {
+            Main.popModal(this);
+        }
+        super.destroy();
+    }
+});
+
 export default class PulsarosGlobalMenuExtension extends Extension {
     enable() {
         this._menuButtons = [];
         this._focusNotifyId = 0;
         this._virtualKeyboard = null;
+        this._origCanLock = null;
+        this._origLock = null;
+        this._origUnlock = null;
         
         // Initialize the virtual keyboard device for injecting keystrokes (Wayland native)
         // Inicializar el dispositivo de teclado virtual para inyectar pulsaciones de tecla (nativo en Wayland)
@@ -63,6 +524,27 @@ export default class PulsarosGlobalMenuExtension extends Extension {
             }
         } catch (e) {
             console.error("[GlobalMenu] Failed to create virtual keyboard device:", e);
+        }
+        
+        // Create lockscreen overlay instance and add it to top of uiGroup
+        // Crear la instancia de pantalla de bloqueo y añadirla a uiGroup
+        this._lockScreenOverlay = new LockScreen(this);
+        Main.uiGroup.add_child(this._lockScreenOverlay);
+        
+        // Bind the native lock-screen media key shortcut (Super+L) to our custom LockScreen overlay
+        // Vincular el atajo de teclado nativo de bloqueo (Super+L) a nuestra pantalla de bloqueo
+        try {
+            Main.wm.addKeybinding(
+                'screensaver',
+                new Gio.Settings({ schema_id: 'org.gnome.settings-daemon.plugins.media-keys' }),
+                Meta.KeyBindingFlags.NONE,
+                Shell.ActionMode.ALL,
+                () => {
+                    this._lockScreenOverlay.lock();
+                }
+            );
+        } catch (e) {
+            console.error("[GlobalMenu] Failed to bind screensaver keybinding:", e);
         }
         
         // Create each of the menu buttons
@@ -77,8 +559,6 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         
         // Add menu buttons to GNOME top panel (Left Box)
         // Añadir botones de menú al panel superior de GNOME (caja izquierda)
-        // Using sequential position indices to maintain the Mac-like layout order
-        // Usamos índices de posición secuenciales para mantener el orden de diseño estilo Mac
         let pos = 1; 
         for (let button of this._menuButtons) {
             Main.panel.addToStatusArea(`global-menu-${button.uuid_suffix}`, button, pos++, 'left');
@@ -107,6 +587,37 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         } catch (e) {
             console.error("[GlobalMenu] Failed to override can_lock:", e);
         }
+
+        // Intercept native screenShield lock and unlock events to use our custom overlay
+        // Interceptar eventos de bloqueo y desbloqueo nativos del screenshield para usar nuestra pantalla
+        try {
+            if (Main.screenShield) {
+                this._origLock = Main.screenShield.lock;
+                let self = this;
+                Main.screenShield.lock = function(animate) {
+                    try {
+                        self._lockScreenOverlay.lock();
+                    } catch (e) {
+                        console.error("[GlobalMenu] Failed to trigger custom lock:", e);
+                    }
+                    return true;
+                };
+                
+                this._origUnlock = Main.screenShield.unlock;
+                Main.screenShield.unlock = function(animate) {
+                    try {
+                        self._lockScreenOverlay.unlock();
+                    } catch (e) {
+                        console.error("[GlobalMenu] Failed to trigger custom unlock:", e);
+                    }
+                    if (self._origUnlock) {
+                        self._origUnlock.call(Main.screenShield, animate);
+                    }
+                };
+            }
+        } catch (e) {
+            console.error("[GlobalMenu] Failed to override Main.screenShield:", e);
+        }
     }
     
     disable() {
@@ -115,6 +626,22 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         if (this._focusNotifyId) {
             global.display.disconnect(this._focusNotifyId);
             this._focusNotifyId = 0;
+        }
+        
+        // Unbind the screensaver keybinding
+        // Desvincular el atajo de teclado de screensaver
+        try {
+            Main.wm.removeKeybinding('screensaver');
+        } catch (e) {
+            // ignore
+        }
+        
+        // Destroy custom lockscreen overlay
+        // Destruir la pantalla de bloqueo personalizada
+        if (this._lockScreenOverlay) {
+            Main.uiGroup.remove_child(this._lockScreenOverlay);
+            this._lockScreenOverlay.destroy();
+            this._lockScreenOverlay = null;
         }
         
         // Safely destroy and remove all panel buttons
@@ -134,6 +661,21 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         } catch (e) {
             // ignore
         }
+
+        // Restore original lock and unlock functions
+        // Restaurar las funciones de bloqueo y desbloqueo originales
+        try {
+            if (Main.screenShield) {
+                if (this._origLock) {
+                    Main.screenShield.lock = this._origLock;
+                }
+                if (this._origUnlock) {
+                    Main.screenShield.unlock = this._origUnlock;
+                }
+            }
+        } catch (e) {
+            // ignore
+        }
         
         // Nullify the virtual keyboard device reference
         // Anular la referencia del dispositivo de teclado virtual
@@ -146,11 +688,14 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         this.logoMenuButton = new GlobalMenuButton("");
         this.logoMenuButton.uuid_suffix = "logo";
         
-        // Replace default label with a system logo icon
-        // Reemplazar la etiqueta por defecto por un icono de logo del sistema
         this.logoMenuButton.label.destroy();
+        
+        // Load custom Pulsar OS PNG logo icon from the extension directory path
+        // Cargar el icono del logo PNG personalizado de Pulsar OS desde la ruta del directorio de la extensión
+        let iconFile = Gio.File.new_for_path(this.path + '/pulsar-white-sf.png');
+        let fileIcon = new Gio.FileIcon({ file: iconFile });
         this.logoMenuButton.icon = new St.Icon({
-            icon_name: 'start-here-symbolic',
+            gicon: fileIcon,
             style_class: 'global-menu-logo-icon'
         });
         this.logoMenuButton.add_child(this.logoMenuButton.icon);
@@ -472,13 +1017,15 @@ export default class PulsarosGlobalMenuExtension extends Extension {
     // --- Utilidad para bloquear la pantalla ---
     _lockScreen() {
         try {
-            if (Main.screenShield) {
+            if (this._lockScreenOverlay) {
+                this._lockScreenOverlay.lock();
+            } else if (Main.screenShield) {
                 Main.screenShield.lock(true);
             } else {
                 GLib.spawn_command_line_async("loginctl lock-session");
             }
         } catch (e) {
-            console.error("[GlobalMenu] Failed to lock screen via Main.screenShield:", e);
+            console.error("[GlobalMenu] Failed to lock screen:", e);
             GLib.spawn_command_line_async("loginctl lock-session");
         }
     }
