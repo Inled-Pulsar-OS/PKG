@@ -210,7 +210,7 @@ class MenuButton extends PanelMenu.Button {
         this.labelWidget = new St.Label({
             text: this._label,
             y_align: Clutter.ActorAlign.CENTER,
-            reactive: true
+            reactive: false
         });
         this.box.add_child(this.labelWidget);
         this.add_child(this.box);
@@ -248,10 +248,20 @@ class FallbackMenuButton extends PanelMenu.Button {
         this.labelWidget = new St.Label({
             text: this._label,
             y_align: Clutter.ActorAlign.CENTER,
-            reactive: true
+            reactive: false
         });
         this.box.add_child(this.labelWidget);
         this.add_child(this.box);
+
+        // Force menu display toggle on click event for maximum robustness
+        // Forzar alternancia de la visualización del menú en el evento de clic para máxima robustez
+        this.connect('button-press-event', (actor, event) => {
+            if (event.get_button() === 1) {
+                this.menu.toggle();
+                return Clutter.EVENT_STOP;
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
 
         // Add dropdown items for fallback simulation / Añadir elementos del menú desplegable
         for (let itemLabel of items) {

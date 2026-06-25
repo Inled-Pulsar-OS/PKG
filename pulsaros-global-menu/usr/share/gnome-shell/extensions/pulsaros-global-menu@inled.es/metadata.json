@@ -1,0 +1,14 @@
+{
+  "uuid": "pulsaros-global-menu@inled.es",
+  "name": "Pulsar OS Global Menu",
+  "description": "A lightweight global menu extension for Pulsar OS, showing Mac-like application menus in the top panel. Designed for Wayland.",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50"
+  ],
+  "url": "https://inled.es"
+}

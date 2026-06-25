@@ -1,0 +1,32 @@
+/* stylesheet.css - Pulsar OS Global Menu styling */
+/* stylesheet.css - Estilos del Menú Global de Pulsar OS */
+
+/* The active app label is bold, mimicking macOS top bar app menu */
+/* La etiqueta de la app activa es negrita, imitando el menú de macOS en la barra superior */
+.global-menu-app-label {
+    font-weight: bold;
+    color: #ffffff;
+    padding: 0 4px;
+    font-size: 13px;
+    transition: color 0.15s ease;
+}
+
+/* Regular menus (File, Edit, Go...) are normal weight and slightly translucent */
+/* Los menús comunes (Archivo, Edición, Ir...) tienen peso normal y son un poco translúcidos */
+.global-menu-label {
+    font-weight: normal;
+    color: #dfdfdf;
+    padding: 0 4px;
+    font-size: 13px;
+    transition: color 0.15s ease;
+}
+
+/* Subtly light up menu items when hovered */
+/* Iluminar sutilmente las etiquetas al pasar el cursor */
+.global-menu-label:hover {
+    color: #ffffff;
+}
+
+.global-menu-app-label:hover {
+    color: #ffffff;
+}

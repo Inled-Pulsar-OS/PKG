@@ -1,0 +1,10 @@
+Package: pulsaros-global-menu
+Version: 1.0.0
+Section: gnome
+Priority: optional
+Architecture: all
+Maintainer: Jaime <info@inled.es>
+Depends: gnome-shell
+Description: Lightweight global menu extension for Pulsar OS.
+ Provides Mac-like global application menus in the top bar.
+ Fully compatible with GNOME 45-50 and Wayland.
