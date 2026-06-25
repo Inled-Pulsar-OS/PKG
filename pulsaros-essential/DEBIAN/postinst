@@ -3,23 +3,6 @@ set -e
 
 echo "🛠️ Configurando utilidades y red de Pulsar OS..."
 
-# Habilitar globalmente el servicio de fildem mediante systemd para todos los usuarios
-if [ -d "/usr/lib/systemd/user" ]; then
-    echo "Configurando Fildem HUD Systemd Service..."
-    mkdir -p /usr/lib/systemd/user/default.target.wants
-    ln -sf "/usr/lib/systemd/user/fildem.service" "/usr/lib/systemd/user/default.target.wants/fildem.service"
-fi
-
-# Configurar variable de entorno global para GTK_MODULES y UBUNTU_MENUPROXY si no están en /etc/environment
-# Configure global environment variables for GTK_MODULES and UBUNTU_MENUPROXY if not present in /etc/environment
-if [ -f "/etc/environment" ]; then
-    if ! grep -q "GTK_MODULES" /etc/environment; then
-        echo "GTK_MODULES=appmenu-gtk-module" >> /etc/environment
-    fi
-    if ! grep -q "UBUNTU_MENUPROXY" /etc/environment; then
-        echo "UBUNTU_MENUPROXY=1" >> /etc/environment
-    fi
-fi
 
 # Configuración de locales si locales está instalado
 if command -v locale-gen >/dev/null; then
@@ -32,7 +15,7 @@ if command -v locale-gen >/dev/null; then
         echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
     fi
     locale-gen
-    echo "LANG=es_ES.UTF-8" > /etc/default/locale
+    echo "LANG=en_US.UTF-8" > /etc/default/locale
 fi
 
 # ==============================================================================

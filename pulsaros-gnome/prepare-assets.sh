@@ -92,7 +92,6 @@ fi
 EGO_EXTENSIONS=(
     "wiggle@mechtifs"
     "search-light@icedman.github.com"
-    "kiwimenu@kemma"
     "compiz-alike-magic-lamp-effect@hermes83.github.com"
     "fullscreen-to-empty-workspace2@corgijan.dev"
     "appmenu-is-back@fthx"
@@ -171,16 +170,7 @@ glib-compile-schemas "$STAGE_DIR/usr/share/glib-2.0/schemas" || true
 # ==============================================================================
 # English: Replace the copyrighted Apple logo in Kiwi Menu with the Pulsar OS logo
 # Español: Reemplazar el logo de Apple con copyright en Kiwi Menu con el logo de Pulsar OS
-KIWI_DIR="$STAGE_DIR/usr/share/gnome-shell/extensions/kiwimenu@kemma"
-if [ -d "$KIWI_DIR" ]; then
-    echo "🍏 Reemplazando el logo de Apple en Kiwi Menu..."
-    # Descargar el logo oficial y guardarlo como apple-icon-symbolic.png
-    wget -q -O "$KIWI_DIR/icons/apple-icon-symbolic.png" "https://hosted.inled.es/pulsar-white-sf.png"
-    # Eliminar el svg original de Apple
-    rm -f "$KIWI_DIR/icons/apple-icon-symbolic.svg"
-    # Modificar src/icons.json y otros archivos si existen para actualizar la extensión a usar el .png
-    find "$KIWI_DIR" -type f -exec sed -i 's/apple-icon-symbolic.svg/apple-icon-symbolic.png/g' {} + || true
-fi
+
 
 # Ensure correct permissions for all files and folders under extensions and schemas directory (avoiding permission denied in Gnome Shell)
 # Asegurar permisos correctos para todos los archivos y carpetas bajo el directorio de extensiones y esquemas (evitando fallos de permisos en Gnome Shell)

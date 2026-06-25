@@ -20,8 +20,9 @@ import GObject from 'gi://GObject';
 
 // Custom button class for our spotlight launcher
 // Clase de botón personalizada para nuestro lanzador de Spotlight
-const SpotlightLauncherButton = GObject.registerClass(
-class SpotlightLauncherButton extends PanelMenu.Button {
+const SpotlightLauncherButton = GObject.registerClass({
+    GTypeName: 'PulsarosSpotlightLauncherButton'
+}, class SpotlightLauncherButton extends PanelMenu.Button {
     _init() {
         // Alignment 0.5, unique identifier, dontCreateMenu = true (do not open a dropdown submenu)
         // Alineación 0.5, identificador único, dontCreateMenu = true (no abre submenú desplegable al clicar)

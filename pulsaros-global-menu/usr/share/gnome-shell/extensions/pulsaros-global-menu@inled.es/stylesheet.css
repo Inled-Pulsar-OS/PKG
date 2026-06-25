@@ -1,6 +1,14 @@
 /* stylesheet.css - Pulsar OS Global Menu styling */
 /* stylesheet.css - Estilos del Menú Global de Pulsar OS */
 
+/* System logo icon on the far left panel button */
+/* Icono del logo del sistema en el botón de panel del extremo izquierdo */
+.global-menu-logo-icon {
+    width: 16px;
+    height: 16px;
+    padding: 0 4px;
+}
+
 /* The active app label is bold, mimicking macOS top bar app menu */
 /* La etiqueta de la app activa es negrita, imitando el menú de macOS en la barra superior */
 .global-menu-app-label {

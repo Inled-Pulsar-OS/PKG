@@ -24,8 +24,9 @@ import Meta from 'gi://Meta';
 
 // Custom GObject class to construct the menu buttons in the panel
 // Clase GObject personalizada para construir los botones de menú en el panel
-const GlobalMenuButton = GObject.registerClass(
-class GlobalMenuButton extends PanelMenu.Button {
+const GlobalMenuButton = GObject.registerClass({
+    GTypeName: 'PulsarosGlobalMenuButton'
+}, class GlobalMenuButton extends PanelMenu.Button {
     _init(title, isAppMenu = false) {
         super._init(0.0, title, false);
         
@@ -66,6 +67,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         
         // Create each of the menu buttons
         // Crear cada uno de los botones de menú
+        this._createLogoMenu();
         this._createAppMenu();
         this._createFileMenu();
         this._createEditMenu();
@@ -91,6 +93,20 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         // Trigger initial focus state setup
         // Lanzar configuración inicial del estado de foco
         this._onFocusWindowChanged();
+        
+        // Force the native GNOME Shell lock button in Quick Settings to be always visible
+        // Forzar a que el botón de bloqueo nativo en los Quick Settings de GNOME Shell sea siempre visible
+        try {
+            this._origCanLock = Object.getOwnPropertyDescriptor(Shell.SystemActions.prototype, 'can_lock') || 
+                                Object.getOwnPropertyDescriptor(Shell.SystemActions.get_default(), 'can_lock');
+            Object.defineProperty(Shell.SystemActions.get_default(), 'can_lock', {
+                get: () => true,
+                configurable: true
+            });
+            Shell.SystemActions.get_default().notify('can-lock');
+        } catch (e) {
+            console.error("[GlobalMenu] Failed to override can_lock:", e);
+        }
     }
     
     disable() {
@@ -108,9 +124,92 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         }
         this._menuButtons = [];
         
+        // Restore the original can_lock descriptor
+        // Restaurar el descriptor de can_lock original
+        try {
+            if (this._origCanLock) {
+                Object.defineProperty(Shell.SystemActions.get_default(), 'can_lock', this._origCanLock);
+                Shell.SystemActions.get_default().notify('can-lock');
+            }
+        } catch (e) {
+            // ignore
+        }
+        
         // Nullify the virtual keyboard device reference
         // Anular la referencia del dispositivo de teclado virtual
         this._virtualKeyboard = null;
+    }
+    
+    // --- Logo Menu Button (Pulsar OS logo) ---
+    // --- Botón de menú con Logo (logo de Pulsar OS) ---
+    _createLogoMenu() {
+        this.logoMenuButton = new GlobalMenuButton("");
+        this.logoMenuButton.uuid_suffix = "logo";
+        
+        // Replace default label with a system logo icon
+        // Reemplazar la etiqueta por defecto por un icono de logo del sistema
+        this.logoMenuButton.label.destroy();
+        this.logoMenuButton.icon = new St.Icon({
+            icon_name: 'start-here-symbolic',
+            style_class: 'global-menu-logo-icon'
+        });
+        this.logoMenuButton.add_child(this.logoMenuButton.icon);
+        
+        // About Pulsar OS
+        let aboutItem = new PopupMenu.PopupMenuItem("About Pulsar OS");
+        aboutItem.connect('activate', () => {
+            Main.notify("Pulsar OS", "Pulsar OS Tahoe Edition\nBasing on Debian GNU/Linux");
+        });
+        this.logoMenuButton.menu.addMenuItem(aboutItem);
+        
+        // System Settings
+        let settingsItem = new PopupMenu.PopupMenuItem("System Settings...");
+        settingsItem.connect('activate', () => {
+            this._openUri("settings://");
+        });
+        this.logoMenuButton.menu.addMenuItem(settingsItem);
+        
+        // App Store
+        let appStoreItem = new PopupMenu.PopupMenuItem("App Store...");
+        appStoreItem.connect('activate', () => {
+            this._openUri("appstream://");
+        });
+        this.logoMenuButton.menu.addMenuItem(appStoreItem);
+        
+        this.logoMenuButton.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        
+        // Lock Screen (Solves missing lock option in system menu when not using GDM)
+        // Bloquear Pantalla (Soluciona la falta de opción de bloqueo en el menú del sistema al no usar GDM)
+        let lockItem = new PopupMenu.PopupMenuItem("Lock Screen");
+        lockItem.connect('activate', () => {
+            this._lockScreen();
+        });
+        this.logoMenuButton.menu.addMenuItem(lockItem);
+        
+        // Log Out
+        let logoutItem = new PopupMenu.PopupMenuItem("Log Out...");
+        logoutItem.connect('activate', () => {
+            this._runCommand("gnome-session-quit --logout");
+        });
+        this.logoMenuButton.menu.addMenuItem(logoutItem);
+        
+        this.logoMenuButton.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        
+        // Restart
+        let restartItem = new PopupMenu.PopupMenuItem("Restart...");
+        restartItem.connect('activate', () => {
+            this._runCommand("gnome-session-quit --reboot");
+        });
+        this.logoMenuButton.menu.addMenuItem(restartItem);
+        
+        // Shut Down
+        let shutdownItem = new PopupMenu.PopupMenuItem("Shut Down...");
+        shutdownItem.connect('activate', () => {
+            this._runCommand("gnome-session-quit --power-off");
+        });
+        this.logoMenuButton.menu.addMenuItem(shutdownItem);
+        
+        this._menuButtons.push(this.logoMenuButton);
     }
     
     // --- App Menu Button (Finder / Active App name) ---
@@ -366,6 +465,31 @@ export default class PulsarosGlobalMenuExtension extends Extension {
             Gio.AppInfo.launch_default_for_uri(uri, null);
         } catch (e) {
             console.error(`[GlobalMenu] Failed to open URI: ${uri}`, e);
+        }
+    }
+    
+    // --- Helper to lock screen ---
+    // --- Utilidad para bloquear la pantalla ---
+    _lockScreen() {
+        try {
+            if (Main.screenShield) {
+                Main.screenShield.lock(true);
+            } else {
+                GLib.spawn_command_line_async("loginctl lock-session");
+            }
+        } catch (e) {
+            console.error("[GlobalMenu] Failed to lock screen via Main.screenShield:", e);
+            GLib.spawn_command_line_async("loginctl lock-session");
+        }
+    }
+    
+    // --- Helper to run command ---
+    // --- Utilidad para ejecutar comandos ---
+    _runCommand(cmd) {
+        try {
+            GLib.spawn_command_line_async(cmd);
+        } catch (e) {
+            console.error(`[GlobalMenu] Failed to run command: ${cmd}`, e);
         }
     }
     
