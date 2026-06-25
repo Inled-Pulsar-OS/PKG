@@ -514,6 +514,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         this._origCanLock = null;
         this._origLock = null;
         this._origUnlock = null;
+        this._activeAppWindow = null;
         
         // Initialize the virtual keyboard device for injecting keystrokes (Wayland native)
         // Inicializar el dispositivo de teclado virtual para inyectar pulsaciones de tecla (nativo en Wayland)
@@ -767,14 +768,14 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         // Elementos dinámicos que adaptarán sus etiquetas al título de la ventana activa
         this.aboutItem = new PopupMenu.PopupMenuItem("About Finder");
         this.aboutItem.connect('activate', () => {
-            let activeApp = this._getAppName(global.display.focus_window);
+            let activeApp = this._getAppName(this._activeAppWindow);
             Main.notify("Pulsar OS", `Active App: ${activeApp}`);
         });
         this.appMenuButton.menu.addMenuItem(this.aboutItem);
         
         this.hideItem = new PopupMenu.PopupMenuItem("Hide Finder");
         this.hideItem.connect('activate', () => {
-            let window = global.display.focus_window;
+            let window = this._activeAppWindow;
             if (window) {
                 window.minimize();
             }
@@ -783,7 +784,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         
         this.quitItem = new PopupMenu.PopupMenuItem("Quit Finder");
         this.quitItem.connect('activate', () => {
-            let window = global.display.focus_window;
+            let window = this._activeAppWindow;
             if (window) {
                 window.delete(global.get_current_time());
             }
@@ -801,7 +802,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         
         let newWindowItem = new PopupMenu.PopupMenuItem("New Window");
         newWindowItem.connect('activate', () => {
-            let window = global.display.focus_window;
+            let window = this._activeAppWindow;
             if (window) {
                 let tracker = Shell.WindowTracker.get_default();
                 let app = tracker.get_window_app(window);
@@ -818,7 +819,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         
         let closeItem = new PopupMenu.PopupMenuItem("Close Window");
         closeItem.connect('activate', () => {
-            let window = global.display.focus_window;
+            let window = this._activeAppWindow;
             if (window) {
                 window.delete(global.get_current_time());
             }
@@ -923,7 +924,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         
         let minimizeItem = new PopupMenu.PopupMenuItem("Minimize");
         minimizeItem.connect('activate', () => {
-            let window = global.display.focus_window;
+            let window = this._activeAppWindow;
             if (window) {
                 window.minimize();
             }
@@ -932,7 +933,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         
         let maximizeItem = new PopupMenu.PopupMenuItem("Maximize");
         maximizeItem.connect('activate', () => {
-            let window = global.display.focus_window;
+            let window = this._activeAppWindow;
             if (window) {
                 if (window.get_maximized()) {
                     window.unmaximize(Meta.MaximizeFlags.BOTH);
@@ -945,7 +946,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         
         let closeItem = new PopupMenu.PopupMenuItem("Close");
         closeItem.connect('activate', () => {
-            let window = global.display.focus_window;
+            let window = this._activeAppWindow;
             if (window) {
                 window.delete(global.get_current_time());
             }
@@ -980,7 +981,29 @@ export default class PulsarosGlobalMenuExtension extends Extension {
     // --- Manejador del Evento de Foco ---
     _onFocusWindowChanged() {
         let window = global.display.focus_window;
-        let appName = this._getAppName(window);
+        
+        // Check if the previously tracked window still exists
+        // Comprobar si la ventana anteriormente rastreada todavía existe
+        if (this._activeAppWindow) {
+            let activeWindows = global.get_window_actors().map(a => a.meta_window || a.get_meta_window()).filter(Boolean);
+            if (!activeWindows.includes(this._activeAppWindow)) {
+                this._activeAppWindow = null;
+            }
+        }
+        
+        if (window) {
+            // Check if this is a system/shell window that we want to ignore (like GNOME Shell panel or menu popups)
+            // Comprobar si es una ventana del sistema o shell que queremos ignorar (como el panel o ventanas emergentes)
+            let wmClass = window.get_wm_class();
+            let isShell = wmClass && (wmClass.toLowerCase().includes('gnome-shell') || wmClass.toLowerCase().includes('gdm'));
+            
+            // In GNOME Shell, some utility windows or menus might also have no app or be system components
+            if (!isShell) {
+                this._activeAppWindow = window;
+            }
+        }
+        
+        let appName = this._getAppName(this._activeAppWindow);
         
         // Update panel text representation for the focused application
         // Actualizar la representación de texto en el panel para la aplicación enfocada
