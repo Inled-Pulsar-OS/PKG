@@ -33,27 +33,36 @@ for mod in 9p 9pnet 9pnet_virtio; do
 done
 
 # ==============================================================================
-# CREACIÓN DE USUARIOS DE PRUEBA Y LIVE
+# CREACIÓN DE USUARIOS DE PRUEBA Y LIVE / CREATION OF TEST AND LIVE USERS
 # ==============================================================================
 echo "👤 Configurando cuentas de usuario y contraseñas..."
-# Asegurar grupo sudo
+# English: Ensure critical groups exist
+# Español: Asegurar que existan los grupos críticos
 groupadd -f sudo || true
+groupadd -f docker || true
 
 # Crear usuario 'jaime' si no existe
+# Create user 'jaime' if it does not exist
 if ! id -u jaime >/dev/null 2>&1; then
     echo "Creando usuario 'jaime'..."
-    useradd -m -s /bin/bash -G sudo jaime || true
+    useradd -m -s /bin/bash -G sudo,docker jaime || true
+else
+    usermod -aG docker jaime || true
 fi
 echo "jaime:pulsar" | chpasswd || echo "⚠️ Advertencia: No se pudo cambiar la contraseña de jaime"
 
 # Crear usuario 'live' si no existe
+# Create user 'live' if it does not exist
 if ! id -u live >/dev/null 2>&1; then
     echo "Creando usuario 'live'..."
-    useradd -m -s /bin/bash -G sudo live || true
+    useradd -m -s /bin/bash -G sudo,docker live || true
+else
+    usermod -aG docker live || true
 fi
 echo "live:live" | chpasswd || echo "⚠️ Advertencia: No se pudo cambiar la contraseña de live"
 
 # Contraseña de root
+# Root password
 echo "root:pulsar" | chpasswd || echo "⚠️ Advertencia: No se pudo cambiar la contraseña de root"
 
 # English: Set Seafari as the default web browser and apply the Safari icon
@@ -79,6 +88,34 @@ chown -R live:live /home/live || true
 echo "📥 Configurando repositorio de Flathub..."
 if command -v flatpak >/dev/null 2>&1; then
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || true
+fi
+
+# English: Configure Bluetooth to run in dual mode (Classic + BLE)
+# Español: Configurar Bluetooth para ejecutarse en modo dual (Classic + BLE)
+echo "📶 Configurando Bluetooth en modo dual..."
+if [ -f "/etc/bluetooth/main.conf" ]; then
+    if grep -q "^#ControllerMode" /etc/bluetooth/main.conf; then
+        sed -i 's/^#ControllerMode.*/ControllerMode = dual/' /etc/bluetooth/main.conf
+    elif grep -q "^ControllerMode" /etc/bluetooth/main.conf; then
+        sed -i 's/^ControllerMode.*/ControllerMode = dual/' /etc/bluetooth/main.conf
+    else
+        sed -i '/^\[General\]/a ControllerMode = dual' /etc/bluetooth/main.conf
+    fi
+else
+    mkdir -p /etc/bluetooth
+    cat <<EOF > /etc/bluetooth/main.conf
+[General]
+ControllerMode = dual
+EOF
+fi
+
+# English: Enable Bluetooth and Docker systemd services
+# Español: Habilitar los servicios de systemd para Bluetooth y Docker
+echo "⚙️ Habilitando servicios de systemd (Bluetooth y Docker)..."
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl enable bluetooth.service || true
+    systemctl enable docker.service || true
+    systemctl enable docker.socket || true
 fi
 
 exit 0

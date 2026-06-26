@@ -1,0 +1,25 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Welcome Application Wrapper
+# ==============================================================================
+# English: Checks if the welcome app has already been completed, if not, runs it.
+#          Allows forcing execution with --force or -f.
+# Español: Comprueba si la aplicación de bienvenida ya se completó, si no, la ejecuta.
+#          Permite forzar la ejecución mediante --force o -f.
+
+DONE_FILE="$HOME/.config/pulsaros-welcome.done"
+
+FORCE=false
+for arg in "$@"; do
+    if [ "$arg" == "--force" ] || [ "$arg" == "-f" ]; then
+        FORCE=true
+    fi
+done
+
+# Si el archivo de marca existe y no se fuerza, salir
+if [ -f "$DONE_FILE" ] && ! $FORCE; then
+    exit 0
+fi
+
+# Ejecutar el script principal de Python
+/usr/share/pulsaros-welcome/welcome.py "$@"

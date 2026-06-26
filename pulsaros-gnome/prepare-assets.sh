@@ -98,6 +98,7 @@ EGO_EXTENSIONS=(
     "just-perfection-desktop@just-perfection"
     "notification-position@drugo.dev"
     "wack-lockscreen-clock@rinzler69-wastaken.github.com"
+    "no-overview@fthx"
 )
 
 echo "🧩 Descargando extensiones de GNOME Shell desde Extensions.gnome.org (EGO)..."

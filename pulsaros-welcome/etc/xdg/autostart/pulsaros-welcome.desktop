@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Welcome to Pulsar OS
+Name[es]=Bienvenido a Pulsar OS
+Comment=Configure your system on first boot
+Comment[es]=Configura tu sistema en el primer arranque
+Exec=/usr/bin/pulsaros-welcome
+Icon=distributor-logo
+Terminal=false
+Categories=System;Utility;
+X-GNOME-Autostart-enabled=true
+NoDisplay=true
