@@ -23,43 +23,18 @@ LOCAL_BRANDING="/home/jaime/Documentos/pulsaros-base/calamares/etc/calamares/bra
 if [ -d "$LOCAL_BRANDING" ]; then
     echo "📥 Copiando branding de Calamares desde: $LOCAL_BRANDING"
     cp -r "$LOCAL_BRANDING"/* "$BRANDING_DEST/"
-    
-    # Ajustar branding.desc para PulsarOS
-    sed -i 's/^componentName:.*/componentName:  pulsaros/' "$BRANDING_DEST/branding.desc"
-    sed -i 's/pearOS NiceC0re/PulsarOS/g' "$BRANDING_DEST/branding.desc"
-    sed -i 's/pearOS/PulsarOS/g' "$BRANDING_DEST/branding.desc"
-    sed -i 's/version:             26.03/version:             1.0/g' "$BRANDING_DEST/branding.desc"
-    sed -i 's/shortVersion:        26.3/shortVersion:        1.0/g' "$BRANDING_DEST/branding.desc"
-    
-    # English: Remove old occurrences of these variables to put them at top-level
-    # Español: Eliminar ocurrencias antiguas de estas variables para ponerlas a nivel raíz
-    sed -i '/productName:/d' "$BRANDING_DEST/branding.desc"
-    sed -i '/shortProductName:/d' "$BRANDING_DEST/branding.desc"
-    sed -i '/productVersion:/d' "$BRANDING_DEST/branding.desc"
-    sed -i '/productUrl:/d' "$BRANDING_DEST/branding.desc"
-    sed -i '/stylesheet:/d' "$BRANDING_DEST/branding.desc"
-    
-    # English: Insert top-level variables right after the YAML frontmatter marker '---'
-    # Español: Insertar variables a nivel raíz justo después del marcador YAML '---'
-    sed -i '/---/a \
-productName:         PulsarOS\
-shortProductName:    PulsarOS\
-productVersion:      1.0\
-productUrl:          https://inled.es\
-stylesheet:          "stylesheet.qss"' "$BRANDING_DEST/branding.desc"
-else
-    echo "⚠️ Advertencia: No se encontró el branding en $LOCAL_BRANDING. Usando fallback funcional..."
-    
-    cat <<EOF > "$BRANDING_DEST/branding.desc"
+fi
+
+# English: Always overwrite branding.desc with a correct and compliant YAML structure
+# Español: Sobrescribir siempre branding.desc con una estructura YAML correcta y compatible
+cat <<EOF > "$BRANDING_DEST/branding.desc"
 ---
 componentName:         pulsaros
-productName:           PulsarOS
-shortProductName:      PulsarOS
-productVersion:        1.0
-productUrl:            https://inled.es
-stylesheet:            "stylesheet.qss"
 welcomeStyleCalamares: false
 welcomeExpandingLogo:  true
+stylesheet:            "stylesheet.qss"
+slideshow:             "show.qml"
+slideshowAPI:          2
 images:
     productLogo:         "logo.png"
     productIcon:         "logo.png"
@@ -69,9 +44,16 @@ style:
    sidebarText:              "#e0e0e0"
    sidebarTextCurrent:       "#ffffff"
    sidebarBackgroundCurrent: "#0071e3"
-slideshowAPI: 2
+
+strings:
+    productName:         "PulsarOS"
+    shortProductName:    "PulsarOS"
+    productVersion:      "1.0"
+    productUrl:          "https://inled.es"
+    supportUrl:          "https://inled.es"
+    knownIssuesUrl:      "https://inled.es"
+    releaseNotesUrl:     "https://inled.es"
 EOF
-fi
 
 # English: Download the official Pulsar OS logo
 # Español: Descargar el logo oficial de Pulsar OS
@@ -98,51 +80,102 @@ fi
 # English: Create a beautiful macOS-like stylesheet for Calamares to fix the selected sidebar item styling
 # Español: Crear una hermosa hoja de estilo tipo macOS para Calamares para solucionar el estilo del elemento seleccionado de la barra lateral
 cat <<EOF > "$BRANDING_DEST/stylesheet.qss"
-/* Pulsar OS Calamares Stylesheet - Modern Dark Theme */
+/* Pulsar OS Calamares Stylesheet - Apple Setup Assistant Style */
 
 #mainApp {
-    background-color: #1e1e1e;
+    background-color: #e3e3e6;
 }
 
 #sidebarApp {
-    background-color: #1e1e1e;
-    min-width: 220px;
-}
-
-#sidebarApp QListWidget {
-    background-color: #1e1e1e;
+    background-color: #e3e3e6;
+    min-width: 0px;
+    max-width: 0px;
+    width: 0px;
     border: none;
 }
 
-#sidebarApp QListWidget::item {
-    color: #a0a0a0;
-    padding: 12px 16px;
+#sidebarApp QListWidget {
+    background-color: transparent;
+    border: none;
+    min-width: 0px;
+    max-width: 0px;
+    width: 0px;
+}
+
+QWidget {
+    font-family: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif";
+    color: #1d1d1f;
+}
+
+QLabel {
+    color: #1d1d1f;
     font-size: 13px;
+}
+
+QTextEdit, QLineEdit, QComboBox, QSpinBox, QAbstractItemView {
+    background-color: #ffffff;
+    border: 1px solid #d2d2d7;
+    border-radius: 8px;
+    color: #1d1d1f;
+    padding: 6px;
+    selection-background-color: #0066cc;
+    selection-color: #ffffff;
+}
+
+QTextEdit:focus, QLineEdit:focus, QComboBox:focus {
+    border: 1px solid #0066cc;
+}
+
+QListView, QTreeView, QListWidget, QTreeWidget {
+    background-color: #ffffff;
+    border: 1px solid #d2d2d7;
+    border-radius: 8px;
+}
+
+QPushButton {
+    background-image: none;
+    background-color: #ffffff;
+    border: 1px solid #d2d2d7;
+    border-radius: 8px;
+    color: #1d1d1f;
     font-weight: 500;
+    font-size: 13px;
+    padding: 6px 20px;
 }
 
-#sidebarApp QListWidget::item:selected {
-    background-color: #0071e3;
-    color: #ffffff;
-    border-radius: 6px;
+QPushButton:hover {
+    background-color: #f5f5f7;
+    border-color: #c5c5ca;
 }
 
-#sidebarApp QListWidget::item:hover:!selected {
-    background-color: #2c2c2c;
+QPushButton:pressed {
+    background-color: #e3e3e6;
+}
+
+QPushButton:disabled {
+    color: #aeaeae;
+    border-color: #e3e3e6;
+    background-color: #f5f5f7;
+}
+
+#nextButton {
+    background-image: none;
+    background-color: #0066cc;
+    border: none;
     color: #ffffff;
-    border-radius: 6px;
+    font-weight: bold;
+}
+
+#nextButton:hover {
+    background-color: #0077ed;
+}
+
+#nextButton:pressed {
+    background-color: #005bb5;
 }
 EOF
 
-# English: Ensure slideshow keys are present in branding.desc to prevent Calamares startup crash
-# Español: Asegurar que las claves de la presentación de diapositivas estén en branding.desc para evitar el fallo de arranque
-if [ -f "$BRANDING_DEST/branding.desc" ]; then
-    # Eliminar líneas anteriores para evitar duplicaciones
-    sed -i '/^slideshow:/d' "$BRANDING_DEST/branding.desc"
-    sed -i '/^slideshowAPI:/d' "$BRANDING_DEST/branding.desc"
-    echo "slideshow: \"show.qml\"" >> "$BRANDING_DEST/branding.desc"
-    echo "slideshowAPI: 2" >> "$BRANDING_DEST/branding.desc"
-fi
+
 
 # English: Create a fallback slideshow QML file if not present
 # Español: Crear un archivo QML de presentación de diapositivas de respaldo si no existe
@@ -259,7 +292,6 @@ instances:
 
 sequence:
 - show:
-  - welcome
   - locale
   - keyboard
   - partition
@@ -306,35 +338,19 @@ xhost +local:root > /dev/null 2>&1 || true
 # Forzar a Qt a usar XWayland/X11 para evitar fallos de conexión gráfica como root en Wayland
 # Force Qt to use X11/XWayland to avoid graphical connection failures as root under Wayland
 export QT_QPA_PLATFORM=xcb
-# Lanzar calamares preservando el entorno
-# Launch calamares preserving the environment
-sudo -E DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" WAYLAND_DISPLAY="$WAYLAND_DISPLAY" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" calamares "$@"
+# Lanzar calamares usando pkexec o sudo env en su defecto
+# Launch calamares using pkexec or sudo env as fallback
+if command -v pkexec >/dev/null 2>&1; then
+    pkexec env DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" WAYLAND_DISPLAY="$WAYLAND_DISPLAY" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" calamares "$@"
+else
+    sudo env DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" WAYLAND_DISPLAY="$WAYLAND_DISPLAY" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" calamares "$@" || calamares "$@"
+fi
 EOF
 
 # Ensure launch script is executable
 # Asegurar que el script de lanzamiento sea ejecutable
 chmod 755 "$STAGE_DIR/usr/local/bin/launch-calamares"
 
-# User-level autostart (for skeleton / user homes)
-# Auto-arranque a nivel de usuario (para esqueleto / nuevos usuarios)
-mkdir -p "$STAGE_DIR/etc/skel/.config/autostart"
-cat <<EOF > "$STAGE_DIR/etc/skel/.config/autostart/calamares.desktop"
-[Desktop Entry]
-Type=Application
-Name=Install PulsarOS
-GenericName=System Installer
-Exec=/usr/local/bin/launch-calamares
-Icon=calamares
-Terminal=false
-Categories=Qt;System;
-X-GNOME-Autostart-enabled=true
-EOF
-chmod 644 "$STAGE_DIR/etc/skel/.config/autostart/calamares.desktop"
-
-# Global-level autostart (ensures it launches for already created live user)
-# Auto-arranque a nivel global (asegura que arranque para el usuario live ya creado)
-mkdir -p "$STAGE_DIR/etc/xdg/autostart"
-cp "$STAGE_DIR/etc/skel/.config/autostart/calamares.desktop" "$STAGE_DIR/etc/xdg/autostart/"
-chmod 644 "$STAGE_DIR/etc/xdg/autostart/calamares.desktop"
-
+# Note: Automatic autostart on the live CD is now managed by pulsaros-recovery.
+# Calamares will be launched by the recovery application when needed.
 echo "✅ Calamares configurado en staging."

@@ -94,7 +94,6 @@ EGO_EXTENSIONS=(
     "search-light@icedman.github.com"
     "compiz-alike-magic-lamp-effect@hermes83.github.com"
     "fullscreen-to-empty-workspace2@corgijan.dev"
-    "appmenu-is-back@fthx"
     "just-perfection-desktop@just-perfection"
     "notification-position@drugo.dev"
     "wack-lockscreen-clock@rinzler69-wastaken.github.com"

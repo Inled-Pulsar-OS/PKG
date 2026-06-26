@@ -1,0 +1,20 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Recovery and Installation Launcher
+# ==============================================================================
+# English: Launches the Pulsar OS Recovery application with privileges.
+# Español: Lanza la aplicación de recuperación de Pulsar OS con privilegios.
+
+# Permitir conexiones X11 locales para root en Wayland
+xhost +local:root > /dev/null 2>&1 || true
+
+# Forzar a Qt/GTK a usar XWayland/X11 si fuese necesario
+export QT_QPA_PLATFORM=xcb
+
+# Intentar ejecutar con pkexec (que abre diálogo de contraseña de Gnome).
+# Si pkexec no está disponible o falla, lanzar con sudo env o finalmente como usuario normal.
+if command -v pkexec >/dev/null 2>&1; then
+    pkexec env DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" WAYLAND_DISPLAY="$WAYLAND_DISPLAY" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" /usr/share/pulsaros-recovery/recovery.py "$@"
+else
+    sudo env DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" WAYLAND_DISPLAY="$WAYLAND_DISPLAY" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" /usr/share/pulsaros-recovery/recovery.py "$@" || /usr/share/pulsaros-recovery/recovery.py "$@"
+fi
