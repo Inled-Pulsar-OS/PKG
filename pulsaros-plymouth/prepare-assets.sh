@@ -39,7 +39,7 @@ ShowDelay=0
 DeviceTimeout=8
 EOF
 
-# 3. Reemplazar los logos de Debian por transparencia para no tener marcas duplicadas
+# 3. Reemplazar los logos y marcas de agua de Debian por transparencia para no tener marcas duplicadas
 echo "Generando reemplazo de logo transparente..."
 mkdir -p "$STAGE_DIR/usr/share/plymouth/themes"
 mkdir -p "$STAGE_DIR/usr/share/pixmaps"
@@ -51,6 +51,15 @@ echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C
 cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/plymouth/themes/debian-logo.png"
 cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/plymouth/logo.png"
 cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/pixmaps/debian-logo.png"
+
+# Sobrescribir las marcas de agua de los temas estándar de Debian (que Plymouth a menudo carga)
+mkdir -p "$STAGE_DIR/usr/share/plymouth/themes/spinner"
+mkdir -p "$STAGE_DIR/usr/share/plymouth/themes/debian-spinner"
+mkdir -p "$STAGE_DIR/usr/share/plymouth/themes/bgrt"
+
+cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/plymouth/themes/spinner/watermark.png"
+cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/plymouth/themes/debian-spinner/watermark.png"
+cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/plymouth/themes/bgrt/watermark.png"
 
 # Limpieza
 rm -rf "$TEMP_BUILD"

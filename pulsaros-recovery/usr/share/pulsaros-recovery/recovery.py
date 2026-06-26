@@ -289,30 +289,9 @@ class RecoveryApp(Gtk.Window):
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
 
-        # Main Layout (Top Bar + Main Area)
+        # Main Layout
         main_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.add(main_vbox)
-
-        # ==============================================================================
-        # TOP BAR (macOS Style)
-        # ==============================================================================
-        top_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        top_bar.get_style_context().add_class("top-bar")
-        main_vbox.pack_start(top_bar, False, False, 0)
-
-        # Left Menu items
-        menu_items = ["", "Recovery", "File", "Edit", "Utilities", "Window"]
-        for item in menu_items:
-            lbl = Gtk.Label(label=item)
-            lbl.get_style_context().add_class("top-bar-menu-item")
-            top_bar.pack_start(lbl, False, False, 0)
-
-        # Right status clock (mock)
-        top_bar.pack_end(Gtk.Label(label="100%"), False, False, 10)
-        
-        clock_lbl = Gtk.Label(label="Fri 11:30 AM")
-        clock_lbl.get_style_context().add_class("top-bar-clock")
-        top_bar.pack_end(clock_lbl, False, False, 10)
 
         # ==============================================================================
         # CENTER CONTENT AREA (Gtk.Stack)

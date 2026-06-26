@@ -228,8 +228,10 @@ def get_available_resolutions():
 
 class HelloWindow(Gtk.Window):
     """
-    English: Transparent window that plays the Apple hello SVG animation.
-    Español: Ventana transparente que reproduce la animación SVG de hello de Apple.
+    English: Transparent window that plays the Apple hello SVG animation indefinitely
+             until the white pill "Continue" button at the bottom is clicked.
+    Español: Ventana transparente que reproduce la animación SVG de hello de Apple indefinidamente
+             hasta que se pulsa el botón pill blanco "Continue" de la parte inferior.
     """
     def __init__(self, on_finish_callback):
         super().__init__(type=Gtk.WindowType.TOPLEVEL)
@@ -249,42 +251,70 @@ class HelloWindow(Gtk.Window):
 
         self.maximize()
 
+        # Cargar estilos CSS personalizados para el botón Pill Blanco
+        style_provider = Gtk.CssProvider()
+        hello_css = """
+        button.hello-continue-btn {
+            background-color: #ffffff;
+            border: none;
+            color: #1d1d1f;
+            font-size: 15px;
+            font-weight: 600;
+            border-radius: 22px;
+            padding: 10px 42px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: all 0.2s ease;
+        }
+        button.hello-continue-btn:hover {
+            background-color: #f5f5f7;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+        }
+        button.hello-continue-btn:active {
+            background-color: #e3e3e6;
+        }
+        """
+        style_provider.load_from_data(hello_css.encode())
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(),
+            style_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+        # Contenedor principal vertical
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=20)
+        vbox.set_margin_bottom(80) # Espacio para empujar el botón arriba del dock/fondo
+        self.add(vbox)
+
+        # Webview para la animación SVG
         self.webview = WebKit2.WebView()
         bg_color = Gdk.RGBA()
         bg_color.alpha = 0.0
         self.webview.set_background_color(bg_color)
+        vbox.pack_start(self.webview, True, True, 0)
 
-        self.add(self.webview)
+        # Contenedor horizontal para centrar el botón "Continue"
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        btn_box.set_halign(Gtk.Align.CENTER)
+        vbox.pack_end(btn_box, False, False, 0)
+
+        # Botón Continue Pill Blanco
+        btn_continue = Gtk.Button(label="Continue")
+        btn_continue.get_style_context().add_class("hello-continue-btn")
+        btn_continue.connect("clicked", lambda b: self.finish_animation())
+        btn_box.pack_start(btn_continue, False, False, 0)
 
         curr_dir = os.path.dirname(os.path.abspath(__file__))
         hello_html_path = os.path.join(curr_dir, "hello", "index.html")
         self.webview.load_uri("file://" + hello_html_path)
 
         self.connect("draw", self.on_draw)
-        self.connect("key-press-event", self.on_key_press)
-        self.connect("button-press-event", self.on_button_press)
-        self.webview.connect("button-press-event", self.on_webview_button_press)
-
         self.show_all()
-        GLib.timeout_add(5500, self.finish_animation)
 
     def on_draw(self, widget, context):
         context.set_source_rgba(0.0, 0.0, 0.0, 0.0)
         context.set_operator(cairo.OPERATOR_CLEAR)
         context.paint()
         context.set_operator(cairo.OPERATOR_OVER)
-        return False
-
-    def on_key_press(self, widget, event):
-        self.finish_animation()
-        return True
-
-    def on_button_press(self, widget, event):
-        self.finish_animation()
-        return True
-
-    def on_webview_button_press(self, webview, event):
-        self.finish_animation()
         return False
 
     def finish_animation(self):

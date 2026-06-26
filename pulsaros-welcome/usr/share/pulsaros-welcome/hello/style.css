@@ -32,18 +32,28 @@ html, body {
   stroke-width: 32px;
   stroke-dasharray: 5800px;
   stroke-dashoffset: 5800px;
-  animation: anim__hello 5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  animation: anim__hello 6s cubic-bezier(0.25, 1, 0.5, 1) infinite;
   width: 100%;
 }
 
 @keyframes anim__hello {
   0% {
     stroke-dashoffset: 5800;
+    opacity: 0;
   }
-  15% {
-    stroke-dashoffset: 5800;
+  5% {
+    opacity: 1;
+  }
+  60% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  85% {
+    stroke-dashoffset: 0;
+    opacity: 0;
   }
   100% {
-    stroke-dashoffset: 0;
+    stroke-dashoffset: 5800;
+    opacity: 0;
   }
 }
