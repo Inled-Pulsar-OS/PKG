@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Pulsar OS Hide Overview Helper
+Comment=Closes the Activities Overview on login to allow welcome hello animation to display
+Exec=/usr/bin/pulsaros-hide-overview
+OnlyShowIn=GNOME;
+NoDisplay=true
+X-GNOME-Autostart-Delay=0
+AutostartCondition=GNOME3 unless-session gnome-initial-setup

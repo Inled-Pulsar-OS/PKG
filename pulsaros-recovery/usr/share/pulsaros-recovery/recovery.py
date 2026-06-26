@@ -375,11 +375,18 @@ class RecoveryApp(Gtk.Window):
             "gnome-disk-utility"
         )
 
-        # Botón inferior derecho Continue
+        # Botones inferiores del Recovery
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         btn_box.set_margin_top(16)
         slide_0.pack_end(btn_box, False, False, 0)
 
+        # Botón "Try System" a la izquierda
+        self.btn_try_system = Gtk.Button(label="Try System")
+        self.btn_try_system.get_style_context().add_class("action-btn")
+        self.btn_try_system.connect("clicked", lambda b: Gtk.main_quit())
+        btn_box.pack_start(self.btn_try_system, False, False, 0)
+
+        # Botón "Continue" a la derecha
         self.btn_util_continue = Gtk.Button(label="Continue")
         self.btn_util_continue.get_style_context().add_class("btn-continue")
         self.btn_util_continue.set_sensitive(False)

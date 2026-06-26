@@ -98,6 +98,7 @@ EGO_EXTENSIONS=(
     "notification-position@drugo.dev"
     "wack-lockscreen-clock@rinzler69-wastaken.github.com"
     "no-overview@fthx"
+    "ding@rastersoft.com"
 )
 
 echo "🧩 Descargando extensiones de GNOME Shell desde Extensions.gnome.org (EGO)..."
@@ -138,9 +139,12 @@ for uuid in "${EGO_EXTENSIONS[@]}"; do
         if curl -L -s -o "$tmp_zip" "$full_url"; then
             dest_dir="$STAGE_DIR/usr/share/gnome-shell/extensions/${uuid}"
             mkdir -p "$dest_dir"
-            unzip -q -o "$tmp_zip" -d "$dest_dir"
-            rm "$tmp_zip"
-            echo "✅ Extensión $uuid lista."
+            if unzip -q -o "$tmp_zip" -d "$dest_dir" 2>/dev/null; then
+                echo "✅ Extensión $uuid lista."
+            else
+                echo "⚠️ Error al descomprimir $uuid (posible zip corrupto o límite de API EGO)"
+            fi
+            rm -f "$tmp_zip"
         fi
     else
         echo "⚠️ [ES] No se encontró ninguna versión compatible en EGO para $uuid"
@@ -179,5 +183,10 @@ echo "⚙️ [EN] Ensuring read and execute permissions for the extensions..."
 find "$STAGE_DIR/usr/share/gnome-shell/extensions" -type d -exec chmod 755 {} \; 2>/dev/null || true
 find "$STAGE_DIR/usr/share/gnome-shell/extensions" -type f -exec chmod 644 {} \; 2>/dev/null || true
 find "$STAGE_DIR/usr/share/glib-2.0/schemas" -type f -exec chmod 644 {} \; 2>/dev/null || true
+
+# Ensure executable permissions for the hide-overview script
+if [ -f "$STAGE_DIR/usr/bin/pulsaros-hide-overview" ]; then
+    chmod 755 "$STAGE_DIR/usr/bin/pulsaros-hide-overview"
+fi
 
 echo "✅ Proceso de extensiones finalizado."

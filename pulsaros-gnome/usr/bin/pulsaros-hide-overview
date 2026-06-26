@@ -1,0 +1,14 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Hide Overview on Startup Helper
+# ==============================================================================
+# English: Closes the GNOME Shell Activities Overview screen via DBus on login.
+# Español: Cierra la pantalla de Vista de Actividades de GNOME Shell vía DBus al iniciar sesión.
+
+for i in {1..50}; do
+    # Intentar mandar el mensaje DBus a GNOME Shell para ocultar la overview
+    if gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.ShowOverview false >/dev/null 2>&1; then
+        exit 0
+    fi
+    sleep 0.1
+done
