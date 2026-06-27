@@ -2,7 +2,7 @@ name: Deploy Package to Inled APT
 
 on:
   issues:
-    types: [opened, edited]
+    types: [opened, edited, labeled]
 
 permissions:
   contents: write
@@ -11,8 +11,12 @@ permissions:
 jobs:
   deploy:
     name: Package Build and Deploy
-    # Solo ejecutar si el issue tiene la etiqueta 'deploy-package'
-    if: contains(github.event.issue.labels.*.name, 'deploy-package')
+    # Only run if the issue has the 'deploy-package' label (case-insensitive)
+    # Solo ejecutar si el issue tiene la etiqueta 'deploy-package' (insensible a mayúsculas/minúsculas)
+    if: |
+      contains(github.event.issue.labels.*.name, 'deploy-package') ||
+      contains(github.event.issue.labels.*.name, 'Deploy-Package') ||
+      contains(github.event.issue.labels.*.name, 'deploy-packages')
     runs-on: ubuntu-latest
 
     steps:
