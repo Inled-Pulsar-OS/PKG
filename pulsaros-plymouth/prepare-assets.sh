@@ -9,25 +9,42 @@
 set -e
 
 STAGE_DIR="$(realpath -m "$1")"
-TEMP_BUILD="/tmp/pulsaros-plymouth-build"
-THEME_REPO="https://github.com/Inled-Pulsar-OS/plymouth-macoslike"
-
-echo "🎨 Descargando tema Plymouth desde Github (depth=1)..."
-rm -rf "$TEMP_BUILD"
-mkdir -p "$TEMP_BUILD"
-
-# Clonar con depth=1
-git clone --depth=1 "$THEME_REPO" "$TEMP_BUILD/theme"
-
-# 1. Copiar el tema a staging
 THEME_DEST="$STAGE_DIR/usr/share/plymouth/themes/pulsar-plymouth"
 mkdir -p "$THEME_DEST"
-cp -r "$TEMP_BUILD/theme"/* "$THEME_DEST/"
 
-# Asegurar que el archivo header-image.png esté en la subcarpeta images/ si procede
-if [ -f "$THEME_DEST/header-image.png" ]; then
-    mkdir -p "$THEME_DEST/images"
-    mv "$THEME_DEST/header-image.png" "$THEME_DEST/images/header-image.png"
+# Check if the local 'repo' directory is present in the staging folder
+# Comprobar si el directorio 'repo' local está presente en la carpeta staging
+if [ -d "$STAGE_DIR/repo" ]; then
+    echo "🎨 Copiando tema Plymouth desde el repositorio local..."
+    # Copy theme assets from local repo
+    # Copiar recursos del tema desde el repositorio local
+    cp -r "$STAGE_DIR/repo"/* "$THEME_DEST/"
+    # Remove the repo folder from staging to avoid packing it at the root of the deb package
+    # Eliminar la carpeta repo de staging para evitar empaquetarla en la raíz del paquete deb
+    rm -rf "$STAGE_DIR/repo"
+else
+    echo "⚠️ Directorio repo local no encontrado en staging. Descargando de respaldo desde Github..."
+    TEMP_BUILD="/tmp/pulsaros-plymouth-build"
+    THEME_REPO="https://github.com/Inled-Pulsar-OS/plymouth-macoslike"
+    rm -rf "$TEMP_BUILD"
+    mkdir -p "$TEMP_BUILD"
+    
+    # Clone with depth=1 from GitHub
+    # Clonar con depth=1 desde GitHub
+    git clone --depth=1 "$THEME_REPO" "$TEMP_BUILD/theme"
+    cp -r "$TEMP_BUILD/theme"/* "$THEME_DEST/"
+fi
+
+# Ensure all assets are at the root of the theme directory (not in an images/ subdirectory)
+# so that the Debian/Ubuntu initramfs hooks (which only glob *.png in the root theme folder)
+# can properly copy them into the ramdisk.
+# Asegurar que todos los recursos estén en la raíz del tema (no en la subcarpeta images/)
+# para que los hooks de initramfs de Debian/Ubuntu (que solo copian *.png de la raíz)
+# puedan incluirlos correctamente en el ramdisk.
+if [ -d "$THEME_DEST/images" ]; then
+    echo "📂 Aplanando estructura de imágenes del tema..."
+    mv "$THEME_DEST/images"/* "$THEME_DEST/" || true
+    rm -rf "$THEME_DEST/images"
 fi
 
 # 2. Configurar el archivo plymouthd.conf en staging
@@ -37,6 +54,7 @@ cat <<EOF > "$STAGE_DIR/etc/plymouth/plymouthd.conf"
 Theme=pulsar-plymouth
 ShowDelay=0
 DeviceTimeout=8
+UseFirmwareBackground=false
 EOF
 
 # 3. Reemplazar los logos y marcas de agua de Debian por transparencia para no tener marcas duplicadas
@@ -61,6 +79,9 @@ cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/plymout
 cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/plymouth/themes/debian-spinner/watermark.png"
 cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/plymouth/themes/bgrt/watermark.png"
 
-# Limpieza
-rm -rf "$TEMP_BUILD"
+# Clean up temporary build directory if it was created
+# Limpiar el directorio temporal de compilación si fue creado
+if [ -d "$TEMP_BUILD" ]; then
+    rm -rf "$TEMP_BUILD"
+fi
 echo "✅ Tema Plymouth estructurado correctamente en staging."

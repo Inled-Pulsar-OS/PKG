@@ -152,6 +152,28 @@ for uuid in "${EGO_EXTENSIONS[@]}"; do
     fi
 done
 
+# ==============================================================================
+# DOWNLOAD AND INSTALL LIQUID GLASS EXTENSION FROM GITHUB
+# DESCARGAR E INSTALAR LA EXTENSIÓN LIQUID GLASS DESDE GITHUB
+# ==============================================================================
+echo "🎨 [ES] Descargando extensión Liquid Glass desde GitHub..."
+echo "🎨 [EN] Downloading Liquid Glass extension from GitHub..."
+TEMP_LG="/tmp/pulsaros-liquid-glass"
+rm -rf "$TEMP_LG"
+# We use HTTPS URL to ensure compatibility without SSH keys in builder / chroot environments
+# Usamos la URL HTTPS para asegurar la compatibilidad sin claves SSH en entornos de compilación / chroot
+if git clone --depth=1 "https://github.com/InledGroup/liquid-glass.git" "$TEMP_LG"; then
+    echo "📦 [ES] Instalando Liquid Glass en el staging..."
+    echo "📦 [EN] Installing Liquid Glass to staging..."
+    mkdir -p "$STAGE_DIR/usr/share/gnome-shell/extensions"
+    cp -r "$TEMP_LG/liquid-glass@thinkingcoding1231.gmail.com" "$STAGE_DIR/usr/share/gnome-shell/extensions/"
+    rm -rf "$TEMP_LG"
+else
+    echo "❌ [ES] Error al clonar Liquid Glass de GitHub."
+    echo "❌ [EN] Error cloning Liquid Glass from GitHub."
+    exit 1
+fi
+
 # Copy all extensions' .gschema.xml files to the global schemas directory so gsettings and dconf can manage them
 # Copiar todos los archivos .gschema.xml de las extensiones al directorio global de esquemas para que gsettings y dconf puedan gestionarlos
 echo "⚙️ [ES] Copiando esquemas xml de extensiones al directorio global..."
@@ -183,6 +205,12 @@ echo "⚙️ [EN] Ensuring read and execute permissions for the extensions..."
 find "$STAGE_DIR/usr/share/gnome-shell/extensions" -type d -exec chmod 755 {} \; 2>/dev/null || true
 find "$STAGE_DIR/usr/share/gnome-shell/extensions" -type f -exec chmod 644 {} \; 2>/dev/null || true
 find "$STAGE_DIR/usr/share/glib-2.0/schemas" -type f -exec chmod 644 {} \; 2>/dev/null || true
+
+# DING extension needs its background process script to be executable
+# La extensión DING necesita que su script de proceso en segundo plano sea ejecutable
+if [ -f "$STAGE_DIR/usr/share/gnome-shell/extensions/ding@rastersoft.com/app/ding.js" ]; then
+    chmod 755 "$STAGE_DIR/usr/share/gnome-shell/extensions/ding@rastersoft.com/app/ding.js"
+fi
 
 # Ensure executable permissions for the hide-overview script
 if [ -f "$STAGE_DIR/usr/bin/pulsaros-hide-overview" ]; then

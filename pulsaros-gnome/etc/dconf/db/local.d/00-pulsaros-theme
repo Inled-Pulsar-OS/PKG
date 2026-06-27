@@ -100,3 +100,18 @@ lockscreen-mode='cupertino'
 [org/gnome/settings-daemon/plugins/power]
 sleep-inactive-ac-type='nothing'
 sleep-inactive-battery-type='nothing'
+
+[org/gnome/shell/extensions/liquid-glass]
+# Default settings for Liquid Glass extension extracted from host
+# Configuración por defecto para la extensión Liquid Glass extraída del host
+application-blur-radius=9
+application-content-opacity=0.71
+application-corner-radius=38.0
+application-glass-all-windows=true
+application-tint-strength=0.15
+application-window-whitelist=@as []
+dock-glass-expand=3
+enable-application-glass=true
+enable-menu-glass=true
+enable-quick-settings-glass=false
+output-logs=false

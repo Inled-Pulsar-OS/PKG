@@ -28,7 +28,7 @@ import cairo
 gi.require_version('Gtk', '3.0')
 gi.require_version('WebKit2', '4.1')
 
-from gi.repository import Gtk, WebKit2, Gdk, GLib, GdkPixbuf
+from gi.repository import Gtk, WebKit2, Gdk, GLib, GdkPixbuf, Gio
 
 CSS_DATA = """
 window {
@@ -342,7 +342,7 @@ class AssistantWindow(Gtk.Window):
         self.set_resizable(False)
 
         self.current_step = 0
-        self.steps_count = 7
+        self.steps_count = 8
 
         # Cargar estilos CSS personalizados de GTK
         style_provider = Gtk.CssProvider()
@@ -448,7 +448,8 @@ class AssistantWindow(Gtk.Window):
         self.icon_stack.add_named(self.create_symbolic_icon("phone-symbolic"), "icon3")
         self.icon_stack.add_named(self.create_symbolic_icon("usb-symbolic"), "icon4")
         self.icon_stack.add_named(self.create_symbolic_icon("computer-symbolic"), "icon5")
-        self.icon_stack.add_named(self.create_symbolic_icon("help-browser-symbolic"), "icon6")
+        self.icon_stack.add_named(self.create_symbolic_icon("preferences-desktop-theme-symbolic"), "icon6")
+        self.icon_stack.add_named(self.create_symbolic_icon("help-browser-symbolic"), "icon7")
 
     def init_slides(self):
         self.titles = [
@@ -458,6 +459,7 @@ class AssistantWindow(Gtk.Window):
             "Sync Mobile with GSConnect",
             "USB Debugging & Integration",
             "Run macOS with Macboat",
+            "Desktop Special Effects",
             "Beta Feedback & Support"
         ]
 
@@ -632,28 +634,78 @@ class AssistantWindow(Gtk.Window):
         self.content_stack.add_named(slide_5, "slide5")
 
         # ----------------------------------------------------------------------
-        # Slide 6: Support Channel
+        # Slide 6: Liquid Glass (Acrylic/Glassmorphic Effects)
         # ----------------------------------------------------------------------
         slide_6 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         slide_6.set_halign(Gtk.Align.CENTER)
 
-        lbl_desc = Gtk.Label(label="Pulsar OS is in active development. Help us improve stability by reporting installation bugs, hardware issues or user interface feedback directly to our official issue tracker on GitHub.")
+        lbl_desc = Gtk.Label(label="Choose your desktop effects style. You can enable Liquid Glass for an advanced acrylic glassmorphism look on your windows and panels, or keep the default Blur my Shell. Note: Liquid Glass requires significant GPU/CPU resources.")
         lbl_desc.get_style_context().add_class("desc-text")
         lbl_desc.set_max_width_chars(65)
         lbl_desc.set_line_wrap(True)
         lbl_desc.set_justify(Gtk.Justification.CENTER)
         slide_6.pack_start(lbl_desc, False, False, 10)
 
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        btn_box.set_halign(Gtk.Align.CENTER)
-        slide_6.pack_start(btn_box, True, True, 10)
+        # Central Card for Selection
+        # Tarjeta central para la selección
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        card.get_style_context().add_class("central-card")
+        card.set_halign(Gtk.Align.CENTER)
+        slide_6.pack_start(card, True, True, 0)
 
-        btn_issue = Gtk.Button(label="Open Issues Page on GitHub")
-        btn_issue.get_style_context().add_class("action-button")
-        btn_issue.connect("clicked", lambda b: os.system("xdg-open https://github.com/Inled-Pulsar-OS/ISO/issues &"))
-        btn_box.pack_start(btn_issue, False, False, 0)
+        # Radio button 1: Blur my Shell (Default)
+        # Botón de radio 1: Blur my Shell (Por defecto)
+        self.radio_blur = Gtk.RadioButton.new_with_label_from_widget(None, "Enable Blur my Shell (Standard performance - Recommended)")
+        self.radio_blur.connect("toggled", self.on_effects_toggled)
+        card.pack_start(self.radio_blur, False, False, 4)
+
+        # Radio button 2: Liquid Glass
+        # Botón de radio 2: Liquid Glass
+        self.radio_glass = Gtk.RadioButton.new_with_label_from_widget(self.radio_blur, "Enable Liquid Glass (Premium acrylic look - High Resource Consumption!)")
+        card.pack_start(self.radio_glass, False, False, 4)
+
+        # Warning Label in Spanish and English
+        # Etiqueta de advertencia en español e inglés
+        lbl_warning = Gtk.Label()
+        lbl_warning.set_markup("<span foreground='#cc0000'><b>⚠️ Warning / Advertencia:</b> Liquid Glass consumes significant system resources. May cause lag on older GPUs or virtual machines. / Liquid Glass consume bastantes recursos del sistema. Puede causar lag en GPUs antiguas o máquinas virtuales.</span>")
+        lbl_warning.set_line_wrap(True)
+        lbl_warning.set_max_width_chars(60)
+        lbl_warning.set_justify(Gtk.Justification.CENTER)
+        card.pack_start(lbl_warning, False, False, 8)
+
+        # Set initial active state
+        # Establecer el estado activo inicial
+        is_glass = self.get_current_effects_state()
+        if is_glass:
+            self.radio_glass.set_active(True)
+        else:
+            self.radio_blur.set_active(True)
 
         self.content_stack.add_named(slide_6, "slide6")
+
+        # ----------------------------------------------------------------------
+        # Slide 7: Support Channel
+        # ----------------------------------------------------------------------
+        slide_7 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        slide_7.set_halign(Gtk.Align.CENTER)
+
+        lbl_desc_7 = Gtk.Label(label="Pulsar OS is in active development. Help us improve stability by reporting installation bugs, hardware issues or user interface feedback directly to our official issue tracker on GitHub.")
+        lbl_desc_7.get_style_context().add_class("desc-text")
+        lbl_desc_7.set_max_width_chars(65)
+        lbl_desc_7.set_line_wrap(True)
+        lbl_desc_7.set_justify(Gtk.Justification.CENTER)
+        slide_7.pack_start(lbl_desc_7, False, False, 10)
+
+        btn_box_7 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        btn_box_7.set_halign(Gtk.Align.CENTER)
+        slide_7.pack_start(btn_box_7, True, True, 10)
+
+        btn_issue_7 = Gtk.Button(label="Open Issues Page on GitHub")
+        btn_issue_7.get_style_context().add_class("action-button")
+        btn_issue_7.connect("clicked", lambda b: os.system("xdg-open https://github.com/Inled-Pulsar-OS/ISO/issues &"))
+        btn_box_7.pack_start(btn_issue_7, False, False, 0)
+
+        self.content_stack.add_named(slide_7, "slide7")
 
     def on_back_clicked(self, button):
         if self.current_step > 0:
@@ -692,6 +744,57 @@ class AssistantWindow(Gtk.Window):
             self.btn_next.set_label("Start")
         else:
             self.btn_next.set_label("Continue")
+
+    def get_current_effects_state(self):
+        """
+        English: Reads the currently enabled extensions from GNOME shell to set initial radio state.
+        Español: Lee las extensiones actualmente habilitadas en GNOME shell para establecer el estado de radio inicial.
+        """
+        try:
+            settings = Gio.Settings.new("org.gnome.shell")
+            enabled = settings.get_strv("enabled-extensions")
+            return "liquid-glass@thinkingcoding1231.gmail.com" in enabled
+        except Exception as e:
+            print("Error reading extensions state:", e)
+            return False
+
+    def on_effects_toggled(self, radio):
+        """
+        English: Callback triggered when the effects radio buttons are toggled.
+                 Switches between Blur my Shell and Liquid Glass.
+        Español: Callback ejecutado cuando se pulsan los botones de radio de efectos.
+                 Intercambia entre Blur my Shell y Liquid Glass.
+        """
+        if radio.get_active():
+            # Blur my Shell is selected
+            self.set_extension_state("blur-my-shell@aunetx", True)
+            self.set_extension_state("liquid-glass@thinkingcoding1231.gmail.com", False)
+        else:
+            # Liquid Glass is selected
+            self.set_extension_state("blur-my-shell@aunetx", False)
+            self.set_extension_state("liquid-glass@thinkingcoding1231.gmail.com", True)
+
+    def set_extension_state(self, uuid, enable):
+        """
+        English: Enables or disables a GNOME Shell extension by its UUID.
+                 Uses GSettings as primary API and falls back to gnome-extensions command.
+        Español: Habilita o deshabilita una extensión de GNOME Shell por su UUID.
+                 Usa GSettings como API principal y cae en el comando gnome-extensions de fallback.
+        """
+        try:
+            settings = Gio.Settings.new("org.gnome.shell")
+            enabled = list(settings.get_strv("enabled-extensions"))
+            if enable:
+                if uuid not in enabled:
+                    enabled.append(uuid)
+            else:
+                if uuid in enabled:
+                    enabled.remove(uuid)
+            settings.set_strv("enabled-extensions", enabled)
+        except Exception as e:
+            print(f"Error setting extension {uuid} state to {enable}: {e}")
+            cmd = "enable" if enable else "disable"
+            subprocess.run(["gnome-extensions", cmd, uuid], capture_output=True)
 
 
 def main():
