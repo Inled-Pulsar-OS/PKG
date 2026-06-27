@@ -12,9 +12,9 @@ STAGE_DIR="$(realpath -m "$1")"
 THEME_DEST="$STAGE_DIR/usr/share/plymouth/themes/pulsar-plymouth"
 mkdir -p "$THEME_DEST"
 
-# Check if the local 'repo' directory is present in the staging folder
-# Comprobar si el directorio 'repo' local está presente en la carpeta staging
-if [ -d "$STAGE_DIR/repo" ]; then
+# Check if the local 'repo' directory is present in the staging folder and contains the theme configuration
+# Comprobar si el directorio 'repo' local está presente en la carpeta staging y contiene la configuración del tema
+if [ -f "$STAGE_DIR/repo/pulsar-plymouth.plymouth" ]; then
     echo "🎨 Copiando tema Plymouth desde el repositorio local..."
     # Copy theme assets from local repo
     # Copiar recursos del tema desde el repositorio local
@@ -23,7 +23,11 @@ if [ -d "$STAGE_DIR/repo" ]; then
     # Eliminar la carpeta repo de staging para evitar empaquetarla en la raíz del paquete deb
     rm -rf "$STAGE_DIR/repo"
 else
-    echo "⚠️ Directorio repo local no encontrado en staging. Descargando de respaldo desde Github..."
+    echo "⚠️ Directorio repo local vacío o no encontrado en staging. Descargando de respaldo desde Github..."
+    # If the local repo folder exists but is empty (e.g. submodule not initialized), clean it up first
+    # Si la carpeta repo local existe pero está vacía (ej. submódulo no inicializado), limpiarla primero
+    rm -rf "$STAGE_DIR/repo"
+    
     TEMP_BUILD="/tmp/pulsaros-plymouth-build"
     THEME_REPO="https://github.com/Inled-Pulsar-OS/plymouth-macoslike"
     rm -rf "$TEMP_BUILD"
