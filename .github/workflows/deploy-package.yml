@@ -23,8 +23,6 @@ jobs:
       # 1. Checkout of the code at the beginning to provide repository context to gh cli
       - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       # 2. Comprobar permisos del actor (solo el administrador / propietario del repo)
       # 2. Verify actor permissions (only repository owner / administrator)
