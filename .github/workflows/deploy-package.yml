@@ -18,20 +18,26 @@ jobs:
       contains(github.event.issue.labels.*.name, 'Deploy-Package') ||
       contains(github.event.issue.labels.*.name, 'deploy-packages')
     runs-on: ubuntu-latest
-
     steps:
-      # 1. Comprobar permisos del actor (solo el administrador / propietario del repo)
+      # 1. Checkout del código al principio para dar contexto de repositorio a gh cli
+      # 1. Checkout of the code at the beginning to provide repository context to gh cli
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2. Comprobar permisos del actor (solo el administrador / propietario del repo)
+      # 2. Verify actor permissions (only repository owner / administrator)
       - name: Verify Admin Permissions
         id: verify-admin
         run: |
           AUTHOR="${{ github.event.issue.user.login }}"
           OWNER="${{ github.repository_owner }}"
-          
+
           echo "Issue opened by: $AUTHOR"
           echo "Repository owner: $OWNER"
-          
+
           # Se permite al dueño del repo, o si el usuario es explícitamente jaime (u otro admin configurado)
-          if [ "$AUTHOR" = "$OWNER" ] || [ "$AUTHOR" = "jaime" ] || [ "$AUTHOR" = "InledGroup" ]; then
+          # Repository owner, jaime, or jaimegh-es are allowed
+          if [ "$AUTHOR" = "$OWNER" ] || [ "$AUTHOR" = "jaimegh-es" ]; then
             echo "✅ Permiso concedido. Procediendo con el despliegue."
             echo "is_admin=true" >> $GITHUB_OUTPUT
           else
@@ -39,7 +45,8 @@ jobs:
             echo "is_admin=false" >> $GITHUB_OUTPUT
           fi
 
-      # 2. Denegar acceso y cerrar el issue si no es admin
+      # 3. Denegar acceso y cerrar el issue si no es admin
+      # 3. Deny access and close the issue if not admin
       - name: Close Unauthorized Issue
         if: steps.verify-admin.outputs.is_admin == 'false'
         env:
@@ -49,10 +56,6 @@ jobs:
           gh issue comment "$ISSUE_NUMBER" --body "⚠️ **Acceso Denegado:** Lo siento @${{ github.event.issue.user.login }}, no tienes permisos para iniciar el empaquetado y despliegue de paquetes de Pulsar OS. Esta acción está reservada únicamente para el administrador del repositorio."
           gh issue close "$ISSUE_NUMBER" --reason "not-planned"
           exit 1
-
-      # 3. Checkout del código
-      - name: Checkout Code
-        uses: actions/checkout@v4
 
       # 4. Instalar herramientas necesarias en la máquina de construcción
       - name: Install Build Dependencies
@@ -65,24 +68,24 @@ jobs:
         id: parse-package
         run: |
           BODY="${{ github.event.issue.body }}"
-          
+
           # Intentar parsear el paquete usando regex simple
           PACKAGE=$(echo "$BODY" | grep -A 2 -i "Nombre del Paquete" | tail -n 1 | tr -d '[:space:]')
-          
+
           # Fallback: si no se encuentra en el cuerpo, intentar parsearlo del título del issue
           if [ -z "$PACKAGE" ] || [ "$PACKAGE" = "--" ]; then
             TITLE="${{ github.event.issue.title }}"
             PACKAGE=$(echo "$TITLE" | sed -r 's/\[Deploy\]\s*//i' | tr -d '[:space:]')
           fi
-          
+
           echo "Paquete detectado: '$PACKAGE'"
-          
+
           # Verificar si la carpeta del paquete existe en el repositorio (excepto si es 'all')
           if [ "$PACKAGE" != "all" ] && [ ! -d "$PACKAGE" ]; then
             echo "❌ Error: El paquete '$PACKAGE' no existe en el repositorio."
             exit 1
           fi
-          
+
           echo "package_name=$PACKAGE" >> $GITHUB_OUTPUT
 
       # 6. Comentar en el issue que ha comenzado la construcción
