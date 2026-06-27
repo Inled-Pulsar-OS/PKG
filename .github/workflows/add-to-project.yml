@@ -6,14 +6,24 @@ on:
 
 jobs:
   add-to-project:
+    # Only run if the issue is NOT for package deployment (case-insensitive)
+    # Solo ejecutar si el issue NO es para despliegue de paquetes (insensible a mayúsculas/minúsculas)
+    if: |
+      !contains(github.event.issue.labels.*.name, 'deploy-package') &&
+      !contains(github.event.issue.labels.*.name, 'Deploy-Package') &&
+      !contains(github.event.issue.labels.*.name, 'deploy-packages')
     runs-on: ubuntu-latest
     steps:
-      - name: Add issue to project
+      - name: Add issue to project via GH CLI
         id: add-project
-        uses: actions/add-to-project@v1.0.1
-        with:
-          project-url: https://github.com/orgs/Inled-Pulsar-OS/projects/1
-          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+        env:
+          GH_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
+        run: |
+          # Add the issue to the organization project board using GitHub CLI
+          # Añadir el issue al panel del proyecto de la organización usando la CLI de GitHub
+          ITEM_DATA=$(gh project item-add "1" --owner "Inled-Pulsar-OS" --url "${{ github.event.issue.html_url }}" --format json)
+          ITEM_ID=$(echo "$ITEM_DATA" | jq -r '.id')
+          echo "itemId=$ITEM_ID" >> $GITHUB_OUTPUT
 
       - name: Set Type to Error
         if: contains(github.event.issue.labels.*.name, 'bug')
