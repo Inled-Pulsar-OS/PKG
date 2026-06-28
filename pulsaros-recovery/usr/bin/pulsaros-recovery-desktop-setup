@@ -21,7 +21,11 @@ if [ -f "/usr/share/applications/pulsaros-recovery.desktop" ]; then
     
     # Force metadata trusted using gio to avoid "Allow Launching" warning
     # Forzar metadato de confianza usando gio para evitar la advertencia "Allow Launching"
-    gio set "$TARGET_LAUNCHER" metadata::trusted true 2>/dev/null || true
+    gio set -t string "$TARGET_LAUNCHER" metadata::trusted true 2>/dev/null || true
+    
+    # Touch the launcher to force GNOME Shell / Nautilus to reload the metadata cache
+    # Hacer touch al lanzador para forzar a GNOME Shell / Nautilus a recargar la caché de metadatos
+    touch "$TARGET_LAUNCHER" 2>/dev/null || true
     
     # Try marking with dbus reload hint if available
     # Intentar marcar con dbus de recarga si está disponible
