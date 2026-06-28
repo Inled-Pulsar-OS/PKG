@@ -67,6 +67,7 @@ Rectangle {
         anchors.fill: parent
         fillMode: Image.PreserveAspectCrop
         visible: true
+        cache: false
         Binding on source {
             when: config.background !== undefined
             value: config.background

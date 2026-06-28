@@ -37,7 +37,7 @@ transparency-mode='FIXED'
 background-opacity=0.8
 custom-theme-shrink=false
 show-apps-at-top=false
-show-show-apps-button=true
+show-show-apps-button=false
 show-trash=true
 move-to-monitor=true
 height-fraction=0.9
@@ -124,3 +124,50 @@ menu-tint-color='#000000'
 notification-tint-color='#000000'
 osd-tint-color='#000000'
 output-logs=false
+
+[org/gnome/desktop/input-sources]
+xkb-options=['ctrl:swap_lwin_lctl', 'ctrl:swap_rwin_rctl']
+
+[org/gnome/desktop/wm/keybindings]
+activate-window-menu=@as []
+show-desktop=['<Primary>d']
+switch-applications=['<Primary>Tab']
+switch-applications-backward=['<Primary><Shift>Tab']
+switch-group=['<Primary>grave']
+switch-group-backward=['<Primary><Shift>grave']
+switch-input-source=@as []
+switch-input-source-backward=@as []
+minimize=['<Primary>m']
+switch-to-workspace-left=['<Super>Left']
+switch-to-workspace-right=['<Super>Right']
+
+[org/gnome/shell/keybindings]
+toggle-overview=['LaunchA']
+toggle-application-view=['LaunchB']
+toggle-message-tray=@as []
+screenshot=['<Primary><Shift>numbersign']
+show-screenshot-ui=['<Shift><Control>dollar']
+screenshot-window=['<Shift><Control>percent']
+
+[org/gnome/mutter/keybindings]
+toggle-tiled-left=@as []
+toggle-tiled-right=@as []
+
+[org/gnome/mutter/wayland/keybindings]
+restore-shortcuts=@as []
+
+[org/gnome/settings-daemon/plugins/media-keys]
+screensaver=@as []
+
+[org/gnome/mutter]
+overlay-key='Super_R'
+
+[org/gnome/terminal/legacy/keybindings]
+copy='<Primary>c'
+paste='<Primary>v'
+new-tab='<Primary>t'
+new-window='<Primary>n'
+close-tab='<Primary>w'
+close-window='<Primary>q'
+find='<Primary>f'
+

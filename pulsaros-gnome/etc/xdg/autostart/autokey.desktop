@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=AutoKey
+GenericName=Keyboard Automation Utility
+Comment=Keyboard automation utility
+Exec=autokey-gtk --nogui
+Terminal=false
+Type=Application
+Icon=autokey
+Categories=Utility;
+X-GNOME-Autostart-enabled=true

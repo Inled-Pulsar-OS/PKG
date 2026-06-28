@@ -17,15 +17,19 @@ fi
 # Inicializar el fondo de pantalla dinámico para SDDM
 # Initialize the dynamic wallpaper for SDDM
 echo "🎨 Inicializando el archivo de fondo de pantalla compartido para SDDM..."
-mkdir -p /var/lib/sddm
+mkdir -p /var/lib/pulsar-sddm
 if [ -f "/usr/share/backgrounds/pulsar-os-tahoe.png" ]; then
-    cp "/usr/share/backgrounds/pulsar-os-tahoe.png" /var/lib/sddm/pulsar-wallpaper.png
+    cp "/usr/share/backgrounds/pulsar-os-tahoe.png" /var/lib/pulsar-sddm/pulsar-wallpaper.png
 else
     # Archivo temporal en caso de que no se haya instalado pulsaros-essential aún
     # Temporary file in case pulsaros-essential is not installed yet
-    touch /var/lib/sddm/pulsar-wallpaper.png
+    touch /var/lib/pulsar-sddm/pulsar-wallpaper.png
 fi
-chown sddm:sddm /var/lib/sddm/pulsar-wallpaper.png || true
-chmod 666 /var/lib/sddm/pulsar-wallpaper.png || true
+chown sddm:sddm /var/lib/pulsar-sddm/pulsar-wallpaper.png || true
+chmod 666 /var/lib/pulsar-sddm/pulsar-wallpaper.png || true
+# Give global write access to the folder so the user sync daemon can run cat >
+# Dar acceso de escritura global al directorio para que el daemon de usuario pueda escribir
+chmod 777 /var/lib/pulsar-sddm || true
+chown sddm:sddm /var/lib/pulsar-sddm || true
 
 exit 0

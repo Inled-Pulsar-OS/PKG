@@ -1,0 +1,10 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Bootsound Post-installation Script
+# ==============================================================================
+set -e
+
+echo "🔊 Habilitando el servicio de sonido de inicio (bootsound)..."
+systemctl enable bootsound.service || true
+
+exit 0

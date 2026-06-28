@@ -1,0 +1,13 @@
+[Unit]
+Description=Play Startup Sound
+After=sound.target multi-user.target
+Before=mpd.service
+
+[Service]
+Type=oneshot
+# Wait for sound card drivers to initialize and force ALSA output for system-level playback
+ExecStartPre=/bin/sleep 2
+ExecStart=/usr/bin/mpv --ao=alsa --volume=80 /usr/share/extras/boot-sound.wav
+
+[Install]
+WantedBy=default.target

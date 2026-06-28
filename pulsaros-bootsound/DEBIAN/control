@@ -1,0 +1,9 @@
+Package: pulsaros-bootsound
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: all
+Depends: mpv
+Maintainer: Inled Pulsar OS Team <info@inled.es>
+Description: Plays a startup sound at boot using headless mpv.
+ Adds systemd service to play the official startup sound during system boot phase.

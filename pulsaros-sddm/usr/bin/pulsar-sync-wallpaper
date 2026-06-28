@@ -1,60 +1,144 @@
 #!/bin/bash
 # ==============================================================================
-# Pulsar OS - SDDM Wallpaper Sync Daemon
+# Pulsar OS - SDDM & Lockscreen Wallpaper Sync Daemon (XML-Aware Version)
 # ==============================================================================
 # English: This script runs on user session start. It copies the current
-#          desktop wallpaper to a shared location read by SDDM, updating
-#          it dynamically to match the active user's preference.
+#          desktop wallpaper to a shared location read by SDDM and synchronizes
+#          GNOME screensaver keys to ensure parity with Lockscreen.
 # Español: Este script se ejecuta al iniciar la sesión de usuario. Copia el
-#          fondo de pantalla actual a una ubicación compartida leída por SDDM,
-#          actualizándolo dinámicamente para coincidir con la preferencia del usuario activo.
+#          fondo de pantalla actual a una ubicación compartida leída por SDDM y
+#          sincroniza las claves del protector de pantalla de GNOME.
 # ==============================================================================
 
-# Function to extract and sync wallpaper path
-# Función para extraer y sincronizar la ruta del fondo de pantalla
+# Redirect stdout and stderr to a temp log file for easy diagnosis
+# Redirigir stdout y stderr a un archivo de registro temporal para un fácil diagnóstico
+exec > /tmp/pulsar-sync-wallpaper.log 2>&1
+
+echo "=== PULSAR WALLPAPER SYNC DAEMON LOG ==="
+date
+echo "User: $USER (UID: $UID)"
+echo "DISPLAY: $DISPLAY"
+echo "XDG_RUNTIME_DIR: $XDG_RUNTIME_DIR"
+
+# Prevent concurrent execution of the sync loop
+# Evitar ejecuciones simultáneas del bucle de sincronización
+LOCK_FILE="/tmp/pulsar-sync-wallpaper.lock"
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    echo "Sync daemon already running. Exiting."
+    exit 0
+fi
+
 sync_wallpaper() {
+    echo "----------------------------------------"
+    echo "Sync Triggered: $(date)"
+    
     # Detect the current interface color scheme (light or dark mode)
     # Detectar el esquema de color de la interfaz actual (modo claro u oscuro)
     SCHEME=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")
+    echo "Detected GNOME Theme Color Scheme: $SCHEME"
     
+    # Read the active URI
+    # Leer el URI activo
     if [ "$SCHEME" = "prefer-dark" ]; then
         BG_URI=$(gsettings get org.gnome.desktop.background picture-uri-dark 2>/dev/null | tr -d "'")
     else
         BG_URI=$(gsettings get org.gnome.desktop.background picture-uri 2>/dev/null | tr -d "'")
     fi
+    echo "Primary BG_URI: $BG_URI"
     
-    # Fallbacks if the preferred URI is empty or none
-    # Fallbacks si el URI preferido está vacío o es none
+    # Fallbacks if empty
+    # Fallbacks si está vacío
     if [ -z "$BG_URI" ] || [ "$BG_URI" = "none" ]; then
         BG_URI=$(gsettings get org.gnome.desktop.background picture-uri 2>/dev/null | tr -d "'")
+        echo "Fallback to picture-uri: $BG_URI"
     fi
     if [ -z "$BG_URI" ] || [ "$BG_URI" = "none" ]; then
         BG_URI=$(gsettings get org.gnome.desktop.background picture-uri-dark 2>/dev/null | tr -d "'")
+        echo "Fallback to picture-uri-dark: $BG_URI"
     fi
 
-    # Convert file:// URI to a local path
-    # Convertir URI file:// en ruta local
+    # If still empty, use default system wallpaper
+    # Si sigue vacío, usar el fondo de pantalla por defecto del sistema
+    if [ -z "$BG_URI" ] || [ "$BG_URI" = "none" ]; then
+        BG_URI="file:///usr/share/backgrounds/pulsar-os-tahoe.png"
+        echo "Defaulting to fallback system wallpaper: $BG_URI"
+    fi
+
+    # 1. Sync all GNOME keys to prevent desynchronization between Desktop and Lockscreen
+    # Sincronizar todas las claves de GNOME para evitar desincronizaciones entre Escritorio y Lockscreen
+    CURRENT_DARK=$(gsettings get org.gnome.desktop.background picture-uri-dark 2>/dev/null | tr -d "'")
+    CURRENT_LIGHT=$(gsettings get org.gnome.desktop.background picture-uri 2>/dev/null | tr -d "'")
+    CURRENT_LOCK=$(gsettings get org.gnome.desktop.screensaver picture-uri 2>/dev/null | tr -d "'")
+
+    echo "Current settings state:"
+    echo "  - Desktop Dark URI: $CURRENT_DARK"
+    echo "  - Desktop Light URI: $CURRENT_LIGHT"
+    echo "  - Screensaver URI:   $CURRENT_LOCK"
+
+    if [ "$CURRENT_DARK" != "$BG_URI" ]; then
+        echo "  -> Updating picture-uri-dark to $BG_URI"
+        gsettings set org.gnome.desktop.background picture-uri-dark "$BG_URI" 2>/dev/null || true
+    fi
+    if [ "$CURRENT_LIGHT" != "$BG_URI" ]; then
+        echo "  -> Updating picture-uri to $BG_URI"
+        gsettings set org.gnome.desktop.background picture-uri "$BG_URI" 2>/dev/null || true
+    fi
+    if [ "$CURRENT_LOCK" != "$BG_URI" ]; then
+        echo "  -> Updating screensaver picture-uri to $BG_URI"
+        gsettings set org.gnome.desktop.screensaver picture-uri "$BG_URI" 2>/dev/null || true
+    fi
+
+    # 2. Sync SDDM Shared Wallpaper
+    # Sincronizar el fondo compartido de SDDM
+    echo "Target SDDM path check: /var/lib/pulsar-sddm"
+    ls -ld /var/lib/pulsar-sddm 2>/dev/null
+    ls -l /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null
+
     if [[ "$BG_URI" == file://* ]]; then
         BG_PATH="${BG_URI#file://}"
-        if [ -f "$BG_PATH" ]; then
-            # Use cat redirection instead of cp to safely overwrite the file content 
-            # without modifying directory attributes, since the directory /var/lib/sddm 
-            # has restrictive permissions for non-privileged users.
-            # Usar redirección cat en lugar de cp para sobrescribir de forma segura el contenido
-            # del archivo sin modificar atributos del directorio, ya que /var/lib/sddm
-            # tiene permisos restrictivos para usuarios no privilegiados.
-            cat "$BG_PATH" > /var/lib/sddm/pulsar-wallpaper.png 2>/dev/null || true
-            chmod 666 /var/lib/sddm/pulsar-wallpaper.png 2>/dev/null || true
+        echo "Extracted path from URI: $BG_PATH"
+        
+        # If the background file is an XML slideshow transition file, parse it to extract the real image path
+        # Si el archivo de fondo es un XML de transición, parsearlo para extraer la ruta de la imagen real
+        if [[ "$BG_PATH" == *.xml ]]; then
+            echo "XML slideshow file detected. Parsing..."
+            if [ -f "$BG_PATH" ]; then
+                REAL_IMG=$(grep '<file>' "$BG_PATH" | head -n 1 | sed -e 's/^[ \t]*<file>//' -e 's/<\/file>.*//')
+                if [ -f "$REAL_IMG" ]; then
+                    BG_PATH="$REAL_IMG"
+                    echo "Successfully parsed XML. Image path: $BG_PATH"
+                else
+                    echo "Could not find image path inside XML or image does not exist."
+                fi
+            fi
         fi
+
+        if [ -f "$BG_PATH" ]; then
+            echo "Copying $BG_PATH to SDDM shared path..."
+            cat "$BG_PATH" > /var/lib/pulsar-sddm/pulsar-wallpaper.png
+            echo "Copy result exit code: $?"
+            # Silent chmod fallback, since only file owner can chmod but write access (666) is already active
+            chmod 666 /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
+        else
+            echo "Error: File $BG_PATH does not exist!"
+        fi
+    else
+        echo "Warning: URI is not a local file (no file:// prefix)"
     fi
 }
 
-# Initial synchronization on login
-# Sincronización inicial al iniciar sesión
+# Initial sync on startup
+# Sincronización inicial al iniciar
+echo "Running initial sync..."
 sync_wallpaper
 
-# Monitor changes in background settings and interface color scheme simultaneously
-# Monitorear cambios en la configuración de fondo y esquema de color de interfaz simultáneamente
-(gsettings monitor org.gnome.desktop.background 2>/dev/null & gsettings monitor org.gnome.desktop.interface color-scheme 2>/dev/null) | while read -r line; do
+# Monitor changes with line-buffering disabled to prevent pipe buffering issues
+# Monitorear cambios desactivando el buffering de tuberías para evitar bloqueos
+echo "Entering monitor loop..."
+(stdbuf -oL gsettings monitor org.gnome.desktop.background 2>/dev/null & \
+ stdbuf -oL gsettings monitor org.gnome.desktop.interface color-scheme 2>/dev/null & \
+ stdbuf -oL gsettings monitor org.gnome.desktop.screensaver 2>/dev/null) | while read -r line; do
+    echo "Monitor event: $line"
     sync_wallpaper
 done

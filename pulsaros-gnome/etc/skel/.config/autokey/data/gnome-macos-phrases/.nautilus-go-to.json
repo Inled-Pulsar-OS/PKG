@@ -1,0 +1,32 @@
+{
+    "type": "phrase",
+    "description": "nautilus-go-to",
+    "modes": [
+        3
+    ],
+    "usageCount": 1,
+    "prompt": false,
+    "omitTrigger": false,
+    "matchCase": false,
+    "showInTrayMenu": false,
+    "abbreviation": {
+        "abbreviations": [],
+        "backspace": true,
+        "ignoreCase": false,
+        "immediate": false,
+        "triggerInside": false,
+        "wordChars": "[\\w]"
+    },
+    "hotkey": {
+        "modifiers": [
+            "<ctrl>",
+            "<shift>"
+        ],
+        "hotKey": "g"
+    },
+    "filter": {
+        "regex": "^.*(Nautilus).*$",
+        "isRecursive": false
+    },
+    "sendMode": "kb"
+}
