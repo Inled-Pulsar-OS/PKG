@@ -5,6 +5,9 @@ Before=mpd.service
 
 [Service]
 Type=oneshot
+# Clear graphical env vars to prevent mpv from failing due to non-root ownership checks
+Environment=XDG_RUNTIME_DIR=
+Environment=DBUS_SESSION_BUS_ADDRESS=
 # Wait for sound card drivers to initialize and force ALSA output for system-level playback
 ExecStartPre=/bin/sleep 2
 ExecStart=/usr/bin/mpv --ao=alsa --volume=80 /usr/share/extras/boot-sound.wav
