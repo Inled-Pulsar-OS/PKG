@@ -109,11 +109,12 @@ ControllerMode = dual
 EOF
 fi
 
-# English: Enable Bluetooth and Docker systemd services
-# Español: Habilitar los servicios de systemd para Bluetooth y Docker
-echo "⚙️ Habilitando servicios de systemd (Bluetooth y Docker)..."
+# English: Enable Bluetooth, Docker and 9pfs mount systemd services
+# Español: Habilitar los servicios de systemd para Bluetooth, Docker y montaje 9pfs
+echo "⚙️ Habilitando servicios de systemd (Bluetooth, Docker y montaje 9pfs)..."
 if command -v systemctl >/dev/null 2>&1; then
     systemctl enable bluetooth.service || true
+    systemctl enable docker-9pfs-mount.service || true
     systemctl enable docker.service || true
     systemctl enable docker.socket || true
 fi

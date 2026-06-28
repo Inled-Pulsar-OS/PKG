@@ -80,6 +80,38 @@ cat <<EOF > "$STAGE_DIR/usr/share/gnome-background-properties/pulsar-backgrounds
 </wallpapers>
 EOF
 
+# ==============================================================================
+# SERVICIO DE COMPATIBILIDAD CON DOCKER Y CONTAINERD EN 9PFS (QEMU TEST)
+# ==============================================================================
+# English: Create a dedicated systemd service to mount tmpfs on /var/lib/docker
+# and /var/lib/containerd if running on a 9pfs root filesystem (QEMU test environment).
+# This bypasses docker.service sandboxing and ensures both docker and containerd
+# have a compatible backing store for overlays in RAM, without affecting real hardware.
+# Español: Crear un servicio de systemd dedicado para montar tmpfs en /var/lib/docker
+# y /var/lib/containerd si se ejecuta sobre un sistema de archivos raíz 9pfs (entorno QEMU).
+# Esto evita las restricciones de sandboxing de docker.service y asegura que tanto docker
+# como containerd tengan un almacenamiento compatible para overlays en RAM, sin afectar hardware real.
+
+echo "🐳 Configurando servicio docker-9pfs-mount para compatibilidad en QEMU..."
+mkdir -p "$STAGE_DIR/etc/systemd/system"
+cat <<'EOF' > "$STAGE_DIR/etc/systemd/system/docker-9pfs-mount.service"
+[Unit]
+Description=Mount tmpfs on /var/lib/docker and /var/lib/containerd for 9pfs compatibility
+DefaultDependencies=no
+After=local-fs.target
+Before=docker.service containerd.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'if grep -q " 9p " /proc/mounts; then mkdir -p /var/lib/docker /var/lib/containerd && (mountpoint -q /var/lib/docker || mount -t tmpfs -o size=2G tmpfs /var/lib/docker) && (mountpoint -q /var/lib/containerd || mount -t tmpfs -o size=1G tmpfs /var/lib/containerd); fi'
+RemainAfterExit=yes
+
+[Install]
+RequiredBy=docker.service containerd.service
+WantedBy=multi-user.target
+EOF
+
 # Limpieza
 rm -rf "$TEMP_BUILD"
 echo "✅ Configuración y Fildem compilado en staging."
+

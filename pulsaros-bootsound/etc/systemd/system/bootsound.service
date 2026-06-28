@@ -5,12 +5,12 @@ Before=mpd.service
 
 [Service]
 Type=oneshot
-# Clear graphical env vars to prevent mpv from failing due to non-root ownership checks
-Environment=XDG_RUNTIME_DIR=
-Environment=DBUS_SESSION_BUS_ADDRESS=
-# Wait for sound card drivers to initialize and force ALSA output for system-level playback
+# Clean graphical environment variables inside shell wrapper to bypass root ownership checks completely
 ExecStartPre=/bin/sleep 2
-ExecStart=/usr/bin/mpv --ao=alsa --volume=80 /usr/share/extras/boot-sound.wav
+# English: Execute mpv with ALSA and redirect output to /var/log/bootsound.log for debugging purposes.
+# Español: Ejecutar mpv con ALSA y redirigir la salida a /var/log/bootsound.log para tareas de depuración.
+ExecStart=/bin/bash -c "unset XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS PULSE_SERVER; exec /usr/bin/mpv --ao=alsa --volume=80 /usr/share/extras/boot-sound.wav > /var/log/bootsound.log 2>&1"
 
 [Install]
 WantedBy=default.target
+
