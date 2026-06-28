@@ -988,6 +988,7 @@ class AssistantWindow(Gtk.Window):
                 settings.set_boolean("custom-theme-shrink", False)
                 settings.set_boolean("show-show-apps-button", True)
                 settings.set_double("height-fraction", 0.9)
+                settings.set_boolean("apply-custom-theme", True)
                 settings.set_string("transparency-mode", "FIXED")
                 settings.set_boolean("customize-alphas", False)
                 print("GNOME Settings: Restored Dash to Dock settings for Blur my Shell.")

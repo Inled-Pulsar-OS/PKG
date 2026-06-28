@@ -16,7 +16,7 @@ TARGET_LAUNCHER="$DESKTOP_DIR/pulsaros-recovery.desktop"
 # Copiar lanzador de Recovery
 if [ -f "/usr/share/applications/pulsaros-recovery.desktop" ]; then
     cp "/usr/share/applications/pulsaros-recovery.desktop" "$TARGET_LAUNCHER"
-    chmod a+rwx "$TARGET_LAUNCHER"
+    chmod 755 "$TARGET_LAUNCHER"
     chown "$USER:$USER" "$TARGET_LAUNCHER" 2>/dev/null || true
     
     # Force metadata trusted using gio to avoid "Allow Launching" warning
