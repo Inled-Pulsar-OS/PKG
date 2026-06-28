@@ -1,29 +1,31 @@
 #!/bin/bash
 # ==============================================================================
-# Pulsar OS - Desktop Recovery Icon Installer
-# ==============================================================================
-# English: Installs and marks the Pulsar OS Recovery launcher on the user's
-#          Desktop, and disables the default Calamares installer icon.
-# Español: Instala y marca el lanzador de Pulsar OS Recovery en el Escritorio
-#          del usuario, y desactiva el icono del instalador de Calamares por defecto.
+# Pulsar OS - Desktop Recovery Icon Installer (Indestructible version)
 # ==============================================================================
 
-# Wait for session and user folders to be fully populated by GNOME
-# Esperar a que la sesión y las carpetas de usuario estén completamente pobladas por GNOME
-sleep 2
+# Wait for session and desktop manager to be fully loaded
+# Esperar a que la sesión y el gestor de escritorio carguen por completo
+sleep 6
 
 DESKTOP_DIR="$HOME/Desktop"
 mkdir -p "$DESKTOP_DIR"
 
+TARGET_LAUNCHER="$DESKTOP_DIR/pulsaros-recovery.desktop"
+
 # Copy Recovery Launcher
 # Copiar lanzador de Recovery
 if [ -f "/usr/share/applications/pulsaros-recovery.desktop" ]; then
-    cp "/usr/share/applications/pulsaros-recovery.desktop" "$DESKTOP_DIR/"
-    chmod +x "$DESKTOP_DIR/pulsaros-recovery.desktop"
+    cp "/usr/share/applications/pulsaros-recovery.desktop" "$TARGET_LAUNCHER"
+    chmod a+rwx "$TARGET_LAUNCHER"
+    chown "$USER:$USER" "$TARGET_LAUNCHER" 2>/dev/null || true
     
-    # Mark as trusted in GNOME to display the icon and name natively
-    # Marcar como de confianza en GNOME para mostrar el icono y nombre nativamente
-    gio set "$DESKTOP_DIR/pulsaros-recovery.desktop" metadata::trusted true 2>/dev/null || true
+    # Force metadata trusted using gio to avoid "Allow Launching" warning
+    # Forzar metadato de confianza usando gio para evitar la advertencia "Allow Launching"
+    gio set "$TARGET_LAUNCHER" metadata::trusted true 2>/dev/null || true
+    
+    # Try marking with dbus reload hint if available
+    # Intentar marcar con dbus de recarga si está disponible
+    update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
 fi
 
 # Clean up default Calamares icons if they were generated

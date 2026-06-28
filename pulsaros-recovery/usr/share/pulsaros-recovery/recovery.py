@@ -236,7 +236,7 @@ def get_physical_disks():
     ]
 
 
-def run_as_real_user(cmd):
+def run_as_real_user(cmd, wait=False):
     """
     English: Runs a command as the real, non-root user who invoked pkexec or sudo,
              preserving the graphical display variables.
@@ -252,7 +252,7 @@ def run_as_real_user(cmd):
                 display = os.environ.get("DISPLAY", "")
                 xauth = os.environ.get("XAUTHORITY", "")
                 wayland = os.environ.get("WAYLAND_DISPLAY", "")
-                xdg_runtime = os.environ.get("XDG_RUNTIME_DIR", "")
+                xdg_runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{real_uid}")
                 
                 # Command wrapping with sudo -u
                 env_str = f'DISPLAY="{display}"'
@@ -265,10 +265,14 @@ def run_as_real_user(cmd):
                     
                 full_cmd = f"sudo -u {username} env {env_str} {cmd}"
                 print(f"Running command as user {username}: {full_cmd}")
+                if wait:
+                    return subprocess.run(full_cmd, shell=True)
                 return subprocess.Popen(full_cmd, shell=True)
             except Exception as e:
                 print("Failed to run command as user, executing normal fallback:", e)
     
+    if wait:
+        return subprocess.run(cmd, shell=True)
     return subprocess.Popen(cmd, shell=True)
 
 
@@ -336,7 +340,7 @@ class RecoveryApp(Gtk.Window):
         self.add_utility_row(
             "Restore from Backup",
             "Restore your Pulsar OS installation from a local system backup.",
-            "document-revert"
+            "timemachine"
         )
         self.add_utility_row(
             "Install Pulsar OS",
@@ -509,6 +513,14 @@ class RecoveryApp(Gtk.Window):
                 image = Gtk.Image.new_from_icon_name("safari", Gtk.IconSize.DND)
             else:
                 image = Gtk.Image.new_from_icon_name("web-browser", Gtk.IconSize.DND)
+        elif icon_name == "timemachine":
+            icon_theme = Gtk.IconTheme.get_default()
+            if icon_theme.has_icon("time-machine"):
+                image = Gtk.Image.new_from_icon_name("time-machine", Gtk.IconSize.DND)
+            elif icon_theme.has_icon("deja-dup"):
+                image = Gtk.Image.new_from_icon_name("deja-dup", Gtk.IconSize.DND)
+            else:
+                image = Gtk.Image.new_from_icon_name("document-revert", Gtk.IconSize.DND)
         else:
             image = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.DND)
         
@@ -544,17 +556,18 @@ class RecoveryApp(Gtk.Window):
 
     def on_utility_continue_clicked(self, button):
         if self.selected_utility == 0:
-            # Time Machine mock info
-            dialog = Gtk.MessageDialog(
-                transient_for=self,
-                flags=0,
-                message_type=Gtk.MessageType.INFO,
-                buttons=Gtk.ButtonsType.OK,
-                text="Time Machine Backup Recovery"
-            )
-            dialog.format_secondary_text("No backups were found on your local storage. Please plug in a backup drive to restore.")
-            dialog.run()
-            dialog.destroy()
+            # Hide recovery to allow Deja-dup to draw on top (fullscreen blocks other windows)
+            # Ocultar el recovery para permitir que Deja-dup se dibuje encima (pantalla completa bloquea otras ventanas)
+            self.hide()
+            
+            def run_deja_dup():
+                run_as_real_user("deja-dup --restore || deja-dup", wait=True)
+                # Show recovery again in GTK main thread
+                # Mostrar el recovery de nuevo en el hilo principal de GTK
+                GLib.idle_add(self.show)
+                
+            import threading
+            threading.Thread(target=run_deja_dup, daemon=True).start()
         elif self.selected_utility == 1:
             # Install Pulsar OS - Ir al welcome
             self.stack.set_visible_child_name("welcome")

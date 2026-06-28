@@ -274,6 +274,26 @@ writeUsersPageToDummy: false
 userShell: /bin/bash
 EOF
 
+# packages.conf (configura la instalación automatizada de drivers y firmware de Pulsar OS)
+cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/packages.conf"
+---
+backend: apt
+
+operations:
+  - install:
+      - firmware-linux
+      - firmware-linux-nonfree
+      - firmware-misc-nonfree
+      - firmware-iwlwifi
+      - firmware-realtek
+      - firmware-atheros
+      - firmware-brcm80211
+      - intel-microcode
+      - amd64-microcode
+      - firmware-amd-graphics
+EOF
+
+
 # settings.conf
 cat <<EOF > "$CALAMARES_CONFIGS_DEST/settings.conf"
 ---
