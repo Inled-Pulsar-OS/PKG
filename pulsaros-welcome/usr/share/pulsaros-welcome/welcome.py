@@ -986,7 +986,7 @@ class AssistantWindow(Gtk.Window):
             if settings:
                 settings.set_double("background-opacity", 0.8)
                 settings.set_boolean("custom-theme-shrink", False)
-                settings.set_boolean("show-show-apps-button", True)
+                settings.set_boolean("show-show-apps-button", False)
                 settings.set_double("height-fraction", 0.9)
                 settings.set_boolean("apply-custom-theme", True)
                 settings.set_string("transparency-mode", "FIXED")
@@ -1006,7 +1006,7 @@ class AssistantWindow(Gtk.Window):
             if settings_dock:
                 settings_dock.set_double("background-opacity", 0.0)
                 settings_dock.set_boolean("custom-theme-shrink", False)
-                settings_dock.set_boolean("show-show-apps-button", True)
+                settings_dock.set_boolean("show-show-apps-button", False)
                 settings_dock.set_double("height-fraction", 0.9)
                 settings_dock.set_boolean("apply-custom-theme", False)
                 settings_dock.set_string("transparency-mode", "FIXED")

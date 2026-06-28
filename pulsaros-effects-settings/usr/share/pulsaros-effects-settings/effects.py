@@ -135,6 +135,26 @@ class EffectsSettingsWindow(Gtk.Window):
         lbl_warn.get_style_context().add_class("warning-text")
         self.warning_box.pack_start(lbl_warn, True, True, 0)
 
+        # Separator line / Línea divisoria
+        separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        card_box.pack_start(separator, False, False, 8)
+
+        # Show apps dock switch row / Fila con interruptor para mostrar el botón de apps del dock
+        apps_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        card_box.pack_start(apps_row, False, False, 4)
+
+        lbl_apps = Gtk.Label()
+        lbl_apps.set_markup("<b>Show applications icon in Dock / Mostrar aplicaciones en el Dock</b>\n"
+                            "<span size='small' foreground='#888888'>Adds GNOME app grid launcher to the dock panels.\nAñade el lanzador de cuadrícula de apps a los paneles del dock.</span>")
+        lbl_apps.set_xalign(0.0)
+        lbl_apps.set_line_wrap(True)
+        lbl_apps.set_max_width_chars(45)
+        apps_row.pack_start(lbl_apps, True, True, 0)
+
+        self.switch_show_apps = Gtk.Switch()
+        self.switch_show_apps.set_valign(Gtk.Align.CENTER)
+        apps_row.pack_end(self.switch_show_apps, False, False, 0)
+
         # Load current system state to set UI switches
         # Cargar el estado actual del sistema para configurar los interruptores de la UI
         is_glass_active = self.get_current_effects_state()
@@ -144,6 +164,18 @@ class EffectsSettingsWindow(Gtk.Window):
         else:
             self.radio_blur.set_active(True)
             self.warning_box.set_visible(False)
+
+        # Load current show-apps state
+        # Cargar el estado actual de show-apps
+        try:
+            settings_dock = self.get_safe_settings("org.gnome.shell.extensions.dash-to-dock")
+            if settings_dock:
+                self.switch_show_apps.set_active(settings_dock.get_boolean("show-show-apps-button"))
+        except Exception as e:
+            print("Error loading show-apps state:", e)
+            self.switch_show_apps.set_active(False)
+
+        self.switch_show_apps.connect("notify::active", self.on_show_apps_toggled)
 
         # Add button bar
         # Añadir barra de botones
@@ -281,7 +313,6 @@ class EffectsSettingsWindow(Gtk.Window):
             if settings:
                 settings.set_double("background-opacity", 0.8)
                 settings.set_boolean("custom-theme-shrink", False)
-                settings.set_boolean("show-show-apps-button", True)
                 settings.set_double("height-fraction", 0.9)
                 settings.set_boolean("apply-custom-theme", True)
                 settings.set_string("transparency-mode", "FIXED")
@@ -301,7 +332,6 @@ class EffectsSettingsWindow(Gtk.Window):
             if settings_dock:
                 settings_dock.set_double("background-opacity", 0.0)
                 settings_dock.set_boolean("custom-theme-shrink", False)
-                settings_dock.set_boolean("show-show-apps-button", True)
                 settings_dock.set_double("height-fraction", 0.9)
                 settings_dock.set_boolean("apply-custom-theme", False)
                 settings_dock.set_string("transparency-mode", "FIXED")
@@ -335,6 +365,20 @@ class EffectsSettingsWindow(Gtk.Window):
                 print("Effects App: Applied Liquid Glass GSettings.")
         except Exception as e:
             print("Error applying Liquid Glass GSettings:", e)
+
+    def on_show_apps_toggled(self, switch, gparam):
+        """
+        Triggered when toggling the 'Show applications' switch.
+        Se ejecuta al alternar el interruptor de 'Mostrar aplicaciones'.
+        """
+        show_apps = switch.get_active()
+        try:
+            settings = self.get_safe_settings("org.gnome.shell.extensions.dash-to-dock")
+            if settings:
+                settings.set_boolean("show-show-apps-button", show_apps)
+                print(f"Effects App: show-show-apps-button set to {show_apps}")
+        except Exception as e:
+            print("Error toggling show-apps setting:", e)
 
     def set_extension_state(self, uuid, enable):
         """
