@@ -14,4 +14,18 @@ if [ -d "/usr/share/fonts/truetype/tahoe-sddm" ]; then
     fc-cache -f || true
 fi
 
+# Inicializar el fondo de pantalla dinámico para SDDM
+# Initialize the dynamic wallpaper for SDDM
+echo "🎨 Inicializando el archivo de fondo de pantalla compartido para SDDM..."
+mkdir -p /var/lib/sddm
+if [ -f "/usr/share/backgrounds/pulsar-os-tahoe.png" ]; then
+    cp "/usr/share/backgrounds/pulsar-os-tahoe.png" /var/lib/sddm/pulsar-wallpaper.png
+else
+    # Archivo temporal en caso de que no se haya instalado pulsaros-essential aún
+    # Temporary file in case pulsaros-essential is not installed yet
+    touch /var/lib/sddm/pulsar-wallpaper.png
+fi
+chown sddm:sddm /var/lib/sddm/pulsar-wallpaper.png || true
+chmod 666 /var/lib/sddm/pulsar-wallpaper.png || true
+
 exit 0

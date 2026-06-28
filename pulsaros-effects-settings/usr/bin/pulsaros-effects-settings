@@ -1,0 +1,9 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Desktop Effects Settings Launcher
+# ==============================================================================
+# Launcher for the desktop visual effects settings panel.
+# Lanzador para el panel de ajustes de efectos visuales de escritorio.
+# ==============================================================================
+
+exec python3 /usr/share/pulsaros-effects-settings/effects.py "$@"

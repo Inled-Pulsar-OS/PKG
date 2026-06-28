@@ -118,4 +118,13 @@ if command -v systemctl >/dev/null 2>&1; then
     systemctl enable docker.socket || true
 fi
 
+# English: Disable default Calamares desktop icon autostart in the live environment
+# Español: Desactivar el autostart del icono de escritorio por defecto de Calamares en la sesión live
+echo "🚫 Desactivando autostart del icono de escritorio de Calamares..."
+if [ -f "/etc/xdg/autostart/calamares-desktop-icon.desktop" ]; then
+    if ! grep -q "^Hidden=" /etc/xdg/autostart/calamares-desktop-icon.desktop; then
+        echo "Hidden=true" >> /etc/xdg/autostart/calamares-desktop-icon.desktop
+    fi
+fi
+
 exit 0

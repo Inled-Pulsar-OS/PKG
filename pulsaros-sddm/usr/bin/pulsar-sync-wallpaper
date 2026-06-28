@@ -1,0 +1,60 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - SDDM Wallpaper Sync Daemon
+# ==============================================================================
+# English: This script runs on user session start. It copies the current
+#          desktop wallpaper to a shared location read by SDDM, updating
+#          it dynamically to match the active user's preference.
+# Español: Este script se ejecuta al iniciar la sesión de usuario. Copia el
+#          fondo de pantalla actual a una ubicación compartida leída por SDDM,
+#          actualizándolo dinámicamente para coincidir con la preferencia del usuario activo.
+# ==============================================================================
+
+# Function to extract and sync wallpaper path
+# Función para extraer y sincronizar la ruta del fondo de pantalla
+sync_wallpaper() {
+    # Detect the current interface color scheme (light or dark mode)
+    # Detectar el esquema de color de la interfaz actual (modo claro u oscuro)
+    SCHEME=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")
+    
+    if [ "$SCHEME" = "prefer-dark" ]; then
+        BG_URI=$(gsettings get org.gnome.desktop.background picture-uri-dark 2>/dev/null | tr -d "'")
+    else
+        BG_URI=$(gsettings get org.gnome.desktop.background picture-uri 2>/dev/null | tr -d "'")
+    fi
+    
+    # Fallbacks if the preferred URI is empty or none
+    # Fallbacks si el URI preferido está vacío o es none
+    if [ -z "$BG_URI" ] || [ "$BG_URI" = "none" ]; then
+        BG_URI=$(gsettings get org.gnome.desktop.background picture-uri 2>/dev/null | tr -d "'")
+    fi
+    if [ -z "$BG_URI" ] || [ "$BG_URI" = "none" ]; then
+        BG_URI=$(gsettings get org.gnome.desktop.background picture-uri-dark 2>/dev/null | tr -d "'")
+    fi
+
+    # Convert file:// URI to a local path
+    # Convertir URI file:// en ruta local
+    if [[ "$BG_URI" == file://* ]]; then
+        BG_PATH="${BG_URI#file://}"
+        if [ -f "$BG_PATH" ]; then
+            # Use cat redirection instead of cp to safely overwrite the file content 
+            # without modifying directory attributes, since the directory /var/lib/sddm 
+            # has restrictive permissions for non-privileged users.
+            # Usar redirección cat en lugar de cp para sobrescribir de forma segura el contenido
+            # del archivo sin modificar atributos del directorio, ya que /var/lib/sddm
+            # tiene permisos restrictivos para usuarios no privilegiados.
+            cat "$BG_PATH" > /var/lib/sddm/pulsar-wallpaper.png 2>/dev/null || true
+            chmod 666 /var/lib/sddm/pulsar-wallpaper.png 2>/dev/null || true
+        fi
+    fi
+}
+
+# Initial synchronization on login
+# Sincronización inicial al iniciar sesión
+sync_wallpaper
+
+# Monitor changes in background settings and interface color scheme simultaneously
+# Monitorear cambios en la configuración de fondo y esquema de color de interfaz simultáneamente
+(gsettings monitor org.gnome.desktop.background 2>/dev/null & gsettings monitor org.gnome.desktop.interface color-scheme 2>/dev/null) | while read -r line; do
+    sync_wallpaper
+done

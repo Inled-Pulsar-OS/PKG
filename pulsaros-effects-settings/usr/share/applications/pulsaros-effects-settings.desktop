@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Desktop Effects
+Name[es]=Efectos de Escritorio
+Comment=Change desktop visual effects styles (Blur vs Glass)
+Comment[es]=Cambia los estilos de efectos visuales del escritorio (Blur vs Cristal)
+Exec=pulsaros-effects-settings
+Icon=preferences-desktop-theme
+Terminal=false
+Type=Application
+Categories=GNOME;GTK;Settings;DesktopSettings;
+StartupNotify=true

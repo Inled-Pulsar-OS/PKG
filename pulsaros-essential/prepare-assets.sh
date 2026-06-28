@@ -45,11 +45,40 @@ iface eth0 inet dhcp
 EOF
 
 # ==============================================================================
-# FONDO DE PANTALLA OFICIAL
+# FONDO DE PANTALLA OFICIAL Y OPCIONES ADICIONALES
 # ==============================================================================
-echo "📥 Descargando fondo de pantalla oficial de Pulsar OS..."
+echo "📥 Descargando fondo de pantalla oficial y opciones adicionales..."
 mkdir -p "$STAGE_DIR/usr/share/backgrounds"
 wget -q -O "$STAGE_DIR/usr/share/backgrounds/pulsar-os-tahoe.png" "$WALLPAPER_URL"
+wget -q -O "$STAGE_DIR/usr/share/backgrounds/pulsaros-golden-gate-background.png" "https://hosted.inled.es/pulsaros-golden-gate-background.png"
+wget -q -O "$STAGE_DIR/usr/share/backgrounds/pulsaros-golden-gate-bg-oscuro.png" "https://hosted.inled.es/pulsaros-golden-gate-bg-oscuro.png"
+
+# Crear el archivo XML de propiedades para registrar los fondos en GNOME Settings
+# Create the properties XML file to register wallpapers in GNOME Settings
+mkdir -p "$STAGE_DIR/usr/share/gnome-background-properties"
+cat <<EOF > "$STAGE_DIR/usr/share/gnome-background-properties/pulsar-backgrounds.xml"
+<?xml version="1.0"?>
+<!DOCTYPE wallpapers SYSTEM "gnome-wp-list.dtd">
+<wallpapers>
+  <wallpaper deleted="false">
+    <name>Pulsar OS Tahoe</name>
+    <filename>/usr/share/backgrounds/pulsar-os-tahoe.png</filename>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Pulsar OS Golden Gate</name>
+    <filename>/usr/share/backgrounds/pulsaros-golden-gate-background.png</filename>
+    <filename-dark>/usr/share/backgrounds/pulsaros-golden-gate-bg-oscuro.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+</wallpapers>
+EOF
 
 # Limpieza
 rm -rf "$TEMP_BUILD"

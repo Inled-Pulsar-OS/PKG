@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Pulsar SDDM Wallpaper Sync
+Comment=Sync user wallpaper with SDDM background
+Exec=/usr/bin/pulsar-sync-wallpaper
+OnlyShowIn=GNOME;
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

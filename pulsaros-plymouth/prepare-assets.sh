@@ -61,8 +61,63 @@ DeviceTimeout=8
 UseFirmwareBackground=false
 EOF
 
-# 3. Reemplazar los logos y marcas de agua de Debian por transparencia para no tener marcas duplicadas
-echo "Generando reemplazo de logo transparente..."
+# 3. Generar la marca de agua elegante "Based on Debian"
+# 3. Generate the elegant "Based on Debian" watermark
+echo "🎨 Generando marca de agua 'Based on Debian'..."
+python3 -c '
+import os, urllib.request, tempfile
+from PIL import Image, ImageDraw, ImageFont
+
+width = 240
+height = 40
+img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+draw = ImageDraw.Draw(img)
+
+font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+font = ImageFont.truetype(font_path, 13) if os.path.exists(font_path) else ImageFont.load_default()
+
+logo_url = "https://www.debian.org/logos/openlogo-nd-50.png"
+logo_loaded = False
+try:
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        urllib.request.urlretrieve(logo_url, tmp.name)
+        logo = Image.open(tmp.name).convert("RGBA")
+        logo = logo.resize((int(20 * logo.width / logo.height), 20), Image.Resampling.LANCZOS)
+        logo_loaded = True
+        os.unlink(tmp.name)
+except Exception as e:
+    print("Warning: Could not download Debian logo from web, attempting local fallback:", e)
+    for path in ["/usr/share/pixmaps/debian-logo.png", "/usr/share/plymouth/debian-logo.png"]:
+        if os.path.exists(path):
+            try:
+                temp_logo = Image.open(path)
+                if temp_logo.width > 2:
+                    logo = temp_logo.convert("RGBA")
+                    logo = logo.resize((int(20 * logo.width / logo.height), 20), Image.Resampling.LANCZOS)
+                    logo_loaded = True
+                    break
+            except:
+                pass
+
+text = "Based on"
+text_y = int((height - 13) / 2)
+draw.text((10, text_y), text, fill=(200, 200, 200, 255), font=font)
+
+if logo_loaded:
+    bbox = draw.textbbox((10, text_y), text, font=font)
+    text_width = bbox[2] - bbox[0]
+    logo_x = 10 + text_width + 8
+    logo_y = int((height - logo.height) / 2)
+    img.paste(logo, (logo_x, logo_y), logo)
+else:
+    draw.text((80, text_y), "Debian", fill=(200, 200, 200, 255), font=font)
+
+img.save("'"$THEME_DEST"'/watermark.png")
+'
+
+# 4. Reemplazar los logos y marcas de agua de Debian del sistema por transparencia
+# 4. Replace system Debian logos and watermarks with transparency to avoid double branding
+echo "Generando reemplazo de logo transparente del sistema..."
 mkdir -p "$STAGE_DIR/usr/share/plymouth/themes"
 mkdir -p "$STAGE_DIR/usr/share/pixmaps"
 
