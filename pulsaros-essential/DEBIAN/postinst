@@ -57,11 +57,8 @@ if [ -f "/usr/share/applications/seafari.desktop" ]; then
     sed -i 's/^Icon=.*/Icon=safari/' /usr/share/applications/seafari.desktop
 fi
 
-# English: Correct permissions and ownership on home directories to avoid write permission errors (like Calamares log issues)
-# Español: Corregir permisos y propietario en directorios personales para evitar errores de escritura (como Calamares log)
-echo "👤 Asegurando permisos en directorios home..."
-chown -R jaime:jaime /home/jaime || true
-chown -R live:live /home/live || true
+# Home directory permissions are dynamically managed by live-config during boot
+# Los permisos del directorio home son gestionados dinámicamente por live-config en el arranque
 
 # English: Register Flathub repository globally
 # Español: Registrar el repositorio de Flathub de forma global
