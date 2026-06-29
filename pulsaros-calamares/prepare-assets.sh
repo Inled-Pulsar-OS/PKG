@@ -259,6 +259,20 @@ cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/removeuser-jaime.conf"
 username: jaime
 EOF
 
+# partition.conf
+cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/partition.conf"
+---
+efiSystemPartition: "/boot/efi"
+efiSystemPartitionSize: 300MiB
+efiSystemPartitionInstallDir: "debian"
+defaultPartitionTableType: gpt
+userSwapChoices:
+    - none
+    - file
+    - partition
+drawPartitionTable: true
+EOF
+
 # users.conf fallback (ajustando hostname por defecto a pulsaros)
 cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/users.conf"
 ---
