@@ -5,8 +5,9 @@ echo "⚙️ Configurando SDDM como el gestor de pantalla predeterminado..."
 mkdir -p /etc/X11
 echo "/usr/sbin/sddm" > /etc/X11/default-display-manager
 
-echo "🎨 Habilitando servicio SDDM..."
+echo "🎨 Habilitando servicio SDDM y auto-login dinámico del live..."
 systemctl enable sddm.service || true
+systemctl enable pulsaros-live-autologin.service || true
 
 # Actualizar fc-cache si se instalaron fuentes del tema
 if [ -d "/usr/share/fonts/truetype/tahoe-sddm" ]; then
