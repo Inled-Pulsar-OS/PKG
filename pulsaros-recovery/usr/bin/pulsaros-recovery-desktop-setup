@@ -10,29 +10,12 @@ sleep 6
 DESKTOP_DIR="$HOME/Desktop"
 mkdir -p "$DESKTOP_DIR"
 
-TARGET_LAUNCHER="$DESKTOP_DIR/pulsaros-recovery.desktop"
-
-# Copy Recovery Launcher
-# Copiar lanzador de Recovery
-if [ -f "/usr/share/applications/pulsaros-recovery.desktop" ]; then
-    cp "/usr/share/applications/pulsaros-recovery.desktop" "$TARGET_LAUNCHER"
-    chmod 755 "$TARGET_LAUNCHER"
-    chown "$USER:$USER" "$TARGET_LAUNCHER" 2>/dev/null || true
-    
-    # Force metadata trusted using gio to avoid "Allow Launching" warning
-    # Forzar metadato de confianza usando gio para evitar la advertencia "Allow Launching"
-    gio set -t string "$TARGET_LAUNCHER" metadata::trusted true 2>/dev/null || true
-    
-    # Touch the launcher to force GNOME Shell / Nautilus to reload the metadata cache
-    # Hacer touch al lanzador para forzar a GNOME Shell / Nautilus a recargar la caché de metadatos
-    touch "$TARGET_LAUNCHER" 2>/dev/null || true
-    
-    # Try marking with dbus reload hint if available
-    # Intentar marcar con dbus de recarga si está disponible
-    update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
-fi
+# English: Remove the recovery launcher from desktop as requested, since it causes errors.
+# Español: Eliminar el lanzador de recovery del escritorio como se solicitó, ya que causa errores.
+rm -f "$DESKTOP_DIR/pulsaros-recovery.desktop"
 
 # Clean up default Calamares icons if they were generated
 # Limpiar iconos de Calamares por defecto si se generaron
 rm -f "$DESKTOP_DIR/calamares-install-debian.desktop"
 rm -f "$DESKTOP_DIR/calamares.desktop"
+

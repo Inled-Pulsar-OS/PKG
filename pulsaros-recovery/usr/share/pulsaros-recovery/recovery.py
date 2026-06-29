@@ -9,15 +9,19 @@
 #          estilo macOS. Permite lanzar la utilidad de discos de Gnome, el navegador Seafari o
 #          iniciar el proceso de instalación. Pasa el disco seleccionado a Calamares y lo lanza (en inglés).
 
-import sys
+import json
 import os
 import subprocess
-import json
+import sys
+
 import gi
 
-# Requerir versiones de GTK y WebKit
-gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk, GLib, GdkPixbuf
+# Requerir versiones específicas de GTK, Gdk y GdkPixbuf para evitar conflictos
+# Require specific versions of GTK, Gdk, and GdkPixbuf to prevent conflicts
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import Gdk, GdkPixbuf, GLib, Gtk
 
 CSS_DATA = """
 window {
@@ -202,13 +206,16 @@ button.btn-continue:disabled {
 }
 """
 
+
 def get_physical_disks():
     """
-    English: Queries real storage devices using lsblk.
-    Español: Consulta los dispositivos de almacenamiento reales mediante lsblk.
+    English: Queries real storage devices using lsblk. Returns an empty list on failure or if no disks found.
+    Español: Consulta los dispositivos de almacenamiento reales mediante lsblk. Devuelve una lista vacía si falla o si no encuentra discos.
     """
     try:
-        output = subprocess.check_output("lsblk -J -d -o NAME,MODEL,SIZE,TYPE,RO", shell=True, text=True)
+        output = subprocess.check_output(
+            "lsblk -J -d -o NAME,MODEL,SIZE,TYPE,RO", shell=True, text=True
+        )
         data = json.loads(output)
         disks = []
         for dev in data.get("blockdevices", []):
@@ -219,21 +226,14 @@ def get_physical_disks():
                 name = dev.get("name")
                 model = dev.get("model", "").strip() or "Local Drive"
                 size = dev.get("size", "0 GB")
-                disks.append({
-                    "path": f"/dev/{name}",
-                    "name": name,
-                    "model": model,
-                    "size": size
-                })
+                disks.append(
+                    {"path": f"/dev/{name}", "name": name, "model": model, "size": size}
+                )
         return disks
     except Exception as e:
         print("Error fetching physical disks:", e)
-    
-    # Fallback mock for local testing
-    return [
-        {"path": "/dev/sda", "name": "sda", "model": "VBOX HARDDISK", "size": "120 GB"},
-        {"path": "/dev/sdb", "name": "sdb", "model": "QEMU HARDDISK", "size": "60 GB"}
-    ]
+    return []
+
 
 
 def run_as_real_user(cmd, wait=False):
@@ -248,12 +248,13 @@ def run_as_real_user(cmd, wait=False):
         if real_uid:
             try:
                 import pwd
+
                 username = pwd.getpwuid(int(real_uid)).pw_name
                 display = os.environ.get("DISPLAY", "")
                 xauth = os.environ.get("XAUTHORITY", "")
                 wayland = os.environ.get("WAYLAND_DISPLAY", "")
                 xdg_runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{real_uid}")
-                
+
                 # Command wrapping with sudo -u
                 env_str = f'DISPLAY="{display}"'
                 if xauth:
@@ -262,7 +263,7 @@ def run_as_real_user(cmd, wait=False):
                     env_str += f' WAYLAND_DISPLAY="{wayland}"'
                 if xdg_runtime:
                     env_str += f' XDG_RUNTIME_DIR="{xdg_runtime}"'
-                    
+
                 full_cmd = f"sudo -u {username} env {env_str} {cmd}"
                 print(f"Running command as user {username}: {full_cmd}")
                 if wait:
@@ -270,7 +271,7 @@ def run_as_real_user(cmd, wait=False):
                 return subprocess.Popen(full_cmd, shell=True)
             except Exception as e:
                 print("Failed to run command as user, executing normal fallback:", e)
-    
+
     if wait:
         return subprocess.run(cmd, shell=True)
     return subprocess.Popen(cmd, shell=True)
@@ -290,7 +291,7 @@ class RecoveryApp(Gtk.Window):
         Gtk.StyleContext.add_provider_for_screen(
             Gdk.Screen.get_default(),
             style_provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
 
         # Main Layout
@@ -340,22 +341,22 @@ class RecoveryApp(Gtk.Window):
         self.add_utility_row(
             "Restore from Backup",
             "Restore your Pulsar OS installation from a local system backup.",
-            "timemachine"
+            "timemachine",
         )
         self.add_utility_row(
             "Install Pulsar OS",
             "Install a new copy of the Pulsar OS desktop on your computer.",
-            "logo" # Cargará el logo físico
+            "logo",  # Cargará el logo físico
         )
         self.add_utility_row(
             "Seafari Browser",
             "Browse the web to search for online support and configuration guides.",
-            "safari"
+            "safari",
         )
         self.add_utility_row(
             "Disk Utility",
             "Partition, format, or check your connected storage drives.",
-            "gnome-disk-utility"
+            "gnome-disk-utility",
         )
 
         # Botones inferiores del Recovery
@@ -391,10 +392,10 @@ class RecoveryApp(Gtk.Window):
         logo_box.set_margin_bottom(12)
         slide_1.pack_start(logo_box, False, False, 0)
 
-        logo_path = "/usr/share/pulsaros-recovery/logo.png"
+        logo_path = "/usr/share/pulsaros-recovery/pulsar-logo.png"
         if not os.path.exists(logo_path):
             curr_dir = os.path.dirname(os.path.abspath(__file__))
-            logo_path = os.path.join(curr_dir, "logo.png")
+            logo_path = os.path.join(curr_dir, "pulsar-logo.png")
 
         if os.path.exists(logo_path):
             pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(logo_path, 150, 150, True)
@@ -410,7 +411,9 @@ class RecoveryApp(Gtk.Window):
         lbl_welcome_title.set_halign(Gtk.Align.CENTER)
         slide_1.pack_start(lbl_welcome_title, False, False, 0)
 
-        lbl_welcome_desc = Gtk.Label(label="To set up the installation of Pulsar OS, click Continue.")
+        lbl_welcome_desc = Gtk.Label(
+            label="To set up the installation of Pulsar OS, click Continue."
+        )
         lbl_welcome_desc.get_style_context().add_class("installer-desc")
         lbl_welcome_desc.set_halign(Gtk.Align.CENTER)
         slide_1.pack_start(lbl_welcome_desc, False, False, 0)
@@ -423,12 +426,16 @@ class RecoveryApp(Gtk.Window):
 
         btn_welcome_back = Gtk.Button(label="Back")
         btn_welcome_back.get_style_context().add_class("action-btn")
-        btn_welcome_back.connect("clicked", lambda b: self.stack.set_visible_child_name("recovery"))
+        btn_welcome_back.connect(
+            "clicked", lambda b: self.stack.set_visible_child_name("recovery")
+        )
         nav_box.pack_start(btn_welcome_back, False, False, 0)
 
         btn_welcome_continue = Gtk.Button(label="Continue")
         btn_welcome_continue.get_style_context().add_class("btn-continue")
-        btn_welcome_continue.connect("clicked", lambda b: self.stack.set_visible_child_name("disk_selection"))
+        btn_welcome_continue.connect(
+            "clicked", lambda b: self.stack.set_visible_child_name("disk_selection")
+        )
         nav_box.pack_start(btn_welcome_continue, False, False, 0)
 
         # ----------------------------------------------------------------------
@@ -459,7 +466,9 @@ class RecoveryApp(Gtk.Window):
         lbl_disk_title.set_halign(Gtk.Align.CENTER)
         slide_2.pack_start(lbl_disk_title, False, False, 0)
 
-        lbl_disk_desc = Gtk.Label(label="Select the disk where you want to install Pulsar OS.")
+        lbl_disk_desc = Gtk.Label(
+            label="Select the disk where you want to install Pulsar OS."
+        )
         lbl_disk_desc.get_style_context().add_class("installer-desc")
         lbl_disk_desc.set_halign(Gtk.Align.CENTER)
         slide_2.pack_start(lbl_disk_desc, False, False, 0)
@@ -469,9 +478,6 @@ class RecoveryApp(Gtk.Window):
         self.disks_hbox.set_halign(Gtk.Align.CENTER)
         slide_2.pack_start(self.disks_hbox, True, True, 10)
 
-        # Rellenar discos
-        self.populate_disks()
-
         # Botones de navegación inferior
         nav_box_disk = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         nav_box_disk.set_margin_top(20)
@@ -480,7 +486,9 @@ class RecoveryApp(Gtk.Window):
 
         btn_disk_back = Gtk.Button(label="Back")
         btn_disk_back.get_style_context().add_class("action-btn")
-        btn_disk_back.connect("clicked", lambda b: self.stack.set_visible_child_name("welcome"))
+        btn_disk_back.connect(
+            "clicked", lambda b: self.stack.set_visible_child_name("welcome")
+        )
         nav_box_disk.pack_start(btn_disk_back, False, False, 0)
 
         self.btn_disk_continue = Gtk.Button(label="Continue")
@@ -489,10 +497,15 @@ class RecoveryApp(Gtk.Window):
         self.btn_disk_continue.connect("clicked", self.on_disk_continue_clicked)
         nav_box_disk.pack_start(self.btn_disk_continue, False, False, 0)
 
+        # Rellenar discos (se ejecuta una vez creado el botón de continuar para evitar AttributeErrors)
+        # Populate disks (runs once the continue button has been created to avoid AttributeErrors)
+        self.populate_disks()
+
+
     def add_utility_row(self, title, desc, icon_name):
         row = Gtk.ListBoxRow()
         row.get_style_context().add_class("recovery-row")
-        
+
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
         row.add(box)
 
@@ -503,10 +516,14 @@ class RecoveryApp(Gtk.Window):
                 curr_dir = os.path.dirname(os.path.abspath(__file__))
                 logo_path = os.path.join(curr_dir, "logo.png")
             if os.path.exists(logo_path):
-                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(logo_path, 42, 42, True)
+                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                    logo_path, 42, 42, True
+                )
                 image = Gtk.Image.new_from_pixbuf(pixbuf)
             else:
-                image = Gtk.Image.new_from_icon_name("system-software-install", Gtk.IconSize.DND)
+                image = Gtk.Image.new_from_icon_name(
+                    "system-software-install", Gtk.IconSize.DND
+                )
         elif icon_name == "safari":
             icon_theme = Gtk.IconTheme.get_default()
             if icon_theme.has_icon("safari"):
@@ -520,10 +537,12 @@ class RecoveryApp(Gtk.Window):
             elif icon_theme.has_icon("deja-dup"):
                 image = Gtk.Image.new_from_icon_name("deja-dup", Gtk.IconSize.DND)
             else:
-                image = Gtk.Image.new_from_icon_name("document-revert", Gtk.IconSize.DND)
+                image = Gtk.Image.new_from_icon_name(
+                    "document-revert", Gtk.IconSize.DND
+                )
         else:
             image = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.DND)
-        
+
         box.pack_start(image, False, False, 0)
 
         # Textos
@@ -559,14 +578,15 @@ class RecoveryApp(Gtk.Window):
             # Hide recovery to allow Deja-dup to draw on top (fullscreen blocks other windows)
             # Ocultar el recovery para permitir que Deja-dup se dibuje encima (pantalla completa bloquea otras ventanas)
             self.hide()
-            
+
             def run_deja_dup():
                 run_as_real_user("deja-dup --restore || deja-dup", wait=True)
                 # Show recovery again in GTK main thread
                 # Mostrar el recovery de nuevo en el hilo principal de GTK
                 GLib.idle_add(self.show)
-                
+
             import threading
+
             threading.Thread(target=run_deja_dup, daemon=True).start()
         elif self.selected_utility == 1:
             # Install Pulsar OS - Ir al welcome
@@ -582,56 +602,103 @@ class RecoveryApp(Gtk.Window):
 
     def populate_disks(self):
         # Limpiar
+        # English: Clear previous disk widgets in layout
+        # Español: Limpiar widgets de disco anteriores en el diseño
         for child in self.disks_hbox.get_children():
             self.disks_hbox.remove(child)
+
+        # Reset continue button state
+        # Restablecer el estado del botón continuar
+        self.btn_disk_continue.set_label("Continue")
+        self.btn_disk_continue.set_sensitive(False)
 
         self.disk_widgets = []
         disks = get_physical_disks()
 
-        for disk in disks:
-            # Crear contenedor clickeable
-            event_box = Gtk.EventBox()
-            card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-            card.get_style_context().add_class("disk-card")
-            card.set_border_width(12)
-            event_box.add(card)
+        if not disks:
+            # English: If no physical disks are found, show a styled warning and enable "Continue Anyway"
+            # Español: Si no se encuentran discos físicos, mostrar un aviso estilizado y habilitar "Continuar de todos modos"
+            warning_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+            warning_box.set_halign(Gtk.Align.CENTER)
+            warning_box.set_valign(Gtk.Align.CENTER)
 
-            # Icono de disco
-            img = Gtk.Image.new_from_icon_name("drive-harddisk", Gtk.IconSize.DIALOG)
-            # set size of hard drive icon to large
-            img.set_pixel_size(64)
-            card.pack_start(img, False, False, 0)
+            # Warning Icon
+            img_warn = Gtk.Image.new_from_icon_name("dialog-warning", Gtk.IconSize.DIALOG)
+            img_warn.set_pixel_size(48)
+            warning_box.pack_start(img_warn, False, False, 0)
 
-            # Escribir nombre del disco (ej: sda)
-            lbl_name = Gtk.Label(label=disk["name"])
-            lbl_name.get_style_context().add_class("disk-name")
-            card.pack_start(lbl_name, False, False, 0)
+            # Warning Labels
+            lbl_warn = Gtk.Label()
+            lbl_warn.set_markup(
+                "<span font_desc='13' weight='bold' foreground='#cc0000'>No storage disks found / No se han encontrado discos</span>"
+            )
+            lbl_warn.set_halign(Gtk.Align.CENTER)
+            warning_box.pack_start(lbl_warn, False, False, 0)
 
-            # Escribir modelo e información de capacidad
-            lbl_info1 = Gtk.Label(label=disk["model"])
-            lbl_info1.get_style_context().add_class("disk-info")
-            lbl_info1.set_line_wrap(True)
-            lbl_info1.set_max_width_chars(15)
-            card.pack_start(lbl_info1, False, False, 0)
+            lbl_warn_desc = Gtk.Label()
+            lbl_warn_desc.set_markup(
+                "<span font_desc='11'>You can click 'Continue Anyway' to launch Calamares and check if it recognizes your storage.\n"
+                "Puede pulsar 'Continuar de todos modos' para lanzar Calamares y comprobar si este reconoce sus discos.</span>"
+            )
+            lbl_warn_desc.set_justify(Gtk.Justification.CENTER)
+            lbl_warn_desc.set_halign(Gtk.Align.CENTER)
+            lbl_warn_desc.set_line_wrap(True)
+            lbl_warn_desc.set_max_width_chars(60)
+            warning_box.pack_start(lbl_warn_desc, False, False, 5)
 
-            lbl_info2 = Gtk.Label(label=f"{disk['size']} total")
-            lbl_info2.get_style_context().add_class("disk-info")
-            card.pack_start(lbl_info2, False, False, 0)
+            self.disks_hbox.pack_start(warning_box, True, True, 20)
 
-            # Conectar click
-            event_box.connect("button-press-event", self.on_disk_clicked, disk["path"], card)
-            self.disks_hbox.pack_start(event_box, False, False, 10)
-            self.disk_widgets.append((card, disk["path"]))
+            # Enable continue anyway
+            self.btn_disk_continue.set_label("Continue Anyway")
+            self.btn_disk_continue.set_sensitive(True)
+            self.selected_disk_path = None
+        else:
+            for disk in disks:
+                # Crear contenedor clickeable
+                event_box = Gtk.EventBox()
+                card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+                card.get_style_context().add_class("disk-card")
+                card.set_border_width(12)
+                event_box.add(card)
+
+                # Icono de disco
+                img = Gtk.Image.new_from_icon_name("drive-harddisk", Gtk.IconSize.DIALOG)
+                # set size of hard drive icon to large
+                img.set_pixel_size(64)
+                card.pack_start(img, False, False, 0)
+
+                # Escribir nombre del disco (ej: sda)
+                lbl_name = Gtk.Label(label=disk["name"])
+                lbl_name.get_style_context().add_class("disk-name")
+                card.pack_start(lbl_name, False, False, 0)
+
+                # Escribir modelo e información de capacidad
+                lbl_info1 = Gtk.Label(label=disk["model"])
+                lbl_info1.get_style_context().add_class("disk-info")
+                lbl_info1.set_line_wrap(True)
+                lbl_info1.set_max_width_chars(15)
+                card.pack_start(lbl_info1, False, False, 0)
+
+                lbl_info2 = Gtk.Label(label=f"{disk['size']} total")
+                lbl_info2.get_style_context().add_class("disk-info")
+                card.pack_start(lbl_info2, False, False, 0)
+
+                # Conectar click
+                event_box.connect(
+                    "button-press-event", self.on_disk_clicked, disk["path"], card
+                )
+                self.disks_hbox.pack_start(event_box, False, False, 10)
+                self.disk_widgets.append((card, disk["path"]))
 
         self.show_all()
 
     def on_disk_clicked(self, widget, event, path, card):
         self.selected_disk_path = path
-        
+
         # Deseleccionar todos y seleccionar el actual
         for c, p in self.disk_widgets:
             c.get_style_context().remove_class("selected")
-        
+
         card.get_style_context().add_class("selected")
         self.btn_disk_continue.set_sensitive(True)
 
@@ -641,7 +708,7 @@ class RecoveryApp(Gtk.Window):
             conf_path = "/etc/calamares/modules/partition.conf"
             try:
                 os.makedirs(os.path.dirname(conf_path), exist_ok=True)
-                
+
                 # Escribir el defaultDisk en el archivo yaml de partición
                 if os.path.exists(conf_path):
                     with open(conf_path, "r") as f:
@@ -650,12 +717,16 @@ class RecoveryApp(Gtk.Window):
                     found = False
                     for line in lines:
                         if line.strip().startswith("defaultDisk:"):
-                            new_lines.append(f'defaultDisk: "{self.selected_disk_path}"\n')
+                            new_lines.append(
+                                f'defaultDisk: "{self.selected_disk_path}"\n'
+                            )
                             found = True
                         else:
                             new_lines.append(line)
                     if not found:
-                        new_lines.append(f'\ndefaultDisk: "{self.selected_disk_path}"\n')
+                        new_lines.append(
+                            f'\ndefaultDisk: "{self.selected_disk_path}"\n'
+                        )
                     with open(conf_path, "w") as f:
                         f.writelines(new_lines)
                 else:
@@ -663,26 +734,37 @@ class RecoveryApp(Gtk.Window):
                         f.write(f'---\ndefaultDisk: "{self.selected_disk_path}"\n')
                 print(f"Preselected partition disk written: {self.selected_disk_path}")
             except (PermissionError, Exception) as e:
-                print(f"Permission denied or error writing to /etc/calamares ({e}), writing to /tmp/partition.conf instead for debugging...")
+                print(
+                    f"Permission denied or error writing to /etc/calamares ({e}), writing to /tmp/partition.conf instead for debugging..."
+                )
                 try:
                     with open("/tmp/partition.conf", "w") as f:
                         f.write(f'---\ndefaultDisk: "{self.selected_disk_path}"\n')
                 except Exception as ex:
                     print("Failed to write fallback config:", ex)
+        else:
+            # English: No disk preselected (bypass when no disks found). Launch Calamares in auto-detect mode.
+            # Español: Sin disco preseleccionado (omitir cuando no se hallan discos). Lanzar Calamares en auto-detección.
+            print("No disk selected. Launching Calamares in auto-detection mode.")
 
-            # Lanzar Calamares en primer plano
-            print("Launching Calamares installer...")
-            # English: Try launch-calamares first, fallback to pkexec calamares (Gnome auth) or standard calamares
-            # Español: Intentar primero launch-calamares, fallback a pkexec calamares (autenticacion Gnome) o calamares estándar
-            subprocess.Popen("/usr/local/bin/launch-calamares || pkexec calamares || calamares &", shell=True)
+        # Lanzar Calamares en primer plano
+        print("Launching Calamares installer...")
+        # English: Try launch-calamares first, fallback to pkexec calamares (Gnome auth) or standard calamares
+        # Español: Intentar primero launch-calamares, fallback a pkexec calamares (autenticacion Gnome) o calamares estándar
+        subprocess.Popen(
+            "/usr/local/bin/launch-calamares || pkexec calamares || calamares &",
+            shell=True,
+        )
 
-            # Cerrar la aplicación de recuperación
-            Gtk.main_quit()
+        # Cerrar la aplicación de recuperación
+        Gtk.main_quit()
+
 
 
 def main():
     RecoveryApp()
     Gtk.main()
+
 
 if __name__ == "__main__":
     main()

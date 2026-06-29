@@ -17,19 +17,22 @@
 #          iconos simbólicos monocromáticos de GNOME teñidos de azul Apple sin círculos de fondo.
 #          Detecta dinámicamente las resoluciones disponibles para evitar errores de modos no soportados.
 
-import sys
 import os
-import subprocess
 import shutil
-import gi
+import subprocess
+import sys
+
 import cairo
+import gi
 
-# Requerir versiones específicas de GTK y WebKit2
-# Require specific versions of GTK and WebKit2
-gi.require_version('Gtk', '3.0')
-gi.require_version('WebKit2', '4.1')
+# Requerir versiones específicas de GTK, Gdk, GdkPixbuf y WebKit2
+# Require specific versions of GTK, Gdk, GdkPixbuf, and WebKit2
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+gi.require_version("GdkPixbuf", "2.0")
+gi.require_version("WebKit2", "4.1")
 
-from gi.repository import Gtk, WebKit2, Gdk, GLib, GdkPixbuf, Gio
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, WebKit2
 
 CSS_DATA = """
 window {
@@ -186,6 +189,7 @@ window {
 }
 """
 
+
 def get_available_resolutions():
     """
     English: Runs xrandr to dynamically query and parse supported monitor resolutions.
@@ -198,15 +202,15 @@ def get_available_resolutions():
         resolutions = []
         for line in output.splitlines():
             parts = line.strip().split()
-            if len(parts) >= 1 and 'x' in parts[0]:
+            if len(parts) >= 1 and "x" in parts[0]:
                 res_str = parts[0]
                 # Detect the active mode (usually marked with * or *+)
                 is_active = False
                 for p in parts[1:]:
-                    if '*' in p:
+                    if "*" in p:
                         is_active = True
                         break
-                
+
                 # Avoid duplicates
                 if res_str not in [r[0] for r in resolutions]:
                     resolutions.append((res_str, is_active))
@@ -214,7 +218,7 @@ def get_available_resolutions():
             return resolutions
     except Exception as e:
         print("xrandr parsing error (fallback to defaults):", e)
-    
+
     # Static Fallback if xrandr fails or is not present
     return [
         ("1920x1080", False),
@@ -223,7 +227,7 @@ def get_available_resolutions():
         ("1366x768", False),
         ("1280x800", False),
         ("1280x720", True),
-        ("1024x768", False)
+        ("1024x768", False),
     ]
 
 
@@ -234,6 +238,7 @@ class HelloWindow(Gtk.Window):
     Español: Ventana transparente que reproduce la animación SVG de hello de Apple indefinidamente
              hasta que se pulsa el botón pill blanco "Continue" de la parte inferior.
     """
+
     def __init__(self, on_finish_callback):
         super().__init__(type=Gtk.WindowType.TOPLEVEL)
         self.on_finish_callback = on_finish_callback
@@ -278,12 +283,14 @@ class HelloWindow(Gtk.Window):
         Gtk.StyleContext.add_provider_for_screen(
             Gdk.Screen.get_default(),
             style_provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
 
         # Contenedor principal vertical
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=20)
-        vbox.set_margin_bottom(80) # Espacio para empujar el botón arriba del dock/fondo
+        vbox.set_margin_bottom(
+            80
+        )  # Espacio para empujar el botón arriba del dock/fondo
         self.add(vbox)
 
         # Webview para la animación SVG
@@ -335,6 +342,28 @@ class AssistantWindow(Gtk.Window):
              Layouts limpios y centrados, título, controles centrales, navegación inferior derecha.
              Usa iconos simbólicos coloreados sin círculos de fondo.
     """
+
+    def is_live_system(self):
+        """
+        English: Checks if the system is running in live-boot mode or QEMU test mode (rootfstype=9p)
+                 so developers can test the recovery slide during development.
+        Español: Comprueba si el sistema se está ejecutando en modo live-boot o en modo de prueba QEMU (rootfstype=9p)
+                 para que los desarrolladores puedan probar la diapositiva de recuperación durante el desarrollo.
+        """
+        try:
+            if os.path.exists("/lib/live/mount"):
+                return True
+            if os.getenv("USER") == "live" or os.getlogin() == "live":
+                return True
+            if os.path.exists("/proc/cmdline"):
+                with open("/proc/cmdline", "r") as f:
+                    cmdline = f.read()
+                    if "boot=live" in cmdline or "rootfstype=9p" in cmdline:
+                        return True
+        except Exception as e:
+            print("Error checking live system status:", e)
+        return False
+
     def __init__(self):
         super().__init__(type=Gtk.WindowType.TOPLEVEL)
         self.set_title("Setup Assistant")
@@ -343,7 +372,8 @@ class AssistantWindow(Gtk.Window):
         self.set_resizable(False)
 
         self.current_step = 0
-        self.steps_count = 11
+        self.is_live = self.is_live_system()
+        self.steps_count = 12 if self.is_live else 11
         self.schema_source = self.load_custom_schemas()
 
         # Cargar estilos CSS personalizados de GTK
@@ -352,7 +382,7 @@ class AssistantWindow(Gtk.Window):
         Gtk.StyleContext.add_provider_for_screen(
             Gdk.Screen.get_default(),
             style_provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
 
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -432,17 +462,21 @@ class AssistantWindow(Gtk.Window):
         Español: Ejecuta `adb devices` y muestra los dispositivos móviles conectados en un diálogo nativo de GTK.
         """
         try:
-            result = subprocess.run(["adb", "devices"], capture_output=True, text=True, timeout=5)
+            result = subprocess.run(
+                ["adb", "devices"], capture_output=True, text=True, timeout=5
+            )
             output = result.stdout
         except Exception as e:
-            output = f"Error running adb: {e}\n\nMake sure adb is installed and running."
-            
+            output = (
+                f"Error running adb: {e}\n\nMake sure adb is installed and running."
+            )
+
         dialog = Gtk.MessageDialog(
             transient_for=self,
             flags=0,
             message_type=Gtk.MessageType.INFO,
             buttons=Gtk.ButtonsType.OK,
-            text="ADB Connected Devices / Dispositivos Conectados"
+            text="ADB Connected Devices / Dispositivos Conectados",
         )
         dialog.format_secondary_text(output)
         dialog.run()
@@ -456,7 +490,7 @@ class AssistantWindow(Gtk.Window):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         box.get_style_context().add_class("icon-wrapper")
         box.set_halign(Gtk.Align.CENTER)
-        
+
         image = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.DIALOG)
         image.set_pixel_size(80)
         image.get_style_context().add_class("icon-style")
@@ -471,12 +505,12 @@ class AssistantWindow(Gtk.Window):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         box.get_style_context().add_class("icon-wrapper")
         box.set_halign(Gtk.Align.CENTER)
-        
+
         curr_dir = os.path.dirname(os.path.abspath(__file__))
         path = os.path.join(curr_dir, "ui", file_name)
         if not os.path.exists(path):
             path = f"/usr/share/pulsaros-welcome/ui/{file_name}"
-            
+
         if os.path.exists(path):
             try:
                 pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, 80, 80, True)
@@ -486,7 +520,7 @@ class AssistantWindow(Gtk.Window):
                 img = Gtk.Image.new_from_icon_name(fallback_icon, Gtk.IconSize.DIALOG)
         else:
             img = Gtk.Image.new_from_icon_name(fallback_icon, Gtk.IconSize.DIALOG)
-            
+
         box.pack_start(img, True, True, 0)
         return box
 
@@ -495,7 +529,7 @@ class AssistantWindow(Gtk.Window):
         logo_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         logo_box.get_style_context().add_class("icon-wrapper")
         logo_box.set_halign(Gtk.Align.CENTER)
-        
+
         curr_dir = os.path.dirname(os.path.abspath(__file__))
         logo_path = os.path.join(curr_dir, "logo.png")
         if not os.path.exists(logo_path):
@@ -506,21 +540,45 @@ class AssistantWindow(Gtk.Window):
             logo_img = Gtk.Image.new_from_pixbuf(pixbuf)
         else:
             logo_img = Gtk.Image.new_from_icon_name("computer", Gtk.IconSize.DIALOG)
-        
+
         logo_box.pack_start(logo_img, True, True, 0)
         self.icon_stack.add_named(logo_box, "icon0")
 
-        # Iconos simbólicos e imágenes para las 11 diapositivas (incluida la de instalación de apps)
-        self.icon_stack.add_named(self.create_symbolic_icon("video-display-symbolic"), "icon1")
-        self.icon_stack.add_named(self.create_symbolic_icon("bluetooth-symbolic"), "icon2")
+        # Iconos simbólicos e imágenes para las diapositivas
+        self.icon_stack.add_named(
+            self.create_symbolic_icon("video-display-symbolic"), "icon1"
+        )
+        self.icon_stack.add_named(
+            self.create_symbolic_icon("bluetooth-symbolic"), "icon2"
+        )
         self.icon_stack.add_named(self.create_symbolic_icon("phone-symbolic"), "icon3")
-        self.icon_stack.add_named(self.create_symbolic_icon("media-removable-symbolic"), "icon4")
-        self.icon_stack.add_named(self.create_image_icon("droidtux.png", "phone-symbolic"), "icon5")
-        self.icon_stack.add_named(self.create_image_icon("macboat.png", "computer-symbolic"), "icon6")
-        self.icon_stack.add_named(self.create_image_icon("winboat.svg", "computer-symbolic"), "icon7")
-        self.icon_stack.add_named(self.create_symbolic_icon("system-software-install-symbolic"), "icon8")
-        self.icon_stack.add_named(self.create_symbolic_icon("preferences-desktop-theme-symbolic"), "icon9")
-        self.icon_stack.add_named(self.create_symbolic_icon("help-browser-symbolic"), "icon10")
+        self.icon_stack.add_named(
+            self.create_symbolic_icon("media-removable-symbolic"), "icon4"
+        )
+        self.icon_stack.add_named(
+            self.create_image_icon("droidtux.png", "phone-symbolic"), "icon5"
+        )
+        self.icon_stack.add_named(
+            self.create_image_icon("macboat.png", "computer-symbolic"), "icon6"
+        )
+        self.icon_stack.add_named(
+            self.create_image_icon("winboat.svg", "computer-symbolic"), "icon7"
+        )
+        self.icon_stack.add_named(
+            self.create_symbolic_icon("system-software-install-symbolic"), "icon8"
+        )
+        self.icon_stack.add_named(
+            self.create_symbolic_icon("preferences-desktop-theme-symbolic"), "icon9"
+        )
+        self.icon_stack.add_named(
+            self.create_symbolic_icon("help-browser-symbolic"), "icon10"
+        )
+        if self.is_live:
+            # English: Setup Recovery icon for the live recovery installation slide
+            # Español: Configurar icono de Recovery para la diapositiva de recuperación en vivo
+            self.icon_stack.add_named(
+                self.create_symbolic_icon("system-run-symbolic"), "icon11"
+            )
 
     def init_slides(self):
         self.titles = [
@@ -534,8 +592,12 @@ class AssistantWindow(Gtk.Window):
             "Run Windows Apps with Winboat",
             "Installing Applications",
             "Desktop Special Effects",
-            "Beta Feedback & Support"
+            "Beta Feedback & Support",
         ]
+        if self.is_live:
+            # English: Setup additional title for the recovery installer slide
+            # Español: Configurar título adicional para la diapositiva del instalador recovery
+            self.titles.append("Pulsar OS Recovery")
 
         # ----------------------------------------------------------------------
         # Slide 0: Welcome Screen
@@ -543,9 +605,11 @@ class AssistantWindow(Gtk.Window):
         slide_0 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         slide_0.set_halign(Gtk.Align.CENTER)
 
-        lbl_desc = Gtk.Label(label="Pulsar OS combines speed, beauty, and design into a powerful and modern operating system. This Setup Assistant will guide you through the essential configurations to customize your experience on first boot.")
+        lbl_desc = Gtk.Label(
+            label="Pulsar OS combines speed, beauty, and design into a powerful and modern operating system. This Setup Assistant will guide you through the essential configurations to customize your experience on first boot.PulsarOS combines macOS design with Linux technology. A useful and functional distribution, ready for anything. This wizard will guide you through the initial setup, show you the essentials, and allow you to run the installer."
+        )
         lbl_desc.get_style_context().add_class("desc-text")
-        lbl_desc.set_max_width_chars(60)
+        lbl_desc.set_max_width_chars(65)
         lbl_desc.set_line_wrap(True)
         lbl_desc.set_justify(Gtk.Justification.CENTER)
         slide_0.pack_start(lbl_desc, False, False, 10)
@@ -558,7 +622,9 @@ class AssistantWindow(Gtk.Window):
         slide_1 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         slide_1.set_halign(Gtk.Align.CENTER)
 
-        lbl_desc = Gtk.Label(label="Adjust the desktop screen resolution to best fit your monitor. In virtual machine environments, opening system display settings will allow you to configure the ideal size.")
+        lbl_desc = Gtk.Label(
+            label="Adjust the desktop screen resolution to best fit your monitor. In virtual machine environments, opening system display settings will allow you to configure the ideal size."
+        )
         lbl_desc.get_style_context().add_class("desc-text")
         lbl_desc.set_max_width_chars(65)
         lbl_desc.set_line_wrap(True)
@@ -571,7 +637,9 @@ class AssistantWindow(Gtk.Window):
 
         btn_display = Gtk.Button(label="Open Display Settings")
         btn_display.get_style_context().add_class("action-button")
-        btn_display.connect("clicked", lambda b: os.system("gnome-control-center display &"))
+        btn_display.connect(
+            "clicked", lambda b: os.system("gnome-control-center display &")
+        )
         btn_box.pack_start(btn_display, False, False, 0)
 
         self.content_stack.add_named(slide_1, "slide1")
@@ -582,7 +650,9 @@ class AssistantWindow(Gtk.Window):
         slide_2 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         slide_2.set_halign(Gtk.Align.CENTER)
 
-        lbl_desc = Gtk.Label(label="Connect wireless controllers, headphones, keyboards, or mice. Pulsar OS scans and listens for both Bluetooth Low Energy (BLE) and classic Bluetooth devices simultaneously for maximum hardware compatibility.")
+        lbl_desc = Gtk.Label(
+            label="Connect wireless controllers, headphones, keyboards, or mice. Pulsar OS scans and listens for both Bluetooth Low Energy (BLE) and classic Bluetooth devices simultaneously for maximum hardware compatibility."
+        )
         lbl_desc.get_style_context().add_class("desc-text")
         lbl_desc.set_max_width_chars(65)
         lbl_desc.set_line_wrap(True)
@@ -595,7 +665,9 @@ class AssistantWindow(Gtk.Window):
 
         btn_bluetooth = Gtk.Button(label="Configure Bluetooth Devices")
         btn_bluetooth.get_style_context().add_class("action-button")
-        btn_bluetooth.connect("clicked", lambda b: os.system("gnome-control-center bluetooth &"))
+        btn_bluetooth.connect(
+            "clicked", lambda b: os.system("gnome-control-center bluetooth &")
+        )
         btn_box.pack_start(btn_bluetooth, False, False, 0)
 
         self.content_stack.add_named(slide_2, "slide2")
@@ -606,7 +678,9 @@ class AssistantWindow(Gtk.Window):
         slide_3 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         slide_3.set_halign(Gtk.Align.CENTER)
 
-        lbl_desc = Gtk.Label(label="Link your Android or iOS device to share files, synchronize the clipboard, manage notifications, and control media features wirelessly. Keep both devices on the same Wi-Fi network.")
+        lbl_desc = Gtk.Label(
+            label="Link your Android or iOS device to share files, synchronize the clipboard, manage notifications, and control media features wirelessly. Keep both devices on the same Wi-Fi network."
+        )
         lbl_desc.get_style_context().add_class("desc-text")
         lbl_desc.set_max_width_chars(65)
         lbl_desc.set_line_wrap(True)
@@ -623,11 +697,18 @@ class AssistantWindow(Gtk.Window):
 
         btn_gsconnect = Gtk.Button(label="GSConnect Settings")
         btn_gsconnect.get_style_context().add_class("action-button")
-        btn_gsconnect.connect("clicked", lambda b: os.system("gnome-extensions prefs gsconnect@andyholmes.github.io || gnome-shell-extension-prefs gsconnect@andyholmes.github.io &"))
+        btn_gsconnect.connect(
+            "clicked",
+            lambda b: os.system(
+                "gnome-extensions prefs gsconnect@andyholmes.github.io || gnome-shell-extension-prefs gsconnect@andyholmes.github.io &"
+            ),
+        )
         btn_gsconnect.set_halign(Gtk.Align.START)
         col_left.pack_start(btn_gsconnect, False, False, 0)
 
-        lbl_col_text = Gtk.Label(label="Make sure the mobile app is open on your phone to initiate pairing.")
+        lbl_col_text = Gtk.Label(
+            label="Make sure the mobile app is open on your phone to initiate pairing."
+        )
         lbl_col_text.get_style_context().add_class("card-desc")
         lbl_col_text.set_line_wrap(True)
         lbl_col_text.set_max_width_chars(30)
@@ -649,7 +730,9 @@ class AssistantWindow(Gtk.Window):
             qr_image = Gtk.Image.new_from_pixbuf(pixbuf)
             qr_image.get_style_context().add_class("qr-image-style")
         else:
-            qr_image = Gtk.Image.new_from_icon_name("image-missing", Gtk.IconSize.DIALOG)
+            qr_image = Gtk.Image.new_from_icon_name(
+                "image-missing", Gtk.IconSize.DIALOG
+            )
 
         col_right.pack_start(qr_image, False, False, 0)
 
@@ -665,7 +748,9 @@ class AssistantWindow(Gtk.Window):
         slide_4 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         slide_4.set_halign(Gtk.Align.CENTER)
 
-        lbl_desc = Gtk.Label(label="Enable USB Debugging in Developer Options on your mobile device. This allows Pulsar OS to communicate with your phone via ADB for advanced phone mirroring and integration features.")
+        lbl_desc = Gtk.Label(
+            label="Enable USB debugging in your mobile device's developer options. This allows Pulsar OS to communicate with your phone via ADB so that the integration of Android apps as native apps works."
+        )
         lbl_desc.get_style_context().add_class("desc-text")
         lbl_desc.set_max_width_chars(65)
         lbl_desc.set_line_wrap(True)
@@ -689,7 +774,9 @@ class AssistantWindow(Gtk.Window):
         slide_5 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         slide_5.set_halign(Gtk.Align.CENTER)
 
-        lbl_desc = Gtk.Label(label="Once connected by USB, use Droidtux to cast, mirror, control and integrate your phone layout as native windows on the desktop with zero latency and high performance.")
+        lbl_desc = Gtk.Label(
+            label="Connect your Android device to your computer via USB, and Droidtux will integrate your phone's applications as native Pulsar OS apps. It offers the same experience as a Googlebook."
+        )
         lbl_desc.get_style_context().add_class("desc-text")
         lbl_desc.set_max_width_chars(65)
         lbl_desc.set_line_wrap(True)
@@ -713,7 +800,9 @@ class AssistantWindow(Gtk.Window):
         slide_6 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         slide_6.set_halign(Gtk.Align.CENTER)
 
-        lbl_desc = Gtk.Label(label="Pulsar OS preinstalls Macboat, allowing you to configure and run macOS virtual machines. KVM configurations are optimized dynamically for accelerated virtual graphics and native performance.")
+        lbl_desc = Gtk.Label(
+            label="PulsarOS comes with Macboat pre-installed, a powerful application that allows you to run macOS within Linux. macOS is downloaded from Apple's official recovery servers. Please read the macOS EULA before using Macboat and accept the terms."
+        )
         lbl_desc.get_style_context().add_class("desc-text")
         lbl_desc.set_max_width_chars(65)
         lbl_desc.set_line_wrap(True)
@@ -737,7 +826,9 @@ class AssistantWindow(Gtk.Window):
         slide_7 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         slide_7.set_halign(Gtk.Align.CENTER)
 
-        lbl_desc = Gtk.Label(label="Winboat allows you to run Windows applications seamlessly on Pulsar OS. It virtualizes a Windows environment in the background and renders applications natively on your desktop using high-performance FreeRDP.")
+        lbl_desc = Gtk.Label(
+            label="PulsarOS can run Windows apps without compatibility issues because it comes with Winboat built-in by default; this powerful application virtualizes Windows and integrates Windows apps as native Linux applications, ensuring a seamless experience."
+        )
         lbl_desc.get_style_context().add_class("desc-text")
         lbl_desc.set_max_width_chars(65)
         lbl_desc.set_line_wrap(True)
@@ -761,7 +852,9 @@ class AssistantWindow(Gtk.Window):
         slide_8 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         slide_8.set_halign(Gtk.Align.CENTER)
 
-        lbl_desc = Gtk.Label(label="Pulsar OS Software Center allows you to easily install Linux applications from both the official repositories and Flathub. Additionally, if you need other software, you can download standard .deb installation files (which act similarly to macOS .pkg or .dmg packages) from your web browser and install them by simply double-clicking on them.")
+        lbl_desc = Gtk.Label(
+            label="Pulsar OS Software Center allows you to easily install Linux applications from both the official repositories and Flathub. Additionally, if you need other software, you can download standard .deb installation files (which act similarly to macOS .pkg or .dmg packages) from your web browser and install them by simply double-clicking on them."
+        )
         lbl_desc.get_style_context().add_class("desc-text")
         lbl_desc.set_max_width_chars(65)
         lbl_desc.set_line_wrap(True)
@@ -785,7 +878,9 @@ class AssistantWindow(Gtk.Window):
         slide_9 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         slide_9.set_halign(Gtk.Align.CENTER)
 
-        lbl_desc = Gtk.Label(label="Choose your desktop effects style. You can enable Liquid Glass for an advanced acrylic glassmorphism look on your windows and panels, or keep the default Blur my Shell. Note: Liquid Glass requires significant GPU/CPU resources.")
+        lbl_desc = Gtk.Label(
+            label='Choose the desktop effect you like best. The basic "blur-my-shell" effect is perfect for older computers or those with mid-range hardware. The "Liquid Glass" effect consumes more resources because it is complex to render, but if you have a powerful computer, you will certainly enjoy it.'
+        )
         lbl_desc.get_style_context().add_class("desc-text")
         lbl_desc.set_max_width_chars(65)
         lbl_desc.set_line_wrap(True)
@@ -797,15 +892,22 @@ class AssistantWindow(Gtk.Window):
         card.set_halign(Gtk.Align.CENTER)
         slide_9.pack_start(card, True, True, 0)
 
-        self.radio_blur = Gtk.RadioButton.new_with_label_from_widget(None, "Enable Blur my Shell (Standard performance - Recommended)")
+        self.radio_blur = Gtk.RadioButton.new_with_label_from_widget(
+            None, "Enable Blur my Shell (Standard performance - Recommended)"
+        )
         self.radio_blur.connect("toggled", self.on_effects_toggled)
         card.pack_start(self.radio_blur, False, False, 4)
 
-        self.radio_glass = Gtk.RadioButton.new_with_label_from_widget(self.radio_blur, "Enable Liquid Glass (Premium acrylic look - High Resource Consumption!)")
+        self.radio_glass = Gtk.RadioButton.new_with_label_from_widget(
+            self.radio_blur,
+            "Enable Liquid Glass (Premium Apple look - High Resource Consumption!)",
+        )
         card.pack_start(self.radio_glass, False, False, 4)
 
         lbl_warning = Gtk.Label()
-        lbl_warning.set_markup("<span foreground='#cc0000'><b>⚠️ Warning / Advertencia:</b> Liquid Glass consumes significant system resources. May cause lag on older GPUs or virtual machines. / Liquid Glass consume bastantes recursos del sistema. Puede causar lag en GPUs antiguas o máquinas virtuales.</span>")
+        lbl_warning.set_markup(
+            "<span foreground='#cc0000'><b>⚠️ Warning / Advertencia:</b> Liquid Glass consumes significant system resources. May cause lag on older GPUs or virtual machines.</span>"
+        )
         lbl_warning.set_line_wrap(True)
         lbl_warning.set_max_width_chars(60)
         lbl_warning.set_justify(Gtk.Justification.CENTER)
@@ -825,7 +927,9 @@ class AssistantWindow(Gtk.Window):
         slide_10 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         slide_10.set_halign(Gtk.Align.CENTER)
 
-        lbl_desc_10 = Gtk.Label(label="Pulsar OS is in active development. Help us improve stability by reporting installation bugs, hardware issues or user interface feedback directly to our official issue tracker on GitHub.")
+        lbl_desc_10 = Gtk.Label(
+            label="Pulsar OS is in active development. Help us improve stability by reporting installation bugs, hardware issues or user interface feedback directly to our official issue tracker on GitHub."
+        )
         lbl_desc_10.get_style_context().add_class("desc-text")
         lbl_desc_10.set_max_width_chars(65)
         lbl_desc_10.set_line_wrap(True)
@@ -838,10 +942,46 @@ class AssistantWindow(Gtk.Window):
 
         btn_issue_10 = Gtk.Button(label="Open Issues Page on GitHub")
         btn_issue_10.get_style_context().add_class("action-button")
-        btn_issue_10.connect("clicked", lambda b: os.system("xdg-open https://github.com/Inled-Pulsar-OS/ISO/issues &"))
+        btn_issue_10.connect(
+            "clicked",
+            lambda b: os.system(
+                "xdg-open https://github.com/Inled-Pulsar-OS/ISO/issues &"
+            ),
+        )
         btn_box_10.pack_start(btn_issue_10, False, False, 0)
 
         self.content_stack.add_named(slide_10, "slide10")
+
+        # ----------------------------------------------------------------------
+        # Slide 11: Pulsar OS Recovery (Only in Live System / Solo en Sistema Live)
+        # ----------------------------------------------------------------------
+        if self.is_live:
+            slide_11 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+            slide_11.set_halign(Gtk.Align.CENTER)
+
+            lbl_desc_11 = Gtk.Label(
+                label="Pulsar OS is currently running in a Live Session. You can start the system installation on your computer or launch the backup recovery, browser or disk partitioner."
+            )
+            lbl_desc_11.get_style_context().add_class("desc-text")
+            lbl_desc_11.set_max_width_chars(65)
+            lbl_desc_11.set_line_wrap(True)
+            lbl_desc_11.set_justify(Gtk.Justification.CENTER)
+            slide_11.pack_start(lbl_desc_11, False, False, 10)
+
+            btn_box_11 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+            btn_box_11.set_halign(Gtk.Align.CENTER)
+            slide_11.pack_start(btn_box_11, True, True, 10)
+
+            # English: Create button to launch recovery installer
+            # Español: Crear botón para lanzar el instalador recovery
+            btn_recovery = Gtk.Button(label="Launch Pulsar OS Recovery")
+            btn_recovery.get_style_context().add_class("action-button")
+            btn_recovery.connect(
+                "clicked", lambda b: self.launch_app("pulsaros-recovery")
+            )
+            btn_box_11.pack_start(btn_recovery, False, False, 0)
+
+            self.content_stack.add_named(slide_11, "slide11")
 
     def on_back_clicked(self, button):
         if self.current_step > 0:
@@ -892,7 +1032,9 @@ class AssistantWindow(Gtk.Window):
             schema = self.schema_source.lookup(schema_id, True)
             if schema:
                 return Gio.Settings.new_full(schema, None, None)
-            print(f"Warning: GSettings schema '{schema_id}' is not found in welcome custom sources.")
+            print(
+                f"Warning: GSettings schema '{schema_id}' is not found in welcome custom sources."
+            )
         except Exception as e:
             print(f"Error checking schema '{schema_id}':", e)
         return None
@@ -903,25 +1045,33 @@ class AssistantWindow(Gtk.Window):
         Español: Comprueba las rutas de esquemas de extensiones locales y las vincula a un SettingsSchemaSource personalizado.
         """
         default_source = Gio.SettingsSchemaSource.get_default()
-        
+
         # Determine the base PKG directory relative to this script
         # Determinar el directorio base PKG relativo a este script
         script_dir = os.path.dirname(os.path.realpath(__file__))
         pkg_dir = os.path.abspath(os.path.join(script_dir, "../../../../"))
-        
+
         # Candidate directories for GSettings schemas (global and local)
         # Directorios candidatos para esquemas GSettings (globales y locales)
         candidate_paths = [
-            os.path.expanduser("~/.local/share/gnome-shell/extensions/liquid-glass@thinkingcoding1231.gmail.com/schemas"),
+            os.path.expanduser(
+                "~/.local/share/gnome-shell/extensions/liquid-glass@thinkingcoding1231.gmail.com/schemas"
+            ),
             "/usr/share/gnome-shell/extensions/liquid-glass@thinkingcoding1231.gmail.com/schemas",
-            os.path.expanduser("~/.local/share/gnome-shell/extensions/blur-my-shell@aunetx/schemas"),
+            os.path.expanduser(
+                "~/.local/share/gnome-shell/extensions/blur-my-shell@aunetx/schemas"
+            ),
             "/usr/share/gnome-shell/extensions/blur-my-shell@aunetx/schemas",
-            os.path.expanduser("~/.local/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/schemas"),
+            os.path.expanduser(
+                "~/.local/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/schemas"
+            ),
             "/usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/schemas",
-            os.path.join(pkg_dir, "build/pkg-staging/pulsaros-gnome/usr/share/glib-2.0/schemas"),
-            os.path.join(pkg_dir, "pulsaros-gnome/usr/share/glib-2.0/schemas")
+            os.path.join(
+                pkg_dir, "build/pkg-staging/pulsaros-gnome/usr/share/glib-2.0/schemas"
+            ),
+            os.path.join(pkg_dir, "pulsaros-gnome/usr/share/glib-2.0/schemas"),
         ]
-        
+
         current_source = default_source
         for path in candidate_paths:
             if os.path.isdir(path):
@@ -929,17 +1079,23 @@ class AssistantWindow(Gtk.Window):
                     files = os.listdir(path)
                     has_xml = any(f.endswith(".gschema.xml") for f in files)
                     has_compiled = "gschemas.compiled" in files
-                    
+
                     if not (has_xml or has_compiled):
                         continue
-                    
+
                     if has_xml and not has_compiled:
-                        subprocess.run(["glib-compile-schemas", path], capture_output=True)
-                    
-                    current_source = Gio.SettingsSchemaSource.new_from_directory(path, current_source, False)
+                        subprocess.run(
+                            ["glib-compile-schemas", path], capture_output=True
+                        )
+
+                    current_source = Gio.SettingsSchemaSource.new_from_directory(
+                        path, current_source, False
+                    )
                 except Exception as e:
-                    print(f"[Schema Welcome] Error loading custom schema path {path}: {e}")
-                    
+                    print(
+                        f"[Schema Welcome] Error loading custom schema path {path}: {e}"
+                    )
+
         return current_source
 
     def get_current_effects_state(self):
@@ -991,7 +1147,9 @@ class AssistantWindow(Gtk.Window):
                 settings.set_boolean("apply-custom-theme", True)
                 settings.set_string("transparency-mode", "FIXED")
                 settings.set_boolean("customize-alphas", False)
-                print("GNOME Settings: Restored Dash to Dock settings for Blur my Shell.")
+                print(
+                    "GNOME Settings: Restored Dash to Dock settings for Blur my Shell."
+                )
         except Exception as e:
             print("Error restoring Dash to Dock for Blur my Shell:", e)
 
@@ -1002,7 +1160,9 @@ class AssistantWindow(Gtk.Window):
         """
         try:
             # 1. Configurar Dash to Dock para Liquid Glass (Opacidad 0.0 y alphas a 0 para dejar ver el cristal de fondo de forma 100% transparente)
-            settings_dock = self.get_safe_settings("org.gnome.shell.extensions.dash-to-dock")
+            settings_dock = self.get_safe_settings(
+                "org.gnome.shell.extensions.dash-to-dock"
+            )
             if settings_dock:
                 settings_dock.set_double("background-opacity", 0.0)
                 settings_dock.set_boolean("custom-theme-shrink", False)
@@ -1018,7 +1178,9 @@ class AssistantWindow(Gtk.Window):
 
         try:
             # 2. Configurar Liquid Glass según los ajustes extraídos del host
-            settings_glass = self.get_safe_settings("org.gnome.shell.extensions.liquid-glass")
+            settings_glass = self.get_safe_settings(
+                "org.gnome.shell.extensions.liquid-glass"
+            )
             if settings_glass:
                 settings_glass.set_int("application-blur-radius", 9)
                 settings_glass.set_double("application-content-opacity", 0.81)
@@ -1037,7 +1199,9 @@ class AssistantWindow(Gtk.Window):
                 settings_glass.set_string("notification-tint-color", "#000000")
                 settings_glass.set_string("osd-tint-color", "#000000")
                 settings_glass.set_boolean("output-logs", False)
-                print("GNOME Settings: Applied Liquid Glass and transparent dock settings.")
+                print(
+                    "GNOME Settings: Applied Liquid Glass and transparent dock settings."
+                )
         except Exception as e:
             print("Error configuring Liquid Glass settings:", e)
 
@@ -1071,12 +1235,13 @@ def main():
 
     done_file = os.path.expanduser("~/.config/pulsaros-welcome.done")
     force = "--force" in sys.argv or "-f" in sys.argv
-    
+
     if not os.path.exists(done_file) or force:
         HelloWindow(start_assistant)
         Gtk.main()
     else:
         print("Welcome app already completed. Use --force to run again.")
+
 
 if __name__ == "__main__":
     main()
