@@ -138,6 +138,21 @@ cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/plymout
 cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/plymouth/themes/debian-spinner/watermark.png"
 cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/plymouth/themes/bgrt/watermark.png"
 
+# English: Force watermark alignment to be centered and at the bottom in the configuration file
+# Español: Forzar la alineación del watermark para que esté centrado y abajo en el archivo de configuración
+conf_file="$THEME_DEST/pulsar-plymouth.plymouth"
+if [ -f "$conf_file" ]; then
+    echo "🎨 Forzando alineación del logo watermark en el archivo de configuración del tema..."
+    sed -i 's/^Watermark=.*/Watermark=watermark/' "$conf_file"
+    # Ensure alignment keys exist or append them / Asegurar que existan las claves de alineación o agregarlas
+    if ! grep -q "^WatermarkHorizontalAlignment" "$conf_file"; then
+        echo "WatermarkHorizontalAlignment=.5" >> "$conf_file"
+    fi
+    if ! grep -q "^WatermarkVerticalAlignment" "$conf_file"; then
+        echo "WatermarkVerticalAlignment=.96" >> "$conf_file"
+    fi
+fi
+
 # Clean up temporary build directory if it was created
 # Limpiar el directorio temporal de compilación si fue creado
 if [ -d "$TEMP_BUILD" ]; then
