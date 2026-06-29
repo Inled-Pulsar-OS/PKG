@@ -34,6 +34,30 @@ if [ -z "$PACKAGE_NAME" ]; then
     exit 1
 fi
 
+# English: Helper to auto-increment SemVer or Debian format versions (X.Y.Z-R or X.Y.Z)
+# Español: Utilidad para auto-incrementar versiones de SemVer o formato Debian (X.Y.Z-R o X.Y.Z)
+increment_version() {
+    local version="$1"
+    if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-([0-9]+)$ ]]; then
+        local base="${BASH_REMATCH[1]}"
+        local rev="${BASH_REMATCH[2]}"
+        local new_rev=$((rev + 1))
+        echo "${base}-${new_rev}"
+    elif [[ "$version" =~ ^([0-9]+\.[0-9]+)\.([0-9]+)$ ]]; then
+        local base="${BASH_REMATCH[1]}"
+        local patch="${BASH_REMATCH[2]}"
+        local new_patch=$((patch + 1))
+        echo "${base}.${new_patch}"
+    elif [[ "$version" =~ ^([0-9]+)\.([0-9]+)$ ]]; then
+        local base="${BASH_REMATCH[1]}"
+        local minor="${BASH_REMATCH[2]}"
+        local new_minor=$((minor + 1))
+        echo "${base}.${new_minor}"
+    else
+        echo "${version}.1"
+    fi
+}
+
 # Función para compilar y desplegar un único paquete
 build_single_package() {
     local name="$1"
@@ -52,6 +76,14 @@ build_single_package() {
         echo "❌ Error: No se encontró '$source_folder/DEBIAN/control'."
         return 1
     fi
+    
+    # Auto-increment package version before building
+    # Auto-incrementar la versión del paquete antes de compilar
+    local control_file="$source_folder/DEBIAN/control"
+    local current_version=$(grep "^Version:" "$control_file" | cut -d' ' -f2)
+    local new_version=$(increment_version "$current_version")
+    echo "🔄 Auto-incrementando versión de $name: $current_version -> $new_version"
+    sed -i "s/^Version:.*/Version: $new_version/" "$control_file"
     
     # Limpieza previa de staging
     rm -rf "$STAGING_DIR/$name"
