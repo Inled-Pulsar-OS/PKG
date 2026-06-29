@@ -9,4 +9,3 @@ Icon=distributor-logo
 Terminal=false
 Categories=System;Utility;
 X-GNOME-Autostart-enabled=true
-NoDisplay=true

@@ -41,26 +41,6 @@ echo "👤 Configurando cuentas de usuario y contraseñas..."
 groupadd -f sudo || true
 groupadd -f docker || true
 
-# Crear usuario 'jaime' si no existe
-# Create user 'jaime' if it does not exist
-if ! id -u jaime >/dev/null 2>&1; then
-    echo "Creando usuario 'jaime'..."
-    useradd -m -s /bin/bash -G sudo,docker jaime || true
-else
-    usermod -aG docker jaime || true
-fi
-echo "jaime:pulsar" | chpasswd || echo "⚠️ Advertencia: No se pudo cambiar la contraseña de jaime"
-
-# Crear usuario 'live' si no existe
-# Create user 'live' if it does not exist
-if ! id -u live >/dev/null 2>&1; then
-    echo "Creando usuario 'live'..."
-    useradd -m -s /bin/bash -G sudo,docker live || true
-else
-    usermod -aG docker live || true
-fi
-echo "live:live" | chpasswd || echo "⚠️ Advertencia: No se pudo cambiar la contraseña de live"
-
 # Contraseña de root
 # Root password
 echo "root:pulsar" | chpasswd || echo "⚠️ Advertencia: No se pudo cambiar la contraseña de root"

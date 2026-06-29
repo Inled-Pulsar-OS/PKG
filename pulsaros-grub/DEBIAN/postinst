@@ -3,10 +3,14 @@ set -e
 
 echo "🎨 Configurando Tema GRUB de Pulsar OS..."
 
-# Mock de grub-probe temporal para evitar fallos si no hay dispositivo de disco real (ej. chroots)
-echo '#!/bin/sh' > /usr/local/bin/grub-probe
-echo 'exit 0' >> /usr/local/bin/grub-probe
-chmod +x /usr/local/bin/grub-probe
+# Mock de grub-probe temporal en ruta absoluta para evitar fallos si no hay dispositivo de disco real (ej. chroots)
+if [ -f "/usr/sbin/grub-probe" ]; then
+    mv /usr/sbin/grub-probe /usr/sbin/grub-probe.bak
+fi
+echo '#!/bin/sh' > /usr/sbin/grub-probe
+echo 'echo "/dev/sda"' >> /usr/sbin/grub-probe
+echo 'exit 0' >> /usr/sbin/grub-probe
+chmod +x /usr/sbin/grub-probe
 
 # Ejecutar el script instalador del tema de grub si está presente en el tema
 if [ -f "/boot/grub/themes/grub-theme/install.sh" ]; then
@@ -14,8 +18,11 @@ if [ -f "/boot/grub/themes/grub-theme/install.sh" ]; then
     ./install.sh -t window -s 2k || echo "Aviso: El instalador de GRUB reportó errores, pero continuamos..."
 fi
 
-# Eliminar el mock temporal
-rm -f /usr/local/bin/grub-probe
+# Eliminar el mock temporal y restaurar el original
+rm -f /usr/sbin/grub-probe
+if [ -f "/usr/sbin/grub-probe.bak" ]; then
+    mv /usr/sbin/grub-probe.bak /usr/sbin/grub-probe
+fi
 
 # Actualizar el gestor de arranque
 if command -v update-grub >/dev/null; then

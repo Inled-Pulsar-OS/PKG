@@ -224,7 +224,7 @@ def get_physical_disks():
             is_ro = ro_val in (True, 1, "1", "true", "True")
             if dev.get("type") == "disk" and not is_ro:
                 name = dev.get("name")
-                model = dev.get("model", "").strip() or "Local Drive"
+                model = (dev.get("model") or "").strip() or "Local Drive"
                 size = dev.get("size", "0 GB")
                 disks.append(
                     {"path": f"/dev/{name}", "name": name, "model": model, "size": size}
