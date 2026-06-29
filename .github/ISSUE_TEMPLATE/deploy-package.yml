@@ -12,21 +12,12 @@ body:
         > [!IMPORTANT]
         > **Seguridad:** Este workflow solo puede ser ejecutado por el administrador del sistema. Si es iniciado por otro usuario, se cancelará y cerrará automáticamente.
   
-  - type: dropdown
+  - type: input
     id: package_name
     attributes:
       label: "Nombre del Paquete"
-      description: "Selecciona el paquete de Pulsar OS que deseas compilar y desplegar (o selecciona 'all' para compilar y desplegar todos juntos)."
-      options:
-        - "all"
-        - "pulsaros-branding"
-        - "pulsaros-theme"
-        - "pulsaros-gnome"
-        - "pulsaros-sddm"
-        - "pulsaros-plymouth"
-        - "pulsaros-grub"
-        - "pulsaros-calamares"
-        - "pulsaros-essential"
+      description: "Introduce el nombre de la carpeta del paquete de Pulsar OS que deseas compilar y desplegar (escribe 'all' para compilar y desplegar todos)."
+      placeholder: "pulsaros-branding o all"
     validations:
       required: true
 

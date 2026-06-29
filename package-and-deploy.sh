@@ -102,46 +102,89 @@ build_single_package() {
     
     echo "✅ Paquete compilado con éxito: $(basename "$deb_file")"
     
-    # Realizar deploy si está activado
-    if [ "$DEPLOY_FLAG" == "--deploy" ] || [ "$DEPLOY_FLAG" == "-d" ]; then
-        echo "🌐 Desplegando al repositorio central APT..."
-        
-        if [ -z "$INLED_REPO_PAT" ]; then
-            echo "❌ Error: La variable INLED_REPO_PAT no está definida."
-            return 1
+    # Add to global list of compiled packages for final bulk deployment
+    # Añadir a la lista global de paquetes compilados para el despliegue final en masa
+    COMPILED_DEBS+=("$deb_file")
+}
+
+# ==============================================================================
+# Bulk Deployment Function / Función de Despliegue en Masa
+# ==============================================================================
+# Uploads all compiled package files (.deb) to the GitHub release and sends
+# a single repository dispatch notifying the APT repository about all packages at once.
+# Sube todos los archivos de paquetes compilados (.deb) a la release de GitHub y envía
+# un único repository dispatch notificando al repositorio APT todos los paquetes a la vez.
+deploy_packages() {
+    local debs=("$@")
+    
+    if [ ${#debs[@]} -eq 0 ]; then
+        echo "⚠️ No se han compilado paquetes para desplegar. / No packages were compiled for deployment."
+        return 0
+    fi
+    
+    echo "=============================================================================="
+    echo "🌐 DESPLEGANDO EN MASA AL REPOSITORIO CENTRAL APT / BULK DEPLOY TO CENTRAL APT"
+    echo "   Paquetes a desplegar / Packages to deploy: ${#debs[@]}"
+    echo "=============================================================================="
+    
+    if [ -z "$INLED_REPO_PAT" ]; then
+        echo "❌ Error: La variable INLED_REPO_PAT no está definida. / Error: INLED_REPO_PAT variable is not defined."
+        return 1
+    fi
+    
+    # 1. Ensure the release exists (using gh cli or curl fallback)
+    # 1. Asegurar que la release existe (usando gh cli o fallback con curl)
+    local use_gh=false
+    local release_id=""
+    
+    if command -v gh >/dev/null 2>&1 && [ -n "$GITHUB_ACTIONS" ]; then
+        use_gh=true
+        echo "🔧 Usando GitHub CLI para verificar/crear release / Using GitHub CLI to verify/create release..."
+        gh release view "$RELEASE_TAG" --repo "$OWNER_REPO" >/dev/null 2>&1 || {
+            gh release create "$RELEASE_TAG" --title "PulsarOS Package Repository Assets" --notes "Repositorio de paquetes deb compilados automáticamente." --repo "$OWNER_REPO"
+        }
+    else
+        echo "🔧 Usando API de GitHub (curl) para verificar/crear release / Using GitHub API (curl) to verify/create release..."
+        # Obtain release_id using curl / Obtener release_id usando curl
+        release_id=$(curl -s -H "Authorization: token $INLED_REPO_PAT" \
+            "https://api.github.com/repos/${OWNER_REPO}/releases/tags/${RELEASE_TAG}" | jq -r '.id')
+            
+        if [ "$release_id" == "null" ] || [ -z "$release_id" ]; then
+            echo "🆕 Creando nueva release / Creating new release..."
+            local release_data=$(curl -s -X POST -H "Authorization: token $INLED_REPO_PAT" \
+                -H "Content-Type: application/json" \
+                -d "{\"tag_name\":\"$RELEASE_TAG\",\"title\":\"PulsarOS Package Repository Assets\",\"body\":\"Repositorio de paquetes deb compilados automáticamente.\"}" \
+                "https://api.github.com/repos/${OWNER_REPO}/releases")
+            release_id=$(echo "$release_data" | jq -r '.id')
         fi
-        
+    fi
+    
+    local urls=()
+    
+    # 2. Upload each deb and obtain its URL
+    # 2. Subir cada deb y obtener su URL
+    for deb_file in "${debs[@]}"; do
+        local file_name=$(basename "$deb_file")
         local package_url=""
         
-        if command -v gh >/dev/null 2>&1 && [ -n "$GITHUB_ACTIONS" ]; then
-            gh release view "$RELEASE_TAG" --repo "$OWNER_REPO" >/dev/null 2>&1 || {
-                gh release create "$RELEASE_TAG" --title "PulsarOS Package Repository Assets" --notes "Repositorio de paquetes deb compilados automáticamente." --repo "$OWNER_REPO"
-            }
+        echo "⬆️ Subiendo asset / Uploading asset: $file_name..."
+        
+        if [ "$use_gh" = true ]; then
             gh release upload "$RELEASE_TAG" "$deb_file" --clobber --repo "$OWNER_REPO"
-            package_url="https://github.com/${OWNER_REPO}/releases/download/${RELEASE_TAG}/$(basename "$deb_file")"
+            package_url="https://github.com/${OWNER_REPO}/releases/download/${RELEASE_TAG}/${file_name}"
         else
-            # Fallback API con curl
-            local release_id=$(curl -s -H "Authorization: token $INLED_REPO_PAT" \
-                "https://api.github.com/repos/${OWNER_REPO}/releases/tags/${RELEASE_TAG}" | jq -r '.id')
-                
-            if [ "$release_id" == "null" ] || [ -z "$release_id" ]; then
-                local release_data=$(curl -s -X POST -H "Authorization: token $INLED_REPO_PAT" \
-                    -H "Content-Type: application/json" \
-                    -d "{\"tag_name\":\"$RELEASE_TAG\",\"title\":\"PulsarOS Package Repository Assets\",\"body\":\"Repositorio de paquetes.\"}" \
-                    "https://api.github.com/repos/${OWNER_REPO}/releases")
-                release_id=$(echo "$release_data" | jq -r '.id')
-            fi
-            
-            local file_name=$(basename "$deb_file")
+            # Delete previous asset if it exists / Eliminar asset anterior si existe
             local asset_id=$(curl -s -H "Authorization: token $INLED_REPO_PAT" \
                 "https://api.github.com/repos/${OWNER_REPO}/releases/$release_id" | \
                 jq -r ".assets[] | select(.name==\"$file_name\") | .id")
                 
             if [ -n "$asset_id" ] && [ "$asset_id" != "null" ]; then
+                echo "🗑️ Eliminando asset anterior / Deleting previous asset: $file_name..."
                 curl -s -X DELETE -H "Authorization: token $INLED_REPO_PAT" \
                     "https://api.github.com/repos/${OWNER_REPO}/releases/assets/$asset_id"
             fi
             
+            # Upload the new asset / Subir el nuevo asset
             local upload_url="https://uploads.github.com/repos/${OWNER_REPO}/releases/${release_id}/assets?name=${file_name}"
             local upload_response=$(curl -s -X POST -H "Authorization: token $INLED_REPO_PAT" \
                 -H "Content-Type: application/vnd.debian.binary-package" \
@@ -151,56 +194,91 @@ build_single_package() {
         fi
         
         if [ "$package_url" == "null" ] || [ -z "$package_url" ]; then
-            echo "❌ Error: Falló la subida del asset a la release de GitHub."
+            echo "❌ Error: Falló la subida de $file_name a la release de GitHub. / Error: Upload of $file_name to GitHub release failed."
             return 1
         fi
         
-        echo "🎉 Subido en: $package_url"
-        echo "📡 Enviando dispatch a repositorio APT central de Inled..."
-        
-        local dispatch_response=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-             -H "Accept: application/vnd.github.v3+json" \
-             -H "Authorization: token $INLED_REPO_PAT" \
-             https://api.github.com/repos/InledGroup/apt/dispatches \
-             -d "{\"event_type\": \"package_upload\", \"client_payload\": {\"package_url\": \"$package_url\"}}")
-             
-        if [ "$dispatch_response" -eq 204 ] || [ "$dispatch_response" -eq 200 ] || [ "$dispatch_response" -eq 201 ]; then
-            echo "🚀 ¡Despliegue notificado con éxito! HTTP $dispatch_response"
-        else
-            echo "❌ Error al notificar al repositorio APT. HTTP $dispatch_response"
-            return 1
+        echo "✅ Subido en / Uploaded at: $package_url"
+        urls+=("$package_url")
+    done
+    
+    # 3. Construct JSON payload for dispatch
+    # 3. Construir el payload JSON para el dispatch
+    # It structures keys as package_url, package_2_url, package_3_url, etc.
+    # Estructura las claves como package_url, package_2_url, package_3_url, etc.
+    local payload="{"
+    for i in "${!urls[@]}"; do
+        local idx=$((i + 1))
+        local key="package_url"
+        if [ "$idx" -gt 1 ]; then
+            key="package_${idx}_url"
         fi
+        payload="${payload}\"${key}\": \"${urls[$i]}\""
+        if [ "$idx" -lt "${#urls[@]}" ]; then
+            payload="${payload}, "
+        fi
+    done
+    payload="${payload}}"
+    
+    # 4. Send a single repository dispatch to central Inled APT repository
+    # 4. Enviar un único repository dispatch al repositorio central APT de Inled
+    echo "📡 Enviando dispatch en masa a repositorio APT central... / Sending bulk dispatch to central APT repository..."
+    local dispatch_response=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+         -H "Accept: application/vnd.github.v3+json" \
+         -H "Authorization: token $INLED_REPO_PAT" \
+         https://api.github.com/repos/InledGroup/apt/dispatches \
+         -d "{\"event_type\": \"package_upload\", \"client_payload\": ${payload}}")
+         
+    if [ "$dispatch_response" -eq 204 ] || [ "$dispatch_response" -eq 200 ] || [ "$dispatch_response" -eq 201 ]; then
+        echo "🚀 ¡Despliegue de todos los paquetes notificado con éxito! / All packages deployment notified successfully! HTTP $dispatch_response"
+    else
+        echo "❌ Error al notificar al repositorio APT. / Error notifying APT repository. HTTP $dispatch_response"
+        return 1
     fi
 }
 
-# 1. Preparar carpetas
+# ==============================================================================
+# Main Execution / Ejecución Principal
+# ==============================================================================
+
+# Global array to collect compiled packages
+# Array global para almacenar los paquetes compilados
+COMPILED_DEBS=()
+
+# 1. Prepare folders / Preparar carpetas
 mkdir -p "$STAGING_DIR"
 mkdir -p "$OUTPUT_DIR"
 
-# 2. Lógica de construcción
+# 2. Build logic / Lógica de construcción
 if [ "$PACKAGE_NAME" == "all" ]; then
     echo "🏗️  MODO COMPILACIÓN TOTAL: Detectando y compilando todos los paquetes..."
+    echo "🏗️  FULL BUILD MODE: Detecting and compiling all packages..."
     
+    # Find all subdirectories that contain a DEBIAN/control file
     # Encontrar todos los subdirectorios que tengan un archivo DEBIAN/control
-    # Excluimos directorios del sistema de compilación
+    # Exclude build staging directories / Excluir directorios del sistema de compilación
     PACKAGES=()
     while read -r control_path; do
         dir_name=$(basename "$(dirname "$(dirname "$control_path")")")
-        # Asegurar que no coja el propio build staging si hay bucles
         if [[ "$control_path" != *"/pkg-staging/"* ]]; then
             PACKAGES+=("$dir_name")
         fi
     done < <(find "$PKG_DIR" -name "control" -path "*/DEBIAN/control")
     
-    echo "📋 Paquetes detectados: ${PACKAGES[*]}"
+    echo "📋 Paquetes detectados / Detected packages: ${PACKAGES[*]}"
     
     for pkg in "${PACKAGES[@]}"; do
         build_single_package "$pkg"
     done
     echo "=============================================================================="
-    echo "🎉 ¡Compilación de todos los paquetes completada!"
+    echo "🎉 ¡Compilación de todos los paquetes completada! / All packages compilation completed!"
     echo "=============================================================================="
 else
-    # Compilar solo el paquete solicitado
+    # Build only requested package / Compilar solo el paquete solicitado
     build_single_package "$PACKAGE_NAME"
+fi
+
+# 3. Perform bulk deployment if requested / Realizar despliegue en masa si está activado
+if [ "$DEPLOY_FLAG" == "--deploy" ] || [ "$DEPLOY_FLAG" == "-d" ]; then
+    deploy_packages "${COMPILED_DEBS[@]}"
 fi
