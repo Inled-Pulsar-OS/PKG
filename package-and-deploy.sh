@@ -204,17 +204,10 @@ deploy_packages() {
     
     # 3. Construct JSON payload for dispatch
     # 3. Construir el payload JSON para el dispatch
-    # It structures keys as package_url, package_2_url, package_3_url, etc.
-    # Estructura las claves como package_url, package_2_url, package_3_url, etc.
-    local json_payload="{}"
-    for i in "${!urls[@]}"; do
-        local idx=$((i + 1))
-        local key="package_url"
-        if [ "$idx" -gt 1 ]; then
-            key="package_${idx}_url"
-        fi
-        json_payload=$(echo "$json_payload" | jq --arg k "$key" --arg v "${urls[$i]}" '. + {($k): $v}')
-    done
+    # Join all URLs into a space-separated string to comply with GitHub's 10-properties limit on client_payload.
+    # Une todas las URLs en una cadena separada por espacios para cumplir con el límite de 10 propiedades de GitHub.
+    local urls_str="${urls[*]}"
+    local json_payload=$(jq -n --arg urls "$urls_str" '{package_urls: $urls}')
     
     local request_body=$(jq -c -n --arg ev "package_upload" --argjson pay "$json_payload" '{event_type: $ev, client_payload: $pay}')
     
