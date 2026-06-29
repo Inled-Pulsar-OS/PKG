@@ -61,7 +61,7 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y dpkg-dev fakeroot jq
+          sudo apt-get install -y dpkg-dev fakeroot jq python3-pil
 
       # 5. Parsear el nombre del paquete desde el issue
       - name: Parse Package Name
