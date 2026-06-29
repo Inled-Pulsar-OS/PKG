@@ -206,33 +206,38 @@ deploy_packages() {
     # 3. Construir el payload JSON para el dispatch
     # It structures keys as package_url, package_2_url, package_3_url, etc.
     # Estructura las claves como package_url, package_2_url, package_3_url, etc.
-    local payload="{"
+    local json_payload="{}"
     for i in "${!urls[@]}"; do
         local idx=$((i + 1))
         local key="package_url"
         if [ "$idx" -gt 1 ]; then
             key="package_${idx}_url"
         fi
-        payload="${payload}\"${key}\": \"${urls[$i]}\""
-        if [ "$idx" -lt "${#urls[@]}" ]; then
-            payload="${payload}, "
-        fi
+        json_payload=$(echo "$json_payload" | jq --arg k "$key" --arg v "${urls[$i]}" '. + {($k): $v}')
     done
-    payload="${payload}}"
+    
+    local request_body=$(jq -c -n --arg ev "package_upload" --argjson pay "$json_payload" '{event_type: $ev, client_payload: $pay}')
     
     # 4. Send a single repository dispatch to central Inled APT repository
     # 4. Enviar un único repository dispatch al repositorio central APT de Inled
     echo "📡 Enviando dispatch en masa a repositorio APT central... / Sending bulk dispatch to central APT repository..."
-    local dispatch_response=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+    
+    local response_file=$(mktemp)
+    local dispatch_response=$(curl -s -w "%{http_code}" -X POST \
          -H "Accept: application/vnd.github.v3+json" \
          -H "Authorization: token $INLED_REPO_PAT" \
          https://api.github.com/repos/InledGroup/apt/dispatches \
-         -d "{\"event_type\": \"package_upload\", \"client_payload\": ${payload}}")
+         -d "$request_body" -o "$response_file")
          
     if [ "$dispatch_response" -eq 204 ] || [ "$dispatch_response" -eq 200 ] || [ "$dispatch_response" -eq 201 ]; then
         echo "🚀 ¡Despliegue de todos los paquetes notificado con éxito! / All packages deployment notified successfully! HTTP $dispatch_response"
+        rm -f "$response_file"
     else
         echo "❌ Error al notificar al repositorio APT. / Error notifying APT repository. HTTP $dispatch_response"
+        echo "Detalles del error de GitHub / GitHub Error Details:"
+        cat "$response_file"
+        echo ""
+        rm -f "$response_file"
         return 1
     fi
 }
