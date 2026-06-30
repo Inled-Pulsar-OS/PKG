@@ -222,6 +222,19 @@ fi
 # ==============================================================================
 echo "⚙️ Configurando módulos de Calamares..."
 
+# bootloader.conf
+cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/bootloader.conf"
+---
+efiBootLoader: "grub"
+grubInstall: "grub-install"
+grubMkconfig: "grub-mkconfig"
+grubCfg: "/boot/grub/grub.cfg"
+grubProbe: "grub-probe"
+efiBootMgr: "efibootmgr"
+efiBootloaderId: "pulsaros"
+installEFIFallback: true
+EOF
+
 # welcome.conf
 cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/welcome.conf"
 ---
@@ -259,19 +272,8 @@ cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/removeuser-jaime.conf"
 username: jaime
 EOF
 
-# partition.conf
-cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/partition.conf"
----
-efiSystemPartition: "/boot/efi"
-efiSystemPartitionSize: 300MiB
-efiSystemPartitionInstallDir: "debian"
-defaultPartitionTableType: gpt
-userSwapChoices:
-    - none
-    - file
-    - partition
-drawPartitionTable: true
-EOF
+# Use default Debian partition.conf to dynamically choose MS-DOS for BIOS and GPT for UEFI boot schemes.
+# Usar el partition.conf predeterminado de Debian para elegir dinámicamente MS-DOS en BIOS y GPT en UEFI.
 
 # users.conf fallback (ajustando hostname por defecto a pulsaros)
 cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/users.conf"
