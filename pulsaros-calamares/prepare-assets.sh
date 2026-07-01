@@ -290,7 +290,7 @@ writeUsersPageToDummy: false
 userShell: /bin/bash
 EOF
 
-# packages.conf (configura la instalación automatizada de drivers y firmware de Pulsar OS)
+# packages.conf (configura la instalación automatizada de drivers y firmware de Pulsar OS, y desinstala calamares y recovery)
 cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/packages.conf"
 ---
 backend: apt
@@ -307,6 +307,11 @@ operations:
       - intel-microcode
       - amd64-microcode
       - firmware-amd-graphics
+  - remove:
+      - calamares
+      - calamares-settings-debian
+      - pulsaros-calamares
+      - pulsaros-recovery
 EOF
 
 
