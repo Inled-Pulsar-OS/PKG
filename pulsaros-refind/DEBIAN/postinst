@@ -1,0 +1,64 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - rEFInd Bootloader Package Post-installation Script
+# ==============================================================================
+# English: Shell script to install and configure rEFInd with macOS theme.
+# Español: Script Shell para instalar y configurar rEFInd con el tema macOS.
+# ==============================================================================
+set -e
+
+echo "🎨 Configurando rEFInd en Pulsar OS..."
+echo "🎨 Configuring rEFInd in Pulsar OS..."
+
+# Run refind-install only if /boot/efi is a mountpoint or if the EFI directory exists.
+# This prevents running refind-install (and modifying the host) during the Live ISO build phase inside the chroot.
+# Ejecutar refind-install solo si /boot/efi está montado o si el directorio EFI ya existe.
+# Esto evita ejecutar refind-install (y alterar el host) durante la fase de compilación de la ISO Live en el chroot.
+if command -v refind-install >/dev/null 2>&1 && (mountpoint -q /boot/efi || [ -d "/boot/efi/EFI" ]); then
+    echo "⚙️ Ejecutando refind-install..."
+    refind-install --yes || echo "⚠️ Advertencia: refind-install falló o reportó advertencias, pero continuamos..."
+else
+    echo "⚠️ Saltando refind-install (entorno de compilación o sin ESP montado)."
+fi
+
+# Copy/install the macOS theme for rEFInd
+# Copiar/instalar el tema macOS para rEFInd
+THEMES_DIR="/boot/efi/EFI/refind/themes"
+THEME_SRC="/usr/share/refind/themes/rEFInd-Regular-Dark"
+THEME_DEST="$THEMES_DIR/rEFInd-Regular-Dark"
+
+if [ -d "/boot/efi/EFI/refind" ]; then
+    echo "📥 Instalando tema macOS para rEFInd..."
+    mkdir -p "$THEMES_DIR"
+    if [ -d "$THEME_DEST" ]; then
+        echo "🧹 Limpiando tema existente..."
+        rm -rf "$THEME_DEST"
+    fi
+    if [ -d "$THEME_SRC" ]; then
+        echo "📂 Copiando archivos de tema locales..."
+        cp -r "$THEME_SRC" "$THEME_DEST"
+    else
+        echo "🌐 Descargando tema desde GitHub (depth=1, HTTP/1.1)..."
+        git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "https://github.com/Inled-Pulsar-OS/refind-mac-theme" "$THEME_DEST" || echo "⚠️ Error al descargar el tema de rEFInd, se continuará sin él."
+        if [ -f "$THEME_DEST/theme.conf" ]; then
+            sed -i '/#MENUENTRIES/q' "$THEME_DEST/theme.conf"
+        fi
+    fi
+
+    # Configure refind.conf / Configurar refind.conf
+    REFIND_CONF="/boot/efi/EFI/refind/refind.conf"
+    if [ -f "$REFIND_CONF" ]; then
+        echo "⚙️ Configurando refind.conf (enable_mouse y tema)..."
+        # Enable mouse / Habilitar ratón
+        sed -i 's/^#enable_mouse/enable_mouse/' "$REFIND_CONF"
+        sed -i 's/^enable_mouse.*/enable_mouse/' "$REFIND_CONF"
+        grep -q "^enable_mouse" "$REFIND_CONF" || echo "enable_mouse" >> "$REFIND_CONF"
+
+        # Include theme / Incluir el tema
+        grep -q "themes/rEFInd-Regular-Dark/theme.conf" "$REFIND_CONF" || echo "include themes/rEFInd-Regular-Dark/theme.conf" >> "$REFIND_CONF"
+    fi
+else
+    echo "⚠️ Directorio /boot/efi/EFI/refind no encontrado. Saltando configuración de tema."
+fi
+
+exit 0

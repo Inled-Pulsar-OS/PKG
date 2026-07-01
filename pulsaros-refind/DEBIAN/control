@@ -1,0 +1,9 @@
+Package: pulsaros-refind
+Version: 1.0.23
+Section: admin
+Priority: optional
+Architecture: all
+Maintainer: Jaime <info@inled.es>
+Depends: refind, git, curl, unzip, efibootmgr
+Description: rEFInd bootloader configuration and macOS theme for Pulsar OS.
+ Packages and configures rEFInd with macOS theme for Pulsar OS.

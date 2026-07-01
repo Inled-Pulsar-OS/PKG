@@ -33,9 +33,9 @@ else
     rm -rf "$TEMP_BUILD"
     mkdir -p "$TEMP_BUILD"
     
-    # Clone with depth=1 from GitHub
-    # Clonar con depth=1 desde GitHub
-    git clone --depth=1 "$THEME_REPO" "$TEMP_BUILD/theme"
+    # Clone with depth=1 from GitHub using HTTP/1.1, low speed timeouts, and larger postBuffer
+    # Clonar con depth=1 desde GitHub usando HTTP/1.1, límites de velocidad y postBuffer mayor
+    git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "$THEME_REPO" "$TEMP_BUILD/theme"
     cp -r "$TEMP_BUILD/theme"/* "$THEME_DEST/"
 fi
 

@@ -58,7 +58,7 @@ EOF
 # English: Download the official Pulsar OS logo
 # Español: Descargar el logo oficial de Pulsar OS
 echo "📥 Descargando logo oficial de Pulsar OS..."
-if ! wget -q -O "$BRANDING_DEST/logo.png" "https://hosted.inled.es/pulsar-logo-simple-sf.png"; then
+if ! wget -q --timeout=15 --tries=3 -O "$BRANDING_DEST/logo.png" "https://hosted.inled.es/pulsar-logo-simple-sf.png"; then
     echo "⚠️ No se pudo descargar el logo desde internet, usando un fallback local..."
     if command -v convert >/dev/null 2>&1; then
         convert -size 64x64 xc:blue "$BRANDING_DEST/logo.png"
@@ -307,11 +307,25 @@ operations:
       - intel-microcode
       - amd64-microcode
       - firmware-amd-graphics
-  - remove:
+  # Use try_remove instead of remove to prevent installation failure if these packages are not found.
+  # Usar try_remove en lugar de remove para evitar fallos de instalación si estos paquetes no se encuentran.
+  # (pulsaros-recovery se mantiene en el sistema instalado y se convierte en herramienta de recuperación / pulsaros-recovery is kept on installed system and becomes a recovery tool)
+  - try_remove:
       - calamares
       - calamares-settings-debian
       - pulsaros-calamares
-      - pulsaros-recovery
+EOF
+
+
+# shellprocess@recovery.conf
+# English: Modifies the recovery launcher in the final installed system (Name to PulsarOS Recovery and Icon to system-backup)
+# Español: Modifica el lanzador de recovery en el sistema final instalado (Nombre a PulsarOS Recovery e Icono a system-backup)
+cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/shellprocess@recovery.conf"
+---
+dontChroot: false
+timeout: 30
+script:
+    - "if [ -f /usr/share/applications/pulsaros-recovery.desktop ]; then sed -i 's/^Name=.*/Name=PulsarOS Recovery/' /usr/share/applications/pulsaros-recovery.desktop && sed -i 's/^Icon=.*/Icon=system-backup/' /usr/share/applications/pulsaros-recovery.desktop; fi"
 EOF
 
 
@@ -330,6 +344,9 @@ instances:
 - id:       jaime
   module:   removeuser
   config:   removeuser-jaime.conf
+- id:       recovery
+  module:   shellprocess
+  config:   shellprocess@recovery.conf
 
 sequence:
 - show:
@@ -353,6 +370,7 @@ sequence:
   - hwclock
   - services-systemd
   - packages
+  - shellprocess@recovery
   - grubcfg
   - removeuser@live
   - removeuser@jaime

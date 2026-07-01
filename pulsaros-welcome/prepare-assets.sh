@@ -16,8 +16,8 @@ UI_DIR="$STAGE_DIR/usr/share/pulsaros-welcome/ui"
 echo "📥 Descargando recursos y logos de bienvenida..."
 mkdir -p "$UI_DIR"
 
-wget -q -O "$UI_DIR/macboat.png" "https://hosted.inled.es/macboat.png"
-wget -q -O "$UI_DIR/droidtux.png" "https://hosted.inled.es/droidtux.png"
-wget -q -O "$UI_DIR/winboat.svg" "https://hosted.inled.es/winboat_logo.NqN8dmd9.svg"
+wget -q --timeout=15 --tries=3 -O "$UI_DIR/macboat.png" "https://hosted.inled.es/macboat.png"
+wget -q --timeout=15 --tries=3 -O "$UI_DIR/droidtux.png" "https://hosted.inled.es/droidtux.png"
+wget -q --timeout=15 --tries=3 -O "$UI_DIR/winboat.svg" "https://hosted.inled.es/winboat_logo.NqN8dmd9.svg"
 
 echo "✅ Recursos de bienvenida descargados correctamente en staging."

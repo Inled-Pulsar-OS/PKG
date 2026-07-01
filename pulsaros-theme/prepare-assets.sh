@@ -19,10 +19,10 @@ rm -rf "$TEMP_BUILD"
 mkdir -p "$TEMP_BUILD"
 
 # 1. Clonar temas e iconos
-echo "Clonando temas GTK (depth=1)..."
-git clone --depth=1 "$THEME_REPO" "$TEMP_BUILD/theme"
-echo "Clonando iconos (depth=1)..."
-git clone --depth=1 "$ICONS_REPO" "$TEMP_BUILD/icons"
+echo "Clonando temas GTK (depth=1, HTTP/1.1 y límites de velocidad)..."
+git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "$THEME_REPO" "$TEMP_BUILD/theme"
+echo "Clonando iconos (depth=1, HTTP/1.1 y límites de velocidad)..."
+git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "$ICONS_REPO" "$TEMP_BUILD/icons"
 
 # 2. Instalar en la estructura temporal del paquete debian (Staging)
 mkdir -p "$STAGE_DIR/usr/share/themes"

@@ -337,17 +337,22 @@ class RecoveryApp(Gtk.Window):
         self.util_list.connect("row-activated", self.on_utility_row_activated)
         slide_0.pack_start(self.util_list, True, True, 8)
 
-        # Añadir las 4 utilidades
+        # English: Check if Calamares or setup assistant is available (indicating live ISO installer environment)
+        # Español: Comprobar si Calamares o el asistente de instalación están disponibles (indica entorno live de instalador)
+        self.is_live = os.path.exists("/usr/local/bin/launch-calamares") or os.path.exists("/usr/bin/calamares")
+
+        # Añadir las utilidades / Add utilities
         self.add_utility_row(
             "Restore from Backup",
             "Restore your Pulsar OS installation from a local system backup.",
             "timemachine",
         )
-        self.add_utility_row(
-            "Install Pulsar OS",
-            "Install a new copy of the Pulsar OS desktop on your computer.",
-            "logo",  # Cargará el logo físico
-        )
+        if self.is_live:
+            self.add_utility_row(
+                "Install Pulsar OS",
+                "Install a new copy of the Pulsar OS desktop on your computer.",
+                "logo",  # Cargará el logo físico
+            )
         self.add_utility_row(
             "Seafari Browser",
             "Browse the web to search for online support and configuration guides.",
@@ -364,8 +369,11 @@ class RecoveryApp(Gtk.Window):
         btn_box.set_margin_top(16)
         slide_0.pack_end(btn_box, False, False, 0)
 
-        # Botón "Try System" a la izquierda
-        self.btn_try_system = Gtk.Button(label="Try System")
+        # Botón a la izquierda / Left action button (Try System or Close)
+        if self.is_live:
+            self.btn_try_system = Gtk.Button(label="Try System")
+        else:
+            self.btn_try_system = Gtk.Button(label="Close")
         self.btn_try_system.get_style_context().add_class("action-btn")
         self.btn_try_system.connect("clicked", lambda b: Gtk.main_quit())
         btn_box.pack_start(self.btn_try_system, False, False, 0)
@@ -505,6 +513,7 @@ class RecoveryApp(Gtk.Window):
     def add_utility_row(self, title, desc, icon_name):
         row = Gtk.ListBoxRow()
         row.get_style_context().add_class("recovery-row")
+        row.title = title  # Store the title directly on the row to avoid hardcoded index dependency
 
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
         row.add(box)
@@ -566,7 +575,7 @@ class RecoveryApp(Gtk.Window):
 
     def on_utility_row_selected(self, listbox, row):
         if row is not None:
-            self.selected_utility = row.get_index()
+            self.selected_utility = row.title  # Use dynamic title name instead of list index
             self.btn_util_continue.set_sensitive(True)
 
     def on_utility_row_activated(self, listbox, row):
@@ -574,7 +583,7 @@ class RecoveryApp(Gtk.Window):
             self.on_utility_continue_clicked(None)
 
     def on_utility_continue_clicked(self, button):
-        if self.selected_utility == 0:
+        if self.selected_utility == "Restore from Backup":
             # Hide recovery to allow Deja-dup to draw on top (fullscreen blocks other windows)
             # Ocultar el recovery para permitir que Deja-dup se dibuje encima (pantalla completa bloquea otras ventanas)
             self.hide()
@@ -588,14 +597,14 @@ class RecoveryApp(Gtk.Window):
             import threading
 
             threading.Thread(target=run_deja_dup, daemon=True).start()
-        elif self.selected_utility == 1:
+        elif self.selected_utility == "Install Pulsar OS":
             # Install Pulsar OS - Ir al welcome
             self.stack.set_visible_child_name("welcome")
-        elif self.selected_utility == 2:
+        elif self.selected_utility == "Seafari Browser":
             # Seafari
             cmd = "seafari || firefox || xdg-open https://google.com"
             run_as_real_user(cmd)
-        elif self.selected_utility == 3:
+        elif self.selected_utility == "Disk Utility":
             # Disk Utility
             cmd = "gnome-disks || gnome-disk-utility"
             subprocess.Popen(cmd, shell=True)

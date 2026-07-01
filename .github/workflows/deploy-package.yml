@@ -19,10 +19,12 @@ jobs:
       contains(github.event.issue.labels.*.name, 'deploy-packages')
     runs-on: ubuntu-latest
     steps:
-      # 1. Checkout del código al principio para dar contexto de repositorio a gh cli
-      # 1. Checkout of the code at the beginning to provide repository context to gh cli
+      # 1. Checkout del código al principio para dar contexto de repositorio a gh cli (incluyendo submódulos recursivamente)
+      # 1. Checkout of the code at the beginning to provide repository context to gh cli (including submodules recursively)
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
 
       # 2. Comprobar permisos del actor (solo el administrador / propietario del repo)
       # 2. Verify actor permissions (only repository owner / administrator)

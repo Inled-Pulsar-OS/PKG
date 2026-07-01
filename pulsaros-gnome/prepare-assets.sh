@@ -136,7 +136,7 @@ for uuid in "${EGO_EXTENSIONS[@]}"; do
         full_url="https://extensions.gnome.org${download_path}"
         tmp_zip="/tmp/${uuid}.zip"
 
-        if curl -L -s -o "$tmp_zip" "$full_url"; then
+        if curl --connect-timeout 15 --max-time 60 --retry 3 -L -s -o "$tmp_zip" "$full_url"; then
             dest_dir="$STAGE_DIR/usr/share/gnome-shell/extensions/${uuid}"
             mkdir -p "$dest_dir"
             if unzip -q -o "$tmp_zip" -d "$dest_dir" 2>/dev/null; then
@@ -162,7 +162,7 @@ TEMP_LG="/tmp/pulsaros-liquid-glass"
 rm -rf "$TEMP_LG"
 # We use HTTPS URL to ensure compatibility without SSH keys in builder / chroot environments
 # Usamos la URL HTTPS para asegurar la compatibilidad sin claves SSH en entornos de compilación / chroot
-if git clone --depth=1 "https://github.com/InledGroup/liquid-glass.git" "$TEMP_LG"; then
+if git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "https://github.com/InledGroup/liquid-glass.git" "$TEMP_LG"; then
     echo "📦 [ES] Instalando Liquid Glass en el staging..."
     echo "📦 [EN] Installing Liquid Glass to staging..."
     mkdir -p "$STAGE_DIR/usr/share/gnome-shell/extensions"
