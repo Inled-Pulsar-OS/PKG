@@ -373,7 +373,7 @@ class AssistantWindow(Gtk.Window):
 
         self.current_step = 0
         self.is_live = self.is_live_system()
-        self.steps_count = 12 if self.is_live else 11
+        self.steps_count = 13 if self.is_live else 12
         self.schema_source = self.load_custom_schemas()
 
         # Cargar estilos CSS personalizados de GTK
@@ -571,13 +571,16 @@ class AssistantWindow(Gtk.Window):
             self.create_symbolic_icon("preferences-desktop-theme-symbolic"), "icon9"
         )
         self.icon_stack.add_named(
-            self.create_symbolic_icon("help-browser-symbolic"), "icon10"
+            self.create_symbolic_icon("input-keyboard-symbolic"), "icon10"
+        )
+        self.icon_stack.add_named(
+            self.create_symbolic_icon("help-browser-symbolic"), "icon11"
         )
         if self.is_live:
             # English: Setup Recovery icon for the live recovery installation slide
             # Español: Configurar icono de Recovery para la diapositiva de recuperación en vivo
             self.icon_stack.add_named(
-                self.create_symbolic_icon("system-run-symbolic"), "icon11"
+                self.create_symbolic_icon("system-run-symbolic"), "icon12"
             )
 
     def init_slides(self):
@@ -592,6 +595,7 @@ class AssistantWindow(Gtk.Window):
             "Run Windows Apps with Winboat",
             "Installing Applications",
             "Desktop Special Effects",
+            "macOS Keyboard Shortcuts",
             "Beta Feedback & Support",
         ]
         if self.is_live:
@@ -924,13 +928,13 @@ class AssistantWindow(Gtk.Window):
         self.content_stack.add_named(slide_9, "slide9")
 
         # ----------------------------------------------------------------------
-        # Slide 10: Support Channel
+        # Slide 10: macOS Keyboard Shortcuts Remap
         # ----------------------------------------------------------------------
         slide_10 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         slide_10.set_halign(Gtk.Align.CENTER)
 
         lbl_desc_10 = Gtk.Label(
-            label="Pulsar OS is in active development. Help us improve stability by reporting installation bugs, hardware issues or user interface feedback directly to our official issue tracker on GitHub."
+            label="Configure macOS-style keyboard shortcuts on Pulsar OS. This utility remaps the main modifier keys (making Command ⌘ your primary shortcut key for copy, paste, tab switching, and Nautilus navigation) and runs the official gnome-macos-remap installer."
         )
         lbl_desc_10.get_style_context().add_class("desc-text")
         lbl_desc_10.set_max_width_chars(65)
@@ -938,81 +942,121 @@ class AssistantWindow(Gtk.Window):
         lbl_desc_10.set_justify(Gtk.Justification.CENTER)
         slide_10.pack_start(lbl_desc_10, False, False, 10)
 
-        # English: Container for the support buttons with a clean vertical layout and 8px spacing
-        # Español: Contenedor para los botones de soporte con un diseño vertical limpio y espaciado de 8px
         btn_box_10 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         btn_box_10.set_halign(Gtk.Align.CENTER)
         slide_10.pack_start(btn_box_10, True, True, 10)
 
+        # English: Button to run local macOS Keyboard Remap install script in a native terminal
+        # Español: Botón para ejecutar el script de instalación local de remapeo de teclado en un terminal nativo
+        btn_remap = Gtk.Button(label="Install macOS Keyboard Remap / Instalar Remapeo de Teclado")
+        btn_remap.get_style_context().add_class("action-button")
+        btn_remap.connect(
+            "clicked",
+            lambda b: os.system(
+                "gnome-terminal -- bash -c '"
+                "echo \"📥 Preparing and installing macOS Keyboard Remap / Preparando e instalando remapeo de teclado...\"; "
+                "rm -rf /tmp/gnome-macos-remap && "
+                "cp -r /usr/share/pulsar-macos-keyboard-remap-x11 /tmp/gnome-macos-remap && "
+                "cd /tmp/gnome-macos-remap && "
+                "chmod +x install.sh bin/* && "
+                "./install.sh; "
+                "echo; read -p \"Press Enter to close / Presiona Enter para cerrar...\"' &"
+            ),
+        )
+        btn_box_10.pack_start(btn_remap, False, False, 0)
+
+        self.content_stack.add_named(slide_10, "slide10")
+
+        # ----------------------------------------------------------------------
+        # Slide 11: Support Channel
+        # ----------------------------------------------------------------------
+        slide_11 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        slide_11.set_halign(Gtk.Align.CENTER)
+
+        lbl_desc_11 = Gtk.Label(
+            label="Pulsar OS is in active development. Help us improve stability by reporting installation bugs, hardware issues or user interface feedback directly to our official issue tracker on GitHub."
+        )
+        lbl_desc_11.get_style_context().add_class("desc-text")
+        lbl_desc_11.set_max_width_chars(65)
+        lbl_desc_11.set_line_wrap(True)
+        lbl_desc_11.set_justify(Gtk.Justification.CENTER)
+        slide_11.pack_start(lbl_desc_11, False, False, 10)
+
+        # English: Container for the support buttons with a clean vertical layout and 8px spacing
+        # Español: Contenedor para los botones de soporte con un diseño vertical limpio y espaciado de 8px
+        btn_box_11 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        btn_box_11.set_halign(Gtk.Align.CENTER)
+        slide_11.pack_start(btn_box_11, True, True, 10)
+
         # English: Button to open GitHub issues page
         # Español: Botón para abrir la página de incidencias en GitHub
-        btn_issue_10 = Gtk.Button(label="Open Issues Page on GitHub / Reportar Incidencias")
-        btn_issue_10.get_style_context().add_class("action-button")
-        btn_issue_10.connect(
+        btn_issue_11 = Gtk.Button(label="Open Issues Page on GitHub / Reportar Incidencias")
+        btn_issue_11.get_style_context().add_class("action-button")
+        btn_issue_11.connect(
             "clicked",
             lambda b: os.system(
                 "xdg-open https://github.com/Inled-Pulsar-OS/ISO/issues &"
             ),
         )
-        btn_box_10.pack_start(btn_issue_10, False, False, 0)
+        btn_box_11.pack_start(btn_issue_11, False, False, 0)
 
         # English: Button to open the official Wiki documentation
         # Español: Botón para abrir la documentación Wiki oficial
-        btn_wiki_10 = Gtk.Button(label="Open Official Wiki / Abrir Wiki Oficial")
-        btn_wiki_10.get_style_context().add_class("action-button")
-        btn_wiki_10.connect(
+        btn_wiki_11 = Gtk.Button(label="Open Official Wiki / Abrir Wiki Oficial")
+        btn_wiki_11.get_style_context().add_class("action-button")
+        btn_wiki_11.connect(
             "clicked",
             lambda b: os.system(
                 "xdg-open https://github.com/Inled-Pulsar-OS/DOCS/wiki &"
             ),
         )
-        btn_box_10.pack_start(btn_wiki_10, False, False, 0)
+        btn_box_11.pack_start(btn_wiki_11, False, False, 0)
 
         # English: Button to visit the official website
         # Español: Botón para visitar la web oficial
-        btn_web_10 = Gtk.Button(label="Visit Official Website / Visitar Web Oficial")
-        btn_web_10.get_style_context().add_class("action-button")
-        btn_web_10.connect(
+        btn_web_11 = Gtk.Button(label="Visit Official Website / Visitar Web Oficial")
+        btn_web_11.get_style_context().add_class("action-button")
+        btn_web_11.connect(
             "clicked",
             lambda b: os.system(
                 "xdg-open https://os.inled.es &"
             ),
         )
-        btn_box_10.pack_start(btn_web_10, False, False, 0)
+        btn_box_11.pack_start(btn_web_11, False, False, 0)
 
         # English: Button to join the official Discord server
         # Español: Botón para unirse al servidor oficial de Discord
-        btn_discord_10 = Gtk.Button(label="Join Discord / Unirse a Discord")
-        btn_discord_10.get_style_context().add_class("action-button")
-        btn_discord_10.connect(
+        btn_discord_11 = Gtk.Button(label="Join Discord / Unirse a Discord")
+        btn_discord_11.get_style_context().add_class("action-button")
+        btn_discord_11.connect(
             "clicked",
             lambda b: os.system(
                 "xdg-open https://discord.gg/PSeTkDMnr &"
             ),
         )
-        btn_box_10.pack_start(btn_discord_10, False, False, 0)
+        btn_box_11.pack_start(btn_discord_11, False, False, 0)
 
-        self.content_stack.add_named(slide_10, "slide10")
+        self.content_stack.add_named(slide_11, "slide11")
 
         # ----------------------------------------------------------------------
-        # Slide 11: Pulsar OS Recovery (Only in Live System / Solo en Sistema Live)
+        # Slide 12: Pulsar OS Recovery (Only in Live System / Solo en Sistema Live)
         # ----------------------------------------------------------------------
         if self.is_live:
-            slide_11 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-            slide_11.set_halign(Gtk.Align.CENTER)
+            slide_12 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+            slide_12.set_halign(Gtk.Align.CENTER)
 
-            lbl_desc_11 = Gtk.Label(
+            lbl_desc_12 = Gtk.Label(
                 label="Pulsar OS is currently running in a Live Session. You can start the system installation on your computer or launch the backup recovery, browser or disk partitioner."
             )
-            lbl_desc_11.get_style_context().add_class("desc-text")
-            lbl_desc_11.set_max_width_chars(65)
-            lbl_desc_11.set_line_wrap(True)
-            lbl_desc_11.set_justify(Gtk.Justification.CENTER)
-            slide_11.pack_start(lbl_desc_11, False, False, 10)
+            lbl_desc_12.get_style_context().add_class("desc-text")
+            lbl_desc_12.set_max_width_chars(65)
+            lbl_desc_12.set_line_wrap(True)
+            lbl_desc_12.set_justify(Gtk.Justification.CENTER)
+            slide_12.pack_start(lbl_desc_12, False, False, 10)
 
-            btn_box_11 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-            btn_box_11.set_halign(Gtk.Align.CENTER)
-            slide_11.pack_start(btn_box_11, True, True, 10)
+            btn_box_12 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+            btn_box_12.set_halign(Gtk.Align.CENTER)
+            slide_12.pack_start(btn_box_12, True, True, 10)
 
             # English: Create button to launch recovery installer
             # Español: Crear botón para lanzar el instalador recovery
@@ -1021,9 +1065,9 @@ class AssistantWindow(Gtk.Window):
             btn_recovery.connect(
                 "clicked", lambda b: self.launch_app("pulsaros-recovery")
             )
-            btn_box_11.pack_start(btn_recovery, False, False, 0)
+            btn_box_12.pack_start(btn_recovery, False, False, 0)
 
-            self.content_stack.add_named(slide_11, "slide11")
+            self.content_stack.add_named(slide_12, "slide12")
 
     def on_back_clicked(self, button):
         if self.current_step > 0:
