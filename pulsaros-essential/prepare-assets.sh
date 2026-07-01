@@ -111,6 +111,18 @@ RequiredBy=docker.service containerd.service
 WantedBy=multi-user.target
 EOF
 
+# English: Configure Seafari as the default system-wide web browser in mimeapps.list
+# Español: Configurar Seafari como el navegador web predeterminado de todo el sistema en mimeapps.list
+mkdir -p "$STAGE_DIR/etc/xdg"
+cat <<EOF > "$STAGE_DIR/etc/xdg/mimeapps.list"
+[Default Applications]
+text/html=seafari.desktop
+x-scheme-handler/http=seafari.desktop
+x-scheme-handler/https=seafari.desktop
+x-scheme-handler/about=seafari.desktop
+x-scheme-handler/unknown=seafari.desktop
+EOF
+
 # Limpieza
 rm -rf "$TEMP_BUILD"
 echo "✅ Configuración y Fildem compilado en staging."

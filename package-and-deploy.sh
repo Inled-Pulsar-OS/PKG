@@ -85,9 +85,11 @@ build_single_package() {
     echo "🔄 Auto-incrementando versión de $name: $current_version -> $new_version"
     sed -i "s/^Version:.*/Version: $new_version/" "$control_file"
     
-    # Limpieza previa de staging
+    # Limpieza previa de staging y debs antiguos en la carpeta de salida
+    # Clean up previous staging and old deb files for this package in the output folder
     rm -rf "$STAGING_DIR/$name"
     mkdir -p "$STAGING_DIR/$name"
+    rm -f "$OUTPUT_DIR/${name}_"*.deb
     
     # Copiar archivos
     cp -r "$source_folder/." "$STAGING_DIR/$name/"
