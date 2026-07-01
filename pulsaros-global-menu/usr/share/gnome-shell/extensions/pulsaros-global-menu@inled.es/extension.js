@@ -962,12 +962,44 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         let helpBtn = new GlobalMenuButton("Help");
         helpBtn.uuid_suffix = "help";
         
+        // English: Link to Pulsar OS Wiki
+        // Español: Enlace a la Wiki de Pulsar OS
+        let wikiItem = new PopupMenu.PopupMenuItem("Pulsar OS Wiki");
+        wikiItem.connect('activate', () => {
+            this._openUri("https://github.com/Inled-Pulsar-OS/DOCS/wiki");
+        });
+        helpBtn.menu.addMenuItem(wikiItem);
+
+        // English: Link to Pulsar OS Website
+        // Español: Enlace al sitio web de Pulsar OS
+        let pulsarWebItem = new PopupMenu.PopupMenuItem("Pulsar OS Website");
+        pulsarWebItem.connect('activate', () => {
+            this._openUri("https://os.inled.es");
+        });
+        helpBtn.menu.addMenuItem(pulsarWebItem);
+
+        // English: Link to Pulsar OS Discord community
+        // Español: Enlace al canal de Discord de Pulsar OS
+        let discordItem = new PopupMenu.PopupMenuItem("Pulsar OS Discord");
+        discordItem.connect('activate', () => {
+            this._openUri("https://discord.gg/PSeTkDMnr");
+        });
+        helpBtn.menu.addMenuItem(discordItem);
+
+        // English: Separator between Pulsar OS and base system/partner links
+        // Español: Separador entre los enlaces de Pulsar OS y los enlaces del sistema base/socios
+        helpBtn.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+        // English: Link to Inled company website
+        // Español: Enlace al sitio web de la empresa Inled
         let inledItem = new PopupMenu.PopupMenuItem("Inled Website");
         inledItem.connect('activate', () => {
             this._openUri("https://inled.es");
         });
         helpBtn.menu.addMenuItem(inledItem);
         
+        // English: Link to Debian base support documentation
+        // Español: Enlace a la documentación de soporte base de Debian
         let debianHelpItem = new PopupMenu.PopupMenuItem("Debian Help");
         debianHelpItem.connect('activate', () => {
             this._openUri("https://www.debian.org/support");

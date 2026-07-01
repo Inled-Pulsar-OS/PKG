@@ -789,7 +789,9 @@ class AssistantWindow(Gtk.Window):
 
         btn_droidtux = Gtk.Button(label="Launch Droidtux Sync")
         btn_droidtux.get_style_context().add_class("action-button")
-        btn_droidtux.connect("clicked", lambda b: self.launch_app("droidtux", "scrcpy"))
+        btn_droidtux.connect(
+            "clicked", lambda b: self.launch_app("droidtux-sync", "scrcpy")
+        )
         btn_box.pack_start(btn_droidtux, False, False, 0)
 
         self.content_stack.add_named(slide_5, "slide5")
@@ -936,11 +938,15 @@ class AssistantWindow(Gtk.Window):
         lbl_desc_10.set_justify(Gtk.Justification.CENTER)
         slide_10.pack_start(lbl_desc_10, False, False, 10)
 
-        btn_box_10 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        # English: Container for the support buttons with a clean vertical layout and 8px spacing
+        # Español: Contenedor para los botones de soporte con un diseño vertical limpio y espaciado de 8px
+        btn_box_10 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         btn_box_10.set_halign(Gtk.Align.CENTER)
         slide_10.pack_start(btn_box_10, True, True, 10)
 
-        btn_issue_10 = Gtk.Button(label="Open Issues Page on GitHub")
+        # English: Button to open GitHub issues page
+        # Español: Botón para abrir la página de incidencias en GitHub
+        btn_issue_10 = Gtk.Button(label="Open Issues Page on GitHub / Reportar Incidencias")
         btn_issue_10.get_style_context().add_class("action-button")
         btn_issue_10.connect(
             "clicked",
@@ -949,6 +955,42 @@ class AssistantWindow(Gtk.Window):
             ),
         )
         btn_box_10.pack_start(btn_issue_10, False, False, 0)
+
+        # English: Button to open the official Wiki documentation
+        # Español: Botón para abrir la documentación Wiki oficial
+        btn_wiki_10 = Gtk.Button(label="Open Official Wiki / Abrir Wiki Oficial")
+        btn_wiki_10.get_style_context().add_class("action-button")
+        btn_wiki_10.connect(
+            "clicked",
+            lambda b: os.system(
+                "xdg-open https://github.com/Inled-Pulsar-OS/DOCS/wiki &"
+            ),
+        )
+        btn_box_10.pack_start(btn_wiki_10, False, False, 0)
+
+        # English: Button to visit the official website
+        # Español: Botón para visitar la web oficial
+        btn_web_10 = Gtk.Button(label="Visit Official Website / Visitar Web Oficial")
+        btn_web_10.get_style_context().add_class("action-button")
+        btn_web_10.connect(
+            "clicked",
+            lambda b: os.system(
+                "xdg-open https://os.inled.es &"
+            ),
+        )
+        btn_box_10.pack_start(btn_web_10, False, False, 0)
+
+        # English: Button to join the official Discord server
+        # Español: Botón para unirse al servidor oficial de Discord
+        btn_discord_10 = Gtk.Button(label="Join Discord / Unirse a Discord")
+        btn_discord_10.get_style_context().add_class("action-button")
+        btn_discord_10.connect(
+            "clicked",
+            lambda b: os.system(
+                "xdg-open https://discord.gg/PSeTkDMnr &"
+            ),
+        )
+        btn_box_10.pack_start(btn_discord_10, False, False, 0)
 
         self.content_stack.add_named(slide_10, "slide10")
 
