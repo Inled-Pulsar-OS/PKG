@@ -3,13 +3,13 @@
 # Pulsar OS - Recovery and Installation Selector UI (Apple-Style Setup Assistant)
 # ==============================================================================
 # English: Python script that manages the macOS-style Recovery and Setup Assistant.
-#          Provides a fully custom silent installer with a Gtk.ProgressBar on "Erase Disk" choice,
-#          replicating Apple's OOBE system installation interface. Launches Calamares GUI ONLY
-#          for manual partitioning or install alongside (dual boot).
+#          Delegates all partitioning, formatting, extraction and bootloader decisions
+#          to Calamares by running it headlessly and parsing its progress output from
+#          the Calamares session log. Removes the fake macOS top menu bar.
 # Español: Script en Python que gestiona la interfaz de recuperación y asistente de configuración
-#          estilo macOS. Provee un instalador silencioso personalizado con un Gtk.ProgressBar para
-#          la opción "Borrar disco", replicando la interfaz de instalación de Apple. Lanza la GUI
-#          de Calamares ÚNICAMENTE para particionado manual o instalación junto a otro (dual boot).
+#          estilo macOS. Delega todas las decisiones de particionado, formateo, extracción y
+#          gestor de arranque en Calamares ejecutándolo de forma oculta y analizando su progreso
+#          desde el log de sesión. Elimina la barra superior falsa de macOS.
 # ==============================================================================
 
 import json
@@ -18,6 +18,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 
 import gi
 
@@ -36,21 +37,6 @@ list, row {
     background-color: transparent;
     border: none;
     box-shadow: none;
-}
-
-/* Barra superior de macOS / macOS Top Bar */
-.top-bar {
-    background-color: #0c0c0d;
-    border-bottom: 1px solid #1a1a1c;
-    padding: 0 16px;
-    min-height: 24px;
-}
-
-.top-bar-menu-item {
-    color: #e5e5e7;
-    font-size: 12px;
-    font-weight: 600;
-    margin-right: 18px;
 }
 
 /* Caja del Recovery Utilities / Recovery Utilities Box */
@@ -329,6 +315,29 @@ def run_as_real_user(cmd, wait=False):
     return subprocess.Popen(cmd, shell=True)
 
 
+def restore_calamares_configs():
+    """Restores settings.conf and partition.conf back to their backup states."""
+    settings_path = "/etc/calamares/settings.conf"
+    bak_path = "/etc/calamares/settings.conf.bak"
+    if os.path.exists(bak_path):
+        try:
+            import shutil
+            shutil.copy(bak_path, settings_path)
+            print("Restored settings.conf from backup.")
+        except Exception as e:
+            print(f"Failed to restore settings.conf backup: {e}")
+            
+    partition_conf = "/etc/calamares/modules/partition.conf"
+    partition_bak = "/etc/calamares/modules/partition.conf.bak"
+    if os.path.exists(partition_bak):
+        try:
+            import shutil
+            shutil.copy(partition_bak, partition_conf)
+            print("Restored partition.conf from backup.")
+        except Exception as e:
+            print(f"Failed to restore partition.conf backup: {e}")
+
+
 class RecoveryApp(Gtk.Window):
     def __init__(self):
         super().__init__(type=Gtk.WindowType.TOPLEVEL)
@@ -350,26 +359,9 @@ class RecoveryApp(Gtk.Window):
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
 
-        # Main Layout
-        main_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        self.add(main_vbox)
-
-        # macOS style top menu bar
-        top_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        top_bar.get_style_context().add_class("top-bar")
-        main_vbox.pack_start(top_bar, False, False, 0)
-
-        lbl_apple = Gtk.Label(label="")
-        lbl_apple.get_style_context().add_class("top-bar-menu-item")
-        top_bar.pack_start(lbl_apple, False, False, 0)
-
-        lbl_recovery = Gtk.Label(label="Pulsar OS Recovery")
-        lbl_recovery.get_style_context().add_class("top-bar-menu-item")
-        top_bar.pack_start(lbl_recovery, False, False, 0)
-
-        # Center Align Container
+        # Center Align Container (Removed macOS fake top bar)
         center_align = Gtk.Alignment.new(0.5, 0.5, 0, 0)
-        main_vbox.pack_start(center_align, True, True, 0)
+        self.add(center_align)
 
         self.stack = Gtk.Stack()
         self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
@@ -378,8 +370,12 @@ class RecoveryApp(Gtk.Window):
 
         self.init_slides()
 
-        self.connect("destroy", Gtk.main_quit)
+        self.connect("destroy", self.on_destroy)
         self.show_all()
+
+    def on_destroy(self, widget):
+        restore_calamares_configs()
+        Gtk.main_quit()
 
     def init_slides(self):
         # ----------------------------------------------------------------------
@@ -415,7 +411,7 @@ class RecoveryApp(Gtk.Window):
 
         self.btn_try_system = Gtk.Button(label="Try System" if self.is_live else "Close")
         self.btn_try_system.get_style_context().add_class("action-btn")
-        self.btn_try_system.connect("clicked", lambda b: Gtk.main_quit())
+        self.btn_try_system.connect("clicked", lambda b: self.close())
         btn_box.pack_start(self.btn_try_system, False, False, 0)
 
         self.btn_util_continue = Gtk.Button(label="Continue")
@@ -482,7 +478,6 @@ class RecoveryApp(Gtk.Window):
         slide_2.set_size_request(680, 520)
         self.stack.add_named(slide_2, "country")
 
-        # Globe Icon (Symbolic blue tinted)
         globe_img = Gtk.Image.new_from_icon_name("preferences-desktop-locale-symbolic", Gtk.IconSize.DIALOG)
         globe_img.get_style_context().add_class("symbolic-blue")
         globe_img.set_pixel_size(100)
@@ -535,7 +530,6 @@ class RecoveryApp(Gtk.Window):
         slide_3.set_size_request(680, 520)
         self.stack.add_named(slide_3, "keyboard")
 
-        # Keyboard Icon (Symbolic blue tinted)
         kbd_img = Gtk.Image.new_from_icon_name("input-keyboard-symbolic", Gtk.IconSize.DIALOG)
         kbd_img.get_style_context().add_class("symbolic-blue")
         kbd_img.set_pixel_size(100)
@@ -588,7 +582,6 @@ class RecoveryApp(Gtk.Window):
         slide_4.set_size_request(680, 520)
         self.stack.add_named(slide_4, "account")
 
-        # User avatar icon (Symbolic blue tinted)
         user_img = Gtk.Image.new_from_icon_name("avatar-default-symbolic", Gtk.IconSize.DIALOG)
         user_img.get_style_context().add_class("symbolic-blue")
         user_img.set_pixel_size(70)
@@ -815,7 +808,7 @@ class RecoveryApp(Gtk.Window):
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
         row.add(box)
 
-        # Uses standard, colored application icons for the main utilities screen (Slide 0)
+        # Uses standard colored application icons for the main utilities screen (Slide 0)
         if icon_name == "logo":
             logo_path = "/usr/share/pulsaros-recovery/logo.png"
             if not os.path.exists(logo_path):
@@ -834,7 +827,6 @@ class RecoveryApp(Gtk.Window):
             name = "time-machine" if icon_theme.has_icon("time-machine") else ("deja-dup" if icon_theme.has_icon("deja-dup") else "document-revert")
             image = Gtk.Image.new_from_icon_name(name, Gtk.IconSize.DND)
         else:
-            # Disk Utility
             icon_theme = Gtk.IconTheme.get_default()
             name = "gnome-disks" if icon_theme.has_icon("gnome-disks") else "gnome-disk-utility"
             image = Gtk.Image.new_from_icon_name(name, Gtk.IconSize.DND)
@@ -978,7 +970,7 @@ class RecoveryApp(Gtk.Window):
                 card.set_border_width(12)
                 event_box.add(card)
 
-                # Standard colored hard drive icon on Slide 5 (Disk Selection cards grid)
+                # Standard colored hard drive icon on Slide 5
                 img = Gtk.Image.new_from_icon_name("drive-harddisk", Gtk.IconSize.DIALOG)
                 img.set_pixel_size(64)
                 card.pack_start(img, False, False, 0)
@@ -1017,11 +1009,27 @@ class RecoveryApp(Gtk.Window):
         elif self.rad_manual.get_active():
             partition_mode = "manual"
 
-        # If user chose manual partitioning or install alongside, run Calamares normally
+        # 1. Save user details to JSON for prefill module
+        settings_data = {
+            "timezone": self.selected_country[1],
+            "keyboardLayout": self.selected_keyboard[1],
+            "username": self.entry_username.get_text().strip(),
+            "fullName": self.entry_fullname.get_text().strip(),
+            "hostname": self.entry_hostname.get_text().strip(),
+            "password": self.entry_password.get_text(),
+            "rootPassword": self.entry_password.get_text() if self.chk_same_password.get_active() else self.entry_root_pwd.get_text(),
+            "autologin": True
+        }
+
+        try:
+            with open("/tmp/recovery-settings.json", "w") as f:
+                json.dump(settings_data, f, indent=4)
+        except Exception as e:
+            print(f"Failed to write settings JSON: {e}")
+
+        # If user chose manual partitioning or install alongside, run Calamares GUI normally
         if partition_mode == "manual" or partition_mode == "alongside":
-            # Configure Calamares configs
-            self.configure_calamares(self.selected_disk_path, partition_mode)
-            # Launch Calamares GUI and close Recovery
+            self.configure_calamares_gui(self.selected_disk_path, partition_mode)
             print("Launching Calamares GUI installer...")
             subprocess.Popen(
                 "/usr/local/bin/launch-calamares || pkexec calamares || calamares &",
@@ -1030,27 +1038,33 @@ class RecoveryApp(Gtk.Window):
             Gtk.main_quit()
             return
 
-        # "Erase entire disk" chosen: run fully silent custom background installer
+        # If user chose Erase Disk, launch Calamares silently and monitor its progress
         self.stack.set_visible_child_name("progress")
-        
-        username = self.entry_username.get_text().strip()
-        fullname = self.entry_fullname.get_text().strip()
-        hostname = self.entry_hostname.get_text().strip()
-        password = self.entry_password.get_text()
-        root_pwd = self.entry_password.get_text() if self.chk_same_password.get_active() else self.entry_root_pwd.get_text()
-        timezone = self.selected_country[1]
-        layout = self.selected_keyboard[1]
-        disk_path = self.selected_disk_path
+        self.configure_calamares_silent(self.selected_disk_path)
 
         threading.Thread(
-            target=self.run_silent_installation,
-            args=(disk_path, username, fullname, hostname, password, root_pwd, timezone, layout),
+            target=self.run_calamares_silent_installation,
             daemon=True
         ).start()
 
     def update_progress(self, fraction, message):
-        self.progress_bar.set_fraction(fraction)
-        self.lbl_progress_status.set_text(message)
+        # Monotonically update progress bar and status text
+        if fraction > self.progress_bar.get_fraction():
+            self.progress_bar.set_fraction(fraction)
+        
+        # Human readable job names
+        friendly_message = message
+        if "unpackfs" in message.lower() or "extract" in message.lower():
+            friendly_message = "Extracting system files..."
+        elif "bootloader" in message.lower():
+            friendly_message = "Configuring system bootloader..."
+        elif "users" in message.lower() or "user" in message.lower():
+            friendly_message = "Configuring user accounts..."
+        elif "fstab" in message.lower():
+            friendly_message = "Writing disk configuration..."
+            
+        self.lbl_progress_status.set_text(friendly_message)
+        
         if fraction >= 1.0:
             self.lbl_progress_title.set_text("Installation Complete")
             self.progress_nav_box.show_all()
@@ -1068,180 +1082,108 @@ class RecoveryApp(Gtk.Window):
         self.progress_nav_box.pack_start(btn_retry, False, False, 0)
         self.progress_nav_box.show_all()
 
-    def run_silent_installation(self, disk_path, username, fullname, hostname, password, root_password, timezone, layout):
+    def run_calamares_silent_installation(self):
         try:
-            GLib.idle_add(self.update_progress, 0.05, "Partitioning disk...")
+            GLib.idle_add(self.update_progress, 0.02, "Initializing Calamares installer...")
             
-            part_prefix = ""
-            if "nvme" in disk_path or "mmcblk" in disk_path:
-                part_prefix = "p"
+            # Reset log file to parse fresh outputs
+            log_path = "/root/.cache/calamares/session.log"
+            if not os.path.exists("/root"):
+                log_path = os.path.expanduser("~/.cache/calamares/session.log")
+            if os.path.exists(log_path):
+                try:
+                    os.remove(log_path)
+                except:
+                    pass
+
+            # Command to launch Calamares silently (offscreen platform plugin avoids opening GUI)
+            cmd = "QT_QPA_PLATFORM=offscreen calamares -d"
+            # Fallback to xvfb-run if offscreen platform backend is missing
+            if subprocess.run("command -v xvfb-run", shell=True, capture_output=True).returncode == 0:
+                cmd = "xvfb-run -a calamares -d"
                 
-            efi_part = f"{disk_path}{part_prefix}1"
-            root_part = f"{disk_path}{part_prefix}2"
-            
-            # 1. Create partition layout (GPT, EFI ESP partition and root partition)
-            subprocess.run(f"parted -s {disk_path} mklabel gpt", shell=True, check=True)
-            subprocess.run(f"parted -s {disk_path} mkpart primary fat32 1MiB 513MiB", shell=True, check=True)
-            subprocess.run(f"parted -s {disk_path} set 1 esp on", shell=True, check=True)
-            subprocess.run(f"parted -s {disk_path} mkpart primary ext4 513MiB 100%", shell=True, check=True)
-            
-            GLib.idle_add(self.update_progress, 0.10, "Formatting partitions...")
-            # 2. Format filesystems
-            subprocess.run(f"mkfs.vfat -F32 {efi_part}", shell=True, check=True)
-            subprocess.run(f"mkfs.ext4 -F {root_part}", shell=True, check=True)
-            
-            GLib.idle_add(self.update_progress, 0.15, "Mounting target filesystem...")
-            # 3. Mount targets
-            subprocess.run("mkdir -p /target", shell=True, check=True)
-            subprocess.run(f"mount {root_part} /target", shell=True, check=True)
-            subprocess.run("mkdir -p /target/boot/efi", shell=True, check=True)
-            subprocess.run(f"mount {efi_part} /target/boot/efi", shell=True, check=True)
-            
-            GLib.idle_add(self.update_progress, 0.20, "Extracting system files (this may take a minute)...")
-            # 4. Copy files from live root / excluding mountpoints and virtual directories
-            rsync_cmd = (
-                "rsync -aHAXx --info=progress2 "
-                "--exclude=/proc/* --exclude=/sys/* --exclude=/dev/* --exclude=/run/* "
-                "--exclude=/tmp/* --exclude=/mnt/* --exclude=/media/* --exclude=/lost+found "
-                "--exclude=/target/* --exclude=/boot/efi/* / /target"
+            print(f"Executing silent installer: {cmd}")
+            process = subprocess.Popen(
+                cmd,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
             )
             
-            # Execute copy with progress tracking
-            proc = subprocess.Popen(rsync_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            
-            while True:
-                line = proc.stdout.readline()
-                if not line:
-                    break
-                match = re.search(r"(\d+)%", line)
-                if match:
-                    pct = int(match.group(1))
-                    progress_val = 0.20 + (pct / 100.0) * 0.60
-                    GLib.idle_add(self.update_progress, progress_val, f"Extracting system files ({pct}%)...")
-            proc.wait()
-            
-            GLib.idle_add(self.update_progress, 0.80, "Generating system configuration (fstab, hostname)...")
-            
-            # 5. Obtain UUIDs and write fstab
-            root_uuid = subprocess.check_output(f"blkid -s UUID -o value {root_part}", shell=True, text=True).strip()
-            efi_uuid = subprocess.check_output(f"blkid -s UUID -o value {efi_part}", shell=True, text=True).strip()
-            
-            fstab_content = (
-                f"# /etc/fstab: static file system information.\n"
-                f"UUID={root_uuid} / ext4 defaults,noatime 0 1\n"
-                f"UUID={efi_uuid} /boot/efi vfat defaults,noatime 0 2\n"
-            )
-            with open("/target/etc/fstab", "w") as f:
-                f.write(fstab_content)
+            # Wait for Calamares to create the log file
+            start_time = time.time()
+            while not os.path.exists(log_path):
+                if process.poll() is not None:
+                    stdout, stderr = process.communicate()
+                    print(f"Calamares exited immediately with code {process.returncode}")
+                    GLib.idle_add(self.show_error, f"Installer failed to start. {stderr or stdout}")
+                    restore_calamares_configs()
+                    return
+                if time.time() - start_time > 10:
+                    GLib.idle_add(self.show_error, "Calamares log file was not created.")
+                    restore_calamares_configs()
+                    return
+                time.sleep(0.1)
                 
-            # Write hostname and hosts
-            with open("/target/etc/hostname", "w") as f:
-                f.write(f"{hostname}\n")
-            with open("/target/etc/hosts", "w") as f:
-                f.write(f"127.0.0.1\tlocalhost\n127.0.1.1\t{hostname}\n")
-                
-            # Timezone and locale setup
-            subprocess.run(f"echo '{timezone}' > /target/etc/timezone", shell=True)
-            subprocess.run(f"ln -sf /usr/share/zoneinfo/{timezone} /target/etc/localtime", shell=True)
+            # Parse Calamares logs for monotonic progress bar updates
+            last_pct = 0.02
+            self.current_job_name = "Preparing disk layout..."
             
-            # Keyboard layout setup
-            keyboard_conf = (
-                f'XKBMODEL="pc105"\n'
-                f'XKBLAYOUT="{layout}"\n'
-                f'XKBVARIANT=""\n'
-                f'XKBOPTIONS=""\n'
-                f'BACKSPACE="guess"\n'
-            )
-            with open("/target/etc/default/keyboard", "w") as f:
-                f.write(keyboard_conf)
-                
-            GLib.idle_add(self.update_progress, 0.85, "Creating user account...")
-            # 6. Setup user account and purge live session defaults inside chroot
-            subprocess.run("chroot /target deluser live || true", shell=True)
-            subprocess.run("chroot /target deluser jaime || true", shell=True)
-            subprocess.run("rm -rf /target/home/live /target/home/jaime", shell=True)
-            
-            subprocess.run(f"chroot /target useradd -m -s /bin/bash -g users -G sudo,docker,lpadmin,sambashare {username}", shell=True, check=True)
-            subprocess.run(f"chroot /target usermod -c '{fullname}' {username}", shell=True)
-            
-            subprocess.run(f"echo '{username}:{password}' | chroot /target chpasswd", shell=True, check=True)
-            subprocess.run(f"echo 'root:{root_password}' | chroot /target chpasswd", shell=True, check=True)
-            
-            # Set GDM autologin if available
-            gdm_custom = "/target/etc/gdm3/daemon.conf"
-            if os.path.exists(gdm_custom):
-                with open(gdm_custom, "r") as f:
-                    gdm_content = f.read()
-                gdm_content = re.sub(r"#?\s*AutomaticLoginEnable\s*=\s*\w+", "AutomaticLoginEnable = true", gdm_content)
-                gdm_content = re.sub(r"#?\s*AutomaticLogin\s*=\s*\w+", f"AutomaticLogin = {username}", gdm_content)
-                with open(gdm_custom, "w") as f:
-                    f.write(gdm_content)
+            with open(log_path, "r", errors="replace") as f:
+                f.seek(0)
+                while True:
+                    ret = process.poll()
+                    lines = f.readlines()
+                    for line in lines:
+                        # Extract progress fraction or percentage
+                        match_pct = re.search(r"JobQueue\s+progress:\s*([0-9.]+)", line, re.IGNORECASE)
+                        if match_pct:
+                            val = float(match_pct.group(1))
+                            pct = val if val <= 1.0 else val / 100.0
+                            if pct > last_pct:
+                                last_pct = pct
+                                GLib.idle_add(self.update_progress, last_pct, self.current_job_name)
+                                
+                        # Extract current running job name
+                        match_job = re.search(r"running\s+job\s+\"([^\"]+)\"", line, re.IGNORECASE)
+                        if not match_job:
+                            match_job = re.search(r"Running\s+\"([^\"]+)\"", line, re.IGNORECASE)
+                        if match_job:
+                            self.current_job_name = match_job.group(1)
+                            GLib.idle_add(self.update_progress, last_pct, self.current_job_name)
+                            
+                    if ret is not None:
+                        # Read final logs
+                        lines = f.readlines()
+                        for line in lines:
+                            match_pct = re.search(r"JobQueue\s+progress:\s*([0-9.]+)", line, re.IGNORECASE)
+                            if match_pct:
+                                val = float(match_pct.group(1))
+                                pct = val if val <= 1.0 else val / 100.0
+                                if pct > last_pct:
+                                    last_pct = pct
+                        break
+                    time.sleep(0.1)
                     
-            GLib.idle_add(self.update_progress, 0.90, "Installing bootloader...")
-            
-            # Bind mount necessary filesystems for bootloader setup
-            subprocess.run("mount -t proc proc /target/proc", shell=True)
-            subprocess.run("mount -t sysfs sys /target/sys", shell=True)
-            subprocess.run("mount --bind /dev /target/dev", shell=True)
-            subprocess.run("mount --bind /dev/pts /target/dev/pts", shell=True)
-            
-            # Determine bootloader flavor (GRUB vs rEFInd)
-            is_refind = os.path.exists("/target/usr/sbin/refind-install")
-            
-            if is_refind:
-                GLib.idle_add(self.update_progress, 0.92, "Configuring rEFInd UEFI bootloader...")
-                subprocess.run("chroot /target refind-install --yes", shell=True)
-                
-                # Setup rEFInd macOS theme
-                themes_dir = "/target/boot/efi/EFI/refind/themes"
-                theme_src = "/target/usr/share/refind/themes/rEFInd-Regular-Dark"
-                theme_dest = f"{themes_dir}/rEFInd-Regular-Dark"
-                
-                subprocess.run(f"mkdir -p {themes_dir}", shell=True)
-                subprocess.run(f"rm -rf {theme_dest}", shell=True)
-                if os.path.exists(theme_src):
-                    subprocess.run(f"cp -r {theme_src} {theme_dest}", shell=True)
-                    
-                refind_conf = "/target/boot/efi/EFI/refind/refind.conf"
-                if os.path.exists(refind_conf):
-                    subprocess.run(f"sed -i 's/^#enable_mouse/enable_mouse/' {refind_conf}", shell=True)
-                    subprocess.run(f"sed -i 's/^enable_mouse.*/enable_mouse/' {refind_conf}", shell=True)
-                    subprocess.run(f"grep -q '^enable_mouse' {refind_conf} || echo 'enable_mouse' >> {refind_conf}", shell=True)
-                    subprocess.run(f"grep -q 'themes/rEFInd-Regular-Dark/theme.conf' {refind_conf} || echo 'include themes/rEFInd-Regular-Dark/theme.conf' >> {refind_conf}", shell=True)
-                    
-                # Copy kernel/initrd physically to EFI partition to enable direct loading
-                subprocess.run("mkdir -p /target/boot/efi/EFI/BOOT", shell=True)
-                subprocess.run("cp /target/boot/vmlinuz* /target/boot/efi/EFI/BOOT/vmlinuz || cp /target/vmlinuz* /target/boot/efi/EFI/BOOT/vmlinuz", shell=True)
-                subprocess.run("cp /target/boot/initrd* /target/boot/efi/EFI/BOOT/initrd || cp /target/initrd* /target/boot/efi/EFI/BOOT/initrd", shell=True)
+            # Completed
+            if process.returncode == 0:
+                GLib.idle_add(self.update_progress, 1.0, "Installation completed successfully!")
             else:
-                GLib.idle_add(self.update_progress, 0.92, "Configuring GRUB UEFI bootloader...")
-                subprocess.run("chroot /target grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=pulsaros --recheck", shell=True)
-                subprocess.run("chroot /target update-grub", shell=True)
+                stderr_out = process.stderr.read() if process.stderr else ""
+                GLib.idle_add(self.show_error, f"Installation failed with code {process.returncode}. {stderr_out}")
                 
-            GLib.idle_add(self.update_progress, 0.96, "Cleaning up temporary files...")
-            
-            # Clean up target system installer packages
-            subprocess.run("chroot /target apt-get purge -y calamares pulsaros-calamares pulsaros-recovery || true", shell=True)
-            
-            # Unmount targets
-            subprocess.run("umount -l /target/dev/pts", shell=True)
-            subprocess.run("umount -l /target/dev", shell=True)
-            subprocess.run("umount -l /target/sys", shell=True)
-            subprocess.run("umount -l /target/proc", shell=True)
-            subprocess.run("umount -l /target/boot/efi", shell=True)
-            subprocess.run("umount -l /target", shell=True)
-            
-            GLib.idle_add(self.update_progress, 1.0, "Installation completed successfully!")
+            restore_calamares_configs()
             
         except Exception as e:
-            print(f"Silent Installation failed: {e}")
+            print(f"Silent Calamares execution failed: {e}")
             GLib.idle_add(self.show_error, f"Installation failed: {e}")
+            restore_calamares_configs()
 
-    def configure_calamares(self, disk_path, partition_mode):
+    def configure_calamares_gui(self, disk_path, partition_mode):
         settings_path = "/etc/calamares/settings.conf"
         bak_path = "/etc/calamares/settings.conf.bak"
 
-        # Backup settings.conf if not already backed up
         if not os.path.exists(bak_path) and os.path.exists(settings_path):
             try:
                 import shutil
@@ -1252,30 +1194,25 @@ class RecoveryApp(Gtk.Window):
         if os.path.exists(settings_path):
             try:
                 if partition_mode == "manual":
-                    # For manual partition, restore original full settings wizard
                     if os.path.exists(bak_path):
                         import shutil
                         shutil.copy(bak_path, settings_path)
                 else:
-                    # Assisted mode: remove wizard pages from show sequence, keep partition and finished
                     with open(settings_path, "r") as f:
                         content = f.read()
 
-                    # Replace show sequence
+                    # Only show Partition and Finished pages on GUI mode
                     show_pattern = r"(show:\s*\n)((\s*-\s*\w+.*\n)+)"
                     content = re.sub(show_pattern, r"\1  - partition\n  - finished\n", content)
 
-                    # Ensure 'prefill' is in the exec block right at the beginning
-                    exec_pattern = r"(\s*-\s*partition\s*\n\s*-\s*mount)"
                     if "- prefill" not in content:
-                        content = content.replace("- partition\n  - mount", "- prefill\n  - partition\n  - mount")
+                        content = content.replace("  - partition\n  - mount", "  - prefill\n  - partition\n  - mount")
 
                     with open(settings_path, "w") as f:
                         f.write(content)
             except Exception as e:
                 print(f"Failed to configure settings.conf: {e}")
 
-        # Pre-select disk in partition.conf
         if disk_path:
             partition_conf = "/etc/calamares/modules/partition.conf"
             try:
@@ -1296,6 +1233,76 @@ class RecoveryApp(Gtk.Window):
                         f.writelines(new_lines)
             except Exception as e:
                 print(f"Failed to set default disk in partition.conf: {e}")
+
+    def configure_calamares_silent(self, disk_path):
+        settings_path = "/etc/calamares/settings.conf"
+        bak_path = "/etc/calamares/settings.conf.bak"
+
+        if not os.path.exists(bak_path) and os.path.exists(settings_path):
+            try:
+                import shutil
+                shutil.copy(settings_path, bak_path)
+            except Exception as e:
+                print(f"Failed to backup settings.conf: {e}")
+
+        if os.path.exists(settings_path):
+            try:
+                with open(settings_path, "r") as f:
+                    content = f.read()
+
+                # Clean up show list completely for silent unattended install
+                show_pattern = r"(show:\s*\n)((\s*-\s*\w+.*\n)+)"
+                content = re.sub(show_pattern, r"\1  # Empty show sequence for silent mode\n", content)
+
+                if "- prefill" not in content:
+                    content = content.replace("  - partition\n  - mount", "  - prefill\n  - partition\n  - mount")
+
+                with open(settings_path, "w") as f:
+                    f.write(content)
+            except Exception as e:
+                print(f"Failed to configure settings.conf: {e}")
+
+        # Configure partition.conf to handle auto-partitioning on the chosen disk
+        partition_conf = "/etc/calamares/modules/partition.conf"
+        partition_bak = "/etc/calamares/modules/partition.conf.bak"
+        if not os.path.exists(partition_bak) and os.path.exists(partition_conf):
+            try:
+                import shutil
+                shutil.copy(partition_conf, partition_bak)
+            except Exception as e:
+                print(f"Failed to backup partition.conf: {e}")
+
+        if os.path.exists(partition_conf):
+            try:
+                with open(partition_conf, "r") as f:
+                    lines = f.readlines()
+                new_lines = []
+                for line in lines:
+                    if line.strip().startswith("defaultDisk:"):
+                        new_lines.append(f'defaultDisk: "{disk_path}"\n')
+                    elif line.strip().startswith("partitionLayout:"):
+                        break
+                    else:
+                        new_lines.append(line)
+
+                # OEM Silent Partition Layout settings in partition.conf
+                layout_yaml = (
+                    "\npartitionLayout:\n"
+                    "    - name: \"efi\"\n"
+                    "      size: 512M\n"
+                    "      filesystem: \"fat32\"\n"
+                    "      mountPoint: \"/boot/efi\"\n"
+                    "      flags: [ boot, esp ]\n"
+                    "    - name: \"root\"\n"
+                    "      size: 100%\n"
+                    "      filesystem: \"ext4\"\n"
+                    "      mountPoint: \"/\"\n"
+                )
+                new_lines.append(layout_yaml)
+                with open(partition_conf, "w") as f:
+                    f.writelines(new_lines)
+            except Exception as e:
+                print(f"Failed to configure partition.conf for auto install: {e}")
 
 
 def main():
