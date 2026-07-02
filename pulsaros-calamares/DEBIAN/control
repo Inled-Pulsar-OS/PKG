@@ -1,10 +1,12 @@
 Package: pulsaros-calamares
-Version: 1.0.27
+Version: 1.0.28
 Section: admin
 Priority: optional
 Architecture: all
 Maintainer: Jaime <info@inled.es>
-Depends: calamares, calamares-settings-debian, x11-xserver-utils, sudo
+Depends: calamares, x11-xserver-utils, sudo
+Conflicts: calamares-settings-debian
+Provides: calamares-settings-debian
 Replaces: calamares-settings-debian
 Description: Calamares system installer configuration for Pulsar OS.
  Packages branding, slideshows, setting files, launchers and autostart configs
