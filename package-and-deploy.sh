@@ -87,7 +87,9 @@ build_single_package() {
     
     # Limpieza previa de staging y debs antiguos en la carpeta de salida
     # Clean up previous staging and old deb files for this package in the output folder
-    rm -rf "$STAGING_DIR/$name"
+    # Clean staging safely, falling back to pkexec if root-owned files are present from chroot operations
+    # Limpiar el staging de forma segura, cayendo en pkexec si hay archivos del chroot propiedad de root
+    rm -rf "$STAGING_DIR/$name" 2>/dev/null || pkexec rm -rf "$STAGING_DIR/$name"
     mkdir -p "$STAGING_DIR/$name"
     rm -f "$OUTPUT_DIR/${name}_"*.deb
     

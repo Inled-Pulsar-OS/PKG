@@ -5,11 +5,13 @@
 # English: Python script that manages the macOS-style Recovery and Setup Assistant.
 #          Allows running Gnome Disk Utility, Seafari web browser, or starting the installation.
 #          Collects timezone, keyboard layout, user details and disk path, and launches Calamares
-#          in silent prefilled mode.
+#          in silent prefilled mode. Uses standard colored application icons on the main menu,
+#          and blue-tinted symbolic outline icons on the installer steps to replicate Apple's OOBE interface.
 # Español: Script en Python que gestiona la interfaz de recuperación y asistente de configuración
 #          estilo macOS. Permite lanzar la utilidad de discos de Gnome, el navegador Seafari o
 #          iniciar el proceso de instalación. Recopila zona horaria, layout de teclado, detalles de usuario
-#          y disco, y lanza Calamares en modo silencioso pre-rellenado.
+#          y disco, y lanza Calamares en modo silencioso pre-rellenado. Usa iconos normales coloreados de
+#          las aplicaciones en la pantalla principal y simbólicos azules en los pasos del instalador.
 # ==============================================================================
 
 import json
@@ -192,6 +194,11 @@ entry {
 entry:focus {
     border-color: #0071e3;
     box-shadow: 0 0 0 1px #0071e3;
+}
+
+/* Blue tinted symbolic icons helper */
+.symbolic-blue {
+    color: #0071e3;
 }
 
 /* Botones / Buttons */
@@ -430,7 +437,9 @@ class RecoveryApp(Gtk.Window):
             pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(logo_path, 150, 150, True)
             logo_img = Gtk.Image.new_from_pixbuf(pixbuf)
         else:
-            logo_img = Gtk.Image.new_from_icon_name("computer", Gtk.IconSize.DIALOG)
+            logo_img = Gtk.Image.new_from_icon_name("computer-symbolic", Gtk.IconSize.DIALOG)
+            logo_img.get_style_context().add_class("symbolic-blue")
+            logo_img.set_pixel_size(150)
         logo_box.pack_start(logo_img, True, True, 0)
 
         lbl_welcome_title = Gtk.Label(label="Pulsar OS")
@@ -464,8 +473,9 @@ class RecoveryApp(Gtk.Window):
         slide_2.set_size_request(680, 520)
         self.stack.add_named(slide_2, "country")
 
-        # Globe Icon
-        globe_img = Gtk.Image.new_from_icon_name("applications-internet", Gtk.IconSize.DIALOG)
+        # Globe Icon (Symbolic blue tinted)
+        globe_img = Gtk.Image.new_from_icon_name("preferences-desktop-locale-symbolic", Gtk.IconSize.DIALOG)
+        globe_img.get_style_context().add_class("symbolic-blue")
         globe_img.set_pixel_size(100)
         slide_2.pack_start(globe_img, False, False, 0)
 
@@ -516,7 +526,9 @@ class RecoveryApp(Gtk.Window):
         slide_3.set_size_request(680, 520)
         self.stack.add_named(slide_3, "keyboard")
 
-        kbd_img = Gtk.Image.new_from_icon_name("input-keyboard", Gtk.IconSize.DIALOG)
+        # Keyboard Icon (Symbolic blue tinted)
+        kbd_img = Gtk.Image.new_from_icon_name("input-keyboard-symbolic", Gtk.IconSize.DIALOG)
+        kbd_img.get_style_context().add_class("symbolic-blue")
         kbd_img.set_pixel_size(100)
         slide_3.pack_start(kbd_img, False, False, 0)
 
@@ -567,8 +579,9 @@ class RecoveryApp(Gtk.Window):
         slide_4.set_size_request(680, 520)
         self.stack.add_named(slide_4, "account")
 
-        # Apple user icon header
-        user_img = Gtk.Image.new_from_icon_name("avatar-default", Gtk.IconSize.DIALOG)
+        # User avatar icon (Symbolic blue tinted)
+        user_img = Gtk.Image.new_from_icon_name("avatar-default-symbolic", Gtk.IconSize.DIALOG)
+        user_img.get_style_context().add_class("symbolic-blue")
         user_img.set_pixel_size(70)
         slide_4.pack_start(user_img, False, False, 0)
 
@@ -691,7 +704,9 @@ class RecoveryApp(Gtk.Window):
             pixbuf_md = GdkPixbuf.Pixbuf.new_from_file_at_scale(logo_path, 60, 60, True)
             logo_img_md = Gtk.Image.new_from_pixbuf(pixbuf_md)
         else:
-            logo_img_md = Gtk.Image.new_from_icon_name("computer", Gtk.IconSize.DIALOG)
+            logo_img_md = Gtk.Image.new_from_icon_name("computer-symbolic", Gtk.IconSize.DIALOG)
+            logo_img_md.get_style_context().add_class("symbolic-blue")
+            logo_img_md.set_pixel_size(60)
         logo_box_md.pack_start(logo_img_md, True, True, 0)
 
         lbl_disk_title = Gtk.Label(label="Select Target Disk and Layout")
@@ -743,6 +758,7 @@ class RecoveryApp(Gtk.Window):
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
         row.add(box)
 
+        # Uses standard, colored application icons for the main utilities screen (Slide 0)
         if icon_name == "logo":
             logo_path = "/usr/share/pulsaros-recovery/logo.png"
             if not os.path.exists(logo_path):
@@ -754,13 +770,17 @@ class RecoveryApp(Gtk.Window):
                 image = Gtk.Image.new_from_icon_name("system-software-install", Gtk.IconSize.DND)
         elif icon_name == "safari":
             icon_theme = Gtk.IconTheme.get_default()
-            image = Gtk.Image.new_from_icon_name("safari" if icon_theme.has_icon("safari") else "web-browser", Gtk.IconSize.DND)
+            name = "safari" if icon_theme.has_icon("safari") else "web-browser"
+            image = Gtk.Image.new_from_icon_name(name, Gtk.IconSize.DND)
         elif icon_name == "timemachine":
             icon_theme = Gtk.IconTheme.get_default()
-            img_name = "time-machine" if icon_theme.has_icon("time-machine") else ("deja-dup" if icon_theme.has_icon("deja-dup") else "document-revert")
-            image = Gtk.Image.new_from_icon_name(img_name, Gtk.IconSize.DND)
+            name = "time-machine" if icon_theme.has_icon("time-machine") else ("deja-dup" if icon_theme.has_icon("deja-dup") else "document-revert")
+            image = Gtk.Image.new_from_icon_name(name, Gtk.IconSize.DND)
         else:
-            image = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.DND)
+            # Disk Utility
+            icon_theme = Gtk.IconTheme.get_default()
+            name = "gnome-disks" if icon_theme.has_icon("gnome-disks") else "gnome-disk-utility"
+            image = Gtk.Image.new_from_icon_name(name, Gtk.IconSize.DND)
 
         box.pack_start(image, False, False, 0)
 
@@ -877,7 +897,8 @@ class RecoveryApp(Gtk.Window):
             warning_box.set_halign(Gtk.Align.CENTER)
             warning_box.set_valign(Gtk.Align.CENTER)
 
-            img_warn = Gtk.Image.new_from_icon_name("dialog-warning", Gtk.IconSize.DIALOG)
+            img_warn = Gtk.Image.new_from_icon_name("dialog-warning-symbolic", Gtk.IconSize.DIALOG)
+            img_warn.get_style_context().add_class("symbolic-blue")
             img_warn.set_pixel_size(48)
             warning_box.pack_start(img_warn, False, False, 0)
 
@@ -902,7 +923,9 @@ class RecoveryApp(Gtk.Window):
                 card.set_border_width(12)
                 event_box.add(card)
 
-                img = Gtk.Image.new_from_icon_name("drive-harddisk", Gtk.IconSize.DIALOG)
+                # Blue-tinted symbolic hard drive icon
+                img = Gtk.Image.new_from_icon_name("drive-harddisk-symbolic", Gtk.IconSize.DIALOG)
+                img.get_style_context().add_class("symbolic-blue")
                 img.set_pixel_size(64)
                 card.pack_start(img, False, False, 0)
 
