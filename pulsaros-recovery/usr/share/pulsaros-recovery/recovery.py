@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# Pulsar OS - Recovery and Installation Selector UI (GTK3 Native macOS Style)
+# Pulsar OS - Recovery and Installation Selector UI (Apple-Style Setup Assistant)
 # ==============================================================================
-# English: Python script that manages the macOS-style Recovery and disk selector interface.
-#          Allows running Gnome Disk Utility, Seafari web browser, or starting the installation
-#          process. Passes the selected disk to Calamares and launches it (English only).
-# Español: Script en Python que gestiona la interfaz de recuperación y selección de disco
+# English: Python script that manages the macOS-style Recovery and Setup Assistant.
+#          Allows running Gnome Disk Utility, Seafari web browser, or starting the installation.
+#          Collects timezone, keyboard layout, user details and disk path, and launches Calamares
+#          in silent prefilled mode.
+# Español: Script en Python que gestiona la interfaz de recuperación y asistente de configuración
 #          estilo macOS. Permite lanzar la utilidad de discos de Gnome, el navegador Seafari o
-#          iniciar el proceso de instalación. Pasa el disco seleccionado a Calamares y lo lanza (en inglés).
+#          iniciar el proceso de instalación. Recopila zona horaria, layout de teclado, detalles de usuario
+#          y disco, y lanza Calamares en modo silencioso pre-rellenado.
+# ==============================================================================
 
 import json
 import os
+import re
 import subprocess
 import sys
 
 import gi
 
-# Requerir versiones específicas de GTK, Gdk y GdkPixbuf para evitar conflictos
-# Require specific versions of GTK, Gdk, and GdkPixbuf to prevent conflicts
+# Require specific GTK, Gdk and GdkPixbuf versions
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
@@ -25,7 +28,7 @@ from gi.repository import Gdk, GdkPixbuf, GLib, Gtk
 
 CSS_DATA = """
 window {
-    background-color: #101010;
+    background-color: #1c1c1e;
 }
 
 list, row {
@@ -49,16 +52,10 @@ list, row {
     margin-right: 18px;
 }
 
-.top-bar-clock {
-    color: #e5e5e7;
-    font-size: 12px;
-    font-weight: 500;
-}
-
 /* Caja del Recovery Utilities / Recovery Utilities Box */
 .recovery-box {
-    background-color: #242426;
-    border: 1px solid #333335;
+    background-color: #2c2c2e;
+    border: 1px solid #3a3a3c;
     border-radius: 12px;
     padding: 24px;
     box-shadow: 0 10px 40px rgba(0,0,0,0.6);
@@ -73,11 +70,11 @@ list, row {
 }
 
 .recovery-row:hover {
-    background-color: #2e2e30;
+    background-color: #3a3a3c;
 }
 
 .recovery-row:selected {
-    background-color: #0066cc;
+    background-color: #0071e3;
     color: #ffffff;
 }
 
@@ -87,25 +84,21 @@ list, row {
     color: #ffffff;
 }
 
-.recovery-row:selected .recovery-title {
-    color: #ffffff;
-}
-
 .recovery-desc {
     font-size: 11px;
-    color: #8a8a8e;
+    color: #8e8e93;
 }
 
 .recovery-row:selected .recovery-desc {
     color: #d1d1d6;
 }
 
-/* Caja del Instalador / Installer box (Slides 1 & 2) */
+/* Caja del Instalador / Installer Assistant Box */
 .installer-box {
-    background-color: #1e1e1e;
-    border: 1px solid #2d2d2d;
-    border-radius: 12px;
-    padding: 40px 60px;
+    background-color: #2c2c2e;
+    border: 1px solid #3a3a3c;
+    border-radius: 16px;
+    padding: 40px 50px;
     box-shadow: 0 10px 40px rgba(0,0,0,0.6);
 }
 
@@ -118,30 +111,30 @@ list, row {
 
 .installer-desc {
     font-size: 13px;
-    color: #8a8a8e;
+    color: #8e8e93;
     margin-bottom: 24px;
 }
 
 /* Tarjeta de disco / Disk Card */
 .disk-card {
-    background-color: #242426;
-    border: 1px solid #333335;
-    border-radius: 10px;
+    background-color: #3a3a3c;
+    border: 1px solid #48484a;
+    border-radius: 12px;
     padding: 16px;
-    min-width: 130px;
+    min-width: 140px;
     margin: 0 8px;
     transition: all 0.15s ease;
 }
 
 .disk-card:hover {
-    background-color: #2e2e30;
-    border-color: #444446;
+    background-color: #444446;
+    border-color: #545456;
 }
 
 .disk-card.selected {
-    background-color: #2e2e30;
-    border-color: #0066cc;
-    box-shadow: 0 0 0 2px #0066cc;
+    background-color: #444446;
+    border-color: #0071e3;
+    box-shadow: 0 0 0 2px #0071e3;
 }
 
 .disk-name {
@@ -153,14 +146,59 @@ list, row {
 
 .disk-info {
     font-size: 10px;
-    color: #8a8a8e;
+    color: #aeaeb2;
+}
+
+/* ListBox Scrollable Areas */
+.scroll-list {
+    background-color: #1c1c1e;
+    border: 1px solid #3a3a3c;
+    border-radius: 8px;
+}
+
+.list-item-row {
+    padding: 10px 14px;
+    border-bottom: 1px solid #2c2c2e;
+}
+
+.list-item-row:hover {
+    background-color: #2c2c2e;
+}
+
+.list-item-row:selected {
+    background-color: #0071e3;
+}
+
+.list-item-label {
+    font-size: 13px;
+    color: #ffffff;
+}
+
+/* Forms & Entries */
+label.form-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e5e5e7;
+}
+
+entry {
+    background-color: #1c1c1e;
+    border: 1px solid #3a3a3c;
+    border-radius: 6px;
+    color: #ffffff;
+    padding: 6px 10px;
+}
+
+entry:focus {
+    border-color: #0071e3;
+    box-shadow: 0 0 0 1px #0071e3;
 }
 
 /* Botones / Buttons */
 button {
     font-size: 13px;
     font-weight: 500;
-    padding: 6px 16px;
+    padding: 6px 18px;
     border-radius: 6px;
     outline: none;
     transition: all 0.15s ease;
@@ -168,50 +206,59 @@ button {
 
 button.action-btn {
     background-image: none;
-    background-color: #323234;
-    border: 1px solid #444446;
+    background-color: #3a3a3c;
+    border: 1px solid #48484a;
     color: #ffffff;
 }
 
 button.action-btn:hover {
-    background-color: #3e3e40;
-}
-
-button.action-btn:disabled {
-    opacity: 0.3;
-    color: #8a8a8e;
+    background-color: #444446;
 }
 
 button.btn-continue {
     background-image: none;
-    background-color: #0066cc;
+    background-color: #0071e3;
     border: none;
     color: #ffffff;
     font-weight: 700;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
 button.btn-continue:hover {
     background-color: #0077ed;
 }
 
-button.btn-continue:active {
-    background-color: #005bb5;
-}
-
 button.btn-continue:disabled {
-    background-color: #323234;
-    color: #8a8a8e;
-    box-shadow: none;
+    background-color: #3a3a3c;
+    color: #8e8e93;
 }
 """
 
+COUNTRIES = [
+    ("Spain (España)", "Europe/Madrid", "es"),
+    ("United States", "America/New_York", "us"),
+    ("United Kingdom", "Europe/London", "gb"),
+    ("France (France)", "Europe/Paris", "fr"),
+    ("Germany (Deutschland)", "Europe/Berlin", "de"),
+    ("Italy (Italia)", "Europe/Rome", "it"),
+    ("Portugal (Portugal)", "Europe/Lisbon", "pt"),
+    ("Mexico (México)", "America/Mexico_City", "es"),
+    ("Argentina (Argentina)", "America/Argentina/Buenos_Aires", "es"),
+    ("Brazil (Brasil)", "America/Sao_Paulo", "br"),
+]
+
+KEYBOARDS = [
+    ("Spanish (es)", "es"),
+    ("English (US - us)", "us"),
+    ("English (UK - gb)", "gb"),
+    ("French (fr)", "fr"),
+    ("German (de)", "de"),
+    ("Italian (it)", "it"),
+    ("Portuguese (pt)", "pt"),
+]
+
 
 def get_physical_disks():
-    """
-    English: Queries real storage devices using lsblk. Returns an empty list on failure or if no disks found.
-    Español: Consulta los dispositivos de almacenamiento reales mediante lsblk. Devuelve una lista vacía si falla o si no encuentra discos.
-    """
+    """Queries block devices using lsblk."""
     try:
         output = subprocess.check_output(
             "lsblk -J -d -o NAME,MODEL,SIZE,TYPE,RO", shell=True, text=True
@@ -219,7 +266,6 @@ def get_physical_disks():
         data = json.loads(output)
         disks = []
         for dev in data.get("blockdevices", []):
-            # Exclude read-only devices like live CD /dev/sr0
             ro_val = dev.get("ro")
             is_ro = ro_val in (True, 1, "1", "true", "True")
             if dev.get("type") == "disk" and not is_ro:
@@ -235,27 +281,19 @@ def get_physical_disks():
     return []
 
 
-
 def run_as_real_user(cmd, wait=False):
-    """
-    English: Runs a command as the real, non-root user who invoked pkexec or sudo,
-             preserving the graphical display variables.
-    Español: Ejecuta un comando como el usuario real no-root que invocó pkexec o sudo,
-             preservando las variables de entorno de pantalla gráfica.
-    """
+    """Runs a graphical command as the host user instead of root."""
     if os.geteuid() == 0:
         real_uid = os.environ.get("PKEXEC_UID") or os.environ.get("SUDO_UID")
         if real_uid:
             try:
                 import pwd
-
                 username = pwd.getpwuid(int(real_uid)).pw_name
                 display = os.environ.get("DISPLAY", "")
                 xauth = os.environ.get("XAUTHORITY", "")
                 wayland = os.environ.get("WAYLAND_DISPLAY", "")
                 xdg_runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{real_uid}")
 
-                # Command wrapping with sudo -u
                 env_str = f'DISPLAY="{display}"'
                 if xauth:
                     env_str += f' XAUTHORITY="{xauth}"'
@@ -265,13 +303,11 @@ def run_as_real_user(cmd, wait=False):
                     env_str += f' XDG_RUNTIME_DIR="{xdg_runtime}"'
 
                 full_cmd = f"sudo -u {username} env {env_str} {cmd}"
-                print(f"Running command as user {username}: {full_cmd}")
                 if wait:
                     return subprocess.run(full_cmd, shell=True)
                 return subprocess.Popen(full_cmd, shell=True)
             except Exception as e:
                 print("Failed to run command as user, executing normal fallback:", e)
-
     if wait:
         return subprocess.run(cmd, shell=True)
     return subprocess.Popen(cmd, shell=True)
@@ -282,8 +318,12 @@ class RecoveryApp(Gtk.Window):
         super().__init__(type=Gtk.WindowType.TOPLEVEL)
         self.set_title("Pulsar OS Recovery")
         self.fullscreen()
+
+        # State Variables
         self.selected_utility = None
         self.selected_disk_path = None
+        self.selected_country = COUNTRIES[0]
+        self.selected_keyboard = KEYBOARDS[0]
 
         # Load Custom GTK CSS
         style_provider = Gtk.CssProvider()
@@ -298,9 +338,20 @@ class RecoveryApp(Gtk.Window):
         main_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.add(main_vbox)
 
-        # ==============================================================================
-        # CENTER CONTENT AREA (Gtk.Stack)
-        # ==============================================================================
+        # macOS style top menu bar
+        top_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        top_bar.get_style_context().add_class("top-bar")
+        main_vbox.pack_start(top_bar, False, False, 0)
+
+        lbl_apple = Gtk.Label(label="")
+        lbl_apple.get_style_context().add_class("top-bar-menu-item")
+        top_bar.pack_start(lbl_apple, False, False, 0)
+
+        lbl_recovery = Gtk.Label(label="Pulsar OS Recovery")
+        lbl_recovery.get_style_context().add_class("top-bar-menu-item")
+        top_bar.pack_start(lbl_recovery, False, False, 0)
+
+        # Center Align Container
         center_align = Gtk.Alignment.new(0.5, 0.5, 0, 0)
         main_vbox.pack_start(center_align, True, True, 0)
 
@@ -311,74 +362,46 @@ class RecoveryApp(Gtk.Window):
 
         self.init_slides()
 
-        # Connect destroy
         self.connect("destroy", Gtk.main_quit)
         self.show_all()
 
     def init_slides(self):
         # ----------------------------------------------------------------------
-        # Slide 0: Recovery Utilities (Imagen 1)
+        # Slide 0: Recovery Utilities Box
         # ----------------------------------------------------------------------
         slide_0 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         slide_0.get_style_context().add_class("recovery-box")
         slide_0.set_size_request(540, 420)
         self.stack.add_named(slide_0, "recovery")
 
-        # Titulo de cabecera de la caja (decorativo o limpio)
         header_lbl = Gtk.Label(label="Pulsar OS Utilities")
         header_lbl.get_style_context().add_class("recovery-title")
         header_lbl.set_margin_bottom(12)
         slide_0.pack_start(header_lbl, False, False, 0)
 
-        # ListBox de utilidades
         self.util_list = Gtk.ListBox()
         self.util_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self.util_list.connect("row-selected", self.on_utility_row_selected)
         self.util_list.connect("row-activated", self.on_utility_row_activated)
         slide_0.pack_start(self.util_list, True, True, 8)
 
-        # English: Check if Calamares or setup assistant is available (indicating live ISO installer environment)
-        # Español: Comprobar si Calamares o el asistente de instalación están disponibles (indica entorno live de instalador)
         self.is_live = os.path.exists("/usr/local/bin/launch-calamares") or os.path.exists("/usr/bin/calamares")
 
-        # Añadir las utilidades / Add utilities
-        self.add_utility_row(
-            "Restore from Backup",
-            "Restore your Pulsar OS installation from a local system backup.",
-            "timemachine",
-        )
+        self.add_utility_row("Restore from Backup", "Restore your Pulsar OS installation from a local system backup.", "timemachine")
         if self.is_live:
-            self.add_utility_row(
-                "Install Pulsar OS",
-                "Install a new copy of the Pulsar OS desktop on your computer.",
-                "logo",  # Cargará el logo físico
-            )
-        self.add_utility_row(
-            "Seafari Browser",
-            "Browse the web to search for online support and configuration guides.",
-            "safari",
-        )
-        self.add_utility_row(
-            "Disk Utility",
-            "Partition, format, or check your connected storage drives.",
-            "gnome-disk-utility",
-        )
+            self.add_utility_row("Install Pulsar OS", "Install a new copy of the Pulsar OS desktop on your computer.", "logo")
+        self.add_utility_row("Seafari Browser", "Browse the web to search for online support and configuration guides.", "safari")
+        self.add_utility_row("Disk Utility", "Partition, format, or check your connected storage drives.", "gnome-disk-utility")
 
-        # Botones inferiores del Recovery
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         btn_box.set_margin_top(16)
         slide_0.pack_end(btn_box, False, False, 0)
 
-        # Botón a la izquierda / Left action button (Try System or Close)
-        if self.is_live:
-            self.btn_try_system = Gtk.Button(label="Try System")
-        else:
-            self.btn_try_system = Gtk.Button(label="Close")
+        self.btn_try_system = Gtk.Button(label="Try System" if self.is_live else "Close")
         self.btn_try_system.get_style_context().add_class("action-btn")
         self.btn_try_system.connect("clicked", lambda b: Gtk.main_quit())
         btn_box.pack_start(self.btn_try_system, False, False, 0)
 
-        # Botón "Continue" a la derecha
         self.btn_util_continue = Gtk.Button(label="Continue")
         self.btn_util_continue.get_style_context().add_class("btn-continue")
         self.btn_util_continue.set_sensitive(False)
@@ -386,14 +409,13 @@ class RecoveryApp(Gtk.Window):
         btn_box.pack_end(self.btn_util_continue, False, False, 0)
 
         # ----------------------------------------------------------------------
-        # Slide 1: Welcome Installer Screen (Imagen 2)
+        # Slide 1: Welcome Installer Screen
         # ----------------------------------------------------------------------
         slide_1 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         slide_1.get_style_context().add_class("installer-box")
-        slide_1.set_size_request(680, 480)
+        slide_1.set_size_request(680, 520)
         self.stack.add_named(slide_1, "welcome")
 
-        # Logo redondo grande
         logo_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         logo_box.set_halign(Gtk.Align.CENTER)
         logo_box.set_margin_top(30)
@@ -402,8 +424,7 @@ class RecoveryApp(Gtk.Window):
 
         logo_path = "/usr/share/pulsaros-recovery/pulsar-logo.png"
         if not os.path.exists(logo_path):
-            curr_dir = os.path.dirname(os.path.abspath(__file__))
-            logo_path = os.path.join(curr_dir, "pulsar-logo.png")
+            logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pulsar-logo.png")
 
         if os.path.exists(logo_path):
             pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(logo_path, 150, 150, True)
@@ -412,21 +433,14 @@ class RecoveryApp(Gtk.Window):
             logo_img = Gtk.Image.new_from_icon_name("computer", Gtk.IconSize.DIALOG)
         logo_box.pack_start(logo_img, True, True, 0)
 
-        # Titulo y desc centrado
-        lbl_welcome_title = Gtk.Label()
+        lbl_welcome_title = Gtk.Label(label="Pulsar OS")
         lbl_welcome_title.get_style_context().add_class("installer-title")
-        lbl_welcome_title.set_text("Pulsar OS")
-        lbl_welcome_title.set_halign(Gtk.Align.CENTER)
         slide_1.pack_start(lbl_welcome_title, False, False, 0)
 
-        lbl_welcome_desc = Gtk.Label(
-            label="To set up the installation of Pulsar OS, click Continue."
-        )
+        lbl_welcome_desc = Gtk.Label(label="To set up the installation of Pulsar OS, click Continue.")
         lbl_welcome_desc.get_style_context().add_class("installer-desc")
-        lbl_welcome_desc.set_halign(Gtk.Align.CENTER)
         slide_1.pack_start(lbl_welcome_desc, False, False, 0)
 
-        # Botones de navegación inferior
         nav_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         nav_box.set_margin_top(20)
         nav_box.set_halign(Gtk.Align.CENTER)
@@ -434,133 +448,327 @@ class RecoveryApp(Gtk.Window):
 
         btn_welcome_back = Gtk.Button(label="Back")
         btn_welcome_back.get_style_context().add_class("action-btn")
-        btn_welcome_back.connect(
-            "clicked", lambda b: self.stack.set_visible_child_name("recovery")
-        )
+        btn_welcome_back.connect("clicked", lambda b: self.stack.set_visible_child_name("recovery"))
         nav_box.pack_start(btn_welcome_back, False, False, 0)
 
         btn_welcome_continue = Gtk.Button(label="Continue")
         btn_welcome_continue.get_style_context().add_class("btn-continue")
-        btn_welcome_continue.connect(
-            "clicked", lambda b: self.stack.set_visible_child_name("disk_selection")
-        )
+        btn_welcome_continue.connect("clicked", lambda b: self.stack.set_visible_child_name("country"))
         nav_box.pack_start(btn_welcome_continue, False, False, 0)
 
         # ----------------------------------------------------------------------
-        # Slide 2: Disk Selection Screen (Imagen 3)
+        # Slide 2: Country Selection (Select Your Country or Region)
         # ----------------------------------------------------------------------
         slide_2 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         slide_2.get_style_context().add_class("installer-box")
-        slide_2.set_size_request(680, 480)
-        self.stack.add_named(slide_2, "disk_selection")
+        slide_2.set_size_request(680, 520)
+        self.stack.add_named(slide_2, "country")
 
-        # Logo mediano arriba
+        # Globe Icon
+        globe_img = Gtk.Image.new_from_icon_name("applications-internet", Gtk.IconSize.DIALOG)
+        globe_img.set_pixel_size(100)
+        slide_2.pack_start(globe_img, False, False, 0)
+
+        lbl_country_title = Gtk.Label(label="Select Your Country or Region")
+        lbl_country_title.get_style_context().add_class("installer-title")
+        slide_2.pack_start(lbl_country_title, False, False, 0)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_size_request(300, 200)
+        scroll.set_halign(Gtk.Align.CENTER)
+        scroll.get_style_context().add_class("scroll-list")
+        slide_2.pack_start(scroll, True, True, 0)
+
+        self.country_listbox = Gtk.ListBox()
+        self.country_listbox.connect("row-selected", self.on_country_row_selected)
+        scroll.add(self.country_listbox)
+
+        for c_name, _, _ in COUNTRIES:
+            row = Gtk.ListBoxRow()
+            row.get_style_context().add_class("list-item-row")
+            lbl = Gtk.Label(label=c_name)
+            lbl.get_style_context().add_class("list-item-label")
+            lbl.set_xalign(0.0)
+            row.add(lbl)
+            self.country_listbox.add(row)
+
+        nav_box_c = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        nav_box_c.set_margin_top(20)
+        nav_box_c.set_halign(Gtk.Align.CENTER)
+        slide_2.pack_end(nav_box_c, False, False, 0)
+
+        btn_c_back = Gtk.Button(label="Back")
+        btn_c_back.get_style_context().add_class("action-btn")
+        btn_c_back.connect("clicked", lambda b: self.stack.set_visible_child_name("welcome"))
+        nav_box_c.pack_start(btn_c_back, False, False, 0)
+
+        btn_c_continue = Gtk.Button(label="Continue")
+        btn_c_continue.get_style_context().add_class("btn-continue")
+        btn_c_continue.connect("clicked", lambda b: self.stack.set_visible_child_name("keyboard"))
+        nav_box_c.pack_start(btn_c_continue, False, False, 0)
+
+        # ----------------------------------------------------------------------
+        # Slide 3: Keyboard Selection
+        # ----------------------------------------------------------------------
+        slide_3 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        slide_3.get_style_context().add_class("installer-box")
+        slide_3.set_size_request(680, 520)
+        self.stack.add_named(slide_3, "keyboard")
+
+        kbd_img = Gtk.Image.new_from_icon_name("input-keyboard", Gtk.IconSize.DIALOG)
+        kbd_img.set_pixel_size(100)
+        slide_3.pack_start(kbd_img, False, False, 0)
+
+        lbl_kbd_title = Gtk.Label(label="Select Your Keyboard Layout")
+        lbl_kbd_title.get_style_context().add_class("installer-title")
+        slide_3.pack_start(lbl_kbd_title, False, False, 0)
+
+        scroll_k = Gtk.ScrolledWindow()
+        scroll_k.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll_k.set_size_request(300, 200)
+        scroll_k.set_halign(Gtk.Align.CENTER)
+        scroll_k.get_style_context().add_class("scroll-list")
+        slide_3.pack_start(scroll_k, True, True, 0)
+
+        self.kbd_listbox = Gtk.ListBox()
+        self.kbd_listbox.connect("row-selected", self.on_keyboard_row_selected)
+        scroll_k.add(self.kbd_listbox)
+
+        for k_name, _ in KEYBOARDS:
+            row = Gtk.ListBoxRow()
+            row.get_style_context().add_class("list-item-row")
+            lbl = Gtk.Label(label=k_name)
+            lbl.get_style_context().add_class("list-item-label")
+            lbl.set_xalign(0.0)
+            row.add(lbl)
+            self.kbd_listbox.add(row)
+
+        nav_box_k = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        nav_box_k.set_margin_top(20)
+        nav_box_k.set_halign(Gtk.Align.CENTER)
+        slide_3.pack_end(nav_box_k, False, False, 0)
+
+        btn_k_back = Gtk.Button(label="Back")
+        btn_k_back.get_style_context().add_class("action-btn")
+        btn_k_back.connect("clicked", lambda b: self.stack.set_visible_child_name("country"))
+        nav_box_k.pack_start(btn_k_back, False, False, 0)
+
+        btn_k_continue = Gtk.Button(label="Continue")
+        btn_k_continue.get_style_context().add_class("btn-continue")
+        btn_k_continue.connect("clicked", lambda b: self.stack.set_visible_child_name("account"))
+        nav_box_k.pack_start(btn_k_continue, False, False, 0)
+
+        # ----------------------------------------------------------------------
+        # Slide 4: User Account Creation (Apple style macOS Account)
+        # ----------------------------------------------------------------------
+        slide_4 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        slide_4.get_style_context().add_class("installer-box")
+        slide_4.set_size_request(680, 520)
+        self.stack.add_named(slide_4, "account")
+
+        # Apple user icon header
+        user_img = Gtk.Image.new_from_icon_name("avatar-default", Gtk.IconSize.DIALOG)
+        user_img.set_pixel_size(70)
+        slide_4.pack_start(user_img, False, False, 0)
+
+        lbl_acc_title = Gtk.Label(label="Create a Mac Account")
+        lbl_acc_title.get_style_context().add_class("installer-title")
+        slide_4.pack_start(lbl_acc_title, False, False, 0)
+
+        lbl_acc_desc = Gtk.Label(label="The password you create here will be used to log in to this Mac.")
+        lbl_acc_desc.get_style_context().add_class("installer-desc")
+        slide_4.pack_start(lbl_acc_desc, False, False, 0)
+
+        # Form Layout
+        grid = Gtk.Grid()
+        grid.set_column_spacing(16)
+        grid.set_row_spacing(10)
+        grid.set_halign(Gtk.Align.CENTER)
+        slide_4.pack_start(grid, True, True, 0)
+
+        # Full Name
+        lbl_fullname = Gtk.Label(label="Full name:")
+        lbl_fullname.get_style_context().add_class("form-label")
+        lbl_fullname.set_halign(Gtk.Align.END)
+        self.entry_fullname = Gtk.Entry()
+        self.entry_fullname.connect("changed", self.on_fullname_changed)
+        grid.attach(lbl_fullname, 0, 0, 1, 1)
+        grid.attach(self.entry_fullname, 1, 0, 1, 1)
+
+        # Account Name (Username)
+        lbl_username = Gtk.Label(label="Account name:")
+        lbl_username.get_style_context().add_class("form-label")
+        lbl_username.set_halign(Gtk.Align.END)
+        self.entry_username = Gtk.Entry()
+        self.entry_username.connect("changed", self.on_account_fields_changed)
+        grid.attach(lbl_username, 0, 1, 1, 1)
+        grid.attach(self.entry_username, 1, 1, 1, 1)
+
+        # Hostname (PC Name)
+        lbl_hostname = Gtk.Label(label="Computer name:")
+        lbl_hostname.get_style_context().add_class("form-label")
+        lbl_hostname.set_halign(Gtk.Align.END)
+        self.entry_hostname = Gtk.Entry()
+        self.entry_hostname.connect("changed", self.on_account_fields_changed)
+        grid.attach(lbl_hostname, 0, 2, 1, 1)
+        grid.attach(self.entry_hostname, 1, 2, 1, 1)
+
+        # Password
+        lbl_password = Gtk.Label(label="Password:")
+        lbl_password.get_style_context().add_class("form-label")
+        lbl_password.set_halign(Gtk.Align.END)
+        self.entry_password = Gtk.Entry()
+        self.entry_password.set_visibility(False)
+        self.entry_password.connect("changed", self.on_account_fields_changed)
+        grid.attach(lbl_password, 0, 3, 1, 1)
+        grid.attach(self.entry_password, 1, 3, 1, 1)
+
+        # Verify password
+        lbl_verify = Gtk.Label(label="Verify:")
+        lbl_verify.get_style_context().add_class("form-label")
+        lbl_verify.set_halign(Gtk.Align.END)
+        self.entry_verify = Gtk.Entry()
+        self.entry_verify.set_visibility(False)
+        self.entry_verify.connect("changed", self.on_account_fields_changed)
+        grid.attach(lbl_verify, 0, 4, 1, 1)
+        grid.attach(self.entry_verify, 1, 4, 1, 1)
+
+        # Root Password / Use Same Password checkbox
+        self.chk_same_password = Gtk.CheckButton(label="Use same password for Administrator/Root")
+        self.chk_same_password.set_active(True)
+        self.chk_same_password.connect("toggled", self.on_same_pwd_toggled)
+        grid.attach(self.chk_same_password, 1, 5, 1, 1)
+
+        self.lbl_root_pwd = Gtk.Label(label="Root Password:")
+        self.lbl_root_pwd.get_style_context().add_class("form-label")
+        self.lbl_root_pwd.set_halign(Gtk.Align.END)
+        self.entry_root_pwd = Gtk.Entry()
+        self.entry_root_pwd.set_visibility(False)
+        self.entry_root_pwd.connect("changed", self.on_account_fields_changed)
+        grid.attach(self.lbl_root_pwd, 0, 6, 1, 1)
+        grid.attach(self.entry_root_pwd, 1, 6, 1, 1)
+
+        # Hide root password by default
+        self.lbl_root_pwd.hide()
+        self.entry_root_pwd.hide()
+
+        # Warning/validation label
+        self.lbl_acc_warn = Gtk.Label()
+        self.lbl_acc_warn.set_markup("<span size='small' foreground='#ff453a'></span>")
+        grid.attach(self.lbl_acc_warn, 1, 7, 1, 1)
+
+        nav_box_a = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        nav_box_a.set_margin_top(20)
+        nav_box_a.set_halign(Gtk.Align.CENTER)
+        slide_4.pack_end(nav_box_a, False, False, 0)
+
+        btn_a_back = Gtk.Button(label="Back")
+        btn_a_back.get_style_context().add_class("action-btn")
+        btn_a_back.connect("clicked", lambda b: self.stack.set_visible_child_name("keyboard"))
+        nav_box_a.pack_start(btn_a_back, False, False, 0)
+
+        self.btn_a_continue = Gtk.Button(label="Continue")
+        self.btn_a_continue.get_style_context().add_class("btn-continue")
+        self.btn_a_continue.set_sensitive(False)
+        self.btn_a_continue.connect("clicked", lambda b: self.stack.set_visible_child_name("disk_selection"))
+        nav_box_a.pack_start(self.btn_a_continue, False, False, 0)
+
+        # ----------------------------------------------------------------------
+        # Slide 5: Disk Selection & Partitioning Mode
+        # ----------------------------------------------------------------------
+        slide_5 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        slide_5.get_style_context().add_class("installer-box")
+        slide_5.set_size_request(680, 520)
+        self.stack.add_named(slide_5, "disk_selection")
+
         logo_box_md = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         logo_box_md.set_halign(Gtk.Align.CENTER)
-        logo_box_md.set_margin_top(16)
-        slide_2.pack_start(logo_box_md, False, False, 0)
+        logo_box_md.set_margin_top(10)
+        slide_5.pack_start(logo_box_md, False, False, 0)
 
         if os.path.exists(logo_path):
-            pixbuf_md = GdkPixbuf.Pixbuf.new_from_file_at_scale(logo_path, 80, 80, True)
+            pixbuf_md = GdkPixbuf.Pixbuf.new_from_file_at_scale(logo_path, 60, 60, True)
             logo_img_md = Gtk.Image.new_from_pixbuf(pixbuf_md)
         else:
             logo_img_md = Gtk.Image.new_from_icon_name("computer", Gtk.IconSize.DIALOG)
         logo_box_md.pack_start(logo_img_md, True, True, 0)
 
-        # Titulo y desc centrado
-        lbl_disk_title = Gtk.Label()
+        lbl_disk_title = Gtk.Label(label="Select Target Disk and Layout")
         lbl_disk_title.get_style_context().add_class("installer-title")
-        lbl_disk_title.set_text("Pulsar OS")
-        lbl_disk_title.set_halign(Gtk.Align.CENTER)
-        slide_2.pack_start(lbl_disk_title, False, False, 0)
+        slide_5.pack_start(lbl_disk_title, False, False, 0)
 
-        lbl_disk_desc = Gtk.Label(
-            label="Select the disk where you want to install Pulsar OS."
-        )
-        lbl_disk_desc.get_style_context().add_class("installer-desc")
-        lbl_disk_desc.set_halign(Gtk.Align.CENTER)
-        slide_2.pack_start(lbl_disk_desc, False, False, 0)
-
-        # Contenedor de Discos Horizontales
         self.disks_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self.disks_hbox.set_halign(Gtk.Align.CENTER)
-        slide_2.pack_start(self.disks_hbox, True, True, 10)
+        slide_5.pack_start(self.disks_hbox, True, True, 8)
 
-        # Botones de navegación inferior
+        # Partitioning Options
+        options_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        options_vbox.set_halign(Gtk.Align.CENTER)
+        slide_5.pack_start(options_vbox, False, False, 8)
+
+        self.rad_erase = Gtk.RadioButton.new_with_label_from_widget(None, "Erase entire disk and install Pulsar OS (Recommended)")
+        self.rad_erase.set_active(True)
+        options_vbox.pack_start(self.rad_erase, False, False, 0)
+
+        self.rad_alongside = Gtk.RadioButton.new_with_label_from_widget(self.rad_erase, "Install alongside another operating system (Dual boot)")
+        options_vbox.pack_start(self.rad_alongside, False, False, 0)
+
+        self.rad_manual = Gtk.RadioButton.new_with_label_from_widget(self.rad_erase, "Manual partitioning (Opens advanced editor in Calamares)")
+        options_vbox.pack_start(self.rad_manual, False, False, 0)
+
         nav_box_disk = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        nav_box_disk.set_margin_top(20)
+        nav_box_disk.set_margin_top(14)
         nav_box_disk.set_halign(Gtk.Align.CENTER)
-        slide_2.pack_end(nav_box_disk, False, False, 0)
+        slide_5.pack_end(nav_box_disk, False, False, 0)
 
         btn_disk_back = Gtk.Button(label="Back")
         btn_disk_back.get_style_context().add_class("action-btn")
-        btn_disk_back.connect(
-            "clicked", lambda b: self.stack.set_visible_child_name("welcome")
-        )
+        btn_disk_back.connect("clicked", lambda b: self.stack.set_visible_child_name("account"))
         nav_box_disk.pack_start(btn_disk_back, False, False, 0)
 
-        self.btn_disk_continue = Gtk.Button(label="Continue")
+        self.btn_disk_continue = Gtk.Button(label="Install Now")
         self.btn_disk_continue.get_style_context().add_class("btn-continue")
         self.btn_disk_continue.set_sensitive(False)
         self.btn_disk_continue.connect("clicked", self.on_disk_continue_clicked)
         nav_box_disk.pack_start(self.btn_disk_continue, False, False, 0)
 
-        # Rellenar discos (se ejecuta una vez creado el botón de continuar para evitar AttributeErrors)
-        # Populate disks (runs once the continue button has been created to avoid AttributeErrors)
         self.populate_disks()
-
 
     def add_utility_row(self, title, desc, icon_name):
         row = Gtk.ListBoxRow()
         row.get_style_context().add_class("recovery-row")
-        row.title = title  # Store the title directly on the row to avoid hardcoded index dependency
+        row.title = title
 
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
         row.add(box)
 
-        # Icono
         if icon_name == "logo":
             logo_path = "/usr/share/pulsaros-recovery/logo.png"
             if not os.path.exists(logo_path):
-                curr_dir = os.path.dirname(os.path.abspath(__file__))
-                logo_path = os.path.join(curr_dir, "logo.png")
+                logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo.png")
             if os.path.exists(logo_path):
-                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-                    logo_path, 42, 42, True
-                )
+                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(logo_path, 42, 42, True)
                 image = Gtk.Image.new_from_pixbuf(pixbuf)
             else:
-                image = Gtk.Image.new_from_icon_name(
-                    "system-software-install", Gtk.IconSize.DND
-                )
+                image = Gtk.Image.new_from_icon_name("system-software-install", Gtk.IconSize.DND)
         elif icon_name == "safari":
             icon_theme = Gtk.IconTheme.get_default()
-            if icon_theme.has_icon("safari"):
-                image = Gtk.Image.new_from_icon_name("safari", Gtk.IconSize.DND)
-            else:
-                image = Gtk.Image.new_from_icon_name("web-browser", Gtk.IconSize.DND)
+            image = Gtk.Image.new_from_icon_name("safari" if icon_theme.has_icon("safari") else "web-browser", Gtk.IconSize.DND)
         elif icon_name == "timemachine":
             icon_theme = Gtk.IconTheme.get_default()
-            if icon_theme.has_icon("time-machine"):
-                image = Gtk.Image.new_from_icon_name("time-machine", Gtk.IconSize.DND)
-            elif icon_theme.has_icon("deja-dup"):
-                image = Gtk.Image.new_from_icon_name("deja-dup", Gtk.IconSize.DND)
-            else:
-                image = Gtk.Image.new_from_icon_name(
-                    "document-revert", Gtk.IconSize.DND
-                )
+            img_name = "time-machine" if icon_theme.has_icon("time-machine") else ("deja-dup" if icon_theme.has_icon("deja-dup") else "document-revert")
+            image = Gtk.Image.new_from_icon_name(img_name, Gtk.IconSize.DND)
         else:
             image = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.DND)
 
         box.pack_start(image, False, False, 0)
 
-        # Textos
         text_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         box.pack_start(text_vbox, True, True, 0)
 
-        lbl_title = Gtk.Label()
+        lbl_title = Gtk.Label(label=title)
         lbl_title.get_style_context().add_class("recovery-title")
-        lbl_title.set_text(title)
         lbl_title.set_xalign(0.0)
         text_vbox.pack_start(lbl_title, False, False, 0)
 
@@ -575,7 +783,7 @@ class RecoveryApp(Gtk.Window):
 
     def on_utility_row_selected(self, listbox, row):
         if row is not None:
-            self.selected_utility = row.title  # Use dynamic title name instead of list index
+            self.selected_utility = row.title
             self.btn_util_continue.set_sensitive(True)
 
     def on_utility_row_activated(self, listbox, row):
@@ -584,104 +792,124 @@ class RecoveryApp(Gtk.Window):
 
     def on_utility_continue_clicked(self, button):
         if self.selected_utility == "Restore from Backup":
-            # Hide recovery to allow Deja-dup to draw on top (fullscreen blocks other windows)
-            # Ocultar el recovery para permitir que Deja-dup se dibuje encima (pantalla completa bloquea otras ventanas)
             self.hide()
-
             def run_deja_dup():
                 run_as_real_user("deja-dup --restore || deja-dup", wait=True)
-                # Show recovery again in GTK main thread
-                # Mostrar el recovery de nuevo en el hilo principal de GTK
                 GLib.idle_add(self.show)
-
             import threading
-
             threading.Thread(target=run_deja_dup, daemon=True).start()
         elif self.selected_utility == "Install Pulsar OS":
-            # Install Pulsar OS - Ir al welcome
             self.stack.set_visible_child_name("welcome")
         elif self.selected_utility == "Seafari Browser":
-            # Seafari
-            cmd = "seafari || firefox || xdg-open https://google.com"
-            run_as_real_user(cmd)
+            run_as_real_user("seafari || firefox || xdg-open https://google.com")
         elif self.selected_utility == "Disk Utility":
-            # Disk Utility
-            cmd = "gnome-disks || gnome-disk-utility"
-            subprocess.Popen(cmd, shell=True)
+            subprocess.Popen("gnome-disks || gnome-disk-utility", shell=True)
+
+    def on_country_row_selected(self, listbox, row):
+        if row is not None:
+            index = row.get_index()
+            self.selected_country = COUNTRIES[index]
+            # Auto-select the keyboard layout matching country if found
+            target_lang = self.selected_country[2]
+            for i, (_, k_code) in enumerate(KEYBOARDS):
+                if k_code == target_lang:
+                    self.kbd_listbox.select_row(self.kbd_listbox.get_row_at_index(i))
+                    break
+
+    def on_keyboard_row_selected(self, listbox, row):
+        if row is not None:
+            index = row.get_index()
+            self.selected_keyboard = KEYBOARDS[index]
+
+    def on_fullname_changed(self, entry):
+        # Automatically generate username (lowercase, no spaces, alphanumeric)
+        name = entry.get_text()
+        username = re.sub(r"[^a-zA-Z0-9]", "", name).lower()
+        self.entry_username.set_text(username)
+        self.entry_hostname.set_text(f"{username}-pc" if username else "")
+        self.on_account_fields_changed(None)
+
+    def on_same_pwd_toggled(self, button):
+        active = button.get_active()
+        if active:
+            self.lbl_root_pwd.hide()
+            self.entry_root_pwd.hide()
+        else:
+            self.lbl_root_pwd.show()
+            self.entry_root_pwd.show()
+        self.on_account_fields_changed(None)
+
+    def on_account_fields_changed(self, entry):
+        fullname = self.entry_fullname.get_text().strip()
+        username = self.entry_username.get_text().strip()
+        hostname = self.entry_hostname.get_text().strip()
+        pwd = self.entry_password.get_text()
+        verify = self.entry_verify.get_text()
+        same_pwd = self.chk_same_password.get_active()
+        root_pwd = self.entry_root_pwd.get_text()
+
+        valid = True
+        warn_msg = ""
+
+        if not fullname or not username or not hostname or not pwd or not verify:
+            valid = False
+        elif pwd != verify:
+            valid = False
+            warn_msg = "Passwords do not match."
+        elif not same_pwd and not root_pwd:
+            valid = False
+
+        self.lbl_acc_warn.set_markup(f"<span size='small' foreground='#ff453a'>{warn_msg}</span>")
+        self.btn_a_continue.set_sensitive(valid)
 
     def populate_disks(self):
-        # Limpiar
-        # English: Clear previous disk widgets in layout
-        # Español: Limpiar widgets de disco anteriores en el diseño
         for child in self.disks_hbox.get_children():
             self.disks_hbox.remove(child)
 
-        # Reset continue button state
-        # Restablecer el estado del botón continuar
-        self.btn_disk_continue.set_label("Continue")
+        self.btn_disk_continue.set_label("Install Now")
         self.btn_disk_continue.set_sensitive(False)
 
         self.disk_widgets = []
         disks = get_physical_disks()
 
         if not disks:
-            # English: If no physical disks are found, show a styled warning and enable "Continue Anyway"
-            # Español: Si no se encuentran discos físicos, mostrar un aviso estilizado y habilitar "Continuar de todos modos"
-            warning_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+            warning_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
             warning_box.set_halign(Gtk.Align.CENTER)
             warning_box.set_valign(Gtk.Align.CENTER)
 
-            # Warning Icon
             img_warn = Gtk.Image.new_from_icon_name("dialog-warning", Gtk.IconSize.DIALOG)
             img_warn.set_pixel_size(48)
             warning_box.pack_start(img_warn, False, False, 0)
 
-            # Warning Labels
             lbl_warn = Gtk.Label()
-            lbl_warn.set_markup(
-                "<span font_desc='13' weight='bold' foreground='#cc0000'>No storage disks found / No se han encontrado discos</span>"
-            )
-            lbl_warn.set_halign(Gtk.Align.CENTER)
+            lbl_warn.set_markup("<span font_desc='13' weight='bold' foreground='#ff453a'>No storage disks found</span>")
             warning_box.pack_start(lbl_warn, False, False, 0)
 
-            lbl_warn_desc = Gtk.Label()
-            lbl_warn_desc.set_markup(
-                "<span font_desc='11'>You can click 'Continue Anyway' to launch Calamares and check if it recognizes your storage.\n"
-                "Puede pulsar 'Continuar de todos modos' para lanzar Calamares y comprobar si este reconoce sus discos.</span>"
-            )
-            lbl_warn_desc.set_justify(Gtk.Justification.CENTER)
-            lbl_warn_desc.set_halign(Gtk.Align.CENTER)
+            lbl_warn_desc = Gtk.Label(label="You can continue to launch Calamares in auto-detect mode.")
             lbl_warn_desc.set_line_wrap(True)
-            lbl_warn_desc.set_max_width_chars(60)
+            lbl_warn_desc.set_max_width_chars(50)
             warning_box.pack_start(lbl_warn_desc, False, False, 5)
 
             self.disks_hbox.pack_start(warning_box, True, True, 20)
-
-            # Enable continue anyway
             self.btn_disk_continue.set_label("Continue Anyway")
             self.btn_disk_continue.set_sensitive(True)
             self.selected_disk_path = None
         else:
             for disk in disks:
-                # Crear contenedor clickeable
                 event_box = Gtk.EventBox()
                 card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
                 card.get_style_context().add_class("disk-card")
                 card.set_border_width(12)
                 event_box.add(card)
 
-                # Icono de disco
                 img = Gtk.Image.new_from_icon_name("drive-harddisk", Gtk.IconSize.DIALOG)
-                # set size of hard drive icon to large
                 img.set_pixel_size(64)
                 card.pack_start(img, False, False, 0)
 
-                # Escribir nombre del disco (ej: sda)
                 lbl_name = Gtk.Label(label=disk["name"])
                 lbl_name.get_style_context().add_class("disk-name")
                 card.pack_start(lbl_name, False, False, 0)
 
-                # Escribir modelo e información de capacidad
                 lbl_info1 = Gtk.Label(label=disk["model"])
                 lbl_info1.get_style_context().add_class("disk-info")
                 lbl_info1.set_line_wrap(True)
@@ -692,10 +920,7 @@ class RecoveryApp(Gtk.Window):
                 lbl_info2.get_style_context().add_class("disk-info")
                 card.pack_start(lbl_info2, False, False, 0)
 
-                # Conectar click
-                event_box.connect(
-                    "button-press-event", self.on_disk_clicked, disk["path"], card
-                )
+                event_box.connect("button-press-event", self.on_disk_clicked, disk["path"], card)
                 self.disks_hbox.pack_start(event_box, False, False, 10)
                 self.disk_widgets.append((card, disk["path"]))
 
@@ -703,71 +928,106 @@ class RecoveryApp(Gtk.Window):
 
     def on_disk_clicked(self, widget, event, path, card):
         self.selected_disk_path = path
-
-        # Deseleccionar todos y seleccionar el actual
         for c, p in self.disk_widgets:
             c.get_style_context().remove_class("selected")
-
         card.get_style_context().add_class("selected")
         self.btn_disk_continue.set_sensitive(True)
 
     def on_disk_continue_clicked(self, button):
-        if self.selected_disk_path:
-            # Escribir en /etc/calamares/modules/partition.conf la preselección del disco
-            conf_path = "/etc/calamares/modules/partition.conf"
-            try:
-                os.makedirs(os.path.dirname(conf_path), exist_ok=True)
+        partition_mode = "erase"
+        if self.rad_alongside.get_active():
+            partition_mode = "alongside"
+        elif self.rad_manual.get_active():
+            partition_mode = "manual"
 
-                # Escribir el defaultDisk en el archivo yaml de partición
-                if os.path.exists(conf_path):
-                    with open(conf_path, "r") as f:
+        # 1. Save user decisions to JSON file
+        settings_data = {
+            "timezone": self.selected_country[1],
+            "keyboardLayout": self.selected_keyboard[1],
+            "username": self.entry_username.get_text().strip(),
+            "fullName": self.entry_fullname.get_text().strip(),
+            "hostname": self.entry_hostname.get_text().strip(),
+            "password": self.entry_password.get_text(),
+            "rootPassword": self.entry_password.get_text() if self.chk_same_password.get_active() else self.entry_root_pwd.get_text(),
+            "autologin": True
+        }
+
+        try:
+            with open("/tmp/recovery-settings.json", "w") as f:
+                json.dump(settings_data, f, indent=4)
+        except Exception as e:
+            print(f"Failed to write settings JSON: {e}")
+
+        # 2. Configure Calamares config files dynamically
+        self.configure_calamares(self.selected_disk_path, partition_mode)
+
+        # 3. Launch Calamares
+        print("Launching Calamares installer...")
+        subprocess.Popen(
+            "/usr/local/bin/launch-calamares || pkexec calamares || calamares &",
+            shell=True,
+        )
+        Gtk.main_quit()
+
+    def configure_calamares(self, disk_path, partition_mode):
+        settings_path = "/etc/calamares/settings.conf"
+        bak_path = "/etc/calamares/settings.conf.bak"
+
+        # Backup settings.conf if not already backed up
+        if not os.path.exists(bak_path) and os.path.exists(settings_path):
+            try:
+                import shutil
+                shutil.copy(settings_path, bak_path)
+            except Exception as e:
+                print(f"Failed to backup settings.conf: {e}")
+
+        if os.path.exists(settings_path):
+            try:
+                if partition_mode == "manual":
+                    # For manual partition, restore original full settings wizard
+                    if os.path.exists(bak_path):
+                        import shutil
+                        shutil.copy(bak_path, settings_path)
+                else:
+                    # Assisted mode: remove wizard pages from show sequence, keep partition and finished
+                    with open(settings_path, "r") as f:
+                        content = f.read()
+
+                    # Replace show sequence
+                    show_pattern = r"(show:\s*\n)((\s*-\s*\w+.*\n)+)"
+                    content = re.sub(show_pattern, r"\1  - partition\n  - finished\n", content)
+
+                    # Ensure 'prefill' is in the exec block right at the beginning
+                    exec_pattern = r"(\s*-\s*partition\s*\n\s*-\s*mount)"
+                    if "- prefill" not in content:
+                        content = content.replace("- partition\n  - mount", "- prefill\n  - partition\n  - mount")
+
+                    with open(settings_path, "w") as f:
+                        f.write(content)
+            except Exception as e:
+                print(f"Failed to configure settings.conf: {e}")
+
+        # Pre-select disk in partition.conf
+        if disk_path:
+            partition_conf = "/etc/calamares/modules/partition.conf"
+            try:
+                if os.path.exists(partition_conf):
+                    with open(partition_conf, "r") as f:
                         lines = f.readlines()
                     new_lines = []
                     found = False
                     for line in lines:
                         if line.strip().startswith("defaultDisk:"):
-                            new_lines.append(
-                                f'defaultDisk: "{self.selected_disk_path}"\n'
-                            )
+                            new_lines.append(f'defaultDisk: "{disk_path}"\n')
                             found = True
                         else:
                             new_lines.append(line)
                     if not found:
-                        new_lines.append(
-                            f'\ndefaultDisk: "{self.selected_disk_path}"\n'
-                        )
-                    with open(conf_path, "w") as f:
+                        new_lines.append(f'\ndefaultDisk: "{disk_path}"\n')
+                    with open(partition_conf, "w") as f:
                         f.writelines(new_lines)
-                else:
-                    with open(conf_path, "w") as f:
-                        f.write(f'---\ndefaultDisk: "{self.selected_disk_path}"\n')
-                print(f"Preselected partition disk written: {self.selected_disk_path}")
-            except (PermissionError, Exception) as e:
-                print(
-                    f"Permission denied or error writing to /etc/calamares ({e}), writing to /tmp/partition.conf instead for debugging..."
-                )
-                try:
-                    with open("/tmp/partition.conf", "w") as f:
-                        f.write(f'---\ndefaultDisk: "{self.selected_disk_path}"\n')
-                except Exception as ex:
-                    print("Failed to write fallback config:", ex)
-        else:
-            # English: No disk preselected (bypass when no disks found). Launch Calamares in auto-detect mode.
-            # Español: Sin disco preseleccionado (omitir cuando no se hallan discos). Lanzar Calamares en auto-detección.
-            print("No disk selected. Launching Calamares in auto-detection mode.")
-
-        # Lanzar Calamares en primer plano
-        print("Launching Calamares installer...")
-        # English: Try launch-calamares first, fallback to pkexec calamares (Gnome auth) or standard calamares
-        # Español: Intentar primero launch-calamares, fallback a pkexec calamares (autenticacion Gnome) o calamares estándar
-        subprocess.Popen(
-            "/usr/local/bin/launch-calamares || pkexec calamares || calamares &",
-            shell=True,
-        )
-
-        # Cerrar la aplicación de recuperación
-        Gtk.main_quit()
-
+            except Exception as e:
+                print(f"Failed to set default disk in partition.conf: {e}")
 
 
 def main():

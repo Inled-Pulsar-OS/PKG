@@ -235,6 +235,11 @@ efiBootloaderId: "pulsaros"
 installEFIFallback: true
 EOF
 
+# prefill.conf
+cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/prefill.conf"
+---
+EOF
+
 # welcome.conf
 cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/welcome.conf"
 ---
@@ -348,6 +353,73 @@ script:
 EOF
 
 
+# prefill module descriptor and script
+mkdir -p "$STAGE_DIR/usr/share/calamares/modules/prefill"
+cat <<EOF > "$STAGE_DIR/usr/share/calamares/modules/prefill/module.desc"
+---
+type: "job"
+name: "prefill"
+interface: "python"
+script: "main.py"
+EOF
+
+cat <<'EOF' > "$STAGE_DIR/usr/share/calamares/modules/prefill/main.py"
+import libcalamares
+import json
+import os
+
+def obscure(s):
+    result = []
+    for c in s:
+        code = ord(c)
+        if 0x00 < code < 0x20:
+            code = 0x20 - code
+        elif 0x20 <= code < 0x7f:
+            code = 0x7f - (code - 0x20)
+        elif 0x80 <= code < 0x100:
+            code = 0x100 - (code - 0x80)
+        result.append(chr(code))
+    return "".join(result)
+
+def run():
+    json_path = "/tmp/recovery-settings.json"
+    if not os.path.exists(json_path):
+        libcalamares.utils.debug("Prefill: /tmp/recovery-settings.json not found")
+        return None
+        
+    try:
+        with open(json_path, "r") as f:
+            data = json.load(f)
+            
+        # Timezone/Locale:
+        libcalamares.globalstorage.insert("timezone", data.get("timezone", "Europe/Madrid"))
+        
+        # Keyboard:
+        libcalamares.globalstorage.insert("keyboardLayout", data.get("keyboardLayout", "es"))
+        libcalamares.globalstorage.insert("keyboardVariant", "")
+        
+        # Users:
+        username = data.get("username", "pepe")
+        password = data.get("password", "")
+        hostname = data.get("hostname", "pulsaros-pc")
+        root_pwd = data.get("rootPassword", password)
+        
+        libcalamares.globalstorage.insert("username", username)
+        libcalamares.globalstorage.insert("fullName", data.get("fullName", username))
+        libcalamares.globalstorage.insert("userRealName", data.get("fullName", username))
+        libcalamares.globalstorage.insert("hostname", hostname)
+        libcalamares.globalstorage.insert("password", obscure(password))
+        libcalamares.globalstorage.insert("rootPassword", obscure(root_pwd))
+        libcalamares.globalstorage.insert("autologinUser", username if data.get("autologin", True) else "")
+        
+        libcalamares.utils.debug("Prefill: Successfully injected settings into Calamares GlobalStorage!")
+    except Exception as e:
+        libcalamares.utils.debug(f"Prefill: Error loading settings: {e}")
+        
+    return None
+EOF
+
+
 # settings.conf
 cat <<EOF > "$CALAMARES_CONFIGS_DEST/settings.conf"
 ---
@@ -369,6 +441,9 @@ instances:
 - id:       refind
   module:   shellprocess
   config:   shellprocess@refind.conf
+- id:       prefill
+  module:   prefill
+  config:   prefill.conf
 
 sequence:
 - show:
