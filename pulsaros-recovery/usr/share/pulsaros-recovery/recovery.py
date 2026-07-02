@@ -798,6 +798,12 @@ class RecoveryApp(Gtk.Window):
         self.progress_nav_box.pack_start(self.btn_prog_reboot, False, False, 0)
         self.progress_nav_box.hide()
 
+        # Always-visible fallback: lets the user open Calamares GUI at any point during installation
+        self.btn_open_calamares = Gtk.Button(label="Open Calamares Installer")
+        self.btn_open_calamares.get_style_context().add_class("action-btn")
+        self.btn_open_calamares.connect("clicked", self._launch_calamares_gui)
+        self.slide_progress.pack_end(self.btn_open_calamares, False, False, 8)
+
         self.populate_disks()
 
     def add_utility_row(self, title, desc, icon_name):
@@ -1048,10 +1054,14 @@ class RecoveryApp(Gtk.Window):
         ).start()
 
     def update_progress(self, fraction, message):
+        # English: Switch from pulse (activity) mode to fraction mode when real progress arrives.
+        # Español: Cambiar de modo pulso (actividad) a modo fracción cuando llega progreso real.
+        if self.progress_bar.get_pulse_step() > 0.0:
+            self.progress_bar.set_pulse_step(0.0)
         # Monotonically update progress bar and status text
         if fraction > self.progress_bar.get_fraction():
             self.progress_bar.set_fraction(fraction)
-        
+
         # Human readable job names
         friendly_message = message
         if "unpackfs" in message.lower() or "extract" in message.lower():
@@ -1062,9 +1072,9 @@ class RecoveryApp(Gtk.Window):
             friendly_message = "Configuring user accounts..."
         elif "fstab" in message.lower():
             friendly_message = "Writing disk configuration..."
-            
+
         self.lbl_progress_status.set_text(friendly_message)
-        
+
         if fraction >= 1.0:
             self.lbl_progress_title.set_text("Installation Complete")
             self.progress_nav_box.show_all()
@@ -1072,36 +1082,68 @@ class RecoveryApp(Gtk.Window):
     def show_error(self, message):
         self.lbl_progress_title.set_text("Installation Failed")
         self.lbl_progress_status.set_markup(f"<span foreground='#ff453a'>{message}</span>")
-        
+
         for child in self.progress_nav_box.get_children():
             self.progress_nav_box.remove(child)
-            
+
+        # English: Back button returns to disk selection to retry silent install
+        # Español: El botón Volver regresa a la selección de disco para reintentar la instalación silenciosa
         btn_retry = Gtk.Button(label="Back")
         btn_retry.get_style_context().add_class("action-btn")
         btn_retry.connect("clicked", lambda b: self.stack.set_visible_child_name("disk_selection"))
         self.progress_nav_box.pack_start(btn_retry, False, False, 0)
+
+        # English: Fallback button opens the full Calamares GUI installer so the user
+        #          can complete installation manually if the silent backend fails.
+        # Español: El botón de instalación manual abre el instalador GUI completo de Calamares
+        #          para que el usuario pueda completar la instalación si el backend silencioso falla.
+        btn_calamares = Gtk.Button(label="Open Calamares Installer")
+        btn_calamares.get_style_context().add_class("btn-continue")
+        btn_calamares.connect("clicked", self._launch_calamares_gui)
+        self.progress_nav_box.pack_start(btn_calamares, False, False, 0)
+
         self.progress_nav_box.show_all()
+
+    def _launch_calamares_gui(self, _btn):
+        """English: Restore Calamares configs and open the full GUI installer.
+           Español: Restaurar configs de Calamares y abrir el instalador GUI completo."""
+        restore_calamares_configs()
+        launcher = "/usr/local/bin/launch-calamares"
+        fallback = "/usr/bin/calamares"
+        cmd = launcher if os.path.exists(launcher) else fallback
+        subprocess.Popen(["bash", "-c", cmd])
+        self.destroy()
 
     def run_calamares_silent_installation(self):
         try:
             GLib.idle_add(self.update_progress, 0.02, "Initializing Calamares installer...")
             
-            # Reset log file to parse fresh outputs
+            # English: Calamares must run as root so its log lands in /root/.cache/calamares/session.log.
+            #          Running as the live user would write to ~/.cache/calamares/session.log (different path)
+            #          and the progress monitor would hang forever waiting for a file that never appears.
+            # Español: Calamares debe ejecutarse como root para que su log se escriba en /root/.cache/calamares/session.log.
+            #          Si corre como el usuario live el log iría a ~/.cache/calamares/session.log (ruta distinta)
+            #          y el monitor de progreso se quedaría bloqueado esperando un archivo que nunca aparece.
             log_path = "/root/.cache/calamares/session.log"
-            if not os.path.exists("/root"):
-                log_path = os.path.expanduser("~/.cache/calamares/session.log")
-            if os.path.exists(log_path):
-                try:
-                    os.remove(log_path)
-                except:
-                    pass
 
-            # Command to launch Calamares silently (offscreen platform plugin avoids opening GUI)
-            cmd = "QT_QPA_PLATFORM=offscreen calamares -d"
-            # Fallback to xvfb-run if offscreen platform backend is missing
+            # Clean old log so we only parse fresh output
+            # Eliminar el log antiguo para analizar solo salida nueva
+            try:
+                os.makedirs("/root/.cache/calamares", exist_ok=True)
+                if os.path.exists(log_path):
+                    os.remove(log_path)
+            except Exception as e:
+                print(f"Could not clear old Calamares log: {e}")
+
+            # English: Run Calamares headlessly via sudo. xvfb-run provides a virtual display;
+            #          QT_QPA_PLATFORM=offscreen is the fallback if xvfb is not available.
+            # Español: Ejecutar Calamares sin GUI via sudo. xvfb-run provee pantalla virtual;
+            #          QT_QPA_PLATFORM=offscreen es el fallback si xvfb no está disponible.
             if subprocess.run("command -v xvfb-run", shell=True, capture_output=True).returncode == 0:
-                cmd = "xvfb-run -a calamares -d"
-                
+                cmd = "sudo -H xvfb-run -a calamares -d"
+            else:
+                cmd = "sudo -H bash -c 'QT_QPA_PLATFORM=offscreen calamares -d'"
+
             print(f"Executing silent installer: {cmd}")
             process = subprocess.Popen(
                 cmd,
@@ -1110,21 +1152,31 @@ class RecoveryApp(Gtk.Window):
                 stderr=subprocess.PIPE,
                 text=True
             )
-            
-            # Wait for Calamares to create the log file
+
+            # English: Wait up to 30s for Calamares to create its session log.
+            #          Pulse the progress bar during init so the user sees activity.
+            # Español: Esperar hasta 30s a que Calamares cree su log de sesión.
+            #          Hacer pulsar la barra de progreso durante la init para que el usuario vea actividad.
             start_time = time.time()
             while not os.path.exists(log_path):
                 if process.poll() is not None:
-                    stdout, stderr = process.communicate()
+                    stdout_data = process.stdout.read() if process.stdout else ""
+                    stderr_data = process.stderr.read() if process.stderr else ""
                     print(f"Calamares exited immediately with code {process.returncode}")
-                    GLib.idle_add(self.show_error, f"Installer failed to start. {stderr or stdout}")
+                    print(f"stdout: {stdout_data}")
+                    print(f"stderr: {stderr_data}")
+                    GLib.idle_add(self.show_error, f"Installer failed to start (code {process.returncode}).")
                     restore_calamares_configs()
                     return
-                if time.time() - start_time > 10:
-                    GLib.idle_add(self.show_error, "Calamares log file was not created.")
+                elapsed = time.time() - start_time
+                if elapsed > 30:
+                    process.kill()
+                    GLib.idle_add(self.show_error, "Calamares took too long to start (30s timeout).")
                     restore_calamares_configs()
                     return
-                time.sleep(0.1)
+                # Pulse the progress bar every 0.5s to indicate activity
+                GLib.idle_add(self.progress_bar.pulse)
+                time.sleep(0.5)
                 
             # Parse Calamares logs for monotonic progress bar updates
             last_pct = 0.02
