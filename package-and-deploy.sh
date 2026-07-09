@@ -24,15 +24,52 @@ BUILD_DIR="$PKG_DIR/build"
 STAGING_DIR="$BUILD_DIR/pkg-staging"
 OUTPUT_DIR="$BUILD_DIR/packages"
 
-# Parámetros
-PACKAGE_NAME="$1"
-DEPLOY_FLAG="$2"
+# Parámetros / Parameters
+PACKAGE_NAME=""
+DEPLOY_FLAG=""
+BRANCH="stable"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --deploy|-d)
+            DEPLOY_FLAG="--deploy"
+            shift
+            ;;
+        --branch|-b)
+            BRANCH="$2"
+            shift 2
+            ;;
+        *)
+            if [ -z "$PACKAGE_NAME" ]; then
+                PACKAGE_NAME="$1"
+            else
+                echo "❌ Parámetro desconocido: $1"
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
 
 if [ -z "$PACKAGE_NAME" ]; then
     echo "❌ Error: Debes especificar el nombre de la carpeta del paquete o 'all'."
     echo "Ejemplo: $0 pulsaros-branding"
     exit 1
 fi
+
+if [ "$BRANCH" != "stable" ] && [ "$BRANCH" != "forky" ] && [ "$BRANCH" != "rolling" ]; then
+    echo "❌ Error: Rama inválida '$BRANCH'. Debe ser stable, forky o rolling."
+    exit 1
+fi
+
+get_branch_suffix() {
+    case "$BRANCH" in
+        stable) echo "+deb13" ;;
+        forky) echo "+deb14" ;;
+        rolling) echo "+rolling" ;;
+        *) echo "" ;;
+    esac
+}
 
 # English: Helper to auto-increment SemVer or Debian format versions (X.Y.Z-R or X.Y.Z)
 # Español: Utilidad para auto-incrementar versiones de SemVer o formato Debian (X.Y.Z-R o X.Y.Z)
@@ -81,7 +118,11 @@ build_single_package() {
     # Auto-incrementar la versión del paquete antes de compilar
     local control_file="$source_folder/DEBIAN/control"
     local current_version=$(grep "^Version:" "$control_file" | cut -d' ' -f2)
-    local new_version=$(increment_version "$current_version")
+    # Strip any existing branch suffix (+deb13, +deb14, +rolling, etc.)
+    local base_version=$(echo "$current_version" | sed -E 's/\+(deb13|deb14|rolling)$//')
+    local new_base=$(increment_version "$base_version")
+    local suffix=$(get_branch_suffix)
+    local new_version="${new_base}${suffix}"
     echo "🔄 Auto-incrementando versión de $name: $current_version -> $new_version"
     sed -i "s/^Version:.*/Version: $new_version/" "$control_file"
     
@@ -100,6 +141,14 @@ build_single_package() {
     local prepare_hook="$source_folder/prepare-assets.sh"
     if [ -f "$prepare_hook" ]; then
         echo "🚀 Ejecutando script de preparación del paquete..."
+        # Set DEBIAN_VERSION environment variable for the hook
+        local debian_version="trixie"
+        case "$BRANCH" in
+            forky) debian_version="forky" ;;
+            rolling) debian_version="testing" ;;
+            *) debian_version="trixie" ;;
+        esac
+        export DEBIAN_VERSION="$debian_version"
         bash "$prepare_hook" "$STAGING_DIR/$name"
         # Eliminar el script del directorio staging para evitar colisiones en la raíz del deb
         rm -f "$STAGING_DIR/$name/prepare-assets.sh"
@@ -243,7 +292,7 @@ deploy_packages() {
     # Join all URLs into a space-separated string to comply with GitHub's 10-properties limit on client_payload.
     # Une todas las URLs en una cadena separada por espacios para cumplir con el límite de 10 propiedades de GitHub.
     local urls_str="${urls[*]}"
-    local json_payload=$(jq -n --arg urls "$urls_str" '{package_urls: $urls}')
+    local json_payload=$(jq -n --arg urls "$urls_str" --arg branch "$BRANCH" '{package_urls: $urls, branch: $branch}')
     
     local request_body=$(jq -c -n --arg ev "package_upload" --argjson pay "$json_payload" '{event_type: $ev, client_payload: $pay}')
     

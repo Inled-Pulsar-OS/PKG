@@ -1135,14 +1135,9 @@ class RecoveryApp(Gtk.Window):
             except Exception as e:
                 print(f"Could not clear old Calamares log: {e}")
 
-            # English: Run Calamares headlessly via sudo. xvfb-run provides a virtual display;
-            #          QT_QPA_PLATFORM=offscreen is the fallback if xvfb is not available.
-            # Español: Ejecutar Calamares sin GUI via sudo. xvfb-run provee pantalla virtual;
-            #          QT_QPA_PLATFORM=offscreen es el fallback si xvfb no está disponible.
-            if subprocess.run("command -v xvfb-run", shell=True, capture_output=True).returncode == 0:
-                cmd = "sudo -H xvfb-run -a calamares -d"
-            else:
-                cmd = "sudo -H bash -c 'QT_QPA_PLATFORM=offscreen calamares -d'"
+            # English: Run Calamares headlessly via sudo with QT_QPA_PLATFORM=offscreen.
+            # Español: Ejecutar Calamares sin GUI via sudo con QT_QPA_PLATFORM=offscreen.
+            cmd = "sudo -H bash -c 'QT_QPA_PLATFORM=offscreen calamares -d'"
 
             print(f"Executing silent installer: {cmd}")
             process = subprocess.Popen(
@@ -1302,9 +1297,13 @@ class RecoveryApp(Gtk.Window):
                 with open(settings_path, "r") as f:
                     content = f.read()
 
-                # Clean up show list completely for silent unattended install
-                show_pattern = r"(show:\s*\n)((\s*-\s*\w+.*\n)+)"
-                content = re.sub(show_pattern, r"\1  # Empty show sequence for silent mode\n", content)
+                # Clean up the first show block in sequence (unattended install)
+                # but keep the final show block containing the 'finished' module.
+                show_match = re.search(r"-\s*show:\s*\n(\s*-\s*\w+.*\n)+", content)
+                if show_match:
+                    exec_pos = content.find("- exec:")
+                    if exec_pos != -1 and show_match.start() < exec_pos:
+                        content = content[:show_match.start()] + content[show_match.end():]
 
                 if "- prefill" not in content:
                     content = content.replace("  - partition\n  - mount", "  - prefill\n  - partition\n  - mount")

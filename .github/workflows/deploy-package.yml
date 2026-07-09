@@ -65,8 +65,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y dpkg-dev fakeroot jq python3-pil
 
-      # 5. Parsear el nombre del paquete desde el issue
-      - name: Parse Package Name
+      # 5. Parsear el nombre del paquete y la rama desde el issue
+      - name: Parse Package and Branch
         id: parse-package
         run: |
           BODY="${{ github.event.issue.body }}"
@@ -88,7 +88,15 @@ jobs:
             exit 1
           fi
 
+          # Parsear la rama seleccionada
+          BRANCH=$(echo "$BODY" | grep -A 2 -i "Rama de la Distribución" | tail -n 1 | tr -d '[:space:]')
+          if [ -z "$BRANCH" ] || [ "$BRANCH" = "--" ]; then
+            BRANCH="stable"
+          fi
+          echo "Rama detectada: '$BRANCH'"
+
           echo "package_name=$PACKAGE" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
 
       # 6. Comentar en el issue que ha comenzado la construcción
       - name: Comment Build Started
@@ -97,9 +105,9 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           if [ "${{ steps.parse-package.outputs.package_name }}" = "all" ]; then
-            gh issue comment "$ISSUE_NUMBER" --body "🏗️ **Comenzando compilación total:** Empaquetando y desplegando TODOS los paquetes del repositorio de forma masiva..."
+            gh issue comment "$ISSUE_NUMBER" --body "🏗️ **Comenzando compilación total:** Empaquetando y desplegando TODOS los paquetes del repositorio de forma masiva para la rama \`${{ steps.parse-package.outputs.branch }}\`..."
           else
-            gh issue comment "$ISSUE_NUMBER" --body "🏗️ **Comenzando la compilación:** Empaquetando la carpeta \`${{ steps.parse-package.outputs.package_name }}\` como archivo \`.deb\`..."
+            gh issue comment "$ISSUE_NUMBER" --body "🏗️ **Comenzando la compilación:** Empaquetando la carpeta \`${{ steps.parse-package.outputs.package_name }}\` como archivo \`.deb\` para la rama \`${{ steps.parse-package.outputs.branch }}\`..."
           fi
 
       # 7. Compilar y Desplegar el paquete
@@ -111,8 +119,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x package-and-deploy.sh
-          # Ejecutar el script desde la raíz del repo
-          ./package-and-deploy.sh "${{ steps.parse-package.outputs.package_name }}" --deploy
+          TARGET_BRANCH="${{ steps.parse-package.outputs.branch }}"
+          
+          if [ "$TARGET_BRANCH" = "all" ]; then
+            echo "Deploying to all three branches (stable, forky, rolling)..."
+            for b in stable forky rolling; do
+              echo "🚀 Deploying to branch: $b"
+              ./package-and-deploy.sh "${{ steps.parse-package.outputs.package_name }}" --deploy --branch "$b"
+            done
+          else
+            echo "🚀 Deploying to branch: $TARGET_BRANCH"
+            ./package-and-deploy.sh "${{ steps.parse-package.outputs.package_name }}" --deploy --branch "$TARGET_BRANCH"
+          fi
 
       # 8. Comentar éxito y cerrar issue
       - name: Comment Success and Close Issue
@@ -122,9 +140,9 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           if [ "${{ steps.parse-package.outputs.package_name }}" = "all" ]; then
-            gh issue comment "$ISSUE_NUMBER" --body "🎉 **¡Despliegue total completado con éxito!** Todos los paquetes del repositorio han sido compilados, subidos a la release y notificados al repositorio central APT de Inled."
+            gh issue comment "$ISSUE_NUMBER" --body "🎉 **¡Despliegue total completado con éxito!** Todos los paquetes del repositorio han sido compilados, subidos a la release y notificados al repositorio central APT de Inled para la rama \`${{ steps.parse-package.outputs.branch }}\`."
           else
-            gh issue comment "$ISSUE_NUMBER" --body "🎉 **¡Despliegue completado con éxito!** El paquete \`${{ steps.parse-package.outputs.package_name }}\` ha sido compilado, subido a los assets de la release del repo PKG y notificado al repositorio APT central de Inled. Estará disponible en breve."
+            gh issue comment "$ISSUE_NUMBER" --body "🎉 **¡Despliegue completado con éxito!** El paquete \`${{ steps.parse-package.outputs.package_name }}\` ha sido compilado, subido a los assets de la release del repo PKG y notificado al repositorio APT central de Inled para la rama \`${{ steps.parse-package.outputs.branch }}\`. Estará disponible en breve."
           fi
           gh issue close "$ISSUE_NUMBER" --reason "completed"
 

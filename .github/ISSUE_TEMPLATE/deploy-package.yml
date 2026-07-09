@@ -21,6 +21,20 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: branch
+    attributes:
+      label: "Rama de la Distribución"
+      description: "Selecciona la rama de la distribución de destino para este despliegue (o 'all' para desplegar a todas las ramas)."
+      options:
+        - "stable"
+        - "forky"
+        - "rolling"
+        - "all"
+      default: 0
+    validations:
+      required: true
+
   - type: textarea
     id: description
     attributes:
