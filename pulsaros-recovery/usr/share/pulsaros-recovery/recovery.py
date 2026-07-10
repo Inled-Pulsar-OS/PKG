@@ -1249,8 +1249,25 @@ class RecoveryApp(Gtk.Window):
                         content = f.read()
 
                     # Only show Partition and Finished pages on GUI mode
-                    show_pattern = r"(show:\s*\n)((\s*-\s*\w+.*\n)+)"
-                    content = re.sub(show_pattern, r"\1  - partition\n  - finished\n", content)
+                    lines = content.splitlines(keepends=True)
+                    new_lines = []
+                    in_show = False
+                    for line in lines:
+                        if line.startswith("  - show:"):
+                            in_show = True
+                            new_lines.append(line)
+                            new_lines.append("      - partition\n")
+                            new_lines.append("      - finished\n")
+                            continue
+                        if in_show:
+                            if line.startswith("  - exec:") or line.startswith("  - show:"):
+                                in_show = False
+                            elif not line.startswith("      -"):
+                                in_show = False
+                            else:
+                                continue
+                        new_lines.append(line)
+                    content = "".join(new_lines)
 
                     if "- prefill" not in content:
                         content = content.replace("  - partition\n  - mount", "  - prefill\n  - partition\n  - mount")
@@ -1299,11 +1316,23 @@ class RecoveryApp(Gtk.Window):
 
                 # Clean up the first show block in sequence (unattended install)
                 # but keep the final show block containing the 'finished' module.
-                show_match = re.search(r"-\s*show:\s*\n(\s*-\s*\w+.*\n)+", content)
-                if show_match:
-                    exec_pos = content.find("- exec:")
-                    if exec_pos != -1 and show_match.start() < exec_pos:
-                        content = content[:show_match.start()] + content[show_match.end():]
+                lines = content.splitlines(keepends=True)
+                new_lines = []
+                in_show = False
+                for line in lines:
+                    if line.startswith("  - show:"):
+                        if not any(nl.startswith("  - exec:") for nl in new_lines):
+                            in_show = True
+                            continue
+                    if in_show:
+                        if line.startswith("  - exec:") or line.startswith("  - show:"):
+                            in_show = False
+                        elif not line.startswith("      -"):
+                            in_show = False
+                        else:
+                            continue
+                    new_lines.append(line)
+                content = "".join(new_lines)
 
                 if "- prefill" not in content:
                     content = content.replace("  - partition\n  - mount", "  - prefill\n  - partition\n  - mount")
