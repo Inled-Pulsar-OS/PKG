@@ -63,12 +63,8 @@ if [ "$BRANCH" != "stable" ] && [ "$BRANCH" != "forky" ] && [ "$BRANCH" != "roll
 fi
 
 get_branch_suffix() {
-    case "$BRANCH" in
-        stable) echo "+deb13" ;;
-        forky) echo "+deb14" ;;
-        rolling) echo "+rolling" ;;
-        *) echo "" ;;
-    esac
+    # Return empty to avoid special character URL encoding issues in APT clients
+    echo ""
 }
 
 # English: Helper to auto-increment SemVer or Debian format versions (X.Y.Z-R or X.Y.Z)
