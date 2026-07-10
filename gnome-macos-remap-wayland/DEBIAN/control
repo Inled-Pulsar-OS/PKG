@@ -1,0 +1,9 @@
+Package: gnome-macos-remap-wayland
+Version: 1.0.0
+Section: misc
+Priority: optional
+Architecture: all
+Maintainer: Jaime <info@inled.es>
+Description: Wayland-based macOS keyboard remap tool for GNOME.
+ This package provides a Wayland-compatible key remapping system
+ using xremap for Pulsar OS.

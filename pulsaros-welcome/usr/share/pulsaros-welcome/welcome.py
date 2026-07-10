@@ -956,7 +956,7 @@ class AssistantWindow(Gtk.Window):
                 "gnome-terminal -- bash -c '"
                 "echo \"📥 Preparing and installing macOS Keyboard Remap / Preparando e instalando remapeo de teclado...\"; "
                 "rm -rf /tmp/gnome-macos-remap && "
-                "cp -r /usr/share/pulsar-macos-keyboard-remap-x11 /tmp/gnome-macos-remap && "
+                "cp -r /usr/share/gnome-macos-remap-wayland /tmp/gnome-macos-remap && "
                 "cd /tmp/gnome-macos-remap && "
                 "chmod +x install.sh bin/* && "
                 "./install.sh; "
