@@ -1253,16 +1253,18 @@ class RecoveryApp(Gtk.Window):
                     new_lines = []
                     in_show = False
                     for line in lines:
-                        if line.startswith("  - show:"):
+                        stripped = line.strip()
+                        if stripped == "- show:":
                             in_show = True
                             new_lines.append(line)
-                            new_lines.append("      - partition\n")
-                            new_lines.append("      - finished\n")
+                            indent = line.split("-")[0] + "  "
+                            new_lines.append(f"{indent}- partition\n")
+                            new_lines.append(f"{indent}- finished\n")
                             continue
                         if in_show:
-                            if line.startswith("  - exec:") or line.startswith("  - show:"):
+                            if stripped == "- exec:" or stripped == "- show:":
                                 in_show = False
-                            elif not line.startswith("      -"):
+                            elif not stripped.startswith("-"):
                                 in_show = False
                             else:
                                 continue
@@ -1320,14 +1322,15 @@ class RecoveryApp(Gtk.Window):
                 new_lines = []
                 in_show = False
                 for line in lines:
-                    if line.startswith("  - show:"):
-                        if not any(nl.startswith("  - exec:") for nl in new_lines):
+                    stripped = line.strip()
+                    if stripped == "- show:":
+                        if not any(nl.strip() == "- exec:" for nl in new_lines):
                             in_show = True
                             continue
                     if in_show:
-                        if line.startswith("  - exec:") or line.startswith("  - show:"):
+                        if stripped == "- exec:" or stripped == "- show:":
                             in_show = False
-                        elif not line.startswith("      -"):
+                        elif not stripped.startswith("-"):
                             in_show = False
                         else:
                             continue
