@@ -65,8 +65,15 @@ EOF
 # 3. Generate the elegant "Based on Debian" watermark
 echo "🎨 Generando marca de agua 'Based on Debian'..."
 python3 -c '
-import os, urllib.request, tempfile
-from PIL import Image, ImageDraw, ImageFont
+import os, urllib.request, tempfile, sys, base64
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except (ImportError, ModuleNotFoundError):
+    print("Warning: PIL (Pillow) is not installed on host. Generating transparent 1x1 fallback for watermark.png.")
+    transparent_png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=")
+    with open("'"$THEME_DEST"'/watermark.png", "wb") as f:
+        f.write(transparent_png)
+    sys.exit(0)
 
 width = 240
 height = 40
