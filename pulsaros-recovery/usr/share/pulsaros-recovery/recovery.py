@@ -874,7 +874,16 @@ class RecoveryApp(Gtk.Window):
             import threading
             threading.Thread(target=run_deja_dup, daemon=True).start()
         elif self.selected_utility == "Install Pulsar OS":
-            self.stack.set_visible_child_name("welcome")
+            self.hide()
+            restore_calamares_configs()
+            launcher = "/usr/local/bin/launch-calamares"
+            fallback = "/usr/bin/calamares"
+            cmd = launcher if os.path.exists(launcher) else fallback
+            def run_calamares():
+                subprocess.run(["bash", "-c", cmd])
+                GLib.idle_add(self.show)
+            import threading
+            threading.Thread(target=run_calamares, daemon=True).start()
         elif self.selected_utility == "Seafari Browser":
             run_as_real_user("seafari || firefox || xdg-open https://google.com")
         elif self.selected_utility == "Disk Utility":
