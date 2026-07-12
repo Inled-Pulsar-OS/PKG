@@ -279,6 +279,14 @@ EOF
 
 # Use default Debian partition.conf to dynamically choose MS-DOS for BIOS and GPT for UEFI boot schemes.
 # Usar el partition.conf predeterminado de Debian para elegir dinámicamente MS-DOS en BIOS y GPT en UEFI.
+cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/partition.conf"
+---
+efiSystemPartition:     "/boot/efi"
+defaultFileSystemType:  "ext4"
+userSwapChoices:
+    - none
+    - small
+EOF
 
 # users.conf fallback (ajustando hostname por defecto a pulsaros)
 cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/users.conf"
