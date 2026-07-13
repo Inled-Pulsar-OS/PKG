@@ -1,0 +1,19 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Welcome/OOTB Package Post-installation Script
+# ==============================================================================
+set -e
+
+echo "⚙️ Configurando servicio de primer arranque (OOTB)..."
+
+# Enable pulsar-ootb service
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload || true
+    systemctl enable pulsar-ootb.service || true
+else
+    # Offline installation / chroot ISO building context
+    mkdir -p /etc/systemd/system/graphical.target.wants
+    ln -sf /etc/systemd/system/pulsar-ootb.service /etc/systemd/system/graphical.target.wants/pulsar-ootb.service || true
+fi
+
+exit 0

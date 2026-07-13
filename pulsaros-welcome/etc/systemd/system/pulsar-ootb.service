@@ -1,0 +1,12 @@
+[Unit]
+Description=Asistente de primer arranque de Pulsar OS
+After=lightdm.service gdm.service
+Before=display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/share/pulsaros/welcome_ootb.py
+RemainAfterExit=yes
+
+[Install]
+WantedBy=graphical.target
