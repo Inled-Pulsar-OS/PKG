@@ -372,12 +372,18 @@ class RecoveryWindow(Adw.ApplicationWindow):
             return
             
         if self.selected_action == "backup":
+            if "TEST_MODE" in os.environ:
+                print("[TEST_MODE] Simulating Deja Dup launcher...")
             subprocess.Popen("deja-dup --restore || deja-dup", shell=True)
         elif self.selected_action == "install":
             self.stack.set_visible_child_name("install_selector")
         elif self.selected_action == "safari":
+            if "TEST_MODE" in os.environ:
+                print("[TEST_MODE] Simulating Seafari launcher...")
             subprocess.Popen("seafari || firefox || xdg-open https://google.com", shell=True)
         elif self.selected_action == "disk":
+            if "TEST_MODE" in os.environ:
+                print("[TEST_MODE] Simulating Disk Utility launcher...")
             subprocess.Popen("gnome-disks || gnome-disk-utility", shell=True)
 
     def build_install_selector_screen(self):
@@ -436,12 +442,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.stack.add_named(selector_box, "install_selector")
 
     def build_install_welcome_screen(self):
-        # Corresponds to macOS Monterey Install welcome screen
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         box.set_valign(Gtk.Align.CENTER)
         box.set_halign(Gtk.Align.CENTER)
         
-        # Centered round logo
         logo_path = "/usr/share/pulsaros-recovery/logo.png"
         logo_fallback = "/usr/share/pulsaros-recovery/pulsar-logo.png"
         image = Gtk.Image()
@@ -454,19 +458,16 @@ class RecoveryWindow(Adw.ApplicationWindow):
         image.set_pixel_size(110)
         box.append(image)
         
-        # Title "Pulsar OS"
         title = Gtk.Label()
         title.set_markup("<span font_weight='bold' size='22000'>Pulsar OS</span>")
         box.append(title)
         
-        # Subtext
         subtext = Gtk.Label(label="Para configurar la instalación de Pulsar OS, haz clic en Continuar.")
         subtext.add_css_class("welcome-subtitle")
         subtext.set_margin_top(8)
         subtext.set_margin_bottom(20)
         box.append(subtext)
         
-        # Navigation buttons
         nav_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
         nav_box.set_halign(Gtk.Align.CENTER)
         
@@ -484,12 +485,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.stack.add_named(box, "install_welcome")
 
     def on_welcome_continue_clicked(self, btn):
-        # Refresh and rebuild disk list before showing selection screen
         self.refresh_disk_cards()
         self.stack.set_visible_child_name("install_disk_select")
 
     def build_install_disk_select_screen(self):
-        # Corresponds to macOS Sequoia Target Disk select screen
         self.disk_select_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         self.disk_select_box.set_valign(Gtk.Align.CENTER)
         self.disk_select_box.set_halign(Gtk.Align.CENTER)
@@ -516,12 +515,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.disk_select_subtitle.add_css_class("welcome-subtitle")
         self.disk_select_box.append(self.disk_select_subtitle)
         
-        # Horizontal container for Disk Cards
         self.disk_cards_flow = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self.disk_cards_flow.set_halign(Gtk.Align.CENTER)
         self.disk_select_box.append(self.disk_cards_flow)
         
-        # Nav buttons
         nav_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
         nav_box.set_halign(Gtk.Align.CENTER)
         nav_box.set_margin_top(20)
@@ -541,7 +538,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.stack.add_named(self.disk_select_box, "install_disk_select")
 
     def refresh_disk_cards(self):
-        # Clear existing disk cards
         while (child := self.disk_cards_flow.get_first_child()):
             self.disk_cards_flow.remove(child)
             
@@ -556,15 +552,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
             self.disk_cards.append(card)
 
     def on_disk_card_selected(self, selected_card):
-        # Clear previous selection style
         for card in self.disk_cards:
             card.remove_css_class("selected")
             
-        # Select clicked card
         selected_card.add_css_class("selected")
         self.selected_disk_card = selected_card
         
-        # Update UI subtitle details
         disk_path = selected_card.disk_info["path"].replace("/dev/", "")
         self.disk_select_subtitle.set_label(f"Pulsar OS se instalará en el disco \"{disk_path}\".")
         self.btn_disk_continue.set_sensitive(True)
@@ -576,15 +569,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
         disk_path = self.selected_disk_card.disk_info["path"]
         disk_name = disk_path.replace("/dev/", "")
         
-        # Set text on progress screen
         self.progress_subtitle.set_label(f"Pulsar OS se está instalando en el disco \"{disk_name}\".")
         self.stack.set_visible_child_name("install_progress")
         
-        # Start installation backend
         threading.Thread(target=self.installation_backend, args=(disk_path,), daemon=True).start()
 
     def build_install_progress_screen(self):
-        # Corresponds to macOS Monterey Progress screen
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         box.set_valign(Gtk.Align.CENTER)
         box.set_halign(Gtk.Align.CENTER)
@@ -611,18 +601,15 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.progress_subtitle.add_css_class("progress-text")
         box.append(self.progress_subtitle)
         
-        # Thin Apple-style blue progress bar
         self.progress_bar = Gtk.ProgressBar()
         self.progress_bar.add_css_class("progress-bar-thin")
         self.progress_bar.set_size_request(320, -1)
         box.append(self.progress_bar)
         
-        # Status details label
         self.progress_label = Gtk.Label(label="Preparando instalación...")
         self.progress_label.add_css_class("progress-text")
         box.append(self.progress_label)
         
-        # Cancel / Restart Button
         self.btn_install_action = Gtk.Button(label="Cancelar")
         self.btn_install_action.add_css_class("secondary-action")
         self.btn_install_action.set_margin_top(16)
@@ -632,18 +619,23 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.stack.add_named(box, "install_progress")
 
     def on_progress_cancel_clicked(self, btn):
-        # If successfully completed, this button changes label to "Reiniciar" and triggers reboot
         if btn.get_label() == "Reiniciar Sistema":
-            subprocess.Popen(["systemctl", "reboot"])
-            self.close()
+            if "TEST_MODE" in os.environ:
+                print("[TEST_MODE] Simulating systemctl reboot...")
+                self.close()
+            else:
+                subprocess.Popen(["systemctl", "reboot"])
+                self.close()
         else:
-            # Cancel installer and return to disk selector (only if safe/before critical steps)
             self.stack.set_visible_child_name("install_disk_select")
 
     def installation_backend(self, disk_path):
         try:
             def exec_cmd(cmd, shell=False):
                 print(f"Running command: {cmd}")
+                if "TEST_MODE" in os.environ:
+                    print(f"[TEST_MODE] Simulating: {' '.join(cmd) if isinstance(cmd, list) else cmd}")
+                    return ""
                 res = subprocess.run(cmd, shell=shell, capture_output=True, text=True)
                 if res.returncode != 0:
                     raise Exception(f"Comando fallido: {' '.join(cmd) if isinstance(cmd, list) else cmd}\n{res.stderr}")
@@ -670,8 +662,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 exec_cmd(["mkfs.ext4", "-F", root_part])
                 
                 GLib.idle_add(self.update_progress, 0.18, "Montando sistema de archivos...")
-                subprocess.run(["umount", "-l", "/mnt/boot/efi"])
-                subprocess.run(["umount", "-l", "/mnt"])
+                if "TEST_MODE" not in os.environ:
+                    subprocess.run(["umount", "-l", "/mnt/boot/efi"])
+                    subprocess.run(["umount", "-l", "/mnt"])
                 os.makedirs("/mnt", exist_ok=True)
                 exec_cmd(["mount", root_part, "/mnt"])
                 os.makedirs("/mnt/boot/efi", exist_ok=True)
@@ -680,8 +673,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 GLib.idle_add(self.update_progress, 0.05, "Limpiando y particionando (MBR para BIOS)...")
                 exec_cmd(["dd", "if=/dev/zero", f"of={disk_path}", "bs=512", "count=1"])
                 sfdisk_script = "label: dos\nsize=+, type=83, bootable\n"
-                p = subprocess.Popen(["sfdisk", disk_path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                p.communicate(input=sfdisk_script)
+                if "TEST_MODE" in os.environ:
+                    print(f"[TEST_MODE] Simulating sfdisk partitioning script:\n{sfdisk_script}")
+                else:
+                    p = subprocess.Popen(["sfdisk", disk_path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    p.communicate(input=sfdisk_script)
                 exec_cmd(["udevadm", "settle"])
                 
                 if "nvme" in disk_path or "mmcblk" in disk_path or "loop" in disk_path:
@@ -693,41 +689,53 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 exec_cmd(["mkfs.ext4", "-F", root_part])
                 
                 GLib.idle_add(self.update_progress, 0.18, "Montando sistema de archivos...")
-                subprocess.run(["umount", "-l", "/mnt"])
+                if "TEST_MODE" not in os.environ:
+                    subprocess.run(["umount", "-l", "/mnt"])
                 os.makedirs("/mnt", exist_ok=True)
                 exec_cmd(["mount", root_part, "/mnt"])
             
             GLib.idle_add(self.update_progress, 0.25, "Replicando archivos... (esto puede tardar)")
-            rsync_cmd = [
-                "rsync", "-aHAXx",
-                "--exclude=/dev/*",
-                "--exclude=/proc/*",
-                "--exclude=/sys/*",
-                "--exclude=/tmp/*",
-                "--exclude=/run/*",
-                "--exclude=/mnt/*",
-                "--exclude=/media/*",
-                "--exclude=/lost+found",
-                "/", "/mnt"
-            ]
             
-            proc = subprocess.Popen(rsync_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            for progress_fraction in range(26, 81):
-                if proc.poll() is not None:
-                    break
-                GLib.idle_add(
-                    self.update_progress, 
-                    progress_fraction / 100.0, 
-                    f"Instalando archivos... ({progress_fraction}%)"
-                )
-                time.sleep(2)
-                
-            proc.wait()
-            if proc.returncode != 0:
-                raise Exception(f"Replicación rsync fallida (código {proc.returncode})\n{proc.stderr.read()}")
+            if "TEST_MODE" in os.environ:
+                # Simulate replication progress fast
+                for progress_fraction in range(26, 81):
+                    GLib.idle_add(
+                        self.update_progress, 
+                        progress_fraction / 100.0, 
+                        f"Instalando archivos... ({progress_fraction}%)"
+                    )
+                    time.sleep(0.08)
+            else:
+                rsync_cmd = [
+                    "rsync", "-aHAXx",
+                    "--exclude=/dev/*",
+                    "--exclude=/proc/*",
+                    "--exclude=/sys/*",
+                    "--exclude=/tmp/*",
+                    "--exclude=/run/*",
+                    "--exclude=/mnt/*",
+                    "--exclude=/media/*",
+                    "--exclude=/lost+found",
+                    "/", "/mnt"
+                ]
+                proc = subprocess.Popen(rsync_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                for progress_fraction in range(26, 81):
+                    if proc.poll() is not None:
+                        break
+                    GLib.idle_add(
+                        self.update_progress, 
+                        progress_fraction / 100.0, 
+                        f"Instalando archivos... ({progress_fraction}%)"
+                    )
+                    time.sleep(2)
+                proc.wait()
+                if proc.returncode != 0:
+                    raise Exception(f"Replicación rsync fallida (código {proc.returncode})\n{proc.stderr.read()}")
                 
             GLib.idle_add(self.update_progress, 0.85, "Configurando arranque (fstab)...")
             def get_partition_uuid(part):
+                if "TEST_MODE" in os.environ:
+                    return "simulated-uuid-1234-abcd"
                 val = exec_cmd(["blkid", "-o", "value", "-s", "UUID", part])
                 return val.strip()
                 
@@ -747,9 +755,12 @@ UUID={efi_uuid} /boot/efi       vfat    umask=0077      0       2
 # <file system>             <mount point>   <type>  <options>       <dump>  <pass>
 UUID={root_uuid} /               ext4    errors=remount-ro 0       1
 """
-            os.makedirs("/mnt/etc", exist_ok=True)
-            with open("/mnt/etc/fstab", "w") as f:
-                f.write(fstab_content)
+            if "TEST_MODE" in os.environ:
+                print(f"[TEST_MODE] Simulating writing fstab content:\n{fstab_content}")
+            else:
+                os.makedirs("/mnt/etc", exist_ok=True)
+                with open("/mnt/etc/fstab", "w") as f:
+                    f.write(fstab_content)
                 
             GLib.idle_add(self.update_progress, 0.90, "Instalando cargador de arranque GRUB...")
             exec_cmd(["mount", "--bind", "/dev", "/mnt/dev"])
@@ -760,7 +771,7 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
             if is_efi:
                 exec_cmd(["chroot", "/mnt", "grub-install", disk_path])
                 refind_postinst = "/mnt/var/lib/dpkg/info/pulsaros-refind.postinst"
-                if os.path.exists(refind_postinst):
+                if os.path.exists(refind_postinst) or "TEST_MODE" in os.environ:
                     GLib.idle_add(self.update_progress, 0.92, "Configurando arranque dual rEFInd...")
                     try:
                         exec_cmd(["chroot", "/mnt", "/var/lib/dpkg/info/pulsaros-refind.postinst", "configure"])
@@ -771,28 +782,31 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                 
             exec_cmd(["chroot", "/mnt", "update-grub"])
             
-            subprocess.run(["umount", "-l", "/mnt/dev"])
-            subprocess.run(["umount", "-l", "/mnt/proc"])
-            subprocess.run(["umount", "-l", "/mnt/sys"])
-            subprocess.run(["umount", "-l", "/mnt/run"])
+            if "TEST_MODE" not in os.environ:
+                subprocess.run(["umount", "-l", "/mnt/dev"])
+                subprocess.run(["umount", "-l", "/mnt/proc"])
+                subprocess.run(["umount", "-l", "/mnt/sys"])
+                subprocess.run(["umount", "-l", "/mnt/run"])
             
             GLib.idle_add(self.update_progress, 0.95, "Creando flag de primer arranque...")
             exec_cmd(["touch", "/mnt/etc/pulsar-need-setup"])
             
-            if is_efi:
-                subprocess.run(["umount", "-l", "/mnt/boot/efi"])
-            subprocess.run(["umount", "-l", "/mnt"])
+            if "TEST_MODE" not in os.environ:
+                if is_efi:
+                    subprocess.run(["umount", "-l", "/mnt/boot/efi"])
+                subprocess.run(["umount", "-l", "/mnt"])
             
             GLib.idle_add(self.on_installation_completed)
             
         except Exception as err:
-            subprocess.run(["umount", "-l", "/mnt/dev"])
-            subprocess.run(["umount", "-l", "/mnt/proc"])
-            subprocess.run(["umount", "-l", "/mnt/sys"])
-            subprocess.run(["umount", "-l", "/mnt/run"])
-            if is_efi:
-                subprocess.run(["umount", "-l", "/mnt/boot/efi"])
-            subprocess.run(["umount", "-l", "/mnt"])
+            if "TEST_MODE" not in os.environ:
+                subprocess.run(["umount", "-l", "/mnt/dev"])
+                subprocess.run(["umount", "-l", "/mnt/proc"])
+                subprocess.run(["umount", "-l", "/mnt/sys"])
+                subprocess.run(["umount", "-l", "/mnt/run"])
+                if is_efi:
+                    subprocess.run(["umount", "-l", "/mnt/boot/efi"])
+                subprocess.run(["umount", "-l", "/mnt"])
             
             GLib.idle_add(self.on_installation_failed, str(err))
 
@@ -806,6 +820,26 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
         self.update_progress(0.0, "Fallo en la instalación.")
         self.show_error_dialog(error)
         self.stack.set_visible_child_name("install_disk_select")
+
+    def on_guided_install_clicked(self, btn):
+        if "TEST_MODE" in os.environ:
+            print("[TEST_MODE] Simulating Calamares installer GUI launcher...")
+            self.close()
+        else:
+            subprocess.Popen(["sudo", "calamares"])
+            self.close()
+
+    def show_error_dialog(self, message):
+        dialog = Gtk.MessageDialog(
+            transient_for=self,
+            flags=Gtk.DialogFlags.MODAL,
+            message_type=Gtk.MessageType.ERROR,
+            buttons=Gtk.ButtonsType.OK,
+            text="Error de Instalación"
+        )
+        dialog.format_secondary_text(message)
+        dialog.connect("response", lambda d, r: d.destroy())
+        dialog.present()
 
 
 class RecoveryApp(Adw.Application):

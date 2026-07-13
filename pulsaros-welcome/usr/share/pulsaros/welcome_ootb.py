@@ -7,8 +7,8 @@
 import sys
 import os
 
-# CRITICAL REGULATION: Check OOTB witness flag before loading graphical libraries
-if not os.path.exists("/etc/pulsar-need-setup"):
+# CRITICAL REGULATION: Check OOTB witness flag before loading graphical libraries, bypass in test mode
+if not os.path.exists("/etc/pulsar-need-setup") and "TEST_MODE" not in os.environ:
     print("OOTB setup not required. Exiting.")
     sys.exit(0)
 
@@ -161,8 +161,10 @@ class OOTBWindow(Adw.ApplicationWindow):
         self.set_default_size(720, 560)
         self.set_resizable(False)
         
-        # Kiosk fullscreen mode
-        self.fullscreen()
+        # Kiosk fullscreen mode (disable fullscreen if in test mode for convenience)
+        if "TEST_MODE" not in os.environ:
+            self.fullscreen()
+        
         self.apply_css()
         
         # Center layout
@@ -509,15 +511,17 @@ class OOTBWindow(Adw.ApplicationWindow):
             self.btn_header_back.set_visible(True)
             
         elif current_page == "language_select":
-            # Apply language and keyboard layout
             lang_idx = self.lang_row.get_selected()
             key_idx = self.keymap_row.get_selected()
             
             locale = "es_ES.UTF-8" if lang_idx == 0 else "en_US.UTF-8"
             keymap = "es" if key_idx == 0 else "us"
             
-            subprocess.run(["localectl", "set-locale", f"LANG={locale}"])
-            subprocess.run(["localectl", "set-x11-keymap", keymap])
+            if "TEST_MODE" in os.environ:
+                print(f"[TEST_MODE] Simulating localectl set-locale LANG={locale} and keymap={keymap}")
+            else:
+                subprocess.run(["localectl", "set-locale", f"LANG={locale}"])
+                subprocess.run(["localectl", "set-x11-keymap", keymap])
             
             self.stack.set_visible_child_name("timezone")
             
@@ -526,7 +530,10 @@ class OOTBWindow(Adw.ApplicationWindow):
             tz_mapping = ["Europe/Madrid", "America/New_York", "UTC"]
             tz = tz_mapping[tz_idx] if tz_idx >= 0 and tz_idx < len(tz_mapping) else "Europe/Madrid"
             
-            subprocess.run(["timedatectl", "set-timezone", tz])
+            if "TEST_MODE" in os.environ:
+                print(f"[TEST_MODE] Simulating timedatectl set-timezone {tz}")
+            else:
+                subprocess.run(["timedatectl", "set-timezone", tz])
             self.stack.set_visible_child_name("account")
             
         elif current_page == "account":
@@ -546,27 +553,29 @@ class OOTBWindow(Adw.ApplicationWindow):
                 return
                 
             # Create user account
-            res = subprocess.run([
-                "useradd", "-m", "-G", "sudo,audio,video,plugdev",
-                "-s", "/bin/bash", username
-            ], capture_output=True, text=True)
-            
-            if res.returncode != 0:
-                self.show_error(f"Error creando cuenta:\n{res.stderr}")
-                return
+            if "TEST_MODE" in os.environ:
+                print(f"[TEST_MODE] Simulating useradd -m -s /bin/bash {username}")
+            else:
+                res = subprocess.run([
+                    "useradd", "-m", "-G", "sudo,audio,video,plugdev",
+                    "-s", "/bin/bash", username
+                ], capture_output=True, text=True)
                 
-            # Configure passwords
-            p1 = subprocess.Popen(["echo", f"{username}:{password}"], stdout=subprocess.PIPE)
-            p2 = subprocess.Popen(["chpasswd"], stdin=p1.stdout, stderr=subprocess.PIPE)
-            p1.stdout.close()
-            p2.communicate()
+                if res.returncode != 0:
+                    self.show_error(f"Error creando cuenta:\n{res.stderr}")
+                    return
+                
+                # Configure passwords
+                p1 = subprocess.Popen(["echo", f"{username}:{password}"], stdout=subprocess.PIPE)
+                p2 = subprocess.Popen(["chpasswd"], stdin=p1.stdout, stderr=subprocess.PIPE)
+                p1.stdout.close()
+                p2.communicate()
+                
+                p1 = subprocess.Popen(["echo", f"root:{password}"], stdout=subprocess.PIPE)
+                p2 = subprocess.Popen(["chpasswd"], stdin=p1.stdout, stderr=subprocess.PIPE)
+                p1.stdout.close()
+                p2.communicate()
             
-            p1 = subprocess.Popen(["echo", f"root:{password}"], stdout=subprocess.PIPE)
-            p2 = subprocess.Popen(["chpasswd"], stdin=p1.stdout, stderr=subprocess.PIPE)
-            p1.stdout.close()
-            p2.communicate()
-            
-            # Transition to final step
             self.stack.set_visible_child_name("finished")
             self.btn_next.set_label("Comenzar a usar Pulsar OS")
             self.btn_back.set_visible(False)
@@ -577,21 +586,26 @@ class OOTBWindow(Adw.ApplicationWindow):
 
     def run_final_cleanup(self):
         try:
-            # 1. Eliminate live user
-            subprocess.run(["userdel", "-f", "-r", "live"])
-            
-            # 2. Delete OOTB witness file
-            if os.path.exists("/etc/pulsar-need-setup"):
-                os.remove("/etc/pulsar-need-setup")
+            if "TEST_MODE" in os.environ:
+                print("[TEST_MODE] Simulating final system cleanup and session manager reboot...")
+                self.close()
+                sys.exit(0)
+            else:
+                # 1. Eliminate live user
+                subprocess.run(["userdel", "-f", "-r", "live"])
                 
-            # 3. Disable service
-            subprocess.run(["systemctl", "disable", "pulsar-ootb.service"])
-            
-            # 4. Restart session manager to login to new user session
-            subprocess.run(["systemctl", "restart", "display-manager"])
-            
-            self.close()
-            sys.exit(0)
+                # 2. Delete OOTB witness file
+                if os.path.exists("/etc/pulsar-need-setup"):
+                    os.remove("/etc/pulsar-need-setup")
+                    
+                # 3. Disable service
+                subprocess.run(["systemctl", "disable", "pulsar-ootb.service"])
+                
+                # 4. Restart session manager to login to new user session
+                subprocess.run(["systemctl", "restart", "display-manager"])
+                
+                self.close()
+                sys.exit(0)
         except Exception as e:
             self.show_error(f"Error durante la limpieza final:\n{e}")
 
