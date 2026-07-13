@@ -63,8 +63,13 @@ if [ "$BRANCH" != "stable" ] && [ "$BRANCH" != "forky" ] && [ "$BRANCH" != "roll
 fi
 
 get_branch_suffix() {
-    # Return empty to avoid special character URL encoding issues in APT clients
-    echo ""
+    if [ "$BRANCH" = "forky" ]; then
+        echo "-deb14"
+    elif [ "$BRANCH" = "rolling" ]; then
+        echo "-rolling"
+    else
+        echo ""
+    fi
 }
 
 # English: Helper to auto-increment SemVer or Debian format versions (X.Y.Z-R or X.Y.Z)
@@ -114,8 +119,8 @@ build_single_package() {
     # Auto-incrementar la versión del paquete antes de compilar
     local control_file="$source_folder/DEBIAN/control"
     local current_version=$(grep "^Version:" "$control_file" | cut -d' ' -f2)
-    # Strip any existing branch suffix (like +deb13, +deb14, +rolling, or any suffix starting with +)
-    local base_version=$(echo "$current_version" | sed -E 's/\+.*$//')
+    # Strip any existing branch suffix (like +deb13, +deb14, +rolling, or any suffix starting with + or -)
+    local base_version=$(echo "$current_version" | sed -E 's/(\+|-)(deb14|rolling).*$//')
     local new_base=$(increment_version "$base_version")
     local suffix=$(get_branch_suffix)
     local new_version="${new_base}${suffix}"
