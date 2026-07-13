@@ -114,8 +114,8 @@ build_single_package() {
     # Auto-incrementar la versión del paquete antes de compilar
     local control_file="$source_folder/DEBIAN/control"
     local current_version=$(grep "^Version:" "$control_file" | cut -d' ' -f2)
-    # Strip any existing branch suffix (+deb13, +deb14, +rolling, etc.)
-    local base_version=$(echo "$current_version" | sed -E 's/\+(deb13|deb14|rolling)$//')
+    # Strip any existing branch suffix (like +deb13, +deb14, +rolling, or any suffix starting with +)
+    local base_version=$(echo "$current_version" | sed -E 's/\+.*$//')
     local new_base=$(increment_version "$base_version")
     local suffix=$(get_branch_suffix)
     local new_version="${new_base}${suffix}"
