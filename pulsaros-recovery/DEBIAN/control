@@ -1,10 +1,10 @@
 Package: pulsaros-recovery
-Version: 1.0.53
+Version: 1.0.55
 Section: admin
 Priority: optional
 Architecture: all
 Maintainer: Jaime <info@inled.es>
-Depends: python3-gi, python3-dbus, gir1.2-gtk-4.0, gir1.2-adw-1, gir1.2-glib-2.0, python3-xlib, x11-xserver-utils, parted, psmisc, deja-dup, gptfdisk, rsync
+Depends: python3-gi, python3-dbus, gir1.2-gtk-4.0, gir1.2-adw-1, gir1.2-glib-2.0, python3-xlib, x11-xserver-utils, parted, psmisc, deja-dup, gdisk, rsync
 Description: Apple-like Recovery and Disk selector UI for Pulsar OS installer.
  Shows macOS-style Recovery Utilities, Welcome screen, and Disk selector
  before launching Calamares.
