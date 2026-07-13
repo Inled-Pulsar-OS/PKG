@@ -475,6 +475,14 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
             
             if is_efi:
                 exec_cmd(["chroot", "/mnt", "grub-install", disk_path])
+                # Dual boot support: if rEFInd is available in the cloned package database, run its postinst to configure it
+                refind_postinst = "/mnt/var/lib/dpkg/info/pulsaros-refind.postinst"
+                if os.path.exists(refind_postinst):
+                    GLib.idle_add(self.update_progress, 0.92, "Configurando gestor de arranque dual rEFInd...")
+                    try:
+                        exec_cmd(["chroot", "/mnt", "/var/lib/dpkg/info/pulsaros-refind.postinst", "configure"])
+                    except Exception as ref_err:
+                        print(f"Warning: rEFInd dual-boot setup encountered an issue: {ref_err}. Falling back to GRUB.")
             else:
                 # Force BIOS/i386-pc installation
                 exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", disk_path])
