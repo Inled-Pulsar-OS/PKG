@@ -1,16 +1,15 @@
 [Unit]
 Description=Play Startup Sound
-After=sound.target multi-user.target
-Before=mpd.service
+After=sound.target
+Conflicts=shutdown.target
 
 [Service]
 Type=oneshot
-# Clean graphical environment variables inside shell wrapper to bypass root ownership checks completely
-ExecStartPre=/bin/sleep 2
-# English: Execute mpv with ALSA and redirect output to /var/log/bootsound.log for debugging purposes.
-# Español: Ejecutar mpv con ALSA y redirigir la salida a /var/log/bootsound.log para tareas de depuración.
-ExecStart=/bin/bash -c "unset XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS PULSE_SERVER; exec /usr/bin/mpv --ao=alsa --volume=80 /usr/share/extras/boot-sound.wav > /var/log/bootsound.log 2>&1"
+# Wait up to 10 seconds for any ALSA control device to become available
+ExecStartPre=/bin/bash -c "for i in {1..20}; do if ls /dev/snd/controlC* >/dev/null 2>&1; then exit 0; fi; sleep 0.5; done; exit 1"
+# Play the sound cleanly using aplay from alsa-utils
+ExecStart=/usr/bin/aplay -q /usr/share/extras/boot-sound.wav
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
 
