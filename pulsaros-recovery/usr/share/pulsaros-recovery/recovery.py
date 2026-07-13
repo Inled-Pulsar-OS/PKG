@@ -350,37 +350,67 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     raise Exception(f"Comando fallido: {' '.join(cmd) if isinstance(cmd, list) else cmd}\n{res.stderr}")
                 return res.stdout
                 
-            # Step 1: Partitioning
-            GLib.idle_add(self.update_progress, 0.05, "Limpiando y particionando el disco (GPT)...")
-            exec_cmd(["sgdisk", "--zap-all", disk_path])
-            exec_cmd(["sgdisk", "--new=1:0:+512M", "--typecode=1:ef00", "--change-name=1:EFI", disk_path])
-            exec_cmd(["sgdisk", "--new=2:0:0", "--typecode=2:8300", "--change-name=2:PulsarOS", disk_path])
-            exec_cmd(["udevadm", "settle"])
+            # Check firmware boot mode: UEFI vs Legacy BIOS
+            is_efi = os.path.exists("/sys/firmware/efi")
+            print(f"Boot firmware mode detected: {'UEFI' if is_efi else 'Legacy BIOS'}")
             
-            # Determine partition suffix
-            if "nvme" in disk_path or "mmcblk" in disk_path or "loop" in disk_path:
-                efi_part = f"{disk_path}p1"
-                root_part = f"{disk_path}p2"
-            else:
-                efi_part = f"{disk_path}1"
-                root_part = f"{disk_path}2"
+            if is_efi:
+                # UEFI Partitioning (GPT)
+                GLib.idle_add(self.update_progress, 0.05, "Limpiando y particionando (GPT para UEFI)...")
+                exec_cmd(["sgdisk", "--zap-all", disk_path])
+                exec_cmd(["sgdisk", "--new=1:0:+512M", "--typecode=1:ef00", "--change-name=1:EFI", disk_path])
+                exec_cmd(["sgdisk", "--new=2:0:0", "--typecode=2:8300", "--change-name=2:PulsarOS", disk_path])
+                exec_cmd(["udevadm", "settle"])
                 
-            # Step 2: Formatting
-            GLib.idle_add(self.update_progress, 0.15, "Formateando particiones (EFI y ext4)...")
-            exec_cmd(["mkfs.vfat", "-F32", efi_part])
-            exec_cmd(["mkfs.ext4", "-F", root_part])
+                # Determine partitions
+                if "nvme" in disk_path or "mmcblk" in disk_path or "loop" in disk_path:
+                    efi_part = f"{disk_path}p1"
+                    root_part = f"{disk_path}p2"
+                else:
+                    efi_part = f"{disk_path}1"
+                    root_part = f"{disk_path}2"
+                    
+                # Format partitions
+                GLib.idle_add(self.update_progress, 0.12, "Formateando particiones (EFI y ext4)...")
+                exec_cmd(["mkfs.vfat", "-F32", efi_part])
+                exec_cmd(["mkfs.ext4", "-F", root_part])
+                
+                # Mount system
+                GLib.idle_add(self.update_progress, 0.18, "Montando sistema de archivos...")
+                subprocess.run(["umount", "-l", "/mnt/boot/efi"])
+                subprocess.run(["umount", "-l", "/mnt"])
+                os.makedirs("/mnt", exist_ok=True)
+                exec_cmd(["mount", root_part, "/mnt"])
+                os.makedirs("/mnt/boot/efi", exist_ok=True)
+                exec_cmd(["mount", efi_part, "/mnt/boot/efi"])
+            else:
+                # BIOS Partitioning (MBR / DOS)
+                GLib.idle_add(self.update_progress, 0.05, "Limpiando y particionando (MBR para BIOS)...")
+                # Wipe MBR sector
+                exec_cmd(["dd", "if=/dev/zero", f"of={disk_path}", "bs=512", "count=1"])
+                # Partition using sfdisk (single bootable partition)
+                sfdisk_script = "label: dos\nsize=+, type=83, bootable\n"
+                p = subprocess.Popen(["sfdisk", disk_path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                p.communicate(input=sfdisk_script)
+                exec_cmd(["udevadm", "settle"])
+                
+                # Determine partitions
+                if "nvme" in disk_path or "mmcblk" in disk_path or "loop" in disk_path:
+                    root_part = f"{disk_path}p1"
+                else:
+                    root_part = f"{disk_path}1"
+                    
+                # Format partitions
+                GLib.idle_add(self.update_progress, 0.12, "Formateando partición raíz (ext4)...")
+                exec_cmd(["mkfs.ext4", "-F", root_part])
+                
+                # Mount system
+                GLib.idle_add(self.update_progress, 0.18, "Montando sistema de archivos...")
+                subprocess.run(["umount", "-l", "/mnt"])
+                os.makedirs("/mnt", exist_ok=True)
+                exec_cmd(["mount", root_part, "/mnt"])
             
-            # Step 3: Mounting
-            GLib.idle_add(self.update_progress, 0.20, "Montando sistema de archivos...")
-            # Clean mounts
-            subprocess.run(["umount", "-l", "/mnt/boot/efi"])
-            subprocess.run(["umount", "-l", "/mnt"])
-            os.makedirs("/mnt", exist_ok=True)
-            exec_cmd(["mount", root_part, "/mnt"])
-            os.makedirs("/mnt/boot/efi", exist_ok=True)
-            exec_cmd(["mount", efi_part, "/mnt/boot/efi"])
-            
-            # Step 4: System Replication
+            # Step 4: System Replication (rsync)
             GLib.idle_add(self.update_progress, 0.25, "Copiando archivos del sistema... (25%)")
             rsync_cmd = [
                 "rsync", "-aHAXx",
@@ -396,7 +426,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
             ]
             
             proc = subprocess.Popen(rsync_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            # Simulated smooth progression during rsync
             for progress_fraction in range(26, 81):
                 if proc.poll() is not None:
                     break
@@ -417,14 +446,21 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 val = exec_cmd(["blkid", "-o", "value", "-s", "UUID", part])
                 return val.strip()
                 
-            efi_uuid = get_partition_uuid(efi_part)
             root_uuid = get_partition_uuid(root_part)
             
-            fstab_content = f"""# /etc/fstab: static file system information.
+            if is_efi:
+                efi_uuid = get_partition_uuid(efi_part)
+                fstab_content = f"""# /etc/fstab: static file system information.
 #
 # <file system>             <mount point>   <type>  <options>       <dump>  <pass>
 UUID={root_uuid} /               ext4    errors=remount-ro 0       1
 UUID={efi_uuid} /boot/efi       vfat    umask=0077      0       2
+"""
+            else:
+                fstab_content = f"""# /etc/fstab: static file system information.
+#
+# <file system>             <mount point>   <type>  <options>       <dump>  <pass>
+UUID={root_uuid} /               ext4    errors=remount-ro 0       1
 """
             os.makedirs("/mnt/etc", exist_ok=True)
             with open("/mnt/etc/fstab", "w") as f:
@@ -437,7 +473,12 @@ UUID={efi_uuid} /boot/efi       vfat    umask=0077      0       2
             exec_cmd(["mount", "--bind", "/sys", "/mnt/sys"])
             exec_cmd(["mount", "--bind", "/run", "/mnt/run"])
             
-            exec_cmd(["chroot", "/mnt", "grub-install", disk_path])
+            if is_efi:
+                exec_cmd(["chroot", "/mnt", "grub-install", disk_path])
+            else:
+                # Force BIOS/i386-pc installation
+                exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", disk_path])
+                
             exec_cmd(["chroot", "/mnt", "update-grub"])
             
             # Clean bind mounts
@@ -451,7 +492,8 @@ UUID={efi_uuid} /boot/efi       vfat    umask=0077      0       2
             exec_cmd(["touch", "/mnt/etc/pulsar-need-setup"])
             
             # Final unmounting
-            subprocess.run(["umount", "-l", "/mnt/boot/efi"])
+            if is_efi:
+                subprocess.run(["umount", "-l", "/mnt/boot/efi"])
             subprocess.run(["umount", "-l", "/mnt"])
             
             # Successful end
@@ -463,7 +505,8 @@ UUID={efi_uuid} /boot/efi       vfat    umask=0077      0       2
             subprocess.run(["umount", "-l", "/mnt/proc"])
             subprocess.run(["umount", "-l", "/mnt/sys"])
             subprocess.run(["umount", "-l", "/mnt/run"])
-            subprocess.run(["umount", "-l", "/mnt/boot/efi"])
+            if is_efi:
+                subprocess.run(["umount", "-l", "/mnt/boot/efi"])
             subprocess.run(["umount", "-l", "/mnt"])
             
             GLib.idle_add(self.on_installation_failed, str(err))

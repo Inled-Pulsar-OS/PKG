@@ -455,9 +455,9 @@ instances:
 
 sequence:
 - show:
+  - partition
   - locale
   - keyboard
-  - partition
   - users
   - summary
 - exec:
