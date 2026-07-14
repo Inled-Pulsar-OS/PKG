@@ -1312,10 +1312,25 @@ class OOTBWindow(Adw.ApplicationWindow):
             if "TEST_MODE" in os.environ:
                 print("[TEST_MODE] Simulating user creation and avatar copy...")
             else:
-                run_setup_cmd([
-                    "useradd", "-m", "-G", "sudo,audio,video,plugdev",
-                    "-s", "/bin/bash", username
-                ])
+                # Check if user already exists
+                user_exists = False
+                try:
+                    res_check = subprocess.run(["id", username], capture_output=True)
+                    if res_check.returncode == 0:
+                        user_exists = True
+                except Exception:
+                    pass
+
+                if not user_exists:
+                    run_setup_cmd([
+                        "useradd", "-m", "-G", "sudo,audio,video,plugdev",
+                        "-s", "/bin/bash", username
+                    ])
+                else:
+                    # User exists, just ensure they are in the correct groups
+                    run_setup_cmd([
+                        "usermod", "-a", "-G", "sudo,audio,video,plugdev", "-s", "/bin/bash", username
+                    ])
 
                 # Write user and root password securely without pipelines
                 cmd_user = ["sudo", "chpasswd"] if os.geteuid() != 0 else ["chpasswd"]
@@ -1366,6 +1381,23 @@ class OOTBWindow(Adw.ApplicationWindow):
 
         except Exception as err:
             GLib.idle_add(self.on_setup_failed, str(err))
+
+    def on_setup_completed(self):
+        self.progress_spinner.stop()
+        self.load_log_to_view()
+        self.stack.set_visible_child_name("finished")
+        self.btn_next.set_label("Start using Pulsar OS")
+        self.btn_back.set_visible(False)
+        self.btn_header_back.set_visible(False)
+        self.btn_next.set_sensitive(True)
+
+    def on_setup_failed(self, error_message):
+        self.progress_spinner.stop()
+        self.show_error(error_message)
+        self.stack.set_visible_child_name("account")
+        self.btn_next.set_sensitive(True)
+        self.btn_back.set_sensitive(True)
+        self.btn_header_back.set_sensitive(True)
 
     def run_final_cleanup(self):
         try:
