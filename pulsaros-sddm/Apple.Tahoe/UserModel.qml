@@ -42,13 +42,20 @@ Item {
     }
 
     onLastNameUserChanged: {
-        finalLoginUserName = lastNameUser || customUserModel.get(0).name
-        updateOrdenModel(lastNameUser || customUserModel.get(0).name)
+        if (customUserModel.count > 0) {
+            finalLoginUserName = lastNameUser || customUserModel.get(0).name
+            updateOrdenModel(lastNameUser || customUserModel.get(0).name)
+        }
     }
 
-    onFullChargeModelChanged: {
-
-        updateOrdenModel(lastNameUser || customUserModel.get(0).name)
+    Connections {
+        target: customUserModel
+        function onCountChanged() {
+            if (customUserModel.count === userModel.count && userModel.count > 0) {
+                finalLoginUserName = lastNameUser || customUserModel.get(0).name
+                updateOrdenModel(lastNameUser || customUserModel.get(0).name)
+            }
+        }
     }
 
     ListModel {

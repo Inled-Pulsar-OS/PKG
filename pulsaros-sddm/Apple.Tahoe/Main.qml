@@ -14,8 +14,8 @@ Rectangle {
     property int sizeAvatar: 110
     property int longitudMasLarga: 0
 
-    property int lastIndexUser: user.currentIndex
-    property string lastNameUser: user.currentText
+    property int lastIndexUser: 0
+    property string lastNameUser: users.lastNameUser
     property int implicitCustomWidth: 0
     property ListModel jUser: users.usersList
     property bool firtInteraction: true
@@ -77,161 +77,7 @@ Rectangle {
 
 
 
-    Row {
-        anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.rightMargin: 40
-        anchors.topMargin: 15
 
-        Item {
-
-            Image {
-                id: shutdown
-                height: 22
-                width: 22
-                source: "images/system-shutdown.svg"
-                fillMode: Image.PreserveAspectFit
-
-                MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onEntered: {
-                        shutdown.source = "images/system-shutdown-hover.svg"
-                        var component = Qt.createComponent(
-                            "components/ShutdownToolTip.qml")
-                        if (component.status === Component.Ready) {
-                            var tooltip = component.createObject(shutdown)
-                            tooltip.x = -100
-                            tooltip.y = 40
-                            tooltip.destroy(600)
-                        }
-                    }
-                    onExited: {
-                        shutdown.source = "images/system-shutdown.svg"
-                    }
-                    onClicked: {
-                        shutdown.source = "images/system-shutdown-pressed.svg"
-                        sddm.powerOff()
-                    }
-                }
-            }
-        }
-    }
-
-    Row {
-        anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.rightMargin: 70
-        anchors.topMargin: 15
-
-        Item {
-
-            Image {
-                id: reboot
-                height: 22
-                width: 22
-                source: "images/system-reboot.svg"
-                fillMode: Image.PreserveAspectFit
-
-                MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onEntered: {
-                        reboot.source = "images/system-reboot-hover.svg"
-                        var component = Qt.createComponent(
-                            "components/RebootToolTip.qml")
-                        if (component.status === Component.Ready) {
-                            var tooltip = component.createObject(reboot)
-                            tooltip.x = -100
-                            tooltip.y = 40
-                            tooltip.destroy(600)
-                        }
-                    }
-                    onExited: {
-                        reboot.source = "images/system-reboot.svg"
-                    }
-                    onClicked: {
-                        reboot.source = "images/system-reboot-pressed.svg"
-                        sddm.reboot()
-                    }
-                }
-            }
-        }
-    }
-    Row {
-        anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.rightMargin: 88
-        anchors.topMargin: 15
-
-    }
-    Row {
-        anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.rightMargin: 110
-        anchors.topMargin: 15
-
-        ComboBox {
-            id: session
-            height: 22
-            width: 150
-            model: sessionModel
-            textRole: "name"
-            displayText: ""
-            currentIndex: sessionModel.lastIndex
-            background: Rectangle {
-                implicitWidth: parent.width
-                implicitHeight: parent.height
-                color: "transparent"
-            }
-
-
-            delegate: MenuItem {
-                id: menuitems
-                width: slistview.width * 4
-                text: session.textRole ? (Array.isArray(session.model) ? modelData[session.textRole] : model[session.textRole]) : modelData
-                highlighted: session.highlightedIndex === index
-                hoverEnabled: session.hoverEnabled
-                onClicked: {
-                    ava.source = "/var/lib/AccountsService/icons/" + user.currentText
-                    session.currentIndex = index
-                    slistview.currentIndex = index
-                    session.popup.close()
-                }
-            }
-            indicator: Rectangle{
-                anchors.right: parent.right
-                anchors.rightMargin: 9
-                height: parent.height
-                width: 22
-                color: "transparent"
-                Image{
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width
-                    height: width
-                    fillMode: Image.PreserveAspectFit
-                    source: "images/conf.svg"
-                }
-            }
-            popup: Popup {
-                width: parent.width
-                height: parent.height * menuitems.count
-                implicitHeight: slistview.contentHeight
-                margins: 0
-                contentItem: ListView {
-                    id: slistview
-                    clip: true
-                    anchors.fill: parent
-                    model: session.model
-                    spacing: 0
-                    highlightFollowsCurrentItem: true
-                    currentIndex: session.highlightedIndex
-                    delegate: session.delegate
-                }
-            }
-
-        }
-    }
 
     BrightnessContrast {
         anchors.fill: parent
@@ -298,7 +144,7 @@ Rectangle {
         anchors.bottomMargin: 40
         color: "transparent"
 
-        Column {
+        Item {
             id: sectionLogin
             height: parent.height
             width: parent.width
@@ -320,6 +166,19 @@ Rectangle {
                 delegate: Item {
                     height: sizeAvatar*.9
                     width: nameList.implicitWidth + height + contentFullUser.spacing
+
+                    Rectangle {
+                        id: hoverBg
+                        anchors.fill: parent
+                        anchors.margins: -4
+                        color: "white"
+                        opacity: mouseArea.containsMouse ? 0.15 : 0.0
+                        radius: 8
+                        Behavior on opacity {
+                            NumberAnimation { duration: 150 }
+                        }
+                    }
+
                     Row {
                         id: contentFullUser
                         height: parent.height - 10
@@ -336,7 +195,7 @@ Rectangle {
                         }
                         Image {
                             id: avaList
-                            source: model.icon
+                            source: (model.icon && model.icon.toString() !== "") ? model.icon : "images/.face.icon"
                             height: parent.height
                             width: height
                             fillMode: Image.PreserveAspectFit
@@ -380,7 +239,9 @@ Rectangle {
                         }
                     }
                     MouseArea {
+                        id: mouseArea
                         anchors.fill: contentFullUser
+                        hoverEnabled: true
                         onClicked: {
                             listuser.visible = !listuser.visible
                             ava.visible = !ava.visible
@@ -482,7 +343,7 @@ Rectangle {
                 layer.effect: OpacityMask {
                     maskSource: mask
                 }
-                source: users.lastUrlAvatar
+                source: (users.lastUrlAvatar && users.lastUrlAvatar.toString() !== "") ? users.lastUrlAvatar : "images/.face.icon"
                 MouseArea {
                     anchors.fill: ava
                     onClicked: {
@@ -497,7 +358,7 @@ Rectangle {
                 id: usernametext
                 text: users.finalLoginUserName
                 anchors.top: parent.top
-                anchors.topMargin: listuser.visible ? listuser.height + 20 : sizeAvatar + 20
+                anchors.topMargin: sizeAvatar + 20
                 anchors.horizontalCenter: parent.horizontalCenter
                 font.pixelSize: 20
                 font.family: fontbold.name
@@ -634,6 +495,137 @@ Rectangle {
                 }
         }
 
+    }
+
+    Row {
+        id: topBar
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.rightMargin: 40
+        anchors.topMargin: 15
+        spacing: 15
+        z: 1000
+
+        ComboBox {
+            id: session
+            height: 22
+            width: 150
+            model: sessionModel
+            textRole: "name"
+            displayText: ""
+            currentIndex: sessionModel.lastIndex
+            background: Rectangle {
+                implicitWidth: parent.width
+                implicitHeight: parent.height
+                color: "transparent"
+            }
+
+            delegate: MenuItem {
+                id: menuitems
+                width: slistview.width * 4
+                text: session.textRole ? (Array.isArray(session.model) ? modelData[session.textRole] : model[session.textRole]) : modelData
+                highlighted: session.highlightedIndex === index
+                hoverEnabled: session.hoverEnabled
+                onClicked: {
+                    ava.source = "/var/lib/AccountsService/icons/" + user.currentText
+                    session.currentIndex = index
+                    slistview.currentIndex = index
+                    session.popup.close()
+                }
+            }
+            indicator: Rectangle{
+                anchors.right: parent.right
+                anchors.rightMargin: 9
+                height: parent.height
+                width: 22
+                color: "transparent"
+                Image{
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width
+                    height: width
+                    fillMode: Image.PreserveAspectFit
+                    source: "images/conf.svg"
+                }
+            }
+            popup: Popup {
+                width: parent.width
+                height: parent.height * menuitems.count
+                implicitHeight: slistview.contentHeight
+                margins: 0
+                contentItem: ListView {
+                    id: slistview
+                    clip: true
+                    anchors.fill: parent
+                    model: session.model
+                    spacing: 0
+                    highlightFollowsCurrentItem: true
+                    currentIndex: session.highlightedIndex
+                    delegate: session.delegate
+                }
+            }
+        }
+
+        Image {
+            id: reboot
+            height: 22
+            width: 22
+            source: "images/system-reboot.svg"
+            fillMode: Image.PreserveAspectFit
+
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                onEntered: {
+                    reboot.source = "images/system-reboot-hover.svg"
+                    var component = Qt.createComponent(
+                        "components/RebootToolTip.qml")
+                    if (component.status === Component.Ready) {
+                        var tooltip = component.createObject(reboot)
+                        tooltip.x = -100
+                        tooltip.y = 40
+                        tooltip.destroy(600)
+                    }
+                }
+                onExited: {
+                    reboot.source = "images/system-reboot.svg"
+                }
+                onClicked: {
+                    reboot.source = "images/system-reboot-pressed.svg"
+                    sddm.reboot()
+                }
+            }
+        }
+
+        Image {
+            id: shutdown
+            height: 22
+            width: 22
+            source: "images/system-shutdown.svg"
+            fillMode: Image.PreserveAspectFit
+
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                onEntered: {
+                    shutdown.source = "images/system-shutdown-hover.svg"
+                    var component = Qt.createComponent(
+                        "components/ShutdownToolTip.qml")
+                    if (component.status === Component.Ready) {
+                        var tooltip = component.createObject(shutdown)
+                        tooltip.x = -100
+                        tooltip.y = 40
+                        tooltip.destroy(600)
+                    }
+                }
+                onExited: {
+                    shutdown.source = "images/system-shutdown.svg"
+                }
+                onClicked: {
+                    shutdown.source = "images/system-shutdown-pressed.svg"
+                    sddm.powerOff()
+                }
+            }
+        }
     }
 }
 

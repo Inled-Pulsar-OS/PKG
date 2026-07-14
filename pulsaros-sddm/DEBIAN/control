@@ -1,10 +1,10 @@
 Package: pulsaros-sddm
-Version: 1.0.49
+Version: 1.0.59
 Section: x11
 Priority: optional
 Architecture: all
 Maintainer: Jaime <info@inled.es>
-Depends: sddm, curl, gnome-session-xsession, qt6-image-formats-plugins
+Depends: sddm, curl, gnome-session-xsession, qt6-image-formats-plugins, qt6-svg-plugins, qml6-module-qt5compat-graphicaleffects
 Description: SDDM login theme and configurations for Pulsar OS.
  Packages and configures SDDM as the default display manager using the Apple Tahoe theme.
  Sets SDDM as default while keeping gdm3 libraries to maintain GNOME screen locking.

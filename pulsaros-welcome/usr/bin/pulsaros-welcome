@@ -16,10 +16,18 @@ for arg in "$@"; do
     fi
 done
 
+# If OOTB setup is pending, launch welcome_ootb.py instead
+if [ -f "/etc/pulsar-need-setup" ]; then
+    if command -v xhost &>/dev/null; then
+        xhost +SI:localuser:root &>/dev/null
+    fi
+    exec sudo -E /usr/bin/python3 /usr/share/pulsaros/welcome_ootb.py
+fi
+
 # Si el archivo de marca existe y no se fuerza, salir
 if [ -f "$DONE_FILE" ] && ! $FORCE; then
     exit 0
 fi
 
 # Ejecutar el script principal de Python
-/usr/share/pulsaros-welcome/welcome.py "$@"
+exec /usr/share/pulsaros-welcome/welcome.py "$@"
