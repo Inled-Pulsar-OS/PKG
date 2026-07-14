@@ -1199,8 +1199,25 @@ class OOTBWindow(Adw.ApplicationWindow):
 
             try:
                 run_setup_cmd(["locale-gen", self.selected_language])
-                run_setup_cmd(["localectl", "set-locale", f"LANG={self.selected_language}"])
                 
+                # Try to set locale via localectl, fallback to writing directly if polkit/D-Bus denies access
+                try:
+                    run_setup_cmd(["localectl", "set-locale", f"LANG={self.selected_language}"])
+                except Exception as loc_err:
+                    with open("/tmp/pulsar-ootb.log", "a") as log:
+                        log.write(f"Warning: localectl set-locale failed: {loc_err}. Writing to /etc/default/locale directly...\n")
+                    try:
+                        locale_content = f'LANG="{self.selected_language}"\n'
+                        if "TEST_MODE" not in os.environ:
+                            with open("/tmp/locale_tmp", "w") as f:
+                                f.write(locale_content)
+                            run_setup_cmd(["mv", "/tmp/locale_tmp", "/etc/default/locale"])
+                            run_setup_cmd(["chown", "root:root", "/etc/default/locale"])
+                            run_setup_cmd(["chmod", "644", "/etc/default/locale"])
+                    except Exception as wr_err:
+                        with open("/tmp/pulsar-ootb.log", "a") as log:
+                            log.write(f"Warning: Failed to write /etc/default/locale: {wr_err}\n")
+
                 # 1. Try to install console-setup to make layout packages available
                 try:
                     run_setup_cmd(["apt-get", "install", "-y", "console-setup", "keyboard-configuration"])
@@ -1232,7 +1249,23 @@ class OOTBWindow(Adw.ApplicationWindow):
                         with open("/tmp/pulsar-ootb.log", "a") as log:
                             log.write(f"Warning: Failed to write /etc/default/keyboard: {kb_err}\n")
 
-                run_setup_cmd(["timedatectl", "set-timezone", self.selected_timezone])
+                # Try to set timezone via timedatectl, fallback to manual files if D-Bus fails
+                try:
+                    run_setup_cmd(["timedatectl", "set-timezone", self.selected_timezone])
+                except Exception as tz_err:
+                    with open("/tmp/pulsar-ootb.log", "a") as log:
+                        log.write(f"Warning: timedatectl set-timezone failed: {tz_err}. Fallback to manual symlink...\n")
+                    try:
+                        if "TEST_MODE" not in os.environ:
+                            run_setup_cmd(["ln", "-sf", f"/usr/share/zoneinfo/{self.selected_timezone}", "/etc/localtime"])
+                            with open("/tmp/tz_tmp", "w") as f:
+                                f.write(f"{self.selected_timezone}\n")
+                            run_setup_cmd(["mv", "/tmp/tz_tmp", "/etc/timezone"])
+                            run_setup_cmd(["chown", "root:root", "/etc/timezone"])
+                            run_setup_cmd(["chmod", "644", "/etc/timezone"])
+                    except Exception as wr_tz_err:
+                        with open("/tmp/pulsar-ootb.log", "a") as log:
+                            log.write(f"Warning: Failed to write timezone manually: {wr_tz_err}\n")
 
                 if "TEST_MODE" in os.environ:
                     print("[TEST_MODE] Simulating user creation and avatar copy...")

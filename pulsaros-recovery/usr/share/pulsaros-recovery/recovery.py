@@ -912,6 +912,13 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
             exec_cmd(["mount", "--bind", "/run", "/mnt/run"])
             
             if is_efi:
+                # Run grub-install twice:
+                # 1. Without --removable to register the UEFI NVRAM boot entry (so the UEFI firmware boots the hard drive by default)
+                try:
+                    exec_cmd(["chroot", "/mnt", "grub-install", disk_path])
+                except Exception as g_err:
+                    print(f"Warning: Standard grub-install failed: {g_err}. Proceeding with removable fallback...")
+                # 2. With --removable to create fallback loader in /EFI/BOOT/BOOTX64.EFI
                 exec_cmd(["chroot", "/mnt", "grub-install", "--removable", disk_path])
                 refind_postinst = "/mnt/var/lib/dpkg/info/pulsaros-refind.postinst"
                 if os.path.exists(refind_postinst) or "TEST_MODE" in os.environ:
