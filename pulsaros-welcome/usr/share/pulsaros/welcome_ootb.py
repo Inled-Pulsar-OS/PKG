@@ -1308,41 +1308,52 @@ class OOTBWindow(Adw.ApplicationWindow):
                 self.close()
                 sys.exit(0)
             else:
+                cleanup_script = """#!/bin/bash
+sleep 2
+echo "=== Background Cleanup Started ===" >> /tmp/pulsar-ootb.log
+
+# 1. Kill any active processes owned by live user
+pkill -9 -u live >> /tmp/pulsar-ootb.log 2>&1
+
+# 2. Eliminate live user
+userdel -f -r live >> /tmp/pulsar-ootb.log 2>&1
+
+# 3. Delete OOTB witness file
+if [ -f /etc/pulsar-need-setup ]; then
+    rm -f /etc/pulsar-need-setup
+    echo "Deleted /etc/pulsar-need-setup" >> /tmp/pulsar-ootb.log
+fi
+
+# 4. Clean up SDDM autologin configuration to prevent bootlooping back to deleted live user
+if [ -f /etc/sddm.conf.d/autologin.conf ]; then
+    rm -f /etc/sddm.conf.d/autologin.conf
+    echo "Deleted /etc/sddm.conf.d/autologin.conf" >> /tmp/pulsar-ootb.log
+fi
+
+# 5. Disable service
+systemctl disable pulsar-ootb.service >> /tmp/pulsar-ootb.log 2>&1
+
+# 6. Restart display manager
+echo "Restarting display-manager..." >> /tmp/pulsar-ootb.log
+systemctl restart display-manager >> /tmp/pulsar-ootb.log 2>&1
+"""
+                cleanup_path = "/tmp/pulsar-cleanup.sh"
+                with open(cleanup_path, "w") as sf:
+                    sf.write(cleanup_script)
+                os.chmod(cleanup_path, 0o755)
+
                 with open("/tmp/pulsar-ootb.log", "a") as log:
-                    log.write("\n=== Running Final Cleanup ===\n")
-                    
-                    # 1. Kill any active processes owned by live user
-                    kill_res = subprocess.run(["pkill", "-9", "-u", "live"], capture_output=True, text=True)
-                    log.write(f"pkill live - STDOUT: {kill_res.stdout} STDERR: {kill_res.stderr}\n")
-                    
-                    # 2. Eliminate live user
-                    udel_res = subprocess.run(["userdel", "-f", "-r", "live"], capture_output=True, text=True)
-                    log.write(f"userdel live - STDOUT: {udel_res.stdout} STDERR: {udel_res.stderr}\n")
+                    log.write("\n=== Scheduling Detached Background Cleanup ===\n")
 
-                    # 3. Delete OOTB witness file
-                    if os.path.exists("/etc/pulsar-need-setup"):
-                        os.remove("/etc/pulsar-need-setup")
-                        log.write("Deleted /etc/pulsar-need-setup\n")
-
-                    # 4. Clean up SDDM autologin configuration to prevent bootlooping back to deleted live user
-                    if os.path.exists("/etc/sddm.conf.d/autologin.conf"):
-                        os.remove("/etc/sddm.conf.d/autologin.conf")
-                        log.write("Deleted /etc/sddm.conf.d/autologin.conf\n")
-
-                    # 5. Disable service
-                    dis_res = subprocess.run(["systemctl", "disable", "pulsar-ootb.service"], capture_output=True, text=True)
-                    log.write(f"systemctl disable pulsar-ootb.service - STDOUT: {dis_res.stdout} STDERR: {dis_res.stderr}\n")
-
-                    # 6. Restart display manager
-                    log.write("Restarting display-manager...\n")
-                    subprocess.run(["systemctl", "restart", "display-manager"])
-
+                # Launch the script completely detached in a new session group
+                subprocess.Popen([cleanup_path], start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                
                 self.close()
                 sys.exit(0)
         except Exception as e:
             with open("/tmp/pulsar-ootb.log", "a") as log:
-                log.write(f"Exception during final cleanup: {e}\n")
-            self.show_error(f"Error during final cleanup:\n{e}")
+                log.write(f"Exception during final cleanup schedule: {e}\n")
+            self.show_error(f"Error starting final cleanup:\n{e}")
 
 
 class OOTBApp(Adw.Application):
