@@ -3,7 +3,13 @@ set -e
 
 echo "🎨 Configurando Tema Plymouth de Pulsar OS..."
 
-# Registrar el tema en update-alternatives
+# Registrar el tema en update-alternatives (limpiando primero enlaces o estados rotos)
+if [ -L "/usr/share/plymouth/themes/default.plymouth" ] && [ ! -e "/usr/share/plymouth/themes/default.plymouth" ]; then
+    echo "🧹 Eliminando enlace simbólico roto de default.plymouth..."
+    rm -f "/usr/share/plymouth/themes/default.plymouth"
+fi
+update-alternatives --remove-all default.plymouth || true
+
 update-alternatives --install /usr/share/plymouth/themes/default.plymouth default.plymouth /usr/share/plymouth/themes/pulsar-plymouth/pulsar-plymouth.plymouth 150
 
 # Establecer como predeterminado

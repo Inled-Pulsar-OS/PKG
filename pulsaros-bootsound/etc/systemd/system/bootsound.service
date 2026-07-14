@@ -8,7 +8,7 @@ Type=oneshot
 # Wait up to 10 seconds for any ALSA control device to become available
 ExecStartPre=/bin/bash -c "for i in {1..20}; do if ls /dev/snd/controlC* >/dev/null 2>&1; then exit 0; fi; sleep 0.5; done; exit 1"
 # Play the sound cleanly using aplay from alsa-utils
-ExecStart=/usr/bin/aplay -q /usr/share/extras/boot-sound.wav
+ExecStart=/bin/bash /usr/share/extras/play-bootsound.sh
 
 [Install]
 WantedBy=multi-user.target
