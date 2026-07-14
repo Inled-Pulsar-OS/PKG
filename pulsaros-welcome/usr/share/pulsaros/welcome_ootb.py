@@ -434,6 +434,7 @@ class OOTBWindow(Adw.ApplicationWindow):
         self.build_timezone_page()
         self.build_account_page()
         self.build_theme_page()
+        self.build_progress_page()
         self.build_finished_page()
 
         # Show first page
@@ -1008,6 +1009,28 @@ class OOTBWindow(Adw.ApplicationWindow):
             self.remove_css_class("dark-theme")
             Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_LIGHT)
             self.selected_theme = "light"
+    def build_progress_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
+        box.set_valign(Gtk.Align.CENTER)
+        box.set_halign(Gtk.Align.CENTER)
+
+        # Large beautiful loading spinner
+        self.progress_spinner = Gtk.Spinner()
+        self.progress_spinner.set_size_request(64, 64)
+        self.progress_spinner.add_css_class("suggested-action")
+        box.append(self.progress_spinner)
+
+        # Title
+        self.progress_title = Gtk.Label(label="Configuring your system...")
+        self.progress_title.add_css_class("welcome-title")
+        box.append(self.progress_title)
+
+        # Subtitle
+        sub_label = Gtk.Label(label="Please wait while Pulsar OS sets up your user account and system files.")
+        sub_label.add_css_class("welcome-subtitle")
+        box.append(sub_label)
+
+        self.stack.add_named(box, "setup_progress")
 
     def build_finished_page(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
@@ -1175,7 +1198,27 @@ class OOTBWindow(Adw.ApplicationWindow):
                 self.show_error("Account name must be 3-16 characters and alphanumeric.")
                 return
 
-            # Perform system configurations setup
+            # Disable navigation buttons to prevent double click/concurrency
+            self.btn_next.set_sensitive(False)
+            self.btn_back.set_sensitive(False)
+            self.btn_header_back.set_sensitive(False)
+
+            # Show progress page and start spinner
+            self.stack.set_visible_child_name("setup_progress")
+            self.progress_spinner.start()
+
+            # Start configuration in a background thread
+            threading.Thread(
+                target=self.run_setup_backend,
+                args=(fullname, username, password),
+                daemon=True
+            ).start()
+
+        elif current_page == "finished":
+            self.run_final_cleanup()
+
+    def run_setup_backend(self, fullname, username, password):
+        try:
             with open("/tmp/pulsar-ootb.log", "w") as log:
                 log.write(f"Pulsar OS OOTB Config Log - {time.ctime()}\n")
 
@@ -1197,142 +1240,132 @@ class OOTBWindow(Adw.ApplicationWindow):
                 if res.returncode != 0:
                     raise Exception(f"Failed command: {cmd_str}\n{res.stderr}")
 
+            run_setup_cmd(["locale-gen", self.selected_language])
+            
+            # Try to set locale via localectl, fallback to writing directly if polkit/D-Bus denies access
             try:
-                run_setup_cmd(["locale-gen", self.selected_language])
+                run_setup_cmd(["localectl", "set-locale", f"LANG={self.selected_language}"])
+            except Exception as loc_err:
+                with open("/tmp/pulsar-ootb.log", "a") as log:
+                    log.write(f"Warning: localectl set-locale failed: {loc_err}. Writing to /etc/default/locale directly...\n")
+                try:
+                    locale_content = f'LANG="{self.selected_language}"\n'
+                    if "TEST_MODE" not in os.environ:
+                        with open("/tmp/locale_tmp", "w") as f:
+                            f.write(locale_content)
+                        run_setup_cmd(["mv", "/tmp/locale_tmp", "/etc/default/locale"])
+                        run_setup_cmd(["chown", "root:root", "/etc/default/locale"])
+                        run_setup_cmd(["chmod", "644", "/etc/default/locale"])
+                except Exception as wr_err:
+                    with open("/tmp/pulsar-ootb.log", "a") as log:
+                        log.write(f"Warning: Failed to write /etc/default/locale: {wr_err}\n")
+
+            # 1. Try to install console-setup to make layout packages available
+            try:
+                run_setup_cmd(["apt-get", "install", "-y", "console-setup", "keyboard-configuration"])
+            except Exception as apt_err:
+                with open("/tmp/pulsar-ootb.log", "a") as log:
+                    log.write(f"Warning: Failed to install console-setup: {apt_err}\n")
+
+            # 2. Try to set keymap via localectl
+            try:
+                run_setup_cmd(["localectl", "set-keymap", self.selected_keymap])
+            except Exception as key_err:
+                with open("/tmp/pulsar-ootb.log", "a") as log:
+                    log.write(f"Warning: localectl set-keymap failed: {key_err}\n")
                 
-                # Try to set locale via localectl, fallback to writing directly if polkit/D-Bus denies access
+                # 3. Fallback: Write directly to /etc/default/keyboard so it applies on reboot
                 try:
-                    run_setup_cmd(["localectl", "set-locale", f"LANG={self.selected_language}"])
-                except Exception as loc_err:
+                    kb_content = (
+                        'XKBMODEL="pc105"\n'
+                        f'XKBLAYOUT="{self.selected_keymap}"\n'
+                        'XKBVARIANT=""\n'
+                        'XKBOPTIONS=""\n'
+                        'BACKSPACE="guess"\n'
+                    )
+                    if "TEST_MODE" not in os.environ:
+                        with open("/tmp/keyboard_tmp", "w") as f:
+                            f.write(kb_content)
+                        run_setup_cmd(["mv", "/tmp/keyboard_tmp", "/etc/default/keyboard"])
+                except Exception as kb_err:
                     with open("/tmp/pulsar-ootb.log", "a") as log:
-                        log.write(f"Warning: localectl set-locale failed: {loc_err}. Writing to /etc/default/locale directly...\n")
-                    try:
-                        locale_content = f'LANG="{self.selected_language}"\n'
-                        if "TEST_MODE" not in os.environ:
-                            with open("/tmp/locale_tmp", "w") as f:
-                                f.write(locale_content)
-                            run_setup_cmd(["mv", "/tmp/locale_tmp", "/etc/default/locale"])
-                            run_setup_cmd(["chown", "root:root", "/etc/default/locale"])
-                            run_setup_cmd(["chmod", "644", "/etc/default/locale"])
-                    except Exception as wr_err:
-                        with open("/tmp/pulsar-ootb.log", "a") as log:
-                            log.write(f"Warning: Failed to write /etc/default/locale: {wr_err}\n")
+                        log.write(f"Warning: Failed to write /etc/default/keyboard: {kb_err}\n")
 
-                # 1. Try to install console-setup to make layout packages available
+            # Try to set timezone via timedatectl, fallback to manual files if D-Bus fails
+            try:
+                run_setup_cmd(["timedatectl", "set-timezone", self.selected_timezone])
+            except Exception as tz_err:
+                with open("/tmp/pulsar-ootb.log", "a") as log:
+                    log.write(f"Warning: timedatectl set-timezone failed: {tz_err}. Fallback to manual symlink...\n")
                 try:
-                    run_setup_cmd(["apt-get", "install", "-y", "console-setup", "keyboard-configuration"])
-                except Exception as apt_err:
+                    if "TEST_MODE" not in os.environ:
+                        run_setup_cmd(["ln", "-sf", f"/usr/share/zoneinfo/{self.selected_timezone}", "/etc/localtime"])
+                        with open("/tmp/tz_tmp", "w") as f:
+                            f.write(f"{self.selected_timezone}\n")
+                        run_setup_cmd(["mv", "/tmp/tz_tmp", "/etc/timezone"])
+                        run_setup_cmd(["chown", "root:root", "/etc/timezone"])
+                        run_setup_cmd(["chmod", "644", "/etc/timezone"])
+                except Exception as wr_tz_err:
                     with open("/tmp/pulsar-ootb.log", "a") as log:
-                        log.write(f"Warning: Failed to install console-setup: {apt_err}\n")
+                        log.write(f"Warning: Failed to write timezone manually: {wr_tz_err}\n")
 
-                # 2. Try to set keymap via localectl
+            if "TEST_MODE" in os.environ:
+                print("[TEST_MODE] Simulating user creation and avatar copy...")
+            else:
+                run_setup_cmd([
+                    "useradd", "-m", "-G", "sudo,audio,video,plugdev",
+                    "-s", "/bin/bash", username
+                ])
+
+                # Write user and root password securely without pipelines
+                cmd_user = ["sudo", "chpasswd"] if os.geteuid() != 0 else ["chpasswd"]
+                res = subprocess.run(cmd_user, input=f"{username}:{password}\n", capture_output=True, text=True)
+                if res.returncode != 0:
+                    raise Exception(f"Failed to set user password: {res.stderr}")
+
+                cmd_root = ["sudo", "chpasswd"] if os.geteuid() != 0 else ["chpasswd"]
+                res = subprocess.run(cmd_root, input=f"root:{password}\n", capture_output=True, text=True)
+                if res.returncode != 0:
+                    raise Exception(f"Failed to set root password: {res.stderr}")
+
+                # Configure keyboard layout for GNOME Wayland
                 try:
-                    run_setup_cmd(["localectl", "set-keymap", self.selected_keymap])
-                except Exception as key_err:
-                    with open("/tmp/pulsar-ootb.log", "a") as log:
-                        log.write(f"Warning: localectl set-keymap failed: {key_err}\n")
-                    
-                    # 3. Fallback: Write directly to /etc/default/keyboard so it applies on reboot
-                    try:
-                        kb_content = (
-                            'XKBMODEL="pc105"\n'
-                            f'XKBLAYOUT="{self.selected_keymap}"\n'
-                            'XKBVARIANT=""\n'
-                            'XKBOPTIONS=""\n'
-                            'BACKSPACE="guess"\n'
-                        )
-                        if "TEST_MODE" not in os.environ:
-                            with open("/tmp/keyboard_tmp", "w") as f:
-                                f.write(kb_content)
-                            run_setup_cmd(["mv", "/tmp/keyboard_tmp", "/etc/default/keyboard"])
-                    except Exception as kb_err:
-                        with open("/tmp/pulsar-ootb.log", "a") as log:
-                            log.write(f"Warning: Failed to write /etc/default/keyboard: {kb_err}\n")
-
-                # Try to set timezone via timedatectl, fallback to manual files if D-Bus fails
-                try:
-                    run_setup_cmd(["timedatectl", "set-timezone", self.selected_timezone])
-                except Exception as tz_err:
-                    with open("/tmp/pulsar-ootb.log", "a") as log:
-                        log.write(f"Warning: timedatectl set-timezone failed: {tz_err}. Fallback to manual symlink...\n")
-                    try:
-                        if "TEST_MODE" not in os.environ:
-                            run_setup_cmd(["ln", "-sf", f"/usr/share/zoneinfo/{self.selected_timezone}", "/etc/localtime"])
-                            with open("/tmp/tz_tmp", "w") as f:
-                                f.write(f"{self.selected_timezone}\n")
-                            run_setup_cmd(["mv", "/tmp/tz_tmp", "/etc/timezone"])
-                            run_setup_cmd(["chown", "root:root", "/etc/timezone"])
-                            run_setup_cmd(["chmod", "644", "/etc/timezone"])
-                    except Exception as wr_tz_err:
-                        with open("/tmp/pulsar-ootb.log", "a") as log:
-                            log.write(f"Warning: Failed to write timezone manually: {wr_tz_err}\n")
-
-                if "TEST_MODE" in os.environ:
-                    print("[TEST_MODE] Simulating user creation and avatar copy...")
-                else:
                     run_setup_cmd([
-                        "useradd", "-m", "-G", "sudo,audio,video,plugdev",
-                        "-s", "/bin/bash", username
+                        "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
+                        "org.gnome.desktop.input-sources", "sources", f"[('xkb', '{self.selected_keymap}')]"
                     ])
+                except Exception as gset_err:
+                    with open("/tmp/pulsar-ootb.log", "a") as log:
+                        log.write(f"Warning: Failed to set GNOME user keymap via gsettings: {gset_err}\n")
 
-                    # Write user and root password securely without pipelines
-                    cmd_user = ["sudo", "chpasswd"] if os.geteuid() != 0 else ["chpasswd"]
-                    res = subprocess.run(cmd_user, input=f"{username}:{password}\n", capture_output=True, text=True)
-                    if res.returncode != 0:
-                        raise Exception(f"Failed to set user password: {res.stderr}")
+                # Setup Real User Avatar
+                if self.selected_avatar_path and os.path.exists(self.selected_avatar_path):
+                    user_home = f"/home/{username}"
+                    if os.path.exists(user_home):
+                        face_dest = os.path.join(user_home, ".face")
+                        run_setup_cmd(["cp", self.selected_avatar_path, face_dest])
+                        run_setup_cmd(["chown", f"{username}:{username}", face_dest])
 
-                    cmd_root = ["sudo", "chpasswd"] if os.geteuid() != 0 else ["chpasswd"]
-                    res = subprocess.run(cmd_root, input=f"root:{password}\n", capture_output=True, text=True)
-                    if res.returncode != 0:
-                        raise Exception(f"Failed to set root password: {res.stderr}")
+                    as_icons_dir = "/var/lib/AccountsService/icons"
+                    run_setup_cmd(["mkdir", "-p", as_icons_dir])
+                    as_icon_dest = os.path.join(as_icons_dir, username)
+                    run_setup_cmd(["cp", self.selected_avatar_path, as_icon_dest])
+                    run_setup_cmd(["chown", "root:root", as_icon_dest])
 
-                    # Configure keyboard layout for GNOME Wayland
-                    try:
-                        run_setup_cmd([
-                            "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
-                            "org.gnome.desktop.input-sources", "sources", f"[('xkb', '{self.selected_keymap}')]"
-                        ])
-                    except Exception as gset_err:
-                        with open("/tmp/pulsar-ootb.log", "a") as log:
-                            log.write(f"Warning: Failed to set GNOME user keymap via gsettings: {gset_err}\n")
+                    as_user_file = f"/var/lib/AccountsService/users/{username}"
+                    as_content = f"[User]\nLanguage={self.selected_language}\nXSession=gnome\nIcon={as_icon_dest}\nSystemAccount=false\n"
+                    
+                    # Write to tmp and move using sudo to bypass permissions
+                    with open("/tmp/as_user_tmp", "w") as f:
+                        f.write(as_content)
+                    run_setup_cmd(["mkdir", "-p", os.path.dirname(as_user_file)])
+                    run_setup_cmd(["mv", "/tmp/as_user_tmp", as_user_file])
+                    run_setup_cmd(["chown", "root:root", as_user_file])
 
-                    # Setup Real User Avatar
-                    if self.selected_avatar_path and os.path.exists(self.selected_avatar_path):
-                        user_home = f"/home/{username}"
-                        if os.path.exists(user_home):
-                            face_dest = os.path.join(user_home, ".face")
-                            run_setup_cmd(["cp", self.selected_avatar_path, face_dest])
-                            run_setup_cmd(["chown", f"{username}:{username}", face_dest])
+            GLib.idle_add(self.on_setup_completed)
 
-                        as_icons_dir = "/var/lib/AccountsService/icons"
-                        run_setup_cmd(["mkdir", "-p", as_icons_dir])
-                        as_icon_dest = os.path.join(as_icons_dir, username)
-                        run_setup_cmd(["cp", self.selected_avatar_path, as_icon_dest])
-                        run_setup_cmd(["chown", "root:root", as_icon_dest])
-
-                        as_user_file = f"/var/lib/AccountsService/users/{username}"
-                        as_content = f"[User]\nLanguage={self.selected_language}\nXSession=gnome\nIcon={as_icon_dest}\nSystemAccount=false\n"
-                        
-                        # Write to tmp and move using sudo to bypass permissions
-                        with open("/tmp/as_user_tmp", "w") as f:
-                            f.write(as_content)
-                        run_setup_cmd(["mkdir", "-p", os.path.dirname(as_user_file)])
-                        run_setup_cmd(["mv", "/tmp/as_user_tmp", as_user_file])
-                        run_setup_cmd(["chown", "root:root", as_user_file])
-
-            except Exception as err:
-                self.show_error(str(err))
-                return
-
-            self.load_log_to_view()
-            self.stack.set_visible_child_name("finished")
-            self.btn_next.set_label("Start using Pulsar OS")
-            self.btn_back.set_visible(False)
-            self.btn_header_back.set_visible(False)
-            self.btn_next.set_sensitive(True)
-
-        elif current_page == "finished":
-            self.run_final_cleanup()
+        except Exception as err:
+            GLib.idle_add(self.on_setup_failed, str(err))
 
     def run_final_cleanup(self):
         try:
