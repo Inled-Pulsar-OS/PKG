@@ -1308,7 +1308,8 @@ class OOTBWindow(Adw.ApplicationWindow):
                 self.close()
                 sys.exit(0)
             else:
-                cleanup_script = """#!/bin/bash
+                username = self.username_entry.get_text().strip()
+                cleanup_script = f"""#!/bin/bash
 sleep 2
 echo "=== Background Cleanup Started ===" >> /tmp/pulsar-ootb.log
 
@@ -1324,11 +1325,15 @@ if [ -f /etc/pulsar-need-setup ]; then
     echo "Deleted /etc/pulsar-need-setup" >> /tmp/pulsar-ootb.log
 fi
 
-# 4. Clean up SDDM autologin configuration to prevent bootlooping back to deleted live user
-if [ -f /etc/sddm.conf.d/autologin.conf ]; then
-    rm -f /etc/sddm.conf.d/autologin.conf
-    echo "Deleted /etc/sddm.conf.d/autologin.conf" >> /tmp/pulsar-ootb.log
-fi
+# 4. Configure SDDM autologin for the new user once
+mkdir -p /etc/sddm.conf.d
+cat <<EOF > /etc/sddm.conf.d/autologin.conf
+[Autologin]
+User={username}
+Session=gnome
+EOF
+chmod 644 /etc/sddm.conf.d/autologin.conf
+echo "Configured autologin for user {username}" >> /tmp/pulsar-ootb.log
 
 # 5. Disable service
 systemctl disable pulsar-ootb.service >> /tmp/pulsar-ootb.log 2>&1
