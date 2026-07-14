@@ -10,6 +10,7 @@ import subprocess
 import threading
 import time
 import re
+import datetime
 import gi
 
 gi.require_version('Gtk', '4.0')
@@ -20,12 +21,11 @@ from gi.repository import Gtk, Gdk, GLib, Adw, Gio, GdkPixbuf
 
 # Custom CSS for Apple macOS Recovery and Installer Look-and-Feel
 CSS_DATA = """
-window {
+window, .root-container {
     background-color: #1e1e1e; /* dark theme base */
-    font-family: 'Inter', 'SF Pro Display', -apple-system, sans-serif;
 }
-.macos-window {
-    border-radius: 20px;
+window, .root-container, * {
+    font-family: 'Inter', 'SF Pro Display', -apple-system, sans-serif;
 }
 .welcome-title {
     font-size: 26px;
@@ -44,6 +44,7 @@ window {
     border: 1px solid #3c3c3c;
     border-radius: 12px;
     padding: 24px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
 }
 .suggested-action {
     background-color: #0071e3; /* Apple Blue */
@@ -77,10 +78,6 @@ window {
 .secondary-action:active {
     background-color: #2c2c2e;
 }
-.header-bar {
-    background-color: #1e1e1e;
-    border-bottom: 1px solid #2d2d2d;
-}
 .progress-bar-thin {
     min-height: 4px;
     margin-top: 12px;
@@ -90,9 +87,24 @@ window {
     font-size: 12px;
     color: #aeaeb2;
 }
+list, listbox {
+    background-color: transparent;
+    border: none;
+}
+listrow, listboxrow {
+    background-color: #2a2a2a;
+    border: none;
+    transition: background-color 0.15s ease;
+}
+listrow:hover, listboxrow:hover {
+    background-color: #323236;
+}
+listrow:selected, listboxrow:selected {
+    background-color: #323236;
+}
 .utility-row-box {
     padding: 12px;
-    border-bottom: 1px solid #3a3a3c;
+    border-bottom: none;
 }
 .utility-title-lbl {
     font-size: 14px;
@@ -166,7 +178,7 @@ def get_system_disks():
                         if re.match(r"^(sd[a-z]|nvme[0-9]n[0-9]|vd[a-z])$", name):
                             disks.append({
                                 "path": f"/dev/{name}",
-                                "name": f"/dev/{name} (Desconocido)"
+                                "name": f"/dev/{name} (Unknown)"
                             })
         except Exception as ex:
             print(f"Fallback reading /proc/partitions failed: {ex}")
@@ -186,21 +198,18 @@ class DiskCard(Gtk.Box):
         self.set_valign(Gtk.Align.CENTER)
         self.set_halign(Gtk.Align.CENTER)
         
-        # HDD icon
-        icon = Gtk.Image.new_from_icon_name("drive-harddisk-symbolic")
+        icon = Gtk.Image.new_from_icon_name("drive-harddisk")
         icon.set_pixel_size(48)
         self.append(icon)
         
-        # Disk name
         name_lbl = Gtk.Label(label=disk_info["path"].replace("/dev/", ""))
         name_lbl.add_css_class("disk-name")
         self.append(name_lbl)
         
-        # Disk size
         size_match = re.search(r"\(([^)]+)\)", disk_info["name"])
-        size_str = size_match.group(1) if size_match else "Desconocido"
+        size_str = size_match.group(1) if size_match else "Unknown"
         
-        details_lbl = Gtk.Label(label=f"{size_str} total\nDisponible")
+        details_lbl = Gtk.Label(label=f"{size_str} total\nAvailable")
         details_lbl.add_css_class("disk-info")
         self.append(details_lbl)
         
@@ -215,34 +224,38 @@ class DiskCard(Gtk.Box):
 class RecoveryWindow(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app)
-        self.set_title("Recuperación de Pulsar OS")
-        self.set_default_size(700, 520)
-        self.set_resizable(False)
+        self.set_title("Pulsar OS Recovery")
+        self.set_default_size(720, 560)
+        self.set_resizable(True)
         
         self.apply_css()
         
-        # Header bar
-        header_bar = Adw.HeaderBar()
-        header_bar.set_show_end_title_buttons(False)
-        header_bar.set_show_start_title_buttons(False)
-        header_bar.add_css_class("header-bar")
+        # Always fullscreen
+        self.fullscreen()
+            
+        # Centered container
+        center_container = Gtk.CenterBox()
+        center_container.add_css_class("root-container")
+        center_container.set_hexpand(True)
+        center_container.set_vexpand(True)
         
-        window_title = Adw.WindowTitle(title="Recuperación")
-        header_bar.set_title_widget(window_title)
+        self.card_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.card_box.add_css_class("apple-box")
+        self.card_box.set_size_request(480, 380)
+        self.card_box.set_valign(Gtk.Align.CENTER)
+        self.card_box.set_halign(Gtk.Align.CENTER)
         
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        vbox.append(header_bar)
+        # Crossfade transition Gtk.Stack (macos styled crossfade transition)
+        self.stack = Gtk.Stack()
+        self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.stack.set_transition_duration(500)
+        self.card_box.append(self.stack)
         
-        self.stack = Adw.ViewStack()
-        vbox.append(self.stack)
-        
-        self.set_content(vbox)
+        center_container.set_center_widget(self.card_box)
+        self.set_content(center_container)
         
         # Build views
         self.build_utilities_screen()
-        self.build_install_selector_screen()
-        
-        # New Welcome and Disk Selection screens matching Apple Monterey/Sequoia style
         self.build_install_welcome_screen()
         self.build_install_disk_select_screen()
         self.build_install_progress_screen()
@@ -264,33 +277,65 @@ class RecoveryWindow(Adw.ApplicationWindow):
         img = Gtk.Image()
         img.set_pixel_size(42)
         
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        
         if icon_name == "logo":
-            logo_path = "/usr/share/pulsaros-recovery/logo.png"
-            logo_fallback = "/usr/share/pulsaros-recovery/pulsar-logo.png"
-            if os.path.exists(logo_path):
-                try:
-                    pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(logo_path, 42, 42, True)
-                    texture = Gdk.Texture.new_for_pixbuf(pixbuf)
-                    img.set_from_paintable(texture)
-                except:
-                    img.set_from_file(logo_path)
-            elif os.path.exists(logo_fallback):
-                try:
-                    pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(logo_fallback, 42, 42, True)
-                    texture = Gdk.Texture.new_for_pixbuf(pixbuf)
-                    img.set_from_paintable(texture)
-                except:
-                    img.set_from_file(logo_fallback)
+            logo_path = os.path.join(script_dir, "installer-logo.png")
+            logo_fallback = os.path.join(script_dir, "logo.png")
+            if not os.path.exists(logo_path):
+                logo_path = "/usr/share/pulsaros-recovery/installer-logo.png"
+            if not os.path.exists(logo_fallback):
+                logo_fallback = "/usr/share/pulsaros-recovery/logo.png"
+                
+            path_to_load = logo_path if os.path.exists(logo_path) else (logo_fallback if os.path.exists(logo_fallback) else None)
+            
+            if path_to_load:
+                img.set_from_file(path_to_load)
             else:
-                img.set_from_icon_name("system-software-install-symbolic")
+                img.set_from_icon_name("system-software-install")
         elif icon_name == "timemachine":
-            img.set_from_icon_name("document-revert-symbolic")
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            svg_path = os.path.join(script_dir, "org.gnome.DejaDup.svg")
+            if not os.path.exists(svg_path):
+                svg_path = "/usr/share/pulsaros-recovery/org.gnome.DejaDup.svg"
+            if os.path.exists(svg_path):
+                img.set_from_file(svg_path)
+            else:
+                img.set_from_icon_name("document-revert")
         elif icon_name == "safari":
-            img.set_from_icon_name("web-browser-symbolic")
+            img.set_from_icon_name("web-browser")
         else:
-            img.set_from_icon_name("gnome-disks")
+            img.set_from_icon_name("drive-harddisk")
             
         return img
+
+    def get_logo_image(self, pixel_size, is_installer=True):
+        image = Gtk.Image()
+        image.set_pixel_size(pixel_size)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        if is_installer:
+            logo_path = os.path.join(script_dir, "installer-logo.png")
+            logo_fallback = os.path.join(script_dir, "logo.png")
+            default_icon = "system-software-install"
+        else:
+            logo_path = os.path.join(script_dir, "pulsar-logo.png")
+            logo_fallback = os.path.join(script_dir, "logo.png")
+            default_icon = "system-software-install"
+            
+        if not os.path.exists(logo_path):
+            logo_path = f"/usr/share/pulsaros-recovery/{'installer-logo.png' if is_installer else 'pulsar-logo.png'}"
+        if not os.path.exists(logo_fallback):
+            logo_fallback = "/usr/share/pulsaros-recovery/logo.png"
+            
+        path_to_load = logo_path if os.path.exists(logo_path) else (logo_fallback if os.path.exists(logo_fallback) else None)
+        
+        if path_to_load:
+            image.set_from_file(path_to_load)
+        else:
+            image.set_from_icon_name(default_icon)
+            
+        return image
 
     def add_utility_row(self, listbox, action_id, title, desc, icon_name):
         row = Gtk.ListBoxRow()
@@ -321,39 +366,31 @@ class RecoveryWindow(Adw.ApplicationWindow):
         listbox.append(row)
 
     def build_utilities_screen(self):
-        screen_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        screen_box.set_margin_top(30)
-        screen_box.set_margin_bottom(30)
-        screen_box.set_margin_start(40)
-        screen_box.set_margin_end(40)
+        screen_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         screen_box.set_valign(Gtk.Align.CENTER)
-        
-        card_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        card_box.add_css_class("apple-box")
-        screen_box.append(card_box)
         
         self.listbox = Gtk.ListBox()
         self.listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self.listbox.connect("row-selected", self.on_utility_row_selected)
-        card_box.append(self.listbox)
+        screen_box.append(self.listbox)
         
-        self.add_utility_row(self.listbox, "backup", "Restaurar desde Copia de Seguridad", 
-                             "Restaura tu instalación de Pulsar OS a partir de una copia de seguridad (Deja Dup).", "timemachine")
-        self.add_utility_row(self.listbox, "install", "Instalar Pulsar OS", 
-                             "Instala una copia del sistema operativo Pulsar OS en tu ordenador.", "logo")
-        self.add_utility_row(self.listbox, "safari", "Seafari Browser", 
-                             "Navega por la web para encontrar guías de configuración y soporte en línea.", "safari")
-        self.add_utility_row(self.listbox, "disk", "Utilidad de Discos", 
-                             "Modifica, formatea o comprueba tus unidades de almacenamiento conectadas.", "disk")
+        self.add_utility_row(self.listbox, "backup", "Restore from Time Machine", 
+                             "If you have backup of your system that you want to restore.", "timemachine")
+        self.add_utility_row(self.listbox, "install", "Reinstall Pulsar OS", 
+                             "Install a new copy of Pulsar OS onto your computer.", "logo")
+        self.add_utility_row(self.listbox, "safari", "Seafari", 
+                             "Browse the web to get help with your computer.", "safari")
+        self.add_utility_row(self.listbox, "disk", "Disk Utility", 
+                             "Repair or erase a disk using Disk Utility.", "disk")
                              
         bottom_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        bottom_box.set_margin_top(16)
+        bottom_box.set_margin_top(12)
         
         spacer = Gtk.Box()
         spacer.set_hexpand(True)
         bottom_box.append(spacer)
         
-        self.btn_continue = Gtk.Button(label="Continuar")
+        self.btn_continue = Gtk.Button(label="Continue")
         self.btn_continue.add_css_class("suggested-action")
         self.btn_continue.set_sensitive(False)
         self.btn_continue.connect("clicked", self.on_utility_continue_clicked)
@@ -372,111 +409,67 @@ class RecoveryWindow(Adw.ApplicationWindow):
             return
             
         if self.selected_action == "backup":
-            if "TEST_MODE" in os.environ:
-                print("[TEST_MODE] Simulating Deja Dup launcher...")
             subprocess.Popen("deja-dup --restore || deja-dup", shell=True)
         elif self.selected_action == "install":
-            self.stack.set_visible_child_name("install_selector")
+            self.show_installer_selector_dialog()
         elif self.selected_action == "safari":
-            if "TEST_MODE" in os.environ:
-                print("[TEST_MODE] Simulating Seafari launcher...")
-            subprocess.Popen("seafari || firefox || xdg-open https://google.com", shell=True)
+            subprocess.Popen("seafari", shell=True)
         elif self.selected_action == "disk":
-            if "TEST_MODE" in os.environ:
-                print("[TEST_MODE] Simulating Disk Utility launcher...")
             subprocess.Popen("gnome-disks || gnome-disk-utility", shell=True)
 
-    def build_install_selector_screen(self):
-        selector_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=20)
-        selector_box.set_valign(Gtk.Align.CENTER)
-        selector_box.set_halign(Gtk.Align.CENTER)
-        selector_box.set_margin_top(40)
-        selector_box.set_margin_bottom(40)
-        selector_box.set_margin_start(40)
-        selector_box.set_margin_end(40)
+    def show_installer_selector_dialog(self):
+        # Emergent selector popup matching Apple design
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Install Pulsar OS",
+            body="Choose the installation method you want to use for your computer."
+        )
+        dialog.add_response("quick", "Quick Install (Recommended)")
+        dialog.add_response("guided", "Guided Install (Calamares)")
+        dialog.add_response("cancel", "Cancel")
         
-        logo_path = "/usr/share/pulsaros-recovery/logo.png"
-        logo_fallback = "/usr/share/pulsaros-recovery/pulsar-logo.png"
+        dialog.set_response_appearance("quick", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_response_appearance("guided", Adw.ResponseAppearance.DEFAULT)
+        dialog.set_response_appearance("cancel", Adw.ResponseAppearance.DESTRUCTIVE)
         
-        image = Gtk.Image()
-        if os.path.exists(logo_path):
-            image.set_from_file(logo_path)
-        elif os.path.exists(logo_fallback):
-            image.set_from_file(logo_fallback)
-        else:
-            image.set_from_icon_name("system-software-install-symbolic")
-        image.set_pixel_size(96)
-        selector_box.append(image)
-        
-        title_label = Gtk.Label()
-        title_label.set_markup("<span font_weight='bold'>Asistente de Pulsar OS</span>")
-        title_label.add_css_class("welcome-title")
-        selector_box.append(title_label)
-        
-        subtitle_label = Gtk.Label(label="Elige cómo deseas instalar Pulsar OS en tu equipo.")
-        subtitle_label.add_css_class("welcome-subtitle")
-        selector_box.append(subtitle_label)
-        
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        btn_box.set_halign(Gtk.Align.CENTER)
-        
-        btn_quick = Gtk.Button(label="Instalación Rápida Pulsar (Recomendado)")
-        btn_quick.add_css_class("suggested-action")
-        btn_quick.connect("clicked", lambda x: self.stack.set_visible_child_name("install_welcome"))
-        btn_box.append(btn_quick)
-
-        btn_guided = Gtk.Button(label="Instalación Guiada (Calamares)")
-        btn_guided.add_css_class("secondary-action")
-        btn_guided.connect("clicked", self.on_guided_install_clicked)
-        btn_box.append(btn_guided)
-        
-        selector_box.append(btn_box)
-        
-        back_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        btn_back = Gtk.Button(label="Atrás")
-        btn_back.add_css_class("secondary-action")
-        btn_back.connect("clicked", lambda x: self.stack.set_visible_child_name("utilities"))
-        back_box.append(btn_back)
-        selector_box.append(back_box)
-        
-        self.stack.add_named(selector_box, "install_selector")
+        def on_response(d, response_id):
+            if response_id == "quick":
+                self.stack.set_visible_child_name("install_welcome")
+            elif response_id == "guided":
+                self.on_guided_install_clicked(None)
+            d.destroy()
+            
+        dialog.connect("response", on_response)
+        dialog.present()
 
     def build_install_welcome_screen(self):
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         box.set_valign(Gtk.Align.CENTER)
         box.set_halign(Gtk.Align.CENTER)
         
-        logo_path = "/usr/share/pulsaros-recovery/logo.png"
-        logo_fallback = "/usr/share/pulsaros-recovery/pulsar-logo.png"
-        image = Gtk.Image()
-        if os.path.exists(logo_path):
-            image.set_from_file(logo_path)
-        elif os.path.exists(logo_fallback):
-            image.set_from_file(logo_fallback)
-        else:
-            image.set_from_icon_name("system-software-install-symbolic")
-        image.set_pixel_size(110)
+        # Large Pulsar OS Logo (160px size)
+        image = self.get_logo_image(160, is_installer=False)
         box.append(image)
         
         title = Gtk.Label()
         title.set_markup("<span font_weight='bold' size='22000'>Pulsar OS</span>")
         box.append(title)
         
-        subtext = Gtk.Label(label="Para configurar la instalación de Pulsar OS, haz clic en Continuar.")
+        subtext = Gtk.Label(label="To set up the installation of Pulsar OS, click Continue.")
         subtext.add_css_class("welcome-subtitle")
-        subtext.set_margin_top(8)
-        subtext.set_margin_bottom(20)
+        subtext.set_margin_top(4)
+        subtext.set_margin_bottom(12)
         box.append(subtext)
         
-        nav_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
+        nav_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
         nav_box.set_halign(Gtk.Align.CENTER)
         
-        btn_back = Gtk.Button(label="Atrás")
+        btn_back = Gtk.Button(label="Back")
         btn_back.add_css_class("secondary-action")
-        btn_back.connect("clicked", lambda x: self.stack.set_visible_child_name("install_selector"))
+        btn_back.connect("clicked", lambda x: self.stack.set_visible_child_name("utilities"))
         nav_box.append(btn_back)
         
-        btn_continue = Gtk.Button(label="Continuar")
+        btn_continue = Gtk.Button(label="Continue")
         btn_continue.add_css_class("suggested-action")
         btn_continue.connect("clicked", self.on_welcome_continue_clicked)
         nav_box.append(btn_continue)
@@ -489,46 +482,35 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.stack.set_visible_child_name("install_disk_select")
 
     def build_install_disk_select_screen(self):
-        self.disk_select_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        self.disk_select_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.disk_select_box.set_valign(Gtk.Align.CENTER)
         self.disk_select_box.set_halign(Gtk.Align.CENTER)
-        self.disk_select_box.set_margin_start(40)
-        self.disk_select_box.set_margin_end(40)
         
-        logo_path = "/usr/share/pulsaros-recovery/logo.png"
-        logo_fallback = "/usr/share/pulsaros-recovery/pulsar-logo.png"
-        image = Gtk.Image()
-        if os.path.exists(logo_path):
-            image.set_from_file(logo_path)
-        elif os.path.exists(logo_fallback):
-            image.set_from_file(logo_fallback)
-        else:
-            image.set_from_icon_name("system-software-install-symbolic")
-        image.set_pixel_size(90)
+        image = self.get_logo_image(100, is_installer=True)
         self.disk_select_box.append(image)
         
         title = Gtk.Label()
         title.set_markup("<span font_weight='bold' size='18000'>Pulsar OS</span>")
         self.disk_select_box.append(title)
         
-        self.disk_select_subtitle = Gtk.Label(label="Pulsar OS se instalará en el disco seleccionado.")
+        self.disk_select_subtitle = Gtk.Label(label="Pulsar OS will be installed on the selected disk.")
         self.disk_select_subtitle.add_css_class("welcome-subtitle")
         self.disk_select_box.append(self.disk_select_subtitle)
         
-        self.disk_cards_flow = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self.disk_cards_flow = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         self.disk_cards_flow.set_halign(Gtk.Align.CENTER)
         self.disk_select_box.append(self.disk_cards_flow)
         
-        nav_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
+        nav_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
         nav_box.set_halign(Gtk.Align.CENTER)
-        nav_box.set_margin_top(20)
+        nav_box.set_margin_top(12)
         
-        btn_back = Gtk.Button(label="Atrás")
+        btn_back = Gtk.Button(label="Back")
         btn_back.add_css_class("secondary-action")
         btn_back.connect("clicked", lambda x: self.stack.set_visible_child_name("install_welcome"))
         nav_box.append(btn_back)
         
-        self.btn_disk_continue = Gtk.Button(label="Continuar")
+        self.btn_disk_continue = Gtk.Button(label="Continue")
         self.btn_disk_continue.add_css_class("suggested-action")
         self.btn_disk_continue.set_sensitive(False)
         self.btn_disk_continue.connect("clicked", self.on_disk_continue_clicked)
@@ -559,67 +541,59 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.selected_disk_card = selected_card
         
         disk_path = selected_card.disk_info["path"].replace("/dev/", "")
-        self.disk_select_subtitle.set_label(f"Pulsar OS se instalará en el disco \"{disk_path}\".")
+        self.disk_select_subtitle.set_label(f"Pulsar OS will be installed on disk \"{disk_path}\".")
         self.btn_disk_continue.set_sensitive(True)
 
     def on_disk_continue_clicked(self, btn):
         if not self.selected_disk_card:
             return
-            
+
         disk_path = self.selected_disk_card.disk_info["path"]
         disk_name = disk_path.replace("/dev/", "")
-        
-        self.progress_subtitle.set_label(f"Pulsar OS se está instalando en el disco \"{disk_name}\".")
-        self.stack.set_visible_child_name("install_progress")
-        
-        threading.Thread(target=self.installation_backend, args=(disk_path,), daemon=True).start()
+        self.pending_disk_path = disk_path
+        self.pending_disk_name = disk_name
+        self.install_nvidia = False
+        self.install_broadcom = False
+        self.nvidia_info = self._detect_nvidia()
+        self._show_nvidia_dialog()
 
     def build_install_progress_screen(self):
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         box.set_valign(Gtk.Align.CENTER)
         box.set_halign(Gtk.Align.CENTER)
-        box.set_margin_start(45)
-        box.set_margin_end(45)
         
-        logo_path = "/usr/share/pulsaros-recovery/logo.png"
-        logo_fallback = "/usr/share/pulsaros-recovery/pulsar-logo.png"
-        image = Gtk.Image()
-        if os.path.exists(logo_path):
-            image.set_from_file(logo_path)
-        elif os.path.exists(logo_fallback):
-            image.set_from_file(logo_fallback)
-        else:
-            image.set_from_icon_name("system-software-install-symbolic")
-        image.set_pixel_size(100)
+        image = self.get_logo_image(100, is_installer=True)
         box.append(image)
         
         title = Gtk.Label()
-        title.set_markup("<span font_weight='bold' size='20000'>Pulsar OS</span>")
+        title.set_markup("<span font_weight='bold' size='18000'>Pulsar OS</span>")
         box.append(title)
         
-        self.progress_subtitle = Gtk.Label(label="Pulsar OS se instalará en el disco.")
+        self.progress_subtitle = Gtk.Label(label="Pulsar OS will be installed on the disk.")
         self.progress_subtitle.add_css_class("progress-text")
         box.append(self.progress_subtitle)
         
         self.progress_bar = Gtk.ProgressBar()
         self.progress_bar.add_css_class("progress-bar-thin")
-        self.progress_bar.set_size_request(320, -1)
+        self.progress_bar.set_size_request(280, -1)
         box.append(self.progress_bar)
         
-        self.progress_label = Gtk.Label(label="Preparando instalación...")
+        self.progress_label = Gtk.Label(label="Preparing installation...")
         self.progress_label.add_css_class("progress-text")
         box.append(self.progress_label)
         
-        self.btn_install_action = Gtk.Button(label="Cancelar")
+        self.btn_install_action = Gtk.Button(label="Cancel")
         self.btn_install_action.add_css_class("secondary-action")
-        self.btn_install_action.set_margin_top(16)
+        self.btn_install_action.set_margin_top(12)
+        self.btn_install_action.set_halign(Gtk.Align.CENTER)
+        self.btn_install_action.set_size_request(140, -1)
         self.btn_install_action.connect("clicked", self.on_progress_cancel_clicked)
         box.append(self.btn_install_action)
         
         self.stack.add_named(box, "install_progress")
 
     def on_progress_cancel_clicked(self, btn):
-        if btn.get_label() == "Reiniciar Sistema":
+        if btn.get_label() == "Restart System":
             if "TEST_MODE" in os.environ:
                 print("[TEST_MODE] Simulating systemctl reboot...")
                 self.close()
@@ -628,6 +602,176 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 self.close()
         else:
             self.stack.set_visible_child_name("install_disk_select")
+
+    def update_progress(self, fraction, text):
+        self.progress_bar.set_fraction(fraction)
+        self.progress_label.set_label(text)
+
+    # ──────────────────────────────────────────────────────────────
+    # Hardware detection helpers
+    # ──────────────────────────────────────────────────────────────
+
+    def _detect_nvidia(self):
+        """Returns dict with keys: found, name, is_new_gen (Turing/Ampere/Ada/Blackwell ≥ GTX 1600/RTX)"""
+        try:
+            out = subprocess.check_output(
+                ["lspci", "-nn"], text=True, stderr=subprocess.DEVNULL
+            )
+        except Exception:
+            return {"found": False}
+        for line in out.splitlines():
+            if "NVIDIA" in line and ("VGA" in line or "3D" in line or "Display" in line):
+                name = line.split(":", 2)[-1].strip()
+                # Turing = RTX 20xx / GTX 1660, Ampere = RTX 30xx,
+                # Ada = RTX 40xx, Blackwell = RTX 50xx  → considered "new"
+                import re as _re
+                m = _re.search(r"(?:RTX|GTX)\s*(\d+)", name, _re.IGNORECASE)
+                if m:
+                    num = int(m.group(1))
+                    is_new = num >= 1600
+                else:
+                    # Quadro / Tesla / older numbering – treat as old
+                    is_new = False
+                return {"found": True, "name": name, "is_new": is_new}
+        return {"found": False}
+
+    def _detect_broadcom(self):
+        """Returns True if a Broadcom WiFi/BT chip is detected via lspci/lsusb."""
+        try:
+            pci = subprocess.check_output(["lspci", "-nn"], text=True, stderr=subprocess.DEVNULL)
+            if "Broadcom" in pci and ("Network" in pci or "Wireless" in pci or "BCM" in pci):
+                return True
+        except Exception:
+            pass
+        try:
+            usb = subprocess.check_output(["lsusb"], text=True, stderr=subprocess.DEVNULL)
+            if "Broadcom" in usb or "BCM" in usb:
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _get_pulsar_channel(self):
+        """Reads /etc/pulsar-channel (values: stable | forky | rolling)."""
+        try:
+            with open("/etc/pulsar-channel") as f:
+                return f.read().strip().lower()
+        except Exception:
+            pass
+        # Fallback: check VERSION_CODENAME in os-release
+        try:
+            with open("/etc/os-release") as f:
+                for line in f:
+                    if line.startswith("VERSION_CODENAME"):
+                        val = line.split("=", 1)[1].strip().strip('"').lower()
+                        if val in ("forky", "rolling"):
+                            return val
+        except Exception:
+            pass
+        return "stable"
+
+    # ──────────────────────────────────────────────────────────────
+    # Hardware dialog chain
+    # ──────────────────────────────────────────────────────────────
+
+    def _show_nvidia_dialog(self):
+        nvidia = self.nvidia_info
+        channel = self._get_pulsar_channel()
+
+        if not nvidia.get("found"):
+            # No NVIDIA → skip straight to Broadcom
+            self._show_broadcom_dialog()
+            return
+
+        gpu_name = nvidia.get("name", "NVIDIA GPU")
+        is_new   = nvidia.get("is_new", False)
+
+        if is_new and channel == "stable":
+            heading = "New NVIDIA GPU Detected"
+            body = (
+                f"<b>{gpu_name}</b>\n\n"
+                "Your GPU requires recent NVIDIA drivers that work best on "
+                "<b>Pulsar OS Forky</b> or <b>Pulsar OS Rolling</b>.\n\n"
+                "Continuing on <b>Stable</b> may result in a black screen or "
+                "degraded performance. We recommend switching channels after install.\n\n"
+                "⚠️  Ethernet recommended — WiFi may not work until drivers are installed."
+            )
+        else:
+            heading = "NVIDIA GPU Detected"
+            body = (
+                f"<b>{gpu_name}</b>\n\n"
+                "Would you like to install NVIDIA proprietary drivers?\n\n"
+                "⚠️  Ethernet recommended — WiFi may not work until drivers are installed."
+            )
+
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading=heading,
+            body=body,
+        )
+        dialog.set_body_use_markup(True)
+        dialog.add_response("skip",    "Skip")
+        dialog.add_response("install", "Install NVIDIA Drivers")
+        dialog.set_response_appearance("install", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("install")
+
+        def on_response(d, resp):
+            d.destroy()
+            if resp == "install":
+                self.install_nvidia = True
+            self._show_broadcom_dialog()
+
+        dialog.connect("response", on_response)
+        dialog.present()
+
+    def _show_broadcom_dialog(self):
+        auto_detected = self._detect_broadcom()
+        if auto_detected:
+            heading = "Broadcom Hardware Detected"
+            body = (
+                "A Broadcom WiFi or Bluetooth adapter was detected on this system.\n\n"
+                "Would you like to install Broadcom drivers (<tt>broadcom-sta-dkms</tt>)?\n\n"
+                "⚠️  Ethernet recommended during installation."
+            )
+        else:
+            heading = "Broadcom Drivers"
+            body = (
+                "No Broadcom adapter was automatically detected.\n\n"
+                "Do you have a Broadcom WiFi or Bluetooth chip? "
+                "(Common in some laptops and older Mac hardware.)\n\n"
+                "If unsure, choose \"No\"."
+            )
+
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading=heading,
+            body=body,
+        )
+        dialog.set_body_use_markup(True)
+        dialog.add_response("no",  "No")
+        dialog.add_response("yes", "Yes, install Broadcom drivers")
+        dialog.set_response_appearance("yes", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("yes" if auto_detected else "no")
+
+        def on_response(d, resp):
+            d.destroy()
+            if resp == "yes":
+                self.install_broadcom = True
+            self._start_installation()
+
+        dialog.connect("response", on_response)
+        dialog.present()
+
+    def _start_installation(self):
+        disk_path = self.pending_disk_path
+        disk_name = self.pending_disk_name
+        self.progress_subtitle.set_label(f"Pulsar OS is installing on disk \"{disk_name}\".")
+        self.stack.set_visible_child_name("install_progress")
+        threading.Thread(
+            target=self.installation_backend,
+            args=(disk_path,),
+            daemon=True
+        ).start()
 
     def installation_backend(self, disk_path):
         try:
@@ -638,13 +782,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     return ""
                 res = subprocess.run(cmd, shell=shell, capture_output=True, text=True)
                 if res.returncode != 0:
-                    raise Exception(f"Comando fallido: {' '.join(cmd) if isinstance(cmd, list) else cmd}\n{res.stderr}")
+                    raise Exception(f"Failed command: {' '.join(cmd) if isinstance(cmd, list) else cmd}\n{res.stderr}")
                 return res.stdout
                 
             is_efi = os.path.exists("/sys/firmware/efi")
             
             if is_efi:
-                GLib.idle_add(self.update_progress, 0.05, "Limpiando y particionando (GPT para UEFI)...")
+                GLib.idle_add(self.update_progress, 0.05, "Cleaning and partitioning (GPT for UEFI)...")
                 exec_cmd(["sgdisk", "--zap-all", disk_path])
                 exec_cmd(["sgdisk", "--new=1:0:+512M", "--typecode=1:ef00", "--change-name=1:EFI", disk_path])
                 exec_cmd(["sgdisk", "--new=2:0:0", "--typecode=2:8300", "--change-name=2:PulsarOS", disk_path])
@@ -657,11 +801,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     efi_part = f"{disk_path}1"
                     root_part = f"{disk_path}2"
                     
-                GLib.idle_add(self.update_progress, 0.12, "Formateando particiones (EFI y ext4)...")
+                GLib.idle_add(self.update_progress, 0.12, "Formatting partitions (EFI and ext4)...")
                 exec_cmd(["mkfs.vfat", "-F32", efi_part])
                 exec_cmd(["mkfs.ext4", "-F", root_part])
                 
-                GLib.idle_add(self.update_progress, 0.18, "Montando sistema de archivos...")
+                GLib.idle_add(self.update_progress, 0.18, "Mounting file systems...")
                 if "TEST_MODE" not in os.environ:
                     subprocess.run(["umount", "-l", "/mnt/boot/efi"])
                     subprocess.run(["umount", "-l", "/mnt"])
@@ -670,7 +814,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 os.makedirs("/mnt/boot/efi", exist_ok=True)
                 exec_cmd(["mount", efi_part, "/mnt/boot/efi"])
             else:
-                GLib.idle_add(self.update_progress, 0.05, "Limpiando y particionando (MBR para BIOS)...")
+                GLib.idle_add(self.update_progress, 0.05, "Cleaning and partitioning (MBR for BIOS)...")
                 exec_cmd(["dd", "if=/dev/zero", f"of={disk_path}", "bs=512", "count=1"])
                 sfdisk_script = "label: dos\nsize=+, type=83, bootable\n"
                 if "TEST_MODE" in os.environ:
@@ -685,24 +829,23 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 else:
                     root_part = f"{disk_path}1"
                     
-                GLib.idle_add(self.update_progress, 0.12, "Formateando partición raíz (ext4)...")
+                GLib.idle_add(self.update_progress, 0.12, "Formatting root partition (ext4)...")
                 exec_cmd(["mkfs.ext4", "-F", root_part])
                 
-                GLib.idle_add(self.update_progress, 0.18, "Montando sistema de archivos...")
+                GLib.idle_add(self.update_progress, 0.18, "Mounting file systems...")
                 if "TEST_MODE" not in os.environ:
                     subprocess.run(["umount", "-l", "/mnt"])
                 os.makedirs("/mnt", exist_ok=True)
                 exec_cmd(["mount", root_part, "/mnt"])
             
-            GLib.idle_add(self.update_progress, 0.25, "Replicando archivos... (esto puede tardar)")
+            GLib.idle_add(self.update_progress, 0.25, "Replicating system files... (this may take a while)")
             
             if "TEST_MODE" in os.environ:
-                # Simulate replication progress fast
                 for progress_fraction in range(26, 81):
                     GLib.idle_add(
                         self.update_progress, 
                         progress_fraction / 100.0, 
-                        f"Instalando archivos... ({progress_fraction}%)"
+                        f"Installing system files... ({progress_fraction}%)"
                     )
                     time.sleep(0.08)
             else:
@@ -725,14 +868,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     GLib.idle_add(
                         self.update_progress, 
                         progress_fraction / 100.0, 
-                        f"Instalando archivos... ({progress_fraction}%)"
+                        f"Installing system files... ({progress_fraction}%)"
                     )
                     time.sleep(2)
                 proc.wait()
                 if proc.returncode != 0:
-                    raise Exception(f"Replicación rsync fallida (código {proc.returncode})\n{proc.stderr.read()}")
+                    raise Exception(f"System replication failed (code {proc.returncode})\n{proc.stderr.read()}")
                 
-            GLib.idle_add(self.update_progress, 0.85, "Configurando arranque (fstab)...")
+            GLib.idle_add(self.update_progress, 0.85, "Configuring bootloader (fstab)...")
             def get_partition_uuid(part):
                 if "TEST_MODE" in os.environ:
                     return "simulated-uuid-1234-abcd"
@@ -762,17 +905,17 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                 with open("/mnt/etc/fstab", "w") as f:
                     f.write(fstab_content)
                 
-            GLib.idle_add(self.update_progress, 0.90, "Instalando cargador de arranque GRUB...")
-            exec_cmd(["mount", "--bind", "/dev", "/mnt/dev"])
+            GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader...")
+            exec_cmd(["mount", "--rbind", "/dev", "/mnt/dev"])
             exec_cmd(["mount", "--bind", "/proc", "/mnt/proc"])
-            exec_cmd(["mount", "--bind", "/sys", "/mnt/sys"])
+            exec_cmd(["mount", "--rbind", "/sys", "/mnt/sys"])
             exec_cmd(["mount", "--bind", "/run", "/mnt/run"])
             
             if is_efi:
-                exec_cmd(["chroot", "/mnt", "grub-install", disk_path])
+                exec_cmd(["chroot", "/mnt", "grub-install", "--removable", disk_path])
                 refind_postinst = "/mnt/var/lib/dpkg/info/pulsaros-refind.postinst"
                 if os.path.exists(refind_postinst) or "TEST_MODE" in os.environ:
-                    GLib.idle_add(self.update_progress, 0.92, "Configurando arranque dual rEFInd...")
+                    GLib.idle_add(self.update_progress, 0.92, "Configuring rEFInd dual-boot bootloader...")
                     try:
                         exec_cmd(["chroot", "/mnt", "/var/lib/dpkg/info/pulsaros-refind.postinst", "configure"])
                     except Exception as ref_err:
@@ -781,6 +924,76 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                 exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", disk_path])
                 
             exec_cmd(["chroot", "/mnt", "update-grub"])
+
+            # ── Driver installation ────────────────────────────────────
+            if self.install_nvidia or self.install_broadcom:
+                # Bind network-related paths so apt can reach the internet
+                exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
+                try:
+                    # Enable non-free repositories on target sources.list
+                    sources_file = "/mnt/etc/apt/sources.list"
+                    if "TEST_MODE" not in os.environ and os.path.exists(sources_file):
+                        try:
+                            with open(sources_file, "r") as f:
+                                content = f.read()
+                            modified = False
+                            lines = []
+                            for line in content.splitlines():
+                                s_line = line.strip()
+                                if s_line and not s_line.startswith("#") and "main" in s_line:
+                                    for comp in ["contrib", "non-free", "non-free-firmware"]:
+                                        if comp not in s_line:
+                                            line += f" {comp}"
+                                            modified = True
+                                lines.append(line)
+                            if modified:
+                                with open(sources_file, "w") as f:
+                                    f.write("\n".join(lines) + "\n")
+                        except Exception as list_err:
+                            print(f"Warning: Failed to update sources.list: {list_err}")
+
+                    # Run apt update to fetch package indices
+                    GLib.idle_add(self.update_progress, 0.93, "Updating package sources...")
+                    exec_cmd(["chroot", "/mnt", "apt-get", "update"])
+                    
+                    if self.install_nvidia:
+                        nvidia = self.nvidia_info
+                        is_new = nvidia.get("is_new", False)
+                        GLib.idle_add(self.update_progress, 0.94, "Installing NVIDIA drivers...")
+                        if is_new:
+                            # Turing / Ampere / Ada / Blackwell → nvidia-driver (current)
+                            exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
+                                      "nvidia-driver", "nvidia-settings",
+                                      "linux-headers-amd64"])
+                        else:
+                            # Kepler / Maxwell / Pascal and older → legacy 470 series
+                            exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
+                                      "nvidia-tesla-470-driver", "nvidia-settings",
+                                      "linux-headers-amd64"])
+
+                    if self.install_broadcom:
+                        GLib.idle_add(self.update_progress, 0.95, "Installing Broadcom drivers...")
+                        exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
+                                  "broadcom-sta-dkms", "linux-headers-amd64"])
+                        # blacklist conflicting drivers
+                        blacklist = (
+                            "blacklist b43\n"
+                            "blacklist b43legacy\n"
+                            "blacklist ssb\n"
+                            "blacklist bcm43xx\n"
+                            "blacklist brcm80211\n"
+                            "blacklist brcmfmac\n"
+                            "blacklist brcmsmac\n"
+                        )
+                        if "TEST_MODE" not in os.environ:
+                            os.makedirs("/mnt/etc/modprobe.d", exist_ok=True)
+                            with open("/mnt/etc/modprobe.d/broadcom-sta-blacklist.conf", "w") as f:
+                                f.write(blacklist)
+                except Exception as drv_err:
+                    print(f"Warning: Driver installation failed: {drv_err}")
+                finally:
+                    subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"])
+            # ──────────────────────────────────────────────────────────
             
             if "TEST_MODE" not in os.environ:
                 subprocess.run(["umount", "-l", "/mnt/dev"])
@@ -788,7 +1001,7 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                 subprocess.run(["umount", "-l", "/mnt/sys"])
                 subprocess.run(["umount", "-l", "/mnt/run"])
             
-            GLib.idle_add(self.update_progress, 0.95, "Creando flag de primer arranque...")
+            GLib.idle_add(self.update_progress, 0.95, "Creating setup flag...")
             exec_cmd(["touch", "/mnt/etc/pulsar-need-setup"])
             
             if "TEST_MODE" not in os.environ:
@@ -811,13 +1024,13 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
             GLib.idle_add(self.on_installation_failed, str(err))
 
     def on_installation_completed(self):
-        self.update_progress(1.0, "¡Pulsar OS se ha instalado correctamente!")
-        self.btn_install_action.set_label("Reiniciar Sistema")
+        self.update_progress(1.0, "Pulsar OS has been successfully installed!")
+        self.btn_install_action.set_label("Restart System")
         self.btn_install_action.add_css_class("suggested-action")
         self.btn_install_action.remove_css_class("secondary-action")
 
     def on_installation_failed(self, error):
-        self.update_progress(0.0, "Fallo en la instalación.")
+        self.update_progress(0.0, "Installation failed.")
         self.show_error_dialog(error)
         self.stack.set_visible_child_name("install_disk_select")
 
@@ -834,11 +1047,19 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
             transient_for=self,
             flags=Gtk.DialogFlags.MODAL,
             message_type=Gtk.MessageType.ERROR,
-            buttons=Gtk.ButtonsType.OK,
-            text="Error de Instalación"
+            buttons=Gtk.ButtonsType.NONE,
+            text="Installation Error"
         )
         dialog.format_secondary_text(message)
-        dialog.connect("response", lambda d, r: d.destroy())
+        dialog.add_button("OK", Gtk.ResponseType.OK)
+        dialog.add_button("View Log", Gtk.ResponseType.HELP)
+        
+        def on_response(d, response_id):
+            if response_id == Gtk.ResponseType.HELP:
+                subprocess.Popen(["xdg-open", "/tmp/pulsaros-install.log"])
+            d.destroy()
+            
+        dialog.connect("response", on_response)
         dialog.present()
 
 

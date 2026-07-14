@@ -14,7 +14,7 @@ echo "🎨 Configuring rEFInd in Pulsar OS..."
 # This prevents running refind-install (and modifying the host) during the Live ISO build phase inside the chroot.
 # Ejecutar refind-install solo si /boot/efi está montado o si el directorio EFI ya existe.
 # Esto evita ejecutar refind-install (y alterar el host) durante la fase de compilación de la ISO Live en el chroot.
-if command -v refind-install >/dev/null 2>&1 && (mountpoint -q /boot/efi || [ -d "/boot/efi/EFI" ]); then
+if command -v refind-install >/dev/null 2>&1 && (grep -q " /boot/efi " /proc/mounts || [ -d "/boot/efi/EFI" ]); then
     echo "⚙️ Ejecutando refind-install..."
     refind-install --yes || echo "⚠️ Advertencia: refind-install falló o reportó advertencias, pero continuamos..."
 else
