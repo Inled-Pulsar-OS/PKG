@@ -115,4 +115,14 @@ if [ -f "/etc/xdg/autostart/calamares-desktop-icon.desktop" ]; then
     fi
 fi
 
+# English: Reduce systemd shutdown/reboot timeouts to prevent long hangs if a service fails to stop
+# Español: Reducir el tiempo de espera de apagado de systemd para evitar cuelgues eternos
+echo "⚙️ Configurando límites de tiempo de espera en systemd para apagado rápido..."
+if [ -f "/etc/systemd/system.conf" ]; then
+    sed -i 's/#*DefaultTimeoutStopSec=.*/DefaultTimeoutStopSec=10s/' /etc/systemd/system.conf
+fi
+if [ -f "/etc/systemd/user.conf" ]; then
+    sed -i 's/#*DefaultTimeoutStopSec=.*/DefaultTimeoutStopSec=10s/' /etc/systemd/user.conf
+fi
+
 exit 0

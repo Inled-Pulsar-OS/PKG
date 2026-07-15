@@ -21,6 +21,37 @@ if [ -f "/etc/default/grub" ]; then
     sed -i "s/GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet splash\"/" /etc/default/grub
 fi
 
+# Configurar KMS (Kernel Mode Setting) para Plymouth en initramfs
+# Esto asegura que Plymouth se cargue con soporte gráfico desde el principio,
+# previniendo pantallas negras, fallos de renderizado y cuelgues al apagar/reiniciar.
+echo "🔌 Añadiendo módulos gráficos de KMS al initramfs para Plymouth..."
+mkdir -p /etc/initramfs-tools
+touch /etc/initramfs-tools/modules
+for mod in intel_agp i915 amdgpu radeon nouveau virtio_gpu vboxvideo; do
+    if ! grep -q "^$mod$" /etc/initramfs-tools/modules; then
+        echo "$mod" >> /etc/initramfs-tools/modules
+    fi
+done
+
+
+# Asegurar permisos correctos para el tema de Plymouth
+# Ensure correct permissions for the Plymouth theme assets
+echo "🔐 Ajustando permisos del tema Plymouth..."
+chmod -R 755 /usr/share/plymouth/themes/pulsar-plymouth || true
+find /usr/share/plymouth/themes/pulsar-plymouth -type f -exec chmod 644 {} + || true
+
+# English: Reduce start timeout for Plymouth systemd shutdown services to prevent hanging on reboot/shutdown
+# Español: Reducir el tiempo de espera de inicio de los servicios de Plymouth al apagar/reiniciar para evitar cuelgues
+echo "⚙️ Configurando límites de tiempo de espera (TimeoutStartSec=2s) en servicios de Plymouth..."
+for service in plymouth-reboot.service plymouth-halt.service plymouth-poweroff.service plymouth-kexec.service; do
+    for dir in /usr/lib/systemd/system /lib/systemd/system; do
+        if [ -f "$dir/$service" ]; then
+            sed -i '/TimeoutStartSec=/d' "$dir/$service"
+            sed -i '/\[Service\]/a TimeoutStartSec=2s' "$dir/$service"
+        fi
+    done
+done
+
 # Regenerar initramfs
 if command -v update-initramfs >/dev/null; then
     echo "🔄 Actualizando initramfs..."

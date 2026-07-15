@@ -7,6 +7,11 @@
 # Español: Comprueba si la aplicación de bienvenida ya se completó, si no, la ejecuta.
 #          Permite forzar la ejecución mediante --force o -f.
 
+# If we are running in the Live ISO environment, we always launch the welcome screen
+if grep -q "boot=live" /proc/cmdline; then
+    exec /usr/share/pulsaros-welcome/welcome.py "$@"
+fi
+
 DONE_FILE="$HOME/.config/pulsaros-welcome.done"
 
 FORCE=false

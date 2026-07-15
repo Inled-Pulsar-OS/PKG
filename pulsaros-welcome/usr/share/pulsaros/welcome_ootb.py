@@ -1407,49 +1407,81 @@ class OOTBWindow(Adw.ApplicationWindow):
                 sys.exit(0)
             else:
                 username = self.username_entry.get_text().strip()
-                cleanup_script = f"""#!/bin/bash
-sleep 2
-echo "=== Background Cleanup Started ===" >> /tmp/pulsar-ootb.log
+                
+                # 1. Create the post-reboot cleanup script
+                cleanup_script_content = f"""#!/bin/bash
+# ==============================================================================
+# pulsar-cleanup-live.sh - Delete the temporary live user cleanly on boot
+# ==============================================================================
+echo "=== Post-Reboot Cleanup Started ===" >> /tmp/pulsar-ootb-cleanup.log
 
-# 1. Kill any active processes owned by live user
-pkill -9 -u live >> /tmp/pulsar-ootb.log 2>&1
+# 1. Kill any stray live user processes just in case
+pkill -9 -u live >> /tmp/pulsar-ootb-cleanup.log 2>&1 || true
 
-# 2. Eliminate live user
-userdel -f -r live >> /tmp/pulsar-ootb.log 2>&1
-
-# 3. Delete OOTB witness file
-if [ -f /etc/pulsar-need-setup ]; then
-    rm -f /etc/pulsar-need-setup
-    echo "Deleted /etc/pulsar-need-setup" >> /tmp/pulsar-ootb.log
+# 2. Delete the live user and their home directory cleanly
+if id live &>/dev/null; then
+    userdel -f -r live >> /tmp/pulsar-ootb-cleanup.log 2>&1
+    echo "Deleted live user" >> /tmp/pulsar-ootb-cleanup.log
+else
+    echo "Live user already deleted" >> /tmp/pulsar-ootb-cleanup.log
 fi
 
-# 4. Configure SDDM autologin for the new user once
-mkdir -p /etc/sddm.conf.d
-cat <<EOF > /etc/sddm.conf.d/autologin.conf
-[Autologin]
-User={username}
-Session=gnome
-EOF
-chmod 644 /etc/sddm.conf.d/autologin.conf
-echo "Configured autologin for user {username}" >> /tmp/pulsar-ootb.log
+# 3. Disable and remove this systemd cleanup service
+systemctl disable pulsar-ootb-cleanup.service >> /tmp/pulsar-ootb-cleanup.log 2>&1 || true
+rm -f /etc/systemd/system/multi-user.target.wants/pulsar-ootb-cleanup.service
+rm -f /lib/systemd/system/pulsar-ootb-cleanup.service
+rm -f /etc/systemd/system/pulsar-ootb-cleanup.service
 
-# 5. Disable service
-systemctl disable pulsar-ootb.service >> /tmp/pulsar-ootb.log 2>&1
-
-# 6. Restart display manager
-echo "Restarting display-manager..." >> /tmp/pulsar-ootb.log
-systemctl restart display-manager >> /tmp/pulsar-ootb.log 2>&1
+echo "=== Post-Reboot Cleanup Finished ===" >> /tmp/pulsar-ootb-cleanup.log
 """
-                cleanup_path = "/tmp/pulsar-cleanup.sh"
-                with open(cleanup_path, "w") as sf:
-                    sf.write(cleanup_script)
-                os.chmod(cleanup_path, 0o755)
+                os.makedirs("/usr/share/pulsaros", exist_ok=True)
+                cleanup_script_path = "/usr/share/pulsaros/pulsar-cleanup-live.sh"
+                with open(cleanup_script_path, "w") as f:
+                    f.write(cleanup_script_content)
+                os.chmod(cleanup_script_path, 0o755)
 
+                # 2. Create the systemd oneshot cleanup service
+                service_content = """[Unit]
+Description=Pulsar OS OOTB Post-Reboot Cleanup
+DefaultDependencies=no
+After=local-fs.target
+Before=sddm.service display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/share/pulsaros/pulsar-cleanup-live.sh
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target
+"""
+                service_path = "/lib/systemd/system/pulsar-ootb-cleanup.service"
+                with open(service_path, "w") as f:
+                    f.write(service_content)
+                os.chmod(service_path, 0o644)
+
+                # 3. Enable the cleanup service
+                subprocess.run(["systemctl", "daemon-reload"], capture_output=True)
+                subprocess.run(["systemctl", "enable", "pulsar-ootb-cleanup.service"], capture_output=True)
+
+                # 4. Configure SDDM autologin for the new user once
+                os.makedirs("/etc/sddm.conf.d", exist_ok=True)
+                with open("/etc/sddm.conf.d/autologin.conf", "w") as f:
+                    f.write(f"[Autologin]\nUser={username}\nSession=gnome\n")
+                os.chmod("/etc/sddm.conf.d/autologin.conf", 0o644)
+
+                # 5. Delete OOTB witness file
+                if os.path.exists("/etc/pulsar-need-setup"):
+                    os.remove("/etc/pulsar-need-setup")
+
+                # 6. Disable pulsar-ootb service
+                subprocess.run(["systemctl", "disable", "pulsar-ootb.service"], capture_output=True)
+
+                # 7. Trigger a reboot to run the cleanup service on next boot
                 with open("/tmp/pulsar-ootb.log", "a") as log:
-                    log.write("\n=== Scheduling Detached Background Cleanup ===\n")
-
-                # Launch the script completely detached in a new session group
-                subprocess.Popen([cleanup_path], start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    log.write("Rebooting system to complete setup...\n")
+                
+                subprocess.Popen(["systemctl", "reboot"], start_new_session=True)
                 
                 self.close()
                 sys.exit(0)

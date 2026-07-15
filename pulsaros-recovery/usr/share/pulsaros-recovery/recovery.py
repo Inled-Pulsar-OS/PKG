@@ -775,6 +775,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
     def installation_backend(self, disk_path):
         try:
+            # Stop udisks2 automount daemon during formatting and system replication
+            if "TEST_MODE" not in os.environ:
+                subprocess.run(["systemctl", "stop", "udisks2.service"], capture_output=True)
+
             def exec_cmd(cmd, shell=False):
                 print(f"Running command: {cmd}")
                 if "TEST_MODE" in os.environ:
@@ -785,14 +789,65 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     raise Exception(f"Failed command: {' '.join(cmd) if isinstance(cmd, list) else cmd}\n{res.stderr}")
                 return res.stdout
                 
+            def cleanup_mounts(is_efi_boot):
+                if "TEST_MODE" not in os.environ:
+                    # 1. Kill any processes holding files open inside /mnt (chroot and host) surgically using fuser
+                    subprocess.run(["fuser", "-k", "-9", "-M", "/mnt"], capture_output=True)
+                    
+                    # 2. Unmount nested virtual filesystems first, then root, in strict reverse order of mounting
+                    for mount_path in [
+                        "/mnt/etc/resolv.conf",
+                        "/mnt/run",
+                        "/mnt/sys",
+                        "/mnt/proc",
+                        "/mnt/dev/pts",
+                        "/mnt/dev",
+                    ]:
+                        if os.path.exists(mount_path):
+                            res = subprocess.run(["umount", "-f", mount_path], capture_output=True)
+                            if res.returncode != 0:
+                                subprocess.run(["umount", "-l", mount_path])
+                    
+                    if is_efi_boot:
+                        res = subprocess.run(["umount", "-f", "/mnt/boot/efi"], capture_output=True)
+                        if res.returncode != 0:
+                            subprocess.run(["umount", "-l", "/mnt/boot/efi"])
+                                
+                    res = subprocess.run(["umount", "-f", "/mnt"], capture_output=True)
+                    if res.returncode != 0:
+                        subprocess.run(["umount", "-l", "/mnt"])
+                        
+                    # 3. Final recursive lazy unmount sweep to ensure absolutely nothing remains bound in the VFS
+                    subprocess.run(["umount", "-f", "-l", "-R", "/mnt"], capture_output=True)
+                
             is_efi = os.path.exists("/sys/firmware/efi")
             
+            # Unmount any active mounts on the selected disk first to prevent device busy errors
+            if "TEST_MODE" not in os.environ:
+                try:
+                    with open("/proc/mounts", "r") as f:
+                        for line in f:
+                            parts = line.split()
+                            if len(parts) >= 2 and parts[0].startswith(disk_path):
+                                print(f"Unmounting busy partition: {parts[0]} from {parts[1]}")
+                                subprocess.run(["umount", "-l", parts[1]], capture_output=True)
+                except Exception as umount_err:
+                    print(f"Warning during unmount prep: {umount_err}")
+                subprocess.run(["swapoff", "-a"], capture_output=True)
+
             if is_efi:
                 GLib.idle_add(self.update_progress, 0.05, "Cleaning and partitioning (GPT for UEFI)...")
                 exec_cmd(["sgdisk", "--zap-all", disk_path])
                 exec_cmd(["sgdisk", "--new=1:0:+512M", "--typecode=1:ef00", "--change-name=1:EFI", disk_path])
                 exec_cmd(["sgdisk", "--new=2:0:0", "--typecode=2:8300", "--change-name=2:PulsarOS", disk_path])
                 exec_cmd(["udevadm", "settle"])
+                try:
+                    exec_cmd(["partprobe", disk_path])
+                except Exception:
+                    try:
+                        exec_cmd(["blockdev", "--rereadpt", disk_path])
+                    except Exception:
+                        pass
                 
                 if "nvme" in disk_path or "mmcblk" in disk_path or "loop" in disk_path:
                     efi_part = f"{disk_path}p1"
@@ -811,6 +866,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     subprocess.run(["umount", "-l", "/mnt"])
                 os.makedirs("/mnt", exist_ok=True)
                 exec_cmd(["mount", root_part, "/mnt"])
+                exec_cmd(["mount", "--make-rprivate", "/mnt"])
                 os.makedirs("/mnt/boot/efi", exist_ok=True)
                 exec_cmd(["mount", efi_part, "/mnt/boot/efi"])
             else:
@@ -820,9 +876,19 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 if "TEST_MODE" in os.environ:
                     print(f"[TEST_MODE] Simulating sfdisk partitioning script:\n{sfdisk_script}")
                 else:
-                    p = subprocess.Popen(["sfdisk", disk_path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                    p.communicate(input=sfdisk_script)
+                    res_sf = subprocess.run(["sfdisk", disk_path], input=sfdisk_script, capture_output=True, text=True)
+                    if res_sf.returncode != 0:
+                        raise Exception(f"Failed to partition disk {disk_path} with sfdisk:\n{res_sf.stderr}")
                 exec_cmd(["udevadm", "settle"])
+                if "TEST_MODE" not in os.environ:
+                    subprocess.run(["sfdisk", "--activate", disk_path, "1"], capture_output=True)
+                try:
+                    exec_cmd(["partprobe", disk_path])
+                except Exception:
+                    try:
+                        exec_cmd(["blockdev", "--rereadpt", disk_path])
+                    except Exception:
+                        pass
                 
                 if "nvme" in disk_path or "mmcblk" in disk_path or "loop" in disk_path:
                     root_part = f"{disk_path}p1"
@@ -837,6 +903,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     subprocess.run(["umount", "-l", "/mnt"])
                 os.makedirs("/mnt", exist_ok=True)
                 exec_cmd(["mount", root_part, "/mnt"])
+                exec_cmd(["mount", "--make-rprivate", "/mnt"])
             
             GLib.idle_add(self.update_progress, 0.25, "Replicating system files... (this may take a while)")
             
@@ -906,20 +973,23 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                     f.write(fstab_content)
                 
             GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader...")
-            exec_cmd(["mount", "--rbind", "/dev", "/mnt/dev"])
+            exec_cmd(["mount", "--bind", "/dev", "/mnt/dev"])
+            if "TEST_MODE" not in os.environ:
+                os.makedirs("/mnt/dev/pts", exist_ok=True)
+            exec_cmd(["mount", "-t", "devpts", "devpts", "/mnt/dev/pts"])
             exec_cmd(["mount", "--bind", "/proc", "/mnt/proc"])
-            exec_cmd(["mount", "--rbind", "/sys", "/mnt/sys"])
-            exec_cmd(["mount", "--bind", "/run", "/mnt/run"])
+            exec_cmd(["mount", "--bind", "/sys", "/mnt/sys"])
+            exec_cmd(["mount", "-t", "tmpfs", "tmpfs", "/mnt/run"])
             
             if is_efi:
                 # Run grub-install twice:
                 # 1. Without --removable to register the UEFI NVRAM boot entry (so the UEFI firmware boots the hard drive by default)
                 try:
-                    exec_cmd(["chroot", "/mnt", "grub-install", disk_path])
+                    exec_cmd(["chroot", "/mnt", "grub-install", "--force", disk_path])
                 except Exception as g_err:
                     print(f"Warning: Standard grub-install failed: {g_err}. Proceeding with removable fallback...")
                 # 2. With --removable to create fallback loader in /EFI/BOOT/BOOTX64.EFI
-                exec_cmd(["chroot", "/mnt", "grub-install", "--removable", disk_path])
+                exec_cmd(["chroot", "/mnt", "grub-install", "--force", "--removable", disk_path])
                 refind_postinst = "/mnt/var/lib/dpkg/info/pulsaros-refind.postinst"
                 if os.path.exists(refind_postinst) or "TEST_MODE" in os.environ:
                     GLib.idle_add(self.update_progress, 0.92, "Configuring rEFInd dual-boot bootloader...")
@@ -928,7 +998,7 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                     except Exception as ref_err:
                         print(f"Warning: rEFInd dual-boot setup encountered an issue: {ref_err}. Falling back to GRUB.")
             else:
-                exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", disk_path])
+                exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", "--force", disk_path])
                 
             exec_cmd(["chroot", "/mnt", "update-grub"])
 
@@ -936,7 +1006,15 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
             if self.install_nvidia or self.install_broadcom:
                 # Bind network-related paths so apt can reach the internet
                 exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
+                policy_file = "/mnt/usr/sbin/policy-rc.d"
                 try:
+                    # Create policy-rc.d to prevent service start in chroot
+                    if "TEST_MODE" not in os.environ:
+                        os.makedirs(os.path.dirname(policy_file), exist_ok=True)
+                        with open(policy_file, "w") as f:
+                            f.write("#!/bin/sh\nexit 101\n")
+                        os.chmod(policy_file, 0o755)
+
                     # Enable non-free repositories on target sources.list
                     sources_file = "/mnt/etc/apt/sources.list"
                     if "TEST_MODE" not in os.environ and os.path.exists(sources_file):
@@ -999,36 +1077,37 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                 except Exception as drv_err:
                     print(f"Warning: Driver installation failed: {drv_err}")
                 finally:
+                    # Remove policy-rc.d
+                    if "TEST_MODE" not in os.environ and os.path.exists(policy_file):
+                        try:
+                            os.remove(policy_file)
+                        except Exception:
+                            pass
                     subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"])
             # ──────────────────────────────────────────────────────────
             
-            if "TEST_MODE" not in os.environ:
-                subprocess.run(["umount", "-l", "/mnt/dev"])
-                subprocess.run(["umount", "-l", "/mnt/proc"])
-                subprocess.run(["umount", "-l", "/mnt/sys"])
-                subprocess.run(["umount", "-l", "/mnt/run"])
-            
+            # 1. Touch the setup flag file first while everything is still mounted cleanly
             GLib.idle_add(self.update_progress, 0.95, "Creating setup flag...")
-            exec_cmd(["touch", "/mnt/etc/pulsar-need-setup"])
-            
             if "TEST_MODE" not in os.environ:
-                if is_efi:
-                    subprocess.run(["umount", "-l", "/mnt/boot/efi"])
-                subprocess.run(["umount", "-l", "/mnt"])
+                try:
+                    os.makedirs("/mnt/etc", exist_ok=True)
+                    with open("/mnt/etc/pulsar-need-setup", "w") as f:
+                        pass
+                except Exception as touch_err:
+                    print(f"Warning: Failed to create setup flag: {touch_err}")
+
+            # 2. Cleanup and unmount all filesystems
+            cleanup_mounts(is_efi)
             
             GLib.idle_add(self.on_installation_completed)
             
         except Exception as err:
-            if "TEST_MODE" not in os.environ:
-                subprocess.run(["umount", "-l", "/mnt/dev"])
-                subprocess.run(["umount", "-l", "/mnt/proc"])
-                subprocess.run(["umount", "-l", "/mnt/sys"])
-                subprocess.run(["umount", "-l", "/mnt/run"])
-                if is_efi:
-                    subprocess.run(["umount", "-l", "/mnt/boot/efi"])
-                subprocess.run(["umount", "-l", "/mnt"])
-            
+            cleanup_mounts(is_efi)
             GLib.idle_add(self.on_installation_failed, str(err))
+        finally:
+            # Restart udisks2 automount daemon so the system goes back to normal state
+            if "TEST_MODE" not in os.environ:
+                subprocess.run(["systemctl", "start", "udisks2.service"], capture_output=True)
 
     def on_installation_completed(self):
         self.update_progress(1.0, "Pulsar OS has been successfully installed!")
