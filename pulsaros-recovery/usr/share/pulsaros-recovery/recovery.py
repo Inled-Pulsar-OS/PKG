@@ -405,34 +405,76 @@ class RecoveryWindow(Adw.ApplicationWindow):
             self.btn_continue.set_sensitive(True)
 
     def _get_real_user(self):
-        for var in ("SUDO_USER", "PKEXEC_UID", "LOGNAME"):
-            val = os.environ.get(var)
-            if val and val != "root":
-                return val
         import pwd
+
+        # 1. Check environment variables set by pkexec/sudo
+        for var in ("SUDO_USER", "PKEXEC_UID"):
+            val = os.environ.get(var)
+            if val:
+                if var == "PKEXEC_UID":
+                    try:
+                        return pwd.getpwuid(int(val)).pw_name
+                    except (KeyError, ValueError):
+                        pass
+                elif val != "root":
+                    return val
+
+        # 2. Walk /proc to find the first non-root, non-this-process UID
+        my_pid = os.getpid()
+        my_uid = os.getuid()
         try:
-            uid = int(os.environ.get("PKEXEC_UID", os.environ.get("SUDO_UID", "0")))
-            if uid > 0:
-                return pwd.getpwuid(uid).pw_name
-        except (KeyError, ValueError):
+            for entry in sorted(os.listdir("/proc")):
+                if not entry.isdigit() or int(entry) == my_pid:
+                    continue
+                try:
+                    with open(f"/proc/{entry}/status") as f:
+                        for line in f:
+                            if line.startswith("Uid:"):
+                                uid = int(line.split()[1])
+                                if uid >= 1000 and uid != my_uid:
+                                    return pwd.getpwuid(uid).pw_name
+                                break
+                except (FileNotFoundError, PermissionError, IndexError):
+                    continue
+        except FileNotFoundError:
             pass
+
+        # 3. Fallback: owner of the XDG_RUNTIME_DIR
+        xdg = os.environ.get("XDG_RUNTIME_DIR", "")
+        if xdg and xdg.startswith("/run/user/"):
+            try:
+                uid = int(xdg.split("/")[3])
+                return pwd.getpwuid(uid).pw_name
+            except (KeyError, ValueError, IndexError):
+                pass
+
         return None
 
     def _popen_as_user(self, cmd):
         user = self._get_real_user()
         if user:
+            uid = os.environ.get("PKEXEC_UID", os.environ.get("SUDO_UID", ""))
+            if not uid:
+                try:
+                    import pwd as _pwd
+                    uid = str(_pwd.getpwnam(user).pw_uid)
+                except Exception:
+                    uid = "1000"
             home = f"/home/{user}"
-            display = os.environ.get("DISPLAY", "")
-            wayland = os.environ.get("WAYLAND_DISPLAY", "")
-            xauth = os.environ.get("XAUTHORITY", "")
-            xdg = os.environ.get("XDG_RUNTIME_DIR", "")
-            env_str = (
-                f"HOME={home} USER={user} LOGNAME={user} "
-                f"DISPLAY={display} WAYLAND_DISPLAY={wayland} "
-                f"XAUTHORITY={xauth} XDG_RUNTIME_DIR={xdg} "
-                f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u {user})"
-            )
-            subprocess.Popen(f"sudo -u {user} env {env_str} {cmd}", shell=True)
+            runtime = f"/run/user/{uid}"
+            env_parts = [
+                f"HOME={home}",
+                f"USER={user}",
+                f"LOGNAME={user}",
+                f"XDG_RUNTIME_DIR={runtime}",
+                f"DBUS_SESSION_BUS_ADDRESS=unix:path={runtime}/bus",
+                f"DISPLAY={os.environ.get('DISPLAY', '')}",
+                f"WAYLAND_DISPLAY={os.environ.get('WAYLAND_DISPLAY', '')}",
+                f"XAUTHORITY={os.environ.get('XAUTHORITY', '')}",
+            ]
+            env_str = " ".join(env_parts)
+            full_cmd = f"env {env_str} {cmd}"
+            subprocess.Popen(full_cmd, shell=True)
         else:
             subprocess.Popen(cmd, shell=True)
 
