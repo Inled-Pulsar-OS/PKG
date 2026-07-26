@@ -404,18 +404,50 @@ class RecoveryWindow(Adw.ApplicationWindow):
             self.selected_action = row.action_id
             self.btn_continue.set_sensitive(True)
 
+    def _get_real_user(self):
+        for var in ("SUDO_USER", "PKEXEC_UID", "LOGNAME"):
+            val = os.environ.get(var)
+            if val and val != "root":
+                return val
+        import pwd
+        try:
+            uid = int(os.environ.get("PKEXEC_UID", os.environ.get("SUDO_UID", "0")))
+            if uid > 0:
+                return pwd.getpwuid(uid).pw_name
+        except (KeyError, ValueError):
+            pass
+        return None
+
+    def _popen_as_user(self, cmd):
+        user = self._get_real_user()
+        if user:
+            home = f"/home/{user}"
+            display = os.environ.get("DISPLAY", "")
+            wayland = os.environ.get("WAYLAND_DISPLAY", "")
+            xauth = os.environ.get("XAUTHORITY", "")
+            xdg = os.environ.get("XDG_RUNTIME_DIR", "")
+            env_str = (
+                f"HOME={home} USER={user} LOGNAME={user} "
+                f"DISPLAY={display} WAYLAND_DISPLAY={wayland} "
+                f"XAUTHORITY={xauth} XDG_RUNTIME_DIR={xdg} "
+                f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u {user})"
+            )
+            subprocess.Popen(f"sudo -u {user} env {env_str} {cmd}", shell=True)
+        else:
+            subprocess.Popen(cmd, shell=True)
+
     def on_utility_continue_clicked(self, btn):
         if not self.selected_action:
             return
             
         if self.selected_action == "backup":
-            subprocess.Popen("deja-dup --restore || deja-dup", shell=True)
+            self._popen_as_user("deja-dup --restore || deja-dup")
         elif self.selected_action == "install":
             self.show_installer_selector_dialog()
         elif self.selected_action == "safari":
-            subprocess.Popen("seafari", shell=True)
+            self._popen_as_user("seafari")
         elif self.selected_action == "disk":
-            subprocess.Popen("gnome-disks || gnome-disk-utility", shell=True)
+            self._popen_as_user("gnome-disks || gnome-disk-utility")
 
     def show_installer_selector_dialog(self):
         # Emergent selector popup matching Apple design

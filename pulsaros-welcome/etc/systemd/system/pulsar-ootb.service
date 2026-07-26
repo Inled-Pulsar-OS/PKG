@@ -1,12 +1,14 @@
 [Unit]
-Description=Asistente de primer arranque de Pulsar OS
-After=lightdm.service gdm.service
-Before=display-manager.service
+Description=Pulsar OS OOTB - Ensure setup sentinel
+DefaultDependencies=no
+Before=display-manager.service graphical.target
+After=local-fs.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 /usr/share/pulsaros/welcome_ootb.py
+ExecStart=/bin/bash -c 'touch /etc/pulsar-need-setup && echo "live ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/pulsar-ootb-live && chmod 0440 /etc/sudoers.d/pulsar-ootb-live'
 RemainAfterExit=yes
+TimeoutStartSec=30
 
 [Install]
 WantedBy=graphical.target

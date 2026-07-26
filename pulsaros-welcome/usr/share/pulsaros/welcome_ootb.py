@@ -1222,160 +1222,172 @@ class OOTBWindow(Adw.ApplicationWindow):
             with open("/tmp/pulsar-ootb.log", "w") as log:
                 log.write(f"Pulsar OS OOTB Config Log - {time.ctime()}\n")
 
-            def run_setup_cmd(cmd):
-                if isinstance(cmd, list):
-                    if cmd[0] not in ["sudo", "echo"]:
-                        cmd = ["sudo"] + cmd
+            def log_msg(msg):
+                with open("/tmp/pulsar-ootb.log", "a") as log:
+                    log.write(f"{msg}\n")
+
+            def run_cmd(cmd, check=True):
                 cmd_str = ' '.join(cmd) if isinstance(cmd, list) else cmd
-                with open("/tmp/pulsar-ootb.log", "a") as log:
-                    log.write(f"Executing: {cmd_str}\n")
+                log_msg(f"Executing: {cmd_str}")
                 if "TEST_MODE" in os.environ:
-                    with open("/tmp/pulsar-ootb.log", "a") as log:
-                        log.write("[TEST_MODE] Bypassed execution.\n")
-                    return
+                    log_msg("[TEST_MODE] Bypassed.")
+                    return subprocess.CompletedProcess(cmd, 0, "", "")
                 res = subprocess.run(cmd, capture_output=True, text=True)
-                with open("/tmp/pulsar-ootb.log", "a") as log:
-                    log.write(f"STDOUT: {res.stdout}\n")
-                    log.write(f"STDERR: {res.stderr}\n")
-                if res.returncode != 0:
-                    raise Exception(f"Failed command: {cmd_str}\n{res.stderr}")
+                log_msg(f"  exit={res.returncode} stdout={res.stdout.strip()} stderr={res.stderr.strip()}")
+                if check and res.returncode != 0:
+                    raise Exception(f"Command failed (exit {res.returncode}): {cmd_str}\n{res.stderr.strip()}")
+                return res
 
-            run_setup_cmd(["locale-gen", self.selected_language])
-            
-            # Try to set locale via localectl, fallback to writing directly if polkit/D-Bus denies access
-            try:
-                run_setup_cmd(["localectl", "set-locale", f"LANG={self.selected_language}"])
-            except Exception as loc_err:
-                with open("/tmp/pulsar-ootb.log", "a") as log:
-                    log.write(f"Warning: localectl set-locale failed: {loc_err}. Writing to /etc/default/locale directly...\n")
-                try:
-                    locale_content = f'LANG="{self.selected_language}"\n'
-                    if "TEST_MODE" not in os.environ:
-                        with open("/tmp/locale_tmp", "w") as f:
-                            f.write(locale_content)
-                        run_setup_cmd(["mv", "/tmp/locale_tmp", "/etc/default/locale"])
-                        run_setup_cmd(["chown", "root:root", "/etc/default/locale"])
-                        run_setup_cmd(["chmod", "644", "/etc/default/locale"])
-                except Exception as wr_err:
-                    with open("/tmp/pulsar-ootb.log", "a") as log:
-                        log.write(f"Warning: Failed to write /etc/default/locale: {wr_err}\n")
+            def write_temp_and_move(content, dest):
+                tmp = dest + ".tmp"
+                with open(tmp, "w") as f:
+                    f.write(content)
+                os.replace(tmp, dest)
 
-            # 1. Try to install console-setup to make layout packages available
+            # ── Locale ─────────────────────────────────────────────
+            run_cmd(["locale-gen", self.selected_language], check=False)
             try:
-                run_setup_cmd(["apt-get", "install", "-y", "console-setup", "keyboard-configuration"])
-            except Exception as apt_err:
-                with open("/tmp/pulsar-ootb.log", "a") as log:
-                    log.write(f"Warning: Failed to install console-setup: {apt_err}\n")
+                run_cmd(["localectl", "set-locale", f"LANG={self.selected_language}"])
+            except Exception:
+                log_msg("Fallback: writing /etc/default/locale directly")
+                write_temp_and_move(f'LANG="{self.selected_language}"\n', "/etc/default/locale")
+                run_cmd(["chown", "root:root", "/etc/default/locale"], check=False)
+                run_cmd(["chmod", "644", "/etc/default/locale"], check=False)
 
-            # 2. Try to set keymap via localectl
+            # ── Keyboard ──────────────────────────────────────────
+            run_cmd(["apt-get", "install", "-y", "console-setup", "keyboard-configuration", "kbd"], check=False)
             try:
-                run_setup_cmd(["localectl", "set-keymap", self.selected_keymap])
-            except Exception as key_err:
-                with open("/tmp/pulsar-ootb.log", "a") as log:
-                    log.write(f"Warning: localectl set-keymap failed: {key_err}\n")
-                
-                # 3. Fallback: Write directly to /etc/default/keyboard so it applies on reboot
-                try:
-                    kb_content = (
-                        'XKBMODEL="pc105"\n'
-                        f'XKBLAYOUT="{self.selected_keymap}"\n'
-                        'XKBVARIANT=""\n'
-                        'XKBOPTIONS=""\n'
-                        'BACKSPACE="guess"\n'
-                    )
-                    if "TEST_MODE" not in os.environ:
-                        with open("/tmp/keyboard_tmp", "w") as f:
-                            f.write(kb_content)
-                        run_setup_cmd(["mv", "/tmp/keyboard_tmp", "/etc/default/keyboard"])
-                except Exception as kb_err:
-                    with open("/tmp/pulsar-ootb.log", "a") as log:
-                        log.write(f"Warning: Failed to write /etc/default/keyboard: {kb_err}\n")
+                run_cmd(["localectl", "set-keymap", self.selected_keymap])
+            except Exception:
+                log_msg("Fallback: writing /etc/default/keyboard directly")
+                kb_content = (
+                    'XKBMODEL="pc105"\n'
+                    f'XKBLAYOUT="{self.selected_keymap}"\n'
+                    'XKBVARIANT=""\n'
+                    'XKBOPTIONS=""\n'
+                    'BACKSPACE="guess"\n'
+                )
+                write_temp_and_move(kb_content, "/etc/default/keyboard")
 
-            # Try to set timezone via timedatectl, fallback to manual files if D-Bus fails
+            # ── Timezone ──────────────────────────────────────────
             try:
-                run_setup_cmd(["timedatectl", "set-timezone", self.selected_timezone])
-            except Exception as tz_err:
-                with open("/tmp/pulsar-ootb.log", "a") as log:
-                    log.write(f"Warning: timedatectl set-timezone failed: {tz_err}. Fallback to manual symlink...\n")
-                try:
-                    if "TEST_MODE" not in os.environ:
-                        run_setup_cmd(["ln", "-sf", f"/usr/share/zoneinfo/{self.selected_timezone}", "/etc/localtime"])
-                        with open("/tmp/tz_tmp", "w") as f:
-                            f.write(f"{self.selected_timezone}\n")
-                        run_setup_cmd(["mv", "/tmp/tz_tmp", "/etc/timezone"])
-                        run_setup_cmd(["chown", "root:root", "/etc/timezone"])
-                        run_setup_cmd(["chmod", "644", "/etc/timezone"])
-                except Exception as wr_tz_err:
-                    with open("/tmp/pulsar-ootb.log", "a") as log:
-                        log.write(f"Warning: Failed to write timezone manually: {wr_tz_err}\n")
+                run_cmd(["timedatectl", "set-timezone", self.selected_timezone])
+            except Exception:
+                log_msg("Fallback: manual timezone symlink")
+                run_cmd(["ln", "-sf", f"/usr/share/zoneinfo/{self.selected_timezone}", "/etc/localtime"], check=False)
+                write_temp_and_move(f"{self.selected_timezone}\n", "/etc/timezone")
+                run_cmd(["chown", "root:root", "/etc/timezone"], check=False)
+                run_cmd(["chmod", "644", "/etc/timezone"], check=False)
 
             if "TEST_MODE" in os.environ:
-                print("[TEST_MODE] Simulating user creation and avatar copy...")
+                log_msg("[TEST_MODE] Skipping user creation.")
             else:
-                # Check if user already exists
-                user_exists = False
+                # ── Lock live user to prevent login ───────────────
+                log_msg(f"Locking live user account...")
+                run_cmd(["usermod", "-L", "-s", "/usr/sbin/nologin", "live"], check=False)
+
+                # ── Create real user with useradd ─────────────────
+                log_msg(f"Creating user '{username}' via useradd...")
+                user_home = f"/home/{username}"
+                run_cmd([
+                    "useradd", "-m",
+                    "-d", user_home,
+                    "-s", "/bin/bash",
+                    "-G", "sudo,audio,video,plugdev,docker",
+                    "-c", fullname,
+                    username
+                ])
+
+                # Verify user was created in /etc/passwd
+                res = run_cmd(["grep", f"^{username}:", "/etc/passwd"])
+                if f"{username}:" not in res.stdout:
+                    raise Exception(f"User '{username}' not found in /etc/passwd after useradd")
+
+                # Verify home directory exists
+                if not os.path.isdir(user_home):
+                    raise Exception(f"Home directory {user_home} does not exist after useradd")
+
+                log_msg(f"User '{username}' verified in /etc/passwd, home={user_home}")
+
+                # ── Update /etc/hosts ─────────────────────────────
                 try:
-                    res_check = subprocess.run(["id", username], capture_output=True)
-                    if res_check.returncode == 0:
-                        user_exists = True
-                except Exception:
-                    pass
+                    with open("/etc/hosts", "r") as f:
+                        hosts = f.read()
+                    if "pulsaros" not in hosts:
+                        lines = hosts.splitlines()
+                        new_lines = []
+                        for line in lines:
+                            if line.startswith("127.0.0.1"):
+                                new_lines.append(line + " pulsaros")
+                            else:
+                                new_lines.append(line)
+                        write_temp_and_move("\n".join(new_lines) + "\n", "/etc/hosts")
+                        log_msg("Updated /etc/hosts with 'pulsaros' alias")
+                except Exception as e:
+                    log_msg(f"Warning: Failed to update /etc/hosts: {e}")
 
-                if not user_exists:
-                    run_setup_cmd([
-                        "useradd", "-m", "-G", "sudo,audio,video,plugdev",
-                        "-s", "/bin/bash", username
-                    ])
-                else:
-                    # User exists, just ensure they are in the correct groups
-                    run_setup_cmd([
-                        "usermod", "-a", "-G", "sudo,audio,video,plugdev", "-s", "/bin/bash", username
-                    ])
-
-                # Write user and root password securely without pipelines
-                cmd_user = ["sudo", "chpasswd"] if os.geteuid() != 0 else ["chpasswd"]
-                res = subprocess.run(cmd_user, input=f"{username}:{password}\n", capture_output=True, text=True)
+                # ── Set passwords ─────────────────────────────────
+                res = subprocess.run(
+                    ["chpasswd"],
+                    input=f"{username}:{password}\n",
+                    capture_output=True, text=True
+                )
                 if res.returncode != 0:
                     raise Exception(f"Failed to set user password: {res.stderr}")
+                log_msg("User password set successfully")
 
-                cmd_root = ["sudo", "chpasswd"] if os.geteuid() != 0 else ["chpasswd"]
-                res = subprocess.run(cmd_root, input=f"root:{password}\n", capture_output=True, text=True)
+                res = subprocess.run(
+                    ["chpasswd"],
+                    input=f"root:{password}\n",
+                    capture_output=True, text=True
+                )
                 if res.returncode != 0:
                     raise Exception(f"Failed to set root password: {res.stderr}")
+                log_msg("Root password set successfully")
 
-                # Configure keyboard layout for GNOME Wayland
-                try:
-                    run_setup_cmd([
-                        "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
-                        "org.gnome.desktop.input-sources", "sources", f"[('xkb', '{self.selected_keymap}')]"
-                    ])
-                except Exception as gset_err:
-                    with open("/tmp/pulsar-ootb.log", "a") as log:
-                        log.write(f"Warning: Failed to set GNOME user keymap via gsettings: {gset_err}\n")
-
-                # Setup Real User Avatar
+                # ── Avatar ────────────────────────────────────────
+                as_icon_dest = ""
                 if self.selected_avatar_path and os.path.exists(self.selected_avatar_path):
-                    user_home = f"/home/{username}"
-                    if os.path.exists(user_home):
+                    if os.path.isdir(user_home):
                         face_dest = os.path.join(user_home, ".face")
-                        run_setup_cmd(["cp", self.selected_avatar_path, face_dest])
-                        run_setup_cmd(["chown", f"{username}:{username}", face_dest])
+                        run_cmd(["cp", self.selected_avatar_path, face_dest])
+                        run_cmd(["chown", f"{username}:{username}", face_dest])
 
                     as_icons_dir = "/var/lib/AccountsService/icons"
-                    run_setup_cmd(["mkdir", "-p", as_icons_dir])
+                    run_cmd(["mkdir", "-p", as_icons_dir])
                     as_icon_dest = os.path.join(as_icons_dir, username)
-                    run_setup_cmd(["cp", self.selected_avatar_path, as_icon_dest])
-                    run_setup_cmd(["chown", "root:root", as_icon_dest])
+                    run_cmd(["cp", self.selected_avatar_path, as_icon_dest])
+                    run_cmd(["chown", "root:root", as_icon_dest])
 
-                    as_user_file = f"/var/lib/AccountsService/users/{username}"
-                    as_content = f"[User]\nLanguage={self.selected_language}\nXSession=gnome\nIcon={as_icon_dest}\nSystemAccount=false\n"
-                    
-                    # Write to tmp and move using sudo to bypass permissions
-                    with open("/tmp/as_user_tmp", "w") as f:
-                        f.write(as_content)
-                    run_setup_cmd(["mkdir", "-p", os.path.dirname(as_user_file)])
-                    run_setup_cmd(["mv", "/tmp/as_user_tmp", as_user_file])
-                    run_setup_cmd(["chown", "root:root", as_user_file])
+                # ── AccountsService ───────────────────────────────
+                as_user_file = f"/var/lib/AccountsService/users/{username}"
+                as_content = (
+                    f"[User]\n"
+                    f"Language={self.selected_language}\n"
+                    f"Session=gnome\n"
+                    f"XSession=gnome\n"
+                    f"SystemAccount=false\n"
+                )
+                if as_icon_dest:
+                    as_content += f"Icon={as_icon_dest}\n"
+
+                run_cmd(["mkdir", "-p", "/var/lib/AccountsService/users"])
+                write_temp_and_move(as_content, as_user_file)
+                run_cmd(["chown", "root:root", as_user_file])
+                run_cmd(["chmod", "600", as_user_file])
+                log_msg(f"AccountsService config written to {as_user_file}")
+
+                # Restart accounts-daemon so it picks up the new user
+                res = run_cmd(["systemctl", "restart", "accounts-daemon.service"], check=False)
+                if res.returncode != 0:
+                    log_msg("accounts-daemon not available, trying accounts-daemon")
+                    run_cmd(["systemctl", "restart", "accounts-daemon"], check=False)
+
+                # ── GNOME keymap for the new user ─────────────────
+                run_cmd([
+                    "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
+                    "org.gnome.desktop.input-sources", "sources", f"[('xkb', '{self.selected_keymap}')]"
+                ], check=False)
 
             GLib.idle_add(self.on_setup_completed)
 
@@ -1407,88 +1419,68 @@ class OOTBWindow(Adw.ApplicationWindow):
                 sys.exit(0)
             else:
                 username = self.username_entry.get_text().strip()
-                
-                # 1. Create the post-reboot cleanup script
-                cleanup_script_content = f"""#!/bin/bash
-# ==============================================================================
-# pulsar-cleanup-live.sh - Delete the temporary live user cleanly on boot
-# ==============================================================================
-echo "=== Post-Reboot Cleanup Started ===" >> /tmp/pulsar-ootb-cleanup.log
+                log_path = "/tmp/pulsar-ootb.log"
 
-# 1. Kill any stray live user processes just in case
-pkill -9 -u live >> /tmp/pulsar-ootb-cleanup.log 2>&1 || true
+                def log_msg(msg):
+                    with open(log_path, "a") as log:
+                        log.write(f"{msg}\n")
 
-# 2. Delete the live user and their home directory cleanly
-if id live &>/dev/null; then
-    userdel -f -r live >> /tmp/pulsar-ootb-cleanup.log 2>&1
-    echo "Deleted live user" >> /tmp/pulsar-ootb-cleanup.log
-else
-    echo "Live user already deleted" >> /tmp/pulsar-ootb-cleanup.log
-fi
+                # 1. Remove temporary sudoers grant for live user
+                log_msg("Cleaning up temporary sudoers for live user...")
+                try:
+                    os.remove("/etc/sudoers.d/pulsar-ootb-live")
+                except FileNotFoundError:
+                    pass
 
-# 3. Disable and remove this systemd cleanup service
-systemctl disable pulsar-ootb-cleanup.service >> /tmp/pulsar-ootb-cleanup.log 2>&1 || true
-rm -f /etc/systemd/system/multi-user.target.wants/pulsar-ootb-cleanup.service
-rm -f /lib/systemd/system/pulsar-ootb-cleanup.service
-rm -f /etc/systemd/system/pulsar-ootb-cleanup.service
+                # 2. Remove residual display manager config files
+                try:
+                    subprocess.run(
+                        "rm -f /etc/sddm.conf /etc/sddm.conf.d/live"
+                        " /etc/lightdm/lightdm.conf.d/* 2>/dev/null",
+                        shell=True
+                    )
+                except Exception:
+                    pass
 
-echo "=== Post-Reboot Cleanup Finished ===" >> /tmp/pulsar-ootb-cleanup.log
-"""
-                os.makedirs("/usr/share/pulsaros", exist_ok=True)
-                cleanup_script_path = "/usr/share/pulsaros/pulsar-cleanup-live.sh"
-                with open(cleanup_script_path, "w") as f:
-                    f.write(cleanup_script_content)
-                os.chmod(cleanup_script_path, 0o755)
-
-                # 2. Create the systemd oneshot cleanup service
-                service_content = """[Unit]
-Description=Pulsar OS OOTB Post-Reboot Cleanup
-DefaultDependencies=no
-After=local-fs.target
-Before=sddm.service display-manager.service
-
-[Service]
-Type=oneshot
-ExecStart=/usr/share/pulsaros/pulsar-cleanup-live.sh
-RemainAfterExit=no
-
-[Install]
-WantedBy=multi-user.target
-"""
-                service_path = "/lib/systemd/system/pulsar-ootb-cleanup.service"
-                with open(service_path, "w") as f:
-                    f.write(service_content)
-                os.chmod(service_path, 0o644)
-
-                # 3. Enable the cleanup service
-                subprocess.run(["systemctl", "daemon-reload"], capture_output=True)
-                subprocess.run(["systemctl", "enable", "pulsar-ootb-cleanup.service"], capture_output=True)
-
-                # 4. Configure SDDM autologin for the new user once
+                # 3. Configure SDDM autologin for the new real user
                 os.makedirs("/etc/sddm.conf.d", exist_ok=True)
                 with open("/etc/sddm.conf.d/autologin.conf", "w") as f:
                     f.write(f"[Autologin]\nUser={username}\nSession=gnome\n")
                 os.chmod("/etc/sddm.conf.d/autologin.conf", 0o644)
+                log_msg(f"SDDM autologin configured for '{username}'")
 
-                # 5. Delete OOTB witness file
+                # 4. Delete OOTB witness file
                 if os.path.exists("/etc/pulsar-need-setup"):
                     os.remove("/etc/pulsar-need-setup")
+                    log_msg("Removed /etc/pulsar-need-setup")
 
-                # 6. Disable pulsar-ootb service
-                subprocess.run(["systemctl", "disable", "pulsar-ootb.service"], capture_output=True)
+                # 5. Disable pulsar-ootb service (no longer needed)
+                subprocess.run(
+                    ["systemctl", "disable", "pulsar-ootb.service"],
+                    capture_output=True
+                )
+                log_msg("Disabled pulsar-ootb.service")
 
-                # 7. Trigger a reboot to run the cleanup service on next boot
-                with open("/tmp/pulsar-ootb.log", "a") as log:
-                    log.write("Rebooting system to complete setup...\n")
-                
+                # 6. Restart SDDM so it re-reads AccountsService and shows the new user
+                log_msg("Restarting SDDM to pick up new user...")
+                res = subprocess.run(
+                    ["systemctl", "restart", "sddm"],
+                    capture_output=True, text=True
+                )
+                if res.returncode != 0:
+                    log_msg(f"SDDM restart returned non-zero: {res.stderr.strip()}")
+
+                log_msg("Setup complete. Rebooting in 3 seconds...")
+                time.sleep(3)
+
                 subprocess.Popen(["systemctl", "reboot"], start_new_session=True)
-                
+
                 self.close()
                 sys.exit(0)
         except Exception as e:
             with open("/tmp/pulsar-ootb.log", "a") as log:
-                log.write(f"Exception during final cleanup schedule: {e}\n")
-            self.show_error(f"Error starting final cleanup:\n{e}")
+                log.write(f"Exception during final cleanup: {e}\n")
+            self.show_error(f"Error during cleanup:\n{e}")
 
 
 class OOTBApp(Adw.Application):

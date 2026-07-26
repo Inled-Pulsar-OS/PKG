@@ -2,10 +2,6 @@
 # ==============================================================================
 # Pulsar OS - Welcome Application Wrapper
 # ==============================================================================
-# English: Checks if the welcome app has already been completed, if not, runs it.
-#          Allows forcing execution with --force or -f.
-# Español: Comprueba si la aplicación de bienvenida ya se completó, si no, la ejecuta.
-#          Permite forzar la ejecución mediante --force o -f.
 
 # If we are running in the Live ISO environment, we always launch the welcome screen
 if grep -q "boot=live" /proc/cmdline; then
@@ -21,7 +17,9 @@ for arg in "$@"; do
     fi
 done
 
-# If OOTB setup is pending, launch welcome_ootb.py instead
+# If OOTB setup is pending, launch welcome_ootb.py with privilege escalation.
+# The systemd service (pulsar-ootb.service) already granted us sudoers access
+# and created the sentinel file before the display manager started.
 if [ -f "/etc/pulsar-need-setup" ]; then
     if command -v xhost &>/dev/null; then
         xhost +SI:localuser:root &>/dev/null
@@ -29,10 +27,10 @@ if [ -f "/etc/pulsar-need-setup" ]; then
     exec sudo -E /usr/bin/python3 /usr/share/pulsaros/welcome_ootb.py
 fi
 
-# Si el archivo de marca existe y no se fuerza, salir
+# If the done file exists and we are not forcing, exit
 if [ -f "$DONE_FILE" ] && ! $FORCE; then
     exit 0
 fi
 
-# Ejecutar el script principal de Python
+# Run the post-install welcome configurator
 exec /usr/share/pulsaros-welcome/welcome.py "$@"

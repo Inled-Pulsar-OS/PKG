@@ -4,7 +4,10 @@
 # ==============================================================================
 set -e
 
-echo "⚙️ Configurando servicio de primer arranque (OOTB)..."
+echo "Configurando servicio de primer arranque (OOTB)..."
+
+# Ensure /etc/sudoers.d directory exists (needed for OOTB live user grant)
+mkdir -p /etc/sudoers.d
 
 # Enable pulsar-ootb service
 if [ -d /run/systemd/system ]; then
@@ -13,7 +16,8 @@ if [ -d /run/systemd/system ]; then
 else
     # Offline installation / chroot ISO building context
     mkdir -p /etc/systemd/system/graphical.target.wants
-    ln -sf /etc/systemd/system/pulsar-ootb.service /etc/systemd/system/graphical.target.wants/pulsar-ootb.service || true
+    ln -sf /etc/systemd/system/pulsar-ootb.service \
+        /etc/systemd/system/graphical.target.wants/pulsar-ootb.service || true
 fi
 
 exit 0
