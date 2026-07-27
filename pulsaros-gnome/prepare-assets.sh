@@ -96,7 +96,6 @@ EGO_EXTENSIONS=(
     "fullscreen-to-empty-workspace2@corgijan.dev"
     "just-perfection-desktop@just-perfection"
     "notification-position@drugo.dev"
-    "wack-lockscreen-clock@rinzler69-wastaken.github.com"
     "no-overview@fthx"
     "ding@rastersoft.com"
 )

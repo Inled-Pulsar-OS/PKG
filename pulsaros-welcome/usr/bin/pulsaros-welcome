@@ -17,6 +17,12 @@ for arg in "$@"; do
     fi
 done
 
+# If live user cleanup is pending, launch the cleanup spinner app first.
+# That app deletes the live user, removes the sentinel, then relaunches us.
+if [ -f "/etc/pulsar-need-cleanup" ]; then
+    exec /usr/bin/pulsar-cleanup-user "$@"
+fi
+
 # If OOTB setup is pending, launch welcome_ootb.py with privilege escalation.
 # The systemd service (pulsar-ootb.service) already granted us sudoers access
 # and created the sentinel file before the display manager started.

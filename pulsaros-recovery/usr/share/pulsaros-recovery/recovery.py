@@ -453,27 +453,21 @@ class RecoveryWindow(Adw.ApplicationWindow):
     def _popen_as_user(self, cmd):
         user = self._get_real_user()
         if user:
-            uid = os.environ.get("PKEXEC_UID", os.environ.get("SUDO_UID", ""))
-            if not uid:
-                try:
-                    import pwd as _pwd
-                    uid = str(_pwd.getpwnam(user).pw_uid)
-                except Exception:
-                    uid = "1000"
             home = f"/home/{user}"
-            runtime = f"/run/user/{uid}"
-            env_parts = [
-                f"HOME={home}",
-                f"USER={user}",
-                f"LOGNAME={user}",
-                f"XDG_RUNTIME_DIR={runtime}",
-                f"DBUS_SESSION_BUS_ADDRESS=unix:path={runtime}/bus",
-                f"DISPLAY={os.environ.get('DISPLAY', '')}",
-                f"WAYLAND_DISPLAY={os.environ.get('WAYLAND_DISPLAY', '')}",
-                f"XAUTHORITY={os.environ.get('XAUTHORITY', '')}",
-            ]
+            display = os.environ.get("DISPLAY", "")
+            wayland = os.environ.get("WAYLAND_DISPLAY", "")
+            xauth = os.environ.get("XAUTHORITY", "")
+            xdg = os.environ.get("XDG_RUNTIME_DIR", "")
+            env_parts = []
+            if home:       env_parts.append(f"HOME={home}")
+            if display:    env_parts.append(f"DISPLAY={display}")
+            if wayland:    env_parts.append(f"WAYLAND_DISPLAY={wayland}")
+            if xauth:      env_parts.append(f"XAUTHORITY={xauth}")
+            if xdg:        env_parts.append(f"XDG_RUNTIME_DIR={xdg}")
             env_str = " ".join(env_parts)
-            full_cmd = f"env {env_str} {cmd}"
+            # sudo -u <user>: run as real user (passwordless via sudoers)
+            # env: pass display/session vars so the app can render
+            full_cmd = f"sudo -u {user} env {env_str} {cmd}"
             subprocess.Popen(full_cmd, shell=True)
         else:
             subprocess.Popen(cmd, shell=True)
