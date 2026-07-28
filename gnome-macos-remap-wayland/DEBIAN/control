@@ -1,5 +1,5 @@
 Package: gnome-macos-remap-wayland
-Version: 1.0.64
+Version: 1.0.65
 Section: misc
 Priority: optional
 Architecture: all

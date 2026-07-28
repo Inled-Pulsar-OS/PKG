@@ -1,0 +1,8 @@
+{
+  "uuid": "pulsaros-control-center-button@inled.es",
+  "name": "Pulsar OS - Control Center Button",
+  "description": "Adds a macOS-style Control Center button to GNOME Quick Settings (system menu).",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "url": "https://os.inled.es",
+  "version": 1
+}

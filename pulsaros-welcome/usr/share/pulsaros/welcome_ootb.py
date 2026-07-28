@@ -358,8 +358,15 @@ class OOTBWindow(Adw.ApplicationWindow):
         self.set_resizable(False)
 
         if "TEST_MODE" not in os.environ:
+            self.set_decorated(False)
+            display = Gdk.Display.get_default()
+            monitors = display.get_monitors()
+            if monitors and len(monitors) > 0:
+                geo = monitors[0].get_geometry()
+                self.set_default_size(geo.width, geo.height)
+            else:
+                self.set_default_size(1920, 1080)
             self.fullscreen()
-            GLib.timeout_add(1000, self._refullscreen_tick)
 
         self.apply_css()
 
@@ -1093,16 +1100,6 @@ class OOTBWindow(Adw.ApplicationWindow):
             content = "Log file not found."
         
         self.log_buffer.set_text(content)
-
-    def _refullscreen_tick(self):
-        if not self.is_fullscreen():
-            self.fullscreen()
-        try:
-            if not self.get_keep_above():
-                self.set_keep_above(True)
-        except AttributeError:
-            pass
-        return True
 
     def on_back_clicked(self, btn):
         current_page = self.stack.get_visible_child_name()

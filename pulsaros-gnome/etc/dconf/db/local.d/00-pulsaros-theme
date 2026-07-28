@@ -57,6 +57,8 @@ panel-indicator-padding-size=10
 animation-speed=200
 startup-status=0
 dash-icon-size=0
+support-notifier-showed-version=36
+support-notifier-type=0
 
 [org/gnome/shell/extensions/kiwimenu]
 activity-menu-visibility=false
@@ -67,6 +69,7 @@ brightness=0.6
 sigma=30
 
 [org/gnome/shell/extensions/blur-my-shell/applications]
+blacklist=['Plank', 'Conky', 'gjs']
 blur=true
 blur-on-overview=false
 corner-when-maximized=true
@@ -77,18 +80,21 @@ sigma=23
 
 [org/gnome/shell/extensions/blur-my-shell/dash-to-dock]
 blur=true
-brightness=0.6
+brightness=0.64000000000000001
 override-background=true
 pipeline='pipeline_default_rounded'
-sigma=30
+sigma=0
 static-blur=true
 style-dash-to-dock=2
 unblur-in-overview=true
 
 [org/gnome/shell/extensions/blur-my-shell/panel]
-brightness=0.6
+blur=false
+brightness=0.59999999999999998
 corner-radius=0
 force-light-text=false
+override-background=false
+pipeline='pipeline_default'
 sigma=30
 
 [org/gnome/shell/extensions/blur-my-shell/window-list]
