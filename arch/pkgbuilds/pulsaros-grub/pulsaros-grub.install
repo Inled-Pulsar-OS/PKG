@@ -1,7 +1,32 @@
 post_install() {
+    # Mock de grub-probe temporal en ruta absoluta para evitar fallos si no hay dispositivo de disco real (ej. chroots)
+    if [ -f "/usr/bin/grub-probe" ]; then
+        mv /usr/bin/grub-probe /usr/bin/grub-probe.bak
+    fi
+    echo '#!/bin/sh' > /usr/bin/grub-probe
+    echo 'echo "/dev/sda"' >> /usr/bin/grub-probe
+    echo 'exit 0' >> /usr/bin/grub-probe
+    chmod +x /usr/bin/grub-probe
+
+    # Ejecutar el script instalador del tema de grub si está presente en el tema
+    if [ -f "/boot/grub/themes/grub-theme/install.sh" ]; then
+        cd /boot/grub/themes/grub-theme
+        ./install.sh -t window -s 1080p || echo "Aviso: El instalador de GRUB reportó errores, pero continuamos..."
+    fi
+
+    # Eliminar el mock temporal y restaurar el original
+    rm -f /usr/bin/grub-probe
+    if [ -f "/usr/bin/grub-probe.bak" ]; then
+        mv /usr/bin/grub-probe.bak /usr/bin/grub-probe
+    fi
+
     if [ -f /etc/default/grub ]; then
         sed -i 's/^#*GRUB_GFXMODE=.*/GRUB_GFXMODE=1920x1080x32/' /etc/default/grub
         sed -i 's/^#*GRUB_GFXPAYLOAD_LINUX=.*/GRUB_GFXPAYLOAD_LINUX=keep/' /etc/default/grub
     fi
     grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
+}
+
+post_upgrade() {
+    post_install
 }
