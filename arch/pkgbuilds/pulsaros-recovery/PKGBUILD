@@ -22,4 +22,57 @@ package() {
     fi
     # Remove Debian-specific __pycache__
     rm -rf "$pkgdir/usr/share/pulsaros-recovery/__pycache__"
+
+    # Patch recovery.py to load custom icons on Arch
+    python3 -c "
+with open('$pkgdir/usr/share/pulsaros-recovery/recovery.py', 'r') as f:
+    code = f.read()
+
+new_method = '''    def create_row_icon(self, icon_name):
+        img = Gtk.Image()
+        img.set_pixel_size(42)
+        
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        def get_path(filename):
+            p = os.path.join(script_dir, filename)
+            if os.path.exists(p): return p
+            p = os.path.join(\"/usr/share/pulsaros-recovery\", filename)
+            if os.path.exists(p): return p
+            return None
+
+        if icon_name == \"logo\":
+            logo_path = get_path(\"installer-logo.png\") or get_path(\"logo.png\")
+            if logo_path: img.set_from_file(logo_path)
+            else: img.set_from_icon_name(\"system-software-install\")
+        elif icon_name == \"timemachine\":
+            tm_path = get_path(\"timemachine.png\") or get_path(\"org.gnome.DejaDup.svg\")
+            if tm_path: img.set_from_file(tm_path)
+            else: img.set_from_icon_name(\"document-revert\")
+        elif icon_name == \"safari\":
+            saf_path = get_path(\"safari.png\")
+            if saf_path: img.set_from_file(saf_path)
+            else: img.set_from_icon_name(\"web-browser\")
+        elif icon_name == \"disk\":
+            disk_path = get_path(\"diskutility.png\")
+            if disk_path: img.set_from_file(disk_path)
+            else: img.set_from_icon_name(\"drive-harddisk\")
+        else:
+            img.set_from_icon_name(\"drive-harddisk\")
+            
+        return img'''
+
+import re
+start_match = re.search(r'    def create_row_icon\\\\(self, icon_name\\\\):', code)
+if start_match:
+    start_idx = start_match.start()
+    end_match = re.search(r'    def get_logo_image', code)
+    if end_match:
+        end_idx = end_match.start()
+        code = code[:start_idx] + new_method + '\\n\\n' + code[end_idx:]
+        with open('$pkgdir/usr/share/pulsaros-recovery/recovery.py', 'w') as f:
+            f.write(code)
+        print('✅ Patched recovery.py successfully')
+"
 }
+

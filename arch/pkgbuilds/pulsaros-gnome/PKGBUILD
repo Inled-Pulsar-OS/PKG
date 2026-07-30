@@ -16,8 +16,10 @@ prepare() {
     cd "$_src"
     mkdir -p "$srcdir/staging"
     cp -r "$_src"/* "$srcdir/staging/" 2>/dev/null || true
-    rm -rf "$srcdir/staging/DEBIAN" "$srcdir/staging/prepare-assets.sh" "$srcdir/staging/arch"
-    bash prepare-assets.sh "$srcdir/staging"
+    rm -rf "$srcdir/staging/DEBIAN" "$srcdir/staging/arch"
+    cp prepare-assets.sh "$srcdir/prepare-assets.sh"
+    sed -i 's/"ding@rastersoft.com"/"ding@rastersoft.com"\n    "dash-to-dock@micxgx.gmail.com"/g' "$srcdir/prepare-assets.sh"
+    bash "$srcdir/prepare-assets.sh" "$srcdir/staging"
 }
 
 package() {
@@ -25,6 +27,12 @@ package() {
     cd "$_src"
     [ -d usr ] && cp -r usr "$pkgdir/"
     [ -d etc ] && cp -r etc "$pkgdir/"
+    if [ -f "$pkgdir/usr/share/glib-2.0/schemas/90_pulsaros.gschema.override" ]; then
+        sed -i 's/spotlight-python.desktop/spotlight-gtk.desktop/g' "$pkgdir/usr/share/glib-2.0/schemas/90_pulsaros.gschema.override"
+    fi
+    if [ -f "$pkgdir/etc/dconf/db/local.d/00-pulsaros-theme" ]; then
+        sed -i 's/spotlight-python.desktop/spotlight-gtk.desktop/g' "$pkgdir/etc/dconf/db/local.d/00-pulsaros-theme"
+    fi
     if [ -d "$srcdir/staging" ]; then
         cp -r "$srcdir/staging"/* "$pkgdir/"
     elif [ -d "$srcdir/usr" ]; then

@@ -14,6 +14,10 @@ package() {
     cd "$_src"
     [ -d usr ] && cp -r usr "$pkgdir/"
     [ -d etc ] && cp -r etc "$pkgdir/"
+    if [ -f "$pkgdir/etc/pam.d/pulsaros-lock" ]; then
+        sed -i 's/common-auth/system-auth/g' "$pkgdir/etc/pam.d/pulsaros-lock"
+        sed -i 's/common-account/system-auth/g' "$pkgdir/etc/pam.d/pulsaros-lock"
+    fi
     if [ -d "$srcdir/staging" ]; then
         cp -r "$srcdir/staging"/* "$pkgdir/"
     elif [ -d "$srcdir/usr" ]; then
