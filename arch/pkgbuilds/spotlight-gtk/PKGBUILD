@@ -10,7 +10,7 @@ depends=(python python-gobject python-dbus gtk4 libadwaita)
 options=(!strip)
 
 prepare() {
-    _src="$(cd "$startdir"/../../../spotlight-gtk && pwd)"
+    _src="/home/jaime/Documentos/spotlight-gtk"
     cd "$_src"
     mkdir -p "$srcdir/staging"
     cp -r "$_src"/* "$srcdir/staging/" 2>/dev/null || true
