@@ -1,0 +1,37 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsaros-plymouth
+pkgver=1.0.119
+pkgrel=1
+pkgdesc="macOS-like Plymouth boot splash theme for Pulsar OS (Arch edition)"
+arch=(any)
+url="https://inled.es"
+license=(custom)
+depends=(plymouth)
+options=(!strip)
+install=pulsaros-plymouth.install
+
+
+
+prepare() {
+    _src="$(cd "$startdir"/../../../pulsaros-plymouth && pwd)"
+    cd "$_src"
+    mkdir -p "$srcdir/staging"
+    cp -r "$_src"/* "$srcdir/staging/" 2>/dev/null || true
+    rm -rf "$srcdir/staging/DEBIAN" "$srcdir/staging/prepare-assets.sh" "$srcdir/staging/arch"
+    bash prepare-assets.sh "$srcdir/staging"
+}
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-plymouth && pwd)"
+    cd "$_src"
+    [ -d usr ] && cp -r usr "$pkgdir/"
+    [ -d etc ] && cp -r etc "$pkgdir/"
+    if [ -d "$srcdir/staging" ]; then
+        cp -r "$srcdir/staging"/* "$pkgdir/"
+    elif [ -d "$srcdir/usr" ]; then
+        cp -r "$srcdir/usr" "$pkgdir/"
+    fi
+    # Remove Debian-specific files
+    rm -f "$pkgdir/usr/share/plymouth/debian-logo.png"
+    rm -f "$pkgdir/usr/share/pixmaps/debian-logo.png"
+}

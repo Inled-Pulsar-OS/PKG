@@ -1,0 +1,25 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsaros-recovery
+pkgver=1.0.132
+pkgrel=1
+pkgdesc="Recovery utilities UI for Pulsar OS (Arch edition, macOS-style disk selector)"
+arch=(any)
+url="https://inled.es"
+license=(custom)
+depends=(python-gobject python-dbus gtk4 libadwaita python-xlib parted psmisc deja-dup gptfdisk rsync)
+options=(!strip)
+install=pulsaros-recovery.install
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-recovery && pwd)"
+    cd "$_src"
+    [ -d usr ] && cp -r usr "$pkgdir/"
+    [ -d etc ] && cp -r etc "$pkgdir/"
+    if [ -d "$srcdir/staging" ]; then
+        cp -r "$srcdir/staging"/* "$pkgdir/"
+    elif [ -d "$srcdir/usr" ]; then
+        cp -r "$srcdir/usr" "$pkgdir/"
+    fi
+    # Remove Debian-specific __pycache__
+    rm -rf "$pkgdir/usr/share/pulsaros-recovery/__pycache__"
+}

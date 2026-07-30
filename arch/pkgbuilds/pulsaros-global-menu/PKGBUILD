@@ -1,0 +1,22 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsaros-global-menu
+pkgver=1.0.120
+pkgrel=1
+pkgdesc="GNOME Shell extension: macOS-like global menu bar for Pulsar OS"
+arch=(any)
+url="https://inled.es"
+license=(custom)
+depends=(gnome-shell pamtester)
+options=(!strip)
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-global-menu && pwd)"
+    cd "$_src"
+    [ -d usr ] && cp -r usr "$pkgdir/"
+    [ -d etc ] && cp -r etc "$pkgdir/"
+    if [ -d "$srcdir/staging" ]; then
+        cp -r "$srcdir/staging"/* "$pkgdir/"
+    elif [ -d "$srcdir/usr" ]; then
+        cp -r "$srcdir/usr" "$pkgdir/"
+    fi
+}

@@ -1,0 +1,7 @@
+post_install() {
+    if [ -f /etc/default/grub ]; then
+        sed -i 's/^#*GRUB_GFXMODE=.*/GRUB_GFXMODE=1920x1080x32/' /etc/default/grub
+        sed -i 's/^#*GRUB_GFXPAYLOAD_LINUX=.*/GRUB_GFXPAYLOAD_LINUX=keep/' /etc/default/grub
+    fi
+    grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
+}

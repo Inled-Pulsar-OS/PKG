@@ -1,0 +1,33 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsaros-branding
+pkgver=1.0.119
+pkgrel=1
+pkgdesc="Branding and system identity files for Pulsar OS (Arch edition)"
+arch=(any)
+url="https://inled.es"
+license=(custom)
+depends=()
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-branding && pwd)"
+    cd "$_src"
+    [ -d usr ] && cp -r usr "$pkgdir/"
+    [ -d etc ] && cp -r etc "$pkgdir/"
+    if [ -d "$srcdir/staging" ]; then
+        cp -r "$srcdir/staging"/* "$pkgdir/"
+    elif [ -d "$srcdir/usr" ]; then
+        cp -r "$srcdir/usr" "$pkgdir/"
+    fi
+    # Write Arch-specific os-release
+    echo 'PRETTY_NAME="Pulsar OS Arch"' > "$pkgdir/etc/os-release"
+    echo 'NAME="Pulsar OS"' >> "$pkgdir/etc/os-release"
+    echo 'VERSION_ID="rolling"' >> "$pkgdir/etc/os-release"
+    echo 'VERSION="rolling"' >> "$pkgdir/etc/os-release"
+    echo 'ID=pulsaros' >> "$pkgdir/etc/os-release"
+    echo 'ID_LIKE=arch' >> "$pkgdir/etc/os-release"
+    echo 'HOME_URL="https://inled.es"' >> "$pkgdir/etc/os-release"
+    echo 'LOGO="pulsar-logo"' >> "$pkgdir/etc/os-release"
+    # Same for usr/lib/os-release
+    mkdir -p "$pkgdir/usr/lib"
+    cp "$pkgdir/etc/os-release" "$pkgdir/usr/lib/os-release"
+}

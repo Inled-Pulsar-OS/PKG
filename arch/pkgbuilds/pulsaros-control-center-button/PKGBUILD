@@ -1,0 +1,22 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsaros-control-center-button
+pkgver=1.0.117
+pkgrel=1
+pkgdesc="GNOME Shell extension: Control Center quick settings button for Pulsar OS"
+arch=(any)
+url="https://inled.es"
+license=(custom)
+depends=(gnome-shell)
+options=(!strip)
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-control-center-button && pwd)"
+    cd "$_src"
+    [ -d usr ] && cp -r usr "$pkgdir/"
+    [ -d etc ] && cp -r etc "$pkgdir/"
+    if [ -d "$srcdir/staging" ]; then
+        cp -r "$srcdir/staging"/* "$pkgdir/"
+    elif [ -d "$srcdir/usr" ]; then
+        cp -r "$srcdir/usr" "$pkgdir/"
+    fi
+}

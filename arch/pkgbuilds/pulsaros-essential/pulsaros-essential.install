@@ -1,0 +1,48 @@
+post_install() {
+    # Locale config
+    if command -v locale-gen &>/dev/null; then
+        sed -i 's/#es_ES.UTF-8 UTF-8/es_ES.UTF-8 UTF-8/' /etc/locale.gen 2>/dev/null || true
+        sed -i 's/#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen 2>/dev/null || true
+        locale-gen 2>/dev/null || true
+    fi
+
+    # Add 9p modules to mkinitcpio
+    if [ -f /etc/mkinitcpio.conf ]; then
+        if ! grep -q "9p" /etc/mkinitcpio.conf; then
+            sed -i 's/^MODULES=()/MODULES=(9p 9pnet 9pnet_virtio)/' /etc/mkinitcpio.conf
+            sed -i 's/^MODULES=(/MODULES=(9p 9pnet 9pnet_virtio /' /etc/mkinitcpio.conf 2>/dev/null || true
+        fi
+        mkinitcpio -P 2>/dev/null || true
+    fi
+
+    # Create users
+    groupadd -f sudo 2>/dev/null || true
+    groupadd -f docker 2>/dev/null || true
+    if ! id -u live &>/dev/null; then
+        useradd -m -s /bin/bash -G sudo,docker live 2>/dev/null || true
+    else
+        usermod -aG docker live 2>/dev/null || true
+    fi
+    echo "live:live" | chpasswd 2>/dev/null || true
+    echo "root:pulsar" | chpasswd 2>/dev/null || true
+
+    # Set Seafari as default browser (via xdg-settings)
+    if command -v xdg-settings &>/dev/null && [ -f /usr/share/applications/seafari.desktop ]; then
+        xdg-settings set default-web-browser seafari.desktop 2>/dev/null || true
+    fi
+
+    # Bluetooth dual mode
+    if [ -f /etc/bluetooth/main.conf ]; then
+        sed -i 's/^#ControllerMode.*/ControllerMode = dual/' /etc/bluetooth/main.conf
+        sed -i 's/^ControllerMode.*/ControllerMode = dual/' /etc/bluetooth/main.conf
+    fi
+
+    # Enable services
+    systemctl enable bluetooth.service 2>/dev/null || true
+    systemctl enable docker.service 2>/dev/null || true
+    systemctl enable docker.socket 2>/dev/null || true
+
+    # Reduce systemd timeouts
+    sed -i 's/^#*DefaultTimeoutStopSec=.*/DefaultTimeoutStopSec=10s/' /etc/systemd/system.conf 2>/dev/null || true
+    sed -i 's/^#*DefaultTimeoutStopSec=.*/DefaultTimeoutStopSec=10s/' /etc/systemd/user.conf 2>/dev/null || true
+}

@@ -1,0 +1,3 @@
+post_install() {
+    systemctl enable pulsar-ootb.service 2>/dev/null || true
+}

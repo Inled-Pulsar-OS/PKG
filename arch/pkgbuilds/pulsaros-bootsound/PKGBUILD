@@ -1,0 +1,23 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsaros-bootsound
+pkgver=1.0.120
+pkgrel=1
+pkgdesc="macOS-like startup sound service for Pulsar OS"
+arch=(any)
+url="https://inled.es"
+license=(custom)
+depends=(alsa-utils)
+options=(!strip)
+install=pulsaros-bootsound.install
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-bootsound && pwd)"
+    cd "$_src"
+    [ -d usr ] && cp -r usr "$pkgdir/"
+    [ -d etc ] && cp -r etc "$pkgdir/"
+    if [ -d "$srcdir/staging" ]; then
+        cp -r "$srcdir/staging"/* "$pkgdir/"
+    elif [ -d "$srcdir/usr" ]; then
+        cp -r "$srcdir/usr" "$pkgdir/"
+    fi
+}

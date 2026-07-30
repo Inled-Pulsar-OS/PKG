@@ -1,0 +1,4 @@
+post_install() {
+    systemctl enable sddm.service 2>/dev/null || true
+    fc-cache -f 2>/dev/null || true
+}

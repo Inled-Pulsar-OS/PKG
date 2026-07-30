@@ -1,0 +1,31 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsaros-grub
+pkgver=1.0.114
+pkgrel=1
+pkgdesc="macOS-like GRUB bootloader theme for Pulsar OS"
+arch=(any)
+url="https://inled.es"
+license=(custom)
+depends=(grub)
+options=(!strip)
+install=pulsaros-grub.install
+
+
+
+prepare() {
+    _src="$(cd "$startdir"/../../../pulsaros-grub && pwd)"
+    cd "$_src"
+    mkdir -p "$srcdir/staging"
+    cp -r "$_src"/* "$srcdir/staging/" 2>/dev/null || true
+    rm -rf "$srcdir/staging/DEBIAN" "$srcdir/staging/prepare-assets.sh" "$srcdir/staging/arch"
+    bash prepare-assets.sh "$srcdir/staging"
+}
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-grub && pwd)"
+    cd "$_src"
+    [ -d boot ] && cp -r boot "$pkgdir/"
+    if [ -d "$srcdir/staging" ]; then
+        cp -r "$srcdir/staging"/* "$pkgdir/"
+    fi
+}

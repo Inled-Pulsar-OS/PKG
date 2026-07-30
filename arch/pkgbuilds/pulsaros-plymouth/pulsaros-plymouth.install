@@ -1,0 +1,17 @@
+post_install() {
+    plymouth-set-default-theme pulsar-plymouth 2>/dev/null || true
+
+    # Add KMS modules to mkinitcpio
+    if [ -f /etc/mkinitcpio.conf ]; then
+        if ! grep -q "i915" /etc/mkinitcpio.conf; then
+            sed -i 's/^MODULES=(/MODULES=(i915 amdgpu radeon nouveau /' /etc/mkinitcpio.conf 2>/dev/null || true
+        fi
+        mkinitcpio -P 2>/dev/null || true
+    fi
+
+    # Add splash to GRUB cmdline
+    if [ -f /etc/default/grub ]; then
+        sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="[^"]*/& splash quiet/' /etc/default/grub
+        grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
+    fi
+}
