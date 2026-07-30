@@ -279,31 +279,39 @@ class RecoveryWindow(Adw.ApplicationWindow):
         
         script_dir = os.path.dirname(os.path.abspath(__file__))
         
+        def get_path(filename):
+            p = os.path.join(script_dir, filename)
+            if os.path.exists(p):
+                return p
+            p = os.path.join("/usr/share/pulsaros-recovery", filename)
+            if os.path.exists(p):
+                return p
+            return None
+
         if icon_name == "logo":
-            logo_path = os.path.join(script_dir, "installer-logo.png")
-            logo_fallback = os.path.join(script_dir, "logo.png")
-            if not os.path.exists(logo_path):
-                logo_path = "/usr/share/pulsaros-recovery/installer-logo.png"
-            if not os.path.exists(logo_fallback):
-                logo_fallback = "/usr/share/pulsaros-recovery/logo.png"
-                
-            path_to_load = logo_path if os.path.exists(logo_path) else (logo_fallback if os.path.exists(logo_fallback) else None)
-            
-            if path_to_load:
-                img.set_from_file(path_to_load)
+            logo_path = get_path("installer-logo.png") or get_path("logo.png")
+            if logo_path:
+                img.set_from_file(logo_path)
             else:
                 img.set_from_icon_name("system-software-install")
         elif icon_name == "timemachine":
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            svg_path = os.path.join(script_dir, "org.gnome.DejaDup.svg")
-            if not os.path.exists(svg_path):
-                svg_path = "/usr/share/pulsaros-recovery/org.gnome.DejaDup.svg"
-            if os.path.exists(svg_path):
-                img.set_from_file(svg_path)
+            tm_path = get_path("timemachine.png") or get_path("org.gnome.DejaDup.svg")
+            if tm_path:
+                img.set_from_file(tm_path)
             else:
                 img.set_from_icon_name("document-revert")
         elif icon_name == "safari":
-            img.set_from_icon_name("web-browser")
+            saf_path = get_path("safari.png")
+            if saf_path:
+                img.set_from_file(saf_path)
+            else:
+                img.set_from_icon_name("web-browser")
+        elif icon_name == "disk":
+            disk_path = get_path("diskutility.png")
+            if disk_path:
+                img.set_from_file(disk_path)
+            else:
+                img.set_from_icon_name("drive-harddisk")
         else:
             img.set_from_icon_name("drive-harddisk")
             
@@ -1193,7 +1201,12 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
             print("[TEST_MODE] Simulating Calamares installer GUI launcher...")
             self.close()
         else:
-            subprocess.Popen(["sudo", "calamares"])
+            installer_cmd = ["/usr/local/bin/launch-calamares"]
+            if not os.path.exists(installer_cmd[0]):
+                installer_cmd = ["/usr/bin/launch-calamares"]
+            if not os.path.exists(installer_cmd[0]):
+                installer_cmd = ["sudo", "calamares", "-platform", "xcb"]
+            subprocess.Popen(installer_cmd)
             self.close()
 
     def show_error_dialog(self, message):

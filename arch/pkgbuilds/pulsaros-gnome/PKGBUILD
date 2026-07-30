@@ -8,6 +8,7 @@ url="https://inled.es"
 license=(custom)
 depends=(gnome-shell dconf)
 options=(!strip)
+install=pulsaros-gnome.install
 
 
 

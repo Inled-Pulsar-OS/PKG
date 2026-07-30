@@ -1,0 +1,18 @@
+post_install() {
+    echo "⚙️ Compilando esquemas GSchema para Pulsar OS..."
+    glib-compile-schemas /usr/share/glib-2.0/schemas/ 2>/dev/null || true
+
+    echo "🧩 Compilando esquemas locales de extensiones..."
+    find /usr/share/gnome-shell/extensions -name schemas -type d -exec glib-compile-schemas {} \; 2>/dev/null || true
+
+    echo "📊 Actualizando base de datos global Dconf..."
+    dconf update 2>/dev/null || true
+}
+
+post_upgrade() {
+    post_install
+}
+
+post_remove() {
+    post_install
+}
