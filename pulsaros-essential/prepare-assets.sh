@@ -121,6 +121,9 @@ x-scheme-handler/http=seafari.desktop
 x-scheme-handler/https=seafari.desktop
 x-scheme-handler/about=seafari.desktop
 x-scheme-handler/unknown=seafari.desktop
+application/vnd.debian.binary-package=es.inled.AppInstall.desktop
+application/x-debian-package=es.inled.AppInstall.desktop
+application/x-zstd=es.inled.AppInstall.desktop
 EOF
 
 # Limpieza
