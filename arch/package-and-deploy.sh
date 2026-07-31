@@ -67,6 +67,10 @@ build_single_package() {
 
     mkdir -p "$BUILD_DIR/packages"
 
+    # Remove stale builds of the same package to avoid 'duplicate target' in pacman -U
+    # Eliminar versiones antiguas del mismo paquete para evitar 'duplicate target' en pacman -U
+    rm -f "$BUILD_DIR/packages/${name}-"*.pkg.tar.zst
+
     cd "$pkgbuild_dir"
     PKGDEST="$BUILD_DIR/packages" makepkg -cfd --noconfirm --nosign
 

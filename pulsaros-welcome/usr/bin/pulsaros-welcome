@@ -4,7 +4,10 @@
 # ==============================================================================
 
 # If we are running in the Live ISO environment, we always launch the welcome screen
-if grep -q "boot=live" /proc/cmdline; then
+# Debian live uses 'boot=live', Arch live uses 'archisobasedir=live'.
+# Si estamos en el entorno Live de la ISO, siempre lanzamos la pantalla de bienvenida
+# (Debian usa 'boot=live', Arch usa 'archisobasedir=live').
+if grep -qE "boot=live|archisobasedir=live" /proc/cmdline; then
     exec /usr/share/pulsaros-welcome/welcome.py "$@"
 fi
 

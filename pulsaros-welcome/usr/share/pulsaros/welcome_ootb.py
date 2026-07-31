@@ -1263,7 +1263,11 @@ class OOTBWindow(Adw.ApplicationWindow):
                 run_cmd(["chmod", "644", "/etc/default/locale"], check=False)
 
             # ── Keyboard ──────────────────────────────────────────
-            run_cmd(["apt-get", "install", "-y", "console-setup", "keyboard-configuration", "kbd"], check=False)
+            # console-setup / keyboard-configuration only exist on Debian.
+            # On Arch, localectl set-keymap works out of the box and kbd is
+            # already part of the base system, so we skip the package install.
+            if os.path.exists("/etc/debian_version"):
+                run_cmd(["apt-get", "install", "-y", "console-setup", "keyboard-configuration", "kbd"], check=False)
             try:
                 run_cmd(["localectl", "set-keymap", self.selected_keymap])
             except Exception:

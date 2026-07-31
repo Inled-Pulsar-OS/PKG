@@ -1103,6 +1103,31 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                 exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", "--force", disk_path])
                 
             if is_arch:
+                # The ISO live rootfs carries live-only boot artifacts that must
+                # be removed on a fixed-disk install:
+                #  - /etc/mkinitcpio.conf.d/archiso.conf: enables the 'archiso'
+                #    hooks so the initramfs boots from the ISO. If left in place
+                #    the installed system waits 30s for the ISO device and drops
+                #    to an emergency shell instead of mounting the root partition.
+                #  - GRUB_DISTRIBUTOR="Arch" in /etc/default/grub makes GRUB show
+                #    "Arch Linux" instead of "Pulsar OS".
+                live_conf = "/mnt/etc/mkinitcpio.conf.d/archiso.conf"
+                if os.path.exists(live_conf):
+                    os.remove(live_conf)
+                grub_default = "/mnt/etc/default/grub"
+                if os.path.exists(grub_default):
+                    with open(grub_default) as f:
+                        content = f.read()
+                    content = re.sub(
+                        r"^#?\s*GRUB_DISTRIBUTOR=.*$",
+                        'GRUB_DISTRIBUTOR="Pulsar OS"',
+                        content,
+                        flags=re.MULTILINE,
+                    )
+                    with open(grub_default, "w") as f:
+                        f.write(content)
+                # Regenerate the initramfs with the standard (non-live) hooks
+                exec_cmd(["chroot", "/mnt", "mkinitcpio", "-P"])
                 exec_cmd(["chroot", "/mnt", "grub-mkconfig", "-o", "/boot/grub/grub.cfg"])
             else:
                 exec_cmd(["chroot", "/mnt", "update-grub"])

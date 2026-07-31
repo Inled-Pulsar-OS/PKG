@@ -1,6 +1,6 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-welcome
-pkgver=1.0.126
+pkgver=1.0.128
 pkgrel=1
 pkgdesc="Welcome and onboarding app for Pulsar OS (macOS-like setup assistant)"
 arch=(any)
@@ -24,9 +24,6 @@ package() {
     cd "$_src"
     [ -d usr ] && cp -r usr "$pkgdir/"
     [ -d etc ] && cp -r etc "$pkgdir/"
-    if [ -f "$pkgdir/usr/bin/pulsaros-welcome" ]; then
-        sed -i 's/grep -q "boot=live"/grep -qE "boot=live|archisolabel=|archisobasedir="/g' "$pkgdir/usr/bin/pulsaros-welcome"
-    fi
     if [ -d "$srcdir/staging" ]; then
         cp -r "$srcdir/staging"/* "$pkgdir/"
     elif [ -d "$srcdir/usr" ]; then
