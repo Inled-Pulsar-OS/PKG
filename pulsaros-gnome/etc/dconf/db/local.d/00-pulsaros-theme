@@ -161,7 +161,13 @@ toggle-tiled-right=@as []
 restore-shortcuts=@as []
 
 [org/gnome/settings-daemon/plugins/media-keys]
+custom-keybindings=['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']
 screensaver=@as []
+
+[org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0]
+name='Spotlight'
+command='spotlight-python'
+binding='<Super>space'
 
 [org/gnome/mutter]
 overlay-key='Super_R'

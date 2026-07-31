@@ -310,6 +310,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     img.set_from_icon_name("document-revert")
         elif icon_name == "safari":
             icon_path = get_path("safari.png")
+            if not icon_path or os.path.getsize(icon_path) < 100:
+                temp_icon = "/tmp/seafari.png"
+                if not os.path.exists(temp_icon):
+                    try:
+                        import urllib.request
+                        urllib.request.urlretrieve("https://hosted.inled.es/seafari.png", temp_icon)
+                        icon_path = temp_icon
+                    except Exception as e:
+                        print(f"Failed to download seafari icon: {e}")
+                else:
+                    icon_path = temp_icon
             if not try_set_from_file(icon_path):
                 img.set_from_icon_name("web-browser")
         elif icon_name == "disk":

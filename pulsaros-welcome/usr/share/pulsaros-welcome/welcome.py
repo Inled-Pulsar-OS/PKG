@@ -873,7 +873,7 @@ class AssistantWindow(Gtk.Window):
 
         btn_software = Gtk.Button(label="Open Software Center")
         btn_software.get_style_context().add_class("action-button")
-        btn_software.connect("clicked", lambda b: self.launch_app("gnome-software"))
+        btn_software.connect("clicked", lambda b: self.launch_app("appinstall"))
         btn_box.pack_start(btn_software, False, False, 0)
 
         self.content_stack.add_named(slide_8, "slide8")
