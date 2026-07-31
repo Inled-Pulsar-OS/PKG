@@ -1,6 +1,6 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-welcome
-pkgver=1.0.128
+pkgver=1.0.129
 pkgrel=1
 pkgdesc="Welcome and onboarding app for Pulsar OS (macOS-like setup assistant)"
 arch=(any)

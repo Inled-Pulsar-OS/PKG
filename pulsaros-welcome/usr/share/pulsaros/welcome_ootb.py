@@ -338,16 +338,33 @@ def get_all_timezones():
     return sorted(list(set(timezones)))
 
 def get_system_face_images():
+    # Debian ships default GNOME faces in /usr/share/pixmaps/faces/.
+    # Arch has no system faces, so we fall back to the bundled set shipped
+    # by pulsaros-welcome under /usr/share/pulsaros/avatars/.
     faces = []
-    faces_dir = "/usr/share/pixmaps/faces/"
-    if not os.path.exists(faces_dir):
-        return faces
-    for file in os.listdir(faces_dir):
-        if file.endswith(".jpg") or file.endswith(".png"):
-            faces.append(os.path.join(faces_dir, file))
+    for faces_dir in ("/usr/share/pixmaps/faces/", "/usr/share/pulsaros/avatars/"):
+        if not os.path.isdir(faces_dir):
+            continue
+        for file in sorted(os.listdir(faces_dir)):
+            if file.endswith(".jpg") or file.endswith(".png"):
+                faces.append(os.path.join(faces_dir, file))
+        if faces:
+            break
     if not faces:
         return faces
     return sorted(faces)[:6]
+
+
+def get_existing_groups():
+    groups = set()
+    try:
+        with open("/etc/group", "r") as f:
+            for line in f:
+                if ":" in line:
+                    groups.add(line.split(":")[0])
+    except Exception:
+        pass
+    return groups
 
 
 class OOTBWindow(Adw.ApplicationWindow):
@@ -1253,14 +1270,45 @@ class OOTBWindow(Adw.ApplicationWindow):
                 os.replace(tmp, dest)
 
             # ── Locale ─────────────────────────────────────────────
-            run_cmd(["locale-gen", self.selected_language], check=False)
+            # selected_language is like "es_ES"; the generated locale name
+            # needs the encoding suffix (es_ES.UTF-8) to be valid.
+            locale_code = self.selected_language
+            locale_full = f"{locale_code}.UTF-8"
+            # Make sure the locale is enabled in /etc/locale.gen and generated.
+            # Both Debian and Arch read /etc/locale.gen (locale-gen takes no args).
             try:
-                run_cmd(["localectl", "set-locale", f"LANG={self.selected_language}"])
+                locale_gen_path = "/etc/locale.gen"
+                with open(locale_gen_path, "r") as f:
+                    content = f.read()
+                new_lines = []
+                found = False
+                for line in content.splitlines():
+                    stripped = line.strip()
+                    cand = stripped.lstrip("#").strip()
+                    if cand and cand.split() and cand.split()[0] == locale_full:
+                        found = True
+                        new_lines.append(f"{locale_full} UTF-8")
+                    else:
+                        new_lines.append(line)
+                if not found:
+                    new_lines.append(f"{locale_full} UTF-8")
+                write_temp_and_move("\n".join(new_lines) + "\n", locale_gen_path)
+                run_cmd(["locale-gen"], check=False)
+            except Exception as e:
+                log_msg(f"Warning: could not enable locale in /etc/locale.gen: {e}")
+
+            try:
+                run_cmd(["localectl", "set-locale", f"LANG={locale_full}"])
             except Exception:
-                log_msg("Fallback: writing /etc/default/locale directly")
-                write_temp_and_move(f'LANG="{self.selected_language}"\n', "/etc/default/locale")
-                run_cmd(["chown", "root:root", "/etc/default/locale"], check=False)
-                run_cmd(["chmod", "644", "/etc/default/locale"], check=False)
+                if os.path.exists("/etc/debian_version"):
+                    write_temp_and_move(f'LANG="{locale_full}"\n', "/etc/default/locale")
+                    run_cmd(["chown", "root:root", "/etc/default/locale"], check=False)
+                    run_cmd(["chmod", "644", "/etc/default/locale"], check=False)
+                else:
+                    # Arch reads /etc/locale.conf (not /etc/default/locale)
+                    write_temp_and_move(f"LANG={locale_full}\n", "/etc/locale.conf")
+                    run_cmd(["chown", "root:root", "/etc/locale.conf"], check=False)
+                    run_cmd(["chmod", "644", "/etc/locale.conf"], check=False)
 
             # ── Keyboard ──────────────────────────────────────────
             # console-setup / keyboard-configuration only exist on Debian.
@@ -1301,11 +1349,17 @@ class OOTBWindow(Adw.ApplicationWindow):
                 # ── Create real user with useradd ─────────────────
                 log_msg(f"Creating user '{username}' via useradd...")
                 user_home = f"/home/{username}"
+                # Some groups are distro/package specific (plugdev exists on
+                # Debian but not Arch; docker only if docker is installed), so
+                # only add secondary groups that actually exist.
+                desired_groups = ["sudo", "audio", "video", "plugdev", "docker"]
+                existing_groups = get_existing_groups()
+                extra_groups = ",".join(g for g in desired_groups if g in existing_groups)
                 run_cmd([
                     "useradd", "-m",
                     "-d", user_home,
                     "-s", "/bin/bash",
-                    "-G", "sudo,audio,video,plugdev,docker",
+                    "-G", extra_groups,
                     "-c", fullname,
                     username
                 ])
