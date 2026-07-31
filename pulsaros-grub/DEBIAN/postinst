@@ -13,9 +13,11 @@ echo 'exit 0' >> /usr/sbin/grub-probe
 chmod +x /usr/sbin/grub-probe
 
 # Ejecutar el script instalador del tema de grub si está presente en el tema
-if [ -f "/boot/grub/themes/grub-theme/install.sh" ]; then
-    cd /boot/grub/themes/grub-theme
-    ./install.sh -t window -s 1080p || echo "Aviso: El instalador de GRUB reportó errores, pero continuamos..."
+PULSAR_GRUB_THEME_SRC="/boot/grub/themes/grub-theme"
+PULSAR_GRUB_THEME_DIR="/boot/grub/themes/Particle-circle-window"
+if [ -f "$PULSAR_GRUB_THEME_SRC/install.sh" ]; then
+    cd "$PULSAR_GRUB_THEME_SRC"
+    ./install.sh -b -t window -s 1080p || echo "Aviso: El instalador de GRUB reportó errores, pero continuamos..."
 fi
 
 # Ensure GRUB uses a robust set of fallback resolutions to prevent black screens on virtual machines
@@ -23,6 +25,26 @@ fi
 if [ -f "/etc/default/grub" ]; then
     sed -i 's/^GRUB_GFXMODE=.*/GRUB_GFXMODE="1920x1080,1280x720,1024x768,auto"/' /etc/default/grub || true
 fi
+
+# Crear script de GRUB para cargar las fuentes del tema en el arranque
+# Create GRUB custom script to load theme fonts during boot
+mkdir -p /etc/grub.d
+cat > /etc/grub.d/01_pulsar_theme << 'GRUBSCRIPT'
+#!/bin/sh
+set -e
+
+# Load Pulsar OS GRUB theme fonts automatically
+# If the theme directory exists, load all .pf2 fonts
+PULSAR_THEME_DIR="/boot/grub/themes/Particle-circle-window"
+if [ -d "$PULSAR_THEME_DIR" ]; then
+    for font_file in "$PULSAR_THEME_DIR"/*.pf2; do
+        if [ -f "$font_file" ]; then
+            echo "loadfont \"$font_file\""
+        fi
+    done
+fi
+GRUBSCRIPT
+chmod 755 /etc/grub.d/01_pulsar_theme
 
 # Eliminar el mock temporal y restaurar el original
 rm -f /usr/sbin/grub-probe

@@ -341,12 +341,12 @@ def get_system_face_images():
     faces = []
     faces_dir = "/usr/share/pixmaps/faces/"
     if not os.path.exists(faces_dir):
-        raise FileNotFoundError(f"Face images directory not found: {faces_dir}")
+        return faces
     for file in os.listdir(faces_dir):
         if file.endswith(".jpg") or file.endswith(".png"):
             faces.append(os.path.join(faces_dir, file))
     if not faces:
-        raise ValueError(f"No avatar images found in {faces_dir}")
+        return faces
     return sorted(faces)[:6]
 
 

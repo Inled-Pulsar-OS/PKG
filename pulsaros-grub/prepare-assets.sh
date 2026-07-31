@@ -25,4 +25,8 @@ cp -r "$TEMP_BUILD/theme"/* "$DEST_DIR/"
 
 # Limpieza
 rm -rf "$TEMP_BUILD"
+
+# Eliminar directorios .git para evitar inflar el paquete
+find "$STAGE_DIR" -name ".git" -type d -prune -exec rm -rf {} + 2>/dev/null || true
+
 echo "✅ Tema de GRUB estructurado en staging."

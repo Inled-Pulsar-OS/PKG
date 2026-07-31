@@ -1316,13 +1316,19 @@ class AssistantWindow(Gtk.Window):
 
 
 def main():
+    first_boot = "--first-boot" in sys.argv
+
     def start_assistant():
-        AssistantWindow()
+        if first_boot:
+            subprocess.Popen(["sudo", "-E", "/usr/bin/python3", "/usr/share/pulsaros/welcome_ootb.py"])
+            Gtk.main_quit()
+        else:
+            AssistantWindow()
 
     done_file = os.path.expanduser("~/.config/pulsaros-welcome.done")
     force = "--force" in sys.argv or "-f" in sys.argv
 
-    if not os.path.exists(done_file) or force:
+    if not os.path.exists(done_file) or force or first_boot:
         HelloWindow(start_assistant)
         Gtk.main()
     else:

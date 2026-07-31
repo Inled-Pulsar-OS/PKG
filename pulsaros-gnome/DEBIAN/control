@@ -1,10 +1,12 @@
 Package: pulsaros-gnome
-Version: 1.0.86
+Version: 1.0.96
 Section: gnome
 Priority: optional
 Architecture: all
 Maintainer: Jaime <info@inled.es>
 Depends: gnome-shell, dconf-cli
+Replaces: gnome-shell-extension-dashtodock
+Conflicts: gnome-shell-extension-dashtodock
 Description: GNOME Shell extensions and configurations for Pulsar OS.
  Packages selected GNOME extensions and injects GSchema overrides and dconf databases
  to achieve a macOS-like desktop experience in Pulsar OS.

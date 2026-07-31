@@ -38,24 +38,22 @@ click-action='minimize-or-previews'
 running-indicator-style='DOTS'
 intellihide=true
 dock-fixed=false
+apply-custom-theme=false
 transparency-mode='FIXED'
-background-opacity=0.2
-custom-theme-shrink=true
+background-opacity=0.15
+custom-theme-shrink=false
 show-apps-at-top=false
 show-show-apps-button=false
 show-trash=true
 
 [org.gnome.shell.extensions.just-perfection]
 activities-button=false
-app-menu=true
 clock-menu-position=1
 clock-menu-position-offset=12
-clock-menu-visibility=true
-workspace-indicator=false
-panel-height=32
+panel-size=32
 panel-button-padding-size=10
 panel-indicator-padding-size=10
-animation-speed=200
+animation=2
 startup-status=0
 dash-icon-size=0
 

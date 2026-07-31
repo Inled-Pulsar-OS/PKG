@@ -6,7 +6,7 @@ pkgdesc="Recovery utilities UI for Pulsar OS (Arch edition, macOS-style disk sel
 arch=(any)
 url="https://inled.es"
 license=(custom)
-depends=(python-gobject python-dbus gtk4 libadwaita python-xlib parted psmisc deja-dup gptfdisk rsync)
+depends=(python-gobject python-dbus gtk4 libadwaita python-xlib parted psmisc deja-dup gptfdisk rsync dosfstools e2fsprogs grub)
 options=(!strip)
 install=pulsaros-recovery.install
 

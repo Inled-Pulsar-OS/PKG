@@ -280,37 +280,41 @@ class RecoveryWindow(Adw.ApplicationWindow):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         
         def get_path(filename):
-            p = os.path.join(script_dir, filename)
-            if os.path.exists(p):
-                return p
-            p = os.path.join("/usr/share/pulsaros-recovery", filename)
-            if os.path.exists(p):
-                return p
+            for base in (script_dir, "/usr/share/pulsaros-recovery"):
+                p = os.path.join(base, filename)
+                if os.path.exists(p):
+                    return p
             return None
 
+        def try_set_from_file(path):
+            if not path:
+                return False
+            try:
+                gfile = Gio.File.new_for_path(path)
+                texture = Gdk.Texture.new_from_file(gfile)
+                img.set_from_paintable(texture)
+                return True
+            except Exception as e:
+                print(f"Failed to load icon {path}: {e}")
+                return False
+
         if icon_name == "logo":
-            logo_path = get_path("installer-logo.png") or get_path("logo.png")
-            if logo_path:
-                img.set_from_file(logo_path)
-            else:
+            icon_path = get_path("installer-logo.png") or get_path("logo.png")
+            if not try_set_from_file(icon_path):
                 img.set_from_icon_name("system-software-install")
         elif icon_name == "timemachine":
-            tm_path = get_path("timemachine.png") or get_path("org.gnome.DejaDup.svg")
-            if tm_path:
-                img.set_from_file(tm_path)
-            else:
-                img.set_from_icon_name("document-revert")
+            icon_path = get_path("timemachine.png")
+            if not try_set_from_file(icon_path):
+                icon_path = get_path("org.gnome.DejaDup.svg")
+                if not try_set_from_file(icon_path):
+                    img.set_from_icon_name("document-revert")
         elif icon_name == "safari":
-            saf_path = get_path("safari.png")
-            if saf_path:
-                img.set_from_file(saf_path)
-            else:
+            icon_path = get_path("safari.png")
+            if not try_set_from_file(icon_path):
                 img.set_from_icon_name("web-browser")
         elif icon_name == "disk":
-            disk_path = get_path("diskutility.png")
-            if disk_path:
-                img.set_from_file(disk_path)
-            else:
+            icon_path = get_path("diskutility.png")
+            if not try_set_from_file(icon_path):
                 img.set_from_icon_name("drive-harddisk")
         else:
             img.set_from_icon_name("drive-harddisk")
@@ -323,25 +327,30 @@ class RecoveryWindow(Adw.ApplicationWindow):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         
         if is_installer:
-            logo_path = os.path.join(script_dir, "installer-logo.png")
-            logo_fallback = os.path.join(script_dir, "logo.png")
-            default_icon = "system-software-install"
+            candidates = ["installer-logo.png", "logo.png"]
         else:
-            logo_path = os.path.join(script_dir, "pulsar-logo.png")
-            logo_fallback = os.path.join(script_dir, "logo.png")
-            default_icon = "system-software-install"
-            
-        if not os.path.exists(logo_path):
-            logo_path = f"/usr/share/pulsaros-recovery/{'installer-logo.png' if is_installer else 'pulsar-logo.png'}"
-        if not os.path.exists(logo_fallback):
-            logo_fallback = "/usr/share/pulsaros-recovery/logo.png"
-            
-        path_to_load = logo_path if os.path.exists(logo_path) else (logo_fallback if os.path.exists(logo_fallback) else None)
+            candidates = ["pulsar-logo.png", "logo.png"]
+        
+        path_to_load = None
+        for name in candidates:
+            for base in (script_dir, "/usr/share/pulsaros-recovery"):
+                p = os.path.join(base, name)
+                if os.path.exists(p):
+                    path_to_load = p
+                    break
+            if path_to_load:
+                break
         
         if path_to_load:
-            image.set_from_file(path_to_load)
+            try:
+                gfile = Gio.File.new_for_path(path_to_load)
+                texture = Gdk.Texture.new_from_file(gfile)
+                image.set_from_paintable(texture)
+            except Exception as e:
+                print(f"Failed to load logo {path_to_load}: {e}")
+                image.set_from_icon_name("system-software-install")
         else:
-            image.set_from_icon_name(default_icon)
+            image.set_from_icon_name("system-software-install")
             
         return image
 
@@ -850,19 +859,35 @@ class RecoveryWindow(Adw.ApplicationWindow):
         ).start()
 
     def installation_backend(self, disk_path):
+        import datetime
+        log_file = "/tmp/pulsaros-install.log"
         try:
+            with open(log_file, "w") as lf:
+                lf.write(f"{datetime.datetime.now()} - Pulsar OS Installation started\n")
+                lf.write(f"Target disk: {disk_path}\n")
             # Stop udisks2 automount daemon during formatting and system replication
             if "TEST_MODE" not in os.environ:
                 subprocess.run(["systemctl", "stop", "udisks2.service"], capture_output=True)
 
+            def log_msg(msg):
+                ts = datetime.datetime.now().strftime("%H:%M:%S")
+                with open(log_file, "a") as lf:
+                    lf.write(f"[{ts}] {msg}\n")
+                print(msg)
+
             def exec_cmd(cmd, shell=False):
-                print(f"Running command: {cmd}")
+                cmd_str = ' '.join(cmd) if isinstance(cmd, list) else cmd
+                log_msg(f"Running: {cmd_str}")
                 if "TEST_MODE" in os.environ:
-                    print(f"[TEST_MODE] Simulating: {' '.join(cmd) if isinstance(cmd, list) else cmd}")
+                    log_msg(f"[TEST_MODE] Simulating: {cmd_str}")
                     return ""
                 res = subprocess.run(cmd, shell=shell, capture_output=True, text=True)
                 if res.returncode != 0:
-                    raise Exception(f"Failed command: {' '.join(cmd) if isinstance(cmd, list) else cmd}\n{res.stderr}")
+                    err_msg = f"Failed: {cmd_str}\n{res.stderr}"
+                    log_msg(f"ERROR: {err_msg}")
+                    raise Exception(err_msg)
+                if res.stdout:
+                    log_msg(f"Output: {res.stdout[:200]}")
                 return res.stdout
                 
             def cleanup_mounts(is_efi_boot):
@@ -897,6 +922,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     subprocess.run(["umount", "-f", "-l", "-R", "/mnt"], capture_output=True)
                 
             is_efi = os.path.exists("/sys/firmware/efi")
+            is_arch = os.path.exists("/etc/pacman.conf")
             
             # Unmount any active mounts on the selected disk first to prevent device busy errors
             if "TEST_MODE" not in os.environ:
@@ -1076,89 +1102,126 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
             else:
                 exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", "--force", disk_path])
                 
-            exec_cmd(["chroot", "/mnt", "update-grub"])
+            if is_arch:
+                exec_cmd(["chroot", "/mnt", "grub-mkconfig", "-o", "/boot/grub/grub.cfg"])
+            else:
+                exec_cmd(["chroot", "/mnt", "update-grub"])
 
             # ── Driver installation ────────────────────────────────────
             if self.install_nvidia or self.install_broadcom:
-                # Bind network-related paths so apt can reach the internet
+                # Bind network-related paths so package manager can reach the internet
                 exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
                 policy_file = "/mnt/usr/sbin/policy-rc.d"
                 try:
-                    # Create policy-rc.d to prevent service start in chroot
-                    if "TEST_MODE" not in os.environ:
-                        os.makedirs(os.path.dirname(policy_file), exist_ok=True)
-                        with open(policy_file, "w") as f:
-                            f.write("#!/bin/sh\nexit 101\n")
-                        os.chmod(policy_file, 0o755)
-
-                    # Enable non-free repositories on target sources.list
-                    sources_file = "/mnt/etc/apt/sources.list"
-                    if "TEST_MODE" not in os.environ and os.path.exists(sources_file):
+                    if is_arch:
+                        # Arch Linux path
+                        GLib.idle_add(self.update_progress, 0.93, "Updating package sources...")
+                        exec_cmd(["chroot", "/mnt", "pacman", "-Sy"])
+                        
+                        if self.install_nvidia:
+                            GLib.idle_add(self.update_progress, 0.94, "Installing NVIDIA drivers...")
+                            exec_cmd(["chroot", "/mnt", "pacman", "-S", "--noconfirm",
+                                      "nvidia", "nvidia-utils", "linux-headers"])
+                            
+                        if self.install_broadcom:
+                            GLib.idle_add(self.update_progress, 0.95, "Installing Broadcom drivers...")
+                            exec_cmd(["chroot", "/mnt", "pacman", "-S", "--noconfirm",
+                                      "broadcom-wl-dkms", "linux-headers"])
+                            # blacklist conflicting drivers
+                            blacklist = (
+                                "blacklist b43\n"
+                                "blacklist b43legacy\n"
+                                "blacklist ssb\n"
+                                "blacklist bcm43xx\n"
+                                "blacklist brcm80211\n"
+                                "blacklist brcmfmac\n"
+                                "blacklist brcmsmac\n"
+                            )
+                            if "TEST_MODE" not in os.environ:
+                                os.makedirs("/mnt/etc/modprobe.d", exist_ok=True)
+                                with open("/mnt/etc/modprobe.d/broadcom-sta-blacklist.conf", "w") as f:
+                                    f.write(blacklist)
+                    else:
+                        # Debian path
                         try:
-                            with open(sources_file, "r") as f:
-                                content = f.read()
-                            modified = False
-                            lines = []
-                            for line in content.splitlines():
-                                s_line = line.strip()
-                                if s_line and not s_line.startswith("#") and "main" in s_line:
-                                    for comp in ["contrib", "non-free", "non-free-firmware"]:
-                                        if comp not in s_line:
-                                            line += f" {comp}"
-                                            modified = True
-                                lines.append(line)
-                            if modified:
-                                with open(sources_file, "w") as f:
-                                    f.write("\n".join(lines) + "\n")
-                        except Exception as list_err:
-                            print(f"Warning: Failed to update sources.list: {list_err}")
+                            # Create policy-rc.d to prevent service start in chroot
+                            if "TEST_MODE" not in os.environ:
+                                os.makedirs(os.path.dirname(policy_file), exist_ok=True)
+                                with open(policy_file, "w") as f:
+                                    f.write("#!/bin/sh\nexit 101\n")
+                                os.chmod(policy_file, 0o755)
 
-                    # Run apt update to fetch package indices
-                    GLib.idle_add(self.update_progress, 0.93, "Updating package sources...")
-                    exec_cmd(["chroot", "/mnt", "apt-get", "update"])
-                    
-                    if self.install_nvidia:
-                        nvidia = self.nvidia_info
-                        is_new = nvidia.get("is_new", False)
-                        GLib.idle_add(self.update_progress, 0.94, "Installing NVIDIA drivers...")
-                        if is_new:
-                            # Turing / Ampere / Ada / Blackwell → nvidia-driver (current)
-                            exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
-                                      "nvidia-driver", "nvidia-settings",
-                                      "linux-headers-amd64"])
-                        else:
-                            # Kepler / Maxwell / Pascal and older → legacy 470 series
-                            exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
-                                      "nvidia-tesla-470-driver", "nvidia-settings",
-                                      "linux-headers-amd64"])
+                            # Enable non-free repositories on target sources.list
+                            sources_file = "/mnt/etc/apt/sources.list"
+                            if "TEST_MODE" not in os.environ and os.path.exists(sources_file):
+                                try:
+                                    with open(sources_file, "r") as f:
+                                        content = f.read()
+                                    modified = False
+                                    lines = []
+                                    for line in content.splitlines():
+                                        s_line = line.strip()
+                                        if s_line and not s_line.startswith("#") and "main" in s_line:
+                                            for comp in ["contrib", "non-free", "non-free-firmware"]:
+                                                if comp not in s_line:
+                                                    line += f" {comp}"
+                                                    modified = True
+                                        lines.append(line)
+                                    if modified:
+                                        with open(sources_file, "w") as f:
+                                            f.write("\n".join(lines) + "\n")
+                                except Exception as list_err:
+                                    print(f"Warning: Failed to update sources.list: {list_err}")
 
-                    if self.install_broadcom:
-                        GLib.idle_add(self.update_progress, 0.95, "Installing Broadcom drivers...")
-                        exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
-                                  "broadcom-sta-dkms", "linux-headers-amd64"])
-                        # blacklist conflicting drivers
-                        blacklist = (
-                            "blacklist b43\n"
-                            "blacklist b43legacy\n"
-                            "blacklist ssb\n"
-                            "blacklist bcm43xx\n"
-                            "blacklist brcm80211\n"
-                            "blacklist brcmfmac\n"
-                            "blacklist brcmsmac\n"
-                        )
-                        if "TEST_MODE" not in os.environ:
-                            os.makedirs("/mnt/etc/modprobe.d", exist_ok=True)
-                            with open("/mnt/etc/modprobe.d/broadcom-sta-blacklist.conf", "w") as f:
-                                f.write(blacklist)
+                            # Run apt update to fetch package indices
+                            GLib.idle_add(self.update_progress, 0.93, "Updating package sources...")
+                            exec_cmd(["chroot", "/mnt", "apt-get", "update"])
+                            
+                            if self.install_nvidia:
+                                nvidia = self.nvidia_info
+                                is_new = nvidia.get("is_new", False)
+                                GLib.idle_add(self.update_progress, 0.94, "Installing NVIDIA drivers...")
+                                if is_new:
+                                    # Turing / Ampere / Ada / Blackwell → nvidia-driver (current)
+                                    exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
+                                              "nvidia-driver", "nvidia-settings",
+                                              "linux-headers-amd64"])
+                                else:
+                                    # Kepler / Maxwell / Pascal and older → legacy 470 series
+                                    exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
+                                              "nvidia-tesla-470-driver", "nvidia-settings",
+                                              "linux-headers-amd64"])
+
+                            if self.install_broadcom:
+                                GLib.idle_add(self.update_progress, 0.95, "Installing Broadcom drivers...")
+                                exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
+                                          "broadcom-sta-dkms", "linux-headers-amd64"])
+                                # blacklist conflicting drivers
+                                blacklist = (
+                                    "blacklist b43\n"
+                                    "blacklist b43legacy\n"
+                                    "blacklist ssb\n"
+                                    "blacklist bcm43xx\n"
+                                    "blacklist brcm80211\n"
+                                    "blacklist brcmfmac\n"
+                                    "blacklist brcmsmac\n"
+                                )
+                                if "TEST_MODE" not in os.environ:
+                                    os.makedirs("/mnt/etc/modprobe.d", exist_ok=True)
+                                    with open("/mnt/etc/modprobe.d/broadcom-sta-blacklist.conf", "w") as f:
+                                        f.write(blacklist)
+                        except Exception as deb_err:
+                            raise deb_err
+                        finally:
+                            # Remove policy-rc.d
+                            if "TEST_MODE" not in os.environ and os.path.exists(policy_file):
+                                try:
+                                    os.remove(policy_file)
+                                except Exception:
+                                    pass
                 except Exception as drv_err:
                     print(f"Warning: Driver installation failed: {drv_err}")
                 finally:
-                    # Remove policy-rc.d
-                    if "TEST_MODE" not in os.environ and os.path.exists(policy_file):
-                        try:
-                            os.remove(policy_file)
-                        except Exception:
-                            pass
                     subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"])
             # ──────────────────────────────────────────────────────────
             
@@ -1178,6 +1241,7 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
             GLib.idle_add(self.on_installation_completed)
             
         except Exception as err:
+            log_msg(f"INSTALLATION FAILED: {err}")
             cleanup_mounts(is_efi)
             GLib.idle_add(self.on_installation_failed, str(err))
         finally:
