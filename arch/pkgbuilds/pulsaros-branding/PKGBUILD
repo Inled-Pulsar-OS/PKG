@@ -19,10 +19,11 @@ package() {
         cp -r "$srcdir/usr" "$pkgdir/"
     fi
     # Write Arch-specific os-release
-    echo 'PRETTY_NAME="Pulsar OS Arch"' > "$pkgdir/etc/os-release"
+    local os_ver="${PULSAR_VERSION:-rolling}"
+    echo "PRETTY_NAME=\"Pulsar OS Arch $os_ver\"" > "$pkgdir/etc/os-release"
     echo 'NAME="Pulsar OS"' >> "$pkgdir/etc/os-release"
-    echo 'VERSION_ID="rolling"' >> "$pkgdir/etc/os-release"
-    echo 'VERSION="rolling"' >> "$pkgdir/etc/os-release"
+    echo "VERSION_ID=\"$os_ver\"" >> "$pkgdir/etc/os-release"
+    echo "VERSION=\"$os_ver\"" >> "$pkgdir/etc/os-release"
     echo 'ID=pulsaros' >> "$pkgdir/etc/os-release"
     echo 'ID_LIKE=arch' >> "$pkgdir/etc/os-release"
     echo 'HOME_URL="https://inled.es"' >> "$pkgdir/etc/os-release"

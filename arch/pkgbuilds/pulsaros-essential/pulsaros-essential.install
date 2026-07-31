@@ -38,11 +38,18 @@ post_install() {
     fi
 
     # Enable services
+    systemctl enable NetworkManager.service 2>/dev/null || true
     systemctl enable bluetooth.service 2>/dev/null || true
     systemctl enable docker.service 2>/dev/null || true
     systemctl enable docker.socket 2>/dev/null || true
+    systemctl enable vboxservice.service 2>/dev/null || true
+    systemctl enable vmtoolsd.service 2>/dev/null || true
 
     # Reduce systemd timeouts
     sed -i 's/^#*DefaultTimeoutStopSec=.*/DefaultTimeoutStopSec=10s/' /etc/systemd/system.conf 2>/dev/null || true
     sed -i 's/^#*DefaultTimeoutStopSec=.*/DefaultTimeoutStopSec=10s/' /etc/systemd/user.conf 2>/dev/null || true
+}
+
+post_upgrade() {
+    post_install
 }

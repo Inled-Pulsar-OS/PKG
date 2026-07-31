@@ -116,7 +116,6 @@ build_single_package() {
     fi
     
     # Auto-increment package version before building
-    # Auto-incrementar la versión del paquete antes de compilar
     local control_file="$source_folder/DEBIAN/control"
     local current_version=$(grep "^Version:" "$control_file" | cut -d' ' -f2)
     # Strip any existing branch suffix (like +deb13, +deb14, +rolling, or any suffix starting with + or -)
@@ -128,15 +127,22 @@ build_single_package() {
     sed -i "s/^Version:.*/Version: $new_version/" "$control_file"
     
     # Limpieza previa de staging y debs antiguos en la carpeta de salida
-    # Clean up previous staging and old deb files for this package in the output folder
-    # Clean staging safely, falling back to pkexec if root-owned files are present from chroot operations
-    # Limpiar el staging de forma segura, cayendo en pkexec si hay archivos del chroot propiedad de root
     rm -rf "$STAGING_DIR/$name" 2>/dev/null || pkexec rm -rf "$STAGING_DIR/$name"
     mkdir -p "$STAGING_DIR/$name"
     rm -f "$OUTPUT_DIR/${name}_"*.deb
     
     # Copiar archivos
     cp -r "$source_folder/." "$STAGING_DIR/$name/"
+
+    # Sobrescribir versión en etc/os-release de pulsaros-branding si PULSAR_VERSION está definido
+    if [ "$name" = "pulsaros-branding" ] && [ -n "$PULSAR_VERSION" ]; then
+        echo "⚙️ Sobrescribiendo versión del sistema en etc/os-release con: $PULSAR_VERSION"
+        if [ -f "$STAGING_DIR/$name/etc/os-release" ]; then
+            sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"Pulsar OS $PULSAR_VERSION\"/" "$STAGING_DIR/$name/etc/os-release"
+            sed -i "s/^VERSION_ID=.*/VERSION_ID=\"$PULSAR_VERSION\"/" "$STAGING_DIR/$name/etc/os-release"
+            sed -i "s/^VERSION=.*/VERSION=\"$PULSAR_VERSION\"/" "$STAGING_DIR/$name/etc/os-release"
+        fi
+    fi
     
     # Hook de preparación
     local prepare_hook="$source_folder/prepare-assets.sh"

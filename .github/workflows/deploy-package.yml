@@ -3,6 +3,25 @@ name: Deploy Package to Inled APT
 on:
   issues:
     types: [opened, edited, labeled]
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Nombre del paquete a compilar o "all" para todos / Package name or "all"'
+        required: true
+        default: 'all'
+      branch:
+        description: 'Rama del repositorio destino / Target branch'
+        required: true
+        default: 'stable'
+        type: choice
+        options:
+          - stable
+          - forky
+          - rolling
+      pulsar_version:
+        description: 'Versión del sistema (ej: 0.0.1-beta-pear) [Opcional] / System Version'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -11,146 +30,199 @@ permissions:
 jobs:
   deploy:
     name: Package Build and Deploy
-    # Only run if the issue has the 'deploy-package' label (case-insensitive)
-    # Solo ejecutar si el issue tiene la etiqueta 'deploy-package' (insensible a mayúsculas/minúsculas)
+    # Run on manual trigger OR if the issue has the 'deploy-package' label
     if: |
+      github.event_name == 'workflow_dispatch' ||
       contains(github.event.issue.labels.*.name, 'deploy-package') ||
       contains(github.event.issue.labels.*.name, 'Deploy-Package') ||
       contains(github.event.issue.labels.*.name, 'deploy-packages')
     runs-on: ubuntu-latest
     steps:
-      # 1. Checkout del código al principio para dar contexto de repositorio a gh cli (incluyendo submódulos recursivamente)
-      # 1. Checkout of the code at the beginning to provide repository context to gh cli (including submodules recursively)
+      # 1. Checkout code
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
 
-      # 2. Comprobar permisos del actor (solo el administrador / propietario del repo)
-      # 2. Verify actor permissions (only repository owner / administrator)
+      # 2. Verify actor permissions
       - name: Verify Admin Permissions
         id: verify-admin
         run: |
-          AUTHOR="${{ github.event.issue.user.login }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            AUTHOR="${{ github.actor }}"
+          else
+            AUTHOR="${{ github.event.issue.user.login }}"
+          fi
           OWNER="${{ github.repository_owner }}"
 
-          echo "Issue opened by: $AUTHOR"
+          echo "Workflow triggered by: $AUTHOR"
           echo "Repository owner: $OWNER"
 
-          # Se permite al dueño del repo, o si el usuario es explícitamente jaime (u otro admin configurado)
-          # Repository owner, jaime, or jaimegh-es are allowed
           if [ "$AUTHOR" = "$OWNER" ] || [ "$AUTHOR" = "jaimegh-es" ]; then
-            echo "✅ Permiso concedido. Procediendo con el despliegue."
+            echo "✅ Permission granted."
             echo "is_admin=true" >> $GITHUB_OUTPUT
           else
-            echo "❌ Permiso denegado. Solo el administrador puede ejecutar esta acción."
+            echo "❌ Permission denied."
             echo "is_admin=false" >> $GITHUB_OUTPUT
           fi
 
-      # 3. Denegar acceso y cerrar el issue si no es admin
-      # 3. Deny access and close the issue if not admin
+      # 3. Deny access and close issue if not admin (for issues)
       - name: Close Unauthorized Issue
-        if: steps.verify-admin.outputs.is_admin == 'false'
+        if: github.event_name != 'workflow_dispatch' && steps.verify-admin.outputs.is_admin == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          gh issue comment "$ISSUE_NUMBER" --body "⚠️ **Acceso Denegado:** Lo siento @${{ github.event.issue.user.login }}, no tienes permisos para iniciar el empaquetado y despliegue de paquetes de Pulsar OS. Esta acción está reservada únicamente para el administrador del repositorio."
+          gh issue comment "$ISSUE_NUMBER" --body "⚠️ **Acceso Denegado:** Lo siento @${{ github.event.issue.user.login }}, no tienes permisos para iniciar el empaquetado y despliegue de paquetes de Pulsar OS."
           gh issue close "$ISSUE_NUMBER" --reason "not-planned"
           exit 1
 
-      # 4. Instalar herramientas necesarias en la máquina de construcción
+      # 4. Deny access if not admin (for manual dispatch)
+      - name: Verify Admin Status (Manual Run)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ "${{ steps.verify-admin.outputs.is_admin }}" = "false" ]; then
+            echo "❌ Acceso Denegado: Solo el administrador puede ejecutar esta acción."
+            exit 1
+          fi
+
+      # 5. Install build dependencies on host for Debian builds
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y dpkg-dev fakeroot jq python3-pil
 
-      # 5. Parsear el nombre del paquete y la rama desde el issue
+      # 6. Parse package and branch from issue or inputs
       - name: Parse Package and Branch
         id: parse-package
         run: |
-          BODY="${{ github.event.issue.body }}"
-
-          # Intentar parsear el paquete usando regex simple
-          PACKAGE=$(echo "$BODY" | grep -A 2 -i "Nombre del Paquete" | tail -n 1 | tr -d '[:space:]')
-
-          # Fallback: si no se encuentra en el cuerpo, intentar parsearlo del título del issue
-          if [ -z "$PACKAGE" ] || [ "$PACKAGE" = "--" ]; then
-            TITLE="${{ github.event.issue.title }}"
-            PACKAGE=$(echo "$TITLE" | sed -r 's/\[Deploy\]\s*//i' | tr -d '[:space:]')
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PACKAGE="${{ github.event.inputs.package_name }}"
+            BRANCH="${{ github.event.inputs.branch }}"
+            PULSAR_VER="${{ github.event.inputs.pulsar_version }}"
+          else
+            BODY="${{ github.event.issue.body }}"
+            PACKAGE=$(echo "$BODY" | grep -A 2 -i "Nombre del Paquete" | tail -n 1 | tr -d '[:space:]')
+            if [ -z "$PACKAGE" ] || [ "$PACKAGE" = "--" ]; then
+              TITLE="${{ github.event.issue.title }}"
+              PACKAGE=$(echo "$TITLE" | sed -r 's/\[Deploy\]\s*//i' | tr -d '[:space:]')
+            fi
+            BRANCH=$(echo "$BODY" | grep -A 2 -i "Rama de la Distribución" | tail -n 1 | tr -d '[:space:]')
+            if [ -z "$BRANCH" ] || [ "$BRANCH" = "--" ]; then
+              BRANCH="stable"
+            fi
+            PULSAR_VER=""
           fi
 
-          echo "Paquete detectado: '$PACKAGE'"
+          echo "Detected package: '$PACKAGE'"
+          echo "Detected branch: '$BRANCH'"
 
-          # Verificar si la carpeta del paquete existe en el repositorio (excepto si es 'all')
-          if [ "$PACKAGE" != "all" ] && [ ! -d "$PACKAGE" ]; then
-            echo "❌ Error: El paquete '$PACKAGE' no existe en el repositorio."
+          # Verify folder existence
+          if [ "$PACKAGE" != "all" ] && [ ! -d "$PACKAGE" ] && [ ! -d "arch/pkgbuilds/$PACKAGE" ]; then
+            echo "❌ Error: Package '$PACKAGE' does not exist in the repository."
             exit 1
           fi
 
-          # Parsear la rama seleccionada
-          BRANCH=$(echo "$BODY" | grep -A 2 -i "Rama de la Distribución" | tail -n 1 | tr -d '[:space:]')
-          if [ -z "$BRANCH" ] || [ "$BRANCH" = "--" ]; then
-            BRANCH="stable"
+          # Determine package type
+          IS_DEBIAN="false"
+          IS_ARCH="false"
+          if [ "$PACKAGE" = "all" ]; then
+            IS_DEBIAN="true"
+            IS_ARCH="true"
+          elif [ -d "$PACKAGE" ]; then
+            IS_DEBIAN="true"
+          elif [ -d "arch/pkgbuilds/$PACKAGE" ]; then
+            IS_ARCH="true"
           fi
-          echo "Rama detectada: '$BRANCH'"
 
+          echo "is_debian=$IS_DEBIAN" >> $GITHUB_OUTPUT
+          echo "is_arch=$IS_ARCH" >> $GITHUB_OUTPUT
           echo "package_name=$PACKAGE" >> $GITHUB_OUTPUT
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "pulsar_version=$PULSAR_VER" >> $GITHUB_OUTPUT
 
-      # 6. Comentar en el issue que ha comenzado la construcción
+      # 7. Comment on issue (for issues only)
       - name: Comment Build Started
+        if: github.event_name != 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           if [ "${{ steps.parse-package.outputs.package_name }}" = "all" ]; then
-            gh issue comment "$ISSUE_NUMBER" --body "🏗️ **Comenzando compilación total:** Empaquetando y desplegando TODOS los paquetes del repositorio de forma masiva para la rama \`${{ steps.parse-package.outputs.branch }}\`..."
+            gh issue comment "$ISSUE_NUMBER" --body "🏗️ **Comenzando compilación total:** Empaquetando y desplegando TODOS los paquetes (Debian y Arch) para la rama \`${{ steps.parse-package.outputs.branch }}\`..."
           else
-            gh issue comment "$ISSUE_NUMBER" --body "🏗️ **Comenzando la compilación:** Empaquetando la carpeta \`${{ steps.parse-package.outputs.package_name }}\` como archivo \`.deb\` para la rama \`${{ steps.parse-package.outputs.branch }}\`..."
+            gh issue comment "$ISSUE_NUMBER" --body "🏗️ **Comenzando la compilación:** Empaquetando \`${{ steps.parse-package.outputs.package_name }}\` para la rama \`${{ steps.parse-package.outputs.branch }}\`..."
           fi
 
-      # 7. Compilar y Desplegar el paquete
-      - name: Build and Deploy Package
-        id: build-deploy
+      # 8. Build and Deploy Debian Packages
+      - name: Build and Deploy Debian Package
+        if: steps.parse-package.outputs.is_debian == 'true'
         env:
           INLED_REPO_PAT: ${{ secrets.INLED_REPO_PAT }}
           GITHUB_ACTIONS: "true"
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PULSAR_VERSION: "${{ steps.parse-package.outputs.pulsar_version }}"
         run: |
           chmod +x package-and-deploy.sh
           TARGET_BRANCH="${{ steps.parse-package.outputs.branch }}"
-          
           if [ "$TARGET_BRANCH" = "all" ]; then
-            echo "Deploying to all three branches (stable, forky, rolling)..."
             for b in stable forky rolling; do
-              echo "🚀 Deploying to branch: $b"
               ./package-and-deploy.sh "${{ steps.parse-package.outputs.package_name }}" --deploy --branch "$b"
             done
           else
-            echo "🚀 Deploying to branch: $TARGET_BRANCH"
             ./package-and-deploy.sh "${{ steps.parse-package.outputs.package_name }}" --deploy --branch "$TARGET_BRANCH"
           fi
 
-      # 8. Comentar éxito y cerrar issue
+      # 9. Build and Deploy Arch Packages inside Docker
+      - name: Build and Deploy Arch Package
+        if: steps.parse-package.outputs.is_arch == 'true'
+        env:
+          INLED_REPO_PAT: ${{ secrets.INLED_REPO_PAT }}
+          GITHUB_ACTIONS: "true"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PULSAR_VERSION: "${{ steps.parse-package.outputs.pulsar_version }}"
+        run: |
+          TARGET_BRANCH="${{ steps.parse-package.outputs.branch }}"
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            -e INLED_REPO_PAT="$INLED_REPO_PAT" \
+            -e GITHUB_ACTIONS="true" \
+            -e PULSAR_VERSION="$PULSAR_VERSION" \
+            archlinux:latest bash -c "
+              pacman-key --init
+              pacman-key --populate archlinux
+              pacman -Syu --noconfirm base-devel git sudo jq curl
+              
+              useradd -m builder
+              echo 'builder ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+              chown -R builder:builder /workspace
+              
+              chmod +x /workspace/arch/package-and-deploy.sh
+              if [ '$TARGET_BRANCH' = 'all' ]; then
+                for b in stable forky rolling; do
+                  sudo -u builder bash -c 'cd /workspace/arch && ./package-and-deploy.sh \"${{ steps.parse-package.outputs.package_name }}\" --deploy --branch \"'\$b'\"'
+                done
+              else
+                sudo -u builder bash -c 'cd /workspace/arch && ./package-and-deploy.sh \"${{ steps.parse-package.outputs.package_name }}\" --deploy --branch \"$TARGET_BRANCH\"'
+              fi
+            "
+
+      # 10. Comment success and close issue (for issues only)
       - name: Comment Success and Close Issue
-        if: success()
+        if: github.event_name != 'workflow_dispatch' && success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          if [ "${{ steps.parse-package.outputs.package_name }}" = "all" ]; then
-            gh issue comment "$ISSUE_NUMBER" --body "🎉 **¡Despliegue total completado con éxito!** Todos los paquetes del repositorio han sido compilados, subidos a la release y notificados al repositorio central APT de Inled para la rama \`${{ steps.parse-package.outputs.branch }}\`."
-          else
-            gh issue comment "$ISSUE_NUMBER" --body "🎉 **¡Despliegue completado con éxito!** El paquete \`${{ steps.parse-package.outputs.package_name }}\` ha sido compilado, subido a los assets de la release del repo PKG y notificado al repositorio APT central de Inled para la rama \`${{ steps.parse-package.outputs.branch }}\`. Estará disponible en breve."
-          fi
+          gh issue comment "$ISSUE_NUMBER" --body "🎉 **¡Despliegue completado con éxito!** Los paquetes correspondientes a \`${{ steps.parse-package.outputs.package_name }}\` han sido compilados y notificados a los repositorios centrales de Inled para la rama \`${{ steps.parse-package.outputs.branch }}\`."
           gh issue close "$ISSUE_NUMBER" --reason "completed"
 
-      # 9. Comentar fallo en caso de error
+      # 11. Comment failure (for issues only)
       - name: Comment Failure
-        if: failure()
+        if: github.event_name != 'workflow_dispatch' && failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          gh issue comment "$ISSUE_NUMBER" --body "❌ **Error en la compilación o despliegue:** Ocurrió un error al intentar procesar el empaquetado. Por favor, revisa los logs de ejecución de GitHub Actions para ver los detalles del fallo."
+          gh issue comment "$ISSUE_NUMBER" --body "❌ **Error en la compilación o despliegue:** Ocurrió un error. Por favor, revisa los logs en GitHub Actions."
