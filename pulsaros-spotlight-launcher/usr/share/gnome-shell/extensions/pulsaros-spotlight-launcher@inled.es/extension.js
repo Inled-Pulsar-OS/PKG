@@ -90,10 +90,19 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
     // Spawns the command-line application asynchronously to prevent panel freezing
     // Ejecuta el comando de consola de forma asíncrona para evitar que el panel se congele
     _launchSpotlight() {
+        // Debian ships spotlight-python; Arch ships spotlight-gtk.
+        // Use whichever binary is present on the system.
+        const cmd = GLib.find_program_in_path('spotlight-python') ||
+                    GLib.find_program_in_path('spotlight-gtk');
+        if (!cmd) {
+            console.error('[SpotlightLauncher] No spotlight binary found '
+                + '(spotlight-python / spotlight-gtk)');
+            return;
+        }
         try {
-            GLib.spawn_command_line_async('spotlight-python');
+            GLib.spawn_command_line_async(GLib.shell_quote(cmd));
         } catch (e) {
-            console.error("[SpotlightLauncher] Failed to launch spotlight-python:", e);
+            console.error(`[SpotlightLauncher] Failed to launch ${cmd}:`, e);
         }
     }
 }

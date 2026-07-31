@@ -1352,7 +1352,7 @@ class OOTBWindow(Adw.ApplicationWindow):
                 # Some groups are distro/package specific (plugdev exists on
                 # Debian but not Arch; docker only if docker is installed), so
                 # only add secondary groups that actually exist.
-                desired_groups = ["sudo", "audio", "video", "plugdev", "docker"]
+                desired_groups = ["sudo", "wheel", "audio", "video", "plugdev", "docker"]
                 existing_groups = get_existing_groups()
                 extra_groups = ",".join(g for g in desired_groups if g in existing_groups)
                 run_cmd([
@@ -1372,6 +1372,16 @@ class OOTBWindow(Adw.ApplicationWindow):
                 # Verify home directory exists
                 if not os.path.isdir(user_home):
                     raise Exception(f"Home directory {user_home} does not exist after useradd")
+
+                # ── Grant sudo to the new user ─────────────────────
+                # Debian's sudoers grants %sudo, but Arch's Pulsar sudoers
+                # does not grant %wheel or %sudo, so we also drop a sudoers
+                # rule for the user. Both distros include /etc/sudoers.d.
+                sudoers_user_file = f"/etc/sudoers.d/pulsaros-user-{username}"
+                write_temp_and_move(f"{username} ALL=(ALL:ALL) ALL\n", sudoers_user_file)
+                run_cmd(["chown", "root:root", sudoers_user_file])
+                run_cmd(["chmod", "0440", sudoers_user_file])
+                log_msg(f"Granted sudo to '{username}' via {sudoers_user_file}")
 
                 log_msg(f"User '{username}' verified in /etc/passwd, home={user_home}")
 
