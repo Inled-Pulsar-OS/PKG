@@ -77,6 +77,55 @@ fi"""
         print("⚠️ Warning: Could not find exact block in install.sh to patch.")
 '
 
+# Patch install.sh and config.yml so they never clobber the PulsarOS dconf.
+# PulsarOS defines the macOS Super<->Ctrl swap (XKB xkb-options), the spotlight
+# on <Ctrl>space and all GNOME/Mutter keybindings in the system dconf DB
+# (/etc/dconf/db/local). Running the upstream gsettings block here would reset
+# xkb-options (killing the swap) and bind <Primary>space to Show Applications
+# (stealing the spotlight), so we neutralize it. The modmap section is removed
+# because a modmap on top of the XKB swap would double-swap.
+python3 -c '
+import os
+install = "'"$DEST_DIR"'/install.sh"
+if os.path.exists(install):
+    with open(install, "r") as f:
+        content = f.read()
+    start = content.find("# Tweak gsettings")
+    end = content.find("# Restart is required")
+    if start != -1 and end != -1 and end > start:
+        replacement = """# PulsarOS: GNOME/Mutter macOS keybindings (incl. the XKB Super<->Ctrl swap,
+# spotlight on <Ctrl>space, overlay key, screenshots and terminal shortcuts)
+# are provided by the PulsarOS system dconf DB (/etc/dconf/db/local).
+# The upstream gsettings block is intentionally disabled: running it here would
+# reset xkb-options (killing the swap) and steal <Ctrl>space from the spotlight.
+"""
+        content = content[:start] + replacement + content[end:]
+        with open(install, "w") as f:
+            f.write(content)
+        print("✅ install.sh gsettings block neutralized (PulsarOS dconf owns keybindings).")
+    else:
+        print("⚠️ Warning: gsettings block markers not found in install.sh.")
+
+config = "'"$DEST_DIR"'/config.yml"
+if os.path.exists(config):
+    with open(config, "r") as f:
+        content = f.read()
+    start = content.find("modmap:")
+    end = content.find("RightMeta: RightCtrl")
+    if start != -1 and end != -1 and end > start:
+        end += len("RightMeta: RightCtrl")
+        replacement = """# PulsarOS: the Super<->Ctrl swap is done at the XKB level by the system dconf
+# (xkb-options ctrl:swap_lwin_lctl / ctrl:swap_rwin_rctl). A modmap here would
+# double-swap the keys, so it is intentionally removed.
+"""
+        content = content[:start] + replacement + content[end:]
+        with open(config, "w") as f:
+            f.write(content)
+        print("✅ config.yml modmap removed (XKB swap is the PulsarOS mechanism).")
+    else:
+        print("⚠️ Warning: modmap section markers not found in config.yml.")
+'
+
 # Remove the .git folder from destination
 rm -rf "$DEST_DIR/.git"
 

@@ -1283,6 +1283,18 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                 if not refind_installed:
                     exec_cmd(["chroot", "/mnt", "update-grub"])
 
+            # ── Recompile the system dconf database ───────────────────
+            # The PulsarOS macOS keybindings (XKB Super<->Ctrl swap, spotlight on
+            # <Ctrl>space, etc.) live in /etc/dconf/db/local. The rsync copies the
+            # compiled DB and its local.d sources; recompiling here guarantees the
+            # installed system applies them even if the compiled DB was missing or
+            # stale. This is best-effort: dconf may be absent in minimal targets.
+            try:
+                GLib.idle_add(self.update_progress, 0.90, "Applying system settings...")
+                exec_cmd(["chroot", "/mnt", "dconf", "update"])
+            except Exception as dconf_err:
+                print(f"Warning: dconf update failed (non-fatal): {dconf_err}")
+
             # ── Driver installation ────────────────────────────────────
             if self.install_nvidia or self.install_broadcom:
                 # Bind network-related paths so package manager can reach the internet

@@ -59,6 +59,18 @@ echo "Instalando iconos en staging..."
 cd "$TEMP_BUILD/icons"
 ./install.sh -t blue -d "$STAGE_DIR/usr/share/icons"
 
+# 2.1 Mapear el icono de AppInstall a la App Store
+# AppInstall (del repo de Inled) usa Icon=es.inled.AppInstall en su .desktop, que
+# no tiene entrada en el tema MacTahoe. Como no lo empaquetamos, lo mapeamos
+# aquí: es.inled.AppInstall -> software-store.svg (la "A" de la App Store).
+echo "Mapeando icono de AppInstall a la App Store..."
+for theme_dir in "$STAGE_DIR/usr/share/icons/"MacTahoe-blue*; do
+    apps_dir="$theme_dir/apps/scalable"
+    if [ -d "$apps_dir" ]; then
+        ln -sf software-store.svg "$apps_dir/es.inled.AppInstall.svg"
+    fi
+done
+
 # 3. Limpiar compilación temporal
 rm -rf "$TEMP_BUILD"
 echo "✅ Temas e iconos posicionados correctamente."

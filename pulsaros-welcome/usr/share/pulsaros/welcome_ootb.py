@@ -1465,6 +1465,55 @@ class OOTBWindow(Adw.ApplicationWindow):
                     "org.gnome.desktop.input-sources", "sources", f"[('xkb', '{self.selected_keymap}')]"
                 ], check=False)
 
+                # ── macOS keybindings + spotlight for the new user ──
+                # Mirrors the PulsarOS system dconf DB (/etc/dconf/db/local) so the
+                # macOS Super<->Ctrl swap (XKB xkb-options), the spotlight on
+                # <Ctrl>space and the rest of the macOS shortcuts survive in the
+                # user DB even if system dconf is absent or a later tool overwrites
+                # them (e.g. the old gnome-macos-remap install.sh used to reset
+                # xkb-options and bind <Primary>space to Show Applications).
+                mac_user_settings = [
+                    ("org.gnome.desktop.input-sources", "xkb-options",
+                     "['ctrl:swap_lwin_lctl', 'ctrl:swap_rwin_rctl']"),
+                    ("org.gnome.mutter", "overlay-key", "'Super_R'"),
+                    ("org.gnome.desktop.wm.keybindings", "minimize", "['<Primary>m']"),
+                    ("org.gnome.desktop.wm.keybindings", "show-desktop", "['<Primary>d']"),
+                    ("org.gnome.desktop.wm.keybindings", "switch-applications", "['<Primary>Tab']"),
+                    ("org.gnome.desktop.wm.keybindings", "switch-applications-backward", "['<Primary><Shift>Tab']"),
+                    ("org.gnome.desktop.wm.keybindings", "switch-group", "['<Primary>grave']"),
+                    ("org.gnome.desktop.wm.keybindings", "switch-group-backward", "['<Primary><Shift>grave']"),
+                    ("org.gnome.mutter.keybindings", "toggle-tiled-left", "[]"),
+                    ("org.gnome.mutter.keybindings", "toggle-tiled-right", "[]"),
+                    ("org.gnome.desktop.wm.keybindings", "switch-to-workspace-left", "['<Super>Left']"),
+                    ("org.gnome.desktop.wm.keybindings", "switch-to-workspace-right", "['<Super>Right']"),
+                    ("org.gnome.shell.keybindings", "toggle-overview", "['LaunchA']"),
+                    ("org.gnome.shell.keybindings", "toggle-application-view", "['LaunchB']"),
+                    ("org.gnome.shell.keybindings", "toggle-message-tray", "[]"),
+                    ("org.gnome.shell.keybindings", "screenshot", "['<Primary><Shift>numbersign']"),
+                    ("org.gnome.shell.keybindings", "show-screenshot-ui", "['<Shift><Control>dollar']"),
+                    ("org.gnome.shell.keybindings", "screenshot-window", "['<Shift><Control>percent']"),
+                    ("org.gnome.settings-daemon.plugins.media-keys", "screensaver", "[]"),
+                    ("org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings",
+                     "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']"),
+                ]
+                for schema, key, value in mac_user_settings:
+                    run_cmd([
+                        "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
+                        schema, key, value
+                    ], check=False)
+
+                spotlight_path = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
+                for key, value in [
+                    ("name", "'Spotlight'"),
+                    ("command", "'pulsaros-spotlight'"),
+                    ("binding", "'<Ctrl>space'"),
+                ]:
+                    run_cmd([
+                        "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
+                        "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:" + spotlight_path,
+                        key, value
+                    ], check=False)
+
             GLib.idle_add(self.on_setup_completed)
 
         except Exception as err:
