@@ -10,11 +10,9 @@ depends=(python python-gobject python-dbus gtk4 libadwaita)
 options=(!strip)
 
 prepare() {
-    _src="/home/jaime/Documentos/spotlight-gtk"
-    cd "$_src"
-    mkdir -p "$srcdir/staging"
-    cp -r "$_src"/* "$srcdir/staging/" 2>/dev/null || true
-    rm -rf "$srcdir/staging/DEBIAN" "$srcdir/staging/prepare-assets.sh" "$srcdir/staging/arch"
+    git clone --depth=1 https://github.com/InledGroup/spotlight-gtk "$srcdir/spotlight-src"
+    mkdir -p "$srcdir/staging/spotlight-python"
+    cp -r "$srcdir/spotlight-src/spotlight-python"/* "$srcdir/staging/spotlight-python/"
 }
 
 package() {
