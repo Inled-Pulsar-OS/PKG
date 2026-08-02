@@ -215,7 +215,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PULSAR_VERSION: "${{ steps.parse-package.outputs.pulsar_version }}"
         run: |
-          chmod +x package-and-deploy.sh arch/package-and-deploy.sh
           TARGET_BRANCH="${{ steps.parse-package.outputs.branch }}"
           DEPLOY_BRANCHES=("$TARGET_BRANCH")
           if [ "$TARGET_BRANCH" = "all" ]; then
