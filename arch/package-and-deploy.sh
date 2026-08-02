@@ -25,12 +25,17 @@ OUTPUT_DIR="$BUILD_DIR/packages"
 
 PACKAGE_NAME=""
 DEPLOY_FLAG=""
+DEPLOY_ONLY_FLAG=""
 BRANCH="stable"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --deploy|-d)
             DEPLOY_FLAG="--deploy"
+            shift
+            ;;
+        --deploy-only)
+            DEPLOY_ONLY_FLAG="--deploy-only"
             shift
             ;;
         --branch|-b)
@@ -205,6 +210,14 @@ deploy_packages() {
         return 1
     fi
 }
+
+# Deploy-only mode: upload previously built packages without rebuilding
+if [ -n "$DEPLOY_ONLY_FLAG" ]; then
+    echo "🚀  DEPLOY-ONLY MODE: Uploading already built .pkg.tar.zst packages..."
+    mapfile -t COMPILED_PKGS < <(find "$OUTPUT_DIR" -maxdepth 1 -name '*.pkg.tar.zst' 2>/dev/null | sort)
+    deploy_packages "${COMPILED_PKGS[@]}"
+    exit $?
+fi
 
 if [ "$PACKAGE_NAME" == "all" ]; then
     echo "🏗️  FULL BUILD: Building all packages..."

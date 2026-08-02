@@ -27,12 +27,17 @@ OUTPUT_DIR="$BUILD_DIR/packages"
 # Parámetros / Parameters
 PACKAGE_NAME=""
 DEPLOY_FLAG=""
+DEPLOY_ONLY_FLAG=""
 BRANCH="stable"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --deploy|-d)
             DEPLOY_FLAG="--deploy"
+            shift
+            ;;
+        --deploy-only)
+            DEPLOY_ONLY_FLAG="--deploy-only"
             shift
             ;;
         --branch|-b)
@@ -338,6 +343,30 @@ COMPILED_DEBS=()
 # 1. Prepare folders / Preparar carpetas
 mkdir -p "$STAGING_DIR"
 mkdir -p "$OUTPUT_DIR"
+
+# 1b. Deploy-only mode: upload previously built packages without rebuilding
+# 1b. Modo solo despliegue: sube los .deb ya compilados sin recompilar
+if [ -n "$DEPLOY_ONLY_FLAG" ]; then
+    echo "🚀  MODO SOLO DESPLIEGUE / DEPLOY-ONLY MODE: Subiendo paquetes .deb ya compilados..."
+    mapfile -t COMPILED_DEBS < <(find "$OUTPUT_DIR" -maxdepth 1 -name '*.deb' 2>/dev/null | sort)
+    # Keep only the .deb files that belong to the target branch (the version
+    # carries the branch suffix: -deb14 for forky, -rolling for rolling).
+    # Mantener solo los .deb que pertenecen a la rama destino (la versión lleva
+    # el sufijo de rama: -deb14 para forky, -rolling para rolling).
+    case "$BRANCH" in
+        forky)
+            COMPILED_DEBS=($(printf '%s\n' "${COMPILED_DEBS[@]}" | grep -- '-deb14' || true))
+            ;;
+        rolling)
+            COMPILED_DEBS=($(printf '%s\n' "${COMPILED_DEBS[@]}" | grep -- '-rolling' || true))
+            ;;
+        *)
+            COMPILED_DEBS=($(printf '%s\n' "${COMPILED_DEBS[@]}" | grep -v -- '-deb14' | grep -v -- '-rolling' || true))
+            ;;
+    esac
+    deploy_packages "${COMPILED_DEBS[@]}"
+    exit $?
+fi
 
 # 2. Build logic / Lógica de construcción
 if [ "$PACKAGE_NAME" == "all" ]; then
