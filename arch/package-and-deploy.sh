@@ -77,7 +77,9 @@ build_single_package() {
 
     mkdir -p "$OUTPUT_DIR"
 
-
+    # Remove stale versions of this package to avoid pacman -U "duplicate
+    # target" errors when the ISO build copies every *.pkg.tar.zst.
+    rm -f "$OUTPUT_DIR/${name}-"*.pkg.tar.zst
 
     cd "$pkgbuild_dir"
     # Export PULSAR_VERSION for the makepkg environment

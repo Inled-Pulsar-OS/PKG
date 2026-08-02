@@ -1,6 +1,6 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-recovery
-pkgver=1.0.133
+pkgver=1.0.137
 pkgrel=1
 pkgdesc="Recovery utilities UI for Pulsar OS (Arch edition, macOS-style disk selector)"
 arch=(any)

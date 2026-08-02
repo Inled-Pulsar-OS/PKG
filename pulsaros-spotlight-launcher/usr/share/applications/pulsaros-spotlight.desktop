@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Pulsar Spotlight
+Name[es]=Spotlight de Pulsar OS
+Comment=Apple-like Spotlight launcher
+Comment[es]=Lanzador tipo Spotlight de Apple
+Exec=/usr/bin/pulsaros-spotlight
+Icon=view-app-grid
+Type=Application
+Categories=Utility;
+Terminal=false

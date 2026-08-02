@@ -6,6 +6,11 @@ post_install() {
         if ! grep -q "i915" /etc/mkinitcpio.conf; then
             sed -i 's/^MODULES=(/MODULES=(i915 amdgpu radeon nouveau /' /etc/mkinitcpio.conf 2>/dev/null || true
         fi
+        # Add the plymouth hook so the splash is baked into the initramfs.
+        # Without it the splash parameter does nothing (works with GRUB and rEFInd).
+        if ! grep -q "plymouth" /etc/mkinitcpio.conf; then
+            sed -i 's/^HOOKS=(\(.*\) block/HOOKS=(\1 plymouth block/' /etc/mkinitcpio.conf 2>/dev/null || true
+        fi
         mkinitcpio -P 2>/dev/null || true
     fi
 
@@ -14,4 +19,8 @@ post_install() {
         sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="[^"]*/& splash quiet/' /etc/default/grub
         grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
     fi
+}
+
+post_upgrade() {
+    post_install
 }

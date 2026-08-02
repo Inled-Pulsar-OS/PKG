@@ -1085,7 +1085,7 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                 with open("/mnt/etc/fstab", "w") as f:
                     f.write(fstab_content)
                 
-            GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader...")
+            GLib.idle_add(self.update_progress, 0.90, "Installing bootloader...")
             exec_cmd(["mount", "--bind", "/dev", "/mnt/dev"])
             if "TEST_MODE" not in os.environ:
                 os.makedirs("/mnt/dev/pts", exist_ok=True)
@@ -1093,24 +1093,160 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
             exec_cmd(["mount", "--bind", "/proc", "/mnt/proc"])
             exec_cmd(["mount", "--bind", "/sys", "/mnt/sys"])
             exec_cmd(["mount", "-t", "tmpfs", "tmpfs", "/mnt/run"])
-            
-            if is_efi:
+
+            # rEFInd ISO builds (./build-iso.sh --refind) replicate rEFInd into
+            # the installed rootfs. Detect it and install rEFInd instead of GRUB
+            # so the installed system boots with the same bootloader as the ISO.
+            refind_installed = False
+            refind_available = any(
+                os.path.exists(p)
+                for p in (
+                    "/mnt/usr/bin/refind-install",
+                    "/mnt/usr/sbin/refind-install",
+                    "/mnt/bin/refind-install",
+                )
+            )
+
+            if is_efi and refind_available:
+                GLib.idle_add(self.update_progress, 0.90, "Installing rEFInd bootloader...")
+                try:
+                    # Run refind-install from the live system with --root /mnt
+                    # instead of chrooting: inside a chroot /proc/mounts is
+                    # bind-mounted from the live system, so it lists the ESP
+                    # as /mnt/boot/efi and refind-install cannot locate it at
+                    # /boot/efi. --root also keeps the efibootmgr/NVRAM and
+                    # secure-boot handling on the live system, where
+                    # /sys/firmware/efi is reachable.
+                    live_refind_install = next(
+                        (
+                            p
+                            for p in (
+                                "/usr/bin/refind-install",
+                                "/usr/sbin/refind-install",
+                                "/bin/refind-install",
+                            )
+                            if os.path.exists(p)
+                        ),
+                        None,
+                    )
+                    if live_refind_install is None:
+                        raise RuntimeError("refind-install not found in the live system")
+                    exec_cmd([live_refind_install, "--root", "/mnt", "--yes"])
+                    refind_installed = True
+                except Exception as ref_err:
+                    print(f"Warning: refind-install failed: {ref_err}. Falling back to GRUB.")
+                    exec_cmd(["chroot", "/mnt", "grub-install", "--force", "--removable", disk_path])
+                else:
+                    # Configure the macOS theme + refind.conf tweaks
+                    GLib.idle_add(self.update_progress, 0.92, "Configuring rEFInd...")
+                    try:
+                        esp_root = "/mnt/boot/efi"
+                        # The ISO live rootfs carries archiso/systemd-boot boot
+                        # artifacts under /boot/efi (UKI in EFI/Linux, systemd-boot
+                        # in EFI/systemd, its removable copy in EFI/BOOT, loader/,
+                        # grub/, plus a stale vmlinuz/initramfs). rEFInd would
+                        # auto-detect every one of them and show bogus menu entries
+                        # that cannot boot the installed system, so remove them and
+                        # keep only the rEFInd install.
+                        stale_dirs = (
+                            "EFI/Linux",
+                            "EFI/systemd",
+                            "EFI/tools",
+                            "EFI/BOOT",
+                            "loader",
+                            "grub",
+                        )
+                        stale_files = (
+                            "vmlinuz-linux",
+                            "initramfs-linux.img",
+                            "initramfs-linux-fallback.img",
+                            "amd-ucode.img",
+                            "refind_linux.conf",
+                        )
+                        if "TEST_MODE" not in os.environ:
+                            for rel in stale_dirs:
+                                subprocess.run(
+                                    ["rm", "-rf", f"{esp_root}/{rel}"],
+                                    capture_output=True,
+                                )
+                            for rel in stale_files:
+                                subprocess.run(
+                                    ["rm", "-f", f"{esp_root}/{rel}"],
+                                    capture_output=True,
+                                )
+
+                        # Write a refind_linux.conf pointing at the real installed
+                        # root. refind-install skips existing files, so the one
+                        # rsynced from the ISO (generated against the build host's
+                        # root partition) would otherwise be kept and fail to boot.
+                        refind_linux_conf = "/mnt/boot/refind_linux.conf"
+                        conf_content = (
+                            f'"Boot with standard options"  "root=UUID={root_uuid} rw quiet splash"\n'
+                            f'"Boot to single-user mode"    "root=UUID={root_uuid} rw single"\n'
+                            f'"Boot with minimal options"   "ro root=UUID={root_uuid}"\n'
+                        )
+                        if "TEST_MODE" not in os.environ:
+                            os.makedirs("/mnt/boot", exist_ok=True)
+                            with open(refind_linux_conf, "w") as f:
+                                f.write(conf_content)
+
+                        # Removable-media fallback: some firmware ignores NVRAM
+                        # entries and only boots /EFI/BOOT/BOOTX64.EFI. Put rEFInd
+                        # there (the archiso copy was removed above).
+                        refind_share = next(
+                            (
+                                p
+                                for p in (
+                                    "/mnt/usr/share/refind/refind_x64.efi",
+                                    "/mnt/usr/share/refind/refind/refind_x64.efi",
+                                )
+                                if os.path.isfile(p)
+                            ),
+                            None,
+                        )
+                        if refind_share:
+                            if "TEST_MODE" not in os.environ:
+                                os.makedirs(f"{esp_root}/EFI/BOOT", exist_ok=True)
+                                subprocess.run(
+                                    ["cp", refind_share, f"{esp_root}/EFI/BOOT/BOOTX64.EFI"],
+                                    capture_output=True,
+                                )
+
+                        refind_root = f"{esp_root}/EFI/refind"
+                        theme_src = "/mnt/usr/share/refind/themes/rEFInd-Regular-Dark"
+                        theme_dest = f"{refind_root}/themes/rEFInd-Regular-Dark"
+                        if os.path.isdir(refind_root):
+                            if "TEST_MODE" not in os.environ:
+                                os.makedirs(theme_dest, exist_ok=True)
+                                if os.path.isdir(theme_src):
+                                    subprocess.run(
+                                        ["cp", "-r", f"{theme_src}/.", theme_dest],
+                                        capture_output=True,
+                                    )
+                                refind_conf = f"{refind_root}/refind.conf"
+                                if os.path.isfile(refind_conf):
+                                    with open(refind_conf, "r") as f:
+                                        content = f.read()
+                                    content = content.replace("#enable_mouse", "enable_mouse")
+                                    content = content.replace("enable_mouse", "enable_mouse", 1)
+                                    if "include themes/rEFInd-Regular-Dark/theme.conf" not in content:
+                                        content += "\ninclude themes/rEFInd-Regular-Dark/theme.conf\n"
+                                    with open(refind_conf, "w") as f:
+                                        f.write(content)
+                    except Exception as theme_err:
+                        print(f"Warning: rEFInd theme configuration failed: {theme_err}")
+            elif is_efi:
                 # Run grub-install twice:
                 # 1. Without --removable to register the UEFI NVRAM boot entry (so the UEFI firmware boots the hard drive by default)
+                GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader...")
                 try:
                     exec_cmd(["chroot", "/mnt", "grub-install", "--force", disk_path])
                 except Exception as g_err:
                     print(f"Warning: Standard grub-install failed: {g_err}. Proceeding with removable fallback...")
                 # 2. With --removable to create fallback loader in /EFI/BOOT/BOOTX64.EFI
                 exec_cmd(["chroot", "/mnt", "grub-install", "--force", "--removable", disk_path])
-                refind_postinst = "/mnt/var/lib/dpkg/info/pulsaros-refind.postinst"
-                if os.path.exists(refind_postinst) or "TEST_MODE" in os.environ:
-                    GLib.idle_add(self.update_progress, 0.92, "Configuring rEFInd dual-boot bootloader...")
-                    try:
-                        exec_cmd(["chroot", "/mnt", "/var/lib/dpkg/info/pulsaros-refind.postinst", "configure"])
-                    except Exception as ref_err:
-                        print(f"Warning: rEFInd dual-boot setup encountered an issue: {ref_err}. Falling back to GRUB.")
             else:
+                GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader...")
                 exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", "--force", disk_path])
                 
             if is_arch:
@@ -1139,9 +1275,13 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                         f.write(content)
                 # Regenerate the initramfs with the standard (non-live) hooks
                 exec_cmd(["chroot", "/mnt", "mkinitcpio", "-P"])
-                exec_cmd(["chroot", "/mnt", "grub-mkconfig", "-o", "/boot/grub/grub.cfg"])
+                # Only regenerate the GRUB config when GRUB was actually
+                # installed (rEFInd builds don't use grub.cfg).
+                if not refind_installed:
+                    exec_cmd(["chroot", "/mnt", "grub-mkconfig", "-o", "/boot/grub/grub.cfg"])
             else:
-                exec_cmd(["chroot", "/mnt", "update-grub"])
+                if not refind_installed:
+                    exec_cmd(["chroot", "/mnt", "update-grub"])
 
             # ── Driver installation ────────────────────────────────────
             if self.install_nvidia or self.install_broadcom:

@@ -1,6 +1,6 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-plymouth
-pkgver=1.0.119
+pkgver=1.0.121
 pkgrel=1
 pkgdesc="macOS-like Plymouth boot splash theme for Pulsar OS (Arch edition)"
 arch=(any)
