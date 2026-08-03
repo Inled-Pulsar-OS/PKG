@@ -5,8 +5,8 @@ html, body {
   overflow: hidden;
   height: 100vh;
   width: 100vw;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
+
 .new__bg {
   height: 100vh;
   width: 100vw;
@@ -15,6 +15,7 @@ html, body {
   justify-content: center;
   align-items: center;
 }
+
 .hello__div {
   display: flex;
   justify-content: center;
@@ -24,36 +25,20 @@ html, body {
   width: 90%;
   max-width: 900px;
 }
+
 .hello__svg {
   fill: none;
   stroke: #ffffff;
   stroke-linecap: round;
   stroke-miterlimit: 10;
-  stroke-width: 32px;
-  stroke-dasharray: 5800px;
-  stroke-dashoffset: 5800px;
-  animation: anim__hello 6s cubic-bezier(0.25, 1, 0.5, 1) infinite;
+  stroke-width: 48px;
   width: 100%;
+  height: auto;
+  display: block;
 }
 
-@keyframes anim__hello {
-  0% {
-    stroke-dashoffset: 5800;
-    opacity: 0;
-  }
-  5% {
-    opacity: 1;
-  }
-  60% {
-    stroke-dashoffset: 0;
-    opacity: 1;
-  }
-  85% {
-    stroke-dashoffset: 0;
-    opacity: 0;
-  }
-  100% {
-    stroke-dashoffset: 5800;
-    opacity: 0;
-  }
+.hello__svg path {
+  stroke: #ffffff;
+  stroke-linecap: round;
+  stroke-width: 48px;
 }
