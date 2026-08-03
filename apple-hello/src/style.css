@@ -1,43 +1,44 @@
-body {
+html, body {
   padding: 0;
   margin: 0;
+  background-color: transparent !important;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
 }
 
 .new__bg {
-  height: 100%;
-  min-height: 100vh;
-  background:
-    linear-gradient(217deg, rgba(255, 159, 237), rgba(255, 0, 0, 0) 70.71%),
-    linear-gradient(127deg, rgba(118, 164, 255), rgba(0, 255, 0, 0) 65%),
-    linear-gradient(336deg, rgba(255, 191, 138), rgba(0, 0, 255, 0) 70.71%);
+  height: 100vh;
+  width: 100vw;
+  background: transparent !important;
   display: flex;
   justify-content: center;
+  align-items: center;
 }
 
 .hello__div {
   display: flex;
   justify-content: center;
-  flex-direction: column;
+  align-items: center;
   margin: 0 auto;
   text-align: center;
-  width: 100%;
-  max-width: 600px;
-
-  @media (max-width: 600px) {
-    padding: 0 20px;
-  }
+  width: 90%;
+  max-width: 900px;
 }
 
 .hello__svg {
   fill: none;
-  stroke: #fff;
+  stroke: #ffffff;
   stroke-linecap: round;
+  stroke-miterlimit: 10;
   stroke-width: 48px;
   width: 100%;
+  height: auto;
+  display: block;
 }
 
 .hello__svg path {
-  stroke: #fff;
+  stroke: #ffffff;
   stroke-linecap: round;
   stroke-width: 48px;
 }
