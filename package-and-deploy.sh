@@ -6,12 +6,14 @@
 # and notifies the Inled central APT repository for deployment.
 #
 # Usage:
-#   ./package-and-deploy.sh <package_folder_name | all> [--deploy]
+#   ./package-and-deploy.sh <package_folder_name | all> [--deploy] [--upload]
 #
 # Examples:
 #   ./package-and-deploy.sh pulsaros-theme            # Compila un paquete en local
 #   ./package-and-deploy.sh all                       # Compila TODOS los paquetes en local
 #   ./package-and-deploy.sh all --deploy              # Compila y despliega TODOS a Inled APT
+#   ./package-and-deploy.sh pulsaros-gnome --upload      # Recompila y sube un paquete .deb
+#   ./package-and-deploy.sh pulsaros-gnome --onlyupload  # Sube un .deb ya compilado
 # ==============================================================================
 
 set -e
@@ -28,7 +30,25 @@ OUTPUT_DIR="$BUILD_DIR/packages"
 PACKAGE_NAME=""
 DEPLOY_FLAG=""
 DEPLOY_ONLY_FLAG=""
+UPLOAD_FLAG=""
+ONLY_UPLOAD_FLAG=""
 BRANCH="stable"
+
+# Packages that must be uploaded manually from a trusted machine (for example
+# because their build downloads external assets, like EGO GNOME Shell
+# extensions, which rate-limit CI runner IPs). The "all" build skips them and
+# warns that they must be uploaded by hand with --upload.
+MANUAL_UPLOAD_ONLY=("pulsaros-gnome")
+
+is_manual_upload_only() {
+    local name="$1"
+    for p in "${MANUAL_UPLOAD_ONLY[@]}"; do
+        if [ "$p" = "$name" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -38,6 +58,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --deploy-only)
             DEPLOY_ONLY_FLAG="--deploy-only"
+            shift
+            ;;
+        --upload|-u)
+            UPLOAD_FLAG="--upload"
+            shift
+            ;;
+        --onlyupload)
+            ONLY_UPLOAD_FLAG="--onlyupload"
             shift
             ;;
         --branch|-b)
@@ -234,7 +262,10 @@ deploy_packages() {
     local use_gh=false
     local release_id=""
     
-    if command -v gh >/dev/null 2>&1 && [ -n "$GITHUB_ACTIONS" ]; then
+    # Prefer gh whenever it is available and authenticated (both locally and in
+    # CI), since the upload to the PKG release assets needs a token with write
+    # access to this repository. Fall back to curl + INLED_REPO_PAT otherwise.
+    if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
         use_gh=true
         echo "🔧 Usando GitHub CLI para verificar/crear release / Using GitHub CLI to verify/create release..."
         gh release view "$RELEASE_TAG" --repo "$OWNER_REPO" >/dev/null 2>&1 || {
@@ -277,8 +308,15 @@ deploy_packages() {
                 
             if [ -n "$asset_id" ] && [ "$asset_id" != "null" ]; then
                 echo "🗑️ Eliminando asset anterior / Deleting previous asset: $file_name..."
-                curl -s -X DELETE -H "Authorization: token $INLED_REPO_PAT" \
-                    "https://api.github.com/repos/${OWNER_REPO}/releases/assets/$asset_id"
+                local del_resp=$(mktemp)
+                local del_code=$(curl -s -o "$del_resp" -w "%{http_code}" -X DELETE \
+                    -H "Authorization: token $INLED_REPO_PAT" \
+                    "https://api.github.com/repos/${OWNER_REPO}/releases/assets/$asset_id")
+                if [ "$del_code" != "200" ] && [ "$del_code" != "204" ]; then
+                    echo "⚠️ Aviso: no se pudo eliminar el asset (HTTP $del_code). Intentando subir igualmente... / Warning: Could not delete existing asset (HTTP $del_code). Trying to upload anyway..."
+                    cat "$del_resp"
+                fi
+                rm -f "$del_resp"
             fi
             
             # Upload the new asset / Subir el nuevo asset
@@ -292,6 +330,8 @@ deploy_packages() {
         
         if [ "$package_url" == "null" ] || [ -z "$package_url" ]; then
             echo "❌ Error: Falló la subida de $file_name a la release de GitHub. / Error: Upload of $file_name to GitHub release failed."
+            echo "   Respuesta de GitHub / Response from GitHub:"
+            echo "$upload_response"
             return 1
         fi
         
@@ -344,11 +384,60 @@ COMPILED_DEBS=()
 mkdir -p "$STAGING_DIR"
 mkdir -p "$OUTPUT_DIR"
 
-# 1b. Deploy-only mode: upload previously built packages without rebuilding
-# 1b. Modo solo despliegue: sube los .deb ya compilados sin recompilar
+# 1b. Upload mode: deploy a single package. By default it rebuilds the package first
+# (useful when the build must run on a trusted machine, e.g. for EGO GNOME Shell
+# extension downloads); use --onlyupload to deploy an already built package.
+# Acepta una ruta directa a un .deb o un nombre de paquete (usa el .deb más reciente).
+if [ -n "$UPLOAD_FLAG" ] || [ -n "$ONLY_UPLOAD_FLAG" ]; then
+    if [ -z "$PACKAGE_NAME" ]; then
+        echo "❌ Error: --upload/--onlyupload requiere un nombre de paquete o una ruta a un archivo .deb."
+        exit 1
+    fi
+    if [ -f "$PACKAGE_NAME" ]; then
+        # Direct path to an already built package: just upload it.
+        UPLOAD_DEB="$PACKAGE_NAME"
+    else
+        if [ -z "$ONLY_UPLOAD_FLAG" ]; then
+            echo "🏗️  MODO SUBIDA / UPLOAD MODE: Recompilando $PACKAGE_NAME antes de subir..."
+            build_single_package "$PACKAGE_NAME"
+        else
+            echo "⏫  MODO SOLO SUBIDA / ONLY-UPLOAD MODE: Subiendo un paquete .deb ya compilado..."
+        fi
+        UPLOAD_DEB=$(ls -t "$OUTPUT_DIR/${PACKAGE_NAME}_"*.deb 2>/dev/null | head -n 1)
+    fi
+    if [ -z "$UPLOAD_DEB" ] || [ ! -f "$UPLOAD_DEB" ]; then
+        echo "❌ Error: No se encontró ningún .deb para '$PACKAGE_NAME' en $OUTPUT_DIR."
+        exit 1
+    fi
+    echo "⏫  Subiendo / Uploading: $(basename "$UPLOAD_DEB")"
+    deploy_packages "$UPLOAD_DEB"
+    exit $?
+fi
+
+# 1c. Deploy-only mode: upload previously built packages without rebuilding
+# 1c. Modo solo despliegue: sube los .deb ya compilados sin recompilar
 if [ -n "$DEPLOY_ONLY_FLAG" ]; then
     echo "🚀  MODO SOLO DESPLIEGUE / DEPLOY-ONLY MODE: Subiendo paquetes .deb ya compilados..."
     mapfile -t COMPILED_DEBS < <(find "$OUTPUT_DIR" -maxdepth 1 -name '*.deb' 2>/dev/null | sort)
+    # Never auto-deploy packages that must be uploaded manually.
+    # Nunca auto-desplegar paquetes que deben subirse manualmente.
+    if [ ${#COMPILED_DEBS[@]} -gt 0 ]; then
+        mapfile -t COMPILED_DEBS < <(for f in "${COMPILED_DEBS[@]}"; do
+            base=$(basename "$f")
+            skip=false
+            for p in "${MANUAL_UPLOAD_ONLY[@]}"; do
+                if [[ "$base" == "$p"_* ]]; then
+                    skip=true
+                    break
+                fi
+            done
+            if $skip; then
+                echo "⏭️  Omitido (subida manual) / Skipping (manual upload only): $base" >&2
+                continue
+            fi
+            echo "$f"
+        done)
+    fi
     # Keep only the .deb files that belong to the target branch (the version
     # carries the branch suffix: -deb14 for forky, -rolling for rolling).
     # Mantener solo los .deb que pertenecen a la rama destino (la versión lleva
@@ -386,12 +475,29 @@ if [ "$PACKAGE_NAME" == "all" ]; then
     
     echo "📋 Paquetes detectados / Detected packages: ${PACKAGES[*]}"
     
+    SKIPPED_MANUAL=()
     for pkg in "${PACKAGES[@]}"; do
+        if is_manual_upload_only "$pkg"; then
+            echo "⏭️  Omitido / Skipping $pkg (manual upload only)..."
+            SKIPPED_MANUAL+=("$pkg")
+            continue
+        fi
         build_single_package "$pkg"
     done
     echo "=============================================================================="
     echo "🎉 ¡Compilación de todos los paquetes completada! / All packages compilation completed!"
     echo "=============================================================================="
+    if [ ${#SKIPPED_MANUAL[@]} -gt 0 ]; then
+        echo "⚠️  ATENCIÓN / ATTENTION: Los siguientes paquetes NO se compilaron/desplegaron"
+        echo "   automáticamente porque deben subirse manualmente desde una máquina de confianza:"
+        for p in "${SKIPPED_MANUAL[@]}"; do
+            echo "     - $p"
+        done
+        echo "   Compílalo localmente (o reutiliza el build local) y súbelo con:"
+        echo "     ./package-and-deploy.sh <paquete> --upload --branch <stable|forky|rolling>"
+        echo "   o, si el paquete ya está compilado en local:"
+        echo "     ./package-and-deploy.sh <paquete> --onlyupload --branch <stable|forky|rolling>"
+    fi
 else
     # Build only requested package / Compilar solo el paquete solicitado
     build_single_package "$PACKAGE_NAME"
