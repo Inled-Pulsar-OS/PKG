@@ -295,6 +295,8 @@ class HelloWindow(Gtk.Window):
 
         # Webview para la animación SVG
         self.webview = WebKit2.WebView()
+        webview_settings = self.webview.get_settings()
+        webview_settings.set_allow_file_access_from_file_urls(True)
         bg_color = Gdk.RGBA()
         bg_color.alpha = 0.0
         self.webview.set_background_color(bg_color)
@@ -313,7 +315,9 @@ class HelloWindow(Gtk.Window):
 
         curr_dir = os.path.dirname(os.path.abspath(__file__))
         hello_html_path = os.path.join(curr_dir, "hello", "index.html")
-        self.webview.load_uri("file://" + hello_html_path)
+        lang = (os.environ.get("LANG") or os.environ.get("LANGUAGE") or "").split(".")[0].replace("-", "_")
+        hello_uri = "file://" + hello_html_path + (f"?lang={lang}" if lang else "")
+        self.webview.load_uri(hello_uri)
 
         self.connect("draw", self.on_draw)
         self.show_all()
