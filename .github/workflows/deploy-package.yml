@@ -129,10 +129,15 @@ jobs:
           if [ "$PACKAGE" = "all" ]; then
             IS_DEBIAN="true"
             IS_ARCH="true"
-          elif [ -d "$PACKAGE" ]; then
-            IS_DEBIAN="true"
-          elif [ -d "arch/pkgbuilds/$PACKAGE" ]; then
-            IS_ARCH="true"
+          else
+            # Check both formats independently: a package can exist as a Debian
+            # folder AND as an Arch PKGBUILD (e.g. pulsaros-welcome).
+            if [ -d "$PACKAGE" ]; then
+              IS_DEBIAN="true"
+            fi
+            if [ -d "arch/pkgbuilds/$PACKAGE" ]; then
+              IS_ARCH="true"
+            fi
           fi
 
           echo "is_debian=$IS_DEBIAN" >> $GITHUB_OUTPUT
