@@ -161,13 +161,18 @@ toggle-tiled-right=@as []
 restore-shortcuts=@as []
 
 [org/gnome/settings-daemon/plugins/media-keys]
-custom-keybindings=['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']
+custom-keybindings=['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/']
 screensaver=@as []
 
 [org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0]
 name='Spotlight'
 command='pulsaros-spotlight'
 binding='<Ctrl>space'
+
+[org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1]
+name='Spotlight'
+command='pulsaros-spotlight'
+binding='<Super>space'
 
 [org/gnome/mutter]
 overlay-key='Super_R'
