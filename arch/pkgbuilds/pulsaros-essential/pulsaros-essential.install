@@ -31,6 +31,11 @@ post_install() {
         xdg-settings set default-web-browser seafari.desktop 2>/dev/null || true
     fi
 
+    # Apply Safari icon to Seafari (same as Debian postinst)
+    if [ -f "/usr/share/applications/seafari.desktop" ]; then
+        sed -i 's/^Icon=.*/Icon=safari/' /usr/share/applications/seafari.desktop
+    fi
+
     # Bluetooth dual mode
     if [ -f /etc/bluetooth/main.conf ]; then
         sed -i 's/^#ControllerMode.*/ControllerMode = dual/' /etc/bluetooth/main.conf

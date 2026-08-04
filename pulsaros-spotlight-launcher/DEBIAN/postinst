@@ -1,0 +1,10 @@
+#!/bin/bash
+# Apply the Pulsar OS Spotlight fixes: overwrite the spotlight app's main.py
+# with the fixed version (focus-race auto-hide on shortcut launch, delayed
+# search focus re-grab, portable autostart). No-op if either file is missing.
+FIXED="/usr/share/pulsaros-spotlight-launcher/main.py"
+TARGET="/usr/share/spotlight-python/main.py"
+if [ -f "$FIXED" ] && [ -f "$TARGET" ]; then
+    install -m 644 "$FIXED" "$TARGET"
+fi
+exit 0
