@@ -1,13 +1,14 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-spotlight-launcher
 pkgver=1.0.120
-pkgrel=1
+pkgrel=2
 pkgdesc="GNOME Shell extension: macOS Spotlight-like search launcher for Pulsar OS"
 arch=(any)
 url="https://inled.es"
 license=(custom)
 depends=(gnome-shell)
 options=(!strip)
+install=pulsaros-spotlight-launcher.install
 
 package() {
     _src="$(cd "$startdir"/../../../pulsaros-spotlight-launcher && pwd)"

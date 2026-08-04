@@ -1,0 +1,14 @@
+# Pulsar OS - workaround for libinput >= 1.28.901 dropping scroll on QEMU/SPICE
+# virtual devices (they only send REL_WHEEL without REL_WHEEL_HI_RES).
+# See https://bugzilla.redhat.com/show_bug.cgi?id=2379768
+[QEMU USB Tablet]
+MatchName=*QEMU USB Tablet*
+AttrEventCode=-REL_WHEEL_HI_RES;-REL_HWHEEL_HI_RES;
+
+[QEMU/KVM mouse integration]
+MatchName=*spice vdagent tablet*
+AttrEventCode=-REL_WHEEL_HI_RES;-REL_HWHEEL_HI_RES;
+
+[QEMU PS/2 Mouse]
+MatchName=*QEMU PS/2 Mouse*
+AttrEventCode=-REL_WHEEL_HI_RES;-REL_HWHEEL_HI_RES;

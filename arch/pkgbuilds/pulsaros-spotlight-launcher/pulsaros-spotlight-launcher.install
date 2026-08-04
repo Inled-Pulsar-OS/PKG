@@ -1,0 +1,14 @@
+post_install() {
+    # Apply the Pulsar OS Spotlight fixes: overwrite the spotlight app's
+    # main.py with the fixed version (focus-race auto-hide on shortcut
+    # launch, delayed search focus re-grab, portable autostart).
+    FIXED="/usr/share/pulsaros-spotlight-launcher/main.py"
+    TARGET="/usr/share/spotlight-gtk/main.py"
+    if [ -f "$FIXED" ] && [ -f "$TARGET" ]; then
+        install -m 644 "$FIXED" "$TARGET"
+    fi
+}
+
+post_upgrade() {
+    post_install
+}

@@ -13,6 +13,10 @@ prepare() {
     git clone --depth=1 https://github.com/InledGroup/spotlight-gtk "$srcdir/spotlight-src"
     mkdir -p "$srcdir/staging/spotlight-python"
     cp -r "$srcdir/spotlight-src/spotlight-python"/* "$srcdir/staging/spotlight-python/"
+    # Apply Pulsar OS fixes to main.py (focus-race auto-hide on shortcut
+    # launch, delayed search focus re-grab, portable autostart). Fails loudly
+    # if upstream has changed the file.
+    python3 "$startdir/patch-main.py" "$srcdir/staging/spotlight-python/main.py"
 }
 
 package() {
