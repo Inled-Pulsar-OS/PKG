@@ -9,21 +9,24 @@
 #   ps aux | grep -i spotlight
 set -u
 
-KEYDIR='/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/'
+KEYBASE='/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings'
 SCHEMA='org.gnome.settings-daemon.plugins.media-keys.custom-keybinding'
 LOG=/tmp/pulsaros-spotlight-debug.log
 
 case "${1:-setup}" in
   setup)
     rm -f "$LOG"
-    echo "== Atajo actual =="
-    gsettings get "$SCHEMA:$KEYDIR" binding
-    gsettings get "$SCHEMA:$KEYDIR" command
-    echo "== Redirigiendo custom0 a /usr/bin/pulsaros-spotlight-debug =="
-    gsettings set "$SCHEMA:$KEYDIR" command '/usr/bin/pulsaros-spotlight-debug'
-    gsettings get "$SCHEMA:$KEYDIR" command
-    echo
-    echo "Pulsa el atajo (Win+Espacio / Ctrl+Espacio)."
+    for i in 0 1; do
+      KEYDIR="$KEYBASE/custom$i/"
+      echo "== Atajo custom$i actual =="
+      gsettings get "$SCHEMA:$KEYDIR" binding
+      gsettings get "$SCHEMA:$KEYDIR" command
+      echo "== Redirigiendo custom$i a /usr/bin/pulsaros-spotlight-debug =="
+      gsettings set "$SCHEMA:$KEYDIR" command '/usr/bin/pulsaros-spotlight-debug'
+      gsettings get "$SCHEMA:$KEYDIR" command
+      echo
+    done
+    echo "Pulsa el atajo (Win+Espacio o Ctrl+Espacio)."
     echo "Despues mira el log:"
     echo "  cat $LOG"
     echo "  ps aux | grep -i spotlight"
@@ -32,9 +35,11 @@ case "${1:-setup}" in
     echo "  dbus-monitor \"interface='org.freedesktop.Application',member='Activate'\""
     ;;
   restore)
-    echo "== Restaurando comando original =="
-    gsettings set "$SCHEMA:$KEYDIR" command 'pulsaros-spotlight'
-    gsettings get "$SCHEMA:$KEYDIR" command
+    echo "== Restaurando comandos originales =="
+    gsettings set "$SCHEMA:$KEYBASE/custom0/" command 'pulsaros-spotlight'
+    gsettings set "$SCHEMA:$KEYBASE/custom1/" command 'pulsaros-spotlight'
+    gsettings get "$SCHEMA:$KEYBASE/custom0/" command
+    gsettings get "$SCHEMA:$KEYBASE/custom1/" command
     ;;
   *)
     echo "Uso: $0 [setup|restore]" >&2
