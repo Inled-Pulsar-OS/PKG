@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = File
+Target = usr/share/spotlight-gtk/main.py
+
+[Action]
+Description = Apply Pulsar OS fixes to spotlight-gtk main.py
+When = PostTransaction
+Exec = /usr/bin/install -m 644 /usr/share/pulsaros-spotlight-launcher/main.py /usr/share/spotlight-gtk/main.py

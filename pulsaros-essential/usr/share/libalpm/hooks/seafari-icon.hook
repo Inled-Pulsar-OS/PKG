@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = File
+Target = usr/share/applications/seafari.desktop
+
+[Action]
+Description = Apply Safari icon to Seafari desktop entry
+When = PostTransaction
+Exec = /usr/bin/sed -i 's/^Icon=.*/Icon=safari/' /usr/share/applications/seafari.desktop
