@@ -119,9 +119,57 @@ if os.path.exists(config):
 # double-swap the keys, so it is intentionally removed.
 """
         content = content[:start] + replacement + content[end:]
+        
+        # Translate keymap rules for XKB swap compatibility
+        content = content.replace("Ctrl-C: Shift-Super-C", "Super-C: Shift-Super-C")
+        content = content.replace("Ctrl-V: Shift-Super-V", "Super-V: Shift-Super-V")
+        content = content.replace("Ctrl-T: Shift-Super-T", "Super-T: Shift-Super-T")
+        content = content.replace("Ctrl-N: Shift-Super-N", "Super-N: Shift-Super-N")
+        content = content.replace("Ctrl-W: Shift-Super-W", "Super-W: Shift-Super-W")
+        content = content.replace("Ctrl-Q: Shift-Super-Q", "Super-Q: Shift-Super-Q")
+        content = content.replace("Ctrl-F: Shift-Super-F", "Super-F: Shift-Super-F")
+
+        content = content.replace("Super-C: Ctrl-C", "Ctrl-C: Super-C")
+
+        content = content.replace("Ctrl-Left: Home", "Super-Left: Home")
+        content = content.replace("Ctrl-Right: End", "Super-Right: End")
+        content = content.replace("Shift-Ctrl-Left: Shift-Home", "Shift-Super-Left: Shift-Home")
+        content = content.replace("Shift-Ctrl-Right: Shift-End", "Shift-Super-Right: Shift-End")
+
+        content = content.replace("Alt-Backspace: Ctrl-Backspace", "Alt-Backspace: Super-Backspace")
+        content = content.replace("Ctrl-K: Ctrl-D", "Ctrl-K: Super-D")
+
+        content = content.replace("Ctrl-Up: Alt-Up", "Super-Up: Alt-Up")
+        content = content.replace("Ctrl-Down: Enter", "Super-Down: Enter")
+        content = content.replace("Ctrl-Backspace: Delete", "Super-Backspace: Delete")
+        content = content.replace("Shift-Ctrl-Dot: Ctrl-H", "Shift-Super-Dot: Super-H")
+        content = content.replace("Shift-Ctrl-G: Ctrl-L", "Shift-Super-G: Super-L")
+
+        content = content.replace("Ctrl-Shift-C # Copy text", "Super-Shift-C # Copy text")
+        content = content.replace("Ctrl-Shift-V # Paste text", "Super-Shift-V # Paste text")
+        content = content.replace("Ctrl-Shift-N # New window", "Super-Shift-N # New window")
+        content = content.replace("Ctrl-Shift-Q # Close window", "Super-Shift-Q # Close window")
+        content = content.replace("Ctrl-Shift-T # New tab", "Super-Shift-T # New tab")
+        content = content.replace("Ctrl-Shift-W # Close tab", "Super-Shift-W # Close tab")
+        content = content.replace("Shift-Ctrl-F # Find", "Shift-Super-F # Find")
+
+        content = content.replace("      Ctrl-C: Super-Shift-C", "      Super-C: Super-Shift-C")
+        content = content.replace("      Ctrl-V: Super-Shift-V", "      Super-V: Super-Shift-V")
+        content = content.replace("      Ctrl-N: Super-Shift-N", "      Super-N: Super-Shift-N")
+        content = content.replace("      Ctrl-Q: Super-Shift-Q", "      Super-Q: Super-Shift-Q")
+        content = content.replace("      Ctrl-T: Super-Shift-T", "      Super-T: Super-Shift-T")
+        content = content.replace("      Ctrl-W: Super-Shift-W", "      Super-W: Super-Shift-W")
+        content = content.replace("      Ctrl-F: Shift-Super-F", "      Super-F: Shift-Super-F")
+
+        # Comment out/remove the nano section
+        nano_start = content.find("  - name: Terminal and Console - make Ctrl work in `nano` editor")
+        next_section = content.find("  - name: Console and Ptyxis shortcuts")
+        if nano_start != -1 and next_section != -1 and next_section > nano_start:
+            content = content[:nano_start] + content[next_section:]
+
         with open(config, "w") as f:
             f.write(content)
-        print("✅ config.yml modmap removed (XKB swap is the PulsarOS mechanism).")
+        print("✅ config.yml modmap removed & keymap translated (XKB swap compatibility).")
     else:
         print("⚠️ Warning: modmap section markers not found in config.yml.")
 '

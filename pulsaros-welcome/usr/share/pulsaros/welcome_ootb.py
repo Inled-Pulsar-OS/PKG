@@ -1492,9 +1492,9 @@ class OOTBWindow(Adw.ApplicationWindow):
                     ("org.gnome.shell.keybindings", "screenshot", "['<Primary><Shift>numbersign']"),
                     ("org.gnome.shell.keybindings", "show-screenshot-ui", "['<Shift><Control>dollar']"),
                     ("org.gnome.shell.keybindings", "screenshot-window", "['<Shift><Control>percent']"),
-                    ("org.gnome.settings-daemon.plugins.media-keys", "screensaver", "[]"),
+                    ("org.gnome.settings-daemon.plugins.media-keys", "screensaver", "['<Super>l', '<Control>l']"),
                     ("org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings",
-                     "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']"),
+                     "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/']"),
                 ]
                 for schema, key, value in mac_user_settings:
                     run_cmd([
@@ -1502,7 +1502,7 @@ class OOTBWindow(Adw.ApplicationWindow):
                         schema, key, value
                     ], check=False)
 
-                spotlight_path = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
+                spotlight_path_ctrl = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
                 for key, value in [
                     ("name", "'Spotlight'"),
                     ("command", "'pulsaros-spotlight'"),
@@ -1510,7 +1510,19 @@ class OOTBWindow(Adw.ApplicationWindow):
                 ]:
                     run_cmd([
                         "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
-                        "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:" + spotlight_path,
+                        "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:" + spotlight_path_ctrl,
+                        key, value
+                    ], check=False)
+
+                spotlight_path_super = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/"
+                for key, value in [
+                    ("name", "'Spotlight'"),
+                    ("command", "'pulsaros-spotlight'"),
+                    ("binding", "'<Super>space'"),
+                ]:
+                    run_cmd([
+                        "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
+                        "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:" + spotlight_path_super,
                         key, value
                     ], check=False)
 

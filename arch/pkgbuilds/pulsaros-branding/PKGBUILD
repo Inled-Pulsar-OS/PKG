@@ -20,8 +20,8 @@ package() {
     fi
     # Write Arch-specific os-release
     local os_ver="${PULSAR_VERSION:-rolling}"
-    echo "PRETTY_NAME=\"Pulsar OS Arch $os_ver\"" > "$pkgdir/etc/os-release"
-    echo 'NAME="Pulsar OS"' >> "$pkgdir/etc/os-release"
+    echo "PRETTY_NAME=\"Pulsar OS Pear Edition Arch $os_ver\"" > "$pkgdir/etc/os-release"
+    echo 'NAME="Pulsar OS Pear Edition"' >> "$pkgdir/etc/os-release"
     echo "VERSION_ID=\"$os_ver\"" >> "$pkgdir/etc/os-release"
     echo "VERSION=\"$os_ver\"" >> "$pkgdir/etc/os-release"
     echo 'ID=pulsaros' >> "$pkgdir/etc/os-release"

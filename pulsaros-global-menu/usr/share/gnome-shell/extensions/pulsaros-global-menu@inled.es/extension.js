@@ -13,6 +13,7 @@ import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
@@ -45,6 +46,110 @@ const GlobalMenuButton = GObject.registerClass({
     // Actualiza el texto de la etiqueta dinámicamente (p. ej., al cambiar la ventana activa)
     setText(text) {
         this.label.set_text(text);
+    }
+});
+
+const AboutDialog = GObject.registerClass({
+    GTypeName: 'PulsarosAboutDialog'
+}, class AboutDialog extends ModalDialog.ModalDialog {
+    _init(osName, osVersion, hostName, cpuModel, memTotal, gpuModel, diskInfo) {
+        super._init({ styleClass: 'pulsaros-about-dialog' });
+
+        let mainBox = new St.BoxLayout({
+            vertical: true,
+            style_class: 'pulsaros-about-mainbox'
+        });
+        this.contentLayout.add_child(mainBox);
+
+        // Add a nice Logo at the top
+        let logoTexture = new St.Icon({
+            icon_name: 'pulsar-logo',
+            icon_size: 96,
+            style_class: 'pulsaros-about-logo',
+            x_align: Clutter.ActorAlign.CENTER
+        });
+        
+        let logoBox = new St.BoxLayout({
+            style_class: 'pulsaros-about-logobox',
+            x_align: Clutter.ActorAlign.CENTER
+        });
+        logoBox.add_child(logoTexture);
+        mainBox.add_child(logoBox);
+
+        // Title
+        let titleLabel = new St.Label({
+            text: "Pulsar OS Pear Edition",
+            style_class: 'pulsaros-about-title',
+            x_align: Clutter.ActorAlign.CENTER
+        });
+        titleLabel.clutter_text.selectable = true;
+        mainBox.add_child(titleLabel);
+
+        // Version Info
+        let verLabel = new St.Label({
+            text: `Version ${osVersion}`,
+            style_class: 'pulsaros-about-subtitle',
+            x_align: Clutter.ActorAlign.CENTER
+        });
+        verLabel.clutter_text.selectable = true;
+        mainBox.add_child(verLabel);
+
+        // Details Grid/Table
+        let detailsBox = new St.BoxLayout({
+            vertical: true,
+            style_class: 'pulsaros-about-details'
+        });
+        mainBox.add_child(detailsBox);
+
+        let addDetail = (label, value) => {
+            let row = new St.BoxLayout({
+                vertical: false,
+                style_class: 'pulsaros-about-row'
+            });
+            let lbl = new St.Label({
+                text: label,
+                style_class: 'pulsaros-about-row-label',
+                width: 140
+            });
+            let val = new St.Label({
+                text: value,
+                style_class: 'pulsaros-about-row-value'
+            });
+            val.clutter_text.selectable = true;
+            row.add_child(lbl);
+            row.add_child(val);
+            detailsBox.add_child(row);
+        };
+
+        addDetail("Device Name:", hostName);
+        addDetail("Processor:", cpuModel);
+        addDetail("Memory:", memTotal);
+        addDetail("Graphics:", gpuModel);
+        addDetail("Storage:", diskInfo);
+
+        // Copy Info Button
+        this.addButton({
+            label: "Copy Info",
+            action: () => {
+                let clipboardText = `Pulsar OS Pear Edition\n` +
+                                    `Version: ${osVersion}\n` +
+                                    `Device Name: ${hostName}\n` +
+                                    `Processor: ${cpuModel}\n` +
+                                    `Memory: ${memTotal}\n` +
+                                    `Graphics: ${gpuModel}\n` +
+                                    `Storage: ${diskInfo}`;
+                St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, clipboardText);
+            }
+        });
+
+        // Close Button
+        this.addButton({
+            label: "Close",
+            action: () => {
+                this.close();
+            },
+            key: Clutter.KEY_Escape
+        });
     }
 });
 
@@ -704,7 +809,105 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         // About Pulsar OS
         let aboutItem = new PopupMenu.PopupMenuItem("About Pulsar OS");
         aboutItem.connect('activate', () => {
-            Main.notify("Pulsar OS", "Pulsar OS Tahoe Edition\nBasing on Debian GNU/Linux");
+            let hostName = GLib.get_host_name();
+            
+            // Memory (RAM)
+            let memTotal = "N/A";
+            try {
+                let [ok, content] = GLib.file_get_contents("/proc/meminfo");
+                if (ok) {
+                    let contentStr = new TextDecoder().decode(content);
+                    let match = contentStr.match(/MemTotal:\s+(\d+)\s+kB/);
+                    if (match) {
+                        let gb = (parseInt(match[1]) / 1024 / 1024).toFixed(1);
+                        memTotal = `${gb} GB`;
+                    }
+                }
+            } catch (e) {
+                console.error("[GlobalMenu] Failed to read /proc/meminfo:", e);
+            }
+
+            // Processor (CPU)
+            let cpuModel = "Unknown CPU";
+            try {
+                let [ok, content] = GLib.file_get_contents("/proc/cpuinfo");
+                if (ok) {
+                    let contentStr = new TextDecoder().decode(content);
+                    let match = contentStr.match(/model name\s+:\s+(.+)/);
+                    if (match) {
+                        cpuModel = match[1].trim();
+                    }
+                }
+            } catch (e) {
+                console.error("[GlobalMenu] Failed to read /proc/cpuinfo:", e);
+            }
+
+            // Graphics (GPU)
+            let gpuModel = "Unknown GPU";
+            try {
+                let [success, stdout, stderr, status] = GLib.spawn_command_line_sync("lspci");
+                if (success) {
+                    let stdoutStr = new TextDecoder().decode(stdout);
+                    let lines = stdoutStr.split("\n");
+                    for (let line of lines) {
+                        if (line.match(/VGA compatible controller|3D controller|Display controller/i)) {
+                            let parts = line.split(": ");
+                            if (parts.length > 1) {
+                                gpuModel = parts[1].trim();
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("[GlobalMenu] Failed to run lspci:", e);
+            }
+
+            // Storage (Disk)
+            let diskInfo = "N/A";
+            try {
+                let [success, stdout, stderr, status] = GLib.spawn_command_line_sync("df -h /");
+                if (success) {
+                    let stdoutStr = new TextDecoder().decode(stdout);
+                    let lines = stdoutStr.split("\n");
+                    if (lines.length > 1) {
+                        let parts = lines[1].split(/\s+/);
+                        if (parts.length > 4) {
+                            let size = parts[1];
+                            let avail = parts[3];
+                            diskInfo = `${size} (${avail} available)`;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("[GlobalMenu] Failed to run df:", e);
+            }
+
+            // OS Name & Version
+            let osName = "Pulsar OS Pear Edition";
+            let osVersion = "rolling";
+            try {
+                let [ok, content] = GLib.file_get_contents("/etc/os-release");
+                if (ok) {
+                    let contentStr = new TextDecoder().decode(content);
+                    let prettyNameMatch = contentStr.match(/^PRETTY_NAME="(.+)"/m);
+                    if (prettyNameMatch) {
+                        osName = prettyNameMatch[1].replace("Tahoe Edition", "Pear Edition");
+                        if (!osName.includes("Pear Edition")) {
+                            osName = osName.replace("Pulsar OS", "Pulsar OS Pear Edition");
+                        }
+                    }
+                    let versionMatch = contentStr.match(/^VERSION_ID="(.+)"/m) || contentStr.match(/^VERSION="(.+)"/m);
+                    if (versionMatch) {
+                        osVersion = versionMatch[1];
+                    }
+                }
+            } catch (e) {
+                console.error("[GlobalMenu] Failed to read /etc/os-release:", e);
+            }
+
+            let dialog = new AboutDialog(osName, osVersion, hostName, cpuModel, memTotal, gpuModel, diskInfo);
+            dialog.open();
         });
         this.logoMenuButton.menu.addMenuItem(aboutItem);
         
@@ -982,9 +1185,17 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         // Español: Enlace al canal de Discord de Pulsar OS
         let discordItem = new PopupMenu.PopupMenuItem("Pulsar OS Discord");
         discordItem.connect('activate', () => {
-            this._openUri("https://discord.gg/PSeTkDMnr");
+            this._openUri("https://link.inled.es/discord");
         });
         helpBtn.menu.addMenuItem(discordItem);
+
+        // English: Link to Pulsar OS Matrix community
+        // Español: Enlace al canal de Matrix de Pulsar OS
+        let matrixItem = new PopupMenu.PopupMenuItem("Pulsar OS Matrix");
+        matrixItem.connect('activate', () => {
+            this._openUri("https://matrix.inled.es");
+        });
+        helpBtn.menu.addMenuItem(matrixItem);
 
         // English: Separator between Pulsar OS and base system/partner links
         // Español: Separador entre los enlaces de Pulsar OS y los enlaces del sistema base/socios

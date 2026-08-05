@@ -111,9 +111,14 @@ switch-input-source=['<Control>space']
 switch-input-source-backward=['<Shift><Control>space']
 
 [org.gnome.settings-daemon.plugins.media-keys]
-custom-keybindings=['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']
-
+custom-keybindings=['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/']
+screensaver=['<Super>l', '<Control>l']
 [org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/]
 name='Spotlight'
-command='spotlight-python'
+command='pulsaros-spotlight'
+binding='<Ctrl>space'
+
+[org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/]
+name='Spotlight'
+command='pulsaros-spotlight'
 binding='<Super>space'

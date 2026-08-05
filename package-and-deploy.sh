@@ -171,7 +171,8 @@ build_single_package() {
     if [ "$name" = "pulsaros-branding" ] && [ -n "$PULSAR_VERSION" ]; then
         echo "⚙️ Sobrescribiendo versión del sistema en etc/os-release con: $PULSAR_VERSION"
         if [ -f "$STAGING_DIR/$name/etc/os-release" ]; then
-            sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"Pulsar OS $PULSAR_VERSION\"/" "$STAGING_DIR/$name/etc/os-release"
+            sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"Pulsar OS Pear Edition $PULSAR_VERSION\"/" "$STAGING_DIR/$name/etc/os-release"
+            sed -i "s/^NAME=.*/NAME=\"Pulsar OS Pear Edition\"/" "$STAGING_DIR/$name/etc/os-release"
             sed -i "s/^VERSION_ID=.*/VERSION_ID=\"$PULSAR_VERSION\"/" "$STAGING_DIR/$name/etc/os-release"
             sed -i "s/^VERSION=.*/VERSION=\"$PULSAR_VERSION\"/" "$STAGING_DIR/$name/etc/os-release"
         fi
