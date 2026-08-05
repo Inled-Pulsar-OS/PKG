@@ -174,3 +174,88 @@
     padding: 0px 10px;
 }
 
+/* --- About Pulsar OS Dialog Styles --- */
+.pulsaros-about-dialog {
+    background-color: rgba(28, 28, 30, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 24px;
+    width: 480px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.pulsaros-about-mainbox {
+    spacing: 12px;
+}
+
+.pulsaros-about-logobox {
+    margin-bottom: 8px;
+}
+
+.pulsaros-about-logo {
+    /* No margin auto */
+}
+
+.pulsaros-about-title {
+    font-size: 20pt;
+    font-weight: bold;
+    color: #ffffff;
+    text-align: center;
+}
+
+.pulsaros-about-subtitle {
+    font-size: 11pt;
+    color: #aaaaaa;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.pulsaros-about-details {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 16px;
+    spacing: 8px;
+}
+
+.pulsaros-about-row {
+    spacing: 12px;
+}
+
+.pulsaros-about-row-label {
+    font-weight: bold;
+    color: #888888;
+}
+
+.pulsaros-about-row-value {
+    color: #dddddd;
+}
+
+.pulsaros-about-dialog .modal-dialog-button-box {
+    spacing: 12px;
+    padding: 0;
+    margin-top: 16px;
+}
+
+.pulsaros-about-dialog .modal-dialog-button {
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 6px 16px;
+    color: #ffffff;
+    font-size: 10pt;
+    font-weight: 500;
+    min-height: 24px;
+}
+
+.pulsaros-about-dialog .modal-dialog-button:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.pulsaros-about-dialog .modal-dialog-button:active {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.pulsaros-about-dialog .modal-dialog-button:focus {
+    border: 1px solid #3498db;
+}
+
