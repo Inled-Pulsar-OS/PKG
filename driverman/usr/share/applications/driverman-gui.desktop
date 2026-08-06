@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Driver Manager
+Name[es]=Gestor de controladores
+Comment=Install and manage GPU drivers
+Comment[es]=Instalar y gestionar controladores de GPU
+Exec=/usr/bin/driverman-gui
+Icon=video-display
+Type=Application
+Categories=System;Settings;HardwareSettings;
+Terminal=false
+Keywords=driver;gpu;nvidia;amd;intel;

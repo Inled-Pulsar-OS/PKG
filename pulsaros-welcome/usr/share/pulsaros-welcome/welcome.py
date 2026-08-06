@@ -34,6 +34,33 @@ gi.require_version("WebKit2", "4.1")
 
 from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, WebKit2
 
+
+def is_arch_system():
+    """
+    English: Detects if the running Pulsar OS edition is Arch-based (pacman)
+             rather than Debian-based (apt-get), so platform-specific launcher
+             paths (e.g. Winboat at /opt/winboat/winboat on Arch) can be used.
+    Español: Detecta si la edición de Pulsar OS en ejecución está basada en
+             Arch (pacman) en lugar de Debian (apt-get), para usar rutas de
+             lanzamiento específicas de la plataforma (p. ej. Winboat en
+             /opt/winboat/winboat en Arch).
+    """
+    try:
+        with open("/etc/os-release", "r") as f:
+            rel = f.read().lower()
+        if "id_like=arch" in rel or "id=arch" in rel:
+            return True
+        if "id_like=debian" in rel or "id=debian" in rel or "id=ubuntu" in rel:
+            return False
+    except Exception:
+        pass
+    if shutil.which("pacman"):
+        return True
+    if shutil.which("apt-get"):
+        return False
+    return False
+
+
 CSS_DATA = """
 window {
     background-color: #e3e3e6;
@@ -575,7 +602,7 @@ class AssistantWindow(Gtk.Window):
             self.create_symbolic_icon("preferences-desktop-theme-symbolic"), "icon9"
         )
         self.icon_stack.add_named(
-            self.create_symbolic_icon("input-keyboard-symbolic"), "icon10"
+            self.create_symbolic_icon("applications-system-symbolic"), "icon10"
         )
         self.icon_stack.add_named(
             self.create_symbolic_icon("help-browser-symbolic"), "icon11"
@@ -599,7 +626,7 @@ class AssistantWindow(Gtk.Window):
             "Run Windows Apps with Winboat",
             "Installing Applications",
             "Desktop Special Effects",
-            "macOS Keyboard Shortcuts",
+            "GPU Driver Manager",
             "Beta Feedback & Support",
         ]
         if self.is_live:
@@ -851,7 +878,16 @@ class AssistantWindow(Gtk.Window):
 
         btn_winboat = Gtk.Button(label="Launch Winboat Setup")
         btn_winboat.get_style_context().add_class("action-button")
-        btn_winboat.connect("clicked", lambda b: self.launch_app("winboat"))
+        # English: On Arch the Winboat binary lives at /opt/winboat/winboat;
+        #          on Debian the `winboat` command in PATH is used instead.
+        # Español: En Arch el binario de Winboat está en /opt/winboat/winboat;
+        #          en Debian se usa el comando `winboat` del PATH.
+        btn_winboat.connect(
+            "clicked",
+            lambda b: self.launch_app(
+                "/opt/winboat/winboat" if is_arch_system() else "winboat"
+            ),
+        )
         btn_box.pack_start(btn_winboat, False, False, 0)
 
         self.content_stack.add_named(slide_7, "slide7")
@@ -932,13 +968,13 @@ class AssistantWindow(Gtk.Window):
         self.content_stack.add_named(slide_9, "slide9")
 
         # ----------------------------------------------------------------------
-        # Slide 10: macOS Keyboard Shortcuts Remap
+        # Slide 10: GPU Driver Manager (driverman)
         # ----------------------------------------------------------------------
         slide_10 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         slide_10.set_halign(Gtk.Align.CENTER)
 
         lbl_desc_10 = Gtk.Label(
-            label="Configure macOS-style keyboard shortcuts on Pulsar OS. This utility remaps the main modifier keys (making Command ⌘ your primary shortcut key for copy, paste, tab switching, and Nautilus navigation) and runs the official gnome-macos-remap installer."
+            label="Pulsar OS detects your GPU automatically and recommends the best open-source or proprietary driver for it. Use Driver Manager to install, switch, or remove GPU drivers. Package conflicts can be resolved directly from the app."
         )
         lbl_desc_10.get_style_context().add_class("desc-text")
         lbl_desc_10.set_max_width_chars(65)
@@ -950,24 +986,13 @@ class AssistantWindow(Gtk.Window):
         btn_box_10.set_halign(Gtk.Align.CENTER)
         slide_10.pack_start(btn_box_10, True, True, 10)
 
-        # English: Button to run local macOS Keyboard Remap install script in a native terminal
-        # Español: Botón para ejecutar el script de instalación local de remapeo de teclado en un terminal nativo
-        btn_remap = Gtk.Button(label="Install macOS Keyboard Remap / Instalar Remapeo de Teclado")
-        btn_remap.get_style_context().add_class("action-button")
-        btn_remap.connect(
+        btn_drivers = Gtk.Button(label="Open Driver Manager / Abrir Gestor de Controladores")
+        btn_drivers.get_style_context().add_class("action-button")
+        btn_drivers.connect(
             "clicked",
-            lambda b: os.system(
-                "gnome-terminal -- bash -c '"
-                "echo \"📥 Preparing and installing macOS Keyboard Remap / Preparando e instalando remapeo de teclado...\"; "
-                "rm -rf /tmp/gnome-macos-remap && "
-                "cp -r /usr/share/gnome-macos-remap-wayland /tmp/gnome-macos-remap && "
-                "cd /tmp/gnome-macos-remap && "
-                "chmod +x install.sh bin/* && "
-                "./install.sh; "
-                "echo; read -p \"Press Enter to close / Presiona Enter para cerrar...\"' &"
-            ),
+            lambda b: self.launch_app("driverman-gui", "driverman"),
         )
-        btn_box_10.pack_start(btn_remap, False, False, 0)
+        btn_box_10.pack_start(btn_drivers, False, False, 0)
 
         self.content_stack.add_named(slide_10, "slide10")
 

@@ -1,12 +1,12 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-welcome
-pkgver=1.0.130
+pkgver=1.0.132
 pkgrel=1
 pkgdesc="Welcome and onboarding app for Pulsar OS (macOS-like setup assistant)"
 arch=(any)
 url="https://inled.es"
 license=(custom)
-depends=(python-gobject python-dbus gtk3 webkitgtk-6.0 xorg-xrandr gtk4 libadwaita)
+depends=(python-gobject python-dbus gtk3 webkitgtk-6.0 xorg-xrandr gtk4 libadwaita driverman)
 options=(!strip)
 install=pulsaros-welcome.install
 
