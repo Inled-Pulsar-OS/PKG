@@ -6,7 +6,7 @@ Before=sddm.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'if [ ! -f /etc/pulsar-need-setup ] && ! grep -q -E "boot=live|rootfstype=9p" /proc/cmdline; then rm -f /etc/sddm.conf.d/autologin.conf; fi'
+ExecStart=/bin/bash -c 'if [ ! -f /etc/pulsar-need-setup ] && ! grep -q -E "boot=live|rootfstype=9p" /proc/cmdline; then rm -f /etc/sddm.conf.d/autologin.conf; else systemctl mask plymouth-quit.service plymouth-quit-wait.service || true; fi'
 RemainAfterExit=yes
 
 [Install]

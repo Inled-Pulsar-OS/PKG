@@ -5,10 +5,23 @@
 # English: Closes the GNOME Shell Activities Overview screen via DBus on login.
 # Español: Cierra la pantalla de Vista de Actividades de GNOME Shell vía DBus al iniciar sesión.
 
-for i in {1..50}; do
+# Quit Plymouth smoothly once the desktop is loaded (for live session where we mask plymouth-quit)
+# Detener Plymouth suavemente cuando el escritorio esté listo (para la sesión live donde enmascaramos plymouth-quit)
+cleanup_plymouth() {
+    if command -v plymouth >/dev/null 2>&1 && plymouth --ping >/dev/null 2>&1; then
+        sudo -n plymouth quit --retain-splash >/dev/null 2>&1 || true
+    fi
+}
+
+for i in {1..100}; do
     # Intentar mandar el mensaje DBus a GNOME Shell para ocultar la overview
     if gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.ShowOverview false >/dev/null 2>&1; then
+        cleanup_plymouth
         exit 0
     fi
     sleep 0.1
 done
+
+# Fallback: Asegurar que Plymouth se detenga si la llamada de DBus falla o expira
+cleanup_plymouth
+
