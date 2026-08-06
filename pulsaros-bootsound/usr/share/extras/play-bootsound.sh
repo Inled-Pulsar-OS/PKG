@@ -25,8 +25,17 @@ fi
 
 if [ -n "$target_card" ]; then
     echo "🔊 Selected target card: $target_card (plughw:$target_card,0)"
+    # Unmute and set master/outputs volume to 100%
+    amixer -c "$target_card" set Master unmute 100% >/dev/null 2>&1
+    amixer -c "$target_card" set PCM unmute 100% >/dev/null 2>&1
+    amixer -c "$target_card" set Headphone unmute 100% >/dev/null 2>&1
+    amixer -c "$target_card" set Speaker unmute 100% >/dev/null 2>&1
     aplay -D "plughw:$target_card,0" -q "$SOUND_FILE"
 else
     echo "🔊 No sound cards detected. Falling back to default."
+    amixer set Master unmute 100% >/dev/null 2>&1
+    amixer set PCM unmute 100% >/dev/null 2>&1
+    amixer set Headphone unmute 100% >/dev/null 2>&1
+    amixer set Speaker unmute 100% >/dev/null 2>&1
     aplay -q "$SOUND_FILE"
 fi
