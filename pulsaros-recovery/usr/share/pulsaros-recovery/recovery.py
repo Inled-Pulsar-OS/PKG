@@ -144,6 +144,23 @@ listrow:selected, listboxrow:selected {
     color: #8e8e93;
     text-align: center;
 }
+.error-icon {
+    color: #ff453a;
+}
+.error-log-view {
+    background-color: #121212;
+    border: 1px solid #3c3c3c;
+    border-radius: 8px;
+    padding: 8px;
+}
+textview.error-log-text {
+    background-color: #121212;
+}
+textview.error-log-text text {
+    background-color: #121212;
+    color: #ff453a;
+    font-size: 11px;
+}
 """
 
 def get_system_disks():
@@ -230,8 +247,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
         
         self.apply_css()
         
-        # Always fullscreen
-        self.fullscreen()
+        # Always fullscreen (except in test mode)
+        if "TEST_MODE" not in os.environ:
+            self.fullscreen()
             
         # Centered container
         center_container = Gtk.CenterBox()
@@ -259,6 +277,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.build_install_welcome_screen()
         self.build_install_disk_select_screen()
         self.build_install_progress_screen()
+        self.build_install_error_screen()
         
         self.stack.set_visible_child_name("utilities")
         self.selected_action = None
@@ -688,6 +707,59 @@ class RecoveryWindow(Adw.ApplicationWindow):
         
         self.stack.add_named(box, "install_progress")
 
+    def build_install_error_screen(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.set_valign(Gtk.Align.CENTER)
+        box.set_halign(Gtk.Align.CENTER)
+        box.set_size_request(460, -1)
+        
+        # Error icon
+        icon = Gtk.Image.new_from_icon_name("dialog-error")
+        icon.set_pixel_size(72)
+        icon.add_css_class("error-icon")
+        box.append(icon)
+        
+        title = Gtk.Label()
+        title.set_markup("<span font_weight='bold' size='18000' color='#ff453a'>Installation Failed</span>")
+        box.append(title)
+        
+        desc = Gtk.Label(label="An error occurred during the installation process.")
+        desc.add_css_class("progress-text")
+        box.append(desc)
+        
+        # Scrolled window for log viewer
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_min_content_height(160)
+        scrolled.set_min_content_width(420)
+        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolled.add_css_class("error-log-view")
+        
+        self.error_log_text = Gtk.TextView()
+        self.error_log_text.set_editable(False)
+        self.error_log_text.set_monospace(True)
+        self.error_log_text.set_wrap_mode(Gtk.WrapMode.WORD)
+        self.error_log_text.add_css_class("error-log-text")
+        
+        scrolled.set_child(self.error_log_text)
+        box.append(scrolled)
+        
+        nav_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        nav_box.set_halign(Gtk.Align.CENTER)
+        nav_box.set_margin_top(12)
+        
+        btn_back = Gtk.Button(label="Back to Disk Select")
+        btn_back.add_css_class("secondary-action")
+        btn_back.connect("clicked", lambda x: self.stack.set_visible_child_name("install_disk_select"))
+        nav_box.append(btn_back)
+        
+        btn_reboot = Gtk.Button(label="Restart System")
+        btn_reboot.add_css_class("suggested-action")
+        btn_reboot.connect("clicked", self.on_progress_cancel_clicked)
+        nav_box.append(btn_reboot)
+        
+        box.append(nav_box)
+        self.stack.add_named(box, "install_error")
+
     def on_progress_cancel_clicked(self, btn):
         if btn.get_label() == "Restart System":
             if "TEST_MODE" in os.environ:
@@ -1022,6 +1094,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
             
             if "TEST_MODE" in os.environ:
                 for progress_fraction in range(26, 81):
+                    if "SIMULATE_INSTALL_ERROR" in os.environ and progress_fraction >= 45:
+                        log_msg("ERROR: Simulated disk read/write error at sector 0x4f32a7b8.")
+                        log_msg("ERROR: System replication failed: failed to copy /usr/lib/libgtk-4.so.")
+                        raise Exception("Simulated disk read/write error: Sector 0x4f32a7b8 is corrupt. System replication failed to copy /usr/lib/libgtk-4.so.")
                     GLib.idle_add(
                         self.update_progress, 
                         progress_fraction / 100.0, 
@@ -1445,8 +1521,33 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
 
     def on_installation_failed(self, error):
         self.update_progress(0.0, "Installation failed.")
-        self.show_error_dialog(error)
-        self.stack.set_visible_child_name("install_disk_select")
+        
+        # Read the log file to display inside the textview
+        log_content = ""
+        log_file = "/tmp/pulsaros-install.log"
+        if os.path.exists(log_file):
+            try:
+                with open(log_file, "r") as f:
+                    log_content = f.read()
+            except Exception as e:
+                log_content = f"Could not read log file: {e}\n"
+        
+        if not log_content:
+            log_content = f"Error details:\n{error}"
+            
+        buffer = self.error_log_text.get_buffer()
+        buffer.set_text(log_content)
+        
+        # Scroll to the bottom of the log
+        GLib.idle_add(self._scroll_log_to_bottom)
+        
+        self.stack.set_visible_child_name("install_error")
+
+    def _scroll_log_to_bottom(self):
+        buffer = self.error_log_text.get_buffer()
+        mark = buffer.get_insert()
+        self.error_log_text.scroll_to_mark(mark, 0.0, True, 0.5, 1.0)
+        return False
 
     def on_guided_install_clicked(self, btn):
         if "TEST_MODE" in os.environ:
@@ -1460,26 +1561,6 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                 installer_cmd = ["sudo", "calamares", "-platform", "xcb"]
             subprocess.Popen(installer_cmd)
             self.close()
-
-    def show_error_dialog(self, message):
-        dialog = Gtk.MessageDialog(
-            transient_for=self,
-            flags=Gtk.DialogFlags.MODAL,
-            message_type=Gtk.MessageType.ERROR,
-            buttons=Gtk.ButtonsType.NONE,
-            text="Installation Error"
-        )
-        dialog.format_secondary_text(message)
-        dialog.add_button("OK", Gtk.ResponseType.OK)
-        dialog.add_button("View Log", Gtk.ResponseType.HELP)
-        
-        def on_response(d, response_id):
-            if response_id == Gtk.ResponseType.HELP:
-                subprocess.Popen(["xdg-open", "/tmp/pulsaros-install.log"])
-            d.destroy()
-            
-        dialog.connect("response", on_response)
-        dialog.present()
 
 
 class RecoveryApp(Adw.Application):
