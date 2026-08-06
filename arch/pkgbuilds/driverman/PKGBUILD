@@ -1,0 +1,32 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=driverman
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="GPU driver manager for Pulsar OS (Arch edition)"
+arch=('x86_64')
+url="https://inled.es"
+license=('custom')
+depends=('gcc-libs' 'pciutils' 'python-gobject' 'gtk3' 'polkit' 'hwdata')
+makedepends=('cmake')
+options=('!strip')
+
+prepare() {
+    _src="$(cd "$startdir"/../../../driverman && pwd)"
+    mkdir -p "$srcdir/staging"
+    cp -r "$_src"/* "$srcdir/staging/" 2>/dev/null || true
+    rm -rf "$srcdir/staging/DEBIAN" "$srcdir/staging/prepare-assets.sh" "$srcdir/staging/arch"
+}
+
+build() {
+    cmake -S "$srcdir/staging" -B "$srcdir/build" \
+        -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+    cmake --build "$srcdir/build" -j"$(nproc)"
+}
+
+package() {
+    cmake --install "$srcdir/build" --prefix "$pkgdir/usr"
+    install -Dm755 "$srcdir/staging/gui/driverman-gui.py" \
+        "$pkgdir/usr/bin/driverman-gui"
+    install -Dm644 "$srcdir/staging/usr/share/applications/driverman-gui.desktop" \
+        "$pkgdir/usr/share/applications/driverman-gui.desktop"
+}
