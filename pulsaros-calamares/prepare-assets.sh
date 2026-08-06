@@ -350,15 +350,10 @@ cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/shellprocess@refind.conf"
 dontChroot: false
 timeout: 120
 script:
-    - "echo '⚙️ Instalando rEFInd... / Installing rEFInd...'"
-    - "refind-install --yes"
-    - "echo '🎨 Instalando tema macOS para rEFInd... / Installing macOS theme...'"
-    - "mkdir -p /boot/efi/EFI/refind/themes"
-    - "rm -rf /boot/efi/EFI/refind/themes/rEFInd-Regular-Dark"
-    - "if [ -d /usr/share/refind/themes/rEFInd-Regular-Dark ]; then cp -r /usr/share/refind/themes/rEFInd-Regular-Dark /boot/efi/EFI/refind/themes/; fi"
-    - "REFIND_CONF=\"/boot/efi/EFI/refind/refind.conf\""
-    - "if [ -f \"\$REFIND_CONF\" ]; then sed -i 's/^#enable_mouse/enable_mouse/' \"\$REFIND_CONF\" && sed -i 's/^enable_mouse.*/enable_mouse/' \"\$REFIND_CONF\" && grep -q \"^enable_mouse\" \"\$REFIND_CONF\" || echo \"enable_mouse\" >> \"\$REFIND_CONF\"; grep -q \"themes/rEFInd-Regular-Dark/theme.conf\" \"\$REFIND_CONF\" || echo \"include themes/rEFInd-Regular-Dark/theme.conf\" >> \"\$REFIND_CONF\"; fi"
+    - "if [ -d /sys/firmware/efi ]; then echo '⚙️ Instalando rEFInd... / Installing rEFInd...' && (refind-install --yes || echo '⚠️ Advertencia: refind-install falló o reportó advertencias, pero continuamos...'); else echo '⚠️ Sistema en modo BIOS, omitiendo rEFInd.'; fi"
+    - "if [ -d /sys/firmware/efi ]; then echo '🎨 Instalando tema macOS para rEFInd... / Installing macOS theme...'; mkdir -p /boot/efi/EFI/refind/themes; rm -rf /boot/efi/EFI/refind/themes/rEFInd-Regular-Dark; if [ -d /usr/share/refind/themes/rEFInd-Regular-Dark ]; then cp -r /usr/share/refind/themes/rEFInd-Regular-Dark /boot/efi/EFI/refind/themes/; fi; REFIND_CONF=\"/boot/efi/EFI/refind/refind.conf\"; if [ -f \"\$REFIND_CONF\" ]; then sed -i 's/^#enable_mouse/enable_mouse/' \"\$REFIND_CONF\" && sed -i 's/^enable_mouse.*/enable_mouse/' \"\$REFIND_CONF\" && grep -q \"^enable_mouse\" \"\$REFIND_CONF\" || echo \"enable_mouse\" >> \"\$REFIND_CONF\"; grep -q \"themes/rEFInd-Regular-Dark/theme.conf\" \"\$REFIND_CONF\" || echo \"include themes/rEFInd-Regular-Dark/theme.conf\" >> \"\$REFIND_CONF\"; fi; fi"
 EOF
+
 
 
 # prefill module descriptor and script

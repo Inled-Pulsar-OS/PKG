@@ -160,6 +160,14 @@ if [ -f "$conf_file" ]; then
     fi
 fi
 
+# Ensure the two-step theme renders the last boot message below the animation.
+# Plymouth only shows messages when this key is enabled, and the splash log line
+# feature (initramfs -> 'plymouth message') depends on it.
+# Asegurar que el tema two-step muestre la última línea de log bajo la animación.
+if [ -f "$conf_file" ] && ! grep -q "^MessageBelowAnimation=true" "$conf_file"; then
+    echo "MessageBelowAnimation=true" >> "$conf_file"
+fi
+
 # Clean up temporary build directory if it was created
 # Limpiar el directorio temporal de compilación si fue creado
 if [ -d "$TEMP_BUILD" ]; then
