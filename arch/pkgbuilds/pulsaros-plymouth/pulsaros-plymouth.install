@@ -11,6 +11,41 @@ post_install() {
         if ! grep -q "plymouth" /etc/mkinitcpio.conf; then
             sed -i 's/^HOOKS=(\(.*\) block/HOOKS=(\1 plymouth block/' /etc/mkinitcpio.conf 2>/dev/null || true
         fi
+        # Forward initramfs boot messages to Plymouth so the splash always shows
+        # the last log line at the bottom of the screen (two-step theme renders
+        # it below the animation via MessageBelowAnimation=true).
+        # Reenviar los mensajes del initramfs a Plymouth para que el splash
+        # muestre siempre la última línea de log abajo (MessageBelowAnimation).
+        INITCPIO_FUNCTIONS="/usr/lib/initcpio/init_functions"
+        if [ -f "$INITCPIO_FUNCTIONS" ] && ! grep -q "plymouth message" "$INITCPIO_FUNCTIONS"; then
+            awk '
+                /^msg\(\) \{/ { inmsg=1 }
+                inmsg && /^}/ {
+                    print "    if command -v plymouth >/dev/null 2>&1 && plymouth --ping >/dev/null 2>&1; then"
+                    print "        plymouth message --text=\"${*#-n }\" >/dev/null 2>&1 || true"
+                    print "    fi"
+                    inmsg=0
+                }
+                { print }
+            ' "$INITCPIO_FUNCTIONS" > "$INITCPIO_FUNCTIONS.tmp" && mv "$INITCPIO_FUNCTIONS.tmp" "$INITCPIO_FUNCTIONS"
+        fi
+        # Clear the Plymouth message line right after the initramfs cleanup hooks,
+        # before switch_root, so the splash doesn't freeze showing the last
+        # initramfs message once message forwarding stops.
+        # Limpiar la línea de mensaje de Plymouth justo después de los cleanup
+        # hooks del initramfs, antes del switch_root, para que el splash no se
+        # quede congelado mostrando el último mensaje del initramfs.
+        INITCPIO_INIT="/usr/lib/initcpio/init"
+        if [ -f "$INITCPIO_INIT" ] && ! grep -q 'plymouth message --text=""' "$INITCPIO_INIT"; then
+            awk '
+                /^run_hookfunctions .run_cleanuphook. .cleanup hook. .CLEANUPHOOKS$/ {
+                    print
+                    print "command -v plymouth >/dev/null 2>&1 && plymouth message --text=\"\" >/dev/null 2>&1 || true"
+                    next
+                }
+                { print }
+            ' "$INITCPIO_INIT" > "$INITCPIO_INIT.tmp" && mv "$INITCPIO_INIT.tmp" "$INITCPIO_INIT"
+        fi
         mkinitcpio -P 2>/dev/null || true
     fi
 
