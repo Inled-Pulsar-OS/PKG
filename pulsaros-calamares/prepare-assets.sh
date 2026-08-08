@@ -339,6 +339,10 @@ dontChroot: false
 timeout: 30
 script:
     - "if [ -f /usr/share/applications/pulsaros-recovery.desktop ]; then sed -i 's/^Name=.*/Name=PulsarOS Recovery/' /usr/share/applications/pulsaros-recovery.desktop && sed -i 's/^Icon=.*/Icon=system-backup/' /usr/share/applications/pulsaros-recovery.desktop; fi"
+    - "rm -rf /usr/share/gnome-shell/extensions/places-menu@gnome-shell-extensions.gcampax.github.com"
+    - "rm -rf /usr/share/gnome-shell/extensions/window-list@gnome-shell-extensions.gcampax.github.com"
+    - "rm -rf /usr/share/gnome-shell/extensions/search-light@icedman.github.com"
+    - "dconf update || true"
 EOF
 
 
@@ -351,7 +355,7 @@ dontChroot: false
 timeout: 120
 script:
     - "if [ -d /sys/firmware/efi ]; then echo '⚙️ Instalando rEFInd... / Installing rEFInd...' && (refind-install --yes || echo '⚠️ Advertencia: refind-install falló o reportó advertencias, pero continuamos...'); else echo '⚠️ Sistema en modo BIOS, omitiendo rEFInd.'; fi"
-    - "if [ -d /sys/firmware/efi ]; then echo '🎨 Instalando tema macOS para rEFInd... / Installing macOS theme...'; mkdir -p /boot/efi/EFI/refind/themes; rm -rf /boot/efi/EFI/refind/themes/rEFInd-Regular-Dark; if [ -d /usr/share/refind/themes/rEFInd-Regular-Dark ]; then cp -r /usr/share/refind/themes/rEFInd-Regular-Dark /boot/efi/EFI/refind/themes/; fi; REFIND_CONF=\"/boot/efi/EFI/refind/refind.conf\"; if [ -f \"\$REFIND_CONF\" ]; then sed -i 's/^#enable_mouse/enable_mouse/' \"\$REFIND_CONF\" && sed -i 's/^enable_mouse.*/enable_mouse/' \"\$REFIND_CONF\" && grep -q \"^enable_mouse\" \"\$REFIND_CONF\" || echo \"enable_mouse\" >> \"\$REFIND_CONF\"; grep -q \"themes/rEFInd-Regular-Dark/theme.conf\" \"\$REFIND_CONF\" || echo \"include themes/rEFInd-Regular-Dark/theme.conf\" >> \"\$REFIND_CONF\"; fi; fi"
+    - "if [ -d /sys/firmware/efi ]; then echo '🎨 Instalando tema macOS para rEFInd... / Installing macOS theme...'; mkdir -p /boot/efi/EFI/refind/themes; rm -rf /boot/efi/EFI/refind/themes/rEFInd-Regular-Dark; if [ -d /usr/share/refind/themes/rEFInd-Regular-Dark ]; then cp -r /usr/share/refind/themes/rEFInd-Regular-Dark /boot/efi/EFI/refind/themes/; fi; if [ -f /boot/efi/EFI/refind/refind.conf ]; then sed -i 's/^#enable_mouse/enable_mouse/' /boot/efi/EFI/refind/refind.conf && sed -i 's/^enable_mouse.*/enable_mouse/' /boot/efi/EFI/refind/refind.conf && grep -q \"^enable_mouse\" /boot/efi/EFI/refind/refind.conf || echo \"enable_mouse\" >> /boot/efi/EFI/refind/refind.conf; grep -q \"themes/rEFInd-Regular-Dark/theme.conf\" /boot/efi/EFI/refind/refind.conf || echo \"include themes/rEFInd-Regular-Dark/theme.conf\" >> /boot/efi/EFI/refind/refind.conf; fi; fi"
 EOF
 
 
@@ -475,6 +479,7 @@ sequence:
   - removeuser@live
   - removeuser@jaime
   - bootloader
+  - shellprocess@refind
   - umount
 - show:
   - finished

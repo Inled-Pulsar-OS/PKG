@@ -157,15 +157,11 @@ const AboutDialog = GObject.registerClass({
 // --- Bloqueador de pantalla con tema Tahoe ---
 const LockScreen = GObject.registerClass({
     GTypeName: 'PulsarosLockScreen'
-}, class LockScreen extends St.BoxLayout {
+}, class LockScreen extends St.Widget {
     _init(extension) {
         super._init({
             name: 'pulsaros-lockscreen',
-            style_class: 'pulsaros-lockscreen-root',
             visible: false,
-            clip_to_allocation: true,
-            reactive: true,
-            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
             y_expand: true
         });
@@ -177,265 +173,338 @@ const LockScreen = GObject.registerClass({
         this._timerId = 0;
         this._sizeChangedId = 0;
         this._sizeChangedId2 = 0;
-        
-        // Dynamically reference extension path for background asset
-        // Referenciar dinámicamente la ruta de la extensión para el fondo de pantalla
-        this.style = `background-image: url("file://${this._extension.path}/background.webp"); background-size: cover;`;
-        
-        // Monitor screen size changes to remain fullscreen
-        // Monitorear cambios de resolución de pantalla para mantenerse en pantalla completa
+        this._monitorContainers = [];
+        this._clocks = [];
+        this._passwordEntry = null;
+
+        // Monitor screen size changes to remain fullscreen and handle multi-monitor layouts
         this._sizeChangedId = global.stage.connect('notify::width', () => this._onSizeChanged());
         this._sizeChangedId2 = global.stage.connect('notify::height', () => this._onSizeChanged());
-        this._onSizeChanged();
         
-        this._buildUI();
+        this._onSizeChanged();
     }
     
     _onSizeChanged() {
         this.set_position(0, 0);
         this.set_size(global.stage.width, global.stage.height);
+        
+        this._rebuildMonitors();
     }
-    
-    _buildUI() {
-        // 1. Top bar for power actions (Shutdown, Reboot)
-        // 1. Barra superior para acciones de energía (Apagar, Reiniciar)
-        let topBar = new St.BoxLayout({
-            style_class: 'pulsaros-lockscreen-topbar',
-            x_align: Clutter.ActorAlign.END,
-            y_align: Clutter.ActorAlign.START
-        });
-        this.add_child(topBar);
-        
-        // Reboot Button
-        // Botón de reiniciar
-        this._rebootBtn = new St.Button({
-            style_class: 'pulsaros-lockscreen-power-button',
-            reactive: true,
-            can_focus: true,
-            child: new St.Icon({
-                icon_name: 'system-restart-symbolic',
-                icon_size: 20
-            })
-        });
-        this._rebootBtn.connect('clicked', () => {
-            GLib.spawn_command_line_async("systemctl reboot");
-        });
-        topBar.add_child(this._rebootBtn);
-        
-        // Shutdown Button
-        // Botón de apagar
-        this._shutdownBtn = new St.Button({
-            style_class: 'pulsaros-lockscreen-power-button',
-            reactive: true,
-            can_focus: true,
-            child: new St.Icon({
-                icon_name: 'system-shutdown-symbolic',
-                icon_size: 20
-            })
-        });
-        this._shutdownBtn.connect('clicked', () => {
-            GLib.spawn_command_line_async("systemctl poweroff");
-        });
-        topBar.add_child(this._shutdownBtn);
-        
-        // Fixed top spacer to push clock down slightly (like macOS)
-        // Espaciador superior fijo para empujar el reloj un poco hacia abajo (como en macOS)
-        let spacer = new St.Widget({
-            style_class: 'pulsaros-lockscreen-spacer',
-            height: 60
-        });
-        this.add_child(spacer);
-        
-        // 2. Central Clock displays
-        // 2. Reloj central en pantalla
-        this._clockBox = new St.BoxLayout({
-            orientation: Clutter.Orientation.VERTICAL,
-            x_align: Clutter.ActorAlign.CENTER,
-            y_align: Clutter.ActorAlign.START,
-            style_class: 'pulsaros-lockscreen-clock-box'
-        });
-        this.add_child(this._clockBox);
-        
-        this._timeLabel = new St.Label({
-            style_class: 'pulsaros-lockscreen-time-label',
-            text: '00:00'
-        });
-        this._clockBox.add_child(this._timeLabel);
-        
-        this._dateLabel = new St.Label({
-            style_class: 'pulsaros-lockscreen-date-label',
-            text: ''
-        });
-        this._clockBox.add_child(this._dateLabel);
-        
-        // Middle spacer
-        // Espaciador medio
-        let middleSpacer = new St.Widget({
-            y_expand: true,
-            style_class: 'pulsaros-lockscreen-middle-spacer'
-        });
-        this.add_child(middleSpacer);
-        
-        // 3. User Credentials login card
-        // 3. Tarjeta de inicio de sesión de usuario
-        this._userCard = new St.BoxLayout({
-            orientation: Clutter.Orientation.VERTICAL,
-            x_align: Clutter.ActorAlign.CENTER,
-            y_align: Clutter.ActorAlign.END,
-            style_class: 'pulsaros-lockscreen-user-card'
-        });
-        this.add_child(this._userCard);
-        
-        // Circular Avatar
-        // Avatar circular
-        let username = GLib.get_user_name();
-        
-        this._avatarWidget = new St.Widget({
-            style_class: 'pulsaros-lockscreen-avatar',
-            x_align: Clutter.ActorAlign.CENTER
-        });
-        
-        try {
-            let avatarPath = `/var/lib/AccountsService/icons/${username}`;
-            let avatarFile = Gio.File.new_for_path(avatarPath);
-            
-            if (avatarFile.query_exists(null)) {
-                this._avatarWidget.style = `background-image: url("file://${avatarPath}"); background-size: cover; border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9);`;
-            } else {
-                let faceFile = Gio.File.new_for_path(GLib.get_home_dir() + '/.face');
-                if (faceFile.query_exists(null)) {
-                    this._avatarWidget.style = `background-image: url("file://${GLib.get_home_dir()}/.face"); background-size: cover; border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9);`;
-                } else {
-                    this._avatarWidget.style = `border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9); background-color: rgba(255, 255, 255, 0.15);`;
-                    let defaultIcon = new St.Icon({
-                        icon_name: 'avatar-default-symbolic',
-                        icon_size: 64,
-                        style_class: 'pulsaros-lockscreen-avatar-default',
-                        x_align: Clutter.ActorAlign.CENTER,
-                        y_align: Clutter.ActorAlign.CENTER
-                    });
-                    this._avatarWidget.add_child(defaultIcon);
-                }
+
+    _rebuildMonitors() {
+        // Destroy old containers
+        if (this._monitorContainers) {
+            for (let container of this._monitorContainers) {
+                container.destroy();
             }
-        } catch (e) {
-            console.error("[LockScreen] Failed to load avatar:", e);
-            // Default styling fallback / Alternativa de estilo por defecto
-            this._avatarWidget.style = `border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9); background-color: rgba(255, 255, 255, 0.15);`;
-            let defaultIcon = new St.Icon({
-                icon_name: 'avatar-default-symbolic',
-                icon_size: 64,
-                style_class: 'pulsaros-lockscreen-avatar-default',
-                x_align: Clutter.ActorAlign.CENTER,
-                y_align: Clutter.ActorAlign.CENTER
-            });
-            this._avatarWidget.add_child(defaultIcon);
         }
-        this._userCard.add_child(this._avatarWidget);
-        
-        // Display Name (Real Name or Username fallback)
-        // Nombre para mostrar (Nombre real o usuario como alternativa)
-        let realName = username;
-        try {
-            let gn = GLib.get_real_name();
-            if (gn && gn !== 'Unknown' && gn.trim() !== '') {
-                realName = gn;
+        this._monitorContainers = [];
+        this._clocks = [];
+        this._passwordEntry = null;
+
+        let monitors = Main.layoutManager.monitors;
+        let primaryMonitor = Main.layoutManager.primaryMonitor;
+
+        for (let i = 0; i < monitors.length; i++) {
+            let monitor = monitors[i];
+            let isPrimary = (monitor === primaryMonitor);
+
+            let container = new St.Widget({
+                name: `pulsaros-lockscreen-monitor-${i}`,
+                clip_to_allocation: true,
+                reactive: true
+            });
+
+            // Set individual wallpaper per screen
+            container.style = `background-image: url("file://${this._extension.path}/background.webp"); background-size: cover;`;
+            container.set_position(monitor.x, monitor.y);
+            container.set_size(monitor.width, monitor.height);
+
+            this.add_child(container);
+            this._monitorContainers.push(container);
+
+            this._buildMonitorUI(container, monitor, isPrimary);
+        }
+
+        // Live clock updates
+        this._updateClock();
+
+        if (this._isLocked) {
+            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                if (this._passwordEntry) {
+                    let activeText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText || this._passwordEntry;
+                    activeText.grab_key_focus();
+                }
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+    }
+
+    _buildMonitorUI(container, monitor, isPrimary) {
+        let contentLayout = new St.BoxLayout({
+            orientation: Clutter.Orientation.VERTICAL,
+            clip_to_allocation: true,
+            x_expand: true,
+            y_expand: true
+        });
+        contentLayout.set_size(monitor.width, monitor.height);
+        container.add_child(contentLayout);
+
+        // Click anywhere to focus password entry on primary monitor
+        container.connect('button-press-event', () => {
+            if (this._passwordEntry) {
+                let activeText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText || this._passwordEntry;
+                activeText.grab_key_focus();
             }
-        } catch (e) {
-            // ignore
-        }
-        realName = realName.charAt(0).toUpperCase() + realName.slice(1);
-        
-        this._nameLabel = new St.Label({
-            style_class: 'pulsaros-lockscreen-name-label',
-            x_align: Clutter.ActorAlign.CENTER,
-            text: realName
-        });
-        this._userCard.add_child(this._nameLabel);
-        
-        // Password Input Entry
-        // Entrada de contraseña
-        this._passwordEntry = new St.Entry({
-            style_class: 'pulsaros-lockscreen-entry',
-            x_align: Clutter.ActorAlign.CENTER,
-            hint_text: 'Enter Password',
-            can_focus: true,
-            reactive: true
-        });
-        
-        // Safe check and resolution for Clutter.Text inside St.Entry across GNOME versions
-        // Comprobación segura y resolución para Clutter.Text dentro de St.Entry en distintas versiones de GNOME
-        let clutterText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText;
-        if (!clutterText && typeof this._passwordEntry.get_clutter_text === 'function') {
-            clutterText = this._passwordEntry.get_clutter_text();
-        }
-        
-        if (clutterText) {
-            clutterText.set_password_char('●');
-            
-            // Trigger verification when pressing Enter
-            // Lanzar verificación al pulsar Enter
-            clutterText.connect('activate', () => {
-                let password = this._passwordEntry.get_text();
-                if (password && password.length > 0) {
-                    this._authenticate(password);
-                }
-            });
-            
-            // Reset text style upon typing
-            // Restablecer el estilo al escribir
-            clutterText.connect('text-changed', () => {
-                this._passwordEntry.style_class = 'pulsaros-lockscreen-entry';
-                this._passwordEntry.set_hint_text('Enter Password');
-            });
-            
-            // Clear text on Escape key
-            // Limpiar el texto al pulsar Escape
-            clutterText.connect('key-press-event', (actor, event) => {
-                let symbol = event.get_key_symbol();
-                if (symbol === Clutter.KEY_Escape) {
-                    this._passwordEntry.set_text('');
-                    return Clutter.EVENT_STOP;
-                }
-                return Clutter.EVENT_PROPAGATE;
-            });
-        }
-        
-        this._userCard.add_child(this._passwordEntry);
-        
-        // Grab keyboard focus on any background click (safely targeting actual Clutter.Text)
-        // Forzar foco en la entrada de contraseña al hacer clic en el fondo (apuntando con seguridad a Clutter.Text)
-        this.connect('button-press-event', () => {
-            let activeText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText || this._passwordEntry;
-            activeText.grab_key_focus();
             return Clutter.EVENT_PROPAGATE;
         });
-        
-        // Bottom spacer to offset card
-        // Espaciador inferior para compensar la tarjeta
-        let bottomSpacer = new St.Widget({
-            style_class: 'pulsaros-lockscreen-bottom-spacer',
-            height: 40
-        });
-        this.add_child(bottomSpacer);
+
+        if (isPrimary) {
+            // 1. Top bar for power actions (Shutdown, Reboot)
+            let topBar = new St.BoxLayout({
+                style_class: 'pulsaros-lockscreen-topbar',
+                x_align: Clutter.ActorAlign.END,
+                y_align: Clutter.ActorAlign.START
+            });
+            contentLayout.add_child(topBar);
+
+            let rebootBtn = new St.Button({
+                style_class: 'pulsaros-lockscreen-power-button',
+                reactive: true,
+                can_focus: true,
+                child: new St.Icon({
+                    icon_name: 'system-restart-symbolic',
+                    icon_size: 20
+                })
+            });
+            rebootBtn.connect('clicked', () => {
+                GLib.spawn_command_line_async("systemctl reboot");
+            });
+            topBar.add_child(rebootBtn);
+
+            let shutdownBtn = new St.Button({
+                style_class: 'pulsaros-lockscreen-power-button',
+                reactive: true,
+                can_focus: true,
+                child: new St.Icon({
+                    icon_name: 'system-shutdown-symbolic',
+                    icon_size: 20
+                })
+            });
+            shutdownBtn.connect('clicked', () => {
+                GLib.spawn_command_line_async("systemctl poweroff");
+            });
+            topBar.add_child(shutdownBtn);
+
+            let spacer = new St.Widget({
+                style_class: 'pulsaros-lockscreen-spacer',
+                height: 60
+            });
+            contentLayout.add_child(spacer);
+
+            // 2. Central Clock displays
+            let clockBox = new St.BoxLayout({
+                orientation: Clutter.Orientation.VERTICAL,
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.START,
+                style_class: 'pulsaros-lockscreen-clock-box'
+            });
+            contentLayout.add_child(clockBox);
+
+            let timeLabel = new St.Label({
+                style_class: 'pulsaros-lockscreen-time-label',
+                text: '00:00'
+            });
+            clockBox.add_child(timeLabel);
+
+            let dateLabel = new St.Label({
+                style_class: 'pulsaros-lockscreen-date-label',
+                text: ''
+            });
+            clockBox.add_child(dateLabel);
+
+            this._clocks.push({ timeLabel, dateLabel });
+
+            let middleSpacer = new St.Widget({
+                y_expand: true,
+                style_class: 'pulsaros-lockscreen-middle-spacer'
+            });
+            contentLayout.add_child(middleSpacer);
+
+            // 3. User Credentials login card
+            let userCard = new St.BoxLayout({
+                orientation: Clutter.Orientation.VERTICAL,
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.END,
+                style_class: 'pulsaros-lockscreen-user-card'
+            });
+            contentLayout.add_child(userCard);
+
+            let username = GLib.get_user_name();
+            let avatarWidget = new St.Widget({
+                style_class: 'pulsaros-lockscreen-avatar',
+                x_align: Clutter.ActorAlign.CENTER
+            });
+
+            try {
+                let avatarPath = `/var/lib/AccountsService/icons/${username}`;
+                let avatarFile = Gio.File.new_for_path(avatarPath);
+                if (avatarFile.query_exists(null)) {
+                    avatarWidget.style = `background-image: url("file://${avatarPath}"); background-size: cover; border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9);`;
+                } else {
+                    let faceFile = Gio.File.new_for_path(GLib.get_home_dir() + '/.face');
+                    if (faceFile.query_exists(null)) {
+                        avatarWidget.style = `background-image: url("file://${GLib.get_home_dir()}/.face"); background-size: cover; border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9);`;
+                    } else {
+                        avatarWidget.style = `border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9); background-color: rgba(255, 255, 255, 0.15);`;
+                        let defaultIcon = new St.Icon({
+                            icon_name: 'avatar-default-symbolic',
+                            icon_size: 64,
+                            style_class: 'pulsaros-lockscreen-avatar-default',
+                            x_align: Clutter.ActorAlign.CENTER,
+                            y_align: Clutter.ActorAlign.CENTER
+                        });
+                        avatarWidget.add_child(defaultIcon);
+                    }
+                }
+            } catch (e) {
+                console.error("[LockScreen] Failed to load avatar:", e);
+                avatarWidget.style = `border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9); background-color: rgba(255, 255, 255, 0.15);`;
+                let defaultIcon = new St.Icon({
+                    icon_name: 'avatar-default-symbolic',
+                    icon_size: 64,
+                    style_class: 'pulsaros-lockscreen-avatar-default',
+                    x_align: Clutter.ActorAlign.CENTER,
+                    y_align: Clutter.ActorAlign.CENTER
+                });
+                avatarWidget.add_child(defaultIcon);
+            }
+            userCard.add_child(avatarWidget);
+
+            let realName = username;
+            try {
+                let gn = GLib.get_real_name();
+                if (gn && gn !== 'Unknown' && gn.trim() !== '') {
+                    realName = gn;
+                }
+            } catch (e) {}
+            realName = realName.charAt(0).toUpperCase() + realName.slice(1);
+
+            let nameLabel = new St.Label({
+                style_class: 'pulsaros-lockscreen-name-label',
+                x_align: Clutter.ActorAlign.CENTER,
+                text: realName
+            });
+            userCard.add_child(nameLabel);
+
+            this._passwordEntry = new St.Entry({
+                style_class: 'pulsaros-lockscreen-entry',
+                x_align: Clutter.ActorAlign.CENTER,
+                hint_text: 'Enter Password',
+                can_focus: true,
+                reactive: true
+            });
+
+            let clutterText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText;
+            if (!clutterText && typeof this._passwordEntry.get_clutter_text === 'function') {
+                clutterText = this._passwordEntry.get_clutter_text();
+            }
+
+            if (clutterText) {
+                clutterText.set_password_char('●');
+                clutterText.connect('activate', () => {
+                    let password = this._passwordEntry.get_text();
+                    if (password && password.length > 0) {
+                        this._authenticate(password);
+                    }
+                });
+                clutterText.connect('text-changed', () => {
+                    this._passwordEntry.style_class = 'pulsaros-lockscreen-entry';
+                    this._passwordEntry.set_hint_text('Enter Password');
+                });
+                clutterText.connect('key-press-event', (actor, event) => {
+                    let symbol = event.get_key_symbol();
+                    if (symbol === Clutter.KEY_Escape) {
+                        this._passwordEntry.set_text('');
+                        return Clutter.EVENT_STOP;
+                    }
+                    return Clutter.EVENT_PROPAGATE;
+                });
+            }
+            userCard.add_child(this._passwordEntry);
+
+            let bottomSpacer = new St.Widget({
+                style_class: 'pulsaros-lockscreen-bottom-spacer',
+                height: 40
+            });
+            contentLayout.add_child(bottomSpacer);
+        } else {
+            // Secondary Monitor: Center a huge clock vertically and horizontally
+            let topSpacer = new St.Widget({
+                y_expand: true
+            });
+            contentLayout.add_child(topSpacer);
+
+            let clockBox = new St.BoxLayout({
+                orientation: Clutter.Orientation.VERTICAL,
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER,
+                style_class: 'pulsaros-lockscreen-clock-box'
+            });
+            contentLayout.add_child(clockBox);
+
+            let timeLabel = new St.Label({
+                style_class: 'pulsaros-lockscreen-time-label',
+                style: 'font-size: 140px; font-weight: bold; text-shadow: 0px 4px 15px rgba(0, 0, 0, 0.3); font-family: "SF Pro Display", "SF Pro Text", "Cantarell", sans-serif; color: #ffffff; text-align: center;',
+                text: '00:00'
+            });
+            clockBox.add_child(timeLabel);
+
+            let dateLabel = new St.Label({
+                style_class: 'pulsaros-lockscreen-date-label',
+                style: 'font-size: 28px; font-weight: 500; text-shadow: 0px 2px 10px rgba(0, 0, 0, 0.3); font-family: "SF Pro Text", "Cantarell", sans-serif; color: rgba(255, 255, 255, 0.85); text-align: center;',
+                text: ''
+            });
+            clockBox.add_child(dateLabel);
+
+            this._clocks.push({ timeLabel, dateLabel });
+
+            let bottomSpacer = new St.Widget({
+                y_expand: true
+            });
+            contentLayout.add_child(bottomSpacer);
+        }
     }
     
     _updateClock() {
         let now = GLib.DateTime.new_now_local();
-        this._timeLabel.set_text(now.format('%H:%M'));
-        this._dateLabel.set_text(now.format('%A, %B %d'));
+        let timeStr = now.format('%H:%M');
+        let dateStr = now.format('%A, %B %d');
+        
+        if (this._clocks) {
+            for (let clock of this._clocks) {
+                if (clock.timeLabel) {
+                    clock.timeLabel.set_text(timeStr);
+                }
+                if (clock.dateLabel) {
+                    clock.dateLabel.set_text(dateStr);
+                }
+            }
+        }
     }
     
     lock() {
         if (this._isLocked) return;
         this._isLocked = true;
         this.visible = true;
-        this._passwordEntry.set_text('');
-        this._passwordEntry.set_reactive(true);
-        this._passwordEntry.style_class = 'pulsaros-lockscreen-entry';
-        this._passwordEntry.set_hint_text('Enter Password');
+        
+        if (this._passwordEntry) {
+            this._passwordEntry.text = '';
+            this._passwordEntry.style_class = 'pulsaros-lockscreen-entry';
+        }
+        this._authenticating = false;
         
         // Put lockscreen overlay on the absolute top of the uiGroup stack
-        // Poner la pantalla de bloqueo en el tope absoluto del uiGroup
         try {
             let parent = this.get_parent();
             if (parent) {
@@ -451,7 +520,6 @@ const LockScreen = GObject.registerClass({
         }
         
         // Defer input grab and key focus to the next main loop cycle to guarantee the actor is mapped
-        // Diferir la captura de entrada y el foco de teclado al siguiente ciclo del bucle principal para garantizar que el actor esté mapeado
         GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
             if (!this._isLocked) return GLib.SOURCE_REMOVE;
             
@@ -462,13 +530,14 @@ const LockScreen = GObject.registerClass({
                 this._hasGrab = false;
             }
             
-            let activeText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText || this._passwordEntry;
-            activeText.grab_key_focus();
+            if (this._passwordEntry) {
+                let activeText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText || this._passwordEntry;
+                activeText.grab_key_focus();
+            }
             return GLib.SOURCE_REMOVE;
         });
         
         // Start live clock updates
-        // Iniciar actualizaciones en vivo del reloj
         this._updateClock();
         this._timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
             this._updateClock();
@@ -484,14 +553,12 @@ const LockScreen = GObject.registerClass({
         this.visible = false;
         
         // Release modal input grab
-        // Liberar la captura modal de entrada
         if (this._hasGrab) {
             Main.popModal(this);
             this._hasGrab = false;
         }
         
         // Clean clock timer
-        // Detener el temporizador del reloj
         if (this._timerId) {
             GLib.source_remove(this._timerId);
             this._timerId = 0;
@@ -502,13 +569,14 @@ const LockScreen = GObject.registerClass({
         if (this._authenticating) return;
         this._authenticating = true;
         
-        this._passwordEntry.set_reactive(false);
-        this._passwordEntry.style_class = 'pulsaros-lockscreen-entry-authenticating';
+        if (this._passwordEntry) {
+            this._passwordEntry.set_reactive(false);
+            this._passwordEntry.style_class = 'pulsaros-lockscreen-entry-authenticating';
+        }
         
         let username = GLib.get_user_name();
         
         // Check if the PAM service file is present. If not, fallback to developer passwords for local testing on host
-        // Comprobar si el archivo de servicio PAM existe. Si no, usar contraseñas de desarrollo para pruebas locales en el host
         let pamFile = Gio.File.new_for_path('/etc/pam.d/pulsaros-lock');
         if (!pamFile.query_exists(null)) {
             console.warn("[LockScreen] PAM service '/etc/pam.d/pulsaros-lock' is missing. Falling back to developer passwords.");
@@ -522,7 +590,6 @@ const LockScreen = GObject.registerClass({
         
         try {
             // Run pamtester asynchronously using stdin piping
-            // Ejecutar pamtester asíncronamente enviando la contraseña por stdin
             let proc = new Gio.Subprocess({
                 argv: ['/usr/bin/pamtester', 'pulsaros-lock', username, 'authenticate'],
                 flags: Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
@@ -552,8 +619,6 @@ const LockScreen = GObject.registerClass({
             });
         } catch (e) {
             console.error("[LockScreen] pamtester launch failed:", e);
-            // Local fallback for testing under host (without pamtester)
-            // Alternativa local para pruebas en el host (sin pamtester)
             if (password === 'pulsar' || password === 'live' || password === 'jaime') {
                 this._onAuthSuccess();
             } else {
@@ -569,26 +634,31 @@ const LockScreen = GObject.registerClass({
     
     _onAuthFailure() {
         this._authenticating = false;
-        this._passwordEntry.set_reactive(true);
-        this._passwordEntry.set_text('');
-        this._passwordEntry.set_hint_text('Incorrect Password');
-        this._passwordEntry.style_class = 'pulsaros-lockscreen-entry-failed';
-        this._passwordEntry.grab_key_focus();
-        
-        // Shake animation
-        // Animación de agitación de contraseña incorrecta
-        let originalX = this._passwordEntry.translation_x;
-        let shakeOffset = 10;
-        let step = 0;
-        let shakeInterval = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
-            if (step >= 6) {
-                this._passwordEntry.translation_x = originalX;
-                return GLib.SOURCE_REMOVE;
-            }
-            this._passwordEntry.translation_x = originalX + (step % 2 === 0 ? shakeOffset : -shakeOffset);
-            step++;
-            return GLib.SOURCE_CONTINUE;
-        });
+        if (this._passwordEntry) {
+            this._passwordEntry.set_reactive(true);
+            this._passwordEntry.set_text('');
+            this._passwordEntry.set_hint_text('Incorrect Password');
+            this._passwordEntry.style_class = 'pulsaros-lockscreen-entry-failed';
+            this._passwordEntry.grab_key_focus();
+            
+            // Shake animation
+            let originalX = this._passwordEntry.translation_x;
+            let shakeOffset = 10;
+            let step = 0;
+            let shakeInterval = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+                if (step >= 6) {
+                    if (this._passwordEntry) {
+                        this._passwordEntry.translation_x = originalX;
+                    }
+                    return GLib.SOURCE_REMOVE;
+                }
+                if (this._passwordEntry) {
+                    this._passwordEntry.translation_x = originalX + (step % 2 === 0 ? shakeOffset : -shakeOffset);
+                }
+                step++;
+                return GLib.SOURCE_CONTINUE;
+            });
+        }
     }
     
     destroy() {
@@ -607,6 +677,12 @@ const LockScreen = GObject.registerClass({
         if (this._isLocked && this._hasGrab) {
             Main.popModal(this);
         }
+        if (this._monitorContainers) {
+            for (let container of this._monitorContainers) {
+                container.destroy();
+            }
+        }
+        this._monitorContainers = [];
         super.destroy();
     }
 });
@@ -620,6 +696,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         this._origLock = null;
         this._origUnlock = null;
         this._activeAppWindow = null;
+        this._activeChangedId = 0;
         
         // Initialize the virtual keyboard device for injecting keystrokes (Wayland native)
         // Inicializar el dispositivo de teclado virtual para inyectar pulsaciones de tecla (nativo en Wayland)
@@ -724,6 +801,21 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         } catch (e) {
             console.error("[GlobalMenu] Failed to override Main.screenShield:", e);
         }
+
+        // Listen to native screenShield active status changes to unlock our overlay when the session is unlocked
+        try {
+            if (Main.screenShield) {
+                this._activeChangedId = Main.screenShield.connect('active-changed', () => {
+                    if (!Main.screenShield.active) {
+                        if (this._lockScreenOverlay) {
+                            this._lockScreenOverlay.unlock();
+                        }
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("[GlobalMenu] Failed to connect to active-changed signal:", e);
+        }
     }
     
     disable() {
@@ -781,6 +873,12 @@ export default class PulsarosGlobalMenuExtension extends Extension {
             }
         } catch (e) {
             // ignore
+        }
+
+        // Disconnect screenShield active-changed signal
+        if (Main.screenShield && this._activeChangedId) {
+            Main.screenShield.disconnect(this._activeChangedId);
+            this._activeChangedId = 0;
         }
         
         // Nullify the virtual keyboard device reference

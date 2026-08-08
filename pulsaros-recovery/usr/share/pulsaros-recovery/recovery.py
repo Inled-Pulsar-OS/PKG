@@ -539,8 +539,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
             heading="Install Pulsar OS",
             body="Choose the installation method you want to use for your computer."
         )
-        dialog.add_response("quick", "Quick Install (Recommended)")
-        dialog.add_response("guided", "Guided Install (Calamares)")
+        dialog.add_response("quick", "MacOS like UI (recommended)")
+        dialog.add_response("guided", "Dual boot and more reliable (calamares)")
         dialog.add_response("cancel", "Cancel")
         
         dialog.set_response_appearance("quick", Adw.ResponseAppearance.SUGGESTED)
