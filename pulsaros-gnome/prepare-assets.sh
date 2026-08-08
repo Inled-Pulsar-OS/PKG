@@ -93,7 +93,6 @@ EGO_EXTENSIONS=(
     "blur-my-shell@aunetx"
     "dash-to-dock@micxgx.gmail.com"
     "wiggle@mechtifs"
-    "search-light@icedman.github.com"
     "compiz-alike-magic-lamp-effect@hermes83.github.com"
     "fullscreen-to-empty-workspace2@corgijan.dev"
     "just-perfection-desktop@just-perfection"

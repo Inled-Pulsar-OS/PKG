@@ -59,6 +59,7 @@ Theme=pulsar-plymouth
 ShowDelay=0
 DeviceTimeout=8
 UseFirmwareBackground=false
+UseSimpledrm=false
 EOF
 
 # 3. Generar la marca de agua elegante "Based on Debian"
