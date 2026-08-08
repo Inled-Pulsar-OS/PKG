@@ -152,6 +152,10 @@ window {
     margin-top: 24px;
 }
 
+.page-dots {
+    margin-top: 2px;
+}
+
 .btn-nav {
     background-image: none;
     background-color: #ffffff;
@@ -404,7 +408,7 @@ class AssistantWindow(Gtk.Window):
 
         self.current_step = 0
         self.is_live = self.is_live_system()
-        self.steps_count = 13 if self.is_live else 12
+        self.steps_count = 14 if self.is_live else 13
         self.schema_source = self.load_custom_schemas()
 
         # Cargar estilos CSS personalizados de GTK
@@ -455,6 +459,14 @@ class AssistantWindow(Gtk.Window):
         nav_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         nav_bar.get_style_context().add_class("nav-bar")
         main_box.pack_end(nav_bar, False, False, 0)
+
+        # Indicador de página (puntos estilo Apple) centrado en la barra inferior
+        # English: Apple-style page indicator dots, centered on the bottom bar
+        self.dots_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        self.dots_box.set_halign(Gtk.Align.CENTER)
+        self.dots_box.set_hexpand(True)
+        self.dots_box.get_style_context().add_class("page-dots")
+        nav_bar.pack_start(self.dots_box, True, True, 0)
 
         self.btn_back = Gtk.Button(label="Back")
         self.btn_back.get_style_context().add_class("btn-nav")
@@ -580,44 +592,48 @@ class AssistantWindow(Gtk.Window):
             self.create_symbolic_icon("video-display-symbolic"), "icon1"
         )
         self.icon_stack.add_named(
-            self.create_symbolic_icon("bluetooth-symbolic"), "icon2"
-        )
-        self.icon_stack.add_named(self.create_symbolic_icon("phone-symbolic"), "icon3")
-        self.icon_stack.add_named(
-            self.create_symbolic_icon("media-removable-symbolic"), "icon4"
+            self.create_symbolic_icon("network-wireless-symbolic"), "icon2"
         )
         self.icon_stack.add_named(
-            self.create_image_icon("droidtux.png", "phone-symbolic"), "icon5"
+            self.create_symbolic_icon("bluetooth-symbolic"), "icon3"
+        )
+        self.icon_stack.add_named(self.create_symbolic_icon("phone-symbolic"), "icon4")
+        self.icon_stack.add_named(
+            self.create_symbolic_icon("media-removable-symbolic"), "icon5"
         )
         self.icon_stack.add_named(
-            self.create_image_icon("macboat.png", "computer-symbolic"), "icon6"
+            self.create_image_icon("droidtux.png", "phone-symbolic"), "icon6"
         )
         self.icon_stack.add_named(
-            self.create_image_icon("winboat.svg", "computer-symbolic"), "icon7"
+            self.create_image_icon("macboat.png", "computer-symbolic"), "icon7"
         )
         self.icon_stack.add_named(
-            self.create_symbolic_icon("system-software-install-symbolic"), "icon8"
+            self.create_image_icon("winboat.svg", "computer-symbolic"), "icon8"
         )
         self.icon_stack.add_named(
-            self.create_symbolic_icon("preferences-desktop-theme-symbolic"), "icon9"
+            self.create_symbolic_icon("system-software-install-symbolic"), "icon9"
         )
         self.icon_stack.add_named(
-            self.create_symbolic_icon("applications-system-symbolic"), "icon10"
+            self.create_symbolic_icon("preferences-desktop-theme-symbolic"), "icon10"
         )
         self.icon_stack.add_named(
-            self.create_symbolic_icon("help-browser-symbolic"), "icon11"
+            self.create_symbolic_icon("applications-system-symbolic"), "icon11"
+        )
+        self.icon_stack.add_named(
+            self.create_symbolic_icon("help-browser-symbolic"), "icon12"
         )
         if self.is_live:
             # English: Setup Recovery icon for the live recovery installation slide
             # Español: Configurar icono de Recovery para la diapositiva de recuperación en vivo
             self.icon_stack.add_named(
-                self.create_symbolic_icon("system-run-symbolic"), "icon12"
+                self.create_symbolic_icon("system-run-symbolic"), "icon13"
             )
 
     def init_slides(self):
         self.titles = [
             "Welcome to Pulsar OS",
             "Select Screen Resolution",
+            "Connect to Wi-Fi",
             "Set Up Bluetooth Connection",
             "Sync Mobile with GSConnect",
             "USB Debugging Setup",
@@ -680,10 +696,38 @@ class AssistantWindow(Gtk.Window):
         self.content_stack.add_named(slide_1, "slide1")
 
         # ----------------------------------------------------------------------
-        # Slide 2: Bluetooth Devices
+        # Slide 2: Wi-Fi Configuration
         # ----------------------------------------------------------------------
-        slide_2 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        slide_2.set_halign(Gtk.Align.CENTER)
+        slide_wifi = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        slide_wifi.set_halign(Gtk.Align.CENTER)
+
+        lbl_desc = Gtk.Label(
+            label="Connect to your Wi-Fi network to access online services, software updates, and app downloads. Pulsar OS uses NetworkManager, which manages wireless, Ethernet and mobile broadband connections automatically."
+        )
+        lbl_desc.get_style_context().add_class("desc-text")
+        lbl_desc.set_max_width_chars(65)
+        lbl_desc.set_line_wrap(True)
+        lbl_desc.set_justify(Gtk.Justification.CENTER)
+        slide_wifi.pack_start(lbl_desc, False, False, 10)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        btn_box.set_halign(Gtk.Align.CENTER)
+        slide_wifi.pack_start(btn_box, True, True, 10)
+
+        btn_wifi = Gtk.Button(label="Open Wi-Fi Settings")
+        btn_wifi.get_style_context().add_class("action-button")
+        btn_wifi.connect(
+            "clicked", lambda b: os.system("gnome-control-center wifi &")
+        )
+        btn_box.pack_start(btn_wifi, False, False, 0)
+
+        self.content_stack.add_named(slide_wifi, "slide2")
+
+        # ----------------------------------------------------------------------
+        # Slide 3: Bluetooth Devices
+        # ----------------------------------------------------------------------
+        slide_3 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        slide_3.set_halign(Gtk.Align.CENTER)
 
         lbl_desc = Gtk.Label(
             label="Connect wireless controllers, headphones, keyboards, or mice. Pulsar OS scans and listens for both Bluetooth Low Energy (BLE) and classic Bluetooth devices simultaneously for maximum hardware compatibility."
@@ -692,11 +736,11 @@ class AssistantWindow(Gtk.Window):
         lbl_desc.set_max_width_chars(65)
         lbl_desc.set_line_wrap(True)
         lbl_desc.set_justify(Gtk.Justification.CENTER)
-        slide_2.pack_start(lbl_desc, False, False, 10)
+        slide_3.pack_start(lbl_desc, False, False, 10)
 
         btn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         btn_box.set_halign(Gtk.Align.CENTER)
-        slide_2.pack_start(btn_box, True, True, 10)
+        slide_3.pack_start(btn_box, True, True, 10)
 
         btn_bluetooth = Gtk.Button(label="Configure Bluetooth Devices")
         btn_bluetooth.get_style_context().add_class("action-button")
@@ -705,13 +749,13 @@ class AssistantWindow(Gtk.Window):
         )
         btn_box.pack_start(btn_bluetooth, False, False, 0)
 
-        self.content_stack.add_named(slide_2, "slide2")
+        self.content_stack.add_named(slide_3, "slide3")
 
         # ----------------------------------------------------------------------
-        # Slide 3: GSConnect Screen
+        # Slide 4: GSConnect Screen
         # ----------------------------------------------------------------------
-        slide_3 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        slide_3.set_halign(Gtk.Align.CENTER)
+        slide_4 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        slide_4.set_halign(Gtk.Align.CENTER)
 
         lbl_desc = Gtk.Label(
             label="Link your Android or iOS device to share files, synchronize the clipboard, manage notifications, and control media features wirelessly. Keep both devices on the same Wi-Fi network."
@@ -720,11 +764,11 @@ class AssistantWindow(Gtk.Window):
         lbl_desc.set_max_width_chars(65)
         lbl_desc.set_line_wrap(True)
         lbl_desc.set_justify(Gtk.Justification.CENTER)
-        slide_3.pack_start(lbl_desc, False, False, 0)
+        slide_4.pack_start(lbl_desc, False, False, 0)
 
         layout_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=24)
         layout_box.set_halign(Gtk.Align.CENTER)
-        slide_3.pack_start(layout_box, True, True, 10)
+        slide_4.pack_start(layout_box, True, True, 10)
 
         col_left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         col_left.set_valign(Gtk.Align.CENTER)
@@ -775,42 +819,16 @@ class AssistantWindow(Gtk.Window):
         lbl_qr.get_style_context().add_class("qr-caption")
         col_right.pack_start(lbl_qr, False, False, 0)
 
-        self.content_stack.add_named(slide_3, "slide3")
-
-        # ----------------------------------------------------------------------
-        # Slide 4: USB Debugging Setup (ADB)
-        # ----------------------------------------------------------------------
-        slide_4 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        slide_4.set_halign(Gtk.Align.CENTER)
-
-        lbl_desc = Gtk.Label(
-            label="Enable USB debugging in your mobile device's developer options. This allows Pulsar OS to communicate with your phone via ADB so that the integration of Android apps as native apps works."
-        )
-        lbl_desc.get_style_context().add_class("desc-text")
-        lbl_desc.set_max_width_chars(65)
-        lbl_desc.set_line_wrap(True)
-        lbl_desc.set_justify(Gtk.Justification.CENTER)
-        slide_4.pack_start(lbl_desc, False, False, 10)
-
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        btn_box.set_halign(Gtk.Align.CENTER)
-        slide_4.pack_start(btn_box, True, True, 10)
-
-        btn_adb = Gtk.Button(label="Check Connected Devices (ADB)")
-        btn_adb.get_style_context().add_class("action-button")
-        btn_adb.connect("clicked", self.on_adb_check_clicked)
-        btn_box.pack_start(btn_adb, False, False, 0)
-
         self.content_stack.add_named(slide_4, "slide4")
 
         # ----------------------------------------------------------------------
-        # Slide 5: Phone Integration with Droidtux
+        # Slide 5: USB Debugging Setup (ADB)
         # ----------------------------------------------------------------------
         slide_5 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         slide_5.set_halign(Gtk.Align.CENTER)
 
         lbl_desc = Gtk.Label(
-            label="Connect your Android device to your computer via USB, and Droidtux will integrate your phone's applications as native Pulsar OS apps. It offers the same experience as a Googlebook."
+            label="Enable USB debugging in your mobile device's developer options. This allows Pulsar OS to communicate with your phone via ADB so that the integration of Android apps as native apps works."
         )
         lbl_desc.get_style_context().add_class("desc-text")
         lbl_desc.set_max_width_chars(65)
@@ -822,23 +840,21 @@ class AssistantWindow(Gtk.Window):
         btn_box.set_halign(Gtk.Align.CENTER)
         slide_5.pack_start(btn_box, True, True, 10)
 
-        btn_droidtux = Gtk.Button(label="Launch Droidtux Sync")
-        btn_droidtux.get_style_context().add_class("action-button")
-        btn_droidtux.connect(
-            "clicked", lambda b: self.launch_app("droidtux-sync", "scrcpy")
-        )
-        btn_box.pack_start(btn_droidtux, False, False, 0)
+        btn_adb = Gtk.Button(label="Check Connected Devices (ADB)")
+        btn_adb.get_style_context().add_class("action-button")
+        btn_adb.connect("clicked", self.on_adb_check_clicked)
+        btn_box.pack_start(btn_adb, False, False, 0)
 
         self.content_stack.add_named(slide_5, "slide5")
 
         # ----------------------------------------------------------------------
-        # Slide 6: Run macOS with Macboat
+        # Slide 6: Phone Integration with Droidtux
         # ----------------------------------------------------------------------
         slide_6 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         slide_6.set_halign(Gtk.Align.CENTER)
 
         lbl_desc = Gtk.Label(
-            label="PulsarOS comes with Macboat pre-installed, a powerful application that allows you to run macOS within Linux. macOS is downloaded from Apple's official recovery servers. Please read the macOS EULA before using Macboat and accept the terms."
+            label="Connect your Android device to your computer via USB, and Droidtux will integrate your phone's applications as native Pulsar OS apps. It offers the same experience as a Googlebook."
         )
         lbl_desc.get_style_context().add_class("desc-text")
         lbl_desc.set_max_width_chars(65)
@@ -850,21 +866,23 @@ class AssistantWindow(Gtk.Window):
         btn_box.set_halign(Gtk.Align.CENTER)
         slide_6.pack_start(btn_box, True, True, 10)
 
-        btn_macboat = Gtk.Button(label="Launch Macboat Setup")
-        btn_macboat.get_style_context().add_class("action-button")
-        btn_macboat.connect("clicked", lambda b: self.launch_app("macboat"))
-        btn_box.pack_start(btn_macboat, False, False, 0)
+        btn_droidtux = Gtk.Button(label="Launch Droidtux Sync")
+        btn_droidtux.get_style_context().add_class("action-button")
+        btn_droidtux.connect(
+            "clicked", lambda b: self.launch_app("droidtux-sync", "scrcpy")
+        )
+        btn_box.pack_start(btn_droidtux, False, False, 0)
 
         self.content_stack.add_named(slide_6, "slide6")
 
         # ----------------------------------------------------------------------
-        # Slide 7: Run Windows Apps with Winboat
+        # Slide 7: Run macOS with Macboat
         # ----------------------------------------------------------------------
         slide_7 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         slide_7.set_halign(Gtk.Align.CENTER)
 
         lbl_desc = Gtk.Label(
-            label="PulsarOS can run Windows apps without compatibility issues because it comes with Winboat built-in by default; this powerful application virtualizes Windows and integrates Windows apps as native Linux applications, ensuring a seamless experience."
+            label="PulsarOS comes with Macboat pre-installed, a powerful application that allows you to run macOS within Linux. macOS is downloaded from Apple's official recovery servers. Please read the macOS EULA before using Macboat and accept the terms."
         )
         lbl_desc.get_style_context().add_class("desc-text")
         lbl_desc.set_max_width_chars(65)
@@ -875,6 +893,32 @@ class AssistantWindow(Gtk.Window):
         btn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         btn_box.set_halign(Gtk.Align.CENTER)
         slide_7.pack_start(btn_box, True, True, 10)
+
+        btn_macboat = Gtk.Button(label="Launch Macboat Setup")
+        btn_macboat.get_style_context().add_class("action-button")
+        btn_macboat.connect("clicked", lambda b: self.launch_app("macboat"))
+        btn_box.pack_start(btn_macboat, False, False, 0)
+
+        self.content_stack.add_named(slide_7, "slide7")
+
+        # ----------------------------------------------------------------------
+        # Slide 8: Run Windows Apps with Winboat
+        # ----------------------------------------------------------------------
+        slide_8 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        slide_8.set_halign(Gtk.Align.CENTER)
+
+        lbl_desc = Gtk.Label(
+            label="PulsarOS can run Windows apps without compatibility issues because it comes with Winboat built-in by default; this powerful application virtualizes Windows and integrates Windows apps as native Linux applications, ensuring a seamless experience."
+        )
+        lbl_desc.get_style_context().add_class("desc-text")
+        lbl_desc.set_max_width_chars(65)
+        lbl_desc.set_line_wrap(True)
+        lbl_desc.set_justify(Gtk.Justification.CENTER)
+        slide_8.pack_start(lbl_desc, False, False, 10)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        btn_box.set_halign(Gtk.Align.CENTER)
+        slide_8.pack_start(btn_box, True, True, 10)
 
         btn_winboat = Gtk.Button(label="Launch Winboat Setup")
         btn_winboat.get_style_context().add_class("action-button")
@@ -890,13 +934,13 @@ class AssistantWindow(Gtk.Window):
         )
         btn_box.pack_start(btn_winboat, False, False, 0)
 
-        self.content_stack.add_named(slide_7, "slide7")
+        self.content_stack.add_named(slide_8, "slide8")
 
         # ----------------------------------------------------------------------
-        # Slide 8: Installing Applications (New!)
+        # Slide 9: Installing Applications (New!)
         # ----------------------------------------------------------------------
-        slide_8 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        slide_8.set_halign(Gtk.Align.CENTER)
+        slide_9 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        slide_9.set_halign(Gtk.Align.CENTER)
 
         lbl_desc = Gtk.Label(
             label="Pulsar OS Software Center allows you to easily install Linux applications from both the official repositories and Flathub. Additionally, if you need other software, you can download standard .deb installation files (which act similarly to macOS .pkg or .dmg packages) from your web browser and install them by simply double-clicking on them."
@@ -905,24 +949,24 @@ class AssistantWindow(Gtk.Window):
         lbl_desc.set_max_width_chars(65)
         lbl_desc.set_line_wrap(True)
         lbl_desc.set_justify(Gtk.Justification.CENTER)
-        slide_8.pack_start(lbl_desc, False, False, 10)
+        slide_9.pack_start(lbl_desc, False, False, 10)
 
         btn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         btn_box.set_halign(Gtk.Align.CENTER)
-        slide_8.pack_start(btn_box, True, True, 10)
+        slide_9.pack_start(btn_box, True, True, 10)
 
         btn_software = Gtk.Button(label="Open Software Center")
         btn_software.get_style_context().add_class("action-button")
         btn_software.connect("clicked", lambda b: self.launch_app("appinstall"))
         btn_box.pack_start(btn_software, False, False, 0)
 
-        self.content_stack.add_named(slide_8, "slide8")
+        self.content_stack.add_named(slide_9, "slide9")
 
         # ----------------------------------------------------------------------
-        # Slide 9: Desktop Special Effects (Liquid Glass vs Blur)
+        # Slide 10: Desktop Special Effects (Liquid Glass vs Blur)
         # ----------------------------------------------------------------------
-        slide_9 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        slide_9.set_halign(Gtk.Align.CENTER)
+        slide_10 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        slide_10.set_halign(Gtk.Align.CENTER)
 
         lbl_desc = Gtk.Label(
             label='Choose the desktop effect you like best. The basic "blur-my-shell" effect is perfect for older computers or those with mid-range hardware. The "Liquid Glass" effect consumes more resources because it is complex to render, but if you have a powerful computer, you will certainly enjoy it.'
@@ -931,12 +975,12 @@ class AssistantWindow(Gtk.Window):
         lbl_desc.set_max_width_chars(65)
         lbl_desc.set_line_wrap(True)
         lbl_desc.set_justify(Gtk.Justification.CENTER)
-        slide_9.pack_start(lbl_desc, False, False, 10)
+        slide_10.pack_start(lbl_desc, False, False, 10)
 
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         card.get_style_context().add_class("central-card")
         card.set_halign(Gtk.Align.CENTER)
-        slide_9.pack_start(card, True, True, 0)
+        slide_10.pack_start(card, True, True, 0)
 
         self.radio_blur = Gtk.RadioButton.new_with_label_from_widget(
             None, "Enable Blur my Shell (Standard performance - Recommended)"
@@ -965,13 +1009,13 @@ class AssistantWindow(Gtk.Window):
         else:
             self.radio_blur.set_active(True)
 
-        self.content_stack.add_named(slide_9, "slide9")
+        self.content_stack.add_named(slide_10, "slide10")
 
         # ----------------------------------------------------------------------
-        # Slide 10: GPU Driver Manager (driverman)
+        # Slide 11: GPU Driver Manager (driverman)
         # ----------------------------------------------------------------------
-        slide_10 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        slide_10.set_halign(Gtk.Align.CENTER)
+        slide_11 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        slide_11.set_halign(Gtk.Align.CENTER)
 
         lbl_desc_10 = Gtk.Label(
             label="Pulsar OS detects your GPU automatically and recommends the best open-source or proprietary driver for it. Use Driver Manager to install, switch, or remove GPU drivers. Package conflicts can be resolved directly from the app."
@@ -980,11 +1024,11 @@ class AssistantWindow(Gtk.Window):
         lbl_desc_10.set_max_width_chars(65)
         lbl_desc_10.set_line_wrap(True)
         lbl_desc_10.set_justify(Gtk.Justification.CENTER)
-        slide_10.pack_start(lbl_desc_10, False, False, 10)
+        slide_11.pack_start(lbl_desc_10, False, False, 10)
 
         btn_box_10 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         btn_box_10.set_halign(Gtk.Align.CENTER)
-        slide_10.pack_start(btn_box_10, True, True, 10)
+        slide_11.pack_start(btn_box_10, True, True, 10)
 
         btn_drivers = Gtk.Button(label="Open Driver Manager / Abrir Gestor de Controladores")
         btn_drivers.get_style_context().add_class("action-button")
@@ -994,13 +1038,13 @@ class AssistantWindow(Gtk.Window):
         )
         btn_box_10.pack_start(btn_drivers, False, False, 0)
 
-        self.content_stack.add_named(slide_10, "slide10")
+        self.content_stack.add_named(slide_11, "slide11")
 
         # ----------------------------------------------------------------------
-        # Slide 11: Support Channel
+        # Slide 12: Support Channel
         # ----------------------------------------------------------------------
-        slide_11 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        slide_11.set_halign(Gtk.Align.CENTER)
+        slide_12 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        slide_12.set_halign(Gtk.Align.CENTER)
 
         lbl_desc_11 = Gtk.Label(
             label="Pulsar OS is in active development. Help us improve stability by reporting installation bugs, hardware issues or user interface feedback directly to our official issue tracker on GitHub."
@@ -1009,13 +1053,13 @@ class AssistantWindow(Gtk.Window):
         lbl_desc_11.set_max_width_chars(65)
         lbl_desc_11.set_line_wrap(True)
         lbl_desc_11.set_justify(Gtk.Justification.CENTER)
-        slide_11.pack_start(lbl_desc_11, False, False, 10)
+        slide_12.pack_start(lbl_desc_11, False, False, 10)
 
         # English: Container for the support buttons with a clean vertical layout and 8px spacing
         # Español: Contenedor para los botones de soporte con un diseño vertical limpio y espaciado de 8px
         btn_box_11 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         btn_box_11.set_halign(Gtk.Align.CENTER)
-        slide_11.pack_start(btn_box_11, True, True, 10)
+        slide_12.pack_start(btn_box_11, True, True, 10)
 
         # English: Button to open GitHub issues page
         # Español: Botón para abrir la página de incidencias en GitHub
@@ -1065,14 +1109,14 @@ class AssistantWindow(Gtk.Window):
         )
         btn_box_11.pack_start(btn_discord_11, False, False, 0)
 
-        self.content_stack.add_named(slide_11, "slide11")
+        self.content_stack.add_named(slide_12, "slide12")
 
         # ----------------------------------------------------------------------
-        # Slide 12: Pulsar OS Recovery (Only in Live System / Solo en Sistema Live)
+        # Slide 13: Pulsar OS Recovery (Only in Live System / Solo en Sistema Live)
         # ----------------------------------------------------------------------
         if self.is_live:
-            slide_12 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-            slide_12.set_halign(Gtk.Align.CENTER)
+            slide_13 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+            slide_13.set_halign(Gtk.Align.CENTER)
 
             lbl_desc_12 = Gtk.Label(
                 label="Pulsar OS is currently running in a Live Session. You can start the system installation on your computer or launch the backup recovery, browser or disk partitioner."
@@ -1081,11 +1125,11 @@ class AssistantWindow(Gtk.Window):
             lbl_desc_12.set_max_width_chars(65)
             lbl_desc_12.set_line_wrap(True)
             lbl_desc_12.set_justify(Gtk.Justification.CENTER)
-            slide_12.pack_start(lbl_desc_12, False, False, 10)
+            slide_13.pack_start(lbl_desc_12, False, False, 10)
 
             btn_box_12 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
             btn_box_12.set_halign(Gtk.Align.CENTER)
-            slide_12.pack_start(btn_box_12, True, True, 10)
+            slide_13.pack_start(btn_box_12, True, True, 10)
 
             # English: Create button to launch recovery installer
             # Español: Crear botón para lanzar el instalador recovery
@@ -1096,7 +1140,7 @@ class AssistantWindow(Gtk.Window):
             )
             btn_box_12.pack_start(btn_recovery, False, False, 0)
 
-            self.content_stack.add_named(slide_12, "slide12")
+            self.content_stack.add_named(slide_13, "slide13")
 
     def on_back_clicked(self, button):
         if self.current_step > 0:
@@ -1115,6 +1159,26 @@ class AssistantWindow(Gtk.Window):
                 f.write("done")
             Gtk.main_quit()
 
+    def update_dots(self):
+        """
+        English: Rebuilds the Apple-style page indicator dots below the content,
+                 highlighting the current step in Apple blue.
+        Español: Reconstruye los puntos indicadores de página estilo Apple,
+                 resaltando la diapositiva actual en azul Apple.
+        """
+        for child in self.dots_box.get_children():
+            self.dots_box.remove(child)
+
+        for i in range(self.steps_count):
+            dot = Gtk.Label()
+            if i == self.current_step:
+                dot.set_markup("<span size='13000' foreground='#0066cc'>●</span>")
+            else:
+                dot.set_markup("<span size='9000' foreground='#c7c7cc'>●</span>")
+            self.dots_box.pack_start(dot, False, False, 0)
+
+        self.dots_box.show_all()
+
     def update_ui(self):
         # Cambiar icono
         self.icon_stack.set_visible_child_name(f"icon{self.current_step}")
@@ -1124,6 +1188,9 @@ class AssistantWindow(Gtk.Window):
 
         # Cambiar slide
         self.content_stack.set_visible_child_name(f"slide{self.current_step}")
+
+        # Actualizar indicador de página
+        self.update_dots()
 
         # Configurar botones
         if self.current_step == 0:
