@@ -240,6 +240,19 @@ cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/prefill.conf"
 ---
 EOF
 
+# grubcfg.conf
+cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/grubcfg.conf"
+---
+keep: true
+defaults:
+  GRUB_TIMEOUT: 5
+  GRUB_DEFAULT: 0
+  GRUB_DISABLE_SUBMENU: y
+  GRUB_CMDLINE_LINUX_DEFAULT: "quiet splash plymouth.use-simpledrm=1"
+  GRUB_CMDLINE_LINUX: ""
+  GRUB_GFXMODE: "1920x1080,1280x720,1024x768,auto"
+EOF
+
 # welcome.conf
 cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/welcome.conf"
 ---
@@ -477,7 +490,6 @@ sequence:
   - shellprocess@recovery
   - grubcfg
   - removeuser@live
-  - removeuser@jaime
   - bootloader
   - shellprocess@refind
   - umount

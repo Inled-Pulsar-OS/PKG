@@ -58,4 +58,10 @@ if command -v update-initramfs >/dev/null; then
     update-initramfs -u -k all || update-initramfs -u
 fi
 
+# Actualizar el gestor de arranque GRUB para aplicar cambios de splash
+if command -v update-grub >/dev/null; then
+    echo "🔄 Actualizando GRUB..."
+    update-grub || true
+fi
+
 exit 0

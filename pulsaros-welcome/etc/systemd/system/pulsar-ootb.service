@@ -6,7 +6,7 @@ After=local-fs.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'touch /etc/pulsar-need-setup && echo "live ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/pulsar-ootb-live && chmod 0440 /etc/sudoers.d/pulsar-ootb-live'
+ExecStart=/bin/bash -c 'if ! awk -F: '\''$3 >= 1000 && $3 != 65534 && $1 != "live" {print $1}'\'' /etc/passwd | grep -q .; then touch /etc/pulsar-need-setup && echo "live ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/pulsar-ootb-live && chmod 0440 /etc/sudoers.d/pulsar-ootb-live; fi'
 RemainAfterExit=yes
 TimeoutStartSec=30
 

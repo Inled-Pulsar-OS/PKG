@@ -5,12 +5,13 @@ set -e
 # Reemplaza logotipos de distribuidor de Debian con el logotipo oficial de Pulsar OS
 
 PULSAR_LOGO="/usr/share/icons/pulsar-logo.png"
+PULSAR_LOGO_SMALL="/usr/share/icons/pulsar-logo-small.png"
 
-# Reemplazar vendor-logos y logos de desktop-base por el logo de Pulsar
+# Reemplazar vendor-logos y logos de desktop-base por el logo de Pulsar (versión pequeña para evitar Plymouth gigante)
 for dir in "/usr/share/images/vendor-logos" "/usr/share/desktop-base/debian-logos"; do
-    if [ -d "$dir" ] && [ -f "$PULSAR_LOGO" ]; then
+    if [ -d "$dir" ] && [ -f "$PULSAR_LOGO_SMALL" ]; then
         find "$dir" -type f \( -name "*.png" -o -name "*.svg" \) 2>/dev/null | while read -r path; do
-            cp "$PULSAR_LOGO" "$path"
+            cp "$PULSAR_LOGO_SMALL" "$path"
         done
     fi
 done
