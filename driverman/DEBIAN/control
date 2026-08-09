@@ -1,10 +1,10 @@
 Package: driverman
-Version: 1.0.1
+Version: 1.0.3
 Section: utils
 Priority: optional
 Architecture: amd64
 Maintainer: Jaime <info@inled.es>
-Depends: libc6, libstdc++6, pciutils, hwdata, python3, python3-gi, gir1.2-gtk-3.0, policykit-1, x-terminal-emulator
+Depends: libc6, libstdc++6, pciutils, hwdata, python3, python3-gi, gir1.2-gtk-3.0, polkitd, pkexec, x-terminal-emulator
 Description: GPU driver manager for Pulsar OS.
  Detects the installed GPU and manages its driver packages through apt-get,
  with a CLI (driverman) and a dark GTK front-end (driverman-gui). If a
