@@ -99,6 +99,7 @@ EGO_EXTENSIONS=(
     "notification-position@drugo.dev"
     "no-overview@fthx"
     "ding@rastersoft.com"
+    "gsconnect@andyholmes.github.io"
 )
 
 echo "🧩 Descargando extensiones de GNOME Shell desde Extensions.gnome.org (EGO)..."
@@ -210,6 +211,11 @@ find "$STAGE_DIR/usr/share/glib-2.0/schemas" -type f -exec chmod 644 {} \; 2>/de
 # La extensión DING necesita que su script de proceso en segundo plano sea ejecutable
 if [ -f "$STAGE_DIR/usr/share/gnome-shell/extensions/ding@rastersoft.com/app/ding.js" ]; then
     chmod 755 "$STAGE_DIR/usr/share/gnome-shell/extensions/ding@rastersoft.com/app/ding.js"
+fi
+
+# GSConnect service scripts
+if [ -d "$STAGE_DIR/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/service" ]; then
+    find "$STAGE_DIR/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/service" -name "*.js" -exec chmod 755 {} \; 2>/dev/null || true
 fi
 
 # Ensure executable permissions for the hide-overview script

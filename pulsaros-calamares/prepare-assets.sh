@@ -513,7 +513,37 @@ cat <<'EOF' > "$STAGE_DIR/usr/local/bin/launch-calamares"
 xhost +local:root > /dev/null 2>&1 || true
 # Forzar a Qt a usar XWayland/X11 para evitar fallos de conexión gráfica como root en Wayland
 # Force Qt to use X11/XWayland to avoid graphical connection failures as root under Wayland
-export QT_QPA_PLATFORM=xcb
+# Dynamically discover squashfs mount point and configure unpackfs.conf
+SFS_PATH=""
+for p in \
+    "/run/archiso/copytoram/airootfs.sfs" \
+    "/run/archiso/bootmnt/live/x86_64/airootfs.sfs" \
+    "/run/archiso/bootmnt/live/airootfs.sfs" \
+    "/run/archiso/bootmnt/airootfs.sfs" \
+    "/run/archiso/airootfs.sfs" \
+    "/lib/live/mount/medium/live/filesystem.squashfs" \
+    "/run/live/medium/live/filesystem.squashfs"; do
+    if [ -f "$p" ]; then
+        SFS_PATH="$p"
+        break
+    fi
+done
+
+if [ -z "$SFS_PATH" ]; then
+    SFS_PATH=$(find /run/archiso /run/live /lib/live /media /mnt -name "*airootfs.sfs" -o -name "*filesystem.squashfs" 2>/dev/null | head -n 1)
+fi
+
+if [ -n "$SFS_PATH" ] && [ -f "$SFS_PATH" ]; then
+    mkdir -p /etc/calamares/modules
+    cat <<END_CONF > /etc/calamares/modules/unpackfs.conf
+---
+unpack:
+    - source: "$SFS_PATH"
+      sourcefs: "squashfs"
+      destination: ""
+END_CONF
+fi
+
 # Lanzar calamares usando pkexec o sudo env en su defecto
 # Launch calamares using pkexec or sudo env as fallback
 if command -v pkexec >/dev/null 2>&1; then

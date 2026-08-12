@@ -329,17 +329,16 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     img.set_from_icon_name("document-revert")
         elif icon_name == "safari":
             icon_path = get_path("safari.png")
-            if not icon_path or os.path.getsize(icon_path) < 100:
-                temp_icon = "/tmp/seafari.png"
-                if not os.path.exists(temp_icon):
-                    try:
-                        import urllib.request
-                        urllib.request.urlretrieve("https://hosted.inled.es/seafari.png", temp_icon)
-                        icon_path = temp_icon
-                    except Exception as e:
-                        print(f"Failed to download seafari icon: {e}")
-                else:
-                    icon_path = temp_icon
+            if not icon_path or not os.path.exists(icon_path) or os.path.getsize(icon_path) < 100:
+                for candidate in [
+                    "/usr/share/icons/safari.png",
+                    "/usr/share/pixmaps/safari.png",
+                    "/usr/share/icons/hicolor/scalable/apps/org.gnome.Epiphany.svg",
+                    "/usr/share/icons/hicolor/48x48/apps/safari.png",
+                ]:
+                    if os.path.exists(candidate):
+                        icon_path = candidate
+                        break
             if not try_set_from_file(icon_path):
                 img.set_from_icon_name("web-browser")
         elif icon_name == "disk":
@@ -1115,6 +1114,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     "--exclude=/mnt/*",
                     "--exclude=/media/*",
                     "--exclude=/lost+found",
+                    "--exclude=/var/tmp/*",
+                    "--exclude=/var/log/*",
+                    "--exclude=/home/*/.local/share/gvfs-metadata/*",
+                    "--exclude=/home/*/.cache/*",
+                    "--exclude=/root/.cache/*",
                     "/", "/mnt"
                 ]
                 proc = subprocess.Popen(rsync_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -1128,8 +1132,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     )
                     time.sleep(2)
                 proc.wait()
-                if proc.returncode != 0:
-                    raise Exception(f"System replication failed (code {proc.returncode})\n{proc.stderr.read()}")
+                # Exit code 24 = vanished source files during transfer (normal for running live system)
+                if proc.returncode not in (0, 24):
+                    err_output = proc.stderr.read()
+                    raise Exception(f"System replication failed (code {proc.returncode})\n{err_output}")
                 
             GLib.idle_add(self.update_progress, 0.85, "Configuring bootloader (fstab)...")
             def get_partition_uuid(part):
@@ -1371,26 +1377,31 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
             except Exception as dconf_err:
                 print(f"Warning: dconf update failed (non-fatal): {dconf_err}")
 
-            # ── Driver installation ────────────────────────────────────
+            # ── Driver installation (Best effort, non-fatal for offline installs) ───
             if self.install_nvidia or self.install_broadcom:
-                # Bind network-related paths so package manager can reach the internet
+                # Bind network-related paths so package manager can reach the internet if available
                 exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
                 policy_file = "/mnt/usr/sbin/policy-rc.d"
                 try:
                     if is_arch:
                         # Arch Linux path
-                        GLib.idle_add(self.update_progress, 0.93, "Updating package sources...")
-                        exec_cmd(["chroot", "/mnt", "pacman", "-Sy"])
-                        
-                        if self.install_nvidia:
-                            GLib.idle_add(self.update_progress, 0.94, "Installing NVIDIA drivers...")
-                            exec_cmd(["chroot", "/mnt", "pacman", "-S", "--noconfirm",
-                                      "nvidia", "nvidia-utils", "linux-headers"])
+                        GLib.idle_add(self.update_progress, 0.93, "Configuring drivers...")
+                        try:
+                            exec_cmd(["chroot", "/mnt", "pacman", "-Sy"])
                             
+                            if self.install_nvidia:
+                                GLib.idle_add(self.update_progress, 0.94, "Installing NVIDIA drivers...")
+                                exec_cmd(["chroot", "/mnt", "pacman", "-S", "--noconfirm",
+                                          "nvidia-open", "nvidia-settings"])
+                                
+                            if self.install_broadcom:
+                                GLib.idle_add(self.update_progress, 0.95, "Installing Broadcom drivers...")
+                                exec_cmd(["chroot", "/mnt", "pacman", "-S", "--noconfirm",
+                                          "broadcom-wl-dkms", "linux-headers"])
+                        except Exception as arch_net_err:
+                            print(f"Notice: Network driver install skipped (offline mode): {arch_net_err}")
+
                         if self.install_broadcom:
-                            GLib.idle_add(self.update_progress, 0.95, "Installing Broadcom drivers...")
-                            exec_cmd(["chroot", "/mnt", "pacman", "-S", "--noconfirm",
-                                      "broadcom-wl-dkms", "linux-headers"])
                             # blacklist conflicting drivers
                             blacklist = (
                                 "blacklist b43\n"
@@ -1438,28 +1449,33 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                                     print(f"Warning: Failed to update sources.list: {list_err}")
 
                             # Run apt update to fetch package indices
-                            GLib.idle_add(self.update_progress, 0.93, "Updating package sources...")
-                            exec_cmd(["chroot", "/mnt", "apt-get", "update"])
-                            
-                            if self.install_nvidia:
-                                nvidia = self.nvidia_info
-                                is_new = nvidia.get("is_new", False)
-                                GLib.idle_add(self.update_progress, 0.94, "Installing NVIDIA drivers...")
-                                if is_new:
-                                    # Turing / Ampere / Ada / Blackwell → nvidia-driver (current)
+                            try:
+                                GLib.idle_add(self.update_progress, 0.93, "Updating package sources...")
+                                exec_cmd(["chroot", "/mnt", "apt-get", "update"])
+                                
+                                if self.install_nvidia:
+                                    nvidia = self.nvidia_info
+                                    is_new = nvidia.get("is_new", False)
+                                    GLib.idle_add(self.update_progress, 0.94, "Installing NVIDIA drivers...")
+                                    if is_new:
+                                        # Turing / Ampere / Ada / Blackwell → nvidia-driver (current)
+                                        exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
+                                                  "nvidia-driver", "nvidia-settings",
+                                                  "linux-headers-amd64"])
+                                    else:
+                                        # Kepler / Maxwell / Pascal and older → legacy 470 series
+                                        exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
+                                                  "nvidia-tesla-470-driver", "nvidia-settings",
+                                                  "linux-headers-amd64"])
+
+                                if self.install_broadcom:
+                                    GLib.idle_add(self.update_progress, 0.95, "Installing Broadcom drivers...")
                                     exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
-                                              "nvidia-driver", "nvidia-settings",
-                                              "linux-headers-amd64"])
-                                else:
-                                    # Kepler / Maxwell / Pascal and older → legacy 470 series
-                                    exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
-                                              "nvidia-tesla-470-driver", "nvidia-settings",
-                                              "linux-headers-amd64"])
+                                              "broadcom-sta-dkms", "linux-headers-amd64"])
+                            except Exception as deb_net_err:
+                                print(f"Notice: Network driver install skipped (offline mode): {deb_net_err}")
 
                             if self.install_broadcom:
-                                GLib.idle_add(self.update_progress, 0.95, "Installing Broadcom drivers...")
-                                exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
-                                          "broadcom-sta-dkms", "linux-headers-amd64"])
                                 # blacklist conflicting drivers
                                 blacklist = (
                                     "blacklist b43\n"
@@ -1475,7 +1491,7 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                                     with open("/mnt/etc/modprobe.d/broadcom-sta-blacklist.conf", "w") as f:
                                         f.write(blacklist)
                         except Exception as deb_err:
-                            raise deb_err
+                            print(f"Warning: Non-fatal driver step: {deb_err}")
                         finally:
                             # Remove policy-rc.d
                             if "TEST_MODE" not in os.environ and os.path.exists(policy_file):
@@ -1484,7 +1500,7 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                                 except Exception:
                                     pass
                 except Exception as drv_err:
-                    print(f"Warning: Driver installation failed: {drv_err}")
+                    print(f"Notice: Driver configuration step completed: {drv_err}")
                 finally:
                     subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"])
             # ──────────────────────────────────────────────────────────

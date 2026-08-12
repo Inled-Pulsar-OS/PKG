@@ -34,4 +34,11 @@ package() {
     # Remove Debian-specific files
     rm -f "$pkgdir/usr/share/plymouth/debian-logo.png"
     rm -f "$pkgdir/usr/share/pixmaps/debian-logo.png"
+    # Ensure archlinux-logo.png exists for mkinitcpio's plymouth hook
+    mkdir -p "$pkgdir/usr/share/pixmaps"
+    if [ -f "$pkgdir/usr/share/plymouth/themes/pulsar-plymouth/pulsar-logo.png" ]; then
+        cp "$pkgdir/usr/share/plymouth/themes/pulsar-plymouth/pulsar-logo.png" "$pkgdir/usr/share/pixmaps/archlinux-logo.png"
+    else
+        echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > "$pkgdir/usr/share/pixmaps/archlinux-logo.png"
+    fi
 }
