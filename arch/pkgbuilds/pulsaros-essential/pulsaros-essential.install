@@ -53,6 +53,12 @@ post_install() {
     # Reduce systemd timeouts
     sed -i 's/^#*DefaultTimeoutStopSec=.*/DefaultTimeoutStopSec=10s/' /etc/systemd/system.conf 2>/dev/null || true
     sed -i 's/^#*DefaultTimeoutStopSec=.*/DefaultTimeoutStopSec=10s/' /etc/systemd/user.conf 2>/dev/null || true
+
+    # Ensure pacman keyring directory permissions are readable for non-root users
+    if [ -d /etc/pacman.d/gnupg ]; then
+        chmod 755 /etc/pacman.d/gnupg 2>/dev/null || true
+        chmod 644 /etc/pacman.d/gnupg/pubring.gpg /etc/pacman.d/gnupg/trustdb.gpg /etc/pacman.d/gnupg/tofu.db /etc/pacman.d/gnupg/gpg.conf 2>/dev/null || true
+    fi
 }
 
 post_upgrade() {
