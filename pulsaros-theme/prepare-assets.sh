@@ -85,7 +85,7 @@ echo "Aplicando fix de Libadwaita moderno para Nautilus..."
 cat <<'NAUTILUS_FIX' > /tmp/nautilus_fix.css
 
 /* ==============================================================================
- * Pulsar OS - Premium macOS-styled Nautilus & Headerbars
+ * Pulsar OS - Pixel-Perfect macOS Capsules for Nautilus Headerbar
  * ============================================================================== */
 
 /* 1. Base Window & SplitView */
@@ -141,94 +141,116 @@ cat <<'NAUTILUS_FIX' > /tmp/nautilus_fix.css
 /* 3. Traffic Lights Spacing on Top-Left */
 .nautilus-window headerbar windowcontrols.start,
 #NautilusFileChooser headerbar windowcontrols.start {
-    margin-left: 4px;
-    margin-right: 14px;
+    margin-left: 6px !important;
+    margin-right: 18px !important;
 }
 
-/* 4. Left Headerbar Title & Search Buttons */
 .nautilus-window headerbar windowtitle .title {
     font-weight: bold;
     font-size: 13px;
 }
 
-/* 5. Clean Navigation Buttons (< and >) */
-.nautilus-window headerbar box.linked:not(viewswitcher):not(.path-bar) {
-    border-radius: 6px !important;
-    background-color: alpha(currentColor, 0.05) !important;
+/* 4. Navigation Buttons (< and >) - macOS Oval Capsule */
+.nautilus-window headerbar box.linked:not(viewswitcher),
+#NautilusFileChooser headerbar box.linked:not(viewswitcher) {
+    border-radius: 9999px !important;
+    background-color: alpha(currentColor, 0.07) !important;
+    border: 1px solid alpha(currentColor, 0.06) !important;
     padding: 2px !important;
     margin: 0 4px !important;
+    box-shadow: none !important;
 }
 
-.nautilus-window headerbar box.linked:not(viewswitcher):not(.path-bar) button {
-    min-height: 26px !important;
-    min-width: 26px !important;
-    padding: 2px 4px !important;
+.nautilus-window headerbar box.linked:not(viewswitcher) button,
+#NautilusFileChooser headerbar box.linked:not(viewswitcher) button {
+    border-radius: 9999px !important;
+    min-height: 24px !important;
+    min-width: 24px !important;
+    padding: 2px 6px !important;
     margin: 0 !important;
-    border-radius: 4px !important;
     border: none !important;
     background: transparent !important;
     box-shadow: none !important;
 }
 
-.nautilus-window headerbar box.linked:not(viewswitcher):not(.path-bar) button:hover {
-    background-color: alpha(currentColor, 0.08) !important;
+.nautilus-window headerbar box.linked:not(viewswitcher) button:hover {
+    background-color: alpha(currentColor, 0.1) !important;
 }
 
-.nautilus-window headerbar box.linked:not(viewswitcher):not(.path-bar) button:active {
-    background-color: alpha(currentColor, 0.14) !important;
+.nautilus-window headerbar box.linked:not(viewswitcher) button:active {
+    background-color: alpha(currentColor, 0.18) !important;
 }
 
-/* 6. Premium PathBar Container & Buttons */
+/* 5. Address / Path Bar - Single Unified Oval Capsule (No nested box inside box!) */
 .nautilus-window .path-bar,
 .nautilus-window #NautilusPathBar,
-#NautilusFileChooser #NautilusPathBar {
-    border-radius: 6px !important;
-    background-color: alpha(currentColor, 0.06) !important;
-    border: 1px solid alpha(currentColor, 0.08) !important;
+#NautilusFileChooser #NautilusPathBar,
+.nautilus-window headerbar box.start > widget > box,
+.nautilus-window headerbar box.start > box {
+    border-radius: 9999px !important;
+    background-color: alpha(currentColor, 0.07) !important;
+    background-image: none !important;
+    border: 1px solid alpha(currentColor, 0.06) !important;
     box-shadow: none !important;
-    padding: 1px 4px !important;
+    padding: 2px 6px !important;
     margin: 0 4px !important;
     min-height: 28px !important;
 }
 
 .nautilus-window .path-bar button,
+.nautilus-window .path-bar menubutton,
+.nautilus-window .path-bar menubutton > button,
 .nautilus-window #NautilusPathBar button,
+.nautilus-window #NautilusPathBar menubutton,
+.nautilus-window #NautilusPathBar menubutton > button,
 .nautilus-window #NautilusPathBar #NautilusPathButton,
-.nautilus-window #NautilusPathBar > menubutton > button {
-    border-radius: 4px !important;
+#NautilusFileChooser #NautilusPathBar button,
+#NautilusFileChooser #NautilusPathBar #NautilusPathButton {
+    border-radius: 9999px !important;
     min-height: 24px !important;
     padding: 2px 8px !important;
     margin: 0 !important;
     border: none !important;
     background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
     box-shadow: none !important;
     font-size: 13px !important;
     font-weight: 500 !important;
+    border-image: none !important;
 }
 
 .nautilus-window .path-bar button:hover,
+.nautilus-window .path-bar menubutton > button:hover,
 .nautilus-window #NautilusPathBar button:hover,
 .nautilus-window #NautilusPathBar #NautilusPathButton:hover,
-.nautilus-window #NautilusPathBar > menubutton > button:hover {
-    background-color: alpha(currentColor, 0.08) !important;
+.nautilus-window #NautilusPathBar menubutton > button:hover {
+    background-color: alpha(currentColor, 0.1) !important;
 }
 
 .nautilus-window .path-bar button:active,
 .nautilus-window .path-bar button:checked,
+.nautilus-window .path-bar menubutton > button:active,
+.nautilus-window .path-bar menubutton > button:checked,
 .nautilus-window #NautilusPathBar button:active,
 .nautilus-window #NautilusPathBar button:checked,
 .nautilus-window #NautilusPathBar #NautilusPathButton:active,
-.nautilus-window #NautilusPathBar #NautilusPathButton:checked {
-    background-color: alpha(currentColor, 0.14) !important;
+.nautilus-window #NautilusPathBar #NautilusPathButton:checked,
+.nautilus-window #NautilusPathBar menubutton > button:active,
+.nautilus-window #NautilusPathBar menubutton > button:checked {
+    background-color: alpha(currentColor, 0.18) !important;
 }
 
-/* 7. View Switcher (Grid / List / Column segmented control) */
+/* 6. View Switcher - macOS Oval Capsule Segmented Control */
 .nautilus-window headerbar viewswitcher,
+.nautilus-window headerbar viewswitchertitle,
 #NautilusFileChooser headerbar viewswitcher,
-headerbar > windowhandle > box viewswitcher {
-    border-radius: 6px !important;
-    background-color: alpha(currentColor, 0.06) !important;
-    border: 1px solid alpha(currentColor, 0.08) !important;
+headerbar > windowhandle > box viewswitcher,
+headerbar viewswitcher {
+    border-radius: 9999px !important;
+    background-color: alpha(currentColor, 0.07) !important;
+    background-image: none !important;
+    border: 1px solid alpha(currentColor, 0.06) !important;
     padding: 2px !important;
     margin: 0 4px !important;
     min-height: 28px !important;
@@ -237,40 +259,47 @@ headerbar > windowhandle > box viewswitcher {
 
 .nautilus-window headerbar viewswitcher > button.toggle,
 #NautilusFileChooser headerbar viewswitcher > button.toggle,
-headerbar > windowhandle > box viewswitcher > button.toggle {
-    border-radius: 4px !important;
+headerbar > windowhandle > box viewswitcher > button.toggle,
+headerbar viewswitcher > button.toggle {
+    border-radius: 9999px !important;
     min-height: 24px !important;
-    min-width: 26px !important;
-    padding: 2px 6px !important;
+    min-width: 28px !important;
+    padding: 2px 8px !important;
     margin: 0 !important;
     border: none !important;
+    border-image: none !important;
     background: transparent !important;
+    background-image: none !important;
     box-shadow: none !important;
 }
 
 .nautilus-window headerbar viewswitcher > button.toggle:hover,
 #NautilusFileChooser headerbar viewswitcher > button.toggle:hover,
-headerbar > windowhandle > box viewswitcher > button.toggle:hover {
-    background-color: alpha(currentColor, 0.08) !important;
+headerbar > windowhandle > box viewswitcher > button.toggle:hover,
+headerbar viewswitcher > button.toggle:hover {
+    background-color: alpha(currentColor, 0.1) !important;
 }
 
 .nautilus-window headerbar viewswitcher > button.toggle:checked,
 #NautilusFileChooser headerbar viewswitcher > button.toggle:checked,
-headerbar > windowhandle > box viewswitcher > button.toggle:checked {
-    background-color: alpha(currentColor, 0.18) !important;
+headerbar > windowhandle > box viewswitcher > button.toggle:checked,
+headerbar viewswitcher > button.toggle:checked {
+    background-color: alpha(currentColor, 0.2) !important;
     color: @accent_fg_color !important;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15) !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25) !important;
 }
 
-/* 8. Standalone Header Buttons (New tab, search, options) */
+/* 7. Standalone Buttons (New Folder, Primary Menu) - Circular */
 .nautilus-window headerbar > windowhandle > box > button,
 .nautilus-window headerbar > windowhandle > box > menubutton > button,
 .nautilus-window headerbar > windowhandle > box.start > button,
 .nautilus-window headerbar > windowhandle > box.end > button,
 .nautilus-window headerbar > windowhandle > box.end > menubutton > button,
 #NautilusFileChooser headerbar > windowhandle > box > button,
-#NautilusFileChooser headerbar > windowhandle > box > menubutton > button {
-    border-radius: 6px !important;
+#NautilusFileChooser headerbar > windowhandle > box > menubutton > button,
+.nautilus-window .sidebar-pane headerbar button,
+.nautilus-window .sidebar-pane headerbar menubutton > button {
+    border-radius: 9999px !important;
     min-height: 28px !important;
     min-width: 28px !important;
     padding: 4px !important;
@@ -284,11 +313,13 @@ headerbar > windowhandle > box viewswitcher > button.toggle:checked {
 .nautilus-window headerbar > windowhandle > box > menubutton > button:hover,
 .nautilus-window headerbar > windowhandle > box.start > button:hover,
 .nautilus-window headerbar > windowhandle > box.end > button:hover,
-.nautilus-window headerbar > windowhandle > box.end > menubutton > button:hover {
-    background-color: alpha(currentColor, 0.08) !important;
+.nautilus-window headerbar > windowhandle > box.end > menubutton > button:hover,
+.nautilus-window .sidebar-pane headerbar button:hover,
+.nautilus-window .sidebar-pane headerbar menubutton > button:hover {
+    background-color: alpha(currentColor, 0.1) !important;
 }
 
-/* 9. Places Sidebar Rows */
+/* 8. Places Sidebar Rows */
 .nautilus-window placessidebar .navigation-sidebar > row,
 #NautilusFileChooser placessidebar .navigation-sidebar > row {
     border-radius: 6px;
