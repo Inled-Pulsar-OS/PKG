@@ -102,7 +102,7 @@ prepare() {
 
 build() {
   local meson_options=(
-    -D documentation=true
+    -D documentation=false
     -D location-services=enabled
     -D malcontent=true
     -D distributor_logo=/usr/share/pixmaps/pulsaros-logo-text.svg
