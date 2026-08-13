@@ -62,26 +62,39 @@ Rectangle {
         }
     }
 
-    Image {
-        id: wallpaper
+    Item {
+        id: wallpaperContainer
         anchors.fill: parent
-        fillMode: Image.PreserveAspectCrop
-        visible: true
-        cache: false
-        Binding on source {
-            when: config.background !== undefined
-            value: config.background
+
+        Image {
+            id: wallpaper
+            anchors.fill: parent
+            fillMode: Image.PreserveAspectCrop
+            visible: !animatedWallpaper.visible
+            cache: false
+            Binding on source {
+                when: config.background !== undefined
+                value: config.background
+            }
         }
 
+        AnimatedImage {
+            id: animatedWallpaper
+            anchors.fill: parent
+            fillMode: Image.PreserveAspectCrop
+            visible: source.toString().endsWith(".gif") || source.toString().endsWith(".webp")
+            cache: false
+            playing: true
+            Binding on source {
+                when: config.background !== undefined
+                value: config.background
+            }
+        }
     }
-
-
-
-
 
     BrightnessContrast {
         anchors.fill: parent
-        source: wallpaper
+        source: wallpaperContainer
         brightness: 0
         contrast: 0.3
         layer.enabled: true
@@ -91,7 +104,7 @@ Rectangle {
     }
     FastBlur {
         anchors.fill: parent
-        source: wallpaper
+        source: wallpaperContainer
         radius: 32
         visible: listuser.visible ? false : true
         layer.enabled: true

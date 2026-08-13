@@ -33,112 +33,121 @@ sync_wallpaper() {
     echo "----------------------------------------"
     echo "Sync Triggered: $(date)"
     
-    # Detect the current interface color scheme (light or dark mode)
-    # Detectar el esquema de color de la interfaz actual (modo claro u oscuro)
-    SCHEME=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")
-    echo "Detected GNOME Theme Color Scheme: $SCHEME"
+    BG_PATH=""
     
-    # Read the active URI
-    # Leer el URI activo
-    if [ "$SCHEME" = "prefer-dark" ]; then
-        BG_URI=$(gsettings get org.gnome.desktop.background picture-uri-dark 2>/dev/null | tr -d "'")
-    else
-        BG_URI=$(gsettings get org.gnome.desktop.background picture-uri 2>/dev/null | tr -d "'")
-    fi
-    echo "Primary BG_URI: $BG_URI"
-    
-    # Fallbacks if empty
-    # Fallbacks si está vacío
-    if [ -z "$BG_URI" ] || [ "$BG_URI" = "none" ]; then
-        BG_URI=$(gsettings get org.gnome.desktop.background picture-uri 2>/dev/null | tr -d "'")
-        echo "Fallback to picture-uri: $BG_URI"
-    fi
-    if [ -z "$BG_URI" ] || [ "$BG_URI" = "none" ]; then
-        BG_URI=$(gsettings get org.gnome.desktop.background picture-uri-dark 2>/dev/null | tr -d "'")
-        echo "Fallback to picture-uri-dark: $BG_URI"
-    fi
-
-    # If still empty, use default system wallpaper
-    # Si sigue vacío, usar el fondo de pantalla por defecto del sistema
-    if [ -z "$BG_URI" ] || [ "$BG_URI" = "none" ]; then
-        BG_URI="file:///usr/share/backgrounds/pulsar-os-tahoe.png"
-        echo "Defaulting to fallback system wallpaper: $BG_URI"
-    fi
-
-    # 1. Sync all GNOME keys to prevent desynchronization between Desktop and Lockscreen
-    # Sincronizar todas las claves de GNOME para evitar desincronizaciones entre Escritorio y Lockscreen
-    CURRENT_DARK=$(gsettings get org.gnome.desktop.background picture-uri-dark 2>/dev/null | tr -d "'")
-    CURRENT_LIGHT=$(gsettings get org.gnome.desktop.background picture-uri 2>/dev/null | tr -d "'")
-    CURRENT_LOCK=$(gsettings get org.gnome.desktop.screensaver picture-uri 2>/dev/null | tr -d "'")
-
-    echo "Current settings state:"
-    echo "  - Desktop Dark URI: $CURRENT_DARK"
-    echo "  - Desktop Light URI: $CURRENT_LIGHT"
-    echo "  - Screensaver URI:   $CURRENT_LOCK"
-
-    if [ "$CURRENT_DARK" != "$BG_URI" ]; then
-        echo "  -> Updating picture-uri-dark to $BG_URI"
-        gsettings set org.gnome.desktop.background picture-uri-dark "$BG_URI" 2>/dev/null || true
-    fi
-    if [ "$CURRENT_LIGHT" != "$BG_URI" ]; then
-        echo "  -> Updating picture-uri to $BG_URI"
-        gsettings set org.gnome.desktop.background picture-uri "$BG_URI" 2>/dev/null || true
-    fi
-    if [ "$CURRENT_LOCK" != "$BG_URI" ]; then
-        echo "  -> Updating screensaver picture-uri to $BG_URI"
-        gsettings set org.gnome.desktop.screensaver picture-uri "$BG_URI" 2>/dev/null || true
-    fi
-
-    # 2. Sync SDDM Shared Wallpaper
-    # Sincronizar el fondo compartido de SDDM
-    echo "Target SDDM path check: /var/lib/pulsar-sddm"
-    ls -ld /var/lib/pulsar-sddm 2>/dev/null
-    ls -l /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null
-
-    if [[ "$BG_URI" == file://* ]]; then
-        BG_PATH="${BG_URI#file://}"
-        echo "Extracted path from URI: $BG_PATH"
-        
-        # If the background file is an XML slideshow transition file, parse it to extract the real image path
-        # Si el archivo de fondo es un XML de transición, parsearlo para extraer la ruta de la imagen real
-        if [[ "$BG_PATH" == *.xml ]]; then
-            echo "XML slideshow file detected. Parsing..."
-            if [ -f "$BG_PATH" ]; then
-                REAL_IMG=$(grep '<file>' "$BG_PATH" | head -n 1 | sed -e 's/^[ \t]*<file>//' -e 's/<\/file>.*//')
-                if [ -f "$REAL_IMG" ]; then
-                    BG_PATH="$REAL_IMG"
-                    echo "Successfully parsed XML. Image path: $BG_PATH"
-                else
-                    echo "Could not find image path inside XML or image does not exist."
-                fi
+    # 1. Check if Hidamari animated/video wallpaper is configured
+    HIDAMARI_PATHS=(
+        "$HOME/.var/app/io.github.jeffshee.Hidamari/config/hidamari/hidamari.json"
+        "$HOME/.config/hidamari/hidamari.json"
+    )
+    for cfg in "${HIDAMARI_PATHS[@]}"; do
+        if [ -f "$cfg" ]; then
+            H_FILE=$(jq -r '.file // empty' "$cfg" 2>/dev/null || grep -o '"file": "[^"]*"' "$cfg" | cut -d'"' -f4)
+            if [ -n "$H_FILE" ] && [ -f "$H_FILE" ]; then
+                BG_PATH="$H_FILE"
+                echo "Detected active Hidamari wallpaper: $BG_PATH"
+                break
             fi
         fi
+    done
 
-        if [ -f "$BG_PATH" ]; then
-            echo "Copying $BG_PATH to SDDM shared path..."
-            cat "$BG_PATH" > /var/lib/pulsar-sddm/pulsar-wallpaper.png
-            echo "Copy result exit code: $?"
-            # Silent chmod fallback, since only file owner can chmod but write access (666) is already active
-            chmod 666 /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
+    # 2. If no Hidamari wallpaper, read from GNOME Desktop settings
+    if [ -z "$BG_PATH" ]; then
+        SCHEME=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")
+        echo "Detected GNOME Theme Color Scheme: $SCHEME"
+        
+        if [ "$SCHEME" = "prefer-dark" ]; then
+            BG_URI=$(gsettings get org.gnome.desktop.background picture-uri-dark 2>/dev/null | tr -d "'")
         else
-            echo "Error: File $BG_PATH does not exist!"
+            BG_URI=$(gsettings get org.gnome.desktop.background picture-uri 2>/dev/null | tr -d "'")
         fi
-    else
-        echo "Warning: URI is not a local file (no file:// prefix)"
+        
+        if [ -z "$BG_URI" ] || [ "$BG_URI" = "none" ]; then
+            BG_URI=$(gsettings get org.gnome.desktop.background picture-uri 2>/dev/null | tr -d "'")
+        fi
+        if [ -z "$BG_URI" ] || [ "$BG_URI" = "none" ]; then
+            BG_URI=$(gsettings get org.gnome.desktop.background picture-uri-dark 2>/dev/null | tr -d "'")
+        fi
+        if [ -z "$BG_URI" ] || [ "$BG_URI" = "none" ]; then
+            BG_URI="file:///usr/share/backgrounds/pulsar-os-tahoe.png"
+        fi
+        
+        echo "Active GNOME BG_URI: $BG_URI"
+        
+        # Sincronizar claves de protector de pantalla / lockscreen
+        gsettings set org.gnome.desktop.screensaver picture-uri "$BG_URI" 2>/dev/null || true
+        
+        if [[ "$BG_URI" == file://* ]]; then
+            BG_PATH="${BG_URI#file://}"
+        else
+            BG_PATH="$BG_URI"
+        fi
+        
+        # If XML slideshow, extract real image
+        if [[ "$BG_PATH" == *.xml ]] && [ -f "$BG_PATH" ]; then
+            REAL_IMG=$(grep '<file>' "$BG_PATH" | head -n 1 | sed -e 's/^[ \t]*<file>//' -e 's/<\/file>.*//')
+            if [ -n "$REAL_IMG" ] && [ -f "$REAL_IMG" ]; then
+                BG_PATH="$REAL_IMG"
+            fi
+        fi
     fi
+
+    # Fallback to system default if still invalid
+    if [ ! -f "$BG_PATH" ]; then
+        BG_PATH="/usr/share/backgrounds/pulsar-os-tahoe.png"
+    fi
+    echo "Resolved final wallpaper path: $BG_PATH"
+
+    # 3. Synchronize to SDDM shared path
+    mkdir -p /var/lib/pulsar-sddm 2>/dev/null || true
+    chmod 777 /var/lib/pulsar-sddm 2>/dev/null || true
+    
+    EXT="${BG_PATH##*.}"
+    EXT_LOWER=$(echo "$EXT" | tr '[:upper:]' '[:lower:]')
+    
+    case "$EXT_LOWER" in
+        mp4|webm|mkv|mov|avi)
+            echo "Processing video wallpaper for SDDM..."
+            cp -f "$BG_PATH" /var/lib/pulsar-sddm/pulsar-wallpaper.mp4 2>/dev/null || true
+            chmod 666 /var/lib/pulsar-sddm/pulsar-wallpaper.mp4 2>/dev/null || true
+            
+            # Generate poster image frame for static fallback in SDDM
+            if command -v ffmpeg >/dev/null 2>&1; then
+                ffmpeg -y -ss 00:00:01 -i "$BG_PATH" -vframes 1 -q:v 2 /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || cp -f "/usr/share/backgrounds/pulsar-os-tahoe.png" /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
+            else
+                cp -f "/usr/share/backgrounds/pulsar-os-tahoe.png" /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
+            fi
+            chmod 666 /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
+            ;;
+        gif|webp)
+            echo "Processing animated GIF/WebP wallpaper for SDDM..."
+            cp -f "$BG_PATH" "/var/lib/pulsar-sddm/pulsar-wallpaper.$EXT_LOWER" 2>/dev/null || true
+            cp -f "$BG_PATH" /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
+            chmod 666 "/var/lib/pulsar-sddm/pulsar-wallpaper.$EXT_LOWER" /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
+            ;;
+        *)
+            echo "Processing static image wallpaper for SDDM..."
+            cp -f "$BG_PATH" /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
+            chmod 666 /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
+            ;;
+    esac
+
+    echo "SDDM wallpaper updated successfully."
 }
 
 # Initial sync on startup
-# Sincronización inicial al iniciar
 echo "Running initial sync..."
 sync_wallpaper
 
-# Monitor changes with line-buffering disabled to prevent pipe buffering issues
-# Monitorear cambios desactivando el buffering de tuberías para evitar bloqueos
+# Monitor changes from GNOME settings and Hidamari config
 echo "Entering monitor loop..."
-(stdbuf -oL gsettings monitor org.gnome.desktop.background 2>/dev/null & \
- stdbuf -oL gsettings monitor org.gnome.desktop.interface color-scheme 2>/dev/null & \
- stdbuf -oL gsettings monitor org.gnome.desktop.screensaver 2>/dev/null) | while read -r line; do
+(
+    stdbuf -oL gsettings monitor org.gnome.desktop.background 2>/dev/null &
+    stdbuf -oL gsettings monitor org.gnome.desktop.interface color-scheme 2>/dev/null &
+    while true; do
+        sleep 3
+    done
+) | while read -r line; do
     echo "Monitor event: $line"
     sync_wallpaper
 done

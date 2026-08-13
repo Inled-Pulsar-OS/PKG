@@ -177,11 +177,86 @@ const LockScreen = GObject.registerClass({
         this._clocks = [];
         this._passwordEntry = null;
 
-        // Monitor screen size changes to remain fullscreen and handle multi-monitor layouts
+        this._bgSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.background' });
+        this._ifaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
+        
+        this._bgChangedId1 = this._bgSettings.connect('changed::picture-uri', () => this._updateWallpapers());
+        this._bgChangedId2 = this._bgSettings.connect('changed::picture-uri-dark', () => this._updateWallpapers());
+        this._bgChangedId3 = this._ifaceSettings.connect('changed::color-scheme', () => this._updateWallpapers());
+
+        // Monitor screen and layout changes to remain fullscreen and handle multi-monitor layouts
         this._sizeChangedId = global.stage.connect('notify::width', () => this._onSizeChanged());
         this._sizeChangedId2 = global.stage.connect('notify::height', () => this._onSizeChanged());
+        this._monitorsChangedId = Main.layoutManager.connect('monitors-changed', () => this._onSizeChanged());
         
         this._onSizeChanged();
+    }
+    
+    _getWallpaperUrl() {
+        try {
+            // 1. Check Hidamari active animated/video wallpaper configuration if present
+            let homeDir = GLib.get_home_dir();
+            let hidamariPaths = [
+                GLib.build_filenamev([homeDir, '.var', 'app', 'io.github.jeffshee.Hidamari', 'config', 'hidamari', 'hidamari.json']),
+                GLib.build_filenamev([homeDir, '.config', 'hidamari', 'hidamari.json'])
+            ];
+            for (let cfgPath of hidamariPaths) {
+                let file = Gio.File.new_for_path(cfgPath);
+                if (file.query_exists(null)) {
+                    let [ok, contents] = file.load_contents(null);
+                    if (ok) {
+                        let json = JSON.parse(new TextDecoder().decode(contents));
+                        if (json && json.file && Gio.File.new_for_path(json.file).query_exists(null)) {
+                            return `file://${json.file}`;
+                        }
+                    }
+                }
+            }
+
+            // 2. Read active GNOME background settings
+            let colorScheme = this._ifaceSettings.get_string('color-scheme');
+            let uri = (colorScheme === 'prefer-dark')
+                ? this._bgSettings.get_string('picture-uri-dark')
+                : this._bgSettings.get_string('picture-uri');
+            
+            if (!uri || uri === 'none') {
+                uri = this._bgSettings.get_string('picture-uri');
+            }
+            if (!uri || uri === 'none') {
+                uri = this._bgSettings.get_string('picture-uri-dark');
+            }
+            if (uri && uri !== 'none') {
+                // If it is an XML slideshow file, extract the real image file
+                if (uri.endsWith('.xml')) {
+                    let path = uri.startsWith('file://') ? uri.substring(7) : uri;
+                    let xmlFile = Gio.File.new_for_path(path);
+                    if (xmlFile.query_exists(null)) {
+                        let [ok, contents] = xmlFile.load_contents(null);
+                        if (ok) {
+                            let text = new TextDecoder().decode(contents);
+                            let match = text.match(/<file>([^<]+)<\/file>/);
+                            if (match && match[1] && Gio.File.new_for_path(match[1]).query_exists(null)) {
+                                return `file://${match[1]}`;
+                            }
+                        }
+                    }
+                }
+                return uri;
+            }
+        } catch (e) {
+            console.error("[LockScreen] Error resolving wallpaper:", e);
+        }
+        return `file://${this._extension.path}/background.webp`;
+    }
+
+    _updateWallpapers() {
+        if (!this._monitorContainers || this._monitorContainers.length === 0) {
+            return;
+        }
+        let bgUrl = this._getWallpaperUrl();
+        for (let container of this._monitorContainers) {
+            container.style = `background-image: url("${bgUrl}"); background-size: cover; background-position: center;`;
+        }
     }
     
     _onSizeChanged() {
@@ -204,6 +279,7 @@ const LockScreen = GObject.registerClass({
 
         let monitors = Main.layoutManager.monitors;
         let primaryMonitor = Main.layoutManager.primaryMonitor;
+        let bgUrl = this._getWallpaperUrl();
 
         for (let i = 0; i < monitors.length; i++) {
             let monitor = monitors[i];
@@ -215,8 +291,8 @@ const LockScreen = GObject.registerClass({
                 reactive: true
             });
 
-            // Set individual wallpaper per screen
-            container.style = `background-image: url("file://${this._extension.path}/background.webp"); background-size: cover;`;
+            // Set dynamic wallpaper per screen for all connected monitors
+            container.style = `background-image: url("${bgUrl}"); background-size: cover; background-position: center;`;
             container.set_position(monitor.x, monitor.y);
             container.set_size(monitor.width, monitor.height);
 
@@ -662,6 +738,22 @@ const LockScreen = GObject.registerClass({
     }
     
     destroy() {
+        if (this._monitorsChangedId) {
+            Main.layoutManager.disconnect(this._monitorsChangedId);
+            this._monitorsChangedId = 0;
+        }
+        if (this._bgChangedId1 && this._bgSettings) {
+            this._bgSettings.disconnect(this._bgChangedId1);
+            this._bgChangedId1 = 0;
+        }
+        if (this._bgChangedId2 && this._bgSettings) {
+            this._bgSettings.disconnect(this._bgChangedId2);
+            this._bgChangedId2 = 0;
+        }
+        if (this._bgChangedId3 && this._ifaceSettings) {
+            this._ifaceSettings.disconnect(this._bgChangedId3);
+            this._bgChangedId3 = 0;
+        }
         if (this._sizeChangedId) {
             global.stage.disconnect(this._sizeChangedId);
             this._sizeChangedId = 0;
