@@ -1,0 +1,13 @@
+post_install() {
+    echo "⚙️ Actualizando caché de iconos para Pulsar OS..."
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+    
+    # Asegurar que os-release en /etc y /usr/lib tengan el logo de Pulsar OS
+    if [ -f /usr/lib/os-release ]; then
+        cp -f /usr/lib/os-release /etc/os-release 2>/dev/null || true
+    fi
+}
+
+post_upgrade() {
+    post_install
+}
