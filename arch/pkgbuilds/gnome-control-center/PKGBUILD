@@ -102,6 +102,10 @@ prepare() {
   else
     patch -Np1 -i "$srcdir/pulsar-macos-style.patch" || true
   fi
+
+  if [ -f "po/pulsar-es.po" ] && [ -f "po/es.po" ]; then
+    msgcat --use-first po/pulsar-es.po po/es.po > po/es.po.merged && mv po/es.po.merged po/es.po
+  fi
 }
 
 build() {

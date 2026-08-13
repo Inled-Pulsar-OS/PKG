@@ -119,14 +119,37 @@ def play_video_engine(video_path):
         with open(h_dir / "hidamari.json", "w") as f:
             json.dump(hidamari_cfg, f, indent=2)
 
-    # Stop old instance and start fresh background player
-    subprocess.run(["pkill", "-f", "hidamari"], check=False)
-    time.sleep(0.5)
+    # 1. Try DBus instant video switch
+    try:
+        res = subprocess.run([
+            "gdbus", "call", "--session",
+            "--dest", "io.github.jeffshee.Hidamari.server",
+            "--object-path", "/io/github/jeffshee/Hidamari/server",
+            "--method", "io.github.jeffshee.hidamari.server.video",
+            str(video_path), ""
+        ], capture_output=True, text=True, timeout=2)
+        if res.returncode == 0:
+            return
+    except Exception:
+        pass
+
+    # 2. If DBus not responding, launch background player
     subprocess.Popen(["flatpak", "run", "io.github.jeffshee.Hidamari", "-b"],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
 def stop_video_engine():
-    subprocess.run(["pkill", "-f", "hidamari"], check=False)
+    # 1. Try DBus quit
+    try:
+        subprocess.run([
+            "gdbus", "call", "--session",
+            "--dest", "io.github.jeffshee.Hidamari.server",
+            "--object-path", "/io/github/jeffshee/Hidamari/server",
+            "--method", "io.github.jeffshee.hidamari.server.quit"
+        ], capture_output=True, timeout=2)
+    except Exception:
+        pass
+    # 2. Clean kill
+    subprocess.run(["flatpak", "kill", "io.github.jeffshee.Hidamari"], check=False)
 
 def set_wallpaper(file_path):
     path = Path(file_path).resolve()
