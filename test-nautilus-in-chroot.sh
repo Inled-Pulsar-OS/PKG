@@ -117,17 +117,132 @@ if [ -d "$CHROOT_DIR/etc/skel/.config/gtk-4.0" ]; then
 fi
 
 cat <<'EOF_NAUTILUS_FIX' >> "$CHROOT_DIR/tmp/testuser/.config/gtk-4.0/gtk.css"
-/* Fix Nautilus Libadwaita */
-.nautilus-window, #NautilusFileChooser { background-color: @window_bg_color; }
-.nautilus-window .sidebar-pane, #NautilusFileChooser .sidebar-pane, .sidebar-pane, .content-pane .sidebar-pane, .sidebar-pane .content-pane {
-    border-radius: 0 !important; margin: 0 !important; padding: 0 !important; box-shadow: none !important; background-color: @sidebar_bg_color !important; background-image: none !important;
+/* ==============================================================================
+ * Pulsar OS - Clean Modern Libadwaita Fix for Nautilus (GNOME Files)
+ * ============================================================================== */
+
+/* 1. Base Window & Colors */
+.nautilus-window,
+#NautilusFileChooser {
+    background-color: @window_bg_color;
 }
-.nautilus-window .sidebar-pane:dir(ltr), .nautilus-window .sidebar-pane:dir(rtl), .nautilus-window .sidebar-pane.end:dir(ltr), .nautilus-window .sidebar-pane.end:dir(rtl), #NautilusFileChooser .sidebar-pane:dir(ltr), #NautilusFileChooser .sidebar-pane:dir(rtl), #NautilusFileChooser .sidebar-pane.end:dir(ltr), #NautilusFileChooser .sidebar-pane.end:dir(rtl) { box-shadow: none !important; }
-.nautilus-window headerbar, #NautilusFileChooser headerbar { background-color: transparent !important; box-shadow: none !important; margin: 0 !important; }
-.nautilus-window headerbar > windowhandle > box > widget > box.start > stack > widget > box, .nautilus-window headerbar > windowhandle > box > widget > box.start > box > stack > widget > box, #NautilusFileChooser headerbar > windowhandle > box > widget > box.start > stack > widget > box, #NautilusFileChooser headerbar > windowhandle > box > widget > box.start > box > stack > widget > box { margin: 0 !important; padding: 0 !important; border-radius: 0 !important; background: none !important; background-image: none !important; box-shadow: none !important; }
-.nautilus-window .content-pane, #NautilusFileChooser .content-pane { border-radius: 0 !important; background-color: @view_bg_color !important; box-shadow: none !important; }
-.nautilus-window placessidebar .navigation-sidebar > row, #NautilusFileChooser placessidebar .navigation-sidebar > row { border-radius: 6px; margin: 1px 6px; }
-.nautilus-window placessidebar .navigation-sidebar > row:selected, #NautilusFileChooser placessidebar .navigation-sidebar > row:selected { background-color: alpha(@accent_bg_color, 0.25) !important; color: @accent_fg_color !important; }
+
+/* 2. Unified Sidebar - No floating cards, no disjointed radii */
+.nautilus-window .sidebar-pane,
+#NautilusFileChooser .sidebar-pane,
+.sidebar-pane,
+.content-pane .sidebar-pane,
+.sidebar-pane .content-pane {
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    background-color: @sidebar_bg_color !important;
+    background-image: none !important;
+}
+
+.nautilus-window .sidebar-pane:dir(ltr),
+.nautilus-window .sidebar-pane:dir(rtl),
+.nautilus-window .sidebar-pane.end:dir(ltr),
+.nautilus-window .sidebar-pane.end:dir(rtl),
+#NautilusFileChooser .sidebar-pane:dir(ltr),
+#NautilusFileChooser .sidebar-pane:dir(rtl),
+#NautilusFileChooser .sidebar-pane.end:dir(ltr),
+#NautilusFileChooser .sidebar-pane.end:dir(rtl) {
+    box-shadow: none !important;
+}
+
+/* 3. Headerbars & Toolbar View - Consistent height and smooth alignment */
+.nautilus-window headerbar,
+#NautilusFileChooser headerbar {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    min-height: 44px !important;
+}
+
+/* 4. Normalise all headerbar buttons to consistent uniform sizing */
+.nautilus-window headerbar button,
+#NautilusFileChooser headerbar button {
+    min-height: 32px !important;
+    min-width: 32px !important;
+    padding: 4px 8px !important;
+    margin: 0 2px !important;
+    border-radius: 6px !important;
+    box-shadow: none !important;
+}
+
+/* 5. Clean up PathBar (Eliminate nested boxes inside boxes) */
+#NautilusPathBar,
+.nautilus-window #NautilusPathBar,
+#NautilusFileChooser #NautilusPathBar {
+    background: none !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 6px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+#NautilusPathBar button,
+#NautilusPathBar #NautilusPathButton,
+#NautilusPathBar > menubutton > button {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 6px !important;
+    min-height: 32px !important;
+    padding: 4px 8px !important;
+}
+
+#NautilusPathBar button:hover,
+#NautilusPathBar #NautilusPathButton:hover,
+#NautilusPathBar > menubutton > button:hover {
+    background-color: alpha(currentColor, 0.08) !important;
+}
+
+#NautilusPathBar button:active,
+#NautilusPathBar button:checked,
+#NautilusPathBar #NautilusPathButton:active,
+#NautilusPathBar #NautilusPathButton:checked {
+    background-color: alpha(currentColor, 0.14) !important;
+}
+
+/* Remove 9999px pill capsules that enclose back/forward and squish against traffic lights */
+.nautilus-window headerbar > windowhandle > box > widget > box.start > stack > widget > box,
+.nautilus-window headerbar > windowhandle > box > widget > box.start > box > stack > widget > box,
+#NautilusFileChooser headerbar > windowhandle > box > widget > box.start > stack > widget > box,
+#NautilusFileChooser headerbar > windowhandle > box > widget > box.start > box > stack > widget > box {
+    margin: 0 4px !important;
+    padding: 0 !important;
+    border-radius: 6px !important;
+    background: none !important;
+    background-image: none !important;
+    box-shadow: none !important;
+}
+
+/* 6. Content Pane */
+.nautilus-window .content-pane,
+#NautilusFileChooser .content-pane {
+    border-radius: 0 !important;
+    background-color: @view_bg_color !important;
+    box-shadow: none !important;
+}
+
+/* 7. Sidebar items */
+.nautilus-window placessidebar .navigation-sidebar > row,
+#NautilusFileChooser placessidebar .navigation-sidebar > row {
+    border-radius: 6px;
+    margin: 1px 6px;
+}
+
+.nautilus-window placessidebar .navigation-sidebar > row:selected,
+#NautilusFileChooser placessidebar .navigation-sidebar > row:selected {
+    background-color: alpha(@accent_bg_color, 0.25) !important;
+    color: @accent_fg_color !important;
+}
 EOF_NAUTILUS_FIX
 
 chown -R 1000:1000 "$CHROOT_DIR/tmp/testuser" || true
