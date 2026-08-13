@@ -133,6 +133,12 @@ package_gnome-control-center() {
 
   meson install -C build --destdir "$pkgdir"
 
+  # Install pearOS macOS icons for Settings panels
+  install -dm755 "$pkgdir/usr/share/icons/hicolor/scalable/apps"
+  if [ -d "$startdir/icons" ]; then
+    cp -rf "$startdir/icons/"* "$pkgdir/usr/share/icons/hicolor/scalable/apps/"
+  fi
+
   cd "$pkgdir"
   _pick gkb usr/share/gettext/its/gnome-keybindings.*
   _pick gkb usr/share/gnome-control-center/keybindings

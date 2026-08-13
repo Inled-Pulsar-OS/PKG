@@ -1227,11 +1227,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         // System Settings
         let settingsItem = new PopupMenu.PopupMenuItem("System Settings...");
         settingsItem.connect('activate', () => {
-            if (GLib.find_program_in_path('pulsaros-settings')) {
-                this._runCommand("pulsaros-settings");
-            } else {
-                this._runCommand("gnome-control-center");
-            }
+            this._runCommand("gnome-control-center");
         });
         this.logoMenuButton.menu.addMenuItem(settingsItem);
         
