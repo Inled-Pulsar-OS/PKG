@@ -54,6 +54,95 @@ mkdir -p "$STAGE_DIR/root/.config/gtk-4.0"
 cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-4.0/"* "$STAGE_DIR/etc/skel/.config/gtk-4.0/" 2>/dev/null || true
 cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-4.0/"* "$STAGE_DIR/root/.config/gtk-4.0/" 2>/dev/null || true
 
+# 2.2 Aplicar fix para Nautilus moderno (Libadwaita en GNOME 46+)
+echo "Aplicando fix de Libadwaita moderno para Nautilus..."
+cat <<'NAUTILUS_FIX' > /tmp/nautilus_fix.css
+
+/* ==============================================================================
+ * Pulsar OS - Clean Modern Libadwaita Fix for Nautilus (GNOME Files)
+ * ============================================================================== */
+.nautilus-window,
+#NautilusFileChooser {
+    background-color: @window_bg_color;
+}
+
+.nautilus-window .sidebar-pane,
+#NautilusFileChooser .sidebar-pane,
+.sidebar-pane,
+.content-pane .sidebar-pane,
+.sidebar-pane .content-pane {
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    background-color: @sidebar_bg_color !important;
+    background-image: none !important;
+}
+
+.nautilus-window .sidebar-pane:dir(ltr),
+.nautilus-window .sidebar-pane:dir(rtl),
+.nautilus-window .sidebar-pane.end:dir(ltr),
+.nautilus-window .sidebar-pane.end:dir(rtl),
+#NautilusFileChooser .sidebar-pane:dir(ltr),
+#NautilusFileChooser .sidebar-pane:dir(rtl),
+#NautilusFileChooser .sidebar-pane.end:dir(ltr),
+#NautilusFileChooser .sidebar-pane.end:dir(rtl) {
+    box-shadow: none !important;
+}
+
+.nautilus-window headerbar,
+#NautilusFileChooser headerbar {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+}
+
+.nautilus-window headerbar > windowhandle > box > widget > box.start > stack > widget > box,
+.nautilus-window headerbar > windowhandle > box > widget > box.start > box > stack > widget > box,
+#NautilusFileChooser headerbar > windowhandle > box > widget > box.start > stack > widget > box,
+#NautilusFileChooser headerbar > windowhandle > box > widget > box.start > box > stack > widget > box {
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background: none !important;
+    background-image: none !important;
+    box-shadow: none !important;
+}
+
+.nautilus-window .content-pane,
+#NautilusFileChooser .content-pane {
+    border-radius: 0 !important;
+    background-color: @view_bg_color !important;
+    box-shadow: none !important;
+}
+
+.nautilus-window placessidebar .navigation-sidebar > row,
+#NautilusFileChooser placessidebar .navigation-sidebar > row {
+    border-radius: 6px;
+    margin: 1px 6px;
+}
+
+.nautilus-window placessidebar .navigation-sidebar > row:selected,
+#NautilusFileChooser placessidebar .navigation-sidebar > row:selected {
+    background-color: alpha(@accent_bg_color, 0.25) !important;
+    color: @accent_fg_color !important;
+}
+NAUTILUS_FIX
+
+for target_dir in \
+    "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-4.0" \
+    "$STAGE_DIR/etc/skel/.config/gtk-4.0" \
+    "$STAGE_DIR/root/.config/gtk-4.0"; do
+    if [ -d "$target_dir" ]; then
+        for css_f in "$target_dir"/*.css; do
+            if [ -f "$css_f" ]; then
+                cat /tmp/nautilus_fix.css >> "$css_f"
+            fi
+        done
+    fi
+done
+rm -f /tmp/nautilus_fix.css
+
 # Ejecutar instalador de iconos
 echo "Instalando iconos en staging..."
 cd "$TEMP_BUILD/icons"
