@@ -167,18 +167,23 @@ cc_keyboard_panel_finalize (GObject *object)
 }
 
 static void
-on_macos_remap_active_changed_cb (CcKeyboardPanel *self,
-                                  GParamSpec      *pspec,
-                                  AdwSwitchRow    *row)
+on_macos_remap_active_changed_cb (CcKeyboardPanel *self)
 {
-  gboolean active = adw_switch_row_get_active (row);
+  gboolean active;
+
+  if (!self->macos_remap_switch_row || !self->input_source_settings)
+    return;
+
+  active = adw_switch_row_get_active (self->macos_remap_switch_row);
   if (active)
     {
-      g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.desktop.input-sources xkb-options \"[\x27ctrl:swap_lwin_lctl\x27, \x27ctrl:swap_rwin_rctl\x27]\"'", NULL);
+      const gchar *options[] = { "ctrl:swap_lwin_lctl", "ctrl:swap_rwin_rctl", NULL };
+      g_settings_set_strv (self->input_source_settings, "xkb-options", options);
     }
   else
     {
-      g_spawn_command_line_async ("/bin/sh -c 'gsettings reset org.gnome.desktop.input-sources xkb-options'", NULL);
+      const gchar *options[] = { NULL };
+      g_settings_set_strv (self->input_source_settings, "xkb-options", options);
     }
 }
 

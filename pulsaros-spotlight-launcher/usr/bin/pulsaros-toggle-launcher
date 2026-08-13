@@ -2,7 +2,7 @@
 """
 Pulsar OS - Native Launcher Mode Switcher
 Seamlessly toggles between macOS Spotlight Mode (Python/GTK) and native GNOME Overview (Apps Grid).
-Places Spotlight directly to the right of Finder (Nautilus) in the Dock when enabled.
+Places Spotlight at index 1 (second icon from far left, right after Finder).
 """
 
 import sys
@@ -37,24 +37,26 @@ def enable_spotlight():
     # 3. Hide default GNOME 9-dots App Grid button from dash-to-dock
     subprocess.run(["gsettings", "set", "org.gnome.shell.extensions.dash-to-dock", "show-show-apps-button", "false"], check=False)
     
-    # 4. Insert Spotlight launcher into dock favorites right AFTER Finder (Nautilus)
+    # 4. Insert Spotlight launcher into dock favorites at position 1 (second icon from far left)
     favs = get_favorites()
     if APP_ID in favs:
         favs.remove(APP_ID)
         
-    finder_idx = -1
+    # Ensure Finder is at index 0 if present
     for f_id in FINDER_IDS:
         if f_id in favs:
-            finder_idx = favs.index(f_id)
+            favs.remove(f_id)
+            favs.insert(0, f_id)
             break
-            
-    if finder_idx != -1:
-        favs.insert(finder_idx + 1, APP_ID)
+
+    # Insert Spotlight at index 1 (al fondo a la izquierda menos 1)
+    if len(favs) > 0:
+        favs.insert(1, APP_ID)
     else:
-        favs.insert(0, APP_ID)
+        favs.append(APP_ID)
         
     set_favorites(favs)
-    print(f"✅ macOS Spotlight mode enabled (placed directly after Finder in Dock at index {finder_idx + 1 if finder_idx != -1 else 0}).")
+    print(f"✅ macOS Spotlight mode enabled (placed at index 1 in Dock: {[f for f in favs[:4]]}).")
 
 def enable_overview():
     # 1. Disable extension

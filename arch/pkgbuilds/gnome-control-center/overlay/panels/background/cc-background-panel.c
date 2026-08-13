@@ -466,15 +466,37 @@ on_chooser_background_chosen_cb (CcBackgroundPanel *self,
   if (item)
     uri = cc_background_item_get_uri (item);
 
-  if (uri && (strstr (uri, "live-wallpaper-") != NULL || strstr (uri, "poster-") != NULL))
+  if (uri)
     {
-      /* Selected the live wallpaper poster -> ensure video engine daemon is active */
-      g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper daemon &'", NULL);
-    }
-  else
-    {
-      /* Selected a static wallpaper -> stop video engine so the static background is displayed */
-      g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper stop'", NULL);
+      g_autofree gchar *lower_uri = g_utf8_strdown (uri, -1);
+      gboolean is_video = FALSE;
+
+      if (strstr (lower_uri, ".mp4") || strstr (lower_uri, ".webm") ||
+          strstr (lower_uri, ".mkv") || strstr (lower_uri, ".mov") ||
+          strstr (lower_uri, ".avi") || strstr (lower_uri, ".gif") ||
+          strstr (lower_uri, "live-wallpaper-") || strstr (lower_uri, "poster-"))
+        {
+          is_video = TRUE;
+        }
+
+      if (is_video)
+        {
+          g_autofree gchar *path = g_filename_from_uri (uri, NULL, NULL);
+          if (path && (strstr (path, ".mp4") || strstr (path, ".webm") || strstr (path, ".mkv") || strstr (path, ".mov") || strstr (path, ".avi") || strstr (path, ".gif")))
+            {
+              g_autofree gchar *cmd = g_strdup_printf ("/usr/bin/pulsaros-live-wallpaper set '%s' &", path);
+              g_spawn_command_line_async (cmd, NULL);
+            }
+          else
+            {
+              g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper daemon &'", NULL);
+            }
+        }
+      else
+        {
+          /* Selected a static wallpaper -> stop video engine so the static background is displayed */
+          g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper stop'", NULL);
+        }
     }
 
   g_signal_handlers_block_by_func (self->settings, on_settings_changed, self);
