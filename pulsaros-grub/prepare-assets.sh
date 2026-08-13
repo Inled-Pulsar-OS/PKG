@@ -23,6 +23,19 @@ DEST_DIR="$STAGE_DIR/boot/grub/themes/grub-theme"
 mkdir -p "$DEST_DIR"
 cp -r "$TEMP_BUILD/theme"/* "$DEST_DIR/"
 
+# Instalar iconos Lucide personalizados para las entradas de boot de Pulsar OS
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+GRUB_ICONS_DIR="$SCRIPT_DIR/../pulsar-boot-icons/grub"
+if [ -d "$GRUB_ICONS_DIR" ]; then
+    echo "📦 Instalando iconos Lucide personalizados en tema de GRUB..."
+    [ -d "$DEST_DIR/assets/assets-icons/icons-1080p" ] && cp -f "$GRUB_ICONS_DIR"/icons-1080p/*.png "$DEST_DIR/assets/assets-icons/icons-1080p/" 2>/dev/null || true
+    [ -d "$DEST_DIR/assets/assets-icons/icons-2k" ] && cp -f "$GRUB_ICONS_DIR"/icons-2k/*.png "$DEST_DIR/assets/assets-icons/icons-2k/" 2>/dev/null || true
+    [ -d "$DEST_DIR/assets/assets-icons/icons-4k" ] && cp -f "$GRUB_ICONS_DIR"/icons-4k/*.png "$DEST_DIR/assets/assets-icons/icons-4k/" 2>/dev/null || true
+    if [ -d "$DEST_DIR/icons" ]; then
+        cp -f "$GRUB_ICONS_DIR"/icons-1080p/*.png "$DEST_DIR/icons/" 2>/dev/null || true
+    fi
+fi
+
 # Limpieza
 rm -rf "$TEMP_BUILD"
 

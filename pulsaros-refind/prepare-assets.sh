@@ -29,6 +29,18 @@ cp -r "$TEMP_BUILD/theme"/* "$DEST_DIR/"
 # Español: Eliminar menuentries de prueba cableados de theme.conf para evitar opciones rotas
 sed -i '/#MENUENTRIES/q' "$DEST_DIR/theme.conf"
 
+# Instalar iconos específicos de arranque de Pulsar OS Live
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+BOOT_ICONS_DIR="$SCRIPT_DIR/../pulsar-boot-icons"
+if [ -d "$BOOT_ICONS_DIR" ]; then
+    echo "📦 Instalando iconos de arranque live personalizados en rEFInd..."
+    mkdir -p "$DEST_DIR/icons"
+    [ -f "$BOOT_ICONS_DIR/toram.png" ] && cp -f "$BOOT_ICONS_DIR/toram.png" "$DEST_DIR/icons/os_pulsaros_toram.png"
+    [ -f "$BOOT_ICONS_DIR/normal.png" ] && cp -f "$BOOT_ICONS_DIR/normal.png" "$DEST_DIR/icons/os_pulsaros_normal.png"
+    [ -f "$BOOT_ICONS_DIR/debug-noplymouth.png" ] && cp -f "$BOOT_ICONS_DIR/debug-noplymouth.png" "$DEST_DIR/icons/os_pulsaros_debug.png"
+    [ -f "$BOOT_ICONS_DIR/old.png" ] && cp -f "$BOOT_ICONS_DIR/old.png" "$DEST_DIR/icons/os_pulsaros_old.png"
+fi
+
 # Limpieza
 rm -rf "$TEMP_BUILD"
 echo "✅ Tema de rEFInd estructurado en staging."
