@@ -461,6 +461,22 @@ static void
 on_chooser_background_chosen_cb (CcBackgroundPanel *self,
                                  CcBackgroundItem  *item)
 {
+  const char *uri = NULL;
+
+  if (item)
+    uri = cc_background_item_get_uri (item);
+
+  if (uri && (strstr (uri, "live-wallpaper-") != NULL || strstr (uri, "poster-") != NULL))
+    {
+      /* Selected the live wallpaper poster -> ensure video engine daemon is active */
+      g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper daemon &'", NULL);
+    }
+  else
+    {
+      /* Selected a static wallpaper -> stop video engine so the static background is displayed */
+      g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper stop'", NULL);
+    }
+
   g_signal_handlers_block_by_func (self->settings, on_settings_changed, self);
 
   set_background (self, self->settings, item, TRUE);

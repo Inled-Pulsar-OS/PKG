@@ -58,6 +58,10 @@ struct _CcWindow
   GtkSearchBar      *search_bar;
   GtkSearchEntry    *search_entry;
 
+  AdwAvatar         *user_avatar;
+  GtkLabel          *user_name_label;
+  GtkLabel          *user_email_label;
+
   GtkWidget  *old_panel;
   GtkWidget  *current_panel;
   char       *current_panel_id;
@@ -756,6 +760,77 @@ search_entry_key_pressed_cb (CcWindow              *self,
 }
 
 static void
+setup_user_account_banner (CcWindow *self)
+{
+  const gchar *real_name;
+  const gchar *user_name;
+  g_autofree gchar *email = NULL;
+  g_autofree gchar *face_path = NULL;
+  g_autoptr(GKeyFile) keyfile = NULL;
+
+  if (!self->user_avatar || !self->user_name_label || !self->user_email_label)
+    return;
+
+  user_name = g_get_user_name ();
+  real_name = g_get_real_name ();
+
+  if (!real_name || real_name[0] == '\0' || g_strcmp0 (real_name, "Unknown") == 0)
+    real_name = user_name;
+
+  /* Check GOA online accounts config for email */
+  keyfile = g_key_file_new ();
+  {
+    g_autofree gchar *goa_conf = g_build_filename (g_get_user_config_dir (), "goa-1.0", "accounts.conf", NULL);
+    if (g_key_file_load_from_file (keyfile, goa_conf, G_KEY_FILE_NONE, NULL))
+      {
+        g_auto(GStrv) groups = g_key_file_get_groups (keyfile, NULL);
+        if (groups && groups[0])
+          {
+            email = g_key_file_get_string (keyfile, groups[0], "PresentationIdentity", NULL);
+            if (!email || email[0] == '\0')
+              email = g_key_file_get_string (keyfile, groups[0], "Identity", NULL);
+          }
+      }
+  }
+
+  /* Set Name */
+  if (real_name && real_name[0] != '\0')
+    gtk_label_set_text (self->user_name_label, real_name);
+  else
+    gtk_label_set_text (self->user_name_label, "Apple ID & Cuentas");
+
+  /* Set Email or Apple ID subtitle */
+  if (email && email[0] != '\0')
+    gtk_label_set_text (self->user_email_label, email);
+  else
+    gtk_label_set_text (self->user_email_label, _("ID de Pulsar OS, iCloud y Medios"));
+
+  /* Set Avatar initials */
+  adw_avatar_set_text (self->user_avatar, real_name ? real_name : "Pulsar OS");
+
+  /* Check for user avatar image (.face / .face.icon / AccountsService) */
+  face_path = g_build_filename (g_get_home_dir (), ".face", NULL);
+  if (!g_file_test (face_path, G_FILE_TEST_EXISTS))
+    {
+      g_free (face_path);
+      face_path = g_build_filename (g_get_home_dir (), ".face.icon", NULL);
+    }
+  if (!g_file_test (face_path, G_FILE_TEST_EXISTS))
+    {
+      g_free (face_path);
+      face_path = g_strdup_printf ("/var/lib/AccountsService/icons/%s", user_name);
+    }
+
+  if (g_file_test (face_path, G_FILE_TEST_EXISTS))
+    {
+      g_autoptr(GFile) file = g_file_new_for_path (face_path);
+      g_autoptr(GdkTexture) texture = gdk_texture_new_from_file (file, NULL);
+      if (texture)
+        adw_avatar_set_custom_image (self->user_avatar, GDK_PAINTABLE (texture));
+    }
+}
+
+static void
 on_user_account_banner_clicked_cb (CcWindow *self)
 {
   set_active_panel_from_id (self, "online-accounts", NULL, TRUE, TRUE, NULL);
@@ -803,6 +878,10 @@ cc_window_class_init (CcWindowClass *klass)
   gtk_widget_class_bind_template_child (widget_class, CcWindow, search_bar);
   gtk_widget_class_bind_template_child (widget_class, CcWindow, search_entry);
 
+  gtk_widget_class_bind_template_child (widget_class, CcWindow, user_avatar);
+  gtk_widget_class_bind_template_child (widget_class, CcWindow, user_name_label);
+  gtk_widget_class_bind_template_child (widget_class, CcWindow, user_email_label);
+
   gtk_widget_class_bind_template_callback (widget_class, on_split_view_collapsed_changed_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_development_warning_dialog_responded_cb);
   gtk_widget_class_bind_template_callback (widget_class, search_entry_activate_cb);
@@ -828,6 +907,9 @@ cc_window_init (CcWindow *self)
 
   self->settings = g_settings_new ("org.gnome.Settings");
   self->previous_panels = g_queue_new ();
+  self->previous_list_view = cc_panel_list_get_view (self->panel_list);
+
+  setup_user_account_banner (self);
   self->previous_list_view = cc_panel_list_get_view (self->panel_list);
 
   /* Add a custom CSS class on development builds */
