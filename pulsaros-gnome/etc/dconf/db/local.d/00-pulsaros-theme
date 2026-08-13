@@ -21,7 +21,7 @@ button-layout='close,minimize,maximize:'
 name='MacTahoe-Dark'
 
 [org/gnome/shell]
-enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'dash-to-dock@micxgx.gmail.com', 'blur-my-shell@aunetx', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'fullscreen-to-empty-workspace2@corgijan.dev', 'just-perfection-desktop@just-perfection', 'pulsaros-global-menu@inled.es', 'pulsaros-spotlight-launcher@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'notification-position@drugo.dev', 'wiggle@mechtifs', 'gsconnect@andyholmes.github.io', 'wack-lockscreen-clock@rinzler69-wastaken.github.com', 'no-overview@fthx', 'ding@rastersoft.com']
+enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'dash-to-dock@micxgx.gmail.com', 'blur-my-shell@aunetx', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'fullscreen-to-empty-workspace2@corgijan.dev', 'just-perfection-desktop@just-perfection', 'pulsaros-global-menu@inled.es', 'pulsaros-spotlight-launcher@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'notification-position@drugo.dev', 'wiggle@mechtifs', 'gsconnect@andyholmes.github.io', 'wack-lockscreen-clock@rinzler69-wastaken.github.com', 'no-overview@fthx', 'ding@rastersoft.com', 'gnome-ui-tune@itstime.tech']
 favorite-apps=['org.gnome.Nautilus.desktop', 'pulsaros-recovery.desktop', 'pulsaros-spotlight.desktop', 'brave-browser.desktop', 'seafari.desktop', 'org.gnome.Terminal.desktop', 'org.gnome.Geary.desktop', 'org.gnome.Calendar.desktop', 'org.gnome.Calculator.desktop', 'com.github.xournalpp.xournalpp.desktop', 'org.gnome.Loupe.desktop', 'io.bassi.Amberol.desktop', 'org.gnome.clocks.desktop', 'org.gnome.Weather.desktop', 'es.inled.AppInstall.desktop']
 disable-extension-version-validation=true
 
@@ -185,4 +185,33 @@ new-window='<Primary>n'
 close-tab='<Primary>w'
 close-window='<Primary>q'
 find='<Primary>f'
+
+[org/gnome/shell/extensions/gnome-ui-tune]
+always-show-thumbnails=true
+hide-search=false
+increase-thumbnails-size='200%'
+overview-firefox-pip=true
+restore-thumbnails-background=true
+
+[io/github/yannmasoch/nautilus-my-computer]
+color-mode='accent'
+computer-icon='computer-symbolic'
+custom-color='#59A6FF'
+custom-gradient-color-1='#59A6FF'
+custom-gradient-color-2='#D574C1'
+preferred-folders=['home', 'recent', 'starred', 'network', 'downloads', 'documents', 'music', 'pictures', 'videos', 'trash']
+show-preferred-folder-captions=false
+show-system-partitions=false
+sidebar-show-home=true
+sidebar-show-network=true
+sidebar-show-recent=true
+sidebar-show-starred=true
+sidebar-show-trash=true
+start-on-disks=true
+visibility-disc='visible'
+visibility-network='visible'
+visibility-preferred-folders='visible'
+visibility-removable='visible'
+visibility-system='visible'
+
 
