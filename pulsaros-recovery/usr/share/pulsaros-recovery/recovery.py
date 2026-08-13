@@ -161,6 +161,48 @@ textview.error-log-text text {
     color: #ff453a;
     font-size: 11px;
 }
+.target-disk-box {
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+.target-disk-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #e5e5ea;
+    text-align: center;
+}
+.terminal-btn {
+    background-color: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: #8e8e93;
+    opacity: 0.7;
+    transition: all 0.2s ease;
+}
+.terminal-btn:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    opacity: 1.0;
+}
+.log-window {
+    background-color: #1a1a1a;
+}
+.live-log-view {
+    background-color: #121212;
+    border: 1px solid #333333;
+    border-radius: 8px;
+    padding: 10px;
+}
+textview.live-log-text {
+    background-color: #121212;
+}
+textview.live-log-text text {
+    background-color: #121212;
+    color: #30d158;
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+    font-size: 11px;
+}
 """
 
 def get_system_disks():
@@ -236,6 +278,84 @@ class DiskCard(Gtk.Box):
         
     def on_clicked(self, gesture, n_press, x, y):
         self.select_callback(self)
+
+
+class InstallerLogWindow(Adw.Window):
+    def __init__(self, parent_window):
+        super().__init__()
+        self.parent_win = parent_window
+        self.set_transient_for(parent_window)
+        self.set_title("Installer Log")
+        self.set_default_size(680, 420)
+        self.set_modal(False)
+        self.add_css_class("log-window")
+        
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        
+        header = Adw.HeaderBar()
+        header.set_show_end_title_buttons(True)
+        title_widget = Adw.WindowTitle(title="Pulsar OS Installer Log", subtitle="Live installation output")
+        header.set_title_widget(title_widget)
+        main_box.append(header)
+        
+        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        content_box.set_margin_top(10)
+        content_box.set_margin_bottom(12)
+        content_box.set_margin_start(14)
+        content_box.set_margin_end(14)
+        content_box.set_hexpand(True)
+        content_box.set_vexpand(True)
+        
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_hexpand(True)
+        scrolled.set_vexpand(True)
+        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolled.add_css_class("live-log-view")
+        
+        self.text_view = Gtk.TextView()
+        self.text_view.set_editable(False)
+        self.text_view.set_monospace(True)
+        self.text_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self.text_view.add_css_class("live-log-text")
+        
+        self.buffer = self.text_view.get_buffer()
+        scrolled.set_child(self.text_view)
+        content_box.append(scrolled)
+        
+        main_box.append(content_box)
+        self.set_content(main_box)
+        
+        self.last_pos = 0
+        self.poll_log()
+        self.timer_id = GLib.timeout_add(300, self.poll_log)
+        self.connect("close-request", self.on_close)
+        
+    def poll_log(self):
+        log_path = "/tmp/pulsaros-install.log"
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                    f.seek(self.last_pos)
+                    new_text = f.read()
+                    if new_text:
+                        self.last_pos = f.tell()
+                        iter_end = self.buffer.get_end_iter()
+                        self.buffer.insert(iter_end, new_text)
+                        
+                        # Auto-scroll to end
+                        mark = self.buffer.create_mark(None, self.buffer.get_end_iter(), False)
+                        self.text_view.scroll_to_mark(mark, 0.0, True, 0.0, 1.0)
+            except Exception:
+                pass
+        return True
+
+    def on_close(self, *args):
+        if self.timer_id:
+            GLib.source_remove(self.timer_id)
+            self.timer_id = None
+        if hasattr(self.parent_win, 'log_window'):
+            self.parent_win.log_window = None
+        return False
 
 
 class RecoveryWindow(Adw.ApplicationWindow):
@@ -672,20 +792,35 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self._show_nvidia_dialog()
 
     def build_install_progress_screen(self):
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         box.set_valign(Gtk.Align.CENTER)
         box.set_halign(Gtk.Align.CENTER)
         
-        image = self.get_logo_image(100, is_installer=True)
+        image = self.get_logo_image(90, is_installer=True)
         box.append(image)
         
         title = Gtk.Label()
         title.set_markup("<span font_weight='bold' size='18000'>Pulsar OS</span>")
         box.append(title)
         
-        self.progress_subtitle = Gtk.Label(label="Pulsar OS will be installed on the disk.")
+        self.progress_subtitle = Gtk.Label(label="Pulsar OS will be installed on the selected disk.")
         self.progress_subtitle.add_css_class("progress-text")
         box.append(self.progress_subtitle)
+        
+        # Target disk visual box (Apple-style disk icon + disk name between description and progress bar)
+        self.target_disk_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        self.target_disk_box.add_css_class("target-disk-box")
+        self.target_disk_box.set_halign(Gtk.Align.CENTER)
+        
+        self.target_disk_icon = Gtk.Image.new_from_icon_name("drive-harddisk")
+        self.target_disk_icon.set_pixel_size(42)
+        self.target_disk_box.append(self.target_disk_icon)
+        
+        self.target_disk_name_lbl = Gtk.Label(label="Target Disk")
+        self.target_disk_name_lbl.add_css_class("target-disk-name")
+        self.target_disk_box.append(self.target_disk_name_lbl)
+        
+        box.append(self.target_disk_box)
         
         self.progress_bar = Gtk.ProgressBar()
         self.progress_bar.add_css_class("progress-bar-thin")
@@ -696,13 +831,25 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.progress_label.add_css_class("progress-text")
         box.append(self.progress_label)
         
+        # Bottom controls row (Cancel button centered, flat terminal log button on bottom right)
+        bottom_row = Gtk.CenterBox()
+        bottom_row.set_margin_top(8)
+        bottom_row.set_size_request(340, -1)
+        
         self.btn_install_action = Gtk.Button(label="Cancel")
         self.btn_install_action.add_css_class("secondary-action")
-        self.btn_install_action.set_margin_top(12)
-        self.btn_install_action.set_halign(Gtk.Align.CENTER)
-        self.btn_install_action.set_size_request(140, -1)
+        self.btn_install_action.set_size_request(130, -1)
         self.btn_install_action.connect("clicked", self.on_progress_cancel_clicked)
-        box.append(self.btn_install_action)
+        bottom_row.set_center_widget(self.btn_install_action)
+        
+        self.btn_log = Gtk.Button()
+        self.btn_log.set_icon_name("utilities-terminal-symbolic")
+        self.btn_log.set_tooltip_text("Show Installer Log")
+        self.btn_log.add_css_class("terminal-btn")
+        self.btn_log.connect("clicked", self.on_show_live_log_clicked)
+        bottom_row.set_end_widget(self.btn_log)
+        
+        box.append(bottom_row)
         
         self.stack.add_named(box, "install_progress")
 
@@ -932,13 +1079,31 @@ class RecoveryWindow(Adw.ApplicationWindow):
     def _start_installation(self):
         disk_path = self.pending_disk_path
         disk_name = self.pending_disk_name
-        self.progress_subtitle.set_label(f"Pulsar OS is installing on disk \"{disk_name}\".")
+        self.progress_subtitle.set_label("Pulsar OS will be installed on the selected disk.")
+        
+        display_name = disk_name
+        if hasattr(self, 'selected_disk_card') and self.selected_disk_card:
+            name_info = self.selected_disk_card.disk_info.get("name", "")
+            size_match = re.search(r"\(([^)]+)\)", name_info)
+            if size_match:
+                display_name = f"Pulsar OS ({disk_name} • {size_match.group(1)})"
+            else:
+                display_name = f"Pulsar OS ({disk_name})"
+        else:
+            display_name = f"Pulsar OS ({disk_name})"
+            
+        self.target_disk_name_lbl.set_label(display_name)
         self.stack.set_visible_child_name("install_progress")
         threading.Thread(
             target=self.installation_backend,
             args=(disk_path,),
             daemon=True
         ).start()
+
+    def on_show_live_log_clicked(self, btn):
+        if not hasattr(self, 'log_window') or self.log_window is None:
+            self.log_window = InstallerLogWindow(self)
+        self.log_window.present()
 
     def installation_backend(self, disk_path):
         import datetime
