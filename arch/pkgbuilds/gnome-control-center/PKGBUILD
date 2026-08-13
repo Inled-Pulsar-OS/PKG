@@ -96,8 +96,12 @@ prepare() {
   git submodule set-url subprojects/gvc "$srcdir/libgnome-volume-control"
   git -c protocol.file.allow=always -c protocol.allow=never submodule update
 
-  echo "🎨 Applying Pulsar OS macOS style and Live Wallpaper patch..."
-  patch -Np1 -i "$srcdir/pulsar-macos-style.patch"
+  echo "🎨 Applying Pulsar OS macOS style, PearOS squircle icons, and Live Wallpaper..."
+  if [ -d "$startdir/overlay" ]; then
+    cp -rf "$startdir/overlay/"* .
+  else
+    patch -Np1 -i "$srcdir/pulsar-macos-style.patch" || true
+  fi
 }
 
 build() {

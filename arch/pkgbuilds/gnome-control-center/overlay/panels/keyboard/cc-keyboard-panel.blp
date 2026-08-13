@@ -1,0 +1,99 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $CcKeyboardPanel: $CcPanel {
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Adw.PreferencesPage {
+      Adw.PreferencesGroup {
+        title: _("Input Sources");
+        header-suffix: Button add_input_source_button {
+          icon-name: "list-add-symbolic";
+          tooltip-text: _("Add Input Source");
+          clicked => $add_input_source ();
+        };
+
+        ListBox input_list {
+          selection-mode: none;
+
+          styles [
+            "boxed-list",
+          ]
+        }
+      }
+
+      Adw.PreferencesGroup {
+        title: _("Special Character Entry");
+
+        Adw.ActionRow alternate_characters_key_row {
+          title: _("Alternate Characters Key");
+          subtitle: _("Modifiers to compose characters not available on the keyboard");
+          activatable: true;
+          activated => $alt_chars_row_activated();
+
+          [suffix]
+          Label alt_chars_key_label {
+            styles [
+              "dim-label",
+            ]
+          }
+
+          [suffix]
+          Image {
+            valign: center;
+            icon-name: "go-next-symbolic";
+          }
+        }
+
+        Adw.ActionRow compose_key_row {
+          title: _("Compose Key");
+          subtitle: _("Type subtle characters that need multiple keystrokes");
+          activatable: true;
+          activated => $compose_row_activated();
+
+          [suffix]
+          Label compose_key_label {
+            styles [
+              "dim-label",
+            ]
+          }
+
+          [suffix]
+          Image {
+            valign: center;
+            icon-name: "go-next-symbolic";
+          }
+        }
+      }
+
+      Adw.PreferencesGroup {
+        title: _("Distribución y Mapeo macOS");
+
+        Adw.SwitchRow macos_remap_switch_row {
+          title: _("Remap de Teclado macOS (Cmd como Ctrl)");
+          subtitle: _("Permite usar la tecla Command/Super para copiar (Cmd+C), pegar (Cmd+V), cerrar pestañas (Cmd+W) y atajos de macOS en todo el sistema");
+          active: true;
+          notify::active => $on_macos_remap_active_changed_cb(template);
+        }
+      }
+
+      Adw.PreferencesGroup {
+        title: _("Keyboard Shortcuts");
+
+        Adw.ActionRow keyboard_shortcuts_row {
+          title: _("View and Customize Shortcuts");
+          activatable: true;
+          activated => $keyboard_shortcuts_activated();
+
+          [suffix]
+          Image {
+            valign: center;
+            icon-name: "go-next-symbolic";
+          }
+        }
+      }
+    };
+  };
+}

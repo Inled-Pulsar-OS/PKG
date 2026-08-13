@@ -2,7 +2,7 @@
 """
 Pulsar OS - Native Live Wallpaper Engine & Daemon
 Manages animated and video wallpapers (MP4, WebM, GIF, MKV, WebP) natively on GNOME/Wayland.
-Persists settings across reboots and automatically synchronizes with SDDM and LockScreen.
+Persists settings across reboots and automatically synchronizes with SDDM, LockScreen, GNOME Background Chooser and Hidamari Engine.
 """
 
 import sys
@@ -16,8 +16,14 @@ from pathlib import Path
 
 CONFIG_DIR = Path.home() / ".config" / "pulsaros"
 CONFIG_FILE = CONFIG_DIR / "live-wallpaper.json"
+USER_BACKGROUNDS_DIR = Path.home() / ".local" / "share" / "backgrounds"
 SDDM_DIR = Path("/var/lib/pulsar-sddm")
 DEFAULT_WALLPAPER = "/usr/share/backgrounds/pulsar-os-tahoe.png"
+
+HIDAMARI_PATHS = [
+    Path.home() / ".var" / "app" / "io.github.jeffshee.Hidamari" / "config" / "hidamari",
+    Path.home() / ".config" / "hidamari"
+]
 
 def get_config():
     if CONFIG_FILE.exists():
@@ -48,8 +54,16 @@ def extract_poster_frame(video_path, output_png):
         return False
 
 def sync_to_sddm_and_lockscreen(media_path, poster_path):
-    # 1. Update GNOME Desktop static fallback keys
+    # 1. Update GNOME Desktop static fallback keys & User Backgrounds folder
     if poster_path and Path(poster_path).exists():
+        USER_BACKGROUNDS_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            dest_poster = USER_BACKGROUNDS_DIR / f"live-wallpaper-{Path(media_path).stem}.png"
+            shutil.copy2(poster_path, dest_poster)
+            poster_path = dest_poster
+        except Exception:
+            pass
+
         file_uri = f"file://{Path(poster_path).resolve()}"
         subprocess.run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri", file_uri], check=False)
         subprocess.run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri-dark", file_uri], check=False)
@@ -78,6 +92,42 @@ def sync_to_sddm_and_lockscreen(media_path, poster_path):
     except Exception as e:
         print(f"[LiveWallpaper] Warning syncing to SDDM: {e}", file=sys.stderr)
 
+def play_video_engine(video_path):
+    # Configure Hidamari Engine
+    hidamari_cfg = {
+        "version": 4,
+        "mode": "MODE_VIDEO",
+        "data_source": {
+            "Default": str(video_path)
+        },
+        "is_mute": True,
+        "audio_volume": 0,
+        "is_static_wallpaper": False,
+        "static_wallpaper_blur_radius": 5,
+        "is_pause_when_maximized": True,
+        "is_mute_when_maximized": True,
+        "fade_duration_sec": 1.5,
+        "fade_interval": 0.1,
+        "is_show_systray": False,
+        "is_first_time": False
+    }
+
+    for h_dir in HIDAMARI_PATHS:
+        h_dir.mkdir(parents=True, exist_ok=True)
+        with open(h_dir / "config.json", "w") as f:
+            json.dump(hidamari_cfg, f, indent=2)
+        with open(h_dir / "hidamari.json", "w") as f:
+            json.dump(hidamari_cfg, f, indent=2)
+
+    # Stop old instance and start fresh background player
+    subprocess.run(["pkill", "-f", "hidamari"], check=False)
+    time.sleep(0.5)
+    subprocess.Popen(["flatpak", "run", "io.github.jeffshee.Hidamari", "-b"],
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+
+def stop_video_engine():
+    subprocess.run(["pkill", "-f", "hidamari"], check=False)
+
 def set_wallpaper(file_path):
     path = Path(file_path).resolve()
     if not path.exists():
@@ -90,7 +140,7 @@ def set_wallpaper(file_path):
 
     poster_path = None
     if is_video:
-        poster_path = CONFIG_DIR / "poster.png"
+        poster_path = CONFIG_DIR / f"poster-{path.stem}.png"
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         if not extract_poster_frame(path, poster_path):
             poster_path = Path(DEFAULT_WALLPAPER)
@@ -109,6 +159,11 @@ def set_wallpaper(file_path):
     save_config(cfg)
     sync_to_sddm_and_lockscreen(str(path), str(poster_path) if poster_path else None)
 
+    if is_video:
+        play_video_engine(str(path))
+    else:
+        stop_video_engine()
+
     print(f"✅ Live wallpaper set successfully: {path.name}")
     print(f"Type: {cfg['type']}")
 
@@ -116,6 +171,7 @@ def stop_wallpaper():
     cfg = get_config()
     cfg["enabled"] = False
     save_config(cfg)
+    stop_video_engine()
     
     # Restore default static wallpaper
     if Path(DEFAULT_WALLPAPER).exists():
@@ -140,6 +196,8 @@ def run_daemon():
     if cfg.get("enabled") and cfg.get("file") and Path(cfg.get("file")).exists():
         print(f"[LiveWallpaper Daemon] Restoring saved wallpaper: {cfg.get('file')}")
         sync_to_sddm_and_lockscreen(cfg.get("file"), cfg.get("poster"))
+        if cfg.get("type") == "video":
+            play_video_engine(cfg.get("file"))
     
     last_mtime = CONFIG_FILE.stat().st_mtime if CONFIG_FILE.exists() else 0
     while True:
@@ -152,20 +210,52 @@ def run_daemon():
                     cfg = get_config()
                     if cfg.get("enabled") and cfg.get("file") and Path(cfg.get("file")).exists():
                         sync_to_sddm_and_lockscreen(cfg.get("file"), cfg.get("poster"))
+                        if cfg.get("type") == "video":
+                            play_video_engine(cfg.get("file"))
         except KeyboardInterrupt:
             break
         except Exception as e:
             print(f"[LiveWallpaper Daemon] Error: {e}", file=sys.stderr)
 
 def open_set_dialog():
+    selected_file = None
+
+    # 1. Try zenity
     try:
-        import gi
-        gi.require_version("Gtk", "4.0")
-        from gi.repository import Gtk, Gio
-        
-        app = Gtk.Application(application_id="es.inled.PulsarLiveWallpaperPicker", flags=Gio.ApplicationFlags.FLAGS_NONE)
-        
-        def on_activate(application):
+        res = subprocess.run(
+            ["zenity", "--file-selection", "--title=Seleccionar Vídeo o Fondo Animado - Pulsar OS",
+             "--file-filter=Vídeos y Animaciones | *.mp4 *.webm *.gif *.mkv *.mov *.webp *.png *.jpg *.jpeg"],
+            capture_output=True, text=True, timeout=120
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            selected_file = res.stdout.strip()
+    except Exception:
+        pass
+
+    # 2. Try kdialog fallback
+    if not selected_file:
+        try:
+            res = subprocess.run(
+                ["kdialog", "--getopenfilename", str(Path.home()),
+                 "*.mp4 *.webm *.gif *.mkv *.mov *.webp *.png *.jpg | Vídeos y Fondos"],
+                capture_output=True, text=True, timeout=120
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                selected_file = res.stdout.strip()
+        except Exception:
+            pass
+
+    # 3. Try python GTK4 Dialog fallback
+    if not selected_file:
+        try:
+            import gi
+            gi.require_version("Gtk", "4.0")
+            from gi.repository import Gtk, GLib, Gio
+
+            Gtk.init()
+            loop = GLib.MainLoop()
+            chosen = []
+
             dialog = Gtk.FileDialog.new()
             dialog.set_title("Seleccionar Vídeo o Fondo Animado - Pulsar OS")
             
@@ -176,23 +266,27 @@ def open_set_dialog():
             filters = Gio.ListStore.new(Gtk.FileFilter)
             filters.append(filt)
             dialog.set_filters(filters)
-            
-            def on_open_finish(d, res):
+
+            def on_finish(d, res):
                 try:
                     f = d.open_finish(res)
                     if f:
-                        set_wallpaper(f.get_path())
-                except Exception as e:
-                    print(f"Cancelado o error: {e}")
-                finally:
-                    application.quit()
-                    
-            dialog.open(None, None, on_open_finish)
-            
-        app.connect("activate", on_activate)
-        app.run([])
-    except Exception as e:
-        print(f"Error launching file picker: {e}", file=sys.stderr)
+                        chosen.append(f.get_path())
+                except Exception:
+                    pass
+                loop.quit()
+
+            dialog.open(None, None, on_finish)
+            loop.run()
+
+            if chosen:
+                selected_file = chosen[0]
+        except Exception as e:
+            print(f"File picker fallback error: {e}", file=sys.stderr)
+
+    if selected_file:
+        set_wallpaper(selected_file)
+        subprocess.run(["notify-send", "-a", "Pulsar OS", "Live Wallpaper Activado", Path(selected_file).name], check=False)
 
 def main():
     parser = argparse.ArgumentParser(description="Pulsar OS Live Wallpaper Manager")
@@ -223,4 +317,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
