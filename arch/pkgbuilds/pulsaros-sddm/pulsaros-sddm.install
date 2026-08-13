@@ -4,11 +4,11 @@ post_install() {
 
     # Initialize the dynamic wallpaper for SDDM
     mkdir -p /var/lib/pulsar-sddm
+    chmod 777 /var/lib/pulsar-sddm || true
     if [ -f "/usr/share/backgrounds/pulsar-os-tahoe.png" ]; then
         cp "/usr/share/backgrounds/pulsar-os-tahoe.png" /var/lib/pulsar-sddm/pulsar-wallpaper.png
     else
         touch /var/lib/pulsar-sddm/pulsar-wallpaper.png
     fi
-    chown -R sddm:sddm /var/lib/pulsar-sddm || true
-    chmod 666 /var/lib/pulsar-sddm/pulsar-wallpaper.png || true
+    chmod 666 /var/lib/pulsar-sddm/* 2>/dev/null || true
 }
