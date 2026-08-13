@@ -17,11 +17,14 @@ import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
+import Cogl from 'gi://Cogl';
 import Shell from 'gi://Shell';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Meta from 'gi://Meta';
+import Gst from 'gi://Gst';
+import GstApp from 'gi://GstApp';
 
 // Custom GObject class to construct the menu buttons in the panel
 // Clase GObject personalizada para construir los botones de menú en el panel
@@ -249,13 +252,106 @@ const LockScreen = GObject.registerClass({
         return `file://${this._extension.path}/background.webp`;
     }
 
+    _isVideoFile(url) {
+        if (!url) return false;
+        let clean = url.toLowerCase();
+        return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.mkv') || clean.endsWith('.mov') || clean.endsWith('.avi');
+    }
+
+    _startVideoWallpaper(videoPath) {
+        this._stopVideoWallpaper();
+        try {
+            Gst.init(null);
+            let localPath = videoPath.startsWith('file://') ? videoPath.substring(7) : videoPath;
+            if (!GLib.file_test(localPath, GLib.FileTest.EXISTS)) {
+                return;
+            }
+            let pipeStr = `filesrc location="${localPath}" ! decodebin ! videoconvert ! video/x-raw,format=RGBA ! appsink name=sink emit-signals=false max-buffers=1 drop=true`;
+            this._videoPipeline = Gst.parse_launch(pipeStr);
+            this._videoSink = this._videoPipeline.get_by_name('sink');
+
+            this._videoContent = new Clutter.Image();
+            for (let container of this._monitorContainers) {
+                container.style = 'background-color: #000000;';
+                container.set_content(this._videoContent);
+            }
+
+            let bus = this._videoPipeline.get_bus();
+            bus.add_signal_watch();
+            this._busWatchId = bus.connect('message::eos', () => {
+                if (this._videoPipeline) {
+                    this._videoPipeline.seek_simple(Gst.Format.TIME, Gst.SeekFlags.FLUSH | Gst.SeekFlags.KEY_UNIT, 0);
+                }
+            });
+
+            this._videoPipeline.set_state(Gst.State.PLAYING);
+
+            this._videoTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 33, () => {
+                if (!this._isLocked || !this._videoSink) {
+                    return GLib.SOURCE_CONTINUE;
+                }
+                let sample = this._videoSink.try_pull_sample(0);
+                if (sample) {
+                    let buffer = sample.get_buffer();
+                    let caps = sample.get_caps();
+                    let s = caps.get_structure(0);
+                    let [okW, width] = s.get_int('width');
+                    let [okH, height] = s.get_int('height');
+                    let [okMap, mapInfo] = buffer.map(Gst.MapFlags.READ);
+                    if (okMap) {
+                        let bytes = GLib.Bytes.new(mapInfo.data);
+                        buffer.unmap(mapInfo);
+                        if (this._videoContent) {
+                            this._videoContent.set_bytes(
+                                bytes,
+                                Cogl.PixelFormat.RGBA_8888,
+                                width,
+                                height,
+                                width * 4
+                            );
+                        }
+                    }
+                }
+                return GLib.SOURCE_CONTINUE;
+            });
+        } catch (e) {
+            console.error("[LockScreen] Failed to start GStreamer video wallpaper:", e);
+        }
+    }
+
+    _stopVideoWallpaper() {
+        if (this._videoTimerId) {
+            GLib.source_remove(this._videoTimerId);
+            this._videoTimerId = 0;
+        }
+        if (this._busWatchId && this._videoPipeline) {
+            let bus = this._videoPipeline.get_bus();
+            bus.disconnect(this._busWatchId);
+            this._busWatchId = 0;
+        }
+        if (this._videoPipeline) {
+            this._videoPipeline.set_state(Gst.State.NULL);
+            this._videoPipeline = null;
+        }
+        this._videoSink = null;
+        this._videoContent = null;
+    }
+
     _updateWallpapers() {
         if (!this._monitorContainers || this._monitorContainers.length === 0) {
             return;
         }
         let bgUrl = this._getWallpaperUrl();
-        for (let container of this._monitorContainers) {
-            container.style = `background-image: url("${bgUrl}"); background-size: cover; background-position: center;`;
+        if (this._isVideoFile(bgUrl)) {
+            if (this._isLocked) {
+                this._startVideoWallpaper(bgUrl);
+            }
+        } else {
+            this._stopVideoWallpaper();
+            for (let container of this._monitorContainers) {
+                container.set_content(null);
+                container.style = `background-image: url("${bgUrl}"); background-size: cover; background-position: center;`;
+            }
         }
     }
     
@@ -280,6 +376,7 @@ const LockScreen = GObject.registerClass({
         let monitors = Main.layoutManager.monitors;
         let primaryMonitor = Main.layoutManager.primaryMonitor;
         let bgUrl = this._getWallpaperUrl();
+        let isVideo = this._isVideoFile(bgUrl);
 
         for (let i = 0; i < monitors.length; i++) {
             let monitor = monitors[i];
@@ -291,8 +388,11 @@ const LockScreen = GObject.registerClass({
                 reactive: true
             });
 
-            // Set dynamic wallpaper per screen for all connected monitors
-            container.style = `background-image: url("${bgUrl}"); background-size: cover; background-position: center;`;
+            if (isVideo) {
+                container.style = 'background-color: #000000;';
+            } else {
+                container.style = `background-image: url("${bgUrl}"); background-size: cover; background-position: center;`;
+            }
             container.set_position(monitor.x, monitor.y);
             container.set_size(monitor.width, monitor.height);
 
@@ -300,6 +400,10 @@ const LockScreen = GObject.registerClass({
             this._monitorContainers.push(container);
 
             this._buildMonitorUI(container, monitor, isPrimary);
+        }
+
+        if (this._isLocked && isVideo) {
+            this._startVideoWallpaper(bgUrl);
         }
 
         // Live clock updates
@@ -574,6 +678,8 @@ const LockScreen = GObject.registerClass({
         this._isLocked = true;
         this.visible = true;
         
+        this._updateWallpapers();
+        
         if (this._passwordEntry) {
             this._passwordEntry.text = '';
             this._passwordEntry.style_class = 'pulsaros-lockscreen-entry';
@@ -627,6 +733,8 @@ const LockScreen = GObject.registerClass({
         if (!this._isLocked) return;
         this._isLocked = false;
         this.visible = false;
+        
+        this._stopVideoWallpaper();
         
         // Release modal input grab
         if (this._hasGrab) {
@@ -738,6 +846,7 @@ const LockScreen = GObject.registerClass({
     }
     
     destroy() {
+        this._stopVideoWallpaper();
         if (this._monitorsChangedId) {
             Main.layoutManager.disconnect(this._monitorsChangedId);
             this._monitorsChangedId = 0;
