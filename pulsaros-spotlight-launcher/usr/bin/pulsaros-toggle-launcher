@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""
+Pulsar OS - Native Launcher Mode Switcher
+Seamlessly toggles between macOS Spotlight Mode (Python/GTK) and native GNOME Overview (Apps Grid).
+Configures Dash-to-Dock, Mutter overlay-key, GNOME Extensions and favorite dock items.
+"""
+
+import sys
+import subprocess
+import ast
+
+APP_ID = "pulsaros-spotlight.desktop"
+
+def get_favorites():
+    try:
+        res = subprocess.run(["gsettings", "get", "org.gnome.shell", "favorite-apps"], capture_output=True, text=True, check=True)
+        raw = res.stdout.strip()
+        # Parse GSettings GVariant string array representation
+        if raw.startswith("@as "):
+            raw = raw[4:]
+        return ast.literal_eval(raw)
+    except Exception:
+        return []
+
+def set_favorites(favs):
+    try:
+        formatted = "[" + ", ".join(f"'{item}'" for item in favs) + "]"
+        subprocess.run(["gsettings", "set", "org.gnome.shell", "favorite-apps", formatted], check=True)
+    except Exception as e:
+        print(f"Error setting favorites: {e}", file=sys.stderr)
+
+def enable_spotlight():
+    # 1. Enable extension
+    subprocess.run(["gnome-extensions", "enable", "pulsaros-spotlight-launcher@inled.es"], check=False)
+    # 2. Disable mutter overlay key so Super opens spotlight
+    subprocess.run(["gsettings", "set", "org.gnome.mutter", "overlay-key", "''"], check=False)
+    # 3. Hide default GNOME 9-dots App Grid button from dash-to-dock
+    subprocess.run(["gsettings", "set", "org.gnome.shell.extensions.dash-to-dock", "show-show-apps-button", "false"], check=False)
+    # 4. Insert Spotlight launcher into dock favorites at the end if not present
+    favs = get_favorites()
+    if APP_ID not in favs:
+        favs.append(APP_ID)
+        set_favorites(favs)
+    print("✅ macOS Spotlight mode enabled (Dash-to-Dock updated).")
+
+def enable_overview():
+    # 1. Disable extension
+    subprocess.run(["gnome-extensions", "disable", "pulsaros-spotlight-launcher@inled.es"], check=False)
+    # 2. Restore Super_L for native GNOME Overview
+    subprocess.run(["gsettings", "set", "org.gnome.mutter", "overlay-key", "'Super_L'"], check=False)
+    # 3. Show native GNOME 9-dots App Grid button on dash-to-dock
+    subprocess.run(["gsettings", "set", "org.gnome.shell.extensions.dash-to-dock", "show-show-apps-button", "true"], check=False)
+    # 4. Remove Spotlight launcher from dock favorites
+    favs = get_favorites()
+    if APP_ID in favs:
+        favs = [item for item in favs if item != APP_ID]
+        set_favorites(favs)
+    print("✅ GNOME Overview & Apps Grid mode enabled (Dash-to-Dock updated).")
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: pulsaros-toggle-launcher [spotlight|overview]")
+        sys.exit(1)
+    
+    cmd = sys.argv[1].lower()
+    if cmd == "spotlight":
+        enable_spotlight()
+    elif cmd in ["overview", "gnome", "grid"]:
+        enable_overview()
+    else:
+        print(f"Unknown command: {cmd}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

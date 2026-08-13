@@ -1,16 +1,66 @@
 diff --git a/panels/background/cc-background-panel.blp b/panels/background/cc-background-panel.blp
-index ff2b3fb..58eaf5f 100644
+index ff2b3fb..1122334 100644
 --- a/panels/background/cc-background-panel.blp
 +++ b/panels/background/cc-background-panel.blp
-@@ -166,6 +166,109 @@ template $CcBackgroundPanel: $CcPanel {
-               }
-             }
-           }
+@@ -26,2 +26,2 @@ template $CcBackgroundPanel: $CcPanel {
+-          Adw.PreferencesGroup {
+-            title: _("Style");
++          Adw.PreferencesGroup {
++            title: _("Appearance");
+@@ -34,2 +34,2 @@ template $CcBackgroundPanel: $CcPanel {
+-                maximum-size: 400;
+-                tightening-threshold: 300;
++                maximum-size: 440;
++                tightening-threshold: 320;
+@@ -69,2 +69,2 @@ template $CcBackgroundPanel: $CcPanel {
+-                    label: _("_Default");
+-                    use-underline: true;
++                    label: _("Light");
++                    mnemonic-widget: default_toggle;
+@@ -105,2 +105,2 @@ template $CcBackgroundPanel: $CcPanel {
+-                    label: _("Da_rk");
+-                    use-underline: true;
++                    label: _("Dark");
++                    mnemonic-widget: dark_toggle;
+@@ -120,2 +120,2 @@ template $CcBackgroundPanel: $CcPanel {
+-          Adw.PreferencesGroup {
+-            title: _("Accent Color");
++          Adw.PreferencesGroup {
++            title: _("Liquid Glass");
++            description: _("Choose your preferred look for Liquid Glass.");
++
++            Adw.SwitchRow liquid_glass_switch_row {
++              title: _("Liquid Glass Effect");
++              subtitle: _("Aplica desenfoques translúcidos y bordes reflectantes a las ventanas activas estilo macOS");
++              active: true;
++              notify::active => $on_liquid_glass_active_changed_cb(template);
++            }
++          }
 +
 +          Adw.PreferencesGroup {
-+            title: _("Live Wallpaper (Fondo Animado)");
-+            description: _("Vídeos (.mp4, .webm) y animaciones (.gif, .webp) sincronizados con Escritorio, SDDM y Bloqueo");
++            title: _("Theme");
 +
++            Adw.ActionRow {
++              title: _("Color");
++              subtitle: _("Color de acento del sistema");
++
++              [suffix]
++              Box accent_box {
++                spacing: 8;
++                margin-top: 8;
++                margin-bottom: 8;
++                halign: end;
++                valign: center;
++              }
++            }
++          }
+@@ -137,2 +160,2 @@ template $CcBackgroundPanel: $CcPanel {
+-          Adw.PreferencesGroup {
+-            title: _("Background");
++          Adw.PreferencesGroup {
++            title: _("Wallpaper & Live Wallpaper");
++            description: _("Fondos estáticos o vídeos y animaciones (.mp4, .webm, .gif, .webp) sincronizados con Escritorio, SDDM y Bloqueo");
+@@ -152,0 +175,23 @@ template $CcBackgroundPanel: $CcPanel {
 +            Adw.ActionRow {
 +              title: _("Seleccionar Fondo Animado o Vídeo");
 +              subtitle: _("Gestionado con el motor nativo Pulsar OS Live Wallpaper");
@@ -35,11 +85,44 @@ index ff2b3fb..58eaf5f 100644
 +                ]
 +              }
 +            }
+@@ -167,0 +212,65 @@ template $CcBackgroundPanel: $CcPanel {
 +          }
 +
 +          Adw.PreferencesGroup {
-+            title: _("Punteros del Ratón (Cursores)");
-+            description: _("Seleccionar estilo de puntero macOS o nativo");
++            title: _("Spotlight & App Launcher");
++            description: _("Experiencia de búsqueda al presionar Cmd+Espacio");
++
++            Adw.ActionRow {
++              title: _("Spotlight macOS (Python)");
++              subtitle: _("Buscador flotante estilo macOS Tahoe");
++
++              [suffix]
++              Button {
++                valign: center;
++                label: _("Activar");
++                clicked => $on_activate_spotlight_python_clicked_cb(template);
++                styles [
++                  "suggested-action",
++                ]
++              }
++            }
++
++            Adw.ActionRow {
++              title: _("Vista de Actividades de GNOME (Overview & Apps Grid)");
++              subtitle: _("Pantalla general nativa y cuadrícula de aplicaciones");
++
++              [suffix]
++              Button {
++                valign: center;
++                label: _("Activar");
++                clicked => $on_activate_gnome_overview_clicked_cb(template);
++              }
++            }
++          }
++
++          Adw.PreferencesGroup {
++            title: _("Mouse & Trackpad Cursors");
++            description: _("Punteros del ratón y estilo visual");
 +
 +            Adw.ActionRow {
 +              title: _("Punteros macOS Tahoe / Cupertino");
@@ -64,86 +147,38 @@ index ff2b3fb..58eaf5f 100644
 +                clicked => $on_apply_cursor_adwaita_clicked_cb(template);
 +              }
 +            }
-+          }
-+
-+          Adw.PreferencesGroup {
-+            title: _("Efectos Visuales macOS");
-+            description: _("Efectos de transparencia de cristal líquido, bordes y desenfoques avanzados");
-+
-+            Adw.SwitchRow liquid_glass_switch_row {
-+              title: _("Activar Efecto Liquid Glass");
-+              subtitle: _("Aplica desenfoques translúcidos y bordes reflectantes a las ventanas activas estilo macOS");
-+              active: true;
-+              notify::active => $on_liquid_glass_active_changed_cb(template);
-+            }
-+          }
-+
-+          Adw.PreferencesGroup {
-+            title: _("Lanzador de Aplicaciones (Cmd+Espacio)");
-+            description: _("Experiencia de búsqueda flotante Spotlight o Vista de Actividades de GNOME");
-+
-+            Adw.ActionRow {
-+              title: _("Spotlight macOS (Python)");
-+              subtitle: _("Buscador flotante estilo macOS Tahoe");
-+
-+              [suffix]
-+              Button {
-+                valign: center;
-+                label: _("Activar");
-+                clicked => $on_activate_spotlight_python_clicked_cb(template);
-+                styles [
-+                  "suggested-action",
-+                ]
-+              }
-+            }
-+
-+            Adw.ActionRow {
-+              title: _("Vista de Actividades de GNOME (Overview)");
-+              subtitle: _("Pantalla general nativa de GNOME");
-+
-+              [suffix]
-+              Button {
-+                valign: center;
-+                label: _("Activar");
-+                clicked => $on_activate_gnome_overview_clicked_cb(template);
-+              }
-+            }
-+          }
-         };
-       };
-     };
 diff --git a/panels/background/cc-background-panel.c b/panels/background/cc-background-panel.c
-index 201d2ab..c7dfc9f 100644
+index 201d2ab..6e5c781 100644
 --- a/panels/background/cc-background-panel.c
 +++ b/panels/background/cc-background-panel.c
-@@ -506,6 +506,55 @@ cc_background_panel_finalize (GObject *object)
+@@ -506,6 +506,42 @@ cc_background_panel_finalize (GObject *object)
    G_OBJECT_CLASS (cc_background_panel_parent_class)->finalize (object);
  }
  
 +static void
 +on_pick_live_wallpaper_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
 +{
-+  g_spawn_command_line_async ("pulsaros-live-wallpaper set-dialog", NULL);
++  g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper set-dialog'", NULL);
 +}
 +
 +static void
 +on_stop_live_wallpaper_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
 +{
-+  g_spawn_command_line_async ("pulsaros-live-wallpaper stop", NULL);
++  g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper stop'", NULL);
 +}
 +
 +static void
 +on_apply_cursor_tahoe_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
 +{
 +  g_settings_set_string (self->interface_settings, "cursor-theme", "Tahoe");
-+  g_spawn_command_line_async ("gsettings set org.gnome.desktop.interface cursor-theme 'Tahoe'", NULL);
++  g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.desktop.interface cursor-theme Tahoe'", NULL);
 +}
 +
 +static void
 +on_apply_cursor_adwaita_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
 +{
 +  g_settings_set_string (self->interface_settings, "cursor-theme", "Adwaita");
-+  g_spawn_command_line_async ("gsettings set org.gnome.desktop.interface cursor-theme 'Adwaita'", NULL);
++  g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.desktop.interface cursor-theme Adwaita'", NULL);
 +}
 +
 +static void
@@ -151,28 +186,27 @@ index 201d2ab..c7dfc9f 100644
 +{
 +  gboolean active = adw_switch_row_get_active (ADW_SWITCH_ROW (object));
 +  if (active)
-+    g_spawn_command_line_async ("gnome-extensions enable liquid-glass@thinkingcoding1231.gmail.com", NULL);
++    g_spawn_command_line_async ("/bin/sh -c 'gnome-extensions enable liquid-glass@thinkingcoding1231.gmail.com'", NULL);
 +  else
-+    g_spawn_command_line_async ("gnome-extensions disable liquid-glass@thinkingcoding1231.gmail.com", NULL);
++    g_spawn_command_line_async ("/bin/sh -c 'gnome-extensions disable liquid-glass@thinkingcoding1231.gmail.com'", NULL);
 +}
 +
 +static void
 +on_activate_spotlight_python_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
 +{
-+  g_spawn_command_line_async ("gsettings set org.gnome.mutter overlay-key ''", NULL);
-+  g_spawn_command_line_async ("gsettings set org.gnome.shell.extensions.pulsaros-spotlight-launcher launcher-type 'python'", NULL);
++  g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.mutter overlay-key \"\" && gsettings set org.gnome.shell.extensions.pulsaros-spotlight-launcher launcher-type \"python\"'", NULL);
 +}
 +
 +static void
 +on_activate_gnome_overview_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
 +{
-+  g_spawn_command_line_async ("gsettings set org.gnome.mutter overlay-key 'Super'", NULL);
++  g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.mutter overlay-key \"Super_L\" && gsettings set org.gnome.shell.extensions.dash-to-dock show-show-apps-button true'", NULL);
 +}
 +
  static void
  cc_background_panel_class_init (CcBackgroundPanelClass *klass)
  {
-@@ -527,12 +576,20 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
+@@ -527,12 +563,20 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
    gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, background_chooser);
    gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, default_preview);
    gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, dark_preview);
@@ -219,7 +253,7 @@ diff --git a/panels/keyboard/cc-keyboard-panel.c b/panels/keyboard/cc-keyboard-p
 index 53c1842..cb1f87e 100644
 --- a/panels/keyboard/cc-keyboard-panel.c
 +++ b/panels/keyboard/cc-keyboard-panel.c
-@@ -165,6 +165,22 @@ cc_keyboard_panel_finalize (GObject *object)
+@@ -165,6 +165,21 @@ cc_keyboard_panel_finalize (GObject *object)
    G_OBJECT_CLASS (cc_keyboard_panel_parent_class)->finalize (object);
  }
  
@@ -229,20 +263,18 @@ index 53c1842..cb1f87e 100644
 +  gboolean active = adw_switch_row_get_active (ADW_SWITCH_ROW (object));
 +  if (active)
 +    {
-+      g_spawn_command_line_async ("systemctl --user start gnome-macos-remap-wayland.service", NULL);
-+      g_spawn_command_line_async ("systemctl --user enable gnome-macos-remap-wayland.service", NULL);
++      g_spawn_command_line_async ("/bin/sh -c 'systemctl --user enable --now gnome-macos-remap-wayland.service'", NULL);
 +    }
 +  else
 +    {
-+      g_spawn_command_line_async ("systemctl --user stop gnome-macos-remap-wayland.service", NULL);
-+      g_spawn_command_line_async ("systemctl --user disable gnome-macos-remap-wayland.service", NULL);
++      g_spawn_command_line_async ("/bin/sh -c 'systemctl --user disable --now gnome-macos-remap-wayland.service'", NULL);
 +    }
 +}
 +
  static void
  cc_keyboard_panel_class_init (CcKeyboardPanelClass *klass)
  {
-@@ -194,6 +210,7 @@ cc_keyboard_panel_class_init (CcKeyboardPanelClass *klass)
+@@ -194,6 +209,7 @@ cc_keyboard_panel_class_init (CcKeyboardPanelClass *klass)
    gtk_widget_class_bind_template_callback (widget_class, alt_chars_row_activated);
    gtk_widget_class_bind_template_callback (widget_class, compose_row_activated);
    gtk_widget_class_bind_template_callback (widget_class, keyboard_shortcuts_activated);
@@ -254,22 +286,75 @@ diff --git a/shell/cc-panel-list.c b/shell/cc-panel-list.c
 index 2b59587..aecb0d2 100644
 --- a/shell/cc-panel-list.c
 +++ b/shell/cc-panel-list.c
-@@ -263,9 +263,16 @@ row_data_new (CcPanelCategory     category,
+@@ -263,9 +263,60 @@ row_data_new (CcPanelCategory     category,
    gtk_grid_set_column_spacing (GTK_GRID (grid), 12);
  
    /* Icon */
-+  g_autofree gchar *custom_icon = NULL;
-+  if (icon && g_str_has_suffix (icon, "-symbolic"))
-+    custom_icon = g_strndup (icon, strlen (icon) - strlen ("-symbolic"));
-+  else
-+    custom_icon = g_strdup (icon);
-+
-   image = g_object_new (GTK_TYPE_IMAGE,
-                         "accessible-role", GTK_ACCESSIBLE_ROLE_PRESENTATION,
+-  image = g_object_new (GTK_TYPE_IMAGE,
+-                        "accessible-role", GTK_ACCESSIBLE_ROLE_PRESENTATION,
 -                        "icon-name", icon,
-+                        "icon-name", custom_icon,
-+                        "pixel-size", 24,
-                         NULL);
+-                        NULL);
++  image = gtk_image_new ();
++  gtk_image_set_pixel_size (GTK_IMAGE (image), 28);
++  gtk_widget_set_valign (image, GTK_ALIGN_CENTER);
++
++  const gchar *apple_icon = NULL;
++  if (g_strcmp0 (id, "wifi") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-system-network.svg";
++  else if (g_strcmp0 (id, "network") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-system-network-ethernet.svg";
++  else if (g_strcmp0 (id, "bluetooth") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-system-bluetooth.svg";
++  else if (g_strcmp0 (id, "display") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-desktop-display.svg";
++  else if (g_strcmp0 (id, "sound") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-sound.svg";
++  else if (g_strcmp0 (id, "power") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-system-power.svg";
++  else if (g_strcmp0 (id, "multitasking") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/window-duplicate.svg";
++  else if (g_strcmp0 (id, "background") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-desktop-theme.svg";
++  else if (g_strcmp0 (id, "applications") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/applications-system.svg";
++  else if (g_strcmp0 (id, "notifications") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-system-notifications.svg";
++  else if (g_strcmp0 (id, "search") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-system-search.svg";
++  else if (g_strcmp0 (id, "online-accounts") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-online-accounts.svg";
++  else if (g_strcmp0 (id, "privacy") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-system-privacy.svg";
++  else if (g_strcmp0 (id, "keyboard") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-desktop-keyboard.svg";
++  else if (g_strcmp0 (id, "mouse") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-desktop-peripherals.svg";
++  else if (g_strcmp0 (id, "printers") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-devices-printer.svg";
++  else if (g_strcmp0 (id, "color") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-color.svg";
++  else if (g_strcmp0 (id, "universal-access") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-desktop-accessibility.svg";
++  else if (g_strcmp0 (id, "system") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences.svg";
++  else if (g_strcmp0 (id, "about") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/computer.svg";
++  else if (g_strcmp0 (id, "users") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/system-users.svg";
++
++  if (apple_icon && g_file_test (apple_icon, G_FILE_TEST_EXISTS))
++    {
++      gtk_image_set_from_file (GTK_IMAGE (image), apple_icon);
++    }
++  else
++    {
++      g_autofree gchar *custom_icon = NULL;
++      if (icon && g_str_has_suffix (icon, "-symbolic"))
++        custom_icon = g_strndup (icon, strlen (icon) - strlen ("-symbolic"));
++      else
++        custom_icon = g_strdup (icon);
++      gtk_image_set_from_icon_name (GTK_IMAGE (image), custom_icon);
++    }
  
    gtk_grid_attach (GTK_GRID (grid), image, 0, 0, 1, 1);
 diff --git a/shell/cc-window.blp b/shell/cc-window.blp
@@ -334,7 +419,7 @@ index 017f1a3..1096493 100644
          SearchBar search_bar {
            search-mode-enabled: bind search_button.active bidirectional;
 diff --git a/shell/cc-window.c b/shell/cc-window.c
-index e80087c..a1e25be 100644
+index e80087c..e3656bd 100644
 --- a/shell/cc-window.c
 +++ b/shell/cc-window.c
 @@ -755,6 +755,12 @@ search_entry_key_pressed_cb (CcWindow              *self,
@@ -344,7 +429,7 @@ index e80087c..a1e25be 100644
 +static void
 +on_user_account_banner_clicked_cb (GtkButton *button, CcWindow *self)
 +{
-+  cc_panel_list_set_active_panel (self->panel_list, "system");
++  set_active_panel_from_id (self, "online-accounts", NULL, TRUE, TRUE, NULL);
 +}
 +
  static void
