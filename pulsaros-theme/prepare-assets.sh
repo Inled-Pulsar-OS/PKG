@@ -45,6 +45,32 @@ if [ -f "libs/lib-core.sh" ]; then
     sed -i 's/! -w "\/root"/false/g' libs/lib-core.sh || true
 fi
 
+# Parchear SCSS para eliminar completamente las deformaciones de Nautilus heredadas de GNOME 40
+if [ -f "src/sass/gtk/apps/_gnome-40.0.scss" ]; then
+    echo "🎨 Limpiando SCSS heredado de Nautilus en GNOME 40..."
+    python3 -c '
+with open("src/sass/gtk/apps/_gnome-40.0.scss", "r") as f:
+    lines = f.readlines()
+# Eliminar las primeras 223 líneas correspondientes al styling obsoleto de Nautilus de GNOME 40
+with open("src/sass/gtk/apps/_gnome-40.0.scss", "w") as f:
+    f.writelines(lines[223:])
+' || true
+fi
+
+if [ -f "src/sass/gtk/apps/_libadwaita.scss" ]; then
+    echo "🎨 Limpiando bordes y márgenes forzados de splitview en Libadwaita SCSS..."
+    python3 -c '
+with open("src/sass/gtk/apps/_libadwaita.scss", "r") as f:
+    c = f.read()
+import re
+c = re.sub(r"border-radius:\s*\$wm_radius\s*-\s*\$container_padding;", "border-radius: 0;", c)
+c = re.sub(r"border-radius:\s*\$wm_radius;", "border-radius: 0;", c)
+c = re.sub(r"margin:\s*\$container_padding;", "margin: 0;", c)
+with open("src/sass/gtk/apps/_libadwaita.scss", "w") as f:
+    f.write(c)
+' || true
+fi
+
 # Ejecutar instalador apuntando al staging
 ./install.sh -b -c dark -l -d "$STAGE_DIR/usr/share/themes" --silent-mode
 
