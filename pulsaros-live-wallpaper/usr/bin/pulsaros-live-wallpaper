@@ -157,6 +157,43 @@ def run_daemon():
         except Exception as e:
             print(f"[LiveWallpaper Daemon] Error: {e}", file=sys.stderr)
 
+def open_set_dialog():
+    try:
+        import gi
+        gi.require_version("Gtk", "4.0")
+        from gi.repository import Gtk, Gio
+        
+        app = Gtk.Application(application_id="es.inled.PulsarLiveWallpaperPicker", flags=Gio.ApplicationFlags.FLAGS_NONE)
+        
+        def on_activate(application):
+            dialog = Gtk.FileDialog.new()
+            dialog.set_title("Seleccionar Vídeo o Fondo Animado - Pulsar OS")
+            
+            filt = Gtk.FileFilter()
+            filt.set_name("Vídeos y Animaciones (*.mp4, *.webm, *.gif, *.mkv, *.webp)")
+            for pat in ["*.mp4", "*.webm", "*.gif", "*.mkv", "*.mov", "*.webp", "*.png", "*.jpg"]:
+                filt.add_pattern(pat)
+            filters = Gio.ListStore.new(Gtk.FileFilter)
+            filters.append(filt)
+            dialog.set_filters(filters)
+            
+            def on_open_finish(d, res):
+                try:
+                    f = d.open_finish(res)
+                    if f:
+                        set_wallpaper(f.get_path())
+                except Exception as e:
+                    print(f"Cancelado o error: {e}")
+                finally:
+                    application.quit()
+                    
+            dialog.open(None, None, on_open_finish)
+            
+        app.connect("activate", on_activate)
+        app.run([])
+    except Exception as e:
+        print(f"Error launching file picker: {e}", file=sys.stderr)
+
 def main():
     parser = argparse.ArgumentParser(description="Pulsar OS Live Wallpaper Manager")
     subparsers = parser.add_subparsers(dest="command")
@@ -164,6 +201,7 @@ def main():
     set_parser = subparsers.add_parser("set", help="Set video or animated wallpaper")
     set_parser.add_argument("file", help="Path to video or image file")
 
+    subparsers.add_parser("set-dialog", help="Open GUI file picker to set wallpaper")
     subparsers.add_parser("stop", help="Stop live wallpaper and revert to static")
     subparsers.add_parser("status", help="Get current live wallpaper status")
     subparsers.add_parser("daemon", help="Run background synchronization daemon")
@@ -172,6 +210,8 @@ def main():
 
     if args.command == "set":
         set_wallpaper(args.file)
+    elif args.command == "set-dialog":
+        open_set_dialog()
     elif args.command == "stop":
         stop_wallpaper()
     elif args.command == "status":
@@ -183,3 +223,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -1,0 +1,36 @@
+name: Monthly Build & Update GNOME Control Center (Pulsar OS)
+
+on:
+  schedule:
+    - cron: '0 0 1 * *' # Executes on the 1st of every month
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+
+    steps:
+      - name: Initialize Arch Linux environment
+        run: |
+          pacman -Syu --noconfirm base-devel git meson blueprint-compiler libadwaita gtk4 glib2-devel sudo
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup build user
+        run: |
+          useradd -m builduser
+          echo "builduser ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          chown -R builduser:builduser .
+
+      - name: Build Patched GNOME Control Center
+        run: |
+          su builduser -c "cd PKG/arch/pkgbuilds/gnome-control-center && makepkg -s --noconfirm"
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulsaros-gnome-control-center
+          path: PKG/arch/pkgbuilds/gnome-control-center/*.pkg.tar.zst
