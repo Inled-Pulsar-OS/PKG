@@ -193,11 +193,17 @@ if git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLim
     cp -r "$TEMP_NMC/nautilus_my_computer" "$STAGE_DIR/usr/share/nautilus-python/extensions/"
     cp -r "$TEMP_NMC/io.github.yannmasoch.nautilus-my-computer.gschema.xml" "$STAGE_DIR/usr/share/glib-2.0/schemas/"
     
-    # Parchear diseño del view switcher de My Computer para cápsula ovalada macOS
+    # Parchear diseño y alineación del view switcher de My Computer para cápsula ovalada macOS uniforme
     if [ -f "$STAGE_DIR/usr/share/nautilus-python/extensions/nautilus_my_computer/my_computer_view.py" ]; then
         sed -i 's/border-radius: 9px;/border-radius: 9999px;/g' "$STAGE_DIR/usr/share/nautilus-python/extensions/nautilus_my_computer/my_computer_view.py"
         sed -i 's/border-radius: 7px;/border-radius: 9999px;/g' "$STAGE_DIR/usr/share/nautilus-python/extensions/nautilus_my_computer/my_computer_view.py"
         sed -i 's/background-color: @view_bg_color;/background-color: alpha(@window_fg_color, 0.22);/g' "$STAGE_DIR/usr/share/nautilus-python/extensions/nautilus_my_computer/my_computer_view.py"
+    fi
+    if [ -f "$STAGE_DIR/usr/share/nautilus-python/extensions/nautilus_my_computer/widgets.py" ]; then
+        sed -i 's/self.set_valign(Gtk.Align.FILL)/self.set_valign(Gtk.Align.CENTER)/g' "$STAGE_DIR/usr/share/nautilus-python/extensions/nautilus_my_computer/widgets.py"
+    fi
+    if [ -f "$STAGE_DIR/usr/share/nautilus-python/extensions/nautilus_my_computer/column_view.py" ]; then
+        sed -i 's/options_btn = Gtk.MenuButton(/options_btn = Gtk.MenuButton()\n    options_btn.add_css_class("flat")\n    options_btn.set_valign(Gtk.Align.CENTER)\n    # options_btn = Gtk.MenuButton(/g' "$STAGE_DIR/usr/share/nautilus-python/extensions/nautilus_my_computer/column_view.py" 2>/dev/null || true
     fi
     
     if command -v msgfmt >/dev/null 2>&1 && [ -d "$TEMP_NMC/po" ]; then
