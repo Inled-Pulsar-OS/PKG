@@ -1021,9 +1021,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
             if is_efi:
                 GLib.idle_add(self.update_progress, 0.05, "Cleaning and partitioning (GPT for UEFI)...")
+                exec_cmd(["wipefs", "-a", "-f", disk_path])
                 exec_cmd(["sgdisk", "--zap-all", disk_path])
+                exec_cmd(["sgdisk", "--clear", disk_path])
                 exec_cmd(["sgdisk", "--new=1:0:+512M", "--typecode=1:ef00", "--change-name=1:EFI", disk_path])
                 exec_cmd(["sgdisk", "--new=2:0:0", "--typecode=2:8300", "--change-name=2:PulsarOS", disk_path])
+                exec_cmd(["sync"])
                 exec_cmd(["udevadm", "settle"])
                 try:
                     exec_cmd(["partprobe", disk_path])
@@ -1032,6 +1035,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         exec_cmd(["blockdev", "--rereadpt", disk_path])
                     except Exception:
                         pass
+                exec_cmd(["udevadm", "settle"])
+                time.sleep(1)
                 
                 if "nvme" in disk_path or "mmcblk" in disk_path or "loop" in disk_path:
                     efi_part = f"{disk_path}p1"
@@ -1040,22 +1045,32 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     efi_part = f"{disk_path}1"
                     root_part = f"{disk_path}2"
                     
+                exec_cmd(["wipefs", "-a", "-f", efi_part])
+                exec_cmd(["wipefs", "-a", "-f", root_part])
+                
                 GLib.idle_add(self.update_progress, 0.12, "Formatting partitions (EFI and ext4)...")
-                exec_cmd(["mkfs.vfat", "-F32", efi_part])
-                exec_cmd(["mkfs.ext4", "-F", root_part])
+                exec_cmd(["mkfs.vfat", "-F32", "-n", "EFI", efi_part])
+                exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PulsarOS", root_part])
+                exec_cmd(["sync"])
+                exec_cmd(["udevadm", "settle"])
+                time.sleep(1)
+                
+                subprocess.run(["modprobe", "ext4"], capture_output=True)
+                subprocess.run(["modprobe", "vfat"], capture_output=True)
                 
                 GLib.idle_add(self.update_progress, 0.18, "Mounting file systems...")
                 if "TEST_MODE" not in os.environ:
                     subprocess.run(["umount", "-l", "/mnt/boot/efi"])
                     subprocess.run(["umount", "-l", "/mnt"])
                 os.makedirs("/mnt", exist_ok=True)
-                exec_cmd(["mount", root_part, "/mnt"])
+                exec_cmd(["mount", "-t", "ext4", root_part, "/mnt"])
                 exec_cmd(["mount", "--make-rprivate", "/mnt"])
                 os.makedirs("/mnt/boot/efi", exist_ok=True)
-                exec_cmd(["mount", efi_part, "/mnt/boot/efi"])
+                exec_cmd(["mount", "-t", "vfat", efi_part, "/mnt/boot/efi"])
             else:
                 GLib.idle_add(self.update_progress, 0.05, "Cleaning and partitioning (MBR for BIOS)...")
-                exec_cmd(["dd", "if=/dev/zero", f"of={disk_path}", "bs=512", "count=1"])
+                exec_cmd(["wipefs", "-a", "-f", disk_path])
+                exec_cmd(["dd", "if=/dev/zero", f"of={disk_path}", "bs=512", "count=2048"])
                 sfdisk_script = "label: dos\nsize=+, type=83, bootable\n"
                 if "TEST_MODE" in os.environ:
                     print(f"[TEST_MODE] Simulating sfdisk partitioning script:\n{sfdisk_script}")
@@ -1063,6 +1078,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     res_sf = subprocess.run(["sfdisk", disk_path], input=sfdisk_script, capture_output=True, text=True)
                     if res_sf.returncode != 0:
                         raise Exception(f"Failed to partition disk {disk_path} with sfdisk:\n{res_sf.stderr}")
+                exec_cmd(["sync"])
                 exec_cmd(["udevadm", "settle"])
                 if "TEST_MODE" not in os.environ:
                     subprocess.run(["sfdisk", "--activate", disk_path, "1"], capture_output=True)
@@ -1073,20 +1089,28 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         exec_cmd(["blockdev", "--rereadpt", disk_path])
                     except Exception:
                         pass
+                exec_cmd(["udevadm", "settle"])
+                time.sleep(1)
                 
                 if "nvme" in disk_path or "mmcblk" in disk_path or "loop" in disk_path:
                     root_part = f"{disk_path}p1"
                 else:
                     root_part = f"{disk_path}1"
                     
+                exec_cmd(["wipefs", "-a", "-f", root_part])
                 GLib.idle_add(self.update_progress, 0.12, "Formatting root partition (ext4)...")
-                exec_cmd(["mkfs.ext4", "-F", root_part])
+                exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PulsarOS", root_part])
+                exec_cmd(["sync"])
+                exec_cmd(["udevadm", "settle"])
+                time.sleep(1)
+                
+                subprocess.run(["modprobe", "ext4"], capture_output=True)
                 
                 GLib.idle_add(self.update_progress, 0.18, "Mounting file systems...")
                 if "TEST_MODE" not in os.environ:
                     subprocess.run(["umount", "-l", "/mnt"])
                 os.makedirs("/mnt", exist_ok=True)
-                exec_cmd(["mount", root_part, "/mnt"])
+                exec_cmd(["mount", "-t", "ext4", root_part, "/mnt"])
                 exec_cmd(["mount", "--make-rprivate", "/mnt"])
             
             GLib.idle_add(self.update_progress, 0.25, "Replicating system files... (this may take a while)")
@@ -1106,6 +1130,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             else:
                 rsync_cmd = [
                     "rsync", "-aHAXx",
+                    "--info=progress2",
                     "--exclude=/dev/*",
                     "--exclude=/proc/*",
                     "--exclude=/sys/*",
@@ -1121,16 +1146,28 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     "--exclude=/root/.cache/*",
                     "/", "/mnt"
                 ]
-                proc = subprocess.Popen(rsync_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                for progress_fraction in range(26, 81):
-                    if proc.poll() is not None:
+                proc = subprocess.Popen(rsync_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
+                buffer = ""
+                while True:
+                    char = proc.stdout.read(1)
+                    if not char:
                         break
-                    GLib.idle_add(
-                        self.update_progress, 
-                        progress_fraction / 100.0, 
-                        f"Installing system files... ({progress_fraction}%)"
-                    )
-                    time.sleep(2)
+                    if char in ('\r', '\n'):
+                        line = buffer.strip()
+                        buffer = ""
+                        m = re.search(r"(\d+)%\s+([\d\.]+[KMGT]?B/s)", line)
+                        if m:
+                            pct = int(m.group(1))
+                            speed = m.group(2)
+                            overall_fraction = 0.25 + (pct / 100.0) * 0.60
+                            GLib.idle_add(
+                                self.update_progress,
+                                overall_fraction,
+                                f"Installing system files... ({pct}% - {speed})"
+                            )
+                    else:
+                        buffer += char
+
                 proc.wait()
                 # Exit code 24 = vanished source files during transfer (normal for running live system)
                 if proc.returncode not in (0, 24):
@@ -1164,6 +1201,10 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                 print(f"[TEST_MODE] Simulating writing fstab content:\n{fstab_content}")
             else:
                 os.makedirs("/mnt/etc", exist_ok=True)
+                os.makedirs("/mnt/dev", exist_ok=True)
+                os.makedirs("/mnt/proc", exist_ok=True)
+                os.makedirs("/mnt/sys", exist_ok=True)
+                os.makedirs("/mnt/run", exist_ok=True)
                 with open("/mnt/etc/fstab", "w") as f:
                     f.write(fstab_content)
                 
