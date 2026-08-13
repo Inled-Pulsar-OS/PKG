@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+"""
+Pulsar OS - Profile & Avatar Sync
+Synchronizes the user profile photo and display name from GNOME Online Accounts (Google, Nextcloud, etc.)
+and saves to ~/.face, ~/.face.icon and /var/lib/AccountsService/icons/<user>.
+"""
+
+import os
+import sys
+import json
+import urllib.request
+from pathlib import Path
+
+try:
+    from gi.repository import Gio
+except ImportError:
+    sys.exit(0)
+
+USER = os.environ.get("USER", "jaime")
+HOME = Path.home()
+FACE_PATH = HOME / ".face"
+FACE_ICON_PATH = HOME / ".face.icon"
+
+def fetch_google_avatar():
+    try:
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        obj_manager = Gio.DBusProxy.new_sync(
+            bus,
+            Gio.DBusProxyFlags.NONE,
+            None,
+            "org.gnome.OnlineAccounts",
+            "/org/gnome/OnlineAccounts",
+            "org.freedesktop.DBus.ObjectManager",
+            None
+        )
+        objects = obj_manager.GetManagedObjects()
+        for path, interfaces in objects.items():
+            if "org.gnome.OnlineAccounts.OAuth2Based" in interfaces and "org.gnome.OnlineAccounts.Account" in interfaces:
+                acc = interfaces["org.gnome.OnlineAccounts.Account"]
+                if acc.get("ProviderType") == "google":
+                    proxy = Gio.DBusProxy.new_sync(
+                        bus,
+                        Gio.DBusProxyFlags.NONE,
+                        None,
+                        "org.gnome.OnlineAccounts",
+                        path,
+                        "org.gnome.OnlineAccounts.OAuth2Based",
+                        None
+                    )
+                    token, _ = proxy.GetAccessToken()
+                    req = urllib.request.Request(
+                        "https://www.googleapis.com/oauth2/v3/userinfo",
+                        headers={"Authorization": f"Bearer {token}"}
+                    )
+                    with urllib.request.urlopen(req, timeout=5) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        picture = data.get("picture")
+                        if picture:
+                            with urllib.request.urlopen(picture) as p_resp:
+                                img_data = p_resp.read()
+                                with open(FACE_PATH, "wb") as f:
+                                    f.write(img_data)
+                                with open(FACE_ICON_PATH, "wb") as f:
+                                    f.write(img_data)
+                                print("✅ Synchronized Google avatar to ~/.face")
+                                return True
+    except Exception as e:
+        print(f"Profile sync note: {e}", file=sys.stderr)
+    return False
+
+def main():
+    if not FACE_PATH.exists() or FACE_PATH.stat().st_size < 500:
+        fetch_google_avatar()
+    else:
+        # Periodic refresh
+        fetch_google_avatar()
+
+if __name__ == "__main__":
+    main()

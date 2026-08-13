@@ -120,7 +120,7 @@ template $CcBackgroundPanel: $CcPanel {
 
             Adw.SwitchRow liquid_glass_switch_row {
               title: _("Liquid Glass Effect");
-              subtitle: _("Aplica desenfoques translúcidos y bordes reflectantes a las ventanas activas estilo macOS");
+              subtitle: _("Apply translucent blurs and reflective borders to active windows in macOS style");
               active: true;
               notify::active => $on_liquid_glass_active_changed_cb(template);
             }
@@ -130,8 +130,8 @@ template $CcBackgroundPanel: $CcPanel {
             title: _("Theme");
 
             Adw.ActionRow {
-              title: _("Color");
-              subtitle: _("Color de acento del sistema");
+              title: _("Accent Color");
+              subtitle: _("System-wide accent color");
 
               [suffix]
               Box accent_box {
@@ -146,7 +146,7 @@ template $CcBackgroundPanel: $CcPanel {
 
           Adw.PreferencesGroup {
             title: _("Wallpaper &amp; Live Wallpaper");
-            description: _("Fondos estáticos o vídeos y animaciones (.mp4, .webm, .gif, .webp) sincronizados con Escritorio, SDDM y Bloqueo");
+            description: _("Static wallpapers or animated videos (.mp4, .webm, .gif, .webp) synchronized across Desktop, SDDM, and Lockscreen");
 
             header-suffix: Button {
               Adw.ButtonContent {
@@ -163,13 +163,13 @@ template $CcBackgroundPanel: $CcPanel {
             };
 
             Adw.ActionRow {
-              title: _("Seleccionar Fondo Animado o Vídeo");
-              subtitle: _("Gestionado con el motor nativo Pulsar OS Live Wallpaper");
+              title: _("Select Animated Wallpaper or Video");
+              subtitle: _("Managed with native Pulsar OS Live Wallpaper engine");
 
               [suffix]
               Button {
                 valign: center;
-                label: _("Elegir Vídeo…");
+                label: _("Choose Video…");
                 clicked => $on_pick_live_wallpaper_clicked_cb(template);
                 styles [
                   "suggested-action",
@@ -179,7 +179,7 @@ template $CcBackgroundPanel: $CcPanel {
               [suffix]
               Button {
                 valign: center;
-                label: _("Desactivar");
+                label: _("Stop");
                 clicked => $on_stop_live_wallpaper_clicked_cb(template);
                 styles [
                   "destructive-action",
@@ -206,16 +206,16 @@ template $CcBackgroundPanel: $CcPanel {
 
           Adw.PreferencesGroup {
             title: _("Spotlight &amp; App Launcher");
-            description: _("Experiencia de búsqueda al presionar Cmd+Espacio");
+            description: _("Search and launcher experience when pressing Cmd+Space");
 
             Adw.ActionRow {
-              title: _("Spotlight macOS (Python)");
-              subtitle: _("Buscador flotante estilo macOS Tahoe");
+              title: _("macOS Spotlight (Python)");
+              subtitle: _("Floating search bar with macOS Tahoe design");
 
               [suffix]
               Button {
                 valign: center;
-                label: _("Activar");
+                label: _("Enable");
                 clicked => $on_activate_spotlight_python_clicked_cb(template);
                 styles [
                   "suggested-action",
@@ -224,13 +224,13 @@ template $CcBackgroundPanel: $CcPanel {
             }
 
             Adw.ActionRow {
-              title: _("Vista de Actividades de GNOME (Overview &amp; Apps Grid)");
-              subtitle: _("Pantalla general nativa y cuadrícula de aplicaciones");
+              title: _("GNOME Overview &amp; Apps Grid");
+              subtitle: _("Native GNOME activities overview and application grid");
 
               [suffix]
               Button {
                 valign: center;
-                label: _("Activar");
+                label: _("Enable");
                 clicked => $on_activate_gnome_overview_clicked_cb(template);
               }
             }
@@ -238,28 +238,28 @@ template $CcBackgroundPanel: $CcPanel {
 
           Adw.PreferencesGroup {
             title: _("Mouse &amp; Trackpad Cursors");
-            description: _("Punteros del ratón y estilo visual");
+            description: _("Cursor themes and visual styles");
 
             Adw.ActionRow {
-              title: _("Punteros macOS Tahoe / Cupertino");
-              subtitle: _("Estilo oficial de Pulsar OS con sombras dinámicas");
+              title: _("macOS Tahoe / Cupertino Cursors");
+              subtitle: _("Official Pulsar OS style with dynamic drop shadows");
 
               [suffix]
               Button {
                 valign: center;
-                label: _("Aplicar Tahoe");
+                label: _("Apply Tahoe");
                 clicked => $on_apply_cursor_tahoe_clicked_cb(template);
               }
             }
 
             Adw.ActionRow {
-              title: _("Punteros Adwaita Estándar");
-              subtitle: _("Cursores clásicos de GNOME");
+              title: _("Standard Adwaita Cursors");
+              subtitle: _("Classic GNOME cursor theme");
 
               [suffix]
               Button {
                 valign: center;
-                label: _("Aplicar Adwaita");
+                label: _("Apply Adwaita");
                 clicked => $on_apply_cursor_adwaita_clicked_cb(template);
               }
             }

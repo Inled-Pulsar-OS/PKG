@@ -69,11 +69,11 @@ template $CcKeyboardPanel: $CcPanel {
       }
 
       Adw.PreferencesGroup {
-        title: _("Distribución y Mapeo macOS");
+        title: _("macOS Layout &amp; Keyboard Remap");
 
         Adw.SwitchRow macos_remap_switch_row {
-          title: _("Remap de Teclado macOS (Cmd como Ctrl)");
-          subtitle: _("Permite usar la tecla Command/Super para copiar (Cmd+C), pegar (Cmd+V), cerrar pestañas (Cmd+W) y atajos de macOS en todo el sistema");
+          title: _("macOS Keyboard Remap (Cmd as Ctrl)");
+          subtitle: _("Allows using the Command/Super key for standard macOS shortcuts (Cmd+C, Cmd+V, Cmd+W) system-wide");
           active: true;
           notify::active => $on_macos_remap_active_changed_cb(template);
         }
