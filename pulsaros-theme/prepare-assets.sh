@@ -176,32 +176,46 @@ cat <<'NAUTILUS_FIX' > /tmp/nautilus_fix.css
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
-/* 3. Address / Path Bar - Slim Single Smooth macOS Capsule (Zero nested inner pill, Zero layout shift) */
+/* 3. PathBar - The ONE AND ONLY Capsule Background */
 .nautilus-pathbar,
 .nautilus-window .path-bar,
 .nautilus-window headerbar pathbar {
     border-radius: 9999px;
-    background-color: alpha(currentColor, 0.07);
+    background-color: alpha(currentColor, 0.08);
     background-image: none;
     border-style: none;
     box-shadow: none;
     padding: 1px 4px;
     margin: 0 4px;
     min-height: 24px;
+    height: 24px;
 }
 
-/* Inner path buttons and dropdown menu button - completely transparent with zero layout shift */
+/* ALL Inner Path Elements (Home, ..., etc) - 100% Transparent, ZERO sub-backgrounds */
 .nautilus-path-button,
+.nautilus-path-button:hover,
+.nautilus-path-button:active,
+.nautilus-path-button:checked,
+.nautilus-path-button.current-dir,
 .nautilus-pathbar button,
+.nautilus-pathbar button:hover,
+.nautilus-pathbar button:active,
 .nautilus-pathbar menubutton,
 .nautilus-pathbar menubutton > button,
+.nautilus-pathbar menubutton > button:hover,
+.nautilus-pathbar menubutton > button:active,
+.nautilus-pathbar menubutton > button:checked,
 .nautilus-pathbar > menubutton,
 .nautilus-pathbar > menubutton > button,
+.nautilus-pathbar > menubutton > button:hover,
+.nautilus-pathbar > menubutton > button:active,
+.nautilus-pathbar > menubutton > button:checked,
 .nautilus-pathbar > scrolledwindow menubutton > button,
 .nautilus-window .path-bar button,
 .nautilus-window .path-bar menubutton > button {
     border-radius: 9999px;
     min-height: 22px;
+    height: 22px;
     padding: 1px 6px;
     margin: 0;
     border-style: none;
@@ -212,34 +226,6 @@ cat <<'NAUTILUS_FIX' > /tmp/nautilus_fix.css
     box-shadow: none;
     font-size: 13px;
     font-weight: 500;
-}
-
-/* Hover and active states with zero layout shifting */
-.nautilus-path-button:hover,
-.nautilus-pathbar menubutton > button:hover,
-.nautilus-pathbar > menubutton > button:hover,
-.nautilus-pathbar > scrolledwindow menubutton > button:hover {
-    background-color: alpha(currentColor, 0.08);
-    background-image: none;
-    border-style: none;
-    box-shadow: none;
-    padding: 1px 6px;
-    margin: 0;
-}
-
-.nautilus-path-button:active,
-.nautilus-path-button:checked,
-.nautilus-path-button.current-dir,
-.nautilus-pathbar menubutton > button:active,
-.nautilus-pathbar menubutton > button:checked,
-.nautilus-pathbar > menubutton > button:active,
-.nautilus-pathbar > menubutton > button:checked {
-    background-color: alpha(currentColor, 0.14);
-    background-image: none;
-    border-style: none;
-    box-shadow: none;
-    padding: 1px 6px;
-    margin: 0;
 }
 
 /* 4. Standalone Buttons (New Folder, Window Options) */
