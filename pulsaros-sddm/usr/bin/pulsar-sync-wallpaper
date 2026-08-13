@@ -35,21 +35,36 @@ sync_wallpaper() {
     
     BG_PATH=""
     
-    # 1. Check if Hidamari animated/video wallpaper is configured
-    HIDAMARI_PATHS=(
-        "$HOME/.var/app/io.github.jeffshee.Hidamari/config/hidamari/hidamari.json"
-        "$HOME/.config/hidamari/hidamari.json"
-    )
-    for cfg in "${HIDAMARI_PATHS[@]}"; do
-        if [ -f "$cfg" ]; then
-            H_FILE=$(jq -r '.file // empty' "$cfg" 2>/dev/null || grep -o '"file": "[^"]*"' "$cfg" | cut -d'"' -f4)
-            if [ -n "$H_FILE" ] && [ -f "$H_FILE" ]; then
-                BG_PATH="$H_FILE"
-                echo "Detected active Hidamari wallpaper: $BG_PATH"
-                break
+    # 1. Check if Pulsar OS Native Live Wallpaper is configured
+    PULSAR_LIVE_CFG="$HOME/.config/pulsaros/live-wallpaper.json"
+    if [ -f "$PULSAR_LIVE_CFG" ]; then
+        P_ENABLED=$(jq -r '.enabled // false' "$PULSAR_LIVE_CFG" 2>/dev/null || grep -o '"enabled": [^,]*' "$PULSAR_LIVE_CFG" | cut -d':' -f2 | tr -d ' ')
+        if [ "$P_ENABLED" = "true" ]; then
+            P_FILE=$(jq -r '.file // empty' "$PULSAR_LIVE_CFG" 2>/dev/null || grep -o '"file": "[^"]*"' "$PULSAR_LIVE_CFG" | cut -d'"' -f4)
+            if [ -n "$P_FILE" ] && [ -f "$P_FILE" ]; then
+                BG_PATH="$P_FILE"
+                echo "Detected active Pulsar OS Live Wallpaper: $BG_PATH"
             fi
         fi
-    done
+    fi
+
+    # 2. Check if Hidamari animated/video wallpaper is configured
+    if [ -z "$BG_PATH" ]; then
+        HIDAMARI_PATHS=(
+            "$HOME/.var/app/io.github.jeffshee.Hidamari/config/hidamari/hidamari.json"
+            "$HOME/.config/hidamari/hidamari.json"
+        )
+        for cfg in "${HIDAMARI_PATHS[@]}"; do
+            if [ -f "$cfg" ]; then
+                H_FILE=$(jq -r '.file // empty' "$cfg" 2>/dev/null || grep -o '"file": "[^"]*"' "$cfg" | cut -d'"' -f4)
+                if [ -n "$H_FILE" ] && [ -f "$H_FILE" ]; then
+                    BG_PATH="$H_FILE"
+                    echo "Detected active Hidamari wallpaper: $BG_PATH"
+                    break
+                fi
+            fi
+        done
+    fi
 
     # 2. If no Hidamari wallpaper, read from GNOME Desktop settings
     if [ -z "$BG_PATH" ]; then

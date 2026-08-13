@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Pulsar OS Live Wallpaper Daemon
+Comment=Native Animated and Video Wallpaper Engine for Pulsar OS
+Exec=/usr/bin/pulsaros-live-wallpaper daemon
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+StartupNotify=false
+Terminal=false

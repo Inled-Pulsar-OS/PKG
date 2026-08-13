@@ -197,8 +197,22 @@ const LockScreen = GObject.registerClass({
     
     _getWallpaperUrl() {
         try {
-            // 1. Check Hidamari active animated/video wallpaper configuration if present
             let homeDir = GLib.get_home_dir();
+            
+            // 1. Check Pulsar OS Native Live Wallpaper configuration first
+            let pulsarLiveCfg = GLib.build_filenamev([homeDir, '.config', 'pulsaros', 'live-wallpaper.json']);
+            let pulsarFile = Gio.File.new_for_path(pulsarLiveCfg);
+            if (pulsarFile.query_exists(null)) {
+                let [ok, contents] = pulsarFile.load_contents(null);
+                if (ok) {
+                    let json = JSON.parse(new TextDecoder().decode(contents));
+                    if (json && json.enabled && json.file && Gio.File.new_for_path(json.file).query_exists(null)) {
+                        return json.file.startsWith('file://') ? json.file : `file://${json.file}`;
+                    }
+                }
+            }
+
+            // 2. Check Hidamari active animated/video wallpaper configuration if present
             let hidamariPaths = [
                 GLib.build_filenamev([homeDir, '.var', 'app', 'io.github.jeffshee.Hidamari', 'config', 'hidamari', 'hidamari.json']),
                 GLib.build_filenamev([homeDir, '.config', 'hidamari', 'hidamari.json'])
@@ -1213,7 +1227,11 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         // System Settings
         let settingsItem = new PopupMenu.PopupMenuItem("System Settings...");
         settingsItem.connect('activate', () => {
-            this._runCommand("gnome-control-center");
+            if (GLib.find_program_in_path('pulsaros-settings')) {
+                this._runCommand("pulsaros-settings");
+            } else {
+                this._runCommand("gnome-control-center");
+            }
         });
         this.logoMenuButton.menu.addMenuItem(settingsItem);
         
