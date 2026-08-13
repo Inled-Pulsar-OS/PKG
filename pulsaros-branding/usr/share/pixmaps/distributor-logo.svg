@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400" height="120" viewBox="0 0 400 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="pulsarGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#556bf7"/>
+      <stop offset="100%" stop-color="#f54eb8"/>
+    </linearGradient>
+  </defs>
+  <!-- Small dot -->
+  <circle cx="50" cy="40" r="14" fill="url(#pulsarGrad)"/>
+  <!-- Large circle -->
+  <circle cx="85" cy="68" r="28" fill="url(#pulsarGrad)"/>
+  <!-- Text -->
+  <text x="135" y="76" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Cantarell', sans-serif" font-size="44" font-weight="700" fill="#FFFFFF" letter-spacing="-1">Pulsar OS</text>
+</svg>

@@ -1,0 +1,22 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsaros-live-wallpaper
+pkgver=1.0.1
+pkgrel=1
+pkgdesc="Native Animated and Video Wallpaper Engine for Pulsar OS"
+arch=(any)
+url="https://inled.es"
+license=(custom)
+depends=(python ffmpeg)
+options=(!strip)
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-live-wallpaper && pwd)"
+    cd "$_src"
+    [ -d usr ] && cp -r usr "$pkgdir/"
+    [ -d etc ] && cp -r etc "$pkgdir/"
+    if [ -d "$srcdir/staging" ]; then
+        cp -r "$srcdir/staging"/* "$pkgdir/"
+    elif [ -d "$srcdir/usr" ]; then
+        cp -r "$srcdir/usr" "$pkgdir/"
+    fi
+}

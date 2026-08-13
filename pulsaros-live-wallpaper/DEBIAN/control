@@ -1,0 +1,10 @@
+Package: pulsaros-live-wallpaper
+Version: 1.0.1
+Section: x11
+Priority: optional
+Architecture: all
+Maintainer: Jaime <info@inled.es>
+Depends: python3, ffmpeg
+Description: Native Animated and Video Wallpaper Engine for Pulsar OS.
+ Manages animated and video wallpapers (MP4, WebM, GIF, MKV, WebP) natively
+ and synchronizes across Desktop, SDDM and LockScreen.
