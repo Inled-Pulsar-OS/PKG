@@ -1,11 +1,12 @@
 diff --git a/panels/background/cc-background-panel.blp b/panels/background/cc-background-panel.blp
-index ff2b3fb..b688d36 100644
+index ff2b3fb..4aa1917 100644
 --- a/panels/background/cc-background-panel.blp
 +++ b/panels/background/cc-background-panel.blp
-@@ -165,6 +165,34 @@ template $CcBackgroundPanel: $CcPanel {
-                 background-chosen => $on_chooser_background_chosen_cb(template);
+@@ -166,6 +166,36 @@ template $CcBackgroundPanel: $CcPanel {
                }
              }
+           }
++
 +          Adw.PreferencesGroup {
 +            title: _("Live Wallpaper (Fondo Animado)");
 +            description: _("Vídeos (.mp4, .webm) y animaciones (.gif, .webp) sincronizados con Escritorio, SDDM y Bloqueo");
@@ -34,9 +35,10 @@ index ff2b3fb..b688d36 100644
 +                ]
 +              }
 +            }
-           }
++          }
          };
        };
+     };
 diff --git a/panels/background/cc-background-panel.c b/panels/background/cc-background-panel.c
 index 201d2ab..6e5c781 100644
 --- a/panels/background/cc-background-panel.c

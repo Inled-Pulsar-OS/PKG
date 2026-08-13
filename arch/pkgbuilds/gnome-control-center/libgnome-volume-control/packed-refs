@@ -1,0 +1,21 @@
+# pack-refs with: peeled fully-peeled sorted 
+6d64d847ea4fb793432691c42052257770056b9e refs/heads/alatiera-master-patch-15426
+1949be72667dec4220de5cfbd4e3066d32a9a63a refs/heads/do-not-deref-null-pointer
+2a7a100a132eeb77a53fc0a20d86282e96d6c668 refs/heads/gbsneto/unnecessary-warnings
+0a4eda0cdc2deb352bebc70ec697c42af46094e4 refs/heads/master
+8eee9f464285a6c59a8a3aa7ffb9bca46ee9be76 refs/merge-requests/12/head
+2ab0a2e0bc66e5665f67275a2933ef84f3fd3a57 refs/merge-requests/12/merge
+1949be72667dec4220de5cfbd4e3066d32a9a63a refs/merge-requests/15/head
+a3549fb7fa7f8780bd410d2a49538f4cc132eb13 refs/merge-requests/15/merge
+301c7a59def997f29c12873cc4386e3c3b9f7ebb refs/merge-requests/26/head
+e8c4b22eeddbe23afba0b3d803253ff03959ae8d refs/merge-requests/26/merge
+9f5af07ea086072452621591e0f5f6bdd3417caf refs/merge-requests/27/head
+45be0e0139f4ded75dce1d6286136531ba522a3c refs/merge-requests/27/merge
+f4620502c2a7ae7c964ca8d5e937d56219a46e82 refs/merge-requests/30/head
+84d05c61bf520626ae410ba4126a8072e3774350 refs/merge-requests/30/merge
+6d64d847ea4fb793432691c42052257770056b9e refs/merge-requests/34/head
+8ef0dd7729aead987fefc39ac57e88027065a8dc refs/merge-requests/34/merge
+c1855af5b169c726f33a28218eeed98c65b3f510 refs/merge-requests/35/head
+586792df1a2f55702801133807b85e1b8508e35d refs/merge-requests/35/merge
+4234a83ee12deb5cd7d5ca5d6f74f5a227f003c0 refs/merge-requests/36/head
+ea33c972f4aec4a56f8f0472f02017e9303b270b refs/merge-requests/36/merge
