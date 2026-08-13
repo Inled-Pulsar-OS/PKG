@@ -1,0 +1,149 @@
+# Maintainer: Jaime <info@inled.es>
+# Maintainer: Fabian Bornschein <fabiscafe@archlinux.org>
+
+pkgbase=gnome-control-center
+pkgname=(
+  gnome-control-center
+  gnome-keybindings
+)
+pkgver=50.4
+pkgrel=1
+pkgdesc="GNOME Settings with Pulsar OS macOS customization and Live Wallpaper engine"
+url="https://inled.es"
+license=(GPL-2.0-or-later)
+arch=(x86_64)
+depends=(
+  accountsservice
+  bolt
+  cairo
+  colord-gtk4
+  cups-pk-helper
+  dconf
+  fontconfig
+  gcr-4
+  gdk-pixbuf2
+  glib2
+  glibc
+  gnome-bluetooth-3.0
+  gnome-color-manager
+  gnome-desktop-4
+  gnome-online-accounts
+  gnome-settings-daemon
+  gnome-shell
+  gnutls
+  graphene
+  gsettings-desktop-schemas
+  gsound
+  gst-plugins-good
+  gtk4
+  hicolor-icon-theme
+  json-glib
+  krb5
+  libadwaita
+  libcolord
+  libcups
+  libepoxy
+  libgcc
+  libgoa
+  libgtop
+  libgudev
+  libibus
+  libmalcontent
+  libmm-glib
+  libnm
+  libnma-gtk4
+  libpulse
+  libpwquality
+  libsecret
+  libsoup3
+  libwacom
+  libx11
+  libxi
+  libxml2
+  pango
+  polkit
+  smbclient
+  sound-theme-freedesktop
+  tecla
+  udisks2
+  upower
+  wayland
+  pulsaros-live-wallpaper
+)
+makedepends=(
+  blueprint-compiler
+  docbook-xsl
+  git
+  glib2-devel
+  meson
+  modemmanager
+)
+source=(
+  "git+https://gitlab.gnome.org/GNOME/gnome-control-center.git#tag=${pkgver/[a-z]/.&}"
+  "git+https://gitlab.gnome.org/GNOME/libgnome-volume-control.git"
+  "git+https://gitlab.gnome.org/GNOME/libgxdp.git#commit=1fe6de799f39b3126e8d0db66fa4f16c10fd9bd6"
+  "pulsar-macos-style.patch"
+)
+sha256sums=('SKIP'
+            'SKIP'
+            'SKIP'
+            'SKIP')
+
+prepare() {
+  cd "$pkgbase"
+
+  git submodule init
+  git submodule set-url subprojects/gvc "$srcdir/libgnome-volume-control"
+  git -c protocol.file.allow=always -c protocol.allow=never submodule update
+
+  echo "🎨 Applying Pulsar OS macOS style and Live Wallpaper patch..."
+  patch -Np1 -i "$srcdir/pulsar-macos-style.patch"
+}
+
+build() {
+  local meson_options=(
+    -D documentation=true
+    -D location-services=enabled
+    -D malcontent=true
+    -D distributor_logo=/usr/share/pixmaps/pulsaros-logo-text.svg
+    -D dark_mode_distributor_logo=/usr/share/pixmaps/pulsaros-logo-text.svg
+  )
+
+  export MESON_PACKAGE_CACHE_DIR="$srcdir"
+
+  arch-meson $pkgbase build "${meson_options[@]}"
+  meson compile -C build
+}
+
+_pick() {
+  local p="$1" f d; shift
+  for f; do
+    d="$srcdir/$p/${f#$pkgdir/}"
+    mkdir -p "$(dirname "$d")"
+    mv "$f" "$d"
+    rmdir -p --ignore-fail-on-non-empty "$(dirname "$f")"
+  done
+}
+
+package_gnome-control-center() {
+  provides=("gnome-control-center=$pkgver")
+  conflicts=("gnome-control-center")
+  depends+=(gnome-keybindings)
+  groups=(gnome)
+
+  meson install -C build --destdir "$pkgdir"
+
+  cd "$pkgdir"
+  _pick gkb usr/share/gettext/its/gnome-keybindings.*
+  _pick gkb usr/share/gnome-control-center/keybindings
+  _pick gkb usr/share/pkgconfig/gnome-keybindings.pc
+}
+
+package_gnome-keybindings() {
+  pkgdesc="Keybindings configuration for GNOME applications"
+  provides=("gnome-keybindings=$pkgver")
+  conflicts=("gnome-keybindings")
+  depends=()
+
+  mv gkb/* "$pkgdir"
+}

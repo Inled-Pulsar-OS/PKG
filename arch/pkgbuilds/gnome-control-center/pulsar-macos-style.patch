@@ -1,0 +1,128 @@
+diff --git a/panels/background/cc-background-panel.blp b/panels/background/cc-background-panel.blp
+index ff2b3fb..b688d36 100644
+--- a/panels/background/cc-background-panel.blp
++++ b/panels/background/cc-background-panel.blp
+@@ -165,6 +165,34 @@ template $CcBackgroundPanel: $CcPanel {
+                 background-chosen => $on_chooser_background_chosen_cb(template);
+               }
+             }
++          Adw.PreferencesGroup {
++            title: _("Live Wallpaper (Fondo Animado)");
++            description: _("Vídeos (.mp4, .webm) y animaciones (.gif, .webp) sincronizados con Escritorio, SDDM y Bloqueo");
++
++            Adw.ActionRow {
++              title: _("Seleccionar Fondo Animado o Vídeo");
++              subtitle: _("Gestionado con el motor nativo Pulsar OS Live Wallpaper");
++
++              [suffix]
++              Button {
++                valign: center;
++                label: _("Elegir Vídeo…");
++                clicked => $on_pick_live_wallpaper_clicked_cb(template);
++                styles [
++                  "suggested-action",
++                ]
++              }
++
++              [suffix]
++              Button {
++                valign: center;
++                label: _("Desactivar");
++                clicked => $on_stop_live_wallpaper_clicked_cb(template);
++                styles [
++                  "destructive-action",
++                ]
++              }
++            }
+           }
+         };
+       };
+diff --git a/panels/background/cc-background-panel.c b/panels/background/cc-background-panel.c
+index 201d2ab..6e5c781 100644
+--- a/panels/background/cc-background-panel.c
++++ b/panels/background/cc-background-panel.c
+@@ -506,6 +506,18 @@ cc_background_panel_finalize (GObject *object)
+   G_OBJECT_CLASS (cc_background_panel_parent_class)->finalize (object);
+ }
+ 
++static void
++on_pick_live_wallpaper_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
++{
++  g_spawn_command_line_async ("pulsaros-live-wallpaper set-dialog", NULL);
++}
++
++static void
++on_stop_live_wallpaper_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
++{
++  g_spawn_command_line_async ("pulsaros-live-wallpaper stop", NULL);
++}
++
+ static void
+ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
+ {
+@@ -527,12 +539,15 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
+   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, background_chooser);
+   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, default_preview);
+   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, dark_preview);
++
+   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, default_toggle);
+   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, dark_toggle);
+ 
+   gtk_widget_class_bind_template_callback (widget_class, on_color_scheme_toggle_active_cb);
+   gtk_widget_class_bind_template_callback (widget_class, on_chooser_background_chosen_cb);
+   gtk_widget_class_bind_template_callback (widget_class, on_add_picture_button_clicked_cb);
++  gtk_widget_class_bind_template_callback (widget_class, on_pick_live_wallpaper_clicked_cb);
++  gtk_widget_class_bind_template_callback (widget_class, on_stop_live_wallpaper_clicked_cb);
+ }
+ 
+ static void
+diff --git a/shell/cc-window.blp b/shell/cc-window.blp
+index 017f1a3..a7ef25e 100644
+--- a/shell/cc-window.blp
++++ b/shell/cc-window.blp
+@@ -38,6 +38,45 @@ template $CcWindow: Adw.ApplicationWindow {
+           }
+         }
+ 
++        [top]
++        Box user_account_banner {
++          orientation: horizontal;
++          spacing: 12;
++          margin-start: 12;
++          margin-end: 12;
++          margin-top: 6;
++          margin-bottom: 6;
++
++          Adw.Avatar {
++            size: 40;
++            text: "Pulsar OS";
++            show-initials: true;
++          }
++
++          Box {
++            orientation: vertical;
++            valign: center;
++            spacing: 2;
++
++            Label {
++              label: _("Apple ID & Cuentas");
++              halign: start;
++              styles [
++                "heading",
++              ]
++            }
++
++            Label {
++              label: _("ID de Pulsar OS, iCloud y Medios");
++              halign: start;
++              styles [
++                "caption",
++                "dim-label",
++              ]
++            }
++          }
++        }
++
+         [top]
+         SearchBar search_bar {
+           search-mode-enabled: bind search_button.active bidirectional;
