@@ -48,6 +48,7 @@ struct _CcKeyboardPanel
   CcListRow           *alt_chars_row;
   CcListRow           *compose_row;
 
+  AdwSwitchRow        *macos_remap_switch_row;
   AdwActionRow        *common_shortcuts_row;
 };
 
@@ -205,6 +206,7 @@ cc_keyboard_panel_class_init (CcKeyboardPanelClass *klass)
   gtk_widget_class_bind_template_child (widget_class, CcKeyboardPanel, same_source);
   gtk_widget_class_bind_template_child (widget_class, CcKeyboardPanel, alt_chars_row);
   gtk_widget_class_bind_template_child (widget_class, CcKeyboardPanel, compose_row);
+  gtk_widget_class_bind_template_child (widget_class, CcKeyboardPanel, macos_remap_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcKeyboardPanel, common_shortcuts_row);
 
   gtk_widget_class_bind_template_callback (widget_class, alt_chars_row_activated);
@@ -246,6 +248,25 @@ cc_keyboard_panel_init (CcKeyboardPanel *self)
   gtk_widget_init_template (GTK_WIDGET (self));
 
   self->input_source_settings = g_settings_new ("org.gnome.desktop.input-sources");
+
+  /* Read initial state of macOS remap */
+  if (self->macos_remap_switch_row)
+    {
+      g_auto(GStrv) options = g_settings_get_strv (self->input_source_settings, "xkb-options");
+      gboolean has_remap = FALSE;
+      if (options)
+        {
+          for (guint i = 0; options[i] != NULL; i++)
+            {
+              if (g_str_equal (options[i], "ctrl:swap_lwin_lctl"))
+                {
+                  has_remap = TRUE;
+                  break;
+                }
+            }
+        }
+      adw_switch_row_set_active (self->macos_remap_switch_row, has_remap);
+    }
 
   /* "Input Source Switching" section */
   g_settings_bind (self->input_source_settings, "per-window",

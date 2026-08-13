@@ -57,7 +57,7 @@ template $CcWindow: Adw.ApplicationWindow {
             margin-top: 4;
             margin-bottom: 4;
 
-            Adw.Avatar {
+            Adw.Avatar user_avatar {
               size: 40;
               text: "Pulsar OS";
               show-initials: true;
@@ -68,7 +68,7 @@ template $CcWindow: Adw.ApplicationWindow {
               valign: center;
               spacing: 2;
 
-              Label {
+              Label user_name_label {
                 label: _("Apple ID &amp; Cuentas");
                 use-markup: true;
                 halign: start;
@@ -77,7 +77,7 @@ template $CcWindow: Adw.ApplicationWindow {
                 ]
               }
 
-              Label {
+              Label user_email_label {
                 label: _("ID de Pulsar OS, iCloud y Medios");
                 halign: start;
                 styles [
