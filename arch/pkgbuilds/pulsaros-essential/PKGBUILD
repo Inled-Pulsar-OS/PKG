@@ -6,7 +6,7 @@ pkgdesc="Essential configurations and system utilities for Pulsar OS (Arch editi
 arch=(any)
 url="https://inled.es"
 license=(custom)
-depends=(sudo polkit flatpak appmenu-gtk-module python-gobject python-dbus bamf libkeybinder3 gtk3 python-xlib docker droidtux macboat appinstall seafari freerdp)
+depends=(sudo polkit flatpak nano appmenu-gtk-module python-gobject python-dbus bamf libkeybinder3 gtk3 python-xlib docker droidtux macboat appinstall seafari freerdp)
 options=(!strip)
 install=pulsaros-essential.install
 
