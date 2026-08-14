@@ -106,14 +106,33 @@ def sync_to_sddm_and_lockscreen(media_path, poster_path):
     except Exception as e:
         print(f"[LiveWallpaper] Warning syncing to SDDM: {e}", file=sys.stderr)
 
+def get_connected_monitors():
+    monitors = []
+    try:
+        for status_file in Path("/sys/class/drm").glob("*/status"):
+            if status_file.is_file() and status_file.read_text().strip() == "connected":
+                name = status_file.parent.name
+                if "-" in name:
+                    name = name.split("-", 1)[1]
+                monitors.append(name)
+    except Exception:
+        pass
+    return monitors
+
 def play_video_engine(video_path):
+    data_source = {
+        "Default": str(video_path)
+    }
+    for mon in get_connected_monitors():
+        data_source[mon] = str(video_path)
+        if mon.startswith("HDMI-A-"):
+            data_source[mon.replace("HDMI-A-", "HDMI-")] = str(video_path)
+
     # Configure Hidamari Engine
     hidamari_cfg = {
         "version": 4,
         "mode": "MODE_VIDEO",
-        "data_source": {
-            "Default": str(video_path)
-        },
+        "data_source": data_source,
         "is_mute": True,
         "audio_volume": 0,
         "is_static_wallpaper": False,
@@ -147,7 +166,8 @@ def play_video_engine(video_path):
     except Exception:
         pass
 
-    # 2. If DBus server was not active, start background player daemon
+    # 2. If DBus server was not active, kill any stale instance and start background player
+    subprocess.run(["flatpak", "kill", "io.github.jeffshee.Hidamari"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     subprocess.Popen(["flatpak", "run", "io.github.jeffshee.Hidamari", "-b"],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
