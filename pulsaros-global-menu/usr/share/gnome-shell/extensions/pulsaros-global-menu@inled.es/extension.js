@@ -156,8 +156,6 @@ const AboutDialog = GObject.registerClass({
     }
 });
 
-// --- Tahoe Theme Screen Locker ---
-// --- Bloqueador de pantalla con tema Tahoe ---
 const LockScreen = GObject.registerClass({
     GTypeName: 'PulsarosLockScreen'
 }, class LockScreen extends St.Widget {
@@ -165,6 +163,8 @@ const LockScreen = GObject.registerClass({
         super._init({
             name: 'pulsaros-lockscreen',
             visible: false,
+            opacity: 0,
+            reactive: false,
             x_expand: true,
             y_expand: true
         });
@@ -432,6 +432,10 @@ const LockScreen = GObject.registerClass({
         this._clocks = [];
         this._passwordEntry = null;
 
+        this.visible = this._isLocked;
+        this.opacity = this._isLocked ? 255 : 0;
+        this.reactive = this._isLocked;
+
         let monitors = Main.layoutManager.monitors;
         let primaryMonitor = Main.layoutManager.primaryMonitor;
         let bgUrl = this._getWallpaperUrl();
@@ -458,10 +462,14 @@ const LockScreen = GObject.registerClass({
             container.add_child(videoActor);
             container._videoActor = videoActor;
 
-            if (isVideo) {
-                container.style = `background-image: url("${this._getPosterUrl(bgUrl)}"); background-size: cover; background-position: center;`;
+            if (this._isLocked) {
+                if (isVideo) {
+                    container.style = `background-image: url("${this._getPosterUrl(bgUrl)}"); background-size: cover; background-position: center;`;
+                } else {
+                    container.style = `background-image: url("${bgUrl}"); background-size: cover; background-position: center;`;
+                }
             } else {
-                container.style = `background-image: url("${bgUrl}"); background-size: cover; background-position: center;`;
+                container.style = 'background-image: none; background-color: transparent;';
             }
             container.set_position(monitor.x, monitor.y);
             container.set_size(monitor.width, monitor.height);
@@ -477,7 +485,9 @@ const LockScreen = GObject.registerClass({
         }
 
         // Live clock updates
-        this._updateClock();
+        if (this._isLocked) {
+            this._updateClock();
+        }
 
         if (this._isLocked) {
             GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
@@ -958,6 +968,21 @@ const LockScreen = GObject.registerClass({
     }
 });
 
+const IGNORED_APPS = [
+    'pulsaros-welcome',
+    'org.pulsaros.welcome',
+    'pulsar-welcome',
+    'calamares',
+    'io.calamares.calamares',
+    'gnome-control-center',
+    'org.gnome.Settings',
+    'spotlight-gtk',
+    'io.github.jeffshee.Hidamari',
+    'hidamari',
+    'gcr-prompter',
+    'polkit-gnome-authentication-agent-1'
+];
+
 class MacOSFullscreenManager {
     constructor(extension) {
         this._extension = extension;
@@ -968,6 +993,24 @@ class MacOSFullscreenManager {
 
         this._setupSettings();
         this._setupSignals();
+    }
+
+    _isIgnoredWindow(window) {
+        if (!window || window.is_override_redirect()) return true;
+        let type = window.get_window_type();
+        if (type !== Meta.WindowType.NORMAL) return true;
+
+        let wmClass = window.get_wm_class ? (window.get_wm_class() || '') : '';
+        let appId = window.get_gtk_application_id ? (window.get_gtk_application_id() || '') : '';
+        let title = window.get_title ? (window.get_title() || '') : '';
+
+        let checkStr = `${wmClass} ${appId} ${title}`.toLowerCase();
+        for (let ignored of IGNORED_APPS) {
+            if (checkStr.includes(ignored.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     _setupSettings() {
@@ -1002,10 +1045,11 @@ class MacOSFullscreenManager {
         }
 
         this._setupPanelAutoHide();
+        this._showPanel(false);
     }
 
     _trackWindow(window) {
-        if (!window || window.is_override_redirect() || window.get_window_type() !== Meta.WindowType.NORMAL) {
+        if (this._isIgnoredWindow(window)) {
             return;
         }
 
@@ -1022,7 +1066,7 @@ class MacOSFullscreenManager {
     }
 
     _onMaximizeChanged(window) {
-        if (!this._enabled || window._pulsarHandlingMaximize) return;
+        if (!this._enabled || window._pulsarHandlingMaximize || this._isIgnoredWindow(window)) return;
 
         let isMax = window.maximized_horizontally && window.maximized_vertically;
         let isTracked = this._fullscreenWindows.has(window);
@@ -1052,7 +1096,7 @@ class MacOSFullscreenManager {
     }
 
     _onFullscreenChanged(window) {
-        if (!this._enabled || window._pulsarHandlingMaximize) return;
+        if (!this._enabled || window._pulsarHandlingMaximize || this._isIgnoredWindow(window)) return;
         if (!window.fullscreen && this._fullscreenWindows.has(window)) {
             this._restoreWindow(window);
         }
@@ -1128,20 +1172,27 @@ class MacOSFullscreenManager {
     }
 
     _onPointerMotion(x, y) {
+        let wsManager = global.workspace_manager;
+        let activeWs = wsManager.get_active_workspace();
+        let hasFullscreenWin = false;
+
+        for (let [win, data] of this._fullscreenWindows) {
+            if (win.get_workspace() === activeWs) {
+                hasFullscreenWin = true;
+                break;
+            }
+        }
+
+        if (!hasFullscreenWin) {
+            if (this._panelHidden) {
+                this._showPanel(false);
+            }
+            return;
+        }
+
         if (!this._panelHidden) {
-            if (y > Main.panel.height + 15) {
-                let wsManager = global.workspace_manager;
-                let activeWs = wsManager.get_active_workspace();
-                let hasFullscreenWin = false;
-                for (let [win, data] of this._fullscreenWindows) {
-                    if (win.get_workspace() === activeWs) {
-                        hasFullscreenWin = true;
-                        break;
-                    }
-                }
-                if (hasFullscreenWin) {
-                    this._hidePanel(true);
-                }
+            if (y > Main.panel.height + 25) {
+                this._hidePanel(true);
             }
             return;
         }
