@@ -143,7 +143,9 @@ package_gnome-control-center() {
 
   # Install pearOS macOS icons for Settings panels
   install -dm755 "$pkgdir/usr/share/icons/hicolor/scalable/apps"
-  if [ -d "$startdir/icons" ]; then
+  if [ -d "$startdir/overlay/icons" ]; then
+    cp -rf "$startdir/overlay/icons/"* "$pkgdir/usr/share/icons/hicolor/scalable/apps/"
+  elif [ -d "$startdir/icons" ]; then
     cp -rf "$startdir/icons/"* "$pkgdir/usr/share/icons/hicolor/scalable/apps/"
   fi
 

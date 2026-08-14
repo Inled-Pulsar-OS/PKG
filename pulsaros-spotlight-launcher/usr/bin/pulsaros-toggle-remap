@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""
+Pulsar OS - Full System Remap & Keybindings Switcher
+Toggles between full macOS workflow (modifier swap + macOS app/window shortcuts + Spotlight)
+and standard upstream GNOME shortcut defaults.
+"""
+
+import sys
+import subprocess
+import ast
+
+def run_gsettings(cmd_list):
+    try:
+        subprocess.run(["gsettings"] + cmd_list, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+def enable_macos_full_remap():
+    print("Enabling full Pulsar OS macOS Remap & Shortcuts...")
+    # 1. Modifier swap: Cmd acts as Ctrl, Ctrl acts as Super
+    run_gsettings(["set", "org.gnome.desktop.input-sources", "xkb-options", "['ctrl:swap_lwin_lctl', 'ctrl:swap_rwin_rctl']"])
+    
+    # 2. Window Management (Mutter / WM)
+    run_gsettings(["set", "org.gnome.mutter", "overlay-key", "''"])
+    run_gsettings(["set", "org.gnome.desktop.wm.keybindings", "close", "['<Primary>w', '<Primary>q', '<Alt>F4']"])
+    run_gsettings(["set", "org.gnome.desktop.wm.keybindings", "minimize", "['<Primary>m']"])
+    run_gsettings(["set", "org.gnome.desktop.wm.keybindings", "show-desktop", "['<Primary>d']"])
+    run_gsettings(["set", "org.gnome.desktop.wm.keybindings", "switch-applications", "['<Primary>Tab']"])
+    run_gsettings(["set", "org.gnome.desktop.wm.keybindings", "switch-applications-backward", "['<Primary><Shift>Tab']"])
+    run_gsettings(["set", "org.gnome.desktop.wm.keybindings", "switch-group", "['<Primary>grave']"])
+    run_gsettings(["set", "org.gnome.desktop.wm.keybindings", "switch-group-backward", "['<Primary><Shift>grave']"])
+    run_gsettings(["set", "org.gnome.desktop.wm.keybindings", "switch-to-workspace-left", "['<Super>Left']"])
+    run_gsettings(["set", "org.gnome.desktop.wm.keybindings", "switch-to-workspace-right", "['<Super>Right']"])
+    run_gsettings(["set", "org.gnome.mutter.keybindings", "toggle-tiled-left", "[]"])
+    run_gsettings(["set", "org.gnome.mutter.keybindings", "toggle-tiled-right", "[]"])
+
+    # 3. Shell Keybindings & Screenshots
+    run_gsettings(["set", "org.gnome.shell.keybindings", "screenshot", "['<Primary><Shift>numbersign']"])
+    run_gsettings(["set", "org.gnome.shell.keybindings", "show-screenshot-ui", "['<Shift><Control>dollar', '<Shift><Super>4', '<Shift><Super>5']"])
+    run_gsettings(["set", "org.gnome.shell.keybindings", "screenshot-window", "['<Shift><Control>percent']"])
+    run_gsettings(["set", "org.gnome.shell.keybindings", "toggle-overview", "['LaunchA']"])
+    run_gsettings(["set", "org.gnome.shell.keybindings", "toggle-application-view", "['LaunchB']"])
+    run_gsettings(["set", "org.gnome.shell.keybindings", "toggle-message-tray", "[]"])
+
+    # 4. Media Keys & Lock
+    run_gsettings(["set", "org.gnome.settings-daemon.plugins.media-keys", "screensaver", "['<Super>l', '<Control>l']"])
+    run_gsettings(["set", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings",
+                   "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/']"])
+
+    # 5. Spotlight shortcuts
+    run_gsettings(["set", "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/", "name", "'Spotlight'"])
+    run_gsettings(["set", "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/", "command", "'pulsaros-spotlight'"])
+    run_gsettings(["set", "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/", "binding", "'<Ctrl>space'"])
+
+    run_gsettings(["set", "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/", "name", "'Spotlight'"])
+    run_gsettings(["set", "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/", "command", "'pulsaros-spotlight'"])
+    run_gsettings(["set", "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/", "binding", "'<Super>space'"])
+
+    print("✅ Pulsar OS full macOS Remap enabled.")
+
+def disable_macos_full_remap():
+    print("Restoring standard GNOME default shortcuts...")
+    # 1. Reset modifiers to standard PC keyboard
+    run_gsettings(["set", "org.gnome.desktop.input-sources", "xkb-options", "[]"])
+    
+    # 2. Reset Mutter / WM
+    run_gsettings(["set", "org.gnome.mutter", "overlay-key", "'Super_L'"])
+    run_gsettings(["reset", "org.gnome.desktop.wm.keybindings", "close"])
+    run_gsettings(["reset", "org.gnome.desktop.wm.keybindings", "minimize"])
+    run_gsettings(["reset", "org.gnome.desktop.wm.keybindings", "show-desktop"])
+    run_gsettings(["reset", "org.gnome.desktop.wm.keybindings", "switch-applications"])
+    run_gsettings(["reset", "org.gnome.desktop.wm.keybindings", "switch-applications-backward"])
+    run_gsettings(["reset", "org.gnome.desktop.wm.keybindings", "switch-group"])
+    run_gsettings(["reset", "org.gnome.desktop.wm.keybindings", "switch-group-backward"])
+    run_gsettings(["reset", "org.gnome.desktop.wm.keybindings", "switch-to-workspace-left"])
+    run_gsettings(["reset", "org.gnome.desktop.wm.keybindings", "switch-to-workspace-right"])
+    run_gsettings(["reset", "org.gnome.mutter.keybindings", "toggle-tiled-left"])
+    run_gsettings(["reset", "org.gnome.mutter.keybindings", "toggle-tiled-right"])
+
+    # 3. Reset Shell
+    run_gsettings(["reset", "org.gnome.shell.keybindings", "screenshot"])
+    run_gsettings(["reset", "org.gnome.shell.keybindings", "show-screenshot-ui"])
+    run_gsettings(["reset", "org.gnome.shell.keybindings", "screenshot-window"])
+    run_gsettings(["reset", "org.gnome.shell.keybindings", "toggle-overview"])
+    run_gsettings(["reset", "org.gnome.shell.keybindings", "toggle-application-view"])
+    run_gsettings(["reset", "org.gnome.shell.keybindings", "toggle-message-tray"])
+    run_gsettings(["reset", "org.gnome.settings-daemon.plugins.media-keys", "screensaver"])
+
+    print("✅ Standard GNOME default keybindings restored.")
+
+def get_status():
+    try:
+        res = subprocess.run(["gsettings", "get", "org.gnome.desktop.input-sources", "xkb-options"], capture_output=True, text=True)
+        raw = res.stdout.strip()
+        if "ctrl:swap_lwin_lctl" in raw:
+            print("macos")
+            return
+    except Exception:
+        pass
+    print("gnome")
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: pulsaros-toggle-remap [macos|gnome|status]")
+        sys.exit(1)
+    
+    arg = sys.argv[1].lower()
+    if arg in ["macos", "enable", "on", "true", "1"]:
+        enable_macos_full_remap()
+    elif arg in ["gnome", "disable", "off", "default", "false", "0"]:
+        disable_macos_full_remap()
+    elif arg == "status":
+        get_status()
+    else:
+        print(f"Unknown option: {arg}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

@@ -237,6 +237,18 @@ template $CcBackgroundPanel: $CcPanel {
           }
 
           Adw.PreferencesGroup {
+            title: _("macOS Layout &amp; Keyboard Remap");
+            description: _("Swap physical Control and Command/Super keys for standard macOS shortcuts (Cmd+C, Cmd+V, Cmd+W)");
+
+            Adw.SwitchRow macos_remap_switch_row {
+              title: _("macOS Keyboard Remap (Cmd as Ctrl)");
+              subtitle: _("Allows using the Command/Super key for standard macOS shortcuts (Cmd+C, Cmd+V, Cmd+W) system-wide");
+              active: false;
+              notify::active => $on_macos_remap_active_changed_cb(template);
+            }
+          }
+
+          Adw.PreferencesGroup {
             title: _("Mouse &amp; Trackpad Cursors");
             description: _("Cursor themes and visual styles");
 
