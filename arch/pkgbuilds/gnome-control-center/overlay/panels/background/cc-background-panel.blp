@@ -249,12 +249,12 @@ template $CcBackgroundPanel: $CcPanel {
           }
 
           Adw.PreferencesGroup {
-            title: _("Ventanas y Pantalla Completa estilo macOS");
-            description: _("Comportamiento inteligente de espacios y barra superior al maximizar");
+            title: _("macOS-style Windows & Fullscreen");
+            description: _("Smart workspace and top bar behavior when maximizing windows");
 
             Adw.SwitchRow macos_fullscreen_switch_row {
-              title: _("Espacios de pantalla completa estilo macOS");
-              subtitle: _("Al maximizar una app, se traslada a un nuevo espacio a pantalla completa y oculta la barra superior");
+              title: _("macOS Fullscreen Spaces");
+              subtitle: _("Moving maximized apps to dedicated workspaces and auto-hiding the top bar");
               active: false;
               notify::active => $on_macos_fullscreen_active_changed_cb(template);
             }
