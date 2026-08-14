@@ -922,6 +922,169 @@ const LockScreen = GObject.registerClass({
     }
 });
 
+const DesktopLiveWallpaper = GObject.registerClass({
+    GTypeName: 'PulsarosDesktopLiveWallpaper'
+}, class DesktopLiveWallpaper extends St.Widget {
+    _init(extension) {
+        super._init({
+            name: 'pulsaros-desktop-live-wallpaper',
+            visible: false,
+            reactive: false,
+            x_expand: true,
+            y_expand: true
+        });
+
+        this._extension = extension;
+        this._videoPipeline = null;
+        this._videoSink = null;
+        this._videoContent = null;
+        this._videoTimerId = 0;
+        this._busWatchId = 0;
+        this._fileMonitor = null;
+        this._monitorChangedId = 0;
+
+        this.set_position(0, 0);
+        this.set_size(global.stage.width, global.stage.height);
+
+        this._monitorChangedId = Main.layoutManager.connect('monitors-changed', () => {
+            this.set_position(0, 0);
+            this.set_size(global.stage.width, global.stage.height);
+        });
+
+        this._setupConfigMonitor();
+        this._syncWallpaper();
+    }
+
+    _setupConfigMonitor() {
+        try {
+            let homeDir = GLib.get_home_dir();
+            let configDir = Gio.File.new_for_path(GLib.build_filenamev([homeDir, '.config', 'pulsaros']));
+            if (!configDir.query_exists(null)) {
+                configDir.make_directory_with_parents(null);
+            }
+            let configFile = configDir.get_child('live-wallpaper.json');
+            this._fileMonitor = configFile.monitor_file(Gio.FileMonitorFlags.NONE, null);
+            this._fileMonitor.connect('changed', () => this._syncWallpaper());
+        } catch (e) {
+            console.error("[DesktopLiveWallpaper] Monitor setup error:", e);
+        }
+    }
+
+    _syncWallpaper() {
+        try {
+            let homeDir = GLib.get_home_dir();
+            let pulsarLiveCfg = GLib.build_filenamev([homeDir, '.config', 'pulsaros', 'live-wallpaper.json']);
+            let file = Gio.File.new_for_path(pulsarLiveCfg);
+            if (file.query_exists(null)) {
+                let [ok, contents] = file.load_contents(null);
+                if (ok) {
+                    let json = JSON.parse(new TextDecoder().decode(contents));
+                    if (json && json.enabled && json.file) {
+                        let videoFile = Gio.File.new_for_path(json.file);
+                        if (videoFile.query_exists(null)) {
+                            this._startVideo(json.file);
+                            return;
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("[DesktopLiveWallpaper] Sync error:", e);
+        }
+        this._stopVideo();
+    }
+
+    _startVideo(videoPath) {
+        this._stopVideo();
+        try {
+            Gst.init(null);
+            let localPath = videoPath.startsWith('file://') ? decodeURIComponent(videoPath.substring(7)) : videoPath;
+            let file = Gio.File.new_for_path(localPath);
+            if (!file.query_exists(null)) return;
+            let videoUri = file.get_uri();
+
+            this._videoContent = new Clutter.Image();
+            this.set_position(0, 0);
+            this.set_size(global.stage.width, global.stage.height);
+            this.set_content(this._videoContent);
+            this.visible = true;
+
+            let pipeStr = `playbin video-sink="videoconvert ! video/x-raw,format=RGBA ! appsink name=sink emit-signals=false max-buffers=1 drop=true" audio-sink="fakesink"`;
+            this._videoPipeline = Gst.parse_launch(pipeStr);
+            this._videoPipeline.set_property('uri', videoUri);
+            this._videoSink = this._videoPipeline.get_by_name('sink');
+
+            let bus = this._videoPipeline.get_bus();
+            bus.add_signal_watch();
+            this._busWatchId = bus.connect('message::eos', () => {
+                if (this._videoPipeline) {
+                    this._videoPipeline.seek_simple(Gst.Format.TIME, Gst.SeekFlags.FLUSH | Gst.SeekFlags.KEY_UNIT, 0);
+                }
+            });
+
+            this._videoPipeline.set_state(Gst.State.PLAYING);
+
+            this._videoTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 33, () => {
+                if (!this._videoSink || !this.visible) return GLib.SOURCE_CONTINUE;
+                try {
+                    let sample = this._videoSink.try_pull_sample(0);
+                    if (sample) {
+                        let buffer = sample.get_buffer();
+                        let caps = sample.get_caps();
+                        let s = caps.get_structure(0);
+                        let [okW, width] = s.get_int('width');
+                        let [okH, height] = s.get_int('height');
+                        let [okMap, mapInfo] = buffer.map(Gst.MapFlags.READ);
+                        if (okMap) {
+                            let bytes = GLib.Bytes.new(mapInfo.data);
+                            buffer.unmap(mapInfo);
+                            if (this._videoContent) {
+                                this._videoContent.set_bytes(bytes, Cogl.PixelFormat.RGBA_8888, width, height, width * 4);
+                            }
+                        }
+                    }
+                } catch (e) {}
+                return GLib.SOURCE_CONTINUE;
+            });
+        } catch (e) {
+            console.error("[DesktopLiveWallpaper] Start video error:", e);
+        }
+    }
+
+    _stopVideo() {
+        this.visible = false;
+        if (this._videoTimerId) {
+            GLib.source_remove(this._videoTimerId);
+            this._videoTimerId = 0;
+        }
+        if (this._busWatchId && this._videoPipeline) {
+            let bus = this._videoPipeline.get_bus();
+            bus.disconnect(this._busWatchId);
+            this._busWatchId = 0;
+        }
+        if (this._videoPipeline) {
+            this._videoPipeline.set_state(Gst.State.NULL);
+            this._videoPipeline = null;
+        }
+        this._videoSink = null;
+        this._videoContent = null;
+        this.set_content(null);
+    }
+
+    destroy() {
+        this._stopVideo();
+        if (this._monitorChangedId) {
+            Main.layoutManager.disconnect(this._monitorChangedId);
+            this._monitorChangedId = 0;
+        }
+        if (this._fileMonitor) {
+            this._fileMonitor.cancel();
+            this._fileMonitor = null;
+        }
+        super.destroy();
+    }
+});
+
 export default class PulsarosGlobalMenuExtension extends Extension {
     enable() {
         this._menuButtons = [];
@@ -933,6 +1096,16 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         this._activeAppWindow = null;
         this._activeChangedId = 0;
         
+        // Native Desktop Live Wallpaper layer
+        try {
+            this._desktopLiveWallpaper = new DesktopLiveWallpaper(this);
+            if (Main.layoutManager && Main.layoutManager._backgroundGroup) {
+                Main.layoutManager._backgroundGroup.add_child(this._desktopLiveWallpaper);
+            }
+        } catch (e) {
+            console.error("[GlobalMenu] Failed to add desktop live wallpaper:", e);
+        }
+
         // Initialize the virtual keyboard device for injecting keystrokes (Wayland native)
         // Inicializar el dispositivo de teclado virtual para inyectar pulsaciones de tecla (nativo en Wayland)
         try {
@@ -1075,6 +1248,15 @@ export default class PulsarosGlobalMenuExtension extends Extension {
             Main.uiGroup.remove_child(this._lockScreenOverlay);
             this._lockScreenOverlay.destroy();
             this._lockScreenOverlay = null;
+        }
+
+        // Destroy desktop live wallpaper layer
+        if (this._desktopLiveWallpaper) {
+            if (Main.layoutManager && Main.layoutManager._backgroundGroup) {
+                Main.layoutManager._backgroundGroup.remove_child(this._desktopLiveWallpaper);
+            }
+            this._desktopLiveWallpaper.destroy();
+            this._desktopLiveWallpaper = null;
         }
         
         // Safely destroy and remove all panel buttons
