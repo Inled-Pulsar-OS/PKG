@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="pulsaros-global-menu">
+  <schema id="org.gnome.shell.extensions.pulsaros-global-menu" path="/org/gnome/shell/extensions/pulsaros-global-menu/">
+    <key name="macos-fullscreen-spaces" type="b">
+      <default>true</default>
+      <summary>macOS Fullscreen Spaces and Top Bar Auto-Hide</summary>
+      <description>Move maximized windows to dedicated workspaces and auto-hide top bar in fullscreen like macOS</description>
+    </key>
+  </schema>
+</schemalist>

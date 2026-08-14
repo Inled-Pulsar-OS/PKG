@@ -10,5 +10,6 @@
     "49",
     "50"
   ],
-  "url": "https://inled.es"
+  "url": "https://inled.es",
+  "settings-schema": "org.gnome.shell.extensions.pulsaros-global-menu"
 }

@@ -205,6 +205,90 @@ def get_hidamari_video_dir():
     h_dir.mkdir(parents=True, exist_ok=True)
     return h_dir
 
+def copy_with_progress(src_path, dst_path):
+    src = Path(src_path)
+    dst = Path(dst_path)
+    try:
+        total_size = src.stat().st_size
+    except Exception:
+        total_size = 0
+
+    # If small (< 5MB) or in headless environment, copy directly
+    if total_size < 5 * 1024 * 1024 or not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        shutil.copy2(src, dst)
+        return True
+
+    try:
+        import gi
+        gi.require_version('Gtk', '3.0')
+        from gi.repository import Gtk, GLib
+        import threading
+
+        win = Gtk.Window(title="Pulsar OS")
+        win.set_default_size(360, 130)
+        win.set_position(Gtk.WindowPosition.CENTER)
+        win.set_resizable(False)
+        win.set_border_width(16)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        win.add(vbox)
+
+        title_label = Gtk.Label()
+        title_label.set_markup("<b>Preparando fondo animado...</b>")
+        title_label.set_xalign(0.0)
+        vbox.pack_start(title_label, False, False, 0)
+
+        total_mb = total_size / (1024 * 1024)
+        sub_label = Gtk.Label()
+        sub_label.set_markup(f"<small>Importando <i>{src.name}</i> ({total_mb:.1f} MB)</small>")
+        sub_label.set_xalign(0.0)
+        sub_label.set_ellipsize(3)
+        vbox.pack_start(sub_label, False, False, 0)
+
+        pbar = Gtk.ProgressBar()
+        pbar.set_show_text(True)
+        pbar.set_fraction(0.0)
+        vbox.pack_start(pbar, False, False, 0)
+
+        win.show_all()
+
+        copied_bytes = [0]
+        error_occurred = [False]
+
+        def do_copy():
+            try:
+                chunk_size = 1024 * 1024  # 1MB
+                with open(src, "rb") as fsrc, open(dst, "wb") as fdst:
+                    while True:
+                        buf = fsrc.read(chunk_size)
+                        if not buf:
+                            break
+                        fdst.write(buf)
+                        copied_bytes[0] += len(buf)
+                        frac = min(1.0, copied_bytes[0] / total_size) if total_size > 0 else 1.0
+                        GLib.idle_add(update_ui, frac, copied_bytes[0], total_size)
+                shutil.copystat(src, dst)
+            except Exception as e:
+                print(f"[LiveWallpaper] Copy error: {e}", file=sys.stderr)
+                error_occurred[0] = True
+            finally:
+                GLib.idle_add(Gtk.main_quit)
+
+        def update_ui(frac, current, total):
+            pbar.set_fraction(frac)
+            c_mb = current / (1024 * 1024)
+            t_mb = total / (1024 * 1024)
+            pbar.set_text(f"{c_mb:.1f} / {t_mb:.1f} MB ({int(frac * 100)}%)")
+            return GLib.SOURCE_REMOVE
+
+        threading.Thread(target=do_copy, daemon=True).start()
+        Gtk.main()
+        return not error_occurred[0]
+    except Exception as e:
+        print(f"[LiveWallpaper] Fallback to direct copy: {e}", file=sys.stderr)
+        shutil.copy2(src, dst)
+        return True
+
 def set_wallpaper(file_path):
     path = Path(file_path).resolve()
     if not path.exists():
@@ -216,16 +300,11 @@ def set_wallpaper(file_path):
     is_animated = ext in [".gif", ".webp"]
 
     if is_video:
-        # Copy to Hidamari video directory so Flatpak sandbox has immediate access
+        # Copy to Hidamari video directory with progress indicator
         h_dir = get_hidamari_video_dir()
         target_video = h_dir / path.name
         if target_video.resolve() != path.resolve():
-            try:
-                shutil.copy2(path, target_video)
-                path = target_video
-            except Exception as e:
-                print(f"[LiveWallpaper] Warning copying to Hidamari folder: {e}", file=sys.stderr)
-        else:
+            copy_with_progress(path, target_video)
             path = target_video
 
     poster_path = None

@@ -249,6 +249,18 @@ template $CcBackgroundPanel: $CcPanel {
           }
 
           Adw.PreferencesGroup {
+            title: _("Ventanas y Pantalla Completa estilo macOS");
+            description: _("Comportamiento inteligente de espacios y barra superior al maximizar");
+
+            Adw.SwitchRow macos_fullscreen_switch_row {
+              title: _("Espacios de pantalla completa estilo macOS");
+              subtitle: _("Al maximizar una app, se traslada a un nuevo espacio a pantalla completa y oculta la barra superior");
+              active: true;
+              notify::active => $on_macos_fullscreen_active_changed_cb(template);
+            }
+          }
+
+          Adw.PreferencesGroup {
             title: _("Mouse &amp; Trackpad Cursors");
             description: _("Cursor themes and visual styles");
 

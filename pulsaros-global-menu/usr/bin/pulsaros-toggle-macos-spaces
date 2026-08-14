@@ -1,0 +1,9 @@
+#!/bin/bash
+CURRENT=$(gsettings get org.gnome.shell.extensions.pulsaros-global-menu macos-fullscreen-spaces 2>/dev/null || echo "false")
+if [ "$1" = "enable" ] || [ "$CURRENT" != "true" -a -z "$1" ]; then
+    gsettings set org.gnome.shell.extensions.pulsaros-global-menu macos-fullscreen-spaces true 2>/dev/null || true
+    echo "✅ macOS Fullscreen Spaces & Auto-hide: ENABLED"
+else
+    gsettings set org.gnome.shell.extensions.pulsaros-global-menu macos-fullscreen-spaces false 2>/dev/null || true
+    echo "❌ macOS Fullscreen Spaces & Auto-hide: DISABLED"
+fi

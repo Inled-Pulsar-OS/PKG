@@ -958,6 +958,265 @@ const LockScreen = GObject.registerClass({
     }
 });
 
+class MacOSFullscreenManager {
+    constructor(extension) {
+        this._extension = extension;
+        this._windowSignals = new Map();
+        this._fullscreenWindows = new Map();
+        this._enabled = true;
+        this._panelHidden = false;
+
+        this._setupSettings();
+        this._setupSignals();
+    }
+
+    _setupSettings() {
+        try {
+            let schema = 'org.gnome.shell.extensions.pulsaros-global-menu';
+            let schemaSource = Gio.SettingsSchemaSource.get_default();
+            if (schemaSource && schemaSource.lookup(schema, true)) {
+                this._settings = new Gio.Settings({ schema_id: schema });
+                this._enabled = this._settings.get_boolean('macos-fullscreen-spaces');
+                this._settings.connect('changed::macos-fullscreen-spaces', () => {
+                    this._enabled = this._settings.get_boolean('macos-fullscreen-spaces');
+                    if (!this._enabled) {
+                        this._showPanel(false);
+                    }
+                });
+            } else {
+                this._enabled = true;
+            }
+        } catch (e) {
+            this._enabled = true;
+        }
+    }
+
+    _setupSignals() {
+        this._windowCreatedId = global.display.connect('window-created', (display, window) => {
+            this._trackWindow(window);
+        });
+
+        for (let actor of global.get_window_actors()) {
+            let win = actor.meta_window;
+            if (win) this._trackWindow(win);
+        }
+
+        this._setupPanelAutoHide();
+    }
+
+    _trackWindow(window) {
+        if (!window || window.is_override_redirect() || window.get_window_type() !== Meta.WindowType.NORMAL) {
+            return;
+        }
+
+        let winId = window.get_id ? window.get_id() : null;
+        if (!winId || this._windowSignals.has(winId)) return;
+
+        let signals = [];
+        signals.push(window.connect('notify::maximized-horizontally', () => this._onMaximizeChanged(window)));
+        signals.push(window.connect('notify::maximized-vertically', () => this._onMaximizeChanged(window)));
+        signals.push(window.connect('notify::fullscreen', () => this._onFullscreenChanged(window)));
+        signals.push(window.connect('unmanaged', () => this._untrackWindow(window)));
+
+        this._windowSignals.set(winId, { window, signals });
+    }
+
+    _onMaximizeChanged(window) {
+        if (!this._enabled || window._pulsarHandlingMaximize) return;
+
+        let isMax = window.maximized_horizontally && window.maximized_vertically;
+        let isTracked = this._fullscreenWindows.has(window);
+
+        if (isMax && !isTracked) {
+            window._pulsarHandlingMaximize = true;
+            try {
+                let wsManager = global.workspace_manager;
+                let activeWs = wsManager.get_active_workspace();
+                let origWsIndex = activeWs.index();
+
+                let newWs = wsManager.append_new_workspace(false, global.get_current_time());
+                window.change_workspace(newWs);
+                window.make_fullscreen();
+                newWs.activate(global.get_current_time());
+
+                this._fullscreenWindows.set(window, { origWsIndex, wasMaximized: true });
+                this._updatePanelVisibility();
+            } catch (e) {
+                console.error("[MacOSFullscreen] Error moving to workspace:", e);
+            } finally {
+                window._pulsarHandlingMaximize = false;
+            }
+        } else if (!isMax && isTracked && !window.fullscreen) {
+            this._restoreWindow(window);
+        }
+    }
+
+    _onFullscreenChanged(window) {
+        if (!this._enabled || window._pulsarHandlingMaximize) return;
+        if (!window.fullscreen && this._fullscreenWindows.has(window)) {
+            this._restoreWindow(window);
+        }
+    }
+
+    _restoreWindow(window) {
+        let data = this._fullscreenWindows.get(window);
+        if (!data) return;
+
+        window._pulsarHandlingMaximize = true;
+        try {
+            let wsManager = global.workspace_manager;
+            let origIndex = Math.min(data.origWsIndex, wsManager.n_workspaces - 1);
+            let targetWs = wsManager.get_workspace_by_index(origIndex);
+
+            if (window.fullscreen) {
+                window.unmake_fullscreen();
+            }
+            if (window.maximized_horizontally || window.maximized_vertically) {
+                window.unmaximize(Meta.MaximizeFlags.BOTH);
+            }
+
+            if (targetWs) {
+                window.change_workspace(targetWs);
+                targetWs.activate(global.get_current_time());
+            }
+
+            this._fullscreenWindows.delete(window);
+            this._updatePanelVisibility();
+        } catch (e) {
+            console.error("[MacOSFullscreen] Error restoring window:", e);
+        } finally {
+            window._pulsarHandlingMaximize = false;
+        }
+    }
+
+    _setupPanelAutoHide() {
+        this._wsChangedId = global.workspace_manager.connect('active-workspace-changed', () => {
+            this._updatePanelVisibility();
+        });
+
+        this._stageMotionId = global.stage.connect('captured-event', (stage, event) => {
+            if (event.type() === Clutter.EventType.MOTION) {
+                let [x, y] = event.get_coords();
+                this._onPointerMotion(x, y);
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
+    }
+
+    _updatePanelVisibility() {
+        if (!this._enabled) {
+            this._showPanel(false);
+            return;
+        }
+
+        let wsManager = global.workspace_manager;
+        let activeWs = wsManager.get_active_workspace();
+        let hasFullscreenWin = false;
+
+        for (let [win, data] of this._fullscreenWindows) {
+            if (win.get_workspace() === activeWs) {
+                hasFullscreenWin = true;
+                break;
+            }
+        }
+
+        if (hasFullscreenWin) {
+            this._hidePanel(true);
+        } else {
+            this._showPanel(true);
+        }
+    }
+
+    _onPointerMotion(x, y) {
+        if (!this._panelHidden) {
+            if (y > Main.panel.height + 15) {
+                let wsManager = global.workspace_manager;
+                let activeWs = wsManager.get_active_workspace();
+                let hasFullscreenWin = false;
+                for (let [win, data] of this._fullscreenWindows) {
+                    if (win.get_workspace() === activeWs) {
+                        hasFullscreenWin = true;
+                        break;
+                    }
+                }
+                if (hasFullscreenWin) {
+                    this._hidePanel(true);
+                }
+            }
+            return;
+        }
+
+        if (y <= 4) {
+            this._showPanel(true);
+        }
+    }
+
+    _hidePanel(animated = false) {
+        this._panelHidden = true;
+        if (animated) {
+            Main.panel.ease({
+                translation_y: -Main.panel.height,
+                opacity: 0,
+                duration: 250,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD
+            });
+        } else {
+            Main.panel.translation_y = -Main.panel.height;
+            Main.panel.opacity = 0;
+        }
+    }
+
+    _showPanel(animated = false) {
+        this._panelHidden = false;
+        if (animated) {
+            Main.panel.ease({
+                translation_y: 0,
+                opacity: 255,
+                duration: 250,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD
+            });
+        } else {
+            Main.panel.translation_y = 0;
+            Main.panel.opacity = 255;
+        }
+    }
+
+    _untrackWindow(window) {
+        let winId = window.get_id ? window.get_id() : null;
+        if (winId && this._windowSignals.has(winId)) {
+            let data = this._windowSignals.get(winId);
+            for (let id of data.signals) {
+                try { window.disconnect(id); } catch (e) {}
+            }
+            this._windowSignals.delete(winId);
+        }
+        this._fullscreenWindows.delete(window);
+    }
+
+    destroy() {
+        if (this._windowCreatedId) {
+            global.display.disconnect(this._windowCreatedId);
+            this._windowCreatedId = 0;
+        }
+        if (this._wsChangedId) {
+            global.workspace_manager.disconnect(this._wsChangedId);
+            this._wsChangedId = 0;
+        }
+        if (this._stageMotionId) {
+            global.stage.disconnect(this._stageMotionId);
+            this._stageMotionId = 0;
+        }
+        for (let [winId, data] of this._windowSignals) {
+            for (let id of data.signals) {
+                try { data.window.disconnect(id); } catch (e) {}
+            }
+        }
+        this._windowSignals.clear();
+        this._fullscreenWindows.clear();
+        this._showPanel(false);
+    }
+}
+
 export default class PulsarosGlobalMenuExtension extends Extension {
     enable() {
         this._menuButtons = [];
@@ -968,6 +1227,13 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         this._origUnlock = null;
         this._activeAppWindow = null;
         this._activeChangedId = 0;
+
+        // macOS Fullscreen Spaces & Top Panel auto-hide manager
+        try {
+            this._macOSFullscreenManager = new MacOSFullscreenManager(this);
+        } catch (e) {
+            console.error("[GlobalMenu] Failed to start macOS fullscreen manager:", e);
+        }
 
         // Initialize the virtual keyboard device for injecting keystrokes (Wayland native)
         // Inicializar el dispositivo de teclado virtual para inyectar pulsaciones de tecla (nativo en Wayland)
@@ -1150,6 +1416,12 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         if (Main.screenShield && this._activeChangedId) {
             Main.screenShield.disconnect(this._activeChangedId);
             this._activeChangedId = 0;
+        }
+
+        // Clean up macOS fullscreen spaces manager
+        if (this._macOSFullscreenManager) {
+            this._macOSFullscreenManager.destroy();
+            this._macOSFullscreenManager = null;
         }
         
         // Nullify the virtual keyboard device reference
