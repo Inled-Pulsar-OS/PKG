@@ -70,11 +70,11 @@ Rectangle {
             id: wallpaper
             anchors.fill: parent
             fillMode: Image.PreserveAspectCrop
-            visible: !animatedWallpaper.visible && !(videoLoader.item && videoLoader.item.isPlaying)
+            visible: !animatedWallpaper.visible && !videoLoader.active
             cache: false
             Binding on source {
                 when: config.background !== undefined
-                value: config.background.toString().endsWith(".mp4") || config.background.toString().endsWith(".webm") || config.background.toString().endsWith(".mkv") || config.background.toString().endsWith(".mov")
+                value: (config.background.toString().endsWith(".mp4") || config.background.toString().endsWith(".webm") || config.background.toString().endsWith(".mkv") || config.background.toString().endsWith(".mov"))
                        ? "file:///var/lib/pulsar-sddm/pulsar-wallpaper.png"
                        : config.background
             }
@@ -100,7 +100,12 @@ Rectangle {
             source: "components/VideoWallpaper.qml"
             onLoaded: {
                 if (item) {
-                    item.videoSource = config.background !== undefined ? config.background : "file:///var/lib/pulsar-sddm/pulsar-wallpaper.mp4"
+                    var bg = (config.background !== undefined) ? config.background.toString() : "";
+                    if (bg.endsWith(".mp4") || bg.endsWith(".webm") || bg.endsWith(".mkv") || bg.endsWith(".mov")) {
+                        item.videoSource = bg;
+                    } else {
+                        item.videoSource = "file:///var/lib/pulsar-sddm/pulsar-wallpaper.mp4";
+                    }
                 }
             }
         }

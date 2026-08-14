@@ -97,10 +97,16 @@ def sync_to_sddm_and_lockscreen(media_path, poster_path):
             else:
                 shutil.copy2(media_path, SDDM_DIR / "pulsar-wallpaper.png")
             
-            # Make sure permissions allow reading
-            for p in SDDM_DIR.glob("pulsar-wallpaper*"):
+            # Update SDDM theme.conf if accessible
+            theme_conf = Path("/usr/share/sddm/themes/Apple.Tahoe/theme.conf")
+            if theme_conf.exists():
                 try:
-                    os.chmod(p, 0o666)
+                    if ext in [".mp4", ".webm", ".mkv", ".mov", ".avi"]:
+                        subprocess.run(["sed", "-i", "s|^background=.*|background=file:///var/lib/pulsar-sddm/pulsar-wallpaper.mp4|", str(theme_conf)], check=False)
+                        subprocess.run(["sed", "-i", "s|^type=.*|type=video|", str(theme_conf)], check=False)
+                    else:
+                        subprocess.run(["sed", "-i", "s|^background=.*|background=file:///var/lib/pulsar-sddm/pulsar-wallpaper.png|", str(theme_conf)], check=False)
+                        subprocess.run(["sed", "-i", "s|^type=.*|type=image|", str(theme_conf)], check=False)
                 except Exception:
                     pass
     except Exception as e:
