@@ -185,6 +185,20 @@ def stop_video_engine():
     # 2. Clean kill
     subprocess.run(["flatpak", "kill", "io.github.jeffshee.Hidamari"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
+def get_hidamari_video_dir():
+    try:
+        res = subprocess.run(["xdg-user-dir", "VIDEOS"], capture_output=True, text=True, check=True)
+        v_dir = Path(res.stdout.strip())
+        if v_dir.exists():
+            h_dir = v_dir / "Hidamari"
+            h_dir.mkdir(parents=True, exist_ok=True)
+            return h_dir
+    except Exception:
+        pass
+    h_dir = Path.home() / "Videos" / "Hidamari"
+    h_dir.mkdir(parents=True, exist_ok=True)
+    return h_dir
+
 def set_wallpaper(file_path):
     path = Path(file_path).resolve()
     if not path.exists():
@@ -194,6 +208,19 @@ def set_wallpaper(file_path):
     ext = path.suffix.lower()
     is_video = ext in [".mp4", ".webm", ".mkv", ".mov", ".avi"]
     is_animated = ext in [".gif", ".webp"]
+
+    if is_video:
+        # Copy to Hidamari video directory so Flatpak sandbox has immediate access
+        h_dir = get_hidamari_video_dir()
+        target_video = h_dir / path.name
+        if target_video.resolve() != path.resolve():
+            try:
+                shutil.copy2(path, target_video)
+                path = target_video
+            except Exception as e:
+                print(f"[LiveWallpaper] Warning copying to Hidamari folder: {e}", file=sys.stderr)
+        else:
+            path = target_video
 
     poster_path = None
     if is_video:
