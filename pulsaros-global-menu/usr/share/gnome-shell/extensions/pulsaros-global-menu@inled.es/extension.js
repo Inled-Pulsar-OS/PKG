@@ -266,6 +266,19 @@ const LockScreen = GObject.registerClass({
         return `file://${this._extension.path}/background.webp`;
     }
 
+    _getPosterUrl(videoUrl) {
+        let homeDir = GLib.get_home_dir();
+        let primaryPoster = GLib.build_filenamev([homeDir, '.local', 'share', 'backgrounds', 'pulsar-live-wallpaper.png']);
+        if (GLib.file_test(primaryPoster, GLib.FileTest.EXISTS)) {
+            return `file://${primaryPoster}`;
+        }
+        let sddmPoster = '/var/lib/pulsar-sddm/pulsar-wallpaper.png';
+        if (GLib.file_test(sddmPoster, GLib.FileTest.EXISTS)) {
+            return `file://${sddmPoster}`;
+        }
+        return `file:///usr/share/backgrounds/pulsar-os-tahoe.png`;
+    }
+
     _isVideoFile(url) {
         if (!url) return false;
         let clean = url.toLowerCase();
@@ -276,19 +289,22 @@ const LockScreen = GObject.registerClass({
         this._stopVideoWallpaper();
         try {
             Gst.init(null);
-            let localPath = videoPath.startsWith('file://') ? videoPath.substring(7) : videoPath;
+            let localPath = videoPath.startsWith('file://') ? decodeURIComponent(videoPath.substring(7)) : videoPath;
             if (!GLib.file_test(localPath, GLib.FileTest.EXISTS)) {
                 return;
             }
-            let pipeStr = `filesrc location="${localPath}" ! decodebin ! videoconvert ! video/x-raw,format=RGBA ! appsink name=sink emit-signals=false max-buffers=1 drop=true`;
-            this._videoPipeline = Gst.parse_launch(pipeStr);
-            this._videoSink = this._videoPipeline.get_by_name('sink');
+            let videoUri = videoPath.startsWith('file://') ? videoPath : `file://${videoPath}`;
+            let posterUrl = this._getPosterUrl(videoPath);
 
             this._videoContent = new Clutter.Image();
             for (let container of this._monitorContainers) {
-                container.style = 'background-color: #000000;';
+                container.style = `background-image: url("${posterUrl}"); background-size: cover; background-position: center;`;
                 container.set_content(this._videoContent);
             }
+
+            let pipeStr = `playbin uri="${videoUri}" video-sink="videoconvert ! video/x-raw,format=RGBA ! appsink name=sink emit-signals=false max-buffers=1 drop=true" audio-sink="fakesink"`;
+            this._videoPipeline = Gst.parse_launch(pipeStr);
+            this._videoSink = this._videoPipeline.get_by_name('sink');
 
             let bus = this._videoPipeline.get_bus();
             bus.add_signal_watch();
@@ -304,28 +320,30 @@ const LockScreen = GObject.registerClass({
                 if (!this._isLocked || !this._videoSink) {
                     return GLib.SOURCE_CONTINUE;
                 }
-                let sample = this._videoSink.try_pull_sample(0);
-                if (sample) {
-                    let buffer = sample.get_buffer();
-                    let caps = sample.get_caps();
-                    let s = caps.get_structure(0);
-                    let [okW, width] = s.get_int('width');
-                    let [okH, height] = s.get_int('height');
-                    let [okMap, mapInfo] = buffer.map(Gst.MapFlags.READ);
-                    if (okMap) {
-                        let bytes = GLib.Bytes.new(mapInfo.data);
-                        buffer.unmap(mapInfo);
-                        if (this._videoContent) {
-                            this._videoContent.set_bytes(
-                                bytes,
-                                Cogl.PixelFormat.RGBA_8888,
-                                width,
-                                height,
-                                width * 4
-                            );
+                try {
+                    let sample = this._videoSink.try_pull_sample(0);
+                    if (sample) {
+                        let buffer = sample.get_buffer();
+                        let caps = sample.get_caps();
+                        let s = caps.get_structure(0);
+                        let [okW, width] = s.get_int('width');
+                        let [okH, height] = s.get_int('height');
+                        let [okMap, mapInfo] = buffer.map(Gst.MapFlags.READ);
+                        if (okMap) {
+                            let bytes = GLib.Bytes.new(mapInfo.data);
+                            buffer.unmap(mapInfo);
+                            if (this._videoContent) {
+                                this._videoContent.set_bytes(
+                                    bytes,
+                                    Cogl.PixelFormat.RGBA_8888,
+                                    width,
+                                    height,
+                                    width * 4
+                                );
+                            }
                         }
                     }
-                }
+                } catch (pullErr) {}
                 return GLib.SOURCE_CONTINUE;
             });
         } catch (e) {
@@ -403,7 +421,7 @@ const LockScreen = GObject.registerClass({
             });
 
             if (isVideo) {
-                container.style = 'background-color: #000000;';
+                container.style = `background-image: url("${this._getPosterUrl(bgUrl)}"); background-size: cover; background-position: center;`;
             } else {
                 container.style = `background-image: url("${bgUrl}"); background-size: cover; background-position: center;`;
             }
