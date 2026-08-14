@@ -238,6 +238,12 @@ const LockScreen = GObject.registerClass({
                 }
             }
 
+            // 3. Check system default live video wallpaper
+            let sddmVideo = '/var/lib/pulsar-sddm/pulsar-wallpaper.mp4';
+            if (GLib.file_test(sddmVideo, GLib.FileTest.EXISTS)) {
+                return `file://${sddmVideo}`;
+            }
+
             // 2. Read active GNOME background settings
             let colorScheme = this._ifaceSettings.get_string('color-scheme');
             let uri = (colorScheme === 'prefer-dark')
@@ -1171,26 +1177,55 @@ class MacOSFullscreenManager {
     }
 
     _setupPanelHoverTrigger() {
-        this._stageMotionId = global.stage.connect('captured-event', (stage, event) => {
-            if (event.type() === Clutter.EventType.MOTION) {
-                let [x, y] = event.get_coords();
-                if (this._isCurrentWorkspaceFullscreenSpace()) {
-                    if (y <= 30) {
-                        this._showPanel(true);
-                    } else if (y > Main.panel.height + 25) {
-                        this._hidePanel(true);
-                    }
-                } else {
-                    if (this._panelHidden) {
-                        this._showPanel(false);
-                    }
-                }
+        this._topTrigger = new Clutter.Actor({
+            name: 'pulsaros-topbar-hover-trigger',
+            reactive: true,
+            x: 0,
+            y: 0,
+            width: global.stage.width,
+            height: 4,
+            opacity: 0,
+            visible: false
+        });
+        Main.layoutManager.addChrome(this._topTrigger, {
+            affectsInputRegion: true,
+            affectsStruts: false,
+            trackFullscreen: true
+        });
+
+        this._topTrigger.connect('enter-event', () => {
+            if (this._isCurrentWorkspaceFullscreenSpace()) {
+                this._showPanel(true);
             }
-            return Clutter.EVENT_PROPAGATE;
+        });
+
+        this._panelEnterId = Main.panel.connect('enter-event', () => {
+            if (this._isCurrentWorkspaceFullscreenSpace()) {
+                this._showPanel(true);
+            }
+        });
+
+        this._panelLeaveId = Main.panel.connect('leave-event', () => {
+            if (!this._isCurrentWorkspaceFullscreenSpace()) return;
+            if (this._hideTimeoutId) GLib.source_remove(this._hideTimeoutId);
+            this._hideTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 350, () => {
+                this._hideTimeoutId = 0;
+                let [x, y] = global.get_pointer();
+                if (y > Main.panel.height + 5 && this._isCurrentWorkspaceFullscreenSpace()) {
+                    this._hidePanel(true);
+                }
+                return GLib.SOURCE_REMOVE;
+            });
         });
 
         this._wsChangedId = global.workspace_manager.connect('active-workspace-changed', () => {
             this._updatePanelVisibility();
+        });
+
+        this._stageResizeId = global.stage.connect('notify::width', () => {
+            if (this._topTrigger) {
+                this._topTrigger.set_size(global.stage.width, 4);
+            }
         });
     }
 
@@ -1209,7 +1244,17 @@ class MacOSFullscreenManager {
     }
 
     _updatePanelVisibility() {
-        if (this._isCurrentWorkspaceFullscreenSpace()) {
+        if (this._hideTimeoutId) {
+            GLib.source_remove(this._hideTimeoutId);
+            this._hideTimeoutId = 0;
+        }
+
+        let isSpace = this._isCurrentWorkspaceFullscreenSpace();
+        if (this._topTrigger) {
+            this._topTrigger.visible = isSpace;
+        }
+
+        if (isSpace) {
             this._hidePanel(true);
         } else {
             this._showPanel(true);
@@ -1218,6 +1263,10 @@ class MacOSFullscreenManager {
 
     _hidePanel(animated = false) {
         this._panelHidden = true;
+        if (Main.layoutManager.panelBox) {
+            Main.layoutManager.panelBox.height = 0;
+            Main.layoutManager._queueUpdateRegions();
+        }
         if (animated) {
             Main.panel.ease({
                 translation_y: -Main.panel.height,
@@ -1244,6 +1293,10 @@ class MacOSFullscreenManager {
             Main.panel.translation_y = 0;
             Main.panel.opacity = 255;
         }
+        if (!this._isCurrentWorkspaceFullscreenSpace() && Main.layoutManager.panelBox) {
+            Main.layoutManager.panelBox.height = -1;
+            Main.layoutManager._queueUpdateRegions();
+        }
     }
 
     _untrackWindow(window) {
@@ -1259,9 +1312,22 @@ class MacOSFullscreenManager {
     }
 
     destroy() {
-        if (this._stageMotionId) {
-            global.stage.disconnect(this._stageMotionId);
-            this._stageMotionId = 0;
+        if (this._hideTimeoutId) {
+            GLib.source_remove(this._hideTimeoutId);
+            this._hideTimeoutId = 0;
+        }
+        if (this._topTrigger) {
+            Main.layoutManager.removeChrome(this._topTrigger);
+            this._topTrigger.destroy();
+            this._topTrigger = null;
+        }
+        if (this._panelEnterId && Main.panel) {
+            Main.panel.disconnect(this._panelEnterId);
+            this._panelEnterId = 0;
+        }
+        if (this._panelLeaveId && Main.panel) {
+            Main.panel.disconnect(this._panelLeaveId);
+            this._panelLeaveId = 0;
         }
         if (this._windowCreatedId) {
             global.display.disconnect(this._windowCreatedId);
@@ -1270,6 +1336,10 @@ class MacOSFullscreenManager {
         if (this._wsChangedId) {
             global.workspace_manager.disconnect(this._wsChangedId);
             this._wsChangedId = 0;
+        }
+        if (this._stageResizeId) {
+            global.stage.disconnect(this._stageResizeId);
+            this._stageResizeId = 0;
         }
         for (let [winId, data] of this._windowSignals) {
             for (let id of data.signals) {

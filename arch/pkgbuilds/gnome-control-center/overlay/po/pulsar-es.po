@@ -91,3 +91,15 @@ msgstr "Apple ID y Cuentas"
 
 msgid "Pulsar OS ID, iCloud and Media"
 msgstr "ID de Pulsar OS, iCloud y Medios"
+
+msgid "macOS-style Windows & Fullscreen"
+msgstr "Ventanas y Pantalla Completa estilo macOS"
+
+msgid "Smart workspace and top bar behavior when maximizing windows"
+msgstr "Comportamiento inteligente de espacios y barra superior al maximizar"
+
+msgid "macOS Fullscreen Spaces"
+msgstr "Espacios de pantalla completa estilo macOS"
+
+msgid "Moving maximized apps to dedicated workspaces and auto-hiding the top bar"
+msgstr "Al maximizar una app, se traslada a un nuevo espacio y oculta la barra superior"
