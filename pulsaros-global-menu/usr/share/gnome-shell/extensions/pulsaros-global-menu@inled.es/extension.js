@@ -1019,28 +1019,44 @@ class MacOSFullscreenManager {
         this._spaceWindows = new Map();
         this._enabled = true;
         this._panelHidden = false;
-        this._hideTimeoutId = 0;
 
         this._setupSettings();
         this._setupSignals();
     }
 
     _isIgnoredWindow(window) {
-        if (!window || window.is_override_redirect()) return true;
-        if (window.is_skip_taskbar && window.is_skip_taskbar()) return true;
-        let type = window.get_window_type();
-        if (type !== Meta.WindowType.NORMAL) return true;
-        if (window.get_transient_for && window.get_transient_for() !== null) return true;
+        if (!window) return true;
+        try {
+            if (window.is_override_redirect && window.is_override_redirect()) return true;
+            if (window.is_skip_taskbar && window.is_skip_taskbar()) return true;
+            let type = window.get_window_type ? window.get_window_type() : Meta.WindowType.NORMAL;
+            if (type !== Meta.WindowType.NORMAL) return true;
+            if (window.get_transient_for && window.get_transient_for() !== null) return true;
 
-        let wmClass = window.get_wm_class ? (window.get_wm_class() || '') : '';
-        let appId = window.get_gtk_application_id ? (window.get_gtk_application_id() || '') : '';
-        let title = window.get_title ? (window.get_title() || '') : '';
+            let wmClass = window.get_wm_class ? (window.get_wm_class() || '') : '';
+            let appId = window.get_gtk_application_id ? (window.get_gtk_application_id() || '') : '';
+            let title = window.get_title ? (window.get_title() || '') : '';
+            let sandboxed = window.get_sandboxed_app_id ? (window.get_sandboxed_app_id() || '') : '';
 
-        let checkStr = `${wmClass} ${appId} ${title}`.toLowerCase();
-        for (let ignored of IGNORED_APPS) {
-            if (checkStr.includes(ignored.toLowerCase())) {
-                return true;
+            let cmdline = '';
+            let pid = window.get_pid ? window.get_pid() : 0;
+            if (pid > 0) {
+                try {
+                    let [ok, contents] = GLib.file_get_contents(`/proc/${pid}/cmdline`);
+                    if (ok) {
+                        cmdline = new TextDecoder().decode(contents).replace(/\0/g, ' ');
+                    }
+                } catch (pe) {}
             }
+
+            let checkStr = `${wmClass} ${appId} ${title} ${sandboxed} ${cmdline}`.toLowerCase();
+            for (let ignored of IGNORED_APPS) {
+                if (checkStr.includes(ignored.toLowerCase())) {
+                    return true;
+                }
+            }
+        } catch (e) {
+            return true;
         }
         return false;
     }
@@ -1155,36 +1171,26 @@ class MacOSFullscreenManager {
     }
 
     _setupPanelHoverTrigger() {
-        this._topBarrier = new Clutter.Actor({
-            name: 'pulsaros-topbar-hover-barrier',
-            reactive: true,
-            x: 0,
-            y: 0,
-            width: global.stage.width,
-            height: 24
-        });
-        Main.uiGroup.add_child(this._topBarrier);
-
-        this._topBarrier.connect('enter-event', () => {
-            this._onPointerEnter();
-        });
-
-        this._panelEnterId = Main.panel.connect('enter-event', () => {
-            this._onPointerEnter();
-        });
-
-        this._panelLeaveId = Main.panel.connect('leave-event', () => {
-            this._onPointerLeave();
+        this._stageMotionId = global.stage.connect('captured-event', (stage, event) => {
+            if (event.type() === Clutter.EventType.MOTION) {
+                let [x, y] = event.get_coords();
+                if (this._isCurrentWorkspaceFullscreenSpace()) {
+                    if (y <= 30) {
+                        this._showPanel(true);
+                    } else if (y > Main.panel.height + 25) {
+                        this._hidePanel(true);
+                    }
+                } else {
+                    if (this._panelHidden) {
+                        this._showPanel(false);
+                    }
+                }
+            }
+            return Clutter.EVENT_PROPAGATE;
         });
 
         this._wsChangedId = global.workspace_manager.connect('active-workspace-changed', () => {
             this._updatePanelVisibility();
-        });
-
-        this._stageResizeId = global.stage.connect('notify::width', () => {
-            if (this._topBarrier) {
-                this._topBarrier.set_size(global.stage.width, 24);
-            }
         });
     }
 
@@ -1203,46 +1209,11 @@ class MacOSFullscreenManager {
     }
 
     _updatePanelVisibility() {
-        if (this._hideTimeoutId) {
-            GLib.source_remove(this._hideTimeoutId);
-            this._hideTimeoutId = 0;
-        }
-
-        let isSpace = this._isCurrentWorkspaceFullscreenSpace();
-        if (this._topBarrier) {
-            this._topBarrier.visible = isSpace;
-        }
-
-        if (isSpace) {
+        if (this._isCurrentWorkspaceFullscreenSpace()) {
             this._hidePanel(true);
         } else {
             this._showPanel(true);
         }
-    }
-
-    _onPointerEnter() {
-        if (this._hideTimeoutId) {
-            GLib.source_remove(this._hideTimeoutId);
-            this._hideTimeoutId = 0;
-        }
-        this._showPanel(true);
-    }
-
-    _onPointerLeave() {
-        if (!this._isCurrentWorkspaceFullscreenSpace()) {
-            return;
-        }
-        if (this._hideTimeoutId) {
-            GLib.source_remove(this._hideTimeoutId);
-        }
-        this._hideTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 350, () => {
-            this._hideTimeoutId = 0;
-            let [x, y] = global.get_pointer();
-            if (y > Main.panel.height + 10 && this._isCurrentWorkspaceFullscreenSpace()) {
-                this._hidePanel(true);
-            }
-            return GLib.SOURCE_REMOVE;
-        });
     }
 
     _hidePanel(animated = false) {
@@ -1288,22 +1259,9 @@ class MacOSFullscreenManager {
     }
 
     destroy() {
-        if (this._hideTimeoutId) {
-            GLib.source_remove(this._hideTimeoutId);
-            this._hideTimeoutId = 0;
-        }
-        if (this._topBarrier) {
-            Main.uiGroup.remove_child(this._topBarrier);
-            this._topBarrier.destroy();
-            this._topBarrier = null;
-        }
-        if (this._panelEnterId && Main.panel) {
-            Main.panel.disconnect(this._panelEnterId);
-            this._panelEnterId = 0;
-        }
-        if (this._panelLeaveId && Main.panel) {
-            Main.panel.disconnect(this._panelLeaveId);
-            this._panelLeaveId = 0;
+        if (this._stageMotionId) {
+            global.stage.disconnect(this._stageMotionId);
+            this._stageMotionId = 0;
         }
         if (this._windowCreatedId) {
             global.display.disconnect(this._windowCreatedId);
@@ -1312,10 +1270,6 @@ class MacOSFullscreenManager {
         if (this._wsChangedId) {
             global.workspace_manager.disconnect(this._wsChangedId);
             this._wsChangedId = 0;
-        }
-        if (this._stageResizeId) {
-            global.stage.disconnect(this._stageResizeId);
-            this._stageResizeId = 0;
         }
         for (let [winId, data] of this._windowSignals) {
             for (let id of data.signals) {
