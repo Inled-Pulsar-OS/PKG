@@ -68,6 +68,7 @@ struct _CcBackgroundPanel
   GtkToggleButton *default_toggle;
   GtkToggleButton *dark_toggle;
   AdwSwitchRow *macos_remap_switch_row;
+  AdwSwitchRow *macos_fullscreen_switch_row;
 };
 
 CC_PANEL_REGISTER (CcBackgroundPanel, cc_background_panel)
@@ -637,6 +638,21 @@ on_macos_remap_active_changed_cb (CcBackgroundPanel *self)
 }
 
 static void
+on_macos_fullscreen_active_changed_cb (CcBackgroundPanel *self)
+{
+  gboolean active;
+
+  if (!self->macos_fullscreen_switch_row)
+    return;
+
+  active = adw_switch_row_get_active (self->macos_fullscreen_switch_row);
+  if (active)
+    g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.shell.extensions.pulsaros-global-menu macos-fullscreen-spaces true'", NULL);
+  else
+    g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.shell.extensions.pulsaros-global-menu macos-fullscreen-spaces false'", NULL);
+}
+
+static void
 cc_background_panel_class_init (CcBackgroundPanelClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
@@ -661,6 +677,7 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, default_toggle);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, dark_toggle);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_remap_switch_row);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_fullscreen_switch_row);
 
   gtk_widget_class_bind_template_callback (widget_class, on_color_scheme_toggle_active_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_chooser_background_chosen_cb);
@@ -673,6 +690,7 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_callback (widget_class, on_activate_spotlight_python_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_activate_gnome_overview_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_macos_remap_active_changed_cb);
+  gtk_widget_class_bind_template_callback (widget_class, on_macos_fullscreen_active_changed_cb);
 }
 
 static void
@@ -706,6 +724,16 @@ cc_background_panel_init (CcBackgroundPanel *self)
             }
         }
       adw_switch_row_set_active (self->macos_remap_switch_row, has_remap);
+    }
+
+  if (self->macos_fullscreen_switch_row)
+    {
+      g_autoptr(GSettings) ext_settings = g_settings_new ("org.gnome.shell.extensions.pulsaros-global-menu");
+      if (ext_settings)
+        {
+          gboolean fs_active = g_settings_get_boolean (ext_settings, "macos-fullscreen-spaces");
+          adw_switch_row_set_active (self->macos_fullscreen_switch_row, fs_active);
+        }
     }
 
   self->connection = g_application_get_dbus_connection (g_application_get_default ());
