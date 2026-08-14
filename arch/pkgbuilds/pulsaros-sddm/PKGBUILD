@@ -6,7 +6,7 @@ pkgdesc="SDDM login manager with Apple Tahoe theme for Pulsar OS"
 arch=(any)
 url="https://inled.es"
 license=(custom)
-depends=(sddm curl qt6-imageformats qt6-svg qt6-declarative qt6-5compat kirigami breeze)
+depends=(sddm curl qt6-imageformats qt6-svg qt6-declarative qt6-5compat qt6-multimedia qt6-multimedia-ffmpeg kirigami breeze)
 options=(!strip)
 install=pulsaros-sddm.install
 
