@@ -309,7 +309,6 @@ const LockScreen = GObject.registerClass({
                 return;
             }
             let videoUri = file.get_uri();
-            let posterUrl = this._getPosterUrl(videoPath);
 
             this._videoContent = new Clutter.Image();
             for (let container of this._monitorContainers) {
@@ -317,20 +316,35 @@ const LockScreen = GObject.registerClass({
                     container._videoActor.set_content(this._videoContent);
                     container._videoActor.visible = true;
                 }
-                container.style = `background-image: none; background-color: #000000;`;
+                container.style = 'background-image: none; background-color: #000000;';
             }
 
-            let videoSinkBin = Gst.parse_bin_from_description(
-                'videoconvert ! video/x-raw,format=RGBA ! appsink name=sink emit-signals=false max-buffers=2 drop=true sync=false',
-                true
-            );
+            // Construct proper custom video sink bin with GhostPad for playbin
+            let bin = Gst.Bin.new('lockscreen-sinkbin');
+            let conv = Gst.ElementFactory.make('videoconvert', 'conv');
+            let sink = Gst.ElementFactory.make('appsink', 'sink');
+            sink.set_property('emit-signals', false);
+            sink.set_property('max-buffers', 2);
+            sink.set_property('drop', true);
+            sink.set_property('sync', false);
+            let caps = Gst.Caps.from_string('video/x-raw,format=RGBA');
+            sink.set_property('caps', caps);
+
+            bin.add(conv);
+            bin.add(sink);
+            conv.link(sink);
+
+            let pad = conv.get_static_pad('sink');
+            let ghostpad = Gst.GhostPad.new('sink', pad);
+            bin.add_pad(ghostpad);
+
             this._videoPipeline = Gst.ElementFactory.make('playbin', 'lockscreen-player');
             this._videoPipeline.set_property('uri', videoUri);
-            this._videoPipeline.set_property('video-sink', videoSinkBin);
+            this._videoPipeline.set_property('video-sink', bin);
             let audioSink = Gst.ElementFactory.make('fakesink', 'lockscreen-audiosink');
             this._videoPipeline.set_property('audio-sink', audioSink);
 
-            this._videoSink = videoSinkBin.get_by_name('sink');
+            this._videoSink = sink;
 
             let bus = this._videoPipeline.get_bus();
             bus.add_signal_watch();
@@ -347,7 +361,7 @@ const LockScreen = GObject.registerClass({
                     return GLib.SOURCE_CONTINUE;
                 }
                 try {
-                    let sample = this._videoSink.try_pull_sample(0);
+                    let sample = this._videoSink.try_pull_sample(10 * Gst.MSECOND);
                     if (sample) {
                         let buffer = sample.get_buffer();
                         let caps = sample.get_caps();
@@ -359,9 +373,12 @@ const LockScreen = GObject.registerClass({
                             let bytes = GLib.Bytes.new(mapInfo.data);
                             buffer.unmap(mapInfo);
                             if (this._videoContent) {
+                                let pixelFormat = (Cogl && Cogl.PixelFormat && Cogl.PixelFormat.RGBA_8888 !== undefined)
+                                    ? Cogl.PixelFormat.RGBA_8888
+                                    : 19;
                                 this._videoContent.set_bytes(
                                     bytes,
-                                    Cogl.PixelFormat.RGBA_8888,
+                                    pixelFormat,
                                     width,
                                     height,
                                     width * 4
@@ -369,7 +386,9 @@ const LockScreen = GObject.registerClass({
                             }
                         }
                     }
-                } catch (pullErr) {}
+                } catch (pullErr) {
+                    console.error("[LockScreen] Video frame pull error:", pullErr);
+                }
                 return GLib.SOURCE_CONTINUE;
             });
         } catch (e) {
@@ -1263,10 +1282,6 @@ class MacOSFullscreenManager {
 
     _hidePanel(animated = false) {
         this._panelHidden = true;
-        if (Main.layoutManager.panelBox) {
-            Main.layoutManager.panelBox.height = 0;
-            Main.layoutManager._queueUpdateRegions();
-        }
         if (animated) {
             Main.panel.ease({
                 translation_y: -Main.panel.height,
@@ -1282,6 +1297,8 @@ class MacOSFullscreenManager {
 
     _showPanel(animated = false) {
         this._panelHidden = false;
+        Main.panel.visible = true;
+        Main.panel.reactive = true;
         if (animated) {
             Main.panel.ease({
                 translation_y: 0,
@@ -1292,10 +1309,6 @@ class MacOSFullscreenManager {
         } else {
             Main.panel.translation_y = 0;
             Main.panel.opacity = 255;
-        }
-        if (!this._isCurrentWorkspaceFullscreenSpace() && Main.layoutManager.panelBox) {
-            Main.layoutManager.panelBox.height = -1;
-            Main.layoutManager._queueUpdateRegions();
         }
     }
 

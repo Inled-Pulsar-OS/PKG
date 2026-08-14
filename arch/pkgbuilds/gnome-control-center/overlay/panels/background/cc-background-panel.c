@@ -81,38 +81,38 @@ load_custom_css (CcBackgroundPanel *self)
   g_autoptr(GtkCssProvider) provider = NULL;
   const gchar *custom_css =
     "button.accent-button {\n"
-    "  min-width: 28px;\n"
-    "  min-height: 28px;\n"
-    "  padding: 0;\n"
-    "  border-radius: 9999px;\n"
-    "  border: none;\n"
-    "  box-shadow: none;\n"
+    "  min-width: 28px !important;\n"
+    "  min-height: 28px !important;\n"
+    "  padding: 0 !important;\n"
+    "  border-radius: 9999px !important;\n"
+    "  border: none !important;\n"
+    "  box-shadow: none !important;\n"
     "  transition: transform 150ms ease-in-out, outline 150ms ease-in-out;\n"
     "}\n"
     "button.accent-button:hover {\n"
     "  transform: scale(1.15);\n"
     "}\n"
     "button.accent-button:checked {\n"
-    "  outline: 3px solid #ffffff;\n"
-    "  outline-offset: 2px;\n"
-    "  box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);\n"
+    "  outline: 3px solid #ffffff !important;\n"
+    "  outline-offset: 2px !important;\n"
+    "  box-shadow: 0 0 8px rgba(0, 0, 0, 0.5) !important;\n"
     "}\n"
-    "button.accent-button.blue { background-color: #3584e4; }\n"
-    "button.accent-button.teal { background-color: #2190a4; }\n"
-    "button.accent-button.green { background-color: #3a944a; }\n"
-    "button.accent-button.yellow { background-color: #e5a50a; }\n"
-    "button.accent-button.orange { background-color: #e66100; }\n"
-    "button.accent-button.red { background-color: #e01b24; }\n"
-    "button.accent-button.pink { background-color: #d56199; }\n"
-    "button.accent-button.purple { background-color: #9141ac; }\n"
-    "button.accent-button.slate { background-color: #6f8396; }\n"
-    "button.accent-button.maia { background-color: #16a085; }\n";
+    "button.accent-button.blue { background-image: none !important; background-color: #3584e4 !important; }\n"
+    "button.accent-button.teal { background-image: none !important; background-color: #2190a4 !important; }\n"
+    "button.accent-button.green { background-image: none !important; background-color: #3a944a !important; }\n"
+    "button.accent-button.yellow { background-image: none !important; background-color: #e5a50a !important; }\n"
+    "button.accent-button.orange { background-image: none !important; background-color: #e66100 !important; }\n"
+    "button.accent-button.red { background-image: none !important; background-color: #e01b24 !important; }\n"
+    "button.accent-button.pink { background-image: none !important; background-color: #d56199 !important; }\n"
+    "button.accent-button.purple { background-image: none !important; background-color: #9141ac !important; }\n"
+    "button.accent-button.slate { background-image: none !important; background-color: #6f8396 !important; }\n"
+    "button.accent-button.maia { background-image: none !important; background-color: #16a085 !important; }\n";
 
   provider = gtk_css_provider_new ();
   gtk_css_provider_load_from_string (provider, custom_css);
   gtk_style_context_add_provider_for_display (gdk_display_get_default (),
                                               GTK_STYLE_PROVIDER (provider),
-                                              GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+                                              GTK_STYLE_PROVIDER_PRIORITY_USER);
 }
 
 static void
