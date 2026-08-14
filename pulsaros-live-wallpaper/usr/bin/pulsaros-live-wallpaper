@@ -54,11 +54,24 @@ def extract_poster_frame(video_path, output_png):
         return False
 
 def sync_to_sddm_and_lockscreen(media_path, poster_path):
-    # 1. Update GNOME Desktop static fallback keys & User Backgrounds folder
+    # 1. Update GNOME Desktop static fallback keys & single clean poster in User Backgrounds
     if poster_path and Path(poster_path).exists():
         USER_BACKGROUNDS_DIR.mkdir(parents=True, exist_ok=True)
+        
+        # Clean up previous timestamped/named posters to prevent duplicate entries in Settings chooser
+        for old in USER_BACKGROUNDS_DIR.glob("live-wallpaper-*.png"):
+            try:
+                old.unlink()
+            except Exception:
+                pass
+        for old in USER_BACKGROUNDS_DIR.glob("poster-*.png"):
+            try:
+                old.unlink()
+            except Exception:
+                pass
+
+        dest_poster = USER_BACKGROUNDS_DIR / "pulsar-live-wallpaper.png"
         try:
-            dest_poster = USER_BACKGROUNDS_DIR / f"live-wallpaper-{Path(media_path).stem}.png"
             shutil.copy2(poster_path, dest_poster)
             poster_path = dest_poster
         except Exception:
@@ -68,6 +81,7 @@ def sync_to_sddm_and_lockscreen(media_path, poster_path):
         subprocess.run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri", file_uri], check=False)
         subprocess.run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri-dark", file_uri], check=False)
         subprocess.run(["gsettings", "set", "org.gnome.desktop.screensaver", "picture-uri", file_uri], check=False)
+        subprocess.run(["gsettings", "set", "org.gnome.desktop.screensaver", "picture-uri-dark", file_uri], check=False)
 
     # 2. Sync to SDDM shared folder if writable
     try:
@@ -133,7 +147,7 @@ def play_video_engine(video_path):
     except Exception:
         pass
 
-    # 2. If DBus not responding, launch background player
+    # 2. If DBus server was not active, start background player daemon
     subprocess.Popen(["flatpak", "run", "io.github.jeffshee.Hidamari", "-b"],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
@@ -149,7 +163,7 @@ def stop_video_engine():
     except Exception:
         pass
     # 2. Clean kill
-    subprocess.run(["flatpak", "kill", "io.github.jeffshee.Hidamari"], check=False)
+    subprocess.run(["flatpak", "kill", "io.github.jeffshee.Hidamari"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def set_wallpaper(file_path):
     path = Path(file_path).resolve()
@@ -163,7 +177,7 @@ def set_wallpaper(file_path):
 
     poster_path = None
     if is_video:
-        poster_path = CONFIG_DIR / f"poster-{path.stem}.png"
+        poster_path = CONFIG_DIR / "poster-live-wallpaper.png"
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         if not extract_poster_frame(path, poster_path):
             poster_path = Path(DEFAULT_WALLPAPER)
@@ -202,12 +216,21 @@ def stop_wallpaper():
         subprocess.run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri", file_uri], check=False)
         subprocess.run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri-dark", file_uri], check=False)
         subprocess.run(["gsettings", "set", "org.gnome.desktop.screensaver", "picture-uri", file_uri], check=False)
+        subprocess.run(["gsettings", "set", "org.gnome.desktop.screensaver", "picture-uri-dark", file_uri], check=False)
         if SDDM_DIR.exists():
             try:
                 shutil.copy2(DEFAULT_WALLPAPER, SDDM_DIR / "pulsar-wallpaper.png")
             except Exception:
                 pass
     print("⏹️ Live wallpaper stopped and restored to default static background.")
+
+def restore_wallpaper():
+    cfg = get_config()
+    file_path = cfg.get("file")
+    if file_path and Path(file_path).exists():
+        set_wallpaper(file_path)
+    else:
+        print("No saved live wallpaper found to restore.", file=sys.stderr)
 
 def get_status():
     cfg = get_config()
@@ -319,6 +342,7 @@ def main():
     set_parser.add_argument("file", help="Path to video or image file")
 
     subparsers.add_parser("set-dialog", help="Open GUI file picker to set wallpaper")
+    subparsers.add_parser("restore", help="Restore and play previously configured live wallpaper")
     subparsers.add_parser("stop", help="Stop live wallpaper and revert to static")
     subparsers.add_parser("status", help="Get current live wallpaper status")
     subparsers.add_parser("daemon", help="Run background synchronization daemon")
@@ -329,6 +353,8 @@ def main():
         set_wallpaper(args.file)
     elif args.command == "set-dialog":
         open_set_dialog()
+    elif args.command == "restore":
+        restore_wallpaper()
     elif args.command == "stop":
         stop_wallpaper()
     elif args.command == "status":

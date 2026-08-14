@@ -67,6 +67,7 @@ struct _CcBackgroundPanel
   CcBackgroundPreview *dark_preview;
   GtkToggleButton *default_toggle;
   GtkToggleButton *dark_toggle;
+  AdwSwitchRow *macos_remap_switch_row;
 };
 
 CC_PANEL_REGISTER (CcBackgroundPanel, cc_background_panel)
@@ -489,7 +490,7 @@ on_chooser_background_chosen_cb (CcBackgroundPanel *self,
             }
           else
             {
-              g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper daemon &'", NULL);
+              g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper restore &'", NULL);
             }
         }
       else
@@ -560,8 +561,8 @@ static void
 on_apply_cursor_tahoe_clicked_cb (CcBackgroundPanel *self)
 {
   if (self->interface_settings)
-    g_settings_set_string (self->interface_settings, "cursor-theme", "Tahoe");
-  g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.desktop.interface cursor-theme Tahoe'", NULL);
+    g_settings_set_string (self->interface_settings, "cursor-theme", "MacTahoe-light");
+  g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.desktop.interface cursor-theme MacTahoe-light'", NULL);
 }
 
 static void
@@ -597,6 +598,21 @@ on_activate_gnome_overview_clicked_cb (CcBackgroundPanel *self)
 }
 
 static void
+on_macos_remap_active_changed_cb (CcBackgroundPanel *self)
+{
+  gboolean active;
+
+  if (!self->macos_remap_switch_row)
+    return;
+
+  active = adw_switch_row_get_active (self->macos_remap_switch_row);
+  if (active)
+    g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-toggle-remap macos'", NULL);
+  else
+    g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-toggle-remap gnome'", NULL);
+}
+
+static void
 cc_background_panel_class_init (CcBackgroundPanelClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
@@ -620,6 +636,7 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
 
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, default_toggle);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, dark_toggle);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_remap_switch_row);
 
   gtk_widget_class_bind_template_callback (widget_class, on_color_scheme_toggle_active_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_chooser_background_chosen_cb);
@@ -631,6 +648,7 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_callback (widget_class, on_liquid_glass_active_changed_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_activate_spotlight_python_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_activate_gnome_overview_clicked_cb);
+  gtk_widget_class_bind_template_callback (widget_class, on_macos_remap_active_changed_cb);
 }
 
 static void
@@ -646,6 +664,25 @@ cc_background_panel_init (CcBackgroundPanel *self)
   g_resources_register (cc_background_get_resource ());
 
   gtk_widget_init_template (GTK_WIDGET (self));
+
+  if (self->macos_remap_switch_row)
+    {
+      g_autoptr(GSettings) input_settings = g_settings_new ("org.gnome.desktop.input-sources");
+      g_auto(GStrv) options = g_settings_get_strv (input_settings, "xkb-options");
+      gboolean has_remap = FALSE;
+      if (options)
+        {
+          for (guint i = 0; options[i] != NULL; i++)
+            {
+              if (g_str_equal (options[i], "ctrl:swap_lwin_lctl"))
+                {
+                  has_remap = TRUE;
+                  break;
+                }
+            }
+        }
+      adw_switch_row_set_active (self->macos_remap_switch_row, has_remap);
+    }
 
   self->connection = g_application_get_dbus_connection (g_application_get_default ());
 

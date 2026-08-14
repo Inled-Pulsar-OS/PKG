@@ -171,20 +171,14 @@ on_macos_remap_active_changed_cb (CcKeyboardPanel *self)
 {
   gboolean active;
 
-  if (!self->macos_remap_switch_row || !self->input_source_settings)
+  if (!self->macos_remap_switch_row)
     return;
 
   active = adw_switch_row_get_active (self->macos_remap_switch_row);
   if (active)
-    {
-      const gchar *options[] = { "ctrl:swap_lwin_lctl", "ctrl:swap_rwin_rctl", NULL };
-      g_settings_set_strv (self->input_source_settings, "xkb-options", options);
-    }
+    g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-toggle-remap macos'", NULL);
   else
-    {
-      const gchar *options[] = { NULL };
-      g_settings_set_strv (self->input_source_settings, "xkb-options", options);
-    }
+    g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-toggle-remap gnome'", NULL);
 }
 
 static void

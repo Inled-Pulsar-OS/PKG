@@ -1,17 +1,11 @@
 #!/bin/bash
 # ==============================================================================
-# Pulsar OS - SDDM & Lockscreen Wallpaper Sync Daemon (XML-Aware Version)
+# Pulsar OS - SDDM & Lockscreen Wallpaper Sync Daemon
 # ==============================================================================
-# English: This script runs on user session start. It copies the current
-#          desktop wallpaper to a shared location read by SDDM and synchronizes
-#          GNOME screensaver keys to ensure parity with Lockscreen.
-# Español: Este script se ejecuta al iniciar la sesión de usuario. Copia el
-#          fondo de pantalla actual a una ubicación compartida leída por SDDM y
-#          sincroniza las claves del protector de pantalla de GNOME.
+# English: Synchronizes current wallpaper/video with SDDM and GNOME Lockscreen.
+# Español: Sincroniza el fondo de escritorio/vídeo con SDDM y Bloqueo de pantalla.
 # ==============================================================================
 
-# Redirect stdout and stderr to a temp log file for easy diagnosis
-# Redirigir stdout y stderr a un archivo de registro temporal para un fácil diagnóstico
 exec > /tmp/pulsar-sync-wallpaper.log 2>&1
 
 echo "=== PULSAR WALLPAPER SYNC DAEMON LOG ==="
@@ -20,8 +14,6 @@ echo "User: $USER (UID: $UID)"
 echo "DISPLAY: $DISPLAY"
 echo "XDG_RUNTIME_DIR: $XDG_RUNTIME_DIR"
 
-# Prevent concurrent execution of the sync loop
-# Evitar ejecuciones simultáneas del bucle de sincronización
 LOCK_FILE="/tmp/pulsar-sync-wallpaper.lock"
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
@@ -34,8 +26,9 @@ sync_wallpaper() {
     echo "Sync Triggered: $(date)"
     
     BG_PATH=""
+    POSTER_PATH=""
     
-    # 1. Check if Pulsar OS Native Live Wallpaper is configured
+    # 1. Check if Pulsar OS Native Live Wallpaper is configured and enabled
     PULSAR_LIVE_CFG="$HOME/.config/pulsaros/live-wallpaper.json"
     if [ -f "$PULSAR_LIVE_CFG" ]; then
         P_ENABLED=$(jq -r '.enabled // false' "$PULSAR_LIVE_CFG" 2>/dev/null || grep -o '"enabled": [^,]*' "$PULSAR_LIVE_CFG" | cut -d':' -f2 | tr -d ' ')
@@ -43,6 +36,7 @@ sync_wallpaper() {
             P_FILE=$(jq -r '.file // empty' "$PULSAR_LIVE_CFG" 2>/dev/null || grep -o '"file": "[^"]*"' "$PULSAR_LIVE_CFG" | cut -d'"' -f4)
             if [ -n "$P_FILE" ] && [ -f "$P_FILE" ]; then
                 BG_PATH="$P_FILE"
+                POSTER_PATH=$(jq -r '.poster // empty' "$PULSAR_LIVE_CFG" 2>/dev/null || grep -o '"poster": "[^"]*"' "$PULSAR_LIVE_CFG" | cut -d'"' -f4)
                 echo "Detected active Pulsar OS Live Wallpaper: $BG_PATH"
             fi
         fi
@@ -66,11 +60,9 @@ sync_wallpaper() {
         done
     fi
 
-    # 2. If no Hidamari wallpaper, read from GNOME Desktop settings
+    # 3. If no Live Wallpaper, read from GNOME Desktop settings
     if [ -z "$BG_PATH" ]; then
         SCHEME=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")
-        echo "Detected GNOME Theme Color Scheme: $SCHEME"
-        
         if [ "$SCHEME" = "prefer-dark" ]; then
             BG_URI=$(gsettings get org.gnome.desktop.background picture-uri-dark 2>/dev/null | tr -d "'")
         else
@@ -87,11 +79,6 @@ sync_wallpaper() {
             BG_URI="file:///usr/share/backgrounds/pulsar-os-tahoe.png"
         fi
         
-        echo "Active GNOME BG_URI: $BG_URI"
-        
-        # Sincronizar claves de protector de pantalla / lockscreen
-        gsettings set org.gnome.desktop.screensaver picture-uri "$BG_URI" 2>/dev/null || true
-        
         if [[ "$BG_URI" == file://* ]]; then
             BG_PATH="${BG_URI#file://}"
         else
@@ -107,62 +94,70 @@ sync_wallpaper() {
         fi
     fi
 
-    # Fallback to system default if still invalid
     if [ ! -f "$BG_PATH" ]; then
         BG_PATH="/usr/share/backgrounds/pulsar-os-tahoe.png"
     fi
-    echo "Resolved final wallpaper path: $BG_PATH"
+    echo "Resolved wallpaper path: $BG_PATH"
 
-    # 3. Synchronize to SDDM shared path
-    mkdir -p /var/lib/pulsar-sddm 2>/dev/null || true
-    chmod 777 /var/lib/pulsar-sddm 2>/dev/null || true
-    
     EXT="${BG_PATH##*.}"
     EXT_LOWER=$(echo "$EXT" | tr '[:upper:]' '[:lower:]')
     
+    mkdir -p /var/lib/pulsar-sddm 2>/dev/null || true
+    chmod 777 /var/lib/pulsar-sddm 2>/dev/null || true
+
     case "$EXT_LOWER" in
         mp4|webm|mkv|mov|avi)
-            echo "Processing video wallpaper for SDDM..."
+            echo "Syncing video wallpaper to SDDM & Lockscreen poster..."
             cp -f "$BG_PATH" /var/lib/pulsar-sddm/pulsar-wallpaper.mp4 2>/dev/null || true
             chmod 666 /var/lib/pulsar-sddm/pulsar-wallpaper.mp4 2>/dev/null || true
             
-            # Generate poster image frame for static fallback in SDDM
-            if command -v ffmpeg >/dev/null 2>&1; then
+            # Generate or copy poster image frame for Lockscreen & SDDM static fallback
+            if [ -n "$POSTER_PATH" ] && [ -f "$POSTER_PATH" ]; then
+                cp -f "$POSTER_PATH" /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
+            elif command -v ffmpeg >/dev/null 2>&1; then
                 ffmpeg -y -ss 00:00:01 -i "$BG_PATH" -vframes 1 -q:v 2 /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || cp -f "/usr/share/backgrounds/pulsar-os-tahoe.png" /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
             else
                 cp -f "/usr/share/backgrounds/pulsar-os-tahoe.png" /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
             fi
             chmod 666 /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
+            
+            # Set lockscreen to poster PNG
+            gsettings set org.gnome.desktop.screensaver picture-uri "file:///var/lib/pulsar-sddm/pulsar-wallpaper.png" 2>/dev/null || true
+            gsettings set org.gnome.desktop.screensaver picture-uri-dark "file:///var/lib/pulsar-sddm/pulsar-wallpaper.png" 2>/dev/null || true
             ;;
         gif|webp)
-            echo "Processing animated GIF/WebP wallpaper for SDDM..."
+            echo "Syncing animated GIF/WebP wallpaper..."
             cp -f "$BG_PATH" "/var/lib/pulsar-sddm/pulsar-wallpaper.$EXT_LOWER" 2>/dev/null || true
             cp -f "$BG_PATH" /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
             chmod 666 "/var/lib/pulsar-sddm/pulsar-wallpaper.$EXT_LOWER" /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
+            
+            gsettings set org.gnome.desktop.screensaver picture-uri "file://$BG_PATH" 2>/dev/null || true
+            gsettings set org.gnome.desktop.screensaver picture-uri-dark "file://$BG_PATH" 2>/dev/null || true
             ;;
         *)
-            echo "Processing static image wallpaper for SDDM..."
+            echo "Syncing static image wallpaper..."
             cp -f "$BG_PATH" /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
             chmod 666 /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
+            
+            gsettings set org.gnome.desktop.screensaver picture-uri "file://$BG_PATH" 2>/dev/null || true
+            gsettings set org.gnome.desktop.screensaver picture-uri-dark "file://$BG_PATH" 2>/dev/null || true
             ;;
     esac
 
-    echo "SDDM wallpaper updated successfully."
+    echo "SDDM & Lockscreen updated successfully."
 }
 
 # Initial sync on startup
 echo "Running initial sync..."
 sync_wallpaper
 
-# Monitor changes from GNOME settings and Hidamari config
-echo "Entering monitor loop..."
-(
-    stdbuf -oL gsettings monitor org.gnome.desktop.background 2>/dev/null &
-    stdbuf -oL gsettings monitor org.gnome.desktop.interface color-scheme 2>/dev/null &
-    while true; do
-        sleep 3
-    done
-) | while read -r line; do
-    echo "Monitor event: $line"
-    sync_wallpaper
+# Event monitor with 1-second debounce
+LAST_SYNC=0
+gsettings monitor org.gnome.desktop.background 2>/dev/null | while read -r line; do
+    NOW=$(date +%s)
+    if [ $((NOW - LAST_SYNC)) -ge 1 ]; then
+        LAST_SYNC=$NOW
+        sleep 0.5
+        sync_wallpaper
+    fi
 done
