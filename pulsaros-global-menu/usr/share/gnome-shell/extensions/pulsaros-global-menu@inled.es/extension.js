@@ -315,7 +315,7 @@ const LockScreen = GObject.registerClass({
             }
 
             let videoSinkBin = Gst.parse_bin_from_description(
-                'videoconvert ! video/x-raw,format=RGBA ! appsink name=sink emit-signals=false max-buffers=2 drop=true sync=true',
+                'videoconvert ! video/x-raw,format=RGBA ! appsink name=sink emit-signals=false max-buffers=2 drop=true sync=false',
                 true
             );
             this._videoPipeline = Gst.ElementFactory.make('playbin', 'lockscreen-player');
@@ -341,7 +341,7 @@ const LockScreen = GObject.registerClass({
                     return GLib.SOURCE_CONTINUE;
                 }
                 try {
-                    let sample = this._videoSink.try_pull_sample(1000000);
+                    let sample = this._videoSink.try_pull_sample(0);
                     if (sample) {
                         let buffer = sample.get_buffer();
                         let caps = sample.get_caps();

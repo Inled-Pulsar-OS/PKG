@@ -111,9 +111,20 @@ Rectangle {
         }
     }
 
+    Image {
+        id: staticBlurSource
+        anchors.fill: parent
+        fillMode: Image.PreserveAspectCrop
+        source: (config.background !== undefined && !config.background.toString().endsWith(".mp4") && !config.background.toString().endsWith(".webm") && !config.background.toString().endsWith(".mkv") && !config.background.toString().endsWith(".mov"))
+                ? config.background
+                : "file:///var/lib/pulsar-sddm/pulsar-wallpaper.png"
+        visible: false
+        cache: false
+    }
+
     BrightnessContrast {
         anchors.fill: parent
-        source: wallpaperContainer
+        source: staticBlurSource
         brightness: 0
         contrast: 0.3
         layer.enabled: true
@@ -123,7 +134,7 @@ Rectangle {
     }
     FastBlur {
         anchors.fill: parent
-        source: wallpaperContainer
+        source: staticBlurSource
         radius: 32
         visible: listuser.visible ? false : true
         layer.enabled: true
