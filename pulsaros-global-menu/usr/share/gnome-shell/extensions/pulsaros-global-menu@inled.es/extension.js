@@ -415,6 +415,14 @@ const LockScreen = GObject.registerClass({
     }
     
     _onSizeChanged() {
+        if (!this._isLocked) {
+            this.set_position(0, 0);
+            this.set_size(0, 0);
+            this.visible = false;
+            this.opacity = 0;
+            this.reactive = false;
+            return;
+        }
         this.set_position(0, 0);
         this.set_size(global.stage.width, global.stage.height);
         
@@ -757,7 +765,12 @@ const LockScreen = GObject.registerClass({
         if (this._isLocked) return;
         this._isLocked = true;
         this.visible = true;
+        this.opacity = 255;
+        this.reactive = true;
+        this.set_position(0, 0);
+        this.set_size(global.stage.width, global.stage.height);
         
+        this._rebuildMonitors();
         this._updateWallpapers();
         
         if (this._passwordEntry) {
@@ -805,16 +818,27 @@ const LockScreen = GObject.registerClass({
             this._updateClock();
             return GLib.SOURCE_CONTINUE;
         });
-        
-        this.opacity = 255;
     }
     
     unlock() {
         if (!this._isLocked) return;
         this._isLocked = false;
         this.visible = false;
+        this.opacity = 0;
+        this.reactive = false;
+        this.set_size(0, 0);
         
         this._stopVideoWallpaper();
+        
+        // Destroy monitor containers when unlocked
+        if (this._monitorContainers) {
+            for (let container of this._monitorContainers) {
+                container.destroy();
+            }
+        }
+        this._monitorContainers = [];
+        this._clocks = [];
+        this._passwordEntry = null;
         
         // Release modal input grab
         if (this._hasGrab) {
@@ -969,9 +993,14 @@ const LockScreen = GObject.registerClass({
 });
 
 const IGNORED_APPS = [
+    'welcome.py',
+    'recovery.py',
+    'welcome',
+    'recovery',
     'pulsaros-welcome',
+    'pulsaros-recovery',
     'org.pulsaros.welcome',
-    'pulsar-welcome',
+    'org.pulsaros.recovery',
     'calamares',
     'io.calamares.calamares',
     'gnome-control-center',
@@ -1164,9 +1193,11 @@ class MacOSFullscreenManager {
         let wsManager = global.workspace_manager;
         let activeWs = wsManager.get_active_workspace();
         for (let [win, data] of this._spaceWindows) {
-            if (win.get_workspace() === activeWs) {
-                return true;
-            }
+            try {
+                if (win && !win.unmanaged && win.get_workspace() === activeWs) {
+                    return true;
+                }
+            } catch (e) {}
         }
         return false;
     }
@@ -1177,7 +1208,12 @@ class MacOSFullscreenManager {
             this._hideTimeoutId = 0;
         }
 
-        if (this._isCurrentWorkspaceFullscreenSpace()) {
+        let isSpace = this._isCurrentWorkspaceFullscreenSpace();
+        if (this._topBarrier) {
+            this._topBarrier.visible = isSpace;
+        }
+
+        if (isSpace) {
             this._hidePanel(true);
         } else {
             this._showPanel(true);
