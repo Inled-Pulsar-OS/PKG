@@ -56,6 +56,11 @@ mkdir -p "$STAGE_DIR/root/.config/gtk-4.0"
 cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-4.0/"* "$STAGE_DIR/etc/skel/.config/gtk-4.0/" 2>/dev/null || true
 cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-4.0/"* "$STAGE_DIR/root/.config/gtk-4.0/" 2>/dev/null || true
 
+# Permitir que el sistema nativo de colores de acento de GNOME / Libadwaita controle los botones
+sed -i '/@define-color accent_/d' "$STAGE_DIR/etc/skel/.config/gtk-4.0/"*.css 2>/dev/null || true
+sed -i '/@define-color accent_/d' "$STAGE_DIR/root/.config/gtk-4.0/"*.css 2>/dev/null || true
+sed -i '/@define-color accent_/d' "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-4.0/"*.css 2>/dev/null || true
+
 # 2.2 Aplicar fix para Nautilus moderno (Libadwaita en GNOME 46+)
 echo "Aplicando fix de Libadwaita moderno para Nautilus..."
 cat <<'NAUTILUS_FIX' > /tmp/nautilus_fix.css
