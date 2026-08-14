@@ -255,7 +255,7 @@ template $CcBackgroundPanel: $CcPanel {
             Adw.SwitchRow macos_fullscreen_switch_row {
               title: _("Espacios de pantalla completa estilo macOS");
               subtitle: _("Al maximizar una app, se traslada a un nuevo espacio a pantalla completa y oculta la barra superior");
-              active: true;
+              active: false;
               notify::active => $on_macos_fullscreen_active_changed_cb(template);
             }
           }

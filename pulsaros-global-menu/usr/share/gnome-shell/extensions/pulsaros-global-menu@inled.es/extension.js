@@ -1017,7 +1017,7 @@ class MacOSFullscreenManager {
         this._extension = extension;
         this._windowSignals = new Map();
         this._spaceWindows = new Map();
-        this._enabled = true;
+        this._enabled = false;
         this._panelHidden = false;
 
         this._setupSettings();
