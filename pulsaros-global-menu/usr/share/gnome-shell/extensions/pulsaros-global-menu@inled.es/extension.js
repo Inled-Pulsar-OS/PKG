@@ -290,10 +290,11 @@ const LockScreen = GObject.registerClass({
         try {
             Gst.init(null);
             let localPath = videoPath.startsWith('file://') ? decodeURIComponent(videoPath.substring(7)) : videoPath;
-            if (!GLib.file_test(localPath, GLib.FileTest.EXISTS)) {
+            let file = Gio.File.new_for_path(localPath);
+            if (!file.query_exists(null)) {
                 return;
             }
-            let videoUri = videoPath.startsWith('file://') ? videoPath : `file://${videoPath}`;
+            let videoUri = file.get_uri();
             let posterUrl = this._getPosterUrl(videoPath);
 
             this._videoContent = new Clutter.Image();
@@ -302,8 +303,9 @@ const LockScreen = GObject.registerClass({
                 container.set_content(this._videoContent);
             }
 
-            let pipeStr = `playbin uri="${videoUri}" video-sink="videoconvert ! video/x-raw,format=RGBA ! appsink name=sink emit-signals=false max-buffers=1 drop=true" audio-sink="fakesink"`;
+            let pipeStr = `playbin video-sink="videoconvert ! video/x-raw,format=RGBA ! appsink name=sink emit-signals=false max-buffers=1 drop=true" audio-sink="fakesink"`;
             this._videoPipeline = Gst.parse_launch(pipeStr);
+            this._videoPipeline.set_property('uri', videoUri);
             this._videoSink = this._videoPipeline.get_by_name('sink');
 
             let bus = this._videoPipeline.get_bus();

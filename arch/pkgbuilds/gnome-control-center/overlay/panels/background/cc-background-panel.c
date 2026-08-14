@@ -89,21 +89,17 @@ load_custom_css (CcBackgroundPanel *self)
 static void
 transition_screen (CcBackgroundPanel *self)
 {
-  g_autoptr (GError) error = NULL;
-
   if (!self->proxy)
     return;
 
-  g_dbus_proxy_call_sync (self->proxy,
-                          "ScreenTransition",
-                          NULL,
-                          G_DBUS_CALL_FLAGS_NONE,
-                          -1,
-                          NULL,
-                          &error);
-
-  if (error)
-    g_warning ("Couldn't transition screen: %s", error->message);
+  g_dbus_proxy_call (self->proxy,
+                     "ScreenTransition",
+                     NULL,
+                     G_DBUS_CALL_FLAGS_NONE,
+                     500,
+                     NULL,
+                     NULL,
+                     NULL);
 }
 
 static void

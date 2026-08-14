@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import Qt5Compat.GraphicalEffects
-import QtMultimedia
 //import QtQuick.Shapes 1.17
 import "components"
 
@@ -71,11 +70,13 @@ Rectangle {
             id: wallpaper
             anchors.fill: parent
             fillMode: Image.PreserveAspectCrop
-            visible: !animatedWallpaper.visible && !videoWallpaper.visible
+            visible: !animatedWallpaper.visible && !(videoLoader.item && videoLoader.item.isPlaying)
             cache: false
             Binding on source {
                 when: config.background !== undefined
-                value: config.background
+                value: config.background.toString().endsWith(".mp4") || config.background.toString().endsWith(".webm") || config.background.toString().endsWith(".mkv") || config.background.toString().endsWith(".mov")
+                       ? "file:///var/lib/pulsar-sddm/pulsar-wallpaper.png"
+                       : config.background
             }
         }
 
@@ -92,26 +93,16 @@ Rectangle {
             }
         }
 
-        MediaPlayer {
-            id: videoPlayer
-            source: config.background !== undefined && (config.background.toString().endsWith(".mp4") || config.background.toString().endsWith(".webm") || config.background.toString().endsWith(".mkv") || config.background.toString().endsWith(".mov")) ? config.background : ""
-            loops: MediaPlayer.Infinite
-            audioOutput: null
-            videoOutput: videoWallpaper
-            Component.onCompleted: {
-                if (source != "") play()
-            }
-            onSourceChanged: {
-                if (source != "") play()
-                else stop()
-            }
-        }
-
-        VideoOutput {
-            id: videoWallpaper
+        Loader {
+            id: videoLoader
             anchors.fill: parent
-            fillMode: VideoOutput.PreserveAspectCrop
-            visible: videoPlayer.playbackState === MediaPlayer.PlayingState
+            active: config.background !== undefined && (config.background.toString().endsWith(".mp4") || config.background.toString().endsWith(".webm") || config.background.toString().endsWith(".mkv") || config.background.toString().endsWith(".mov"))
+            source: "components/VideoWallpaper.qml"
+            onLoaded: {
+                if (item) {
+                    item.videoSource = config.background
+                }
+            }
         }
     }
 

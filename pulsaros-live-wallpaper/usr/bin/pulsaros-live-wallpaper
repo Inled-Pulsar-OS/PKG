@@ -204,14 +204,14 @@ def set_wallpaper(file_path):
     print(f"✅ Live wallpaper set successfully: {path.name}")
     print(f"Type: {cfg['type']}")
 
-def stop_wallpaper():
+def stop_wallpaper(restore_default=False):
     cfg = get_config()
     cfg["enabled"] = False
     save_config(cfg)
     stop_video_engine()
     
-    # Restore default static wallpaper
-    if Path(DEFAULT_WALLPAPER).exists():
+    # Only restore default static wallpaper if explicitly requested
+    if restore_default and Path(DEFAULT_WALLPAPER).exists():
         file_uri = f"file://{DEFAULT_WALLPAPER}"
         subprocess.run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri", file_uri], check=False)
         subprocess.run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri-dark", file_uri], check=False)
@@ -222,7 +222,7 @@ def stop_wallpaper():
                 shutil.copy2(DEFAULT_WALLPAPER, SDDM_DIR / "pulsar-wallpaper.png")
             except Exception:
                 pass
-    print("⏹️ Live wallpaper stopped and restored to default static background.")
+    print("⏹️ Live wallpaper stopped.")
 
 def restore_wallpaper():
     cfg = get_config()
