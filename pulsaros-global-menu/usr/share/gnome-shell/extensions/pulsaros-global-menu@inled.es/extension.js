@@ -314,10 +314,17 @@ const LockScreen = GObject.registerClass({
                 container.style = `background-image: none; background-color: #000000;`;
             }
 
-            let pipeStr = `playbin video-sink="videoconvert ! video/x-raw,format=RGBA ! appsink name=sink emit-signals=false max-buffers=2 drop=true sync=true" audio-sink="fakesink"`;
-            this._videoPipeline = Gst.parse_launch(pipeStr);
+            let videoSinkBin = Gst.parse_bin_from_description(
+                'videoconvert ! video/x-raw,format=RGBA ! appsink name=sink emit-signals=false max-buffers=2 drop=true sync=true',
+                true
+            );
+            this._videoPipeline = Gst.ElementFactory.make('playbin', 'lockscreen-player');
             this._videoPipeline.set_property('uri', videoUri);
-            this._videoSink = this._videoPipeline.get_by_name('sink');
+            this._videoPipeline.set_property('video-sink', videoSinkBin);
+            let audioSink = Gst.ElementFactory.make('fakesink', 'lockscreen-audiosink');
+            this._videoPipeline.set_property('audio-sink', audioSink);
+
+            this._videoSink = videoSinkBin.get_by_name('sink');
 
             let bus = this._videoPipeline.get_bus();
             bus.add_signal_watch();
