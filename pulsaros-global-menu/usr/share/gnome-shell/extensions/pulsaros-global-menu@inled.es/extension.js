@@ -206,8 +206,12 @@ const LockScreen = GObject.registerClass({
                 let [ok, contents] = pulsarFile.load_contents(null);
                 if (ok) {
                     let json = JSON.parse(new TextDecoder().decode(contents));
-                    if (json && json.enabled && json.file && Gio.File.new_for_path(json.file).query_exists(null)) {
-                        return json.file.startsWith('file://') ? json.file : `file://${json.file}`;
+                    if (json && json.enabled && json.file) {
+                        let rawPath = json.file.startsWith('file://') ? decodeURIComponent(json.file.substring(7)) : json.file;
+                        let f = Gio.File.new_for_path(rawPath);
+                        if (f.query_exists(null)) {
+                            return f.get_uri();
+                        }
                     }
                 }
             }
@@ -223,8 +227,12 @@ const LockScreen = GObject.registerClass({
                     let [ok, contents] = file.load_contents(null);
                     if (ok) {
                         let json = JSON.parse(new TextDecoder().decode(contents));
-                        if (json && json.file && Gio.File.new_for_path(json.file).query_exists(null)) {
-                            return `file://${json.file}`;
+                        if (json && json.file) {
+                            let rawPath = json.file.startsWith('file://') ? decodeURIComponent(json.file.substring(7)) : json.file;
+                            let f = Gio.File.new_for_path(rawPath);
+                            if (f.query_exists(null)) {
+                                return f.get_uri();
+                            }
                         }
                     }
                 }
