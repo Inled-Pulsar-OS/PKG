@@ -307,11 +307,14 @@ const LockScreen = GObject.registerClass({
 
             this._videoContent = new Clutter.Image();
             for (let container of this._monitorContainers) {
-                container.style = `background-image: url("${posterUrl}"); background-size: cover; background-position: center;`;
-                container.set_content(this._videoContent);
+                if (container._videoActor) {
+                    container._videoActor.set_content(this._videoContent);
+                    container._videoActor.visible = true;
+                }
+                container.style = `background-image: none; background-color: #000000;`;
             }
 
-            let pipeStr = `playbin video-sink="videoconvert ! video/x-raw,format=RGBA ! appsink name=sink emit-signals=false max-buffers=1 drop=true" audio-sink="fakesink"`;
+            let pipeStr = `playbin video-sink="videoconvert ! video/x-raw,format=RGBA ! appsink name=sink emit-signals=false max-buffers=2 drop=true sync=true" audio-sink="fakesink"`;
             this._videoPipeline = Gst.parse_launch(pipeStr);
             this._videoPipeline.set_property('uri', videoUri);
             this._videoSink = this._videoPipeline.get_by_name('sink');
@@ -331,7 +334,7 @@ const LockScreen = GObject.registerClass({
                     return GLib.SOURCE_CONTINUE;
                 }
                 try {
-                    let sample = this._videoSink.try_pull_sample(0);
+                    let sample = this._videoSink.try_pull_sample(1000000);
                     if (sample) {
                         let buffer = sample.get_buffer();
                         let caps = sample.get_caps();
@@ -377,6 +380,14 @@ const LockScreen = GObject.registerClass({
         }
         this._videoSink = null;
         this._videoContent = null;
+        if (this._monitorContainers) {
+            for (let container of this._monitorContainers) {
+                if (container._videoActor) {
+                    container._videoActor.set_content(null);
+                    container._videoActor.visible = false;
+                }
+            }
+        }
     }
 
     _updateWallpapers() {
@@ -391,7 +402,6 @@ const LockScreen = GObject.registerClass({
         } else {
             this._stopVideoWallpaper();
             for (let container of this._monitorContainers) {
-                container.set_content(null);
                 container.style = `background-image: url("${bgUrl}"); background-size: cover; background-position: center;`;
             }
         }
@@ -429,6 +439,17 @@ const LockScreen = GObject.registerClass({
                 clip_to_allocation: true,
                 reactive: true
             });
+
+            let videoActor = new Clutter.Actor({
+                name: `pulsaros-lockscreen-video-${i}`,
+                x_expand: true,
+                y_expand: true,
+                width: monitor.width,
+                height: monitor.height,
+                visible: false
+            });
+            container.add_child(videoActor);
+            container._videoActor = videoActor;
 
             if (isVideo) {
                 container.style = `background-image: url("${this._getPosterUrl(bgUrl)}"); background-size: cover; background-position: center;`;

@@ -96,11 +96,11 @@ Rectangle {
         Loader {
             id: videoLoader
             anchors.fill: parent
-            active: config.background !== undefined && (config.background.toString().endsWith(".mp4") || config.background.toString().endsWith(".webm") || config.background.toString().endsWith(".mkv") || config.background.toString().endsWith(".mov"))
+            active: config.type === "video" || (config.background !== undefined && (config.background.toString().endsWith(".mp4") || config.background.toString().endsWith(".webm") || config.background.toString().endsWith(".mkv") || config.background.toString().endsWith(".mov")))
             source: "components/VideoWallpaper.qml"
             onLoaded: {
                 if (item) {
-                    item.videoSource = config.background
+                    item.videoSource = config.background !== undefined ? config.background : "file:///var/lib/pulsar-sddm/pulsar-wallpaper.mp4"
                 }
             }
         }

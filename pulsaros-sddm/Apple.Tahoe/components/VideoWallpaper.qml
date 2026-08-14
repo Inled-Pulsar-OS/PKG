@@ -14,10 +14,10 @@ Item {
         audioOutput: null
         videoOutput: videoOutput
         Component.onCompleted: {
-            if (source != "") play()
+            if (source !== "") play()
         }
         onSourceChanged: {
-            if (source != "") play()
+            if (source !== "") play()
             else stop()
         }
     }
@@ -26,6 +26,5 @@ Item {
         id: videoOutput
         anchors.fill: parent
         fillMode: VideoOutput.PreserveAspectCrop
-        visible: videoPlayer.playbackState === MediaPlayer.PlayingState
     }
 }
