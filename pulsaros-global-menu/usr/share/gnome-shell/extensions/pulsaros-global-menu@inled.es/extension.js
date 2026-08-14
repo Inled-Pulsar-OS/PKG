@@ -928,6 +928,8 @@ const LockScreen = GObject.registerClass({
         this._monitorContainers = [];
         super.destroy();
     }
+});
+
 export default class PulsarosGlobalMenuExtension extends Extension {
     enable() {
         this._menuButtons = [];
