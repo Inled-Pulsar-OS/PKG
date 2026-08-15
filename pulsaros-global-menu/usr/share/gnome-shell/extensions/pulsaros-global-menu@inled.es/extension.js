@@ -1376,10 +1376,10 @@ class MacOSFullscreenManager {
         this._topTrigger = new Clutter.Actor({
             name: 'pulsaros-topbar-hover-trigger',
             reactive: true,
-            x: 0,
+            x: 85,
             y: 0,
-            width: global.stage.width,
-            height: 6,
+            width: Math.max(100, global.stage.width - 85),
+            height: 30,
             opacity: 1,
             background_color: new Clutter.Color({ red: 0, green: 0, blue: 0, alpha: 1 }),
             visible: false
@@ -1421,7 +1421,8 @@ class MacOSFullscreenManager {
 
         this._stageResizeId = global.stage.connect('notify::width', () => {
             if (this._topTrigger) {
-                this._topTrigger.set_size(global.stage.width, 6);
+                this._topTrigger.set_position(85, 0);
+                this._topTrigger.set_size(Math.max(100, global.stage.width - 85), 30);
             }
         });
     }

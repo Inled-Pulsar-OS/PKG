@@ -66,6 +66,46 @@ find "$STAGE_DIR/etc/skel" -name "*.css" -exec sed -i 's/#0088ff/@accent_bg_colo
 find "$STAGE_DIR/root" -name "*.css" -exec sed -i 's/#0088FF/@accent_bg_color/g' {} + 2>/dev/null || true
 find "$STAGE_DIR/root" -name "*.css" -exec sed -i 's/#0088ff/@accent_bg_color/g' {} + 2>/dev/null || true
 
+# Añadir estilos explícitos para los botones de selección de color de acento de GNOME Settings
+cat <<'ACCENT_BTN_FIX' > /tmp/accent_btn_fix.css
+
+/* ==============================================================================
+ * Pulsar OS - Accent Color Selector Previews (GNOME Settings / Libadwaita)
+ * ============================================================================== */
+button.accent-button {
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 9999px;
+  padding: 0;
+  margin: 4px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
+  transition: all 150ms ease;
+}
+button.accent-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.35);
+}
+button.accent-button:checked {
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6), 0 4px 10px rgba(0, 0, 0, 0.4);
+  transform: scale(1.15);
+}
+button.accent-button.blue { background-color: #0088FF !important; background-image: none !important; }
+button.accent-button.teal { background-color: #2190a4 !important; background-image: none !important; }
+button.accent-button.green { background-color: #79B757 !important; background-image: none !important; }
+button.accent-button.yellow { background-color: #F3BA4B !important; background-image: none !important; }
+button.accent-button.orange { background-color: #E9873A !important; background-image: none !important; }
+button.accent-button.red { background-color: #ED5F5D !important; background-image: none !important; }
+button.accent-button.pink { background-color: #E55E9C !important; background-image: none !important; }
+button.accent-button.purple { background-color: #9A57A3 !important; background-image: none !important; }
+button.accent-button.slate { background-color: #6f8396 !important; background-image: none !important; }
+ACCENT_BTN_FIX
+
+find "$STAGE_DIR" -path "*/gtk-4.0/gtk.css" -exec sh -c 'cat /tmp/accent_btn_fix.css >> "$1"' _ {} \; 2>/dev/null || true
+find "$STAGE_DIR" -path "*/gtk-3.0/gtk.css" -exec sh -c 'cat /tmp/accent_btn_fix.css >> "$1"' _ {} \; 2>/dev/null || true
+rm -f /tmp/accent_btn_fix.css
+
 # 2.2 Aplicar fix para Nautilus moderno (Libadwaita en GNOME 46+)
 echo "Aplicando fix de Libadwaita moderno para Nautilus..."
 cat <<'NAUTILUS_FIX' > /tmp/nautilus_fix.css
