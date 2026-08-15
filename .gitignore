@@ -1,10 +1,23 @@
-# Directorio de compilación local (staging y paquetes deb de salida)
+# Directorio de compilación local (staging y paquetes deb/arch de salida)
 build/
-
-# Archivos de paquetes debian locales
 *.deb
+*.pkg.tar.zst
+*.pkg.tar.xz
+*.pkg.tar.gz
+
+# Arch PKGBUILD build directories and sources
+arch/**/src/
+arch/**/pkg/
+arch/**/gnome-control-center/gnome-control-center/
+arch/**/*.tar.*
+arch/**/.git/
+
+# Python caches
+__pycache__/
+*.pyc
 
 # Logs y archivos temporales
 *.log
 *.tmp
 .DS_Store
+
