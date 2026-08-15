@@ -5,10 +5,14 @@ build/
 *.pkg.tar.xz
 *.pkg.tar.gz
 
-# Arch PKGBUILD build directories and sources
+# Arch PKGBUILD build directories and cloned sources
 arch/**/src/
 arch/**/pkg/
 arch/**/gnome-control-center/gnome-control-center/
+arch/**/gnome-control-center/libgnome-volume-control/
+arch/**/gnome-control-center/libgxdp/
+arch/**/libgnome-volume-control/
+arch/**/libgxdp/
 arch/**/*.tar.*
 arch/**/.git/
 
