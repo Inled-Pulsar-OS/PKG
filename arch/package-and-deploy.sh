@@ -117,6 +117,21 @@ build_single_package() {
     cd "$pkgbuild_dir"
     # Export PULSAR_VERSION for the makepkg environment
     export PULSAR_VERSION
+
+    # In CI/Docker environments, install official package dependencies
+    if command -v pacman >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
+        local raw_deps=$(grep -E '^(makedepends|depends)=\(' PKGBUILD -A 50 | sed '/)/q' | grep -v -E '^(makedepends|depends)=\(' | tr -d '()"' | tr -d "'" | tr -s '[:space:]' ' ')
+        local to_install=()
+        for dep in $raw_deps; do
+            if [[ "$dep" != pulsaros-* ]] && [[ "$dep" != gnome-macos-remap* ]] && [[ "$dep" != droidtux* ]] && [[ "$dep" != macboat* ]] && [[ "$dep" != seafari* ]] && [[ "$dep" != spotlight* ]]; then
+                to_install+=("$dep")
+            fi
+        done
+        if [ ${#to_install[@]} -gt 0 ]; then
+            sudo pacman -S --needed --noconfirm "${to_install[@]}" 2>/dev/null || true
+        fi
+    fi
+
     PKGDEST="$OUTPUT_DIR" makepkg -cfd --noconfirm --nosign
 
     local pkg_file=$(ls "$OUTPUT_DIR/${name}-"*.pkg.tar.zst 2>/dev/null | head -n 1)
