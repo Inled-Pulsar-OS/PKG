@@ -120,15 +120,28 @@ build_single_package() {
 
     # In CI/Docker environments, install official package dependencies
     if command -v pacman >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-        local raw_deps=$(grep -E '^(makedepends|depends)=\(' PKGBUILD -A 50 | sed '/)/q' | grep -v -E '^(makedepends|depends)=\(' | tr -d '()"' | tr -d "'" | tr -s '[:space:]' ' ')
+        local raw_deps=($(bash -c '
+            unset depends makedepends
+            source ./PKGBUILD 2>/dev/null || true
+            echo "${depends[@]} ${makedepends[@]}"
+        '))
         local to_install=()
-        for dep in $raw_deps; do
-            if [[ "$dep" != pulsaros-* ]] && [[ "$dep" != gnome-macos-remap* ]] && [[ "$dep" != droidtux* ]] && [[ "$dep" != macboat* ]] && [[ "$dep" != seafari* ]] && [[ "$dep" != spotlight* ]]; then
+        for dep in "${raw_deps[@]}"; do
+            dep="${dep%%[<>=]*}"
+            if [[ "$dep" != pulsaros-* ]] && [[ "$dep" != gnome-macos-remap* ]] && \
+               [[ "$dep" != droidtux* ]] && [[ "$dep" != macboat* ]] && \
+               [[ "$dep" != seafari* ]] && [[ "$dep" != spotlight* ]] && \
+               [[ "$dep" != winboat* ]] && [ -n "$dep" ]; then
                 to_install+=("$dep")
             fi
         done
         if [ ${#to_install[@]} -gt 0 ]; then
-            sudo pacman -S --needed --noconfirm "${to_install[@]}" 2>/dev/null || true
+            echo "📦 Installing official build dependencies for $name..."
+            sudo pacman -S --needed --noconfirm "${to_install[@]}" 2>/dev/null || {
+                for d in "${to_install[@]}"; do
+                    sudo pacman -S --needed --noconfirm "$d" 2>/dev/null || true
+                done
+            }
         fi
     fi
 
