@@ -361,8 +361,23 @@ def restore_wallpaper():
     file_path = cfg.get("file")
     if file_path and Path(file_path).exists():
         set_wallpaper(file_path)
-    else:
-        print("No saved live wallpaper found to restore.", file=sys.stderr)
+        return
+
+    # Fallback 1: SDDM synced wallpaper video
+    sddm_video = Path("/var/lib/pulsar-sddm/pulsar-wallpaper.mp4")
+    if sddm_video.exists():
+        set_wallpaper(str(sddm_video))
+        return
+
+    # Fallback 2: Hidamari videos directory
+    h_dir = get_hidamari_video_dir()
+    if h_dir.exists():
+        for v in list(h_dir.glob("*.mp4")) + list(h_dir.glob("*.webm")) + list(h_dir.glob("*.mkv")):
+            if v.exists():
+                set_wallpaper(str(v))
+                return
+
+    print("No saved live wallpaper found to restore.", file=sys.stderr)
 
 def get_status():
     cfg = get_config()

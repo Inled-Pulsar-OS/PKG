@@ -500,7 +500,8 @@ on_chooser_background_chosen_cb (CcBackgroundPanel *self,
       if (strstr (lower_uri, ".mp4") || strstr (lower_uri, ".webm") ||
           strstr (lower_uri, ".mkv") || strstr (lower_uri, ".mov") ||
           strstr (lower_uri, ".avi") || strstr (lower_uri, ".gif") ||
-          strstr (lower_uri, "live-wallpaper-") || strstr (lower_uri, "poster-"))
+          strstr (lower_uri, "live-wallpaper") || strstr (lower_uri, "pulsar-live-wallpaper") ||
+          strstr (lower_uri, "poster-") || strstr (lower_uri, "poster"))
         {
           is_video = TRUE;
         }
