@@ -1,63 +1,95 @@
 /* PulsarOS Spotlight — GTK4 theme */
 
+.spotlight-window {
+    background-color: @window_bg_color;
+    border-radius: 12px;
+    border: 1px solid alpha(@borders, 0.5);
+    box-shadow: 0 8px 32px alpha(black, 0.4);
+}
+
 .spotlight-main {
-    background-color: @theme_bg_color;
+    background-color: transparent;
 }
 
 .search-header {
     padding: 12px 16px;
-    border-bottom: 1px solid @borders;
+    border-bottom: 1px solid alpha(@borders, 0.4);
+    background-color: alpha(@headerbar_bg_color, 0.6);
+    border-radius: 12px 12px 0 0;
 }
 
 .search-icon {
-    opacity: 0.6;
+    opacity: 0.55;
+    -gtk-icon-size: 20px;
 }
 
 .search-input {
     font-size: 16px;
-    padding: 8px 12px;
+    padding: 6px 10px;
     border-radius: 8px;
-    background-color: alpha(@theme_fg_color, 0.08);
-    color: @theme_fg_color;
-    caret-color: @accent_bg_color;
+    border: none;
+    outline: none;
+    background: none;
+    color: @view_fg_color;
+    caret-color: @accent_color;
+    box-shadow: none;
 }
 
 .search-input:focus {
-    background-color: alpha(@theme_fg_color, 0.12);
-    box-shadow: 0 0 0 2px alpha(@accent_bg_color, 0.35);
+    background: none;
+    box-shadow: none;
 }
 
 .view-toggle {
-    padding: 6px;
+    padding: 5px;
     border-radius: 6px;
+    min-width: 28px;
+    min-height: 28px;
 }
 
 .category-bar {
-    padding: 6px 16px;
-    spacing: 4px;
+    padding: 4px 12px;
+    border-bottom: 1px solid alpha(@borders, 0.25);
+    background-color: alpha(@window_bg_color, 0.4);
 }
 
 .category-btn {
-    padding: 4px 10px;
+    padding: 3px 10px;
     border-radius: 12px;
     font-size: 12px;
+    min-height: 22px;
+}
+
+.category-btn:checked {
+    background-color: @accent_bg_color;
+    color: @accent_fg_color;
 }
 
 .results-area {
     padding: 4px 0;
+    background: transparent;
+    min-height: 240px;
 }
 
 /* list view */
 .result-item-list {
-    padding: 8px 16px;
+    padding: 7px 16px;
+    border-radius: 6px;
+    margin: 1px 6px;
 }
 
-.result-item-list:selected {
-    background-color: alpha(@accent_bg_color, 0.2);
+.result-item-list:hover {
+    background-color: alpha(@accent_bg_color, 0.12);
+}
+
+.result-item-list:selected,
+.result-item-list:focus {
+    background-color: alpha(@accent_bg_color, 0.25);
 }
 
 .result-icon {
-    opacity: 0.7;
+    opacity: 0.75;
+    -gtk-icon-size: 20px;
 }
 
 .result-title {
@@ -74,14 +106,21 @@
 .result-item-grid {
     padding: 12px 8px;
     border-radius: 8px;
+    margin: 2px;
 }
 
-.result-item-grid:selected {
-    background-color: alpha(@accent_bg_color, 0.2);
+.result-item-grid:hover {
+    background-color: alpha(@accent_bg_color, 0.12);
+}
+
+.result-item-grid:selected,
+.result-item-grid:focus {
+    background-color: alpha(@accent_bg_color, 0.25);
 }
 
 .result-icon-grid {
-    opacity: 0.8;
+    opacity: 0.85;
+    -gtk-icon-size: 32px;
 }
 
 .result-title-grid {
