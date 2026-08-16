@@ -57,8 +57,7 @@ cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-4.0/"* "$STAGE_DIR/etc/ske
 cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-4.0/"* "$STAGE_DIR/root/.config/gtk-4.0/" 2>/dev/null || true
 
 # Permitir que el sistema nativo de colores de acento de GNOME / Libadwaita controle los botones y temas
-echo "Habilitando colores de acento dinámicos en temas MacTahoe..."
-find "$STAGE_DIR" -name "*.css" -exec sed -i '/@define-color accent_/d' {} + 2>/dev/null || true
+echo "Habilitando colores de acento dinámicos y reparando colores de resalte/selección en temas MacTahoe..."
 find "$STAGE_DIR/usr/share/themes" -name "*.css" -exec sed -i 's/#0088FF/@accent_bg_color/g' {} + 2>/dev/null || true
 find "$STAGE_DIR/usr/share/themes" -name "*.css" -exec sed -i 's/#0088ff/@accent_bg_color/g' {} + 2>/dev/null || true
 find "$STAGE_DIR/etc/skel" -name "*.css" -exec sed -i 's/#0088FF/@accent_bg_color/g' {} + 2>/dev/null || true
@@ -66,8 +65,72 @@ find "$STAGE_DIR/etc/skel" -name "*.css" -exec sed -i 's/#0088ff/@accent_bg_colo
 find "$STAGE_DIR/root" -name "*.css" -exec sed -i 's/#0088FF/@accent_bg_color/g' {} + 2>/dev/null || true
 find "$STAGE_DIR/root" -name "*.css" -exec sed -i 's/#0088ff/@accent_bg_color/g' {} + 2>/dev/null || true
 
-# Añadir estilos explícitos para los botones de selección de color de acento de GNOME Settings
+# Garantizar que las variables de color de acento y selección tengan siempre una definición base válida
+# para evitar que GTK3, WebViews y navegadores (Firefox, Chromium, Seafari) evalúen la selección como transparente
+cat <<'ACCENT_COLOR_DEFINES' > /tmp/accent_color_defines.css
+@define-color accent_color #0088FF;
+@define-color accent_bg_color #0088FF;
+@define-color accent_fg_color #ffffff;
+@define-color theme_selected_bg_color #0088FF;
+@define-color theme_selected_fg_color #ffffff;
+@define-color selected_bg_color #0088FF;
+@define-color selected_fg_color #ffffff;
+ACCENT_COLOR_DEFINES
+
+# Prepend accent fallback definitions to all gtk.css / gtk-dark.css files
+find "$STAGE_DIR" -name "*.css" | while read -r css_file; do
+    if [ -f "$css_file" ]; then
+        if ! grep -q "@define-color accent_bg_color" "$css_file" 2>/dev/null; then
+            cat /tmp/accent_color_defines.css "$css_file" > "${css_file}.tmp" && mv "${css_file}.tmp" "$css_file"
+        fi
+    fi
+done
+rm -f /tmp/accent_color_defines.css
+
+# Añadir estilos explícitos para selección de texto, webviews, dropdowns y botones de color de acento
 cat <<'ACCENT_BTN_FIX' > /tmp/accent_btn_fix.css
+
+/* ==============================================================================
+ * Pulsar OS - Text Selection, WebViews and Dropdowns Highlight Fix
+ * ============================================================================== */
+::selection {
+  background-color: #0088FF;
+  color: #ffffff;
+}
+
+selection {
+  background-color: #0088FF;
+  color: #ffffff;
+}
+
+entry selection,
+entry:focus selection,
+textview text selection,
+textview selection,
+label:selected,
+.view:selected,
+.view:selected:focus,
+treeview:selected,
+treeview:selected:focus,
+flowboxchild:selected,
+listboxrow:selected,
+list row:selected,
+list row:hover,
+listbox > row:hover,
+listbox > row:selected,
+combobox window list:hover,
+combobox .menuitem:hover,
+popover modelbutton:hover,
+popover modelbutton:selected,
+popover listview row:hover,
+popover listview row:selected,
+menu menuitem:hover,
+menu menuitem:selected,
+dropdown popover listview row:hover,
+dropdown popover listview row:selected {
+  background-color: #0088FF;
+  color: #ffffff;
+}
 
 /* ==============================================================================
  * Pulsar OS - Accent Color Selector Previews (GNOME Settings / Libadwaita)
@@ -104,6 +167,8 @@ ACCENT_BTN_FIX
 
 find "$STAGE_DIR" -path "*/gtk-4.0/gtk.css" -exec sh -c 'cat /tmp/accent_btn_fix.css >> "$1"' _ {} \; 2>/dev/null || true
 find "$STAGE_DIR" -path "*/gtk-3.0/gtk.css" -exec sh -c 'cat /tmp/accent_btn_fix.css >> "$1"' _ {} \; 2>/dev/null || true
+find "$STAGE_DIR" -path "*/gtk-4.0/gtk-dark.css" -exec sh -c 'cat /tmp/accent_btn_fix.css >> "$1"' _ {} \; 2>/dev/null || true
+find "$STAGE_DIR" -path "*/gtk-3.0/gtk-dark.css" -exec sh -c 'cat /tmp/accent_btn_fix.css >> "$1"' _ {} \; 2>/dev/null || true
 rm -f /tmp/accent_btn_fix.css
 
 # 2.2 Aplicar fix para Nautilus moderno (Libadwaita en GNOME 46+)

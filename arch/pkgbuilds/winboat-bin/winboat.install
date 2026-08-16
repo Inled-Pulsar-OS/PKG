@@ -1,0 +1,7 @@
+post_install() {
+    echo ":: Winboat installed. Ensure docker service is active (sudo systemctl enable --now docker)."
+}
+
+post_upgrade() {
+    post_install
+}

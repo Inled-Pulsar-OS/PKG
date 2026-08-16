@@ -155,6 +155,292 @@ for uuid in "${EGO_EXTENSIONS[@]}"; do
 done
 
 # ==============================================================================
+# PATCH WIGGLE EXTENSION FOR GNOME 50 / CLUTTER ANIMATION COMPATIBILITY
+# PARCHEAR EXTENSIÓN WIGGLE PARA COMPATIBILIDAD CON GNOME 50 / CLUTTER
+# ==============================================================================
+WIGGLE_DIR="$STAGE_DIR/usr/share/gnome-shell/extensions/wiggle@mechtifs"
+if [ -d "$WIGGLE_DIR" ]; then
+    echo "🔧 [ES] Aplicando parche de estabilidad para Wiggle en GNOME 50..."
+    echo "🔧 [EN] Applying stability patch for Wiggle on GNOME 50..."
+
+    cat <<'WIGGLE_CURSOR_JS' > "$WIGGLE_DIR/cursor.js"
+'use strict';
+
+export default class Cursor {
+    constructor() {
+        this._tracker = global.backend.get_cursor_tracker(global.display);
+    }
+
+    get hot() {
+        try {
+            return this._tracker.get_hot();
+        } catch (e) {
+            return [0, 0];
+        }
+    }
+
+    get sprite() {
+        try {
+            return this._tracker.get_sprite();
+        } catch (e) {
+            return null;
+        }
+    }
+
+    show() {
+        try {
+            this._tracker.set_pointer_visible(true);
+        } catch (e) {}
+    }
+
+    hide() {
+        try {
+            this._tracker.set_pointer_visible(false);
+        } catch (e) {}
+    }
+}
+WIGGLE_CURSOR_JS
+
+    cat <<'WIGGLE_EFFECT_JS' > "$WIGGLE_DIR/effect.js"
+'use strict';
+
+import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
+import Graphene from 'gi://Graphene';
+import St from 'gi://St';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+
+import Cursor from './cursor.js';
+
+export default class Effect extends St.Icon {
+    static {
+        GObject.registerClass(this);
+    }
+
+    constructor() {
+        super();
+        this.isHidden = true;
+        this.magnifyDuration = 250;
+        this.unmagnifyDuration = 150;
+        this.unmagnifyDelay = 0;
+        this.isWiggling = false;
+        this.cursor = new Cursor();
+        [this._hotX, this._hotY] = this.cursor.hot;
+        this._spriteSize = this.cursor.sprite ? this.cursor.sprite.get_width() : 24;
+
+        this._pivot = new Graphene.Point({
+            x: this._hotX / this._spriteSize,
+            y: this._hotY / this._spriteSize,
+        });
+    }
+
+    set cursorSize(size) {
+        this.icon_size = size;
+        this._ratio = size / this._spriteSize;
+    }
+
+    set cursorPath(path) {
+        this.gicon = Gio.Icon.new_for_string(path || GLib.path_get_dirname(import.meta.url.slice(7)) + '/icons/cursor.svg');
+    }
+
+    move(x, y) {
+        this.set_position(x - this._hotX * this._ratio, y - this._hotY * this._ratio);
+    }
+
+    magnify() {
+        if (this._unmagnifyDelayId) {
+            GLib.Source.remove(this._unmagnifyDelayId);
+            this._unmagnifyDelayId = null;
+        }
+        this._isInTransition = false;
+        this.isWiggling = true;
+        if (!this.get_parent()) {
+            Main.uiGroup.add_child(this);
+        }
+        if (this.isHidden) {
+            this.cursor.hide();
+        }
+        this.remove_all_transitions();
+        this.ease({
+            duration: this.magnifyDuration,
+            mode: Clutter.AnimationMode.EASE_IN_QUAD,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            pivot_point: this._pivot,
+        });
+    }
+
+    unmagnify() {
+        if (this._isInTransition) {
+            return;
+        }
+        this._isInTransition = true;
+        if (this._unmagnifyDelayId) {
+            GLib.Source.remove(this._unmagnifyDelayId);
+        }
+        this._unmagnifyDelayId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, this.unmagnifyDelay, () => {
+            this._unmagnifyDelayId = null;
+            this.remove_all_transitions();
+            this.ease({
+                duration: this.unmagnifyDuration,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                scale_x: 1.0 / this._ratio,
+                scale_y: 1.0 / this._ratio,
+                pivot_point: this._pivot,
+                onComplete: () => {
+                    this._cleanup();
+                },
+                onStopped: () => {
+                    this._cleanup();
+                }
+            });
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, this.unmagnifyDuration + 50, () => {
+                this._cleanup();
+                return GLib.SOURCE_REMOVE;
+            });
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _cleanup() {
+        if (this.get_parent()) {
+            Main.uiGroup.remove_child(this);
+        }
+        this.cursor.show();
+        this.isWiggling = false;
+        this._isInTransition = false;
+    }
+
+    destroy() {
+        if (this._unmagnifyDelayId) {
+            GLib.Source.remove(this._unmagnifyDelayId);
+            this._unmagnifyDelayId = null;
+        }
+        this._cleanup();
+    }
+}
+WIGGLE_EFFECT_JS
+
+    cat <<'WIGGLE_EXT_JS' > "$WIGGLE_DIR/extension.js"
+'use strict';
+
+import GLib from 'gi://GLib';
+import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
+import { getPointerWatcher } from 'resource:///org/gnome/shell/ui/pointerWatcher.js';
+
+import { Field } from './const.js';
+import Effect from './effect.js';
+import History from './history.js';
+
+const initSettings = (settings, entries) => {
+    const getValue = (name, type) => ({
+        'b': () => settings.get_boolean(name),
+        'd': () => settings.get_double(name),
+        'i': () => settings.get_int(name),
+        's': () => settings.get_string(name),
+    }[type]());
+    entries.forEach(([name, type, func]) => {
+        func(getValue(name, type));
+        settings.connect(`changed::${name}`, () => func(getValue(name, type)));
+    });
+};
+
+export default class WiggleExtension extends Extension {
+    _onCheckIntervalChange(interval) {
+        if (this._checkTimeoutId) {
+            GLib.Source.remove(this._checkTimeoutId);
+        }
+        this._checkTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, () => {
+            if (this._history && this._history.check()) {
+                if (this._effect && !this._effect.isWiggling) {
+                    this._effect.move(this._history.lastCoords.x, this._history.lastCoords.y);
+                    this._effect.magnify();
+                }
+            } else if (this._effect && this._effect.isWiggling) {
+                this._effect.unmagnify();
+            }
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    _onDrawIntervalChange(interval) {
+        this._drawInterval = interval;
+        if (this._drawIntervalWatch && this._pointerWatcher) {
+            this._pointerWatcher._removeWatch(this._drawIntervalWatch);
+        }
+        if (this._pointerWatcher) {
+            this._drawIntervalWatch = this._pointerWatcher.addWatch(interval, (x, y) => {
+                if (this._history) {
+                    this._history.push(x, y);
+                }
+                if (this._effect && this._effect.isWiggling) {
+                    this._effect.move(x, y);
+                }
+            });
+        }
+    }
+
+    _togglePointerWatcher(state) {
+        if (state) {
+            if (!this._drawIntervalWatch) {
+                this._onDrawIntervalChange(this._drawInterval);
+            }
+        } else {
+            if (this._effect && this._effect.isWiggling) {
+                this._effect.unmagnify();
+            }
+            if (this._drawIntervalWatch && this._pointerWatcher) {
+                this._pointerWatcher._removeWatch(this._drawIntervalWatch);
+                this._drawIntervalWatch = null;
+            }
+            if (this._history) {
+                this._history.clear();
+            }
+        }
+    }
+
+    enable() {
+        this._pointerWatcher = getPointerWatcher();
+        this._history = new History();
+        this._effect = new Effect();
+        this._settings = this.getSettings();
+        initSettings(this._settings, [
+            [Field.HIDE, 'b', (r) => {if (this._effect) this._effect.isHidden = r}],
+            [Field.SIZE, 'i', (r) => {if (this._effect) this._effect.cursorSize = r}],
+            [Field.PATH, 's', (r) => {if (this._effect) this._effect.cursorPath = r}],
+            [Field.MAGN, 'i', (r) => {if (this._effect) this._effect.magnifyDuration = r}],
+            [Field.UMGN, 'i', (r) => {if (this._effect) this._effect.unmagnifyDuration = r}],
+            [Field.DLAY, 'i', (r) => {if (this._effect) this._effect.unmagnifyDelay = r}],
+
+            [Field.SAMP, 'i', (r) => {if (this._history) this._history.sampleSize = r}],
+            [Field.RADI, 'i', (r) => {if (this._history) this._history.radiansThreshold = r}],
+            [Field.DIST, 'i', (r) => {if (this._history) this._history.distanceThreshold = r}],
+            [Field.CHCK, 'i', (r) => this._onCheckIntervalChange(r)],
+            [Field.DRAW, 'i', (r) => this._onDrawIntervalChange(r)],
+        ]);
+    }
+
+    disable() {
+        if (this._checkTimeoutId) {
+            GLib.Source.remove(this._checkTimeoutId);
+            this._checkTimeoutId = null;
+        }
+        this._togglePointerWatcher(false);
+        if (this._effect) {
+            this._effect.destroy();
+            this._effect = null;
+        }
+        this._pointerWatcher = null;
+        this._history = null;
+        this._settings = null;
+    }
+}
+WIGGLE_EXT_JS
+fi
+
+# ==============================================================================
 # DOWNLOAD AND INSTALL LIQUID GLASS EXTENSION FROM GITHUB
 # DESCARGAR E INSTALAR LA EXTENSIÓN LIQUID GLASS DESDE GITHUB
 # ==============================================================================
