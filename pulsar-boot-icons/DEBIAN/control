@@ -1,0 +1,8 @@
+Package: pulsaros-boot-icons
+Version: 1.0.0
+Section: misc
+Priority: optional
+Architecture: all
+Maintainer: Jaime <info@inled.es>
+Description: Bootloader icons for Pulsar OS (rEFInd and GRUB).
+ Contains high-resolution icons for live and installed boot entries.

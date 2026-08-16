@@ -1,0 +1,23 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsaros-boot-icons
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Bootloader icons for Pulsar OS (rEFInd and GRUB)"
+arch=(any)
+url="https://inled.es"
+license=(custom)
+options=(!strip)
+
+prepare() {
+    _src="$(cd "$startdir"/../../../pulsar-boot-icons && pwd)"
+    mkdir -p "$srcdir/staging"
+    if [ -f "$_src/prepare-assets.sh" ]; then
+        bash "$_src/prepare-assets.sh" "$srcdir/staging"
+    fi
+}
+
+package() {
+    if [ -d "$srcdir/staging" ]; then
+        cp -rf "$srcdir/staging"/* "$pkgdir/"
+    fi
+}
