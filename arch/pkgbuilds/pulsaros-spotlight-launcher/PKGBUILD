@@ -6,8 +6,11 @@ pkgdesc="Spotlight search for Pulsar OS"
 arch=(any)
 url="https://inled.es"
 license=(GPL3)
-depends=(python gtk4 libadwaita tinysparql localsearch-3)
-makedepends=(python-build python-installer)
+depends=(python gtk4 libadwaita tinysparql localsearch python-gobject ydotool wl-clipboard)
+makedepends=(python-build python-installer python-setuptools python-wheel)
+provides=(spotlight-gtk spotlight-python)
+conflicts=(spotlight-gtk spotlight-python)
+replaces=(spotlight-gtk spotlight-python)
 options=(!strip)
 
 build() {
@@ -26,14 +29,18 @@ package() {
     install -Dm755 cli/pulsaros-toggle-remap "$pkgdir/usr/bin/pulsaros-toggle-remap"
     install -Dm755 cli/pulsaros-toggle-launcher "$pkgdir/usr/bin/pulsaros-toggle-launcher"
 
+    # Style and icons
+    install -Dm644 data/style.css "$pkgdir/usr/share/pulsaros-spotlight/style.css"
+    mkdir -p "$pkgdir/usr/share/pulsaros-spotlight/icons"
+    cp -r data/icons/* "$pkgdir/usr/share/pulsaros-spotlight/icons/" 2>/dev/null || true
+
+    install -Dm644 data/icons/pulsaros-spotlight.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/pulsaros-spotlight.svg" 2>/dev/null || true
+    install -Dm644 data/icons/spotlight-symbolic.svg "$pkgdir/usr/share/icons/hicolor/symbolic/apps/spotlight-symbolic.svg" 2>/dev/null || true
+
     # Desktop file
     install -Dm644 data/pulsaros-spotlight.desktop "$pkgdir/usr/share/applications/pulsaros-spotlight.desktop"
 
     # GNOME Shell extension
-    install -Dm644 gnome-shell-extension/extension.js \
-        "$pkgdir/usr/share/gnome-shell/extensions/pulsaros-spotlight-launcher@inled.es/extension.js"
-    install -Dm644 gnome-shell-extension/metadata.json \
-        "$pkgdir/usr/share/gnome-shell/extensions/pulsaros-spotlight-launcher@inled.es/metadata.json"
-    install -Dm644 gnome-shell-extension/stylesheet.css \
-        "$pkgdir/usr/share/gnome-shell/extensions/pulsaros-spotlight-launcher@inled.es/stylesheet.css"
+    mkdir -p "$pkgdir/usr/share/gnome-shell/extensions/pulsaros-spotlight-launcher@inled.es"
+    cp -r gnome-shell-extension/* "$pkgdir/usr/share/gnome-shell/extensions/pulsaros-spotlight-launcher@inled.es/"
 }

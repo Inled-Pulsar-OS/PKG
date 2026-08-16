@@ -8,7 +8,8 @@ import sys
 from gi.repository import Gio, GLib, Gtk
 
 from pulsaros_spotlight import __app_id__, __version__
-from pulsaros_spotlight.config import Config
+from pulsaros_spotlight.clipboard import ClipboardManager
+from pulsaros_spotlight.config import SpotlightConfig
 from pulsaros_spotlight.search import SearchBackend
 from pulsaros_spotlight.ui.window import SpotlightWindow
 
@@ -23,8 +24,9 @@ class SpotlightApp(Gtk.Application):
             application_id=__app_id__,
             flags=Gio.ApplicationFlags.FLAGS_NONE,
         )
-        self._config = Config()
-        self._backend = SearchBackend()
+        self._config = SpotlightConfig()
+        self._clipboard_mgr = ClipboardManager(self._config)
+        self._backend = SearchBackend(clipboard_mgr=self._clipboard_mgr)
         self._window: SpotlightWindow | None = None
 
     def do_activate(self) -> None:
@@ -35,7 +37,11 @@ class SpotlightApp(Gtk.Application):
 
         if not self._window:
             self._window = SpotlightWindow(
-                app=self, backend=self._backend, config=self._config)
+                application=self,
+                config=self._config,
+                backend=self._backend,
+                clipboard_mgr=self._clipboard_mgr,
+            )
 
         is_hidden = "--hidden" in sys.argv
         if is_hidden:
