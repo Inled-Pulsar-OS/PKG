@@ -7,7 +7,7 @@ from typing import Callable
 from gi.repository import Gtk
 
 from pulsaros_spotlight.search import SearchResult
-from pulsaros_spotlight.utils import icon_for_mime
+from pulsaros_spotlight.utils import get_file_icon
 
 
 class ResultListRow(Gtk.ListBoxRow):
@@ -21,8 +21,10 @@ class ResultListRow(Gtk.ListBoxRow):
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         box.add_css_class("result-item-list")
 
-        icon_name = icon_for_mime(result.mime)
-        icon = Gtk.Image.new_from_icon_name(icon_name)
+        if result.app and result.app.icon:
+            icon = Gtk.Image.new_from_gicon(result.app.icon)
+        else:
+            icon = get_file_icon(result.url, result.mime)
         icon.set_pixel_size(32)
         icon.add_css_class("result-icon")
 
@@ -62,8 +64,10 @@ class ResultGridChild(Gtk.FlowBoxChild):
         box.add_css_class("result-item-grid")
         box.set_size_request(90, -1)
 
-        icon_name = icon_for_mime(result.mime)
-        icon = Gtk.Image.new_from_icon_name(icon_name)
+        if result.app and result.app.icon:
+            icon = Gtk.Image.new_from_gicon(result.app.icon)
+        else:
+            icon = get_file_icon(result.url, result.mime)
         icon.set_pixel_size(48)
         icon.add_css_class("result-icon-grid")
 
@@ -126,6 +130,7 @@ class ResultView(Gtk.Stack):
         row = self._list_box.get_row_at_index(0)
         if row:
             self._list_box.select_row(row)
+            row.grab_focus()
 
     def activate_selected(self) -> SearchResult | None:
         """Activate the currently selected result. Returns it if found."""
@@ -149,7 +154,19 @@ class ResultView(Gtk.Stack):
             if row:
                 idx = row.get_index()
                 if idx > 0:
-                    self._list_box.select_row(self._list_box.get_row_at_index(idx - 1))
+                    prev_row = self._list_box.get_row_at_index(idx - 1)
+                    if prev_row:
+                        self._list_box.select_row(prev_row)
+                        prev_row.grab_focus()
+        else:
+            selected = self._grid.get_selected_children()
+            if selected:
+                idx = selected[0].get_index()
+                if idx >= 6:
+                    prev_child = self._grid.get_child_at_index(idx - 6)
+                    if prev_child:
+                        self._grid.select_child(prev_child)
+                        prev_child.grab_focus()
 
     def move_selection_down(self) -> None:
         if self.get_visible_child_name() == "list":
@@ -159,6 +176,36 @@ class ResultView(Gtk.Stack):
                 next_row = self._list_box.get_row_at_index(idx + 1)
                 if next_row:
                     self._list_box.select_row(next_row)
+                    next_row.grab_focus()
+        else:
+            selected = self._grid.get_selected_children()
+            if selected:
+                idx = selected[0].get_index()
+                next_child = self._grid.get_child_at_index(idx + 6)
+                if next_child:
+                    self._grid.select_child(next_child)
+                    next_child.grab_focus()
+
+    def move_selection_left(self) -> None:
+        if self.get_visible_child_name() == "grid":
+            selected = self._grid.get_selected_children()
+            if selected:
+                idx = selected[0].get_index()
+                if idx > 0:
+                    prev_child = self._grid.get_child_at_index(idx - 1)
+                    if prev_child:
+                        self._grid.select_child(prev_child)
+                        prev_child.grab_focus()
+
+    def move_selection_right(self) -> None:
+        if self.get_visible_child_name() == "grid":
+            selected = self._grid.get_selected_children()
+            if selected:
+                idx = selected[0].get_index()
+                next_child = self._grid.get_child_at_index(idx + 1)
+                if next_child:
+                    self._grid.select_child(next_child)
+                    next_child.grab_focus()
 
     # -- internal -------------------------------------------------------------
 

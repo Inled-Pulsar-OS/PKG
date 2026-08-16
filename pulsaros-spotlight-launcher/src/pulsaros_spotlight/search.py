@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from pulsaros_spotlight.apps import DesktopApp, load_apps
+
+if TYPE_CHECKING:
+    from pulsaros_spotlight.clipboard import ClipboardManager
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +49,7 @@ SELECT ?url ?title ?mtime WHERE {{
 _CATEGORY_RDF_TYPES: dict[str, str] = {
     "documents": "nie:InformationElement",
     "images": "nfo:Image",
-    "music": "nmm:MusicPiece",
+    "audio": "nmm:MusicPiece",
     "video": "nmm:Video",
 }
 
@@ -54,19 +58,21 @@ DEFAULT_LIMIT = 50
 
 @dataclass(frozen=True)
 class SearchResult:
-    """Single search result from Tracker."""
+    """Single search result from Tracker or internal providers."""
 
     url: str
     title: str
-    mime: str
-    snippet: str
+    mime: str = ""
+    snippet: str = ""
+    app: DesktopApp | None = None
 
 
 class SearchBackend:
-    """SPARQL query layer over Tracker/TinySPARQL."""
+    """SPARQL query layer over Tracker/TinySPARQL and local providers."""
 
-    def __init__(self) -> None:
+    def __init__(self, clipboard_mgr: ClipboardManager | None = None) -> None:
         self._conn = None
+        self._clipboard_mgr = clipboard_mgr
         self._apps: list[DesktopApp] = []
         self._load_apps()
 
@@ -102,21 +108,30 @@ class SearchBackend:
         limit: int = DEFAULT_LIMIT,
     ) -> list[SearchResult]:
         """Run a full-text search and return results."""
+        if category == "clipboard":
+            if self._clipboard_mgr:
+                return self._clipboard_mgr.search_history(query)
+            return []
+
         if not query.strip():
             return []
 
         query = query.strip()
 
-        if category == "apps":
+        if category in ("apps", "applications"):
             return self._search_apps(query, limit)
 
         if category == "all":
             app_results = self._search_apps(query, limit)
+            clip_results = []
+            if self._clipboard_mgr:
+                clip_results = self._clipboard_mgr.search_history(query)[:3]
+
             if self.is_ready:
                 sparql = self._build_query(query, category, limit)
                 file_results = self._execute(sparql)
-                return app_results + file_results
-            return app_results
+                return clip_results + app_results + file_results
+            return clip_results + app_results
 
         if not self.is_ready:
             return []
@@ -130,13 +145,14 @@ class SearchBackend:
         results: list[SearchResult] = []
 
         for app in self._apps:
-            if query_lower in app.name.lower() or query_lower in app.comment.lower():
+            if query_lower in app.name.lower() or (app.comment and query_lower in app.comment.lower()):
                 results.append(
                     SearchResult(
-                        url=app.exec,
+                        url=f"app://{app.id}",
                         title=app.name,
                         mime="application/x-desktop",
-                        snippet=app.comment,
+                        snippet=app.comment or "",
+                        app=app,
                     )
                 )
                 if len(results) >= limit:
@@ -147,7 +163,7 @@ class SearchBackend:
     # -- internal -------------------------------------------------------------
 
     def _build_query(self, query: str, category: str, limit: int) -> str:
-        if category == "apps":
+        if category in ("apps", "applications"):
             return _SEARCH_APPS.format(query=query, limit=limit)
         if category in _CATEGORY_RDF_TYPES:
             return _SEARCH_CATEGORY.format(
@@ -167,6 +183,6 @@ class SearchBackend:
             url = cursor.get_string(0) or ""
             title = cursor.get_string(1) or url.rsplit("/", 1)[-1]
             results.append(
-                SearchResult(url=url, title=title, mime="", snippet="")
+                SearchResult(url=url, title=title, mime="", snippet="", app=None)
             )
         return results

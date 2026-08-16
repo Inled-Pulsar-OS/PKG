@@ -26,6 +26,16 @@ install -m 644 data/pulsaros-spotlight.desktop "$STAGE_DIR/usr/share/application
 mkdir -p "$STAGE_DIR/usr/share/pulsaros-spotlight"
 install -m 644 data/style.css "$STAGE_DIR/usr/share/pulsaros-spotlight/style.css"
 
+# Install Icons
+mkdir -p "$STAGE_DIR/usr/share/pulsaros-spotlight/icons"
+cp -r data/icons/* "$STAGE_DIR/usr/share/pulsaros-spotlight/icons/" 2>/dev/null || true
+
+mkdir -p "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps"
+install -m 644 data/icons/pulsaros-spotlight.svg "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps/pulsaros-spotlight.svg" 2>/dev/null || true
+
+mkdir -p "$STAGE_DIR/usr/share/icons/hicolor/symbolic/apps"
+install -m 644 data/icons/spotlight-symbolic.svg "$STAGE_DIR/usr/share/icons/hicolor/symbolic/apps/spotlight-symbolic.svg" 2>/dev/null || true
+
 # Install GNOME Shell extension
 EXT_DIR="$STAGE_DIR/usr/share/gnome-shell/extensions/pulsaros-spotlight-launcher@inled.es"
 mkdir -p "$EXT_DIR"
