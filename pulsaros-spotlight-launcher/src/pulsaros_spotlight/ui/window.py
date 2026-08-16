@@ -341,6 +341,8 @@ class SpotlightWindow(Gtk.ApplicationWindow):
                 self._cycle_category(1)
                 return True
 
+        entry_has_focus = self._search_entry.has_focus()
+
         # Arrow key navigation in results
         if keyval == Gdk.KEY_Up:
             self._result_view.move_selection_up()
@@ -348,10 +350,10 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         if keyval == Gdk.KEY_Down:
             self._result_view.move_selection_down()
             return True
-        if keyval == Gdk.KEY_Left:
+        if keyval == Gdk.KEY_Left and not entry_has_focus:
             self._result_view.move_selection_left()
             return True
-        if keyval == Gdk.KEY_Right:
+        if keyval == Gdk.KEY_Right and not entry_has_focus:
             self._result_view.move_selection_right()
             return True
 
@@ -368,6 +370,25 @@ class SpotlightWindow(Gtk.ApplicationWindow):
                 self._search_entry.set_placeholder_text(f"Navegando: {parent}")
                 results = self._browse_directory(parent)
                 self._result_view.set_results(results, self._config.is_grid_view)
+                return True
+
+        # Automatic typing activation: if user is typing any character while focus is elsewhere
+        if not entry_has_focus and not (state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK | Gdk.ModifierType.SUPER_MASK)):
+            unicode_char = Gdk.keyval_to_unicode(keyval)
+            if unicode_char != 0:
+                char_str = chr(unicode_char)
+                if char_str.isprintable():
+                    self._search_entry.grab_focus()
+                    curr = self._search_entry.get_text()
+                    self._search_entry.set_text(curr + char_str)
+                    self._search_entry.set_position(-1)
+                    return True
+            elif keyval == Gdk.KEY_BackSpace:
+                self._search_entry.grab_focus()
+                curr = self._search_entry.get_text()
+                if curr:
+                    self._search_entry.set_text(curr[:-1])
+                    self._search_entry.set_position(-1)
                 return True
 
         return False
