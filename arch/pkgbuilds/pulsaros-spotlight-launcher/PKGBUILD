@@ -1,23 +1,39 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-spotlight-launcher
-pkgver=1.0.120
-pkgrel=3
-pkgdesc="GNOME Shell extension: macOS Spotlight-like search launcher for Pulsar OS"
+pkgver=2.0.0
+pkgrel=1
+pkgdesc="Spotlight search for Pulsar OS"
 arch=(any)
 url="https://inled.es"
-license=(custom)
-depends=(gnome-shell spotlight-gtk)
+license=(GPL3)
+depends=(python gtk4 libadwaita tinysparql localsearch-3)
+makedepends=(python-build python-installer)
 options=(!strip)
-install=pulsaros-spotlight-launcher.install
+
+build() {
+    _src="$(cd "$startdir"/../../../pulsaros-spotlight-launcher && pwd)"
+    cd "$_src"
+    python -m build --wheel
+}
 
 package() {
     _src="$(cd "$startdir"/../../../pulsaros-spotlight-launcher && pwd)"
     cd "$_src"
-    [ -d usr ] && cp -r usr "$pkgdir/"
-    [ -d etc ] && cp -r etc "$pkgdir/"
-    if [ -d "$srcdir/staging" ]; then
-        cp -r "$srcdir/staging"/* "$pkgdir/"
-    elif [ -d "$srcdir/usr" ]; then
-        cp -r "$srcdir/usr" "$pkgdir/"
-    fi
+    python -m installer --destdir="$pkgdir" dist/*.whl
+
+    # CLI scripts
+    install -Dm755 cli/pulsaros-spotlight "$pkgdir/usr/bin/pulsaros-spotlight"
+    install -Dm755 cli/pulsaros-toggle-remap "$pkgdir/usr/bin/pulsaros-toggle-remap"
+    install -Dm755 cli/pulsaros-toggle-launcher "$pkgdir/usr/bin/pulsaros-toggle-launcher"
+
+    # Desktop file
+    install -Dm644 data/pulsaros-spotlight.desktop "$pkgdir/usr/share/applications/pulsaros-spotlight.desktop"
+
+    # GNOME Shell extension
+    install -Dm644 gnome-shell-extension/extension.js \
+        "$pkgdir/usr/share/gnome-shell/extensions/pulsaros-spotlight-launcher@inled.es/extension.js"
+    install -Dm644 gnome-shell-extension/metadata.json \
+        "$pkgdir/usr/share/gnome-shell/extensions/pulsaros-spotlight-launcher@inled.es/metadata.json"
+    install -Dm644 gnome-shell-extension/stylesheet.css \
+        "$pkgdir/usr/share/gnome-shell/extensions/pulsaros-spotlight-launcher@inled.es/stylesheet.css"
 }
