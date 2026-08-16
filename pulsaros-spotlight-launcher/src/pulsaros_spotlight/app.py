@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 import sys
+from pathlib import Path
 
-from gi.repository import Gio, GLib, Gtk
+from gi.repository import Gio, GLib, Gdk, Gtk
 
 from pulsaros_spotlight import __app_id__, __version__
 from pulsaros_spotlight.clipboard import ClipboardManager
@@ -14,6 +15,36 @@ from pulsaros_spotlight.search import SearchBackend
 from pulsaros_spotlight.ui.window import SpotlightWindow
 
 logger = logging.getLogger(__name__)
+
+_CSS_SEARCH_PATHS = [
+    Path("/usr/share/pulsaros-spotlight/style.css"),
+    Path(__file__).resolve().parent.parent.parent / "data" / "style.css",
+]
+
+
+def _load_css() -> None:
+    """Load the Spotlight GTK4 stylesheet into the default display."""
+    css_file: Path | None = None
+    for p in _CSS_SEARCH_PATHS:
+        if p.exists():
+            css_file = p
+            break
+    if css_file is None:
+        logger.warning("spotlight style.css not found — results area may be invisible")
+        return
+
+    provider = Gtk.CssProvider()
+    try:
+        provider.load_from_path(str(css_file))
+    except Exception:
+        provider.load_from_file(Gio.File.new_for_path(str(css_file)))
+
+    display = Gdk.Display.get_default()
+    if display:
+        Gtk.StyleContext.add_provider_for_display(
+            display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+        logger.info("Loaded spotlight CSS from %s", css_file)
 
 
 class SpotlightApp(Gtk.Application):
@@ -28,6 +59,10 @@ class SpotlightApp(Gtk.Application):
         self._clipboard_mgr = ClipboardManager(self._config)
         self._backend = SearchBackend(clipboard_mgr=self._clipboard_mgr)
         self._window: SpotlightWindow | None = None
+
+    def do_startup(self) -> None:
+        Gtk.Application.do_startup(self)
+        _load_css()
 
     def do_activate(self) -> None:
         self.hold()
