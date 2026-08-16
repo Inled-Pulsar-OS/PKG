@@ -1,0 +1,3 @@
+#!/bin/sh
+# PulsarOS Spotlight — launcher wrapper
+exec python3 -m pulsaros_spotlight "$@"

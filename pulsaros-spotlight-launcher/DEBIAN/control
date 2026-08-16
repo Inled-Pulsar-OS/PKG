@@ -1,10 +1,25 @@
-Package: pulsaros-spotlight-launcher
-Version: 1.0.104
+Source: pulsaros-spotlight
 Section: gnome
 Priority: optional
-Architecture: all
 Maintainer: Jaime <info@inled.es>
-Depends: gnome-shell, spotlight-python
-Description: Spotlight launcher extension for Pulsar OS.
- Adds a search icon in the GNOME top bar that runs spotlight-python.
- Fully compatible with GNOME 45-50 and Wayland.
+Build-Depends: debhelper-compat (= 13),
+               dh-python,
+               python3-all,
+               python3-setuptools
+Standards-Version: 4.6.2
+Homepage: https://inled.es
+
+Package: pulsaros-spotlight
+Architecture: all
+Depends: ${python3:Depends},
+         ${misc:Depends},
+         python3 (>= 3.11),
+         gir1.2-gtk-4.0,
+         gir1.2-adw-1,
+         gir1.2-tsparql-3.0,
+         localsearch-3
+Description: Spotlight search for Pulsar OS
+ Full-text file and application search powered by
+ GNOME Tracker/TinySPARQL. Provides a Spotlight-like
+ search window for finding files, documents, images,
+ music, video, and installed applications.
