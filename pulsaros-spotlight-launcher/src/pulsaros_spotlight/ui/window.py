@@ -53,7 +53,7 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         self._has_been_active: bool = False
 
         self.set_title("Spotlight")
-        self.set_default_size(680, -1)
+        self.set_default_size(680, 520)
         self.set_resizable(False)
         self.set_decorated(False)
         self.add_css_class("spotlight-window")
@@ -117,6 +117,8 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroll.set_vexpand(True)
+        scroll.set_min_content_height(300)
+        scroll.set_max_content_height(480)
         scroll.add_css_class("results-area")
         scroll.set_child(self._result_view)
         main_box.append(scroll)
