@@ -1,0 +1,8 @@
+pulsaros-spotlight (2.0.0-1) unstable; urgency=medium
+
+  * Full restructure with src layout and pyproject.toml
+  * Tracker/TinySPARQL backend for full-text file search
+  * Category filters (Apps, Documents, Images, Music, Video)
+  * Proper Debian packaging with dh-python
+
+ -- Jaime <info@inled.es>  Fri, 15 Aug 2025 00:00:00 +0000
