@@ -8,3 +8,5 @@ Icon=edit-find
 Type=Application
 Categories=Utility;
 Terminal=false
+StartupNotify=true
+X-GNOME-Autostart-enabled=true

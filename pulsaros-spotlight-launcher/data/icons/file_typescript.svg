@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.18"/>
+    </filter>
+    <linearGradient id="foldGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e0e0e0"/>
+      <stop offset="100%" stop-color="#b0b0b0"/>
+    </linearGradient>
+  </defs>
+  <!-- Document Page Background -->
+  <path d="M14 6 C11.8 6 10 7.8 10 10 L10 54 C10 56.2 11.8 58 14 58 L50 58 C52.2 58 54 56.2 54 54 L54 20 L40 6 Z" fill="#f8f9fa" filter="url(#shadow)"/>
+  <!-- Fold Corner -->
+  <path d="M40 6 L54 20 L42 20 C40.9 20 40 19.1 40 18 Z" fill="url(#foldGrad)"/>
+  <!-- Center Badge / Icon -->
+  <rect x="18" y="24" width="28" height="24" rx="5" fill="#3178c6"/>
+  
+  <text x="32" y="39" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">TS</text>
+  
+</svg>

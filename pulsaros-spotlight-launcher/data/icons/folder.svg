@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <filter id="folderShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.2"/>
+    </filter>
+    <linearGradient id="folderGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#42a5f5"/>
+      <stop offset="100%" stop-color="#1976d2"/>
+    </linearGradient>
+  </defs>
+  <path d="M8 14 C8 11.8 9.8 10 12 10 L26 10 L32 16 L52 16 C54.2 16 56 17.8 56 20 L56 50 C56 52.2 54.2 54 52 54 L12 54 C9.8 54 8 52.2 8 50 Z" fill="url(#folderGrad)" filter="url(#folderShadow)"/>
+</svg>

@@ -81,7 +81,7 @@ const AboutDialog = GObject.registerClass({
 
         // Title
         let titleLabel = new St.Label({
-            text: "Pulsar OS Pear Edition",
+            text: osName || "Pulsar OS",
             style_class: 'pulsaros-about-title',
             x_align: Clutter.ActorAlign.CENTER
         });
@@ -134,7 +134,7 @@ const AboutDialog = GObject.registerClass({
         this.addButton({
             label: "Copy Info",
             action: () => {
-                let clipboardText = `Pulsar OS Pear Edition\n` +
+                let clipboardText = `${osName || "Pulsar OS"}\n` +
                                     `Version: ${osVersion}\n` +
                                     `Device Name: ${hostName}\n` +
                                     `Processor: ${cpuModel}\n` +
@@ -1867,21 +1867,26 @@ export default class PulsarosGlobalMenuExtension extends Extension {
                 console.error("[GlobalMenu] Failed to run df:", e);
             }
 
-            // OS Name & Version
-            let osName = "Pulsar OS Pear Edition";
+            // OS Name & Version from /etc/os-release
+            let osName = "Pulsar OS";
             let osVersion = "rolling";
             try {
                 let [ok, content] = GLib.file_get_contents("/etc/os-release");
                 if (ok) {
                     let contentStr = new TextDecoder().decode(content);
-                    let prettyNameMatch = contentStr.match(/^PRETTY_NAME="(.+)"/m);
+                    let prettyNameMatch = contentStr.match(/^PRETTY_NAME="?([^"\n]+)"?/m);
+                    let nameMatch = contentStr.match(/^NAME="?([^"\n]+)"?/m);
+                    let versionMatch = contentStr.match(/^VERSION_ID="?([^"\n]+)"?/m) ||
+                                       contentStr.match(/^VERSION="?([^"\n]+)"?/m) ||
+                                       contentStr.match(/^BUILD_ID="?([^"\n]+)"?/m) ||
+                                       contentStr.match(/^IMAGE_VERSION="?([^"\n]+)"?/m);
+
                     if (prettyNameMatch) {
-                        osName = prettyNameMatch[1].replace("Tahoe Edition", "Pear Edition");
-                        if (!osName.includes("Pear Edition")) {
-                            osName = osName.replace("Pulsar OS", "Pulsar OS Pear Edition");
-                        }
+                        osName = prettyNameMatch[1];
+                    } else if (nameMatch) {
+                        osName = nameMatch[1];
                     }
-                    let versionMatch = contentStr.match(/^VERSION_ID="(.+)"/m) || contentStr.match(/^VERSION="(.+)"/m);
+
                     if (versionMatch) {
                         osVersion = versionMatch[1];
                     }
@@ -1926,7 +1931,12 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         });
         this.logoMenuButton.menu.addMenuItem(logoutItem);
         
-        this.logoMenuButton.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        // Sleep
+        let sleepItem = new PopupMenu.PopupMenuItem("Sleep");
+        sleepItem.connect('activate', () => {
+            this._runCommand("systemctl suspend");
+        });
+        this.logoMenuButton.menu.addMenuItem(sleepItem);
         
         // Restart
         let restartItem = new PopupMenu.PopupMenuItem("Restart...");

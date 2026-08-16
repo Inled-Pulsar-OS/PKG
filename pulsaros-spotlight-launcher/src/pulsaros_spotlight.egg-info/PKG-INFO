@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: pulsaros-spotlight
+Version: 2.0.0
+Summary: Spotlight search for Pulsar OS
+Author-email: Jaime <info@inled.es>
+License-Expression: GPL-3.0-or-later
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: pygobject>=3.48
