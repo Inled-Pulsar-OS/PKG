@@ -19,10 +19,17 @@ jobs:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_URL: ${{ github.event.issue.html_url }}
           REPO: ${{ github.repository }}
+          LABELS: ${{ toJSON(github.event.issue.labels.*.name) }}
         run: |
+          ESCAPED_TITLE=$(echo "$ISSUE_TITLE" | sed 's/"/\\"/g')
+          MSG="🟢 **${ESCAPED_TITLE}**\nRepo: \`${REPO}\`"
+          if [ "$LABELS" != "[]" ]; then
+            MSG="${MSG}\nLabels: ${LABELS}"
+          fi
+          MSG="${MSG}\n<${ISSUE_URL}>"
           curl -s -X POST "$DISCORD_WEBHOOK" \
             -H "Content-Type: application/json" \
-            -d '{"content":"🟢 **'"$(echo "$ISSUE_TITLE" | sed 's/"/\\"/g')"'**\nRepo: `'"$REPO"'`\n<'"$ISSUE_URL"'>"}'
+            -d "{\"content\":\"$MSG\"}"
 
       - name: Notify on PR
         if: github.event_name == 'pull_request'
@@ -32,9 +39,10 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           REPO: ${{ github.repository }}
         run: |
+          ESCAPED_TITLE=$(echo "$PR_TITLE" | sed 's/"/\\"/g')
           curl -s -X POST "$DISCORD_WEBHOOK" \
             -H "Content-Type: application/json" \
-            -d '{"content":"🔀 **PR: '"$(echo "$PR_TITLE" | sed 's/"/\\"/g')"'**\nRepo: `'"$REPO"'`\n<'"$PR_URL"'>"}'
+            -d "{\"content\":\"🔀 **PR: ${ESCAPED_TITLE}**\nRepo: \`${REPO}\`\n<${PR_URL}>\"}"
 
       - name: Notify on release
         if: github.event_name == 'release'
@@ -44,6 +52,7 @@ jobs:
           RELEASE_URL: ${{ github.event.release.html_url }}
           REPO: ${{ github.repository }}
         run: |
+          ESCAPED_NAME=$(echo "$RELEASE_NAME" | sed 's/"/\\"/g')
           curl -s -X POST "$DISCORD_WEBHOOK" \
             -H "Content-Type: application/json" \
-            -d '{"content":"🚀 **New Release: '"$(echo "$RELEASE_NAME" | sed 's/"/\\"/g')"'**\nRepo: `'"$REPO"'`\n<'"$RELEASE_URL"'>"}'
+            -d "{\"content\":\"🚀 **New Release: ${ESCAPED_NAME}**\nRepo: \`${REPO}\`\n<${RELEASE_URL}>\"}"

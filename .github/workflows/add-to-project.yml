@@ -36,10 +36,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PROJECT_PAT }}
           ITEM_ID: ${{ steps.add-project.outputs.itemId }}
-          LABELS: ${{ github.event.issue.labels.*.name }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           PROJECT_ID="PVT_kwDOEGtWb84Bbe-_"
+          LABELS='${{ toJSON(github.event.issue.labels.*.name) }}'
+          BODY='${{ toJSON(github.event.issue.body) }}'
 
           set_field() {
             gh api graphql -f query='
@@ -61,7 +61,7 @@ jobs:
           }
 
           extract_field() {
-            echo "$ISSUE_BODY" | sed -n "/^### $1$/,/^### /{/^### $1$/d;/^### /d;p}" | head -1 | xargs
+            echo "$BODY" | sed -n "/^### $1$/,/^### /{/^### $1$/d;/^### /d;p}" | head -1 | xargs
           }
 
           # --- Tipo (from labels) ---
@@ -77,7 +77,7 @@ jobs:
             [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" "$OPT"
           fi
 
-          # --- Difficulty (from form field ### Difficulty) ---
+          # --- Difficulty (from ### Difficulty) ---
           DIFF=$(extract_field "Difficulty")
           if echo "$DIFF" | grep -q "Easy"; then
             OPT=$(get_option "Difficulty" "Easy")
@@ -93,16 +93,16 @@ jobs:
             [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "$OPT"
           fi
 
-          # --- Roadmap Phase (from form field ### Roadmap Phase) ---
+          # --- Roadmap Phase (from ### Roadmap Phase) ---
           PHASE=$(extract_field "Roadmap Phase")
           if [ -n "$PHASE" ]; then
             OPT=$(get_option "Roadmap Phase" "$PHASE")
             [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocY" "$OPT"
           fi
 
-          # --- Cost (from form field ### Cost) ---
-          COST=$(extract_field "Cost")
-          if [ -n "$COST" ]; then
-            OPT=$(get_option "Cost" "$COST")
+          # --- Cost (from ### Cost) ---
+          COST_VAL=$(extract_field "Cost")
+          if [ -n "$COST_VAL" ]; then
+            OPT=$(get_option "Cost" "$COST_VAL")
             [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocg" "$OPT"
           fi
