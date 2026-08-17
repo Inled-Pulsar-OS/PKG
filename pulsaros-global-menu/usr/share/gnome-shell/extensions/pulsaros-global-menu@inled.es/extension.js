@@ -1219,6 +1219,7 @@ class MacOSFullscreenManager {
         this._windowCreatedId = 0;
         this._stageResizeId = 0;
         this._topTrigger = null;
+        this._refreshingGeometry = false;
 
         this._setupSettings();
         this._setupSignals();
@@ -1421,12 +1422,42 @@ class MacOSFullscreenManager {
     }
 
     _forceWindowsRefreshGeometry(ws) {
-        // After changing affectsStruts, Mutter sends a configure event to all
-        // maximized windows on the next compositor frame, so they resize automatically.
-        // We just call this to make sure the update is queued.
-        try {
-            Main.layoutManager._queueUpdateRegions?.();
-        } catch (_) {}
+        // Guard against re-entry (workspace-changed can call _syncPanel again during unmaximize)
+        if (this._refreshingGeometry) return;
+        this._refreshingGeometry = true;
+
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            try {
+                for (let [win] of this._spaceWindows) {
+                    try {
+                        if (win.unmanaged || win.get_workspace() !== ws) continue;
+                        if (!win.maximized_horizontally || !win.maximized_vertically) continue;
+
+                        let actor = win.get_compositor_private();
+                        win._pulsarLock = true;
+
+                        // Hide the compositor actor so GNOME Shell's WindowManager
+                        // skips animations in _onWindowUnmaximized / _onWindowMaximized
+                        if (actor) actor.hide();
+                        try {
+                            win.unmaximize(Meta.MaximizeFlags.BOTH);
+                            win.maximize(Meta.MaximizeFlags.BOTH);
+                        } finally {
+                            if (actor) actor.show();
+                        }
+                    } catch (_) {}
+                }
+            } finally {
+                // Release locks in the next idle so all pending notify:: signals settle
+                GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                    for (let [win] of this._spaceWindows)
+                        win._pulsarLock = false;
+                    this._refreshingGeometry = false;
+                    return GLib.SOURCE_REMOVE;
+                });
+            }
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     // ─── Panel show/hide ───────────────────────────────────────────────────────
