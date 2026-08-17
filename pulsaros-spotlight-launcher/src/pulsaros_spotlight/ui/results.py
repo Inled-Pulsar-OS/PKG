@@ -13,7 +13,8 @@ import gi
 gi.require_version("Gdk", "4.0")
 gi.require_version("GdkPixbuf", "2.0")
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk
+gi.require_version("Pango", "1.0")
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango
 
 from pulsaros_spotlight.search import SearchResult
 from pulsaros_spotlight.utils import get_file_icon
@@ -75,6 +76,12 @@ def _build_icon_image(result: SearchResult, pixel_size: int, css_class: str) -> 
         except Exception:
             pass
 
+    if result.url.startswith("http://") or result.url.startswith("https://"):
+        image = Gtk.Image.new_from_icon_name("web-browser-symbolic")
+        image.set_pixel_size(pixel_size)
+        image.add_css_class(css_class)
+        return image
+
     icon = _app_icon_image(result.app.icon) if result.app else None
     if icon is None:
         icon = get_file_icon(result.url, result.mime)
@@ -135,14 +142,20 @@ class ResultListRow(Gtk.ListBoxRow):
 
         title_label = Gtk.Label(label=result.title, xalign=0)
         title_label.add_css_class("result-title")
-        title_label.set_ellipsize(True)
+        title_label.set_ellipsize(Pango.EllipsizeMode.END)
         title_label.set_max_width_chars(60)
         text_box.append(title_label)
 
-        if result.snippet:
-            snippet_label = Gtk.Label(label=result.snippet, xalign=0)
+        sub_text = result.snippet
+        if not sub_text and result.url.startswith("file://"):
+            sub_text = result.url.removeprefix("file://")
+        elif not sub_text and (result.url.startswith("http://") or result.url.startswith("https://")):
+            sub_text = result.url
+
+        if sub_text:
+            snippet_label = Gtk.Label(label=sub_text, xalign=0)
             snippet_label.add_css_class("result-snippet")
-            snippet_label.set_ellipsize(True)
+            snippet_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE if result.url.startswith("file://") else Pango.EllipsizeMode.END)
             snippet_label.set_max_width_chars(60)
             text_box.append(snippet_label)
 
