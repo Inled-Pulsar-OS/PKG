@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Add issue to project
+        id: add-project
         env:
           GH_TOKEN: ${{ secrets.PROJECT_PAT }}
         run: |
@@ -30,19 +31,17 @@ jobs:
             --jq '.data.addProjectV2ItemById.item.id')
           echo "itemId=$ITEM_DATA" >> $GITHUB_OUTPUT
 
-      - name: Set fields from labels
-        if: always() && steps.add-project.outcome == 'success'
+      - name: Set project fields
+        if: steps.add-project.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.PROJECT_PAT }}
           ITEM_ID: ${{ steps.add-project.outputs.itemId }}
           LABELS: ${{ github.event.issue.labels.*.name }}
-          BODY: ${{ github.event.issue.body }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           PROJECT_ID="PVT_kwDOEGtWb84Bbe-_"
 
           set_field() {
-            local FIELD_ID="$1"
-            local OPTION_ID="$2"
             gh api graphql -f query='
               mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
                 updateProjectV2ItemFieldValue(input: {
@@ -51,22 +50,24 @@ jobs:
                 }) { projectV2Item { id } }
               }' \
               -f projectId="$PROJECT_ID" -f itemId="$ITEM_ID" \
-              -f fieldId="$FIELD_ID" -f optionId="$OPTION_ID" 2>/dev/null || true
+              -f fieldId="$1" -f optionId="$2" 2>/dev/null || true
           }
 
           get_option() {
-            local FIELD_NAME="$1"
-            local OPTION_NAME="$2"
             gh api graphql -f query='
               query { projectV2(number: 1, owner: "Inled-Pulsar-OS") {
-                field(name: "'"$FIELD_NAME"'") { ... on ProjectV2SingleSelectField { options { id name } } }
-              } }' --jq '.data.projectV2.field.options[] | select(.name == "'"$OPTION_NAME"'") | .id' 2>/dev/null
+                field(name: "'"$1"'") { ... on ProjectV2SingleSelectField { options { id name } } }
+              } }' --jq '.data.projectV2.field.options[] | select(.name == "'"$2"'") | .id' 2>/dev/null
           }
 
-          # Tipo
-          if echo "$LABELS" | grep -qi "bug"; then
+          extract_field() {
+            echo "$ISSUE_BODY" | sed -n "/^### $1$/,/^### /{/^### $1$/d;/^### /d;p}" | head -1 | xargs
+          }
+
+          # --- Tipo (from labels) ---
+          if echo "$LABELS" | grep -qi "bug\|error"; then
             set_field "PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" "0fad1b2f"
-          elif echo "$LABELS" | grep -qi "idea"; then
+          elif echo "$LABELS" | grep -qi "idea\|enhancement"; then
             set_field "PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" "cdb185ea"
           elif echo "$LABELS" | grep -qi "task"; then
             OPT=$(get_option "Tipo" "Task")
@@ -76,21 +77,32 @@ jobs:
             [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" "$OPT"
           fi
 
-          # Roadmap Phase
-          OPT=$(get_option "Roadmap Phase" "Pear Edition Stable")
-          [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocY" "$OPT"
-
-          # Difficulty from body
-          if echo "$BODY" | grep -q "Easy (1-2 hours)"; then
+          # --- Difficulty (from form field ### Difficulty) ---
+          DIFF=$(extract_field "Difficulty")
+          if echo "$DIFF" | grep -q "Easy"; then
             OPT=$(get_option "Difficulty" "Easy")
             [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "$OPT"
-          elif echo "$BODY" | grep -q "Medium (4-8 hours)"; then
+          elif echo "$DIFF" | grep -q "Medium"; then
             OPT=$(get_option "Difficulty" "Medium")
             [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "$OPT"
-          elif echo "$BODY" | grep -q "Hard (1-2 days)"; then
+          elif echo "$DIFF" | grep -q "Hard"; then
             OPT=$(get_option "Difficulty" "Hard")
             [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "$OPT"
-          elif echo "$BODY" | grep -q "Expert (1+ week)"; then
+          elif echo "$DIFF" | grep -q "Expert"; then
             OPT=$(get_option "Difficulty" "Expert")
             [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "$OPT"
+          fi
+
+          # --- Roadmap Phase (from form field ### Roadmap Phase) ---
+          PHASE=$(extract_field "Roadmap Phase")
+          if [ -n "$PHASE" ]; then
+            OPT=$(get_option "Roadmap Phase" "$PHASE")
+            [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocY" "$OPT"
+          fi
+
+          # --- Cost (from form field ### Cost) ---
+          COST=$(extract_field "Cost")
+          if [ -n "$COST" ]; then
+            OPT=$(get_option "Cost" "$COST")
+            [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocg" "$OPT"
           fi
