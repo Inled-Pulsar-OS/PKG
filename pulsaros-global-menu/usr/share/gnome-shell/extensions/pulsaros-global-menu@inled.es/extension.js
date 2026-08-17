@@ -1479,22 +1479,18 @@ class MacOSFullscreenManager {
         if (!panelBox) return;
 
         if (animated) {
-            // Slide in from off-screen top
-            if (!panelBox.visible) {
-                panelBox.translation_y = -panelH;
-                panelBox.show();
-                // affectsStruts is still false here (space mode), so showing doesn't add struts
-            }
+            // Slide in from off-screen: start at y=-panelH then ease to y=0
+            // affectsStruts is still false (space mode), so showing doesn't add struts
             panelBox.remove_all_transitions();
             panelBox.ease({
-                translation_y: 0,
+                y: 0,
                 duration: 200,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             });
         } else {
+            // Normal workspace: restore y=0 so get_transformed_position() is on-screen → struts restored
             panelBox.remove_all_transitions();
-            panelBox.translation_y = 0;
-            panelBox.show();
+            panelBox.set_y(0);
             // Synchronously update regions so struts take effect immediately
             try { Main.layoutManager._updateRegions?.(); } catch (_) {}
             Main.layoutManager._queueUpdateRegions?.();
@@ -1514,21 +1510,21 @@ class MacOSFullscreenManager {
         if (!panelBox) return;
 
         if (animated) {
+            // Slide panel upward by animating its actual y position.
+            // When y = -panelH, get_transformed_position() returns (0, -panelH)
+            // → _updateRegions computes strut rect at (0, -panelH, w, panelH)
+            // → Mutter clips to screen: effective top strut = 0
             panelBox.remove_all_transitions();
             panelBox.ease({
-                translation_y: -panelH,
+                y: -panelH,
                 duration: 200,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                onComplete: () => {
-                    panelBox.hide();
-                    panelBox.translation_y = 0;
-                    // affectsStruts=false already set, so hiding is purely cosmetic
-                }
             });
         } else {
+            // Move panelBox off-screen immediately.
+            // y=-panelH → get_transformed_position returns off-screen → struts=0
             panelBox.remove_all_transitions();
-            panelBox.translation_y = 0;
-            panelBox.hide();
+            panelBox.set_y(-panelH);
         }
     }
 
@@ -1550,11 +1546,11 @@ class MacOSFullscreenManager {
         let isSpace  = this._isSpaceWorkspace(activeWs);
 
         if (isSpace) {
-            // 1. Set affectsStruts=false on the Chrome entry
+            // 1. Set affectsStruts=false (belt-and-suspenders)
             this._setPanelStruts(false);
-            // 2. Hide panelBox visually (visible=false also removes struts via _updateRegions visibility check)
+            // 2. Move panelBox to y=-panelH so get_transformed_position() is off-screen
+            //    → _updateRegions computes struts=0 regardless of affectsStruts
             this._hidePanel(false);
-            // 3. Force a synchronous regions update so Mutter gets struts=0 NOW
             try { Main.layoutManager._updateRegions?.(); } catch (_) {}
             Main.layoutManager._queueUpdateRegions?.();
             // 4. Now that Mutter has struts=0, force windows to recalculate their maximized rect
