@@ -37,78 +37,78 @@ jobs:
           GH_TOKEN: ${{ secrets.PROJECT_PAT }}
           ITEM_ID: ${{ steps.add-project.outputs.itemId }}
         run: |
-          PROJECT_ID="PVT_kwDOEGtWb84Bbe-_"
           set +e
+          PROJECT_ID="PVT_kwDOEGtWb84Bbe-_"
+          ITEM_ID="${{ steps.add-project.outputs.itemId }}"
 
-          # Fetch issue data directly from API to get clean body
+          # Fetch clean issue data
           ISSUE_DATA=$(gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }})
           BODY=$(echo "$ISSUE_DATA" | jq -r '.body // ""')
           LABELS=$(echo "$ISSUE_DATA" | jq -r '.labels[].name')
 
           set_field() {
             gh api graphql -f query='
-              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+              mutation($pid: ID!, $iid: ID!, $fid: ID!, $oid: String!) {
                 updateProjectV2ItemFieldValue(input: {
-                  projectId: $projectId, itemId: $itemId, fieldId: $fieldId,
-                  value: { singleSelectOptionId: $optionId }
+                  projectId: $pid, itemId: $iid, fieldId: $fid,
+                  value: { singleSelectOptionId: $oid }
                 }) { projectV2Item { id } }
               }' \
-              -f projectId="$PROJECT_ID" -f itemId="$ITEM_ID" \
-              -f fieldId="$1" -f optionId="$2" 2>/dev/null || true
-          }
-
-          get_option() {
-            gh api graphql -f query='
-              query { projectV2(number: 1, owner: "Inled-Pulsar-OS") {
-                field(name: "'"$1"'") { ... on ProjectV2SingleSelectField { options { id name } } }
-              } }' --jq '.data.projectV2.field.options[] | select(.name == "'"$2"'") | .id' 2>/dev/null
+              -f pid="$PROJECT_ID" -f iid="$ITEM_ID" \
+              -f fid="$1" -f oid="$2" 2>&1 | grep -q '"errors"' && return 1
+            return 0
           }
 
           extract_field() {
             echo "$BODY" | sed -n "/^### $1$/,/^### /{/^### $1$/d;/^### /d;p}" | head -1 | xargs
           }
 
-          # --- Tipo (from labels) ---
+          echo "LABELS: $LABELS"
+          echo "BODY preview: $(echo "$BODY" | head -5)"
+
+          # --- Tipo ---
+          # Tipo options: Error=0fad1b2f, Idea=cdb185ea, Ayuda=bb79688a
           if echo "$LABELS" | grep -qi "bug\|error"; then
-            set_field "PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" "0fad1b2f"
+            echo "Setting Tipo=Error"
+            set_field "PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" "0fad1b2f" || true
           elif echo "$LABELS" | grep -qi "idea\|enhancement"; then
-            set_field "PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" "cdb185ea"
-          elif echo "$LABELS" | grep -qi "task"; then
-            OPT=$(get_option "Tipo" "Task")
-            [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" "$OPT"
-          elif echo "$LABELS" | grep -qi "suggestion"; then
-            OPT=$(get_option "Tipo" "Suggestion")
-            [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" "$OPT"
+            echo "Setting Tipo=Idea"
+            set_field "PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" "cdb185ea" || true
+          elif echo "$LABELS" | grep -qi "task\|suggestion\|help"; then
+            echo "Setting Tipo=Ayuda"
+            set_field "PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" "bb79688a" || true
           fi
 
           # --- Difficulty ---
+          # Options: Easy=4f37548b, Medium=2bdc8f09, Hard=2c706859, Expert=026f84c1
           DIFF=$(extract_field "Difficulty")
-          if echo "$DIFF" | grep -q "Easy"; then
-            OPT=$(get_option "Difficulty" "Easy")
-            [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "$OPT"
-          elif echo "$DIFF" | grep -q "Medium"; then
-            OPT=$(get_option "Difficulty" "Medium")
-            [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "$OPT"
-          elif echo "$DIFF" | grep -q "Hard"; then
-            OPT=$(get_option "Difficulty" "Hard")
-            [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "$OPT"
-          elif echo "$DIFF" | grep -q "Expert"; then
-            OPT=$(get_option "Difficulty" "Expert")
-            [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "$OPT"
-          fi
+          echo "Difficulty: $DIFF"
+          case "$DIFF" in
+            *Easy*)   echo "Setting Difficulty=Easy";   set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "4f37548b" || true ;;
+            *Medium*) echo "Setting Difficulty=Medium"; set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "2bdc8f09" || true ;;
+            *Hard*)   echo "Setting Difficulty=Hard";   set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "2c706859" || true ;;
+            *Expert*) echo "Setting Difficulty=Expert"; set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "026f84c1" || true ;;
+          esac
 
           # --- Roadmap Phase ---
+          # Options: Pear Edition Stable=900032c5, Tube OS=e2cdb253, Wintux=a3a19724, General=7606665f
           PHASE=$(extract_field "Roadmap Phase")
-          if [ -n "$PHASE" ]; then
-            OPT=$(get_option "Roadmap Phase" "$PHASE")
-            [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocY" "$OPT"
-          fi
+          echo "Roadmap Phase: $PHASE"
+          case "$PHASE" in
+            *Pear*)    echo "Setting Phase=Pear Edition Stable"; set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocY" "900032c5" || true ;;
+            *Tube*)    echo "Setting Phase=Tube OS";             set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocY" "e2cdb253" || true ;;
+            *Wintux*)  echo "Setting Phase=Wintux";              set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocY" "a3a19724" || true ;;
+            *General*) echo "Setting Phase=General";              set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocY" "7606665f" || true ;;
+          esac
 
           # --- Cost ---
+          # Options: Low=0783fcec, Medium=be3bc85b, High=9e435e0f
           COST_VAL=$(extract_field "Cost")
-          if [ -n "$COST_VAL" ]; then
-            OPT=$(get_option "Cost" "$COST_VAL")
-            [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocg" "$OPT"
-          fi
+          echo "Cost: $COST_VAL"
+          case "$COST_VAL" in
+            *Low*)    echo "Setting Cost=Low";    set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocg" "0783fcec" || true ;;
+            *Medium*) echo "Setting Cost=Medium"; set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocg" "be3bc85b" || true ;;
+            *High*)   echo "Setting Cost=High";   set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocg" "9e435e0f" || true ;;
+          esac
 
-          echo "Done setting fields"
+          echo "Done"
