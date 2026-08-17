@@ -24,11 +24,10 @@ jobs:
           DIFF=$(echo "$BODY" | sed -n '/^### Difficulty$/,/^### /{/^### Difficulty$/d;/^### /d;p}' | head -1 | xargs)
           PHASE=$(echo "$BODY" | sed -n '/^### Roadmap Phase$/,/^### /{/^### Roadmap Phase$/d;/^### /d;p}' | head -1 | xargs)
 
-          MSG="🟢 **${TITLE}**"
-          MSG="${MSG}\nRepo: \`${REPO}\`"
-          [ -n "$DIFF" ] && MSG="${MSG}\n📋 Difficulty: **${DIFF}**"
-          [ -n "$PHASE" ] && MSG="${MSG}\n🗺️ Roadmap: **${PHASE}**"
-          MSG="${MSG}\n${URL}"
+          MSG=$(echo -e "🟢 **${TITLE}**\nRepo: \`${REPO}\`")
+          [ -n "$DIFF" ] && MSG=$(echo -e "${MSG}\n📋 Difficulty: **${DIFF}**")
+          [ -n "$PHASE" ] && MSG=$(echo -e "${MSG}\n🗺️ Roadmap: **${PHASE}**")
+          MSG=$(echo -e "${MSG}\n${URL}")
 
           jq -n --arg msg "$MSG" '{"content": $msg}' | \
             curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-
@@ -41,7 +40,15 @@ jobs:
           TITLE=$(echo '${{ toJSON(github.event.pull_request.title) }}' | jq -r '.')
           URL="${{ github.event.pull_request.html_url }}"
           REPO="${{ github.repository }}"
-          MSG="🔀 **PR: ${TITLE}**\nRepo: \`${REPO}\`\n${URL}"
+          STATE="${{ github.event.pull_request.merged && 'merged' || github.event.action }}"
+          if [ "$STATE" = "merged" ]; then
+            ICON="🟣"
+          elif [ "$STATE" = "closed" ]; then
+            ICON="🔴"
+          else
+            ICON="🟢"
+          fi
+          MSG=$(echo -e "${ICON} **PR: ${TITLE}** (${STATE})\nRepo: \`${REPO}\`\n${URL}")
           jq -n --arg msg "$MSG" '{"content": $msg}' | \
             curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-
 
@@ -53,6 +60,6 @@ jobs:
           NAME=$(echo '${{ toJSON(github.event.release.name) }}' | jq -r '.')
           URL="${{ github.event.release.html_url }}"
           REPO="${{ github.repository }}"
-          MSG="🚀 **New Release: ${NAME}**\nRepo: \`${REPO}\`\n${URL}"
+          MSG=$(echo -e "🚀 **New Release: ${NAME}**\nRepo: \`${REPO}\`\n${URL}")
           jq -n --arg msg "$MSG" '{"content": $msg}' | \
             curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-
