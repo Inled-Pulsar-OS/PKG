@@ -12,35 +12,38 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Send Discord notification for issues
+      - name: Notify on issue
         if: github.event_name == 'issues'
-        uses: Ilshidur/action-discord@master
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        with:
-          args: |
-            🟢 **{{issue.title}}**
-            Repo: `{{github.repository}}`
-            <{{issue.html_url}}>
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          curl -s -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d '{"content":"🟢 **'"$(echo "$ISSUE_TITLE" | sed 's/"/\\"/g')"'**\nRepo: `'"$REPO"'`\n<'"$ISSUE_URL"'>"}'
 
-      - name: Send Discord notification for PRs
+      - name: Notify on PR
         if: github.event_name == 'pull_request'
-        uses: Ilshidur/action-discord@master
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        with:
-          args: |
-            🔀 **PR: {{pull_request.title}}**
-            Repo: `{{github.repository}}`
-            <{{pull_request.html_url}}>
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          curl -s -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d '{"content":"🔀 **PR: '"$(echo "$PR_TITLE" | sed 's/"/\\"/g')"'**\nRepo: `'"$REPO"'`\n<'"$PR_URL"'>"}'
 
-      - name: Send Discord notification for releases
+      - name: Notify on release
         if: github.event_name == 'release'
-        uses: Ilshidur/action-discord@master
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        with:
-          args: |
-            🚀 **New Release: {{release.name}}**
-            Repo: `{{github.repository}}`
-            <{{release.html_url}}>
+          RELEASE_NAME: ${{ github.event.release.name }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          curl -s -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d '{"content":"🚀 **New Release: '"$(echo "$RELEASE_NAME" | sed 's/"/\\"/g')"'**\nRepo: `'"$REPO"'`\n<'"$RELEASE_URL"'>"}'

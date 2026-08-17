@@ -4,6 +4,9 @@ on:
   issues:
     types: [opened]
 
+permissions:
+  issues: read
+
 jobs:
   add-to-project:
     if: |
@@ -13,9 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Add issue to project
-        id: add-project
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
         run: |
           ITEM_DATA=$(gh api graphql -f query='
             mutation($projectId: ID!, $issueId: ID!) {
@@ -28,34 +30,19 @@ jobs:
             --jq '.data.addProjectV2ItemById.item.id')
           echo "itemId=$ITEM_DATA" >> $GITHUB_OUTPUT
 
-      - name: Set Tipo from labels
-        if: |
-          contains(github.event.issue.labels.*.name, 'bug') ||
-          contains(github.event.issue.labels.*.name, 'idea') ||
-          contains(github.event.issue.labels.*.name, 'task') ||
-          contains(github.event.issue.labels.*.name, 'suggestion')
+      - name: Set fields from labels
+        if: always() && steps.add-project.outcome == 'success'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
           ITEM_ID: ${{ steps.add-project.outputs.itemId }}
+          LABELS: ${{ github.event.issue.labels.*.name }}
+          BODY: ${{ github.event.issue.body }}
         run: |
-          # Determine option ID based on label
-          if echo "${{ github.event.issue.labels.*.name }}" | grep -q "bug"; then
-            OPTION_ID="0fad1b2f"
-          elif echo "${{ github.event.issue.labels.*.name }}" | grep -q "idea"; then
-            OPTION_ID="cdb185ea"
-          elif echo "${{ github.event.issue.labels.*.name }}" | grep -q "task"; then
-            OPTION_ID=$(gh api graphql -f query='
-              query { projectV2(number: 1, owner: "Inled-Pulsar-OS") {
-                field(name: "Tipo") { ... on ProjectV2SingleSelectField { options { id name } } }
-              } }' --jq '.data.projectV2.field.options[] | select(.name == "Task") | .id')
-          elif echo "${{ github.event.issue.labels.*.name }}" | grep -q "suggestion"; then
-            OPTION_ID=$(gh api graphql -f query='
-              query { projectV2(number: 1, owner: "Inled-Pulsar-OS") {
-                field(name: "Tipo") { ... on ProjectV2SingleSelectField { options { id name } } }
-              } }' --jq '.data.projectV2.field.options[] | select(.name == "Suggestion") | .id')
-          fi
+          PROJECT_ID="PVT_kwDOEGtWb84Bbe-_"
 
-          if [ -n "$OPTION_ID" ]; then
+          set_field() {
+            local FIELD_ID="$1"
+            local OPTION_ID="$2"
             gh api graphql -f query='
               mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
                 updateProjectV2ItemFieldValue(input: {
@@ -63,29 +50,47 @@ jobs:
                   value: { singleSelectOptionId: $optionId }
                 }) { projectV2Item { id } }
               }' \
-              -f projectId="PVT_kwDOEGtWb84Bbe-_" -f itemId="$ITEM_ID" \
-              -f fieldId="PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" -f optionId="$OPTION_ID"
+              -f projectId="$PROJECT_ID" -f itemId="$ITEM_ID" \
+              -f fieldId="$FIELD_ID" -f optionId="$OPTION_ID" 2>/dev/null || true
+          }
+
+          get_option() {
+            local FIELD_NAME="$1"
+            local OPTION_NAME="$2"
+            gh api graphql -f query='
+              query { projectV2(number: 1, owner: "Inled-Pulsar-OS") {
+                field(name: "'"$FIELD_NAME"'") { ... on ProjectV2SingleSelectField { options { id name } } }
+              } }' --jq '.data.projectV2.field.options[] | select(.name == "'"$OPTION_NAME"'") | .id' 2>/dev/null
+          }
+
+          # Tipo
+          if echo "$LABELS" | grep -qi "bug"; then
+            set_field "PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" "0fad1b2f"
+          elif echo "$LABELS" | grep -qi "idea"; then
+            set_field "PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" "cdb185ea"
+          elif echo "$LABELS" | grep -qi "task"; then
+            OPT=$(get_option "Tipo" "Task")
+            [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" "$OPT"
+          elif echo "$LABELS" | grep -qi "suggestion"; then
+            OPT=$(get_option "Tipo" "Suggestion")
+            [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" "$OPT"
           fi
 
-      - name: Set Roadmap Phase to Pear Edition Stable
-        if: "!contains(github.event.issue.labels.*.name, 'roadmap-tube') && !contains(github.event.issue.labels.*.name, 'roadmap-wintux')"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ITEM_ID: ${{ steps.add-project.outputs.itemId }}
-        run: |
-          OPTION_ID=$(gh api graphql -f query='
-            query { projectV2(number: 1, owner: "Inled-Pulsar-OS") {
-              field(name: "Roadmap Phase") { ... on ProjectV2SingleSelectField { options { id name } } }
-            } }' --jq '.data.projectV2.field.options[] | select(.name == "Pear Edition Stable") | .id')
+          # Roadmap Phase
+          OPT=$(get_option "Roadmap Phase" "Pear Edition Stable")
+          [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocY" "$OPT"
 
-          if [ -n "$OPTION_ID" ]; then
-            gh api graphql -f query='
-              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
-                updateProjectV2ItemFieldValue(input: {
-                  projectId: $projectId, itemId: $itemId, fieldId: $fieldId,
-                  value: { singleSelectOptionId: $optionId }
-                }) { projectV2Item { id } }
-              }' \
-              -f projectId="PVT_kwDOEGtWb84Bbe-_" -f itemId="$ITEM_ID" \
-              -f fieldId="PVTSSF_lADOEGtWb84Bbe-_zhfkocY" -f optionId="$OPTION_ID"
+          # Difficulty from body
+          if echo "$BODY" | grep -q "Easy (1-2 hours)"; then
+            OPT=$(get_option "Difficulty" "Easy")
+            [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "$OPT"
+          elif echo "$BODY" | grep -q "Medium (4-8 hours)"; then
+            OPT=$(get_option "Difficulty" "Medium")
+            [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "$OPT"
+          elif echo "$BODY" | grep -q "Hard (1-2 days)"; then
+            OPT=$(get_option "Difficulty" "Hard")
+            [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "$OPT"
+          elif echo "$BODY" | grep -q "Expert (1+ week)"; then
+            OPT=$(get_option "Difficulty" "Expert")
+            [ -n "$OPT" ] && set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "$OPT"
           fi
