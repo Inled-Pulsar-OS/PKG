@@ -79,9 +79,23 @@ window, .root-container, * {
     background-color: #2c2c2e;
 }
 .progress-bar-thin {
-    min-height: 4px;
+    min-height: 6px;
     margin-top: 12px;
     margin-bottom: 12px;
+}
+progressbar.progress-bar-thin trough,
+.progress-bar-thin trough {
+    min-height: 6px;
+    border-radius: 9999px;
+    background-color: #3a3a3c;
+    border: none;
+}
+progressbar.progress-bar-thin progress,
+.progress-bar-thin progress {
+    min-height: 6px;
+    border-radius: 9999px;
+    background-color: #0071e3;
+    border: none;
 }
 .progress-text {
     font-size: 12px;

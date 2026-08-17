@@ -478,10 +478,12 @@ if [ "$PACKAGE_NAME" == "all" ]; then
     
     SKIPPED_MANUAL=()
     for pkg in "${PACKAGES[@]}"; do
-        if is_manual_upload_only "$pkg"; then
-            echo "⏭️  Omitido / Skipping $pkg (manual upload only)..."
-            SKIPPED_MANUAL+=("$pkg")
-            continue
+        if [ "$DEPLOY_FLAG" == "--deploy" ] || [ "$DEPLOY_FLAG" == "-d" ] || [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
+            if is_manual_upload_only "$pkg"; then
+                echo "⏭️  Omitido / Skipping $pkg (manual upload only)..."
+                SKIPPED_MANUAL+=("$pkg")
+                continue
+            fi
         fi
         build_single_package "$pkg"
     done

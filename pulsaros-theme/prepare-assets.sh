@@ -57,7 +57,8 @@ cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-4.0/"* "$STAGE_DIR/etc/ske
 cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-4.0/"* "$STAGE_DIR/root/.config/gtk-4.0/" 2>/dev/null || true
 
 # Permitir que el sistema nativo de colores de acento de GNOME / Libadwaita controle los botones y temas
-echo "Habilitando colores de acento dinámicos y reparando colores de resalte/selección en temas MacTahoe..."
+echo "Habilitando colores de acento dinámicos en temas MacTahoe..."
+find "$STAGE_DIR" -name "*.css" -exec sed -i '/@define-color accent_/d' {} + 2>/dev/null || true
 find "$STAGE_DIR/usr/share/themes" -name "*.css" -exec sed -i 's/#0088FF/@accent_bg_color/g' {} + 2>/dev/null || true
 find "$STAGE_DIR/usr/share/themes" -name "*.css" -exec sed -i 's/#0088ff/@accent_bg_color/g' {} + 2>/dev/null || true
 find "$STAGE_DIR/etc/skel" -name "*.css" -exec sed -i 's/#0088FF/@accent_bg_color/g' {} + 2>/dev/null || true
@@ -65,33 +66,18 @@ find "$STAGE_DIR/etc/skel" -name "*.css" -exec sed -i 's/#0088ff/@accent_bg_colo
 find "$STAGE_DIR/root" -name "*.css" -exec sed -i 's/#0088FF/@accent_bg_color/g' {} + 2>/dev/null || true
 find "$STAGE_DIR/root" -name "*.css" -exec sed -i 's/#0088ff/@accent_bg_color/g' {} + 2>/dev/null || true
 
-# Garantizar que las variables de color de acento y selección tengan siempre una definición base válida
-# para evitar que GTK3, WebViews y navegadores (Firefox, Chromium, Seafari) evalúen la selección como transparente
-cat <<'ACCENT_COLOR_DEFINES' > /tmp/accent_color_defines.css
-@define-color accent_color #0088FF;
-@define-color accent_bg_color #0088FF;
-@define-color accent_fg_color #ffffff;
-@define-color theme_selected_bg_color #0088FF;
-@define-color theme_selected_fg_color #ffffff;
-@define-color selected_bg_color #0088FF;
-@define-color selected_fg_color #ffffff;
-ACCENT_COLOR_DEFINES
-
-# Prepend accent fallback definitions to all gtk.css / gtk-dark.css files
-find "$STAGE_DIR" -name "*.css" | while read -r css_file; do
+# Definir variables de acento solo en GTK3 como fallback dinámico
+find "$STAGE_DIR" -path "*/gtk-3.0/*.css" | while read -r css_file; do
     if [ -f "$css_file" ]; then
-        if ! grep -q "@define-color accent_bg_color" "$css_file" 2>/dev/null; then
-            cat /tmp/accent_color_defines.css "$css_file" > "${css_file}.tmp" && mv "${css_file}.tmp" "$css_file"
-        fi
+        sed -i '1s/^/@define-color accent_color @theme_selected_bg_color;\n@define-color accent_bg_color @theme_selected_bg_color;\n@define-color accent_fg_color @theme_selected_fg_color;\n/' "$css_file"
     fi
 done
-rm -f /tmp/accent_color_defines.css
 
-# Añadir estilos explícitos para selección de texto, webviews, dropdowns y botones de color de acento
+# Añadir estilos explícitos para selección de texto sólida y botones de color de acento
 cat <<'ACCENT_BTN_FIX' > /tmp/accent_btn_fix.css
 
 /* ==============================================================================
- * Pulsar OS - Text Selection, WebViews and Dropdowns Highlight Fix
+ * Pulsar OS - Text Selection Fix (Solid, Non-Transparent Selection)
  * ============================================================================== */
 selection {
   background-color: @accent_bg_color;
@@ -104,25 +90,7 @@ textview text selection,
 textview selection,
 label:selected,
 .view:selected,
-.view:selected:focus,
-treeview:selected,
-treeview:selected:focus,
-flowboxchild:selected,
-listboxrow:selected,
-list row:selected,
-list row:hover,
-listbox > row:hover,
-listbox > row:selected,
-combobox window list:hover,
-combobox .menuitem:hover,
-popover modelbutton:hover,
-popover modelbutton:selected,
-popover listview row:hover,
-popover listview row:selected,
-menu menuitem:hover,
-menu menuitem:selected,
-dropdown popover listview row:hover,
-dropdown popover listview row:selected {
+.view:selected:focus {
   background-color: @accent_bg_color;
   color: @accent_fg_color;
 }
@@ -149,15 +117,15 @@ button.accent-button:checked {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6), 0 4px 10px rgba(0, 0, 0, 0.4);
   transform: scale(1.15);
 }
-button.accent-button.blue { background-color: #3584e4; background-image: none; }
-button.accent-button.teal { background-color: #2190a4; background-image: none; }
-button.accent-button.green { background-color: #3a944a; background-image: none; }
-button.accent-button.yellow { background-color: #e5a50a; background-image: none; }
-button.accent-button.orange { background-color: #e66100; background-image: none; }
-button.accent-button.red { background-color: #e01b24; background-image: none; }
-button.accent-button.pink { background-color: #d56199; background-image: none; }
-button.accent-button.purple { background-color: #9141ac; background-image: none; }
-button.accent-button.slate { background-color: #6f8396; background-image: none; }
+button.accent-button.blue { background-color: #0088FF !important; background-image: none !important; }
+button.accent-button.teal { background-color: #2190a4 !important; background-image: none !important; }
+button.accent-button.green { background-color: #79B757 !important; background-image: none !important; }
+button.accent-button.yellow { background-color: #F3BA4B !important; background-image: none !important; }
+button.accent-button.orange { background-color: #E9873A !important; background-image: none !important; }
+button.accent-button.red { background-color: #ED5F5D !important; background-image: none !important; }
+button.accent-button.pink { background-color: #E55E9C !important; background-image: none !important; }
+button.accent-button.purple { background-color: #9A57A3 !important; background-image: none !important; }
+button.accent-button.slate { background-color: #6f8396 !important; background-image: none !important; }
 ACCENT_BTN_FIX
 
 find "$STAGE_DIR" -path "*/gtk-4.0/gtk.css" -exec sh -c 'cat /tmp/accent_btn_fix.css >> "$1"' _ {} \; 2>/dev/null || true

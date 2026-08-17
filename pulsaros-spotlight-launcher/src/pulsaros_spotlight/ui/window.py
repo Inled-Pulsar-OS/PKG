@@ -54,6 +54,7 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         self._clipboard_mgr = clipboard_mgr
         self._category: str = "all"
         self._debounce_id: int | None = None
+        self._search_seq: int = 0
         self._current_dir: str | None = None
         self._has_been_active: bool = False
 
@@ -202,6 +203,8 @@ class SpotlightWindow(Gtk.ApplicationWindow):
 
     def _do_search(self) -> bool:
         self._debounce_id = None
+        self._search_seq += 1
+        current_seq = self._search_seq
         query = self._search_entry.get_text()
 
         # If currently browsing a directory
@@ -210,16 +213,21 @@ class SpotlightWindow(Gtk.ApplicationWindow):
             self._result_view.set_results(results, self._config.is_grid_view)
             return False
 
-        if not query.strip():
-            if self._category == "clipboard" and self._clipboard_mgr:
-                results = self._clipboard_mgr.search_history("")
-            else:
-                results = self._backend.search("", category=self._category)
-            self._result_view.set_results(results, self._config.is_grid_view)
-            return False
+        # 1. Instant results (apps and clipboard) displayed with 0ms UI delay
+        instant_results = self._backend.search_instant(query, category=self._category)
+        self._result_view.set_results(instant_results, self._config.is_grid_view)
 
-        results = self._backend.search(query.strip(), category=self._category)
-        self._result_view.set_results(results, self._config.is_grid_view)
+        # 2. Async file search in background thread without blocking the GTK UI
+        if query.strip() and self._category not in ("apps", "applications", "clipboard"):
+            def _on_files_ready(file_results: list[SearchResult]) -> None:
+                if self._search_seq != current_seq:
+                    return  # Discard outdated search results
+                if file_results:
+                    all_results = instant_results + file_results
+                    self._result_view.set_results(all_results, self._config.is_grid_view)
+
+            self._backend.search_async(query.strip(), category=self._category, limit=30, callback=_on_files_ready)
+
         return False
 
     def _browse_directory(self, path_str: str, filter_q: str = "") -> list[SearchResult]:
