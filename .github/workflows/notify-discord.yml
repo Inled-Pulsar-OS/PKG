@@ -16,43 +16,34 @@ jobs:
         if: github.event_name == 'issues'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_URL: ${{ github.event.issue.html_url }}
-          REPO: ${{ github.repository }}
-          LABELS: ${{ toJSON(github.event.issue.labels.*.name) }}
         run: |
-          ESCAPED_TITLE=$(echo "$ISSUE_TITLE" | sed 's/"/\\"/g')
-          MSG="🟢 **${ESCAPED_TITLE}**\nRepo: \`${REPO}\`"
-          if [ "$LABELS" != "[]" ]; then
-            MSG="${MSG}\nLabels: ${LABELS}"
-          fi
-          MSG="${MSG}\n<${ISSUE_URL}>"
-          curl -s -X POST "$DISCORD_WEBHOOK" \
-            -H "Content-Type: application/json" \
-            -d "{\"content\":\"$MSG\"}"
+          TITLE=$(echo '${{ toJSON(github.event.issue.title) }}' | jq -r '.')
+          URL="${{ github.event.issue.html_url }}"
+          REPO="${{ github.repository }}"
+          jq -n --arg t "$TITLE" --arg r "$REPO" --arg u "$URL" \
+            '{"content": "🟢 **" + $t + "**\nRepo: `" + $r + "`\n" + $u}' | \
+            curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-
 
       - name: Notify on PR
         if: github.event_name == 'pull_request'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          REPO: ${{ github.repository }}
         run: |
-          ESCAPED_TITLE=$(echo "$PR_TITLE" | sed 's/"/\\"/g')
-          curl -s -X POST "$DISCORD_WEBHOOK" \
-            -H "Content-Type: application/json" \
-            -d "{\"content\":\"🔀 **PR: ${ESCAPED_TITLE}**\nRepo: \`${REPO}\`\n<${PR_URL}>\"}"
+          TITLE=$(echo '${{ toJSON(github.event.pull_request.title) }}' | jq -r '.')
+          URL="${{ github.event.pull_request.html_url }}"
+          REPO="${{ github.repository }}"
+          jq -n --arg t "$TITLE" --arg r "$REPO" --arg u "$URL" \
+            '{"content": "🔀 **PR: " + $t + "**\nRepo: `" + $r + "`\n" + $u}' | \
+            curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-
 
       - name: Notify on release
         if: github.event_name == 'release'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          RELEASE_NAME: ${{ github.event.release.name }}
-          RELEASE_URL: ${{ github.event.release.html_url }}
-          REPO: ${{ github.repository }}
         run: |
-          ESCAPED_NAME=$(echo "$RELEASE_NAME" | sed 's/"/\\"/g')
-          curl -s -X POST "$DISCORD_WEBHOOK" \
-            -H "Content-Type: application/json" \
-            -d "{\"content\":\"🚀 **New Release: ${ESCAPED_NAME}**\nRepo: \`${REPO}\`\n<${RELEASE_URL}>\"}"
+          NAME=$(echo '${{ toJSON(github.event.release.name) }}' | jq -r '.')
+          URL="${{ github.event.release.html_url }}"
+          REPO="${{ github.repository }}"
+          jq -n --arg n "$NAME" --arg r "$REPO" --arg u "$URL" \
+            '{"content": "🚀 **New Release: " + $n + "**\nRepo: `" + $r + "`\n" + $u}' | \
+            curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-
