@@ -1391,12 +1391,16 @@ class MacOSFullscreenManager {
         if (this._panelStrutsState === affectsStruts) return;
         this._panelStrutsState = affectsStruts;
         try {
-            if (Main.layoutManager.panelBox) {
-                Main.layoutManager.untrackChrome(Main.layoutManager.panelBox);
-                Main.layoutManager.addChrome(Main.layoutManager.panelBox, {
-                    affectsStruts: affectsStruts,
-                    trackFullscreen: !affectsStruts
-                });
+            if (Main.layoutManager && Main.layoutManager._chrome) {
+                let chrome = Main.layoutManager._chrome;
+                let data = chrome._findActor ? chrome._findActor(Main.layoutManager.panelBox) : null;
+                if (data) {
+                    data.affectsStruts = affectsStruts;
+                    data.trackFullscreen = false;
+                }
+                if (Main.layoutManager._queueUpdateRegions) {
+                    Main.layoutManager._queueUpdateRegions();
+                }
             }
         } catch (e) {
             console.error("[MacOSFullscreen] Error setting panel struts:", e);
@@ -1425,28 +1429,6 @@ class MacOSFullscreenManager {
                 this._showPanel(true);
             }
         });
-
-        if (Main.panel) {
-            this._panelEnterId = Main.panel.connect('enter-event', () => {
-                if (this._isCurrentWorkspaceFullscreenSpace()) {
-                    this._showPanel(true);
-                }
-            });
-
-            this._panelLeaveId = Main.panel.connect('leave-event', () => {
-                if (!this._isCurrentWorkspaceFullscreenSpace()) return;
-                if (this._hideTimeoutId) GLib.source_remove(this._hideTimeoutId);
-                this._hideTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 350, () => {
-                    this._hideTimeoutId = 0;
-                    let [x, y] = global.get_pointer();
-                    let panelHeight = Main.panel.height || 36;
-                    if (y > panelHeight + 8 && this._isCurrentWorkspaceFullscreenSpace()) {
-                        this._hidePanel(true);
-                    }
-                    return GLib.SOURCE_REMOVE;
-                });
-            });
-        }
 
         try {
             this._pointerWatcher = getPointerWatcher();
