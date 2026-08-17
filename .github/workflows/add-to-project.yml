@@ -6,180 +6,55 @@ on:
 
 jobs:
   add-to-project:
-    # Only run if the issue is NOT for package deployment (case-insensitive)
-    # Solo ejecutar si el issue NO es para despliegue de paquetes (insensible a mayúsculas/minúsculas)
     if: |
       !contains(github.event.issue.labels.*.name, 'deploy-package') &&
       !contains(github.event.issue.labels.*.name, 'Deploy-Package') &&
       !contains(github.event.issue.labels.*.name, 'deploy-packages')
     runs-on: ubuntu-latest
     steps:
-      - name: Add issue to project via GH CLI
+      - name: Add issue to project
         id: add-project
         env:
-          GH_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Add the issue to the organization project board using GitHub CLI
-          # Añadir el issue al panel del proyecto de la organización usando la CLI de GitHub
-          ITEM_DATA=$(gh project item-add "1" --owner "Inled-Pulsar-OS" --url "${{ github.event.issue.html_url }}" --format json)
-          ITEM_ID=$(echo "$ITEM_DATA" | jq -r '.id')
-          echo "itemId=$ITEM_ID" >> $GITHUB_OUTPUT
-
-      - name: Set Type to Bug
-        if: contains(github.event.issue.labels.*.name, 'bug')
-        env:
-          GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
-          ITEM_ID: ${{ steps.add-project.outputs.itemId }}
-        run: |
-          gh api graphql -f query='
-            mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
-              updateProjectV2ItemFieldValue(input: {
-                projectId: $projectId,
-                itemId: $itemId,
-                fieldId: $fieldId,
-                value: {
-                  singleSelectOptionId: $optionId
-                }
-              }) {
-                projectV2Item {
-                  id
-                }
+          ITEM_DATA=$(gh api graphql -f query='
+            mutation($projectId: ID!, $issueId: ID!) {
+              addProjectV2ItemById(input: {projectId: $projectId, contentId: $issueId}) {
+                item { id }
               }
             }' \
             -f projectId="PVT_kwDOEGtWb84Bbe-_" \
-            -f itemId="$ITEM_ID" \
-            -f fieldId="PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" \
-            -f optionId="45a5f370"
+            -f issueId="${{ github.event.issue.node_id }}" \
+            --jq '.data.addProjectV2ItemById.item.id')
+          echo "itemId=$ITEM_DATA" >> $GITHUB_OUTPUT
 
-      - name: Set Type to Idea
-        if: contains(github.event.issue.labels.*.name, 'idea')
+      - name: Set Tipo from labels
+        if: |
+          contains(github.event.issue.labels.*.name, 'bug') ||
+          contains(github.event.issue.labels.*.name, 'idea') ||
+          contains(github.event.issue.labels.*.name, 'task') ||
+          contains(github.event.issue.labels.*.name, 'suggestion')
         env:
-          GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ITEM_ID: ${{ steps.add-project.outputs.itemId }}
         run: |
-          gh api graphql -f query='
-            mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
-              updateProjectV2ItemFieldValue(input: {
-                projectId: $projectId,
-                itemId: $itemId,
-                fieldId: $fieldId,
-                value: {
-                  singleSelectOptionId: $optionId
-                }
-              }) {
-                projectV2Item {
-                  id
-                }
-              }
-            }' \
-            -f projectId="PVT_kwDOEGtWb84Bbe-_" \
-            -f itemId="$ITEM_ID" \
-            -f fieldId="PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" \
-            -f optionId="b7b66bcf"
-
-      - name: Set Type to Task
-        if: contains(github.event.issue.labels.*.name, 'task')
-        env:
-          GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
-          ITEM_ID: ${{ steps.add-project.outputs.itemId }}
-        run: |
-          # Get the option ID for "Task" from the Tipo field
-          # Obtener el option ID para "Task" del campo Tipo
-          OPTION_ID=$(gh api graphql -f query='
-            query($project: ID!) {
-              projectV2(number: 1, owner: "Inled-Pulsar-OS") {
-                field(name: "Tipo") {
-                  ... on ProjectV2SingleSelectField {
-                    options {
-                      id
-                      name
-                    }
-                  }
-                }
-              }
-            }' -f project="PVT_kwDOEGtWb84Bbe-_" --jq '.data.projectV2.field.options[] | select(.name == "Task") | .id')
-          
-          if [ -n "$OPTION_ID" ]; then
-            gh api graphql -f query='
-              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
-                updateProjectV2ItemFieldValue(input: {
-                  projectId: $projectId,
-                  itemId: $itemId,
-                  fieldId: $fieldId,
-                  value: {
-                    singleSelectOptionId: $optionId
-                  }
-                }) {
-                  projectV2Item {
-                    id
-                  }
-                }
-              }' \
-              -f projectId="PVT_kwDOEGtWb84Bbe-_" \
-              -f itemId="$ITEM_ID" \
-              -f fieldId="PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" \
-              -f optionId="$OPTION_ID"
+          # Determine option ID based on label
+          if echo "${{ github.event.issue.labels.*.name }}" | grep -q "bug"; then
+            OPTION_ID="0fad1b2f"
+          elif echo "${{ github.event.issue.labels.*.name }}" | grep -q "idea"; then
+            OPTION_ID="cdb185ea"
+          elif echo "${{ github.event.issue.labels.*.name }}" | grep -q "task"; then
+            OPTION_ID=$(gh api graphql -f query='
+              query { projectV2(number: 1, owner: "Inled-Pulsar-OS") {
+                field(name: "Tipo") { ... on ProjectV2SingleSelectField { options { id name } } }
+              } }' --jq '.data.projectV2.field.options[] | select(.name == "Task") | .id')
+          elif echo "${{ github.event.issue.labels.*.name }}" | grep -q "suggestion"; then
+            OPTION_ID=$(gh api graphql -f query='
+              query { projectV2(number: 1, owner: "Inled-Pulsar-OS") {
+                field(name: "Tipo") { ... on ProjectV2SingleSelectField { options { id name } } }
+              } }' --jq '.data.projectV2.field.options[] | select(.name == "Suggestion") | .id')
           fi
 
-      - name: Set Type to Suggestion
-        if: contains(github.event.issue.labels.*.name, 'suggestion')
-        env:
-          GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
-          ITEM_ID: ${{ steps.add-project.outputs.itemId }}
-        run: |
-          OPTION_ID=$(gh api graphql -f query='
-            query($project: ID!) {
-              projectV2(number: 1, owner: "Inled-Pulsar-OS") {
-                field(name: "Tipo") {
-                  ... on ProjectV2SingleSelectField {
-                    options {
-                      id
-                      name
-                    }
-                  }
-                }
-              }
-            }' -f project="PVT_kwDOEGtWb84Bbe-_" --jq '.data.projectV2.field.options[] | select(.name == "Suggestion") | .id')
-          
-          if [ -n "$OPTION_ID" ]; then
-            gh api graphql -f query='
-              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
-                updateProjectV2ItemFieldValue(input: {
-                  projectId: $projectId,
-                  itemId: $itemId,
-                  fieldId: $fieldId,
-                  value: {
-                    singleSelectOptionId: $optionId
-                  }
-                }) {
-                  projectV2Item {
-                    id
-                  }
-                }
-              }' \
-              -f projectId="PVT_kwDOEGtWb84Bbe-_" \
-              -f itemId="$ITEM_ID" \
-              -f fieldId="PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" \
-              -f optionId="$OPTION_ID"
-          fi
-
-      - name: Set Difficulty from body (Easy)
-        if: contains(github.event.issue.body, 'Easy (1-2 hours)')
-        env:
-          GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
-          ITEM_ID: ${{ steps.add-project.outputs.itemId }}
-        run: |
-          OPTION_ID=$(gh api graphql -f query='
-            query($project: ID!) {
-              projectV2(number: 1, owner: "Inled-Pulsar-OS") {
-                field(name: "Difficulty") {
-                  ... on ProjectV2SingleSelectField {
-                    options { id name }
-                  }
-                }
-              }
-            }' -f project="PVT_kwDOEGtWb84Bbe-_" --jq '.data.projectV2.field.options[] | select(.name == "Easy") | .id')
-          
           if [ -n "$OPTION_ID" ]; then
             gh api graphql -f query='
               mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
@@ -189,171 +64,20 @@ jobs:
                 }) { projectV2Item { id } }
               }' \
               -f projectId="PVT_kwDOEGtWb84Bbe-_" -f itemId="$ITEM_ID" \
-              -f fieldId="PVTSSF_lADOEGtWb84Bbe-_zhfkocU" -f optionId="$OPTION_ID"
+              -f fieldId="PVTSSF_lADOEGtWb84Bbe-_zhWPMX0" -f optionId="$OPTION_ID"
           fi
 
-      - name: Set Difficulty from body (Medium)
-        if: contains(github.event.issue.body, 'Medium (4-8 hours)')
+      - name: Set Roadmap Phase to Pear Edition Stable
+        if: "!contains(github.event.issue.labels.*.name, 'roadmap-tube') && !contains(github.event.issue.labels.*.name, 'roadmap-wintux')"
         env:
-          GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ITEM_ID: ${{ steps.add-project.outputs.itemId }}
         run: |
           OPTION_ID=$(gh api graphql -f query='
-            query($project: ID!) {
-              projectV2(number: 1, owner: "Inled-Pulsar-OS") {
-                field(name: "Difficulty") {
-                  ... on ProjectV2SingleSelectField {
-                    options { id name }
-                  }
-                }
-              }
-            }' -f project="PVT_kwDOEGtWb84Bbe-_" --jq '.data.projectV2.field.options[] | select(.name == "Medium") | .id')
-          
-          if [ -n "$OPTION_ID" ]; then
-            gh api graphql -f query='
-              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
-                updateProjectV2ItemFieldValue(input: {
-                  projectId: $projectId, itemId: $itemId, fieldId: $fieldId,
-                  value: { singleSelectOptionId: $optionId }
-                }) { projectV2Item { id } }
-              }' \
-              -f projectId="PVT_kwDOEGtWb84Bbe-_" -f itemId="$ITEM_ID" \
-              -f fieldId="PVTSSF_lADOEGtWb84Bbe-_zhfkocU" -f optionId="$OPTION_ID"
-          fi
+            query { projectV2(number: 1, owner: "Inled-Pulsar-OS") {
+              field(name: "Roadmap Phase") { ... on ProjectV2SingleSelectField { options { id name } } }
+            } }' --jq '.data.projectV2.field.options[] | select(.name == "Pear Edition Stable") | .id')
 
-      - name: Set Difficulty from body (Hard)
-        if: contains(github.event.issue.body, 'Hard (1-2 days)')
-        env:
-          GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
-          ITEM_ID: ${{ steps.add-project.outputs.itemId }}
-        run: |
-          OPTION_ID=$(gh api graphql -f query='
-            query($project: ID!) {
-              projectV2(number: 1, owner: "Inled-Pulsar-OS") {
-                field(name: "Difficulty") {
-                  ... on ProjectV2SingleSelectField {
-                    options { id name }
-                  }
-                }
-              }
-            }' -f project="PVT_kwDOEGtWb84Bbe-_" --jq '.data.projectV2.field.options[] | select(.name == "Hard") | .id')
-          
-          if [ -n "$OPTION_ID" ]; then
-            gh api graphql -f query='
-              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
-                updateProjectV2ItemFieldValue(input: {
-                  projectId: $projectId, itemId: $itemId, fieldId: $fieldId,
-                  value: { singleSelectOptionId: $optionId }
-                }) { projectV2Item { id } }
-              }' \
-              -f projectId="PVT_kwDOEGtWb84Bbe-_" -f itemId="$ITEM_ID" \
-              -f fieldId="PVTSSF_lADOEGtWb84Bbe-_zhfkocU" -f optionId="$OPTION_ID"
-          fi
-
-      - name: Set Difficulty from body (Expert)
-        if: contains(github.event.issue.body, 'Expert (1+ week)')
-        env:
-          GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
-          ITEM_ID: ${{ steps.add-project.outputs.itemId }}
-        run: |
-          OPTION_ID=$(gh api graphql -f query='
-            query($project: ID!) {
-              projectV2(number: 1, owner: "Inled-Pulsar-OS") {
-                field(name: "Difficulty") {
-                  ... on ProjectV2SingleSelectField {
-                    options { id name }
-                  }
-                }
-              }
-            }' -f project="PVT_kwDOEGtWb84Bbe-_" --jq '.data.projectV2.field.options[] | select(.name == "Expert") | .id')
-          
-          if [ -n "$OPTION_ID" ]; then
-            gh api graphql -f query='
-              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
-                updateProjectV2ItemFieldValue(input: {
-                  projectId: $projectId, itemId: $itemId, fieldId: $fieldId,
-                  value: { singleSelectOptionId: $optionId }
-                }) { projectV2Item { id } }
-              }' \
-              -f projectId="PVT_kwDOEGtWb84Bbe-_" -f itemId="$ITEM_ID" \
-              -f fieldId="PVTSSF_lADOEGtWb84Bbe-_zhfkocU" -f optionId="$OPTION_ID"
-          fi
-
-      - name: Set Roadmap Phase from body (Pear Edition Stable)
-        if: contains(github.event.issue.body, 'Pear Edition Stable')
-        env:
-          GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
-          ITEM_ID: ${{ steps.add-project.outputs.itemId }}
-        run: |
-          OPTION_ID=$(gh api graphql -f query='
-            query($project: ID!) {
-              projectV2(number: 1, owner: "Inled-Pulsar-OS") {
-                field(name: "Roadmap Phase") {
-                  ... on ProjectV2SingleSelectField {
-                    options { id name }
-                  }
-                }
-              }
-            }' -f project="PVT_kwDOEGtWb84Bbe-_" --jq '.data.projectV2.field.options[] | select(.name == "Pear Edition Stable") | .id')
-          
-          if [ -n "$OPTION_ID" ]; then
-            gh api graphql -f query='
-              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
-                updateProjectV2ItemFieldValue(input: {
-                  projectId: $projectId, itemId: $itemId, fieldId: $fieldId,
-                  value: { singleSelectOptionId: $optionId }
-                }) { projectV2Item { id } }
-              }' \
-              -f projectId="PVT_kwDOEGtWb84Bbe-_" -f itemId="$ITEM_ID" \
-              -f fieldId="PVTSSF_lADOEGtWb84Bbe-_zhfkocY" -f optionId="$OPTION_ID"
-          fi
-
-      - name: Set Roadmap Phase from body (Tube OS)
-        if: contains(github.event.issue.body, 'Tube OS')
-        env:
-          GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
-          ITEM_ID: ${{ steps.add-project.outputs.itemId }}
-        run: |
-          OPTION_ID=$(gh api graphql -f query='
-            query($project: ID!) {
-              projectV2(number: 1, owner: "Inled-Pulsar-OS") {
-                field(name: "Roadmap Phase") {
-                  ... on ProjectV2SingleSelectField {
-                    options { id name }
-                  }
-                }
-              }
-            }' -f project="PVT_kwDOEGtWb84Bbe-_" --jq '.data.projectV2.field.options[] | select(.name == "Tube OS") | .id')
-          
-          if [ -n "$OPTION_ID" ]; then
-            gh api graphql -f query='
-              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
-                updateProjectV2ItemFieldValue(input: {
-                  projectId: $projectId, itemId: $itemId, fieldId: $fieldId,
-                  value: { singleSelectOptionId: $optionId }
-                }) { projectV2Item { id } }
-              }' \
-              -f projectId="PVT_kwDOEGtWb84Bbe-_" -f itemId="$ITEM_ID" \
-              -f fieldId="PVTSSF_lADOEGtWb84Bbe-_zhfkocY" -f optionId="$OPTION_ID"
-          fi
-
-      - name: Set Roadmap Phase from body (Wintux)
-        if: contains(github.event.issue.body, 'Wintux')
-        env:
-          GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
-          ITEM_ID: ${{ steps.add-project.outputs.itemId }}
-        run: |
-          OPTION_ID=$(gh api graphql -f query='
-            query($project: ID!) {
-              projectV2(number: 1, owner: "Inled-Pulsar-OS") {
-                field(name: "Roadmap Phase") {
-                  ... on ProjectV2SingleSelectField {
-                    options { id name }
-                  }
-                }
-              }
-            }' -f project="PVT_kwDOEGtWb84Bbe-_" --jq '.data.projectV2.field.options[] | select(.name == "Wintux") | .id')
-          
           if [ -n "$OPTION_ID" ]; then
             gh api graphql -f query='
               mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {

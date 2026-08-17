@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 DESKTOP_DIRS = [
     Path("/usr/share/applications"),
     Path.home() / ".local/share/applications",
+    Path("/var/lib/flatpak/exports/share/applications"),
+    Path.home() / ".local/share/flatpak/exports/share/applications",
+    Path("/var/lib/snapd/desktop/applications"),
 ]
 
 
