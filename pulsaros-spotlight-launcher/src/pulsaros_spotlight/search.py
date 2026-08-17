@@ -151,13 +151,13 @@ class SearchBackend:
     def is_ready(self) -> bool:
         return self._conn is not None
 
-    def search(
+    def search_instant(
         self,
         query: str,
         category: str = "all",
         limit: int = DEFAULT_LIMIT,
     ) -> list[SearchResult]:
-        """Run a full-text search and return results."""
+        """Instant in-memory search for apps and clipboard without blocking the UI."""
         if category == "clipboard":
             if self._clipboard_mgr:
                 return self._clipboard_mgr.search_history(query)
@@ -168,7 +168,6 @@ class SearchBackend:
         if category in ("apps", "applications"):
             return self._search_apps(query, limit)
 
-        # Empty query: show the full application list, like macOS Spotlight on open
         if not query and category == "all":
             return self._search_apps("", max(limit, 200))
 
@@ -177,18 +176,47 @@ class SearchBackend:
             clip_results = []
             if self._clipboard_mgr:
                 clip_results = self._clipboard_mgr.search_history(query)[:3]
-
-            if self.is_ready:
-                sparql = self._build_query(query, category, limit)
-                file_results = self._execute(sparql)
-                return clip_results + app_results + file_results
             return clip_results + app_results
 
-        if not self.is_ready:
-            return []
+        return []
 
-        sparql = self._build_query(query, category, limit)
-        return self._execute(sparql)
+    def search(
+        self,
+        query: str,
+        category: str = "all",
+        limit: int = DEFAULT_LIMIT,
+    ) -> list[SearchResult]:
+        """Synchronous search combining instant apps and Tracker files."""
+        instant = self.search_instant(query, category, limit)
+        if category in ("apps", "applications", "clipboard") or not self.is_ready:
+            return instant
+
+        sparql = self._build_query(query.strip(), category, limit)
+        files = self._execute(sparql)
+        return instant + files
+
+    def search_async(
+        self,
+        query: str,
+        category: str = "all",
+        limit: int = 30,
+        callback: Callable[[list[SearchResult]], None] | None = None,
+    ) -> None:
+        """Run Tracker SPARQL query in background thread and return results via callback."""
+        if not self.is_ready or category in ("apps", "applications", "clipboard"):
+            if callback:
+                GLib.idle_add(callback, [])
+            return
+
+        import threading
+
+        def _worker():
+            sparql = self._build_query(query.strip(), category, limit)
+            file_results = self._execute(sparql)
+            if callback:
+                GLib.idle_add(callback, file_results)
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _search_apps(self, query: str, limit: int) -> list[SearchResult]:
         """Search desktop applications by name and comment."""
@@ -197,7 +225,6 @@ class SearchBackend:
 
         for app in self._apps:
             if query_lower in app.name.lower() or (app.comment and query_lower in app.comment.lower()):
-                # Use exec as the URL so open_file can launch it directly
                 app_url = f"app://{app.filename}"
                 results.append(
                     SearchResult(
@@ -216,10 +243,11 @@ class SearchBackend:
     # -- internal -------------------------------------------------------------
 
     def _build_query(self, query: str, category: str, limit: int) -> str:
+        home_scope = 'FILTER(STRSTARTS(?url, "file:///home/") || STRSTARTS(?url, "file:///media/") || STRSTARTS(?url, "file:///run/media/"))'
         filter_clause = (
-            f'FILTER(CONTAINS(LCASE(?title), LCASE("{query}")))'
+            f'{home_scope}\n    FILTER(CONTAINS(LCASE(?title), LCASE("{query}")))'
             if query
-            else ""
+            else home_scope
         )
         if category in ("apps", "applications"):
             return _SEARCH_APPS.format(query=query, limit=limit)
@@ -234,6 +262,8 @@ class SearchBackend:
         return _SEARCH_ALL.format(query=query, filter=filter_clause, limit=limit)
 
     def _execute(self, sparql: str) -> list[SearchResult]:
+        if not self._conn:
+            return []
         try:
             cursor = self._conn.query(sparql, None)
         except Exception:

@@ -107,14 +107,6 @@ class ClipboardManager:
         """Search clipboard history entries."""
         from pulsaros_spotlight.search import SearchResult
 
-        # Also check current clipboard content on search
-        try:
-            p = subprocess.run(["wl-paste", "--no-newline"], capture_output=True, text=True, timeout=0.2)
-            if p.returncode == 0 and p.stdout and p.stdout.strip():
-                self.record_clip(p.stdout.strip())
-        except Exception:
-            pass
-
         results: list[SearchResult] = []
         q_lower = query.lower().strip()
 

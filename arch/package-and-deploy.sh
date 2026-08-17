@@ -342,10 +342,12 @@ if [ "$PACKAGE_NAME" == "all" ]; then
     for pkg_dir in "$PKGBUILDS_DIR"/*/; do
         pkg_name=$(basename "$pkg_dir")
         if [ -f "$pkg_dir/PKGBUILD" ]; then
-            if is_manual_upload_only "$pkg_name"; then
-                echo "⏭️  Skipping $pkg_name (manual upload only)..."
-                SKIPPED_MANUAL+=("$pkg_name")
-                continue
+            if [ -n "$DEPLOY_FLAG" ] || [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
+                if is_manual_upload_only "$pkg_name"; then
+                    echo "⏭️  Skipping $pkg_name (manual upload only)..."
+                    SKIPPED_MANUAL+=("$pkg_name")
+                    continue
+                fi
             fi
             build_single_package "$pkg_name"
         fi
