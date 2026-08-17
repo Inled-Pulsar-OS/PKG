@@ -1481,12 +1481,10 @@ class MacOSFullscreenManager {
         if (!panelBox) return;
 
         if (animated) {
-            // Start from off-screen top if currently hidden
+            // Show from off-screen, sliding down
             if (!panelBox.visible) {
                 panelBox.translation_y = -panelH;
                 panelBox.show();
-                // _queueUpdateRegions so struts are restored before animate completes
-                Main.layoutManager._queueUpdateRegions?.();
             }
             panelBox.remove_all_transitions();
             panelBox.ease({
@@ -1498,6 +1496,7 @@ class MacOSFullscreenManager {
             panelBox.remove_all_transitions();
             panelBox.translation_y = 0;
             panelBox.show();
+            // Trigger strut recalculation (effect depends on affectsStruts set by _syncPanel)
             Main.layoutManager._queueUpdateRegions?.();
         }
     }
@@ -1523,19 +1522,13 @@ class MacOSFullscreenManager {
                 onComplete: () => {
                     panelBox.hide();
                     panelBox.translation_y = 0;
-                    // Struts are removed because visible=false → _updateRegions skips it
-                    Main.layoutManager._queueUpdateRegions?.();
-                    // Trigger window geometry refresh now that struts are gone
-                    let ws = global.workspace_manager?.get_active_workspace();
-                    if (ws) this._forceWindowsRefreshGeometry(ws);
+                    // affectsStruts is already false in space mode, so hiding is purely visual
                 }
             });
         } else {
             panelBox.remove_all_transitions();
             panelBox.translation_y = 0;
             panelBox.hide();
-            // Struts are removed because visible=false → _updateRegions skips it
-            Main.layoutManager._queueUpdateRegions?.();
         }
     }
 
@@ -1548,6 +1541,7 @@ class MacOSFullscreenManager {
         }
 
         if (!this._enabled) {
+            this._setPanelStruts(true);
             this._showPanel(false);
             return;
         }
@@ -1556,13 +1550,18 @@ class MacOSFullscreenManager {
         let isSpace  = this._isSpaceWorkspace(activeWs);
 
         if (isSpace) {
-            // Hide panelBox: visible=false removes it from _updateRegions → struts=0
-            // → Mutter resizes maximized windows to fill screen
+            // Remove struts FIRST so the panel overlays the window instead of pushing it
+            this._setPanelStruts(false);
+            // Then hide panelBox visually
             this._hidePanel(false);
-            // Also trigger geometry refresh explicitly
+            // Now trigger a strut update (struts=0 because affectsStruts=false)
+            Main.layoutManager._queueUpdateRegions?.();
+            // Force the window to expand to fill the now-available space
             this._forceWindowsRefreshGeometry(activeWs);
         } else {
-            // Normal workspace: show panelBox → struts restored
+            // Restore struts FIRST so showing the panel triggers window repositioning
+            this._setPanelStruts(true);
+            // Then show panelBox (struts=36 → Mutter sends configure to window)
             this._showPanel(false);
         }
     }
