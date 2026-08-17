@@ -18,12 +18,11 @@ _BUS_NAME = "org.freedesktop.LocalSearch3"
 # -- SPARQL query templates ---------------------------------------------------
 
 _SEARCH_ALL = """\
-SELECT ?url ?title ?mtime WHERE {{
+SELECT DISTINCT ?url ?title WHERE {{
     ?u a nfo:FileDataObject ;
        nie:url ?url ;
-       nfo:fileName ?title ;
-       nfo:fileLastModified ?mtime .
-    FILTER(CONTAINS(LCASE(?title), LCASE("{query}")))
+       nfo:fileName ?title .
+    {filter}
 }} ORDER BY ?title LIMIT {limit}
 """
 
@@ -37,20 +36,34 @@ SELECT ?url ?name WHERE {{
 """
 
 _SEARCH_CATEGORY = """\
-SELECT ?url ?title ?mtime WHERE {{
-    ?u a {rdf_type} ;
+SELECT DISTINCT ?url ?title WHERE {{
+    ?f a nfo:FileDataObject ;
        nie:url ?url ;
        nfo:fileName ?title ;
-       nfo:fileLastModified ?mtime .
-    FILTER(CONTAINS(LCASE(?title), LCASE("{query}")))
+       nie:interpretedAs ?m .
+    ?m a {rdf_type} .
+    {excludes}
+    {filter}
 }} ORDER BY ?title LIMIT {limit}
 """
 
+# Tracker 3.x stores the MIME-derived type (Image/Video/Audio/…) on the
+# resource linked via nie:interpretedAs, not on the nfo:FileDataObject itself.
 _CATEGORY_RDF_TYPES: dict[str, str] = {
     "documents": "nie:InformationElement",
     "images": "nfo:Image",
-    "audio": "nmm:MusicPiece",
-    "video": "nmm:Video",
+    "audio": "nfo:Audio",
+    "video": "nfo:Video",
+}
+
+# "documents" = any file that is not an image, video, audio or folder.
+_CATEGORY_EXCLUDES: dict[str, str] = {
+    "documents": (
+        "FILTER NOT EXISTS { ?m a nfo:Image }\n"
+        "    FILTER NOT EXISTS { ?m a nfo:Video }\n"
+        "    FILTER NOT EXISTS { ?m a nfo:Audio }\n"
+        "    FILTER NOT EXISTS { ?m a nfo:Folder }"
+    ),
 }
 
 DEFAULT_LIMIT = 50
@@ -79,6 +92,8 @@ class SearchBackend:
     def connect(self) -> bool:
         """Connect to the Tracker SPARQL endpoint over D-Bus."""
         try:
+            import gi
+            gi.require_version("Tsparql", "3.0")
             from gi.repository import Tsparql
 
             self._conn = Tsparql.SparqlConnection.bus_new(_BUS_NAME, None, None)
@@ -113,13 +128,14 @@ class SearchBackend:
                 return self._clipboard_mgr.search_history(query)
             return []
 
-        if not query.strip():
-            return []
-
         query = query.strip()
 
         if category in ("apps", "applications"):
             return self._search_apps(query, limit)
+
+        # Empty query: show the full application list, like macOS Spotlight on open
+        if not query and category == "all":
+            return self._search_apps("", max(limit, 200))
 
         if category == "all":
             app_results = self._search_apps(query, limit)
@@ -146,9 +162,11 @@ class SearchBackend:
 
         for app in self._apps:
             if query_lower in app.name.lower() or (app.comment and query_lower in app.comment.lower()):
+                # Use exec as the URL so open_file can launch it directly
+                app_url = f"app://{app.filename}"
                 results.append(
                     SearchResult(
-                        url=f"app://{app.id}",
+                        url=app_url,
                         title=app.name,
                         mime="application/x-desktop",
                         snippet=app.comment or "",
@@ -163,13 +181,22 @@ class SearchBackend:
     # -- internal -------------------------------------------------------------
 
     def _build_query(self, query: str, category: str, limit: int) -> str:
+        filter_clause = (
+            f'FILTER(CONTAINS(LCASE(?title), LCASE("{query}")))'
+            if query
+            else ""
+        )
         if category in ("apps", "applications"):
             return _SEARCH_APPS.format(query=query, limit=limit)
         if category in _CATEGORY_RDF_TYPES:
             return _SEARCH_CATEGORY.format(
-                query=query, rdf_type=_CATEGORY_RDF_TYPES[category], limit=limit
+                query=query,
+                rdf_type=_CATEGORY_RDF_TYPES[category],
+                excludes=_CATEGORY_EXCLUDES.get(category, ""),
+                filter=filter_clause,
+                limit=limit,
             )
-        return _SEARCH_ALL.format(query=query, limit=limit)
+        return _SEARCH_ALL.format(query=query, filter=filter_clause, limit=limit)
 
     def _execute(self, sparql: str) -> list[SearchResult]:
         try:
@@ -179,9 +206,17 @@ class SearchBackend:
             return []
 
         results: list[SearchResult] = []
+        seen: set[str] = set()
         while cursor.next():
-            url = cursor.get_string(0) or ""
-            title = cursor.get_string(1) or url.rsplit("/", 1)[-1]
+            raw_url = cursor.get_string(0)
+            url = raw_url[0] if isinstance(raw_url, tuple) else raw_url
+            url = url or ""
+            raw_title = cursor.get_string(1)
+            title = raw_title[0] if isinstance(raw_title, tuple) else raw_title
+            title = title or url.rsplit("/", 1)[-1]
+            if url in seen:
+                continue
+            seen.add(url)
             results.append(
                 SearchResult(url=url, title=title, mime="", snippet="", app=None)
             )

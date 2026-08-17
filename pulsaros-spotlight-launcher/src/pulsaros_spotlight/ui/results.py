@@ -2,12 +2,39 @@
 
 from __future__ import annotations
 
+import os
 from typing import Callable
 
 from gi.repository import Gtk
 
 from pulsaros_spotlight.search import SearchResult
 from pulsaros_spotlight.utils import get_file_icon
+
+
+def _app_icon_image(icon_name: str) -> Gtk.Image | None:
+    """Build a Gtk.Image from a .desktop Icon value (name or absolute path)."""
+    if not icon_name:
+        return None
+    icon_name = icon_name.strip()
+    if icon_name.startswith("/") and os.path.isfile(icon_name):
+        try:
+            return Gtk.Image.new_from_file(icon_name)
+        except Exception:
+            pass
+    try:
+        return Gtk.Image.new_from_icon_name(icon_name)
+    except Exception:
+        return None
+
+
+def _build_icon_image(result: SearchResult, pixel_size: int, css_class: str) -> Gtk.Image:
+    """Return the best icon for a result, falling back to a generic file icon."""
+    icon = _app_icon_image(result.app.icon) if result.app else None
+    if icon is None:
+        icon = get_file_icon(result.url, result.mime)
+    icon.set_pixel_size(pixel_size)
+    icon.add_css_class(css_class)
+    return icon
 
 
 class ResultListRow(Gtk.ListBoxRow):
@@ -21,11 +48,7 @@ class ResultListRow(Gtk.ListBoxRow):
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         box.add_css_class("result-item-list")
 
-        if result.app and result.app.icon:
-            icon = Gtk.Image.new_from_gicon(result.app.icon)
-        else:
-            icon = get_file_icon(result.url, result.mime)
-        icon.set_pixel_size(32)
+        icon = _build_icon_image(result, 32, "result-icon")
         icon.add_css_class("result-icon")
 
         text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
@@ -64,12 +87,7 @@ class ResultGridChild(Gtk.FlowBoxChild):
         box.add_css_class("result-item-grid")
         box.set_size_request(90, -1)
 
-        if result.app and result.app.icon:
-            icon = Gtk.Image.new_from_gicon(result.app.icon)
-        else:
-            icon = get_file_icon(result.url, result.mime)
-        icon.set_pixel_size(48)
-        icon.add_css_class("result-icon-grid")
+        icon = _build_icon_image(result, 48, "result-icon-grid")
 
         title_label = Gtk.Label(label=result.title)
         title_label.add_css_class("result-title-grid")

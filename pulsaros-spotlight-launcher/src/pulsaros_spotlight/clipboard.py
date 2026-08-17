@@ -103,7 +103,7 @@ class ClipboardManager:
         self._items = self._items[:max_items]
         self._save()
 
-    def search(self, query: str = "") -> list[SearchResult]:
+    def search_history(self, query: str = "") -> list[SearchResult]:
         """Search clipboard history entries."""
         from pulsaros_spotlight.search import SearchResult
 
