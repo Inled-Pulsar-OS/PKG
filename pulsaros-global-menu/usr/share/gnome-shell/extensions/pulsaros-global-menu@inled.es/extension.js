@@ -1425,6 +1425,12 @@ class MacOSFullscreenManager {
             }
         });
 
+        this._topTrigger.connect('motion-event', () => {
+            if (this._isCurrentWorkspaceFullscreenSpace()) {
+                this._showPanel(true);
+            }
+        });
+
         try {
             this._pointerWatcher = getPointerWatcher();
             if (this._pointerWatcher) {
@@ -1459,7 +1465,12 @@ class MacOSFullscreenManager {
                 this._hideTimeoutId = 0;
             }
             this._showPanel(true);
-        } else if (y > panelHeight + 16) {
+        } else if (y <= panelHeight + 16) {
+            if (this._hideTimeoutId) {
+                GLib.source_remove(this._hideTimeoutId);
+                this._hideTimeoutId = 0;
+            }
+        } else {
             if (this._panelVisible && !this._hasOpenMenu() && !this._hideTimeoutId) {
                 this._hideTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
                     this._hideTimeoutId = 0;
@@ -1544,6 +1555,12 @@ class MacOSFullscreenManager {
         this._panelVisible = false;
         let targetY = -(Main.panel.height || 36);
 
+        if (this._topTrigger && Main.layoutManager.uiGroup && Main.layoutManager.uiGroup.set_child_above_sibling) {
+            try {
+                Main.layoutManager.uiGroup.set_child_above_sibling(this._topTrigger, null);
+            } catch (e) {}
+        }
+
         if (animated) {
             Main.panel.ease({
                 translation_y: targetY,
@@ -1573,6 +1590,13 @@ class MacOSFullscreenManager {
                 } catch (e) {}
             }
         }
+
+        if (this._topTrigger && Main.layoutManager.uiGroup && Main.layoutManager.uiGroup.set_child_above_sibling) {
+            try {
+                Main.layoutManager.uiGroup.set_child_above_sibling(this._topTrigger, null);
+            } catch (e) {}
+        }
+
         Main.panel.visible = true;
         Main.panel.reactive = true;
         Main.panel.opacity = 255;
