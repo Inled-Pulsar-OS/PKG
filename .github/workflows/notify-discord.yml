@@ -1,0 +1,46 @@
+name: Notify Discord
+
+on:
+  issues:
+    types: [opened, closed, labeled]
+  pull_request:
+    types: [opened, closed, merged]
+  release:
+    types: [published]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Discord notification for issues
+        if: github.event_name == 'issues'
+        uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: |
+            {{#if (eq issue.state "open")}}🟢{{else}}🔴{{/if}} **{{issue.title}}**
+            Repo: `{{github.repository}}`
+            <{{issue.html_url}}>
+
+      - name: Send Discord notification for PRs
+        if: github.event_name == 'pull_request'
+        uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: |
+            {{#if (eq pull_request.state "open")}}🟢{{else if pull_request.merged}}🟣{{else}}🔴{{/if}} **PR: {{pull_request.title}}**
+            Repo: `{{github.repository}}`
+            <{{pull_request.html_url}}>
+
+      - name: Send Discord notification for releases
+        if: github.event_name == 'release'
+        uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: |
+            🚀 **New Release: {{release.name}}**
+            Repo: `{{github.repository}}`
+            <{{release.html_url}}>

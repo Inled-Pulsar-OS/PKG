@@ -1,0 +1,76 @@
+name: Suggestion
+description: Suggest a feature or improvement for Pulsar OS
+title: "[SUGGESTION] "
+labels: ["suggestion"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 💡 Suggestion
+        We love ideas! Please note that the roadmap priorities are:
+        1. Pear Edition Stable
+        2. Tube OS
+        3. Wintux
+        
+        Suggestions aligned with the roadmap will be reviewed first.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What would you like to suggest?
+      description: Describe your idea clearly.
+      placeholder: I think Pulsar OS should...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: roadmap-phase
+    attributes:
+      label: Which roadmap phase does this relate to?
+      description: If none, select "General".
+      options:
+        - Pear Edition Stable
+        - Tube OS
+        - Wintux
+        - General / None
+    validations:
+      required: true
+
+  - type: textarea
+    id: benefit
+    attributes:
+      label: What benefit would this bring?
+      description: Explain the value this adds to Pulsar OS or its users.
+      placeholder: This would help users because...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: estimated-effort
+    attributes:
+      label: Estimated development cost
+      description: Rough estimate of how much work this would take.
+      options:
+        - Low (hours)
+        - Medium (days)
+        - High (weeks)
+        - Very High (months)
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Have you thought about other ways to achieve this?
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Links, screenshots, mockups, or related issues.
+    validations:
+      required: false
