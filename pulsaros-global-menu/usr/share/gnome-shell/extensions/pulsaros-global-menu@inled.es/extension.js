@@ -1445,7 +1445,7 @@ class MacOSFullscreenManager {
                 }
             }
             if (Main.layoutManager.panelBox) {
-                Main.layoutManager.panelBox.visible = true;
+                Main.layoutManager.panelBox.visible = affectsStruts;
             }
         } catch (e) {
             console.error("[MacOSFullscreen] Error setting panel struts:", e);
@@ -1613,11 +1613,19 @@ class MacOSFullscreenManager {
             Main.panel.ease({
                 translation_y: targetY,
                 duration: 200,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                onComplete: () => {
+                    if (this._panelHidden && this._isCurrentWorkspaceFullscreenSpace() && Main.layoutManager.panelBox) {
+                        Main.layoutManager.panelBox.visible = false;
+                    }
+                }
             });
         } else {
             Main.panel.remove_all_transitions();
             Main.panel.translation_y = targetY;
+            if (Main.layoutManager.panelBox) {
+                Main.layoutManager.panelBox.visible = false;
+            }
         }
     }
 
@@ -1646,11 +1654,6 @@ class MacOSFullscreenManager {
         Main.panel.visible = true;
         Main.panel.reactive = true;
         Main.panel.opacity = 255;
-
-        if (this._isCurrentWorkspaceFullscreenSpace()) {
-            this._setPanelStruts(true);
-            this._refreshSpaceWindows();
-        }
 
         if (animated) {
             Main.panel.ease({
