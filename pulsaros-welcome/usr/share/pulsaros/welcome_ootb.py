@@ -1490,7 +1490,7 @@ class OOTBWindow(Adw.ApplicationWindow):
                     ("org.gnome.shell.keybindings", "toggle-application-view", "['LaunchB']"),
                     ("org.gnome.shell.keybindings", "toggle-message-tray", "[]"),
                     ("org.gnome.shell.keybindings", "screenshot", "['<Primary><Shift>numbersign']"),
-                    ("org.gnome.shell.keybindings", "show-screenshot-ui", "['<Shift><Control>dollar']"),
+                    ("org.gnome.shell.keybindings", "show-screenshot-ui", "['Print', '<Shift><Control>dollar', '<Shift><Super>4', '<Shift><Super>5']"),
                     ("org.gnome.shell.keybindings", "screenshot-window", "['<Shift><Control>percent']"),
                     ("org.gnome.settings-daemon.plugins.media-keys", "screensaver", "['<Super>l', '<Control>l']"),
                     ("org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings",

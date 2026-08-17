@@ -163,3 +163,19 @@
 .ctx-menu-btn-danger:hover {
     background-color: alpha(@error_color, 0.12);
 }
+
+/* uninstall progress bar */
+.uninstall-progress {
+    padding: 8px 16px;
+    background-color: alpha(@accent_bg_color, 0.08);
+    border-top: 1px solid alpha(@borders, 0.5);
+}
+
+.uninstall-progress spinner {
+    margin-right: 4px;
+}
+
+.uninstall-progress label {
+    font-size: 13px;
+    color: @view_fg_color;
+}

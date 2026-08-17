@@ -11,8 +11,9 @@ from typing import Callable
 
 import gi
 gi.require_version("Gdk", "4.0")
+gi.require_version("GdkPixbuf", "2.0")
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gdk, Gio, GLib, Gtk
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk
 
 from pulsaros_spotlight.search import SearchResult
 from pulsaros_spotlight.utils import get_file_icon
@@ -59,12 +60,18 @@ def _build_icon_image(result: SearchResult, pixel_size: int, css_class: str) -> 
     if _is_image_file(result):
         path = result.url.removeprefix("file://")
         try:
-            texture = Gdk.Texture.new_from_file(Gio.File.new_for_path(path))
-            picture = Gtk.Picture.new_for_paintable(texture)
-            picture.set_size_request(pixel_size, pixel_size)
-            picture.set_content_fit(Gtk.ContentFit.CONTAIN)
-            picture.add_css_class(css_class)
-            return picture
+            # Pre-scale with GdkPixbuf so texture is already exact pixel_size
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                path, pixel_size, pixel_size, True  # preserve_aspect_ratio=True
+            )
+            texture = Gdk.Texture.new_for_pixbuf(pixbuf)
+            image = Gtk.Image.new_from_paintable(texture)
+            image.set_pixel_size(pixel_size)
+            image.set_size_request(pixel_size, pixel_size)
+            image.set_halign(Gtk.Align.CENTER)
+            image.set_valign(Gtk.Align.CENTER)
+            image.add_css_class(css_class)
+            return image
         except Exception:
             pass
 
@@ -108,10 +115,16 @@ def _set_favorites(favs: list[str]) -> None:
 class ResultListRow(Gtk.ListBoxRow):
     """A single result row in list view: icon + title + path + snippet."""
 
-    def __init__(self, result: SearchResult, on_activate: Callable[[SearchResult], None]) -> None:
+    def __init__(
+        self,
+        result: SearchResult,
+        on_activate: Callable[[SearchResult], None],
+        on_context_menu: Callable[[SearchResult, Gtk.Widget, float, float], None] | None = None,
+    ) -> None:
         super().__init__()
         self._result = result
         self._on_activate = on_activate
+        self._on_context_menu = on_context_menu
 
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         box.add_css_class("result-item-list")
@@ -137,6 +150,20 @@ class ResultListRow(Gtk.ListBoxRow):
         box.append(text_box)
         self.set_child(box)
 
+        if self._on_context_menu:
+            click = Gtk.GestureClick()
+            click.set_button(3)
+            click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+            click.connect("pressed", self._on_right_click)
+            self.add_controller(click)
+
+    def _on_right_click(self, _gesture, _n_press, x, y) -> None:
+        parent = self.get_parent()
+        if isinstance(parent, Gtk.ListBox):
+            parent.select_row(self)
+        if self._on_context_menu:
+            self._on_context_menu(self._result, self, x, y)
+
     @property
     def result(self) -> SearchResult:
         return self._result
@@ -145,10 +172,16 @@ class ResultListRow(Gtk.ListBoxRow):
 class ResultGridChild(Gtk.FlowBoxChild):
     """A single result tile in grid view: icon + title."""
 
-    def __init__(self, result: SearchResult, on_activate: Callable[[SearchResult], None]) -> None:
+    def __init__(
+        self,
+        result: SearchResult,
+        on_activate: Callable[[SearchResult], None],
+        on_context_menu: Callable[[SearchResult, Gtk.Widget, float, float], None] | None = None,
+    ) -> None:
         super().__init__()
         self._result = result
         self._on_activate = on_activate
+        self._on_context_menu = on_context_menu
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         box.add_css_class("result-item-grid")
@@ -167,6 +200,20 @@ class ResultGridChild(Gtk.FlowBoxChild):
         box.append(title_label)
         self.set_child(box)
 
+        if self._on_context_menu:
+            click = Gtk.GestureClick()
+            click.set_button(3)
+            click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+            click.connect("pressed", self._on_right_click)
+            self.add_controller(click)
+
+    def _on_right_click(self, _gesture, _n_press, x, y) -> None:
+        parent = self.get_parent()
+        if isinstance(parent, Gtk.FlowBox):
+            parent.select_child(self)
+        if self._on_context_menu:
+            self._on_context_menu(self._result, self, x, y)
+
     @property
     def result(self) -> SearchResult:
         return self._result
@@ -177,9 +224,14 @@ class ResultGridChild(Gtk.FlowBoxChild):
 class ResultView(Gtk.Stack):
     """Container that switches between list and grid result views."""
 
-    def __init__(self, on_activate: Callable[[SearchResult], None]) -> None:
+    def __init__(
+        self,
+        on_activate: Callable[[SearchResult], None],
+        on_uninstall: Callable[[str, str], None] | None = None,
+    ) -> None:
         super().__init__()
         self._on_activate = on_activate
+        self._on_uninstall = on_uninstall
         self._results: list[SearchResult] = []
         self._popover_parent: Gtk.Widget | None = None
 
@@ -189,11 +241,23 @@ class ResultView(Gtk.Stack):
         self._list_box.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self._list_box.connect("row-activated", self._on_list_row_activated)
 
+        list_click = Gtk.GestureClick()
+        list_click.set_button(3)
+        list_click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        list_click.connect("pressed", self._on_list_box_right_click)
+        self._list_box.add_controller(list_click)
+
         self._grid = Gtk.FlowBox()
         self._grid.set_valign(Gtk.Align.START)
         self._grid.set_max_children_per_line(6)
         self._grid.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self._grid.connect("child-activated", self._on_grid_child_activated)
+
+        grid_click = Gtk.GestureClick()
+        grid_click.set_button(3)
+        grid_click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        grid_click.connect("pressed", self._on_grid_right_click)
+        self._grid.add_controller(grid_click)
 
         self.add_named(self._list_box, "list")
         self.add_named(self._grid, "grid")
@@ -212,8 +276,8 @@ class ResultView(Gtk.Stack):
         self._clear(self._grid)
 
         for result in results[:200]:
-            self._list_box.append(ResultListRow(result, self._on_activate))
-            self._grid.append(ResultGridChild(result, self._on_activate))
+            self._list_box.append(ResultListRow(result, self._on_activate, self.show_context_menu_for))
+            self._grid.append(ResultGridChild(result, self._on_activate, self.show_context_menu_for))
 
         self.set_visible_child_name("grid" if as_grid else "list")
         if not as_grid:
@@ -318,32 +382,23 @@ class ResultView(Gtk.Stack):
 
     # -- context menu ---------------------------------------------------------
 
-    def _get_offset_to(self, ancestor: Gtk.Widget) -> tuple[int, int]:
-        """Compute pixel offset from *self* to *ancestor* by walking up the tree."""
-        x, y = 0, 0
-        widget: Gtk.Widget | None = self
-        while widget and widget != ancestor:
-            alloc = widget.get_allocation()
-            x += alloc.x
-            y += alloc.y
-            widget = widget.get_parent()
-        return x, y
-
     def _build_context_menu(self) -> Gtk.Popover:
         popover = Gtk.Popover()
         popover.set_has_arrow(False)
+        popover.set_position(Gtk.PositionType.BOTTOM)
+        popover.set_autohide(True)
         popover.add_css_class("ctx-menu")
 
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         outer.add_css_class("ctx-menu-box")
 
-        self._btn_open = Gtk.Button(label="Abrir")
+        self._btn_open = Gtk.Button(label="Open")
         self._btn_open.add_css_class("ctx-menu-btn")
         self._btn_open.set_halign(Gtk.Align.FILL)
         self._btn_open.connect("clicked", lambda *_: self._ctx_open())
         outer.append(self._btn_open)
 
-        self._btn_open_dir = Gtk.Button(label="Abrir carpeta contenedora")
+        self._btn_open_dir = Gtk.Button(label="Open containing folder")
         self._btn_open_dir.add_css_class("ctx-menu-btn")
         self._btn_open_dir.set_halign(Gtk.Align.FILL)
         self._btn_open_dir.connect("clicked", lambda *_: self._ctx_open_dir())
@@ -352,13 +407,13 @@ class ResultView(Gtk.Stack):
         sep1 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
         outer.append(sep1)
 
-        self._btn_pin = Gtk.Button(label="Anclar al dock")
+        self._btn_pin = Gtk.Button(label="Pin to dock")
         self._btn_pin.add_css_class("ctx-menu-btn")
         self._btn_pin.set_halign(Gtk.Align.FILL)
         self._btn_pin.connect("clicked", lambda *_: self._ctx_toggle_pin())
         outer.append(self._btn_pin)
 
-        self._btn_uninstall = Gtk.Button(label="Desinstalar")
+        self._btn_uninstall = Gtk.Button(label="Uninstall")
         self._btn_uninstall.add_css_class("ctx-menu-btn")
         self._btn_uninstall.add_css_class("ctx-menu-btn-danger")
         self._btn_uninstall.set_halign(Gtk.Align.FILL)
@@ -368,13 +423,13 @@ class ResultView(Gtk.Stack):
         sep2 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
         outer.append(sep2)
 
-        self._btn_copy_name = Gtk.Button(label="Copiar nombre")
+        self._btn_copy_name = Gtk.Button(label="Copy name")
         self._btn_copy_name.add_css_class("ctx-menu-btn")
         self._btn_copy_name.set_halign(Gtk.Align.FILL)
         self._btn_copy_name.connect("clicked", lambda *_: self._ctx_copy_name())
         outer.append(self._btn_copy_name)
 
-        self._btn_copy_path = Gtk.Button(label="Copiar ruta")
+        self._btn_copy_path = Gtk.Button(label="Copy path")
         self._btn_copy_path.add_css_class("ctx-menu-btn")
         self._btn_copy_path.set_halign(Gtk.Align.FILL)
         self._btn_copy_path.connect("clicked", lambda *_: self._ctx_copy_path())
@@ -387,6 +442,63 @@ class ResultView(Gtk.Stack):
             popover.set_parent(self)
         return popover
 
+    def _on_list_box_right_click(self, _gesture, _n_press, x, y) -> None:
+        row = self._list_box.get_row_at_y(int(y))
+        if isinstance(row, ResultListRow):
+            self._list_box.select_row(row)
+            row_y = y - row.get_allocation().y
+            self.show_context_menu_for(row.result, row, x, row_y)
+
+    def _on_grid_right_click(self, _gesture, _n_press, x, y) -> None:
+        child = self._grid.get_child_at_pos(int(x), int(y))
+        if isinstance(child, ResultGridChild):
+            self._grid.select_child(child)
+            child_alloc = child.get_allocation()
+            child_x = x - child_alloc.x
+            child_y = y - child_alloc.y
+            self.show_context_menu_for(child.result, child, child_x, child_y)
+
+    def show_context_menu_for(
+        self,
+        result: SearchResult,
+        source_widget: Gtk.Widget,
+        x: float,
+        y: float,
+    ) -> None:
+        """Show context menu pointing directly to the clicked spot on source_widget."""
+        self._context_menu_result = result
+        is_app = result.app is not None
+
+        self._btn_open_dir.set_visible(not is_app)
+        self._btn_copy_path.set_visible(not is_app)
+
+        if is_app:
+            desktop_id = result.app.filename
+            favs = _get_favorites()
+            is_pinned = desktop_id in favs
+            self._btn_pin.set_label("Unpin from dock" if is_pinned else "Pin to dock")
+            self._btn_pin.set_visible(True)
+            self._btn_uninstall.set_visible(True)
+        else:
+            self._btn_pin.set_visible(False)
+            self._btn_uninstall.set_visible(False)
+
+        # Parent the popover directly to the clicked row/item
+        if self._popover.get_parent() != source_widget:
+            if self._popover.get_parent():
+                self._popover.unparent()
+            self._popover.set_parent(source_widget)
+
+        # In PyGObject, Gdk.Rectangle kwargs in __init__ are ignored; set attributes directly!
+        rect = Gdk.Rectangle()
+        rect.x = int(x)
+        rect.y = int(y)
+        rect.width = 1
+        rect.height = 1
+
+        self._popover.set_pointing_to(rect)
+        self._popover.popup()
+
     def _get_result_at(self, x: float, y: float) -> SearchResult | None:
         if self.get_visible_child_name() == "list":
             widget = self._list_box.get_row_at_y(int(y))
@@ -398,8 +510,12 @@ class ResultView(Gtk.Stack):
                 return child.result
         return None
 
-    def show_context_menu(self, x: float, y: float) -> None:
-        result = self._get_result_at(x, y)
+    def show_context_menu(
+        self,
+        hit_x: float, hit_y: float,
+        popup_x: int, popup_y: int,
+    ) -> None:
+        result = self._get_result_at(hit_x, hit_y)
         if result is None:
             return
 
@@ -413,22 +529,14 @@ class ResultView(Gtk.Stack):
             desktop_id = result.app.filename
             favs = _get_favorites()
             is_pinned = desktop_id in favs
-            self._btn_pin.set_label("Desanclar del dock" if is_pinned else "Anclar al dock")
+            self._btn_pin.set_label("Unpin from dock" if is_pinned else "Pin to dock")
             self._btn_pin.set_visible(True)
             self._btn_uninstall.set_visible(True)
         else:
             self._btn_pin.set_visible(False)
             self._btn_uninstall.set_visible(False)
 
-        parent = self._popover_parent or self
-        if parent is not self:
-            offset_x, offset_y = self._get_offset_to(parent)
-            px = int(x) + offset_x
-            py = int(y) + offset_y
-        else:
-            px, py = int(x), int(y)
-
-        rect = Gdk.Rectangle(x=px, y=py, width=1, height=1)
+        rect = Gdk.Rectangle(x=popup_x, y=popup_y, width=1, height=1)
         self._popover.set_pointing_to(rect)
         self._popover.popup()
 
@@ -457,21 +565,20 @@ class ResultView(Gtk.Stack):
                 favs.append(desktop_id)
             _set_favorites(favs)
             is_pinned = desktop_id in favs
-            self._btn_pin.set_label("Desanclar del dock" if is_pinned else "Anclar al dock")
+            self._btn_pin.set_label("Unpin from dock" if is_pinned else "Pin to dock")
         self._popover.popdown()
 
     def _ctx_uninstall(self) -> None:
         if self._context_menu_result and self._context_menu_result.app:
             desktop_id = self._context_menu_result.app.filename
-            try:
-                subprocess.Popen(
-                    ["appinstall", "--uninstall", desktop_id],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-            except FileNotFoundError:
-                logger.warning("appinstall not found – cannot uninstall %s", desktop_id)
-        self._popover.popdown()
+            app_name = self._context_menu_result.app.name
+            self._popover.popdown()
+            if self._on_uninstall:
+                self._on_uninstall(desktop_id, app_name)
+            else:
+                logger.warning("No uninstall handler registered for %s", desktop_id)
+        else:
+            self._popover.popdown()
 
     def _ctx_copy_name(self) -> None:
         if self._context_menu_result:

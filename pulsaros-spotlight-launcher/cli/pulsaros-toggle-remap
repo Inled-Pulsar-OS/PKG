@@ -36,7 +36,7 @@ def enable_macos_full_remap():
 
     # 3. Shell Keybindings & Screenshots
     run_gsettings(["set", "org.gnome.shell.keybindings", "screenshot", "['<Primary><Shift>numbersign']"])
-    run_gsettings(["set", "org.gnome.shell.keybindings", "show-screenshot-ui", "['<Shift><Control>dollar', '<Shift><Super>4', '<Shift><Super>5']"])
+    run_gsettings(["set", "org.gnome.shell.keybindings", "show-screenshot-ui", "['Print', '<Shift><Control>dollar', '<Shift><Super>4', '<Shift><Super>5']"])
     run_gsettings(["set", "org.gnome.shell.keybindings", "screenshot-window", "['<Shift><Control>percent']"])
     run_gsettings(["set", "org.gnome.shell.keybindings", "toggle-overview", "['LaunchA']"])
     run_gsettings(["set", "org.gnome.shell.keybindings", "toggle-application-view", "['LaunchB']"])

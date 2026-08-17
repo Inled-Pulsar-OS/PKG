@@ -10,7 +10,8 @@ import gi
 gi.require_version("Adw", "1")
 gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk", "4.0")
-from gi.repository import Adw, Gdk, GLib, Gtk
+gi.require_version("Pango", "1.0")
+from gi.repository import Adw, Gdk, GLib, Gtk, Pango
 
 from pulsaros_spotlight.search import SearchBackend, SearchResult
 from pulsaros_spotlight.ui.results import ResultView
@@ -64,6 +65,7 @@ class SpotlightWindow(Gtk.ApplicationWindow):
 
         self._build_ui()
         self._setup_events()
+        self._backend.set_on_apps_updated(self._on_apps_updated)
 
     # -- UI construction ------------------------------------------------------
 
@@ -116,22 +118,43 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         main_box.append(self._category_bar)
 
         # -- results area --
-        self._result_view = ResultView(on_activate=self._on_result_activated)
+        self._result_view = ResultView(
+            on_activate=self._on_result_activated,
+            on_uninstall=self._start_uninstall,
+        )
+
+        self._scroll = Gtk.ScrolledWindow()
+        self._scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self._scroll.set_vexpand(True)
+        self._scroll.set_min_content_height(300)
+        self._scroll.set_max_content_height(480)
+        self._scroll.add_css_class("results-area")
+        self._scroll.set_child(self._result_view)
+        main_box.append(self._scroll)
+
+        # Popover is parented to window (`self`) for unconstrained popup space.
         self._result_view.set_popover_parent(self)
 
-        right_click = Gtk.GestureClick()
-        right_click.set_button(3)
-        right_click.connect("pressed", self._on_right_click)
-        self._result_view.add_controller(right_click)
+        # -- uninstall progress bar (hidden by default) --
+        self._progress_revealer = Gtk.Revealer()
+        self._progress_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
+        self._progress_revealer.set_transition_duration(200)
+        self._progress_revealer.set_reveal_child(False)
 
-        scroll = Gtk.ScrolledWindow()
-        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        scroll.set_vexpand(True)
-        scroll.set_min_content_height(300)
-        scroll.set_max_content_height(480)
-        scroll.add_css_class("results-area")
-        scroll.set_child(self._result_view)
-        main_box.append(scroll)
+        progress_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        progress_box.add_css_class("uninstall-progress")
+
+        self._progress_spinner = Gtk.Spinner()
+        self._progress_label = Gtk.Label()
+        self._progress_label.set_hexpand(True)
+        self._progress_label.set_xalign(0)
+        self._progress_label.set_ellipsize(Pango.EllipsizeMode.END)
+        self._progress_label.set_max_width_chars(65)
+
+        progress_box.append(self._progress_spinner)
+        progress_box.append(self._progress_label)
+        self._progress_revealer.set_child(progress_box)
+        main_box.append(self._progress_revealer)
 
     # -- event setup ----------------------------------------------------------
 
@@ -277,8 +300,73 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         open_file(result.url)
         self.set_visible(False)
 
-    def _on_right_click(self, _gesture, _n_press, x, y) -> None:
-        self._result_view.show_context_menu(x, y)
+    # -- uninstall background task --------------------------------------------
+
+    def _start_uninstall(self, desktop_id: str, app_name: str) -> None:
+        """Run uninstall in a background thread, showing a progress spinner."""
+        import threading, subprocess as sp, sys, os
+
+        self._progress_label.set_text(f"Uninstalling {app_name}…")
+        self._progress_spinner.start()
+        self._progress_revealer.set_reveal_child(True)
+
+        def _worker() -> None:
+            success = False
+            msg = ""
+            try:
+                # Use pkm's internal API to resolve and execute uninstall
+                sys.path.insert(0, "/usr/share/appinstall")
+                from src.cli import uninstall_by_desktop_id  # type: ignore
+                ok, message = uninstall_by_desktop_id(desktop_id)
+                success = ok
+                msg = message
+            except Exception as exc:
+                try:
+                    env = os.environ.copy()
+                    env["APPINSTALL_SUDO"] = "pkexec"
+                    proc = sp.Popen(
+                        ["pkm", "--uninstall", desktop_id],
+                        env=env,
+                        stdout=sp.PIPE,
+                        stderr=sp.PIPE,
+                    )
+                    out, err = proc.communicate(timeout=120)
+                    success = proc.returncode == 0
+                    msg = (out or err).decode().strip() or (f"'{app_name}' uninstalled." if success else "Uninstall failed.")
+                except Exception as exc2:
+                    success = False
+                    msg = str(exc2)
+            GLib.idle_add(self._on_uninstall_done, success, msg, app_name)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_uninstall_done(self, success: bool, message: str, app_name: str) -> bool:
+        self._progress_spinner.stop()
+        if success:
+            self._progress_label.set_text(f"✓ {app_name} uninstalled successfully")
+            delay_ms = 1800
+        else:
+            clean_msg = " ".join(line.strip() for line in message.splitlines() if line.strip())
+            if "dependencias" in clean_msg.lower() or "dependencies" in clean_msg.lower():
+                clean_msg = f"Cannot remove {app_name}: required by other system packages"
+            elif "error:" in clean_msg:
+                clean_msg = clean_msg.split("error:", 1)[1].strip()
+            self._progress_label.set_text(f"✗ {clean_msg}")
+            self._progress_label.set_tooltip_text(message)
+            delay_ms = 4000
+        GLib.timeout_add(delay_ms, self._hide_progress_and_refresh)
+        return False
+
+    def _on_apps_updated(self) -> None:
+        """Automatically refresh search results when apps change on disk."""
+        if self.is_visible():
+            self._do_search()
+
+    def _hide_progress_and_refresh(self) -> bool:
+        self._progress_revealer.set_reveal_child(False)
+        self._backend.reload_apps()
+        self._do_search()
+        return False
 
     def _on_toggle_view(self, _btn: Gtk.Button) -> None:
         self._config.is_grid_view = not self._config.is_grid_view
@@ -413,6 +501,7 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         self._current_dir = None
         self._search_entry.set_placeholder_text("Search applications, files, or clipboard...")
         self._search_entry.set_text("")
+        self._backend.reload_apps()
         self._do_search()
 
         self.present()

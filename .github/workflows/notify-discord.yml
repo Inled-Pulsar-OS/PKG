@@ -19,7 +19,7 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         with:
           args: |
-            {{#if (eq issue.state "open")}}🟢{{else}}🔴{{/if}} **{{issue.title}}**
+            🟢 **{{issue.title}}**
             Repo: `{{github.repository}}`
             <{{issue.html_url}}>
 
@@ -30,7 +30,7 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         with:
           args: |
-            {{#if (eq pull_request.state "open")}}🟢{{else if pull_request.merged}}🟣{{else}}🔴{{/if}} **PR: {{pull_request.title}}**
+            🔀 **PR: {{pull_request.title}}**
             Repo: `{{github.repository}}`
             <{{pull_request.html_url}}>
 

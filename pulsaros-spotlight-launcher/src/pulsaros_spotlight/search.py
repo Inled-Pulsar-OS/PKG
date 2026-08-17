@@ -6,7 +6,12 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from pulsaros_spotlight.apps import DesktopApp, load_apps
+import gi
+gi.require_version("Gio", "2.0")
+from gi.repository import Gio, GLib
+from typing import Callable
+
+from pulsaros_spotlight.apps import DESKTOP_DIRS, DesktopApp, load_apps
 
 if TYPE_CHECKING:
     from pulsaros_spotlight.clipboard import ClipboardManager
@@ -89,12 +94,40 @@ class SearchBackend:
         self._conn = None
         self._clipboard_mgr = clipboard_mgr
         self._apps: list[DesktopApp] = []
+        self._on_apps_updated: Callable[[], None] | None = None
+        self._monitors: list[Gio.FileMonitor] = []
+        self._load_apps()
+        self._setup_app_monitors()
+
+    def set_on_apps_updated(self, callback: Callable[[], None]) -> None:
+        """Register a callback to be notified when the installed apps list changes."""
+        self._on_apps_updated = callback
+
+    def _setup_app_monitors(self) -> None:
+        """Watch application directories for new/removed/updated .desktop files."""
+        for dir_path in DESKTOP_DIRS:
+            try:
+                gfile = Gio.File.new_for_path(str(dir_path))
+                if dir_path.is_dir():
+                    monitor = gfile.monitor_directory(Gio.FileMonitorFlags.NONE, None)
+                    monitor.connect("changed", self._on_apps_dir_changed)
+                    self._monitors.append(monitor)
+            except Exception:
+                logger.debug("Failed to set up directory monitor for %s", dir_path, exc_info=True)
+
+    def _on_apps_dir_changed(self, monitor, file, other_file, event_type) -> None:
+        """Handler for file changes in desktop directories."""
+        self.reload_apps()
+        if self._on_apps_updated:
+            GLib.idle_add(self._on_apps_updated)
+
+    def reload_apps(self) -> None:
+        """Reload desktop applications from disk."""
         self._load_apps()
 
     def connect(self) -> bool:
         """Connect to the Tracker SPARQL endpoint over D-Bus."""
         try:
-            import gi
             gi.require_version("Tsparql", "3.0")
             from gi.repository import Tsparql
 
