@@ -1390,12 +1390,19 @@ class MacOSFullscreenManager {
         if (this._panelStrutsState === affectsStruts) return;
         this._panelStrutsState = affectsStruts;
         try {
-            if (Main.layoutManager && Main.layoutManager.panelBox) {
-                Main.layoutManager.removeChrome(Main.layoutManager.panelBox);
-                Main.layoutManager.addChrome(Main.layoutManager.panelBox, {
-                    affectsStruts: affectsStruts,
-                    trackFullscreen: true
-                });
+            if (Main.layoutManager && Main.layoutManager._chrome) {
+                let chrome = Main.layoutManager._chrome;
+                let data = chrome._findActor ? chrome._findActor(Main.layoutManager.panelBox) : null;
+                if (!data && chrome._trackedActors) {
+                    data = chrome._trackedActors.find(a => a.actor === Main.layoutManager.panelBox);
+                }
+                if (data) {
+                    data.affectsStruts = affectsStruts;
+                    data.trackFullscreen = false;
+                }
+                if (Main.layoutManager._queueUpdateRegions) {
+                    Main.layoutManager._queueUpdateRegions();
+                }
             }
         } catch (e) {
             console.error("[MacOSFullscreen] Error setting panel struts:", e);
