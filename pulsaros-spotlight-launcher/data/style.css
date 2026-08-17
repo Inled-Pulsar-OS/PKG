@@ -127,3 +127,39 @@
     font-size: 11px;
     opacity: 0.8;
 }
+
+/* thumbnail for image results */
+.result-icon picture {
+    border-radius: 4px;
+}
+
+/* context menu popover */
+.ctx-menu {
+    padding: 4px 0;
+    border-radius: 10px;
+}
+
+.ctx-menu-box {
+    min-width: 200px;
+}
+
+.ctx-menu-btn {
+    padding: 7px 14px;
+    border-radius: 0;
+    border: none;
+    background: none;
+    color: @view_fg_color;
+    font-size: 13px;
+}
+
+.ctx-menu-btn:hover {
+    background-color: alpha(@accent_bg_color, 0.15);
+}
+
+.ctx-menu-btn-danger {
+    color: @error_color;
+}
+
+.ctx-menu-btn-danger:hover {
+    background-color: alpha(@error_color, 0.12);
+}

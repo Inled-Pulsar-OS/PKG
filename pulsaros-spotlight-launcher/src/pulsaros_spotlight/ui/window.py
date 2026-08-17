@@ -113,6 +113,7 @@ class SpotlightWindow(Gtk.ApplicationWindow):
 
         # -- results area --
         self._result_view = ResultView(on_activate=self._on_result_activated)
+        self._result_view.set_popover_parent(self)
 
         right_click = Gtk.GestureClick()
         right_click.set_button(3)
