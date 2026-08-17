@@ -1211,7 +1211,7 @@ class MacOSFullscreenManager {
         this._windowSignals = new Map();
         this._spaceWindows = new Map();
         this._enabled = false;
-        this._panelHidden = false;
+        this._panelVisible = true;
         this._panelStrutsState = null;
         this._hideTimeoutId = 0;
         this._pointerWatcher = null;
@@ -1343,7 +1343,6 @@ class MacOSFullscreenManager {
                 }
 
                 window.change_workspace(newWs);
-                window.maximize(Meta.MaximizeFlags.BOTH);
                 newWs.activate_with_focus(window, global.get_current_time());
 
                 this._spaceWindows.set(window, { origWsIndex });
@@ -1391,16 +1390,12 @@ class MacOSFullscreenManager {
         if (this._panelStrutsState === affectsStruts) return;
         this._panelStrutsState = affectsStruts;
         try {
-            if (Main.layoutManager && Main.layoutManager._chrome) {
-                let chrome = Main.layoutManager._chrome;
-                let data = chrome._findActor ? chrome._findActor(Main.layoutManager.panelBox) : null;
-                if (data) {
-                    data.affectsStruts = affectsStruts;
-                    data.trackFullscreen = false;
-                }
-                if (Main.layoutManager._queueUpdateRegions) {
-                    Main.layoutManager._queueUpdateRegions();
-                }
+            if (Main.layoutManager && Main.layoutManager.panelBox) {
+                Main.layoutManager.removeChrome(Main.layoutManager.panelBox);
+                Main.layoutManager.addChrome(Main.layoutManager.panelBox, {
+                    affectsStruts: affectsStruts,
+                    trackFullscreen: true
+                });
             }
         } catch (e) {
             console.error("[MacOSFullscreen] Error setting panel struts:", e);
@@ -1452,27 +1447,20 @@ class MacOSFullscreenManager {
     }
 
     _onPointerMoved(x, y) {
-        if (!this._enabled) {
-            if (this._panelHidden) this._showPanel(false);
-            return;
-        }
+        if (!this._enabled) return;
         let isSpace = this._isCurrentWorkspaceFullscreenSpace();
-        if (!isSpace) {
-            if (this._panelHidden) this._showPanel(false);
-            return;
-        }
+        if (!isSpace) return;
 
         let panelHeight = Main.panel.height || 36;
 
         if (y <= 24) {
-            this._showPanel(true);
-        } else if (y <= panelHeight + 16) {
             if (this._hideTimeoutId) {
                 GLib.source_remove(this._hideTimeoutId);
                 this._hideTimeoutId = 0;
             }
-        } else {
-            if (!this._panelHidden && !this._hasOpenMenu() && !this._hideTimeoutId) {
+            this._showPanel(true);
+        } else if (y > panelHeight + 16) {
+            if (this._panelVisible && !this._hasOpenMenu() && !this._hideTimeoutId) {
                 this._hideTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
                     this._hideTimeoutId = 0;
                     if (this._isCurrentWorkspaceFullscreenSpace() && !this._hasOpenMenu()) {
@@ -1522,7 +1510,22 @@ class MacOSFullscreenManager {
 
         if (isSpace) {
             this._setPanelStruts(false);
-            this._hidePanel(true);
+            this._hidePanel(false);
+            // Re-apply maximize geometry to windows on this workspace
+            let wsManager = global.workspace_manager;
+            let activeWs = wsManager ? wsManager.get_active_workspace() : null;
+            if (activeWs) {
+                for (let [win, data] of this._spaceWindows) {
+                    if (win && !win.unmanaged && win.get_workspace() === activeWs) {
+                        win._pulsarHandlingMaximize = true;
+                        try {
+                            win.maximize(Meta.MaximizeFlags.BOTH);
+                        } finally {
+                            win._pulsarHandlingMaximize = false;
+                        }
+                    }
+                }
+            }
         } else {
             this._setPanelStruts(true);
             this._showPanel(false);
@@ -1538,7 +1541,7 @@ class MacOSFullscreenManager {
             return;
         }
 
-        this._panelHidden = true;
+        this._panelVisible = false;
         let targetY = -(Main.panel.height || 36);
 
         if (animated) {
@@ -1559,7 +1562,7 @@ class MacOSFullscreenManager {
             this._hideTimeoutId = 0;
         }
 
-        this._panelHidden = false;
+        this._panelVisible = true;
 
         if (Main.layoutManager.panelBox) {
             Main.layoutManager.panelBox.visible = true;
