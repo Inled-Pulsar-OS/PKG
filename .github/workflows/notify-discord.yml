@@ -25,20 +25,18 @@ jobs:
           BODY='${{ github.event.issue.body }}'
           DIFF=$(echo "$BODY" | sed -n '/^### Difficulty$/,/^### /{/^### Difficulty$/d;/^### /d;p}' | head -1 | xargs)
           PHASE=$(echo "$BODY" | sed -n '/^### Roadmap Phase$/,/^### /{/^### Roadmap Phase$/d;/^### /d;p}' | head -1 | xargs)
-          COST=$(echo "$BODY" | sed -n '/^### Cost$/,/^### /{/^### Cost$/d;/^### /d;p}' | head -1 | xargs)
 
           # Build extras string
           EXTRAS=""
-          [ -n "$DIFF" ] && EXTRAS="${EXTRAS}\n📋 Difficulty: **${DIFF}**"
-          [ -n "$PHASE" ] && EXTRAS="${EXTRAS}\n🗺️ Roadmap: **${PHASE}**"
-          [ -n "$COST" ] && EXTRAS="${EXTRAS}\n💰 Cost: **${COST}**"
+          [ -n "$DIFF" ] && EXTRAS="${EXTRAS}\\n📋 Difficulty: **${DIFF}**"
+          [ -n "$PHASE" ] && EXTRAS="${EXTRAS}\\n🗺️ Roadmap: **${PHASE}**"
 
           PAYLOAD=$(jq -n \
             --arg t "$TITLE" \
             --arg r "$REPO" \
             --arg u "$URL" \
             --arg e "$EXTRAS" \
-            '{content: ("🟢 **" + $t + "**\nRepo: `" + $r + "`" + (if $e != "" then $e else "" end) + "\n" + $u)}')
+            '{content: ("🟢 **" + $t + "**\\nRepo: `" + $r + "`" + (if $e != "" then $e else "" end) + "\\n" + $u)}')
           curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD"
 
       - name: Notify on PR
@@ -53,7 +51,7 @@ jobs:
             --arg t "$TITLE" \
             --arg r "$REPO" \
             --arg u "$URL" \
-            '{content: ("🔀 **PR: " + $t + "**\nRepo: `" + $r + "`\n" + $u)}')
+            '{content: ("🔀 **PR: " + $t + "**\\nRepo: `" + $r + "`\\n" + $u)}')
           curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD"
 
       - name: Notify on release
@@ -68,5 +66,5 @@ jobs:
             --arg n "$NAME" \
             --arg r "$REPO" \
             --arg u "$URL" \
-            '{content: ("🚀 **New Release: " + $n + "**\nRepo: `" + $r + "`\n" + $u)}')
+            '{content: ("🚀 **New Release: " + $n + "**\\nRepo: `" + $r + "`\\n" + $u)}')
           curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD"
