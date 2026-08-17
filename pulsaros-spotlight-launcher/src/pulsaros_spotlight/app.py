@@ -6,6 +6,9 @@ import logging
 import sys
 from pathlib import Path
 
+import gi
+gi.require_version("Gdk", "4.0")
+gi.require_version("Gtk", "4.0")
 from gi.repository import Gio, GLib, Gdk, Gtk
 
 from pulsaros_spotlight import __app_id__, __version__

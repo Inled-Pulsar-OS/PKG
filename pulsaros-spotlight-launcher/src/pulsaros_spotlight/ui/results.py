@@ -9,6 +9,9 @@ import subprocess
 from pathlib import Path
 from typing import Callable
 
+import gi
+gi.require_version("Gdk", "4.0")
+gi.require_version("Gtk", "4.0")
 from gi.repository import Gdk, Gio, GLib, Gtk
 
 from pulsaros_spotlight.search import SearchResult
@@ -336,13 +339,13 @@ class ResultView(Gtk.Stack):
 
         self._btn_open = Gtk.Button(label="Abrir")
         self._btn_open.add_css_class("ctx-menu-btn")
-        self._btn_open.set_xalign(0)
+        self._btn_open.set_halign(Gtk.Align.FILL)
         self._btn_open.connect("clicked", lambda *_: self._ctx_open())
         outer.append(self._btn_open)
 
         self._btn_open_dir = Gtk.Button(label="Abrir carpeta contenedora")
         self._btn_open_dir.add_css_class("ctx-menu-btn")
-        self._btn_open_dir.set_xalign(0)
+        self._btn_open_dir.set_halign(Gtk.Align.FILL)
         self._btn_open_dir.connect("clicked", lambda *_: self._ctx_open_dir())
         outer.append(self._btn_open_dir)
 
@@ -351,14 +354,14 @@ class ResultView(Gtk.Stack):
 
         self._btn_pin = Gtk.Button(label="Anclar al dock")
         self._btn_pin.add_css_class("ctx-menu-btn")
-        self._btn_pin.set_xalign(0)
+        self._btn_pin.set_halign(Gtk.Align.FILL)
         self._btn_pin.connect("clicked", lambda *_: self._ctx_toggle_pin())
         outer.append(self._btn_pin)
 
         self._btn_uninstall = Gtk.Button(label="Desinstalar")
         self._btn_uninstall.add_css_class("ctx-menu-btn")
         self._btn_uninstall.add_css_class("ctx-menu-btn-danger")
-        self._btn_uninstall.set_xalign(0)
+        self._btn_uninstall.set_halign(Gtk.Align.FILL)
         self._btn_uninstall.connect("clicked", lambda *_: self._ctx_uninstall())
         outer.append(self._btn_uninstall)
 
@@ -367,13 +370,13 @@ class ResultView(Gtk.Stack):
 
         self._btn_copy_name = Gtk.Button(label="Copiar nombre")
         self._btn_copy_name.add_css_class("ctx-menu-btn")
-        self._btn_copy_name.set_xalign(0)
+        self._btn_copy_name.set_halign(Gtk.Align.FILL)
         self._btn_copy_name.connect("clicked", lambda *_: self._ctx_copy_name())
         outer.append(self._btn_copy_name)
 
         self._btn_copy_path = Gtk.Button(label="Copiar ruta")
         self._btn_copy_path.add_css_class("ctx-menu-btn")
-        self._btn_copy_path.set_xalign(0)
+        self._btn_copy_path.set_halign(Gtk.Align.FILL)
         self._btn_copy_path.connect("clicked", lambda *_: self._ctx_copy_path())
         outer.append(self._btn_copy_path)
 
