@@ -1212,301 +1212,282 @@ class MacOSFullscreenManager {
         this._spaceWindows = new Map();
         this._enabled = false;
         this._panelVisible = true;
-        this._panelStrutsState = null;
         this._hideTimeoutId = 0;
         this._pointerWatcher = null;
         this._pointerWatch = null;
+        this._wsChangedId = 0;
+        this._windowCreatedId = 0;
+        this._stageResizeId = 0;
+        this._topTrigger = null;
 
         this._setupSettings();
         this._setupSignals();
     }
 
+    // ─── Utilities ─────────────────────────────────────────────────────────────
+
     _hasOpenMenu() {
         try {
-            if (Main.overview && Main.overview.visible) return true;
-            if (Main.panel && Main.panel.menuManager && Main.panel.menuManager.activeMenu) return true;
-            if (Main.panel && Main.panel.statusArea) {
+            if (Main.overview?.visible) return true;
+            if (Main.panel?.menuManager?.activeMenu) return true;
+            if (Main.panel?.statusArea) {
                 for (let k in Main.panel.statusArea) {
                     let item = Main.panel.statusArea[k];
-                    if (item && item.menu && item.menu.isOpen) return true;
+                    if (item?.menu?.isOpen) return true;
                 }
             }
         } catch (e) {}
         return false;
     }
 
-    _isIgnoredWindow(window) {
-        if (!window) return true;
+    _isIgnoredWindow(win) {
+        if (!win) return true;
         try {
-            if (window.is_override_redirect && window.is_override_redirect()) return true;
-            if (window.is_skip_taskbar && window.is_skip_taskbar()) return true;
-            if (window.is_on_all_workspaces && window.is_on_all_workspaces()) return true;
-            let type = window.get_window_type ? window.get_window_type() : Meta.WindowType.NORMAL;
+            if (win.is_override_redirect?.()) return true;
+            if (win.is_skip_taskbar?.()) return true;
+            if (win.is_on_all_workspaces?.()) return true;
+            let type = win.get_window_type?.() ?? Meta.WindowType.NORMAL;
             if (type !== Meta.WindowType.NORMAL) return true;
-            if (window.get_transient_for && window.get_transient_for() !== null) return true;
+            if (win.get_transient_for?.() !== null) return true;
 
-            let wmClass = window.get_wm_class ? (window.get_wm_class() || '') : '';
-            let appId = window.get_gtk_application_id ? (window.get_gtk_application_id() || '') : '';
-            let title = window.get_title ? (window.get_title() || '') : '';
-            let sandboxed = window.get_sandboxed_app_id ? (window.get_sandboxed_app_id() || '') : '';
-
+            let wmClass = win.get_wm_class?.() ?? '';
+            let appId  = win.get_gtk_application_id?.() ?? '';
+            let title  = win.get_title?.() ?? '';
+            let sand   = win.get_sandboxed_app_id?.() ?? '';
             let cmdline = '';
-            let pid = window.get_pid ? window.get_pid() : 0;
+            let pid = win.get_pid?.() ?? 0;
             if (pid > 0) {
                 try {
-                    let [ok, contents] = GLib.file_get_contents(`/proc/${pid}/cmdline`);
-                    if (ok) {
-                        cmdline = new TextDecoder().decode(contents).replace(/\0/g, ' ');
-                    }
-                } catch (pe) {}
+                    let [ok, buf] = GLib.file_get_contents(`/proc/${pid}/cmdline`);
+                    if (ok) cmdline = new TextDecoder().decode(buf).replace(/\0/g, ' ');
+                } catch (_) {}
             }
-
-            let checkStr = `${wmClass} ${appId} ${title} ${sandboxed} ${cmdline}`.toLowerCase();
-            for (let ignored of IGNORED_APPS) {
-                if (checkStr.includes(ignored.toLowerCase())) {
-                    return true;
-                }
-            }
-        } catch (e) {
-            return true;
-        }
+            let check = `${wmClass} ${appId} ${title} ${sand} ${cmdline}`.toLowerCase();
+            for (let ign of IGNORED_APPS)
+                if (check.includes(ign.toLowerCase())) return true;
+        } catch (e) { return true; }
         return false;
     }
 
-    _setupSettings() {
-        try {
-            let schema = 'org.gnome.shell.extensions.pulsaros-global-menu';
-            let schemaSource = Gio.SettingsSchemaSource.get_default();
-            if (schemaSource && schemaSource.lookup(schema, true)) {
-                this._settings = new Gio.Settings({ schema_id: schema });
-                this._enabled = this._settings.get_boolean('macos-fullscreen-spaces');
-                this._settings.connect('changed::macos-fullscreen-spaces', () => {
-                    this._enabled = this._settings.get_boolean('macos-fullscreen-spaces');
-                    this._updatePanelVisibility();
-                });
-            } else {
-                this._enabled = false;
-            }
-        } catch (e) {
-            this._enabled = false;
-        }
-    }
-
-    _setupSignals() {
-        this._windowCreatedId = global.display.connect('window-created', (display, window) => {
-            this._trackWindow(window);
-        });
-
-        for (let actor of global.get_window_actors()) {
-            let win = actor.meta_window;
-            if (win) this._trackWindow(win);
-        }
-
-        this._setupPanelHoverTrigger();
-        this._updatePanelVisibility();
-    }
-
-    _trackWindow(window) {
-        if (this._isIgnoredWindow(window)) {
-            return;
-        }
-
-        let winId = window.get_id ? window.get_id() : null;
-        if (!winId || this._windowSignals.has(winId)) return;
-
-        let signals = [];
-        signals.push(window.connect('notify::maximized-horizontally', () => this._onMaximizeChanged(window)));
-        signals.push(window.connect('notify::maximized-vertically', () => this._onMaximizeChanged(window)));
-        signals.push(window.connect('unmanaged', () => this._untrackWindow(window)));
-
-        this._windowSignals.set(winId, { window, signals });
-    }
-
-    _onMaximizeChanged(window) {
-        if (!this._enabled || window._pulsarHandlingMaximize || this._isIgnoredWindow(window)) return;
-
-        let isMax = window.maximized_horizontally && window.maximized_vertically;
-        let isTracked = this._spaceWindows.has(window);
-
-        if (isMax && !isTracked) {
-            window._pulsarHandlingMaximize = true;
+    _isSpaceWorkspace(ws) {
+        if (!ws) return false;
+        for (let [win] of this._spaceWindows) {
             try {
-                let wsManager = global.workspace_manager;
-                let activeWs = wsManager.get_active_workspace();
-                let origWsIndex = activeWs.index();
-
-                // Append new workspace and reorder immediately to the right
-                let newWs = wsManager.append_new_workspace(false, global.get_current_time());
-                let targetIndex = origWsIndex + 1;
-                if (wsManager.reorder_workspace && targetIndex < wsManager.n_workspaces) {
-                    wsManager.reorder_workspace(newWs, targetIndex);
-                }
-
-                window.change_workspace(newWs);
-                newWs.activate_with_focus(window, global.get_current_time());
-
-                this._spaceWindows.set(window, { origWsIndex });
-                this._updatePanelVisibility();
-            } catch (e) {
-                console.error("[MacOSFullscreen] Error moving to workspace:", e);
-            } finally {
-                window._pulsarHandlingMaximize = false;
-            }
-        } else if (!isMax && isTracked) {
-            this._restoreWindow(window);
+                if (!win.unmanaged && win.get_workspace() === ws) return true;
+            } catch (_) {}
         }
-    }
-
-    _restoreWindow(window) {
-        let data = this._spaceWindows.get(window);
-        if (!data) return;
-
-        window._pulsarHandlingMaximize = true;
-        try {
-            let wsManager = global.workspace_manager;
-            let origIndex = Math.min(data.origWsIndex, wsManager.n_workspaces - 1);
-            let targetWs = wsManager.get_workspace_by_index(origIndex);
-
-            this._spaceWindows.delete(window);
-
-            if (window.maximized_horizontally || window.maximized_vertically) {
-                window.unmaximize(Meta.MaximizeFlags.BOTH);
-            }
-
-            if (targetWs) {
-                window.change_workspace(targetWs);
-                targetWs.activate_with_focus(window, global.get_current_time());
-            }
-
-            this._updatePanelVisibility();
-        } catch (e) {
-            console.error("[MacOSFullscreen] Error restoring window:", e);
-        } finally {
-            window._pulsarHandlingMaximize = false;
-        }
-    }
-
-    _setPanelStruts(affectsStruts) {
-        if (this._panelStrutsState === affectsStruts) return;
-        this._panelStrutsState = affectsStruts;
-        try {
-            if (Main.layoutManager && Main.layoutManager._chrome) {
-                let chrome = Main.layoutManager._chrome;
-                let data = chrome._findActor ? chrome._findActor(Main.layoutManager.panelBox) : null;
-                if (!data && chrome._trackedActors) {
-                    data = chrome._trackedActors.find(a => a.actor === Main.layoutManager.panelBox);
-                }
-                if (data) {
-                    data.affectsStruts = affectsStruts;
-                    data.trackFullscreen = false;
-                }
-                if (Main.layoutManager._queueUpdateRegions) {
-                    Main.layoutManager._queueUpdateRegions();
-                }
-            }
-        } catch (e) {
-            console.error("[MacOSFullscreen] Error setting panel struts:", e);
-        }
-    }
-
-    _setupPanelHoverTrigger() {
-        this._topTrigger = new Clutter.Actor({
-            name: 'pulsaros-topbar-hover-trigger',
-            reactive: true,
-            x: 0,
-            y: 0,
-            width: global.stage.width || 1920,
-            height: 24,
-            opacity: 1,
-            visible: true
-        });
-        Main.layoutManager.addChrome(this._topTrigger, {
-            affectsInputRegion: true,
-            affectsStruts: false,
-            trackFullscreen: true
-        });
-
-        this._topTrigger.connect('enter-event', () => {
-            if (this._isCurrentWorkspaceFullscreenSpace()) {
-                this._showPanel(true);
-            }
-        });
-
-        this._topTrigger.connect('motion-event', () => {
-            if (this._isCurrentWorkspaceFullscreenSpace()) {
-                this._showPanel(true);
-            }
-        });
-
-        try {
-            this._pointerWatcher = getPointerWatcher();
-            if (this._pointerWatcher) {
-                this._pointerWatch = this._pointerWatcher.addWatch(50, (x, y) => {
-                    this._onPointerMoved(x, y);
-                });
-            }
-        } catch (e) {}
-
-        this._wsChangedId = global.workspace_manager.connect('active-workspace-changed', () => {
-            this._updatePanelVisibility();
-        });
-
-        this._stageResizeId = global.stage.connect('notify::width', () => {
-            if (this._topTrigger) {
-                this._topTrigger.set_position(0, 0);
-                this._topTrigger.set_size(global.stage.width, 24);
-            }
-        });
-    }
-
-    _onPointerMoved(x, y) {
-        if (!this._enabled) return;
-        let isSpace = this._isCurrentWorkspaceFullscreenSpace();
-        if (!isSpace) return;
-
-        let panelHeight = Main.panel.height || 36;
-
-        if (y <= 24) {
-            if (this._hideTimeoutId) {
-                GLib.source_remove(this._hideTimeoutId);
-                this._hideTimeoutId = 0;
-            }
-            this._showPanel(true);
-        } else if (y <= panelHeight + 16) {
-            if (this._hideTimeoutId) {
-                GLib.source_remove(this._hideTimeoutId);
-                this._hideTimeoutId = 0;
-            }
-        } else {
-            if (this._panelVisible && !this._hasOpenMenu() && !this._hideTimeoutId) {
-                this._hideTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
-                    this._hideTimeoutId = 0;
-                    if (this._isCurrentWorkspaceFullscreenSpace() && !this._hasOpenMenu()) {
-                        this._hidePanel(true);
-                    }
-                    return GLib.SOURCE_REMOVE;
-                });
-            }
-        }
+        return false;
     }
 
     _isCurrentWorkspaceFullscreenSpace() {
         if (!this._enabled) return false;
-        let wsManager = global.workspace_manager;
-        let activeWs = wsManager ? wsManager.get_active_workspace() : null;
-        if (!activeWs) return false;
+        return this._isSpaceWorkspace(global.workspace_manager?.get_active_workspace());
+    }
 
-        for (let [win, data] of this._spaceWindows) {
+    // ─── Settings ──────────────────────────────────────────────────────────────
+
+    _setupSettings() {
+        try {
+            let schema = 'org.gnome.shell.extensions.pulsaros-global-menu';
+            if (Gio.SettingsSchemaSource.get_default()?.lookup(schema, true)) {
+                this._settings = new Gio.Settings({ schema_id: schema });
+                this._enabled = this._settings.get_boolean('macos-fullscreen-spaces');
+                this._settings.connect('changed::macos-fullscreen-spaces', () => {
+                    this._enabled = this._settings.get_boolean('macos-fullscreen-spaces');
+                    this._syncPanelForCurrentWorkspace();
+                });
+            }
+        } catch (_) {}
+    }
+
+    // ─── Signal Setup ──────────────────────────────────────────────────────────
+
+    _setupSignals() {
+        this._windowCreatedId = global.display.connect('window-created', (_d, win) => {
+            this._trackWindow(win);
+        });
+        for (let actor of global.get_window_actors())
+            this._trackWindow(actor.meta_window);
+
+        this._wsChangedId = global.workspace_manager.connect('active-workspace-changed', () => {
+            this._syncPanelForCurrentWorkspace();
+        });
+
+        // PointerWatcher for reliable edge detection
+        try {
+            this._pointerWatcher = getPointerWatcher();
+            this._pointerWatch = this._pointerWatcher.addWatch(50, (x, y) => this._onPointerMoved(x, y));
+        } catch (_) {}
+
+        this._syncPanelForCurrentWorkspace();
+    }
+
+    _trackWindow(win) {
+        if (this._isIgnoredWindow(win)) return;
+        let id = win.get_id?.();
+        if (!id || this._windowSignals.has(id)) return;
+
+        let sigs = [
+            win.connect('notify::maximized-horizontally', () => this._onMaximizeChanged(win)),
+            win.connect('notify::maximized-vertically',   () => this._onMaximizeChanged(win)),
+            win.connect('unmanaged', () => this._untrackWindow(win)),
+        ];
+        this._windowSignals.set(id, { win, sigs });
+    }
+
+    // ─── Workspace / Maximize Logic ────────────────────────────────────────────
+
+    _onMaximizeChanged(win) {
+        if (!this._enabled || win._pulsarLock || this._isIgnoredWindow(win)) return;
+
+        let isMax     = win.maximized_horizontally && win.maximized_vertically;
+        let isTracked = this._spaceWindows.has(win);
+
+        if (isMax && !isTracked) {
+            win._pulsarLock = true;
             try {
-                if (win && !win.unmanaged && win.get_workspace() === activeWs) {
-                    return true;
+                let wsm   = global.workspace_manager;
+                let curWs = wsm.get_active_workspace();
+                let origI = curWs.index();
+
+                let newWs = wsm.append_new_workspace(false, global.get_current_time());
+                let dest  = origI + 1;
+                if (dest < wsm.n_workspaces && wsm.reorder_workspace)
+                    wsm.reorder_workspace(newWs, dest);
+
+                this._spaceWindows.set(win, { origWsIndex: origI });
+                win.change_workspace(newWs);
+                newWs.activate_with_focus(win, global.get_current_time());
+            } catch (e) {
+                console.error('[MacOSFullscreen] move workspace:', e);
+            } finally {
+                win._pulsarLock = false;
+            }
+            // syncPanel is triggered by workspace-changed signal
+
+        } else if (!isMax && isTracked) {
+            this._restoreWindow(win);
+        }
+    }
+
+    _restoreWindow(win) {
+        let saved = this._spaceWindows.get(win);
+        if (!saved) return;
+
+        win._pulsarLock = true;
+        try {
+            this._spaceWindows.delete(win);
+
+            let wsm = global.workspace_manager;
+            let targetWs = wsm.get_workspace_by_index(
+                Math.min(saved.origWsIndex, wsm.n_workspaces - 1));
+
+            if (win.maximized_horizontally || win.maximized_vertically)
+                win.unmaximize(Meta.MaximizeFlags.BOTH);
+
+            if (targetWs) {
+                win.change_workspace(targetWs);
+                targetWs.activate_with_focus(win, global.get_current_time());
+            }
+        } catch (e) {
+            console.error('[MacOSFullscreen] restore window:', e);
+        } finally {
+            win._pulsarLock = false;
+        }
+        // syncPanel is triggered by workspace-changed signal
+    }
+
+    // ─── Struts ────────────────────────────────────────────────────────────────
+
+    /**
+     * Toggle affectsStruts on the panelBox Chrome entry WITHOUT removing it
+     * (removing it from chrome breaks GNOME Shell's panel lifecycle).
+     * After toggling, we must force maximized windows to recalculate their geometry
+     * by briefly unmaximizing + re-maximizing them with _pulsarLock held.
+     */
+    _setPanelStruts(affectsStruts) {
+        try {
+            let chrome = Main.layoutManager._chrome;
+            let entry = chrome?._trackedActors?.find(a => a.actor === Main.layoutManager.panelBox);
+            if (entry && entry.affectsStruts !== affectsStruts) {
+                entry.affectsStruts = affectsStruts;
+                // trackFullscreen must be false so panel reacts normally
+                entry.trackFullscreen = false;
+                Main.layoutManager._queueUpdateRegions?.();
+            }
+        } catch (e) {
+            console.error('[MacOSFullscreen] struts:', e);
+        }
+    }
+
+    _forceWindowsRefreshGeometry(ws) {
+        for (let [win] of this._spaceWindows) {
+            try {
+                if (!win.unmanaged && win.get_workspace() === ws) {
+                    win._pulsarLock = true;
+                    win.unmaximize(Meta.MaximizeFlags.BOTH);
+                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                        try {
+                            win.maximize(Meta.MaximizeFlags.BOTH);
+                        } finally {
+                            win._pulsarLock = false;
+                        }
+                        return GLib.SOURCE_REMOVE;
+                    });
                 }
             } catch (e) {}
         }
-        return false;
     }
 
-    _updatePanelVisibility() {
+    // ─── Panel show/hide ───────────────────────────────────────────────────────
+
+    _showPanel(animated) {
+        if (this._hideTimeoutId) {
+            GLib.source_remove(this._hideTimeoutId);
+            this._hideTimeoutId = 0;
+        }
+        this._panelVisible = true;
+
+        // Ensure panelBox is visible (just in case)
+        if (Main.layoutManager.panelBox) {
+            Main.layoutManager.panelBox.show();
+            Main.layoutManager.panelBox.translation_y = 0;
+        }
+        Main.panel.reactive = true;
+        Main.panel.opacity  = 255;
+
+        if (animated) {
+            Main.panel.ease({
+                translation_y: 0,
+                duration: 200,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
+        } else {
+            Main.panel.remove_all_transitions();
+            Main.panel.translation_y = 0;
+        }
+    }
+
+    _hidePanel(animated) {
+        if (this._hasOpenMenu()) return;
+        this._panelVisible = false;
+        let targetY = -(Main.panel.height || 36);
+
+        if (animated) {
+            Main.panel.ease({
+                translation_y: targetY,
+                duration: 200,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
+        } else {
+            Main.panel.remove_all_transitions();
+            Main.panel.translation_y = targetY;
+        }
+    }
+
+    // ─── Master sync ───────────────────────────────────────────────────────────
+
+    _syncPanelForCurrentWorkspace() {
         if (this._hideTimeoutId) {
             GLib.source_remove(this._hideTimeoutId);
             this._hideTimeoutId = 0;
@@ -1515,121 +1496,70 @@ class MacOSFullscreenManager {
         if (!this._enabled) {
             this._setPanelStruts(true);
             this._showPanel(false);
-            if (this._topTrigger) {
-                this._topTrigger.visible = false;
-            }
             return;
         }
 
-        let isSpace = this._isCurrentWorkspaceFullscreenSpace();
-        if (this._topTrigger) {
-            this._topTrigger.visible = isSpace;
-        }
+        let activeWs = global.workspace_manager?.get_active_workspace();
+        let isSpace  = this._isSpaceWorkspace(activeWs);
 
         if (isSpace) {
+            // Step 1: remove struts so Mutter work area starts at y=0
             this._setPanelStruts(false);
+            // Step 2: hide panel immediately (no strut = window will fill)
             this._hidePanel(false);
-            // Re-apply maximize geometry to windows on this workspace
-            let wsManager = global.workspace_manager;
-            let activeWs = wsManager ? wsManager.get_active_workspace() : null;
-            if (activeWs) {
-                for (let [win, data] of this._spaceWindows) {
-                    if (win && !win.unmanaged && win.get_workspace() === activeWs) {
-                        win._pulsarHandlingMaximize = true;
-                        try {
-                            win.maximize(Meta.MaximizeFlags.BOTH);
-                        } finally {
-                            win._pulsarHandlingMaximize = false;
-                        }
-                    }
-                }
-            }
+            // Step 3: force windows on this ws to recalculate geometry
+            this._forceWindowsRefreshGeometry(activeWs);
         } else {
+            // Normal desktop workspace: restore struts and show panel
             this._setPanelStruts(true);
             this._showPanel(false);
         }
     }
 
-    _hidePanel(animated = false) {
-        if (!this._enabled || !this._isCurrentWorkspaceFullscreenSpace()) {
-            this._showPanel(false);
-            return;
-        }
-        if (this._hasOpenMenu()) {
-            return;
-        }
+    // ─── Pointer hover ─────────────────────────────────────────────────────────
 
-        this._panelVisible = false;
-        let targetY = -(Main.panel.height || 36);
+    _onPointerMoved(x, y) {
+        if (!this._enabled) return;
+        if (!this._isCurrentWorkspaceFullscreenSpace()) return;
 
-        if (this._topTrigger && Main.layoutManager.uiGroup && Main.layoutManager.uiGroup.set_child_above_sibling) {
-            try {
-                Main.layoutManager.uiGroup.set_child_above_sibling(this._topTrigger, null);
-            } catch (e) {}
-        }
+        let panelH = (Main.panel.height || 36) + 16;
 
-        if (animated) {
-            Main.panel.ease({
-                translation_y: targetY,
-                duration: 200,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD
-            });
+        if (y <= 1) {
+            // Cursor at the very top edge
+            if (this._hideTimeoutId) {
+                GLib.source_remove(this._hideTimeoutId);
+                this._hideTimeoutId = 0;
+            }
+            if (!this._panelVisible) this._showPanel(true);
+        } else if (y < panelH) {
+            // Cursor inside panel area – cancel any pending hide
+            if (this._hideTimeoutId) {
+                GLib.source_remove(this._hideTimeoutId);
+                this._hideTimeoutId = 0;
+            }
         } else {
-            Main.panel.remove_all_transitions();
-            Main.panel.translation_y = targetY;
+            // Cursor below panel – schedule hide
+            if (this._panelVisible && !this._hasOpenMenu() && !this._hideTimeoutId) {
+                this._hideTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
+                    this._hideTimeoutId = 0;
+                    if (this._isCurrentWorkspaceFullscreenSpace() && !this._hasOpenMenu())
+                        this._hidePanel(true);
+                    return GLib.SOURCE_REMOVE;
+                });
+            }
         }
     }
 
-    _showPanel(animated = false) {
-        if (this._hideTimeoutId) {
-            GLib.source_remove(this._hideTimeoutId);
-            this._hideTimeoutId = 0;
+    // ─── Cleanup ───────────────────────────────────────────────────────────────
+
+    _untrackWindow(win) {
+        let id = win.get_id?.();
+        if (id && this._windowSignals.has(id)) {
+            let { sigs } = this._windowSignals.get(id);
+            for (let s of sigs) try { win.disconnect(s); } catch (_) {}
+            this._windowSignals.delete(id);
         }
-
-        this._panelVisible = true;
-
-        if (Main.layoutManager.panelBox) {
-            Main.layoutManager.panelBox.visible = true;
-            Main.layoutManager.panelBox.translation_y = 0;
-            if (Main.layoutManager.uiGroup && Main.layoutManager.uiGroup.set_child_above_sibling) {
-                try {
-                    Main.layoutManager.uiGroup.set_child_above_sibling(Main.layoutManager.panelBox, null);
-                } catch (e) {}
-            }
-        }
-
-        if (this._topTrigger && Main.layoutManager.uiGroup && Main.layoutManager.uiGroup.set_child_above_sibling) {
-            try {
-                Main.layoutManager.uiGroup.set_child_above_sibling(this._topTrigger, null);
-            } catch (e) {}
-        }
-
-        Main.panel.visible = true;
-        Main.panel.reactive = true;
-        Main.panel.opacity = 255;
-
-        if (animated) {
-            Main.panel.ease({
-                translation_y: 0,
-                duration: 200,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD
-            });
-        } else {
-            Main.panel.remove_all_transitions();
-            Main.panel.translation_y = 0;
-        }
-    }
-
-    _untrackWindow(window) {
-        let winId = window.get_id ? window.get_id() : null;
-        if (winId && this._windowSignals.has(winId)) {
-            let data = this._windowSignals.get(winId);
-            for (let id of data.signals) {
-                try { window.disconnect(id); } catch (e) {}
-            }
-            this._windowSignals.delete(winId);
-        }
-        this._spaceWindows.delete(window);
+        this._spaceWindows.delete(win);
     }
 
     destroy() {
@@ -1638,25 +1568,12 @@ class MacOSFullscreenManager {
             this._hideTimeoutId = 0;
         }
         if (this._pointerWatch && this._pointerWatcher) {
-            try {
-                this._pointerWatcher._removeWatch(this._pointerWatch);
-            } catch (e) {}
+            try { this._pointerWatcher._removeWatch?.(this._pointerWatch); } catch (_) {}
             this._pointerWatch = null;
         }
         if (this._topTrigger) {
-            try {
-                Main.layoutManager.removeChrome(this._topTrigger);
-                this._topTrigger.destroy();
-            } catch (e) {}
+            try { Main.layoutManager.removeChrome(this._topTrigger); this._topTrigger.destroy(); } catch (_) {}
             this._topTrigger = null;
-        }
-        if (this._panelEnterId && Main.panel) {
-            Main.panel.disconnect(this._panelEnterId);
-            this._panelEnterId = 0;
-        }
-        if (this._panelLeaveId && Main.panel) {
-            Main.panel.disconnect(this._panelLeaveId);
-            this._panelLeaveId = 0;
         }
         if (this._windowCreatedId) {
             global.display.disconnect(this._windowCreatedId);
@@ -1670,34 +1587,17 @@ class MacOSFullscreenManager {
             global.stage.disconnect(this._stageResizeId);
             this._stageResizeId = 0;
         }
-        for (let [winId, data] of this._windowSignals) {
-            for (let id of data.signals) {
-                try { data.window.disconnect(id); } catch (e) {}
-            }
-        }
+        for (let [, { win, sigs }] of this._windowSignals)
+            for (let s of sigs) try { win.disconnect(s); } catch (_) {}
         this._windowSignals.clear();
         this._spaceWindows.clear();
 
-        try {
-            if (Main.layoutManager && Main.layoutManager._chrome) {
-                let chrome = Main.layoutManager._chrome;
-                let data = chrome._findActor ? chrome._findActor(Main.layoutManager.panelBox) : null;
-                if (data) {
-                    data.affectsStruts = true;
-                    data.trackFullscreen = true;
-                }
-                if (Main.layoutManager._queueUpdateRegions) {
-                    Main.layoutManager._queueUpdateRegions();
-                }
-            }
-            if (Main.layoutManager.panelBox) {
-                Main.layoutManager.panelBox.visible = true;
-            }
-        } catch (e) {}
-
+        // Always restore struts and panel position on disable
+        this._setPanelStruts(true);
         this._showPanel(false);
     }
 }
+
 
 export default class PulsarosGlobalMenuExtension extends Extension {
     enable() {
