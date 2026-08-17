@@ -80,14 +80,13 @@ jobs:
           fi
 
           # --- Difficulty ---
-          # Options: Easy=4f37548b, Medium=2bdc8f09, Hard=2c706859, Expert=026f84c1
+          # Options: Low=93c81a24, Medium=108a82c7, High=c5465fdb
           DIFF=$(extract_field "Difficulty")
           echo "Difficulty: $DIFF"
           case "$DIFF" in
-            *Easy*)   echo "Setting Difficulty=Easy";   set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "4f37548b" || true ;;
-            *Medium*) echo "Setting Difficulty=Medium"; set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "2bdc8f09" || true ;;
-            *Hard*)   echo "Setting Difficulty=Hard";   set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "2c706859" || true ;;
-            *Expert*) echo "Setting Difficulty=Expert"; set_field "PVTSSF_lADOEGtWb84Bbe-_zhfkocU" "026f84c1" || true ;;
+            *Low*)    echo "Setting Difficulty=Low";    set_field "PVTSSF_lADOEGtWb84Bbe-_zhflI5s" "93c81a24" || true ;;
+            *Medium*) echo "Setting Difficulty=Medium"; set_field "PVTSSF_lADOEGtWb84Bbe-_zhflI5s" "108a82c7" || true ;;
+            *High*)   echo "Setting Difficulty=High";   set_field "PVTSSF_lADOEGtWb84Bbe-_zhflI5s" "c5465fdb" || true ;;
           esac
 
           # --- Roadmap Phase ---

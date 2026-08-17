@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        ## 🤝 Community Task
+        ## Community Task
         Thanks for picking up a task! Fill in the details below so others can understand the scope.
 
   - type: dropdown
@@ -16,10 +16,9 @@ body:
       label: Difficulty
       description: How hard is this task?
       options:
-        - Easy (1-2 hours)
-        - Medium (4-8 hours)
-        - Hard (1-2 days)
-        - Expert (1+ week)
+        - Low
+        - Medium
+        - High
     validations:
       required: true
 

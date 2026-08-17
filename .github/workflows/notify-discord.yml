@@ -17,46 +17,42 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          TITLE='${{ github.event.issue.title }}'
-          URL='${{ github.event.issue.html_url }}'
-          REPO='${{ github.repository }}'
-
-          # Extract fields from body
-          BODY='${{ github.event.issue.body }}'
+          TITLE=$(echo '${{ toJSON(github.event.issue.title) }}' | jq -r '.')
+          URL="${{ github.event.issue.html_url }}"
+          REPO="${{ github.repository }}"
+          BODY=$(echo '${{ toJSON(github.event.issue.body) }}' | jq -r '.')
           DIFF=$(echo "$BODY" | sed -n '/^### Difficulty$/,/^### /{/^### Difficulty$/d;/^### /d;p}' | head -1 | xargs)
           PHASE=$(echo "$BODY" | sed -n '/^### Roadmap Phase$/,/^### /{/^### Roadmap Phase$/d;/^### /d;p}' | head -1 | xargs)
 
-          # Build extras string
-          EXTRAS=""
-          [ -n "$DIFF" ] && EXTRAS="${EXTRAS}
-📋 Difficulty: **${DIFF}**"
-          [ -n "$PHASE" ] && EXTRAS="${EXTRAS}
-🗺️ Roadmap: **${PHASE}**"
+          MSG="🟢 **${TITLE}**"
+          MSG="${MSG}\nRepo: \`${REPO}\`"
+          [ -n "$DIFF" ] && MSG="${MSG}\n📋 Difficulty: **${DIFF}**"
+          [ -n "$PHASE" ] && MSG="${MSG}\n🗺️ Roadmap: **${PHASE}**"
+          MSG="${MSG}\n${URL}"
 
-          PAYLOAD=$(printf '{"content":"🟢 **%s**\nRepo: `%s`%s\n%s"}' \
-            "$TITLE" "$REPO" "$EXTRAS" "$URL" | jq -c '.')
-          curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD"
+          jq -n --arg msg "$MSG" '{"content": $msg}' | \
+            curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-
 
       - name: Notify on PR
         if: github.event_name == 'pull_request'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          TITLE='${{ github.event.pull_request.title }}'
-          URL='${{ github.event.pull_request.html_url }}'
-          REPO='${{ github.repository }}'
-          PAYLOAD=$(printf '{"content":"🔀 **PR: %s**\nRepo: `%s`\n%s"}' \
-            "$TITLE" "$REPO" "$URL" | jq -c '.')
-          curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD"
+          TITLE=$(echo '${{ toJSON(github.event.pull_request.title) }}' | jq -r '.')
+          URL="${{ github.event.pull_request.html_url }}"
+          REPO="${{ github.repository }}"
+          MSG="🔀 **PR: ${TITLE}**\nRepo: \`${REPO}\`\n${URL}"
+          jq -n --arg msg "$MSG" '{"content": $msg}' | \
+            curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-
 
       - name: Notify on release
         if: github.event_name == 'release'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          NAME='${{ github.event.release.name }}'
-          URL='${{ github.event.release.html_url }}'
-          REPO='${{ github.repository }}'
-          PAYLOAD=$(printf '{"content":"🚀 **New Release: %s**\nRepo: `%s`\n%s"}' \
-            "$NAME" "$REPO" "$URL" | jq -c '.')
-          curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD"
+          NAME=$(echo '${{ toJSON(github.event.release.name) }}' | jq -r '.')
+          URL="${{ github.event.release.html_url }}"
+          REPO="${{ github.repository }}"
+          MSG="🚀 **New Release: ${NAME}**\nRepo: \`${REPO}\`\n${URL}"
+          jq -n --arg msg "$MSG" '{"content": $msg}' | \
+            curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-

@@ -93,14 +93,9 @@ cat <<'ACCENT_BTN_FIX' > /tmp/accent_btn_fix.css
 /* ==============================================================================
  * Pulsar OS - Text Selection, WebViews and Dropdowns Highlight Fix
  * ============================================================================== */
-::selection {
-  background-color: #0088FF;
-  color: #ffffff;
-}
-
 selection {
-  background-color: #0088FF;
-  color: #ffffff;
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
 }
 
 entry selection,
@@ -128,8 +123,8 @@ menu menuitem:hover,
 menu menuitem:selected,
 dropdown popover listview row:hover,
 dropdown popover listview row:selected {
-  background-color: #0088FF;
-  color: #ffffff;
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
 }
 
 /* ==============================================================================
@@ -154,15 +149,15 @@ button.accent-button:checked {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6), 0 4px 10px rgba(0, 0, 0, 0.4);
   transform: scale(1.15);
 }
-button.accent-button.blue { background-color: #0088FF !important; background-image: none !important; }
-button.accent-button.teal { background-color: #2190a4 !important; background-image: none !important; }
-button.accent-button.green { background-color: #79B757 !important; background-image: none !important; }
-button.accent-button.yellow { background-color: #F3BA4B !important; background-image: none !important; }
-button.accent-button.orange { background-color: #E9873A !important; background-image: none !important; }
-button.accent-button.red { background-color: #ED5F5D !important; background-image: none !important; }
-button.accent-button.pink { background-color: #E55E9C !important; background-image: none !important; }
-button.accent-button.purple { background-color: #9A57A3 !important; background-image: none !important; }
-button.accent-button.slate { background-color: #6f8396 !important; background-image: none !important; }
+button.accent-button.blue { background-color: #3584e4; background-image: none; }
+button.accent-button.teal { background-color: #2190a4; background-image: none; }
+button.accent-button.green { background-color: #3a944a; background-image: none; }
+button.accent-button.yellow { background-color: #e5a50a; background-image: none; }
+button.accent-button.orange { background-color: #e66100; background-image: none; }
+button.accent-button.red { background-color: #e01b24; background-image: none; }
+button.accent-button.pink { background-color: #d56199; background-image: none; }
+button.accent-button.purple { background-color: #9141ac; background-image: none; }
+button.accent-button.slate { background-color: #6f8396; background-image: none; }
 ACCENT_BTN_FIX
 
 find "$STAGE_DIR" -path "*/gtk-4.0/gtk.css" -exec sh -c 'cat /tmp/accent_btn_fix.css >> "$1"' _ {} \; 2>/dev/null || true
@@ -177,7 +172,8 @@ cat <<'NAUTILUS_FIX' > /tmp/nautilus_fix.css
 
 /* ==============================================================================
  * Pulsar OS - Pixel-Perfect macOS Capsules for Nautilus Headerbar
- * =================================================================/* 1. Headerbars Geometry */
+ * ============================================================================== */
+/* 1. Headerbars Geometry */
 .nautilus-window headerbar,
 #NautilusFileChooser headerbar {
     min-height: 44px;
@@ -279,7 +275,6 @@ cat <<'NAUTILUS_FIX' > /tmp/nautilus_fix.css
     padding: 1px 4px;
     margin: 0 4px;
     min-height: 24px;
-    height: 24px;
 }
 
 /* ALL Inner Path Elements (Home, ..., etc) - 100% Transparent, ZERO sub-backgrounds */
@@ -306,7 +301,6 @@ cat <<'NAUTILUS_FIX' > /tmp/nautilus_fix.css
 .nautilus-window .path-bar menubutton > button {
     border-radius: 9999px;
     min-height: 22px;
-    height: 22px;
     padding: 1px 6px;
     margin: 0;
     border-style: none;
