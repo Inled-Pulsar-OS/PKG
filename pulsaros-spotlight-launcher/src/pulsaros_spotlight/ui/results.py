@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Callable
 
-from gi.repository import Gtk
+from gi.repository import Gdk, Gio, GLib, Gtk
 
 from pulsaros_spotlight.search import SearchResult
 from pulsaros_spotlight.utils import get_file_icon
@@ -128,6 +128,9 @@ class ResultView(Gtk.Stack):
         self.add_named(self._list_box, "list")
         self.add_named(self._grid, "grid")
 
+        self._context_menu_result: SearchResult | None = None
+        self._popover = self._build_context_menu()
+
     def set_results(self, results: list[SearchResult], as_grid: bool = False) -> None:
         """Replace the current results and render."""
         self._results = results
@@ -239,3 +242,63 @@ class ResultView(Gtk.Stack):
     def _clear(container: Gtk.ListBox | Gtk.FlowBox) -> None:
         while child := container.get_first_child():
             container.remove(child)
+
+    # -- context menu ---------------------------------------------------------
+
+    def _build_context_menu(self) -> Gtk.PopoverMenu:
+        menu = Gio.Menu()
+        menu.append("Abrir", "result.open")
+        menu.append("Copiar nombre", "result.copy-name")
+        menu.append("Copiar ruta", "result.copy-path")
+
+        popover = Gtk.PopoverMenu(menu_model=menu)
+        popover.set_parent(self)
+
+        actions = Gio.SimpleActionGroup()
+        for name, handler in [
+            ("open", self._ctx_open),
+            ("copy-name", self._ctx_copy_name),
+            ("copy-path", self._ctx_copy_path),
+        ]:
+            action = Gio.SimpleAction(name=name)
+            action.connect("activate", handler)
+            actions.add_action(action)
+
+        self.insert_action_group("result", actions)
+        return popover
+
+    def _get_result_at(self, x: float, y: float) -> SearchResult | None:
+        if self.get_visible_child_name() == "list":
+            widget = self._list_box.get_row_at_y(int(y))
+            if isinstance(widget, ResultListRow):
+                return widget.result
+        else:
+            child = self._grid.get_child_at_pos(int(x), int(y))
+            if isinstance(child, ResultGridChild):
+                return child.result
+        return None
+
+    def show_context_menu(self, x: float, y: float) -> None:
+        result = self._get_result_at(x, y)
+        if result is None:
+            return
+        self._context_menu_result = result
+        self._popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
+        self._popover.popup()
+
+    def _ctx_open(self, _action, _param) -> None:
+        if self._context_menu_result:
+            self._on_activate(self._context_menu_result)
+            self._popover.popdown()
+
+    def _ctx_copy_name(self, _action, _param) -> None:
+        if self._context_menu_result:
+            clipboard = Gdk.Display.get_default().get_clipboard()
+            clipboard.set(self._context_menu_result.title)
+            self._popover.popdown()
+
+    def _ctx_copy_path(self, _action, _param) -> None:
+        if self._context_menu_result:
+            clipboard = Gdk.Display.get_default().get_clipboard()
+            clipboard.set(self._context_menu_result.url)
+            self._popover.popdown()
