@@ -17,33 +17,42 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          TITLE=$(echo '${{ toJSON(github.event.issue.title) }}' | jq -r '.')
-          URL="${{ github.event.issue.html_url }}"
-          REPO="${{ github.repository }}"
-          jq -n --arg t "$TITLE" --arg r "$REPO" --arg u "$URL" \
-            '{"content": "🟢 **" + $t + "**\nRepo: `" + $r + "`\n" + $u}' | \
-            curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-
+          TITLE='${{ github.event.issue.title }}'
+          URL='${{ github.event.issue.html_url }}'
+          REPO='${{ github.repository }}'
+          PAYLOAD=$(jq -n \
+            --arg t "$TITLE" \
+            --arg r "$REPO" \
+            --arg u "$URL" \
+            '{content: ("🟢 **" + $t + "**\nRepo: `" + $r + "`\n" + $u)}')
+          curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD"
 
       - name: Notify on PR
         if: github.event_name == 'pull_request'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          TITLE=$(echo '${{ toJSON(github.event.pull_request.title) }}' | jq -r '.')
-          URL="${{ github.event.pull_request.html_url }}"
-          REPO="${{ github.repository }}"
-          jq -n --arg t "$TITLE" --arg r "$REPO" --arg u "$URL" \
-            '{"content": "🔀 **PR: " + $t + "**\nRepo: `" + $r + "`\n" + $u}' | \
-            curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-
+          TITLE='${{ github.event.pull_request.title }}'
+          URL='${{ github.event.pull_request.html_url }}'
+          REPO='${{ github.repository }}'
+          PAYLOAD=$(jq -n \
+            --arg t "$TITLE" \
+            --arg r "$REPO" \
+            --arg u "$URL" \
+            '{content: ("🔀 **PR: " + $t + "**\nRepo: `" + $r + "`\n" + $u)}')
+          curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD"
 
       - name: Notify on release
         if: github.event_name == 'release'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          NAME=$(echo '${{ toJSON(github.event.release.name) }}' | jq -r '.')
-          URL="${{ github.event.release.html_url }}"
-          REPO="${{ github.repository }}"
-          jq -n --arg n "$NAME" --arg r "$REPO" --arg u "$URL" \
-            '{"content": "🚀 **New Release: " + $n + "**\nRepo: `" + $r + "`\n" + $u}' | \
-            curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-
+          NAME='${{ github.event.release.name }}'
+          URL='${{ github.event.release.html_url }}'
+          REPO='${{ github.repository }}'
+          PAYLOAD=$(jq -n \
+            --arg n "$NAME" \
+            --arg r "$REPO" \
+            --arg u "$URL" \
+            '{content: ("🚀 **New Release: " + $n + "**\nRepo: `" + $r + "`\n" + $u)}')
+          curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD"
