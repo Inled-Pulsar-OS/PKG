@@ -114,6 +114,11 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         # -- results area --
         self._result_view = ResultView(on_activate=self._on_result_activated)
 
+        right_click = Gtk.GestureClick()
+        right_click.set_button(3)
+        right_click.connect("pressed", self._on_right_click)
+        self._result_view.add_controller(right_click)
+
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroll.set_vexpand(True)
@@ -267,18 +272,15 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         open_file(result.url)
         self.set_visible(False)
 
+    def _on_right_click(self, _gesture, _n_press, x, y) -> None:
+        self._result_view.show_context_menu(x, y)
+
     def _on_toggle_view(self, _btn: Gtk.Button) -> None:
         self._config.is_grid_view = not self._config.is_grid_view
         self._config.save()
         icon_name = "view-list-symbolic" if self._config.is_grid_view else "view-grid-symbolic"
         self._view_toggle.set_icon_name(icon_name)
-
-        query = self._search_entry.get_text().strip()
-        if self._current_dir:
-            results = self._browse_directory(self._current_dir, query)
-            self._result_view.set_results(results, self._config.is_grid_view)
-        elif query or self._category == "clipboard":
-            self._do_search()
+        self._do_search()
 
     def _on_category_toggled(self, btn: Gtk.ToggleButton, cat_id: str) -> None:
         if not btn.get_active():
