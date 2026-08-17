@@ -1469,40 +1469,73 @@ class MacOSFullscreenManager {
         }
         this._panelVisible = true;
 
-        // Ensure panelBox is visible (just in case)
-        if (Main.layoutManager.panelBox) {
-            Main.layoutManager.panelBox.show();
-            Main.layoutManager.panelBox.translation_y = 0;
-        }
+        let panelBox = Main.layoutManager.panelBox;
+        let panelH   = panelBox?.height || 36;
+
+        // Reset child translation (Main.panel)
+        Main.panel.remove_all_transitions();
+        Main.panel.translation_y = 0;
         Main.panel.reactive = true;
         Main.panel.opacity  = 255;
 
+        if (!panelBox) return;
+
         if (animated) {
-            Main.panel.ease({
+            // Start from off-screen top if currently hidden
+            if (!panelBox.visible) {
+                panelBox.translation_y = -panelH;
+                panelBox.show();
+                // _queueUpdateRegions so struts are restored before animate completes
+                Main.layoutManager._queueUpdateRegions?.();
+            }
+            panelBox.remove_all_transitions();
+            panelBox.ease({
                 translation_y: 0,
                 duration: 200,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             });
         } else {
-            Main.panel.remove_all_transitions();
-            Main.panel.translation_y = 0;
+            panelBox.remove_all_transitions();
+            panelBox.translation_y = 0;
+            panelBox.show();
+            Main.layoutManager._queueUpdateRegions?.();
         }
     }
 
     _hidePanel(animated) {
         if (this._hasOpenMenu()) return;
         this._panelVisible = false;
-        let targetY = -(Main.panel.height || 36);
+
+        let panelBox = Main.layoutManager.panelBox;
+        let panelH   = panelBox?.height || 36;
+
+        Main.panel.remove_all_transitions();
+        Main.panel.translation_y = 0;
+
+        if (!panelBox) return;
 
         if (animated) {
-            Main.panel.ease({
-                translation_y: targetY,
+            panelBox.remove_all_transitions();
+            panelBox.ease({
+                translation_y: -panelH,
                 duration: 200,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                onComplete: () => {
+                    panelBox.hide();
+                    panelBox.translation_y = 0;
+                    // Struts are removed because visible=false → _updateRegions skips it
+                    Main.layoutManager._queueUpdateRegions?.();
+                    // Trigger window geometry refresh now that struts are gone
+                    let ws = global.workspace_manager?.get_active_workspace();
+                    if (ws) this._forceWindowsRefreshGeometry(ws);
+                }
             });
         } else {
-            Main.panel.remove_all_transitions();
-            Main.panel.translation_y = targetY;
+            panelBox.remove_all_transitions();
+            panelBox.translation_y = 0;
+            panelBox.hide();
+            // Struts are removed because visible=false → _updateRegions skips it
+            Main.layoutManager._queueUpdateRegions?.();
         }
     }
 
@@ -1515,7 +1548,6 @@ class MacOSFullscreenManager {
         }
 
         if (!this._enabled) {
-            this._setPanelStruts(true);
             this._showPanel(false);
             return;
         }
@@ -1524,15 +1556,13 @@ class MacOSFullscreenManager {
         let isSpace  = this._isSpaceWorkspace(activeWs);
 
         if (isSpace) {
-            // Step 1: remove struts so Mutter work area starts at y=0
-            this._setPanelStruts(false);
-            // Step 2: hide panel immediately (no strut = window will fill)
+            // Hide panelBox: visible=false removes it from _updateRegions → struts=0
+            // → Mutter resizes maximized windows to fill screen
             this._hidePanel(false);
-            // Step 3: force windows on this ws to recalculate geometry
+            // Also trigger geometry refresh explicitly
             this._forceWindowsRefreshGeometry(activeWs);
         } else {
-            // Normal desktop workspace: restore struts and show panel
-            this._setPanelStruts(true);
+            // Normal workspace: show panelBox → struts restored
             this._showPanel(false);
         }
     }
