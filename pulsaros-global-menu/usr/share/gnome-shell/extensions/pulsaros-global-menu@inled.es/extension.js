@@ -1212,7 +1212,6 @@ class MacOSFullscreenManager {
         this._spaceWindows = new Map();
         this._enabled = false;
         this._panelHidden = false;
-        this._panelShowing = true;
         this._panelStrutsState = null;
         this._hideTimeoutId = 0;
         this._pointerWatcher = null;
@@ -1318,7 +1317,6 @@ class MacOSFullscreenManager {
         let signals = [];
         signals.push(window.connect('notify::maximized-horizontally', () => this._onMaximizeChanged(window)));
         signals.push(window.connect('notify::maximized-vertically', () => this._onMaximizeChanged(window)));
-        signals.push(window.connect('notify::fullscreen', () => this._onFullscreenChanged(window)));
         signals.push(window.connect('unmanaged', () => this._untrackWindow(window)));
 
         this._windowSignals.set(winId, { window, signals });
@@ -1337,33 +1335,19 @@ class MacOSFullscreenManager {
                 let activeWs = wsManager.get_active_workspace();
                 let origWsIndex = activeWs.index();
 
-                // Look for an empty workspace to the right, or append a new one
-                let targetWs = null;
-                let n = wsManager.n_workspaces;
-                for (let i = origWsIndex + 1; i < n; i++) {
-                    let ws = wsManager.get_workspace_by_index(i);
-                    let nonSticky = ws.list_windows().filter(w => !w.is_on_all_workspaces() && !this._isIgnoredWindow(w));
-                    if (nonSticky.length === 0) {
-                        targetWs = ws;
-                        break;
-                    }
+                // Append new workspace and reorder immediately to the right
+                let newWs = wsManager.append_new_workspace(false, global.get_current_time());
+                let targetIndex = origWsIndex + 1;
+                if (wsManager.reorder_workspace && targetIndex < wsManager.n_workspaces) {
+                    wsManager.reorder_workspace(newWs, targetIndex);
                 }
 
-                if (!targetWs) {
-                    targetWs = wsManager.append_new_workspace(false, global.get_current_time());
-                    let insertIndex = origWsIndex + 1;
-                    if (wsManager.reorder_workspace && insertIndex < wsManager.n_workspaces) {
-                        wsManager.reorder_workspace(targetWs, insertIndex);
-                    }
-                }
-
-                window.change_workspace(targetWs);
-                targetWs.activate_with_focus(window, global.get_current_time());
+                window.change_workspace(newWs);
+                window.maximize(Meta.MaximizeFlags.BOTH);
+                newWs.activate_with_focus(window, global.get_current_time());
 
                 this._spaceWindows.set(window, { origWsIndex });
-                this._setPanelStruts(false);
                 this._updatePanelVisibility();
-                this._refreshSpaceWindows();
             } catch (e) {
                 console.error("[MacOSFullscreen] Error moving to workspace:", e);
             } finally {
@@ -1372,30 +1356,6 @@ class MacOSFullscreenManager {
         } else if (!isMax && isTracked) {
             this._restoreWindow(window);
         }
-    }
-
-    _refreshSpaceWindows() {
-        let wsManager = global.workspace_manager;
-        let activeWs = wsManager ? wsManager.get_active_workspace() : null;
-        if (!activeWs) return;
-
-        for (let [win, data] of this._spaceWindows) {
-            try {
-                if (win && !win.unmanaged && win.get_workspace() === activeWs) {
-                    win._pulsarHandlingMaximize = true;
-                    try {
-                        win.unmaximize(Meta.MaximizeFlags.BOTH);
-                        win.maximize(Meta.MaximizeFlags.BOTH);
-                    } finally {
-                        win._pulsarHandlingMaximize = false;
-                    }
-                }
-            } catch (e) {}
-        }
-    }
-
-    _onFullscreenChanged(window) {
-        this._updatePanelVisibility();
     }
 
     _restoreWindow(window) {
@@ -1431,21 +1391,12 @@ class MacOSFullscreenManager {
         if (this._panelStrutsState === affectsStruts) return;
         this._panelStrutsState = affectsStruts;
         try {
-            if (Main.layoutManager && Main.layoutManager._chrome) {
-                let chrome = Main.layoutManager._chrome;
-                let data = chrome._findActor ? chrome._findActor(Main.layoutManager.panelBox) : null;
-                if (data) {
-                    data.affectsStruts = affectsStruts;
-                    data.trackFullscreen = false;
-                }
-                if (chrome._updateRegions) {
-                    chrome._updateRegions();
-                } else if (Main.layoutManager._queueUpdateRegions) {
-                    Main.layoutManager._queueUpdateRegions();
-                }
-            }
             if (Main.layoutManager.panelBox) {
-                Main.layoutManager.panelBox.visible = affectsStruts;
+                Main.layoutManager.untrackChrome(Main.layoutManager.panelBox);
+                Main.layoutManager.addChrome(Main.layoutManager.panelBox, {
+                    affectsStruts: affectsStruts,
+                    trackFullscreen: !affectsStruts
+                });
             }
         } catch (e) {
             console.error("[MacOSFullscreen] Error setting panel struts:", e);
@@ -1464,8 +1415,9 @@ class MacOSFullscreenManager {
             visible: true
         });
         Main.layoutManager.addChrome(this._topTrigger, {
+            affectsInputRegion: true,
             affectsStruts: false,
-            trackFullscreen: false
+            trackFullscreen: true
         });
 
         this._topTrigger.connect('enter-event', () => {
@@ -1473,6 +1425,37 @@ class MacOSFullscreenManager {
                 this._showPanel(true);
             }
         });
+
+        if (Main.panel) {
+            this._panelEnterId = Main.panel.connect('enter-event', () => {
+                if (this._isCurrentWorkspaceFullscreenSpace()) {
+                    this._showPanel(true);
+                }
+            });
+
+            this._panelLeaveId = Main.panel.connect('leave-event', () => {
+                if (!this._isCurrentWorkspaceFullscreenSpace()) return;
+                if (this._hideTimeoutId) GLib.source_remove(this._hideTimeoutId);
+                this._hideTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 350, () => {
+                    this._hideTimeoutId = 0;
+                    let [x, y] = global.get_pointer();
+                    let panelHeight = Main.panel.height || 36;
+                    if (y > panelHeight + 8 && this._isCurrentWorkspaceFullscreenSpace()) {
+                        this._hidePanel(true);
+                    }
+                    return GLib.SOURCE_REMOVE;
+                });
+            });
+        }
+
+        try {
+            this._pointerWatcher = getPointerWatcher();
+            if (this._pointerWatcher) {
+                this._pointerWatch = this._pointerWatcher.addWatch(50, (x, y) => {
+                    this._onPointerMoved(x, y);
+                });
+            }
+        } catch (e) {}
 
         this._wsChangedId = global.workspace_manager.connect('active-workspace-changed', () => {
             this._updatePanelVisibility();
@@ -1484,17 +1467,6 @@ class MacOSFullscreenManager {
                 this._topTrigger.set_size(global.stage.width, 24);
             }
         });
-
-        try {
-            this._pointerWatcher = getPointerWatcher();
-            if (this._pointerWatcher) {
-                this._pointerWatch = this._pointerWatcher.addWatch(50, (x, y) => {
-                    this._onPointerMoved(x, y);
-                });
-            }
-        } catch (e) {
-            console.error("[MacOSFullscreen] Error setting up pointer watcher:", e);
-        }
     }
 
     _onPointerMoved(x, y) {
@@ -1518,8 +1490,8 @@ class MacOSFullscreenManager {
                 this._hideTimeoutId = 0;
             }
         } else {
-            if (this._panelShowing && !this._hasOpenMenu() && !this._hideTimeoutId) {
-                this._hideTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 450, () => {
+            if (!this._panelHidden && !this._hasOpenMenu() && !this._hideTimeoutId) {
+                this._hideTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
                     this._hideTimeoutId = 0;
                     if (this._isCurrentWorkspaceFullscreenSpace() && !this._hasOpenMenu()) {
                         this._hidePanel(true);
@@ -1536,7 +1508,6 @@ class MacOSFullscreenManager {
         let activeWs = wsManager ? wsManager.get_active_workspace() : null;
         if (!activeWs) return false;
 
-        // 1. Check windows tracked explicitly in _spaceWindows
         for (let [win, data] of this._spaceWindows) {
             try {
                 if (win && !win.unmanaged && win.get_workspace() === activeWs) {
@@ -1544,19 +1515,6 @@ class MacOSFullscreenManager {
                 }
             } catch (e) {}
         }
-
-        // 2. Check if a normal non-desktop application window is fullscreen on this workspace
-        let windows = activeWs.list_windows ? activeWs.list_windows() : [];
-        for (let win of windows) {
-            try {
-                if (win && !win.unmanaged && !win.is_on_all_workspaces() && !this._isIgnoredWindow(win)) {
-                    if (win.is_fullscreen && win.is_fullscreen()) {
-                        return true;
-                    }
-                }
-            } catch (e) {}
-        }
-
         return false;
     }
 
@@ -1582,7 +1540,7 @@ class MacOSFullscreenManager {
 
         if (isSpace) {
             this._setPanelStruts(false);
-            this._hidePanel(false);
+            this._hidePanel(true);
         } else {
             this._setPanelStruts(true);
             this._showPanel(false);
@@ -1598,34 +1556,18 @@ class MacOSFullscreenManager {
             return;
         }
 
-        if (this._panelHidden && !this._panelShowing) {
-            return;
-        }
-
         this._panelHidden = true;
-        this._panelShowing = false;
         let targetY = -(Main.panel.height || 36);
-
-        this._setPanelStruts(false);
-        this._refreshSpaceWindows();
 
         if (animated) {
             Main.panel.ease({
                 translation_y: targetY,
                 duration: 200,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                onComplete: () => {
-                    if (this._panelHidden && this._isCurrentWorkspaceFullscreenSpace() && Main.layoutManager.panelBox) {
-                        Main.layoutManager.panelBox.visible = false;
-                    }
-                }
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD
             });
         } else {
             Main.panel.remove_all_transitions();
             Main.panel.translation_y = targetY;
-            if (Main.layoutManager.panelBox) {
-                Main.layoutManager.panelBox.visible = false;
-            }
         }
     }
 
@@ -1635,12 +1577,7 @@ class MacOSFullscreenManager {
             this._hideTimeoutId = 0;
         }
 
-        if (this._panelShowing && !this._panelHidden) {
-            return;
-        }
-
         this._panelHidden = false;
-        this._panelShowing = true;
 
         if (Main.layoutManager.panelBox) {
             Main.layoutManager.panelBox.visible = true;
