@@ -2,13 +2,24 @@
 
 from __future__ import annotations
 
+import ast
+import logging
 import os
+import subprocess
+from pathlib import Path
 from typing import Callable
 
 from gi.repository import Gdk, Gio, GLib, Gtk
 
 from pulsaros_spotlight.search import SearchResult
 from pulsaros_spotlight.utils import get_file_icon
+
+logger = logging.getLogger(__name__)
+
+_IMAGE_EXTS = frozenset({
+    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp",
+    ".tiff", ".tif", ".ico", ".avif", ".heic",
+})
 
 
 def _app_icon_image(icon_name: str) -> Gtk.Image | None:
@@ -27,8 +38,33 @@ def _app_icon_image(icon_name: str) -> Gtk.Image | None:
         return None
 
 
-def _build_icon_image(result: SearchResult, pixel_size: int, css_class: str) -> Gtk.Image:
-    """Return the best icon for a result, falling back to a generic file icon."""
+def _is_image_file(result: SearchResult) -> bool:
+    """Check if a result is an image file that should show a thumbnail."""
+    if not result.url.startswith("file://"):
+        return False
+    path = result.url.removeprefix("file://")
+    if not os.path.isfile(path):
+        return False
+    mime = result.mime or ""
+    if mime.startswith("image/"):
+        return True
+    return Path(path).suffix.lower() in _IMAGE_EXTS
+
+
+def _build_icon_image(result: SearchResult, pixel_size: int, css_class: str) -> Gtk.Widget:
+    """Return the best icon for a result, with thumbnail for images."""
+    if _is_image_file(result):
+        path = result.url.removeprefix("file://")
+        try:
+            texture = Gdk.Texture.new_from_file(Gio.File.new_for_path(path))
+            picture = Gtk.Picture.new_for_paintable(texture)
+            picture.set_size_request(pixel_size, pixel_size)
+            picture.set_content_fit(Gtk.ContentFit.CONTAIN)
+            picture.add_css_class(css_class)
+            return picture
+        except Exception:
+            pass
+
     icon = _app_icon_image(result.app.icon) if result.app else None
     if icon is None:
         icon = get_file_icon(result.url, result.mime)
@@ -36,6 +72,35 @@ def _build_icon_image(result: SearchResult, pixel_size: int, css_class: str) -> 
     icon.add_css_class(css_class)
     return icon
 
+
+# -- dock helpers ---------------------------------------------------------------
+
+def _get_favorites() -> list[str]:
+    try:
+        res = subprocess.run(
+            ["gsettings", "get", "org.gnome.shell", "favorite-apps"],
+            capture_output=True, text=True, check=True,
+        )
+        raw = res.stdout.strip()
+        if raw.startswith("@as "):
+            raw = raw[4:]
+        return ast.literal_eval(raw)
+    except Exception:
+        return []
+
+
+def _set_favorites(favs: list[str]) -> None:
+    try:
+        formatted = "[" + ", ".join(f"'{item}'" for item in favs) + "]"
+        subprocess.run(
+            ["gsettings", "set", "org.gnome.shell", "favorite-apps", formatted],
+            check=True,
+        )
+    except Exception:
+        pass
+
+
+# -- result widgets -------------------------------------------------------------
 
 class ResultListRow(Gtk.ListBoxRow):
     """A single result row in list view: icon + title + path + snippet."""
@@ -49,7 +114,6 @@ class ResultListRow(Gtk.ListBoxRow):
         box.add_css_class("result-item-list")
 
         icon = _build_icon_image(result, 32, "result-icon")
-        icon.add_css_class("result-icon")
 
         text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
 
@@ -105,6 +169,8 @@ class ResultGridChild(Gtk.FlowBoxChild):
         return self._result
 
 
+# -- main container -------------------------------------------------------------
+
 class ResultView(Gtk.Stack):
     """Container that switches between list and grid result views."""
 
@@ -112,6 +178,7 @@ class ResultView(Gtk.Stack):
         super().__init__()
         self._on_activate = on_activate
         self._results: list[SearchResult] = []
+        self._popover_parent: Gtk.Widget | None = None
 
         self.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
 
@@ -131,8 +198,12 @@ class ResultView(Gtk.Stack):
         self._context_menu_result: SearchResult | None = None
         self._popover = self._build_context_menu()
 
+    def set_popover_parent(self, widget: Gtk.Widget) -> None:
+        self._popover_parent = widget
+        self._popover.unparent()
+        self._popover.set_parent(widget)
+
     def set_results(self, results: list[SearchResult], as_grid: bool = False) -> None:
-        """Replace the current results and render."""
         self._results = results
         self._clear(self._list_box)
         self._clear(self._grid)
@@ -154,7 +225,6 @@ class ResultView(Gtk.Stack):
             row.grab_focus()
 
     def activate_selected(self) -> SearchResult | None:
-        """Activate the currently selected result. Returns it if found."""
         if self.get_visible_child_name() == "grid":
             selected = self._grid.get_selected_children()
             if selected:
@@ -245,26 +315,73 @@ class ResultView(Gtk.Stack):
 
     # -- context menu ---------------------------------------------------------
 
-    def _build_context_menu(self) -> Gtk.PopoverMenu:
-        menu = Gio.Menu()
-        menu.append("Abrir", "result.open")
-        menu.append("Copiar nombre", "result.copy-name")
-        menu.append("Copiar ruta", "result.copy-path")
+    def _get_offset_to(self, ancestor: Gtk.Widget) -> tuple[int, int]:
+        """Compute pixel offset from *self* to *ancestor* by walking up the tree."""
+        x, y = 0, 0
+        widget: Gtk.Widget | None = self
+        while widget and widget != ancestor:
+            alloc = widget.get_allocation()
+            x += alloc.x
+            y += alloc.y
+            widget = widget.get_parent()
+        return x, y
 
-        popover = Gtk.PopoverMenu(menu_model=menu)
-        popover.set_parent(self)
+    def _build_context_menu(self) -> Gtk.Popover:
+        popover = Gtk.Popover()
+        popover.set_has_arrow(False)
+        popover.add_css_class("ctx-menu")
 
-        actions = Gio.SimpleActionGroup()
-        for name, handler in [
-            ("open", self._ctx_open),
-            ("copy-name", self._ctx_copy_name),
-            ("copy-path", self._ctx_copy_path),
-        ]:
-            action = Gio.SimpleAction(name=name)
-            action.connect("activate", handler)
-            actions.add_action(action)
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        outer.add_css_class("ctx-menu-box")
 
-        self.insert_action_group("result", actions)
+        self._btn_open = Gtk.Button(label="Abrir")
+        self._btn_open.add_css_class("ctx-menu-btn")
+        self._btn_open.set_xalign(0)
+        self._btn_open.connect("clicked", lambda *_: self._ctx_open())
+        outer.append(self._btn_open)
+
+        self._btn_open_dir = Gtk.Button(label="Abrir carpeta contenedora")
+        self._btn_open_dir.add_css_class("ctx-menu-btn")
+        self._btn_open_dir.set_xalign(0)
+        self._btn_open_dir.connect("clicked", lambda *_: self._ctx_open_dir())
+        outer.append(self._btn_open_dir)
+
+        sep1 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        outer.append(sep1)
+
+        self._btn_pin = Gtk.Button(label="Anclar al dock")
+        self._btn_pin.add_css_class("ctx-menu-btn")
+        self._btn_pin.set_xalign(0)
+        self._btn_pin.connect("clicked", lambda *_: self._ctx_toggle_pin())
+        outer.append(self._btn_pin)
+
+        self._btn_uninstall = Gtk.Button(label="Desinstalar")
+        self._btn_uninstall.add_css_class("ctx-menu-btn")
+        self._btn_uninstall.add_css_class("ctx-menu-btn-danger")
+        self._btn_uninstall.set_xalign(0)
+        self._btn_uninstall.connect("clicked", lambda *_: self._ctx_uninstall())
+        outer.append(self._btn_uninstall)
+
+        sep2 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        outer.append(sep2)
+
+        self._btn_copy_name = Gtk.Button(label="Copiar nombre")
+        self._btn_copy_name.add_css_class("ctx-menu-btn")
+        self._btn_copy_name.set_xalign(0)
+        self._btn_copy_name.connect("clicked", lambda *_: self._ctx_copy_name())
+        outer.append(self._btn_copy_name)
+
+        self._btn_copy_path = Gtk.Button(label="Copiar ruta")
+        self._btn_copy_path.add_css_class("ctx-menu-btn")
+        self._btn_copy_path.set_xalign(0)
+        self._btn_copy_path.connect("clicked", lambda *_: self._ctx_copy_path())
+        outer.append(self._btn_copy_path)
+
+        popover.set_child(outer)
+        if self._popover_parent:
+            popover.set_parent(self._popover_parent)
+        else:
+            popover.set_parent(self)
         return popover
 
     def _get_result_at(self, x: float, y: float) -> SearchResult | None:
@@ -282,22 +399,84 @@ class ResultView(Gtk.Stack):
         result = self._get_result_at(x, y)
         if result is None:
             return
+
         self._context_menu_result = result
-        self._popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
+        is_app = result.app is not None
+
+        self._btn_open_dir.set_visible(not is_app)
+        self._btn_copy_path.set_visible(not is_app)
+
+        if is_app:
+            desktop_id = result.app.filename
+            favs = _get_favorites()
+            is_pinned = desktop_id in favs
+            self._btn_pin.set_label("Desanclar del dock" if is_pinned else "Anclar al dock")
+            self._btn_pin.set_visible(True)
+            self._btn_uninstall.set_visible(True)
+        else:
+            self._btn_pin.set_visible(False)
+            self._btn_uninstall.set_visible(False)
+
+        parent = self._popover_parent or self
+        if parent is not self:
+            offset_x, offset_y = self._get_offset_to(parent)
+            px = int(x) + offset_x
+            py = int(y) + offset_y
+        else:
+            px, py = int(x), int(y)
+
+        rect = Gdk.Rectangle(x=px, y=py, width=1, height=1)
+        self._popover.set_pointing_to(rect)
         self._popover.popup()
 
-    def _ctx_open(self, _action, _param) -> None:
+    def _ctx_open(self) -> None:
         if self._context_menu_result:
             self._on_activate(self._context_menu_result)
             self._popover.popdown()
 
-    def _ctx_copy_name(self, _action, _param) -> None:
+    def _ctx_open_dir(self) -> None:
+        if self._context_menu_result:
+            url = self._context_menu_result.url
+            path = url.removeprefix("file://")
+            parent = os.path.dirname(path)
+            if parent:
+                from pulsaros_spotlight.utils import open_file
+                open_file(f"file://{parent}")
+            self._popover.popdown()
+
+    def _ctx_toggle_pin(self) -> None:
+        if self._context_menu_result and self._context_menu_result.app:
+            desktop_id = self._context_menu_result.app.filename
+            favs = _get_favorites()
+            if desktop_id in favs:
+                favs = [f for f in favs if f != desktop_id]
+            else:
+                favs.append(desktop_id)
+            _set_favorites(favs)
+            is_pinned = desktop_id in favs
+            self._btn_pin.set_label("Desanclar del dock" if is_pinned else "Anclar al dock")
+        self._popover.popdown()
+
+    def _ctx_uninstall(self) -> None:
+        if self._context_menu_result and self._context_menu_result.app:
+            desktop_id = self._context_menu_result.app.filename
+            try:
+                subprocess.Popen(
+                    ["appinstall", "--uninstall", desktop_id],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            except FileNotFoundError:
+                logger.warning("appinstall not found – cannot uninstall %s", desktop_id)
+        self._popover.popdown()
+
+    def _ctx_copy_name(self) -> None:
         if self._context_menu_result:
             clipboard = Gdk.Display.get_default().get_clipboard()
             clipboard.set(self._context_menu_result.title)
             self._popover.popdown()
 
-    def _ctx_copy_path(self, _action, _param) -> None:
+    def _ctx_copy_path(self) -> None:
         if self._context_menu_result:
             clipboard = Gdk.Display.get_default().get_clipboard()
             clipboard.set(self._context_menu_result.url)

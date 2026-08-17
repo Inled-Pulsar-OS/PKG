@@ -18,10 +18,11 @@ _BUS_NAME = "org.freedesktop.LocalSearch3"
 # -- SPARQL query templates ---------------------------------------------------
 
 _SEARCH_ALL = """\
-SELECT DISTINCT ?url ?title WHERE {{
+SELECT DISTINCT ?url ?title ?mime WHERE {{
     ?u a nfo:FileDataObject ;
        nie:url ?url ;
        nfo:fileName ?title .
+    OPTIONAL {{ ?u nie:interpretedAs ?ie . ?ie nie:mimeType ?mime . }}
     {filter}
 }} ORDER BY ?title LIMIT {limit}
 """
@@ -36,12 +37,13 @@ SELECT ?url ?name WHERE {{
 """
 
 _SEARCH_CATEGORY = """\
-SELECT DISTINCT ?url ?title WHERE {{
+SELECT DISTINCT ?url ?title ?mime WHERE {{
     ?f a nfo:FileDataObject ;
        nie:url ?url ;
        nfo:fileName ?title ;
        nie:interpretedAs ?m .
     ?m a {rdf_type} .
+    OPTIONAL {{ ?m nie:mimeType ?mime . }}
     {excludes}
     {filter}
 }} ORDER BY ?title LIMIT {limit}
@@ -214,10 +216,13 @@ class SearchBackend:
             raw_title = cursor.get_string(1)
             title = raw_title[0] if isinstance(raw_title, tuple) else raw_title
             title = title or url.rsplit("/", 1)[-1]
+            raw_mime = cursor.get_string(2)
+            mime = raw_mime[0] if isinstance(raw_mime, tuple) else raw_mime
+            mime = mime or ""
             if url in seen:
                 continue
             seen.add(url)
             results.append(
-                SearchResult(url=url, title=title, mime="", snippet="", app=None)
+                SearchResult(url=url, title=title, mime=mime, snippet="", app=None)
             )
         return results
