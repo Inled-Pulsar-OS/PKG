@@ -28,15 +28,13 @@ jobs:
 
           # Build extras string
           EXTRAS=""
-          [ -n "$DIFF" ] && EXTRAS="${EXTRAS}\\n📋 Difficulty: **${DIFF}**"
-          [ -n "$PHASE" ] && EXTRAS="${EXTRAS}\\n🗺️ Roadmap: **${PHASE}**"
+          [ -n "$DIFF" ] && EXTRAS="${EXTRAS}
+📋 Difficulty: **${DIFF}**"
+          [ -n "$PHASE" ] && EXTRAS="${EXTRAS}
+🗺️ Roadmap: **${PHASE}**"
 
-          PAYLOAD=$(jq -n \
-            --arg t "$TITLE" \
-            --arg r "$REPO" \
-            --arg u "$URL" \
-            --arg e "$EXTRAS" \
-            '{content: ("🟢 **" + $t + "**\\nRepo: `" + $r + "`" + (if $e != "" then $e else "" end) + "\\n" + $u)}')
+          PAYLOAD=$(printf '{"content":"🟢 **%s**\nRepo: `%s`%s\n%s"}' \
+            "$TITLE" "$REPO" "$EXTRAS" "$URL" | jq -c '.')
           curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD"
 
       - name: Notify on PR
@@ -47,11 +45,8 @@ jobs:
           TITLE='${{ github.event.pull_request.title }}'
           URL='${{ github.event.pull_request.html_url }}'
           REPO='${{ github.repository }}'
-          PAYLOAD=$(jq -n \
-            --arg t "$TITLE" \
-            --arg r "$REPO" \
-            --arg u "$URL" \
-            '{content: ("🔀 **PR: " + $t + "**\\nRepo: `" + $r + "`\\n" + $u)}')
+          PAYLOAD=$(printf '{"content":"🔀 **PR: %s**\nRepo: `%s`\n%s"}' \
+            "$TITLE" "$REPO" "$URL" | jq -c '.')
           curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD"
 
       - name: Notify on release
@@ -62,9 +57,6 @@ jobs:
           NAME='${{ github.event.release.name }}'
           URL='${{ github.event.release.html_url }}'
           REPO='${{ github.repository }}'
-          PAYLOAD=$(jq -n \
-            --arg n "$NAME" \
-            --arg r "$REPO" \
-            --arg u "$URL" \
-            '{content: ("🚀 **New Release: " + $n + "**\\nRepo: `" + $r + "`\\n" + $u)}')
+          PAYLOAD=$(printf '{"content":"🚀 **New Release: %s**\nRepo: `%s`\n%s"}' \
+            "$NAME" "$REPO" "$URL" | jq -c '.')
           curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD"
