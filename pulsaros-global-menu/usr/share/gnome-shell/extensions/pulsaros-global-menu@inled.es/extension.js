@@ -1524,15 +1524,15 @@ class MacOSFullscreenManager {
 
         let panelH = (Main.panel.height || 36) + 16;
 
-        if (y <= 1) {
-            // Cursor at the very top edge
+        if (y <= 4) {
+            // Cursor at top edge – show panel
             if (this._hideTimeoutId) {
                 GLib.source_remove(this._hideTimeoutId);
                 this._hideTimeoutId = 0;
             }
             if (!this._panelVisible) this._showPanel(true);
         } else if (y < panelH) {
-            // Cursor inside panel area – cancel any pending hide
+            // Cursor still inside panel area – cancel any pending hide
             if (this._hideTimeoutId) {
                 GLib.source_remove(this._hideTimeoutId);
                 this._hideTimeoutId = 0;
