@@ -28,6 +28,8 @@ package() {
     install -Dm755 cli/pulsaros-spotlight "$pkgdir/usr/bin/pulsaros-spotlight"
     install -Dm755 cli/pulsaros-toggle-remap "$pkgdir/usr/bin/pulsaros-toggle-remap"
     install -Dm755 cli/pulsaros-toggle-launcher "$pkgdir/usr/bin/pulsaros-toggle-launcher"
+    ln -sf pulsaros-spotlight "$pkgdir/usr/bin/spotlight-python"
+    ln -sf pulsaros-spotlight "$pkgdir/usr/bin/spotlight-gtk"
 
     # Style and icons
     install -Dm644 data/style.css "$pkgdir/usr/share/pulsaros-spotlight/style.css"

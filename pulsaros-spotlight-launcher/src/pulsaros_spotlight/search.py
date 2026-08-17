@@ -23,13 +23,10 @@ _BUS_NAME = "org.freedesktop.LocalSearch3"
 # -- SPARQL query templates ---------------------------------------------------
 
 _SEARCH_ALL = """\
-SELECT DISTINCT ?url ?title ?mime WHERE {{
-    ?u a nfo:FileDataObject ;
-       nie:url ?url ;
-       nfo:fileName ?title .
-    OPTIONAL {{ ?u nie:interpretedAs ?ie . ?ie nie:mimeType ?mime . }}
+SELECT DISTINCT ?url WHERE {{
+    ?u nie:url ?url .
     {filter}
-}} ORDER BY ?title LIMIT {limit}
+}}
 """
 
 _SEARCH_APPS = """\
@@ -38,42 +35,25 @@ SELECT ?url ?name WHERE {{
        nie:url ?url ;
        nie:title ?name .
     FILTER(CONTAINS(LCASE(?name), LCASE("{query}")))
-}} ORDER BY ?name LIMIT {limit}
+}} LIMIT {limit}
 """
+
+_CATEGORY_FILTERS: dict[str, str] = {
+    "documents": 'FILTER(REGEX(?url, "\\\\.(pdf|txt|md|doc|docx|odt|xls|xlsx|ods|ppt|pptx|odp|csv|rtf|epub|html|json|xml|yaml|yml|sh|py|c|cpp|h|rs|go|js|ts)$", "i"))',
+    "images": 'FILTER(REGEX(?url, "\\\\.(png|jpg|jpeg|svg|webp|gif|avif|ico|bmp|tiff)$", "i"))',
+    "audio": 'FILTER(REGEX(?url, "\\\\.(mp3|flac|wav|ogg|m4a|aac|opus|wma|oga)$", "i"))',
+    "video": 'FILTER(REGEX(?url, "\\\\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|3gp)$", "i"))',
+}
 
 _SEARCH_CATEGORY = """\
-SELECT DISTINCT ?url ?title ?mime WHERE {{
-    ?f a nfo:FileDataObject ;
-       nie:url ?url ;
-       nfo:fileName ?title ;
-       nie:interpretedAs ?m .
-    ?m a {rdf_type} .
-    OPTIONAL {{ ?m nie:mimeType ?mime . }}
-    {excludes}
+SELECT DISTINCT ?url WHERE {{
+    ?u nie:url ?url .
+    {category_filter}
     {filter}
-}} ORDER BY ?title LIMIT {limit}
+}}
 """
 
-# Tracker 3.x stores the MIME-derived type (Image/Video/Audio/…) on the
-# resource linked via nie:interpretedAs, not on the nfo:FileDataObject itself.
-_CATEGORY_RDF_TYPES: dict[str, str] = {
-    "documents": "nie:InformationElement",
-    "images": "nfo:Image",
-    "audio": "nfo:Audio",
-    "video": "nfo:Video",
-}
-
-# "documents" = any file that is not an image, video, audio or folder.
-_CATEGORY_EXCLUDES: dict[str, str] = {
-    "documents": (
-        "FILTER NOT EXISTS { ?m a nfo:Image }\n"
-        "    FILTER NOT EXISTS { ?m a nfo:Video }\n"
-        "    FILTER NOT EXISTS { ?m a nfo:Audio }\n"
-        "    FILTER NOT EXISTS { ?m a nfo:Folder }"
-    ),
-}
-
-DEFAULT_LIMIT = 50
+DEFAULT_LIMIT = 500
 
 
 @dataclass(frozen=True)
@@ -98,6 +78,7 @@ class SearchBackend:
         self._monitors: list[Gio.FileMonitor] = []
         self._load_apps()
         self._setup_app_monitors()
+        self.connect()
 
     def set_on_apps_updated(self, callback: Callable[[], None]) -> None:
         """Register a callback to be notified when the installed apps list changes."""
@@ -127,6 +108,8 @@ class SearchBackend:
 
     def connect(self) -> bool:
         """Connect to the Tracker SPARQL endpoint over D-Bus."""
+        if self._conn is not None:
+            return True
         try:
             gi.require_version("Tsparql", "3.0")
             from gi.repository import Tsparql
@@ -139,6 +122,35 @@ class SearchBackend:
             self._conn = None
             return False
 
+    def get_indexing_status(self) -> tuple[bool, str, float]:
+        """Check if Tracker/LocalSearch miner is currently indexing.
+        Returns (is_indexing, status_text, progress_float).
+        """
+        for bus_name, obj_path in [
+            ("org.freedesktop.LocalSearch3.Miner.Files", "/org/freedesktop/LocalSearch3/Miner/Files"),
+            ("org.freedesktop.Tracker3.Miner.Files", "/org/freedesktop/Tracker3/Miner/Files"),
+        ]:
+            try:
+                bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+                proxy = Gio.DBusProxy.new_sync(
+                    bus,
+                    Gio.DBusProxyFlags.NONE,
+                    None,
+                    bus_name,
+                    obj_path,
+                    "org.freedesktop.Tracker3.Miner",
+                    None,
+                )
+                status_var = proxy.call_sync("GetStatus", None, Gio.DBusCallFlags.NONE, 200, None)
+                status = status_var.unpack()[0] if status_var else "Idle"
+                if status and status.lower() not in ("idle", "inactivo", "paused"):
+                    progress_var = proxy.call_sync("GetProgress", None, Gio.DBusCallFlags.NONE, 200, None)
+                    progress = float(progress_var.unpack()[0]) if progress_var else 0.0
+                    return True, status, progress
+            except Exception:
+                pass
+        return False, "Idle", 1.0
+
     def _load_apps(self) -> None:
         """Load desktop applications for app search."""
         try:
@@ -149,6 +161,8 @@ class SearchBackend:
 
     @property
     def is_ready(self) -> bool:
+        if self._conn is None:
+            self.connect()
         return self._conn is not None
 
     def search_instant(
@@ -163,6 +177,9 @@ class SearchBackend:
                 return self._clipboard_mgr.search_history(query)
             return []
 
+        if category == "web":
+            return self._search_web(query)
+
         query = query.strip()
 
         if category in ("apps", "applications"):
@@ -176,9 +193,66 @@ class SearchBackend:
             clip_results = []
             if self._clipboard_mgr:
                 clip_results = self._clipboard_mgr.search_history(query)[:3]
-            return clip_results + app_results
+            web_results = self._search_web(query)[:1] if query else []
+            return clip_results + app_results + web_results
 
         return []
+
+    def _search_web(self, query: str) -> list[SearchResult]:
+        """Provide instant web search, bookmarks, and default web sites."""
+        import urllib.parse
+        results: list[SearchResult] = []
+        q_strip = query.strip()
+        if q_strip:
+            encoded = urllib.parse.quote_plus(q_strip)
+            results.append(
+                SearchResult(
+                    url=f"https://www.google.com/search?q={encoded}",
+                    title=f"Search '{q_strip}' on the Web",
+                    mime="text/html",
+                    snippet=f"Open Google search for '{q_strip}'",
+                    app=None,
+                )
+            )
+            import sqlite3
+            from pathlib import Path
+            home = Path.home()
+            for db_path in home.glob(".mozilla/firefox/*/places.sqlite"):
+                try:
+                    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "SELECT url, title FROM moz_places WHERE (title LIKE ? OR url LIKE ?) AND hidden = 0 ORDER BY frecency DESC LIMIT 5",
+                        (f"%{q_strip}%", f"%{q_strip}%"),
+                    )
+                    for u, t in cursor.fetchall():
+                        results.append(SearchResult(url=u, title=t or u, mime="text/html", snippet=u, app=None))
+                    conn.close()
+                except Exception:
+                    pass
+        else:
+            results.extend([
+                SearchResult(url="https://www.google.com", title="Google", mime="text/html", snippet="https://www.google.com", app=None),
+                SearchResult(url="https://github.com", title="GitHub", mime="text/html", snippet="https://github.com", app=None),
+                SearchResult(url="https://youtube.com", title="YouTube", mime="text/html", snippet="https://youtube.com", app=None),
+                SearchResult(url="https://wikipedia.org", title="Wikipedia", mime="text/html", snippet="https://wikipedia.org", app=None),
+            ])
+            import sqlite3
+            from pathlib import Path
+            home = Path.home()
+            for db_path in home.glob(".mozilla/firefox/*/places.sqlite"):
+                try:
+                    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "SELECT url, title FROM moz_places WHERE hidden = 0 AND title != '' ORDER BY frecency DESC LIMIT 6"
+                    )
+                    for u, t in cursor.fetchall():
+                        results.append(SearchResult(url=u, title=t or u, mime="text/html", snippet=u, app=None))
+                    conn.close()
+                except Exception:
+                    pass
+        return results
 
     def search(
         self,
@@ -188,7 +262,7 @@ class SearchBackend:
     ) -> list[SearchResult]:
         """Synchronous search combining instant apps and Tracker files."""
         instant = self.search_instant(query, category, limit)
-        if category in ("apps", "applications", "clipboard") or not self.is_ready:
+        if category in ("apps", "applications", "clipboard", "web") or not self.is_ready:
             return instant
 
         sparql = self._build_query(query.strip(), category, limit)
@@ -199,32 +273,58 @@ class SearchBackend:
         self,
         query: str,
         category: str = "all",
-        limit: int = 30,
+        limit: int | None = None,
         callback: Callable[[list[SearchResult]], None] | None = None,
     ) -> None:
         """Run Tracker SPARQL query in background thread and return results via callback."""
-        if not self.is_ready or category in ("apps", "applications", "clipboard"):
+        if not self.is_ready or category in ("apps", "applications", "clipboard", "web"):
             if callback:
                 GLib.idle_add(callback, [])
             return
 
+        import mimetypes
         import threading
+        import urllib.parse
 
         def _worker():
-            sparql = self._build_query(query.strip(), category, limit)
-            file_results = self._execute(sparql)
-            if callback:
-                GLib.idle_add(callback, file_results)
+            try:
+                gi.require_version("Tsparql", "3.0")
+                from gi.repository import Tsparql
+
+                conn = Tsparql.SparqlConnection.bus_new(_BUS_NAME, None, None)
+                sparql = self._build_query(query.strip(), category, limit)
+                cursor = conn.query(sparql, None)
+                results: list[SearchResult] = []
+                seen: set[str] = set()
+                while cursor.next():
+                    raw_url = cursor.get_string(0)
+                    url = raw_url[0] if isinstance(raw_url, tuple) else raw_url
+                    url = url or ""
+                    if not url or url in seen:
+                        continue
+                    seen.add(url)
+                    title = urllib.parse.unquote(url.rsplit("/", 1)[-1])
+                    mime = mimetypes.guess_type(url)[0] or "application/octet-stream"
+                    results.append(
+                        SearchResult(url=url, title=title, mime=mime, snippet="", app=None)
+                    )
+                results.sort(key=lambda r: r.title.lower())
+                if callback:
+                    GLib.idle_add(callback, results)
+            except Exception as e:
+                logger.debug("Async search worker error: %s", e)
+                if callback:
+                    GLib.idle_add(callback, [])
 
         threading.Thread(target=_worker, daemon=True).start()
 
-    def _search_apps(self, query: str, limit: int) -> list[SearchResult]:
+    def _search_apps(self, query: str, limit: int = 500) -> list[SearchResult]:
         """Search desktop applications by name and comment."""
         query_lower = query.lower()
         results: list[SearchResult] = []
 
         for app in self._apps:
-            if query_lower in app.name.lower() or (app.comment and query_lower in app.comment.lower()):
+            if not query_lower or query_lower in app.name.lower() or (app.comment and query_lower in app.comment.lower()):
                 app_url = f"app://{app.filename}"
                 results.append(
                     SearchResult(
@@ -242,24 +342,28 @@ class SearchBackend:
 
     # -- internal -------------------------------------------------------------
 
-    def _build_query(self, query: str, category: str, limit: int) -> str:
+    def _build_query(self, query: str, category: str, limit: int | None = None) -> str:
         home_scope = 'FILTER(STRSTARTS(?url, "file:///home/") || STRSTARTS(?url, "file:///media/") || STRSTARTS(?url, "file:///run/media/"))'
-        filter_clause = (
-            f'{home_scope}\n    FILTER(CONTAINS(LCASE(?title), LCASE("{query}")))'
-            if query
-            else home_scope
-        )
-        if category in ("apps", "applications"):
-            return _SEARCH_APPS.format(query=query, limit=limit)
-        if category in _CATEGORY_RDF_TYPES:
-            return _SEARCH_CATEGORY.format(
-                query=query,
-                rdf_type=_CATEGORY_RDF_TYPES[category],
-                excludes=_CATEGORY_EXCLUDES.get(category, ""),
-                filter=filter_clause,
-                limit=limit,
+        ignore_clutter = 'FILTER(!CONTAINS(?url, "/node_modules/") && !CONTAINS(?url, "/.git/") && !CONTAINS(?url, "/.cache/"))'
+        if query:
+            q_clean = query.replace('"', '\\"').lower()
+            filter_clause = (
+                f'{home_scope}\n    {ignore_clutter}\n    FILTER(CONTAINS(LCASE(?url), "{q_clean}"))'
             )
-        return _SEARCH_ALL.format(query=query, filter=filter_clause, limit=limit)
+        else:
+            filter_clause = f"{home_scope}\n    {ignore_clutter}"
+
+        limit_val = limit if limit is not None else 100
+        limit_clause = f" LIMIT {limit_val}"
+
+        if category in ("apps", "applications"):
+            return _SEARCH_APPS.format(query=query, limit=limit_val)
+        if category in _CATEGORY_FILTERS:
+            return _SEARCH_CATEGORY.format(
+                category_filter=_CATEGORY_FILTERS[category],
+                filter=filter_clause,
+            ) + limit_clause
+        return _SEARCH_ALL.format(query=query, filter=filter_clause) + limit_clause
 
     def _execute(self, sparql: str) -> list[SearchResult]:
         if not self._conn:
@@ -270,22 +374,21 @@ class SearchBackend:
             logger.warning("SPARQL query failed", exc_info=True)
             return []
 
+        import mimetypes
+        import urllib.parse
         results: list[SearchResult] = []
         seen: set[str] = set()
         while cursor.next():
             raw_url = cursor.get_string(0)
             url = raw_url[0] if isinstance(raw_url, tuple) else raw_url
             url = url or ""
-            raw_title = cursor.get_string(1)
-            title = raw_title[0] if isinstance(raw_title, tuple) else raw_title
-            title = title or url.rsplit("/", 1)[-1]
-            raw_mime = cursor.get_string(2)
-            mime = raw_mime[0] if isinstance(raw_mime, tuple) else raw_mime
-            mime = mime or ""
-            if url in seen:
+            if not url or url in seen:
                 continue
             seen.add(url)
+            title = urllib.parse.unquote(url.rsplit("/", 1)[-1])
+            mime = mimetypes.guess_type(url)[0] or "application/octet-stream"
             results.append(
                 SearchResult(url=url, title=title, mime=mime, snippet="", app=None)
             )
+        results.sort(key=lambda r: r.title.lower())
         return results

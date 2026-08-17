@@ -179,3 +179,32 @@
     font-size: 13px;
     color: @view_fg_color;
 }
+
+/* indexing status bar */
+.indexing-status-bar {
+    padding: 6px 14px;
+    background-color: alpha(@window_bg_color, 0.6);
+    border-top: 1px solid alpha(@borders, 0.25);
+    border-radius: 0 0 12px 12px;
+}
+
+.indexing-status-bar spinner {
+    margin-right: 4px;
+}
+
+.indexing-status-bar label {
+    font-size: 12px;
+    color: alpha(@view_fg_color, 0.7);
+}
+
+.indexing-status-bar progressbar trough {
+    min-height: 4px;
+    background-color: alpha(@borders, 0.4);
+    border-radius: 9999px;
+}
+
+.indexing-status-bar progressbar progress {
+    min-height: 4px;
+    background-color: @accent_bg_color;
+    border-radius: 9999px;
+}

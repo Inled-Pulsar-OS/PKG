@@ -136,6 +136,36 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         # Popover is parented to window (`self`) for unconstrained popup space.
         self._result_view.set_popover_parent(self)
 
+        # -- indexing progress indicator (hidden when idle) --
+        self._indexing_revealer = Gtk.Revealer()
+        self._indexing_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
+        self._indexing_revealer.set_transition_duration(200)
+        self._indexing_revealer.set_reveal_child(False)
+
+        indexing_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        indexing_box.add_css_class("indexing-status-bar")
+        indexing_box.set_margin_start(16)
+        indexing_box.set_margin_end(16)
+        indexing_box.set_margin_top(4)
+        indexing_box.set_margin_bottom(6)
+
+        self._indexing_spinner = Gtk.Spinner()
+        self._indexing_spinner.start()
+        self._indexing_label = Gtk.Label(label="Indexando archivos en segundo plano...")
+        self._indexing_label.add_css_class("dim-label")
+        self._indexing_label.set_xalign(0)
+        self._indexing_label.set_hexpand(True)
+
+        self._indexing_pbar = Gtk.ProgressBar()
+        self._indexing_pbar.set_valign(Gtk.Align.CENTER)
+        self._indexing_pbar.set_size_request(100, 4)
+
+        indexing_box.append(self._indexing_spinner)
+        indexing_box.append(self._indexing_label)
+        indexing_box.append(self._indexing_pbar)
+        self._indexing_revealer.set_child(indexing_box)
+        main_box.append(self._indexing_revealer)
+
         # -- uninstall progress bar (hidden by default) --
         self._progress_revealer = Gtk.Revealer()
         self._progress_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
@@ -175,12 +205,31 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         self.add_controller(key_ctrl)
 
         self.connect("close-request", self._on_close_request)
+        GLib.timeout_add_seconds(3, self._check_indexing_status)
+
+    def _check_indexing_status(self) -> bool:
+        if not self.is_visible():
+            return True
+        try:
+            is_indexing, status_text, progress = self._backend.get_indexing_status()
+            if is_indexing:
+                percent = int(progress * 100) if progress > 0 else 0
+                label_text = f"Indexing files in background... ({percent}%)" if percent > 0 else "Indexing files in background..."
+                self._indexing_label.set_text(label_text)
+                self._indexing_pbar.set_fraction(max(0.0, min(1.0, progress)))
+                self._indexing_revealer.set_reveal_child(True)
+            else:
+                self._indexing_revealer.set_reveal_child(False)
+        except Exception:
+            pass
+        return True
 
     # -- focus & dismiss handlers ---------------------------------------------
 
     def _on_active_changed(self, window: Gtk.Window, _pspec) -> None:
         if window.is_active():
             self._has_been_active = True
+            self._check_indexing_status()
         elif self._has_been_active:
             GLib.timeout_add(100, self._check_focus_and_hide)
 
@@ -207,26 +256,35 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         current_seq = self._search_seq
         query = self._search_entry.get_text()
 
+        # If in documents category and query is empty, browse $HOME
+        if self._category == "documents" and not query.strip() and not self._current_dir:
+            results = self._browse_directory(str(Path.home()))
+            self._result_view.set_results(results, self._config.is_grid_view)
+            return False
+
         # If currently browsing a directory
         if self._current_dir:
             results = self._browse_directory(self._current_dir, query.strip())
             self._result_view.set_results(results, self._config.is_grid_view)
             return False
 
-        # 1. Instant results (apps and clipboard) displayed with 0ms UI delay
+        # 1. Instant results (apps, clipboard, web) displayed with 0ms UI delay
         instant_results = self._backend.search_instant(query, category=self._category)
         self._result_view.set_results(instant_results, self._config.is_grid_view)
 
         # 2. Async file search in background thread without blocking the GTK UI
-        if query.strip() and self._category not in ("apps", "applications", "clipboard"):
+        should_search_files = (
+            bool(query.strip()) or self._category in ("documents", "images", "audio", "video")
+        ) and self._category not in ("apps", "applications", "clipboard", "web")
+
+        if should_search_files:
             def _on_files_ready(file_results: list[SearchResult]) -> None:
                 if self._search_seq != current_seq:
                     return  # Discard outdated search results
-                if file_results:
-                    all_results = instant_results + file_results
-                    self._result_view.set_results(all_results, self._config.is_grid_view)
+                all_results = instant_results + file_results
+                self._result_view.set_results(all_results, self._config.is_grid_view)
 
-            self._backend.search_async(query.strip(), category=self._category, limit=30, callback=_on_files_ready)
+            self._backend.search_async(query.strip(), category=self._category, limit=None, callback=_on_files_ready)
 
         return False
 
@@ -238,12 +296,13 @@ class SpotlightWindow(Gtk.ApplicationWindow):
             if not p.is_dir():
                 return results
 
+            home = Path.home().resolve()
             # Parent directory navigation
-            if p != p.parent:
+            if p != home and p != p.parent:
                 results.append(
                     SearchResult(
                         url=f"file://{p.parent}",
-                        title=".. (Subir al directorio superior)",
+                        title=".. (Parent directory)",
                         mime="inode/directory",
                         snippet=str(p.parent),
                         app=None,
@@ -299,7 +358,7 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         if os.path.isdir(clean_path) and (result.mime in ("inode/directory", "folder") or not result.app):
             self._current_dir = clean_path
             self._search_entry.set_text("")
-            self._search_entry.set_placeholder_text(f"Navegando: {clean_path}")
+            self._search_entry.set_placeholder_text(f"Browsing: {clean_path}")
             results = self._browse_directory(clean_path)
             self._result_view.set_results(results, self._config.is_grid_view)
             return
@@ -391,7 +450,7 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         self._search_entry.set_placeholder_text("Search applications, files, or clipboard...")
 
         for cid, b in self._category_buttons.items():
-            if cid != cat_id:
+            if cid != cat_id and b.get_active():
                 b.set_active(False)
 
         self._do_search()
