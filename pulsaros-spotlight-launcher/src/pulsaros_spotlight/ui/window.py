@@ -180,9 +180,9 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         if not query.strip():
             if self._category == "clipboard" and self._clipboard_mgr:
                 results = self._clipboard_mgr.search_history("")
-                self._result_view.set_results(results, self._config.is_grid_view)
             else:
-                self._result_view.set_results([], self._config.is_grid_view)
+                results = self._backend.search("", category=self._category)
+            self._result_view.set_results(results, self._config.is_grid_view)
             return False
 
         results = self._backend.search(query.strip(), category=self._category)

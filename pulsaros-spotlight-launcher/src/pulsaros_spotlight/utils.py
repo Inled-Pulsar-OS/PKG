@@ -14,6 +14,23 @@ _LOCAL_ICON_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "icon
 def open_file(url: str) -> bool:
     """Open a file or URI with the default application via GIO."""
     try:
+        # Handle app://filename.desktop — launch via GDesktopAppInfo
+        if url.startswith("app://"):
+            desktop_filename = url[len("app://"):]
+            app_info = Gio.DesktopAppInfo.new(desktop_filename)
+            if app_info:
+                app_info.launch([], None)
+                return True
+            # Fallback: try finding it in applications dirs
+            for d in ("/usr/share/applications", os.path.expanduser("~/.local/share/applications")):
+                f = Path(d) / desktop_filename
+                if f.exists():
+                    app_info2 = Gio.DesktopAppInfo.new_from_filename(str(f))
+                    if app_info2:
+                        app_info2.launch([], None)
+                        return True
+            return False
+
         Gio.AppInfo.launch_default_for_uri(url, None)
         return True
     except Exception:

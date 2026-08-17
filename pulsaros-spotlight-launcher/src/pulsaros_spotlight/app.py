@@ -59,16 +59,28 @@ class SpotlightApp(Gtk.Application):
         self._clipboard_mgr = ClipboardManager(self._config)
         self._backend = SearchBackend(clipboard_mgr=self._clipboard_mgr)
         self._window: SpotlightWindow | None = None
+        self._css_loaded: bool = False
 
     def do_startup(self) -> None:
         Gtk.Application.do_startup(self)
+        self._ensure_css()
+
+    def _ensure_css(self) -> None:
+        """Apply the Spotlight stylesheet once the display is available."""
+        if self._css_loaded:
+            return
+        if Gdk.Display.get_default() is None:
+            return
         _load_css()
+        self._css_loaded = True
 
     def do_activate(self) -> None:
         self.hold()
 
         if not self._backend.is_ready:
             self._backend.connect()
+
+        self._ensure_css()
 
         if not self._window:
             self._window = SpotlightWindow(
