@@ -1421,22 +1421,12 @@ class MacOSFullscreenManager {
     }
 
     _forceWindowsRefreshGeometry(ws) {
-        for (let [win] of this._spaceWindows) {
-            try {
-                if (!win.unmanaged && win.get_workspace() === ws) {
-                    win._pulsarLock = true;
-                    win.unmaximize(Meta.MaximizeFlags.BOTH);
-                    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                        try {
-                            win.maximize(Meta.MaximizeFlags.BOTH);
-                        } finally {
-                            win._pulsarLock = false;
-                        }
-                        return GLib.SOURCE_REMOVE;
-                    });
-                }
-            } catch (e) {}
-        }
+        // After changing affectsStruts, Mutter sends a configure event to all
+        // maximized windows on the next compositor frame, so they resize automatically.
+        // We just call this to make sure the update is queued.
+        try {
+            Main.layoutManager._queueUpdateRegions?.();
+        } catch (_) {}
     }
 
     // ─── Panel show/hide ───────────────────────────────────────────────────────
