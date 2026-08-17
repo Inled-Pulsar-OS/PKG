@@ -1582,7 +1582,7 @@ class OOTBWindow(Adw.ApplicationWindow):
                 # 3. Configure SDDM autologin for the new real user
                 os.makedirs("/etc/sddm.conf.d", exist_ok=True)
                 with open("/etc/sddm.conf.d/autologin.conf", "w") as f:
-                    f.write(f"[Autologin]\nUser={username}\nSession=gnome\n")
+                    f.write(f"[Autologin]\nUser={username}\nSession=gnome\nRelogin=false\n")
                 os.chmod("/etc/sddm.conf.d/autologin.conf", 0o644)
                 log_msg(f"SDDM autologin configured for '{username}'")
 

@@ -14,6 +14,8 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
+import { getPointerWatcher } from 'resource:///org/gnome/shell/ui/pointerWatcher.js';
+import * as SystemActions from 'resource:///org/gnome/shell/misc/systemActions.js';
 
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
@@ -1194,6 +1196,11 @@ const IGNORED_APPS = [
     'spotlight-gtk',
     'io.github.jeffshee.Hidamari',
     'hidamari',
+    'pulsaros-live-wallpaper',
+    'ding',
+    'org.rastersoft.ding',
+    'ding.js',
+    'desktop-icons',
     'gcr-prompter',
     'polkit-gnome-authentication-agent-1'
 ];
@@ -1205,11 +1212,28 @@ class MacOSFullscreenManager {
         this._spaceWindows = new Map();
         this._enabled = false;
         this._panelHidden = false;
+        this._panelShowing = true;
         this._panelStrutsState = null;
         this._hideTimeoutId = 0;
+        this._pointerWatcher = null;
+        this._pointerWatch = null;
 
         this._setupSettings();
         this._setupSignals();
+    }
+
+    _hasOpenMenu() {
+        try {
+            if (Main.overview && Main.overview.visible) return true;
+            if (Main.panel && Main.panel.menuManager && Main.panel.menuManager.activeMenu) return true;
+            if (Main.panel && Main.panel.statusArea) {
+                for (let k in Main.panel.statusArea) {
+                    let item = Main.panel.statusArea[k];
+                    if (item && item.menu && item.menu.isOpen) return true;
+                }
+            }
+        } catch (e) {}
+        return false;
     }
 
     _isIgnoredWindow(window) {
@@ -1217,6 +1241,7 @@ class MacOSFullscreenManager {
         try {
             if (window.is_override_redirect && window.is_override_redirect()) return true;
             if (window.is_skip_taskbar && window.is_skip_taskbar()) return true;
+            if (window.is_on_all_workspaces && window.is_on_all_workspaces()) return true;
             let type = window.get_window_type ? window.get_window_type() : Meta.WindowType.NORMAL;
             if (type !== Meta.WindowType.NORMAL) return true;
             if (window.get_transient_for && window.get_transient_for() !== null) return true;
@@ -1293,6 +1318,7 @@ class MacOSFullscreenManager {
         let signals = [];
         signals.push(window.connect('notify::maximized-horizontally', () => this._onMaximizeChanged(window)));
         signals.push(window.connect('notify::maximized-vertically', () => this._onMaximizeChanged(window)));
+        signals.push(window.connect('notify::fullscreen', () => this._onFullscreenChanged(window)));
         signals.push(window.connect('unmanaged', () => this._untrackWindow(window)));
 
         this._windowSignals.set(winId, { window, signals });
@@ -1311,13 +1337,33 @@ class MacOSFullscreenManager {
                 let activeWs = wsManager.get_active_workspace();
                 let origWsIndex = activeWs.index();
 
-                let newWs = wsManager.append_new_workspace(false, global.get_current_time());
-                window.change_workspace(newWs);
-                window.maximize(Meta.MaximizeFlags.BOTH);
-                newWs.activate_with_focus(window, global.get_current_time());
+                // Look for an empty workspace to the right, or append a new one
+                let targetWs = null;
+                let n = wsManager.n_workspaces;
+                for (let i = origWsIndex + 1; i < n; i++) {
+                    let ws = wsManager.get_workspace_by_index(i);
+                    let nonSticky = ws.list_windows().filter(w => !w.is_on_all_workspaces() && !this._isIgnoredWindow(w));
+                    if (nonSticky.length === 0) {
+                        targetWs = ws;
+                        break;
+                    }
+                }
+
+                if (!targetWs) {
+                    targetWs = wsManager.append_new_workspace(false, global.get_current_time());
+                    let insertIndex = origWsIndex + 1;
+                    if (wsManager.reorder_workspace && insertIndex < wsManager.n_workspaces) {
+                        wsManager.reorder_workspace(targetWs, insertIndex);
+                    }
+                }
+
+                window.change_workspace(targetWs);
+                targetWs.activate_with_focus(window, global.get_current_time());
 
                 this._spaceWindows.set(window, { origWsIndex });
+                this._setPanelStruts(false);
                 this._updatePanelVisibility();
+                this._refreshSpaceWindows();
             } catch (e) {
                 console.error("[MacOSFullscreen] Error moving to workspace:", e);
             } finally {
@@ -1326,6 +1372,30 @@ class MacOSFullscreenManager {
         } else if (!isMax && isTracked) {
             this._restoreWindow(window);
         }
+    }
+
+    _refreshSpaceWindows() {
+        let wsManager = global.workspace_manager;
+        let activeWs = wsManager ? wsManager.get_active_workspace() : null;
+        if (!activeWs) return;
+
+        for (let [win, data] of this._spaceWindows) {
+            try {
+                if (win && !win.unmanaged && win.get_workspace() === activeWs) {
+                    win._pulsarHandlingMaximize = true;
+                    try {
+                        win.unmaximize(Meta.MaximizeFlags.BOTH);
+                        win.maximize(Meta.MaximizeFlags.BOTH);
+                    } finally {
+                        win._pulsarHandlingMaximize = false;
+                    }
+                }
+            } catch (e) {}
+        }
+    }
+
+    _onFullscreenChanged(window) {
+        this._updatePanelVisibility();
     }
 
     _restoreWindow(window) {
@@ -1338,6 +1408,8 @@ class MacOSFullscreenManager {
             let origIndex = Math.min(data.origWsIndex, wsManager.n_workspaces - 1);
             let targetWs = wsManager.get_workspace_by_index(origIndex);
 
+            this._spaceWindows.delete(window);
+
             if (window.maximized_horizontally || window.maximized_vertically) {
                 window.unmaximize(Meta.MaximizeFlags.BOTH);
             }
@@ -1347,7 +1419,6 @@ class MacOSFullscreenManager {
                 targetWs.activate_with_focus(window, global.get_current_time());
             }
 
-            this._spaceWindows.delete(window);
             this._updatePanelVisibility();
         } catch (e) {
             console.error("[MacOSFullscreen] Error restoring window:", e);
@@ -1360,12 +1431,21 @@ class MacOSFullscreenManager {
         if (this._panelStrutsState === affectsStruts) return;
         this._panelStrutsState = affectsStruts;
         try {
+            if (Main.layoutManager && Main.layoutManager._chrome) {
+                let chrome = Main.layoutManager._chrome;
+                let data = chrome._findActor ? chrome._findActor(Main.layoutManager.panelBox) : null;
+                if (data) {
+                    data.affectsStruts = affectsStruts;
+                    data.trackFullscreen = false;
+                }
+                if (chrome._updateRegions) {
+                    chrome._updateRegions();
+                } else if (Main.layoutManager._queueUpdateRegions) {
+                    Main.layoutManager._queueUpdateRegions();
+                }
+            }
             if (Main.layoutManager.panelBox) {
-                Main.layoutManager.untrackChrome(Main.layoutManager.panelBox);
-                Main.layoutManager.addChrome(Main.layoutManager.panelBox, {
-                    affectsStruts: affectsStruts,
-                    trackFullscreen: !affectsStruts
-                });
+                Main.layoutManager.panelBox.visible = true;
             }
         } catch (e) {
             console.error("[MacOSFullscreen] Error setting panel struts:", e);
@@ -1376,18 +1456,16 @@ class MacOSFullscreenManager {
         this._topTrigger = new Clutter.Actor({
             name: 'pulsaros-topbar-hover-trigger',
             reactive: true,
-            x: 85,
+            x: 0,
             y: 0,
-            width: Math.max(100, global.stage.width - 85),
-            height: 30,
+            width: global.stage.width || 1920,
+            height: 24,
             opacity: 1,
-            background_color: new Clutter.Color({ red: 0, green: 0, blue: 0, alpha: 1 }),
-            visible: false
+            visible: true
         });
         Main.layoutManager.addChrome(this._topTrigger, {
-            affectsInputRegion: true,
             affectsStruts: false,
-            trackFullscreen: true
+            trackFullscreen: false
         });
 
         this._topTrigger.connect('enter-event', () => {
@@ -1396,41 +1474,69 @@ class MacOSFullscreenManager {
             }
         });
 
-        this._panelEnterId = Main.panel.connect('enter-event', () => {
-            if (this._isCurrentWorkspaceFullscreenSpace()) {
-                this._showPanel(true);
-            }
-        });
-
-        this._panelLeaveId = Main.panel.connect('leave-event', () => {
-            if (!this._isCurrentWorkspaceFullscreenSpace()) return;
-            if (this._hideTimeoutId) GLib.source_remove(this._hideTimeoutId);
-            this._hideTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 350, () => {
-                this._hideTimeoutId = 0;
-                let [x, y] = global.get_pointer();
-                if (y > Main.panel.height + 4 && this._isCurrentWorkspaceFullscreenSpace()) {
-                    this._hidePanel(true);
-                }
-                return GLib.SOURCE_REMOVE;
-            });
-        });
-
         this._wsChangedId = global.workspace_manager.connect('active-workspace-changed', () => {
             this._updatePanelVisibility();
         });
 
         this._stageResizeId = global.stage.connect('notify::width', () => {
             if (this._topTrigger) {
-                this._topTrigger.set_position(85, 0);
-                this._topTrigger.set_size(Math.max(100, global.stage.width - 85), 30);
+                this._topTrigger.set_position(0, 0);
+                this._topTrigger.set_size(global.stage.width, 24);
             }
         });
+
+        try {
+            this._pointerWatcher = getPointerWatcher();
+            if (this._pointerWatcher) {
+                this._pointerWatch = this._pointerWatcher.addWatch(50, (x, y) => {
+                    this._onPointerMoved(x, y);
+                });
+            }
+        } catch (e) {
+            console.error("[MacOSFullscreen] Error setting up pointer watcher:", e);
+        }
+    }
+
+    _onPointerMoved(x, y) {
+        if (!this._enabled) {
+            if (this._panelHidden) this._showPanel(false);
+            return;
+        }
+        let isSpace = this._isCurrentWorkspaceFullscreenSpace();
+        if (!isSpace) {
+            if (this._panelHidden) this._showPanel(false);
+            return;
+        }
+
+        let panelHeight = Main.panel.height || 36;
+
+        if (y <= 24) {
+            this._showPanel(true);
+        } else if (y <= panelHeight + 16) {
+            if (this._hideTimeoutId) {
+                GLib.source_remove(this._hideTimeoutId);
+                this._hideTimeoutId = 0;
+            }
+        } else {
+            if (this._panelShowing && !this._hasOpenMenu() && !this._hideTimeoutId) {
+                this._hideTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 450, () => {
+                    this._hideTimeoutId = 0;
+                    if (this._isCurrentWorkspaceFullscreenSpace() && !this._hasOpenMenu()) {
+                        this._hidePanel(true);
+                    }
+                    return GLib.SOURCE_REMOVE;
+                });
+            }
+        }
     }
 
     _isCurrentWorkspaceFullscreenSpace() {
         if (!this._enabled) return false;
         let wsManager = global.workspace_manager;
-        let activeWs = wsManager.get_active_workspace();
+        let activeWs = wsManager ? wsManager.get_active_workspace() : null;
+        if (!activeWs) return false;
+
+        // 1. Check windows tracked explicitly in _spaceWindows
         for (let [win, data] of this._spaceWindows) {
             try {
                 if (win && !win.unmanaged && win.get_workspace() === activeWs) {
@@ -1438,6 +1544,19 @@ class MacOSFullscreenManager {
                 }
             } catch (e) {}
         }
+
+        // 2. Check if a normal non-desktop application window is fullscreen on this workspace
+        let windows = activeWs.list_windows ? activeWs.list_windows() : [];
+        for (let win of windows) {
+            try {
+                if (win && !win.unmanaged && !win.is_on_all_workspaces() && !this._isIgnoredWindow(win)) {
+                    if (win.is_fullscreen && win.is_fullscreen()) {
+                        return true;
+                    }
+                }
+            } catch (e) {}
+        }
+
         return false;
     }
 
@@ -1447,6 +1566,15 @@ class MacOSFullscreenManager {
             this._hideTimeoutId = 0;
         }
 
+        if (!this._enabled) {
+            this._setPanelStruts(true);
+            this._showPanel(false);
+            if (this._topTrigger) {
+                this._topTrigger.visible = false;
+            }
+            return;
+        }
+
         let isSpace = this._isCurrentWorkspaceFullscreenSpace();
         if (this._topTrigger) {
             this._topTrigger.visible = isSpace;
@@ -1454,7 +1582,7 @@ class MacOSFullscreenManager {
 
         if (isSpace) {
             this._setPanelStruts(false);
-            this._hidePanel(true);
+            this._hidePanel(false);
         } else {
             this._setPanelStruts(true);
             this._showPanel(false);
@@ -1462,34 +1590,77 @@ class MacOSFullscreenManager {
     }
 
     _hidePanel(animated = false) {
+        if (!this._enabled || !this._isCurrentWorkspaceFullscreenSpace()) {
+            this._showPanel(false);
+            return;
+        }
+        if (this._hasOpenMenu()) {
+            return;
+        }
+
+        if (this._panelHidden && !this._panelShowing) {
+            return;
+        }
+
         this._panelHidden = true;
+        this._panelShowing = false;
+        let targetY = -(Main.panel.height || 36);
+
+        this._setPanelStruts(false);
+        this._refreshSpaceWindows();
+
         if (animated) {
             Main.panel.ease({
-                translation_y: -Main.panel.height,
-                opacity: 0,
-                duration: 250,
-                mode: Clutter.AnimationMode.EASE_OUT_CUBIC
+                translation_y: targetY,
+                duration: 200,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD
             });
         } else {
-            Main.panel.translation_y = -Main.panel.height;
-            Main.panel.opacity = 0;
+            Main.panel.remove_all_transitions();
+            Main.panel.translation_y = targetY;
         }
     }
 
     _showPanel(animated = false) {
+        if (this._hideTimeoutId) {
+            GLib.source_remove(this._hideTimeoutId);
+            this._hideTimeoutId = 0;
+        }
+
+        if (this._panelShowing && !this._panelHidden) {
+            return;
+        }
+
         this._panelHidden = false;
+        this._panelShowing = true;
+
+        if (Main.layoutManager.panelBox) {
+            Main.layoutManager.panelBox.visible = true;
+            Main.layoutManager.panelBox.translation_y = 0;
+            if (Main.layoutManager.uiGroup && Main.layoutManager.uiGroup.set_child_above_sibling) {
+                try {
+                    Main.layoutManager.uiGroup.set_child_above_sibling(Main.layoutManager.panelBox, null);
+                } catch (e) {}
+            }
+        }
         Main.panel.visible = true;
         Main.panel.reactive = true;
+        Main.panel.opacity = 255;
+
+        if (this._isCurrentWorkspaceFullscreenSpace()) {
+            this._setPanelStruts(true);
+            this._refreshSpaceWindows();
+        }
+
         if (animated) {
             Main.panel.ease({
                 translation_y: 0,
-                opacity: 255,
-                duration: 250,
-                mode: Clutter.AnimationMode.EASE_OUT_CUBIC
+                duration: 200,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD
             });
         } else {
+            Main.panel.remove_all_transitions();
             Main.panel.translation_y = 0;
-            Main.panel.opacity = 255;
         }
     }
 
@@ -1510,9 +1681,17 @@ class MacOSFullscreenManager {
             GLib.source_remove(this._hideTimeoutId);
             this._hideTimeoutId = 0;
         }
+        if (this._pointerWatch && this._pointerWatcher) {
+            try {
+                this._pointerWatcher._removeWatch(this._pointerWatch);
+            } catch (e) {}
+            this._pointerWatch = null;
+        }
         if (this._topTrigger) {
-            Main.layoutManager.removeChrome(this._topTrigger);
-            this._topTrigger.destroy();
+            try {
+                Main.layoutManager.removeChrome(this._topTrigger);
+                this._topTrigger.destroy();
+            } catch (e) {}
             this._topTrigger = null;
         }
         if (this._panelEnterId && Main.panel) {
@@ -1542,7 +1721,24 @@ class MacOSFullscreenManager {
         }
         this._windowSignals.clear();
         this._spaceWindows.clear();
-        this._setPanelStruts(true);
+
+        try {
+            if (Main.layoutManager && Main.layoutManager._chrome) {
+                let chrome = Main.layoutManager._chrome;
+                let data = chrome._findActor ? chrome._findActor(Main.layoutManager.panelBox) : null;
+                if (data) {
+                    data.affectsStruts = true;
+                    data.trackFullscreen = true;
+                }
+                if (Main.layoutManager._queueUpdateRegions) {
+                    Main.layoutManager._queueUpdateRegions();
+                }
+            }
+            if (Main.layoutManager.panelBox) {
+                Main.layoutManager.panelBox.visible = true;
+            }
+        } catch (e) {}
+
         this._showPanel(false);
     }
 }
@@ -1634,13 +1830,15 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         // Force the native GNOME Shell lock button in Quick Settings to be always visible
         // Forzar a que el botón de bloqueo nativo en los Quick Settings de GNOME Shell sea siempre visible
         try {
-            this._origCanLock = Object.getOwnPropertyDescriptor(Shell.SystemActions.prototype, 'can_lock') || 
-                                Object.getOwnPropertyDescriptor(Shell.SystemActions.get_default(), 'can_lock');
-            Object.defineProperty(Shell.SystemActions.get_default(), 'can_lock', {
-                get: () => true,
-                configurable: true
-            });
-            Shell.SystemActions.get_default().notify('can-lock');
+            let actions = SystemActions?.getDefault ? SystemActions.getDefault() : null;
+            if (actions) {
+                this._origCanLock = Object.getOwnPropertyDescriptor(actions, 'can_lock');
+                Object.defineProperty(actions, 'can_lock', {
+                    get: () => true,
+                    configurable: true
+                });
+                if (actions.notify) actions.notify('can-lock');
+            }
         } catch (e) {
             console.error("[GlobalMenu] Failed to override can_lock:", e);
         }
@@ -1927,28 +2125,64 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         // Log Out
         let logoutItem = new PopupMenu.PopupMenuItem("Log Out...");
         logoutItem.connect('activate', () => {
-            this._runCommand("gnome-session-quit --logout");
+            try {
+                let actions = SystemActions?.getDefault ? SystemActions.getDefault() : null;
+                if (actions && actions.activateLogout) {
+                    actions.activateLogout();
+                } else {
+                    this._runCommand("gnome-session-quit --logout");
+                }
+            } catch (e) {
+                this._runCommand("gnome-session-quit --logout");
+            }
         });
         this.logoMenuButton.menu.addMenuItem(logoutItem);
         
         // Sleep
         let sleepItem = new PopupMenu.PopupMenuItem("Sleep");
         sleepItem.connect('activate', () => {
-            this._runCommand("systemctl suspend");
+            try {
+                let actions = SystemActions?.getDefault ? SystemActions.getDefault() : null;
+                if (actions && actions.activateSuspend) {
+                    actions.activateSuspend();
+                } else {
+                    this._runCommand("systemctl suspend");
+                }
+            } catch (e) {
+                this._runCommand("systemctl suspend");
+            }
         });
         this.logoMenuButton.menu.addMenuItem(sleepItem);
         
         // Restart
         let restartItem = new PopupMenu.PopupMenuItem("Restart...");
         restartItem.connect('activate', () => {
-            this._runCommand("gnome-session-quit --reboot");
+            try {
+                let actions = SystemActions?.getDefault ? SystemActions.getDefault() : null;
+                if (actions && actions.activateRestart) {
+                    actions.activateRestart();
+                } else {
+                    this._runCommand("gnome-session-quit --reboot");
+                }
+            } catch (e) {
+                this._runCommand("gnome-session-quit --reboot");
+            }
         });
         this.logoMenuButton.menu.addMenuItem(restartItem);
         
         // Shut Down
         let shutdownItem = new PopupMenu.PopupMenuItem("Shut Down...");
         shutdownItem.connect('activate', () => {
-            this._runCommand("gnome-session-quit --power-off");
+            try {
+                let actions = SystemActions?.getDefault ? SystemActions.getDefault() : null;
+                if (actions && actions.activatePowerOff) {
+                    actions.activatePowerOff();
+                } else {
+                    this._runCommand("gnome-session-quit --power-off");
+                }
+            } catch (e) {
+                this._runCommand("gnome-session-quit --power-off");
+            }
         });
         this.logoMenuButton.menu.addMenuItem(shutdownItem);
         

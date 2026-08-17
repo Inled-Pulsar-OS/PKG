@@ -94,7 +94,6 @@ EGO_EXTENSIONS=(
     "dash-to-dock@micxgx.gmail.com"
     "wiggle@mechtifs"
     "compiz-alike-magic-lamp-effect@hermes83.github.com"
-    "fullscreen-to-empty-workspace2@corgijan.dev"
     "just-perfection-desktop@just-perfection"
     "notification-position@drugo.dev"
     "no-overview@fthx"
