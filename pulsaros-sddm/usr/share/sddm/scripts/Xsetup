@@ -1,0 +1,9 @@
+#!/bin/sh
+# Xsetup - run as root before the SDDM login dialog appears
+
+# Setup hybrid graphics (PRIME) providers if available
+if command -v xrandr >/dev/null 2>&1; then
+    xrandr --setprovideroutputsource 1 0 2>/dev/null || true
+    xrandr --setprovideroutputsource 2 0 2>/dev/null || true
+    xrandr --auto
+fi
