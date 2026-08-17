@@ -1422,11 +1422,13 @@ class MacOSFullscreenManager {
     }
 
     _forceWindowsRefreshGeometry(ws) {
-        // Guard against re-entry (workspace-changed can call _syncPanel again during unmaximize)
+        // Guard against re-entry
         if (this._refreshingGeometry) return;
         this._refreshingGeometry = true;
 
-        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        // Use GLib.PRIORITY_DEFAULT so this runs after _updateRegions (which uses
+        // Meta.later_add BEFORE_REDRAW). By this point struts=0 in Mutter.
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
             try {
                 for (let [win] of this._spaceWindows) {
                     try {
@@ -1436,25 +1438,22 @@ class MacOSFullscreenManager {
                         let actor = win.get_compositor_private();
                         win._pulsarLock = true;
 
-                        // Hide the compositor actor so GNOME Shell's WindowManager
-                        // skips animations in _onWindowUnmaximized / _onWindowMaximized
+                        // Hide actor so GNOME Shell skips unmaximize/maximize animations
                         if (actor) actor.hide();
                         try {
                             win.unmaximize(Meta.MaximizeFlags.BOTH);
+                            // At this point Mutter work area = (0,0,w,h) since struts=0
                             win.maximize(Meta.MaximizeFlags.BOTH);
                         } finally {
                             if (actor) actor.show();
+                            // Release lock right away – notify:: signals fire synchronously
+                            // during unmaximize/maximize, while the lock was still held
+                            win._pulsarLock = false;
                         }
                     } catch (_) {}
                 }
             } finally {
-                // Release locks in the next idle so all pending notify:: signals settle
-                GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                    for (let [win] of this._spaceWindows)
-                        win._pulsarLock = false;
-                    this._refreshingGeometry = false;
-                    return GLib.SOURCE_REMOVE;
-                });
+                this._refreshingGeometry = false;
             }
             return GLib.SOURCE_REMOVE;
         });
@@ -1472,7 +1471,6 @@ class MacOSFullscreenManager {
         let panelBox = Main.layoutManager.panelBox;
         let panelH   = panelBox?.height || 36;
 
-        // Reset child translation (Main.panel)
         Main.panel.remove_all_transitions();
         Main.panel.translation_y = 0;
         Main.panel.reactive = true;
@@ -1481,10 +1479,11 @@ class MacOSFullscreenManager {
         if (!panelBox) return;
 
         if (animated) {
-            // Show from off-screen, sliding down
+            // Slide in from off-screen top
             if (!panelBox.visible) {
                 panelBox.translation_y = -panelH;
                 panelBox.show();
+                // affectsStruts is still false here (space mode), so showing doesn't add struts
             }
             panelBox.remove_all_transitions();
             panelBox.ease({
@@ -1496,7 +1495,8 @@ class MacOSFullscreenManager {
             panelBox.remove_all_transitions();
             panelBox.translation_y = 0;
             panelBox.show();
-            // Trigger strut recalculation (effect depends on affectsStruts set by _syncPanel)
+            // Synchronously update regions so struts take effect immediately
+            try { Main.layoutManager._updateRegions?.(); } catch (_) {}
             Main.layoutManager._queueUpdateRegions?.();
         }
     }
@@ -1522,7 +1522,7 @@ class MacOSFullscreenManager {
                 onComplete: () => {
                     panelBox.hide();
                     panelBox.translation_y = 0;
-                    // affectsStruts is already false in space mode, so hiding is purely visual
+                    // affectsStruts=false already set, so hiding is purely cosmetic
                 }
             });
         } else {
@@ -1550,18 +1550,18 @@ class MacOSFullscreenManager {
         let isSpace  = this._isSpaceWorkspace(activeWs);
 
         if (isSpace) {
-            // Remove struts FIRST so the panel overlays the window instead of pushing it
+            // 1. Set affectsStruts=false on the Chrome entry
             this._setPanelStruts(false);
-            // Then hide panelBox visually
+            // 2. Hide panelBox visually (visible=false also removes struts via _updateRegions visibility check)
             this._hidePanel(false);
-            // Now trigger a strut update (struts=0 because affectsStruts=false)
+            // 3. Force a synchronous regions update so Mutter gets struts=0 NOW
+            try { Main.layoutManager._updateRegions?.(); } catch (_) {}
             Main.layoutManager._queueUpdateRegions?.();
-            // Force the window to expand to fill the now-available space
+            // 4. Now that Mutter has struts=0, force windows to recalculate their maximized rect
             this._forceWindowsRefreshGeometry(activeWs);
         } else {
-            // Restore struts FIRST so showing the panel triggers window repositioning
+            // Restore struts first, then show panel (order matters for window repositioning)
             this._setPanelStruts(true);
-            // Then show panelBox (struts=36 → Mutter sends configure to window)
             this._showPanel(false);
         }
     }
