@@ -4,7 +4,7 @@
 ACTION="$1"     # "shutdown" | "restart"
 RESTORE="$2"    # "restore" | "normal"
 
-# Sincronizar buffers a disco
+# Sincronizar todos los buffers a disco inmediatamente
 sync
 
 if [ "$RESTORE" = "restore" ]; then
@@ -14,15 +14,14 @@ if [ "$RESTORE" = "restore" ]; then
         echo shutdown > /sys/power/disk 2>/dev/null || true
     fi
 
-    # Sincronizar antes de hibernar
     sync
 
-    # Hibernar directamente ignorando inhibidores
-    systemctl hibernate -i --no-wall 2>/dev/null || (echo disk > /sys/power/state)
+    # Hibernación forzada inmediata (-i ignora inhibidores, --force fuerza ejecución directa de bajo nivel)
+    systemctl hibernate -i --force --no-wall 2>/dev/null || (echo disk > /sys/power/state)
 else
     if [ "$ACTION" = "restart" ]; then
-        gnome-session-quit --reboot --force --no-prompt 2>/dev/null || systemctl reboot -i
+        gnome-session-quit --reboot --force --no-prompt 2>/dev/null || systemctl reboot -i --force
     else
-        gnome-session-quit --power-off --force --no-prompt 2>/dev/null || systemctl poweroff -i
+        gnome-session-quit --power-off --force --no-prompt 2>/dev/null || systemctl poweroff -i --force
     fi
 fi
