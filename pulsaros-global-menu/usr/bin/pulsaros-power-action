@@ -12,10 +12,17 @@ if [ "$RESTORE" = "restore" ]; then
     if [ "$ACTION" = "restart" ]; then
         mkdir -p /run/systemd/sleep.conf.d
         printf '[Sleep]\nHibernateMode=reboot\n' > /run/systemd/sleep.conf.d/00-pulsar-reboot.conf
+        echo reboot > /sys/power/disk 2>/dev/null || true
+    else
+        mkdir -p /run/systemd/sleep.conf.d
+        printf '[Sleep]\nHibernateMode=shutdown\n' > /run/systemd/sleep.conf.d/00-pulsar-reboot.conf
+        echo shutdown > /sys/power/disk 2>/dev/null || true
     fi
 
-    # Ejecutar hibernación completa manteniendo la sesión de usuario y GNOME Shell
-    # vivas en memoria para que el snapshot capture todas las aplicaciones abiertas.
+    # Sincronizar discos
+    sync
+
+    # Ejecutar hibernación completa
     systemctl hibernate 2>/dev/null || (echo disk > /sys/power/state)
 else
     if [ "$ACTION" = "restart" ]; then
