@@ -2273,13 +2273,13 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         logoutItem.connect('activate', () => {
             try {
                 let actions = SystemActions?.getDefault ? SystemActions.getDefault() : null;
-                if (actions && actions.activateLogout) {
+                if (actions && typeof actions.activateLogout === 'function' && actions.can_logout) {
                     actions.activateLogout();
                 } else {
-                    this._runCommand("gnome-session-quit --logout");
+                    this._runCommand("gnome-session-quit --logout --no-prompt || loginctl terminate-session '' || loginctl terminate-session self");
                 }
             } catch (e) {
-                this._runCommand("gnome-session-quit --logout");
+                this._runCommand("gnome-session-quit --logout --no-prompt || loginctl terminate-session '' || loginctl terminate-session self");
             }
         });
         this.logoMenuButton.menu.addMenuItem(logoutItem);
