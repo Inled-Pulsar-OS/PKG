@@ -53,15 +53,13 @@ if [ -f /swapfile ]; then
     OFFSET=$(filefrag -v /swapfile 2>/dev/null | awk '$1=="0:" {print substr($4, 1, length($4)-2)}' || true)
 
     if [ -n "$ROOT_UUID" ] && [ -n "$OFFSET" ]; then
-        RESUME_PARAMS="resume=UUID=${ROOT_UUID} resume_offset=${OFFSET} acpi_sleep=nonvs reboot=pci"
+        RESUME_PARAMS="resume=UUID=${ROOT_UUID} resume_offset=${OFFSET}"
 
         # rEFInd
         if [ -f /boot/refind_linux.conf ]; then
             if ! grep -q "resume=" /boot/refind_linux.conf; then
                 echo "⚙️ Configurando resume en /boot/refind_linux.conf..."
                 sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${RESUME_PARAMS}|g" /boot/refind_linux.conf 2>/dev/null || true
-            elif ! grep -q "reboot=pci" /boot/refind_linux.conf; then
-                sed -i "s|\(acpi_sleep=nonvs\)|\1 reboot=pci|g" /boot/refind_linux.conf 2>/dev/null || true
             fi
         fi
 
