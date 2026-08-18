@@ -19,15 +19,16 @@ if [ "$RESTORE" = "restore" ]; then
         echo shutdown > /sys/power/disk 2>/dev/null || true
     fi
 
-    # Sincronizar discos
+    # Sincronizar buffers a disco
     sync
 
-    # Ejecutar hibernación completa
-    systemctl hibernate 2>/dev/null || (echo disk > /sys/power/state)
+    # Ejecutar hibernación ignorando inhibidores de logind (-i / --check-inhibitors=no)
+    # para evitar bloqueos y deadlocks con gnome-shell / gsd-power
+    systemctl hibernate -i --no-wall 2>/dev/null || (echo disk > /sys/power/state)
 else
     if [ "$ACTION" = "restart" ]; then
-        systemctl reboot 2>/dev/null || gnome-session-quit --reboot
+        gnome-session-quit --reboot --no-prompt 2>/dev/null || systemctl reboot -i
     else
-        systemctl poweroff 2>/dev/null || gnome-session-quit --power-off
+        gnome-session-quit --power-off --no-prompt 2>/dev/null || systemctl poweroff -i
     fi
 fi
