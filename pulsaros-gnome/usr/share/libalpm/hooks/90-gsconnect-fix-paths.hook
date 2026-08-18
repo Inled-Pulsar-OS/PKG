@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = File
+Target = usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/config.js
+
+[Action]
+Description = Fixing GSConnect config.js paths (/usr/local/share -> /usr/share)...
+When = PostTransaction
+Exec = /usr/bin/sed -i "s|'/usr/local/share/|'/usr/share/|g" /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/config.js

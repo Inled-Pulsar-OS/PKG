@@ -549,6 +549,20 @@ if [ -f "$STAGE_DIR/usr/share/gnome-shell/extensions/ding@rastersoft.com/app/din
     chmod 755 "$STAGE_DIR/usr/share/gnome-shell/extensions/ding@rastersoft.com/app/ding.js"
 fi
 
+# GSConnect config.js path fix: EGO builds may ship with /usr/local/share prefixes
+# but we install to /usr/share, so patch the paths to match
+# Parche de rutas en config.js de GSConnect: las builds de EGO pueden traer prefijos /usr/local/share
+# pero instalamos en /usr/share, así que ajustamos las rutas
+GSCONNECT_CONFIG="$STAGE_DIR/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/config.js"
+if [ -f "$GSCONNECT_CONFIG" ]; then
+    sed -i "s|'/usr/local/share/gnome-shell/extensions/gsconnect@andyholmes.github.io'|'/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io'|g" "$GSCONNECT_CONFIG"
+    sed -i "s|'/usr/local/share/glib-2.0/schemas'|'/usr/share/glib-2.0/schemas'|g" "$GSCONNECT_CONFIG"
+    sed -i "s|'/usr/local/share/locale'|'/usr/share/locale'|g" "$GSCONNECT_CONFIG"
+    sed -i "s|'/usr/local/lib/x86_64-linux-gnu'|'/usr/lib/x86_64-linux-gnu'|g" "$GSCONNECT_CONFIG" 2>/dev/null || true
+    echo "✅ [ES] Rutas de config.js de GSConnect parcheadas a /usr/share"
+    echo "✅ [EN] GSConnect config.js paths patched to /usr/share"
+fi
+
 # GSConnect service scripts
 if [ -d "$STAGE_DIR/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/service" ]; then
     find "$STAGE_DIR/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/service" -name "*.js" -exec chmod 755 {} \; 2>/dev/null || true
