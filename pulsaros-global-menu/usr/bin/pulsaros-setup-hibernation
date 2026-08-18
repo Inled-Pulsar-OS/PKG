@@ -83,7 +83,36 @@ cat << 'DROPEOF' > /etc/systemd/sleep.conf.d/pulsaros-hibernate.conf
 HibernateMode=shutdown
 DROPEOF
 
-# 5. Compilar esquemas GSettings
+# 5. Fixes específicos por GPU — solo se aplican si el hardware está presente
+# NVIDIA: en portátiles AMD+NVIDIA, los notificadores PM de NVIDIA abortan el hibernate.
+# Deshabilitarlos permite al kernel volcar la RAM sin interferencias.
+NVIDIA_MODPROBE_FILE=/etc/modprobe.d/pulsaros-nvidia-hibernate.conf
+if lsmod | grep -q "^nvidia "; then
+    echo "🎮 NVIDIA detectada — aplicando fixes de hibernación..."
+    cat << 'NVEOF' > "$NVIDIA_MODPROBE_FILE"
+# Pulsar OS - NVIDIA hibernate fixes (auto-generado por pulsaros-setup-hibernation)
+# Solo se aplica en sistemas con NVIDIA. Seguro ignorar en sistemas sin NVIDIA.
+# PreserveVideoMemoryAllocations: preserva VRAM para restaurar estado tras hibernate.
+# UseKernelSuspendNotifiers=0: evita que NVIDIA aborte el volcado de RAM en setups AMD+NVIDIA.
+options nvidia NVreg_PreserveVideoMemoryAllocations=1 NVreg_TemporaryFilePath=/var/tmp NVreg_UseKernelSuspendNotifiers=0
+NVEOF
+
+    # Habilitar servicios NVIDIA de hibernate si están disponibles
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl enable nvidia-hibernate.service nvidia-resume.service nvidia-suspend.service 2>/dev/null || true
+    fi
+
+    # Regenerar initramfs para que las opciones del módulo se incluyan
+    if command -v mkinitcpio >/dev/null 2>&1; then
+        echo "🔄 Regenerando initramfs con configuración NVIDIA..."
+        mkinitcpio -P 2>/dev/null || true
+    fi
+elif [ -f "$NVIDIA_MODPROBE_FILE" ]; then
+    # Limpiar si se había instalado antes y ahora no hay NVIDIA
+    rm -f "$NVIDIA_MODPROBE_FILE"
+fi
+
+# 6. Compilar esquemas GSettings
 if [ -d /usr/share/glib-2.0/schemas ]; then
     glib-compile-schemas /usr/share/glib-2.0/schemas 2>/dev/null || true
 fi
