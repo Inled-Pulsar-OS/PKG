@@ -6,7 +6,6 @@ RESTORE="$2"    # "restore" | "normal"
 
 sync
 
-# Limpiar drop-ins temporales previos
 rm -f /run/systemd/sleep.conf.d/00-pulsar-reboot.conf 2>/dev/null || true
 
 if [ "$RESTORE" = "restore" ]; then
@@ -14,12 +13,10 @@ if [ "$RESTORE" = "restore" ]; then
         mkdir -p /run/systemd/sleep.conf.d
         printf '[Sleep]\nHibernateMode=reboot\n' > /run/systemd/sleep.conf.d/00-pulsar-reboot.conf
     fi
-
-    # Descargar módulo NVIDIA antes de hibernar (laptop AMD+NVIDIA: NVIDIA no gestiona pantalla)
-    # Sin esto, NVIDIA activa su HDA controller durante el volcado y aborta la hibernación
-    modprobe -r nvidia_drm nvidia_modeset nvidia_uvm nvidia 2>/dev/null || true
-
-    # Lanzar la hibernación fuera del scope de sesión de usuario
+    # Lanzar hibernate fuera del scope de sesión.
+    # El hook /usr/lib/systemd/system-sleep/pulsaros-nvidia-hibernate.sh
+    # descargará NVIDIA DESPUÉS de que los procesos de usuario estén congelados
+    # (y por tanto gnome-shell ya no tendrá abierto /dev/nvidia*).
     systemd-run --no-block --unit=pulsaros-hibernate \
         --description="Pulsar OS Session Restore Hibernate" \
         /bin/sh -c 'sync; sleep 1; systemctl hibernate'
