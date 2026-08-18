@@ -90,6 +90,7 @@ cat << 'TMPEOF' > /usr/lib/tmpfiles.d/pulsaros-hibernate.conf
 # Pulsar OS - Hibernate disk powerdown mode and user permissions
 w /sys/power/disk - - - - shutdown
 z /sys/power/disk 0666 root root -
+z /sys/power/state 0666 root root -
 TMPEOF
 
 # 5. Fixes específicos por GPU — solo se aplican si el hardware está presente
