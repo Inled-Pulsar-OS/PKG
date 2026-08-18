@@ -1,6 +1,6 @@
 #!/bin/bash
 # Pulsar OS - Power Action Handler with Session State Persistence
-# Ejecuta apagado o reinicio con soporte de hibernación / restauración de sesión.
+# Ejecuta apagado o reinicio gestionado por systemd con soporte de hibernación / restauración de sesión.
 
 ACTION="$1"     # "shutdown" | "restart"
 RESTORE="$2"    # "restore" | "normal"
@@ -8,15 +8,22 @@ RESTORE="$2"    # "restore" | "normal"
 # Sincronizar buffers de disco
 sync
 
+# Limpiar cualquier drop-in previo de reboot en tmpfs
+rm -f /run/systemd/sleep.conf.d/00-pulsar-reboot.conf 2>/dev/null || true
+
 if [ "$RESTORE" = "restore" ]; then
     if [ "$ACTION" = "restart" ]; then
-        # Hibernar a disco y reiniciar inmediatamente
-        echo reboot > /sys/power/disk 2>/dev/null || true
-        echo disk > /sys/power/state 2>/dev/null || systemctl hibernate 2>/dev/null || systemctl reboot
+        # Configurar systemd-sleep para reiniciar tras volcar la memoria
+        mkdir -p /run/systemd/sleep.conf.d
+        cat << 'DROPIN' > /run/systemd/sleep.conf.d/00-pulsar-reboot.conf
+[Sleep]
+HibernateMode=reboot
+DROPIN
+        # Ejecutar hibernación gestionada por systemd (con fallback a reboot normal)
+        systemctl hibernate 2>/dev/null || systemctl reboot
     else
-        # Hibernar a disco y apagar
-        echo shutdown > /sys/power/disk 2>/dev/null || true
-        echo disk > /sys/power/state 2>/dev/null || systemctl hibernate 2>/dev/null || systemctl poweroff
+        # Hibernación estándar gestionada por systemd (con fallback a apagado normal)
+        systemctl hibernate 2>/dev/null || systemctl poweroff
     fi
 else
     if [ "$ACTION" = "restart" ]; then
