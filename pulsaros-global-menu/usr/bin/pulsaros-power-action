@@ -13,19 +13,15 @@ if [ "$RESTORE" = "restore" ]; then
         mkdir -p /run/systemd/sleep.conf.d
         printf '[Sleep]\nHibernateMode=reboot\n' > /run/systemd/sleep.conf.d/00-pulsar-reboot.conf
     fi
-    # Lanzar hibernate fuera del scope de sesión.
-    # El hook /usr/lib/systemd/system-sleep/pulsaros-nvidia-hibernate.sh
-    # descargará NVIDIA DESPUÉS de que los procesos de usuario estén congelados
-    # (y por tanto gnome-shell ya no tendrá abierto /dev/nvidia*).
+    # Con NVreg_UseKernelSuspendNotifiers=0, el kernel no llama al callback de NVIDIA
+    # durante el hibernate, evitando el abort por "Enabling HDA controller"
     systemd-run --no-block --unit=pulsaros-hibernate \
         --description="Pulsar OS Session Restore Hibernate" \
         /bin/sh -c 'sync; sleep 1; systemctl hibernate'
 else
     if [ "$ACTION" = "restart" ]; then
-        systemd-run --no-block --unit=pulsaros-reboot \
-            /bin/sh -c 'sleep 1; systemctl reboot'
+        systemctl reboot 2>/dev/null || gnome-session-quit --reboot
     else
-        systemd-run --no-block --unit=pulsaros-poweroff \
-            /bin/sh -c 'sleep 1; systemctl poweroff'
+        systemctl poweroff 2>/dev/null || gnome-session-quit --power-off
     fi
 fi
