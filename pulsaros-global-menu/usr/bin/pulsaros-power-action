@@ -4,24 +4,23 @@
 ACTION="$1"     # "shutdown" | "restart"
 RESTORE="$2"    # "restore" | "normal"
 
-# Sincronizar todos los buffers a disco inmediatamente
 sync
+
+rm -f /run/systemd/sleep.conf.d/00-pulsar-reboot.conf 2>/dev/null || true
 
 if [ "$RESTORE" = "restore" ]; then
     if [ "$ACTION" = "restart" ]; then
-        echo reboot > /sys/power/disk 2>/dev/null || true
-    else
-        echo shutdown > /sys/power/disk 2>/dev/null || true
+        mkdir -p /run/systemd/sleep.conf.d
+        printf '[Sleep]\nHibernateMode=reboot\n' > /run/systemd/sleep.conf.d/00-pulsar-reboot.conf
     fi
 
-    sync
-
-    # Hibernación forzada inmediata (-i ignora inhibidores, --force fuerza ejecución directa de bajo nivel)
-    systemctl hibernate -i --force --no-wall 2>/dev/null || (echo disk > /sys/power/state)
+    # Ejecutar hibernación completa manteniendo la sesión de usuario y GNOME Shell
+    # vivas en memoria para que el snapshot capture todas las aplicaciones abiertas.
+    systemctl hibernate 2>/dev/null || (echo disk > /sys/power/state)
 else
     if [ "$ACTION" = "restart" ]; then
-        gnome-session-quit --reboot --force --no-prompt 2>/dev/null || systemctl reboot -i --force
+        systemctl reboot 2>/dev/null || gnome-session-quit --reboot
     else
-        gnome-session-quit --power-off --force --no-prompt 2>/dev/null || systemctl poweroff -i --force
+        systemctl poweroff 2>/dev/null || gnome-session-quit --power-off
     fi
 fi
