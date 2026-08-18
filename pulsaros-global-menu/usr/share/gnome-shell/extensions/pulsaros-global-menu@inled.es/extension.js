@@ -296,110 +296,6 @@ const PowerConfirmDialog = GObject.registerClass({
     }
 });
 
-const PowerProgressDialog = GObject.registerClass({
-    GTypeName: 'PulsarosPowerProgressDialog'
-}, class PowerProgressDialog extends ModalDialog.ModalDialog {
-    _init(actionType, isHibernating) {
-        super._init({ styleClass: 'pulsaros-power-dialog' });
-
-        this._progressTimer = 0;
-
-        let mainBox = new St.BoxLayout({
-            vertical: true,
-            style_class: 'pulsaros-power-mainbox'
-        });
-        this.contentLayout.add_child(mainBox);
-
-        let iconName = isHibernating 
-            ? 'drive-harddisk-symbolic' 
-            : (actionType === 'restart' ? 'system-restart-symbolic' : 'system-shutdown-symbolic');
-
-        let icon = new St.Icon({
-            icon_name: iconName,
-            icon_size: 56,
-            style_class: 'pulsaros-power-logo',
-            x_align: Clutter.ActorAlign.CENTER
-        });
-        mainBox.add_child(icon);
-
-        let titleText = isHibernating
-            ? (actionType === 'restart' ? "Restarting (Session Restore)..." : "Saving Session & Shutting Down...")
-            : (actionType === 'restart' ? "Restarting..." : "Shutting Down...");
-
-        let titleLabel = new St.Label({
-            text: titleText,
-            style_class: 'pulsaros-power-title',
-            x_align: Clutter.ActorAlign.CENTER
-        });
-        mainBox.add_child(titleLabel);
-
-        let descText = isHibernating
-            ? "Writing memory state to disk to restore all active apps upon next boot. Please do not turn off your computer."
-            : "Closing applications and powering down...";
-
-        let descLabel = new St.Label({
-            text: descText,
-            style_class: 'pulsaros-power-subtitle',
-            x_align: Clutter.ActorAlign.CENTER
-        });
-        mainBox.add_child(descLabel);
-
-        // Progress bar container
-        let progressBg = new St.BoxLayout({
-            style_class: 'pulsaros-power-progress-bg',
-            x_align: Clutter.ActorAlign.CENTER
-        });
-        this._progressBar = new St.Widget({
-            style_class: 'pulsaros-power-progress-fill',
-            width: 10,
-            height: 8
-        });
-        progressBg.add_child(this._progressBar);
-        mainBox.add_child(progressBg);
-
-        this._statusLabel = new St.Label({
-            text: isHibernating ? "Dumping RAM to disk... (0%)" : "Closing session...",
-            style_class: 'pulsaros-power-hint',
-            x_align: Clutter.ActorAlign.CENTER
-        });
-        mainBox.add_child(this._statusLabel);
-    }
-
-    startProgress(onComplete) {
-        let totalSteps = 30;
-        let currentStep = 0;
-        let maxWidth = 380;
-
-        this._progressTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 40, () => {
-            currentStep++;
-            let progressRatio = Math.min(currentStep / totalSteps, 1.0);
-            let percent = Math.round(progressRatio * 100);
-            
-            if (this._progressBar) {
-                this._progressBar.width = Math.max(10, Math.round(maxWidth * progressRatio));
-            }
-            if (this._statusLabel) {
-                this._statusLabel.text = `Dumping RAM to disk... (${percent}%)`;
-            }
-
-            if (currentStep >= totalSteps) {
-                this._progressTimer = 0;
-                if (onComplete) onComplete();
-                return GLib.SOURCE_REMOVE;
-            }
-            return GLib.SOURCE_CONTINUE;
-        });
-    }
-
-    close() {
-        if (this._progressTimer) {
-            GLib.source_remove(this._progressTimer);
-            this._progressTimer = 0;
-        }
-        super.close();
-    }
-});
-
 const LockScreen = GObject.registerClass({
     GTypeName: 'PulsarosLockScreen'
 }, class LockScreen extends St.Widget {
@@ -2661,24 +2557,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
     _executePowerAction(actionType, restore) {
         let mode = restore ? "restore" : "normal";
         let cmd = `pkexec /usr/bin/pulsaros-power-action ${actionType} ${mode}`;
-
-        if (restore) {
-            let progressDialog = new PowerProgressDialog(actionType, true);
-            progressDialog.open();
-
-            progressDialog.startProgress(() => {
-                try {
-                    // Close and destroy progress dialog and drop grabs BEFORE memory snapshot
-                    progressDialog.close();
-                } catch (e) {
-                    console.error("[GlobalMenu] Failed to close dialog:", e);
-                }
-                this._runCommand(cmd);
-            });
-        } else {
-            // Normal shutdown / restart: execute immediately without memory dump progress
-            this._runCommand(cmd);
-        }
+        this._runCommand(cmd);
     }
 
     // --- Helper to run command ---
