@@ -14,23 +14,9 @@ if [ "$RESTORE" = "restore" ]; then
         printf '[Sleep]\nHibernateMode=reboot\n' > /run/systemd/sleep.conf.d/00-pulsar-reboot.conf
     fi
 
-    # Crear un servicio de sistema que hará el hibernate DESPUÉS de que la sesión
-    # gráfica se cierre completamente (y con ella gnome-shell, liberando /dev/nvidia*)
-    systemd-run --no-block --unit=pulsaros-hibernate \
-        --description="Pulsar OS Session Restore Hibernate" \
-        /bin/sh -c '
-            # Terminar la sesión gráfica del usuario para liberar /dev/nvidia*
-            # gdm/sddm/lightdm detendrá la sesión y gnome-shell morirá
-            systemctl stop display-manager.service 2>/dev/null || true
-            # Esperar a que gnome-shell libere el dispositivo
-            sleep 3
-            # Descargar NVIDIA (ahora sí funciona porque gnome-shell está muerto)
-            modprobe -r nvidia_drm nvidia_modeset nvidia_uvm nvidia 2>/dev/null || true
-            sleep 1
-            sync
-            # Hibernar
-            systemctl hibernate 2>/dev/null || (echo disk > /sys/power/state)
-        '
+    # Ejecutar hibernación completa manteniendo la sesión de usuario y GNOME Shell
+    # vivas en memoria para que el snapshot capture todas las aplicaciones abiertas.
+    systemctl hibernate 2>/dev/null || (echo disk > /sys/power/state)
 else
     if [ "$ACTION" = "restart" ]; then
         systemctl reboot 2>/dev/null || gnome-session-quit --reboot
