@@ -4,18 +4,26 @@
 ACTION="$1"     # "shutdown" | "restart"
 RESTORE="$2"    # "restore" | "normal"
 
+# Sincronizar buffers a disco
 sync
 
+# Limpiar drop-ins temporales previos
 rm -f /run/systemd/sleep.conf.d/00-pulsar-reboot.conf 2>/dev/null || true
 
 if [ "$RESTORE" = "restore" ]; then
+    # Mostrar bootsplash oficial de Plymouth durante el volcado de memoria
+    if command -v plymouth >/dev/null 2>&1; then
+        plymouth --show-splash 2>/dev/null || true
+    fi
+
     if [ "$ACTION" = "restart" ]; then
         mkdir -p /run/systemd/sleep.conf.d
         printf '[Sleep]\nHibernateMode=reboot\n' > /run/systemd/sleep.conf.d/00-pulsar-reboot.conf
     fi
 
-    # Ejecutar hibernación completa manteniendo la sesión de usuario y GNOME Shell
-    # vivas en memoria para que el snapshot capture todas las aplicaciones abiertas.
+    sync
+
+    # Ejecutar hibernación gestionada por systemd
     systemctl hibernate 2>/dev/null || (echo disk > /sys/power/state)
 else
     if [ "$ACTION" = "restart" ]; then
