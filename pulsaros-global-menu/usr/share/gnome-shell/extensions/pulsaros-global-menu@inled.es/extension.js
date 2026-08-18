@@ -2660,7 +2660,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
     // --- Utilidad para ejecutar acción de energía (con restauración opcional de sesión / hibernación) ---
     _executePowerAction(actionType, restore) {
         let mode = restore ? "restore" : "normal";
-        let cmd = `pkexec /usr/bin/pulsaros-power-action ${actionType} ${mode}`;
+        let cmd = `/usr/bin/pulsaros-power-action ${actionType} ${mode}`;
 
         if (restore) {
             let progressDialog = new PowerProgressDialog(actionType, true);
