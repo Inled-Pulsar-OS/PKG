@@ -1,12 +1,9 @@
 #!/bin/bash
 # Pulsar OS - Power Action Handler with Session State Persistence
-# Ejecuta la acción de energía fuera del scope de sesión de usuario para evitar
-# que systemd mate el proceso antes de completar el volcado de RAM a disco.
 
 ACTION="$1"     # "shutdown" | "restart"
 RESTORE="$2"    # "restore" | "normal"
 
-# Sincronizar buffers de disco
 sync
 
 # Limpiar drop-ins temporales previos
@@ -14,12 +11,15 @@ rm -f /run/systemd/sleep.conf.d/00-pulsar-reboot.conf 2>/dev/null || true
 
 if [ "$RESTORE" = "restore" ]; then
     if [ "$ACTION" = "restart" ]; then
-        # Configurar modo reboot para hibernación (vuelca RAM y reinicia el hardware)
         mkdir -p /run/systemd/sleep.conf.d
         printf '[Sleep]\nHibernateMode=reboot\n' > /run/systemd/sleep.conf.d/00-pulsar-reboot.conf
     fi
-    # Lanzar la hibernación fuera del scope de sesión de usuario con systemd-run
-    # Esto evita que systemd mate el proceso antes de completar el volcado de RAM
+
+    # Descargar módulo NVIDIA antes de hibernar (laptop AMD+NVIDIA: NVIDIA no gestiona pantalla)
+    # Sin esto, NVIDIA activa su HDA controller durante el volcado y aborta la hibernación
+    modprobe -r nvidia_drm nvidia_modeset nvidia_uvm nvidia 2>/dev/null || true
+
+    # Lanzar la hibernación fuera del scope de sesión de usuario
     systemd-run --no-block --unit=pulsaros-hibernate \
         --description="Pulsar OS Session Restore Hibernate" \
         /bin/sh -c 'sync; sleep 1; systemctl hibernate'
