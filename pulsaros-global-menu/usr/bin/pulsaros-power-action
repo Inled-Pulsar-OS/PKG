@@ -11,14 +11,6 @@ sync
 rm -f /run/systemd/sleep.conf.d/00-pulsar-reboot.conf 2>/dev/null || true
 
 if [ "$RESTORE" = "restore" ]; then
-    # Iniciar demonio de Plymouth si no está activo y mostrar splash oficial
-    if command -v plymouth >/dev/null 2>&1; then
-        if ! plymouth --ping 2>/dev/null; then
-            plymouthd --mode=shutdown 2>/dev/null || true
-        fi
-        plymouth --show-splash 2>/dev/null || true
-    fi
-
     if [ "$ACTION" = "restart" ]; then
         mkdir -p /run/systemd/sleep.conf.d
         printf '[Sleep]\nHibernateMode=reboot\n' > /run/systemd/sleep.conf.d/00-pulsar-reboot.conf
