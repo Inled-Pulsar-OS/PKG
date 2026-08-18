@@ -4,26 +4,20 @@
 ACTION="$1"     # "shutdown" | "restart"
 RESTORE="$2"    # "restore" | "normal"
 
+# Sincronizar buffers a disco
 sync
-
-rm -f /run/systemd/sleep.conf.d/00-pulsar-reboot.conf 2>/dev/null || true
 
 if [ "$RESTORE" = "restore" ]; then
     if [ "$ACTION" = "restart" ]; then
-        mkdir -p /run/systemd/sleep.conf.d
-        printf '[Sleep]\nHibernateMode=reboot\n' > /run/systemd/sleep.conf.d/00-pulsar-reboot.conf
         echo reboot > /sys/power/disk 2>/dev/null || true
     else
-        mkdir -p /run/systemd/sleep.conf.d
-        printf '[Sleep]\nHibernateMode=shutdown\n' > /run/systemd/sleep.conf.d/00-pulsar-reboot.conf
         echo shutdown > /sys/power/disk 2>/dev/null || true
     fi
 
-    # Sincronizar buffers a disco
+    # Sincronizar antes de hibernar
     sync
 
-    # Ejecutar hibernación ignorando inhibidores de logind (-i / --check-inhibitors=no)
-    # para evitar bloqueos y deadlocks con gnome-shell / gsd-power
+    # Hibernar directamente ignorando inhibidores
     systemctl hibernate -i --no-wall 2>/dev/null || (echo disk > /sys/power/state)
 else
     if [ "$ACTION" = "restart" ]; then
