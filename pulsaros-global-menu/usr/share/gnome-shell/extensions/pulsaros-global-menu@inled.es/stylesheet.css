@@ -259,3 +259,112 @@
     border: 1px solid #3498db;
 }
 
+/* --- Pulsar OS Power Confirmation Dialog Styles --- */
+.pulsaros-power-dialog {
+    background-color: rgba(28, 28, 30, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 14px;
+    padding: 24px;
+    width: 440px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+}
+
+.pulsaros-power-mainbox {
+    spacing: 12px;
+}
+
+.pulsaros-power-logo {
+    color: #ffffff;
+    margin-bottom: 6px;
+}
+
+.pulsaros-power-title {
+    font-size: 18pt;
+    font-weight: bold;
+    color: #ffffff;
+    text-align: center;
+}
+
+.pulsaros-power-subtitle {
+    font-size: 11pt;
+    color: #cccccc;
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.pulsaros-power-option-box {
+    background-color: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 12px 16px;
+    spacing: 6px;
+}
+
+.pulsaros-power-checkbox-button {
+    background-color: transparent;
+    border-radius: 6px;
+    padding: 4px 8px;
+}
+
+.pulsaros-power-checkbox-button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.pulsaros-power-checkbox-layout {
+    spacing: 8px;
+}
+
+.pulsaros-power-checkbox-icon {
+    color: #0a84ff;
+    icon-size: 18px;
+}
+
+.pulsaros-power-checkbox-label {
+    font-size: 11pt;
+    font-weight: 500;
+    color: #ffffff;
+}
+
+.pulsaros-power-hint {
+    font-size: 9pt;
+    color: #8e8e93;
+    text-align: center;
+}
+
+.pulsaros-power-dialog .modal-dialog-button-box {
+    spacing: 12px;
+    padding: 0;
+    margin-top: 18px;
+}
+
+.pulsaros-power-dialog .modal-dialog-button {
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 8px 20px;
+    color: #ffffff;
+    font-size: 11pt;
+    font-weight: 500;
+    min-height: 28px;
+}
+
+.pulsaros-power-dialog .modal-dialog-button:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.pulsaros-power-dialog .modal-dialog-button:active {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.pulsaros-power-dialog .modal-dialog-button.pulsaros-power-confirm-btn {
+    background-color: #0a84ff;
+    border: 1px solid #0071e3;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.pulsaros-power-dialog .modal-dialog-button.pulsaros-power-confirm-btn:hover {
+    background-color: #0071e3;
+}
+
+

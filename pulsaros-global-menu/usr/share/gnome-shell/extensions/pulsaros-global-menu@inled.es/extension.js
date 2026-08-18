@@ -158,6 +158,146 @@ const AboutDialog = GObject.registerClass({
     }
 });
 
+const PowerConfirmDialog = GObject.registerClass({
+    GTypeName: 'PulsarosPowerConfirmDialog'
+}, class PowerConfirmDialog extends ModalDialog.ModalDialog {
+    _init(actionType, callback) {
+        super._init({ styleClass: 'pulsaros-power-dialog' });
+
+        this._actionType = actionType; // 'shutdown' | 'restart'
+        this._callback = callback;
+        this._restoreSession = false;
+
+        let mainBox = new St.BoxLayout({
+            vertical: true,
+            style_class: 'pulsaros-power-mainbox'
+        });
+        this.contentLayout.add_child(mainBox);
+
+        // Action Icon
+        let iconName = actionType === 'restart' ? 'system-restart-symbolic' : 'system-shutdown-symbolic';
+        let icon = new St.Icon({
+            icon_name: iconName,
+            icon_size: 56,
+            style_class: 'pulsaros-power-logo',
+            x_align: Clutter.ActorAlign.CENTER
+        });
+        mainBox.add_child(icon);
+
+        // Title
+        let titleText = actionType === 'restart' ? "Restart Computer" : "Shut Down Computer";
+        let titleLabel = new St.Label({
+            text: titleText,
+            style_class: 'pulsaros-power-title',
+            x_align: Clutter.ActorAlign.CENTER
+        });
+        mainBox.add_child(titleLabel);
+
+        // Subtitle / Prompt
+        let descText = actionType === 'restart'
+            ? "Are you sure you want to restart your computer now?"
+            : "Are you sure you want to shut down your computer now?";
+        let descLabel = new St.Label({
+            text: descText,
+            style_class: 'pulsaros-power-subtitle',
+            x_align: Clutter.ActorAlign.CENTER
+        });
+        mainBox.add_child(descLabel);
+
+        // Option Container
+        let optionBox = new St.BoxLayout({
+            vertical: true,
+            style_class: 'pulsaros-power-option-box',
+            x_align: Clutter.ActorAlign.CENTER
+        });
+        mainBox.add_child(optionBox);
+
+        // Checkbox Toggle Row
+        let checkRow = new St.Button({
+            style_class: 'pulsaros-power-checkbox-button',
+            reactive: true,
+            can_focus: true,
+            toggle_mode: true,
+            checked: false,
+            x_align: Clutter.ActorAlign.CENTER
+        });
+
+        let checkLayout = new St.BoxLayout({
+            vertical: false,
+            style_class: 'pulsaros-power-checkbox-layout',
+            y_align: Clutter.ActorAlign.CENTER
+        });
+
+        let checkIcon = new St.Icon({
+            icon_name: 'checkbox-symbolic',
+            icon_size: 18,
+            style_class: 'pulsaros-power-checkbox-icon'
+        });
+        checkLayout.add_child(checkIcon);
+
+        let checkLabel = new St.Label({
+            text: "Reopen windows when logging back in",
+            style_class: 'pulsaros-power-checkbox-label',
+            y_align: Clutter.ActorAlign.CENTER
+        });
+        checkLayout.add_child(checkLabel);
+
+        checkRow.set_child(checkLayout);
+
+        let syncCheck = () => {
+            this._restoreSession = checkRow.checked;
+            checkIcon.icon_name = checkRow.checked ? 'checkbox-checked-symbolic' : 'checkbox-symbolic';
+            if (checkRow.checked) {
+                checkIcon.add_style_pseudo_class('checked');
+            } else {
+                checkIcon.remove_style_pseudo_class('checked');
+            }
+        };
+
+        checkRow.connect('clicked', () => {
+            syncCheck();
+        });
+        checkRow.connect('notify::checked', () => {
+            syncCheck();
+        });
+
+        optionBox.add_child(checkRow);
+
+        let hintLabel = new St.Label({
+            text: "Dumps memory state to disk (hibernation) to resume right where you left off.",
+            style_class: 'pulsaros-power-hint',
+            x_align: Clutter.ActorAlign.CENTER
+        });
+        optionBox.add_child(hintLabel);
+
+        // Cancel Button
+        this.addButton({
+            label: "Cancel",
+            action: () => {
+                this.close();
+            },
+            key: Clutter.KEY_Escape
+        });
+
+        // Action Button
+        let actionLabel = actionType === 'restart' ? "Restart" : "Shut Down";
+        let actionBtn = this.addButton({
+            label: actionLabel,
+            action: () => {
+                let restore = this._restoreSession;
+                this.close();
+                if (this._callback) {
+                    this._callback(restore);
+                }
+            },
+            default: true
+        });
+        if (actionBtn && actionBtn.add_style_class_name) {
+            actionBtn.add_style_class_name('pulsaros-power-confirm-btn');
+        }
+    }
+});
+
 const LockScreen = GObject.registerClass({
     GTypeName: 'PulsarosLockScreen'
 }, class LockScreen extends St.Widget {
@@ -2059,32 +2199,20 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         // Restart
         let restartItem = new PopupMenu.PopupMenuItem("Restart...");
         restartItem.connect('activate', () => {
-            try {
-                let actions = SystemActions?.getDefault ? SystemActions.getDefault() : null;
-                if (actions && actions.activateRestart) {
-                    actions.activateRestart();
-                } else {
-                    this._runCommand("gnome-session-quit --reboot");
-                }
-            } catch (e) {
-                this._runCommand("gnome-session-quit --reboot");
-            }
+            let dialog = new PowerConfirmDialog('restart', (restore) => {
+                this._executePowerAction('restart', restore);
+            });
+            dialog.open();
         });
         this.logoMenuButton.menu.addMenuItem(restartItem);
         
         // Shut Down
         let shutdownItem = new PopupMenu.PopupMenuItem("Shut Down...");
         shutdownItem.connect('activate', () => {
-            try {
-                let actions = SystemActions?.getDefault ? SystemActions.getDefault() : null;
-                if (actions && actions.activatePowerOff) {
-                    actions.activatePowerOff();
-                } else {
-                    this._runCommand("gnome-session-quit --power-off");
-                }
-            } catch (e) {
-                this._runCommand("gnome-session-quit --power-off");
-            }
+            let dialog = new PowerConfirmDialog('shutdown', (restore) => {
+                this._executePowerAction('shutdown', restore);
+            });
+            dialog.open();
         });
         this.logoMenuButton.menu.addMenuItem(shutdownItem);
         
@@ -2426,6 +2554,42 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         }
     }
     
+    // --- Helper to execute power action (with optional session restore / hibernation) ---
+    // --- Utilidad para ejecutar acción de energía (con restauración opcional de sesión / hibernación) ---
+    _executePowerAction(actionType, restore) {
+        if (restore) {
+            if (actionType === 'shutdown') {
+                this._runCommand("systemctl hibernate");
+            } else if (actionType === 'restart') {
+                this._runCommand("sh -c 'echo reboot > /sys/power/disk 2>/dev/null; systemctl hibernate || systemctl reboot'");
+            }
+        } else {
+            if (actionType === 'shutdown') {
+                try {
+                    let actions = SystemActions?.getDefault ? SystemActions.getDefault() : null;
+                    if (actions && actions.activatePowerOff) {
+                        actions.activatePowerOff();
+                    } else {
+                        this._runCommand("gnome-session-quit --power-off");
+                    }
+                } catch (e) {
+                    this._runCommand("gnome-session-quit --power-off");
+                }
+            } else if (actionType === 'restart') {
+                try {
+                    let actions = SystemActions?.getDefault ? SystemActions.getDefault() : null;
+                    if (actions && actions.activateRestart) {
+                        actions.activateRestart();
+                    } else {
+                        this._runCommand("gnome-session-quit --reboot");
+                    }
+                } catch (e) {
+                    this._runCommand("gnome-session-quit --reboot");
+                }
+            }
+        }
+    }
+
     // --- Helper to run command ---
     // --- Utilidad para ejecutar comandos ---
     _runCommand(cmd) {
