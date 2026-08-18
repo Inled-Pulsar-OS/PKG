@@ -2665,61 +2665,17 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         progressDialog.open();
 
         progressDialog.startProgress(() => {
-            if (restore) {
-                try {
-                    GLib.spawn_command_line_async("sync");
-                    if (actionType === 'shutdown') {
-                        this._runCommandWithFallback(
-                            "systemctl hibernate",
-                            "systemctl poweroff"
-                        );
-                    } else if (actionType === 'restart') {
-                        this._runCommandWithFallback(
-                            "sh -c 'echo reboot > /sys/power/disk 2>/dev/null; systemctl hibernate'",
-                            "systemctl reboot"
-                        );
-                    }
-                } catch (e) {
-                    console.error("[GlobalMenu] Failed hibernation, fallback to poweroff:", e);
-                    this._runCommand(actionType === 'restart' ? "systemctl reboot" : "systemctl poweroff");
-                }
-            } else {
-                if (actionType === 'shutdown') {
-                    try {
-                        let actions = SystemActions?.getDefault ? SystemActions.getDefault() : null;
-                        if (actions && actions.activatePowerOff) {
-                            actions.activatePowerOff();
-                        } else {
-                            this._runCommand("systemctl poweroff");
-                        }
-                    } catch (e) {
-                        this._runCommand("systemctl poweroff");
-                    }
-                } else if (actionType === 'restart') {
-                    try {
-                        let actions = SystemActions?.getDefault ? SystemActions.getDefault() : null;
-                        if (actions && actions.activateRestart) {
-                            actions.activateRestart();
-                        } else {
-                            this._runCommand("systemctl reboot");
-                        }
-                    } catch (e) {
-                        this._runCommand("systemctl reboot");
-                    }
-                }
+            try {
+                // Close and destroy progress dialog and drop grabs BEFORE memory snapshot
+                progressDialog.close();
+            } catch (e) {
+                console.error("[GlobalMenu] Failed to close dialog:", e);
             }
-        });
-    }
 
-    // --- Helper to run command with immediate fallback on non-zero exit ---
-    // --- Utilidad para ejecutar comando con respaldo inmediato en caso de error ---
-    _runCommandWithFallback(primaryCmd, fallbackCmd) {
-        try {
-            GLib.spawn_command_line_async(`/bin/sh -c "${primaryCmd} || ${fallbackCmd}"`);
-        } catch (e) {
-            console.error(`[GlobalMenu] Command failed, executing fallback: ${fallbackCmd}`, e);
-            GLib.spawn_command_line_async(fallbackCmd);
-        }
+            let mode = restore ? "restore" : "normal";
+            let cmd = `pkexec /usr/bin/pulsaros-power-action ${actionType} ${mode}`;
+            this._runCommand(cmd);
+        });
     }
 
     // --- Helper to run command ---

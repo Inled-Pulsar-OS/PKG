@@ -1,0 +1,27 @@
+#!/bin/bash
+# Pulsar OS - Power Action Handler with Session State Persistence
+# Ejecuta apagado o reinicio con soporte de hibernación / restauración de sesión.
+
+ACTION="$1"     # "shutdown" | "restart"
+RESTORE="$2"    # "restore" | "normal"
+
+# Sincronizar buffers de disco
+sync
+
+if [ "$RESTORE" = "restore" ]; then
+    if [ "$ACTION" = "restart" ]; then
+        # Hibernar a disco y reiniciar inmediatamente
+        echo reboot > /sys/power/disk 2>/dev/null || true
+        echo disk > /sys/power/state 2>/dev/null || systemctl hibernate 2>/dev/null || systemctl reboot
+    else
+        # Hibernar a disco y apagar
+        echo shutdown > /sys/power/disk 2>/dev/null || true
+        echo disk > /sys/power/state 2>/dev/null || systemctl hibernate 2>/dev/null || systemctl poweroff
+    fi
+else
+    if [ "$ACTION" = "restart" ]; then
+        systemctl reboot 2>/dev/null || gnome-session-quit --reboot
+    else
+        systemctl poweroff 2>/dev/null || gnome-session-quit --power-off
+    fi
+fi
