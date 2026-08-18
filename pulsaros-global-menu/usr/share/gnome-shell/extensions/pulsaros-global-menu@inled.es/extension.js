@@ -244,10 +244,11 @@ const PowerConfirmDialog = GObject.registerClass({
 
         checkRow.set_child(checkLayout);
 
-        let syncCheck = () => {
-            this._restoreSession = checkRow.checked;
-            checkIcon.icon_name = checkRow.checked ? 'checkbox-checked-symbolic' : 'checkbox-symbolic';
-            if (checkRow.checked) {
+        let syncCheck = (val) => {
+            this._restoreSession = val;
+            checkRow.checked = val;
+            checkIcon.icon_name = val ? 'checkbox-checked-symbolic' : 'checkbox-symbolic';
+            if (val) {
                 checkIcon.add_style_pseudo_class('checked');
             } else {
                 checkIcon.remove_style_pseudo_class('checked');
@@ -255,10 +256,7 @@ const PowerConfirmDialog = GObject.registerClass({
         };
 
         checkRow.connect('clicked', () => {
-            syncCheck();
-        });
-        checkRow.connect('notify::checked', () => {
-            syncCheck();
+            syncCheck(!this._restoreSession);
         });
 
         optionBox.add_child(checkRow);
