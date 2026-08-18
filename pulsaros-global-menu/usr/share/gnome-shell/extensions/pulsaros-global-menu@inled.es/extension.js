@@ -2661,21 +2661,26 @@ export default class PulsarosGlobalMenuExtension extends Extension {
     // --- Helper to execute power action (with optional session restore / hibernation) ---
     // --- Utilidad para ejecutar acción de energía (con restauración opcional de sesión / hibernación) ---
     _executePowerAction(actionType, restore) {
-        let progressDialog = new PowerProgressDialog(actionType, restore);
-        progressDialog.open();
+        let mode = restore ? "restore" : "normal";
+        let cmd = `pkexec /usr/bin/pulsaros-power-action ${actionType} ${mode}`;
 
-        progressDialog.startProgress(() => {
-            try {
-                // Close and destroy progress dialog and drop grabs BEFORE memory snapshot
-                progressDialog.close();
-            } catch (e) {
-                console.error("[GlobalMenu] Failed to close dialog:", e);
-            }
+        if (restore) {
+            let progressDialog = new PowerProgressDialog(actionType, true);
+            progressDialog.open();
 
-            let mode = restore ? "restore" : "normal";
-            let cmd = `pkexec /usr/bin/pulsaros-power-action ${actionType} ${mode}`;
+            progressDialog.startProgress(() => {
+                try {
+                    // Close and destroy progress dialog and drop grabs BEFORE memory snapshot
+                    progressDialog.close();
+                } catch (e) {
+                    console.error("[GlobalMenu] Failed to close dialog:", e);
+                }
+                this._runCommand(cmd);
+            });
+        } else {
+            // Normal shutdown / restart: execute immediately without memory dump progress
             this._runCommand(cmd);
-        });
+        }
     }
 
     // --- Helper to run command ---
