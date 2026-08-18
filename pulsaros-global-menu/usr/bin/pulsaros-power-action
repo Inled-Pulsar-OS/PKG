@@ -1,6 +1,7 @@
 #!/bin/bash
 # Pulsar OS - Power Action Handler with Session State Persistence
-# Ejecuta apagado o reinicio gestionado por systemd con soporte de hibernación / restauración de sesión.
+# Ejecuta la acción de energía fuera del scope de sesión de usuario para evitar
+# que systemd mate el proceso antes de completar el volcado de RAM a disco.
 
 ACTION="$1"     # "shutdown" | "restart"
 RESTORE="$2"    # "restore" | "normal"
@@ -8,27 +9,26 @@ RESTORE="$2"    # "restore" | "normal"
 # Sincronizar buffers de disco
 sync
 
-# Limpiar cualquier drop-in previo de reboot en tmpfs
+# Limpiar drop-ins temporales previos
 rm -f /run/systemd/sleep.conf.d/00-pulsar-reboot.conf 2>/dev/null || true
 
 if [ "$RESTORE" = "restore" ]; then
     if [ "$ACTION" = "restart" ]; then
-        # Configurar systemd-sleep temporalmente para reiniciar tras volcar la memoria
+        # Configurar modo reboot para hibernación (vuelca RAM y reinicia el hardware)
         mkdir -p /run/systemd/sleep.conf.d
-        cat << 'DROPIN' > /run/systemd/sleep.conf.d/00-pulsar-reboot.conf
-[Sleep]
-HibernateMode=reboot
-DROPIN
-        # Ejecutar hibernación gestionada por systemd
-        systemctl hibernate 2>/dev/null || (echo reboot > /sys/power/disk && echo disk > /sys/power/state) || systemctl reboot
-    else
-        # Apagado con hibernación usando modo shutdown (corte de corriente directo)
-        systemctl hibernate 2>/dev/null || (echo shutdown > /sys/power/disk && echo disk > /sys/power/state) || systemctl poweroff
+        printf '[Sleep]\nHibernateMode=reboot\n' > /run/systemd/sleep.conf.d/00-pulsar-reboot.conf
     fi
+    # Lanzar la hibernación fuera del scope de sesión de usuario con systemd-run
+    # Esto evita que systemd mate el proceso antes de completar el volcado de RAM
+    systemd-run --no-block --unit=pulsaros-hibernate \
+        --description="Pulsar OS Session Restore Hibernate" \
+        /bin/sh -c 'sync; sleep 1; systemctl hibernate'
 else
     if [ "$ACTION" = "restart" ]; then
-        systemctl reboot 2>/dev/null || gnome-session-quit --reboot
+        systemd-run --no-block --unit=pulsaros-reboot \
+            /bin/sh -c 'sleep 1; systemctl reboot'
     else
-        systemctl poweroff 2>/dev/null || gnome-session-quit --power-off
+        systemd-run --no-block --unit=pulsaros-poweroff \
+            /bin/sh -c 'sleep 1; systemctl poweroff'
     fi
 fi
