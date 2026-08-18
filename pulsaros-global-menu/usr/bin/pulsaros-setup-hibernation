@@ -83,6 +83,12 @@ cat << 'DROPEOF' > /etc/systemd/sleep.conf.d/pulsaros-hibernate.conf
 HibernateMode=shutdown
 DROPEOF
 
+mkdir -p /usr/lib/tmpfiles.d
+cat << 'TMPEOF' > /usr/lib/tmpfiles.d/pulsaros-hibernate.conf
+# Pulsar OS - Default hibernation powerdown mode to direct shutdown (avoid ACPI S4 BIOS hang)
+w /sys/power/disk - - - - shutdown
+TMPEOF
+
 # 5. Fixes específicos por GPU — solo se aplican si el hardware está presente
 # NVIDIA: en portátiles AMD+NVIDIA, los notificadores PM de NVIDIA abortan el hibernate.
 # Deshabilitarlos permite al kernel volcar la RAM sin interferencias.
