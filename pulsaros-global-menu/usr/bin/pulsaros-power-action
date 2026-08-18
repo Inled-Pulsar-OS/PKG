@@ -21,8 +21,8 @@ if [ "$RESTORE" = "restore" ]; then
     systemctl hibernate -i --no-wall 2>/dev/null || (echo disk > /sys/power/state)
 else
     if [ "$ACTION" = "restart" ]; then
-        gnome-session-quit --reboot --no-prompt 2>/dev/null || systemctl reboot -i
+        gnome-session-quit --reboot --force --no-prompt 2>/dev/null || systemctl reboot -i
     else
-        gnome-session-quit --power-off --no-prompt 2>/dev/null || systemctl poweroff -i
+        gnome-session-quit --power-off --force --no-prompt 2>/dev/null || systemctl poweroff -i
     fi
 fi
