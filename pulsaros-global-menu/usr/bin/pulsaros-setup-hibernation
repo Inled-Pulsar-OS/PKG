@@ -76,7 +76,14 @@ if [ -f /swapfile ]; then
     fi
 fi
 
-# 4. Compilar esquemas GSettings
+# 4. Asegurar HibernateMode=shutdown para evitar bloqueos ACPI S4 de la BIOS
+mkdir -p /etc/systemd/sleep.conf.d
+cat << 'DROPEOF' > /etc/systemd/sleep.conf.d/pulsaros-hibernate.conf
+[Sleep]
+HibernateMode=shutdown
+DROPEOF
+
+# 5. Compilar esquemas GSettings
 if [ -d /usr/share/glib-2.0/schemas ]; then
     glib-compile-schemas /usr/share/glib-2.0/schemas 2>/dev/null || true
 fi

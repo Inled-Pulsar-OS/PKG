@@ -13,17 +13,17 @@ rm -f /run/systemd/sleep.conf.d/00-pulsar-reboot.conf 2>/dev/null || true
 
 if [ "$RESTORE" = "restore" ]; then
     if [ "$ACTION" = "restart" ]; then
-        # Configurar systemd-sleep para reiniciar tras volcar la memoria
+        # Configurar systemd-sleep temporalmente para reiniciar tras volcar la memoria
         mkdir -p /run/systemd/sleep.conf.d
         cat << 'DROPIN' > /run/systemd/sleep.conf.d/00-pulsar-reboot.conf
 [Sleep]
 HibernateMode=reboot
 DROPIN
-        # Ejecutar hibernación gestionada por systemd (con fallback a reboot normal)
-        systemctl hibernate 2>/dev/null || systemctl reboot
+        # Ejecutar hibernación gestionada por systemd
+        systemctl hibernate 2>/dev/null || (echo reboot > /sys/power/disk && echo disk > /sys/power/state) || systemctl reboot
     else
-        # Hibernación estándar gestionada por systemd (con fallback a apagado normal)
-        systemctl hibernate 2>/dev/null || systemctl poweroff
+        # Apagado con hibernación usando modo shutdown (corte de corriente directo)
+        systemctl hibernate 2>/dev/null || (echo shutdown > /sys/power/disk && echo disk > /sys/power/state) || systemctl poweroff
     fi
 else
     if [ "$ACTION" = "restart" ]; then
