@@ -1,0 +1,87 @@
+#!/bin/bash
+# Pulsar OS - Automated Hibernation & Swapfile Setup
+# Configura automáticamente swapfile, fstab, y parámetros del kernel para hibernación y restauración de sesión.
+
+set -e
+
+# Evitar ejecución en Live ISO de instalación
+if [ -d /run/archiso ] || [ -f /run/archiso/bootmnt ]; then
+    echo "ℹ️ Entorno Live ISO detectado; posponiendo configuración de swapfile hasta instalación en disco."
+    exit 0
+fi
+
+# Detectar memoria RAM total en GiB
+TOTAL_RAM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+TOTAL_RAM_GB=$(( (TOTAL_RAM_KB + 1048575) / 1048576 ))
+
+# Determinar tamaño óptimo de swap (entre 4GB y 32GB)
+SWAP_GB=$TOTAL_RAM_GB
+if [ "$SWAP_GB" -lt 4 ]; then
+    SWAP_GB=4
+elif [ "$SWAP_GB" -gt 32 ]; then
+    SWAP_GB=32
+fi
+
+# 1. Crear /swapfile si no existe o activar si ya existe
+if [ ! -f /swapfile ]; then
+    FREE_SPACE_GB=$(df -BG / | awk 'NR==2 {print $4}' | tr -d 'G')
+    REQUIRED_SPACE=$((SWAP_GB + 4))
+
+    if [ "$FREE_SPACE_GB" -gt "$REQUIRED_SPACE" ]; then
+        echo "💾 Creando /swapfile de ${SWAP_GB}GB para soporte de hibernación..."
+        fallocate -l "${SWAP_GB}G" /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=$((SWAP_GB * 1024)) status=progress
+        chmod 600 /swapfile
+        mkswap /swapfile
+    else
+        echo "⚠️ Espacio en disco insuficiente para crear swapfile de ${SWAP_GB}GB."
+    fi
+fi
+
+if [ -f /swapfile ]; then
+    chmod 600 /swapfile
+    if ! swapon --show | grep -q "/swapfile"; then
+        swapon /swapfile 2>/dev/null || true
+    fi
+
+    # 2. Asegurar entrada en /etc/fstab
+    if [ -f /etc/fstab ] && ! grep -q "/swapfile" /etc/fstab; then
+        echo "/swapfile none swap defaults 0 0" >> /etc/fstab
+    fi
+
+    # 3. Configurar parámetros de reanudación (resume) en gestores de arranque
+    ROOT_UUID=$(findmnt -no UUID -T /swapfile 2>/dev/null || findmnt -no UUID / 2>/dev/null || true)
+    OFFSET=$(filefrag -v /swapfile 2>/dev/null | awk '$1=="0:" {print substr($4, 1, length($4)-2)}' || true)
+
+    if [ -n "$ROOT_UUID" ] && [ -n "$OFFSET" ]; then
+        RESUME_PARAMS="resume=UUID=${ROOT_UUID} resume_offset=${OFFSET}"
+
+        # rEFInd
+        if [ -f /boot/refind_linux.conf ]; then
+            if ! grep -q "resume=" /boot/refind_linux.conf; then
+                echo "⚙️ Configurando resume en /boot/refind_linux.conf..."
+                sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${RESUME_PARAMS}|g" /boot/refind_linux.conf 2>/dev/null || true
+            fi
+        fi
+
+        # GRUB
+        if [ -f /etc/default/grub ]; then
+            if ! grep -q "resume=" /etc/default/grub; then
+                echo "⚙️ Configurando resume en /etc/default/grub..."
+                sed -i "s|GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${RESUME_PARAMS}\"|" /etc/default/grub 2>/dev/null || true
+                if command -v grub-mkconfig >/dev/null 2>&1; then
+                    grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
+                fi
+            fi
+        fi
+    fi
+fi
+
+# 4. Compilar esquemas GSettings
+if [ -d /usr/share/glib-2.0/schemas ]; then
+    glib-compile-schemas /usr/share/glib-2.0/schemas 2>/dev/null || true
+fi
+if [ -d /usr/share/gnome-shell/extensions/pulsaros-global-menu@inled.es/schemas ]; then
+    glib-compile-schemas /usr/share/gnome-shell/extensions/pulsaros-global-menu@inled.es/schemas 2>/dev/null || true
+fi
+
+echo "✅ Configuración de hibernación y restauración de sesión completada con éxito."

@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ]; then
+    if [ -x /usr/bin/pulsaros-setup-hibernation ]; then
+        /usr/bin/pulsaros-setup-hibernation 2>/dev/null || true
+    fi
+
+    glib-compile-schemas /usr/share/glib-2.0/schemas/ 2>/dev/null || true
+fi
+
+exit 0
