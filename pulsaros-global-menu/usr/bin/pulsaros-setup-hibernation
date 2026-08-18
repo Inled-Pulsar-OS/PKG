@@ -93,8 +93,7 @@ if lsmod | grep -q "^nvidia "; then
 # Pulsar OS - NVIDIA hibernate fixes (auto-generado por pulsaros-setup-hibernation)
 # Solo se aplica en sistemas con NVIDIA. Seguro ignorar en sistemas sin NVIDIA.
 # PreserveVideoMemoryAllocations: preserva VRAM para restaurar estado tras hibernate.
-# UseKernelSuspendNotifiers=0: evita que NVIDIA aborte el volcado de RAM en setups AMD+NVIDIA.
-options nvidia NVreg_PreserveVideoMemoryAllocations=1 NVreg_TemporaryFilePath=/var/tmp NVreg_UseKernelSuspendNotifiers=0
+options nvidia NVreg_PreserveVideoMemoryAllocations=1 NVreg_TemporaryFilePath=/var/tmp
 NVEOF
 
     # Habilitar servicios NVIDIA de hibernate si están disponibles
