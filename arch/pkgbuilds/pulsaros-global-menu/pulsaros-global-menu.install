@@ -3,6 +3,13 @@ post_install() {
         /usr/bin/pulsaros-setup-hibernation 2>/dev/null || true
     fi
 
+    # Habilitar servicios NVIDIA para hibernación si el driver está presente
+    if [ -f /usr/lib/systemd/system/nvidia-hibernate.service ]; then
+        echo "🎮 Habilitando servicios NVIDIA para hibernación..."
+        systemctl enable nvidia-hibernate.service nvidia-resume.service nvidia-suspend.service 2>/dev/null || true
+        mkinitcpio -P 2>/dev/null || true
+    fi
+
     echo "⚙️ Compilando esquemas GSchema para Pulsar OS Global Menu..."
     glib-compile-schemas /usr/share/glib-2.0/schemas/ 2>/dev/null || true
     find /usr/share/gnome-shell/extensions/pulsaros-global-menu@inled.es -name schemas -type d -exec glib-compile-schemas {} \; 2>/dev/null || true
