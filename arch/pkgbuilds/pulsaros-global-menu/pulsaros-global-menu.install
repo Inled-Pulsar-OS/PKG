@@ -1,0 +1,13 @@
+post_install() {
+    if [ -x /usr/bin/pulsaros-setup-hibernation ]; then
+        /usr/bin/pulsaros-setup-hibernation 2>/dev/null || true
+    fi
+
+    echo "⚙️ Compilando esquemas GSchema para Pulsar OS Global Menu..."
+    glib-compile-schemas /usr/share/glib-2.0/schemas/ 2>/dev/null || true
+    find /usr/share/gnome-shell/extensions/pulsaros-global-menu@inled.es -name schemas -type d -exec glib-compile-schemas {} \; 2>/dev/null || true
+}
+
+post_upgrade() {
+    post_install
+}
