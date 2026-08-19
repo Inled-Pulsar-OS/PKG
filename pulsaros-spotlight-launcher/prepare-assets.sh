@@ -17,6 +17,8 @@ mkdir -p "$STAGE_DIR/usr/bin"
 install -m 755 cli/pulsaros-spotlight "$STAGE_DIR/usr/bin/pulsaros-spotlight"
 install -m 755 cli/pulsaros-toggle-remap "$STAGE_DIR/usr/bin/pulsaros-toggle-remap" 2>/dev/null || true
 install -m 755 cli/pulsaros-toggle-launcher "$STAGE_DIR/usr/bin/pulsaros-toggle-launcher" 2>/dev/null || true
+ln -sf pulsaros-spotlight "$STAGE_DIR/usr/bin/spotlight-python"
+ln -sf pulsaros-spotlight "$STAGE_DIR/usr/bin/spotlight-gtk"
 
 # Install Desktop file
 mkdir -p "$STAGE_DIR/usr/share/applications"
@@ -41,7 +43,9 @@ EXT_DIR="$STAGE_DIR/usr/share/gnome-shell/extensions/pulsaros-spotlight-launcher
 mkdir -p "$EXT_DIR"
 cp -r gnome-shell-extension/* "$EXT_DIR/"
 
-# Remove staging build remnants
-rm -rf "$STAGE_DIR/src" "$STAGE_DIR/cli" "$STAGE_DIR/data" "$STAGE_DIR/gnome-shell-extension" "$STAGE_DIR/pyproject.toml" "$STAGE_DIR/usr/share/pulsaros-spotlight-launcher"
+# Remove staging build remnants and cache
+rm -rf "$STAGE_DIR/src" "$STAGE_DIR/cli" "$STAGE_DIR/data" "$STAGE_DIR/gnome-shell-extension" "$STAGE_DIR/pyproject.toml" "$STAGE_DIR/usr/share/pulsaros-spotlight-launcher" "$STAGE_DIR/build" "$STAGE_DIR/dist" "$STAGE_DIR"/*.egg-info "$STAGE_DIR/.gitignore"
+find "$STAGE_DIR" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find "$STAGE_DIR" -type f -name "*.pyc" -delete 2>/dev/null || true
 
 echo "✅ Pulsar OS Spotlight launcher staging preparation complete."
