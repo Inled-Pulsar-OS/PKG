@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Tube OS
+Description=Tube OS boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/tubeos
+ScriptFile=/usr/share/plymouth/themes/tubeos/tubeos.script

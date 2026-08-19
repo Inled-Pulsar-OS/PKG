@@ -1,0 +1,7 @@
+post_install() {
+    echo "Tube OS Dashboard installed. Start with:"
+    echo "  sudo systemctl enable --now tubeos-gateway tubeos-message-bus tubeos-user-service tubeos-local-storage tubeos-app-management tubeos"
+}
+post_upgrade() {
+    echo "Restart services: sudo systemctl restart tubeos-gateway tubeos-message-bus tubeos-user-service tubeos-local-storage tubeos-app-management tubeos"
+}

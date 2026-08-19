@@ -1,0 +1,8 @@
+Package: tubeos-branding
+Version: 0.1.0
+Section: misc
+Priority: optional
+Architecture: all
+Maintainer: Pulsar OS Team <team@pulsaros.io>
+Description: Tube OS branding and identity files
+ Logos, icons, and branding assets for the Tube OS distribution.

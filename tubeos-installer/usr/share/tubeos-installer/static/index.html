@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tube OS Installer</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- Screen 1: Welcome (install mode) -->
+  <div id="screen-welcome" class="screen active">
+    <div class="logo-container">
+      <img src="/static/logo.svg" alt="Tube OS" class="logo">
+    </div>
+    <h1>Tube OS</h1>
+    <p class="subtitle">NAS Dashboard</p>
+    <div class="qr-box" id="qr-box"></div>
+    <p class="instruction" id="connect-instruction">Conecta tu dispositivo por ethernet y abre esta URL desde otro dispositivo:</p>
+    <p class="url" id="install-url"></p>
+    <div class="spacer"></div>
+    <div id="backup-tip" class="tip" style="display:none">
+      <p><strong>Tip:</strong> Si vienes de otra instalacion Docker, usa <a href="#" onclick="window.open('http://'+location.hostname+':8070');return false">DockerMigrate</a> para hacer backup de tus contenedores antes de instalar.</p>
+    </div>
+    <button class="btn primary" onclick="showScreen('screen-disks')">Instalar Tube OS</button>
+  </div>
+
+  <!-- Screen 2: Select disk -->
+  <div id="screen-disks" class="screen">
+    <h2>Selecciona disco de destino</h2>
+    <div id="disk-list" class="disk-list"></div>
+    <div class="btn-row">
+      <button class="btn secondary" onclick="showScreen('screen-welcome')">Atras</button>
+      <button class="btn primary" id="btn-install" onclick="startInstall()" disabled>Instalar</button>
+    </div>
+  </div>
+
+  <!-- Screen 3: Installing -->
+  <div id="screen-installing" class="screen">
+    <h2>Instalando Tube OS</h2>
+    <div class="progress-container">
+      <div class="progress-bar"><div class="progress-fill" id="install-progress"></div></div>
+      <p class="progress-text" id="install-status">Preparando...</p>
+    </div>
+  </div>
+
+  <!-- Screen 4: Done - Reboot -->
+  <div id="screen-done" class="screen">
+    <div class="logo-container"><img src="/static/logo.svg" alt="Tube OS" class="logo small"></div>
+    <h2>Instalacion completada</h2>
+    <p>Reinicia el equipo para completar la configuracion inicial.</p>
+    <button class="btn primary" onclick="reboot()">Reiniciar</button>
+  </div>
+
+  <!-- Screen 5: OOTB - Welcome back -->
+  <div id="screen-ootb-welcome" class="screen">
+    <div class="logo-container"><img src="/static/logo.svg" alt="Tube OS" class="logo"></div>
+    <h1>Bienvenido a Tube OS</h1>
+    <p class="subtitle">Configuracion inicial</p>
+    <button class="btn primary" onclick="showScreen('screen-timezone')">Comenzar</button>
+  </div>
+
+  <!-- Screen 6: OOTB - Timezone -->
+  <div id="screen-timezone" class="screen">
+    <h2>Zona horaria</h2>
+    <select id="tz-select" class="select-lg"></select>
+    <div class="btn-row">
+      <button class="btn secondary" onclick="showScreen('screen-ootb-welcome')">Atras</button>
+      <button class="btn primary" onclick="setTimezone()">Siguiente</button>
+    </div>
+  </div>
+
+  <!-- Screen 7: OOTB - Keyboard -->
+  <div id="screen-keyboard" class="screen">
+    <h2>Teclado</h2>
+    <select id="kb-select" class="select-lg"></select>
+    <div class="btn-row">
+      <button class="btn secondary" onclick="showScreen('screen-timezone')">Atras</button>
+      <button class="btn primary" onclick="setKeyboard()">Siguiente</button>
+    </div>
+  </div>
+
+  <!-- Screen 8: OOTB - Create user -->
+  <div id="screen-user" class="screen">
+    <h2>Crear usuario</h2>
+    <form id="user-form" onsubmit="createUser(event)">
+      <input type="text" id="inp-fullname" placeholder="Nombre completo" required>
+      <input type="text" id="inp-username" placeholder="Nombre de usuario" required pattern="[a-z0-9._-]+">
+      <input type="password" id="inp-password" placeholder="Contrasena" required minlength="4">
+      <input type="password" id="inp-password2" placeholder="Repetir contrasena" required minlength="4">
+      <p class="error" id="user-error"></p>
+      <div class="btn-row">
+        <button type="button" class="btn secondary" onclick="showScreen('screen-keyboard')">Atras</button>
+        <button type="submit" class="btn primary">Crear usuario</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Screen 9: OOTB - Complete -->
+  <div id="screen-complete" class="screen">
+    <div class="logo-container"><img src="/static/logo.svg" alt="Tube OS" class="logo small"></div>
+    <h2>Tube OS esta listo</h2>
+    <p>Tu NAS esta configurado y listo para usar.</p>
+    <div class="complete-links">
+      <a id="dashboard-link" href="#" class="btn primary">Abrir Dashboard</a>
+      <a id="dockermigrate-link" href="#" class="btn secondary" target="_blank">Importar contenedores Docker</a>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
