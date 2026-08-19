@@ -1,0 +1,23 @@
+# Maintainer: Pulsar OS Team <team@pulsaros.io>
+pkgname=tubeos-branding
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Tube OS branding and identity files"
+arch=('x86_64' 'any')
+url="https://github.com/Inled-Pulsar-OS"
+license=('Apache-2.0')
+depends=()
+source=()
+sha256sums=('SKIP')
+
+package() {
+  # Package content is copied from the PKG source tree during build
+  cd "$startdir"
+  if [ -d "../../tubeos-branding/usr" ]; then
+    cp -r "../../tubeos-branding/usr" "$pkgdir/"
+  fi
+  if [ -d "../../tubeos-branding/DEBIAN" ]; then
+    # Convert Debian postinst to Arch .install if needed
+    true
+  fi
+}

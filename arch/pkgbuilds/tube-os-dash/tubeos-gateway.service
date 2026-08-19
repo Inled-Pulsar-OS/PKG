@@ -1,0 +1,13 @@
+[Unit]
+After=network.target
+Description=Tube OS Gateway
+
+[Service]
+ExecStartPre=/usr/bin/tubeos-gateway -v
+ExecStart=/usr/bin/tubeos-gateway
+PIDFile=/var/run/tubeos/gateway.pid
+Restart=always
+Type=notify
+
+[Install]
+WantedBy=multi-user.target

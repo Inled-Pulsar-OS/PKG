@@ -1,0 +1,8 @@
+[Unit]
+Description=Tube OS Install Background Worker
+After=tubeos-installer.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'while [ ! -f /tmp/tubeos-install.json ]; do sleep 2; done; /usr/share/tubeos-installer/install.sh'
+StandardOutput=append:/tmp/tubeos-install.log

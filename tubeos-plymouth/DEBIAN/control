@@ -1,0 +1,9 @@
+Package: tubeos-plymouth
+Version: 0.1.0
+Section: graphics
+Priority: optional
+Architecture: any
+Depends: plymouth
+Maintainer: Pulsar OS Team <team@pulsaros.io>
+Description: Tube OS Plymouth boot splash theme
+ Animated boot splash theme for Tube OS using the Tube OS logo.

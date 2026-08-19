@@ -1,0 +1,5 @@
+image = Image("logo.png");
+sprite = Sprite(image, (Window.GetWidth()/2) - (image.GetWidth()/2), (Window.GetHeight()/2) - (image.GetHeight()/2));
+
+fun display_normal() { sprite.Show(); }
+fun display_pause() { sprite.Hide(); }

@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+case "$1" in
+    configure)
+        systemctl enable tubeos-installer 2>/dev/null || true
+        echo "Tube OS Installer installed. Service will start on next boot (live mode)."
+    ;;
+esac
+#DEBHELPER#
+exit 0

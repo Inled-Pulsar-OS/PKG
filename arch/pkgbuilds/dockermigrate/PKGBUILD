@@ -1,0 +1,23 @@
+# Maintainer: Pulsar OS Team <team@pulsaros.io>
+pkgname=dockermigrate
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Docker container migration tool with web UI"
+arch=('x86_64' 'any')
+url="https://github.com/Inled-Pulsar-OS"
+license=('Apache-2.0')
+depends=('docker')
+source=()
+sha256sums=('SKIP')
+
+package() {
+  # Package content is copied from the PKG source tree during build
+  cd "$startdir"
+  if [ -d "../../dockermigrate/usr" ]; then
+    cp -r "../../dockermigrate/usr" "$pkgdir/"
+  fi
+  if [ -d "../../dockermigrate/DEBIAN" ]; then
+    # Convert Debian postinst to Arch .install if needed
+    true
+  fi
+}

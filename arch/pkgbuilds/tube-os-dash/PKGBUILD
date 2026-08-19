@@ -1,0 +1,116 @@
+# Maintainer: Pulsar OS Team <team@pulsaros.io>
+pkgname=tube-os-dash
+pkgver=0.4.16
+pkgrel=1
+pkgdesc="Tube OS Dashboard - Web-based NAS management dashboard"
+arch=('x86_64' 'aarch64' 'armv7h')
+url="https://github.com/Inled-Pulsar-OS/CasaOS"
+license=('Apache-2.0')
+depends=('docker' 'rclone' 'smartmontools' 'parted' 'ntfs-3g' 'net-tools' 'udevil' 'samba' 'cifs-utils' 'mergerfs' 'unzip')
+makedepends=('go' 'git' 'pnpm' 'nodejs')
+backup=('etc/tubeos/gateway.ini' 'etc/tubeos/message-bus.conf' 'etc/tubeos/user-service.conf' 'etc/tubeos/local-storage.conf' 'etc/tubeos/app-management.conf' 'etc/tubeos/tubeos.conf')
+install=tube-os-dash.install
+
+_gourl="https://github.com/Inled-Pulsar-OS"
+
+source=(
+    "$pkgname-$pkgver.tar.gz::$_gourl/CasaOS/archive/refs/heads/main.tar.gz"
+    "$pkgname-gateway.tar.gz::$_gourl/CasaOS-Gateway/archive/refs/heads/main.tar.gz"
+    "$pkgname-messagebus.tar.gz::$_gourl/CasaOS-MessageBus/archive/refs/heads/main.tar.gz"
+    "$pkgname-userservice.tar.gz::$_gourl/CasaOS-UserService/archive/refs/heads/main.tar.gz"
+    "$pkgname-localstorage.tar.gz::$_gourl/CasaOS-LocalStorage/archive/refs/heads/main.tar.gz"
+    "$pkgname-appmanagement.tar.gz::$_gourl/CasaOS-AppManagement/archive/refs/heads/main.tar.gz"
+    "$pkgname-ui.tar.gz::$_gourl/CasaOS-UI/archive/refs/heads/main.tar.gz"
+    "$pkgname-cli.tar.gz::$_gourl/CasaOS-CLI/archive/refs/heads/main.tar.gz"
+    "$pkgname-common.tar.gz::$_gourl/CasaOS-Common/archive/refs/heads/main.tar.gz"
+    'tubeos-gateway.service'
+    'tubeos-message-bus.service'
+    'tubeos-user-service.service'
+    'tubeos-local-storage.service'
+    'tubeos-local-storage-first.service'
+    'tubeos-app-management.service'
+    'tubeos.service'
+    'rclone.service'
+    'gateway.ini'
+    'message-bus.conf'
+    'user-service.conf'
+    'local-storage.conf'
+    'app-management.conf'
+    'tubeos.conf'
+    'tube-os-dash.install'
+)
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+export GOPATH="$srcdir/gopath"
+
+prepare() {
+    cd "$srcdir"
+    mkdir -p "$GOPATH/pkg/mod/github.com/Inled-Pulsar-OS"
+    ln -sf "$srcdir/CasaOS-Common-"* "$GOPATH/pkg/mod/github.com/Inled-Pulsar-OS/CasaOS-Common@main" 2>/dev/null || true
+    cd "$srcdir/CasaOS-UI-"*
+    pnpm install --frozen-lockfile 2>/dev/null || pnpm install
+}
+
+build() {
+    cd "$srcdir"
+    export CGO_ENABLED=0
+
+    cd "$srcdir/CasaOS-Gateway-"*
+    go build -trimpath -ldflags "-s -w" -o "$srcdir/tubeos-gateway" .
+
+    cd "$srcdir/CasaOS-MessageBus-"*
+    go build -trimpath -ldflags "-s -w" -o "$srcdir/tubeos-message-bus" .
+
+    cd "$srcdir/CasaOS-UserService-"*
+    go build -trimpath -ldflags "-s -w" -o "$srcdir/tubeos-user-service" .
+
+    cd "$srcdir/CasaOS-LocalStorage-"*
+    go build -trimpath -ldflags "-s -w" -o "$srcdir/tubeos-local-storage" .
+
+    cd "$srcdir/CasaOS-AppManagement-"*
+    go build -trimpath -ldflags "-s -w" -o "$srcdir/tubeos-app-management" .
+
+    cd "$srcdir/CasaOS-"*
+    go build -trimpath -ldflags "-s -w" -o "$srcdir/tubeos" .
+
+    cd "$srcdir/CasaOS-CLI-"*
+    go build -trimpath -ldflags "-s -w" -o "$srcdir/tubeos-cli" .
+
+    cd "$srcdir/CasaOS-UI-"*
+    pnpm run build 2>/dev/null || true
+}
+
+package() {
+    cd "$srcdir"
+    install -Dm755 "$srcdir/tubeos-gateway" "$pkgdir/usr/bin/tubeos-gateway"
+    install -Dm755 "$srcdir/tubeos-message-bus" "$pkgdir/usr/bin/tubeos-message-bus"
+    install -Dm755 "$srcdir/tubeos-user-service" "$pkgdir/usr/bin/tubeos-user-service"
+    install -Dm755 "$srcdir/tubeos-local-storage" "$pkgdir/usr/bin/tubeos-local-storage"
+    install -Dm755 "$srcdir/tubeos-app-management" "$pkgdir/usr/bin/tubeos-app-management"
+    install -Dm755 "$srcdir/tubeos" "$pkgdir/usr/bin/tubeos"
+    install -Dm755 "$srcdir/tubeos-cli" "$pkgdir/usr/bin/tubeos-cli"
+
+    # UI
+    local uisrc=$(find "$srcdir" -path "*/build/sysroot/var/lib/tubeos/www" -type d 2>/dev/null | head -1)
+    if [ -n "$uisrc" ]; then
+        cp -r "$uisrc" "$pkgdir/var/lib/tubeos/www"
+    fi
+
+    # Systemd
+    for svc in tubeos-gateway tubeos-message-bus tubeos-user-service tubeos-local-storage tubeos-local-storage-first tubeos-app-management tubeos; do
+        install -Dm644 "$srcdir/${svc}.service" "$pkgdir/usr/lib/systemd/system/${svc}.service" 2>/dev/null || true
+    done
+    install -Dm644 "$srcdir/rclone.service" "$pkgdir/usr/lib/systemd/system/rclone.service" 2>/dev/null || true
+
+    # Config
+    for cfg in gateway.ini message-bus.conf user-service.conf local-storage.conf app-management.conf tubeos.conf; do
+        install -Dm644 "$srcdir/$cfg" "$pkgdir/etc/tubeos/$cfg" 2>/dev/null || true
+    done
+
+    # Dirs
+    install -dm755 "$pkgdir/var/lib/tubeos"
+    install -dm755 "$pkgdir/var/run/tubeos"
+    install -dm755 "$pkgdir/var/log/tubeos"
+}

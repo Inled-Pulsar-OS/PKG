@@ -1,0 +1,13 @@
+[Unit]
+After=tubeos-gateway.service
+Description=Tube OS Message Bus Service
+
+[Service]
+ExecStartPre=/usr/bin/tubeos-message-bus -v
+ExecStart=/usr/bin/tubeos-message-bus -c /etc/tubeos/message-bus.conf
+PIDFile=/var/run/tubeos/message-bus.pid
+Restart=always
+Type=notify
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+Package: dockermigrate
+Version: 0.1.0
+Section: admin
+Priority: optional
+Architecture: amd64
+Depends: docker.io | docker-ce
+Maintainer: Pulsar OS Team <team@pulsaros.io>
+Description: Docker container migration tool with web UI
+ Export and import Docker containers, volumes, and compose projects
+ between machines. Provides a web interface on port 8070 for
+ selecting containers and managing backups.

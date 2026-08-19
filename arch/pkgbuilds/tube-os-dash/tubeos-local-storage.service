@@ -1,0 +1,14 @@
+[Unit]
+After=tubeos-gateway.service
+After=tubeos-message-bus.service
+Description=Tube OS Local Storage Service
+
+[Service]
+ExecStartPre=/usr/bin/tubeos-local-storage -v
+ExecStart=/usr/bin/tubeos-local-storage -c /etc/tubeos/local-storage.conf
+PIDFile=/var/run/tubeos/local-storage.pid
+Restart=always
+Type=notify
+
+[Install]
+WantedBy=multi-user.target
