@@ -1,23 +1,13 @@
-Source: pulsaros-spotlight
+Package: pulsaros-spotlight-launcher
+Version: 2.0.3
 Section: gnome
 Priority: optional
-Maintainer: Jaime <info@inled.es>
-Build-Depends: debhelper-compat (= 13),
-               dh-python,
-               python3-all,
-               python3-setuptools
-Standards-Version: 4.6.2
-Homepage: https://inled.es
-
-Package: pulsaros-spotlight
 Architecture: all
-Depends: ${python3:Depends},
-         ${misc:Depends},
-         python3 (>= 3.11),
-         gir1.2-gtk-4.0,
-         gir1.2-adw-1,
-         gir1.2-tsparql-3.0,
-         localsearch-3
+Maintainer: Jaime <info@inled.es>
+Depends: gnome-shell, python3, python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, gir1.2-tsparql-3.0, localsearch-3, ydotool, wl-clipboard
+Provides: spotlight-gtk, spotlight-python, pulsaros-spotlight
+Replaces: spotlight-gtk, spotlight-python, pulsaros-spotlight
+Conflicts: spotlight-gtk, spotlight-python, pulsaros-spotlight
 Description: Spotlight search for Pulsar OS
  Full-text file and application search powered by
  GNOME Tracker/TinySPARQL. Provides a Spotlight-like
