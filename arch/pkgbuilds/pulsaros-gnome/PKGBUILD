@@ -1,6 +1,6 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-gnome
-pkgver=1.0.121
+pkgver=1.0.123
 pkgrel=1
 pkgdesc="GNOME Shell extensions and configurations for Pulsar OS (macOS-like desktop)"
 arch=(any)
