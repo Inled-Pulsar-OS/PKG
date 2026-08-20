@@ -161,29 +161,33 @@ cd "$SRC_DIR"
 git submodule update --init --depth=1 2>/dev/null || true
 
 # ==============================================================================
-# 3. Apply Pulsar OS overlay (same files used in the Arch PKGBUILD)
+# 3. Apply Pulsar OS overlay and assets
 # ==============================================================================
 OVERLAY_DIR="$SCRIPT_DIR/../arch/pkgbuilds/gnome-control-center/overlay"
 PATCH_FILE="$SCRIPT_DIR/../arch/pkgbuilds/gnome-control-center/pulsar-macos-style.patch"
 
-if [ -d "$OVERLAY_DIR" ]; then
-    echo "🎨 [ES] Aplicando overlay de Pulsar OS (archivos source)..."
-    echo "🎨 [EN] Applying Pulsar OS overlay (source files)..."
-    cp -rf "$OVERLAY_DIR/." "$SRC_DIR/"
-else
-    echo "⚠️ [ES] Overlay no encontrado, intentando aplicar parche..."
-    echo "⚠️ [EN] Overlay not found, trying to apply patch..."
-    if [ -f "$PATCH_FILE" ]; then
+# Check if target version matches the overlay (overlay is tailored for GNOME 50+)
+if [ "$GNOME_CC_VER" -ge 50 ] 2>/dev/null; then
+    if [ -d "$OVERLAY_DIR" ]; then
+        echo "🎨 [ES] Aplicando overlay de Pulsar OS (GNOME 50+)..."
+        echo "🎨 [EN] Applying Pulsar OS overlay (GNOME 50+)..."
+        cp -rf "$OVERLAY_DIR/." "$SRC_DIR/"
+    elif [ -f "$PATCH_FILE" ]; then
+        echo "🎨 [ES] Aplicando parche de Pulsar OS (GNOME 50+)..."
+        echo "🎨 [EN] Applying Pulsar OS patch (GNOME 50+)..."
         patch -Np1 -i "$PATCH_FILE" -d "$SRC_DIR" || true
     fi
+else
+    echo "ℹ️ [ES] GNOME Control Center $GNOME_CC_VER detectado (Debian). Usando compilación limpia con branding Pulsar OS e iconos squircle macOS..."
+    echo "ℹ️ [EN] GNOME Control Center $GNOME_CC_VER detected (Debian). Using clean build with Pulsar OS branding and macOS squircle icons..."
 fi
 
-# Merge Spanish translations
+# Merge Spanish translations if available and compatible
 PO_DIR="$OVERLAY_DIR/po"
 if [ -f "$PO_DIR/pulsar-es.po" ] && [ -f "$SRC_DIR/po/es.po" ]; then
     echo "🌐 [ES] Fusionando traducciones al español..."
     msgcat --use-first "$PO_DIR/pulsar-es.po" "$SRC_DIR/po/es.po" \
-        > "$SRC_DIR/po/es.po.merged" && mv "$SRC_DIR/po/es.po.merged" "$SRC_DIR/po/es.po" || true
+        > "$SRC_DIR/po/es.po.merged" 2>/dev/null && mv "$SRC_DIR/po/es.po.merged" "$SRC_DIR/po/es.po" || true
 fi
 
 # ==============================================================================

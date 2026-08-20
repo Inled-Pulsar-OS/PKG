@@ -18,7 +18,7 @@ if [ -n "$PULSAR_BUILD_CHROOT" ]; then
     exit 0
 fi
 # 2. systemd no está corriendo como PID 1 → estamos en chroot o contenedor
-if [ ! -d /run/systemd/private ]; then
+if [ ! -d /run/systemd/system ]; then
     echo "ℹ️ systemd no activo como PID 1 (chroot/contenedor); omitiendo configuración de swapfile."
     exit 0
 fi
