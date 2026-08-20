@@ -546,13 +546,13 @@ on_liquid_glass_active_changed_cb (GObject *object, GParamSpec *pspec, CcBackgro
 static void
 on_activate_spotlight_python_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
 {
-  g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.mutter overlay-key "" && gsettings set org.gnome.shell.extensions.pulsaros-spotlight-launcher launcher-type "python"'", NULL);
+  g_spawn_command_line_async ("/bin/sh -c \"gsettings set org.gnome.mutter overlay-key '' && gsettings set org.gnome.shell.extensions.pulsaros-spotlight-launcher launcher-type 'python'\"", NULL);
 }
 
 static void
 on_activate_gnome_overview_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
 {
-  g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.mutter overlay-key "Super_L" && gsettings set org.gnome.shell.extensions.dash-to-dock show-show-apps-button true'", NULL);
+  g_spawn_command_line_async ("/bin/sh -c \"gsettings set org.gnome.mutter overlay-key 'Super_L' && gsettings set org.gnome.shell.extensions.dash-to-dock show-show-apps-button true\"", NULL);
 }
 
 static void

@@ -1,11 +1,11 @@
 Package: pulsaros-control-center
-Version: 1.0.4
+Version: 1.0.10
 Section: gnome
 Priority: optional
 Architecture: amd64
 Maintainer: Jaime <info@inled.es>
-Depends: libgtk-4-1, libadwaita-1-0, libglib2.0-0, libgnome-desktop-4-2, libcolord-gtk4-1, libgoa-1.0-0, gnome-settings-daemon, accountsservice, libmalcontent-0-0, libgtop-2.0-11, libpwquality1, libnm0, libsecret-1-0, libpolkit-gobject-1-0, udisks2
-Provides: gnome-control-center
+Depends: libgtk-4-1, libadwaita-1-0, libglib2.0-0t64 | libglib2.0-0, libgnome-desktop-4-2t64 | libgnome-desktop-4-2, libcolord-gtk4-1t64 | libcolord-gtk4-1, libgoa-1.0-0b | libgoa-1.0-0, gnome-settings-daemon, accountsservice, libmalcontent-0-0, libgtop-2.0-11, libpwquality1, libnm0, libsecret-1-0, libpolkit-gobject-1-0, libudisks2-0 | udisks2
+Provides: gnome-control-center (= 1:48.4-1~deb13u1)
 Replaces: gnome-control-center
 Conflicts: gnome-control-center
 Description: GNOME Settings with Pulsar OS macOS customization for Debian.
