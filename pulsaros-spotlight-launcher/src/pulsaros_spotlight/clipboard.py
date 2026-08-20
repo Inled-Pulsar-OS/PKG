@@ -1,6 +1,8 @@
 """Clipboard history manager and auto-paste provider for PulsarOS Spotlight."""
 
 from __future__ import annotations
+from pulsaros_spotlight.config import Config
+from gi.repository import Gdk, GLib
 
 import json
 import logging
@@ -15,9 +17,7 @@ import gi
 
 gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gdk, GLib, Gtk
 
-from pulsaros_spotlight.config import Config
 
 if TYPE_CHECKING:
     from pulsaros_spotlight.search import SearchResult
@@ -34,22 +34,35 @@ class ClipboardManager:
     def __init__(self, config: Config | None = None) -> None:
         self._config = config or Config()
         self._items: list[dict] = []
+        self._save_timer_id: int | None = None
         self._load()
         self._init_listener()
 
     def _load(self) -> None:
         if CLIPBOARD_FILE.exists():
             try:
-                self._items = json.loads(CLIPBOARD_FILE.read_text(encoding="utf-8"))
+                self._items = json.loads(
+                    CLIPBOARD_FILE.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
                 self._items = []
 
     def _save(self) -> None:
+        self._save_timer_id = None
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         try:
-            CLIPBOARD_FILE.write_text(json.dumps(self._items, indent=2), encoding="utf-8")
+            CLIPBOARD_FILE.write_text(json.dumps(
+                self._items, indent=2), encoding="utf-8")
         except OSError:
             pass
+
+    def _schedule_save(self) -> None:
+        if self._save_timer_id is not None:
+            GLib.source_remove(self._save_timer_id)
+        self._save_timer_id = GLib.timeout_add(1000, self._do_delayed_save)
+
+    def _do_delayed_save(self) -> bool:
+        self._save()
+        return False
 
     def _init_listener(self) -> None:
         try:
@@ -58,7 +71,8 @@ class ClipboardManager:
                 clipboard = display.get_clipboard()
                 clipboard.connect("changed", self._on_clipboard_changed)
         except Exception:
-            logger.warning("Failed to hook Gdk.Clipboard listener", exc_info=True)
+            logger.warning(
+                "Failed to hook Gdk.Clipboard listener", exc_info=True)
 
     def _on_clipboard_changed(self, clipboard: Gdk.Clipboard) -> None:
         try:
@@ -87,7 +101,8 @@ class ClipboardManager:
             return
 
         # Remove previous occurrence if exists
-        self._items = [item for item in self._items if item.get("text") != clean]
+        self._items = [
+            item for item in self._items if item.get("text") != clean]
 
         # Insert at front
         self._items.insert(
@@ -101,7 +116,7 @@ class ClipboardManager:
         # Enforce max items
         max_items = getattr(self._config, "clipboard_max_items", 50)
         self._items = self._items[:max_items]
-        self._save()
+        self._schedule_save()
 
     def search_history(self, query: str = "") -> list[SearchResult]:
         """Search clipboard history entries."""
@@ -116,7 +131,8 @@ class ClipboardManager:
                 continue
 
             if not q_lower or q_lower in text.lower():
-                lines = [line.strip() for line in text.splitlines() if line.strip()]
+                lines = [line.strip()
+                         for line in text.splitlines() if line.strip()]
                 first_line = lines[0] if lines else text
                 if len(first_line) > 60:
                     first_line = first_line[:57] + "..."
@@ -175,7 +191,8 @@ class ClipboardManager:
                 sock = f"/run/user/{os.getuid()}/.ydotool_socket"
                 if os.path.exists(sock):
                     env["YDOTOOL_SOCKET"] = sock
-                subprocess.Popen(["ydotool", "key", "29:1", "47:1", "47:0", "29:0"], env=env)
+                subprocess.Popen(
+                    ["ydotool", "key", "29:1", "47:1", "47:0", "29:0"], env=env)
                 return False
             except Exception:
                 pass
