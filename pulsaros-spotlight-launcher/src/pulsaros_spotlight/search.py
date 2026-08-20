@@ -107,6 +107,16 @@ class SearchBackend:
         """Reload desktop applications from disk."""
         self._load_apps()
 
+    def close(self) -> None:
+        """Cancel file monitors and release backend connections."""
+        for monitor in self._monitors:
+            try:
+                monitor.cancel()
+            except Exception:
+                pass
+        self._monitors.clear()
+        self._conn = None
+
     def connect(self) -> bool:
         """Connect to the Tracker SPARQL endpoint over D-Bus."""
         if self._conn is not None:
