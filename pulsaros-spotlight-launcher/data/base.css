@@ -1,0 +1,156 @@
+/* PulsarOS Spotlight — Base Layout & Structural Styles */
+
+.spotlight-window {
+    border-radius: 16px;
+    transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+.spotlight-main {
+    background-color: transparent;
+}
+
+.search-header {
+    padding: 14px 18px;
+    border-radius: 16px 16px 0 0;
+}
+
+.search-icon {
+    -gtk-icon-size: 22px;
+}
+
+.search-input {
+    font-size: 22px;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 8px;
+    border: none;
+    outline: none;
+    background: none;
+    box-shadow: none;
+}
+
+.search-input:focus {
+    background: none;
+    box-shadow: none;
+}
+
+.view-toggle {
+    padding: 5px;
+    border-radius: 8px;
+    min-width: 30px;
+    min-height: 30px;
+}
+
+.category-bar {
+    padding: 6px 14px;
+}
+
+.category-btn {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    min-height: 24px;
+    border: none;
+    background: transparent;
+}
+
+.results-area {
+    padding: 4px 0;
+    background: transparent;
+    min-height: 260px;
+}
+
+/* list view */
+.result-item-list {
+    padding: 8px 14px;
+    border-radius: 8px;
+    margin: 2px 8px;
+}
+
+.result-icon {
+    -gtk-icon-size: 24px;
+}
+
+.result-title {
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.result-snippet {
+    font-size: 12px;
+}
+
+/* grid view */
+.result-item-grid {
+    padding: 12px 8px;
+    border-radius: 10px;
+    margin: 2px;
+}
+
+.result-icon-grid {
+    -gtk-icon-size: 36px;
+}
+
+.result-title-grid {
+    font-size: 11px;
+}
+
+/* thumbnail for image results */
+.result-icon picture {
+    border-radius: 6px;
+}
+
+/* context menu popover */
+.ctx-menu {
+    padding: 4px 0;
+    border-radius: 10px;
+}
+
+.ctx-menu-box {
+    min-width: 200px;
+}
+
+.ctx-menu-btn {
+    padding: 7px 14px;
+    border-radius: 0;
+    border: none;
+    background: none;
+    font-size: 13px;
+}
+
+/* progress & status bars */
+.uninstall-progress {
+    padding: 8px 16px;
+}
+
+.uninstall-progress spinner {
+    margin-right: 4px;
+}
+
+.uninstall-progress label {
+    font-size: 13px;
+}
+
+.indexing-status-bar {
+    padding: 6px 14px;
+    border-radius: 0 0 16px 16px;
+}
+
+.indexing-status-bar spinner {
+    margin-right: 4px;
+}
+
+.indexing-status-bar label {
+    font-size: 12px;
+}
+
+.indexing-status-bar progressbar trough {
+    min-height: 4px;
+    border-radius: 9999px;
+}
+
+.indexing-status-bar progressbar progress {
+    min-height: 4px;
+    border-radius: 9999px;
+}

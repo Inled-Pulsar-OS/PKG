@@ -64,9 +64,24 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         self.set_decorated(False)
         self.add_css_class("spotlight-window")
 
+        self._style_manager = Adw.StyleManager.get_default()
+        self._style_manager.connect("notify::dark", self._on_theme_changed)
+        self._update_theme_css()
+
         self._build_ui()
         self._setup_events()
         self._backend.set_on_apps_updated(self._on_apps_updated)
+
+    def _on_theme_changed(self, _manager: Adw.StyleManager, _pspec) -> None:
+        self._update_theme_css()
+
+    def _update_theme_css(self) -> None:
+        if self._style_manager.get_dark():
+            self.remove_css_class("light")
+            self.add_css_class("dark")
+        else:
+            self.remove_css_class("dark")
+            self.add_css_class("light")
 
     # -- UI construction ------------------------------------------------------
 
