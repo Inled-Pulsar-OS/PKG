@@ -1,8 +1,95 @@
 post_install() {
+    echo "⚙️ Configurando hibernación para restauración de sesión..."
+
+    # Run the full setup script (may skip in chroot/build environments)
     if [ -x /usr/bin/pulsaros-setup-hibernation ]; then
-        echo "⚙️ Configurando hibernación para restauración de sesión..."
         /usr/bin/pulsaros-setup-hibernation 2>/dev/null || true
     fi
+
+    # -----------------------------------------------------------------------
+    # Critical fixes applied directly here to ensure they are NEVER skipped,
+    # even when pulsaros-setup-hibernation detects a chroot/container environment.
+    # These operations are idempotent and safe to run on every install/upgrade.
+    # -----------------------------------------------------------------------
+
+    # 1. HibernateMode=shutdown — avoid ACPI S4 locks on laptops
+    mkdir -p /etc/systemd/sleep.conf.d
+    cat << 'EOF' > /etc/systemd/sleep.conf.d/pulsaros-hibernate.conf
+[Sleep]
+HibernateMode=shutdown
+EOF
+
+    # 2. Fix mkinitcpio HOOKS order: 'resume' MUST come after 'block' so that
+    #    block devices are discovered before the kernel tries to read the swapfile.
+    #    Also ensure the hook exists at all.
+    if [ -f /etc/mkinitcpio.conf ] && grep -q "^HOOKS=" /etc/mkinitcpio.conf; then
+        # Add resume hook if completely missing
+        if ! grep -q "\bresume\b" /etc/mkinitcpio.conf; then
+            echo "⚙️ Añadiendo hook resume a /etc/mkinitcpio.conf..."
+            if grep -q "sd-vconsole" /etc/mkinitcpio.conf; then
+                sed -i 's/\(sd-vconsole[^)]*\))/\1 resume/' /etc/mkinitcpio.conf
+            else
+                sed -i 's/\(block\)/\1 resume/' /etc/mkinitcpio.conf
+            fi
+        fi
+
+        # Reorder: resume must be after block, before filesystems
+        HOOKS_LINE=$(grep "^HOOKS=" /etc/mkinitcpio.conf)
+        HOOKS_CONTENT=$(echo "$HOOKS_LINE" | sed 's/^HOOKS=(//; s/)$//')
+        RESUME_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^resume$" | cut -d: -f1)
+        BLOCK_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^block$" | cut -d: -f1)
+        FILESYSTEMS_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^filesystems$" | cut -d: -f1)
+        NEEDS_REORDER=0
+        if [ -n "$RESUME_POS" ] && [ -n "$BLOCK_POS" ] && [ "$RESUME_POS" -lt "$BLOCK_POS" ]; then
+            NEEDS_REORDER=1
+        fi
+        if [ -n "$RESUME_POS" ] && [ -n "$FILESYSTEMS_POS" ] && [ "$RESUME_POS" -gt "$FILESYSTEMS_POS" ]; then
+            NEEDS_REORDER=1
+        fi
+        if [ "$NEEDS_REORDER" -eq 1 ]; then
+            echo "⚙️ Reordenando hooks: resume después de block, antes de filesystems..."
+            NEW_HOOKS=$(echo "$HOOKS_CONTENT" | sed 's/\bresume\b//; s/  */ /g; s/^ //; s/ $//')
+            NEW_HOOKS=$(echo "$NEW_HOOKS" | sed 's/\bblock\b/block resume/')
+            sed -i "s|^HOOKS=.*|HOOKS=(${NEW_HOOKS})|" /etc/mkinitcpio.conf
+        fi
+    fi
+
+    # 3. NVIDIA: UseKernelSuspendNotifiers=0 — prevents NVIDIA from aborting
+    #    hibernation when the GPU is in use.
+    if lsmod 2>/dev/null | grep -q "^nvidia "; then
+        echo "🎮 NVIDIA detectada — aplicando fixes de hibernación..."
+        cat << 'EOF' > /etc/modprobe.d/pulsaros-nvidia-hibernate.conf
+# Pulsar OS - NVIDIA hibernate fixes
+# PreserveVideoMemoryAllocations: preserva VRAM para restaurar estado tras hibernate.
+# UseKernelSuspendNotifiers=0: evita que NVIDIA aborte la hibernación cuando la GPU está en uso.
+options nvidia NVreg_PreserveVideoMemoryAllocations=1 NVreg_TemporaryFilePath=/var/tmp NVreg_UseKernelSuspendNotifiers=0
+EOF
+        systemctl enable nvidia-hibernate.service nvidia-resume.service nvidia-suspend.service 2>/dev/null || true
+    fi
+
+    # 4. Disable zswap in kernel cmdline — zswap intercepts hibernation image writes
+    #    and stores them in RAM instead of disk. When HibernateMode=shutdown powers off,
+    #    the zswap pool is lost and the kernel finds no image on next boot (EINVAL).
+    ROOT_UUID=$(findmnt -no UUID / 2>/dev/null || true)
+    OFFSET=$(filefrag -v /swapfile 2>/dev/null | awk '$1=="0:" {print substr($4, 1, length($4)-2)}' || true)
+    if [ -n "$ROOT_UUID" ] && [ -n "$OFFSET" ]; then
+        HIBERNATE_PARAMS="resume=UUID=${ROOT_UUID} resume_offset=${OFFSET} zswap.enabled=0"
+        if [ -f /boot/refind_linux.conf ]; then
+            sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' /boot/refind_linux.conf 2>/dev/null || true
+            sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${HIBERNATE_PARAMS}|g" /boot/refind_linux.conf 2>/dev/null || true
+        fi
+        if [ -f /etc/default/grub ]; then
+            sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' /etc/default/grub 2>/dev/null || true
+            sed -i "s|GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${HIBERNATE_PARAMS}\"|" /etc/default/grub 2>/dev/null || true
+            if command -v grub-mkconfig >/dev/null 2>&1; then
+                grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
+            fi
+        fi
+    fi
+
+    # 5. Regenerate initramfs with correct hooks and nvidia options
+    echo "🔄 Regenerando initramfs..."
+    mkinitcpio -P 2>/dev/null || true
 }
 
 post_upgrade() {

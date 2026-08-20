@@ -2,19 +2,94 @@
 set -e
 
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ]; then
+    # Run the full setup script (may skip in chroot/build environments)
     if [ -x /usr/bin/pulsaros-setup-hibernation ]; then
         /usr/bin/pulsaros-setup-hibernation 2>/dev/null || true
     fi
 
-    # pamtester needs setuid root to authenticate users via PAM
+    # -----------------------------------------------------------------------
+    # Critical fixes applied directly here to ensure they are NEVER skipped,
+    # even when pulsaros-setup-hibernation detects a chroot/container environment.
+    # -----------------------------------------------------------------------
+
+    # HibernateMode=shutdown
+    mkdir -p /etc/systemd/sleep.conf.d
+    cat << 'EOF' > /etc/systemd/sleep.conf.d/pulsaros-hibernate.conf
+[Sleep]
+HibernateMode=shutdown
+EOF
+
+    # Fix mkinitcpio HOOKS order: resume after block, before filesystems
+    if [ -f /etc/mkinitcpio.conf ] && grep -q "^HOOKS=" /etc/mkinitcpio.conf; then
+        if ! grep -q "\bresume\b" /etc/mkinitcpio.conf; then
+            if grep -q "sd-vconsole" /etc/mkinitcpio.conf; then
+                sed -i 's/\(sd-vconsole[^)]*\))/\1 resume/' /etc/mkinitcpio.conf
+            else
+                sed -i 's/\(block\)/\1 resume/' /etc/mkinitcpio.conf
+            fi
+        fi
+        HOOKS_CONTENT=$(grep "^HOOKS=" /etc/mkinitcpio.conf | sed 's/^HOOKS=(//; s/)$//')
+        RESUME_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^resume$" | cut -d: -f1)
+        BLOCK_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^block$" | cut -d: -f1)
+        FILESYSTEMS_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^filesystems$" | cut -d: -f1)
+        NEEDS_REORDER=0
+        if [ -n "$RESUME_POS" ] && [ -n "$BLOCK_POS" ] && [ "$RESUME_POS" -lt "$BLOCK_POS" ]; then
+            NEEDS_REORDER=1
+        fi
+        if [ -n "$RESUME_POS" ] && [ -n "$FILESYSTEMS_POS" ] && [ "$RESUME_POS" -gt "$FILESYSTEMS_POS" ]; then
+            NEEDS_REORDER=1
+        fi
+        if [ "$NEEDS_REORDER" -eq 1 ]; then
+            echo "⚙️ Reordenando hooks: resume después de block, antes de filesystems..."
+            NEW_HOOKS=$(echo "$HOOKS_CONTENT" | sed 's/\bresume\b//; s/  */ /g; s/^ //; s/ $//')
+            NEW_HOOKS=$(echo "$NEW_HOOKS" | sed 's/\bblock\b/block resume/')
+            sed -i "s|^HOOKS=.*|HOOKS=(${NEW_HOOKS})|" /etc/mkinitcpio.conf
+        fi
+    fi
+
+    # NVIDIA: UseKernelSuspendNotifiers=0
+    if lsmod 2>/dev/null | grep -q "^nvidia "; then
+        cat << 'EOF' > /etc/modprobe.d/pulsaros-nvidia-hibernate.conf
+# Pulsar OS - NVIDIA hibernate fixes
+# PreserveVideoMemoryAllocations: preserva VRAM para restaurar estado tras hibernate.
+# UseKernelSuspendNotifiers=0: evita que NVIDIA aborte la hibernación cuando la GPU está en uso.
+options nvidia NVreg_PreserveVideoMemoryAllocations=1 NVreg_TemporaryFilePath=/var/tmp NVreg_UseKernelSuspendNotifiers=0
+EOF
+        systemctl enable nvidia-hibernate.service nvidia-resume.service nvidia-suspend.service 2>/dev/null || true
+    fi
+
+    # Disable zswap in kernel cmdline — zswap intercepts hibernation image writes
+    ROOT_UUID=$(findmnt -no UUID / 2>/dev/null || true)
+    OFFSET=$(filefrag -v /swapfile 2>/dev/null | awk '$1=="0:" {print substr($4, 1, length($4)-2)}' || true)
+    if [ -n "$ROOT_UUID" ] && [ -n "$OFFSET" ]; then
+        HIBERNATE_PARAMS="resume=UUID=${ROOT_UUID} resume_offset=${OFFSET} zswap.enabled=0"
+        if [ -f /boot/refind_linux.conf ]; then
+            sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' /boot/refind_linux.conf 2>/dev/null || true
+            sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${HIBERNATE_PARAMS}|g" /boot/refind_linux.conf 2>/dev/null || true
+        fi
+        if [ -f /etc/default/grub ]; then
+            sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' /etc/default/grub 2>/dev/null || true
+            sed -i "s|GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${HIBERNATE_PARAMS}\"|" /etc/default/grub 2>/dev/null || true
+            if command -v grub-mkconfig >/dev/null 2>&1; then
+                grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
+            fi
+        fi
+    fi
+
+    # Regenerate initramfs
+    if command -v mkinitcpio >/dev/null 2>&1; then
+        echo "🔄 Regenerando initramfs..."
+        mkinitcpio -P 2>/dev/null || true
+    elif command -v update-initramfs >/dev/null 2>&1; then
+        update-initramfs -u 2>/dev/null || true
+    fi
+
+    # pamtester needs setuid root
     if [ -f /usr/bin/pamtester ]; then
         chmod u+s /usr/bin/pamtester 2>/dev/null || true
     fi
-
-    # Ensure the PAM service file is readable by pamtester
     chmod 644 /etc/pam.d/pulsaros-lock 2>/dev/null || true
 
-    # Auto-detect distro and fix PAM includes if needed
     if [ -f /etc/pam.d/system-auth ] && ! grep -q "system-auth" /etc/pam.d/pulsaros-lock 2>/dev/null; then
         sed -i 's|common-auth|system-auth|g; s|common-account|system-account|g' /etc/pam.d/pulsaros-lock 2>/dev/null || true
     fi

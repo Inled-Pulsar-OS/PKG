@@ -66,21 +66,21 @@ if [ -f /swapfile ]; then
     OFFSET=$(filefrag -v /swapfile 2>/dev/null | awk '$1=="0:" {print substr($4, 1, length($4)-2)}' || true)
 
     if [ -n "$ROOT_UUID" ] && [ -n "$OFFSET" ]; then
-        RESUME_PARAMS="resume=UUID=${ROOT_UUID} resume_offset=${OFFSET}"
+        RESUME_PARAMS="resume=UUID=${ROOT_UUID} resume_offset=${OFFSET} zswap.enabled=0"
 
         # rEFInd
         if [ -f /boot/refind_linux.conf ]; then
-            echo "⚙️ Configurando resume en /boot/refind_linux.conf..."
-            # Remove any existing resume parameters first, then append correct ones
-            sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g' /boot/refind_linux.conf 2>/dev/null || true
+            echo "⚙️ Configurando resume y zswap en /boot/refind_linux.conf..."
+            # Remove any existing resume and zswap parameters first, then append correct ones
+            sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' /boot/refind_linux.conf 2>/dev/null || true
             sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${RESUME_PARAMS}|g" /boot/refind_linux.conf 2>/dev/null || true
         fi
 
         # GRUB
         if [ -f /etc/default/grub ]; then
-            echo "⚙️ Configurando resume en /etc/default/grub..."
-            # Remove any existing resume parameters first, then append correct ones
-            sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g' /etc/default/grub 2>/dev/null || true
+            echo "⚙️ Configurando resume y zswap en /etc/default/grub..."
+            # Remove any existing resume and zswap parameters first, then append correct ones
+            sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' /etc/default/grub 2>/dev/null || true
             sed -i "s|GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${RESUME_PARAMS}\"|" /etc/default/grub 2>/dev/null || true
             if command -v grub-mkconfig >/dev/null 2>&1; then
                 grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
@@ -99,31 +99,52 @@ HibernateMode=shutdown
 DROPEOF
 
 # 5. Asegurar hook de resume en initramfs para que el kernel detecte la imagen de hibernación
-# On Arch (mkinitcpio with systemd hooks): sd-resume
-# On Arch (mkinitcpio with busybox hooks): resume
-# On Debian (initramfs-tools): resume
+# The 'resume' hook (mkinitcpio ≥ 32) handles both busybox and systemd initramfs.
+# CRITICAL: 'resume' MUST come after 'block' and 'filesystems' so that block devices
+# are discovered and ext4 is loaded before the kernel tries to read the swapfile.
 INITRAMFS_CHANGED=0
 
 if [ -f /etc/mkinitcpio.conf ]; then
     # Arch Linux — mkinitcpio
-    # Detect the correct resume hook: sd-resume (systemd) or resume (busybox/swsusp)
-    NEEDS_RESUME=1
-    grep -q "resume\|sd-resume" /etc/mkinitcpio.conf && NEEDS_RESUME=0
-    if [ "$NEEDS_RESUME" -eq 1 ]; then
-        if grep -q "sd-vconsole" /etc/mkinitcpio.conf; then
-            # systemd-based initramfs: try sd-resume first, fallback to resume
-            if mkinitcpio -H sd-resume >/dev/null 2>&1; then
-                echo "⚙️ Añadiendo hook sd-resume a /etc/mkinitcpio.conf..."
-                sed -i 's/\(sd-vconsole\)/\1 sd-resume/' /etc/mkinitcpio.conf
+    if grep -q "^HOOKS=" /etc/mkinitcpio.conf; then
+        HAS_RESUME_HOOK=0
+        grep -q "\bresume\b" /etc/mkinitcpio.conf && HAS_RESUME_HOOK=1
+
+        # Add resume hook if missing
+        if [ "$HAS_RESUME_HOOK" -eq 0 ]; then
+            echo "⚙️ Añadiendo hook resume a /etc/mkinitcpio.conf..."
+            if grep -q "sd-vconsole" /etc/mkinitcpio.conf; then
+                sed -i 's/\(sd-vconsole[^)]*\))/\1 resume/' /etc/mkinitcpio.conf
             else
-                echo "⚙️ Añadiendo hook resume a /etc/mkinitcpio.conf..."
-                sed -i 's/\(sd-vconsole\)/\1 resume/' /etc/mkinitcpio.conf
+                sed -i 's/\(block\)/\1 resume/' /etc/mkinitcpio.conf
             fi
             INITRAMFS_CHANGED=1
-        elif grep -q "^HOOKS=" /etc/mkinitcpio.conf; then
-            echo "⚙️ Añadiendo hook resume a /etc/mkinitcpio.conf..."
-            sed -i 's/\(block\)/\1 resume/' /etc/mkinitcpio.conf
-            INITRAMFS_CHANGED=1
+        fi
+
+        # Ensure resume comes AFTER block and filesystems (needed for swapfile on ext4)
+        if grep -q "\bresume\b" /etc/mkinitcpio.conf; then
+            HOOKS_LINE=$(grep "^HOOKS=" /etc/mkinitcpio.conf)
+            # Extract just the hook names between parentheses
+            HOOKS_CONTENT=$(echo "$HOOKS_LINE" | sed 's/^HOOKS=(//; s/)$//')
+            # Check if resume appears before filesystems or before block
+            RESUME_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^resume$" | cut -d: -f1)
+            FILESYSTEMS_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^filesystems$" | cut -d: -f1)
+            BLOCK_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^block$" | cut -d: -f1)
+            NEEDS_REORDER=0
+            if [ -n "$RESUME_POS" ] && [ -n "$BLOCK_POS" ] && [ "$RESUME_POS" -lt "$BLOCK_POS" ]; then
+                NEEDS_REORDER=1
+            fi
+            if [ -n "$RESUME_POS" ] && [ -n "$FILESYSTEMS_POS" ] && [ "$RESUME_POS" -gt "$FILESYSTEMS_POS" ]; then
+                NEEDS_REORDER=1
+            fi
+            if [ "$NEEDS_REORDER" -eq 1 ]; then
+                echo "⚙️ Reordenando hooks: resume debe ir después de block y antes de filesystems..."
+                # Remove resume from its current position, then insert after block
+                NEW_HOOKS=$(echo "$HOOKS_CONTENT" | sed 's/\bresume\b//; s/  */ /g; s/^ //; s/ $//')
+                NEW_HOOKS=$(echo "$NEW_HOOKS" | sed 's/\bblock\b/block resume/')
+                sed -i "s|^HOOKS=.*|HOOKS=(${NEW_HOOKS})|" /etc/mkinitcpio.conf
+                INITRAMFS_CHANGED=1
+            fi
         fi
     fi
 elif [ -f /etc/initramfs-tools/conf.d/resume ]; then
@@ -159,7 +180,8 @@ if lsmod | grep -q "^nvidia "; then
 # Pulsar OS - NVIDIA hibernate fixes (auto-generado por pulsaros-setup-hibernation)
 # Solo se aplica en sistemas con NVIDIA. Seguro ignorar en sistemas sin NVIDIA.
 # PreserveVideoMemoryAllocations: preserva VRAM para restaurar estado tras hibernate.
-options nvidia NVreg_PreserveVideoMemoryAllocations=1 NVreg_TemporaryFilePath=/var/tmp
+# UseKernelSuspendNotifiers=0: evita que NVIDIA aborte la hibernación cuando la GPU está en uso.
+options nvidia NVreg_PreserveVideoMemoryAllocations=1 NVreg_TemporaryFilePath=/var/tmp NVreg_UseKernelSuspendNotifiers=0
 NVEOF
 
     # Habilitar servicios NVIDIA de hibernate si están disponibles
