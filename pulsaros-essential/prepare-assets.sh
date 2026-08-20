@@ -115,74 +115,6 @@ application/x-debian-package=es.inled.AppInstall.desktop
 application/x-zstd=es.inled.AppInstall.desktop
 EOF
 
-# ==============================================================================
-# GESTOR DE HIBERNACIÓN SEGURO CON PROGRESO Y REANUDACIÓN LIMPIA (PULSAR OS HIBERNATE)
-# ==============================================================================
-echo "❄️ Configurando gestor de hibernación con progreso real y apagado seguro..."
-mkdir -p "$STAGE_DIR/usr/bin"
-cat <<'SCRIPT_EOF' > "$STAGE_DIR/usr/bin/pulsaros-hibernate"
-#!/bin/bash
-# ==============================================================================
-# Pulsar OS - Hibernate Manager with Real Progress & Guaranteed Resume
-# ==============================================================================
-set -e
-
-MODE="${1:-shutdown}"
-
-if [ "$EUID" -ne 0 ]; then
-    exec pkexec "$0" "$@"
-fi
-
-# 1. Configurar modo de apagado o reinicio según argumento
-case "$MODE" in
-    reboot)
-        echo "reboot" > /sys/power/disk 2>/dev/null || true
-        ;;
-    suspend)
-        echo "suspend" > /sys/power/disk 2>/dev/null || true
-        ;;
-    *)
-        echo "shutdown" > /sys/power/disk 2>/dev/null || true
-        ;;
-esac
-
-# 2. Asegurar sincronización previa de discos
-sync
-
-# 3. Iniciar splash gráfico de Plymouth si está disponible
-HAS_PLYMOUTH=false
-if command -v plymouth >/dev/null 2>&1; then
-    if plymouth --ping 2>/dev/null; then
-        HAS_PLYMOUTH=true
-    else
-        plymouth --show-splash 2>/dev/null && HAS_PLYMOUTH=true || true
-    fi
-fi
-
-if [ "$HAS_PLYMOUTH" = true ]; then
-    plymouth message --text="Pulsar OS: Guardando sesión en disco..." 2>/dev/null || true
-fi
-
-# 4. Ejecutar la hibernación del kernel
-# El kernel congelará los procesos, volcará la memoria a la swap y apagará/reiniciará el PC.
-echo disk > /sys/power/state || true
-
-# ==============================================================================
-# RETORNO TRAS DESPERTAR / REANUDACIÓN EXITOSA (RESUME)
-# ==============================================================================
-# Cuando el kernel reanuda la memoria RAM, la ejecución continúa AQUÍ:
-if [ "$HAS_PLYMOUTH" = true ]; then
-    plymouth message --text="Sesión de Pulsar OS restaurada con éxito" 2>/dev/null || true
-    sleep 0.5
-    plymouth --quit 2>/dev/null || true
-fi
-
-sync
-exit 0
-SCRIPT_EOF
-
-chmod 755 "$STAGE_DIR/usr/bin/pulsaros-hibernate"
-
 # Configurar modprobe para preservación de VRAM en NVIDIA
 mkdir -p "$STAGE_DIR/etc/modprobe.d"
 cat <<'CONF_EOF' > "$STAGE_DIR/etc/modprobe.d/pulsaros-nvidia-hibernate.conf"
@@ -190,21 +122,13 @@ cat <<'CONF_EOF' > "$STAGE_DIR/etc/modprobe.d/pulsaros-nvidia-hibernate.conf"
 options nvidia NVreg_PreserveVideoMemoryAllocations=1 NVreg_TemporaryFilePath=/var/tmp NVreg_DynamicPowerManagement=0x02
 CONF_EOF
 
-# Configurar systemd sleep para modo shutdown directo
+# Configurar systemd sleep para modo shutdown directo (ACPI S5)
 mkdir -p "$STAGE_DIR/etc/systemd/sleep.conf.d"
 cat <<'CONF_EOF' > "$STAGE_DIR/etc/systemd/sleep.conf.d/pulsaros-hibernate.conf"
 [Sleep]
 HibernateMode=shutdown
 CONF_EOF
 
-# Override de systemd-hibernate para invocar el gestor de Pulsar OS con splash
-mkdir -p "$STAGE_DIR/etc/systemd/system/systemd-hibernate.service.d"
-cat <<'CONF_EOF' > "$STAGE_DIR/etc/systemd/system/systemd-hibernate.service.d/override.conf"
-[Service]
-ExecStart=
-ExecStart=/usr/bin/pulsaros-hibernate shutdown
-CONF_EOF
-
 # Limpieza
 rm -rf "$TEMP_BUILD"
-echo "✅ Configuración de Pulsar OS Essential y gestor de hibernación preparados en staging."
+echo "✅ Configuración de Pulsar OS Essential preparada en staging."
