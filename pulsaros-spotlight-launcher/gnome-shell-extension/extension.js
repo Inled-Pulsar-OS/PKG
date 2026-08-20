@@ -17,6 +17,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Meta from 'gi://Meta';
+import Shell from 'gi://Shell';
 
 const DBUS_NAME = 'org.gnome.Shell.Extensions.PulsarSpotlight';
 const DBUS_PATH = '/org/gnome/Shell/Extensions/PulsarSpotlight';
@@ -121,12 +122,14 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
             return Clutter.EVENT_PROPAGATE;
         });
         
-        // Listen to window creation to automatically raise Spotlight above everything
+        // Listen to window creation to automatically raise Spotlight (pre-filtered to eliminate event loop overhead)
         this._windowCreatedId = global.display.connect('window-created', (display, win) => {
-            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-                this._ensureSpotlightOnTop(win);
-                return GLib.SOURCE_REMOVE;
-            });
+            if (this._isSpotlightWindow(win)) {
+                GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                    this._ensureSpotlightOnTop(win);
+                    return GLib.SOURCE_REMOVE;
+                });
+            }
         });
 
         // Intercept demands-attention and marked-urgent to prevent "is ready" banner and focus immediately
@@ -215,11 +218,31 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
                wmClass === 'spotlight-gtk';
     }
 
+    _applyHardwareBlur(win) {
+        try {
+            const actor = win.get_compositor_private ? win.get_compositor_private() : null;
+            if (!actor || !Shell.BlurEffect) return;
+
+            let blur = actor.get_effect ? actor.get_effect('spotlight-glass-blur') : null;
+            if (!blur) {
+                blur = new Shell.BlurEffect({
+                    brightness: 0.92,
+                    sigma: 32,
+                    mode: Shell.BlurMode.BACKGROUND
+                });
+                actor.add_effect_with_name('spotlight-glass-blur', blur);
+            }
+        } catch (e) {
+            console.error('[SpotlightLauncher] Error applying hardware blur:', e);
+        }
+    }
+
     _ensureSpotlightOnTop(win) {
         if (this._isSpotlightWindow(win)) {
             try {
                 win.make_above();
                 win.stick();
+                this._applyHardwareBlur(win);
                 Main.activateWindow(win);
                 win.activate(global.get_current_time());
             } catch (e) {
