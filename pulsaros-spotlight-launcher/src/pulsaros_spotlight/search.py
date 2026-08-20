@@ -207,7 +207,7 @@ class SearchBackend:
             clip_results = []
             if self._clipboard_mgr:
                 clip_results = self._clipboard_mgr.search_history(query)[:3]
-            web_results = self._search_web(query)[:1] if query else []
+            web_results = self._search_web(query)[:1] if query and not calc_eval else []
             return calc_list + clip_results + app_results + web_results
 
         return []
