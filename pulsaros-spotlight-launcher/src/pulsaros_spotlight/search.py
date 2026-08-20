@@ -12,6 +12,7 @@ from gi.repository import Gio, GLib
 from typing import Callable
 
 from pulsaros_spotlight.apps import DESKTOP_DIRS, DesktopApp, load_apps
+from pulsaros_spotlight.calculator import Calculator
 
 if TYPE_CHECKING:
     from pulsaros_spotlight.clipboard import ClipboardManager
@@ -171,7 +172,7 @@ class SearchBackend:
         category: str = "all",
         limit: int = DEFAULT_LIMIT,
     ) -> list[SearchResult]:
-        """Instant in-memory search for apps and clipboard without blocking the UI."""
+        """Instant in-memory search for apps, clipboard, and calculator without blocking UI."""
         if category == "clipboard":
             if self._clipboard_mgr:
                 return self._clipboard_mgr.search_history(query)
@@ -189,12 +190,25 @@ class SearchBackend:
             return self._search_apps("", max(limit, 200))
 
         if category == "all":
+            calc_eval = Calculator.evaluate(query)
+            calc_list = []
+            if calc_eval:
+                val_str, snippet = calc_eval
+                calc_list = [
+                    SearchResult(
+                        url=f"calc://{val_str}",
+                        title=val_str,
+                        mime="application/x-calculator",
+                        snippet=snippet,
+                        app=None,
+                    )
+                ]
             app_results = self._search_apps(query, limit)
             clip_results = []
             if self._clipboard_mgr:
                 clip_results = self._clipboard_mgr.search_history(query)[:3]
             web_results = self._search_web(query)[:1] if query else []
-            return clip_results + app_results + web_results
+            return calc_list + clip_results + app_results + web_results
 
         return []
 
