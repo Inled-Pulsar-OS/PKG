@@ -28,6 +28,8 @@ class DesktopApp:
     comment: str
     categories: str
     filename: str
+    lower_name: str = ""
+    lower_comment: str = ""
 
 
 def _parse_desktop_file(path: Path) -> DesktopApp | None:
@@ -59,13 +61,16 @@ def _parse_desktop_file(path: Path) -> DesktopApp | None:
         if not exec_cmd:
             return None
 
+        comment = cp.get("Desktop Entry", "Comment", fallback="")
         return DesktopApp(
             name=name,
             exec=exec_cmd,
             icon=cp.get("Desktop Entry", "Icon", fallback="application-x-executable"),
-            comment=cp.get("Desktop Entry", "Comment", fallback=""),
+            comment=comment,
             categories=cp.get("Desktop Entry", "Categories", fallback=""),
             filename=path.name,
+            lower_name=name.lower(),
+            lower_comment=comment.lower(),
         )
     except Exception:
         logger.debug("Failed to parse %s", path, exc_info=True)
