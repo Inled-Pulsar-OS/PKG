@@ -55,14 +55,6 @@ if [ -d "/boot/efi/EFI/refind" ]; then
         grep -q "^enable_mouse" "$REFIND_CONF" || echo "enable_mouse" >> "$REFIND_CONF"
 
         # Include theme / Incluir el tema
-        grep -q "themes/rEFInd-Regular-Dark/theme.conf" "$REFIND_CONF" || echo "include themes/rEFInd-Regular-Dark/theme.conf" >> "$REFIND_CONF"
-    fi
-
-    # Configure refind_linux.conf
-    if [ -f "/boot/refind_linux.conf" ]; then
-        if ! grep -q "no_console_suspend" /boot/refind_linux.conf; then
-            sed -i "s/rw quiet splash/rw splash no_console_suspend pci=noaer acpi_osi=Linux/g" /boot/refind_linux.conf || true
-        fi
     fi
 else
     echo "⚠️ Directorio /boot/efi/EFI/refind no encontrado. Saltando configuración de tema."
