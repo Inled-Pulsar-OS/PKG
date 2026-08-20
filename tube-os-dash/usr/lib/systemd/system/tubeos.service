@@ -1,0 +1,13 @@
+[Unit]
+After=tubeos-message-bus.service
+After=rclone.service
+Description=Tube OS Main Service
+
+[Service]
+ExecStart=/usr/bin/tubeos -c /etc/tubeos/tubeos.conf
+PIDFile=/var/run/tubeos/tubeos.pid
+Restart=always
+Type=notify
+
+[Install]
+WantedBy=multi-user.target

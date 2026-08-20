@@ -1,0 +1,13 @@
+[Unit]
+Description=Tube OS First-Time Setup
+After=network-online.target
+ConditionPathExists=/var/lib/tubeos/need-ootb
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/share/tubeos-installer/server.py --ootb --port 80
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

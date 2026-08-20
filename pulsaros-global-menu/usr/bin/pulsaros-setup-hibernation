@@ -10,6 +10,19 @@ if [ -d /run/archiso ] || [ -f /run/archiso/bootmnt ]; then
     exit 0
 fi
 
+# Evitar ejecución dentro de un chroot de build (ISO builder, CI, Docker, contenedor)
+# Avoid running inside a build chroot (ISO builder, CI, Docker, container)
+# 1. Variable explícita que build-iso.sh inyecta en el chroot
+if [ -n "$PULSAR_BUILD_CHROOT" ]; then
+    echo "ℹ️ Entorno chroot de build detectado (PULSAR_BUILD_CHROOT); omitiendo configuración de swapfile."
+    exit 0
+fi
+# 2. systemd no está corriendo como PID 1 → estamos en chroot o contenedor
+if [ ! -d /run/systemd/private ]; then
+    echo "ℹ️ systemd no activo como PID 1 (chroot/contenedor); omitiendo configuración de swapfile."
+    exit 0
+fi
+
 # Detectar memoria RAM total en GiB
 TOTAL_RAM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
 TOTAL_RAM_GB=$(( (TOTAL_RAM_KB + 1048575) / 1048576 ))
@@ -57,20 +70,22 @@ if [ -f /swapfile ]; then
 
         # rEFInd
         if [ -f /boot/refind_linux.conf ]; then
-            if ! grep -q "resume=" /boot/refind_linux.conf; then
-                echo "⚙️ Configurando resume en /boot/refind_linux.conf..."
-                sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${RESUME_PARAMS}|g" /boot/refind_linux.conf 2>/dev/null || true
-            fi
+            echo "⚙️ Configurando resume en /boot/refind_linux.conf..."
+            # Remove any existing resume parameters first, then append correct ones
+            sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g' /boot/refind_linux.conf 2>/dev/null || true
+            sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${RESUME_PARAMS}|g" /boot/refind_linux.conf 2>/dev/null || true
         fi
 
         # GRUB
         if [ -f /etc/default/grub ]; then
-            if ! grep -q "resume=" /etc/default/grub; then
-                echo "⚙️ Configurando resume en /etc/default/grub..."
-                sed -i "s|GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${RESUME_PARAMS}\"|" /etc/default/grub 2>/dev/null || true
-                if command -v grub-mkconfig >/dev/null 2>&1; then
-                    grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
-                fi
+            echo "⚙️ Configurando resume en /etc/default/grub..."
+            # Remove any existing resume parameters first, then append correct ones
+            sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g' /etc/default/grub 2>/dev/null || true
+            sed -i "s|GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${RESUME_PARAMS}\"|" /etc/default/grub 2>/dev/null || true
+            if command -v grub-mkconfig >/dev/null 2>&1; then
+                grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
+            elif command -v update-grub >/dev/null 2>&1; then
+                update-grub 2>/dev/null || true
             fi
         fi
     fi
@@ -83,7 +98,58 @@ cat << 'DROPEOF' > /etc/systemd/sleep.conf.d/pulsaros-hibernate.conf
 HibernateMode=shutdown
 DROPEOF
 
-# 5. Fixes específicos por GPU — solo se aplican si el hardware está presente
+# 5. Asegurar hook de resume en initramfs para que el kernel detecte la imagen de hibernación
+# On Arch (mkinitcpio with systemd hooks): sd-resume
+# On Arch (mkinitcpio with busybox hooks): resume
+# On Debian (initramfs-tools): resume
+INITRAMFS_CHANGED=0
+
+if [ -f /etc/mkinitcpio.conf ]; then
+    # Arch Linux — mkinitcpio
+    # Detect the correct resume hook: sd-resume (systemd) or resume (busybox/swsusp)
+    NEEDS_RESUME=1
+    grep -q "resume\|sd-resume" /etc/mkinitcpio.conf && NEEDS_RESUME=0
+    if [ "$NEEDS_RESUME" -eq 1 ]; then
+        if grep -q "sd-vconsole" /etc/mkinitcpio.conf; then
+            # systemd-based initramfs: try sd-resume first, fallback to resume
+            if mkinitcpio -H sd-resume >/dev/null 2>&1; then
+                echo "⚙️ Añadiendo hook sd-resume a /etc/mkinitcpio.conf..."
+                sed -i 's/\(sd-vconsole\)/\1 sd-resume/' /etc/mkinitcpio.conf
+            else
+                echo "⚙️ Añadiendo hook resume a /etc/mkinitcpio.conf..."
+                sed -i 's/\(sd-vconsole\)/\1 resume/' /etc/mkinitcpio.conf
+            fi
+            INITRAMFS_CHANGED=1
+        elif grep -q "^HOOKS=" /etc/mkinitcpio.conf; then
+            echo "⚙️ Añadiendo hook resume a /etc/mkinitcpio.conf..."
+            sed -i 's/\(block\)/\1 resume/' /etc/mkinitcpio.conf
+            INITRAMFS_CHANGED=1
+        fi
+    fi
+elif [ -f /etc/initramfs-tools/conf.d/resume ]; then
+    # Debian — initramfs-tools already configured
+    true
+elif [ -f /etc/initramfs-tools/conf.d/ ] && command -v update-initramfs >/dev/null 2>&1; then
+    # Debian — write resume config
+    if [ -n "$ROOT_UUID" ] && [ -n "$OFFSET" ]; then
+        echo "BOOTUUID=${ROOT_UUID}" > /etc/initramfs-tools/conf.d/resume 2>/dev/null || true
+        INITRAMFS_CHANGED=1
+    fi
+fi
+
+# Regenerar initramfs si se modificó la configuración de resume
+if [ "$INITRAMFS_CHANGED" -eq 1 ]; then
+    echo "🔄 Regenerando initramfs para incluir hook de resume..."
+    if command -v mkinitcpio >/dev/null 2>&1; then
+        mkinitcpio -P 2>/dev/null || true
+    elif command -v update-initramfs >/dev/null 2>&1; then
+        update-initramfs -u 2>/dev/null || true
+    elif command -v dracut >/dev/null 2>&1; then
+        dracut --force 2>/dev/null || true
+    fi
+fi
+
+# 6. Fixes específicos por GPU — solo se aplican si el hardware está presente
 # NVIDIA: en portátiles AMD+NVIDIA, los notificadores PM de NVIDIA abortan el hibernate.
 # Deshabilitarlos permite al kernel volcar la RAM sin interferencias.
 NVIDIA_MODPROBE_FILE=/etc/modprobe.d/pulsaros-nvidia-hibernate.conf
@@ -102,16 +168,20 @@ NVEOF
     fi
 
     # Regenerar initramfs para que las opciones del módulo se incluyan
-    if command -v mkinitcpio >/dev/null 2>&1; then
-        echo "🔄 Regenerando initramfs con configuración NVIDIA..."
+    echo "🔄 Regenerando initramfs con configuración NVIDIA..."
+    if command -v update-initramfs >/dev/null 2>&1; then
+        update-initramfs -u 2>/dev/null || true
+    elif command -v mkinitcpio >/dev/null 2>&1; then
         mkinitcpio -P 2>/dev/null || true
+    elif command -v dracut >/dev/null 2>&1; then
+        dracut --force 2>/dev/null || true
     fi
 elif [ -f "$NVIDIA_MODPROBE_FILE" ]; then
     # Limpiar si se había instalado antes y ahora no hay NVIDIA
     rm -f "$NVIDIA_MODPROBE_FILE"
 fi
 
-# 6. Compilar esquemas GSettings
+# 7. Compilar esquemas GSettings
 if [ -d /usr/share/glib-2.0/schemas ]; then
     glib-compile-schemas /usr/share/glib-2.0/schemas 2>/dev/null || true
 fi

@@ -1,0 +1,19 @@
+#!/bin/bash
+set -e
+
+# Compilar esquemas GSettings
+if [ -d /usr/share/glib-2.0/schemas ]; then
+    glib-compile-schemas /usr/share/glib-2.0/schemas 2>/dev/null || true
+fi
+
+# Actualizar la caché de iconos
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -q /usr/share/icons/hicolor 2>/dev/null || true
+fi
+
+# Actualizar la base de datos de escritorio
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database -q /usr/share/applications 2>/dev/null || true
+fi
+
+exit 0

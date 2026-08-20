@@ -341,6 +341,10 @@ if [ "$PACKAGE_NAME" == "all" ]; then
     SKIPPED_MANUAL=()
     for pkg_dir in "$PKGBUILDS_DIR"/*/; do
         pkg_name=$(basename "$pkg_dir")
+        # Skip Tube OS flavour packages in the general Pulsar OS build
+        if [[ "$pkg_name" == tubeos-* ]] || [[ "$pkg_name" == tube-os-* ]] || [[ "$pkg_name" == "dockermigrate" ]]; then
+            continue
+        fi
         if [ -f "$pkg_dir/PKGBUILD" ]; then
             if [ -n "$DEPLOY_FLAG" ] || [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
                 if is_manual_upload_only "$pkg_name"; then

@@ -6,6 +6,19 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ]; then
         /usr/bin/pulsaros-setup-hibernation 2>/dev/null || true
     fi
 
+    # pamtester needs setuid root to authenticate users via PAM
+    if [ -f /usr/bin/pamtester ]; then
+        chmod u+s /usr/bin/pamtester 2>/dev/null || true
+    fi
+
+    # Ensure the PAM service file is readable by pamtester
+    chmod 644 /etc/pam.d/pulsaros-lock 2>/dev/null || true
+
+    # Auto-detect distro and fix PAM includes if needed
+    if [ -f /etc/pam.d/system-auth ] && ! grep -q "system-auth" /etc/pam.d/pulsaros-lock 2>/dev/null; then
+        sed -i 's|common-auth|system-auth|g; s|common-account|system-account|g' /etc/pam.d/pulsaros-lock 2>/dev/null || true
+    fi
+
     glib-compile-schemas /usr/share/glib-2.0/schemas/ 2>/dev/null || true
 fi
 

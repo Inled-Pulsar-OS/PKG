@@ -2,9 +2,15 @@
 set -e
 case "$1" in
     configure)
-        systemctl enable tubeos-installer 2>/dev/null || true
-        echo "Tube OS Installer installed. Service will start on next boot (live mode)."
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl daemon-reload 2>/dev/null || true
+            systemctl enable tubeos-installer 2>/dev/null || true
+            systemctl enable avahi-daemon 2>/dev/null || true
+        fi
+        echo "tubeos" > /etc/hostname 2>/dev/null || true
+        if [ -f /etc/hosts ] && ! grep -q "tubeos.local" /etc/hosts; then
+            echo "127.0.0.1 tubeos.local tubeos" >> /etc/hosts
+        fi
     ;;
 esac
-#DEBHELPER#
 exit 0

@@ -138,7 +138,15 @@ sync_wallpaper() {
             echo "Syncing static image wallpaper..."
             cp -f "$BG_PATH" /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
             chmod 666 /var/lib/pulsar-sddm/pulsar-wallpaper.png 2>/dev/null || true
-            
+
+            # Remove residual video/animated files from previous live wallpaper
+            rm -f /var/lib/pulsar-sddm/pulsar-wallpaper.mp4 2>/dev/null || true
+            rm -f /var/lib/pulsar-sddm/pulsar-wallpaper.webm 2>/dev/null || true
+            rm -f /var/lib/pulsar-sddm/pulsar-wallpaper.mkv 2>/dev/null || true
+            rm -f /var/lib/pulsar-sddm/pulsar-wallpaper.gif 2>/dev/null || true
+            rm -f /var/lib/pulsar-sddm/pulsar-wallpaper.webp 2>/dev/null || true
+            echo "Cleaned residual video files from SDDM sync dir."
+
             gsettings set org.gnome.desktop.screensaver picture-uri "file://$BG_PATH" 2>/dev/null || true
             gsettings set org.gnome.desktop.screensaver picture-uri-dark "file://$BG_PATH" 2>/dev/null || true
             ;;
