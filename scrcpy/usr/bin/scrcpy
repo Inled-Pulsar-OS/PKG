@@ -1,0 +1,5 @@
+#!/bin/bash
+if command -v scrcpy.real &>/dev/null; then
+    exec scrcpy.real "$@"
+fi
+echo "scrcpy wrapper: adb device display"

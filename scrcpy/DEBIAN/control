@@ -1,0 +1,9 @@
+Package: scrcpy
+Version: 2.4-1
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: Pulsar OS <info@inled.es>
+Depends: adb
+Description: Display and control Android devices (Pulsar OS package)
+ Provides Android screen mirroring and control utilities.
