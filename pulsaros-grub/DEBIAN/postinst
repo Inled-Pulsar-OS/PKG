@@ -24,6 +24,9 @@ fi
 # Asegurar que GRUB use una lista de resoluciones de respaldo robusta para evitar pantallas negras en VMs
 if [ -f "/etc/default/grub" ]; then
     sed -i 's/^GRUB_GFXMODE=.*/GRUB_GFXMODE="1920x1080,1280x720,1024x768,auto"/' /etc/default/grub || true
+    if ! grep -q "no_console_suspend" /etc/default/grub; then
+        sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="\([^"]*\)"/GRUB_CMDLINE_LINUX_DEFAULT="\1 no_console_suspend pci=noaer acpi_osi=Linux"/' /etc/default/grub || true
+    fi
 fi
 
 # Crear script de GRUB para cargar las fuentes del tema en el arranque
