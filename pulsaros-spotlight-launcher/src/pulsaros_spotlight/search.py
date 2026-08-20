@@ -338,7 +338,7 @@ class SearchBackend:
         results: list[SearchResult] = []
 
         for app in self._apps:
-            if not query_lower or query_lower in app.name.lower() or (app.comment and query_lower in app.comment.lower()):
+            if not query_lower or query_lower in app.lower_name or (app.lower_comment and query_lower in app.lower_comment):
                 app_url = f"app://{app.filename}"
                 results.append(
                     SearchResult(
