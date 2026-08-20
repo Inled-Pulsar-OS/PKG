@@ -32,7 +32,10 @@ package() {
     ln -sf pulsaros-spotlight "$pkgdir/usr/bin/spotlight-gtk"
 
     # Style and icons
-    install -Dm644 data/style.css "$pkgdir/usr/share/pulsaros-spotlight/style.css"
+    install -Dm644 data/base.css "$pkgdir/usr/share/pulsaros-spotlight/base.css"
+    install -Dm644 data/dark.css "$pkgdir/usr/share/pulsaros-spotlight/dark.css"
+    install -Dm644 data/light.css "$pkgdir/usr/share/pulsaros-spotlight/light.css"
+    install -Dm644 data/index.css "$pkgdir/usr/share/pulsaros-spotlight/index.css"
     mkdir -p "$pkgdir/usr/share/pulsaros-spotlight/icons"
     cp -r data/icons/* "$pkgdir/usr/share/pulsaros-spotlight/icons/" 2>/dev/null || true
 

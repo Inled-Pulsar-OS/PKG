@@ -1,0 +1,141 @@
+/* PulsarOS Spotlight — macOS Dark Glass Theme Tokens & Rules */
+
+.spotlight-window.dark,
+.spotlight-window {
+    background-color: rgba(30, 30, 35, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.42);
+    color: #ffffff;
+}
+
+.spotlight-window.dark .search-header,
+.search-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.spotlight-window.dark .search-icon,
+.search-icon {
+    opacity: 0.65;
+}
+
+.spotlight-window.dark .search-input,
+.search-input {
+    color: #ffffff;
+    caret-color: #0A84FF;
+}
+
+.view-toggle {
+    opacity: 0.7;
+}
+
+.view-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    opacity: 1.0;
+}
+
+.spotlight-window.dark .category-bar,
+.category-bar {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background-color: rgba(0, 0, 0, 0.15);
+}
+
+.spotlight-window.dark .category-btn,
+.category-btn {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.category-btn:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.category-btn:checked {
+    background-color: #0A84FF;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.spotlight-window.dark .result-item-list:hover,
+.result-item-list:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.result-item-list:selected,
+.result-item-list:focus {
+    background-color: #0A84FF;
+    color: #ffffff;
+}
+
+.result-item-list:selected .result-title,
+.result-item-list:selected .result-snippet {
+    color: #ffffff;
+    opacity: 1.0;
+}
+
+.result-icon {
+    opacity: 0.85;
+}
+
+.result-snippet {
+    opacity: 0.55;
+}
+
+.result-item-grid:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.result-item-grid:selected,
+.result-item-grid:focus {
+    background-color: #0A84FF;
+    color: #ffffff;
+}
+
+.result-icon-grid {
+    opacity: 0.90;
+}
+
+.result-title-grid {
+    opacity: 0.85;
+}
+
+.ctx-menu-btn {
+    color: #ffffff;
+}
+
+.ctx-menu-btn:hover {
+    background-color: rgba(10, 132, 255, 0.20);
+}
+
+.ctx-menu-btn-danger {
+    color: #ff453a;
+}
+
+.ctx-menu-btn-danger:hover {
+    background-color: rgba(255, 69, 58, 0.15);
+}
+
+.uninstall-progress {
+    background-color: rgba(10, 132, 255, 0.10);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.uninstall-progress label {
+    color: #ffffff;
+}
+
+.indexing-status-bar {
+    background-color: rgba(0, 0, 0, 0.20);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.indexing-status-bar label {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.indexing-status-bar progressbar trough {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.indexing-status-bar progressbar progress {
+    background-color: #0A84FF;
+}

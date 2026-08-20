@@ -64,9 +64,24 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         self.set_decorated(False)
         self.add_css_class("spotlight-window")
 
+        self._style_manager = Adw.StyleManager.get_default()
+        self._style_manager.connect("notify::dark", self._on_theme_changed)
+        self._update_theme_css()
+
         self._build_ui()
         self._setup_events()
         self._backend.set_on_apps_updated(self._on_apps_updated)
+
+    def _on_theme_changed(self, _manager: Adw.StyleManager, _pspec) -> None:
+        self._update_theme_css()
+
+    def _update_theme_css(self) -> None:
+        if self._style_manager.get_dark():
+            self.remove_css_class("light")
+            self.add_css_class("dark")
+        else:
+            self.remove_css_class("dark")
+            self.add_css_class("light")
 
     # -- UI construction ------------------------------------------------------
 
@@ -205,11 +220,21 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         self.add_controller(key_ctrl)
 
         self.connect("close-request", self._on_close_request)
-        GLib.timeout_add_seconds(3, self._check_indexing_status)
+        self._indexing_timer_id: int | None = None
+
+    def _start_indexing_timer(self) -> None:
+        if self._indexing_timer_id is None and self.is_visible():
+            self._indexing_timer_id = GLib.timeout_add_seconds(3, self._check_indexing_status)
+
+    def _stop_indexing_timer(self) -> None:
+        if self._indexing_timer_id is not None:
+            GLib.source_remove(self._indexing_timer_id)
+            self._indexing_timer_id = None
 
     def _check_indexing_status(self) -> bool:
         if not self.is_visible():
-            return True
+            self._indexing_timer_id = None
+            return False
         try:
             is_indexing, status_text, progress = self._backend.get_indexing_status()
             if is_indexing:
@@ -241,6 +266,7 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         if self._has_been_active and self.is_visible() and not self.is_active():
             self._has_been_active = False
             self.set_visible(False)
+            self._stop_indexing_timer()
         return False
 
     # -- event handlers -------------------------------------------------------
@@ -338,6 +364,14 @@ class SpotlightWindow(Gtk.ApplicationWindow):
                 self._on_result_activated(row.result)
 
     def _on_result_activated(self, result: SearchResult) -> None:
+        # 0. Calculator Activation (Copy & close)
+        if result.url.startswith("calc://"):
+            answer = result.url.removeprefix("calc://")
+            clipboard = Gdk.Display.get_default().get_clipboard()
+            clipboard.set(answer)
+            self.set_visible(False)
+            return
+
         # 1. Clipboard Item Activation (Paste & close)
         if result.url.startswith("clipboard://"):
             try:
@@ -573,3 +607,4 @@ class SpotlightWindow(Gtk.ApplicationWindow):
 
         self.present()
         self._search_entry.grab_focus()
+        self._start_indexing_timer()

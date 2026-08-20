@@ -26,7 +26,10 @@ install -m 644 data/pulsaros-spotlight.desktop "$STAGE_DIR/usr/share/application
 
 # Install style CSS
 mkdir -p "$STAGE_DIR/usr/share/pulsaros-spotlight"
-install -m 644 data/style.css "$STAGE_DIR/usr/share/pulsaros-spotlight/style.css"
+install -m 644 data/base.css "$STAGE_DIR/usr/share/pulsaros-spotlight/base.css"
+install -m 644 data/dark.css "$STAGE_DIR/usr/share/pulsaros-spotlight/dark.css"
+install -m 644 data/light.css "$STAGE_DIR/usr/share/pulsaros-spotlight/light.css"
+install -m 644 data/index.css "$STAGE_DIR/usr/share/pulsaros-spotlight/index.css"
 
 # Install Icons
 mkdir -p "$STAGE_DIR/usr/share/pulsaros-spotlight/icons"
