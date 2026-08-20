@@ -353,6 +353,14 @@ class SpotlightWindow(Gtk.ApplicationWindow):
                 self._on_result_activated(row.result)
 
     def _on_result_activated(self, result: SearchResult) -> None:
+        # 0. Calculator Activation (Copy & close)
+        if result.url.startswith("calc://"):
+            answer = result.url.removeprefix("calc://")
+            clipboard = Gdk.Display.get_default().get_clipboard()
+            clipboard.set(answer)
+            self.set_visible(False)
+            return
+
         # 1. Clipboard Item Activation (Paste & close)
         if result.url.startswith("clipboard://"):
             try:
