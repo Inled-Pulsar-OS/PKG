@@ -96,6 +96,11 @@ def sync_to_sddm_and_lockscreen(media_path, poster_path):
                 shutil.copy2(media_path, SDDM_DIR / "pulsar-wallpaper.png")
             else:
                 shutil.copy2(media_path, SDDM_DIR / "pulsar-wallpaper.png")
+                # Remove residual video/animated files from previous live wallpaper
+                for vext in [".mp4", ".webm", ".mkv", ".mov", ".avi", ".gif", ".webp"]:
+                    old_vid = SDDM_DIR / f"pulsar-wallpaper{vext}"
+                    if old_vid.exists():
+                        old_vid.unlink()
             
             # Update SDDM theme.conf if accessible
             theme_conf = Path("/usr/share/sddm/themes/Apple.Tahoe/theme.conf")

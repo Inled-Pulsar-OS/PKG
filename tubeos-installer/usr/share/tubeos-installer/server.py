@@ -52,15 +52,14 @@ def get_ip():
 def gen_qr_svg(url: str) -> str:
     try:
         import qrcode
-        qr = qrcode.QRCode(version=1, box_size=6, border=2)
-        qr.add_data(url)
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
-        import io, base64
+        import qrcode.image.svg
+        factory = qrcode.image.svg.SvgPathImage
+        img = qrcode.make(url, image_factory=factory)
+        import io
         buf = io.BytesIO()
-        img.save(buf, format="SVG")
-        return buf.getvalue().decode()
-    except ImportError:
+        img.save(buf)
+        return buf.getvalue().decode("utf-8")
+    except Exception:
         return ""
 
 # ─── Disk helpers ───────────────────────────────────────────────────────────
@@ -142,10 +141,13 @@ def apply_keyboard(kb: str):
 def create_user(username: str, password: str, fullname: str = ""):
     if not fullname:
         fullname = username
-    run(f"useradd -m -s /bin/bash -G wheel,docker,audio,video {username}", check=False)
+    admin_group = "sudo" if Path("/etc/debian_version").exists() else "wheel"
+    run("groupadd -f docker", check=False)
+    run("groupadd -f " + admin_group, check=False)
+    run(f"useradd -m -s /bin/bash -G {admin_group},docker,audio,video {username}", check=False)
     p = subprocess.Popen(["chpasswd"], stdin=subprocess.PIPE, shell=False)
     p.communicate(input=f"{username}:{password}\n".encode())
-    run(f"echo '{username} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/{username}", check=False)
+    run(f"mkdir -p /etc/sudoers.d && echo '{username} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/{username} && chmod 0440 /etc/sudoers.d/{username}", check=False)
 
 def finalize_ootb():
     run("rm -f /var/lib/tubeos/need-ootb", check=False)
@@ -158,6 +160,10 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 @app.get("/", response_class=HTMLResponse)
 async def index():
     return (STATIC_DIR / "index.html").read_text()
+
+@app.get("/api/mode")
+async def api_mode():
+    return {"mode": "ootb" if ootb_mode else "installer"}
 
 # ─── Routes: install mode ──────────────────────────────────────────────────
 
@@ -182,6 +188,16 @@ async def api_install(request: Request):
     # Write a marker so the background install script can pick it up
     marker = Path("/tmp/tubeos-install.json")
     marker.write_text(json.dumps({"disk": disk, "hostname": hostname_val}))
+    
+    # Spawn install.sh in background if present
+    install_sh = Path("/usr/share/tubeos-installer/install.sh")
+    if not install_sh.exists():
+        install_sh = Path(__file__).parent / "install.sh"
+    
+    if install_sh.exists():
+        Path("/tmp/tubeos-install.log").write_text("")
+        subprocess.Popen(["/bin/bash", str(install_sh)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    
     return {"status": "started"}
 
 @app.get("/api/install/progress")

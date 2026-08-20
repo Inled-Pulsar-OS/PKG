@@ -1024,11 +1024,10 @@ const LockScreen = GObject.registerClass({
         
         try {
             // Run pamtester asynchronously using stdin piping
-            let proc = new Gio.Subprocess({
+            let proc = new Gio.SubprocessBuilder({
                 argv: ['/usr/bin/pamtester', 'pulsaros-lock', username, 'authenticate'],
                 flags: Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
-            });
-            proc.init(null);
+            }).build();
             
             let stdinStream = proc.get_stdin_pipe();
             if (stdinStream) {
@@ -1041,6 +1040,11 @@ const LockScreen = GObject.registerClass({
                 try {
                     proc.wait_finish(res);
                     let success = proc.get_successful();
+                    if (!success) {
+                        let stderrBytes = proc.get_stderr_pipe()?.read_bytes(null);
+                        let stderrText = stderrBytes ? new TextDecoder().decode(stderrBytes.get_data()) : '';
+                        console.warn(`[LockScreen] pamtester auth failed for user '${username}': exit=${proc.get_exit_status()} stderr=${stderrText.trim()}`);
+                    }
                     if (success) {
                         this._onAuthSuccess();
                     } else {
@@ -1053,11 +1057,7 @@ const LockScreen = GObject.registerClass({
             });
         } catch (e) {
             console.error("[LockScreen] pamtester launch failed:", e);
-            if (password === 'pulsar' || password === 'live' || password === 'jaime') {
-                this._onAuthSuccess();
-            } else {
-                this._onAuthFailure();
-            }
+            this._onAuthFailure();
         }
     }
     

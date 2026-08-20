@@ -1,0 +1,10 @@
+Package: tube-os-dash
+Version: 0.4.17
+Section: admin
+Priority: optional
+Architecture: amd64
+Depends: docker.io | docker-ce, rclone, smartmontools, parted, ntfs-3g, net-tools, udevil, samba, cifs-utils, mergerfs, unzip
+Maintainer: Pulsar OS Team <team@pulsaros.io>
+Description: Tube OS Dashboard - Web-based NAS management dashboard
+ Tube OS is an elegant, open-source dashboard and app orchestrator
+ for NAS and home server setups.

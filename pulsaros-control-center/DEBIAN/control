@@ -1,0 +1,16 @@
+Package: pulsaros-control-center
+Version: 1.0.3
+Section: gnome
+Priority: optional
+Architecture: amd64
+Maintainer: Jaime <info@inled.es>
+Depends: libgtk-4-1, libadwaita-1-0, libglib2.0-0, libgnome-desktop-4-2, libcolord-gtk4-1, libgoa-1.0-0, gnome-settings-daemon, accountsservice, libmalcontent-0-0, libgtop-2.0-11, libpwquality1, libnm0, libsecret-1-0, libpolkit-gobject-1-0, udisks2
+Provides: gnome-control-center
+Replaces: gnome-control-center
+Conflicts: gnome-control-center
+Description: GNOME Settings with Pulsar OS macOS customization for Debian.
+ Custom build of gnome-control-center with Pulsar OS patches:
+ Appearance panel with Live Wallpaper engine, Liquid Glass effect,
+ macOS-style accent colors, and custom UI layout.
+ Compiled from upstream GNOME source with the same overlay and patches
+ used in the Arch Linux version of Pulsar OS.

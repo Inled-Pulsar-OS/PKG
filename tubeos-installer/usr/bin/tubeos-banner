@@ -1,0 +1,50 @@
+#!/bin/bash
+# ==============================================================================
+# Tube OS Interactive Banner & IP / QR Detector
+# ==============================================================================
+
+# Wait for IP address
+IP=""
+for i in {1..10}; do
+    IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7}')
+    if [ -z "$IP" ]; then
+        IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+    fi
+    [ -n "$IP" ] && [ "$IP" != "127.0.0.1" ] && break
+    sleep 0.5
+done
+
+IP="${IP:-127.0.0.1}"
+URL="http://${IP}"
+
+echo ""
+echo -e "\033[1;36m  =======================================================\033[0m"
+echo -e "\033[1;37m                 Welcome to Tube OS \033[0m"
+echo -e "\033[1;36m  =======================================================\033[0m"
+echo ""
+echo -e "  \033[1;32mWeb Access URL:\033[0m \033[1;37m${URL}\033[0m"
+echo -e "  \033[1;33mDockerMigrate:\033[0m  \033[1;37mhttp://${IP}:8070\033[0m"
+echo ""
+echo -e "  \033[1;35mScan this QR code with your mobile camera:\033[0m"
+echo ""
+
+# Render QR code
+if command -v qrencode >/dev/null 2>&1; then
+    qrencode -t ANSIUTF8 "${URL}"
+elif python3 -c "import qrcode" >/dev/null 2>&1; then
+    python3 -c "
+import qrcode
+qr = qrcode.QRCode(border=1)
+qr.add_data('${URL}')
+qr.make(fit=True)
+qr.print_ascii(invert=True)
+" 2>/dev/null || true
+elif command -v tubeos-cli >/dev/null 2>&1; then
+    tubeos-cli qrcode 2>/dev/null || true
+fi
+
+echo ""
+echo -e "  \033[90mManagement Commands:\033[0m"
+echo -e "    \033[37mtubeos-cli --help\033[0m       - Tube OS CLI tools"
+echo -e "    \033[37mjournalctl -u tubeos-installer -f\033[0m - Installer logs"
+echo ""

@@ -1,0 +1,14 @@
+[Unit]
+After=tubeos-message-bus.service
+After=docker.service
+Description=Tube OS App Management Service
+
+[Service]
+ExecStartPre=/usr/bin/tubeos-app-management -v
+ExecStart=/usr/bin/tubeos-app-management -c /etc/tubeos/app-management.conf
+PIDFile=/var/run/tubeos/app-management.pid
+Restart=always
+Type=notify
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+[Unit]
+After=tubeos-message-bus.service
+Description=Tube OS User Service
+
+[Service]
+ExecStartPre=/usr/bin/tubeos-user-service -v
+ExecStart=/usr/bin/tubeos-user-service -c /etc/tubeos/user-service.conf
+PIDFile=/var/run/tubeos/user-service.pid
+Restart=always
+Type=notify
+
+[Install]
+WantedBy=multi-user.target

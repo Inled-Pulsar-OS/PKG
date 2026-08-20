@@ -465,11 +465,11 @@ if [ "$PACKAGE_NAME" == "all" ]; then
     
     # Find all subdirectories that contain a DEBIAN/control file
     # Encontrar todos los subdirectorios que tengan un archivo DEBIAN/control
-    # Exclude build staging directories / Excluir directorios del sistema de compilación
+    # Exclude build staging directories and Tube OS flavor packages
     PACKAGES=()
     while read -r control_path; do
         dir_name=$(basename "$(dirname "$(dirname "$control_path")")")
-        if [[ "$control_path" != *"/pkg-staging/"* ]]; then
+        if [[ "$control_path" != *"/pkg-staging/"* ]] && [[ "$dir_name" != tubeos-* ]] && [[ "$dir_name" != tube-os-* ]] && [[ "$dir_name" != "dockermigrate" ]]; then
             PACKAGES+=("$dir_name")
         fi
     done < <(find "$PKG_DIR" -name "control" -path "*/DEBIAN/control")

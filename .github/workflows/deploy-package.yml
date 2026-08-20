@@ -90,7 +90,18 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y dpkg-dev fakeroot jq python3-pil
+          sudo apt-get install -y \
+            dpkg-dev fakeroot jq python3-pil \
+            meson ninja-build git gettext blueprint-compiler \
+            libgtk-4-dev libadwaita-1-dev libgnome-desktop-4-dev \
+            libcolord-gtk4-dev libgoa-1.0-dev libgtop2-dev \
+            libpwquality-dev libnm-dev libsecret-1-dev \
+            libpolkit-gobject-1-dev libmalcontent-dev \
+            libaccountsservice-dev libglib2.0-dev libgsound-dev \
+            libjson-glib-dev libsoup-3.0-dev libwacom-dev \
+            libibus-1.0-dev libkrb5-dev libgnutls28-dev \
+            libxi-dev libx11-dev docbook-xsl xsltproc \
+            modemmanager-dev libmm-glib-dev
 
       # 6. Parse package and branch from issue or inputs
       - name: Parse Package and Branch

@@ -23,11 +23,11 @@ async function init() {
     }
   } catch(e) {}
 
-  // Check if OOTB needed
+  // Check mode
   try {
-    const r = await fetch('/api/disks');
+    const r = await fetch('/api/mode');
     const d = await r.json();
-    if (d.disks && d.disks.length === 0) {
+    if (d.mode === 'ootb') {
       isOotb = true;
       showScreen('screen-ootb-welcome');
       return;

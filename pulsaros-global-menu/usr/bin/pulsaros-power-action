@@ -18,8 +18,57 @@ if [ "$RESTORE" = "restore" ]; then
 
     sync
 
+    # Guardar estado de la sesión GNOME antes de hibernar para asegurar restauración
+    # Save GNOME session state before hibernation to ensure restoration
+    gnome-session-save --force --no-prompt 2>/dev/null || true
+    sleep 1
+    sync
+
+    # Watchdog de seguridad: si systemctl hibernate no apaga el sistema en 90 segundos
+    # (fallo de ACPI S4, bug de kernel, etc.), forzamos el poweroff o reboot.
+    # Safety watchdog: if systemctl hibernate doesn't cut power within 90s
+    # (ACPI S4 failure, kernel bug, etc.), we force poweroff/reboot.
+    (
+        sleep 90
+        sync
+        if [ "$ACTION" = "restart" ]; then
+            systemctl reboot --force 2>/dev/null || echo b > /proc/sysrq-trigger
+        else
+            systemctl poweroff --force 2>/dev/null || echo o > /proc/sysrq-trigger
+        fi
+    ) &
+    WATCHDOG_PID=$!
+
     # Ejecutar hibernación gestionada por systemd
-    systemctl hibernate 2>/dev/null || (echo disk > /sys/power/state)
+    # Si hibernate falla o retorna (lo que no debería pasar si ACPI S4 funciona),
+    # el watchdog se encargará del poweroff.
+    # Run systemd-managed hibernate. If it fails or returns unexpectedly
+    # (which shouldn't happen when ACPI S4 works), the watchdog handles poweroff.
+    if systemctl hibernate 2>/dev/null; then
+        # hibernate retornó sin error pero sin apagar — matar watchdog y apagar nosotros
+        # hibernate returned without error but without powering off — kill watchdog and power off ourselves
+        kill $WATCHDOG_PID 2>/dev/null || true
+        sync
+        if [ "$ACTION" = "restart" ]; then
+            systemctl reboot --force 2>/dev/null || echo b > /proc/sysrq-trigger
+        else
+            systemctl poweroff --force 2>/dev/null || echo o > /proc/sysrq-trigger
+        fi
+    else
+        # systemctl hibernate falló — intentar volcado directo al kernel como fallback
+        # systemctl hibernate failed — try direct kernel suspend-to-disk as fallback
+        kill $WATCHDOG_PID 2>/dev/null || true
+        sync
+        echo disk > /sys/power/state 2>/dev/null || true
+        # Si tampoco funcionó, apagar igualmente
+        # If that also failed, power off anyway
+        sleep 5
+        if [ "$ACTION" = "restart" ]; then
+            systemctl reboot --force 2>/dev/null || echo b > /proc/sysrq-trigger
+        else
+            systemctl poweroff --force 2>/dev/null || echo o > /proc/sysrq-trigger
+        fi
+    fi
 else
     if [ "$ACTION" = "restart" ]; then
         systemctl reboot 2>/dev/null || gnome-session-quit --reboot

@@ -1,0 +1,13 @@
+[Unit]
+Description=DockerMigrate Web Service
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/dockermigrate serve --port 8070
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
