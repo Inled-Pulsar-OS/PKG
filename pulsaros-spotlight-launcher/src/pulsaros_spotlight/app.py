@@ -20,8 +20,9 @@ from pulsaros_spotlight.ui.window import SpotlightWindow
 logger = logging.getLogger(__name__)
 
 _CSS_SEARCH_PATHS = [
-    Path("/usr/share/pulsaros-spotlight/style.css"),
-    Path(__file__).resolve().parent.parent.parent / "data" / "style.css",
+    Path("/usr/share/pulsaros-spotlight/index.css"),
+    Path(__file__).resolve().parent / "index.css",
+    Path(__file__).resolve().parent.parent.parent / "data" / "index.css",
 ]
 
 
@@ -33,7 +34,7 @@ def _load_css() -> None:
             css_file = p
             break
     if css_file is None:
-        logger.warning("spotlight style.css not found — results area may be invisible")
+        logger.warning("spotlight index.css not found — results area may be invisible")
         return
 
     provider = Gtk.CssProvider()
