@@ -220,11 +220,21 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         self.add_controller(key_ctrl)
 
         self.connect("close-request", self._on_close_request)
-        GLib.timeout_add_seconds(3, self._check_indexing_status)
+        self._indexing_timer_id: int | None = None
+
+    def _start_indexing_timer(self) -> None:
+        if self._indexing_timer_id is None and self.is_visible():
+            self._indexing_timer_id = GLib.timeout_add_seconds(3, self._check_indexing_status)
+
+    def _stop_indexing_timer(self) -> None:
+        if self._indexing_timer_id is not None:
+            GLib.source_remove(self._indexing_timer_id)
+            self._indexing_timer_id = None
 
     def _check_indexing_status(self) -> bool:
         if not self.is_visible():
-            return True
+            self._indexing_timer_id = None
+            return False
         try:
             is_indexing, status_text, progress = self._backend.get_indexing_status()
             if is_indexing:
@@ -256,6 +266,7 @@ class SpotlightWindow(Gtk.ApplicationWindow):
         if self._has_been_active and self.is_visible() and not self.is_active():
             self._has_been_active = False
             self.set_visible(False)
+            self._stop_indexing_timer()
         return False
 
     # -- event handlers -------------------------------------------------------
@@ -596,3 +607,4 @@ class SpotlightWindow(Gtk.ApplicationWindow):
 
         self.present()
         self._search_entry.grab_focus()
+        self._start_indexing_timer()

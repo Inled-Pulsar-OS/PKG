@@ -69,6 +69,11 @@ class SpotlightApp(Gtk.Application):
         Gtk.Application.do_startup(self)
         self._ensure_css()
 
+    def do_shutdown(self) -> None:
+        if self._backend:
+            self._backend.close()
+        Gtk.Application.do_shutdown(self)
+
     def _ensure_css(self) -> None:
         """Apply the Spotlight stylesheet once the display is available."""
         if self._css_loaded:
