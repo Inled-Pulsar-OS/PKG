@@ -70,7 +70,6 @@
                             <child>
                               <object class="GtkLabel" id="user_name_label">
                                 <property name="label" translatable="yes">Apple ID &amp; Accounts</property>
-                                <property name="use-markup">True</property>
                                 <property name="halign">start</property>
                                 <style>
                                   <class name="heading"/>
