@@ -202,35 +202,69 @@ fi
 # 4. Meson build & install into STAGE_DIR
 # ==============================================================================
 BUILD_DIR="$BUILD_ROOT/build"
-mkdir -p "$BUILD_DIR"
-
-echo "🔨 [ES] Configurando con Meson..."
-echo "🔨 [EN] Configuring with Meson..."
-
-# Locate the distributor logo (deployed by pulsaros-branding)
-DISTRIBUTOR_LOGO="/usr/share/pixmaps/pulsaros-logo-text.svg"
-if [ ! -f "$DISTRIBUTOR_LOGO" ]; then
-    DISTRIBUTOR_LOGO="/usr/share/pixmaps/gnome-logo-text.svg"
+# Detect if we need to compile inside a Debian chroot (e.g. when building on an Arch Linux host)
+IS_DEBIAN_HOST=false
+if [ -f /etc/debian_version ] && [ ! -f /etc/arch-release ]; then
+    IS_DEBIAN_HOST=true
 fi
 
-meson setup \
-    --prefix=/usr \
-    --buildtype=release \
-    -D documentation=false \
-    -D location-services=enabled \
-    -D malcontent=true \
-    -D distributor_logo="$DISTRIBUTOR_LOGO" \
-    -D dark_mode_distributor_logo="$DISTRIBUTOR_LOGO" \
-    "$BUILD_DIR" \
-    "$SRC_DIR"
+DEBIAN_CHROOT="$SCRIPT_DIR/../../ISO/build/rootfs-base-stable-debian"
+if [ ! -d "$DEBIAN_CHROOT" ]; then
+    DEBIAN_CHROOT="$SCRIPT_DIR/../../ISO/build/rootfs-target-stable-debian"
+fi
 
-echo "⚙️ [ES] Compilando gnome-control-center..."
-echo "⚙️ [EN] Building gnome-control-center..."
-meson compile -C "$BUILD_DIR" -j "$(nproc)"
+if ! $IS_DEBIAN_HOST && [ -d "$DEBIAN_CHROOT/usr/bin" ]; then
+    echo "🐧 [ES] Host no-Debian detectado (Arch). Compilando nativamente dentro del chroot Debian..."
+    echo "🐧 [EN] Non-Debian host detected (Arch). Compiling natively inside Debian chroot..."
+    
+    # Create temporary in-chroot build directories
+    CHROOT_BUILD_ROOT="$DEBIAN_CHROOT/tmp/gcc-chroot-build"
+    pkexec rm -rf "$CHROOT_BUILD_ROOT"
+    pkexec mkdir -p "$CHROOT_BUILD_ROOT"
+    pkexec cp -rf "$SRC_DIR" "$CHROOT_BUILD_ROOT/src"
+    
+    pkexec chroot "$DEBIAN_CHROOT" /bin/bash -c "
+        cd /tmp/gcc-chroot-build
+        meson setup \
+            --prefix=/usr \
+            --buildtype=release \
+            -D documentation=false \
+            -D location-services=enabled \
+            -D malcontent=true \
+            -D distributor_logo=\"$DISTRIBUTOR_LOGO\" \
+            -D dark_mode_distributor_logo=\"$DISTRIBUTOR_LOGO\" \
+            build src
+        ninja -C build -j \$(nproc)
+        DESTDIR=/tmp/gcc-chroot-build/staging meson install -C build
+    "
+    
+    # Copy compiled files to the host STAGE_DIR
+    mkdir -p "$STAGE_DIR"
+    pkexec cp -rf "$CHROOT_BUILD_ROOT/staging/"* "$STAGE_DIR/"
+    pkexec chown -R "$(id -u):$(id -g)" "$STAGE_DIR"
+    pkexec rm -rf "$CHROOT_BUILD_ROOT"
+else
+    echo "🔨 [ES] Configurando con Meson local..."
+    echo "🔨 [EN] Configuring with local Meson..."
+    meson setup \
+        --prefix=/usr \
+        --buildtype=release \
+        -D documentation=false \
+        -D location-services=enabled \
+        -D malcontent=true \
+        -D distributor_logo="$DISTRIBUTOR_LOGO" \
+        -D dark_mode_distributor_logo="$DISTRIBUTOR_LOGO" \
+        "$BUILD_DIR" \
+        "$SRC_DIR"
 
-echo "📦 [ES] Instalando en staging: $STAGE_DIR"
-echo "📦 [EN] Installing into staging: $STAGE_DIR"
-DESTDIR="$STAGE_DIR" meson install -C "$BUILD_DIR"
+    echo "⚙️ [ES] Compilando gnome-control-center..."
+    echo "⚙️ [EN] Building gnome-control-center..."
+    meson compile -C "$BUILD_DIR" -j "$(nproc)"
+
+    echo "📦 [ES] Instalando en staging: $STAGE_DIR"
+    echo "📦 [EN] Installing into staging: $STAGE_DIR"
+    DESTDIR="$STAGE_DIR" meson install -C "$BUILD_DIR"
+fi
 
 # ==============================================================================
 # 5. Install Pulsar OS panel icons (squircle macOS-style)
