@@ -54,7 +54,6 @@ wget -q --timeout=15 --tries=3 -O "$STAGE_DIR/usr/share/backgrounds/pulsaros-gol
 wget -q --timeout=15 --tries=3 -O "$STAGE_DIR/usr/share/backgrounds/pulsaros-golden-gate-bg-oscuro.png" "https://hosted.inled.es/pulsaros-golden-gate-bg-oscuro.png"
 
 # Crear el archivo XML de propiedades para registrar los fondos en GNOME Settings
-# Create the properties XML file to register wallpapers in GNOME Settings
 mkdir -p "$STAGE_DIR/usr/share/gnome-background-properties"
 cat <<EOF > "$STAGE_DIR/usr/share/gnome-background-properties/pulsar-backgrounds.xml"
 <?xml version="1.0"?>
@@ -83,15 +82,6 @@ EOF
 # ==============================================================================
 # SERVICIO DE COMPATIBILIDAD CON DOCKER Y CONTAINERD EN 9PFS (QEMU TEST)
 # ==============================================================================
-# English: Create a dedicated systemd service to mount tmpfs on /var/lib/docker
-# and /var/lib/containerd if running on a 9pfs root filesystem (QEMU test environment).
-# This bypasses docker.service sandboxing and ensures both docker and containerd
-# have a compatible backing store for overlays in RAM, without affecting real hardware.
-# Español: Crear un servicio de systemd dedicado para montar tmpfs en /var/lib/docker
-# y /var/lib/containerd si se ejecuta sobre un sistema de archivos raíz 9pfs (entorno QEMU).
-# Esto evita las restricciones de sandboxing de docker.service y asegura que tanto docker
-# como containerd tengan un almacenamiento compatible para overlays en RAM, sin afectar hardware real.
-
 echo "🐳 Configurando servicio docker-9pfs-mount para compatibilidad en QEMU..."
 mkdir -p "$STAGE_DIR/etc/systemd/system"
 cat <<'EOF' > "$STAGE_DIR/etc/systemd/system/docker-9pfs-mount.service"
@@ -111,8 +101,7 @@ RequiredBy=docker.service containerd.service
 WantedBy=multi-user.target
 EOF
 
-# English: Configure Seafari as the default system-wide web browser in mimeapps.list
-# Español: Configurar Seafari como el navegador web predeterminado de todo el sistema en mimeapps.list
+# Configurar Seafari como el navegador web predeterminado en mimeapps.list
 mkdir -p "$STAGE_DIR/etc/xdg"
 cat <<EOF > "$STAGE_DIR/etc/xdg/mimeapps.list"
 [Default Applications]
@@ -126,7 +115,123 @@ application/x-debian-package=es.inled.AppInstall.desktop
 application/x-zstd=es.inled.AppInstall.desktop
 EOF
 
+# ==============================================================================
+# GESTOR DE HIBERNACIÓN SEGURO CON BARRA DE PROGRESO REAL (PULSAR OS HIBERNATE)
+# ==============================================================================
+echo "❄️ Configurando gestor de hibernación con progreso real y apagado seguro..."
+mkdir -p "$STAGE_DIR/usr/bin"
+cat <<'SCRIPT_EOF' > "$STAGE_DIR/usr/bin/pulsaros-hibernate"
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Hibernate Manager with Real Progress & Guaranteed Poweroff
+# ==============================================================================
+set -e
+
+if [ "$EUID" -ne 0 ]; then
+    exec pkexec "$0" "$@"
+fi
+
+# 1. Asegurar sincronización previa de discos
+sync
+
+# 2. Configurar modo de apagado S5 directo (evitar bugs de ACPI S4 de placa)
+echo "shutdown" > /sys/power/disk 2>/dev/null || true
+
+# 3. Iniciar splash gráfico de Plymouth si está disponible
+HAS_PLYMOUTH=false
+if command -v plymouth >/dev/null 2>&1; then
+    if plymouth --ping 2>/dev/null; then
+        HAS_PLYMOUTH=true
+    else
+        plymouth --show-splash 2>/dev/null && HAS_PLYMOUTH=true || true
+    fi
+fi
+
+if [ "$HAS_PLYMOUTH" = true ]; then
+    plymouth message --text="Pulsar OS: Preparando memoria para hibernación..." 2>/dev/null || true
+fi
+
+# 4. Calcular memoria RAM usada a guardar
+TOTAL_RAM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+AVAIL_RAM_KB=$(grep MemAvailable /proc/meminfo | awk '{print $2}')
+USED_RAM_KB=$((TOTAL_RAM_KB - AVAIL_RAM_KB))
+USED_RAM_MB=$((USED_RAM_KB / 1024))
+
+# Monitor de progreso real en segundo plano
+PROGRESS_PID=""
+if [ "$HAS_PLYMOUTH" = true ] && [ "$USED_RAM_MB" -gt 0 ]; then
+    (
+        INITIAL_SWAP_USED=$(grep -v "Filename" /proc/swaps 2>/dev/null | awk '{sum+=$4} END {print sum+0}')
+        START_TIME=$(date +%s%N)
+        while true; do
+            CURRENT_SWAP_USED=$(grep -v "Filename" /proc/swaps 2>/dev/null | awk '{sum+=$4} END {print sum+0}')
+            DELTA_KB=$((CURRENT_SWAP_USED - INITIAL_SWAP_USED))
+            if [ "$DELTA_KB" -lt 0 ]; then DELTA_KB=0; fi
+            DELTA_MB=$((DELTA_KB / 1024))
+            
+            PCT=$((DELTA_MB * 100 / USED_RAM_MB))
+            if [ "$PCT" -gt 100 ]; then PCT=100; fi
+            
+            NOW=$(date +%s%N)
+            ELAPSED_MS=$(( (NOW - START_TIME) / 1000000 ))
+            if [ "$ELAPSED_MS" -gt 200 ]; then
+                SPEED_MBPS=$(( DELTA_MB * 1000 / ELAPSED_MS ))
+            else
+                SPEED_MBPS=0
+            fi
+            
+            plymouth message --text="Guardando sesión en disco: ${PCT}% (${DELTA_MB}/${USED_RAM_MB} MB - ${SPEED_MBPS} MB/s)" 2>/dev/null || true
+            sleep 0.15
+        done
+    ) &
+    PROGRESS_PID=$!
+fi
+
+# 5. Volcar imagen y apagar
+if [ "$HAS_PLYMOUTH" = true ]; then
+    plymouth message --text="Guardando memoria y apagando equipo..." 2>/dev/null || true
+fi
+
+# Ejecutar la hibernación
+echo disk > /sys/power/state || true
+
+# Si el proceso sigue vivo tras el intento de suspender
+if [ -n "$PROGRESS_PID" ]; then
+    kill "$PROGRESS_PID" 2>/dev/null || true
+fi
+
+# 6. Fallback de emergencia a lo bruto si el hardware no corta la energía
+echo "⚡ Ejecutando apagado forzado de hardware tras volcado de memoria..."
+echo 1 > /proc/sys/kernel/sysrq 2>/dev/null || true
+sync
+echo o > /proc/sysrq-trigger 2>/dev/null || true
+systemctl poweroff -f -f 2>/dev/null || true
+SCRIPT_EOF
+
+chmod 755 "$STAGE_DIR/usr/bin/pulsaros-hibernate"
+
+# Configurar modprobe para preservación de VRAM en NVIDIA
+mkdir -p "$STAGE_DIR/etc/modprobe.d"
+cat <<'CONF_EOF' > "$STAGE_DIR/etc/modprobe.d/pulsaros-nvidia-hibernate.conf"
+# Pulsar OS - Preservar memoria VRAM en hibernación / suspensión
+options nvidia NVreg_PreserveVideoMemoryAllocations=1 NVreg_TemporaryFilePath=/var/tmp
+CONF_EOF
+
+# Configurar systemd sleep para modo shutdown directo
+mkdir -p "$STAGE_DIR/etc/systemd/sleep.conf.d"
+cat <<'CONF_EOF' > "$STAGE_DIR/etc/systemd/sleep.conf.d/pulsaros-hibernate.conf"
+[Sleep]
+HibernateMode=shutdown
+CONF_EOF
+
+# Override de systemd-hibernate para invocar el gestor de Pulsar OS con splash
+mkdir -p "$STAGE_DIR/etc/systemd/system/systemd-hibernate.service.d"
+cat <<'CONF_EOF' > "$STAGE_DIR/etc/systemd/system/systemd-hibernate.service.d/override.conf"
+[Service]
+ExecStart=
+ExecStart=/usr/bin/pulsaros-hibernate
+CONF_EOF
+
 # Limpieza
 rm -rf "$TEMP_BUILD"
-echo "✅ Configuración y Fildem compilado en staging."
-
+echo "✅ Configuración de Pulsar OS Essential y gestor de hibernación preparados en staging."
