@@ -178,8 +178,16 @@ if [ "$GNOME_CC_VER" -ge 50 ] 2>/dev/null; then
         patch -Np1 -i "$PATCH_FILE" -d "$SRC_DIR" || true
     fi
 else
-    echo "ℹ️ [ES] GNOME Control Center $GNOME_CC_VER detectado (Debian). Usando compilación limpia con branding Pulsar OS e iconos squircle macOS..."
-    echo "ℹ️ [EN] GNOME Control Center $GNOME_CC_VER detected (Debian). Using clean build with Pulsar OS branding and macOS squircle icons..."
+    OVERLAY_48="$SCRIPT_DIR/overlay-gnome48"
+    if [ -d "$OVERLAY_48" ]; then
+        echo "🎨 [ES] Aplicando overlay nativo de Pulsar OS para GNOME 48 (Debian)..."
+        echo "🎨 [EN] Applying native Pulsar OS overlay for GNOME 48 (Debian)..."
+        cp -rf "$OVERLAY_48/." "$SRC_DIR/"
+        OVERLAY_DIR="$OVERLAY_48"
+    else
+        echo "ℹ️ [ES] GNOME Control Center $GNOME_CC_VER detectado (Debian). Usando compilación limpia con branding Pulsar OS..."
+        echo "ℹ️ [EN] GNOME Control Center $GNOME_CC_VER detected (Debian). Using clean build with Pulsar OS branding..."
+    fi
 fi
 
 # Merge Spanish translations if available and compatible

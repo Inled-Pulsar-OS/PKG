@@ -1,0 +1,105 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: gnome-control-center\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-13 18:00+0200\n"
+"PO-Revision-Date: 2026-08-13 18:00+0200\n"
+"Last-Translator: Pulsar OS <info@inled.es>\n"
+"Language-Team: Spanish\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Liquid Glass Effect"
+msgstr "Efecto Liquid Glass"
+
+msgid "Apply translucent blurs and reflective borders to active windows in macOS style"
+msgstr "Aplica desenfoques translúcidos y bordes reflectantes a las ventanas activas estilo macOS"
+
+msgid "System-wide accent color"
+msgstr "Color de acento del sistema"
+
+msgid "Wallpaper & Live Wallpaper"
+msgstr "Fondo de Pantalla y Fondo Animado"
+
+msgid "Static wallpapers or animated videos (.mp4, .webm, .gif, .webp) synchronized across Desktop, SDDM, and Lockscreen"
+msgstr "Fondos estáticos o vídeos y animaciones (.mp4, .webm, .gif, .webp) sincronizados con Escritorio, SDDM y Bloqueo"
+
+msgid "Select Animated Wallpaper or Video"
+msgstr "Seleccionar Fondo Animado o Vídeo"
+
+msgid "Managed with native Pulsar OS Live Wallpaper engine"
+msgstr "Gestionado con el motor nativo Pulsar OS Live Wallpaper"
+
+msgid "Choose Video…"
+msgstr "Elegir Vídeo…"
+
+msgid "Spotlight & App Launcher"
+msgstr "Spotlight y Lanzador de Aplicaciones"
+
+msgid "Search and launcher experience when pressing Cmd+Space"
+msgstr "Experiencia de búsqueda y lanzamiento al presionar Cmd+Espacio"
+
+msgid "macOS Spotlight (Python)"
+msgstr "Spotlight de macOS (Python)"
+
+msgid "Floating search bar with macOS Tahoe design"
+msgstr "Buscador flotante estilo macOS Tahoe"
+
+msgid "GNOME Overview & Apps Grid"
+msgstr "Vista de Actividades de GNOME (Overview y Apps)"
+
+msgid "Native GNOME activities overview and application grid"
+msgstr "Pantalla general nativa y cuadrícula de aplicaciones"
+
+msgid "Mouse & Trackpad Cursors"
+msgstr "Punteros de Ratón y Trackpad"
+
+msgid "Cursor themes and visual styles"
+msgstr "Temas de cursores y estilo visual"
+
+msgid "macOS Tahoe / Cupertino Cursors"
+msgstr "Punteros macOS Tahoe / Cupertino"
+
+msgid "Official Pulsar OS style with dynamic drop shadows"
+msgstr "Estilo oficial de Pulsar OS con sombras dinámicas"
+
+msgid "Apply Tahoe"
+msgstr "Aplicar Tahoe"
+
+msgid "Standard Adwaita Cursors"
+msgstr "Punteros Estándar Adwaita"
+
+msgid "Classic GNOME cursor theme"
+msgstr "Tema de cursores clásico de GNOME"
+
+msgid "Apply Adwaita"
+msgstr "Aplicar Adwaita"
+
+msgid "macOS Layout & Keyboard Remap"
+msgstr "Distribución y Mapeo macOS"
+
+msgid "macOS Keyboard Remap (Cmd as Ctrl)"
+msgstr "Remapeo de Teclado macOS (Cmd como Ctrl)"
+
+msgid "Allows using the Command/Super key for standard macOS shortcuts (Cmd+C, Cmd+V, Cmd+W) system-wide"
+msgstr "Permite usar la tecla Command/Super para atajos de macOS (Cmd+C, Cmd+V, Cmd+W) en todo el sistema"
+
+msgid "Apple ID & Accounts"
+msgstr "Apple ID y Cuentas"
+
+msgid "Pulsar OS ID, iCloud and Media"
+msgstr "ID de Pulsar OS, iCloud y Medios"
+
+msgid "macOS-style Windows & Fullscreen"
+msgstr "Ventanas y Pantalla Completa estilo macOS"
+
+msgid "Smart workspace and top bar behavior when maximizing windows"
+msgstr "Comportamiento inteligente de espacios y barra superior al maximizar"
+
+msgid "macOS Fullscreen Spaces"
+msgstr "Espacios de pantalla completa estilo macOS"
+
+msgid "Moving maximized apps to dedicated workspaces and auto-hiding the top bar"
+msgstr "Al maximizar una app, se traslada a un nuevo espacio y oculta la barra superior"

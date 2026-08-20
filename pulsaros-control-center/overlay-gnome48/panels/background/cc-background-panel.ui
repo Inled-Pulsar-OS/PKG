@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="CcBackgroundPanel" parent="CcPanel">
+    <property name="child">
+      <object class="AdwBreakpointBin">
+        <property name="width-request">346</property>
+        <property name="height-request">200</property>
+        <child>
+          <object class="AdwBreakpoint">
+            <condition>max-width: 420px</condition>
+            <setter object="accent_box" property="spacing">6</setter>
+            <setter object="accent_box" property="margin-top">6</setter>
+            <setter object="accent_box" property="margin-bottom">6</setter>
+          </object>
+        </child>
+        <property name="child">
+          <object class="AdwToolbarView">
+            <child type="top">
+              <object class="AdwHeaderBar"/>
+            </child>
+
+            <property name="content">
+              <object class="AdwToastOverlay" id="toast_overlay">
+                <property name="child">
+                  <object class="AdwPreferencesPage">
+
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">Appearance</property>
+
+                        <child>
+                          <object class="AdwPreferencesRow">
+                            <property name="activatable">False</property>
+                            <property name="focusable">False</property>
+                            <child>
+                              <object class="AdwClamp">
+                                <property name="maximum-size">440</property>
+                                <property name="tightening-threshold">320</property>
+                                <child>
+                                  <object class="GtkGrid">
+                                    <property name="column-homogeneous">True</property>
+                                    <property name="column-spacing">24</property>
+                                    <property name="row-spacing">12</property>
+                                    <property name="margin-start">12</property>
+                                    <property name="margin-end">12</property>
+                                    <property name="margin-top">18</property>
+                                    <property name="margin-bottom">12</property>
+                                    <property name="hexpand">True</property>
+                                    <child>
+                                      <object class="GtkToggleButton" id="default_toggle">
+                                        <accessibility>
+                                          <relation name="labelled-by">default_label</relation>
+                                        </accessibility>
+                                        <signal name="notify::active" handler="on_color_scheme_toggle_active_cb" swapped="true"/>
+                                        <child>
+                                          <object class="CcBackgroundPreview" id="default_preview"/>
+                                        </child>
+                                        <style>
+                                          <class name="background-preview-button"/>
+                                        </style>
+                                        <layout>
+                                          <property name="column">0</property>
+                                          <property name="row">0</property>
+                                        </layout>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="default_label">
+                                        <property name="label" translatable="yes">Light</property>
+                                        <property name="mnemonic-widget">default_toggle</property>
+                                        <layout>
+                                          <property name="column">0</property>
+                                          <property name="row">1</property>
+                                        </layout>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkToggleButton" id="dark_toggle">
+                                        <property name="group">default_toggle</property>
+                                        <accessibility>
+                                          <relation name="labelled-by">dark_label</relation>
+                                        </accessibility>
+                                        <signal name="notify::active" handler="on_color_scheme_toggle_active_cb" swapped="true"/>
+                                        <child>
+                                          <object class="CcBackgroundPreview" id="dark_preview">
+                                            <property name="is-dark">True</property>
+                                          </object>
+                                        </child>
+                                        <style>
+                                          <class name="background-preview-button"/>
+                                        </style>
+                                        <layout>
+                                          <property name="column">1</property>
+                                          <property name="row">0</property>
+                                        </layout>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="dark_label">
+                                        <property name="label" translatable="yes">Dark</property>
+                                        <property name="mnemonic-widget">dark_toggle</property>
+                                        <layout>
+                                          <property name="column">1</property>
+                                          <property name="row">1</property>
+                                        </layout>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+
+                      </object>
+                    </child>
+
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">Liquid Glass</property>
+                        <property name="description" translatable="yes">Choose your preferred look for Liquid Glass.</property>
+                        <child>
+                          <object class="AdwSwitchRow" id="liquid_glass_switch_row">
+                            <property name="title" translatable="yes">Liquid Glass Effect</property>
+                            <property name="subtitle" translatable="yes">Apply translucent blurs and reflective borders to active windows in macOS style</property>
+                            <property name="active">True</property>
+                            <signal name="notify::active" handler="on_liquid_glass_active_changed_cb" object="CcBackgroundPanel" swapped="yes" />
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">Theme</property>
+                        <child>
+                          <object class="AdwActionRow">
+                            <property name="title" translatable="yes">Accent Color</property>
+                            <property name="subtitle" translatable="yes">System-wide accent color</property>
+                            <child type="suffix">
+                              <object class="GtkBox" id="accent_box">
+                                <property name="spacing">8</property>
+                                <property name="margin-top">8</property>
+                                <property name="margin-bottom">8</property>
+                                <property name="halign">end</property>
+                                <property name="valign">center</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">Wallpaper &amp; Live Wallpaper</property>
+                        <property name="description" translatable="yes">Static wallpapers or animated videos (.mp4, .webm, .gif, .webp) synchronized across Desktop, SDDM, and Lockscreen</property>
+                        <property name="header-suffix">
+                          <object class="GtkButton">
+                            <child>
+                              <object class="AdwButtonContent">
+                                <property name="icon-name">list-add-symbolic</property>
+                                <property name="label" translatable="yes">_Add Picture…</property>
+                                <property name="use-underline">True</property>
+                              </object>
+                            </child>
+                            <signal name="clicked" handler="on_add_picture_button_clicked_cb" object="CcBackgroundPanel" swapped="yes" />
+                            <style>
+                              <class name="flat"/>
+                            </style>
+                          </object>
+                        </property>
+
+                        <child>
+                          <object class="AdwActionRow">
+                            <property name="title" translatable="yes">Select Animated Wallpaper or Video</property>
+                            <property name="subtitle" translatable="yes">Managed with native Pulsar OS Live Wallpaper engine</property>
+                            <child type="suffix">
+                              <object class="GtkButton">
+                                <property name="valign">center</property>
+                                <property name="label" translatable="yes">Choose Video…</property>
+                                <signal name="clicked" handler="on_pick_live_wallpaper_clicked_cb" object="CcBackgroundPanel" swapped="yes" />
+                                <style>
+                                  <class name="suggested-action"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child type="suffix">
+                              <object class="GtkButton">
+                                <property name="valign">center</property>
+                                <property name="label" translatable="yes">Stop</property>
+                                <signal name="clicked" handler="on_stop_live_wallpaper_clicked_cb" object="CcBackgroundPanel" swapped="yes" />
+                                <style>
+                                  <class name="destructive-action"/>
+                                </style>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+
+                        <child>
+                          <object class="AdwBin">
+                            <style>
+                              <class name="card"/>
+                            </style>
+                            <child>
+                              <object class="CcBackgroundChooser" id="background_chooser">
+                                <property name="hexpand">True</property>
+                                <property name="toast-overlay">toast_overlay</property>
+                                <signal name="background-chosen" handler="on_chooser_background_chosen_cb" object="CcBackgroundPanel" swapped="yes" />
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+
+                      </object>
+                    </child>
+
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">Spotlight &amp; App Launcher</property>
+                        <property name="description" translatable="yes">Search and launcher experience when pressing Cmd+Space</property>
+                        <child>
+                          <object class="AdwActionRow">
+                            <property name="title" translatable="yes">macOS Spotlight (Python)</property>
+                            <property name="subtitle" translatable="yes">Floating search bar with macOS Tahoe design</property>
+                            <child type="suffix">
+                              <object class="GtkButton">
+                                <property name="valign">center</property>
+                                <property name="label" translatable="yes">Enable</property>
+                                <signal name="clicked" handler="on_activate_spotlight_python_clicked_cb" object="CcBackgroundPanel" swapped="yes" />
+                                <style>
+                                  <class name="suggested-action"/>
+                                </style>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwActionRow">
+                            <property name="title" translatable="yes">GNOME Overview &amp; Apps Grid</property>
+                            <property name="subtitle" translatable="yes">Native GNOME activities overview and application grid</property>
+                            <child type="suffix">
+                              <object class="GtkButton">
+                                <property name="valign">center</property>
+                                <property name="label" translatable="yes">Enable</property>
+                                <signal name="clicked" handler="on_activate_gnome_overview_clicked_cb" object="CcBackgroundPanel" swapped="yes" />
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">Mouse &amp; Trackpad Cursors</property>
+                        <property name="description" translatable="yes">Cursor themes and visual styles</property>
+                        <child>
+                          <object class="AdwActionRow">
+                            <property name="title" translatable="yes">macOS Tahoe / Cupertino Cursors</property>
+                            <property name="subtitle" translatable="yes">Official Pulsar OS style with dynamic drop shadows</property>
+                            <child type="suffix">
+                              <object class="GtkButton">
+                                <property name="valign">center</property>
+                                <property name="label" translatable="yes">Apply Tahoe</property>
+                                <signal name="clicked" handler="on_apply_cursor_tahoe_clicked_cb" object="CcBackgroundPanel" swapped="yes" />
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwActionRow">
+                            <property name="title" translatable="yes">Standard Adwaita Cursors</property>
+                            <property name="subtitle" translatable="yes">Classic GNOME cursor theme</property>
+                            <child type="suffix">
+                              <object class="GtkButton">
+                                <property name="valign">center</property>
+                                <property name="label" translatable="yes">Apply Adwaita</property>
+                                <signal name="clicked" handler="on_apply_cursor_adwaita_clicked_cb" object="CcBackgroundPanel" swapped="yes" />
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+
+                  </object>
+                </property>
+              </object>
+            </property>
+          </object>
+        </property>
+      </object>
+    </property>
+  </template>
+</interface>

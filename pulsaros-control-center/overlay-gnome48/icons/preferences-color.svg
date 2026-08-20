@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="24" y1="0" x2="24" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#64D2FF"/>
+      <stop offset="1" stop-color="#64D2FF" stop-opacity="0.85"/>
+    </linearGradient>
+  </defs>
+  <!-- Apple squircle background (22% radius on 48px = 11px rx) -->
+  <rect width="48" height="48" rx="11" fill="url(#bg)"/>
+  
+  <!-- Subtle inner top highlight border -->
+  <rect x="0.75" y="0.75" width="46.5" height="46.5" rx="10.25" stroke="white" stroke-opacity="0.2" stroke-width="1.5"/>
+
+  <!-- Centered Lucide Vector Glyph -->
+  <g transform="translate(10, 10) scale(1.1666)">
+    <circle cx="13.5" cy="6.5" r=".5" fill="white"/>
+                  <circle cx="17.5" cy="10.5" r=".5" fill="white"/>
+                  <circle cx="8.5" cy="7.5" r=".5" fill="white"/>
+                  <circle cx="6.5" cy="12.5" r=".5" fill="white"/>
+                  <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1-.23-.27-.38-.62-.38-1 0-.83.67-1.5 1.5-1.5H16c3.31 0 6-2.69 6-6 0-5.52-4.48-10-10-10z" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
+  </g>
+</svg>
