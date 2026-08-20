@@ -67,6 +67,9 @@ struct _CcBackgroundPanel
   CcBackgroundPreview *dark_preview;
   GtkToggleButton *default_toggle;
   GtkToggleButton *dark_toggle;
+  AdwSwitchRow *macos_remap_switch_row;
+  AdwSwitchRow *macos_fullscreen_switch_row;
+  AdwSwitchRow *liquid_glass_switch_row;
 };
 
 CC_PANEL_REGISTER (CcBackgroundPanel, cc_background_panel)
@@ -331,7 +334,6 @@ reload_current_bg (CcBackgroundPanel *self)
   if (uri && *uri == '\0')
     g_clear_pointer (&uri, g_free);
 
-
   configured = cc_background_item_new (uri);
 
   dark_uri = g_settings_get_string (settings, WP_URI_DARK_KEY);
@@ -383,14 +385,6 @@ reset_settings_if_defaults (CcBackgroundPanel *self,
 
       setting_is_default = g_variant_equal (default_value, user_value);
 
-      /* As a courtesy to distros that are a little lackadaisical about making sure
-       * schema defaults match the settings in the background item with the default
-       * picture, we only look at the URI to determine if we shouldn't clean out dconf.
-       *
-       * In otherwords, we still clean out the picture-uri key from dconf when a user
-       * selects the default background in control-center, even if after selecting it
-       * e.g., primary-color still mismatches with schema defaults.
-       */
       if (g_str_equal (keys[i], WP_URI_KEY) && !setting_is_default)
         return;
 
@@ -409,7 +403,6 @@ set_background (CcBackgroundPanel *self,
 {
   GDesktopBackgroundStyle style;
   CcBackgroundItemFlags flags;
-  g_autofree gchar *filename = NULL;
   const char *uri;
 
   if (item == NULL)
@@ -432,7 +425,6 @@ set_background (CcBackgroundPanel *self,
         g_settings_set_string (settings, WP_URI_DARK_KEY, uri);
     }
 
-  /* Also set the placement if we have a URI and the previous value was none */
   if (flags & CC_BACKGROUND_ITEM_HAS_PLACEMENT)
     {
       g_settings_set_enum (settings, WP_OPTIONS_KEY, cc_background_item_get_placement (item));
@@ -450,10 +442,7 @@ set_background (CcBackgroundPanel *self,
   g_settings_set_string (settings, WP_PCOLOR_KEY, cc_background_item_get_pcolor (item));
   g_settings_set_string (settings, WP_SCOLOR_KEY, cc_background_item_get_scolor (item));
 
-  /* Apply all changes */
   g_settings_apply (settings);
-
-  /* Clean out dconf if the user went back to distro defaults */
   reset_settings_if_defaults (self, settings, set_dark);
 }
 
@@ -506,37 +495,43 @@ cc_background_panel_finalize (GObject *object)
   G_OBJECT_CLASS (cc_background_panel_parent_class)->finalize (object);
 }
 
-
 static void
-on_pick_live_wallpaper_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
+on_pick_live_wallpaper_clicked_cb (CcBackgroundPanel *self)
 {
   g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper set-dialog'", NULL);
 }
 
 static void
-on_stop_live_wallpaper_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
+on_stop_live_wallpaper_clicked_cb (CcBackgroundPanel *self)
 {
   g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper stop'", NULL);
 }
 
 static void
-on_apply_cursor_tahoe_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
+on_apply_cursor_tahoe_clicked_cb (CcBackgroundPanel *self)
 {
-  g_settings_set_string (self->interface_settings, "cursor-theme", "Tahoe");
-  g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.desktop.interface cursor-theme Tahoe'", NULL);
+  if (self->interface_settings)
+    g_settings_set_string (self->interface_settings, "cursor-theme", "MacTahoe-light");
+  g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.desktop.interface cursor-theme MacTahoe-light'", NULL);
 }
 
 static void
-on_apply_cursor_adwaita_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
+on_apply_cursor_adwaita_clicked_cb (CcBackgroundPanel *self)
 {
-  g_settings_set_string (self->interface_settings, "cursor-theme", "Adwaita");
+  if (self->interface_settings)
+    g_settings_set_string (self->interface_settings, "cursor-theme", "Adwaita");
   g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.desktop.interface cursor-theme Adwaita'", NULL);
 }
 
 static void
-on_liquid_glass_active_changed_cb (GObject *object, GParamSpec *pspec, CcBackgroundPanel *self)
+on_liquid_glass_active_changed_cb (CcBackgroundPanel *self)
 {
-  gboolean active = adw_switch_row_get_active (ADW_SWITCH_ROW (object));
+  gboolean active;
+
+  if (!self->liquid_glass_switch_row)
+    return;
+
+  active = adw_switch_row_get_active (self->liquid_glass_switch_row);
   if (active)
     g_spawn_command_line_async ("/bin/sh -c 'gnome-extensions enable liquid-glass@thinkingcoding1231.gmail.com'", NULL);
   else
@@ -544,15 +539,45 @@ on_liquid_glass_active_changed_cb (GObject *object, GParamSpec *pspec, CcBackgro
 }
 
 static void
-on_activate_spotlight_python_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
+on_activate_spotlight_python_clicked_cb (CcBackgroundPanel *self)
 {
-  g_spawn_command_line_async ("/bin/sh -c \"gsettings set org.gnome.mutter overlay-key '' && gsettings set org.gnome.shell.extensions.pulsaros-spotlight-launcher launcher-type 'python'\"", NULL);
+  g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-toggle-launcher spotlight'", NULL);
 }
 
 static void
-on_activate_gnome_overview_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
+on_activate_gnome_overview_clicked_cb (CcBackgroundPanel *self)
 {
-  g_spawn_command_line_async ("/bin/sh -c \"gsettings set org.gnome.mutter overlay-key 'Super_L' && gsettings set org.gnome.shell.extensions.dash-to-dock show-show-apps-button true\"", NULL);
+  g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-toggle-launcher overview'", NULL);
+}
+
+static void
+on_macos_remap_active_changed_cb (CcBackgroundPanel *self)
+{
+  gboolean active;
+
+  if (!self->macos_remap_switch_row)
+    return;
+
+  active = adw_switch_row_get_active (self->macos_remap_switch_row);
+  if (active)
+    g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-toggle-remap macos'", NULL);
+  else
+    g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-toggle-remap gnome'", NULL);
+}
+
+static void
+on_macos_fullscreen_active_changed_cb (CcBackgroundPanel *self)
+{
+  gboolean active;
+
+  if (!self->macos_fullscreen_switch_row)
+    return;
+
+  active = adw_switch_row_get_active (self->macos_fullscreen_switch_row);
+  if (active)
+    g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.shell.extensions.pulsaros-global-menu macos-fullscreen-spaces true'", NULL);
+  else
+    g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.shell.extensions.pulsaros-global-menu macos-fullscreen-spaces false'", NULL);
 }
 
 static void
@@ -578,6 +603,9 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, dark_preview);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, default_toggle);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, dark_toggle);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_remap_switch_row);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_fullscreen_switch_row);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, liquid_glass_switch_row);
 
   gtk_widget_class_bind_template_callback (widget_class, on_color_scheme_toggle_active_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_chooser_background_chosen_cb);
@@ -589,6 +617,8 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_callback (widget_class, on_liquid_glass_active_changed_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_activate_spotlight_python_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_activate_gnome_overview_clicked_cb);
+  gtk_widget_class_bind_template_callback (widget_class, on_macos_remap_active_changed_cb);
+  gtk_widget_class_bind_template_callback (widget_class, on_macos_fullscreen_active_changed_cb);
 }
 
 static void
@@ -598,12 +628,79 @@ on_settings_changed (CcBackgroundPanel *self)
   update_preview (self);
 }
 
+static GSettings *
+safe_settings_new (const gchar *schema_id)
+{
+  GSettingsSchemaSource *source = g_settings_schema_source_get_default ();
+  g_autoptr(GSettingsSchema) schema = NULL;
+  if (!source)
+    return NULL;
+  schema = g_settings_schema_source_lookup (source, schema_id, TRUE);
+  if (!schema)
+    return NULL;
+  return g_settings_new (schema_id);
+}
+
 static void
 cc_background_panel_init (CcBackgroundPanel *self)
 {
   g_resources_register (cc_background_get_resource ());
 
   gtk_widget_init_template (GTK_WIDGET (self));
+
+  if (self->macos_remap_switch_row)
+    {
+      g_autoptr(GSettings) input_settings = safe_settings_new ("org.gnome.desktop.input-sources");
+      gboolean has_remap = FALSE;
+      if (input_settings)
+        {
+          g_auto(GStrv) options = g_settings_get_strv (input_settings, "xkb-options");
+          if (options)
+            {
+              for (guint i = 0; options[i] != NULL; i++)
+                {
+                  if (g_str_equal (options[i], "ctrl:swap_lwin_lctl"))
+                    {
+                      has_remap = TRUE;
+                      break;
+                    }
+                }
+            }
+        }
+      adw_switch_row_set_active (self->macos_remap_switch_row, has_remap);
+    }
+
+  if (self->macos_fullscreen_switch_row)
+    {
+      g_autoptr(GSettings) ext_settings = safe_settings_new ("org.gnome.shell.extensions.pulsaros-global-menu");
+      if (ext_settings)
+        {
+          gboolean fs_active = g_settings_get_boolean (ext_settings, "macos-fullscreen-spaces");
+          adw_switch_row_set_active (self->macos_fullscreen_switch_row, fs_active);
+        }
+    }
+
+  if (self->liquid_glass_switch_row)
+    {
+      g_autoptr(GSettings) shell_settings = safe_settings_new ("org.gnome.shell");
+      if (shell_settings)
+        {
+          g_auto(GStrv) enabled_exts = g_settings_get_strv (shell_settings, "enabled-extensions");
+          gboolean lg_active = FALSE;
+          if (enabled_exts)
+            {
+              for (guint i = 0; enabled_exts[i] != NULL; i++)
+                {
+                  if (g_str_equal (enabled_exts[i], "liquid-glass@thinkingcoding1231.gmail.com"))
+                    {
+                      lg_active = TRUE;
+                      break;
+                    }
+                }
+            }
+          adw_switch_row_set_active (self->liquid_glass_switch_row, lg_active);
+        }
+    }
 
   self->connection = g_application_get_dbus_connection (g_application_get_default ());
 

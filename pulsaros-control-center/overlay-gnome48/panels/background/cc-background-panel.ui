@@ -2,62 +2,39 @@
 <interface>
   <template class="CcBackgroundPanel" parent="CcPanel">
     <property name="child">
-      <object class="AdwBreakpointBin">
-        <property name="width-request">346</property>
-        <property name="height-request">200</property>
-        <child>
-          <object class="AdwBreakpoint">
-            <condition>max-width: 420px</condition>
-            <setter object="accent_box" property="spacing">6</setter>
-            <setter object="accent_box" property="margin-top">6</setter>
-            <setter object="accent_box" property="margin-bottom">6</setter>
-          </object>
-        </child>
+      <object class="AdwToastOverlay" id="toast_overlay">
         <property name="child">
-          <object class="AdwToolbarView">
-            <child type="top">
-              <object class="AdwHeaderBar"/>
-            </child>
+          <object class="AdwPreferencesPage">
+            <child>
+              <object class="AdwPreferencesGroup">
+                <child>
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">24</property>
+                    <property name="margin-top">12</property>
+                    <property name="margin-bottom">24</property>
+                    <property name="margin-start">12</property>
+                    <property name="margin-end">12</property>
 
-            <property name="content">
-              <object class="AdwToastOverlay" id="toast_overlay">
-                <property name="child">
-                  <object class="AdwPreferencesPage">
-
+                    <!-- Style Toggle (Light / Dark) -->
                     <child>
                       <object class="AdwPreferencesGroup">
-                        <property name="title" translatable="yes">Appearance</property>
-
+                        <property name="title" translatable="yes">Style</property>
                         <child>
-                          <object class="AdwPreferencesRow">
-                            <property name="activatable">False</property>
-                            <property name="focusable">False</property>
+                          <object class="GtkBox">
+                            <property name="halign">center</property>
+                            <property name="homogeneous">True</property>
+                            <property name="spacing">24</property>
                             <child>
-                              <object class="AdwClamp">
-                                <property name="maximum-size">440</property>
-                                <property name="tightening-threshold">320</property>
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">12</property>
                                 <child>
                                   <object class="GtkGrid">
-                                    <property name="column-homogeneous">True</property>
-                                    <property name="column-spacing">24</property>
+                                    <property name="column-spacing">12</property>
                                     <property name="row-spacing">12</property>
-                                    <property name="margin-start">12</property>
-                                    <property name="margin-end">12</property>
-                                    <property name="margin-top">18</property>
-                                    <property name="margin-bottom">12</property>
-                                    <property name="hexpand">True</property>
                                     <child>
-                                      <object class="GtkToggleButton" id="default_toggle">
-                                        <accessibility>
-                                          <relation name="labelled-by">default_label</relation>
-                                        </accessibility>
-                                        <signal name="notify::active" handler="on_color_scheme_toggle_active_cb" swapped="true"/>
-                                        <child>
-                                          <object class="CcBackgroundPreview" id="default_preview"/>
-                                        </child>
-                                        <style>
-                                          <class name="background-preview-button"/>
-                                        </style>
+                                      <object class="CcBackgroundPreview" id="default_preview">
                                         <layout>
                                           <property name="column">0</property>
                                           <property name="row">0</property>
@@ -65,9 +42,10 @@
                                       </object>
                                     </child>
                                     <child>
-                                      <object class="GtkLabel" id="default_label">
-                                        <property name="label" translatable="yes">Light</property>
-                                        <property name="mnemonic-widget">default_toggle</property>
+                                      <object class="GtkCheckButton" id="default_toggle">
+                                        <property name="label" translatable="yes">Default</property>
+                                        <property name="active">True</property>
+                                        <signal name="toggled" handler="on_color_scheme_toggle_active_cb" object="CcBackgroundPanel" swapped="yes" />
                                         <layout>
                                           <property name="column">0</property>
                                           <property name="row">1</property>
@@ -75,20 +53,8 @@
                                       </object>
                                     </child>
                                     <child>
-                                      <object class="GtkToggleButton" id="dark_toggle">
-                                        <property name="group">default_toggle</property>
-                                        <accessibility>
-                                          <relation name="labelled-by">dark_label</relation>
-                                        </accessibility>
-                                        <signal name="notify::active" handler="on_color_scheme_toggle_active_cb" swapped="true"/>
-                                        <child>
-                                          <object class="CcBackgroundPreview" id="dark_preview">
-                                            <property name="is-dark">True</property>
-                                          </object>
-                                        </child>
-                                        <style>
-                                          <class name="background-preview-button"/>
-                                        </style>
+                                      <object class="CcBackgroundPreview" id="dark_preview">
+                                        <property name="is-dark">True</property>
                                         <layout>
                                           <property name="column">1</property>
                                           <property name="row">0</property>
@@ -96,9 +62,9 @@
                                       </object>
                                     </child>
                                     <child>
-                                      <object class="GtkLabel" id="dark_label">
+                                      <object class="GtkCheckButton" id="dark_toggle">
+                                        <property name="group">default_toggle</property>
                                         <property name="label" translatable="yes">Dark</property>
-                                        <property name="mnemonic-widget">dark_toggle</property>
                                         <layout>
                                           <property name="column">1</property>
                                           <property name="row">1</property>
@@ -111,14 +77,38 @@
                             </child>
                           </object>
                         </child>
-
                       </object>
                     </child>
 
+                    <!-- macOS Layout and Keyboard Remap -->
                     <child>
                       <object class="AdwPreferencesGroup">
-                        <property name="title" translatable="yes">Liquid Glass</property>
-                        <property name="description" translatable="yes">Choose your preferred look for Liquid Glass.</property>
+                        <property name="title" translatable="yes">Keyboard and macOS Remap</property>
+                        <property name="description" translatable="yes">Configure macOS style modifier keys (Cmd/Ctrl swap) and fullscreen spaces workflow</property>
+                        <child>
+                          <object class="AdwSwitchRow" id="macos_remap_switch_row">
+                            <property name="title" translatable="yes">macOS Keyboard Shortcuts and Cmd Swap</property>
+                            <property name="subtitle" translatable="yes">Swap Command (Super) and Control keys for native Cmd+C, Cmd+V, Cmd+W, Cmd+Space shortcuts</property>
+                            <property name="active">True</property>
+                            <signal name="notify::active" handler="on_macos_remap_active_changed_cb" object="CcBackgroundPanel" swapped="yes" />
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwSwitchRow" id="macos_fullscreen_switch_row">
+                            <property name="title" translatable="yes">macOS Fullscreen Spaces</property>
+                            <property name="subtitle" translatable="yes">Move maximized or fullscreen applications to dedicated adjacent workspaces</property>
+                            <property name="active">True</property>
+                            <signal name="notify::active" handler="on_macos_fullscreen_active_changed_cb" object="CcBackgroundPanel" swapped="yes" />
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+
+                    <!-- Liquid Glass Effects -->
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">Liquid Glass and Visual Effects</property>
+                        <property name="description" translatable="yes">Translucent glass shaders and dynamic blur reflections</property>
                         <child>
                           <object class="AdwSwitchRow" id="liquid_glass_switch_row">
                             <property name="title" translatable="yes">Liquid Glass Effect</property>
@@ -130,13 +120,14 @@
                       </object>
                     </child>
 
+                    <!-- Accent Color Theme -->
                     <child>
                       <object class="AdwPreferencesGroup">
-                        <property name="title" translatable="yes">Theme</property>
+                        <property name="title" translatable="yes">Accent Color</property>
                         <child>
                           <object class="AdwActionRow">
-                            <property name="title" translatable="yes">Accent Color</property>
-                            <property name="subtitle" translatable="yes">System-wide accent color</property>
+                            <property name="title" translatable="yes">System Accent Color</property>
+                            <property name="subtitle" translatable="yes">Highlight color for buttons, toggles and selections</property>
                             <child type="suffix">
                               <object class="GtkBox" id="accent_box">
                                 <property name="spacing">8</property>
@@ -151,9 +142,10 @@
                       </object>
                     </child>
 
+                    <!-- Wallpaper and Live Wallpaper -->
                     <child>
                       <object class="AdwPreferencesGroup">
-                        <property name="title" translatable="yes">Wallpaper &amp; Live Wallpaper</property>
+                        <property name="title" translatable="yes">Wallpaper and Live Wallpaper</property>
                         <property name="description" translatable="yes">Static wallpapers or animated videos (.mp4, .webm, .gif, .webp) synchronized across Desktop, SDDM, and Lockscreen</property>
                         <property name="header-suffix">
                           <object class="GtkButton">
@@ -216,14 +208,15 @@
                       </object>
                     </child>
 
+                    <!-- Spotlight and App Launcher -->
                     <child>
                       <object class="AdwPreferencesGroup">
-                        <property name="title" translatable="yes">Spotlight &amp; App Launcher</property>
+                        <property name="title" translatable="yes">Spotlight and App Launcher</property>
                         <property name="description" translatable="yes">Search and launcher experience when pressing Cmd+Space</property>
                         <child>
                           <object class="AdwActionRow">
-                            <property name="title" translatable="yes">macOS Spotlight (Python)</property>
-                            <property name="subtitle" translatable="yes">Floating search bar with macOS Tahoe design</property>
+                            <property name="title" translatable="yes">macOS Spotlight (Tahoe Search)</property>
+                            <property name="subtitle" translatable="yes">Floating search bar with instant app launcher, math calc, and web shortcuts</property>
                             <child type="suffix">
                               <object class="GtkButton">
                                 <property name="valign">center</property>
@@ -238,7 +231,7 @@
                         </child>
                         <child>
                           <object class="AdwActionRow">
-                            <property name="title" translatable="yes">GNOME Overview &amp; Apps Grid</property>
+                            <property name="title" translatable="yes">GNOME Overview and Apps Grid</property>
                             <property name="subtitle" translatable="yes">Native GNOME activities overview and application grid</property>
                             <child type="suffix">
                               <object class="GtkButton">
@@ -252,9 +245,10 @@
                       </object>
                     </child>
 
+                    <!-- Mouse and Trackpad Cursors -->
                     <child>
                       <object class="AdwPreferencesGroup">
-                        <property name="title" translatable="yes">Mouse &amp; Trackpad Cursors</property>
+                        <property name="title" translatable="yes">Mouse and Trackpad Cursors</property>
                         <property name="description" translatable="yes">Cursor themes and visual styles</property>
                         <child>
                           <object class="AdwActionRow">
@@ -286,9 +280,9 @@
                     </child>
 
                   </object>
-                </property>
+                </child>
               </object>
-            </property>
+            </child>
           </object>
         </property>
       </object>

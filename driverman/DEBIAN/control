@@ -1,5 +1,5 @@
 Package: driverman
-Version: 1.0.10
+Version: 1.0.11
 Section: utils
 Priority: optional
 Architecture: amd64

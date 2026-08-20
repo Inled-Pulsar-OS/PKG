@@ -310,6 +310,8 @@ row_data_new (CcPanelCategory     category,
     apple_icon = "/usr/share/icons/hicolor/scalable/apps/computer.svg";
   else if (g_strcmp0 (id, "users") == 0)
     apple_icon = "/usr/share/icons/hicolor/scalable/apps/system-users.svg";
+  else if (g_strcmp0 (id, "wellbeing") == 0)
+    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-wellbeing.svg";
 
   if (apple_icon && g_file_test (apple_icon, G_FILE_TEST_EXISTS))
     {
