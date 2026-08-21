@@ -1,6 +1,9 @@
 # Directorio de compilación local (staging y paquetes deb/arch de salida)
 build/
 target/
+
+# Binarios compilados de tube-os-dash (staging del paquete deb)
+tube-os-dash/usr/bin/
 *.deb
 *.pkg.tar.zst
 *.pkg.tar.xz
