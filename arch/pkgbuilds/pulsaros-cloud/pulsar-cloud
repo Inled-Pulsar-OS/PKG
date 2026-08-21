@@ -32,22 +32,38 @@ case "$cmd" in
         require_name "$@"
         name="$2"
         backend=$(provider_backend "$name") || usage
+        label=$(echo "$name" | tr '-' ' ')
         mkdir -p "$(dirname "$CONF")" "${CLOUD_DIR}/${name}"
 
         if ! grep -q "^\[${name}\]$" "$CONF" 2>/dev/null; then
-            echo "== Configurando ${name} (rclone ${backend}) =="
-            echo "Acepta los valores por defecto con Enter; autoriza en el navegador cuando se abra."
-            rclone config create "${name}" "${backend}" || exit 1
+            echo "== Configurando ${label} =="
+            echo "Se abrirá tu navegador para autorizar el acceso..."
+            raw=$(rclone authorize "${backend}" 2>&1)
+            token=$(printf '%s\n' "$raw" | grep -oE '\{.*\}' | tail -n1)
+            if [ -z "$token" ]; then
+                echo "No se completó la autorización."
+                printf '%s\n' "$raw" | sed -n '1,4p'
+                exit 1
+            fi
+            rclone config create "${name}" "${backend}" \
+                config_refresh_token true token "${token}" >/dev/null \
+                && echo "Cuenta '${name}' configurada."
+        else
+            echo "'${name}' ya estaba configurado; reconectando..."
         fi
 
         systemctl --user enable --now "pulsar-cloud@${name}.service" >/dev/null 2>&1 \
             || systemctl --user restart "pulsar-cloud@${name}.service"
 
-        sleep 1
+        for i in $(seq 1 20); do
+            mountpoint -q "${CLOUD_DIR}/${name}" && break
+            sleep 0.5
+        done
+
         if mountpoint -q "${CLOUD_DIR}/${name}"; then
             echo "Listo: '${name}' montado en ${CLOUD_DIR}/${name}"
         else
-            echo "Configuración creada. El montaje aparecerá en ${CLOUD_DIR}/${name} tras completar la autorización."
+            echo "Aún sin montar; revisa 'journalctl --user -u pulsar-cloud@${name}'."
         fi
         ;;
     mount|open)
