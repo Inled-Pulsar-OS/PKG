@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# pulsar-cloud — rclone-backed cloud drives for Pulsar OS Finder.
+# Providers are mounted under ~/Cloud/<name> via a systemd user unit.
+
+set -u
+
+CLOUD_DIR="${HOME}/Cloud"
+CONF="${HOME}/.config/rclone/rclone.conf"
+
+usage() {
+    echo "uso: pulsar-cloud <setup|mount|unmount|open|list> [nombre]"
+    echo "proveedores soportados: google-drive, onedrive, dropbox"
+    exit 1
+}
+
+provider_backend() {
+    case "$1" in
+        google-drive) echo "drive" ;;
+        onedrive)     echo "onedrive" ;;
+        dropbox)      echo "dropbox" ;;
+        *) return 1 ;;
+    esac
+}
+
+require_name() {
+    [ -n "${2:-}" ] || usage
+}
+
+cmd="${1:-}"
+case "$cmd" in
+    setup)
+        require_name "$@"
+        name="$2"
+        backend=$(provider_backend "$name") || usage
+        mkdir -p "$(dirname "$CONF")" "${CLOUD_DIR}/${name}"
+
+        if ! grep -q "^\[${name}\]$" "$CONF" 2>/dev/null; then
+            echo "== Configurando ${name} (rclone ${backend}) =="
+            echo "Acepta los valores por defecto con Enter; autoriza en el navegador cuando se abra."
+            rclone config create "${name}" "${backend}" || exit 1
+        fi
+
+        systemctl --user enable --now "pulsar-cloud@${name}.service" >/dev/null 2>&1 \
+            || systemctl --user restart "pulsar-cloud@${name}.service"
+
+        sleep 1
+        if mountpoint -q "${CLOUD_DIR}/${name}"; then
+            echo "Listo: '${name}' montado en ${CLOUD_DIR}/${name}"
+        else
+            echo "Configuración creada. El montaje aparecerá en ${CLOUD_DIR}/${name} tras completar la autorización."
+        fi
+        ;;
+    mount|open)
+        require_name "$@"
+        name="$2"
+        mkdir -p "${CLOUD_DIR}/${name}"
+        systemctl --user start "pulsar-cloud@${name}.service"
+        [ "$cmd" = "mount" ] && exit 0
+        exec xdg-open "${CLOUD_DIR}/${name}"
+        ;;
+    unmount)
+        require_name "$@"
+        name="$2"
+        systemctl --user stop "pulsar-cloud@${name}.service"
+        fusermount3 -uz "${CLOUD_DIR}/${name}" 2>/dev/null || true
+        ;;
+    list)
+        [ -f "$CONF" ] && grep -E '^\[' "$CONF" | tr -d '[]'
+        ;;
+    *)
+        usage
+        ;;
+esac

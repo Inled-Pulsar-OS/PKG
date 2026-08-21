@@ -1,0 +1,13 @@
+[Unit]
+Description=Pulsar OS cloud drive %i (rclone mount)
+After=network-online.target
+
+[Service]
+ExecStartPre=/usr/bin/env bash -c 'mkdir -p "%h/Cloud/%i"'
+ExecStart=/usr/bin/rclone mount %i: "%h/Cloud/%i" --vfs-cache-mode writes --dir-cache-time 24h --poll-interval 30s
+ExecStopPost=/usr/bin/fusermount3 -uz "%h/Cloud/%i"
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
