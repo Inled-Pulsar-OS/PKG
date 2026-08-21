@@ -1,5 +1,6 @@
 # Directorio de compilación local (staging y paquetes deb/arch de salida)
 build/
+target/
 *.deb
 *.pkg.tar.zst
 *.pkg.tar.xz
