@@ -26,6 +26,10 @@ require_name() {
     [ -n "${2:-}" ] || usage
 }
 
+has_token() {
+    rclone config show "$1" 2>/dev/null | grep -q '^token *= *{'
+}
+
 cmd="${1:-}"
 case "$cmd" in
     setup)
@@ -35,9 +39,15 @@ case "$cmd" in
         label=$(echo "$name" | tr '-' ' ')
         mkdir -p "$(dirname "$CONF")" "${CLOUD_DIR}/${name}"
 
-        if ! grep -q "^\[${name}\]$" "$CONF" 2>/dev/null; then
-            echo "== Configurando ${label} =="
-            echo "Se abrirá tu navegador para autorizar el acceso..."
+        if grep -q "^\[${name}\]$" "$CONF" 2>/dev/null && has_token "$name"; then
+            echo "'${name}' ya estaba configurado; reconectando..."
+        else
+            if grep -q "^\[${name}\]$" "$CONF" 2>/dev/null; then
+                echo "'${name}' existe sin autorización; completando login..."
+            else
+                echo "== Configurando ${label} =="
+                echo "Se abrirá tu navegador para autorizar el acceso..."
+            fi
             raw=$(rclone authorize "${backend}" 2>&1)
             token=$(printf '%s\n' "$raw" | grep -oE '\{.*\}' | tail -n1)
             if [ -z "$token" ]; then
@@ -45,11 +55,14 @@ case "$cmd" in
                 printf '%s\n' "$raw" | sed -n '1,4p'
                 exit 1
             fi
-            rclone config create "${name}" "${backend}" \
-                config_refresh_token true token "${token}" >/dev/null \
-                && echo "Cuenta '${name}' configurada."
-        else
-            echo "'${name}' ya estaba configurado; reconectando..."
+            if grep -q "^\[${name}\]$" "$CONF" 2>/dev/null; then
+                rclone config update "${name}" \
+                    config_refresh_token true token "${token}" >/dev/null
+            else
+                rclone config create "${name}" "${backend}" \
+                    config_refresh_token true token "${token}" >/dev/null
+            fi
+            echo "Cuenta '${name}' configurada."
         fi
 
         systemctl --user enable --now "pulsar-cloud@${name}.service" >/dev/null 2>&1 \
