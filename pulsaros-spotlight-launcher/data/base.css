@@ -111,12 +111,22 @@
     min-width: 200px;
 }
 
-.ctx-menu-btn {
+.ctx-menu-btn,
+.ctx-menu-btn-danger {
     padding: 7px 14px;
     border-radius: 0;
     border: none;
     background: none;
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    outline: none;
     font-size: 13px;
+}
+
+.ctx-menu-btn:hover,
+.ctx-menu-btn-danger:hover {
+    border-radius: 0;
 }
 
 /* progress & status bars */

@@ -1,0 +1,13 @@
+[Unit]
+Description=Pulsar OS - Verify hibernate resume_offset matches /swapfile
+After=local-fs.target
+Before=multi-user.target
+ConditionPathExists=/swapfile
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/pulsaros/verify-resume-offset
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

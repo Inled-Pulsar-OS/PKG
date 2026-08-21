@@ -1,0 +1,4 @@
+[org.gnome.desktop.sound]
+theme-name='bigsur'
+event-sounds=true
+input-feedback-sounds=true

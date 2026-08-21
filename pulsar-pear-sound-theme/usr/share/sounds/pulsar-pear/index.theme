@@ -1,0 +1,8 @@
+[Sound Theme]
+Name=Pulsar Pear
+Comment=Pulsar OS Pear Sound Theme
+Directories=stereo
+Example=theme-demo
+
+[stereo]
+OutputProfile=stereo

@@ -1,0 +1,18 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Hibernate package post-installation script
+# ==============================================================================
+set -e
+
+echo "🌙 Configurando hibernación de Pulsar OS..."
+
+systemctl daemon-reload || true
+systemctl enable pulsaros-verify-resume-offset.service || true
+
+# Run the offset check once on real systems (skip chroot/live ISO builds)
+if [ -e /run/systemd/system ] && [ -f /swapfile ]; then
+    echo "🔍 Verificando resume_offset de /swapfile..."
+    /usr/lib/pulsaros/verify-resume-offset || true
+fi
+
+exit 0

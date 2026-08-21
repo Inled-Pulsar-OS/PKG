@@ -1,0 +1,59 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=nautilus
+pkgver=48.7
+pkgrel=1
+pkgdesc="GNOME Files (Finder) with Pulsar OS macOS customization"
+url="https://inled.es"
+license=(GPL-3.0-or-later)
+arch=(x86_64)
+depends=(
+  cloudproviders
+  dconf
+  gdk-pixbuf2
+  gexiv2
+  glib2
+  gnome-autoar
+  gnome-desktop-4
+  graphene
+  gst-plugins-base-libs
+  gstreamer
+  gtk4
+  gvfs
+  hicolor-icon-theme
+  libadwaita
+  libportal
+  libportal-gtk4
+  pango
+  tinysparql
+)
+makedepends=(
+  desktop-file-utils
+  gettext
+  git
+  gobject-introspection
+  meson
+  ninja
+)
+options=(!lto)
+
+prepare() {
+  _src="$(cd "$startdir"/../../../nautilus && pwd)"
+  rm -rf "$srcdir/nautilus-src"
+  mkdir -p "$srcdir/nautilus-src"
+  cp -r "$_src"/. "$srcdir/nautilus-src/"
+  rm -rf "$srcdir/nautilus-src/_build" "$srcdir/nautilus-src/DEBIAN" "$srcdir/nautilus-src/prepare-assets.sh"
+}
+
+build() {
+  local meson_options=(
+    -D docs=false
+    -D tests=none
+  )
+
+  arch-meson "$srcdir/nautilus-src" build "${meson_options[@]}"
+  meson compile -C build
+}
+
+package() {
+  DESTDIR="$pkgdir" meson install -C build
+}

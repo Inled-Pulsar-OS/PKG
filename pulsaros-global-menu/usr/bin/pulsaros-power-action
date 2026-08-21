@@ -4,16 +4,52 @@
 ACTION="$1"     # "shutdown" | "restart"
 RESTORE="$2"    # "restore" | "normal"
 
+if [ "$ACTION" != "restart" ] && [ "$ACTION" != "shutdown" ]; then
+    echo "Uso: $0 {shutdown|restart} [restore|normal]" >&2
+    exit 1
+fi
+
+# Notificar a todas las sesiones gráficas activas. El aviso permanece visible
+# durante el volcado de VRAM de NVIDIA y la escritura de la imagen, ya que la
+# pantalla sigue viva hasta que el kernel congela los procesos.
+notify_sessions() {
+    local MSG="$1"
+    command -v notify-send >/dev/null 2>&1 || return 0
+    local ubus uid
+    for ubus in /run/user/*/bus; do
+        [ -S "$ubus" ] || continue
+        uid=$(stat -c %u "${ubus%/bus}")
+        setpriv --reuid="$uid" --regid="$uid" --init-groups \
+            env DBUS_SESSION_BUS_ADDRESS="unix:path=$ubus" XDG_RUNTIME_DIR="${ubus%/bus}" \
+            notify-send -u normal -t 0 "$MSG" 2>/dev/null || true
+    done
+}
+
 # Sincronizar buffers a disco
 sync
 
 # Limpiar drop-ins temporales previos
-rm -f /run/systemd/sleep.conf.d/00-pulsar-reboot.conf 2>/dev/null || true
+rm -f /run/systemd/sleep.conf.d/*pulsar*.conf 2>/dev/null || true
 
 if [ "$RESTORE" = "restore" ]; then
+    # Optimizar memoria antes de hibernar: descartar cachés de lectura ya guardadas en disco
+    # y solicitar al kernel el tamaño de imagen más compacto posible.
+    sync
+    echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
+    echo 0 > /sys/power/image_size 2>/dev/null || true
+
+    mkdir -p /run/systemd/sleep.conf.d
     if [ "$ACTION" = "restart" ]; then
-        mkdir -p /run/systemd/sleep.conf.d
-        printf '[Sleep]\nHibernateMode=reboot\n' > /run/systemd/sleep.conf.d/00-pulsar-reboot.conf
+        # Override /etc/systemd/sleep.conf.d/pulsaros-hibernate.conf y garantizar modo reboot
+        printf '[Sleep]\nHibernateMode=reboot\n' > /run/systemd/sleep.conf.d/pulsaros-hibernate.conf
+        printf '[Sleep]\nHibernateMode=reboot\n' > /run/systemd/sleep.conf.d/zz-pulsar-mode.conf
+        echo reboot > /sys/power/disk 2>/dev/null || true
+        notify_sessions "Saving session state to disk… The computer will restart automatically when finished."
+    else
+        printf '[Sleep]\nHibernateMode=shutdown\n' > /run/systemd/sleep.conf.d/pulsaros-hibernate.conf
+        printf '[Sleep]\nHibernateMode=shutdown\n' > /run/systemd/sleep.conf.d/zz-pulsar-mode.conf
+        echo shutdown > /sys/power/disk 2>/dev/null || true
+        notify_sessions "Saving session state to disk… The computer will power off automatically when finished."
     fi
 
     sync
@@ -22,10 +58,15 @@ if [ "$RESTORE" = "restore" ]; then
     # systemctl hibernate se encarga del ciclo completo:
     # 1. Notificar a las aplicaciones y congelar procesos
     # 2. Volcar la imagen completa de RAM al swapfile
-    # 3. Apagar el equipo por ACPI S4 (o reiniciar si HibernateMode=reboot)
+    # 3. Apagar el equipo por ACPI (o reiniciar si HibernateMode=reboot)
     if ! systemctl hibernate; then
         echo "⚠️ systemctl hibernate falló; intentando volcado directo al kernel..." >&2
         sync
+        if [ "$ACTION" = "restart" ]; then
+            echo reboot > /sys/power/disk 2>/dev/null || true
+        else
+            echo shutdown > /sys/power/disk 2>/dev/null || true
+        fi
         if ! echo disk > /sys/power/state 2>/dev/null; then
             echo "❌ Hibernación no soportada o fallida; ejecutando apagado/reinicio normal..." >&2
             if [ "$ACTION" = "restart" ]; then

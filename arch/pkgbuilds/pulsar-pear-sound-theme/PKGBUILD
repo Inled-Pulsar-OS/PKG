@@ -1,0 +1,21 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsar-pear-sound-theme
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="macOS-like system sound theme for Pulsar OS Pear Edition"
+arch=(any)
+url="https://github.com/Inled-Pulsar-OS/pulsar-pear-sound-theme"
+license=(custom)
+depends=()
+options=(!strip)
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsar-pear-sound-theme && pwd)"
+    mkdir -p "$pkgdir"
+    if [ -d "$_src/usr" ]; then
+        cp -r "$_src/usr" "$pkgdir/"
+    fi
+    if [ -d "$_src/etc" ]; then
+        cp -r "$_src/etc" "$pkgdir/"
+    fi
+}

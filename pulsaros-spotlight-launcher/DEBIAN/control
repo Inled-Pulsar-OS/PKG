@@ -1,8 +1,8 @@
 Package: pulsaros-spotlight-launcher
-Version: 2.0.15
+Version: 2.0.19
 Section: gnome
 Priority: optional
-Architecture: all
+Architecture: amd64
 Maintainer: Jaime <info@inled.es>
 Depends: gnome-shell, python3, python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, gir1.2-tsparql-3.0 | gir1.2-tracker-3.0, localsearch | tracker-miner-fs, wl-clipboard
 Recommends: ydotool

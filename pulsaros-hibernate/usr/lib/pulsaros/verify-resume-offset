@@ -1,0 +1,108 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Hibernate resume_offset guardian
+# ==============================================================================
+# Verifies that the hibernate resume_offset configured in the bootloader
+# (rEFInd) and the kernel cmdline match the REAL geometry of /swapfile.
+# If the swapfile is recreated or moved, the offset changes and old images
+# become unreachable ("Unable to resume"). This unit repairs the config
+# automatically at boot.
+#
+# Usage: verify-resume-offset [--dry-run]
+#
+# Paths can be overridden for testing:
+#   PULSAR_SWAPFILE, PULSAR_REFIND_CONF, PULSAR_CMDLINE,
+#   PULSAR_SYSFS_OFFSET, PULSAR_GRUB_DEFAULT
+# ==============================================================================
+set -u
+
+SWAPFILE="${PULSAR_SWAPFILE:-/swapfile}"
+REFIND_CONF="${PULSAR_REFIND_CONF:-/boot/refind_linux.conf}"
+CMDLINE="${PULSAR_CMDLINE:-/proc/cmdline}"
+SYSFS_OFFSET="${PULSAR_SYSFS_OFFSET:-/sys/power/resume_offset}"
+GRUB_DEFAULT="${PULSAR_GRUB_DEFAULT:-/etc/default/grub}"
+
+DRY_RUN=0
+[ "${1:-}" = "--dry-run" ] && DRY_RUN=1
+
+log() { echo "pulsaros-resume-offset: $*"; }
+
+is_num() { [ -n "$1" ] && [ "$1" -eq "$1" ] 2>/dev/null; }
+
+# ------------------------------------------------------------------------------
+# 1) Real offset of the swapfile's first extent (4k blocks, filefrag)
+# ------------------------------------------------------------------------------
+real=""
+if command -v filefrag >/dev/null 2>&1 && [ -f "$SWAPFILE" ]; then
+    real=$(filefrag -v "$SWAPFILE" 2>/dev/null | awk '$1=="0:" {gsub(/\.\./,"",$4); print $4; exit}')
+fi
+if ! is_num "$real"; then
+    log "No se pudo determinar el offset real de $SWAPFILE (¿no existe? ¿sin swapfile?). Nada que hacer."
+    exit 0
+fi
+
+# ------------------------------------------------------------------------------
+# 2) Currently configured offsets
+# ------------------------------------------------------------------------------
+cmdline_offset=""
+if [ -r "$CMDLINE" ]; then
+    cmdline_offset=$(sed -n 's/.*\bresume_offset=\([0-9]\+\).*/\1/p' "$CMDLINE")
+fi
+kernel_offset=""
+[ -r "$SYSFS_OFFSET" ] && kernel_offset=$(cat "$SYSFS_OFFSET" 2>/dev/null)
+
+log "offset real=$real | cmdline=${cmdline_offset:-<ausente>} | kernel=${kernel_offset:-<desconocido>}"
+
+# Only a *configured* offset can mismatch; absence is handled by the repair step
+cmdline_ok=1
+if is_num "$cmdline_offset" && [ "$cmdline_offset" != "$real" ]; then
+    cmdline_ok=0
+fi
+kernel_ok=1
+if is_num "$kernel_offset" && [ "$kernel_offset" != "$real" ]; then
+    kernel_ok=0
+fi
+
+if [ "$cmdline_ok" = 1 ] && [ "$kernel_ok" = 1 ]; then
+    log "OK: resume_offset sincronizado ($real)"
+    exit 0
+fi
+
+# ------------------------------------------------------------------------------
+# 3) Repair rEFInd configuration
+# ------------------------------------------------------------------------------
+repair_refind() {
+    if [ ! -f "$REFIND_CONF" ]; then
+        log "⚠ $REFIND_CONF no encontrado; no se puede reparar rEFInd."
+        return 1
+    fi
+    if [ "$DRY_RUN" = 1 ]; then
+        log "[dry-run] Se actualizaría resume_offset a $real en $REFIND_CONF"
+        return 0
+    fi
+    cp -a "$REFIND_CONF" "${REFIND_CONF}.bak" || true
+    if grep -q "resume_offset=" "$REFIND_CONF"; then
+        sed -i -E "s/resume_offset=[0-9]+/resume_offset=$real/g" "$REFIND_CONF"
+    else
+        # Append to every entry line that already carries resume=
+        sed -i -E "\|resume=| s/\"[[:space:]]*$/ resume_offset=$real\"/" "$REFIND_CONF"
+    fi
+    log "✔ $REFIND_CONF actualizado a resume_offset=$real (copia previa en ${REFIND_CONF}.bak)"
+}
+
+# ------------------------------------------------------------------------------
+# 4) GRUB (best effort, only warns: regeneration left to the admin)
+# ------------------------------------------------------------------------------
+check_grub() {
+    [ -f "$GRUB_DEFAULT" ] || return 0
+    grub_offset=$(sed -n 's/^GRUB_CMDLINE_LINUX_DEFAULT=".*resume_offset=\([0-9]\+\).*"$/\1/p' "$GRUB_DEFAULT")
+    if is_num "$grub_offset" && [ "$grub_offset" != "$real" ]; then
+        log "⚠ GRUB configurado con resume_offset=$grub_offset pero el real es $real."
+        log "⚠ Actualiza $GRUB_DEFAULT y ejecuta grub-mkconfig manualmente."
+    fi
+}
+
+repair_refind
+check_grub
+
+exit 0

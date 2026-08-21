@@ -1,5 +1,0 @@
-[console_scripts]
-pulsaros-spotlight = pulsaros_spotlight.app:main
-
-[gui_scripts]
-pulsaros-spotlight-gui = pulsaros_spotlight.app:main

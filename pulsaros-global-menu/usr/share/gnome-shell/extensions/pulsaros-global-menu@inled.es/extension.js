@@ -158,6 +158,11 @@ const AboutDialog = GObject.registerClass({
     }
 });
 
+const _isSpanish = () => {
+    let langs = GLib.get_language_names ? GLib.get_language_names() : [];
+    return langs.length > 0 && langs[0].startsWith('es');
+};
+
 const PowerConfirmDialog = GObject.registerClass({
     GTypeName: 'PulsarosPowerConfirmDialog'
 }, class PowerConfirmDialog extends ModalDialog.ModalDialog {
@@ -167,50 +172,55 @@ const PowerConfirmDialog = GObject.registerClass({
         this._actionType = actionType; // 'shutdown' | 'restart'
         this._callback = callback;
         this._restoreSession = false;
+        this._progressTimerId = 0;
+        let isEs = _isSpanish();
 
         let mainBox = new St.BoxLayout({
             vertical: true,
             style_class: 'pulsaros-power-mainbox'
         });
         this.contentLayout.add_child(mainBox);
+        this._mainBox = mainBox;
 
         // Action Icon
         let iconName = actionType === 'restart' ? 'system-restart-symbolic' : 'system-shutdown-symbolic';
-        let icon = new St.Icon({
+        this._icon = new St.Icon({
             icon_name: iconName,
             icon_size: 56,
             style_class: 'pulsaros-power-logo',
             x_align: Clutter.ActorAlign.CENTER
         });
-        mainBox.add_child(icon);
+        mainBox.add_child(this._icon);
 
         // Title
-        let titleText = actionType === 'restart' ? "Restart Computer" : "Shut Down Computer";
-        let titleLabel = new St.Label({
+        let titleText = actionType === 'restart'
+            ? (isEs ? "Reiniciar equipo" : "Restart Computer")
+            : (isEs ? "Apagar equipo" : "Shut Down Computer");
+        this._titleLabel = new St.Label({
             text: titleText,
             style_class: 'pulsaros-power-title',
             x_align: Clutter.ActorAlign.CENTER
         });
-        mainBox.add_child(titleLabel);
+        mainBox.add_child(this._titleLabel);
 
         // Subtitle / Prompt
         let descText = actionType === 'restart'
-            ? "Are you sure you want to restart your computer now?"
-            : "Are you sure you want to shut down your computer now?";
-        let descLabel = new St.Label({
+            ? (isEs ? "¿Seguro que quieres reiniciar el equipo ahora?" : "Are you sure you want to restart your computer now?")
+            : (isEs ? "¿Seguro que quieres apagar el equipo ahora?" : "Are you sure you want to shut down your computer now?");
+        this._descLabel = new St.Label({
             text: descText,
             style_class: 'pulsaros-power-subtitle',
             x_align: Clutter.ActorAlign.CENTER
         });
-        mainBox.add_child(descLabel);
+        mainBox.add_child(this._descLabel);
 
         // Option Container
-        let optionBox = new St.BoxLayout({
+        this._optionBox = new St.BoxLayout({
             vertical: true,
             style_class: 'pulsaros-power-option-box',
             x_align: Clutter.ActorAlign.CENTER
         });
-        mainBox.add_child(optionBox);
+        mainBox.add_child(this._optionBox);
 
         // Checkbox Toggle Row
         let checkRow = new St.Button({
@@ -236,7 +246,7 @@ const PowerConfirmDialog = GObject.registerClass({
         checkLayout.add_child(checkIcon);
 
         let checkLabel = new St.Label({
-            text: "Reopen windows when logging back in",
+            text: isEs ? "Reabrir las ventanas al volver a iniciar sesión" : "Reopen windows when logging back in",
             style_class: 'pulsaros-power-checkbox-label',
             y_align: Clutter.ActorAlign.CENTER
         });
@@ -259,40 +269,142 @@ const PowerConfirmDialog = GObject.registerClass({
             syncCheck(!this._restoreSession);
         });
 
-        optionBox.add_child(checkRow);
+        this._optionBox.add_child(checkRow);
 
         let hintLabel = new St.Label({
-            text: "Dumps memory state to disk (hibernation) to resume right where you left off.",
+            text: isEs
+                ? "Guarda el estado completo en disco (hibernación) para continuar donde lo dejaste."
+                : "Dumps memory state to disk (hibernation) to resume right where you left off.",
             style_class: 'pulsaros-power-hint',
             x_align: Clutter.ActorAlign.CENTER
         });
-        optionBox.add_child(hintLabel);
+        this._optionBox.add_child(hintLabel);
 
         // Cancel Button
-        this.addButton({
-            label: "Cancel",
+        this._cancelBtn = this.addButton({
+            label: isEs ? "Cancelar" : "Cancel",
             action: () => {
+                this._cleanup();
                 this.close();
             },
             key: Clutter.KEY_Escape
         });
 
         // Action Button
-        let actionLabel = actionType === 'restart' ? "Restart" : "Shut Down";
-        let actionBtn = this.addButton({
+        let actionLabel = actionType === 'restart'
+            ? (isEs ? "Reiniciar" : "Restart")
+            : (isEs ? "Apagar" : "Shut Down");
+        this._actionBtn = this.addButton({
             label: actionLabel,
             action: () => {
                 let restore = this._restoreSession;
-                this.close();
-                if (this._callback) {
-                    this._callback(restore);
+                if (restore) {
+                    this._showProgressState(isEs);
+                } else {
+                    this._cleanup();
+                    this.close();
+                    if (this._callback) {
+                        this._callback(false);
+                    }
                 }
             },
             default: true
         });
-        if (actionBtn && actionBtn.add_style_class_name) {
-            actionBtn.add_style_class_name('pulsaros-power-confirm-btn');
+        if (this._actionBtn && this._actionBtn.add_style_class_name) {
+            this._actionBtn.add_style_class_name('pulsaros-power-confirm-btn');
         }
+    }
+
+    _showProgressState(isEs) {
+        // Hide interactive elements
+        this._optionBox.hide();
+        if (this._cancelBtn) this._cancelBtn.hide();
+        if (this._actionBtn) this._actionBtn.hide();
+
+        let isRestart = this._actionType === 'restart';
+        let actionName = isRestart ? 'Restarting' : 'Shutting down';
+        let targetAction = isRestart ? 'restart' : 'power off';
+
+        this._titleLabel.text = `${actionName}…`;
+        this._descLabel.text = "Saving session state to disk…";
+
+        // Progress Container
+        let progressBox = new St.BoxLayout({
+            vertical: true,
+            style_class: 'pulsaros-power-progress-container',
+            x_align: Clutter.ActorAlign.CENTER
+        });
+        this._mainBox.add_child(progressBox);
+
+        // Progress Bar Background
+        let progressBg = new St.BoxLayout({
+            style_class: 'pulsaros-power-progress-bg',
+            x_align: Clutter.ActorAlign.START
+        });
+
+        let progressFill = new St.Widget({
+            style_class: 'pulsaros-power-progress-fill',
+            width: 20
+        });
+        progressBg.add_child(progressFill);
+        progressBox.add_child(progressBg);
+
+        // Progress Status Text
+        let statusLabel = new St.Label({
+            text: "Preparing memory and application snapshot…",
+            style_class: 'pulsaros-power-progress-status',
+            x_align: Clutter.ActorAlign.CENTER
+        });
+        progressBox.add_child(statusLabel);
+
+        let noteLabel = new St.Label({
+            text: `The computer will ${targetAction} automatically. Your session will be restored on next boot.`,
+            style_class: 'pulsaros-power-progress-note',
+            x_align: Clutter.ActorAlign.CENTER
+        });
+        progressBox.add_child(noteLabel);
+
+        // Animate progress bar smoothly
+        let startTime = GLib.get_monotonic_time();
+        let totalBgWidth = 380;
+        let powerTriggered = false;
+
+        this._progressTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => {
+            let elapsedSec = (GLib.get_monotonic_time() - startTime) / 1000000;
+            
+            // Smooth asymptotic progress animation
+            let progress = Math.min(0.95, 1 - Math.exp(-elapsedSec / 2.5));
+            let currentWidth = Math.max(20, Math.floor(totalBgWidth * progress));
+            progressFill.set_width(currentWidth);
+
+            if (elapsedSec > 0.8 && elapsedSec < 2.0) {
+                statusLabel.text = "Syncing system state and VRAM to disk…";
+            } else if (elapsedSec >= 2.0) {
+                statusLabel.text = "Writing memory snapshot to SSD…";
+            }
+
+            // Trigger the power action after giving the user 1.2 seconds of clear visual splash feedback
+            if (elapsedSec >= 1.2 && !powerTriggered) {
+                powerTriggered = true;
+                if (this._callback) {
+                    this._callback(true);
+                }
+            }
+
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    _cleanup() {
+        if (this._progressTimerId) {
+            GLib.source_remove(this._progressTimerId);
+            this._progressTimerId = 0;
+        }
+    }
+
+    destroy() {
+        this._cleanup();
+        super.destroy();
     }
 });
 
@@ -1793,6 +1905,38 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         this._origUnlock = null;
         this._activeAppWindow = null;
         this._activeChangedId = 0;
+        this._activePowerDialog = null;
+        this._prepareForSleepId = 0;
+
+        try {
+            this._prepareForSleepId = Gio.DBus.system.signal_subscribe(
+                'org.freedesktop.login1',
+                'org.freedesktop.login1.Manager',
+                'PrepareForSleep',
+                '/org/freedesktop/login1',
+                null,
+                Gio.DBusSignalFlags.NONE,
+                (connection, senderName, objectPath, interfaceName, signalName, parameters) => {
+                    try {
+                        let [aboutToSuspend] = parameters.deep_unpack();
+                        if (!aboutToSuspend) {
+                            if (this._activePowerDialog) {
+                                this._activePowerDialog._cleanup();
+                                this._activePowerDialog.close();
+                                this._activePowerDialog = null;
+                            }
+                            if (Main.notify) {
+                                Main.notify("Pulsar OS", _isSpanish() ? "Sesión restaurada correctamente." : "Session restored successfully.");
+                            }
+                        }
+                    } catch (e) {
+                        console.error("[GlobalMenu] Error handling PrepareForSleep:", e);
+                    }
+                }
+            );
+        } catch (e) {
+            console.error("[GlobalMenu] Failed to subscribe to PrepareForSleep signal:", e);
+        }
 
         // Desktop Live Wallpaper Manager
         try {
@@ -2008,6 +2152,21 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         // Nullify the virtual keyboard device reference
         // Anular la referencia del dispositivo de teclado virtual
         this._virtualKeyboard = null;
+
+        if (this._prepareForSleepId) {
+            try {
+                Gio.DBus.system.signal_unsubscribe(this._prepareForSleepId);
+            } catch (e) {}
+            this._prepareForSleepId = 0;
+        }
+
+        if (this._activePowerDialog) {
+            try {
+                this._activePowerDialog._cleanup();
+                this._activePowerDialog.close();
+            } catch (e) {}
+            this._activePowerDialog = null;
+        }
     }
     
     // --- Logo Menu Button (Pulsar OS logo) ---
@@ -2200,6 +2359,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
             let dialog = new PowerConfirmDialog('restart', (restore) => {
                 this._executePowerAction('restart', restore);
             });
+            this._activePowerDialog = dialog;
             dialog.open();
         });
         this.logoMenuButton.menu.addMenuItem(restartItem);
@@ -2210,6 +2370,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
             let dialog = new PowerConfirmDialog('shutdown', (restore) => {
                 this._executePowerAction('shutdown', restore);
             });
+            this._activePowerDialog = dialog;
             dialog.open();
         });
         this.logoMenuButton.menu.addMenuItem(shutdownItem);

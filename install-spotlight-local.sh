@@ -27,6 +27,11 @@ install -m 755 "$PKG_DIR/cli/pulsaros-spotlight" "$HOME/.local/bin/"
 install -m 755 "$PKG_DIR/cli/pulsaros-toggle-remap" "$HOME/.local/bin/"
 install -m 755 "$PKG_DIR/cli/pulsaros-toggle-launcher" "$HOME/.local/bin/"
 
+# 2b. Native Rust binary (overrides the Python wrapper)
+echo "==> Building and installing Rust binary (release)..."
+(cd "$PKG_DIR" && cargo build --release)
+install -m 755 "$PKG_DIR/target/release/pulsaros-spotlight" "$HOME/.local/bin/pulsaros-spotlight"
+
 # 3. GNOME Shell extension
 echo "==> Installing GNOME Shell extension..."
 EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$EXT_UUID"

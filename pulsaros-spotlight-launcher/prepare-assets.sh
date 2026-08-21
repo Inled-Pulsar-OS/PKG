@@ -8,17 +8,23 @@ echo "🚀 Preparing Pulsar OS Spotlight launcher assets for staging in $STAGE_D
 
 cd "$SRC_DIR"
 
-# Install python modules
+# Install python modules (legacy fallback, now in src_python/)
 mkdir -p "$STAGE_DIR/usr/lib/python3/dist-packages"
-cp -r src/pulsaros_spotlight "$STAGE_DIR/usr/lib/python3/dist-packages/"
+cp -r src_python/pulsaros_spotlight "$STAGE_DIR/usr/lib/python3/dist-packages/"
 
-# Install CLI scripts
+# Install native Rust binary as the main launcher
 mkdir -p "$STAGE_DIR/usr/bin"
-install -m 755 cli/pulsaros-spotlight "$STAGE_DIR/usr/bin/pulsaros-spotlight"
+if [ ! -f target/release/pulsaros-spotlight ] || [ src/main.rs -nt target/release/pulsaros-spotlight ]; then
+    echo "🦀 Building pulsaros-spotlight (release)..."
+    cargo build --release
+fi
+install -m 755 target/release/pulsaros-spotlight "$STAGE_DIR/usr/bin/pulsaros-spotlight"
+
+# Install CLI scripts (Python fallback and helpers)
+install -m 755 cli/pulsaros-spotlight "$STAGE_DIR/usr/bin/spotlight-python"
 install -m 755 cli/pulsaros-toggle-remap "$STAGE_DIR/usr/bin/pulsaros-toggle-remap" 2>/dev/null || true
 install -m 755 cli/pulsaros-toggle-launcher "$STAGE_DIR/usr/bin/pulsaros-toggle-launcher" 2>/dev/null || true
-ln -sf pulsaros-spotlight "$STAGE_DIR/usr/bin/spotlight-python"
-ln -sf pulsaros-spotlight "$STAGE_DIR/usr/bin/spotlight-gtk"
+ln -sf spotlight-python "$STAGE_DIR/usr/bin/spotlight-gtk"
 
 # Install Desktop file
 mkdir -p "$STAGE_DIR/usr/share/applications"

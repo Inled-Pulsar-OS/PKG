@@ -2,7 +2,7 @@ name: Notify Discord
 
 on:
   issues:
-    types: [opened]
+    types: [opened, closed]
   pull_request:
     types: [opened, closed, merged]
   release:
@@ -19,12 +19,25 @@ jobs:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_URL: ${{ github.event.issue.html_url }}
           ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_ACTION: ${{ github.event.action }}
+          STATE_REASON: ${{ github.event.issue.state_reason }}
           REPO: ${{ github.repository }}
         run: |
           DIFF=$(echo "$ISSUE_BODY" | sed -n '/^### Difficulty$/,/^### /{/^### Difficulty$/d;/^### /d;p}' | head -1 | xargs)
           PHASE=$(echo "$ISSUE_BODY" | sed -n '/^### Roadmap Phase$/,/^### /{/^### Roadmap Phase$/d;/^### /d;p}' | head -1 | xargs)
 
-          MSG=$(echo -e "🟢 **${ISSUE_TITLE}**\nRepo: \`${REPO}\`")
+          if [ "$ISSUE_ACTION" = "closed" ]; then
+            if [ "$STATE_REASON" = "not_planned" ]; then
+              ICON="⚪"
+              STATUS="closed (not planned)"
+            else
+              ICON="🔴"
+              STATUS="closed"
+            fi
+            MSG=$(echo -e "${ICON} **Issue: ${ISSUE_TITLE}** (${STATUS})\nRepo: \`${REPO}\`")
+          else
+            MSG=$(echo -e "🟢 **${ISSUE_TITLE}**\nRepo: \`${REPO}\`")
+          fi
           [ -n "$DIFF" ] && MSG=$(echo -e "${MSG}\n📋 Difficulty: **${DIFF}**")
           [ -n "$PHASE" ] && MSG=$(echo -e "${MSG}\n🗺️ Roadmap: **${PHASE}**")
           MSG=$(echo -e "${MSG}\n${ISSUE_URL}")

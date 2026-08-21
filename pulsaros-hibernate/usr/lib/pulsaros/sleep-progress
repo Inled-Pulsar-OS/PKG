@@ -1,0 +1,21 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Hibernate Post-Resume Safe Cleanup Handler
+# ==============================================================================
+set -u
+
+ACTION="${1:-}"
+
+case "$ACTION" in
+    end)
+        # Restore default quiet kernel printk loglevel
+        echo "4 4 1 7" > /proc/sys/kernel/printk 2>/dev/null || true
+        # Clean up temporary sleep drop-ins and state files
+        rm -f /run/systemd/sleep.conf.d/*pulsar*.conf 2>/dev/null || true
+        rm -f /run/pulsaros-hibernate-vt 2>/dev/null || true
+        ;;
+    *)
+        ;;
+esac
+
+exit 0

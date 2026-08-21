@@ -1,0 +1,12 @@
+Package: pulsaros-hibernate
+Version: 1.0.2
+Section: admin
+Priority: optional
+Architecture: all
+Maintainer: Jaime <info@inled.es>
+Depends: plymouth, e2fsprogs, systemd, init-system-helpers
+Description: Hibernation UX for Pulsar OS: Plymouth progress feedback and resume-offset guardian.
+ Shows a Plymouth splash with progress message during hibernate (covers the NVIDIA VRAM
+ save phase and the kernel image write), and verifies at every boot that the rEFInd
+ resume_offset matches the real /swapfile geometry, repairing it automatically if the
+ swapfile is recreated or moved.

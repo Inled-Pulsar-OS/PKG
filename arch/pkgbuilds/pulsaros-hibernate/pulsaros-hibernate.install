@@ -1,0 +1,8 @@
+post_install() {
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl enable pulsaros-verify-resume-offset.service 2>/dev/null || true
+}
+
+post_remove() {
+    systemctl daemon-reload 2>/dev/null || true
+}

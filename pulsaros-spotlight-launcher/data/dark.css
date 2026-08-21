@@ -55,11 +55,6 @@
     font-weight: 600;
 }
 
-.spotlight-window.dark .result-item-list:hover,
-.result-item-list:hover {
-    background-color: rgba(255, 255, 255, 0.08);
-}
-
 .result-item-list:selected,
 .result-item-list:focus {
     background-color: #0A84FF;
@@ -78,10 +73,6 @@
 
 .result-snippet {
     opacity: 0.55;
-}
-
-.result-item-grid:hover {
-    background-color: rgba(255, 255, 255, 0.08);
 }
 
 .result-item-grid:selected,
