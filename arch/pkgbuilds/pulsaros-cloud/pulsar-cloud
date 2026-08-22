@@ -30,6 +30,48 @@ has_token() {
     rclone config show "$1" 2>/dev/null | grep -q '^token *= *{'
 }
 
+# The OneDrive backend needs drive_id/drive_type which plain OAuth does not
+# provide. Detect them via Microsoft Graph using the stored access token.
+ensure_drive_metadata() {
+    local name="$1" backend tok detected did dtype
+
+    backend=$(provider_backend "$name") || return 0
+    [ "${backend}" = "onedrive" ] || return 0
+
+    if rclone config show "${name}" 2>/dev/null | grep -q '^drive_id *= *[[:alnum:]]'; then
+        return 0
+    fi
+
+    tok=$(rclone config show "${name}" 2>/dev/null | sed -n 's/^token *= *//p')
+    [ -n "${tok}" ] || return 1
+
+    echo "Detecting your OneDrive location..."
+    detected=$(T="${tok}" python3 - <<'PY' 2>/dev/null
+import os, json, urllib.request
+try:
+    t = json.loads(os.environ["T"])["access_token"]
+    req = urllib.request.Request("https://graph.microsoft.com/v1.0/me/drive",
+                                 headers={"Authorization": "Bearer " + t})
+    d = json.load(urllib.request.urlopen(req, timeout=20))
+    print(d.get("id", ""), d.get("driveType", ""))
+except Exception:
+    raise SystemExit(1)
+PY
+) || {
+        echo "Could not detect the drive (token may be expired). Run setup again."
+        return 1
+    }
+
+    did=${detected%% *}
+    dtype=${detected##* }
+    if [ -z "${did}" ]; then
+        echo "Could not detect the drive. Run setup again."
+        return 1
+    fi
+
+    rclone config update "${name}" drive_id "${did}" drive_type "${dtype}" >/dev/null
+}
+
 cmd="${1:-}"
 case "$cmd" in
     setup)
@@ -72,6 +114,8 @@ case "$cmd" in
             echo "Account '${name}' configured."
         fi
 
+        ensure_drive_metadata "${name}" || true
+
         systemctl --user enable --now "pulsar-cloud@${name}.service" >/dev/null 2>&1 \
             || systemctl --user restart "pulsar-cloud@${name}.service"
 
@@ -90,6 +134,7 @@ case "$cmd" in
         require_name "$@"
         name="$2"
         mkdir -p "${CLOUD_DIR}/${name}"
+        ensure_drive_metadata "${name}" || true
         systemctl --user start "pulsar-cloud@${name}.service"
         [ "$cmd" = "mount" ] && exit 0
         exec xdg-open "${CLOUD_DIR}/${name}"
