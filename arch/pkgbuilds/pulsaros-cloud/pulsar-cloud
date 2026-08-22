@@ -8,8 +8,9 @@ CLOUD_DIR="${HOME}/Cloud"
 CONF="${HOME}/.config/rclone/rclone.conf"
 
 usage() {
-    echo "usage: pulsar-cloud <setup|mount|unmount|open|list> [name]"
-    echo "supported providers: google-drive, onedrive, dropbox"
+    echo "usage: pulsar-cloud <add|setup|mount|unmount|open|list> [name]"
+    echo "featured providers: google-drive, onedrive, icloud; any rclone"
+    echo "backend can be added interactively via 'add'."
     exit 1
 }
 
@@ -18,6 +19,7 @@ provider_backend() {
         google-drive) echo "drive" ;;
         onedrive)     echo "onedrive" ;;
         dropbox)      echo "dropbox" ;;
+        icloud)       echo "iclouddrive" ;;
         *) return 1 ;;
     esac
 }
@@ -72,6 +74,123 @@ PY
     rclone config update "${name}" drive_id "${did}" drive_type "${dtype}" >/dev/null
 }
 
+activate_account() {
+    local name="$1" i
+
+    ensure_drive_metadata "${name}" || true
+
+    systemctl --user enable --now "pulsar-cloud@${name}.service" >/dev/null 2>&1 \
+        || systemctl --user restart "pulsar-cloud@${name}.service"
+
+    for i in $(seq 1 20); do
+        mountpoint -q "${CLOUD_DIR}/${name}" && break
+        sleep 0.5
+    done
+
+    if mountpoint -q "${CLOUD_DIR}/${name}"; then
+        echo "Done: '${name}' mounted at ${CLOUD_DIR}/${name}"
+    else
+        echo "Not mounted yet; check 'journalctl --user -u pulsar-cloud@${name}'."
+    fi
+}
+
+# Interactive configuration for any rclone backend, running in the
+# current terminal so rclone can ask its own questions (OAuth, keys,
+# two-factor codes...).
+wizard_backend() {
+    local name="$1" backend="$2"
+
+    mkdir -p "$(dirname "$CONF")" "${CLOUD_DIR}/${name}"
+
+    if rclone config show "${name}" >/dev/null 2>&1; then
+        echo "Account '${name}' already exists."
+    elif ! rclone config create "${name}" "${backend}"; then
+        echo "Setup of '${name}' failed or was cancelled."
+        return 1
+    fi
+
+    activate_account "${name}"
+}
+
+choose_other_backend() {
+    local -a entries=()
+    mapfile -t entries < <(rclone help backends 2>/dev/null \
+        | sed -n 's/^[[:space:]]\{2\}\([a-z0-9]\{1,\}\)[[:space:]]\{1,\}/\1 /p' | sort)
+    local count=${#entries[@]} pick name backend default_name n
+
+    if [ "${count}" -eq 0 ]; then
+        echo "Could not list rclone backends."
+        return 1
+    fi
+
+    echo
+    echo "Available providers:"
+    for n in $(seq "${count}"); do
+        printf ' %3d) %s\n' "${n}" "${entries[$((n - 1))]}"
+    done
+    echo
+    printf "Choose a provider [1-%d]: " "${count}"
+    read -r pick
+    case "${pick}" in
+        ''|*[!0-9]*) echo "Invalid choice."; return 1 ;;
+        *) [ "${pick}" -ge 1 ] && [ "${pick}" -le "${count}" ] || { echo "Invalid choice."; return 1; } ;;
+    esac
+
+    backend=${entries[$((pick - 1))]%% *}
+    default_name=$(unique_remote_name "${backend}")
+    printf "Account name [%s]: " "${default_name}"
+    read -r name
+    name=${name:-${default_name}}
+
+    wizard_backend "${name}" "${backend}"
+}
+
+unique_remote_name() {
+    local base="$1" candidate="$1" n=1
+    while rclone config show "${candidate}" >/dev/null 2>&1; do
+        n=$((n + 1))
+        candidate="${base}-${n}"
+    done
+    echo "${candidate}"
+}
+
+cmd_add() {
+    local choice name label answer
+
+    echo "== Add a cloud account =="
+    echo
+    echo "Featured providers:"
+    echo "  1) Google Drive"
+    echo "  2) OneDrive"
+    echo "  3) iCloud"
+    echo
+    echo "  o) Other provider (any backend supported by rclone)"
+    echo "  q) Quit"
+    printf "Choose an option: "
+    read -r choice
+
+    case "${choice}" in
+        1) exec "$0" setup google-drive ;;
+        2) exec "$0" setup onedrive ;;
+        3)
+            name="icloud"
+            if rclone config show "${name}" >/dev/null 2>&1; then
+                printf "An account named '%s' already exists. Use another name? [y/N] " "${name}"
+                read -r answer
+                case "${answer}" in
+                    y|Y)
+                        printf "Account name: "
+                        read -r name
+                        ;;
+                esac
+            fi
+            wizard_backend "${name}" iclouddrive
+            ;;
+        o) choose_other_backend ;;
+        *) echo "Cancelled." ;;
+    esac
+}
+
 cmd="${1:-}"
 case "$cmd" in
     setup)
@@ -114,21 +233,10 @@ case "$cmd" in
             echo "Account '${name}' configured."
         fi
 
-        ensure_drive_metadata "${name}" || true
-
-        systemctl --user enable --now "pulsar-cloud@${name}.service" >/dev/null 2>&1 \
-            || systemctl --user restart "pulsar-cloud@${name}.service"
-
-        for i in $(seq 1 20); do
-            mountpoint -q "${CLOUD_DIR}/${name}" && break
-            sleep 0.5
-        done
-
-        if mountpoint -q "${CLOUD_DIR}/${name}"; then
-            echo "Done: '${name}' mounted at ${CLOUD_DIR}/${name}"
-        else
-            echo "Not mounted yet; check 'journalctl --user -u pulsar-cloud@${name}'."
-        fi
+        activate_account "${name}"
+        ;;
+    add)
+        cmd_add
         ;;
     mount|open)
         require_name "$@"

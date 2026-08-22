@@ -14,14 +14,11 @@ depends=(
   glib2
   gnome-autoar
   gnome-desktop-4
-  gnome-online-accounts
   graphene
   gst-plugins-base-libs
   gstreamer
   gtk4
   gvfs
-  gvfs-goa
-  gvfs-onedrive
   hicolor-icon-theme
   libadwaita
   libportal

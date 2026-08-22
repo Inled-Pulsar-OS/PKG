@@ -1,13 +1,15 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-cloud
 pkgver=1.0.0
-pkgrel=1
-pkgdesc="Cloud drives (Google Drive, OneDrive, Dropbox) via rclone for the Pulsar OS Finder"
+pkgrel=2
+pkgdesc="Cloud drives for the Pulsar OS Finder: any provider supported by rclone"
 url="https://inled.es"
 license=(GPL-3.0-or-later)
 arch=(x86_64)
 depends=(
   fuse3
+  gnome-terminal
+  python3
   rclone
 )
 source=(pulsar-cloud
