@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+
+# English: make sure the helper is executable and icon caches are fresh
+# Español: asegurar permisos del helper y refrescar cachés de iconos
+chmod 755 /usr/bin/pulsar-cloud
+
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f /usr/share/icons/hicolor >/dev/null 2>&1 || true
+fi
+
+exit 0

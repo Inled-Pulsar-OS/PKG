@@ -1,0 +1,11 @@
+Package: pulsaros-cloud
+Version: 1.0.0-11
+Section: utils
+Priority: optional
+Architecture: all
+Depends: rclone, fuse3, zenity, curl, gnome-terminal
+Maintainer: Jaime <info@inled.es>
+Description: Cloud drives for the Pulsar OS Finder: any provider supported by rclone.
+ Adds the pulsar-cloud helper, a systemd user mount unit and cloud brand icons.
+ Integrates with the Finder sidebar to add, mount and remove cloud accounts
+ (Google Drive, OneDrive, iCloud or any rclone backend) under ~/Cloud/<name>.
