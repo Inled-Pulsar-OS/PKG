@@ -206,6 +206,28 @@ cmd_reconnect() {
     gnome-terminal -- bash -c "rclone config reconnect ${name}:; systemctl --user restart 'pulsar-cloud@${name}.service'; echo; echo Done; read -n 1 -p 'Press any key to close...'"
 }
 
+# Remove a cloud account: unmount, disable its unit, delete the
+# remote and clean up its mount directory.
+cmd_remove() {
+    require_name "$@"
+    local name="$2"
+
+    if ! remote_exists "${name}"; then
+        echo "No account named '${name}'."
+        return 1
+    fi
+
+    systemctl --user disable --now "pulsar-cloud@${name}.service" 2>/dev/null
+    fusermount3 -uz "${CLOUD_DIR}/${name}" 2>/dev/null || true
+    rclone config delete "${name}" >/dev/null 2>&1
+
+    if [ -d "${CLOUD_DIR}/${name}" ] && ! rmdir "${CLOUD_DIR}/${name}" 2>/dev/null; then
+        echo "Note: ${CLOUD_DIR}/${name} is not empty; left in place."
+    fi
+
+    echo "Account '${name}' removed."
+}
+
 mount_remote_now() {
     local name="$1"
     mkdir -p "${CLOUD_DIR}/${name}"
@@ -223,14 +245,14 @@ cmd_gui() {
     log=$(mktemp)
     list_remotes >"${known}"
 
-    rclone gui --no-auth --no-open-browser >"${log}" 2>&1 &
+    # The web UI only self-configures when opened through the /login
+    # bootstrap URL (pass+url+user params) printed by 'rclone gui'.
+    rclone gui --no-open-browser >"${log}" 2>&1 &
     pid=$!
 
-    # rclone gui serves two ports: the rc API and the web UI. Only the
-    # line mentioning "GUI" carries the browser-facing address.
     url=""
     for i in $(seq 1 120); do
-        url=$(grep 'GUI' "${log}" 2>/dev/null | grep -oE 'http://127\.0\.0\.1:[0-9]+' | head -n1)
+        url=$(grep -oE 'GUI available at [^ ]+' "${log}" 2>/dev/null | awk '{print $4}')
         [ -n "${url}" ] && break
         kill -0 "${pid}" 2>/dev/null || break
         sleep 0.5
@@ -243,9 +265,7 @@ cmd_gui() {
         return 1
     fi
 
-    # Open the root page: the web UI self-configures against its own
-    # origin there; deep links (/remotes/new) skip that bootstrap and
-    # fail with "URL is not configured".
+    # The bootstrap URL already carries the generated credentials.
     xdg-open "${url}" >/dev/null 2>&1 &
 
     handled=" $(tr '\n' ' ' <"${known}") "
@@ -369,6 +389,9 @@ case "$cmd" in
         ;;
     reconnect)
         cmd_reconnect "$@"
+        ;;
+    remove)
+        cmd_remove "$@"
         ;;
     *)
         usage
