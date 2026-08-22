@@ -243,7 +243,10 @@ cmd_gui() {
         return 1
     fi
 
-    xdg-open "${url}/remotes/new" >/dev/null 2>&1 &
+    # Open the root page: the web UI self-configures against its own
+    # origin there; deep links (/remotes/new) skip that bootstrap and
+    # fail with "URL is not configured".
+    xdg-open "${url}" >/dev/null 2>&1 &
 
     handled=" $(tr '\n' ' ' <"${known}") "
     ticks=0
