@@ -1,7 +1,7 @@
 {
   "uuid": "pulsaros-spotlight-launcher@inled.es",
   "name": "Pulsar OS Spotlight Launcher",
-  "description": "Adds a macOS-like Spotlight search icon to the GNOME top bar that launches spotlight-python.",
+  "description": "Adds a macOS-like Spotlight search icon to the GNOME top bar that launches pulsaros-spotlight.",
   "shell-version": [
     "45",
     "46",

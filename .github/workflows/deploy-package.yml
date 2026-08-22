@@ -101,7 +101,8 @@ jobs:
             libjson-glib-dev libsoup-3.0-dev libwacom-dev \
             libibus-1.0-dev libkrb5-dev libgnutls28-dev \
             libxi-dev libx11-dev docbook-xsl xsltproc \
-            modemmanager-dev libmm-glib-dev
+            modemmanager-dev libmm-glib-dev \
+            cargo rustc
 
       # 6. Parse package and branch from issue or inputs
       - name: Parse Package and Branch
@@ -200,7 +201,7 @@ jobs:
             archlinux:latest bash -c "
               pacman-key --init
               pacman-key --populate archlinux
-              pacman -Syu --noconfirm base-devel git sudo jq curl wget gtk-update-icon-cache cmake meson ninja blueprint-compiler glib2-devel docbook-xsl
+              pacman -Syu --noconfirm base-devel git sudo jq curl wget gtk-update-icon-cache cmake meson ninja blueprint-compiler glib2-devel docbook-xsl rust
 
               useradd -m builder
               echo 'builder ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers

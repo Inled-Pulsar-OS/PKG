@@ -193,25 +193,4 @@ increase-thumbnails-size='200%'
 overview-firefox-pip=true
 restore-thumbnails-background=true
 
-[io/github/yannmasoch/nautilus-my-computer]
-color-mode='accent'
-computer-icon='computer-symbolic'
-custom-color='#59A6FF'
-custom-gradient-color-1='#59A6FF'
-custom-gradient-color-2='#D574C1'
-preferred-folders=['home', 'recent', 'starred', 'network', 'downloads', 'documents', 'music', 'pictures', 'videos', 'trash']
-show-preferred-folder-captions=false
-show-system-partitions=false
-sidebar-show-home=true
-sidebar-show-network=true
-sidebar-show-recent=true
-sidebar-show-starred=true
-sidebar-show-trash=true
-start-on-disks=true
-visibility-disc='visible'
-visibility-network='visible'
-visibility-preferred-folders='visible'
-visibility-removable='visible'
-visibility-system='visible'
-
 

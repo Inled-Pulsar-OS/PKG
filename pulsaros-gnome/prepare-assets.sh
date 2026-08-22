@@ -518,51 +518,6 @@ else
     exit 1
 fi
 
-# ==============================================================================
-# DOWNLOAD AND INSTALL NAUTILUS MY COMPUTER PLUGIN
-# DESCARGAR E INSTALAR EL PLUGIN NAUTILUS MY COMPUTER
-# ==============================================================================
-echo "📂 [ES] Descargando plugin Nautilus My Computer desde GitHub..."
-echo "📂 [EN] Downloading Nautilus My Computer plugin from GitHub..."
-TEMP_NMC="/tmp/pulsaros-nautilus-my-computer"
-rm -rf "$TEMP_NMC"
-if git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "https://github.com/yannmasoch/nautilus-my-computer.git" "$TEMP_NMC"; then
-    echo "📦 [ES] Instalando Nautilus My Computer en staging..."
-    echo "📦 [EN] Installing Nautilus My Computer to staging..."
-    mkdir -p "$STAGE_DIR/usr/share/nautilus-python/extensions"
-    mkdir -p "$STAGE_DIR/usr/share/glib-2.0/schemas"
-    cp -r "$TEMP_NMC/nautilus-my-computer.py" "$STAGE_DIR/usr/share/nautilus-python/extensions/"
-    cp -r "$TEMP_NMC/nautilus_my_computer" "$STAGE_DIR/usr/share/nautilus-python/extensions/"
-    cp -r "$TEMP_NMC/io.github.yannmasoch.nautilus-my-computer.gschema.xml" "$STAGE_DIR/usr/share/glib-2.0/schemas/"
-    
-    # Parchear diseño y alineación del view switcher de My Computer para cápsula ovalada macOS uniforme
-    if [ -f "$STAGE_DIR/usr/share/nautilus-python/extensions/nautilus_my_computer/my_computer_view.py" ]; then
-        sed -i 's/border-radius: 9px;/border-radius: 9999px;/g' "$STAGE_DIR/usr/share/nautilus-python/extensions/nautilus_my_computer/my_computer_view.py"
-        sed -i 's/border-radius: 7px;/border-radius: 9999px;/g' "$STAGE_DIR/usr/share/nautilus-python/extensions/nautilus_my_computer/my_computer_view.py"
-        sed -i 's/background-color: @view_bg_color;/background-color: alpha(@window_fg_color, 0.22);/g' "$STAGE_DIR/usr/share/nautilus-python/extensions/nautilus_my_computer/my_computer_view.py"
-    fi
-    if [ -f "$STAGE_DIR/usr/share/nautilus-python/extensions/nautilus_my_computer/widgets.py" ]; then
-        sed -i 's/self.set_valign(Gtk.Align.FILL)/self.set_valign(Gtk.Align.CENTER)/g' "$STAGE_DIR/usr/share/nautilus-python/extensions/nautilus_my_computer/widgets.py"
-    fi
-    if [ -f "$STAGE_DIR/usr/share/nautilus-python/extensions/nautilus_my_computer/column_view.py" ]; then
-        sed -i 's/options_btn = Gtk.MenuButton(/options_btn = Gtk.MenuButton()\n    options_btn.add_css_class("flat")\n    options_btn.set_valign(Gtk.Align.CENTER)\n    # options_btn = Gtk.MenuButton(/g' "$STAGE_DIR/usr/share/nautilus-python/extensions/nautilus_my_computer/column_view.py" 2>/dev/null || true
-    fi
-    
-    if command -v msgfmt >/dev/null 2>&1 && [ -d "$TEMP_NMC/po" ]; then
-        for po_file in "$TEMP_NMC"/po/*.po; do
-            [ -f "$po_file" ] || continue
-            lang=$(basename "$po_file" .po)
-            mkdir -p "$STAGE_DIR/usr/share/locale/$lang/LC_MESSAGES"
-            msgfmt "$po_file" -o "$STAGE_DIR/usr/share/locale/$lang/LC_MESSAGES/nautilus-my-computer.mo" 2>/dev/null || true
-        done
-    fi
-    rm -rf "$TEMP_NMC"
-else
-    echo "❌ [ES] Error al clonar Nautilus My Computer de GitHub."
-    echo "❌ [EN] Error cloning Nautilus My Computer from GitHub."
-    exit 1
-fi
-
 # Copy all extensions' .gschema.xml files to the global schemas directory so gsettings and dconf can manage them
 # Copiar todos los archivos .gschema.xml de las extensiones al directorio global de esquemas para que gsettings y dconf puedan gestionarlos
 echo "⚙️ [ES] Copiando esquemas xml de extensiones al directorio global..."
@@ -594,11 +549,6 @@ echo "⚙️ [EN] Ensuring read and execute permissions for the extensions..."
 find "$STAGE_DIR/usr/share/gnome-shell/extensions" -type d -exec chmod 755 {} \; 2>/dev/null || true
 find "$STAGE_DIR/usr/share/gnome-shell/extensions" -type f -exec chmod 644 {} \; 2>/dev/null || true
 find "$STAGE_DIR/usr/share/glib-2.0/schemas" -type f -exec chmod 644 {} \; 2>/dev/null || true
-
-if [ -d "$STAGE_DIR/usr/share/nautilus-python" ]; then
-    find "$STAGE_DIR/usr/share/nautilus-python" -type d -exec chmod 755 {} \; 2>/dev/null || true
-    find "$STAGE_DIR/usr/share/nautilus-python" -type f -exec chmod 644 {} \; 2>/dev/null || true
-fi
 
 # DING extension needs its background process script to be executable
 # La extensión DING necesita que su script de proceso en segundo plano sea ejecutable

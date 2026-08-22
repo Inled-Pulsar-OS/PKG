@@ -40,7 +40,7 @@ This repository contains the **source packages** that make up Pulsar OS. PulsarO
 | `pulsaros-control-center-button` | GNOME Shell extension: **Control Center quick-settings button** that opens `gnome-control-center` |
 | `pulsaros-effects-settings` | Desktop **effects switcher**: toggles between *Blur my Shell* and *Liquid Glass* (acrylic glassmorphism) and auto-tunes Dash to Dock for optimal rendering |
 | `gnome-macos-remap-wayland` | **macOS keyboard remap** for GNOME on Wayland (based on `xremap`) |
-| `spotlight-gtk` *(Arch)* | Apple-like **Spotlight launcher** app built with GTK4 + Libadwaita |
+| `pulsaros-spotlight-launcher` | GNOME Shell extension: **Spotlight-like search launcher** icon in the top bar (GNOME 45-50, Wayland). Fully native **Rust/GTK4 binary** at `/usr/bin/pulsaros-spotlight` |
 
 ### System utilities & installer
 | Package | What it does |
@@ -49,6 +49,39 @@ This repository contains the **source packages** that make up Pulsar OS. PulsarO
 | `pulsaros-calamares` | **Calamares installer** branding, slideshows, settings, launchers and autostart for the live installer; replaces `calamares-settings-debian` |
 | `pulsaros-recovery` | Apple-like **Recovery Utilities + Disk selector** UI shown before Calamares launches in the installer |
 | `pulsaros-welcome` | **Welcome/onboarding** app: Apple-like "hello" animation and guides for resolution, Bluetooth, GSConnect, USB debugging, macOS, and feedback |
+| `pulsaros-meta` | **Metapackage**: depends on the whole Pulsar OS package set. Bump its version whenever new packages are added so existing installations pull them on update |
+
+## Build dependencies
+
+### Arch Linux / CachyOS / Manjaro
+
+```bash
+sudo pacman -S --needed \
+  base-devel git jq curl wget unzip rsync fakeroot \
+  meson ninja sassc blueprint-compiler gettext gobject-introspection gtk-update-icon-cache cmake \
+  cargo rust
+```
+
+`cargo`/`rust` compile the Spotlight launcher (Rust/GTK4, no Python involved);
+`meson`/`ninja` build the custom Nautilus.
+
+### Debian / Ubuntu
+
+```bash
+sudo apt-get install -y \
+  dpkg-dev fakeroot jq python3-pil \
+  meson ninja-build git gettext blueprint-compiler cargo rustc \
+  libgtk-4-dev libadwaita-1-dev libgnome-desktop-4-dev \
+  libcolord-gtk4-dev libgoa-1.0-dev libgtop2-dev \
+  libpwquality-dev libnm-dev libsecret-1-dev \
+  libpolkit-gobject-1-dev libmalcontent-dev \
+  libaccountsservice-dev libglib2.0-dev libgsound-dev \
+  libjson-glib-dev libsoup-3.0-dev libwacom-dev \
+  libibus-1.0-dev libkrb5-dev libgnutls28-dev \
+  libxi-dev libx11-dev docbook-xsl xsltproc
+```
+
+These mirror what `.github/workflows/deploy-package.yml` installs in CI.
 
 ## Building a package
 
@@ -72,3 +105,10 @@ cd arch
 ```
 
 The ISO build script (`/ISO`) can consume the packages from this repo's `build/packages/` folder with the `--local` flag.
+
+### Local development tips
+
+- Test your dash-to-dock fork without cloning from GitHub:
+  `PULSAR_DOCK_LOCAL_DIR=../dash-to-dock ./package-and-deploy.sh pulsaros-gnome`
+- Install the Spotlight Rust binary into your session for quick testing:
+  `./install-spotlight-local.sh` (goes to `~/.local/bin`)

@@ -1,6 +1,6 @@
 /**
  * Pulsar OS - Spotlight Launcher Extension
- * Adds the authentic macOS Spotlight search icon to GNOME top panel that launches spotlight-python.
+ * Adds the authentic macOS Spotlight search icon to GNOME top panel that launches the native pulsaros-spotlight binary.
  * Automatically ensures Spotlight window is always on top (make_above), intercepts demands-attention,
  * and provides native Wayland keystroke injection (Paste) via Clutter VirtualInputDevice over D-Bus.
  * 
