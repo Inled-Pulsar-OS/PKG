@@ -8,9 +8,7 @@ CLOUD_DIR="${HOME}/Cloud"
 CONF="${HOME}/.config/rclone/rclone.conf"
 
 usage() {
-    echo "usage: pulsar-cloud <add|setup|mount|unmount|open|list> [name]"
-    echo "featured providers: google-drive, onedrive, icloud; any rclone"
-    echo "backend can be added interactively via 'add'."
+    echo "usage: pulsar-cloud <choose|gui|add|setup|mount|unmount|open|list|reconnect> [name]"
     exit 1
 }
 
@@ -39,15 +37,29 @@ has_token() {
     rclone config show "$1" 2>/dev/null | grep -q '^token *= *{'
 }
 
-# The OneDrive backend needs drive_id/drive_type which plain OAuth does not
-# provide. Detect them via Microsoft Graph using the stored access token.
-ensure_drive_metadata() {
-    local name="$1" backend tok detected did dtype
+list_remotes() {
+    [ -f "$CONF" ] && grep -E '^\[' "$CONF" | tr -d '[]' | sort
+}
 
-    backend=$(provider_backend "$name") || return 0
+unique_remote_name() {
+    local base="$1" candidate="$1" n=1
+    while remote_exists "${candidate}"; do
+        n=$((n + 1))
+        candidate="${base}-${n}"
+    done
+    echo "${candidate}"
+}
+
+# The OneDrive backend needs drive_id/drive_type which plain OAuth does
+# not provide. Detect them via Microsoft Graph using the stored token.
+ensure_drive_metadata() {
+    local name="$1" backend tok json did dtype section
+
+    backend=$(provider_backend "${name}") || return 0
     [ "${backend}" = "onedrive" ] || return 0
 
-    if rclone config show "${name}" 2>/dev/null | grep -q '^drive_id *= *[[:alnum:]]'; then
+    section=$(sed -n "/^\\[${name}\\]\$/,/^\\[/p" "$CONF" 2>/dev/null)
+    if printf '%s\n' "${section}" | grep -q '^drive_id *= *[[:alnum:]]'; then
         return 0
     fi
 
@@ -55,30 +67,18 @@ ensure_drive_metadata() {
     [ -n "${tok}" ] || return 1
 
     echo "Detecting your OneDrive location..."
-    detected=$(T="${tok}" python3 - <<'PY' 2>/dev/null
-import os, json, urllib.request
-try:
-    t = json.loads(os.environ["T"])["access_token"]
-    req = urllib.request.Request("https://graph.microsoft.com/v1.0/me/drive",
-                                 headers={"Authorization": "Bearer " + t})
-    d = json.load(urllib.request.urlopen(req, timeout=20))
-    print(d.get("id", ""), d.get("driveType", ""))
-except Exception:
-    raise SystemExit(1)
-PY
-) || {
-        echo "Could not detect the drive (token may be expired). Run setup again."
-        return 1
-    }
+    json=$(curl -s --max-time 20 \
+        -H "Authorization: Bearer ${tok}" \
+        https://graph.microsoft.com/v1.0/me/drive)
+    did=$(printf '%s' "${json}" | sed -n 's/.*"id" *: *"\([^"]*\)".*/\1/p' | head -n1)
+    dtype=$(printf '%s' "${json}" | sed -n 's/.*"driveType" *: *"\([^"]*\)".*/\1/p' | head -n1)
 
-    did=${detected%% *}
-    dtype=${detected##* }
     if [ -z "${did}" ]; then
-        echo "Could not detect the drive. Run setup again."
+        echo "Could not detect the drive (token may be expired). Run setup again."
         return 1
     fi
 
-    rclone config update "${name}" drive_id "${did}" drive_type "${dtype}" >/dev/null
+    rclone config update "${name}" drive_id "${did}" drive_type "${dtype:-personal}" >/dev/null
 }
 
 activate_account() {
@@ -89,16 +89,11 @@ activate_account() {
     systemctl --user enable --now "pulsar-cloud@${name}.service" >/dev/null 2>&1 \
         || systemctl --user restart "pulsar-cloud@${name}.service"
 
-    for i in $(seq 1 20); do
-        mountpoint -q "${CLOUD_DIR}/${name}" && break
+    for i in $(seq 1 40); do
+        mountpoint -q "${CLOUD_DIR}/${name}" && return 0
         sleep 0.5
     done
-
-    if mountpoint -q "${CLOUD_DIR}/${name}"; then
-        echo "Done: '${name}' mounted at ${CLOUD_DIR}/${name}"
-    else
-        echo "Not mounted yet; check 'journalctl --user -u pulsar-cloud@${name}'."
-    fi
+    return 1
 }
 
 # Interactive configuration for any rclone backend, running in the
@@ -123,14 +118,18 @@ wizard_backend() {
         fi
     fi
 
-    activate_account "${name}"
+    if activate_account "${name}"; then
+        echo "Done: '${name}' mounted at ${CLOUD_DIR}/${name}"
+    else
+        echo "Not mounted yet; check 'journalctl --user -u pulsar-cloud@${name}'."
+    fi
 }
 
 choose_other_backend() {
     local -a entries=()
     mapfile -t entries < <(rclone help backends 2>/dev/null \
         | sed -n 's/^[[:space:]]\{2\}\([a-z0-9]\{1,\}\)[[:space:]]\{1,\}/\1 /p' | sort)
-    local count=${#entries[@]} pick name backend default_name n
+    local count=${#entries[@]} pick name backend
 
     if [ "${count}" -eq 0 ]; then
         echo "Could not list rclone backends."
@@ -151,22 +150,12 @@ choose_other_backend() {
     esac
 
     backend=${entries[$((pick - 1))]%% *}
-    name=$(unique_remote_name "${backend}")
 
-    wizard_backend "${name}" "${backend}"
-}
-
-unique_remote_name() {
-    local base="$1" candidate="$1" n=1
-    while remote_exists "${candidate}"; do
-        n=$((n + 1))
-        candidate="${base}-${n}"
-    done
-    echo "${candidate}"
+    wizard_backend "$(unique_remote_name "${backend}")" "${backend}"
 }
 
 cmd_add() {
-    local choice name label answer
+    local choice name answer
 
     echo "== Add a cloud account =="
     echo
@@ -184,8 +173,8 @@ cmd_add() {
         1) exec "$0" setup google-drive ;;
         2) exec "$0" setup onedrive ;;
         3)
-            name="icloud"
-            if rclone config show "${name}" >/dev/null 2>&1; then
+            name=icloud
+            if remote_exists "${name}"; then
                 printf "An account named '%s' already exists. Use another name? [y/N] " "${name}"
                 read -r answer
                 case "${answer}" in
@@ -202,8 +191,111 @@ cmd_add() {
     esac
 }
 
+# Refresh the credentials of an existing remote in a visible terminal,
+# then remount. Used when a session/trust token expires.
+cmd_reconnect() {
+    require_name "$@"
+    local name="$2"
+    mkdir -p "$(dirname "$CONF")" "${CLOUD_DIR}/${name}"
+
+    if ! command -v gnome-terminal >/dev/null 2>&1; then
+        echo "Run manually:  rclone config reconnect ${name}:"
+        return 1
+    fi
+
+    gnome-terminal -- bash -c "rclone config reconnect ${name}:; systemctl --user restart 'pulsar-cloud@${name}.service'; echo; echo Done; read -n 1 -p 'Press any key to close...'"
+}
+
+mount_remote_now() {
+    local name="$1"
+    mkdir -p "${CLOUD_DIR}/${name}"
+    activate_account "${name}"
+}
+
+# Web GUI flow: launch 'rclone gui', open the new-remote page, and
+# mount whatever accounts the user creates there.
+cmd_gui() {
+    local known handled url log pid i name ticks
+
+    command -v rclone >/dev/null || { echo "rclone is required"; return 1; }
+
+    known=$(mktemp)
+    log=$(mktemp)
+    list_remotes >"${known}"
+
+    rclone gui --no-auth --no-open-browser >"${log}" 2>&1 &
+    pid=$!
+
+    url=""
+    for i in $(seq 1 120); do
+        url=$(grep -oE 'http://127\.0\.0\.1:[0-9]+' "${log}" 2>/dev/null | head -n1)
+        [ -n "${url}" ] && break
+        kill -0 "${pid}" 2>/dev/null || break
+        sleep 0.5
+    done
+
+    if [ -z "${url}" ]; then
+        zenity --error --text="Could not start the rclone web GUI." 2>/dev/null \
+            || tail -n 5 "${log}"
+        rm -f "${log}" "${known}"
+        return 1
+    fi
+
+    xdg-open "${url}/remotes/new" >/dev/null 2>&1 &
+
+    handled=" $(tr '\n' ' ' <"${known}") "
+    ticks=0
+    while kill -0 "${pid}" 2>/dev/null && [ "${ticks}" -lt 600 ]; do
+        while read -r name; do
+            [ -z "${name}" ] && continue
+            case "${handled}" in *" ${name} "*) continue ;; esac
+            handled="${handled}${name} "
+            if mount_remote_now "${name}"; then
+                zenity --info \
+                    --text="'${name}' has been added and mounted at ${CLOUD_DIR}/${name}." \
+                    2>/dev/null
+            else
+                zenity --warning \
+                    --text="'${name}' was added but could not be mounted yet. It will appear in Files once signed in." \
+                    2>/dev/null
+            fi
+        done < <(list_remotes)
+        ticks=$((ticks + 1))
+        sleep 3
+    done
+
+    rm -f "${log}" "${known}"
+}
+
+# Entry point used by the Files sidebar: ask whether the user wants the
+# graphical rclone web UI or the terminal wizard.
+cmd_choose() {
+    if command -v zenity >/dev/null 2>&1; then
+        zenity --question \
+            --title="Add Cloud Account" \
+            --text="How do you want to add your cloud account?" \
+            --ok-label="Graphical setup" \
+            --cancel-label="Terminal wizard" >/dev/null 2>&1
+        case $? in
+            0) exec "$0" gui ;;
+            1) exec gnome-terminal -- bash -lc 'pulsar-cloud add' ;;
+            *) exit 0 ;;
+        esac
+    fi
+    exec gnome-terminal -- bash -lc 'pulsar-cloud add'
+}
+
 cmd="${1:-}"
 case "$cmd" in
+    choose)
+        cmd_choose
+        ;;
+    gui)
+        cmd_gui
+        ;;
+    add)
+        cmd_add
+        ;;
     setup)
         require_name "$@"
         name="$2"
@@ -211,19 +303,14 @@ case "$cmd" in
         label=$(echo "$name" | tr '-' ' ')
         mkdir -p "$(dirname "$CONF")" "${CLOUD_DIR}/${name}"
 
-        if grep -q "^\[${name}\]$" "$CONF" 2>/dev/null && has_token "$name"; then
+        if remote_exists "${name}" && has_token "${name}"; then
             echo "'${name}' is already configured; reconnecting..."
+        elif remote_exists "${name}"; then
+            echo "'${name}' exists without authorization; completing sign-in..."
         else
-            if grep -q "^\[${name}\]$" "$CONF" 2>/dev/null; then
-                echo "'${name}' exists without authorization; completing sign-in..."
-            else
-                echo "== Setting up ${label} =="
-                echo "Your browser will open to grant access. Follow any on-screen prompts."
-            fi
+            echo "== Setting up ${label} =="
+            echo "Your browser will open to grant access. Follow any on-screen prompts."
 
-            # Run rclone visibly so its interactive prompts (e.g. OneDrive
-            # account/drive selection) are answerable, while capturing the
-            # output to extract the token afterwards.
             logfile=$(mktemp)
             rclone authorize "${backend}" 2>&1 | tee "${logfile}"
             token=$(grep -oE '\{.*\}' "${logfile}" | tail -n1)
@@ -234,20 +321,16 @@ case "$cmd" in
                 exit 1
             fi
 
-            if grep -q "^\[${name}\]$" "$CONF" 2>/dev/null; then
-                rclone config update "${name}" \
-                    config_refresh_token true token "${token}" >/dev/null
-            else
-                rclone config create "${name}" "${backend}" \
-                    config_refresh_token true token "${token}" >/dev/null
-            fi
+            rclone config create "${name}" "${backend}" \
+                config_refresh_token true token "${token}" >/dev/null
             echo "Account '${name}' configured."
         fi
 
-        activate_account "${name}"
-        ;;
-    add)
-        cmd_add
+        if activate_account "${name}"; then
+            echo "Done: '${name}' mounted at ${CLOUD_DIR}/${name}"
+        else
+            echo "Not mounted yet; check 'journalctl --user -u pulsar-cloud@${name}'."
+        fi
         ;;
     mount|open)
         require_name "$@"
@@ -255,6 +338,18 @@ case "$cmd" in
         mkdir -p "${CLOUD_DIR}/${name}"
         ensure_drive_metadata "${name}" || true
         systemctl --user start "pulsar-cloud@${name}.service"
+
+        mounted=0
+        for i in $(seq 1 30); do
+            mountpoint -q "${CLOUD_DIR}/${name}" && { mounted=1; break; }
+            sleep 0.5
+        done
+
+        if [ "${mounted}" = 0 ]; then
+            echo "'${name}' could not be mounted; refreshing its access..."
+            exec "$0" reconnect "${name}"
+        fi
+
         [ "$cmd" = "mount" ] && exit 0
         exec xdg-open "${CLOUD_DIR}/${name}"
         ;;
@@ -265,7 +360,10 @@ case "$cmd" in
         fusermount3 -uz "${CLOUD_DIR}/${name}" 2>/dev/null || true
         ;;
     list)
-        [ -f "$CONF" ] && grep -E '^\[' "$CONF" | tr -d '[]'
+        list_remotes
+        ;;
+    reconnect)
+        cmd_reconnect "$@"
         ;;
     *)
         usage
