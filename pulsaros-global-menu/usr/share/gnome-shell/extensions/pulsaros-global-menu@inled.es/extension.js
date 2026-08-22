@@ -1135,27 +1135,18 @@ const LockScreen = GObject.registerClass({
         }
         
         try {
-            // Run pamtester asynchronously using stdin piping
-            let proc = new Gio.SubprocessBuilder({
-                argv: ['/usr/bin/pamtester', 'pulsaros-lock', username, 'authenticate'],
-                flags: Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
-            }).build();
+            // Run pamtester asynchronously, piping the password via stdin
+            let proc = Gio.Subprocess.new(
+                ['/usr/bin/pamtester', 'pulsaros-lock', username, 'authenticate'],
+                Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+            );
             
-            let stdinStream = proc.get_stdin_pipe();
-            if (stdinStream) {
-                let bytes = GLib.Bytes.new(password + '\n');
-                stdinStream.write_bytes(bytes, null);
-                stdinStream.close(null);
-            }
-            
-            proc.wait_async(null, (obj, res) => {
+            proc.communicate_utf8_async(password + '\n', null, (obj, res) => {
                 try {
-                    proc.wait_finish(res);
-                    let success = proc.get_successful();
+                    let [ok, , stderrText] = obj.communicate_utf8_finish(res);
+                    let success = ok && obj.get_successful();
                     if (!success) {
-                        let stderrBytes = proc.get_stderr_pipe()?.read_bytes(null);
-                        let stderrText = stderrBytes ? new TextDecoder().decode(stderrBytes.get_data()) : '';
-                        console.warn(`[LockScreen] pamtester auth failed for user '${username}': exit=${proc.get_exit_status()} stderr=${stderrText.trim()}`);
+                        console.warn(`[LockScreen] pamtester auth failed for user '${username}': exit=${obj.get_exit_status()} stderr=${(stderrText || '').trim()}`);
                     }
                     if (success) {
                         this._onAuthSuccess();

@@ -91,7 +91,6 @@ fi
 
 EGO_EXTENSIONS=(
     "blur-my-shell@aunetx"
-    "dash-to-dock@micxgx.gmail.com"
     "wiggle@mechtifs"
     "compiz-alike-magic-lamp-effect@hermes83.github.com"
     "just-perfection-desktop@just-perfection"
@@ -152,6 +151,64 @@ for uuid in "${EGO_EXTENSIONS[@]}"; do
         echo "⚠️ [EN] No compatible version found on EGO for $uuid"
     fi
 done
+
+# ==============================================================================
+# INSTALL PULSAR DOCK (OUR DASH-TO-DOCK FORK) REPLACING UPSTREAM DASH TO DOCK
+# INSTALAR PULSAR DOCK (NUESTRO FORK DE DASH-TO-DOCK) EN LUGAR DEL ORIGINAL
+# ==============================================================================
+# The fork is built from source because stylesheet.css, gschemas.compiled and
+# the .mo translations are not committed to the repository.
+# Requires on the builder: git, make, sassc, gettext (msgfmt), glib-compile-schemas.
+#
+# For development builds set PULSAR_DOCK_LOCAL_DIR to a local checkout of the
+# dash-to-dock repo to skip the GitHub clone:
+#   PULSAR_DOCK_LOCAL_DIR=../dash-to-dock ./package-and-deploy.sh pulsaros-gnome
+# ==============================================================================
+echo "🚢 [ES] Instalando Pulsar Dock (fork propio de Dash to Dock)..."
+echo "🚢 [EN] Installing Pulsar Dock (our own Dash to Dock fork)..."
+
+PULSAR_DOCK_UUID="pulsar-dock@inled.es"
+PULSAR_DOCK_TEMP="/tmp/pulsaros-pulsar-dock"
+rm -rf "$PULSAR_DOCK_TEMP"
+
+if [ -n "$PULSAR_DOCK_LOCAL_DIR" ] && [ -d "$PULSAR_DOCK_LOCAL_DIR/.git" ]; then
+    PULSAR_DOCK_SRC="$(realpath "$PULSAR_DOCK_LOCAL_DIR")"
+    echo "📦 [ES] Usando copia local de Pulsar Dock: $PULSAR_DOCK_SRC"
+    echo "📦 [EN] Using local Pulsar Dock checkout: $PULSAR_DOCK_SRC"
+else
+    # We use HTTPS URL to ensure compatibility without SSH keys in builder / chroot environments
+    if git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "https://github.com/Inled-Pulsar-OS/dash-to-dock.git" "$PULSAR_DOCK_TEMP"; then
+        PULSAR_DOCK_SRC="$PULSAR_DOCK_TEMP"
+    else
+        echo "❌ [ES] Error al clonar Pulsar Dock de GitHub."
+        echo "❌ [EN] Error cloning Pulsar Dock from GitHub."
+        exit 1
+    fi
+fi
+
+if ! (cd "$PULSAR_DOCK_SRC" && make _build >/dev/null 2>&1); then
+    echo "❌ [ES] Fallo al compilar Pulsar Dock. Asegúrate de tener make, sassc, msgfmt y glib-compile-schemas en el entorno de build."
+    echo "❌ [EN] Failed to build Pulsar Dock. Make sure make, sassc, msgfmt and glib-compile-schemas are available in the build environment."
+    exit 1
+fi
+
+PULSAR_DOCK_DEST="$STAGE_DIR/usr/share/gnome-shell/extensions/${PULSAR_DOCK_UUID}"
+mkdir -p "$PULSAR_DOCK_DEST"
+cp -r "$PULSAR_DOCK_SRC"/_build/* "$PULSAR_DOCK_DEST"/
+
+# Ship the dock translations system-wide so the dashtodock gettext domain resolves
+# Publicar las traducciones del dock en el sistema para que el dominio gettext dashtodock resuelva
+if [ -d "$PULSAR_DOCK_SRC/_build/locale" ]; then
+    for mo_file in "$PULSAR_DOCK_SRC"/_build/locale/*/LC_MESSAGES/*.mo; do
+        [ -f "$mo_file" ] || continue
+        lang_dir="$(basename "$(dirname "$(dirname "$mo_file")")")"
+        mkdir -p "$STAGE_DIR/usr/share/locale/$lang_dir/LC_MESSAGES"
+        cp "$mo_file" "$STAGE_DIR/usr/share/locale/$lang_dir/LC_MESSAGES/"
+    done
+fi
+
+rm -rf "$PULSAR_DOCK_TEMP"
+echo "✅ Extensión $PULSAR_DOCK_UUID lista."
 
 # ==============================================================================
 # PATCH WIGGLE EXTENSION FOR GNOME 50 / CLUTTER ANIMATION COMPATIBILITY

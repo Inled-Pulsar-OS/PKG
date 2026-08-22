@@ -237,6 +237,8 @@ class EffectsSettingsWindow(Gtk.Window):
             "/usr/share/gnome-shell/extensions/liquid-glass@thinkingcoding1231.gmail.com/schemas",
             os.path.expanduser("~/.local/share/gnome-shell/extensions/blur-my-shell@aunetx/schemas"),
             "/usr/share/gnome-shell/extensions/blur-my-shell@aunetx/schemas",
+            os.path.expanduser("~/.local/share/gnome-shell/extensions/pulsar-dock@inled.es/schemas"),
+            "/usr/share/gnome-shell/extensions/pulsar-dock@inled.es/schemas",
             os.path.expanduser("~/.local/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/schemas"),
             "/usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/schemas",
             os.path.join(pkg_dir, "build/pkg-staging/pulsaros-gnome/usr/share/glib-2.0/schemas"),

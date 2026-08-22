@@ -196,6 +196,10 @@ impl ResultView {
 
         self.stack.set_visible_child_name(if as_grid { "grid" } else { "list" });
 
+        if let Some(adj) = self.viewport_vadjustment() {
+            adj.set_value(0.0);
+        }
+
         if !as_grid {
             if let Some(first_row) = self.list_box.row_at_index(0) {
                 self.list_box.select_row(Some(&first_row));
@@ -588,6 +592,29 @@ impl ResultView {
         });
     }
 
+    fn viewport_vadjustment(&self) -> Option<gtk4::Adjustment> {
+        self.stack
+            .ancestor(gtk4::ScrolledWindow::static_type())
+            .and_then(|w| w.downcast::<gtk4::ScrolledWindow>().ok())
+            .map(|sw| sw.vadjustment())
+    }
+
+    fn ensure_visible<W: IsA<gtk4::Widget>>(&self, widget: &W) {
+        let Some(adj) = self.viewport_vadjustment() else {
+            return;
+        };
+        let alloc = widget.allocation();
+        let top = alloc.y() as f64;
+        let bottom = top + alloc.height() as f64;
+        let value = adj.value();
+        let page = adj.page_size();
+        if top < value {
+            adj.set_value(top);
+        } else if bottom > value + page {
+            adj.set_value(bottom - page);
+        }
+    }
+
     pub fn move_selection_up(&self) {
         // Bind first: an `if let ... = *refcell.borrow()` scrutinee keeps the
         // borrow alive across the whole block, and select_child/select_row
@@ -598,7 +625,7 @@ impl ResultView {
                 if idx > 0 {
                     if let Some(row) = self.list_box.row_at_index((idx - 1) as i32) {
                         self.list_box.select_row(Some(&row));
-
+                        self.ensure_visible(&row);
                     }
                 }
             }
@@ -606,7 +633,7 @@ impl ResultView {
             if idx >= 6 {
                 if let Some(child) = self.grid.child_at_index((idx - 6) as i32) {
                     self.grid.select_child(&child);
-
+                    self.ensure_visible(&child);
                 }
             }
         }
@@ -620,7 +647,7 @@ impl ResultView {
             if idx + 1 < max_len {
                 if let Some(row) = self.list_box.row_at_index((idx + 1) as i32) {
                     self.list_box.select_row(Some(&row));
-
+                    self.ensure_visible(&row);
                 }
             }
         } else if let Some(idx) = current {
@@ -628,7 +655,7 @@ impl ResultView {
             if next_idx < max_len {
                 if let Some(child) = self.grid.child_at_index(next_idx as i32) {
                     self.grid.select_child(&child);
-
+                    self.ensure_visible(&child);
                 }
             }
         }
@@ -641,7 +668,7 @@ impl ResultView {
                 if idx > 0 {
                     if let Some(child) = self.grid.child_at_index((idx - 1) as i32) {
                         self.grid.select_child(&child);
-
+                        self.ensure_visible(&child);
                     }
                 }
             }
@@ -656,7 +683,7 @@ impl ResultView {
                 if idx + 1 < max_len {
                     if let Some(child) = self.grid.child_at_index((idx + 1) as i32) {
                         self.grid.select_child(&child);
-
+                        self.ensure_visible(&child);
                     }
                 }
             }
