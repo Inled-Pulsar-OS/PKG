@@ -226,9 +226,11 @@ cmd_gui() {
     rclone gui --no-auth --no-open-browser >"${log}" 2>&1 &
     pid=$!
 
+    # rclone gui serves two ports: the rc API and the web UI. Only the
+    # line mentioning "GUI" carries the browser-facing address.
     url=""
     for i in $(seq 1 120); do
-        url=$(grep -oE 'http://127\.0\.0\.1:[0-9]+' "${log}" 2>/dev/null | head -n1)
+        url=$(grep 'GUI' "${log}" 2>/dev/null | grep -oE 'http://127\.0\.0\.1:[0-9]+' | head -n1)
         [ -n "${url}" ] && break
         kill -0 "${pid}" 2>/dev/null || break
         sleep 0.5
