@@ -8,8 +8,8 @@ CLOUD_DIR="${HOME}/Cloud"
 CONF="${HOME}/.config/rclone/rclone.conf"
 
 usage() {
-    echo "uso: pulsar-cloud <setup|mount|unmount|open|list> [nombre]"
-    echo "proveedores soportados: google-drive, onedrive, dropbox"
+    echo "usage: pulsar-cloud <setup|mount|unmount|open|list> [name]"
+    echo "supported providers: google-drive, onedrive, dropbox"
     exit 1
 }
 
@@ -40,21 +40,28 @@ case "$cmd" in
         mkdir -p "$(dirname "$CONF")" "${CLOUD_DIR}/${name}"
 
         if grep -q "^\[${name}\]$" "$CONF" 2>/dev/null && has_token "$name"; then
-            echo "'${name}' ya estaba configurado; reconectando..."
+            echo "'${name}' is already configured; reconnecting..."
         else
             if grep -q "^\[${name}\]$" "$CONF" 2>/dev/null; then
-                echo "'${name}' existe sin autorización; completando login..."
+                echo "'${name}' exists without authorization; completing sign-in..."
             else
-                echo "== Configurando ${label} =="
-                echo "Se abrirá tu navegador para autorizar el acceso..."
+                echo "== Setting up ${label} =="
+                echo "Your browser will open to grant access. Follow any on-screen prompts."
             fi
-            raw=$(rclone authorize "${backend}" 2>&1)
-            token=$(printf '%s\n' "$raw" | grep -oE '\{.*\}' | tail -n1)
+
+            # Run rclone visibly so its interactive prompts (e.g. OneDrive
+            # account/drive selection) are answerable, while capturing the
+            # output to extract the token afterwards.
+            logfile=$(mktemp)
+            rclone authorize "${backend}" 2>&1 | tee "${logfile}"
+            token=$(grep -oE '\{.*\}' "${logfile}" | tail -n1)
+            rm -f "${logfile}"
+
             if [ -z "$token" ]; then
-                echo "No se completó la autorización."
-                printf '%s\n' "$raw" | sed -n '1,4p'
+                echo "Authorization was not completed."
                 exit 1
             fi
+
             if grep -q "^\[${name}\]$" "$CONF" 2>/dev/null; then
                 rclone config update "${name}" \
                     config_refresh_token true token "${token}" >/dev/null
@@ -62,7 +69,7 @@ case "$cmd" in
                 rclone config create "${name}" "${backend}" \
                     config_refresh_token true token "${token}" >/dev/null
             fi
-            echo "Cuenta '${name}' configurada."
+            echo "Account '${name}' configured."
         fi
 
         systemctl --user enable --now "pulsar-cloud@${name}.service" >/dev/null 2>&1 \
@@ -74,9 +81,9 @@ case "$cmd" in
         done
 
         if mountpoint -q "${CLOUD_DIR}/${name}"; then
-            echo "Listo: '${name}' montado en ${CLOUD_DIR}/${name}"
+            echo "Done: '${name}' mounted at ${CLOUD_DIR}/${name}"
         else
-            echo "Aún sin montar; revisa 'journalctl --user -u pulsar-cloud@${name}'."
+            echo "Not mounted yet; check 'journalctl --user -u pulsar-cloud@${name}'."
         fi
         ;;
     mount|open)
