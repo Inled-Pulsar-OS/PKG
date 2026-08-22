@@ -28,6 +28,13 @@ require_name() {
     [ -n "${2:-}" ] || usage
 }
 
+# NOTE: 'rclone config show <name>' succeeds even for unknown remotes
+# (the name falls back to the implicit local backend), so existence
+# must be checked against the config file itself.
+remote_exists() {
+    [ -f "$CONF" ] && grep -q "^\[${1}\]$" "$CONF"
+}
+
 has_token() {
     rclone config show "$1" 2>/dev/null | grep -q '^token *= *{'
 }
@@ -102,11 +109,18 @@ wizard_backend() {
 
     mkdir -p "$(dirname "$CONF")" "${CLOUD_DIR}/${name}"
 
-    if rclone config show "${name}" >/dev/null 2>&1; then
+    if remote_exists "${name}"; then
         echo "Account '${name}' already exists."
-    elif ! rclone config create "${name}" "${backend}"; then
-        echo "Setup of '${name}' failed or was cancelled."
-        return 1
+    else
+        echo
+        echo "Setting up '${name}' (${backend})."
+        echo "rclone will now ask you the questions for this provider."
+        # '--all' forces the full interactive questionnaire; without it
+        # modern rclone just takes defaults and fails on required keys.
+        if ! rclone config create "${name}" "${backend}" --all; then
+            echo "Setup of '${name}' failed or was cancelled."
+            return 1
+        fi
     fi
 
     activate_account "${name}"
@@ -137,17 +151,14 @@ choose_other_backend() {
     esac
 
     backend=${entries[$((pick - 1))]%% *}
-    default_name=$(unique_remote_name "${backend}")
-    printf "Account name [%s]: " "${default_name}"
-    read -r name
-    name=${name:-${default_name}}
+    name=$(unique_remote_name "${backend}")
 
     wizard_backend "${name}" "${backend}"
 }
 
 unique_remote_name() {
     local base="$1" candidate="$1" n=1
-    while rclone config show "${candidate}" >/dev/null 2>&1; do
+    while remote_exists "${candidate}"; do
         n=$((n + 1))
         candidate="${base}-${n}"
     done
