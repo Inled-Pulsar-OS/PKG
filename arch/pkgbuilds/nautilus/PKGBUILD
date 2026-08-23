@@ -7,7 +7,7 @@ url="https://inled.es"
 license=(GPL-3.0-or-later)
 arch=(x86_64)
 depends=(
-  cloudproviders
+  libcloudproviders
   dconf
   gdk-pixbuf2
   gexiv2
@@ -42,6 +42,9 @@ prepare() {
   mkdir -p "$srcdir/nautilus-src"
   cp -r "$_src"/. "$srcdir/nautilus-src/"
   rm -rf "$srcdir/nautilus-src/_build" "$srcdir/nautilus-src/DEBIAN" "$srcdir/nautilus-src/prepare-assets.sh"
+
+  # gexiv2 0.16 renamed its pkgconfig to gexiv2-0.16; meson looks for gexiv2
+  sed -i "s/dependency('gexiv2'/dependency('gexiv2-0.16'/" "$srcdir/nautilus-src/meson.build"
 }
 
 build() {
