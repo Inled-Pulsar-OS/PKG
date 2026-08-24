@@ -1389,7 +1389,7 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     f.write(fstab_content)
                 
             def preserve_live_initramfs_for_recovery():
-                """Deploy the live/recovery initramfs to the recovery partition and ESP."""
+                """Deploy the live/recovery initramfs to PULSAR_OS (@/boot), ESP, and PULSAR_RECOVERY."""
                 if "TEST_MODE" in os.environ or not is_efi:
                     return
                 try:
@@ -1425,27 +1425,27 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                         log_msg("ERROR: no live initramfs found - the recovery entry will not boot")
                         return
                     esp_root = "/mnt/boot/efi"
+                    os.makedirs("/mnt/boot", exist_ok=True)
                     os.makedirs("/mnt/recovery/boot", exist_ok=True)
                     os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
+                    shutil.copy2(src, "/mnt/boot/initramfs-recovery.img")
                     shutil.copy2(src, "/mnt/recovery/boot/initramfs-recovery.img")
                     shutil.copy2(src, "/mnt/recovery/initramfs-recovery.img")
                     shutil.copy2(src, f"{esp_root}/EFI/recovery/initramfs-recovery.img")
                     shutil.copy2(src, f"{esp_root}/EFI/recovery/initrd.img")
                     subprocess.run(["sync"])
-                    log_msg(f"Recovery initramfs preserved: {src} -> /mnt/recovery/boot/initramfs-recovery.img & {esp_root}/EFI/recovery/")
+                    log_msg(f"Recovery initramfs deployed to PULSAR_OS, PULSAR_RECOVERY, and ESP from {src}")
                 except Exception as p_err:
                     log_msg(f"ERROR preserving live initramfs for recovery: {p_err}")
 
             def deploy_kernel_to_recovery():
-                """Deploy the live/recovery kernel to the recovery partition and ESP, and generate refind_linux.conf."""
+                """Deploy the live/recovery kernel to PULSAR_OS (@/boot), ESP, and PULSAR_RECOVERY."""
                 if "TEST_MODE" in os.environ or not is_efi:
                     return
                 kernel_cand = [
-                    # Dedicated recovery kernel if provided by the ISO
                     "/run/archiso/bootmnt/recovery/vmlinuz-recovery",
                     "/run/live/medium/recovery/vmlinuz-recovery",
                     "/recovery/vmlinuz-recovery",
-                    # Live media mounted paths
                     "/run/live/medium/live/vmlinuz",
                     "/lib/live/mount/medium/live/vmlinuz",
                     "/live/vmlinuz",
@@ -1470,8 +1470,10 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                         log_msg("ERROR: no kernel found - the recovery entry will not boot")
                         return
                     esp_root = "/mnt/boot/efi"
+                    os.makedirs("/mnt/boot", exist_ok=True)
                     os.makedirs("/mnt/recovery/boot", exist_ok=True)
                     os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
+                    shutil.copy2(found_k, "/mnt/boot/vmlinuz-recovery")
                     shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-recovery")
                     shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-linux")
                     shutil.copy2(found_k, "/mnt/recovery/vmlinuz-recovery")
@@ -1490,7 +1492,7 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                         f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
 
                     subprocess.run(["sync"])
-                    log_msg(f"Recovery kernel deployed: {found_k} -> /mnt/recovery/boot/vmlinuz-recovery & {esp_root}/EFI/recovery/")
+                    log_msg(f"Recovery kernel deployed to PULSAR_OS, PULSAR_RECOVERY, and ESP from {found_k}")
                 except Exception as cp_err:
                     log_msg(f"ERROR deploying recovery kernel: {cp_err}")
 
@@ -1561,13 +1563,12 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                             "\n"
                             'menuentry "Pulsar OS Recovery" {\n'
                             f"    icon {icon_rec}\n"
-                            "    volume EFI\n"
-                            "    loader /EFI/recovery/vmlinuz-recovery\n"
-                            "    initrd /EFI/recovery/initramfs-recovery.img\n"
+                            "    volume PULSAR_OS\n"
+                            "    loader /@/boot/vmlinuz-recovery\n"
+                            "    initrd /@/boot/initramfs-recovery.img\n"
                             f'    options "{rec_opts}"\n'
-                            '    submenuentry "Boot Recovery (.efi loader)" {\n'
-                            "        volume EFI\n"
-                            "        loader /EFI/recovery/vmlinuz-recovery.efi\n"
+                            '    submenuentry "Boot Recovery from ESP" {\n'
+                            "        loader /EFI/recovery/vmlinuz-recovery\n"
                             "        initrd /EFI/recovery/initramfs-recovery.img\n"
                             f'        options "{rec_opts}"\n'
                             "    }\n"
