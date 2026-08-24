@@ -1551,14 +1551,13 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                             "\n"
                             'menuentry "Pulsar OS Recovery" {\n'
                             f"    icon {icon_rec}\n"
-                            "    volume PULSAR_RECOVERY\n"
-                            "    loader /boot/vmlinuz-recovery\n"
-                            "    initrd /boot/initramfs-recovery.img\n"
+                            "    loader /EFI/recovery/vmlinuz-recovery.efi\n"
+                            "    initrd /EFI/recovery/initramfs-recovery.img\n"
                             f'    options "{rec_opts}"\n'
-                            '    submenuentry "Boot Recovery from ESP" {\n'
-                            "        volume EFI\n"
-                            "        loader /EFI/recovery/vmlinuz-recovery.efi\n"
-                            "        initrd /EFI/recovery/initramfs-recovery.img\n"
+                            '    submenuentry "Boot Recovery from PULSAR_RECOVERY partition" {\n'
+                            "        volume PULSAR_RECOVERY\n"
+                            "        loader /boot/vmlinuz-recovery\n"
+                            "        initrd /boot/initramfs-recovery.img\n"
                             f'        options "{rec_opts}"\n'
                             "    }\n"
                             '    submenuentry "Internet Recovery" {\n'
