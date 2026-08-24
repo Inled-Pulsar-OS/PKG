@@ -1394,33 +1394,27 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     return
                 try:
                     candidates = [
+                        # Dedicated Debian recovery initrd
+                        "/recovery/initramfs-recovery.img",
+                        "/usr/share/pulsaros-recovery/initramfs-recovery.img",
                         "/run/archiso/bootmnt/recovery/initramfs-recovery.img",
                         "/run/live/medium/recovery/initramfs-recovery.img",
-                        "/recovery/initramfs-recovery.img",
-                        "/run/live/medium/live/initrd",
-                        "/run/live/medium/live/initrd.img",
-                        "/lib/live/mount/medium/live/initrd",
-                        "/lib/live/mount/medium/live/initrd.img",
-                        "/live/initrd",
-                        "/live/initrd.img",
-                        "/run/archiso/bootmnt/live/initrd",
-                        "/run/archiso/bootmnt/EFI/BOOT/initrd",
-                        "/run/archiso/bootmnt/arch/boot/x86_64/initramfs-linux.img",
+                        "/mnt/usr/share/pulsaros-recovery/initramfs-recovery.img",
+                        "/mnt/recovery/initramfs-recovery.img",
                     ]
-                    for root_dir in ("/run/archiso", "/run/live", "/lib/live"):
-                        if os.path.exists(root_dir):
-                            for p in glob.glob(f"{root_dir}/**/initr*", recursive=True):
-                                if os.path.isfile(p) and not p.endswith(".kver"):
-                                    candidates.append(p)
-
-                    for p in sorted(glob.glob("/boot/initramfs-*.img") + glob.glob("/boot/initrd.img*") + glob.glob("/boot/initrd*")):
-                        if "fallback" not in p and "ucode" not in p and not p.endswith(".kver"):
-                            candidates.append(p)
-                    for p in sorted(glob.glob("/mnt/boot/initramfs-*.img") + glob.glob("/mnt/boot/initrd.img*") + glob.glob("/mnt/boot/initrd*")):
-                        if "fallback" not in p and "ucode" not in p and not p.endswith(".kver"):
-                            candidates.append(p)
-
                     src = next((p for p in candidates if os.path.isfile(p) and os.path.getsize(p) > 1024), None)
+                    if not src:
+                        # Fallback to general live media paths
+                        for root_dir in ("/run/archiso", "/run/live", "/lib/live"):
+                            if os.path.exists(root_dir):
+                                for p in glob.glob(f"{root_dir}/**/initr*", recursive=True):
+                                    if os.path.isfile(p) and not p.endswith(".kver"):
+                                        candidates.append(p)
+                        for p in sorted(glob.glob("/boot/initramfs-*.img") + glob.glob("/boot/initrd.img*") + glob.glob("/boot/initrd*")):
+                            if "fallback" not in p and "ucode" not in p and not p.endswith(".kver"):
+                                candidates.append(p)
+                        src = next((p for p in candidates if os.path.isfile(p) and os.path.getsize(p) > 1024), None)
+
                     if not src:
                         log_msg("ERROR: no live initramfs found - the recovery entry will not boot")
                         return
@@ -1443,28 +1437,26 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                 if "TEST_MODE" in os.environ or not is_efi:
                     return
                 kernel_cand = [
+                    # Dedicated Debian recovery kernel
+                    "/recovery/vmlinuz-recovery",
+                    "/usr/share/pulsaros-recovery/vmlinuz-recovery",
                     "/run/archiso/bootmnt/recovery/vmlinuz-recovery",
                     "/run/live/medium/recovery/vmlinuz-recovery",
-                    "/recovery/vmlinuz-recovery",
-                    "/run/live/medium/live/vmlinuz",
-                    "/lib/live/mount/medium/live/vmlinuz",
-                    "/live/vmlinuz",
-                    "/run/archiso/bootmnt/live/vmlinuz",
-                    "/run/archiso/bootmnt/EFI/BOOT/vmlinuz",
-                    "/run/archiso/bootmnt/arch/boot/x86_64/vmlinuz-linux",
+                    "/mnt/usr/share/pulsaros-recovery/vmlinuz-recovery",
+                    "/mnt/recovery/vmlinuz-recovery",
                 ]
-                for root_dir in ("/run/archiso", "/run/live", "/lib/live"):
-                    if os.path.exists(root_dir):
-                        for p in glob.glob(f"{root_dir}/**/vmlinuz*", recursive=True):
-                            if os.path.isfile(p) and not p.endswith(".kver"):
-                                kernel_cand.append(p)
-
-                kernel_cand += [
-                    "/mnt/boot/vmlinuz-linux",
-                    "/mnt/boot/vmlinuz",
-                ] + sorted(glob.glob("/mnt/boot/vmlinuz-*")) + sorted(glob.glob("/boot/vmlinuz-*"))
-                
                 found_k = next((k for k in kernel_cand if os.path.isfile(k) and not k.endswith(".kver") and os.path.getsize(k) > 1024), None)
+                if not found_k:
+                    for root_dir in ("/run/archiso", "/run/live", "/lib/live"):
+                        if os.path.exists(root_dir):
+                            for p in glob.glob(f"{root_dir}/**/vmlinuz*", recursive=True):
+                                if os.path.isfile(p) and not p.endswith(".kver"):
+                                    kernel_cand.append(p)
+                    kernel_cand += [
+                        "/mnt/boot/vmlinuz-linux",
+                        "/mnt/boot/vmlinuz",
+                    ] + sorted(glob.glob("/mnt/boot/vmlinuz-*")) + sorted(glob.glob("/boot/vmlinuz-*"))
+                    found_k = next((k for k in kernel_cand if os.path.isfile(k) and not k.endswith(".kver") and os.path.getsize(k) > 1024), None)
                 try:
                     if not found_k:
                         log_msg("ERROR: no kernel found - the recovery entry will not boot")
