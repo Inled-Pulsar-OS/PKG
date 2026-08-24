@@ -25,6 +25,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Meta from 'gi://Meta';
+import Pango from 'gi://Pango';
 import Gst from 'gi://Gst';
 import GstApp from 'gi://GstApp';
 
@@ -441,13 +442,6 @@ const PowerConfirmDialog = GObject.registerClass({
 
             return GLib.SOURCE_CONTINUE;
         });
-    }
-
-    _cleanup() {
-        if (this._progressTimerId) {
-            GLib.source_remove(this._progressTimerId);
-            this._progressTimerId = 0;
-        }
     }
 
     destroy() {

@@ -323,10 +323,43 @@ done
 rm -f /tmp/nautilus_fix.css
 
 # 2.3 Pulsar OS - Dock Icon Hover Transparency & Zero Shadow Fix for GNOME Shell Theme
+# NOTA: los selectores deben igualar/superar la especificidad del propio tema
+# (#dash .dash-item-container ...:hover .overview-icon y la variante con
+# #dashtodockContainer), si no, el gris de hover sigue ganando.
 cat <<'DOCK_HOVER_FIX' > /tmp/dock_hover_fix.css
 /* ==============================================================================
  * Pulsar OS - Dock Icon Hover Transparency & Zero Shadow Fix
  * ============================================================================== */
+#dashtodockContainer #dash .dash-item-container .show-apps .overview-icon,
+#dashtodockContainer #dash .dash-item-container .show-apps:hover .overview-icon,
+#dashtodockContainer #dash .dash-item-container .show-apps:focus .overview-icon,
+#dashtodockContainer #dash .dash-item-container .show-apps:active .overview-icon,
+#dashtodockContainer #dash .dash-item-container .show-apps:highlighted .overview-icon,
+#dashtodockContainer #dash .dash-item-container .show-apps:selected .overview-icon,
+#dashtodockContainer #dash .dash-item-container .show-apps:checked .overview-icon,
+#dashtodockContainer #dash .dash-item-container .overview-tile .overview-icon,
+#dashtodockContainer #dash .dash-item-container .overview-tile:hover .overview-icon,
+#dashtodockContainer #dash .dash-item-container .overview-tile:focus .overview-icon,
+#dashtodockContainer #dash .dash-item-container .overview-tile:active .overview-icon,
+#dashtodockContainer #dash .dash-item-container .overview-tile:highlighted .overview-icon,
+#dashtodockContainer #dash .dash-item-container .overview-tile:selected .overview-icon,
+#dashtodockContainer #dash .dash-item-container .overview-tile:checked .overview-icon,
+#dash .dash-item-container .show-apps .overview-icon,
+#dash .dash-item-container .show-apps:hover .overview-icon,
+#dash .dash-item-container .show-apps:focus .overview-icon,
+#dash .dash-item-container .show-apps:active .overview-icon,
+#dash .dash-item-container .show-apps:highlighted .overview-icon,
+#dash .dash-item-container .show-apps:selected .overview-icon,
+#dash .dash-item-container .show-apps:checked .overview-icon,
+#dash .dash-item-container .overview-tile .overview-icon,
+#dash .dash-item-container .overview-tile:hover .overview-icon,
+#dash .dash-item-container .overview-tile:focus .overview-icon,
+#dash .dash-item-container .overview-tile:active .overview-icon,
+#dash .dash-item-container .overview-tile:highlighted .overview-icon,
+#dash .dash-item-container .overview-tile:selected .overview-icon,
+#dash .dash-item-container .overview-tile:checked .overview-icon,
+#dashtodockContainer .app-well-app .overview-icon,
+#dashtodockContainer .app-well-app:hover .overview-icon,
 #dashtodockContainer .app-well-app,
 #dashtodockContainer .app-well-app:hover,
 #dashtodockContainer .app-well-app:focus,
@@ -339,37 +372,56 @@ cat <<'DOCK_HOVER_FIX' > /tmp/dock_hover_fix.css
 #dashtodockContainer .show-apps:active,
 #dashtodockContainer .show-apps:selected,
 #dashtodockContainer .show-apps:checked,
-#dashtodockContainer .overview-tile,
-#dashtodockContainer .overview-tile:hover,
-#dashtodockContainer .overview-tile:focus,
-#dashtodockContainer .overview-tile:active,
-#dashtodockContainer .overview-tile:selected,
-#dashtodockContainer .overview-tile:checked,
-#dashtodockContainer .dash-item-container,
-#dashtodockContainer .dash-item-container > StButton,
-#dashtodockContainer .dash-item-container > StButton:hover,
-#dashtodockContainer .dash-item-container > StButton:focus,
-#dashtodockContainer .dash-item-container > StButton:active,
-#dashtodockContainer .dash-item-container > StButton:checked,
 #dashtodockContainer .overview-icon,
 #dashtodockContainer .overview-icon:hover,
 #dashtodockContainer .overview-icon:focus,
 #dashtodockContainer .overview-icon:active,
 #dashtodockContainer .overview-icon:selected,
 #dashtodockContainer .overview-icon:checked,
-#dashtodockContainer .app-well-app .overview-icon,
-#dashtodockContainer .app-well-app:hover .overview-icon,
-#dashtodockContainer .show-apps .overview-icon,
-#dashtodockContainer .show-apps:hover .overview-icon,
-#dash .app-well-app:hover .overview-icon,
-#dash .show-apps:hover .overview-icon {
+#dashtodockContainer .dash-item-container > StButton,
+#dashtodockContainer .dash-item-container > StButton:hover,
+#dashtodockContainer .dash-item-container > StButton:focus,
+#dashtodockContainer .dash-item-container > StButton:active,
+#dashtodockContainer .dash-item-container > StButton:checked {
     background-color: transparent !important;
     background-image: none !important;
     box-shadow: none !important;
     icon-shadow: none !important;
-    text-shadow: none !important;
     border: none !important;
     border-color: transparent !important;
+}
+
+/* Nivel tile: el tema tambien pinta .overview-tile:hover/.show-apps:hover
+ * directamente (sin prefijo #dash), cubrirlo tambien. */
+#dash .dash-item-container .overview-tile,
+#dash .dash-item-container .overview-tile:hover,
+#dash .dash-item-container .overview-tile:focus,
+#dash .dash-item-container .overview-tile:active,
+#dash .dash-item-container .overview-tile:highlighted,
+#dash .dash-item-container .overview-tile:selected,
+#dash .dash-item-container .overview-tile:checked,
+#dash .dash-item-container .show-apps,
+#dash .dash-item-container .show-apps:hover,
+#dash .dash-item-container .show-apps:focus,
+#dash .dash-item-container .show-apps:active,
+#dash .dash-item-container .show-apps:highlighted,
+#dash .dash-item-container .show-apps:selected,
+#dash .dash-item-container .show-apps:checked,
+#dashtodockContainer #dash .dash-item-container .overview-tile:hover,
+#dashtodockContainer #dash .dash-item-container .overview-tile:focus,
+#dashtodockContainer #dash .dash-item-container .overview-tile:active,
+#dashtodockContainer #dash .dash-item-container .overview-tile:highlighted,
+#dashtodockContainer #dash .dash-item-container .overview-tile:selected,
+#dashtodockContainer #dash .dash-item-container .overview-tile:checked,
+#dashtodockContainer #dash .dash-item-container .show-apps:hover,
+#dashtodockContainer #dash .dash-item-container .show-apps:focus,
+#dashtodockContainer #dash .dash-item-container .show-apps:active,
+#dashtodockContainer #dash .dash-item-container .show-apps:highlighted,
+#dashtodockContainer #dash .dash-item-container .show-apps:selected,
+#dashtodockContainer #dash .dash-item-container .show-apps:checked {
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
 }
 DOCK_HOVER_FIX
 
