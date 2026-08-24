@@ -1095,6 +1095,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 
             is_efi = os.path.exists("/sys/firmware/efi")
             is_arch = os.path.exists("/etc/pacman.conf")
+            esp_root = "/mnt/boot/efi"
             
             # Unmount any active mounts on the selected disk first to prevent device busy errors
             if "TEST_MODE" not in os.environ:
@@ -1423,11 +1424,13 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     if not src:
                         log_msg("ERROR: no live initramfs found - the recovery entry will not boot")
                         return
+                    esp_root = "/mnt/boot/efi"
                     os.makedirs("/mnt/recovery/boot", exist_ok=True)
                     os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
                     shutil.copy2(src, "/mnt/recovery/boot/initramfs-recovery.img")
                     shutil.copy2(src, "/mnt/recovery/initramfs-recovery.img")
                     shutil.copy2(src, f"{esp_root}/EFI/recovery/initramfs-recovery.img")
+                    shutil.copy2(src, f"{esp_root}/EFI/recovery/initrd.img")
                     log_msg(f"Recovery initramfs preserved: {src} -> /mnt/recovery/boot/initramfs-recovery.img & {esp_root}/EFI/recovery/")
                 except Exception as p_err:
                     log_msg(f"ERROR preserving live initramfs for recovery: {p_err}")
@@ -1437,9 +1440,11 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                 if "TEST_MODE" in os.environ or not is_efi:
                     return
                 kernel_cand = [
+                    # Dedicated recovery kernel if provided by the ISO
                     "/run/archiso/bootmnt/recovery/vmlinuz-recovery",
                     "/run/live/medium/recovery/vmlinuz-recovery",
                     "/recovery/vmlinuz-recovery",
+                    # Live media mounted paths
                     "/run/live/medium/live/vmlinuz",
                     "/lib/live/mount/medium/live/vmlinuz",
                     "/live/vmlinuz",
@@ -1463,6 +1468,7 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     if not found_k:
                         log_msg("ERROR: no kernel found - the recovery entry will not boot")
                         return
+                    esp_root = "/mnt/boot/efi"
                     os.makedirs("/mnt/recovery/boot", exist_ok=True)
                     os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
                     shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-recovery")
@@ -1470,6 +1476,8 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     shutil.copy2(found_k, "/mnt/recovery/vmlinuz-recovery")
                     shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery.efi")
                     shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery")
+                    shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz.efi")
+                    shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz")
                     
                     rec_opts = "boot=live components username=live autologin cow_spacesize=4G quiet splash"
                     
@@ -1663,18 +1671,6 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                                     capture_output=True,
                                 )
                             for rel in stale_files:
-                                subprocess.run(
-                                    ["rm", "-f", f"{esp_root}/{rel}"],
-                                    capture_output=True,
-                                )
-                            for rel in (
-                                "EFI/recovery/vmlinuz.efi",
-                                "EFI/recovery/vmlinuz-linux.efi",
-                                "EFI/recovery/vmlinuz",
-                                "EFI/recovery/vmlinuz-linux",
-                                "EFI/recovery/initrd.img",
-                                "EFI/recovery/initramfs-linux.img",
-                            ):
                                 subprocess.run(
                                     ["rm", "-f", f"{esp_root}/{rel}"],
                                     capture_output=True,
