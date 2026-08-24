@@ -1294,29 +1294,59 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     err_output = proc.stderr.read()
                     raise Exception(f"System replication failed (code {proc.returncode})\n{err_output}")
                 
-            # Populate Recovery Partition with base recovery image and assistant.
+            # Populate Recovery Partition with dedicated Debian Recovery image, clean base image, and assistant.
             try:
                 os.makedirs("/mnt/recovery/images/x86_64", exist_ok=True)
                 os.makedirs("/mnt/recovery/live", exist_ok=True)
-                squash_sources = [
+                os.makedirs("/mnt/recovery/boot", exist_ok=True)
+
+                # 1. Recovery OS SquashFS (Debian + Fluxbox + Rust Assistant)
+                rec_squash_sources = [
+                    "/run/archiso/bootmnt/recovery/filesystem.squashfs",
+                    "/run/live/medium/recovery/filesystem.squashfs",
+                    "/lib/live/mount/medium/recovery/filesystem.squashfs",
+                    "/recovery/filesystem.squashfs",
+                    "/run/live/medium/live/filesystem.squashfs",
+                    "/lib/live/mount/medium/live/filesystem.squashfs",
+                    "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
+                    "/run/archiso/bootmnt/live/filesystem.squashfs",
+                    "/run/archiso/airootfs.sfs",
+                    "/live/filesystem.squashfs",
+                ]
+                found_rec_squash = next((p for p in rec_squash_sources if os.path.isfile(p)), None)
+                if found_rec_squash and "TEST_MODE" not in os.environ:
+                    deb_dst = "/mnt/recovery/live/filesystem.squashfs"
+                    arch_dst = "/mnt/recovery/images/x86_64/airootfs.sfs"
+                    shutil.copy2(found_rec_squash, deb_dst)
+                    if not os.path.exists(arch_dst):
+                        try:
+                            os.link(deb_dst, arch_dst)
+                        except Exception:
+                            shutil.copy2(deb_dst, arch_dst)
+                    log_msg(f"Recovery OS squashfs deployed from {found_rec_squash} -> {deb_dst}")
+
+                # 2. Base System SquashFS (for restoring root @ subvolume)
+                base_squash_sources = [
+                    "/run/archiso/bootmnt/images/pulsaros-base.squashfs",
+                    "/run/live/medium/images/pulsaros-base.squashfs",
+                    "/recovery/images/pulsaros-base.squashfs",
                     "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
                     "/run/archiso/bootmnt/live/filesystem.squashfs",
                     "/run/live/medium/live/filesystem.squashfs",
                     "/lib/live/mount/medium/live/filesystem.squashfs",
-                    "/run/archiso/airootfs.sfs",
                     "/live/filesystem.squashfs",
                 ]
-                found_squash = next((p for p in squash_sources if os.path.isfile(p)), None)
-                if found_squash and "TEST_MODE" not in os.environ:
-                    arch_dst = "/mnt/recovery/images/x86_64/airootfs.sfs"
-                    deb_dst = "/mnt/recovery/live/filesystem.squashfs"
-                    shutil.copy2(found_squash, arch_dst)
-                    if not os.path.exists(deb_dst):
+                found_base_squash = next((p for p in base_squash_sources if os.path.isfile(p)), None)
+                if found_base_squash and "TEST_MODE" not in os.environ:
+                    base_dst = "/mnt/recovery/images/pulsaros-base.squashfs"
+                    if found_base_squash != deb_dst:
+                        shutil.copy2(found_base_squash, base_dst)
+                    else:
                         try:
-                            os.link(arch_dst, deb_dst)
+                            os.link(deb_dst, base_dst)
                         except Exception:
-                            shutil.copy2(arch_dst, deb_dst)
-                    log_msg(f"Recovery squashfs deployed to {arch_dst} and {deb_dst}")
+                            shutil.copy2(deb_dst, base_dst)
+                    log_msg(f"Base system restoration image deployed from {found_base_squash} -> {base_dst}")
             except Exception as rec_copy_err:
                 print(f"Notice: Recovery squashfs copy: {rec_copy_err}")
 
@@ -1358,25 +1388,25 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     f.write(fstab_content)
                 
             def preserve_live_initramfs_for_recovery():
-                """Save the live initramfs BEFORE 'mkinitcpio -P' or 'update-initramfs'
-                regenerates it without the live/archiso hooks.
-
-                The recovery entry boots the recovery environment from PULSAR_RECOVERY,
-                which requires an initramfs with live-boot or archiso hooks."""
+                """Deploy the live/recovery initramfs to the recovery partition."""
                 if "TEST_MODE" in os.environ or not is_efi:
                     return
                 try:
                     candidates = [
-                        # Live media mounted paths (Arch & Debian)
-                        "/run/archiso/bootmnt/live/initrd",
-                        "/run/archiso/bootmnt/EFI/BOOT/initrd",
-                        "/run/archiso/bootmnt/arch/boot/x86_64/initramfs-linux.img",
+                        # Dedicated recovery initrd if provided by the ISO
+                        "/run/archiso/bootmnt/recovery/initramfs-recovery.img",
+                        "/run/live/medium/recovery/initramfs-recovery.img",
+                        "/recovery/initramfs-recovery.img",
+                        # Live media mounted paths (Debian & Arch)
                         "/run/live/medium/live/initrd",
                         "/run/live/medium/live/initrd.img",
                         "/lib/live/mount/medium/live/initrd",
                         "/lib/live/mount/medium/live/initrd.img",
                         "/live/initrd",
                         "/live/initrd.img",
+                        "/run/archiso/bootmnt/live/initrd",
+                        "/run/archiso/bootmnt/EFI/BOOT/initrd",
+                        "/run/archiso/bootmnt/arch/boot/x86_64/initramfs-linux.img",
                     ]
                     for root_dir in ("/run/archiso", "/run/live", "/lib/live"):
                         if os.path.exists(root_dir):
@@ -1402,16 +1432,21 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     log_msg(f"ERROR preserving live initramfs for recovery: {p_err}")
 
             def deploy_kernel_to_recovery():
-                """Copy the live kernel to the recovery partition and generate refind_linux.conf."""
+                """Deploy the live/recovery kernel to the recovery partition and generate refind_linux.conf."""
                 if "TEST_MODE" in os.environ or not is_efi:
                     return
                 kernel_cand = [
-                    "/run/archiso/bootmnt/live/vmlinuz",
-                    "/run/archiso/bootmnt/EFI/BOOT/vmlinuz",
-                    "/run/archiso/bootmnt/arch/boot/x86_64/vmlinuz-linux",
+                    # Dedicated recovery kernel if provided by the ISO
+                    "/run/archiso/bootmnt/recovery/vmlinuz-recovery",
+                    "/run/live/medium/recovery/vmlinuz-recovery",
+                    "/recovery/vmlinuz-recovery",
+                    # Live media mounted paths
                     "/run/live/medium/live/vmlinuz",
                     "/lib/live/mount/medium/live/vmlinuz",
                     "/live/vmlinuz",
+                    "/run/archiso/bootmnt/live/vmlinuz",
+                    "/run/archiso/bootmnt/EFI/BOOT/vmlinuz",
+                    "/run/archiso/bootmnt/arch/boot/x86_64/vmlinuz-linux",
                 ]
                 for root_dir in ("/run/archiso", "/run/live", "/lib/live"):
                     if os.path.exists(root_dir):
@@ -1433,11 +1468,8 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-recovery")
                     shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-linux")
                     
-                    is_archiso = os.path.exists("/run/archiso") or is_arch
-                    if is_archiso:
-                        rec_opts = "archisobasedir=images archisolabel=PULSAR_RECOVERY cow_spacesize=4G quiet splash"
-                    else:
-                        rec_opts = "boot=live components username=live autologin cow_spacesize=4G quiet splash"
+                    # Dedicated Debian live-boot options for the recovery partition
+                    rec_opts = "boot=live components username=live autologin cow_spacesize=4G quiet splash"
                     
                     with open("/mnt/recovery/boot/refind_linux.conf", "w") as f:
                         f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
@@ -1478,14 +1510,9 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     if os.path.exists(f"/mnt/boot/{uc}")
                 )
 
-                # Determine recovery options
-                is_archiso = os.path.exists("/run/archiso") or is_arch
-                if is_archiso:
-                    rec_opts = "archisobasedir=images archisolabel=PULSAR_RECOVERY cow_spacesize=4G quiet splash"
-                    rec_net_opts = "archisobasedir=images archisolabel=PULSAR_RECOVERY cow_spacesize=4G internet_recovery=1 quiet splash"
-                else:
-                    rec_opts = "boot=live components username=live autologin cow_spacesize=4G quiet splash"
-                    rec_net_opts = "boot=live components username=live autologin cow_spacesize=4G internet_recovery=1 quiet splash"
+                # Dedicated Debian Live Recovery boot options
+                rec_opts = "boot=live components username=live autologin cow_spacesize=4G quiet splash"
+                rec_net_opts = "boot=live components username=live autologin cow_spacesize=4G internet_recovery=1 quiet splash"
 
                 menu_block = (
                     f"\n{MENU_BEGIN}\n"
