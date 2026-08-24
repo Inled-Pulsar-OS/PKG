@@ -1303,10 +1303,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
                 # 1. Recovery OS SquashFS (Debian + Fluxbox + Rust Assistant)
                 rec_squash_sources = [
+                    "/recovery/filesystem.squashfs",
+                    "/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
+                    "/mnt/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
                     "/run/archiso/bootmnt/recovery/filesystem.squashfs",
                     "/run/live/medium/recovery/filesystem.squashfs",
                     "/lib/live/mount/medium/recovery/filesystem.squashfs",
-                    "/recovery/filesystem.squashfs",
                     "/run/live/medium/live/filesystem.squashfs",
                     "/lib/live/mount/medium/live/filesystem.squashfs",
                     "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
@@ -1317,8 +1319,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 found_rec_squash = next((p for p in rec_squash_sources if os.path.isfile(p)), None)
                 if found_rec_squash and "TEST_MODE" not in os.environ:
                     deb_dst = "/mnt/recovery/live/filesystem.squashfs"
-                    arch_dst = "/mnt/recovery/images/x86_64/airootfs.sfs"
                     shutil.copy2(found_rec_squash, deb_dst)
+                    try:
+                        shutil.copy2(found_rec_squash, "/mnt/recovery/filesystem.squashfs")
+                    except Exception:
+                        pass
+                    try:
+                        os.makedirs("/mnt/live", exist_ok=True)
+                        shutil.copy2(found_rec_squash, "/mnt/live/filesystem.squashfs")
+                    except Exception:
+                        pass
+                    arch_dst = "/mnt/recovery/images/x86_64/airootfs.sfs"
                     if not os.path.exists(arch_dst):
                         try:
                             os.link(deb_dst, arch_dst)
@@ -1368,25 +1379,31 @@ class RecoveryWindow(Adw.ApplicationWindow):
 UUID={root_uuid}            /               btrfs   subvol=@,compress=zstd:1,space_cache=v2         0       0
 UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1,space_cache=v2     0       0
 UUID={efi_uuid}             /boot/efi       vfat    umask=0077                                      0       2
-UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail                         0       2
+UUID={rec_uuid}             /recovery       ext4    defaults,noatime                                0       2
 """
+                if "TEST_MODE" not in os.environ:
+                    os.makedirs("/mnt/etc", exist_ok=True)
+                    os.makedirs("/mnt/dev", exist_ok=True)
+                    os.makedirs("/mnt/proc", exist_ok=True)
+                    os.makedirs("/mnt/sys", exist_ok=True)
+                    os.makedirs("/mnt/run", exist_ok=True)
+                    with open("/mnt/etc/fstab", "w") as f:
+                        f.write(fstab_content)
             else:
-                fstab_content = f"""# /etc/fstab: Pulsar OS Btrfs Configuration
+                fstab_content = f"""# /etc/fstab: Pulsar OS Btrfs Configuration (BIOS)
 # <file system>             <mount point>   <type>  <options>                                       <dump>  <pass>
 UUID={root_uuid}            /               btrfs   subvol=@,compress=zstd:1,space_cache=v2         0       0
 UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1,space_cache=v2     0       0
-UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail                         0       2
+UUID={rec_uuid}             /recovery       ext4    defaults,noatime                                0       2
 """
-            if "TEST_MODE" in os.environ:
-                print(f"[TEST_MODE] Simulating writing fstab content:\n{fstab_content}")
-            else:
-                os.makedirs("/mnt/etc", exist_ok=True)
-                os.makedirs("/mnt/dev", exist_ok=True)
-                os.makedirs("/mnt/proc", exist_ok=True)
-                os.makedirs("/mnt/sys", exist_ok=True)
-                os.makedirs("/mnt/run", exist_ok=True)
-                with open("/mnt/etc/fstab", "w") as f:
-                    f.write(fstab_content)
+                if "TEST_MODE" not in os.environ:
+                    os.makedirs("/mnt/etc", exist_ok=True)
+                    os.makedirs("/mnt/dev", exist_ok=True)
+                    os.makedirs("/mnt/proc", exist_ok=True)
+                    os.makedirs("/mnt/sys", exist_ok=True)
+                    os.makedirs("/mnt/run", exist_ok=True)
+                    with open("/mnt/etc/fstab", "w") as f:
+                        f.write(fstab_content)
                 
             def preserve_live_initramfs_for_recovery():
                 """Deploy the live/recovery initramfs to PULSAR_OS (@/boot), ESP, and PULSAR_RECOVERY."""
@@ -1474,7 +1491,7 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz.efi")
                     shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz")
                     
-                    rec_opts = "boot=live components username=live autologin cow_spacesize=4G quiet splash"
+                    rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live quiet splash"
                     
                     with open("/mnt/recovery/boot/refind_linux.conf", "w") as f:
                         f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
@@ -1516,7 +1533,7 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     if os.path.exists(f"/mnt/boot/{uc}")
                 )
 
-                rec_opts = "boot=live components username=live autologin cow_spacesize=4G quiet splash"
+                rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live quiet splash"
                 rec_net_opts = "boot=live components username=live autologin cow_spacesize=4G internet_recovery=1 quiet splash"
 
                 refind_main = f"{esp_root}/EFI/refind"
@@ -1568,7 +1585,7 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                             "        volume PULSAR_RECOVERY\n"
                             "        loader /boot/vmlinuz-recovery\n"
                             "        initrd /boot/initramfs-recovery.img\n"
-                            f'        options "{rec_opts}"\n'
+                            f'        options "{rec_opts.replace("live-media=any", "live-media=/dev/disk/by-label/PULSAR_RECOVERY")}"\n'
                             "    }\n"
                             '    submenuentry "Internet Recovery" {\n'
                             f'        options "{rec_net_opts}"\n'
