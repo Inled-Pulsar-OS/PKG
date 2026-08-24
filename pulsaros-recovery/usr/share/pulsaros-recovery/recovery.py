@@ -1294,19 +1294,29 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     err_output = proc.stderr.read()
                     raise Exception(f"System replication failed (code {proc.returncode})\n{err_output}")
                 
-            # Populate Recovery Partition with base recovery image and assistant
+            # Populate Recovery Partition with base recovery image and assistant.
             try:
-                os.makedirs("/mnt/recovery/images", exist_ok=True)
+                os.makedirs("/mnt/recovery/images/x86_64", exist_ok=True)
+                os.makedirs("/mnt/recovery/live", exist_ok=True)
                 squash_sources = [
                     "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
                     "/run/archiso/bootmnt/live/filesystem.squashfs",
                     "/run/live/medium/live/filesystem.squashfs",
                     "/lib/live/mount/medium/live/filesystem.squashfs",
-                    "/run/archiso/airootfs.sfs"
+                    "/run/archiso/airootfs.sfs",
+                    "/live/filesystem.squashfs",
                 ]
-                found_squash = next((p for p in squash_sources if os.path.exists(p)), None)
+                found_squash = next((p for p in squash_sources if os.path.isfile(p)), None)
                 if found_squash and "TEST_MODE" not in os.environ:
-                    shutil.copy2(found_squash, "/mnt/recovery/images/pulsaros-base.squashfs")
+                    arch_dst = "/mnt/recovery/images/x86_64/airootfs.sfs"
+                    deb_dst = "/mnt/recovery/live/filesystem.squashfs"
+                    shutil.copy2(found_squash, arch_dst)
+                    if not os.path.exists(deb_dst):
+                        try:
+                            os.link(arch_dst, deb_dst)
+                        except Exception:
+                            shutil.copy2(arch_dst, deb_dst)
+                    log_msg(f"Recovery squashfs deployed to {arch_dst} and {deb_dst}")
             except Exception as rec_copy_err:
                 print(f"Notice: Recovery squashfs copy: {rec_copy_err}")
 
@@ -1347,6 +1357,210 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                 with open("/mnt/etc/fstab", "w") as f:
                     f.write(fstab_content)
                 
+            def preserve_live_initramfs_for_recovery():
+                """Save the live initramfs BEFORE 'mkinitcpio -P' or 'update-initramfs'
+                regenerates it without the live/archiso hooks.
+
+                The recovery entry boots the recovery environment from PULSAR_RECOVERY,
+                which requires an initramfs with live-boot or archiso hooks."""
+                if "TEST_MODE" in os.environ or not is_efi:
+                    return
+                try:
+                    candidates = [
+                        "/run/archiso/bootmnt/live/initrd",
+                        "/run/archiso/bootmnt/EFI/BOOT/initrd",
+                        "/run/live/medium/live/initrd",
+                        "/lib/live/mount/medium/live/initrd",
+                        "/run/live/medium/live/initrd.img",
+                        "/lib/live/mount/medium/live/initrd.img",
+                        "/live/initrd",
+                        "/live/initrd.img",
+                    ]
+                    # Also check /mnt/boot before mkinitcpio regenerates it
+                    for p in sorted(glob.glob("/mnt/boot/initramfs-*.img") + glob.glob("/mnt/boot/initrd.img*") + glob.glob("/mnt/boot/initrd*")):
+                        if "fallback" not in p and "ucode" not in p and not p.endswith(".kver"):
+                            candidates.append(p)
+                    # Also check host /boot
+                    for p in sorted(glob.glob("/boot/initramfs-*.img") + glob.glob("/boot/initrd.img*") + glob.glob("/boot/initrd*")):
+                        if "fallback" not in p and "ucode" not in p and not p.endswith(".kver"):
+                            candidates.append(p)
+
+                    src = next((p for p in candidates if os.path.isfile(p) and os.path.getsize(p) > 1024), None)
+                    if not src:
+                        log_msg("ERROR: no live initramfs found - the recovery entry will not boot")
+                        return
+                    os.makedirs("/mnt/recovery/boot", exist_ok=True)
+                    shutil.copy2(src, "/mnt/recovery/boot/initramfs-recovery.img")
+                    log_msg(f"Recovery initramfs preserved: {src} -> /mnt/recovery/boot/initramfs-recovery.img")
+                except Exception as p_err:
+                    log_msg(f"ERROR preserving live initramfs for recovery: {p_err}")
+
+            def deploy_kernel_to_recovery():
+                """Copy the kernel to the recovery partition and generate refind_linux.conf."""
+                if "TEST_MODE" in os.environ or not is_efi:
+                    return
+                kernel_cand = [
+                    "/run/archiso/bootmnt/live/vmlinuz",
+                    "/run/archiso/bootmnt/EFI/BOOT/vmlinuz",
+                    "/run/live/medium/live/vmlinuz",
+                    "/lib/live/mount/medium/live/vmlinuz",
+                    "/live/vmlinuz",
+                    "/mnt/boot/vmlinuz-linux",
+                    "/mnt/boot/vmlinuz",
+                ] + sorted(glob.glob("/mnt/boot/vmlinuz-*")) + sorted(glob.glob("/boot/vmlinuz-*"))
+                found_k = next((k for k in kernel_cand if os.path.isfile(k) and not k.endswith(".kver") and os.path.getsize(k) > 1024), None)
+                try:
+                    if not found_k:
+                        log_msg("ERROR: no kernel found - the recovery entry will not boot")
+                        return
+                    os.makedirs("/mnt/recovery/boot", exist_ok=True)
+                    shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-recovery")
+                    shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-linux")
+                    
+                    is_archiso = os.path.exists("/run/archiso") or is_arch
+                    if is_archiso:
+                        rec_opts = "archisobasedir=images archisolabel=PULSAR_RECOVERY cow_spacesize=4G quiet splash"
+                    else:
+                        rec_opts = "boot=live components username=live autologin cow_spacesize=4G quiet splash"
+                    
+                    with open("/mnt/recovery/boot/refind_linux.conf", "w") as f:
+                        f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
+                        f.write(f'"Boot Recovery (Debug)"     "{rec_opts.replace("quiet splash", "loglevel=7")}"\n')
+
+                    log_msg("Recovery deploy verified: /mnt/recovery/boot/vmlinuz-recovery + initramfs-recovery.img + refind_linux.conf")
+                except Exception as cp_err:
+                    log_msg(f"ERROR deploying recovery kernel: {cp_err}")
+
+            def configure_refind_menus():
+                """Write the deterministic two-entry boot menu to EVERY rEFInd
+                configuration location (NVRAM path and fallback)."""
+                if "TEST_MODE" in os.environ or not is_efi:
+                    return
+                MENU_BEGIN = "# PULSAR-MENU-BEGIN"
+                MENU_END = "# PULSAR-MENU-END"
+
+                # Detect actual installed kernel on PULSAR_OS
+                kernel_cands = sorted(glob.glob("/mnt/boot/vmlinuz-*") + glob.glob("/mnt/boot/vmlinuz"))
+                installed_k_file = next((k for k in kernel_cands if os.path.isfile(k) and not k.endswith(".kver")), None)
+                k_name = os.path.basename(installed_k_file) if installed_k_file else "vmlinuz-linux"
+
+                # Detect actual installed initramfs on PULSAR_OS
+                initrd_cands = sorted(glob.glob("/mnt/boot/initramfs-*.img") + glob.glob("/mnt/boot/initrd.img*") + glob.glob("/mnt/boot/initrd*"))
+                installed_initrd_file = next(
+                    (
+                        i for i in initrd_cands
+                        if os.path.isfile(i) and "fallback" not in i and "ucode" not in i and not i.endswith(".kver")
+                    ),
+                    None
+                )
+                initrd_name = os.path.basename(installed_initrd_file) if installed_initrd_file else "initramfs-linux.img"
+
+                # Microcode lines on Btrfs volume PULSAR_OS (prefixed with /@/boot/)
+                ucode_lines = "".join(
+                    f"    initrd /@/boot/{uc}\n"
+                    for uc in ("amd-ucode.img", "intel-ucode.img")
+                    if os.path.exists(f"/mnt/boot/{uc}")
+                )
+
+                # Determine recovery options
+                is_archiso = os.path.exists("/run/archiso") or is_arch
+                if is_archiso:
+                    rec_opts = "archisobasedir=images archisolabel=PULSAR_RECOVERY cow_spacesize=4G quiet splash"
+                    rec_net_opts = "archisobasedir=images archisolabel=PULSAR_RECOVERY cow_spacesize=4G internet_recovery=1 quiet splash"
+                else:
+                    rec_opts = "boot=live components username=live autologin cow_spacesize=4G quiet splash"
+                    rec_net_opts = "boot=live components username=live autologin cow_spacesize=4G internet_recovery=1 quiet splash"
+
+                menu_block = (
+                    f"\n{MENU_BEGIN}\n"
+                    "# Only show our explicit curated entries: exactly\n"
+                    "# 'Pulsar OS' and 'Pulsar OS Recovery'.\n"
+                    "scanfor manual,external,optical\n"
+                    'dont_scan_volumes "PULSAR_RECOVERY"\n'
+                    "default_selection 1\n"
+                    "\n"
+                    'menuentry "Pulsar OS" {\n'
+                    "    icon os_pulsaros_normal.png\n"
+                    "    volume PULSAR_OS\n"
+                    f"    loader /@/boot/{k_name}\n"
+                    f"{ucode_lines}"
+                    f"    initrd /@/boot/{initrd_name}\n"
+                    f'    options "root=UUID={root_uuid} rootflags=subvol=@ rw quiet splash"\n'
+                    '    submenuentry "Boot to single-user mode" {\n'
+                    f'        options "root=UUID={root_uuid} rootflags=subvol=@ rw single"\n'
+                    "    }\n"
+                    "}\n"
+                    "\n"
+                    'menuentry "Pulsar OS Recovery" {\n'
+                    "    icon os_recovery.png\n"
+                    "    volume PULSAR_RECOVERY\n"
+                    "    loader /boot/vmlinuz-recovery\n"
+                    "    initrd /boot/initramfs-recovery.img\n"
+                    f'    options "{rec_opts}"\n'
+                    '    submenuentry "Internet Recovery" {\n'
+                    f'        options "{rec_net_opts}"\n'
+                    "    }\n"
+                    "}\n"
+                    f"{MENU_END}\n"
+                )
+
+                refind_main = f"{esp_root}/EFI/refind"
+                boot_fb = f"{esp_root}/EFI/BOOT"
+
+                # Mirror drivers/theme/icons next to the fallback loader
+                try:
+                    if os.path.isdir(boot_fb):
+                        for sub in ("drivers_x64", "icons"):
+                            src_d = f"{refind_main}/{sub}"
+                            if os.path.isdir(src_d):
+                                shutil.copytree(src_d, f"{boot_fb}/{sub}", dirs_exist_ok=True)
+                        theme_d = f"{refind_main}/themes/rEFInd-Regular-Dark"
+                        if os.path.isdir(theme_d):
+                            shutil.copytree(
+                                theme_d,
+                                f"{boot_fb}/themes/rEFInd-Regular-Dark",
+                                dirs_exist_ok=True,
+                            )
+                except Exception as mir_err:
+                    log_msg(f"Warning: could not mirror rEFInd assets to EFI/BOOT: {mir_err}")
+
+                for rd in (refind_main, boot_fb):
+                    conf_path = f"{rd}/refind.conf"
+                    if not os.path.isdir(rd):
+                        log_msg(f"Notice: {rd} absent - menu config skipped there")
+                        continue
+                    try:
+                        content = ""
+                        if os.path.isfile(conf_path):
+                            with open(conf_path, "r") as f:
+                                content = f.read()
+                        content = content.replace("#enable_mouse", "enable_mouse")
+                        content = content.replace("enable_mouse", "enable_mouse", 1)
+                        if os.path.isfile(f"{rd}/themes/rEFInd-Regular-Dark/theme.conf") \
+                                and "include themes/rEFInd-Regular-Dark/theme.conf" not in content:
+                            content += "\ninclude themes/rEFInd-Regular-Dark/theme.conf\n"
+                        # Rebuild our section from scratch (upgrade-safe).
+                        content = re.sub(
+                            re.escape(MENU_BEGIN) + r".*?" + re.escape(MENU_END) + r"\n?",
+                            "",
+                            content,
+                            flags=re.DOTALL,
+                        )
+                        # Drop pre-2026-08 recovery stanzas pointing at ESP loaders.
+                        if "/EFI/recovery/vmlinuz.efi" in content:
+                            content = re.sub(
+                                r'\nmenuentry "Pulsar OS Recovery" \{.*?\n\}\n',
+                                "\n",
+                                content,
+                                flags=re.DOTALL,
+                            )
+                        content += menu_block
+                        with open(conf_path, "w") as f:
+                            f.write(content)
+                        log_msg(f"rEFInd menu configured: {conf_path}")
+                    except Exception as cfg_err:
+                        log_msg(f"ERROR configuring {conf_path}: {cfg_err}")
+
             GLib.idle_add(self.update_progress, 0.90, "Installing bootloader...")
             exec_cmd(["mount", "--bind", "/dev", "/mnt/dev"])
             if "TEST_MODE" not in os.environ:
@@ -1356,9 +1570,6 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
             exec_cmd(["mount", "--bind", "/sys", "/mnt/sys"])
             exec_cmd(["mount", "-t", "tmpfs", "tmpfs", "/mnt/run"])
 
-            # rEFInd ISO builds (./build-iso.sh --refind) replicate rEFInd into
-            # the installed rootfs. Detect it and install rEFInd instead of GRUB
-            # so the installed system boots with the same bootloader as the ISO.
             refind_installed = False
             refind_available = any(
                 os.path.exists(p)
@@ -1372,13 +1583,6 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
             if is_efi and refind_available:
                 GLib.idle_add(self.update_progress, 0.90, "Installing rEFInd bootloader...")
                 try:
-                    # Run refind-install from the live system with --root /mnt
-                    # instead of chrooting: inside a chroot /proc/mounts is
-                    # bind-mounted from the live system, so it lists the ESP
-                    # as /mnt/boot/efi and refind-install cannot locate it at
-                    # /boot/efi. --root also keeps the efibootmgr/NVRAM and
-                    # secure-boot handling on the live system, where
-                    # /sys/firmware/efi is reachable.
                     live_refind_install = next(
                         (
                             p
@@ -1403,13 +1607,6 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     GLib.idle_add(self.update_progress, 0.92, "Configuring rEFInd...")
                     esp_root = "/mnt/boot/efi"
                     try:
-                        # The ISO live rootfs carries archiso/systemd-boot boot
-                        # artifacts under /boot/efi (UKI in EFI/Linux, systemd-boot
-                        # in EFI/systemd, its removable copy in EFI/BOOT, loader/,
-                        # grub/, plus a stale vmlinuz/initramfs). rEFInd would
-                        # auto-detect every one of them and show bogus menu entries
-                        # that cannot boot the installed system, so remove them and
-                        # keep only the rEFInd install.
                         stale_dirs = (
                             "EFI/Linux",
                             "EFI/systemd",
@@ -1436,11 +1633,19 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                                     ["rm", "-f", f"{esp_root}/{rel}"],
                                     capture_output=True,
                                 )
+                            for rel in (
+                                "EFI/recovery/vmlinuz.efi",
+                                "EFI/recovery/vmlinuz-linux.efi",
+                                "EFI/recovery/vmlinuz",
+                                "EFI/recovery/vmlinuz-linux",
+                                "EFI/recovery/initrd.img",
+                                "EFI/recovery/initramfs-linux.img",
+                            ):
+                                subprocess.run(
+                                    ["rm", "-f", f"{esp_root}/{rel}"],
+                                    capture_output=True,
+                                )
 
-                        # Write a refind_linux.conf pointing at the real installed
-                        # root. refind-install skips existing files, so the one
-                        # rsynced from the ISO (generated against the build host's
-                        # root partition) would otherwise be kept and fail to boot.
                         refind_linux_conf = "/mnt/boot/refind_linux.conf"
                         conf_content = (
                             f'"Boot with standard options"  "root=UUID={root_uuid} rootflags=subvol=@ rw quiet splash"\n'
@@ -1452,9 +1657,6 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                             with open(refind_linux_conf, "w") as f:
                                 f.write(conf_content)
 
-                        # Removable-media fallback: some firmware ignores NVRAM
-                        # entries and only boots /EFI/BOOT/BOOTX64.EFI. Put rEFInd
-                        # there (the archiso copy was removed above).
                         refind_share = next(
                             (
                                 p
@@ -1485,7 +1687,6 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                                     capture_output=True,
                                 )
 
-                            # Deploy recovery icon (.VolumeIcon.png and os_recovery.png)
                             icon_src = "/mnt/usr/share/pulsaros-recovery/os_recovery.png"
                             if not os.path.exists(icon_src):
                                 icon_src = "/usr/share/pulsaros-recovery/os_recovery.png"
@@ -1505,7 +1706,23 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                                 shutil.copy2(icon_src, "/mnt/recovery/.VolumeIcon.png")
                                 shutil.copy2(icon_src, "/mnt/recovery/os_recovery.png")
 
-                            # Deploy ext4 and btrfs UEFI drivers if present
+                            main_icon_dst = f"{theme_dest}/icons/os_pulsaros_normal.png"
+                            if not os.path.exists(main_icon_dst):
+                                mi_src = next(
+                                    (
+                                        p
+                                        for p in (
+                                            "/mnt/usr/share/pulsar-boot-icons/normal.png",
+                                            "/usr/share/pulsar-boot-icons/normal.png",
+                                        )
+                                        if os.path.exists(p)
+                                    ),
+                                    None,
+                                )
+                                if mi_src:
+                                    os.makedirs(f"{theme_dest}/icons", exist_ok=True)
+                                    shutil.copy2(mi_src, main_icon_dst)
+
                             for drv_name in ["ext4_x64.efi", "btrfs_x64.efi"]:
                                 drv_src = f"/mnt/usr/share/refind/drivers_x64/{drv_name}"
                                 if not os.path.exists(drv_src):
@@ -1513,60 +1730,22 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                                 if os.path.exists(drv_src):
                                     os.makedirs(f"{refind_root}/drivers_x64", exist_ok=True)
                                     shutil.copy2(drv_src, f"{refind_root}/drivers_x64/{drv_name}")
-
-                            refind_conf = f"{refind_root}/refind.conf"
-                            if os.path.isfile(refind_conf):
-                                with open(refind_conf, "r") as f:
-                                    content = f.read()
-                                content = content.replace("#enable_mouse", "enable_mouse")
-                                content = content.replace("enable_mouse", "enable_mouse", 1)
-                                if "include themes/rEFInd-Regular-Dark/theme.conf" not in content:
-                                    content += "\ninclude themes/rEFInd-Regular-Dark/theme.conf\n"
-                                
-                                # Filter out duplicate auto-scanned loaders
-                                if "dont_scan_dirs" not in content:
-                                    content += "\ndont_scan_dirs EFI/recovery,EFI/BOOT,EFI/boot\n"
-                                if "dont_scan_files" not in content:
-                                    content += "dont_scan_files vmlinuz*,initrd*,initramfs*\n"
-
-                                if 'menuentry "Pulsar OS Recovery"' not in content:
-                                    content += (
-                                        '\nmenuentry "Pulsar OS Recovery" {\n'
-                                        '    icon os_recovery.png\n'
-                                        '    loader /EFI/recovery/vmlinuz.efi\n'
-                                        '    initrd /EFI/recovery/initrd.img\n'
-                                        '    options "root=LABEL=PULSAR_RECOVERY rw quiet splash"\n'
-                                        '    submenuentry "Internet Recovery" {\n'
-                                        '        options "root=LABEL=PULSAR_RECOVERY rw quiet splash internet_recovery=1"\n'
-                                        '    }\n'
-                                        '}\n'
-                                    )
-                                with open(refind_conf, "w") as f:
-                                    f.write(content)
                     except Exception as theme_err:
                         print(f"Warning: rEFInd theme configuration failed: {theme_err}")
             elif is_efi:
-                # Run grub-install twice:
-                # 1. Without --removable to register the UEFI NVRAM boot entry (so the UEFI firmware boots the hard drive by default)
                 GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader...")
                 try:
                     exec_cmd(["chroot", "/mnt", "grub-install", "--force", disk_path])
                 except Exception as g_err:
                     print(f"Warning: Standard grub-install failed: {g_err}. Proceeding with removable fallback...")
-                # 2. With --removable to create fallback loader in /EFI/BOOT/BOOTX64.EFI
                 exec_cmd(["chroot", "/mnt", "grub-install", "--force", "--removable", disk_path])
             else:
                 GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader...")
                 exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", "--force", disk_path])
                 
             esp_root = "/mnt/boot/efi"
+
             if is_arch:
-                # The ISO live rootfs carries live-only boot artifacts that must
-                # be removed on a fixed-disk install:
-                #  - /etc/mkinitcpio.conf.d/archiso.conf: enables the 'archiso'
-                #    hooks so the initramfs boots from the ISO. If left in place
-                #    the installed system waits 30s for the ISO device and drops
-                #    to an emergency shell instead of mounting the root partition.
                 for f_live in [
                     "/mnt/etc/mkinitcpio.conf.d/archiso.conf",
                     "/mnt/etc/mkinitcpio.conf.d/live.conf",
@@ -1577,7 +1756,6 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                         except Exception:
                             pass
 
-                # Ensure btrfs hook is enabled in mkinitcpio.conf
                 mkinit_path = "/mnt/etc/mkinitcpio.conf"
                 if os.path.exists(mkinit_path):
                     with open(mkinit_path, "r") as f:
@@ -1600,67 +1778,26 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     with open(grub_default, "w") as f:
                         f.write(content)
 
-                # Regenerate the initramfs with the standard fixed-disk Btrfs hooks
-                exec_cmd(["chroot", "/mnt", "mkinitcpio", "-P"])
+                preserve_live_initramfs_for_recovery()
 
-                # Now deploy the freshly generated fixed-disk kernel and initramfs into ESP and Recovery partition
-                if "TEST_MODE" not in os.environ and is_efi:
-                    kernel_cand = [
-                        "/mnt/boot/vmlinuz-linux",
-                        "/mnt/boot/vmlinuz",
-                    ] + glob.glob("/mnt/boot/vmlinuz-*")
-                    initrd_cand = [
-                        "/mnt/boot/initramfs-linux.img",
-                        "/mnt/boot/initrd.img",
-                    ] + glob.glob("/mnt/boot/initramfs-linux*.img")
+                try:
+                    exec_cmd(["chroot", "/mnt", "mkinitcpio", "-P"])
+                except Exception as mki_err:
+                    log_msg(f"Warning: mkinitcpio -P failed (non-fatal): {mki_err}")
 
-                    found_k = next((k for k in kernel_cand if os.path.exists(k)), None)
-                    found_i = next((i for i in initrd_cand if os.path.exists(i)), None)
-                    if found_k and found_i:
-                        os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
-                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz.efi")
-                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-linux.efi")
-                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz")
-                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-linux")
-                        shutil.copy2(found_i, f"{esp_root}/EFI/recovery/initrd.img")
-                        shutil.copy2(found_i, f"{esp_root}/EFI/recovery/initramfs-linux.img")
+                deploy_kernel_to_recovery()
 
-                        os.makedirs("/mnt/recovery/boot", exist_ok=True)
-                        shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz.efi")
-                        shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-linux.efi")
-                        shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz")
-                        shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-linux")
-                        shutil.copy2(found_i, "/mnt/recovery/boot/initrd.img")
-                        shutil.copy2(found_i, "/mnt/recovery/boot/initramfs-linux.img")
-
-                # Only regenerate the GRUB config when GRUB was actually
-                # installed (rEFInd builds don't use grub.cfg).
                 if not refind_installed:
                     exec_cmd(["chroot", "/mnt", "grub-mkconfig", "-o", "/boot/grub/grub.cfg"])
+                else:
+                    configure_refind_menus()
             else:
+                preserve_live_initramfs_for_recovery()
                 if not refind_installed:
                     exec_cmd(["chroot", "/mnt", "update-grub"])
-                if "TEST_MODE" not in os.environ and is_efi:
-                    kernel_cand = glob.glob("/mnt/boot/vmlinuz-*") + ["/mnt/boot/vmlinuz"]
-                    initrd_cand = glob.glob("/mnt/boot/initrd.img-*") + ["/mnt/boot/initrd.img"]
-                    found_k = next((k for k in kernel_cand if os.path.exists(k)), None)
-                    found_i = next((i for i in initrd_cand if os.path.exists(i)), None)
-                    if found_k and found_i:
-                        os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
-                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz.efi")
-                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-linux.efi")
-                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz")
-                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-linux")
-                        shutil.copy2(found_i, f"{esp_root}/EFI/recovery/initrd.img")
-                        shutil.copy2(found_i, f"{esp_root}/EFI/recovery/initramfs-linux.img")
-
-                        os.makedirs("/mnt/recovery/boot", exist_ok=True)
-                        shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz.efi")
-                        shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-linux.efi")
-                        shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz")
-                        shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-linux")
-                        shutil.copy2(found_i, "/mnt/recovery/boot/initrd.img")
-                        shutil.copy2(found_i, "/mnt/recovery/boot/initramfs-linux.img")
+                deploy_kernel_to_recovery()
+                if refind_installed:
+                    configure_refind_menus()
 
 
 
@@ -1781,16 +1918,7 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     print(f"Notice: Driver configuration step completed: {drv_err}")
                 finally:
                     subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"])
-                            # Remove policy-rc.d
-                            if "TEST_MODE" not in os.environ and os.path.exists(policy_file):
-                                try:
-                                    os.remove(policy_file)
-                                except Exception:
-                                    pass
-                except Exception as drv_err:
-                    print(f"Notice: Driver configuration step completed: {drv_err}")
-                finally:
-                    subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"])
+
             # ──────────────────────────────────────────────────────────
             
             # 1. Touch the setup flag file first while everything is still mounted cleanly
