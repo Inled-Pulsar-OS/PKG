@@ -1431,6 +1431,7 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     shutil.copy2(src, "/mnt/recovery/initramfs-recovery.img")
                     shutil.copy2(src, f"{esp_root}/EFI/recovery/initramfs-recovery.img")
                     shutil.copy2(src, f"{esp_root}/EFI/recovery/initrd.img")
+                    subprocess.run(["sync"])
                     log_msg(f"Recovery initramfs preserved: {src} -> /mnt/recovery/boot/initramfs-recovery.img & {esp_root}/EFI/recovery/")
                 except Exception as p_err:
                     log_msg(f"ERROR preserving live initramfs for recovery: {p_err}")
@@ -1488,6 +1489,7 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     with open(f"{esp_root}/EFI/recovery/refind_linux.conf", "w") as f:
                         f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
 
+                    subprocess.run(["sync"])
                     log_msg(f"Recovery kernel deployed: {found_k} -> /mnt/recovery/boot/vmlinuz-recovery & {esp_root}/EFI/recovery/")
                 except Exception as cp_err:
                     log_msg(f"ERROR deploying recovery kernel: {cp_err}")
