@@ -77,20 +77,6 @@
 
                 <child>
                   <object class="AdwPreferencesGroup">
-                    <property name="title" translatable="yes">macOS Layout &amp; Keyboard Remap</property>
-                    <child>
-                      <object class="AdwSwitchRow" id="macos_remap_switch_row">
-                        <property name="title" translatable="yes">Remap de Teclado macOS (Cmd como Ctrl)</property>
-                        <property name="subtitle" translatable="yes">Permite usar la tecla Command/Super para copiar (Cmd+C), pegar (Cmd+V), cerrar pestañas (Cmd+W) y atajos de macOS en todo el sistema</property>
-                        <property name="active">True</property>
-                        <signal name="notify::active" handler="on_macos_remap_active_changed_cb" object="CcKeyboardPanel" swapped="yes" />
-                      </object>
-                    </child>
-                  </object>
-                </child>
-
-                <child>
-                  <object class="AdwPreferencesGroup">
                     <property name="title" translatable="yes">Keyboard Shortcuts</property>
                     <child>
                       <object class="CcListRow" id="common_shortcuts_row">

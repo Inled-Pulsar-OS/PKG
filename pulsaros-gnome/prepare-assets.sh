@@ -171,8 +171,17 @@ PULSAR_DOCK_UUID="pulsar-dock@inled.es"
 PULSAR_DOCK_TEMP="/tmp/pulsaros-pulsar-dock"
 rm -rf "$PULSAR_DOCK_TEMP"
 
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 if [ -n "$PULSAR_DOCK_LOCAL_DIR" ] && [ -d "$PULSAR_DOCK_LOCAL_DIR/.git" ]; then
     PULSAR_DOCK_SRC="$(realpath "$PULSAR_DOCK_LOCAL_DIR")"
+    echo "📦 [ES] Usando copia local de Pulsar Dock: $PULSAR_DOCK_SRC"
+    echo "📦 [EN] Using local Pulsar Dock checkout: $PULSAR_DOCK_SRC"
+elif [ -d "$SCRIPT_DIR/../../dash-to-dock/.git" ]; then
+    PULSAR_DOCK_SRC="$(realpath "$SCRIPT_DIR/../../dash-to-dock")"
+    echo "📦 [ES] Usando copia local de Pulsar Dock: $PULSAR_DOCK_SRC"
+    echo "📦 [EN] Using local Pulsar Dock checkout: $PULSAR_DOCK_SRC"
+elif [ -d "$SCRIPT_DIR/../dash-to-dock/.git" ]; then
+    PULSAR_DOCK_SRC="$(realpath "$SCRIPT_DIR/../dash-to-dock")"
     echo "📦 [ES] Usando copia local de Pulsar Dock: $PULSAR_DOCK_SRC"
     echo "📦 [EN] Using local Pulsar Dock checkout: $PULSAR_DOCK_SRC"
 else

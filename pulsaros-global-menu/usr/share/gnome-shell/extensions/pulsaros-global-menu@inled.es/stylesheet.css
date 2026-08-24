@@ -259,55 +259,65 @@
     border: 1px solid #3498db;
 }
 
-/* --- Pulsar OS Power Confirmation Dialog Styles --- */
+/* --- Pulsar OS Power Confirmation Dialog Styles (macOS Tahoe Dark Style) --- */
 .pulsaros-power-dialog {
-    background-color: rgba(28, 28, 30, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 14px;
-    padding: 24px;
-    width: 440px;
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+    background-color: #242426;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 24px 28px;
+    width: 460px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8);
 }
 
 .pulsaros-power-mainbox {
     spacing: 12px;
 }
 
-.pulsaros-power-logo {
+.pulsaros-power-icon-container {
+    margin-bottom: 4px;
+}
+
+.pulsaros-power-circle-badge {
+    width: 64px;
+    height: 64px;
+    min-width: 64px;
+    min-height: 64px;
+    border-radius: 32px;
+    background-color: #555558;
+}
+
+.pulsaros-power-circle-icon {
     color: #ffffff;
-    margin-bottom: 6px;
+    icon-size: 32px;
 }
 
 .pulsaros-power-title {
-    font-size: 18pt;
-    font-weight: bold;
+    font-size: 13.5pt;
+    font-weight: 700;
     color: #ffffff;
-    text-align: center;
+    text-align: left;
+    margin-bottom: 2px;
 }
 
 .pulsaros-power-subtitle {
-    font-size: 11pt;
-    color: #cccccc;
-    text-align: center;
-    margin-bottom: 12px;
+    font-size: 10.5pt;
+    color: #98989d;
+    text-align: left;
+    margin-bottom: 6px;
+    line-height: 1.4;
 }
 
 .pulsaros-power-option-box {
-    background-color: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    padding: 12px 16px;
-    spacing: 6px;
+    background-color: transparent;
+    border: none;
+    padding: 0;
+    margin: 2px 0 6px 0;
 }
 
 .pulsaros-power-checkbox-button {
     background-color: transparent;
     border-radius: 6px;
-    padding: 4px 8px;
-}
-
-.pulsaros-power-checkbox-button:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+    padding: 4px 0px;
 }
 
 .pulsaros-power-checkbox-layout {
@@ -315,57 +325,54 @@
 }
 
 .pulsaros-power-checkbox-icon {
-    color: #0a84ff;
+    color: #0071e3;
     icon-size: 18px;
 }
 
 .pulsaros-power-checkbox-label {
     font-size: 11pt;
-    font-weight: 500;
+    font-weight: 400;
     color: #ffffff;
-}
-
-.pulsaros-power-hint {
-    font-size: 9pt;
-    color: #8e8e93;
-    text-align: center;
 }
 
 .pulsaros-power-dialog .modal-dialog-button-box {
-    spacing: 12px;
+    spacing: 14px;
     padding: 0;
-    margin-top: 18px;
+    margin-top: 14px;
 }
 
 .pulsaros-power-dialog .modal-dialog-button {
-    background-color: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 8px;
-    padding: 8px 20px;
-    color: #ffffff;
+    border-radius: 9999px !important;
+    padding: 8px 24px;
+    min-width: 120px;
     font-size: 11pt;
     font-weight: 500;
-    min-height: 28px;
+    min-height: 34px;
 }
 
-.pulsaros-power-dialog .modal-dialog-button:hover {
-    background-color: rgba(255, 255, 255, 0.2);
+.pulsaros-power-dialog .modal-dialog-button.pulsaros-power-cancel-btn {
+    background-color: #38383a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    border-radius: 9999px !important;
 }
 
-.pulsaros-power-dialog .modal-dialog-button:active {
-    background-color: rgba(255, 255, 255, 0.15);
+.pulsaros-power-dialog .modal-dialog-button.pulsaros-power-cancel-btn:hover {
+    background-color: #48484a;
 }
 
 .pulsaros-power-dialog .modal-dialog-button.pulsaros-power-confirm-btn {
-    background-color: #0a84ff;
-    border: 1px solid #0071e3;
+    background-color: #0071e3;
+    border: none;
     color: #ffffff;
     font-weight: 600;
+    border-radius: 9999px !important;
 }
 
 .pulsaros-power-dialog .modal-dialog-button.pulsaros-power-confirm-btn:hover {
-    background-color: #0071e3;
+    background-color: #007bf5;
 }
+
 
 /* Progress bar and status in power dialog */
 .pulsaros-power-progress-container {

@@ -26,6 +26,8 @@ gtk-theme='MacTahoe-Dark'
 cursor-theme='MacTahoe-blue-dark'
 icon-theme='MacTahoe-blue-dark'
 color-scheme='prefer-dark'
+enable-animations=true
+
 
 [org.gnome.desktop.wm.preferences]
 button-layout='close,minimize,maximize:'
@@ -53,7 +55,7 @@ clock-menu-position-offset=12
 panel-size=32
 panel-button-padding-size=10
 panel-indicator-padding-size=10
-animation=2
+animation=0
 startup-status=0
 dash-icon-size=0
 

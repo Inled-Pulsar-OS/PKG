@@ -322,6 +322,62 @@ for target_dir in \
 done
 rm -f /tmp/nautilus_fix.css
 
+# 2.3 Pulsar OS - Dock Icon Hover Transparency & Zero Shadow Fix for GNOME Shell Theme
+cat <<'DOCK_HOVER_FIX' > /tmp/dock_hover_fix.css
+/* ==============================================================================
+ * Pulsar OS - Dock Icon Hover Transparency & Zero Shadow Fix
+ * ============================================================================== */
+#dashtodockContainer .app-well-app,
+#dashtodockContainer .app-well-app:hover,
+#dashtodockContainer .app-well-app:focus,
+#dashtodockContainer .app-well-app:active,
+#dashtodockContainer .app-well-app:selected,
+#dashtodockContainer .app-well-app:checked,
+#dashtodockContainer .show-apps,
+#dashtodockContainer .show-apps:hover,
+#dashtodockContainer .show-apps:focus,
+#dashtodockContainer .show-apps:active,
+#dashtodockContainer .show-apps:selected,
+#dashtodockContainer .show-apps:checked,
+#dashtodockContainer .overview-tile,
+#dashtodockContainer .overview-tile:hover,
+#dashtodockContainer .overview-tile:focus,
+#dashtodockContainer .overview-tile:active,
+#dashtodockContainer .overview-tile:selected,
+#dashtodockContainer .overview-tile:checked,
+#dashtodockContainer .dash-item-container,
+#dashtodockContainer .dash-item-container > StButton,
+#dashtodockContainer .dash-item-container > StButton:hover,
+#dashtodockContainer .dash-item-container > StButton:focus,
+#dashtodockContainer .dash-item-container > StButton:active,
+#dashtodockContainer .dash-item-container > StButton:checked,
+#dashtodockContainer .overview-icon,
+#dashtodockContainer .overview-icon:hover,
+#dashtodockContainer .overview-icon:focus,
+#dashtodockContainer .overview-icon:active,
+#dashtodockContainer .overview-icon:selected,
+#dashtodockContainer .overview-icon:checked,
+#dashtodockContainer .app-well-app .overview-icon,
+#dashtodockContainer .app-well-app:hover .overview-icon,
+#dashtodockContainer .show-apps .overview-icon,
+#dashtodockContainer .show-apps:hover .overview-icon,
+#dash .app-well-app:hover .overview-icon,
+#dash .show-apps:hover .overview-icon {
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    icon-shadow: none !important;
+    text-shadow: none !important;
+    border: none !important;
+    border-color: transparent !important;
+}
+DOCK_HOVER_FIX
+
+find "$STAGE_DIR" -path "*/gnome-shell/gnome-shell.css" -exec sh -c 'cat /tmp/dock_hover_fix.css >> "$1"' _ {} \; 2>/dev/null || true
+rm -f /tmp/dock_hover_fix.css
+
+
+
 # Ejecutar instalador de iconos
 echo "Instalando iconos en staging..."
 cd "$TEMP_BUILD/icons"

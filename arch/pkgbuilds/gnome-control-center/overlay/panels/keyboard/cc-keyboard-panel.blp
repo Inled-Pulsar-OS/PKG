@@ -2,98 +2,82 @@ using Gtk 4.0;
 using Adw 1;
 
 template $CcKeyboardPanel: $CcPanel {
-  child: Adw.ToolbarView {
-    [top]
-    Adw.HeaderBar {}
+  [subpage]
+  Adw.NavigationPage {
+    title: _("Keyboard");
 
-    content: Adw.PreferencesPage {
-      Adw.PreferencesGroup {
-        title: _("Input Sources");
-        header-suffix: Button add_input_source_button {
-          icon-name: "list-add-symbolic";
-          tooltip-text: _("Add Input Source");
-          clicked => $add_input_source ();
-        };
+    Adw.ToolbarView {
+      [top]
+      Adw.HeaderBar {}
 
-        ListBox input_list {
-          selection-mode: none;
+      content: Adw.PreferencesPage {
+        Adw.PreferencesGroup {
+          title: _("Input Sources");
+          description: _("Includes keyboard layouts and input methods");
 
-          styles [
-            "boxed-list",
-          ]
-        }
-      }
-
-      Adw.PreferencesGroup {
-        title: _("Special Character Entry");
-
-        Adw.ActionRow alternate_characters_key_row {
-          title: _("Alternate Characters Key");
-          subtitle: _("Modifiers to compose characters not available on the keyboard");
-          activatable: true;
-          activated => $alt_chars_row_activated();
-
-          [suffix]
-          Label alt_chars_key_label {
-            styles [
-              "dim-label",
-            ]
-          }
-
-          [suffix]
-          Image {
-            valign: center;
-            icon-name: "go-next-symbolic";
+          $CcInputListBox input_list {
+            vexpand: false;
           }
         }
 
-        Adw.ActionRow compose_key_row {
-          title: _("Compose Key");
-          subtitle: _("Type subtle characters that need multiple keystrokes");
-          activatable: true;
-          activated => $compose_row_activated();
+        Adw.PreferencesGroup input_switch_group {
+          title: _("Input Source Switching");
 
-          [suffix]
-          Label compose_key_label {
-            styles [
-              "dim-label",
-            ]
+          Adw.ActionRow {
+            title: _("Use the _same source for all windows");
+            use-underline: true;
+            activatable-widget: same_source;
+
+            [prefix]
+            CheckButton same_source {
+              valign: center;
+            }
           }
 
-          [suffix]
-          Image {
-            valign: center;
-            icon-name: "go-next-symbolic";
+          Adw.ActionRow {
+            title: _("Switch input sources _individually for each window");
+            use-underline: true;
+            activatable-widget: per_window_source;
+
+            [prefix]
+            CheckButton per_window_source {
+              active: bind same_source.active inverted;
+              valign: center;
+              group: same_source;
+            }
           }
         }
-      }
 
-      Adw.PreferencesGroup {
-        title: _("macOS Layout &amp; Keyboard Remap");
+        Adw.PreferencesGroup {
+          title: _("Special Character Entry");
+          description: _("Methods for entering symbols and letter variants using the keyboard");
 
-        Adw.SwitchRow macos_remap_switch_row {
-          title: _("macOS Keyboard Remap (Cmd as Ctrl)");
-          subtitle: _("Allows using the Command/Super key for standard macOS shortcuts (Cmd+C, Cmd+V, Cmd+W) system-wide");
-          active: true;
-          notify::active => $on_macos_remap_active_changed_cb(template);
-        }
-      }
+          $CcListRow alt_chars_row {
+            title: _("A_lternate Characters Key");
+            show-arrow: true;
+            secondary-label: "Right Alt";
+            activated => $alt_chars_row_activated(template);
+          }
 
-      Adw.PreferencesGroup {
-        title: _("Keyboard Shortcuts");
-
-        Adw.ActionRow keyboard_shortcuts_row {
-          title: _("View and Customize Shortcuts");
-          activatable: true;
-          activated => $keyboard_shortcuts_activated();
-
-          [suffix]
-          Image {
-            valign: center;
-            icon-name: "go-next-symbolic";
+          $CcListRow compose_row {
+            title: _("_Compose Key");
+            show-arrow: true;
+            activated => $compose_row_activated(template);
           }
         }
-      }
-    };
-  };
+
+        Adw.PreferencesGroup {
+          title: _("Keyboard Shortcuts");
+
+          $CcListRow common_shortcuts_row {
+            title: _("_View and Customize Shortcuts");
+            show-arrow: true;
+            activated => $keyboard_shortcuts_activated(template);
+          }
+        }
+      };
+    }
+  }
 }
+
+

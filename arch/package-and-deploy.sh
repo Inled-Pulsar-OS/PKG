@@ -48,6 +48,8 @@ is_manual_upload_only() {
     return 1
 }
 
+INCREMENTAL=false
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --deploy|-d)
@@ -64,6 +66,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --onlyupload)
             ONLY_UPLOAD_FLAG="--onlyupload"
+            shift
+            ;;
+        --incremental|-i|--smart)
+            INCREMENTAL=true
             shift
             ;;
         --branch|-b)
@@ -84,11 +90,35 @@ done
 
 if [ -z "$PACKAGE_NAME" ]; then
     echo "❌ Error: Specify a package name or 'all'."
-    echo "Usage: $0 <package_name | all> [--deploy] [--branch <stable|forky|rolling>] [--upload|--onlyupload]"
+    echo "Usage: $0 <package_name | all> [--deploy] [--branch <stable|forky|rolling>] [--upload|--onlyupload] [--incremental]"
     exit 1
 fi
 
 COMPILED_PKGS=()
+
+is_pkg_up_to_date() {
+    local name="$1"
+    local pkgbuild_dir="$PKGBUILDS_DIR/$name"
+    local existing_pkg=$(ls -t "$OUTPUT_DIR/${name}-"*.pkg.tar.zst 2>/dev/null | head -n 1)
+    [ -z "$existing_pkg" ] && return 1
+    [ ! -f "$existing_pkg" ] && return 1
+
+    local pkg_time=$(stat -c %Y "$existing_pkg" 2>/dev/null || echo 0)
+
+    # Check PKGBUILD directory
+    local newest_src=$(find "$pkgbuild_dir" -type f -printf '%T@\n' 2>/dev/null | sort -nr | head -n 1 | cut -d. -f1)
+    [ -n "$newest_src" ] && [ "$newest_src" -gt "$pkg_time" ] && return 1
+
+    # Also check corresponding root PKG directory if present
+    local root_src_dir="$PKG_DIR/../../PKG/$name"
+    [ ! -d "$root_src_dir" ] && root_src_dir="$PKG_DIR/../$name"
+    if [ -d "$root_src_dir" ]; then
+        local newest_root_src=$(find "$root_src_dir" -type f -not -path "*/target/*" -not -path "*/.git/*" -printf '%T@\n' 2>/dev/null | sort -nr | head -n 1 | cut -d. -f1)
+        [ -n "$newest_root_src" ] && [ "$newest_root_src" -gt "$pkg_time" ] && return 1
+    fi
+
+    return 0
+}
 
 build_single_package() {
     local name="$1"
@@ -119,7 +149,7 @@ build_single_package() {
     export PULSAR_VERSION
 
     # In CI/Docker environments, install official package dependencies
-    if command -v pacman >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
+    if command -v pacman >/dev/null 2>&1; then
         local raw_deps=($(bash -c '
             unset depends makedepends
             source ./PKGBUILD 2>/dev/null || true
@@ -137,9 +167,11 @@ build_single_package() {
         done
         if [ ${#to_install[@]} -gt 0 ]; then
             echo "📦 Installing official build dependencies for $name..."
-            sudo pacman -S --needed --noconfirm "${to_install[@]}" 2>/dev/null || {
+            local auth_cmd="pkexec"
+            command -v pkexec >/dev/null 2>&1 || auth_cmd="sudo"
+            $auth_cmd pacman -S --needed --noconfirm "${to_install[@]}" 2>/dev/null || {
                 for d in "${to_install[@]}"; do
-                    sudo pacman -S --needed --noconfirm "$d" 2>/dev/null || true
+                    $auth_cmd pacman -S --needed --noconfirm "$d" 2>/dev/null || true
                 done
             }
         fi
@@ -337,7 +369,11 @@ if [ -n "$DEPLOY_ONLY_FLAG" ]; then
 fi
 
 if [ "$PACKAGE_NAME" == "all" ]; then
-    echo "🏗️  FULL BUILD: Building all packages..."
+    if $INCREMENTAL; then
+        echo "⚡  INCREMENTAL BUILD: Rebuilding only modified packages..."
+    else
+        echo "🏗️  FULL BUILD: Building all packages..."
+    fi
     SKIPPED_MANUAL=()
     for pkg_dir in "$PKGBUILDS_DIR"/*/; do
         pkg_name=$(basename "$pkg_dir")
@@ -353,11 +389,18 @@ if [ "$PACKAGE_NAME" == "all" ]; then
                     continue
                 fi
             fi
-            build_single_package "$pkg_name"
+
+            if $INCREMENTAL && is_pkg_up_to_date "$pkg_name"; then
+                existing_pkg=$(ls -t "$OUTPUT_DIR/${pkg_name}-"*.pkg.tar.zst 2>/dev/null | head -n 1)
+                echo "⚡ [CACHED] Reusing $pkg_name: $(basename "$existing_pkg") (unmodified)"
+                COMPILED_PKGS+=("$existing_pkg")
+            else
+                build_single_package "$pkg_name"
+            fi
         fi
     done
     echo "=============================================================================="
-    echo "🎉 All packages built successfully!"
+    echo "🎉 Packages processed successfully!"
     echo "=============================================================================="
     if [ ${#SKIPPED_MANUAL[@]} -gt 0 ]; then
         echo "⚠️  ATTENTION: The following packages were NOT built/deployed automatically"
