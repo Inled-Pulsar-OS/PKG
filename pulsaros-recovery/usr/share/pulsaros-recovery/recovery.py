@@ -1367,21 +1367,27 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     return
                 try:
                     candidates = [
+                        # Live media mounted paths (Arch & Debian)
                         "/run/archiso/bootmnt/live/initrd",
                         "/run/archiso/bootmnt/EFI/BOOT/initrd",
+                        "/run/archiso/bootmnt/arch/boot/x86_64/initramfs-linux.img",
                         "/run/live/medium/live/initrd",
-                        "/lib/live/mount/medium/live/initrd",
                         "/run/live/medium/live/initrd.img",
+                        "/lib/live/mount/medium/live/initrd",
                         "/lib/live/mount/medium/live/initrd.img",
                         "/live/initrd",
                         "/live/initrd.img",
                     ]
-                    # Also check /mnt/boot before mkinitcpio regenerates it
-                    for p in sorted(glob.glob("/mnt/boot/initramfs-*.img") + glob.glob("/mnt/boot/initrd.img*") + glob.glob("/mnt/boot/initrd*")):
+                    for root_dir in ("/run/archiso", "/run/live", "/lib/live"):
+                        if os.path.exists(root_dir):
+                            for p in glob.glob(f"{root_dir}/**/initr*", recursive=True):
+                                if os.path.isfile(p) and not p.endswith(".kver"):
+                                    candidates.append(p)
+
+                    for p in sorted(glob.glob("/boot/initramfs-*.img") + glob.glob("/boot/initrd.img*") + glob.glob("/boot/initrd*")):
                         if "fallback" not in p and "ucode" not in p and not p.endswith(".kver"):
                             candidates.append(p)
-                    # Also check host /boot
-                    for p in sorted(glob.glob("/boot/initramfs-*.img") + glob.glob("/boot/initrd.img*") + glob.glob("/boot/initrd*")):
+                    for p in sorted(glob.glob("/mnt/boot/initramfs-*.img") + glob.glob("/mnt/boot/initrd.img*") + glob.glob("/mnt/boot/initrd*")):
                         if "fallback" not in p and "ucode" not in p and not p.endswith(".kver"):
                             candidates.append(p)
 
@@ -1396,18 +1402,28 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     log_msg(f"ERROR preserving live initramfs for recovery: {p_err}")
 
             def deploy_kernel_to_recovery():
-                """Copy the kernel to the recovery partition and generate refind_linux.conf."""
+                """Copy the live kernel to the recovery partition and generate refind_linux.conf."""
                 if "TEST_MODE" in os.environ or not is_efi:
                     return
                 kernel_cand = [
                     "/run/archiso/bootmnt/live/vmlinuz",
                     "/run/archiso/bootmnt/EFI/BOOT/vmlinuz",
+                    "/run/archiso/bootmnt/arch/boot/x86_64/vmlinuz-linux",
                     "/run/live/medium/live/vmlinuz",
                     "/lib/live/mount/medium/live/vmlinuz",
                     "/live/vmlinuz",
+                ]
+                for root_dir in ("/run/archiso", "/run/live", "/lib/live"):
+                    if os.path.exists(root_dir):
+                        for p in glob.glob(f"{root_dir}/**/vmlinuz*", recursive=True):
+                            if os.path.isfile(p) and not p.endswith(".kver"):
+                                kernel_cand.append(p)
+
+                kernel_cand += [
                     "/mnt/boot/vmlinuz-linux",
                     "/mnt/boot/vmlinuz",
                 ] + sorted(glob.glob("/mnt/boot/vmlinuz-*")) + sorted(glob.glob("/boot/vmlinuz-*"))
+                
                 found_k = next((k for k in kernel_cand if os.path.isfile(k) and not k.endswith(".kver") and os.path.getsize(k) > 1024), None)
                 try:
                     if not found_k:
@@ -1427,7 +1443,7 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                         f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
                         f.write(f'"Boot Recovery (Debug)"     "{rec_opts.replace("quiet splash", "loglevel=7")}"\n')
 
-                    log_msg("Recovery deploy verified: /mnt/recovery/boot/vmlinuz-recovery + initramfs-recovery.img + refind_linux.conf")
+                    log_msg(f"Recovery kernel deployed: {found_k} -> /mnt/recovery/boot/vmlinuz-recovery + refind_linux.conf")
                 except Exception as cp_err:
                     log_msg(f"ERROR deploying recovery kernel: {cp_err}")
 
@@ -1480,7 +1496,7 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     "default_selection 1\n"
                     "\n"
                     'menuentry "Pulsar OS" {\n'
-                    "    icon os_pulsaros_normal.png\n"
+                    "    icon themes/rEFInd-Regular-Dark/icons/os_pulsaros_normal.png\n"
                     "    volume PULSAR_OS\n"
                     f"    loader /@/boot/{k_name}\n"
                     f"{ucode_lines}"
@@ -1492,7 +1508,7 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                     "}\n"
                     "\n"
                     'menuentry "Pulsar OS Recovery" {\n'
-                    "    icon os_recovery.png\n"
+                    "    icon themes/rEFInd-Regular-Dark/icons/os_recovery.png\n"
                     "    volume PULSAR_RECOVERY\n"
                     "    loader /boot/vmlinuz-recovery\n"
                     "    initrd /boot/initramfs-recovery.img\n"
@@ -1677,8 +1693,11 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                                 )
 
                         refind_root = f"{esp_root}/EFI/refind"
+                        boot_fb = f"{esp_root}/EFI/BOOT"
                         theme_src = "/mnt/usr/share/refind/themes/rEFInd-Regular-Dark"
                         theme_dest = f"{refind_root}/themes/rEFInd-Regular-Dark"
+                        theme_fb_dest = f"{boot_fb}/themes/rEFInd-Regular-Dark"
+
                         if os.path.isdir(refind_root) and "TEST_MODE" not in os.environ:
                             os.makedirs(theme_dest, exist_ok=True)
                             if os.path.isdir(theme_src):
@@ -1687,41 +1706,65 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime,nofail     
                                     capture_output=True,
                                 )
 
-                            icon_src = "/mnt/usr/share/pulsaros-recovery/os_recovery.png"
-                            if not os.path.exists(icon_src):
-                                icon_src = "/usr/share/pulsaros-recovery/os_recovery.png"
-                            if not os.path.exists(icon_src):
-                                icon_src = "/usr/share/pulsar-boot-icons/os_recovery.png"
-                            if os.path.exists(icon_src):
-                                os.makedirs(f"{theme_dest}/icons", exist_ok=True)
-                                os.makedirs(f"{refind_root}/icons", exist_ok=True)
-                                os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
-                                os.makedirs("/mnt/recovery", exist_ok=True)
-                                shutil.copy2(icon_src, f"{theme_dest}/icons/os_recovery.png")
-                                shutil.copy2(icon_src, f"{theme_dest}/icons/os_recovery-big.png")
-                                shutil.copy2(icon_src, f"{theme_dest}/icons/os_pulsaros_recovery.png")
-                                shutil.copy2(icon_src, f"{refind_root}/icons/os_recovery.png")
-                                shutil.copy2(icon_src, f"{esp_root}/EFI/recovery/.VolumeIcon.png")
-                                shutil.copy2(icon_src, f"{esp_root}/EFI/recovery/os_recovery.png")
-                                shutil.copy2(icon_src, "/mnt/recovery/.VolumeIcon.png")
-                                shutil.copy2(icon_src, "/mnt/recovery/os_recovery.png")
+                            # Locate and deploy recovery icons (Apple gears) and Pulsar OS icons
+                            rec_icon_cands = [
+                                "/mnt/usr/share/pulsar-boot-icons/os_recovery.png",
+                                "/mnt/usr/share/pulsar-boot-icons/recovery.png",
+                                "/usr/share/pulsar-boot-icons/os_recovery.png",
+                                "/usr/share/pulsar-boot-icons/recovery.png",
+                                "/mnt/usr/share/pulsaros-recovery/os_recovery.png",
+                                "/usr/share/pulsaros-recovery/os_recovery.png",
+                            ]
+                            rec_icon_src = next((p for p in rec_icon_cands if os.path.isfile(p)), None)
+                            if rec_icon_src:
+                                for idir in (
+                                    f"{theme_dest}/icons",
+                                    f"{theme_fb_dest}/icons",
+                                    f"{refind_root}/icons",
+                                    refind_root,
+                                    f"{boot_fb}/icons",
+                                    boot_fb,
+                                    f"{esp_root}/EFI/recovery",
+                                    "/mnt/recovery",
+                                    "/mnt/recovery/boot",
+                                ):
+                                    try:
+                                        os.makedirs(idir, exist_ok=True)
+                                        shutil.copy2(rec_icon_src, f"{idir}/os_recovery.png")
+                                        shutil.copy2(rec_icon_src, f"{idir}/os_recovery-big.png")
+                                        shutil.copy2(rec_icon_src, f"{idir}/os_pulsaros_recovery.png")
+                                        shutil.copy2(rec_icon_src, f"{idir}/.VolumeIcon.png")
+                                    except Exception:
+                                        pass
 
-                            main_icon_dst = f"{theme_dest}/icons/os_pulsaros_normal.png"
-                            if not os.path.exists(main_icon_dst):
-                                mi_src = next(
-                                    (
-                                        p
-                                        for p in (
-                                            "/mnt/usr/share/pulsar-boot-icons/normal.png",
-                                            "/usr/share/pulsar-boot-icons/normal.png",
-                                        )
-                                        if os.path.exists(p)
-                                    ),
-                                    None,
-                                )
-                                if mi_src:
-                                    os.makedirs(f"{theme_dest}/icons", exist_ok=True)
-                                    shutil.copy2(mi_src, main_icon_dst)
+                            # Deploy Pulsar OS main icon
+                            main_icon_cands = [
+                                "/mnt/usr/share/pulsar-boot-icons/normal.png",
+                                "/usr/share/pulsar-boot-icons/normal.png",
+                                f"{theme_dest}/icons/os_pulsaros_normal.png",
+                                f"{theme_dest}/icons/os_pulsaros.png",
+                                "/mnt/usr/share/pulsaros-recovery/logo.png",
+                                "/usr/share/pulsaros-recovery/logo.png",
+                            ]
+                            main_icon_src = next((p for p in main_icon_cands if os.path.isfile(p)), None)
+                            if main_icon_src:
+                                for idir in (
+                                    f"{theme_dest}/icons",
+                                    f"{theme_fb_dest}/icons",
+                                    f"{refind_root}/icons",
+                                    refind_root,
+                                    f"{boot_fb}/icons",
+                                    boot_fb,
+                                    "/mnt/@/boot",
+                                    "/mnt/@",
+                                ):
+                                    try:
+                                        os.makedirs(idir, exist_ok=True)
+                                        shutil.copy2(main_icon_src, f"{idir}/os_pulsaros_normal.png")
+                                        shutil.copy2(main_icon_src, f"{idir}/os_pulsaros.png")
+                                        shutil.copy2(main_icon_src, f"{idir}/.VolumeIcon.png")
+                                    except Exception:
+                                        pass
 
                             for drv_name in ["ext4_x64.efi", "btrfs_x64.efi"]:
                                 drv_src = f"/mnt/usr/share/refind/drivers_x64/{drv_name}"

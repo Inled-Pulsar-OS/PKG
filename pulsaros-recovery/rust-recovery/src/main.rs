@@ -257,12 +257,24 @@ fn find_btrfs_targets() -> Vec<BtrfsTarget> {
 }
 
 fn detect_local_squashfs() -> Option<String> {
+    // If /tmp/pulsar_recovery isn't mounted yet, try to mount PULSAR_RECOVERY
+    let rec_mnt = "/tmp/pulsar_recovery";
+    let _ = fs::create_dir_all(rec_mnt);
+    let _ = Command::new("mount")
+        .args(&["-L", "PULSAR_RECOVERY", rec_mnt])
+        .output();
+
     let candidates = [
+        "/tmp/pulsar_recovery/images/x86_64/airootfs.sfs",
+        "/tmp/pulsar_recovery/live/filesystem.squashfs",
+        "/tmp/pulsar_recovery/images/pulsaros-base.squashfs",
+        "/recovery/images/x86_64/airootfs.sfs",
+        "/recovery/live/filesystem.squashfs",
         "/recovery/images/pulsaros-base.squashfs",
-        "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
-        "/run/archiso/bootmnt/live/filesystem.squashfs",
+        "/live/filesystem.squashfs",
         "/run/live/medium/live/filesystem.squashfs",
         "/lib/live/mount/medium/live/filesystem.squashfs",
+        "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
         "/run/archiso/airootfs.sfs",
     ];
     for p in &candidates {
@@ -293,6 +305,10 @@ fn build_ui(app: &Application) {
         .default_height(590)
         .resizable(true)
         .build();
+
+    if std::env::var("TEST_MODE").is_err() {
+        window.fullscreen();
+    }
 
     let style_mgr = libadwaita::StyleManager::default();
     style_mgr.set_color_scheme(libadwaita::ColorScheme::ForceDark);
