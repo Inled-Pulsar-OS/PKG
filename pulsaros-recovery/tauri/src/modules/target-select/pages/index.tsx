@@ -3,15 +3,20 @@ import { useRecoveryContext } from "@/modules/core";
 import { DiskCard } from "../components/disk-card";
 
 export function TargetSelectPage() {
-  const { targets, selectedTarget, setSelectedTarget, startRestoreFlow, goBack } =
-    useRecoveryContext();
+  const {
+    targets,
+    selectedTarget,
+    setSelectedTarget,
+    startRestoreFlow,
+    goBack,
+  } = useRecoveryContext();
 
   return (
     <Screen
       title="Select Pulsar OS Partition"
       subtitle="The root system (@) will be cleanly restored. Your documents, applications, and settings in /home (@home) will remain intact."
       footer={
-        <>
+        <div className="flex w-full items-center justify-end gap-2">
           <button className="btn-secondary" onClick={goBack}>
             Back
           </button>
@@ -22,7 +27,7 @@ export function TargetSelectPage() {
           >
             Restore System
           </button>
-        </>
+        </div>
       }
     >
       {targets.length === 0 ? (

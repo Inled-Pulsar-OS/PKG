@@ -12,7 +12,7 @@ export function UtilityRow({ option, selected, onSelect }: UtilityRowProps) {
   return (
     <button
       className={cn(
-        "flex w-full items-center gap-4 px-4 py-3.5 text-left transition-colors",
+        "cursor-pointer flex w-full items-center gap-4 px-4 py-3.5 text-left transition-colors",
         "border-b border-separator last:border-b-0",
         "hover:bg-black/[0.04]",
         selected && "bg-black/[0.06]"

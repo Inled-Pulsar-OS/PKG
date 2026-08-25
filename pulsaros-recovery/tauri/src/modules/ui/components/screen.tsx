@@ -15,7 +15,7 @@ export function Screen({ title, subtitle, children, footer }: ScreenProps) {
         className="glass screen-enter flex h-[75vh] max-h-[700px] min-h-[400px] w-[60vw] max-w-[800px] min-w-[500px] flex-col overflow-hidden"
       >
         {/* Header */}
-        <header className="flex flex-shrink-0 flex-col items-center px-8 pt-12 pb-4 sm:pt-16">
+        <header className="flex flex-shrink-0 flex-col items-center px-8 pt-12 pb-4 sm:pt-16 select-none">
           <h1 className="text-center text-[26px] font-semibold leading-tight text-text-primary sm:text-[28px]">
             {title}
           </h1>
