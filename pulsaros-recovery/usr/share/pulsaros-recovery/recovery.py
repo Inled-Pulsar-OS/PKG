@@ -1321,11 +1321,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     deb_dst = "/mnt/recovery/live/filesystem.squashfs"
                     shutil.copy2(found_rec_squash, deb_dst)
                     try:
+                        os.makedirs("/mnt/recovery/recovery", exist_ok=True)
+                        shutil.copy2(found_rec_squash, "/mnt/recovery/recovery/filesystem.squashfs")
                         shutil.copy2(found_rec_squash, "/mnt/recovery/filesystem.squashfs")
                     except Exception:
                         pass
                     try:
                         os.makedirs("/mnt/live", exist_ok=True)
+                        os.makedirs("/mnt/recovery", exist_ok=True)
                         shutil.copy2(found_rec_squash, "/mnt/live/filesystem.squashfs")
                     except Exception:
                         pass
@@ -1491,7 +1494,7 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime            
                     shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz.efi")
                     shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz")
                     
-                    rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live fsck.mode=skip quiet splash"
+                    rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=any fsck.mode=skip quiet splash"
                     
                     with open("/mnt/recovery/boot/refind_linux.conf", "w") as f:
                         f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
@@ -1533,7 +1536,7 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime            
                     if os.path.exists(f"/mnt/boot/{uc}")
                 )
 
-                rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live fsck.mode=skip quiet splash"
+                rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=any fsck.mode=skip quiet splash"
                 rec_net_opts = "boot=live components username=live autologin cow_spacesize=4G internet_recovery=1 quiet splash"
 
                 refind_main = f"{esp_root}/EFI/refind"
