@@ -1494,11 +1494,11 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime            
                     shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz.efi")
                     shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz")
                     
-                    rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=any fsck.mode=skip quiet splash"
+                    rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=@/recovery fsck.mode=skip quiet splash"
                     
                     with open("/mnt/recovery/boot/refind_linux.conf", "w") as f:
                         f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
-                        f.write(f'"Boot Recovery (Debug)"     "{rec_opts.replace("quiet splash", "loglevel=7")}"\n')
+                        f.write(f'"Boot Recovery (Debug)"     "{rec_opts.replace("quiet splash", "loglevel=7 live-debug")}"\n')
 
                     with open(f"{esp_root}/EFI/recovery/refind_linux.conf", "w") as f:
                         f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
@@ -1536,8 +1536,8 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime            
                     if os.path.exists(f"/mnt/boot/{uc}")
                 )
 
-                rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=any fsck.mode=skip quiet splash"
-                rec_net_opts = "boot=live components username=live autologin cow_spacesize=4G internet_recovery=1 quiet splash"
+                rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=@/recovery fsck.mode=skip quiet splash"
+                rec_net_opts = "boot=live components username=live autologin cow_spacesize=4G live-media-path=recovery internet_recovery=1 quiet splash"
 
                 refind_main = f"{esp_root}/EFI/refind"
                 boot_fb = f"{esp_root}/EFI/BOOT"
