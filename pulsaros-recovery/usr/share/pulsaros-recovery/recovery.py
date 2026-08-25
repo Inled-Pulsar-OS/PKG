@@ -1536,8 +1536,8 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime            
                     if os.path.exists(f"/mnt/boot/{uc}")
                 )
 
-                rec_opts_rec = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash"
-                rec_opts_os = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_OS live-media-path=@/live fsck.mode=skip quiet splash"
+                rec_opts_rec = "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live fsck.mode=skip quiet splash"
+                rec_opts_os = "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=@/live fsck.mode=skip quiet splash"
                 rec_opts_esp = "boot=live components username=live autologin cow_spacesize=4G live-media=any fsck.mode=skip quiet splash"
                 rec_net_opts = "boot=live components username=live autologin cow_spacesize=4G internet_recovery=1 quiet splash"
 
