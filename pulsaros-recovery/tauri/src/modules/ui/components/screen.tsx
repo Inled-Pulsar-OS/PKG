@@ -10,7 +10,10 @@ interface ScreenProps {
 export function Screen({ title, subtitle, children, footer }: ScreenProps) {
   return (
     <div className="bg-atmosphere flex h-screen w-screen items-center justify-center p-5 sm:p-8">
-      <div className="glass screen-enter flex h-full w-full max-h-[92vh] max-w-[92vw] flex-col overflow-hidden">
+      <div
+        data-sys-element-name="screen"
+        className="glass screen-enter flex h-[75vh] max-h-[700px] min-h-[400px] w-[60vw] max-w-[800px] min-w-[500px] flex-col overflow-hidden"
+      >
         {/* Header */}
         <header className="flex flex-shrink-0 flex-col items-center px-8 pt-12 pb-4 sm:pt-16">
           <h1 className="text-center text-[26px] font-semibold leading-tight text-text-primary sm:text-[28px]">
@@ -25,7 +28,9 @@ export function Screen({ title, subtitle, children, footer }: ScreenProps) {
 
         {/* Content */}
         <main className="flex min-h-0 flex-1 justify-center overflow-y-auto px-8 pb-6">
-          <div className="m-auto flex w-full max-w-[540px] flex-col">{children}</div>
+          <div className="m-auto flex w-full max-w-[540px] flex-col">
+            {children}
+          </div>
         </main>
 
         {/* Footer */}
