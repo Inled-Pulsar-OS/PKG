@@ -1,25 +1,133 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #1c1c1e;
-  --color-card: #2c2c2e;
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-strong: rgba(255, 255, 255, 0.12);
-  --color-accent: #0071e3;
-  --color-accent-hover: #007bf5;
-  --color-text-secondary: #98989d;
-  --color-row-hover: rgba(255, 255, 255, 0.07);
-  --color-row-selected: rgba(255, 255, 255, 0.12);
-}
+  /* Background */
+  --color-background: #e8e8ed;
+  --color-background-atmo-1: rgba(196, 168, 120, 0.3);
+  --color-background-atmo-2: rgba(120, 156, 196, 0.2);
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+  /* Surface */
+  --color-surface: rgba(255, 255, 255, 0.72);
+  --color-surface-solid: #ffffff;
+  --color-surface-elevated: rgba(255, 255, 255, 0.82);
+  --color-surface-grouped: rgba(245, 245, 247, 0.65);
+
+  /* Border / Separator */
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-separator: rgba(0, 0, 0, 0.06);
+
+  /* Text */
+  --color-text-primary: #1d1d1f;
+  --color-text-secondary: #6e6e73;
+  --color-text-tertiary: #aeaeb2;
+
+  /* Accent */
+  --color-accent: #0071e3;
+  --color-accent-hover: #0077ed;
+  --color-accent-active: #006edb;
 }
 
 body {
-  background-color: var(--color-bg);
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: "Inter", "SF Pro Display", "SF Pro Text", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Atmospheric background */
+.bg-atmosphere {
+  background-color: var(--color-background);
+  background-image:
+    radial-gradient(ellipse at 20% 50%, var(--color-background-atmo-1), transparent 60%),
+    radial-gradient(ellipse at 80% 30%, var(--color-background-atmo-2), transparent 60%);
+}
+
+/* Glass surface */
+.glass {
+  background: var(--color-surface);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    0 12px 40px rgba(0, 0, 0, 0.06);
+}
+
+/* Grouped content card (rows container) */
+.glass-grouped {
+  background: var(--color-surface-grouped);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
+/* Primary button */
+.btn-primary {
+  background: var(--color-accent);
   color: white;
-  font-family: "Inter", "SF Pro Display", -apple-system, system-ui, sans-serif;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 18px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  font-family: inherit;
+}
+.btn-primary:hover {
+  background: var(--color-accent-hover);
+}
+.btn-primary:active {
+  background: var(--color-accent-active);
+  transform: scale(0.98);
+}
+.btn-primary:disabled {
+  background: rgba(0, 0, 0, 0.04);
+  color: rgba(0, 0, 0, 0.2);
+  cursor: default;
+  transform: none;
+}
+
+/* Secondary button */
+.btn-secondary {
+  background: transparent;
+  color: var(--color-text-primary);
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 18px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  font-family: inherit;
+}
+.btn-secondary:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+.btn-secondary:active {
+  background: rgba(0, 0, 0, 0.08);
+  transform: scale(0.98);
+}
+
+/* Screen transition animation */
+@keyframes screen-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.screen-enter {
+  animation: screen-enter 0.3s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen-enter {
+    animation: none;
+  }
 }

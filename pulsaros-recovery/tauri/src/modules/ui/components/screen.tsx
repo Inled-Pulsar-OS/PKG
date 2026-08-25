@@ -4,23 +4,36 @@ interface ScreenProps {
   title: string;
   subtitle?: string;
   children: ReactNode;
+  footer?: ReactNode;
 }
 
-export function Screen({ title, subtitle, children }: ScreenProps) {
+export function Screen({ title, subtitle, children, footer }: ScreenProps) {
   return (
-    <div className="flex h-screen w-screen items-center justify-center bg-bg">
-      <div className="flex w-[560px] min-h-[450px] flex-col items-center rounded-[18px] border border-border-strong bg-card p-7 shadow-[0_20px_60px_rgba(0,0,0,0.8)]">
-        {title && (
-          <h1 className="mt-1 mb-1 text-center text-2xl font-bold text-white">
+    <div className="bg-atmosphere flex h-screen w-screen items-center justify-center p-5 sm:p-8">
+      <div className="glass screen-enter flex h-full w-full max-h-[92vh] max-w-[92vw] flex-col overflow-hidden">
+        {/* Header */}
+        <header className="flex flex-shrink-0 flex-col items-center px-8 pt-12 pb-4 sm:pt-16">
+          <h1 className="text-center text-[26px] font-semibold leading-tight text-text-primary sm:text-[28px]">
             {title}
           </h1>
+          {subtitle && (
+            <p className="mt-2.5 max-w-[440px] text-center text-[14px] leading-relaxed text-text-secondary sm:text-[15px]">
+              {subtitle}
+            </p>
+          )}
+        </header>
+
+        {/* Content */}
+        <main className="flex min-h-0 flex-1 justify-center overflow-y-auto px-8 pb-6">
+          <div className="m-auto flex w-full max-w-[540px] flex-col">{children}</div>
+        </main>
+
+        {/* Footer */}
+        {footer && (
+          <footer className="flex flex-shrink-0 items-center justify-between border-t border-separator px-6 py-3.5 sm:px-8 sm:py-4">
+            {footer}
+          </footer>
         )}
-        {subtitle && (
-          <p className="mb-4 text-center text-[13px] leading-relaxed text-text-secondary whitespace-pre-line">
-            {subtitle}
-          </p>
-        )}
-        {children}
       </div>
     </div>
   );

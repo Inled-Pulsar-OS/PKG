@@ -1,4 +1,5 @@
 import { cn } from "@/modules/ui/utils/cn";
+import { Icon } from "@/modules/ui";
 import type { BtrfsTarget } from "@/modules/core/types";
 
 interface DiskCardProps {
@@ -11,13 +12,16 @@ export function DiskCard({ target, selected, onSelect }: DiskCardProps) {
   return (
     <button
       className={cn(
-        "flex min-w-[140px] flex-col items-center gap-1 rounded-xl border border-[#3c3c3c] bg-[#2a2a2a] p-5 transition-all hover:bg-[#323236]",
-        selected && "border-accent shadow-[0_0_0_2px_var(--color-accent)] bg-[#323236]"
+        "flex min-w-[140px] flex-col items-center gap-1.5 rounded-xl border border-border bg-white/60 p-4 transition-all",
+        "hover:bg-white/80",
+        selected && "border-accent/40 ring-2 ring-accent/20 bg-white/80"
       )}
       onClick={() => onSelect(target)}
     >
-      <div className="text-[36px]">💾</div>
-      <div className="text-[13px] font-semibold text-white">
+      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
+        <Icon name="disk" className="h-5 w-5 text-accent" />
+      </div>
+      <div className="text-[13px] font-medium text-text-primary">
         {target.label} ({target.size})
       </div>
       <div className="text-[11px] text-text-secondary">{target.part_path}</div>
