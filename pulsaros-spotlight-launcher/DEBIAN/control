@@ -4,7 +4,7 @@ Section: gnome
 Priority: optional
 Architecture: amd64
 Maintainer: Jaime <info@inled.es>
-Depends: gnome-shell, python3, python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, gir1.2-tsparql-3.0 | gir1.2-tracker-3.0, localsearch | tracker-miner-fs, wl-clipboard
+Depends: gnome-shell, libgtk-4-1, libadwaita-1-0, localsearch | tracker-miner-fs, wl-clipboard
 Recommends: ydotool
 Provides: spotlight-gtk, spotlight-python, pulsaros-spotlight
 Replaces: spotlight-gtk, spotlight-python, pulsaros-spotlight

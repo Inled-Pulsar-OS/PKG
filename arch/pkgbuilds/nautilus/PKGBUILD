@@ -1,7 +1,8 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=nautilus
 pkgver=48.7
-pkgrel=1
+pkgrel=2
+epoch=1
 pkgdesc="GNOME Files (Finder) with Pulsar OS macOS customization"
 url="https://inled.es"
 license=(GPL-3.0-or-later)
@@ -35,6 +36,9 @@ makedepends=(
   ninja
 )
 options=(!lto)
+provides=(libnautilus-extension)
+conflicts=(libnautilus-extension)
+replaces=(libnautilus-extension)
 
 prepare() {
   _src="$(cd "$startdir"/../../../nautilus && pwd)"

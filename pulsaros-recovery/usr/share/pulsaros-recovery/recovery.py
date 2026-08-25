@@ -11,7 +11,10 @@ import threading
 import time
 import re
 import datetime
+import glob
+import shutil
 import gi
+
 
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
@@ -657,13 +660,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
             return
             
         if self.selected_action == "backup":
-            self._popen_as_user("deja-dup --restore || deja-dup")
+            subprocess.Popen("timeshift-launcher || pkexec timeshift-gtk || timeshift-gtk || deja-dup --restore || deja-dup", shell=True)
         elif self.selected_action == "install":
             self.show_installer_selector_dialog()
         elif self.selected_action == "safari":
-            self._popen_as_user("seafari")
+            self._popen_as_user("seafari || epiphany || firefox")
         elif self.selected_action == "disk":
-            self._popen_as_user("gnome-disks || gnome-disk-utility")
+            subprocess.Popen("gparted || pkexec gparted || gnome-disks || gnome-disk-utility", shell=True)
+
 
     def show_installer_selector_dialog(self):
         # Emergent selector popup matching Apple design
@@ -800,10 +804,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
         disk_name = disk_path.replace("/dev/", "")
         self.pending_disk_path = disk_path
         self.pending_disk_name = disk_name
-        self.install_nvidia = False
         self.install_broadcom = False
-        self.nvidia_info = self._detect_nvidia()
-        self._show_nvidia_dialog()
+        self._show_broadcom_dialog()
 
     def build_install_progress_screen(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -939,30 +941,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
     # Hardware detection helpers
     # ──────────────────────────────────────────────────────────────
 
-    def _detect_nvidia(self):
-        """Returns dict with keys: found, name, is_new_gen (Turing/Ampere/Ada/Blackwell ≥ GTX 1600/RTX)"""
-        try:
-            out = subprocess.check_output(
-                ["lspci", "-nn"], text=True, stderr=subprocess.DEVNULL
-            )
-        except Exception:
-            return {"found": False}
-        for line in out.splitlines():
-            if "NVIDIA" in line and ("VGA" in line or "3D" in line or "Display" in line):
-                name = line.split(":", 2)[-1].strip()
-                # Turing = RTX 20xx / GTX 1660, Ampere = RTX 30xx,
-                # Ada = RTX 40xx, Blackwell = RTX 50xx  → considered "new"
-                import re as _re
-                m = _re.search(r"(?:RTX|GTX)\s*(\d+)", name, _re.IGNORECASE)
-                if m:
-                    num = int(m.group(1))
-                    is_new = num >= 1600
-                else:
-                    # Quadro / Tesla / older numbering – treat as old
-                    is_new = False
-                return {"found": True, "name": name, "is_new": is_new}
-        return {"found": False}
-
     def _detect_broadcom(self):
         """Returns True if a Broadcom WiFi/BT chip is detected via lspci/lsusb."""
         try:
@@ -979,95 +957,25 @@ class RecoveryWindow(Adw.ApplicationWindow):
             pass
         return False
 
-    def _get_pulsar_channel(self):
-        """Reads /etc/pulsar-channel (values: stable | forky | rolling)."""
-        try:
-            with open("/etc/pulsar-channel") as f:
-                return f.read().strip().lower()
-        except Exception:
-            pass
-        # Fallback: check VERSION_CODENAME in os-release
-        try:
-            with open("/etc/os-release") as f:
-                for line in f:
-                    if line.startswith("VERSION_CODENAME"):
-                        val = line.split("=", 1)[1].strip().strip('"').lower()
-                        if val in ("forky", "rolling"):
-                            return val
-        except Exception:
-            pass
-        return "stable"
-
-    # ──────────────────────────────────────────────────────────────
-    # Hardware dialog chain
-    # ──────────────────────────────────────────────────────────────
-
-    def _show_nvidia_dialog(self):
-        nvidia = self.nvidia_info
-        channel = self._get_pulsar_channel()
-
-        if not nvidia.get("found"):
-            # No NVIDIA → skip straight to Broadcom
-            self._show_broadcom_dialog()
-            return
-
-        gpu_name = nvidia.get("name", "NVIDIA GPU")
-        is_new   = nvidia.get("is_new", False)
-
-        if is_new and channel == "stable":
-            heading = "New NVIDIA GPU Detected"
-            body = (
-                f"<b>{gpu_name}</b>\n\n"
-                "Your GPU requires recent NVIDIA drivers that work best on "
-                "<b>Pulsar OS Forky</b> or <b>Pulsar OS Rolling</b>.\n\n"
-                "Continuing on <b>Stable</b> may result in a black screen or "
-                "degraded performance. We recommend switching channels after install.\n\n"
-                "⚠️  Ethernet recommended — WiFi may not work until drivers are installed."
-            )
-        else:
-            heading = "NVIDIA GPU Detected"
-            body = (
-                f"<b>{gpu_name}</b>\n\n"
-                "Would you like to install NVIDIA proprietary drivers?\n\n"
-                "⚠️  Ethernet recommended — WiFi may not work until drivers are installed."
-            )
-
-        dialog = Adw.MessageDialog(
-            transient_for=self,
-            heading=heading,
-            body=body,
-        )
-        dialog.set_body_use_markup(True)
-        dialog.add_response("skip",    "Skip")
-        dialog.add_response("install", "Install NVIDIA Drivers")
-        dialog.set_response_appearance("install", Adw.ResponseAppearance.SUGGESTED)
-        dialog.set_default_response("install")
-
-        def on_response(d, resp):
-            d.destroy()
-            if resp == "install":
-                self.install_nvidia = True
-            self._show_broadcom_dialog()
-
-        dialog.connect("response", on_response)
-        dialog.present()
-
     def _show_broadcom_dialog(self):
         auto_detected = self._detect_broadcom()
         if auto_detected:
             heading = "Broadcom Hardware Detected"
             body = (
-                "A Broadcom WiFi or Bluetooth adapter was detected on this system.\n\n"
-                "Would you like to install Broadcom drivers (<tt>broadcom-sta-dkms</tt>)?\n\n"
-                "⚠️  Ethernet recommended during installation."
+                "A Broadcom WiFi or Bluetooth adapter was detected on this computer.\n\n"
+                "Would you like to install the Broadcom wireless driver (<tt>broadcom-wl / broadcom-sta-dkms</tt>)?\n\n"
+                "⚠️ <b>Active Internet connection required</b>:\n"
+                "An active Internet connection (Ethernet cable or USB tethering) is required during installation to download and compile the driver.\n\n"
+                "If you do not have Internet access right now, choose \"No\" (you can install it later with Driver Manager)."
             )
         else:
-            heading = "Broadcom Drivers"
+            heading = "Broadcom Wireless Drivers"
             body = (
                 "No Broadcom adapter was automatically detected.\n\n"
-                "Do you have a Broadcom WiFi or Bluetooth chip? "
-                "(Common in some laptops and older Mac hardware.)\n\n"
-                "If unsure, choose \"No\"."
+                "Do you have a Broadcom WiFi or Bluetooth chip? (Common in older MacBooks and select laptops).\n\n"
+                "⚠️ <b>Active Internet connection required</b>:\n"
+                "An active Internet connection (Ethernet cable or USB tethering) is required to download the driver.\n\n"
+                "If unsure or without Internet, choose \"No\"."
             )
 
         dialog = Adw.MessageDialog(
@@ -1164,6 +1072,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         "/mnt/proc",
                         "/mnt/dev/pts",
                         "/mnt/dev",
+                        "/mnt/recovery",
+                        "/mnt/boot/efi",
+                        "/mnt/home",
                     ]:
                         if os.path.exists(mount_path):
                             res = subprocess.run(["umount", "-f", mount_path], capture_output=True)
@@ -1184,6 +1095,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 
             is_efi = os.path.exists("/sys/firmware/efi")
             is_arch = os.path.exists("/etc/pacman.conf")
+            esp_root = "/mnt/boot/efi"
             
             # Unmount any active mounts on the selected disk first to prevent device busy errors
             if "TEST_MODE" not in os.environ:
@@ -1199,12 +1111,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 subprocess.run(["swapoff", "-a"], capture_output=True)
 
             if is_efi:
-                GLib.idle_add(self.update_progress, 0.05, "Cleaning and partitioning (GPT for UEFI)...")
+                GLib.idle_add(self.update_progress, 0.05, "Cleaning and partitioning (GPT for UEFI: EFI, Recovery, Btrfs)...")
                 exec_cmd(["wipefs", "-a", "-f", disk_path])
                 exec_cmd(["sgdisk", "--zap-all", disk_path])
                 exec_cmd(["sgdisk", "--clear", disk_path])
                 exec_cmd(["sgdisk", "--new=1:0:+512M", "--typecode=1:ef00", "--change-name=1:EFI", disk_path])
-                exec_cmd(["sgdisk", "--new=2:0:0", "--typecode=2:8300", "--change-name=2:PulsarOS", disk_path])
+                exec_cmd(["sgdisk", "--new=2:0:+4G", "--typecode=2:8300", "--change-name=2:PulsarRecovery", disk_path])
+                exec_cmd(["sgdisk", "--new=3:0:0", "--typecode=3:8300", "--change-name=3:PulsarOS", disk_path])
                 exec_cmd(["sync"])
                 exec_cmd(["udevadm", "settle"])
                 try:
@@ -1219,38 +1132,52 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 
                 if "nvme" in disk_path or "mmcblk" in disk_path or "loop" in disk_path:
                     efi_part = f"{disk_path}p1"
-                    root_part = f"{disk_path}p2"
+                    recovery_part = f"{disk_path}p2"
+                    root_part = f"{disk_path}p3"
                 else:
                     efi_part = f"{disk_path}1"
-                    root_part = f"{disk_path}2"
+                    recovery_part = f"{disk_path}2"
+                    root_part = f"{disk_path}3"
                     
                 exec_cmd(["wipefs", "-a", "-f", efi_part])
+                exec_cmd(["wipefs", "-a", "-f", recovery_part])
                 exec_cmd(["wipefs", "-a", "-f", root_part])
                 
-                GLib.idle_add(self.update_progress, 0.12, "Formatting partitions (EFI and ext4)...")
+                GLib.idle_add(self.update_progress, 0.10, "Formatting partitions (EFI, Recovery, Btrfs)...")
                 exec_cmd(["mkfs.vfat", "-F32", "-n", "EFI", efi_part])
-                exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PulsarOS", root_part])
+                exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PULSAR_RECOVERY", recovery_part])
+                exec_cmd(["mkfs.btrfs", "-f", "-L", "PULSAR_OS", root_part])
                 exec_cmd(["sync"])
                 exec_cmd(["udevadm", "settle"])
                 time.sleep(1)
                 
+                subprocess.run(["modprobe", "btrfs"], capture_output=True)
                 subprocess.run(["modprobe", "ext4"], capture_output=True)
                 subprocess.run(["modprobe", "vfat"], capture_output=True)
                 
-                GLib.idle_add(self.update_progress, 0.18, "Mounting file systems...")
+                GLib.idle_add(self.update_progress, 0.15, "Creating Btrfs subvolumes (@ and @home)...")
                 if "TEST_MODE" not in os.environ:
-                    subprocess.run(["umount", "-l", "/mnt/boot/efi"])
                     subprocess.run(["umount", "-l", "/mnt"])
                 os.makedirs("/mnt", exist_ok=True)
-                exec_cmd(["mount", "-t", "ext4", root_part, "/mnt"])
+                exec_cmd(["mount", "-t", "btrfs", root_part, "/mnt"])
+                exec_cmd(["btrfs", "subvolume", "create", "/mnt/@"])
+                exec_cmd(["btrfs", "subvolume", "create", "/mnt/@home"])
+                exec_cmd(["umount", "/mnt"])
+                
+                GLib.idle_add(self.update_progress, 0.18, "Mounting Btrfs subvolumes...")
+                exec_cmd(["mount", "-t", "btrfs", "-o", "subvol=@,compress=zstd:1", root_part, "/mnt"])
                 exec_cmd(["mount", "--make-rprivate", "/mnt"])
+                os.makedirs("/mnt/home", exist_ok=True)
+                exec_cmd(["mount", "-t", "btrfs", "-o", "subvol=@home,compress=zstd:1", root_part, "/mnt/home"])
                 os.makedirs("/mnt/boot/efi", exist_ok=True)
                 exec_cmd(["mount", "-t", "vfat", efi_part, "/mnt/boot/efi"])
+                os.makedirs("/mnt/recovery", exist_ok=True)
+                exec_cmd(["mount", "-t", "ext4", recovery_part, "/mnt/recovery"])
             else:
-                GLib.idle_add(self.update_progress, 0.05, "Cleaning and partitioning (MBR for BIOS)...")
+                GLib.idle_add(self.update_progress, 0.05, "Cleaning and partitioning (MBR for BIOS: Recovery, Btrfs)...")
                 exec_cmd(["wipefs", "-a", "-f", disk_path])
                 exec_cmd(["dd", "if=/dev/zero", f"of={disk_path}", "bs=512", "count=2048"])
-                sfdisk_script = "label: dos\nsize=+, type=83, bootable\n"
+                sfdisk_script = "label: dos\nsize=4096M, type=83\nsize=+, type=83, bootable\n"
                 if "TEST_MODE" in os.environ:
                     print(f"[TEST_MODE] Simulating sfdisk partitioning script:\n{sfdisk_script}")
                 else:
@@ -1260,7 +1187,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 exec_cmd(["sync"])
                 exec_cmd(["udevadm", "settle"])
                 if "TEST_MODE" not in os.environ:
-                    subprocess.run(["sfdisk", "--activate", disk_path, "1"], capture_output=True)
+                    subprocess.run(["sfdisk", "--activate", disk_path, "2"], capture_output=True)
                 try:
                     exec_cmd(["partprobe", disk_path])
                 except Exception:
@@ -1272,25 +1199,40 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 time.sleep(1)
                 
                 if "nvme" in disk_path or "mmcblk" in disk_path or "loop" in disk_path:
-                    root_part = f"{disk_path}p1"
+                    recovery_part = f"{disk_path}p1"
+                    root_part = f"{disk_path}p2"
                 else:
-                    root_part = f"{disk_path}1"
+                    recovery_part = f"{disk_path}1"
+                    root_part = f"{disk_path}2"
                     
+                exec_cmd(["wipefs", "-a", "-f", recovery_part])
                 exec_cmd(["wipefs", "-a", "-f", root_part])
-                GLib.idle_add(self.update_progress, 0.12, "Formatting root partition (ext4)...")
-                exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PulsarOS", root_part])
+                GLib.idle_add(self.update_progress, 0.10, "Formatting Recovery and Btrfs partitions...")
+                exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PULSAR_RECOVERY", recovery_part])
+                exec_cmd(["mkfs.btrfs", "-f", "-L", "PULSAR_OS", root_part])
                 exec_cmd(["sync"])
                 exec_cmd(["udevadm", "settle"])
                 time.sleep(1)
                 
+                subprocess.run(["modprobe", "btrfs"], capture_output=True)
                 subprocess.run(["modprobe", "ext4"], capture_output=True)
                 
-                GLib.idle_add(self.update_progress, 0.18, "Mounting file systems...")
+                GLib.idle_add(self.update_progress, 0.15, "Creating Btrfs subvolumes (@ and @home)...")
                 if "TEST_MODE" not in os.environ:
                     subprocess.run(["umount", "-l", "/mnt"])
                 os.makedirs("/mnt", exist_ok=True)
-                exec_cmd(["mount", "-t", "ext4", root_part, "/mnt"])
+                exec_cmd(["mount", "-t", "btrfs", root_part, "/mnt"])
+                exec_cmd(["btrfs", "subvolume", "create", "/mnt/@"])
+                exec_cmd(["btrfs", "subvolume", "create", "/mnt/@home"])
+                exec_cmd(["umount", "/mnt"])
+                
+                GLib.idle_add(self.update_progress, 0.18, "Mounting Btrfs subvolumes...")
+                exec_cmd(["mount", "-t", "btrfs", "-o", "subvol=@,compress=zstd:1", root_part, "/mnt"])
                 exec_cmd(["mount", "--make-rprivate", "/mnt"])
+                os.makedirs("/mnt/home", exist_ok=True)
+                exec_cmd(["mount", "-t", "btrfs", "-o", "subvol=@home,compress=zstd:1", root_part, "/mnt/home"])
+                os.makedirs("/mnt/recovery", exist_ok=True)
+                exec_cmd(["mount", "-t", "ext4", recovery_part, "/mnt/recovery"])
             
             GLib.idle_add(self.update_progress, 0.25, "Replicating system files... (this may take a while)")
             
@@ -1338,11 +1280,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         if m:
                             pct = int(m.group(1))
                             speed = m.group(2)
-                            overall_fraction = 0.25 + (pct / 100.0) * 0.60
+                            frac = 0.25 + (pct / 100.0) * 0.55
                             GLib.idle_add(
-                                self.update_progress,
-                                overall_fraction,
-                                f"Installing system files... ({pct}% - {speed})"
+                                self.update_progress, 
+                                frac, 
+                                f"Copying files: {pct}% at {speed}"
                             )
                     else:
                         buffer += char
@@ -1353,6 +1295,76 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     err_output = proc.stderr.read()
                     raise Exception(f"System replication failed (code {proc.returncode})\n{err_output}")
                 
+            # Populate Recovery Partition with dedicated Debian Recovery image, clean base image, and assistant.
+            try:
+                os.makedirs("/mnt/recovery/images/x86_64", exist_ok=True)
+                os.makedirs("/mnt/recovery/live", exist_ok=True)
+                os.makedirs("/mnt/recovery/boot", exist_ok=True)
+
+                # 1. Recovery OS SquashFS (Debian + Fluxbox + Rust Assistant)
+                rec_squash_sources = [
+                    "/recovery/filesystem.squashfs",
+                    "/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
+                    "/mnt/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
+                    "/run/archiso/bootmnt/recovery/filesystem.squashfs",
+                    "/run/live/medium/recovery/filesystem.squashfs",
+                    "/lib/live/mount/medium/recovery/filesystem.squashfs",
+                    "/run/live/medium/live/filesystem.squashfs",
+                    "/lib/live/mount/medium/live/filesystem.squashfs",
+                    "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
+                    "/run/archiso/bootmnt/live/filesystem.squashfs",
+                    "/run/archiso/airootfs.sfs",
+                    "/live/filesystem.squashfs",
+                ]
+                found_rec_squash = next((p for p in rec_squash_sources if os.path.isfile(p)), None)
+                if found_rec_squash and "TEST_MODE" not in os.environ:
+                    deb_dst = "/mnt/recovery/live/filesystem.squashfs"
+                    shutil.copy2(found_rec_squash, deb_dst)
+                    try:
+                        os.makedirs("/mnt/recovery/recovery", exist_ok=True)
+                        shutil.copy2(found_rec_squash, "/mnt/recovery/recovery/filesystem.squashfs")
+                        shutil.copy2(found_rec_squash, "/mnt/recovery/filesystem.squashfs")
+                    except Exception:
+                        pass
+                    try:
+                        os.makedirs("/mnt/live", exist_ok=True)
+                        os.makedirs("/mnt/recovery", exist_ok=True)
+                        shutil.copy2(found_rec_squash, "/mnt/live/filesystem.squashfs")
+                    except Exception:
+                        pass
+                    arch_dst = "/mnt/recovery/images/x86_64/airootfs.sfs"
+                    if not os.path.exists(arch_dst):
+                        try:
+                            os.link(deb_dst, arch_dst)
+                        except Exception:
+                            shutil.copy2(deb_dst, arch_dst)
+                    log_msg(f"Recovery OS squashfs deployed from {found_rec_squash} -> {deb_dst}")
+
+                # 2. Base System SquashFS (for restoring root @ subvolume)
+                base_squash_sources = [
+                    "/run/archiso/bootmnt/images/pulsaros-base.squashfs",
+                    "/run/live/medium/images/pulsaros-base.squashfs",
+                    "/recovery/images/pulsaros-base.squashfs",
+                    "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
+                    "/run/archiso/bootmnt/live/filesystem.squashfs",
+                    "/run/live/medium/live/filesystem.squashfs",
+                    "/lib/live/mount/medium/live/filesystem.squashfs",
+                    "/live/filesystem.squashfs",
+                ]
+                found_base_squash = next((p for p in base_squash_sources if os.path.isfile(p)), None)
+                if found_base_squash and "TEST_MODE" not in os.environ:
+                    base_dst = "/mnt/recovery/images/pulsaros-base.squashfs"
+                    if found_base_squash != deb_dst:
+                        shutil.copy2(found_base_squash, base_dst)
+                    else:
+                        try:
+                            os.link(deb_dst, base_dst)
+                        except Exception:
+                            shutil.copy2(deb_dst, base_dst)
+                    log_msg(f"Base system restoration image deployed from {found_base_squash} -> {base_dst}")
+            except Exception as rec_copy_err:
+                print(f"Notice: Recovery squashfs copy: {rec_copy_err}")
+
             GLib.idle_add(self.update_progress, 0.85, "Configuring bootloader (fstab)...")
             def get_partition_uuid(part):
                 if "TEST_MODE" in os.environ:
@@ -1361,32 +1373,259 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 return val.strip()
                 
             root_uuid = get_partition_uuid(root_part)
+            rec_uuid = get_partition_uuid(recovery_part)
             
             if is_efi:
                 efi_uuid = get_partition_uuid(efi_part)
-                fstab_content = f"""# /etc/fstab: static file system information.
-#
-# <file system>             <mount point>   <type>  <options>       <dump>  <pass>
-UUID={root_uuid} /               ext4    errors=remount-ro 0       1
-UUID={efi_uuid} /boot/efi       vfat    umask=0077      0       2
+                fstab_content = f"""# /etc/fstab: Pulsar OS Btrfs Configuration
+# <file system>             <mount point>   <type>  <options>                                       <dump>  <pass>
+UUID={root_uuid}            /               btrfs   subvol=@,compress=zstd:1,space_cache=v2         0       0
+UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1,space_cache=v2     0       0
+UUID={efi_uuid}             /boot/efi       vfat    umask=0077                                      0       2
+UUID={rec_uuid}             /recovery       ext4    defaults,noatime                                0       2
 """
+                if "TEST_MODE" not in os.environ:
+                    os.makedirs("/mnt/etc", exist_ok=True)
+                    os.makedirs("/mnt/dev", exist_ok=True)
+                    os.makedirs("/mnt/proc", exist_ok=True)
+                    os.makedirs("/mnt/sys", exist_ok=True)
+                    os.makedirs("/mnt/run", exist_ok=True)
+                    with open("/mnt/etc/fstab", "w") as f:
+                        f.write(fstab_content)
             else:
-                fstab_content = f"""# /etc/fstab: static file system information.
-#
-# <file system>             <mount point>   <type>  <options>       <dump>  <pass>
-UUID={root_uuid} /               ext4    errors=remount-ro 0       1
+                fstab_content = f"""# /etc/fstab: Pulsar OS Btrfs Configuration (BIOS)
+# <file system>             <mount point>   <type>  <options>                                       <dump>  <pass>
+UUID={root_uuid}            /               btrfs   subvol=@,compress=zstd:1,space_cache=v2         0       0
+UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1,space_cache=v2     0       0
+UUID={rec_uuid}             /recovery       ext4    defaults,noatime                                0       2
 """
-            if "TEST_MODE" in os.environ:
-                print(f"[TEST_MODE] Simulating writing fstab content:\n{fstab_content}")
-            else:
-                os.makedirs("/mnt/etc", exist_ok=True)
-                os.makedirs("/mnt/dev", exist_ok=True)
-                os.makedirs("/mnt/proc", exist_ok=True)
-                os.makedirs("/mnt/sys", exist_ok=True)
-                os.makedirs("/mnt/run", exist_ok=True)
-                with open("/mnt/etc/fstab", "w") as f:
-                    f.write(fstab_content)
+                if "TEST_MODE" not in os.environ:
+                    os.makedirs("/mnt/etc", exist_ok=True)
+                    os.makedirs("/mnt/dev", exist_ok=True)
+                    os.makedirs("/mnt/proc", exist_ok=True)
+                    os.makedirs("/mnt/sys", exist_ok=True)
+                    os.makedirs("/mnt/run", exist_ok=True)
+                    with open("/mnt/etc/fstab", "w") as f:
+                        f.write(fstab_content)
                 
+            def preserve_live_initramfs_for_recovery():
+                """Deploy the live/recovery initramfs to PULSAR_OS (@/boot), ESP, and PULSAR_RECOVERY."""
+                if "TEST_MODE" in os.environ or not is_efi:
+                    return
+                try:
+                    candidates = [
+                        # Dedicated Debian recovery initrd
+                        "/recovery/initramfs-recovery.img",
+                        "/usr/share/pulsaros-recovery/initramfs-recovery.img",
+                        "/run/archiso/bootmnt/recovery/initramfs-recovery.img",
+                        "/run/live/medium/recovery/initramfs-recovery.img",
+                        "/mnt/usr/share/pulsaros-recovery/initramfs-recovery.img",
+                        "/mnt/recovery/initramfs-recovery.img",
+                    ]
+                    src = next((p for p in candidates if os.path.isfile(p) and os.path.getsize(p) > 1024), None)
+                    if not src:
+                        # Fallback to general live media paths
+                        for root_dir in ("/run/archiso", "/run/live", "/lib/live"):
+                            if os.path.exists(root_dir):
+                                for p in glob.glob(f"{root_dir}/**/initr*", recursive=True):
+                                    if os.path.isfile(p) and not p.endswith(".kver"):
+                                        candidates.append(p)
+                        for p in sorted(glob.glob("/boot/initramfs-*.img") + glob.glob("/boot/initrd.img*") + glob.glob("/boot/initrd*")):
+                            if "fallback" not in p and "ucode" not in p and not p.endswith(".kver"):
+                                candidates.append(p)
+                        src = next((p for p in candidates if os.path.isfile(p) and os.path.getsize(p) > 1024), None)
+
+                    if not src:
+                        log_msg("ERROR: no live initramfs found - the recovery entry will not boot")
+                        return
+                    esp_root = "/mnt/boot/efi"
+                    os.makedirs("/mnt/boot", exist_ok=True)
+                    os.makedirs("/mnt/recovery/boot", exist_ok=True)
+                    os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
+                    shutil.copy2(src, "/mnt/boot/initramfs-recovery.img")
+                    shutil.copy2(src, "/mnt/recovery/boot/initramfs-recovery.img")
+                    shutil.copy2(src, "/mnt/recovery/initramfs-recovery.img")
+                    shutil.copy2(src, f"{esp_root}/EFI/recovery/initramfs-recovery.img")
+                    shutil.copy2(src, f"{esp_root}/EFI/recovery/initrd.img")
+                    subprocess.run(["sync"])
+                    log_msg(f"Recovery initramfs deployed to PULSAR_OS, PULSAR_RECOVERY, and ESP from {src}")
+                except Exception as p_err:
+                    log_msg(f"ERROR preserving live initramfs for recovery: {p_err}")
+
+            def deploy_kernel_to_recovery():
+                """Deploy the live/recovery kernel to PULSAR_OS (@/boot), ESP, and PULSAR_RECOVERY."""
+                if "TEST_MODE" in os.environ or not is_efi:
+                    return
+                kernel_cand = [
+                    # Dedicated Debian recovery kernel
+                    "/recovery/vmlinuz-recovery",
+                    "/usr/share/pulsaros-recovery/vmlinuz-recovery",
+                    "/run/archiso/bootmnt/recovery/vmlinuz-recovery",
+                    "/run/live/medium/recovery/vmlinuz-recovery",
+                    "/mnt/usr/share/pulsaros-recovery/vmlinuz-recovery",
+                    "/mnt/recovery/vmlinuz-recovery",
+                ]
+                found_k = next((k for k in kernel_cand if os.path.isfile(k) and not k.endswith(".kver") and os.path.getsize(k) > 1024), None)
+                if not found_k:
+                    for root_dir in ("/run/archiso", "/run/live", "/lib/live"):
+                        if os.path.exists(root_dir):
+                            for p in glob.glob(f"{root_dir}/**/vmlinuz*", recursive=True):
+                                if os.path.isfile(p) and not p.endswith(".kver"):
+                                    kernel_cand.append(p)
+                    kernel_cand += [
+                        "/mnt/boot/vmlinuz-linux",
+                        "/mnt/boot/vmlinuz",
+                    ] + sorted(glob.glob("/mnt/boot/vmlinuz-*")) + sorted(glob.glob("/boot/vmlinuz-*"))
+                    found_k = next((k for k in kernel_cand if os.path.isfile(k) and not k.endswith(".kver") and os.path.getsize(k) > 1024), None)
+                try:
+                    if not found_k:
+                        log_msg("ERROR: no kernel found - the recovery entry will not boot")
+                        return
+                    esp_root = "/mnt/boot/efi"
+                    os.makedirs("/mnt/boot", exist_ok=True)
+                    os.makedirs("/mnt/recovery/boot", exist_ok=True)
+                    os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
+                    shutil.copy2(found_k, "/mnt/boot/vmlinuz-recovery")
+                    shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-recovery")
+                    shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-linux")
+                    shutil.copy2(found_k, "/mnt/recovery/vmlinuz-recovery")
+                    shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery.efi")
+                    shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery")
+                    shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz.efi")
+                    shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz")
+                    
+                    rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=@/recovery fsck.mode=skip quiet splash"
+                    
+                    with open("/mnt/recovery/boot/refind_linux.conf", "w") as f:
+                        f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
+                        f.write(f'"Boot Recovery (Debug)"     "{rec_opts.replace("quiet splash", "loglevel=7 live-debug")}"\n')
+
+                    with open(f"{esp_root}/EFI/recovery/refind_linux.conf", "w") as f:
+                        f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
+
+                    subprocess.run(["sync"])
+                    log_msg(f"Recovery kernel deployed to PULSAR_OS, PULSAR_RECOVERY, and ESP from {found_k}")
+                except Exception as cp_err:
+                    log_msg(f"ERROR deploying recovery kernel: {cp_err}")
+
+            def configure_refind_menus():
+                """Write the deterministic two-entry boot menu to EVERY rEFInd
+                configuration location (NVRAM path and fallback)."""
+                if "TEST_MODE" in os.environ or not is_efi:
+                    return
+                MENU_BEGIN = "# PULSAR-MENU-BEGIN"
+                MENU_END = "# PULSAR-MENU-END"
+
+                kernel_cands = sorted(glob.glob("/mnt/boot/vmlinuz-*") + glob.glob("/mnt/boot/vmlinuz"))
+                installed_k_file = next((k for k in kernel_cands if os.path.isfile(k) and not k.endswith(".kver")), None)
+                k_name = os.path.basename(installed_k_file) if installed_k_file else "vmlinuz-linux"
+
+                initrd_cands = sorted(glob.glob("/mnt/boot/initramfs-*.img") + glob.glob("/mnt/boot/initrd.img*") + glob.glob("/mnt/boot/initrd*"))
+                installed_initrd_file = next(
+                    (
+                        i for i in initrd_cands
+                        if os.path.isfile(i) and "fallback" not in i and "ucode" not in i and not i.endswith(".kver")
+                    ),
+                    None
+                )
+                initrd_name = os.path.basename(installed_initrd_file) if installed_initrd_file else "initramfs-linux.img"
+
+                ucode_lines = "".join(
+                    f"    initrd /@/boot/{uc}\n"
+                    for uc in ("amd-ucode.img", "intel-ucode.img")
+                    if os.path.exists(f"/mnt/boot/{uc}")
+                )
+
+                rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=@/recovery fsck.mode=skip quiet splash"
+                rec_net_opts = "boot=live components username=live autologin cow_spacesize=4G live-media-path=recovery internet_recovery=1 quiet splash"
+
+                refind_main = f"{esp_root}/EFI/refind"
+                boot_fb = f"{esp_root}/EFI/BOOT"
+
+                for rd in (refind_main, boot_fb):
+                    conf_path = f"{rd}/refind.conf"
+                    if not os.path.isdir(rd):
+                        log_msg(f"Notice: {rd} absent - menu config skipped there")
+                        continue
+                    try:
+                        is_main = (rd == refind_main)
+                        icon_prefix = "/EFI/refind" if is_main else "/EFI/BOOT"
+                        icon_os = f"{icon_prefix}/themes/rEFInd-Regular-Dark/icons/os_pulsaros_normal.png"
+                        icon_rec = f"{icon_prefix}/themes/rEFInd-Regular-Dark/icons/os_recovery.png"
+
+                        menu_block = (
+                            f"\n{MENU_BEGIN}\n"
+                            "# Only show our explicit curated entries: exactly\n"
+                            "# 'Pulsar OS' and 'Pulsar OS Recovery'.\n"
+                            "scanfor manual,external,optical\n"
+                            'dont_scan_volumes "PULSAR_RECOVERY"\n'
+                            "default_selection 1\n"
+                            "\n"
+                            'menuentry "Pulsar OS" {\n'
+                            f"    icon {icon_os}\n"
+                            "    volume PULSAR_OS\n"
+                            f"    loader /@/boot/{k_name}\n"
+                            f"{ucode_lines}"
+                            f"    initrd /@/boot/{initrd_name}\n"
+                            f'    options "root=UUID={root_uuid} rootflags=subvol=@ rw quiet splash"\n'
+                            '    submenuentry "Boot to single-user mode" {\n'
+                            f'        options "root=UUID={root_uuid} rootflags=subvol=@ rw single"\n'
+                            "    }\n"
+                            "}\n"
+                            "\n"
+                            'menuentry "Pulsar OS Recovery" {\n'
+                            f"    icon {icon_rec}\n"
+                            "    volume PULSAR_OS\n"
+                            "    loader /@/boot/vmlinuz-recovery\n"
+                            "    initrd /@/boot/initramfs-recovery.img\n"
+                            f'    options "{rec_opts}"\n'
+                            '    submenuentry "Boot Recovery from ESP" {\n'
+                            "        loader /EFI/recovery/vmlinuz-recovery\n"
+                            "        initrd /EFI/recovery/initramfs-recovery.img\n"
+                            f'        options "{rec_opts}"\n'
+                            "    }\n"
+                            '    submenuentry "Boot Recovery from PULSAR_RECOVERY partition" {\n'
+                            "        volume PULSAR_RECOVERY\n"
+                            "        loader /boot/vmlinuz-recovery\n"
+                            "        initrd /boot/initramfs-recovery.img\n"
+                            f'        options "{rec_opts.replace("live-media=any", "live-media=/dev/disk/by-label/PULSAR_RECOVERY")}"\n'
+                            "    }\n"
+                            '    submenuentry "Internet Recovery" {\n'
+                            f'        options "{rec_net_opts}"\n'
+                            "    }\n"
+                            "}\n"
+                            f"{MENU_END}\n"
+                        )
+
+                        content = ""
+                        if os.path.isfile(conf_path):
+                            with open(conf_path, "r") as f:
+                                content = f.read()
+                        content = content.replace("#enable_mouse", "enable_mouse")
+                        content = content.replace("enable_mouse", "enable_mouse", 1)
+                        if os.path.isfile(f"{rd}/themes/rEFInd-Regular-Dark/theme.conf") \
+                                and "include themes/rEFInd-Regular-Dark/theme.conf" not in content:
+                            content += "\ninclude themes/rEFInd-Regular-Dark/theme.conf\n"
+                        content = re.sub(
+                            re.escape(MENU_BEGIN) + r".*?" + re.escape(MENU_END) + r"\n?",
+                            "",
+                            content,
+                            flags=re.DOTALL,
+                        )
+                        if "/EFI/recovery/vmlinuz.efi" in content:
+                            content = re.sub(
+                                r'\nmenuentry "Pulsar OS Recovery" \{.*?\n\}\n',
+                                "\n",
+                                content,
+                                flags=re.DOTALL,
+                            )
+                        content += menu_block
+                        with open(conf_path, "w") as f:
+                            f.write(content)
+                        log_msg(f"rEFInd menu configured: {conf_path}")
+                    except Exception as cfg_err:
+                        log_msg(f"ERROR configuring {conf_path}: {cfg_err}")
+
             GLib.idle_add(self.update_progress, 0.90, "Installing bootloader...")
             exec_cmd(["mount", "--bind", "/dev", "/mnt/dev"])
             if "TEST_MODE" not in os.environ:
@@ -1396,9 +1635,6 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
             exec_cmd(["mount", "--bind", "/sys", "/mnt/sys"])
             exec_cmd(["mount", "-t", "tmpfs", "tmpfs", "/mnt/run"])
 
-            # rEFInd ISO builds (./build-iso.sh --refind) replicate rEFInd into
-            # the installed rootfs. Detect it and install rEFInd instead of GRUB
-            # so the installed system boots with the same bootloader as the ISO.
             refind_installed = False
             refind_available = any(
                 os.path.exists(p)
@@ -1412,13 +1648,6 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
             if is_efi and refind_available:
                 GLib.idle_add(self.update_progress, 0.90, "Installing rEFInd bootloader...")
                 try:
-                    # Run refind-install from the live system with --root /mnt
-                    # instead of chrooting: inside a chroot /proc/mounts is
-                    # bind-mounted from the live system, so it lists the ESP
-                    # as /mnt/boot/efi and refind-install cannot locate it at
-                    # /boot/efi. --root also keeps the efibootmgr/NVRAM and
-                    # secure-boot handling on the live system, where
-                    # /sys/firmware/efi is reachable.
                     live_refind_install = next(
                         (
                             p
@@ -1439,17 +1668,9 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                     print(f"Warning: refind-install failed: {ref_err}. Falling back to GRUB.")
                     exec_cmd(["chroot", "/mnt", "grub-install", "--force", "--removable", disk_path])
                 else:
-                    # Configure the macOS theme + refind.conf tweaks
                     GLib.idle_add(self.update_progress, 0.92, "Configuring rEFInd...")
+                    esp_root = "/mnt/boot/efi"
                     try:
-                        esp_root = "/mnt/boot/efi"
-                        # The ISO live rootfs carries archiso/systemd-boot boot
-                        # artifacts under /boot/efi (UKI in EFI/Linux, systemd-boot
-                        # in EFI/systemd, its removable copy in EFI/BOOT, loader/,
-                        # grub/, plus a stale vmlinuz/initramfs). rEFInd would
-                        # auto-detect every one of them and show bogus menu entries
-                        # that cannot boot the installed system, so remove them and
-                        # keep only the rEFInd install.
                         stale_dirs = (
                             "EFI/Linux",
                             "EFI/systemd",
@@ -1477,24 +1698,17 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                                     capture_output=True,
                                 )
 
-                        # Write a refind_linux.conf pointing at the real installed
-                        # root. refind-install skips existing files, so the one
-                        # rsynced from the ISO (generated against the build host's
-                        # root partition) would otherwise be kept and fail to boot.
                         refind_linux_conf = "/mnt/boot/refind_linux.conf"
                         conf_content = (
-                            f'"Boot with standard options"  "root=UUID={root_uuid} rw quiet splash"\n'
-                            f'"Boot to single-user mode"    "root=UUID={root_uuid} rw single"\n'
-                            f'"Boot with minimal options"   "ro root=UUID={root_uuid}"\n'
+                            f'"Boot with standard options"  "root=UUID={root_uuid} rootflags=subvol=@ rw quiet splash"\n'
+                            f'"Boot to single-user mode"    "root=UUID={root_uuid} rootflags=subvol=@ rw single"\n'
+                            f'"Boot with minimal options"   "ro root=UUID={root_uuid} rootflags=subvol=@"\n'
                         )
                         if "TEST_MODE" not in os.environ:
                             os.makedirs("/mnt/boot", exist_ok=True)
                             with open(refind_linux_conf, "w") as f:
                                 f.write(conf_content)
 
-                        # Removable-media fallback: some firmware ignores NVRAM
-                        # entries and only boots /EFI/BOOT/BOOTX64.EFI. Put rEFInd
-                        # there (the archiso copy was removed above).
                         refind_share = next(
                             (
                                 p
@@ -1515,54 +1729,147 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                                 )
 
                         refind_root = f"{esp_root}/EFI/refind"
+                        boot_fb = f"{esp_root}/EFI/BOOT"
                         theme_src = "/mnt/usr/share/refind/themes/rEFInd-Regular-Dark"
                         theme_dest = f"{refind_root}/themes/rEFInd-Regular-Dark"
-                        if os.path.isdir(refind_root):
-                            if "TEST_MODE" not in os.environ:
-                                os.makedirs(theme_dest, exist_ok=True)
-                                if os.path.isdir(theme_src):
-                                    subprocess.run(
-                                        ["cp", "-r", f"{theme_src}/.", theme_dest],
-                                        capture_output=True,
-                                    )
-                                refind_conf = f"{refind_root}/refind.conf"
-                                if os.path.isfile(refind_conf):
-                                    with open(refind_conf, "r") as f:
-                                        content = f.read()
-                                    content = content.replace("#enable_mouse", "enable_mouse")
-                                    content = content.replace("enable_mouse", "enable_mouse", 1)
-                                    if "include themes/rEFInd-Regular-Dark/theme.conf" not in content:
-                                        content += "\ninclude themes/rEFInd-Regular-Dark/theme.conf\n"
-                                    with open(refind_conf, "w") as f:
-                                        f.write(content)
+                        theme_fb_dest = f"{boot_fb}/themes/rEFInd-Regular-Dark"
+
+                        if os.path.isdir(refind_root) and "TEST_MODE" not in os.environ:
+                            os.makedirs(theme_dest, exist_ok=True)
+                            os.makedirs(theme_fb_dest, exist_ok=True)
+                            if os.path.isdir(theme_src):
+                                subprocess.run(
+                                    ["cp", "-r", f"{theme_src}/.", theme_dest],
+                                    capture_output=True,
+                                )
+                                subprocess.run(
+                                    ["cp", "-r", f"{theme_src}/.", theme_fb_dest],
+                                    capture_output=True,
+                                )
+
+                            rec_icon_cands = [
+                                "/mnt/usr/share/pulsar-boot-icons/os_recovery.png",
+                                "/mnt/usr/share/pulsar-boot-icons/recovery.png",
+                                "/usr/share/pulsar-boot-icons/os_recovery.png",
+                                "/usr/share/pulsar-boot-icons/recovery.png",
+                                "/mnt/usr/share/pulsaros-recovery/os_recovery.png",
+                                "/usr/share/pulsaros-recovery/os_recovery.png",
+                            ]
+                            rec_icon_src = next((p for p in rec_icon_cands if os.path.isfile(p)), None)
+                            if rec_icon_src:
+                                for idir in (
+                                    f"{theme_dest}/icons",
+                                    f"{theme_fb_dest}/icons",
+                                    f"{refind_root}/icons",
+                                    refind_root,
+                                    f"{boot_fb}/icons",
+                                    boot_fb,
+                                    f"{esp_root}/EFI/recovery",
+                                    "/mnt/recovery",
+                                    "/mnt/recovery/boot",
+                                ):
+                                    try:
+                                        os.makedirs(idir, exist_ok=True)
+                                        shutil.copy2(rec_icon_src, f"{idir}/os_recovery.png")
+                                        shutil.copy2(rec_icon_src, f"{idir}/os_recovery-big.png")
+                                        shutil.copy2(rec_icon_src, f"{idir}/os_pulsaros_recovery.png")
+                                        shutil.copy2(rec_icon_src, f"{idir}/.VolumeIcon.png")
+                                    except Exception:
+                                        pass
+
+                            main_icon_cands = [
+                                "/mnt/usr/share/icons/hicolor/128x128/apps/pulsar-logo.png",
+                                "/mnt/usr/share/icons/hicolor/128x128/apps/pulsaros-logo.png",
+                                "/usr/share/icons/hicolor/128x128/apps/pulsar-logo.png",
+                                "/usr/share/icons/hicolor/128x128/apps/pulsaros-logo.png",
+                                "/mnt/usr/share/pulsar-boot-icons/normal.png",
+                                "/usr/share/pulsar-boot-icons/normal.png",
+                                f"{theme_dest}/icons/os_pulsaros_normal.png",
+                                f"{theme_dest}/icons/os_pulsaros.png",
+                                "/mnt/usr/share/pulsaros-recovery/logo.png",
+                                "/usr/share/pulsaros-recovery/logo.png",
+                            ]
+                            main_icon_src = next((p for p in main_icon_cands if os.path.isfile(p)), None)
+                            if main_icon_src:
+                                for idir in (
+                                    f"{theme_dest}/icons",
+                                    f"{theme_fb_dest}/icons",
+                                    f"{refind_root}/icons",
+                                    refind_root,
+                                    f"{boot_fb}/icons",
+                                    boot_fb,
+                                    "/mnt/@/boot",
+                                    "/mnt/@",
+                                ):
+                                    try:
+                                        os.makedirs(idir, exist_ok=True)
+                                        shutil.copy2(main_icon_src, f"{idir}/os_pulsaros_normal.png")
+                                        shutil.copy2(main_icon_src, f"{idir}/os_pulsaros.png")
+                                        shutil.copy2(main_icon_src, f"{idir}/.VolumeIcon.png")
+                                    except Exception:
+                                        pass
+
+                            drv_search_dirs = [
+                                "/mnt/usr/share/refind/drivers_x64",
+                                "/mnt/usr/lib/refind/drivers_x64",
+                                "/usr/share/refind/drivers_x64",
+                                "/usr/lib/refind/drivers_x64",
+                                "/run/archiso/bootmnt/EFI/BOOT/drivers_x64",
+                                "/run/archiso/bootmnt/EFI/refind/drivers_x64",
+                                "/run/live/medium/EFI/BOOT/drivers_x64",
+                                "/run/live/medium/EFI/refind/drivers_x64",
+                            ]
+                            for drv_name in ["ext4_x64.efi", "btrfs_x64.efi", "iso9660_x64.efi"]:
+                                drv_src = next((f"{d}/{drv_name}" for d in drv_search_dirs if os.path.isfile(f"{d}/{drv_name}")), None)
+                                if drv_src:
+                                    for target_dir in (
+                                        f"{refind_root}/drivers_x64",
+                                        f"{refind_root}/drivers",
+                                        f"{boot_fb}/drivers_x64",
+                                        f"{boot_fb}/drivers",
+                                        f"{esp_root}/drivers_x64",
+                                        f"{esp_root}/drivers",
+                                    ):
+                                        try:
+                                            os.makedirs(target_dir, exist_ok=True)
+                                            shutil.copy2(drv_src, f"{target_dir}/{drv_name}")
+                                        except Exception:
+                                            pass
                     except Exception as theme_err:
                         print(f"Warning: rEFInd theme configuration failed: {theme_err}")
             elif is_efi:
-                # Run grub-install twice:
-                # 1. Without --removable to register the UEFI NVRAM boot entry (so the UEFI firmware boots the hard drive by default)
                 GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader...")
                 try:
                     exec_cmd(["chroot", "/mnt", "grub-install", "--force", disk_path])
                 except Exception as g_err:
                     print(f"Warning: Standard grub-install failed: {g_err}. Proceeding with removable fallback...")
-                # 2. With --removable to create fallback loader in /EFI/BOOT/BOOTX64.EFI
                 exec_cmd(["chroot", "/mnt", "grub-install", "--force", "--removable", disk_path])
             else:
                 GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader...")
                 exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", "--force", disk_path])
                 
+            esp_root = "/mnt/boot/efi"
+
             if is_arch:
-                # The ISO live rootfs carries live-only boot artifacts that must
-                # be removed on a fixed-disk install:
-                #  - /etc/mkinitcpio.conf.d/archiso.conf: enables the 'archiso'
-                #    hooks so the initramfs boots from the ISO. If left in place
-                #    the installed system waits 30s for the ISO device and drops
-                #    to an emergency shell instead of mounting the root partition.
-                #  - GRUB_DISTRIBUTOR="Arch" in /etc/default/grub makes GRUB show
-                #    "Arch Linux" instead of "Pulsar OS".
-                live_conf = "/mnt/etc/mkinitcpio.conf.d/archiso.conf"
-                if os.path.exists(live_conf):
-                    os.remove(live_conf)
+                for f_live in [
+                    "/mnt/etc/mkinitcpio.conf.d/archiso.conf",
+                    "/mnt/etc/mkinitcpio.conf.d/live.conf",
+                ]:
+                    if os.path.exists(f_live):
+                        try:
+                            os.remove(f_live)
+                        except Exception:
+                            pass
+
+                mkinit_path = "/mnt/etc/mkinitcpio.conf"
+                if os.path.exists(mkinit_path):
+                    with open(mkinit_path, "r") as f:
+                        mk_content = f.read()
+                    if "btrfs" not in mk_content and "HOOKS=" in mk_content:
+                        mk_content = re.sub(r'HOOKS=\((.*?)\)', r'HOOKS=(\1 btrfs)', mk_content)
+                        with open(mkinit_path, "w") as f:
+                            f.write(mk_content)
+
                 grub_default = "/mnt/etc/default/grub"
                 if os.path.exists(grub_default):
                     with open(grub_default) as f:
@@ -1575,15 +1882,29 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                     )
                     with open(grub_default, "w") as f:
                         f.write(content)
-                # Regenerate the initramfs with the standard (non-live) hooks
-                exec_cmd(["chroot", "/mnt", "mkinitcpio", "-P"])
-                # Only regenerate the GRUB config when GRUB was actually
-                # installed (rEFInd builds don't use grub.cfg).
+
+                preserve_live_initramfs_for_recovery()
+
+                try:
+                    exec_cmd(["chroot", "/mnt", "mkinitcpio", "-P"])
+                except Exception as mki_err:
+                    log_msg(f"Warning: mkinitcpio -P failed (non-fatal): {mki_err}")
+
+                deploy_kernel_to_recovery()
+
                 if not refind_installed:
                     exec_cmd(["chroot", "/mnt", "grub-mkconfig", "-o", "/boot/grub/grub.cfg"])
+                else:
+                    configure_refind_menus()
             else:
+                preserve_live_initramfs_for_recovery()
                 if not refind_installed:
                     exec_cmd(["chroot", "/mnt", "update-grub"])
+                deploy_kernel_to_recovery()
+                if refind_installed:
+                    configure_refind_menus()
+
+
 
             # ── Recompile the system dconf database ───────────────────
             # The PulsarOS macOS keybindings (XKB Super<->Ctrl swap, spotlight on
@@ -1598,44 +1919,47 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                 print(f"Warning: dconf update failed (non-fatal): {dconf_err}")
 
             # ── Driver installation (Best effort, non-fatal for offline installs) ───
-            if self.install_nvidia or self.install_broadcom:
+            # ── Broadcom Driver installation (Optional, requires Internet) ───
+            if self.install_broadcom:
                 # Bind network-related paths so package manager can reach the internet if available
                 exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
                 policy_file = "/mnt/usr/sbin/policy-rc.d"
                 try:
-                    if is_arch:
-                        # Arch Linux path
-                        GLib.idle_add(self.update_progress, 0.93, "Configuring drivers...")
-                        try:
-                            exec_cmd(["chroot", "/mnt", "pacman", "-Sy"])
-                            
-                            if self.install_nvidia:
-                                GLib.idle_add(self.update_progress, 0.94, "Installing NVIDIA drivers...")
-                                exec_cmd(["chroot", "/mnt", "pacman", "-S", "--noconfirm",
-                                          "nvidia-open", "nvidia-settings"])
-                                
-                            if self.install_broadcom:
-                                GLib.idle_add(self.update_progress, 0.95, "Installing Broadcom drivers...")
-                                exec_cmd(["chroot", "/mnt", "pacman", "-S", "--noconfirm",
-                                          "broadcom-wl-dkms", "linux-headers"])
-                        except Exception as arch_net_err:
-                            print(f"Notice: Network driver install skipped (offline mode): {arch_net_err}")
+                    # Check network connectivity
+                    has_net = subprocess.run(
+                        ["ping", "-c", "1", "-W", "3", "1.1.1.1"],
+                        capture_output=True
+                    ).returncode == 0 or subprocess.run(
+                        ["curl", "-s", "-I", "-m", "3", "https://archlinux.org"],
+                        capture_output=True
+                    ).returncode == 0
 
-                        if self.install_broadcom:
-                            # blacklist conflicting drivers
-                            blacklist = (
-                                "blacklist b43\n"
-                                "blacklist b43legacy\n"
-                                "blacklist ssb\n"
-                                "blacklist bcm43xx\n"
-                                "blacklist brcm80211\n"
-                                "blacklist brcmfmac\n"
-                                "blacklist brcmsmac\n"
-                            )
-                            if "TEST_MODE" not in os.environ:
-                                os.makedirs("/mnt/etc/modprobe.d", exist_ok=True)
-                                with open("/mnt/etc/modprobe.d/broadcom-sta-blacklist.conf", "w") as f:
-                                    f.write(blacklist)
+                    if not has_net:
+                        print("Notice: No active Internet connection. Broadcom driver installation skipped. Install later with Driver Manager.")
+                    elif is_arch:
+                        # Arch Linux path
+                        GLib.idle_add(self.update_progress, 0.93, "Installing Broadcom drivers...")
+                        try:
+                            exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
+                            exec_cmd(["chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
+                                      "broadcom-wl-dkms", "linux-headers"])
+                        except Exception as arch_net_err:
+                            print(f"Notice: Broadcom install error: {arch_net_err}")
+
+                        # blacklist conflicting open-source drivers
+                        blacklist = (
+                            "blacklist b43\n"
+                            "blacklist b43legacy\n"
+                            "blacklist ssb\n"
+                            "blacklist bcm43xx\n"
+                            "blacklist brcm80211\n"
+                            "blacklist brcmfmac\n"
+                            "blacklist brcmsmac\n"
+                        )
+                        if "TEST_MODE" not in os.environ:
+                            os.makedirs("/mnt/etc/modprobe.d", exist_ok=True)
+                            with open("/mnt/etc/modprobe.d/broadcom-sta-blacklist.conf", "w") as f:
+                                f.write(blacklist)
                     else:
                         # Debian path
                         try:
@@ -1668,52 +1992,28 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                                 except Exception as list_err:
                                     print(f"Warning: Failed to update sources.list: {list_err}")
 
-                            # Run apt update to fetch package indices
-                            try:
-                                GLib.idle_add(self.update_progress, 0.93, "Updating package sources...")
-                                exec_cmd(["chroot", "/mnt", "apt-get", "update"])
-                                
-                                if self.install_nvidia:
-                                    nvidia = self.nvidia_info
-                                    is_new = nvidia.get("is_new", False)
-                                    GLib.idle_add(self.update_progress, 0.94, "Installing NVIDIA drivers...")
-                                    if is_new:
-                                        # Turing / Ampere / Ada / Blackwell → nvidia-driver (current)
-                                        exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
-                                                  "nvidia-driver", "nvidia-settings",
-                                                  "linux-headers-amd64"])
-                                    else:
-                                        # Kepler / Maxwell / Pascal and older → legacy 470 series
-                                        exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
-                                                  "nvidia-tesla-470-driver", "nvidia-settings",
-                                                  "linux-headers-amd64"])
+                            # Run apt update to fetch package indices and install broadcom-sta-dkms
+                            GLib.idle_add(self.update_progress, 0.93, "Installing Broadcom drivers...")
+                            exec_cmd(["chroot", "/mnt", "apt-get", "update"])
+                            exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
+                                      "broadcom-sta-dkms", "linux-headers-amd64"])
 
-                                if self.install_broadcom:
-                                    GLib.idle_add(self.update_progress, 0.95, "Installing Broadcom drivers...")
-                                    exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
-                                              "broadcom-sta-dkms", "linux-headers-amd64"])
-                            except Exception as deb_net_err:
-                                print(f"Notice: Network driver install skipped (offline mode): {deb_net_err}")
-
-                            if self.install_broadcom:
-                                # blacklist conflicting drivers
-                                blacklist = (
-                                    "blacklist b43\n"
-                                    "blacklist b43legacy\n"
-                                    "blacklist ssb\n"
-                                    "blacklist bcm43xx\n"
-                                    "blacklist brcm80211\n"
-                                    "blacklist brcmfmac\n"
-                                    "blacklist brcmsmac\n"
-                                )
-                                if "TEST_MODE" not in os.environ:
-                                    os.makedirs("/mnt/etc/modprobe.d", exist_ok=True)
-                                    with open("/mnt/etc/modprobe.d/broadcom-sta-blacklist.conf", "w") as f:
-                                        f.write(blacklist)
+                            blacklist = (
+                                "blacklist b43\n"
+                                "blacklist b43legacy\n"
+                                "blacklist ssb\n"
+                                "blacklist bcm43xx\n"
+                                "blacklist brcm80211\n"
+                                "blacklist brcmfmac\n"
+                                "blacklist brcmsmac\n"
+                            )
+                            if "TEST_MODE" not in os.environ:
+                                os.makedirs("/mnt/etc/modprobe.d", exist_ok=True)
+                                with open("/mnt/etc/modprobe.d/broadcom-sta-blacklist.conf", "w") as f:
+                                    f.write(blacklist)
                         except Exception as deb_err:
                             print(f"Warning: Non-fatal driver step: {deb_err}")
                         finally:
-                            # Remove policy-rc.d
                             if "TEST_MODE" not in os.environ and os.path.exists(policy_file):
                                 try:
                                     os.remove(policy_file)
@@ -1723,6 +2023,7 @@ UUID={root_uuid} /               ext4    errors=remount-ro 0       1
                     print(f"Notice: Driver configuration step completed: {drv_err}")
                 finally:
                     subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"])
+
             # ──────────────────────────────────────────────────────────
             
             # 1. Touch the setup flag file first while everything is still mounted cleanly

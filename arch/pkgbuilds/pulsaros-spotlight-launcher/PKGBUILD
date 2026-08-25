@@ -1,13 +1,13 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-spotlight-launcher
 pkgver=2.0.0
-pkgrel=4
+pkgrel=5
 pkgdesc="Spotlight search for Pulsar OS"
 arch=(any)
 url="https://inled.es"
 license=(GPL3)
-depends=(python gtk4 libadwaita tinysparql localsearch python-gobject ydotool wl-clipboard)
-makedepends=(python-build python-installer python-setuptools python-wheel)
+depends=(gtk4 libadwaita tinysparql localsearch ydotool wl-clipboard)
+makedepends=(cargo)
 provides=(spotlight-gtk spotlight-python)
 conflicts=(spotlight-gtk spotlight-python)
 replaces=(spotlight-gtk spotlight-python)
@@ -16,20 +16,21 @@ options=(!strip)
 build() {
     _src="$(cd "$startdir"/../../../pulsaros-spotlight-launcher && pwd)"
     cd "$_src"
-    python -m build --wheel
+    if [ ! -f target/release/pulsaros-spotlight ] || [ src/main.rs -nt target/release/pulsaros-spotlight ]; then
+        cargo build --release
+    fi
 }
 
 package() {
     _src="$(cd "$startdir"/../../../pulsaros-spotlight-launcher && pwd)"
     cd "$_src"
-    python -m installer --destdir="$pkgdir" dist/*.whl
 
-    # CLI scripts
-    install -Dm755 cli/pulsaros-spotlight "$pkgdir/usr/bin/pulsaros-spotlight"
+    # Native Rust binary as the main launcher
+    install -Dm755 target/release/pulsaros-spotlight "$pkgdir/usr/bin/pulsaros-spotlight"
+
+    # Helper CLI scripts
     install -Dm755 cli/pulsaros-toggle-remap "$pkgdir/usr/bin/pulsaros-toggle-remap"
     install -Dm755 cli/pulsaros-toggle-launcher "$pkgdir/usr/bin/pulsaros-toggle-launcher"
-    ln -sf pulsaros-spotlight "$pkgdir/usr/bin/spotlight-python"
-    ln -sf pulsaros-spotlight "$pkgdir/usr/bin/spotlight-gtk"
 
     # Style and icons
     install -Dm644 data/base.css "$pkgdir/usr/share/pulsaros-spotlight/base.css"

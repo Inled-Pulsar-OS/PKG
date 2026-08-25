@@ -1245,6 +1245,10 @@ class AssistantWindow(Gtk.Window):
             ),
             "/usr/share/gnome-shell/extensions/blur-my-shell@aunetx/schemas",
             os.path.expanduser(
+                "~/.local/share/gnome-shell/extensions/pulsar-dock@inled.es/schemas"
+            ),
+            "/usr/share/gnome-shell/extensions/pulsar-dock@inled.es/schemas",
+            os.path.expanduser(
                 "~/.local/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/schemas"
             ),
             "/usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/schemas",

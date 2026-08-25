@@ -1,0 +1,40 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsaros-meta
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Metapackage that pulls in every Pulsar OS package (delivers newly added packages to existing installations)"
+arch=(any)
+url="https://inled.es"
+license=(custom)
+depends=(
+  droidtux
+  gnome-keybindings
+  gnome-macos-remap-wayland
+  appinstall
+  macboat
+  pulsar-pear-sound-theme
+  seafari
+  winboat-bin
+  pulsaros-boot-icons
+  pulsaros-bootsound
+  pulsaros-branding
+  pulsaros-calamares
+  pulsaros-global-menu
+  pulsaros-gnome
+  pulsaros-hibernate
+  pulsaros-live-wallpaper
+  pulsaros-plymouth
+  pulsaros-recovery
+  pulsaros-sddm
+  pulsaros-spotlight-launcher
+  pulsaros-theme
+  pulsaros-welcome
+)
+options=(!strip)
+
+package() {
+    # Metapackage: no files, only dependency resolution
+    mkdir -p "$pkgdir/usr/share/doc/pulsaros-meta"
+    echo "Pulsar OS metapackage. Bump pkgver when adding new depends." \
+        > "$pkgdir/usr/share/doc/pulsaros-meta/README"
+}

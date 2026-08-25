@@ -3,4 +3,4 @@
 # Arch Linux: system-auth | Debian: common-auth
 
 auth     include      system-auth
-account  include      system-account
+account  include      system-auth

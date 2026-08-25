@@ -25,6 +25,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Meta from 'gi://Meta';
+import Pango from 'gi://Pango';
 import Gst from 'gi://Gst';
 import GstApp from 'gi://GstApp';
 
@@ -172,8 +173,9 @@ const PowerConfirmDialog = GObject.registerClass({
         this._actionType = actionType; // 'shutdown' | 'restart'
         this._callback = callback;
         this._restoreSession = false;
+        this._countdown = 60;
+        this._timerId = 0;
         this._progressTimerId = 0;
-        let isEs = _isSpanish();
 
         let mainBox = new St.BoxLayout({
             vertical: true,
@@ -182,43 +184,65 @@ const PowerConfirmDialog = GObject.registerClass({
         this.contentLayout.add_child(mainBox);
         this._mainBox = mainBox;
 
-        // Action Icon
+        // Circular Icon Badge matching macOS Tahoe (properly centered)
+        let circleBox = new St.Bin({
+            style_class: 'pulsaros-power-circle-badge',
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+            x_expand: false,
+            y_expand: false
+        });
         let iconName = actionType === 'restart' ? 'system-restart-symbolic' : 'system-shutdown-symbolic';
         this._icon = new St.Icon({
             icon_name: iconName,
-            icon_size: 56,
-            style_class: 'pulsaros-power-logo',
-            x_align: Clutter.ActorAlign.CENTER
+            icon_size: 32,
+            style_class: 'pulsaros-power-circle-icon'
         });
-        mainBox.add_child(this._icon);
+        circleBox.set_child(this._icon);
 
-        // Title
-        let titleText = actionType === 'restart'
-            ? (isEs ? "Reiniciar equipo" : "Restart Computer")
-            : (isEs ? "Apagar equipo" : "Shut Down Computer");
+        let iconContainer = new St.BoxLayout({
+            vertical: false,
+            x_align: Clutter.ActorAlign.START,
+            style_class: 'pulsaros-power-icon-container'
+        });
+        iconContainer.add_child(circleBox);
+        mainBox.add_child(iconContainer);
+
+        // Title (Left aligned, wrapping, full text)
+        let isRestart = actionType === 'restart';
+        let titleText = isRestart
+            ? "Are you sure you want to restart your computer now?"
+            : "Are you sure you want to shut down your computer now?";
         this._titleLabel = new St.Label({
             text: titleText,
             style_class: 'pulsaros-power-title',
-            x_align: Clutter.ActorAlign.CENTER
+            x_align: Clutter.ActorAlign.START
         });
+        this._titleLabel.clutter_text.line_wrap = true;
+        this._titleLabel.clutter_text.line_wrap_mode = Pango.WrapMode.WORD;
+        this._titleLabel.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
         mainBox.add_child(this._titleLabel);
 
-        // Subtitle / Prompt
-        let descText = actionType === 'restart'
-            ? (isEs ? "¿Seguro que quieres reiniciar el equipo ahora?" : "Are you sure you want to restart your computer now?")
-            : (isEs ? "¿Seguro que quieres apagar el equipo ahora?" : "Are you sure you want to shut down your computer now?");
+        // Subtitle / Countdown prompt (Left aligned, wrapping)
+        let getDescText = (secs) => isRestart
+            ? `If you do nothing, the computer will restart automatically in ${secs} seconds.`
+            : `If you do nothing, the computer will shut down automatically in ${secs} seconds.`;
+
         this._descLabel = new St.Label({
-            text: descText,
+            text: getDescText(this._countdown),
             style_class: 'pulsaros-power-subtitle',
-            x_align: Clutter.ActorAlign.CENTER
+            x_align: Clutter.ActorAlign.START
         });
+        this._descLabel.clutter_text.line_wrap = true;
+        this._descLabel.clutter_text.line_wrap_mode = Pango.WrapMode.WORD;
+        this._descLabel.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
         mainBox.add_child(this._descLabel);
 
-        // Option Container
+        // Option Container (Reopen windows checkbox, left-aligned)
         this._optionBox = new St.BoxLayout({
             vertical: true,
             style_class: 'pulsaros-power-option-box',
-            x_align: Clutter.ActorAlign.CENTER
+            x_align: Clutter.ActorAlign.START
         });
         mainBox.add_child(this._optionBox);
 
@@ -229,7 +253,7 @@ const PowerConfirmDialog = GObject.registerClass({
             can_focus: true,
             toggle_mode: true,
             checked: false,
-            x_align: Clutter.ActorAlign.CENTER
+            x_align: Clutter.ActorAlign.START
         });
 
         let checkLayout = new St.BoxLayout({
@@ -246,7 +270,7 @@ const PowerConfirmDialog = GObject.registerClass({
         checkLayout.add_child(checkIcon);
 
         let checkLabel = new St.Label({
-            text: isEs ? "Reabrir las ventanas al volver a iniciar sesión" : "Reopen windows when logging back in",
+            text: "Reopen windows when logging in",
             style_class: 'pulsaros-power-checkbox-label',
             y_align: Clutter.ActorAlign.CENTER
         });
@@ -271,35 +295,27 @@ const PowerConfirmDialog = GObject.registerClass({
 
         this._optionBox.add_child(checkRow);
 
-        let hintLabel = new St.Label({
-            text: isEs
-                ? "Guarda el estado completo en disco (hibernación) para continuar donde lo dejaste."
-                : "Dumps memory state to disk (hibernation) to resume right where you left off.",
-            style_class: 'pulsaros-power-hint',
-            x_align: Clutter.ActorAlign.CENTER
-        });
-        this._optionBox.add_child(hintLabel);
-
         // Cancel Button
         this._cancelBtn = this.addButton({
-            label: isEs ? "Cancelar" : "Cancel",
+            label: "Cancel",
             action: () => {
                 this._cleanup();
                 this.close();
             },
             key: Clutter.KEY_Escape
         });
+        if (this._cancelBtn && this._cancelBtn.add_style_class_name) {
+            this._cancelBtn.add_style_class_name('pulsaros-power-cancel-btn');
+        }
 
-        // Action Button
-        let actionLabel = actionType === 'restart'
-            ? (isEs ? "Reiniciar" : "Restart")
-            : (isEs ? "Apagar" : "Shut Down");
+        // Action Button (Restart / Shut Down)
+        let actionLabel = isRestart ? "Restart" : "Shut Down";
         this._actionBtn = this.addButton({
             label: actionLabel,
             action: () => {
                 let restore = this._restoreSession;
                 if (restore) {
-                    this._showProgressState(isEs);
+                    this._showProgressState();
                 } else {
                     this._cleanup();
                     this.close();
@@ -313,9 +329,42 @@ const PowerConfirmDialog = GObject.registerClass({
         if (this._actionBtn && this._actionBtn.add_style_class_name) {
             this._actionBtn.add_style_class_name('pulsaros-power-confirm-btn');
         }
+
+        // 60-Second live countdown timer
+        this._timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
+            this._countdown--;
+            if (this._countdown <= 0) {
+                this._timerId = 0;
+                let restore = this._restoreSession;
+                if (restore) {
+                    this._showProgressState();
+                } else {
+                    this._cleanup();
+                    this.close();
+                    if (this._callback) {
+                        this._callback(false);
+                    }
+                }
+                return GLib.SOURCE_REMOVE;
+            }
+            this._descLabel.text = getDescText(this._countdown);
+            return GLib.SOURCE_CONTINUE;
+        });
     }
 
-    _showProgressState(isEs) {
+    _cleanup() {
+        if (this._timerId > 0) {
+            GLib.source_remove(this._timerId);
+            this._timerId = 0;
+        }
+        if (this._progressTimerId > 0) {
+            GLib.source_remove(this._progressTimerId);
+            this._progressTimerId = 0;
+        }
+    }
+
+    _showProgressState() {
+        this._cleanup();
         // Hide interactive elements
         this._optionBox.hide();
         if (this._cancelBtn) this._cancelBtn.hide();
@@ -393,13 +442,6 @@ const PowerConfirmDialog = GObject.registerClass({
 
             return GLib.SOURCE_CONTINUE;
         });
-    }
-
-    _cleanup() {
-        if (this._progressTimerId) {
-            GLib.source_remove(this._progressTimerId);
-            this._progressTimerId = 0;
-        }
     }
 
     destroy() {
@@ -1135,27 +1177,18 @@ const LockScreen = GObject.registerClass({
         }
         
         try {
-            // Run pamtester asynchronously using stdin piping
-            let proc = new Gio.SubprocessBuilder({
-                argv: ['/usr/bin/pamtester', 'pulsaros-lock', username, 'authenticate'],
-                flags: Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
-            }).build();
+            // Run pamtester asynchronously, piping the password via stdin
+            let proc = Gio.Subprocess.new(
+                ['/usr/bin/pamtester', 'pulsaros-lock', username, 'authenticate'],
+                Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+            );
             
-            let stdinStream = proc.get_stdin_pipe();
-            if (stdinStream) {
-                let bytes = GLib.Bytes.new(password + '\n');
-                stdinStream.write_bytes(bytes, null);
-                stdinStream.close(null);
-            }
-            
-            proc.wait_async(null, (obj, res) => {
+            proc.communicate_utf8_async(password + '\n', null, (obj, res) => {
                 try {
-                    proc.wait_finish(res);
-                    let success = proc.get_successful();
+                    let [ok, , stderrText] = obj.communicate_utf8_finish(res);
+                    let success = ok && obj.get_successful();
                     if (!success) {
-                        let stderrBytes = proc.get_stderr_pipe()?.read_bytes(null);
-                        let stderrText = stderrBytes ? new TextDecoder().decode(stderrBytes.get_data()) : '';
-                        console.warn(`[LockScreen] pamtester auth failed for user '${username}': exit=${proc.get_exit_status()} stderr=${stderrText.trim()}`);
+                        console.warn(`[LockScreen] pamtester auth failed for user '${username}': exit=${obj.get_exit_status()} stderr=${(stderrText || '').trim()}`);
                     }
                     if (success) {
                         this._onAuthSuccess();

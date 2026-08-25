@@ -48,7 +48,7 @@ struct _CcKeyboardPanel
   CcListRow           *alt_chars_row;
   CcListRow           *compose_row;
 
-  AdwActionRow        *common_shortcuts_row;
+  CcListRow           *common_shortcuts_row;
 };
 
 CC_PANEL_REGISTER (CcKeyboardPanel, cc_keyboard_panel)
@@ -160,21 +160,6 @@ cc_keyboard_panel_finalize (GObject *object)
   G_OBJECT_CLASS (cc_keyboard_panel_parent_class)->finalize (object);
 }
 
-
-static void
-on_macos_remap_active_changed_cb (GObject *object, GParamSpec *pspec, CcKeyboardPanel *self)
-{
-  gboolean active = adw_switch_row_get_active (ADW_SWITCH_ROW (object));
-  if (active)
-    {
-      g_spawn_command_line_async ("/bin/sh -c 'systemctl --user enable --now gnome-macos-remap-wayland.service'", NULL);
-    }
-  else
-    {
-      g_spawn_command_line_async ("/bin/sh -c 'systemctl --user disable --now gnome-macos-remap-wayland.service'", NULL);
-    }
-}
-
 static void
 cc_keyboard_panel_class_init (CcKeyboardPanelClass *klass)
 {
@@ -204,7 +189,6 @@ cc_keyboard_panel_class_init (CcKeyboardPanelClass *klass)
   gtk_widget_class_bind_template_callback (widget_class, alt_chars_row_activated);
   gtk_widget_class_bind_template_callback (widget_class, compose_row_activated);
   gtk_widget_class_bind_template_callback (widget_class, keyboard_shortcuts_activated);
-  gtk_widget_class_bind_template_callback (widget_class, on_macos_remap_active_changed_cb);
 }
 
 static gboolean
@@ -272,3 +256,4 @@ cc_keyboard_panel_init (CcKeyboardPanel *self)
                                 (gpointer)&COMPOSE_MODIFIER,
                                 NULL);
 }
+

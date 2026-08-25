@@ -50,6 +50,8 @@ is_manual_upload_only() {
     return 1
 }
 
+INCREMENTAL=false
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --deploy|-d)
@@ -66,6 +68,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --onlyupload)
             ONLY_UPLOAD_FLAG="--onlyupload"
+            shift
+            ;;
+        --incremental|-i|--smart)
+            INCREMENTAL=true
             shift
             ;;
         --branch|-b)
@@ -86,9 +92,25 @@ done
 
 if [ -z "$PACKAGE_NAME" ]; then
     echo "❌ Error: Debes especificar el nombre de la carpeta del paquete o 'all'."
-    echo "Ejemplo: $0 pulsaros-branding"
+    echo "Ejemplo: $0 pulsaros-branding [--incremental]"
     exit 1
 fi
+
+is_deb_up_to_date() {
+    local name="$1"
+    local existing_deb=$(ls -t "$OUTPUT_DIR/${name}_"*.deb 2>/dev/null | head -n 1)
+    [ -z "$existing_deb" ] && return 1
+    [ ! -f "$existing_deb" ] && return 1
+
+    local deb_time=$(stat -c %Y "$existing_deb" 2>/dev/null || echo 0)
+    local pkg_src_dir="$PKG_DIR/$name"
+    [ ! -d "$pkg_src_dir" ] && return 1
+
+    local newest_src=$(find "$pkg_src_dir" -type f -not -path "*/target/*" -not -path "*/.git/*" -printf '%T@\n' 2>/dev/null | sort -nr | head -n 1 | cut -d. -f1)
+    [ -n "$newest_src" ] && [ "$newest_src" -gt "$deb_time" ] && return 1
+
+    return 0
+}
 
 if [ "$BRANCH" != "stable" ] && [ "$BRANCH" != "forky" ] && [ "$BRANCH" != "rolling" ]; then
     echo "❌ Error: Rama inválida '$BRANCH'. Debe ser stable, forky o rolling."
@@ -485,10 +507,17 @@ if [ "$PACKAGE_NAME" == "all" ]; then
                 continue
             fi
         fi
-        build_single_package "$pkg"
+
+        if $INCREMENTAL && is_deb_up_to_date "$pkg"; then
+            existing_deb=$(ls -t "$OUTPUT_DIR/${pkg}_"*.deb 2>/dev/null | head -n 1)
+            echo "⚡ [CACHED] Reutilizando $pkg: $(basename "$existing_deb") (sin cambios)"
+            COMPILED_DEBS+=("$existing_deb")
+        else
+            build_single_package "$pkg"
+        fi
     done
     echo "=============================================================================="
-    echo "🎉 ¡Compilación de todos los paquetes completada! / All packages compilation completed!"
+    echo "🎉 ¡Paquetes procesados con éxito! / Packages processed successfully!"
     echo "=============================================================================="
     if [ ${#SKIPPED_MANUAL[@]} -gt 0 ]; then
         echo "⚠️  ATENCIÓN / ATTENTION: Los siguientes paquetes NO se compilaron/desplegaron"

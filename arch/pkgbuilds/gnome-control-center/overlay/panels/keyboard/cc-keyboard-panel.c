@@ -48,8 +48,7 @@ struct _CcKeyboardPanel
   CcListRow           *alt_chars_row;
   CcListRow           *compose_row;
 
-  AdwSwitchRow        *macos_remap_switch_row;
-  AdwActionRow        *common_shortcuts_row;
+  CcListRow           *common_shortcuts_row;
 };
 
 CC_PANEL_REGISTER (CcKeyboardPanel, cc_keyboard_panel)
@@ -167,21 +166,6 @@ cc_keyboard_panel_finalize (GObject *object)
 }
 
 static void
-on_macos_remap_active_changed_cb (CcKeyboardPanel *self)
-{
-  gboolean active;
-
-  if (!self->macos_remap_switch_row)
-    return;
-
-  active = adw_switch_row_get_active (self->macos_remap_switch_row);
-  if (active)
-    g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-toggle-remap macos'", NULL);
-  else
-    g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-toggle-remap gnome'", NULL);
-}
-
-static void
 cc_keyboard_panel_class_init (CcKeyboardPanelClass *klass)
 {
   GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
@@ -205,13 +189,11 @@ cc_keyboard_panel_class_init (CcKeyboardPanelClass *klass)
   gtk_widget_class_bind_template_child (widget_class, CcKeyboardPanel, same_source);
   gtk_widget_class_bind_template_child (widget_class, CcKeyboardPanel, alt_chars_row);
   gtk_widget_class_bind_template_child (widget_class, CcKeyboardPanel, compose_row);
-  gtk_widget_class_bind_template_child (widget_class, CcKeyboardPanel, macos_remap_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcKeyboardPanel, common_shortcuts_row);
 
   gtk_widget_class_bind_template_callback (widget_class, alt_chars_row_activated);
   gtk_widget_class_bind_template_callback (widget_class, compose_row_activated);
   gtk_widget_class_bind_template_callback (widget_class, keyboard_shortcuts_activated);
-  gtk_widget_class_bind_template_callback (widget_class, on_macos_remap_active_changed_cb);
 }
 
 static gboolean
@@ -248,25 +230,6 @@ cc_keyboard_panel_init (CcKeyboardPanel *self)
 
   self->input_source_settings = g_settings_new ("org.gnome.desktop.input-sources");
 
-  /* Read initial state of macOS remap */
-  if (self->macos_remap_switch_row)
-    {
-      g_auto(GStrv) options = g_settings_get_strv (self->input_source_settings, "xkb-options");
-      gboolean has_remap = FALSE;
-      if (options)
-        {
-          for (guint i = 0; options[i] != NULL; i++)
-            {
-              if (g_str_equal (options[i], "ctrl:swap_lwin_lctl"))
-                {
-                  has_remap = TRUE;
-                  break;
-                }
-            }
-        }
-      adw_switch_row_set_active (self->macos_remap_switch_row, has_remap);
-    }
-
   /* "Input Source Switching" section */
   g_settings_bind (self->input_source_settings, "per-window",
                    self->same_source, "active",
@@ -298,3 +261,4 @@ cc_keyboard_panel_init (CcKeyboardPanel *self)
                                 (gpointer)&COMPOSE_MODIFIER,
                                 NULL);
 }
+

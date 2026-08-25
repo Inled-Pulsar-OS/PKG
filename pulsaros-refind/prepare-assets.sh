@@ -37,8 +37,11 @@ if [ -d "$BOOT_ICONS_DIR" ]; then
     mkdir -p "$DEST_DIR/icons"
     [ -f "$BOOT_ICONS_DIR/toram.png" ] && cp -f "$BOOT_ICONS_DIR/toram.png" "$DEST_DIR/icons/os_pulsaros_toram.png"
     [ -f "$BOOT_ICONS_DIR/normal.png" ] && cp -f "$BOOT_ICONS_DIR/normal.png" "$DEST_DIR/icons/os_pulsaros_normal.png"
+    [ -f "$BOOT_ICONS_DIR/normal.png" ] && cp -f "$BOOT_ICONS_DIR/normal.png" "$DEST_DIR/icons/os_pulsaros.png"
     [ -f "$BOOT_ICONS_DIR/debug-noplymouth.png" ] && cp -f "$BOOT_ICONS_DIR/debug-noplymouth.png" "$DEST_DIR/icons/os_pulsaros_debug.png"
     [ -f "$BOOT_ICONS_DIR/old.png" ] && cp -f "$BOOT_ICONS_DIR/old.png" "$DEST_DIR/icons/os_pulsaros_old.png"
+    [ -f "$BOOT_ICONS_DIR/recovery.png" ] && cp -f "$BOOT_ICONS_DIR/recovery.png" "$DEST_DIR/icons/os_recovery.png"
+    [ -f "$BOOT_ICONS_DIR/recovery.png" ] && cp -f "$BOOT_ICONS_DIR/recovery.png" "$DEST_DIR/icons/os_pulsaros_recovery.png"
 fi
 
 # Limpieza

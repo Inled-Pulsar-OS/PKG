@@ -1,14 +1,15 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-recovery
-pkgver=1.0.137
+pkgver=1.0.138
 pkgrel=1
-pkgdesc="Recovery utilities UI for Pulsar OS (Arch edition, macOS-style disk selector)"
+pkgdesc="Recovery utilities UI for Pulsar OS (Arch edition, macOS-style disk selector and Btrfs recovery)"
 arch=(any)
 url="https://inled.es"
 license=(custom)
-depends=(python-gobject python-dbus gtk4 libadwaita python-xlib parted psmisc deja-dup gptfdisk rsync dosfstools e2fsprogs grub)
+depends=(python-gobject python-dbus gtk4 libadwaita python-xlib parted psmisc deja-dup timeshift gparted gptfdisk rsync dosfstools e2fsprogs grub btrfs-progs squashfs-tools curl)
 options=(!strip)
 install=pulsaros-recovery.install
+
 
 package() {
     _src="$(cd "$startdir"/../../../pulsaros-recovery && pwd)"
