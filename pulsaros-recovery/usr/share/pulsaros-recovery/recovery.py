@@ -1494,14 +1494,14 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime            
                     shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz.efi")
                     shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz")
                     
-                    rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=@/recovery fsck.mode=skip quiet splash"
+                    rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash"
                     
                     with open("/mnt/recovery/boot/refind_linux.conf", "w") as f:
                         f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
                         f.write(f'"Boot Recovery (Debug)"     "{rec_opts.replace("quiet splash", "loglevel=7 live-debug")}"\n')
 
                     with open(f"{esp_root}/EFI/recovery/refind_linux.conf", "w") as f:
-                        f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
+                        f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts.replace("live-media=/dev/disk/by-label/PULSAR_RECOVERY", "live-media=any")}"\n')
 
                     subprocess.run(["sync"])
                     log_msg(f"Recovery kernel deployed to PULSAR_OS, PULSAR_RECOVERY, and ESP from {found_k}")
@@ -1536,8 +1536,10 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime            
                     if os.path.exists(f"/mnt/boot/{uc}")
                 )
 
-                rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=@/recovery fsck.mode=skip quiet splash"
-                rec_net_opts = "boot=live components username=live autologin cow_spacesize=4G live-media-path=recovery internet_recovery=1 quiet splash"
+                rec_opts_rec = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash"
+                rec_opts_os = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_OS live-media-path=@/live fsck.mode=skip quiet splash"
+                rec_opts_esp = "boot=live components username=live autologin cow_spacesize=4G live-media=any fsck.mode=skip quiet splash"
+                rec_net_opts = "boot=live components username=live autologin cow_spacesize=4G internet_recovery=1 quiet splash"
 
                 refind_main = f"{esp_root}/EFI/refind"
                 boot_fb = f"{esp_root}/EFI/BOOT"
@@ -1575,20 +1577,26 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime            
                             "\n"
                             'menuentry "Pulsar OS Recovery" {\n'
                             f"    icon {icon_rec}\n"
-                            "    volume PULSAR_OS\n"
-                            "    loader /@/boot/vmlinuz-recovery\n"
-                            "    initrd /@/boot/initramfs-recovery.img\n"
-                            f'    options "{rec_opts}"\n'
+                            "    volume PULSAR_RECOVERY\n"
+                            "    loader /boot/vmlinuz-recovery\n"
+                            "    initrd /boot/initramfs-recovery.img\n"
+                            f'    options "{rec_opts_rec}"\n'
+                            '    submenuentry "Boot Recovery from PULSAR_OS (Btrfs)" {\n'
+                            "        volume PULSAR_OS\n"
+                            "        loader /@/boot/vmlinuz-recovery\n"
+                            "        initrd /@/boot/initramfs-recovery.img\n"
+                            f'        options "{rec_opts_os}"\n'
+                            "    }\n"
                             '    submenuentry "Boot Recovery from ESP" {\n'
                             "        loader /EFI/recovery/vmlinuz-recovery\n"
                             "        initrd /EFI/recovery/initramfs-recovery.img\n"
-                            f'        options "{rec_opts}"\n'
+                            f'        options "{rec_opts_esp}"\n'
                             "    }\n"
-                            '    submenuentry "Boot Recovery from PULSAR_RECOVERY partition" {\n'
+                            '    submenuentry "Boot Recovery (Debug Mode)" {\n'
                             "        volume PULSAR_RECOVERY\n"
                             "        loader /boot/vmlinuz-recovery\n"
                             "        initrd /boot/initramfs-recovery.img\n"
-                            f'        options "{rec_opts.replace("live-media=any", "live-media=/dev/disk/by-label/PULSAR_RECOVERY")}"\n'
+                            f'        options "{rec_opts_rec.replace("quiet splash", "loglevel=7 live-debug")}"\n'
                             "    }\n"
                             '    submenuentry "Internet Recovery" {\n'
                             f'        options "{rec_net_opts}"\n'
