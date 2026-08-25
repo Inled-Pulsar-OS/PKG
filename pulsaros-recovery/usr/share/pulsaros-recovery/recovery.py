@@ -1560,7 +1560,6 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime            
                             "# Only show our explicit curated entries: exactly\n"
                             "# 'Pulsar OS' and 'Pulsar OS Recovery'.\n"
                             "scanfor manual,external,optical\n"
-                            'dont_scan_volumes "PULSAR_RECOVERY"\n'
                             "default_selection 1\n"
                             "\n"
                             'menuentry "Pulsar OS" {\n'
@@ -1577,25 +1576,25 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime            
                             "\n"
                             'menuentry "Pulsar OS Recovery" {\n'
                             f"    icon {icon_rec}\n"
-                            "    volume PULSAR_RECOVERY\n"
-                            "    loader /boot/vmlinuz-recovery\n"
-                            "    initrd /boot/initramfs-recovery.img\n"
+                            "    volume PULSAR_OS\n"
+                            "    loader /@/boot/vmlinuz-recovery\n"
+                            "    initrd /@/boot/initramfs-recovery.img\n"
                             f'    options "{rec_opts_rec}"\n'
-                            '    submenuentry "Boot Recovery from PULSAR_OS (Btrfs)" {\n'
-                            "        volume PULSAR_OS\n"
-                            "        loader /@/boot/vmlinuz-recovery\n"
-                            "        initrd /@/boot/initramfs-recovery.img\n"
-                            f'        options "{rec_opts_os}"\n'
-                            "    }\n"
                             '    submenuentry "Boot Recovery from ESP" {\n'
                             "        loader /EFI/recovery/vmlinuz-recovery\n"
                             "        initrd /EFI/recovery/initramfs-recovery.img\n"
                             f'        options "{rec_opts_esp}"\n'
                             "    }\n"
-                            '    submenuentry "Boot Recovery (Debug Mode)" {\n'
+                            '    submenuentry "Boot Recovery from PULSAR_RECOVERY partition" {\n'
                             "        volume PULSAR_RECOVERY\n"
                             "        loader /boot/vmlinuz-recovery\n"
                             "        initrd /boot/initramfs-recovery.img\n"
+                            f'        options "{rec_opts_rec}"\n'
+                            "    }\n"
+                            '    submenuentry "Boot Recovery (Debug Mode)" {\n'
+                            "        volume PULSAR_OS\n"
+                            "        loader /@/boot/vmlinuz-recovery\n"
+                            "        initrd /@/boot/initramfs-recovery.img\n"
                             f'        options "{rec_opts_rec.replace("quiet splash", "loglevel=7 live-debug")}"\n'
                             "    }\n"
                             '    submenuentry "Internet Recovery" {\n'
