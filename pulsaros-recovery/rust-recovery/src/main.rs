@@ -28,11 +28,11 @@ window, .root-container, * {
     font-family: 'Inter', 'SF Pro Display', -apple-system, sans-serif;
 }
 .apple-box {
-    background-color: #2c2c2e !important;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    background-color: #38383a !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
     border-radius: 20px !important;
-    padding: 28px !important;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85) !important;
+    padding: 30px 34px !important;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7) !important;
 }
 .welcome-title {
     font-size: 24px !important;
@@ -43,40 +43,48 @@ window, .root-container, * {
 }
 .welcome-subtitle {
     font-size: 13px !important;
-    color: #98989d !important;
+    color: #c7c7cc !important;
     margin-bottom: 16px !important;
 }
-/* Force Spaced macOS Cards for ListBox & Rows */
-list, listview, listbox {
+/* Force completely transparent ListBox with individual floating rows */
+list, listview, listbox, .transparent-list, .content, .boxed-list {
+    background: transparent !important;
     background-color: transparent !important;
     background-image: none !important;
     border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
     padding: 0 !important;
     margin: 0 !important;
 }
-listbox > row, listboxrow, row {
-    background-color: rgba(255, 255, 255, 0.05) !important;
+listbox > row, listboxrow, row, .utility-card-row {
+    background: transparent !important;
+    background-color: transparent !important;
     background-image: none !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-radius: 14px !important;
-    margin-top: 3px !important;
-    margin-bottom: 7px !important;
+    border: 1px solid transparent !important;
+    border-radius: 12px !important;
+    margin-top: 4px !important;
+    margin-bottom: 4px !important;
     padding: 0 !important;
     color: #ffffff !important;
-    transition: all 0.15s ease !important;
+    outline: none !important;
+    box-shadow: none !important;
+    transition: background-color 0.15s ease !important;
 }
-listbox > row:hover, listboxrow:hover {
-    background-color: rgba(255, 255, 255, 0.09) !important;
-    border-color: rgba(255, 255, 255, 0.16) !important;
+listbox > row:hover, listboxrow:hover, .utility-card-row:hover {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    border-color: transparent !important;
 }
-listbox > row:selected, listboxrow:selected, listbox > row:selected:focus, listboxrow:selected:focus {
-    background-color: rgba(0, 113, 227, 0.22) !important;
-    border: 1px solid #0071e3 !important;
-    box-shadow: 0 0 0 1px #0071e3 !important;
+listbox > row:selected, listboxrow:selected, .utility-card-row:selected,
+listbox > row:selected:focus, listboxrow:selected:focus, .utility-card-row:selected:focus {
+    background-color: #0071e3 !important;
+    border-color: #0071e3 !important;
     color: #ffffff !important;
+    outline: none !important;
+    box-shadow: 0 4px 14px rgba(0, 113, 227, 0.35) !important;
 }
 .utility-row-box {
-    padding: 13px 18px !important;
+    padding: 10px 14px !important;
 }
 .utility-title-lbl {
     font-size: 15px !important;
@@ -85,15 +93,17 @@ listbox > row:selected, listboxrow:selected, listbox > row:selected:focus, listb
 }
 .utility-desc-lbl {
     font-size: 13px !important;
-    color: #98989d !important;
+    color: #c7c7cc !important;
 }
 listbox > row:selected .utility-title-lbl,
-listboxrow:selected .utility-title-lbl {
+listboxrow:selected .utility-title-lbl,
+.utility-card-row:selected .utility-title-lbl {
     color: #ffffff !important;
 }
 listbox > row:selected .utility-desc-lbl,
-listboxrow:selected .utility-desc-lbl {
-    color: #e5e5ea !important;
+listboxrow:selected .utility-desc-lbl,
+.utility-card-row:selected .utility-desc-lbl {
+    color: rgba(255, 255, 255, 0.92) !important;
 }
 .suggested-action {
     background-color: #0071e3 !important;
@@ -504,11 +514,13 @@ fn build_ui(app: &Application) {
     util_box.append(&sub_lbl);
 
     let listbox = ListBox::new();
+    listbox.add_css_class("transparent-list");
     listbox.set_selection_mode(SelectionMode::Single);
 
     let add_row = |id: &str, title: &str, desc: &str, icon_file: &str, icon_fallback: &str| {
         let row = ListBoxRow::new();
         row.set_widget_name(id);
+        row.add_css_class("utility-card-row");
         let hbox = GtkBox::new(Orientation::Horizontal, 18);
         hbox.add_css_class("utility-row-box");
 
