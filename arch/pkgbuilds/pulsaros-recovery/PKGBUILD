@@ -1,27 +1,54 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-recovery
-pkgver=1.0.138
+pkgver=2.0.0
 pkgrel=1
-pkgdesc="Recovery utilities UI for Pulsar OS (Arch edition, macOS-style disk selector and Btrfs recovery)"
-arch=(any)
+pkgdesc="Recovery utilities UI for Pulsar OS (MacOS-style disk selector and Btrfs recovery)"
+arch=(x86_64)
 url="https://inled.es"
 license=(custom)
-depends=(python-gobject python-dbus gtk4 libadwaita python-xlib parted psmisc deja-dup timeshift gparted gptfdisk rsync dosfstools e2fsprogs grub btrfs-progs squashfs-tools curl)
+depends=(
+  webkit2gtk-4.1
+  gtk3
+  openssl
+  curl
+  librsvg
+  libappindicator-gtk3
+  appmenu-gtk-module
+  xdotool
+  btrfs-progs
+  squashfs-tools
+  rsync
+  gparted
+  gptfdisk
+  dosfstools
+  e2fsprogs
+  grub
+  parted
+  psmisc
+  deja-dup
+  timeshift
+)
+makedepends=(
+  cargo
+  rust
+  nodejs
+  pnpm
+)
 options=(!strip)
 install=pulsaros-recovery.install
 
+source=()
 
-package() {
-    _src="$(cd "$startdir"/../../../pulsaros-recovery && pwd)"
-    cd "$_src"
-    [ -d usr ] && cp -r usr "$pkgdir/"
-    [ -d etc ] && cp -r etc "$pkgdir/"
-    if [ -d "$srcdir/staging" ]; then
-        cp -r "$srcdir/staging"/* "$pkgdir/"
-    elif [ -d "$srcdir/usr" ]; then
-        cp -r "$srcdir/usr" "$pkgdir/"
-    fi
-    # Remove Debian-specific __pycache__
-    rm -rf "$pkgdir/usr/share/pulsaros-recovery/__pycache__"
+sha256sums=()
+
+build() {
+  _src="$(cd "$startdir"/../../../pulsaros-recovery/tauri && pwd)"
+  cd "$_src"
+  pnpm install --frozen-lockfile
+  pnpm tauri build
 }
 
+package() {
+  _src="$(cd "$startdir"/../../../pulsaros-recovery/tauri && pwd)"
+  install -Dm755 "$_src/src-tauri/target/release/pulsaros-recovery" "$pkgdir/usr/bin/pulsaros-recovery"
+}
