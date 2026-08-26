@@ -102,7 +102,12 @@ jobs:
             libibus-1.0-dev libkrb5-dev libgnutls28-dev \
             libxi-dev libx11-dev docbook-xsl xsltproc \
             modemmanager-dev libmm-glib-dev \
+            libwebkit2gtk-4.1-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev \
             cargo rustc
+          # Install Node.js and pnpm for Tauri frontend builds
+          curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+          sudo apt-get install -y nodejs
+          sudo npm install -g pnpm
 
       # 6. Parse package and branch from issue or inputs
       - name: Parse Package and Branch
@@ -201,7 +206,10 @@ jobs:
             archlinux:latest bash -c "
               pacman-key --init
               pacman-key --populate archlinux
-              pacman -Syu --noconfirm base-devel git sudo jq curl wget gtk-update-icon-cache cmake meson ninja blueprint-compiler glib2-devel docbook-xsl rust
+              pacman -Syu --noconfirm base-devel git sudo jq curl wget gtk-update-icon-cache cmake meson ninja blueprint-compiler glib2-devel docbook-xsl rust nodejs npm webkit2gtk-4.1 openssl appmenu-gtk-module libappindicator-gtk3 librsvg xdotool
+
+              # Install pnpm for Tauri frontend builds
+              npm install -g pnpm
 
               useradd -m builder
               echo 'builder ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
