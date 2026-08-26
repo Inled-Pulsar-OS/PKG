@@ -1537,9 +1537,10 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime            
                     if os.path.exists(f"/mnt/boot/{uc}")
                 )
 
-                rec_opts_rec = "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live fsck.mode=skip quiet splash"
-                rec_opts_os = "boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=@/live fsck.mode=skip quiet splash"
-                rec_opts_esp = "boot=live components username=live autologin cow_spacesize=4G live-media=any fsck.mode=skip quiet splash"
+                rec_opts_rec = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash"
+                rec_opts_auto = "boot=live components username=live autologin cow_spacesize=4G live-media-path=live fsck.mode=skip quiet splash"
+                rec_opts_os = "boot=live components username=live autologin cow_spacesize=4G live-media-path=@/live fsck.mode=skip quiet splash"
+                rec_opts_esp = "boot=live components username=live autologin cow_spacesize=4G live-media-path=live fsck.mode=skip quiet splash"
                 rec_net_opts = "boot=live components username=live autologin cow_spacesize=4G internet_recovery=1 quiet splash"
 
                 refind_main = f"{esp_root}/EFI/refind"
@@ -1577,25 +1578,31 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime            
                             "\n"
                             'menuentry "Pulsar OS Recovery" {\n'
                             f"    icon {icon_rec}\n"
-                            "    volume PULSAR_OS\n"
-                            "    loader /@/boot/vmlinuz-recovery\n"
-                            "    initrd /@/boot/initramfs-recovery.img\n"
+                            "    volume PULSAR_RECOVERY\n"
+                            "    loader /boot/vmlinuz-recovery\n"
+                            "    initrd /boot/initramfs-recovery.img\n"
                             f'    options "{rec_opts_rec}"\n'
+                            '    submenuentry "Boot Recovery from PULSAR_OS volume" {\n'
+                            "        volume PULSAR_OS\n"
+                            "        loader /@/boot/vmlinuz-recovery\n"
+                            "        initrd /@/boot/initramfs-recovery.img\n"
+                            f'        options "{rec_opts_rec}"\n'
+                            "    }\n"
                             '    submenuentry "Boot Recovery from ESP" {\n'
                             "        loader /EFI/recovery/vmlinuz-recovery\n"
                             "        initrd /EFI/recovery/initramfs-recovery.img\n"
                             f'        options "{rec_opts_esp}"\n'
                             "    }\n"
-                            '    submenuentry "Boot Recovery from PULSAR_RECOVERY partition" {\n'
+                            '    submenuentry "Boot Recovery (Auto-Detect Drive)" {\n'
                             "        volume PULSAR_RECOVERY\n"
                             "        loader /boot/vmlinuz-recovery\n"
                             "        initrd /boot/initramfs-recovery.img\n"
-                            f'        options "{rec_opts_rec}"\n'
+                            f'        options "{rec_opts_auto}"\n'
                             "    }\n"
                             '    submenuentry "Boot Recovery (Debug Mode)" {\n'
-                            "        volume PULSAR_OS\n"
-                            "        loader /@/boot/vmlinuz-recovery\n"
-                            "        initrd /@/boot/initramfs-recovery.img\n"
+                            "        volume PULSAR_RECOVERY\n"
+                            "        loader /boot/vmlinuz-recovery\n"
+                            "        initrd /boot/initramfs-recovery.img\n"
                             f'        options "{rec_opts_rec.replace("quiet splash", "loglevel=7 live-debug")}"\n'
                             "    }\n"
                             '    submenuentry "Internet Recovery" {\n'
