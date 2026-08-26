@@ -1,11 +1,10 @@
 Package: pulsaros-recovery
-Version: 1.0.138
+Version: 2.0.0
 Section: admin
 Priority: optional
-Architecture: all
+Architecture: amd64
 Maintainer: Jaime <info@inled.es>
-Depends: python3-gi, python3-dbus, gir1.2-gtk-4.0, gir1.2-adw-1, gir1.2-glib-2.0, python3-xlib, x11-xserver-utils, parted, psmisc, deja-dup, timeshift, gparted, gdisk, rsync, btrfs-progs, squashfs-tools, curl
-Description: Apple-like Recovery and Disk selector UI for Pulsar OS installer.
- Shows macOS-style Recovery Utilities, Welcome screen, and Disk selector
- before launching Calamares.
-
+Depends: libwebkit2gtk-4.1-0, libgtk-3-0, libssl3, librsvg2-2, btrfs-progs, squashfs-tools, rsync, gparted, gptfdisk, dosfstools, e2fsprogs, grub, parted, psmisc, deja-dup, timeshift, curl
+Description: Recovery utilities UI for Pulsar OS
+ macOS-style recovery assistant with disk selector and Btrfs recovery.
+ Built with Tauri.
