@@ -314,23 +314,45 @@ fn find_btrfs_targets() -> Vec<BtrfsTarget> {
     targets
 }
 
+fn is_valid_squashfs(path: &str) -> bool {
+    if !Path::new(path).exists() {
+        return false;
+    }
+    if let Ok(meta) = fs::metadata(path) {
+        if meta.len() < 1024 * 1024 { // Less than 1MB is definitely invalid
+            return false;
+        }
+    } else {
+        return false;
+    }
+    // Quick superblock verification using unsquashfs -s
+    Command::new("unsquashfs")
+        .args(&["-s", path])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 fn detect_local_squashfs<L>(log: &L) -> Option<String>
 where
     L: Fn(&str) + Send + Sync + 'static,
 {
-    log("Scanning storage devices for local Pulsar OS image...");
+    log("Scanning storage devices for clean Pulsar OS base image...");
 
     let rec_mnt = "/tmp/pulsar_recovery";
     let _ = fs::create_dir_all(rec_mnt);
 
-    // 1. Try mounting partition by label
+    // 1. Mount recovery partition by label
     let _ = Command::new("sudo").args(&["-n", "mount", "/dev/disk/by-label/PULSAR_RECOVERY", rec_mnt]).output();
     let _ = Command::new("sudo").args(&["-n", "mount", "-L", "PULSAR_RECOVERY", rec_mnt]).output();
 
     let base_image_names = [
-        "images/pulsaros-base.squashfs",
         "images/x86_64/airootfs.sfs",
+        "images/pulsaros-base.squashfs",
         "images/airootfs.sfs",
+        "arch/x86_64/airootfs.sfs",
         "recovery-base.squashfs",
         "pulsaros-base.squashfs",
         "live/x86_64/airootfs.sfs",
@@ -351,8 +373,12 @@ where
         for img in &base_image_names {
             let full_p = format!("{}/{}", root, img);
             if Path::new(&full_p).exists() {
-                log(&format!("Found local base system image at: {}", full_p));
-                return Some(full_p);
+                if is_valid_squashfs(&full_p) {
+                    log(&format!("Verified clean base system image at: {}", full_p));
+                    return Some(full_p);
+                } else {
+                    log(&format!("⚠️ Image at {} is truncated or corrupted (EOF). Skipping.", full_p));
+                }
             }
         }
     }
@@ -370,8 +396,8 @@ where
             if Command::new("sudo").args(&["-n", "mount", "-o", "ro", dev, &temp_mnt]).status().map(|s| s.success()).unwrap_or(false) {
                 for img in &base_image_names {
                     let p = format!("{}/{}", temp_mnt, img);
-                    if Path::new(&p).exists() {
-                        log(&format!("Found base system image on {} at: {}", dev, p));
+                    if Path::new(&p).exists() && is_valid_squashfs(&p) {
+                        log(&format!("Verified clean base system image on {} at: {}", dev, p));
                         return Some(p);
                     }
                 }
@@ -383,8 +409,10 @@ where
                         if let Some(ext) = path.extension() {
                             if ext == "squashfs" || ext == "sfs" {
                                 let path_str = path.to_string_lossy().to_string();
-                                log(&format!("Found base image: {}", path_str));
-                                return Some(path_str);
+                                if is_valid_squashfs(&path_str) {
+                                    log(&format!("Verified clean image: {}", path_str));
+                                    return Some(path_str);
+                                }
                             }
                         }
                     }
@@ -394,7 +422,7 @@ where
         }
     }
 
-    log("⚠️ No local base image found on attached partitions.");
+    log("⚠️ No valid local base image found. Falling back to Internet Recovery.");
     None
 }
 
@@ -479,6 +507,7 @@ fn build_ui(app: &Application) {
 
     let add_row = |id: &str, title: &str, desc: &str, icon_file: &str, icon_fallback: &str| {
         let row = ListBoxRow::new();
+        row.set_widget_name(id);
         let hbox = GtkBox::new(Orientation::Horizontal, 18);
         hbox.add_css_class("utility-row-box");
 
@@ -501,9 +530,6 @@ fn build_ui(app: &Application) {
 
         hbox.append(&vbox);
         row.set_child(Some(&hbox));
-        unsafe {
-            row.set_data("action_id", id.to_string());
-        }
         listbox.append(&row);
     };
 
@@ -722,22 +748,16 @@ fn build_ui(app: &Application) {
     // ─────────────────────────────────────────────────────────────
     listbox.connect_row_selected(clone!(@weak btn_util_continue, @strong selected_action => move |_, row| {
         if let Some(r) = row {
-            unsafe {
-                if let Some(id) = r.data::<String>("action_id") {
-                    *selected_action.borrow_mut() = Some(id.as_ref().clone());
-                    btn_util_continue.set_sensitive(true);
-                }
-            }
+            let id = r.widget_name().to_string();
+            *selected_action.borrow_mut() = Some(id);
+            btn_util_continue.set_sensitive(true);
         }
     }));
 
     listbox.connect_row_activated(clone!(@weak btn_util_continue, @strong selected_action => move |_, row| {
-        unsafe {
-            if let Some(id) = row.data::<String>("action_id") {
-                *selected_action.borrow_mut() = Some(id.as_ref().clone());
-                btn_util_continue.emit_clicked();
-            }
-        }
+        let id = row.widget_name().to_string();
+        *selected_action.borrow_mut() = Some(id);
+        btn_util_continue.emit_clicked();
     }));
 
     btn_target_back.connect_clicked(clone!(@weak stack => move |_| {
@@ -756,19 +776,17 @@ fn build_ui(app: &Application) {
         match action.as_str() {
             "disk" => {
                 log_msg("Launching elevated GParted partition manager...");
-                let _ = Command::new("sudo")
-                    .args(&["-E", "gparted"])
-                    .spawn()
-                    .or_else(|_| Command::new("gparted").spawn())
-                    .or_else(|_| Command::new("pkexec").arg("gparted").spawn());
+                let _ = Command::new("sh")
+                    .arg("-c")
+                    .arg("xhost +local: 2>/dev/null; sudo -E gparted &")
+                    .spawn();
             }
             "terminal" => {
                 log_msg("Launching recovery root terminal...");
-                let _ = Command::new("xterm")
-                    .args(&["-title", "Pulsar OS Recovery Terminal", "-bg", "#18181b", "-fg", "#ffffff", "-fa", "Monospace", "-fs", "11", "-e", "sudo", "bash"])
-                    .spawn()
-                    .or_else(|_| Command::new("sudo").args(&["-E", "xterm", "-bg", "#18181b", "-fg", "#ffffff", "-fa", "Monospace", "-fs", "11", "-e", "bash"]).spawn())
-                    .or_else(|_| Command::new("alacritty").spawn());
+                let _ = Command::new("sh")
+                    .arg("-c")
+                    .arg("xhost +local: 2>/dev/null; xterm -title 'Pulsar OS Recovery Terminal' -bg '#18181b' -fg '#ffffff' -fa Monospace -fs 11 -e sudo bash &")
+                    .spawn();
             }
             "reinstall" | "internet" => {
                 if action == "internet" {
@@ -1003,7 +1021,7 @@ where
             match detect_local_squashfs(&log) {
                 Some(p) => p,
                 None => {
-                    log("Local image not found. Attempting Internet Recovery download...");
+                    log("Local image not found or corrupted. Attempting Internet Recovery download...");
                     let url = "https://github.com/Inled-Pulsar-OS/ISO/releases/download/latest/pulsaros-stable-arch-refind.squashfs";
                     let dl_path = "/tmp/pulsaros-remote-recovery.squashfs";
                     progress(0.35, "Downloading Pulsar OS image from GitHub Releases...");
@@ -1038,7 +1056,15 @@ where
     // 5. Unsquash clean system into @
     progress(0.55, "Unpacking clean Pulsar OS rootfs into @...");
     log(&format!("Unsquashing {} into {}/@...", squashfs_path, btrfs_mnt));
-    exec_cmd_stream(&format!("unsquashfs -f -d {}/@ {}", btrfs_mnt, squashfs_path), &log)?;
+    if let Err(unsquash_err) = exec_cmd_stream(&format!("unsquashfs -f -d {}/@ {}", btrfs_mnt, squashfs_path), &log) {
+        log(&format!("Local unsquash failed ({}). Attempting Internet Recovery fallback...", unsquash_err));
+        let url = "https://github.com/Inled-Pulsar-OS/ISO/releases/download/latest/pulsaros-stable-arch-refind.squashfs";
+        let dl_path = "/tmp/pulsaros-remote-recovery.squashfs";
+        progress(0.60, "Downloading fresh system image from GitHub Releases...");
+        exec_cmd_stream(&format!("curl -L -C - --retry 3 -o {} {}", dl_path, url), &log)?;
+        log(&format!("Unsquashing downloaded image {} into {}/@...", dl_path, btrfs_mnt));
+        exec_cmd_stream(&format!("unsquashfs -f -d {}/@ {}", btrfs_mnt, dl_path), &log)?;
+    }
 
     // 6. Re-inject preserved users
     progress(0.85, "Re-injecting user credentials and settings...");
