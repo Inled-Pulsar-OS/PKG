@@ -454,12 +454,12 @@ fn build_ui(app: &Application) {
     let window = ApplicationWindow::builder()
         .application(app)
         .title("Pulsar OS Recovery")
-        .default_width(760)
-        .default_height(590)
+        .default_width(1024)
+        .default_height(720)
         .resizable(true)
         .build();
 
-
+    window.maximize();
 
     let style_mgr = libadwaita::StyleManager::default();
     style_mgr.set_color_scheme(libadwaita::ColorScheme::ForceDark);
@@ -1217,8 +1217,25 @@ where
             if name.starts_with("vmlinuz") && !name.contains("recovery") && !name.ends_with(".kver") {
                 found_kernel = Some(p.to_string_lossy().to_string());
             }
-            if name.starts_with("initramfs") && !name.contains("recovery") && !name.contains("fallback") {
+            if (name.starts_with("initramfs") || name.starts_with("initrd")) && !name.contains("recovery") && !name.contains("fallback") && !name.contains("ucode") {
                 found_initrd = Some(p.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    // Fallback search for initrd if not in rootfs
+    if found_initrd.is_none() {
+        let alt_initrd_sources = [
+            "/boot/initramfs-6.1-x86_64.img",
+            "/boot/initramfs-linux.img",
+            "/tmp/pulsar_recovery/boot/initramfs-6.1-x86_64.img",
+            "/run/live/medium/boot/initramfs-6.1-x86_64.img",
+            "/run/live/medium/boot/initramfs-linux.img",
+        ];
+        for alt in &alt_initrd_sources {
+            if Path::new(alt).exists() {
+                found_initrd = Some(alt.to_string());
+                break;
             }
         }
     }
@@ -1228,7 +1245,7 @@ where
         let targets = ["vmlinuz-6.1-x86_64", "vmlinuz-linux", "vmlinuz"];
         for t in &targets {
             let dest = format!("{}/{}", boot_dir, t);
-            if !Path::new(&dest).exists() {
+            if !Path::new(&dest).exists() || &dest != k {
                 let _ = exec_cmd(&format!("cp -f {} {}", k, dest));
                 log(&format!("Created kernel alias: {} -> {}", dest, k));
             }
@@ -1240,12 +1257,17 @@ where
         let targets = ["initramfs-6.1-x86_64.img", "initramfs-linux.img"];
         for t in &targets {
             let dest = format!("{}/{}", boot_dir, t);
-            if !Path::new(&dest).exists() {
+            if !Path::new(&dest).exists() || &dest != i {
                 let _ = exec_cmd(&format!("cp -f {} {}", i, dest));
                 log(&format!("Created initramfs alias: {} -> {}", dest, i));
             }
         }
     }
+
+    // Enforce UEFI-compatible permissions on @/boot and all boot assets
+    let _ = exec_cmd(&format!("chmod 755 {}", boot_dir));
+    let _ = exec_cmd(&format!("chmod 644 {}/*", boot_dir));
+    let _ = exec_cmd(&format!("chown -R 0:0 {}", boot_dir));
 
     // Copy microcode files if present on host / recovery medium
     let ucode_sources = [
