@@ -12,9 +12,9 @@ export function DiskCard({ target, selected, onSelect }: DiskCardProps) {
   return (
     <button
       className={cn(
-        "flex min-w-[140px] flex-col items-center gap-1.5 rounded-xl border border-border bg-white/60 p-4 transition-all",
+        "flex min-w-35 flex-col items-center gap-1.5 rounded-xl border border-border bg-white/60 p-4 transition-all",
         "hover:bg-white/80",
-        selected && "border-accent/40 ring-2 ring-accent/20 bg-white/80"
+        selected && "border-accent/40 ring-2 ring-accent/20 bg-white/80",
       )}
       onClick={() => onSelect(target)}
     >
