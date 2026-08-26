@@ -1,3 +1,4 @@
 post_install() {
-    echo "Pulsar OS Recovery installed to /usr/bin/pulsaros-recovery"
+    chmod +x /usr/share/applications/pulsaros-recovery.desktop 2>/dev/null || true
+    chmod +x /usr/bin/pulsaros-recovery-desktop-setup 2>/dev/null || true
 }

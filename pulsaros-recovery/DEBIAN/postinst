@@ -1,0 +1,11 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Recovery Package Post-installation Script
+# ==============================================================================
+set -e
+
+echo "Configuring recovery launcher permissions..."
+chmod +x /usr/share/applications/pulsaros-recovery.desktop || true
+chmod +x /usr/bin/pulsaros-recovery-desktop-setup || true
+
+exit 0

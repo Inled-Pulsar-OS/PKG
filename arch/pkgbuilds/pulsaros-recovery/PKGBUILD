@@ -49,6 +49,17 @@ build() {
 }
 
 package() {
-  _src="$(cd "$startdir"/../../../pulsaros-recovery/tauri && pwd)"
-  install -Dm755 "$_src/src-tauri/target/release/pulsaros-recovery" "$pkgdir/usr/bin/pulsaros-recovery"
+  _src="$(cd "$startdir"/../../../pulsaros-recovery && pwd)"
+
+  # Tauri binary
+  install -Dm755 "$_src/tauri/src-tauri/target/release/pulsaros-recovery" "$pkgdir/usr/bin/pulsaros-recovery"
+
+  # Desktop cleanup script (GNOME autostart)
+  install -Dm755 "$_src/usr/bin/pulsaros-recovery-desktop-setup" "$pkgdir/usr/bin/pulsaros-recovery-desktop-setup"
+
+  # Desktop launcher
+  install -Dm644 "$_src/usr/share/applications/pulsaros-recovery.desktop" "$pkgdir/usr/share/applications/pulsaros-recovery.desktop"
+
+  # Autostart entry
+  install -Dm644 "$_src/etc/xdg/autostart/pulsaros-recovery-desktop-setup.desktop" "$pkgdir/etc/xdg/autostart/pulsaros-recovery-desktop-setup.desktop"
 }
