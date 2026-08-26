@@ -1333,11 +1333,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     except Exception:
                         pass
                     arch_dst = "/mnt/recovery/images/x86_64/airootfs.sfs"
-                    if not os.path.exists(arch_dst):
-                        try:
-                            os.link(deb_dst, arch_dst)
-                        except Exception:
-                            shutil.copy2(deb_dst, arch_dst)
                     log_msg(f"Recovery OS squashfs deployed from {found_rec_squash} -> {deb_dst}")
 
                     # Verify the critical live-boot path exists
@@ -1348,27 +1343,24 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     log_msg("WARNING: No recovery squashfs found in any search path — live-boot will fail")
                     log_msg(f"Searched: {rec_squash_sources}")
 
-                # 2. Base System SquashFS (for restoring root @ subvolume)
+                # 2. Base System SquashFS (for restoring root @ subvolume - must be the Arch Linux image)
                 base_squash_sources = [
                     "/run/archiso/bootmnt/images/pulsaros-base.squashfs",
+                    "/run/archiso/bootmnt/arch/x86_64/airootfs.sfs",
+                    "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
+                    "/run/archiso/airootfs.sfs",
                     "/run/live/medium/images/pulsaros-base.squashfs",
                     "/recovery/images/pulsaros-base.squashfs",
-                    "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
-                    "/run/archiso/bootmnt/live/filesystem.squashfs",
-                    "/run/live/medium/live/filesystem.squashfs",
-                    "/lib/live/mount/medium/live/filesystem.squashfs",
-                    "/live/filesystem.squashfs",
                 ]
-                found_base_squash = next((p for p in base_squash_sources if os.path.isfile(p)), None)
+                found_base_squash = next((p for p in base_squash_sources if os.path.isfile(p) and os.path.getsize(p) > 500 * 1024 * 1024), None)
                 if found_base_squash and "TEST_MODE" not in os.environ:
                     base_dst = "/mnt/recovery/images/pulsaros-base.squashfs"
-                    if found_base_squash != deb_dst:
-                        shutil.copy2(found_base_squash, base_dst)
-                    else:
-                        try:
-                            os.link(deb_dst, base_dst)
-                        except Exception:
-                            shutil.copy2(deb_dst, base_dst)
+                    shutil.copy2(found_base_squash, base_dst)
+                    try:
+                        arch_dst = "/mnt/recovery/images/x86_64/airootfs.sfs"
+                        os.link(base_dst, arch_dst)
+                    except Exception:
+                        pass
                     log_msg(f"Base system restoration image deployed from {found_base_squash} -> {base_dst}")
             except Exception as rec_copy_err:
                 print(f"Notice: Recovery squashfs copy: {rec_copy_err}")

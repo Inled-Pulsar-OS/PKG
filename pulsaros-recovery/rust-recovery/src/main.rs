@@ -326,12 +326,13 @@ fn find_btrfs_targets() -> Vec<BtrfsTarget> {
     targets
 }
 
-fn is_valid_squashfs(path: &str) -> bool {
+fn is_valid_base_squashfs(path: &str) -> bool {
     if !Path::new(path).exists() {
         return false;
     }
+    // Must be a complete Arch Linux base OS rootfs (>= 1.0 GB), NEVER the ~350MB Debian mini rootfs
     if let Ok(meta) = fs::metadata(path) {
-        if meta.len() < 1024 * 1024 { // Less than 1MB is definitely invalid
+        if meta.len() < 1000 * 1024 * 1024 {
             return false;
         }
     } else {
@@ -351,7 +352,7 @@ fn detect_local_squashfs<L>(log: &L) -> Option<String>
 where
     L: Fn(&str) + Send + Sync + 'static,
 {
-    log("Scanning storage devices for clean Pulsar OS base image...");
+    log("Scanning storage devices for clean Arch Linux Pulsar OS base image...");
 
     let rec_mnt = "/tmp/pulsar_recovery";
     let _ = fs::create_dir_all(rec_mnt);
@@ -361,13 +362,11 @@ where
     let _ = Command::new("sudo").args(&["-n", "mount", "-L", "PULSAR_RECOVERY", rec_mnt]).output();
 
     let base_image_names = [
-        "images/x86_64/airootfs.sfs",
         "images/pulsaros-base.squashfs",
+        "images/x86_64/airootfs.sfs",
         "images/airootfs.sfs",
         "arch/x86_64/airootfs.sfs",
-        "recovery-base.squashfs",
         "pulsaros-base.squashfs",
-        "live/x86_64/airootfs.sfs",
         "airootfs.sfs",
     ];
 
@@ -385,11 +384,9 @@ where
         for img in &base_image_names {
             let full_p = format!("{}/{}", root, img);
             if Path::new(&full_p).exists() {
-                if is_valid_squashfs(&full_p) {
-                    log(&format!("Verified clean base system image at: {}", full_p));
+                if is_valid_base_squashfs(&full_p) {
+                    log(&format!("Verified clean Arch base system image at: {}", full_p));
                     return Some(full_p);
-                } else {
-                    log(&format!("⚠️ Image at {} is truncated or corrupted (EOF). Skipping.", full_p));
                 }
             }
         }
@@ -408,25 +405,9 @@ where
             if Command::new("sudo").args(&["-n", "mount", "-o", "ro", dev, &temp_mnt]).status().map(|s| s.success()).unwrap_or(false) {
                 for img in &base_image_names {
                     let p = format!("{}/{}", temp_mnt, img);
-                    if Path::new(&p).exists() && is_valid_squashfs(&p) {
+                    if Path::new(&p).exists() && is_valid_base_squashfs(&p) {
                         log(&format!("Verified clean base system image on {} at: {}", dev, p));
                         return Some(p);
-                    }
-                }
-                // Check any .squashfs / .sfs under images/
-                let img_dir = format!("{}/images", temp_mnt);
-                if let Ok(entries) = fs::read_dir(&img_dir) {
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        if let Some(ext) = path.extension() {
-                            if ext == "squashfs" || ext == "sfs" {
-                                let path_str = path.to_string_lossy().to_string();
-                                if is_valid_squashfs(&path_str) {
-                                    log(&format!("Verified clean image: {}", path_str));
-                                    return Some(path_str);
-                                }
-                            }
-                        }
                     }
                 }
                 let _ = Command::new("sudo").args(&["-n", "umount", &temp_mnt]).output();
@@ -434,7 +415,7 @@ where
         }
     }
 
-    log("⚠️ No valid local base image found. Falling back to Internet Recovery.");
+    log("⚠️ No valid local base image (>= 1.0 GB) found. Falling back to Internet Recovery.");
     None
 }
 
@@ -1173,38 +1154,78 @@ where
 
     // 1. Locate and deploy recovery kernel & initramfs
     let rec_kernel_sources = [
-        "/tmp/pulsar_recovery/boot/vmlinuz-recovery",
-        "/tmp/pulsar_recovery/vmlinuz-recovery",
+        "/run/live/medium/live/vmlinuz",
+        "/run/live/medium/vmlinuz",
         "/run/live/medium/recovery/vmlinuz-recovery",
         "/run/live/medium/boot/vmlinuz-recovery",
+        "/tmp/pulsar_recovery/boot/vmlinuz-recovery",
+        "/tmp/pulsar_recovery/vmlinuz-recovery",
+        "/tmp/pulsar_recovery/live/vmlinuz",
         "/recovery/vmlinuz-recovery",
-        "/lib/live/mount/medium/recovery/vmlinuz-recovery",
+        "/lib/live/mount/medium/live/vmlinuz",
+        "/lib/live/mount/medium/vmlinuz",
     ];
     let rec_initrd_sources = [
-        "/tmp/pulsar_recovery/boot/initramfs-recovery.img",
-        "/tmp/pulsar_recovery/initramfs-recovery.img",
+        "/run/live/medium/live/initrd.img",
+        "/run/live/medium/initrd.img",
         "/run/live/medium/recovery/initramfs-recovery.img",
         "/run/live/medium/boot/initramfs-recovery.img",
+        "/tmp/pulsar_recovery/boot/initramfs-recovery.img",
+        "/tmp/pulsar_recovery/initramfs-recovery.img",
+        "/tmp/pulsar_recovery/live/initrd.img",
         "/recovery/initramfs-recovery.img",
-        "/lib/live/mount/medium/recovery/initramfs-recovery.img",
+        "/lib/live/mount/medium/live/initrd.img",
+        "/lib/live/mount/medium/initrd.img",
     ];
 
+    let mut rec_k_found: Option<String> = None;
     for src in &rec_kernel_sources {
         if Path::new(src).exists() {
-            let dest = format!("{}/vmlinuz-recovery", boot_dir);
-            let _ = exec_cmd(&format!("cp -f {} {}", src, dest));
-            log(&format!("Restored recovery kernel to {} from {}", dest, src));
+            rec_k_found = Some(src.to_string());
             break;
         }
     }
+    if rec_k_found.is_none() {
+        if let Ok(entries) = fs::read_dir("/boot") {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.starts_with("vmlinuz") && !name.ends_with(".kver") {
+                    rec_k_found = Some(entry.path().to_string_lossy().to_string());
+                    break;
+                }
+            }
+        }
+    }
 
+    if let Some(src) = rec_k_found {
+        let dest = format!("{}/vmlinuz-recovery", boot_dir);
+        let _ = exec_cmd(&format!("cp -f {} {}", src, dest));
+        log(&format!("Restored recovery kernel to {} from {}", dest, src));
+    }
+
+    let mut rec_initrd_found: Option<String> = None;
     for src in &rec_initrd_sources {
         if Path::new(src).exists() {
-            let dest = format!("{}/initramfs-recovery.img", boot_dir);
-            let _ = exec_cmd(&format!("cp -f {} {}", src, dest));
-            log(&format!("Restored recovery initramfs to {} from {}", dest, src));
+            rec_initrd_found = Some(src.to_string());
             break;
         }
+    }
+    if rec_initrd_found.is_none() {
+        if let Ok(entries) = fs::read_dir("/boot") {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.starts_with("initrd") || name.starts_with("initramfs") {
+                    rec_initrd_found = Some(entry.path().to_string_lossy().to_string());
+                    break;
+                }
+            }
+        }
+    }
+
+    if let Some(src) = rec_initrd_found {
+        let dest = format!("{}/initramfs-recovery.img", boot_dir);
+        let _ = exec_cmd(&format!("cp -f {} {}", src, dest));
+        log(&format!("Restored recovery initramfs to {} from {}", dest, src));
     }
 
     // 2. Ensure OS kernel naming aliases exist in @/boot
