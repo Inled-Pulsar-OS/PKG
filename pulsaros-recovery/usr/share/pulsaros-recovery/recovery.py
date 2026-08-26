@@ -1340,6 +1340,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             shutil.copy2(deb_dst, arch_dst)
                     log_msg(f"Recovery OS squashfs deployed from {found_rec_squash} -> {deb_dst}")
 
+                    # Verify the critical live-boot path exists
+                    if not os.path.isfile(deb_dst) or os.path.getsize(deb_dst) == 0:
+                        raise Exception(f"SquashFS verification failed: {deb_dst} is missing or empty after copy")
+                    log_msg(f"Live-boot SquashFS verified at {deb_dst} ({os.path.getsize(deb_dst)} bytes)")
+                elif not found_rec_squash:
+                    log_msg("WARNING: No recovery squashfs found in any search path — live-boot will fail")
+                    log_msg(f"Searched: {rec_squash_sources}")
+
                 # 2. Base System SquashFS (for restoring root @ subvolume)
                 base_squash_sources = [
                     "/run/archiso/bootmnt/images/pulsaros-base.squashfs",
@@ -1424,19 +1432,16 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime            
                     ]
                     src = next((p for p in candidates if os.path.isfile(p) and os.path.getsize(p) > 1024), None)
                     if not src:
-                        # Fallback to general live media paths
-                        for root_dir in ("/run/archiso", "/run/live", "/lib/live"):
+                        # Search only for dedicated recovery initramfs images
+                        for root_dir in ("/run/archiso", "/run/live", "/lib/live", "/mnt"):
                             if os.path.exists(root_dir):
-                                for p in glob.glob(f"{root_dir}/**/initr*", recursive=True):
-                                    if os.path.isfile(p) and not p.endswith(".kver"):
+                                for p in glob.glob(f"{root_dir}/**/initramfs-recovery.img", recursive=True) + glob.glob(f"{root_dir}/**/initrd.img-*+deb*", recursive=True):
+                                    if os.path.isfile(p) and os.path.getsize(p) > 1024:
                                         candidates.append(p)
-                        for p in sorted(glob.glob("/boot/initramfs-*.img") + glob.glob("/boot/initrd.img*") + glob.glob("/boot/initrd*")):
-                            if "fallback" not in p and "ucode" not in p and not p.endswith(".kver"):
-                                candidates.append(p)
                         src = next((p for p in candidates if os.path.isfile(p) and os.path.getsize(p) > 1024), None)
 
                     if not src:
-                        log_msg("ERROR: no live initramfs found - the recovery entry will not boot")
+                        log_msg("WARNING: dedicated recovery initramfs not found. Skipping recovery bootloader entry to avoid boot failure.")
                         return
                     esp_root = "/mnt/boot/efi"
                     os.makedirs("/mnt/boot", exist_ok=True)
@@ -1467,19 +1472,15 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime            
                 ]
                 found_k = next((k for k in kernel_cand if os.path.isfile(k) and not k.endswith(".kver") and os.path.getsize(k) > 1024), None)
                 if not found_k:
-                    for root_dir in ("/run/archiso", "/run/live", "/lib/live"):
+                    for root_dir in ("/run/archiso", "/run/live", "/lib/live", "/mnt"):
                         if os.path.exists(root_dir):
-                            for p in glob.glob(f"{root_dir}/**/vmlinuz*", recursive=True):
-                                if os.path.isfile(p) and not p.endswith(".kver"):
+                            for p in glob.glob(f"{root_dir}/**/vmlinuz-recovery*", recursive=True) + glob.glob(f"{root_dir}/**/vmlinuz-*+deb*", recursive=True):
+                                if os.path.isfile(p) and not p.endswith(".kver") and os.path.getsize(p) > 1024:
                                     kernel_cand.append(p)
-                    kernel_cand += [
-                        "/mnt/boot/vmlinuz-linux",
-                        "/mnt/boot/vmlinuz",
-                    ] + sorted(glob.glob("/mnt/boot/vmlinuz-*")) + sorted(glob.glob("/boot/vmlinuz-*"))
                     found_k = next((k for k in kernel_cand if os.path.isfile(k) and not k.endswith(".kver") and os.path.getsize(k) > 1024), None)
                 try:
                     if not found_k:
-                        log_msg("ERROR: no kernel found - the recovery entry will not boot")
+                        log_msg("WARNING: dedicated recovery kernel not found. Skipping recovery kernel deployment.")
                         return
                     esp_root = "/mnt/boot/efi"
                     os.makedirs("/mnt/boot", exist_ok=True)
