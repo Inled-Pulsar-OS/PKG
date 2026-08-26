@@ -10,6 +10,7 @@ export type RecoveryMode = "local" | "internet";
 
 export type Screen =
   | "utilities"
+  | "reinstall_choice"
   | "target_select"
   | "progress"
   | "complete"

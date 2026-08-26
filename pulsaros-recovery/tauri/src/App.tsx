@@ -1,5 +1,6 @@
 import { RecoveryProvider, useRecoveryContext } from "@/modules/core";
 import { UtilitiesPage } from "@/modules/utilities";
+import { ReinstallChoicePage } from "@/modules/reinstall-choice";
 import { TargetSelectPage } from "@/modules/target-select";
 import { ProgressPage } from "@/modules/progress";
 import { CompletePage } from "@/modules/complete";
@@ -11,6 +12,8 @@ function CurrentScreen() {
   switch (screen) {
     case "utilities":
       return <UtilitiesPage />;
+    case "reinstall_choice":
+      return <ReinstallChoicePage />;
     case "target_select":
       return <TargetSelectPage />;
     case "progress":

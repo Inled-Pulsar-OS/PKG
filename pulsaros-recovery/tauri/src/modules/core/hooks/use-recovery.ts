@@ -32,15 +32,31 @@ export function useRecovery() {
       await launchApp("gparted");
       return;
     }
+    if (selectedAction === "reinstall") {
+      setScreen("reinstall_choice");
+      return;
+    }
 
-    const mode: RecoveryMode = selectedAction === "internet" ? "internet" : "local";
-    setRecoveryMode(mode);
-
+    setRecoveryMode("internet");
     const found = await getBtrfsTargets();
     setTargets(found);
     setSelectedTarget(null);
     setScreen("target_select");
   }, [selectedAction]);
+
+  const startLocalRestoreFlow = useCallback(async () => {
+    setRecoveryMode("local");
+    const found = await getBtrfsTargets();
+    setTargets(found);
+    setSelectedTarget(null);
+    setScreen("target_select");
+  }, []);
+
+  const launchCalamares = useCallback(async () => {
+    await launchApp("calamares");
+    setScreen("utilities");
+    setSelectedAction(null);
+  }, []);
 
   const startRestoreFlow = useCallback(async () => {
     if (!selectedTarget) return;
@@ -87,6 +103,8 @@ export function useRecovery() {
     error,
     selectAction,
     continueFromUtilities,
+    startLocalRestoreFlow,
+    launchCalamares,
     setSelectedTarget,
     startRestoreFlow,
     goBack,
