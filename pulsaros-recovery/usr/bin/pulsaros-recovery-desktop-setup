@@ -1,0 +1,17 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Desktop Recovery Icon Installer (Indestructible version)
+# ==============================================================================
+
+# Wait for session and desktop manager to be fully loaded
+sleep 6
+
+DESKTOP_DIR="$HOME/Desktop"
+mkdir -p "$DESKTOP_DIR"
+
+# Remove the recovery launcher from desktop as requested, since it causes errors.
+rm -f "$DESKTOP_DIR/pulsaros-recovery.desktop"
+
+# Clean up default Calamares icons if they were generated
+rm -f "$DESKTOP_DIR/calamares-install-debian.desktop"
+rm -f "$DESKTOP_DIR/calamares.desktop"
