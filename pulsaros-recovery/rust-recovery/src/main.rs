@@ -459,9 +459,7 @@ fn build_ui(app: &Application) {
         .resizable(true)
         .build();
 
-    if std::env::var("TEST_MODE").is_err() {
-        window.fullscreen();
-    }
+
 
     let style_mgr = libadwaita::StyleManager::default();
     style_mgr.set_color_scheme(libadwaita::ColorScheme::ForceDark);
@@ -1121,7 +1119,7 @@ where
     }
 
     // 7. Regenerate clean /etc/fstab with correct UUID
-    progress(0.92, "Configuring file systems and boot mounts...");
+    progress(0.90, "Configuring file systems and boot mounts...");
     log("Writing clean /etc/fstab for Btrfs subvolumes (@, @home)...");
     let btrfs_uuid = if !target.uuid.is_empty() {
         target.uuid.clone()
@@ -1149,7 +1147,11 @@ where
     let _ = fs::write("/tmp/pulsar_new_fstab", &fstab_content);
     let _ = exec_cmd(&format!("cp -f /tmp/pulsar_new_fstab {}/etc/fstab", new_root));
 
-    // 8. Cleanup and sync
+    // 8. Deploy boot kernels, recovery kernel, and align rEFInd
+    progress(0.95, "Deploying OS & Recovery kernels to @/boot and aligning bootloader...");
+    deploy_boot_and_recovery_kernels(&new_root, &btrfs_uuid, &log);
+
+    // 9. Cleanup and sync
     progress(0.98, "Synchronizing disks and unmounting...");
     log("Syncing disks...");
     let _ = exec_cmd("sync");
@@ -1158,6 +1160,149 @@ where
     progress(1.0, "Restoration complete!");
     log("System successfully restored.");
     Ok(())
+}
+
+fn deploy_boot_and_recovery_kernels<L>(new_root: &str, btrfs_uuid: &str, log: &L)
+where
+    L: Fn(&str) + Send + Sync + 'static,
+{
+    log("Verifying and deploying boot and recovery kernels into @/boot and ESP...");
+
+    let boot_dir = format!("{}/boot", new_root);
+    let _ = fs::create_dir_all(&boot_dir);
+
+    // 1. Locate and deploy recovery kernel & initramfs
+    let rec_kernel_sources = [
+        "/tmp/pulsar_recovery/boot/vmlinuz-recovery",
+        "/tmp/pulsar_recovery/vmlinuz-recovery",
+        "/run/live/medium/recovery/vmlinuz-recovery",
+        "/run/live/medium/boot/vmlinuz-recovery",
+        "/recovery/vmlinuz-recovery",
+        "/lib/live/mount/medium/recovery/vmlinuz-recovery",
+    ];
+    let rec_initrd_sources = [
+        "/tmp/pulsar_recovery/boot/initramfs-recovery.img",
+        "/tmp/pulsar_recovery/initramfs-recovery.img",
+        "/run/live/medium/recovery/initramfs-recovery.img",
+        "/run/live/medium/boot/initramfs-recovery.img",
+        "/recovery/initramfs-recovery.img",
+        "/lib/live/mount/medium/recovery/initramfs-recovery.img",
+    ];
+
+    for src in &rec_kernel_sources {
+        if Path::new(src).exists() {
+            let dest = format!("{}/vmlinuz-recovery", boot_dir);
+            let _ = exec_cmd(&format!("cp -f {} {}", src, dest));
+            log(&format!("Restored recovery kernel to {} from {}", dest, src));
+            break;
+        }
+    }
+
+    for src in &rec_initrd_sources {
+        if Path::new(src).exists() {
+            let dest = format!("{}/initramfs-recovery.img", boot_dir);
+            let _ = exec_cmd(&format!("cp -f {} {}", src, dest));
+            log(&format!("Restored recovery initramfs to {} from {}", dest, src));
+            break;
+        }
+    }
+
+    // 2. Ensure OS kernel naming aliases exist in @/boot
+    let mut found_kernel: Option<String> = None;
+    let mut found_initrd: Option<String> = None;
+    if let Ok(entries) = fs::read_dir(&boot_dir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+            if name.starts_with("vmlinuz") && !name.contains("recovery") && !name.ends_with(".kver") {
+                found_kernel = Some(p.to_string_lossy().to_string());
+            }
+            if name.starts_with("initramfs") && !name.contains("recovery") && !name.contains("fallback") {
+                found_initrd = Some(p.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    if let Some(k) = &found_kernel {
+        log(&format!("Detected main OS kernel: {}", k));
+        let targets = ["vmlinuz-6.1-x86_64", "vmlinuz-linux", "vmlinuz"];
+        for t in &targets {
+            let dest = format!("{}/{}", boot_dir, t);
+            if !Path::new(&dest).exists() {
+                let _ = exec_cmd(&format!("cp -f {} {}", k, dest));
+                log(&format!("Created kernel alias: {} -> {}", dest, k));
+            }
+        }
+    }
+
+    if let Some(i) = &found_initrd {
+        log(&format!("Detected main OS initrd: {}", i));
+        let targets = ["initramfs-6.1-x86_64.img", "initramfs-linux.img"];
+        for t in &targets {
+            let dest = format!("{}/{}", boot_dir, t);
+            if !Path::new(&dest).exists() {
+                let _ = exec_cmd(&format!("cp -f {} {}", i, dest));
+                log(&format!("Created initramfs alias: {} -> {}", dest, i));
+            }
+        }
+    }
+
+    // Copy microcode files if present on host / recovery medium
+    let ucode_sources = [
+        "/tmp/pulsar_recovery/amd-ucode.img",
+        "/run/live/medium/amd-ucode.img",
+        "/boot/amd-ucode.img",
+        "/tmp/pulsar_recovery/intel-ucode.img",
+        "/run/live/medium/intel-ucode.img",
+        "/boot/intel-ucode.img",
+    ];
+    for u in &ucode_sources {
+        if Path::new(u).exists() {
+            let fname = Path::new(u).file_name().and_then(|n| n.to_str()).unwrap_or_default();
+            let dest = format!("{}/{}", boot_dir, fname);
+            if !Path::new(&dest).exists() {
+                let _ = exec_cmd(&format!("cp -f {} {}", u, dest));
+            }
+        }
+    }
+
+    // 3. Mount and configure ESP / rEFInd
+    let esp_mnt = "/tmp/pulsar_esp_mount";
+    let _ = fs::create_dir_all(esp_mnt);
+    let _ = exec_cmd(&format!("umount -l {} 2>/dev/null || true", esp_mnt));
+
+    if let Ok(out) = exec_cmd("blkid -t TYPE=vfat -o device | head -n 1") {
+        let efi_dev = out.trim();
+        if !efi_dev.is_empty() {
+            if exec_cmd(&format!("mount {} {}", efi_dev, esp_mnt)).is_ok() {
+                log(&format!("Mounted ESP on {} for bootloader alignment...", esp_mnt));
+
+                // Copy recovery kernels to ESP as well
+                let efi_rec_dir = format!("{}/EFI/recovery", esp_mnt);
+                let _ = fs::create_dir_all(&efi_rec_dir);
+                let _ = exec_cmd(&format!("cp -f {}/vmlinuz-recovery {}/vmlinuz-recovery 2>/dev/null || true", boot_dir, efi_rec_dir));
+                let _ = exec_cmd(&format!("cp -f {}/initramfs-recovery.img {}/initramfs-recovery.img 2>/dev/null || true", boot_dir, efi_rec_dir));
+
+                // Align refind.conf UUIDs
+                let refind_confs = [
+                    format!("{}/EFI/refind/refind.conf", esp_mnt),
+                    format!("{}/EFI/BOOT/refind.conf", esp_mnt),
+                ];
+                for rc in &refind_confs {
+                    if Path::new(rc).exists() {
+                        if let Ok(content) = fs::read_to_string(rc) {
+                            let re = Regex::new(r"root=UUID=[a-fA-F0-9-]+").unwrap();
+                            let updated = re.replace_all(&content, &format!("root=UUID={}", btrfs_uuid)).to_string();
+                            let _ = fs::write(rc, updated);
+                            log(&format!("Updated root UUID in {} to {}", rc, btrfs_uuid));
+                        }
+                    }
+                }
+
+                let _ = exec_cmd(&format!("umount -l {}", esp_mnt));
+            }
+        }
+    }
 }
 
 fn main() {
