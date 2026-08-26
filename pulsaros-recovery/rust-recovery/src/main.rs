@@ -31,7 +31,7 @@ window, .root-container, * {
     background-color: #323236 !important;
     border: 1px solid rgba(255, 255, 255, 0.14) !important;
     border-radius: 20px !important;
-    padding: 30px 34px !important;
+    padding: 28px 32px !important;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7) !important;
 }
 .welcome-title {
@@ -46,10 +46,10 @@ window, .root-container, * {
     color: #c7c7cc !important;
     margin-bottom: 16px !important;
 }
-/* Force completely transparent ListBox with individual floating rows */
+/* Force completely transparent ListBox with individual floating cards */
 list, listview, listbox, .transparent-list, .content, .boxed-list {
-    background: transparent !important;
     background-color: transparent !important;
+    background: transparent !important;
     background-image: none !important;
     border: none !important;
     box-shadow: none !important;
@@ -57,35 +57,35 @@ list, listview, listbox, .transparent-list, .content, .boxed-list {
     padding: 0 !important;
     margin: 0 !important;
 }
-listbox > row, listboxrow, row, .utility-card-row {
-    background: transparent !important;
+listbox > row, listboxrow, row, .utility-item-row {
     background-color: transparent !important;
+    background: transparent !important;
     background-image: none !important;
-    border: 1px solid transparent !important;
-    border-radius: 12px !important;
-    margin-top: 4px !important;
-    margin-bottom: 4px !important;
-    padding: 0 !important;
-    color: #ffffff !important;
-    outline: none !important;
+    border: none !important;
     box-shadow: none !important;
-    transition: background-color 0.15s ease !important;
+    outline: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
 }
-listbox > row:hover, listboxrow:hover, .utility-card-row:hover {
-    background-color: rgba(255, 255, 255, 0.08) !important;
-    border-color: transparent !important;
+.utility-row-card {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 12px !important;
+    padding: 12px 16px !important;
+    transition: all 0.15s ease !important;
 }
-listbox > row:selected, listboxrow:selected, .utility-card-row:selected,
-listbox > row:selected:focus, listboxrow:selected:focus, .utility-card-row:selected:focus,
-listbox > row:focus, listboxrow:focus {
+listbox > row:hover .utility-row-card,
+listboxrow:hover .utility-row-card,
+.utility-item-row:hover .utility-row-card {
+    background-color: rgba(255, 255, 255, 0.09) !important;
+    border-color: rgba(255, 255, 255, 0.16) !important;
+}
+listbox > row:selected .utility-row-card,
+listboxrow:selected .utility-row-card,
+.utility-item-row:selected .utility-row-card {
     background-color: #0071e3 !important;
     border-color: #0071e3 !important;
-    color: #ffffff !important;
-    outline: none !important;
     box-shadow: 0 4px 14px rgba(0, 113, 227, 0.35) !important;
-}
-.utility-row-box {
-    padding: 10px 14px !important;
 }
 .utility-title-lbl {
     font-size: 15px !important;
@@ -98,12 +98,12 @@ listbox > row:focus, listboxrow:focus {
 }
 listbox > row:selected .utility-title-lbl,
 listboxrow:selected .utility-title-lbl,
-.utility-card-row:selected .utility-title-lbl {
+.utility-item-row:selected .utility-title-lbl {
     color: #ffffff !important;
 }
 listbox > row:selected .utility-desc-lbl,
 listboxrow:selected .utility-desc-lbl,
-.utility-card-row:selected .utility-desc-lbl {
+.utility-item-row:selected .utility-desc-lbl {
     color: rgba(255, 255, 255, 0.92) !important;
 }
 .suggested-action {
@@ -522,12 +522,17 @@ fn build_ui(app: &Application) {
     let add_row = |id: &str, title: &str, desc: &str, icon_file: &str, icon_fallback: &str| {
         let row = ListBoxRow::new();
         row.set_widget_name(id);
-        row.add_css_class("utility-card-row");
-        let hbox = GtkBox::new(Orientation::Horizontal, 18);
-        hbox.add_css_class("utility-row-box");
+        row.add_css_class("utility-item-row");
 
-        let icon = create_icon_widget(icon_file, icon_fallback, 52);
-        hbox.append(&icon);
+        let card = GtkBox::new(Orientation::Horizontal, 18);
+        card.add_css_class("utility-row-card");
+        card.set_margin_top(4);
+        card.set_margin_bottom(4);
+        card.set_margin_start(2);
+        card.set_margin_end(2);
+
+        let icon = create_icon_widget(icon_file, icon_fallback, 50);
+        card.append(&icon);
 
         let vbox = GtkBox::new(Orientation::Vertical, 3);
         vbox.set_valign(Align::Center);
@@ -543,8 +548,8 @@ fn build_ui(app: &Application) {
         desc_l.set_wrap(true);
         vbox.append(&desc_l);
 
-        hbox.append(&vbox);
-        row.set_child(Some(&hbox));
+        card.append(&vbox);
+        row.set_child(Some(&card));
         listbox.append(&row);
     };
 
