@@ -21,15 +21,15 @@ use regex::Regex;
 const APP_CSS: &str = r#"
 /* Force macOS Dark Backdrop */
 window, window.background, .background, .root-container {
-    background-color: #1c1c1e !important;
+    background-color: #1e1e20 !important;
     color: #ffffff !important;
 }
 window, .root-container, * {
     font-family: 'Inter', 'SF Pro Display', -apple-system, sans-serif;
 }
 .apple-box {
-    background-color: #38383a !important;
-    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    background-color: #323236 !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
     border-radius: 20px !important;
     padding: 30px 34px !important;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7) !important;
@@ -76,7 +76,8 @@ listbox > row:hover, listboxrow:hover, .utility-card-row:hover {
     border-color: transparent !important;
 }
 listbox > row:selected, listboxrow:selected, .utility-card-row:selected,
-listbox > row:selected:focus, listboxrow:selected:focus, .utility-card-row:selected:focus {
+listbox > row:selected:focus, listboxrow:selected:focus, .utility-card-row:selected:focus,
+listbox > row:focus, listboxrow:focus {
     background-color: #0071e3 !important;
     border-color: #0071e3 !important;
     color: #ffffff !important;
@@ -471,7 +472,7 @@ fn build_ui(app: &Application) {
         gtk4::style_context_add_provider_for_display(
             &display,
             &provider,
-            gtk4::STYLE_PROVIDER_PRIORITY_USER,
+            gtk4::STYLE_PROVIDER_PRIORITY_USER + 500,
         );
     }
 
@@ -516,6 +517,7 @@ fn build_ui(app: &Application) {
     let listbox = ListBox::new();
     listbox.add_css_class("transparent-list");
     listbox.set_selection_mode(SelectionMode::Single);
+    listbox.set_show_separators(false);
 
     let add_row = |id: &str, title: &str, desc: &str, icon_file: &str, icon_fallback: &str| {
         let row = ListBoxRow::new();
