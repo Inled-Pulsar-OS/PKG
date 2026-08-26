@@ -1116,7 +1116,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 exec_cmd(["sgdisk", "--zap-all", disk_path])
                 exec_cmd(["sgdisk", "--clear", disk_path])
                 exec_cmd(["sgdisk", "--new=1:0:+512M", "--typecode=1:ef00", "--change-name=1:EFI", disk_path])
-                exec_cmd(["sgdisk", "--new=2:0:+8G", "--typecode=2:8300", "--change-name=2:PulsarRecovery", disk_path])
+                exec_cmd(["sgdisk", "--new=2:0:+4G", "--typecode=2:8300", "--change-name=2:PulsarRecovery", disk_path])
                 exec_cmd(["sgdisk", "--new=3:0:0", "--typecode=3:8300", "--change-name=3:PulsarOS", disk_path])
                 exec_cmd(["sync"])
                 exec_cmd(["udevadm", "settle"])
@@ -1177,7 +1177,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 GLib.idle_add(self.update_progress, 0.05, "Cleaning and partitioning (MBR for BIOS: Recovery, Btrfs)...")
                 exec_cmd(["wipefs", "-a", "-f", disk_path])
                 exec_cmd(["dd", "if=/dev/zero", f"of={disk_path}", "bs=512", "count=2048"])
-                sfdisk_script = "label: dos\nsize=8192M, type=83\nsize=+, type=83, bootable\n"
+                sfdisk_script = "label: dos\nsize=4096M, type=83\nsize=+, type=83, bootable\n"
                 if "TEST_MODE" in os.environ:
                     print(f"[TEST_MODE] Simulating sfdisk partitioning script:\n{sfdisk_script}")
                 else:
@@ -1350,34 +1350,27 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
                 # 2. Base System SquashFS (for restoring root @ subvolume)
                 base_squash_sources = [
-                    "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
-                    "/run/archiso/bootmnt/arch/x86_64/airootfs.sfs",
                     "/run/archiso/bootmnt/images/pulsaros-base.squashfs",
-                    "/run/archiso/copytoram/airootfs.sfs",
-                    "/run/archiso/airootfs.sfs",
                     "/run/live/medium/images/pulsaros-base.squashfs",
                     "/recovery/images/pulsaros-base.squashfs",
+                    "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
                     "/run/archiso/bootmnt/live/filesystem.squashfs",
+                    "/run/live/medium/live/filesystem.squashfs",
+                    "/lib/live/mount/medium/live/filesystem.squashfs",
                     "/live/filesystem.squashfs",
                 ]
                 found_base_squash = next((p for p in base_squash_sources if os.path.isfile(p)), None)
                 if found_base_squash and "TEST_MODE" not in os.environ:
                     base_dst = "/mnt/recovery/images/pulsaros-base.squashfs"
-                    shutil.copy2(found_base_squash, base_dst)
-                    try:
-                        arch_dst = "/mnt/recovery/images/x86_64/airootfs.sfs"
-                        if os.path.exists(arch_dst):
-                            os.remove(arch_dst)
-                        os.link(base_dst, arch_dst)
-                    except Exception:
-                        pass
-                    src_sz = os.path.getsize(found_base_squash)
-                    dst_sz = os.path.getsize(base_dst)
-                    if dst_sz < src_sz:
-                        raise Exception(f"Base squashfs copy truncated: {dst_sz}/{src_sz} bytes")
-                    log_msg(f"Base system restoration image verified at {base_dst} ({dst_sz} bytes)")
+                    if found_base_squash != deb_dst:
+                        shutil.copy2(found_base_squash, base_dst)
+                    else:
+                        try:
+                            os.link(deb_dst, base_dst)
+                        except Exception:
+                            shutil.copy2(deb_dst, base_dst)
+                    log_msg(f"Base system restoration image deployed from {found_base_squash} -> {base_dst}")
             except Exception as rec_copy_err:
-                log_msg(f"ERROR: Recovery squashfs copy failed: {rec_copy_err}")
                 print(f"Notice: Recovery squashfs copy: {rec_copy_err}")
 
             GLib.idle_add(self.update_progress, 0.85, "Configuring bootloader (fstab)...")

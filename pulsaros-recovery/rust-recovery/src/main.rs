@@ -775,17 +775,17 @@ fn build_ui(app: &Application) {
         let action = selected_action.borrow().clone().unwrap_or_default();
         match action.as_str() {
             "disk" => {
-                log_msg("Launching elevated GParted partition manager...");
+                log_msg("Launching elevated Disk Utility (GParted / Disks)...");
                 let _ = Command::new("sh")
                     .arg("-c")
-                    .arg("xhost +local: 2>/dev/null; sudo -E gparted &")
+                    .arg("gparted || pkexec gparted || sudo -E gparted || gnome-disks || gnome-disk-utility &")
                     .spawn();
             }
             "terminal" => {
                 log_msg("Launching recovery root terminal...");
                 let _ = Command::new("sh")
                     .arg("-c")
-                    .arg("xhost +local: 2>/dev/null; xterm -title 'Pulsar OS Recovery Terminal' -bg '#18181b' -fg '#ffffff' -fa Monospace -fs 11 -e sudo bash &")
+                    .arg("gnome-terminal -- sudo bash || kgx -e 'sudo bash' || alacritty -e sudo bash || xfce4-terminal -e 'sudo bash' || konsole -e sudo bash || kitty sudo bash || xterm -title 'Pulsar OS Recovery Terminal' -bg '#18181b' -fg '#ffffff' -fa Monospace -fs 11 -e sudo bash || x-terminal-emulator -e sudo bash || xterm -e sudo bash || gnome-terminal || alacritty || xterm &")
                     .spawn();
             }
             "reinstall" | "internet" => {
