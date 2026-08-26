@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::rc::Rc;
 use std::thread;
 
@@ -17,7 +17,6 @@ use gtk4::{
 use libadwaita::prelude::*;
 use libadwaita::ApplicationWindow;
 use regex::Regex;
-
 
 const APP_CSS: &str = r#"
 /* Force macOS Dark Backdrop */
@@ -47,7 +46,7 @@ window, .root-container, * {
     color: #98989d !important;
     margin-bottom: 16px !important;
 }
-/* Force Pure Dark ListBox & Rows (completely eliminates light theme override) */
+/* Force Pure Dark ListBox & Rows */
 list, listview, listbox {
     background-color: #202022 !important;
     background-image: none !important;
@@ -156,6 +155,12 @@ listboxrow:selected .utility-desc-lbl {
     font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
     font-size: 11px;
 }
+.err-log-text text {
+    background-color: #121212;
+    color: #ff453a;
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+    font-size: 11px;
+}
 .disk-card {
     background-color: #2a2a2a;
     border: 1px solid #3c3c3c;
@@ -203,6 +208,61 @@ fn log_msg(msg: &str) {
         let _ = writeln!(f, "{}", msg);
     }
     println!("{}", msg);
+}
+
+fn exec_cmd_stream<L>(cmd: &str, log: &L) -> Result<(), String>
+where
+    L: Fn(&str) + Send + Sync + 'static,
+{
+    log_msg(&format!("Running: {}", cmd));
+    log(&format!("$ {}", cmd));
+
+    let mut child = Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn '{}': {}", cmd, e))?;
+
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+
+    let (tx, rx) = std::sync::mpsc::channel::<String>();
+
+    if let Some(out) = stdout {
+        let tx_out = tx.clone();
+        thread::spawn(move || {
+            let reader = BufReader::new(out);
+            for line in reader.lines().flatten() {
+                let _ = tx_out.send(line);
+            }
+        });
+    }
+
+    if let Some(err) = stderr {
+        let tx_err = tx.clone();
+        thread::spawn(move || {
+            let reader = BufReader::new(err);
+            for line in reader.lines().flatten() {
+                let _ = tx_err.send(line);
+            }
+        });
+    }
+    drop(tx);
+
+    while let Ok(line) = rx.recv() {
+        log_msg(&line);
+        log(&line);
+    }
+
+    let status = child.wait().map_err(|e| format!("Failed to wait on '{}': {}", cmd, e))?;
+    if !status.success() {
+        let err_str = format!("Command '{}' failed with exit code: {:?}", cmd, status.code());
+        log_msg(&format!("ERROR: {}", err_str));
+        return Err(err_str);
+    }
+    Ok(())
 }
 
 fn exec_cmd(cmd: &str) -> Result<String, String> {
@@ -256,32 +316,87 @@ fn find_btrfs_targets() -> Vec<BtrfsTarget> {
     targets
 }
 
-fn detect_local_squashfs() -> Option<String> {
-    // If /tmp/pulsar_recovery isn't mounted yet, try to mount PULSAR_RECOVERY
+fn detect_local_squashfs<L>(log: &L) -> Option<String>
+where
+    L: Fn(&str) + Send + Sync + 'static,
+{
+    log("Scanning storage devices for local Pulsar OS image...");
+
     let rec_mnt = "/tmp/pulsar_recovery";
     let _ = fs::create_dir_all(rec_mnt);
-    let _ = Command::new("mount")
-        .args(&["-L", "PULSAR_RECOVERY", rec_mnt])
-        .output();
 
-    let candidates = [
-        "/tmp/pulsar_recovery/images/x86_64/airootfs.sfs",
-        "/tmp/pulsar_recovery/live/filesystem.squashfs",
-        "/tmp/pulsar_recovery/images/pulsaros-base.squashfs",
-        "/recovery/images/x86_64/airootfs.sfs",
-        "/recovery/live/filesystem.squashfs",
-        "/recovery/images/pulsaros-base.squashfs",
-        "/live/filesystem.squashfs",
-        "/run/live/medium/live/filesystem.squashfs",
-        "/lib/live/mount/medium/live/filesystem.squashfs",
-        "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
-        "/run/archiso/airootfs.sfs",
+    // 1. Try mounting partition by label
+    let _ = Command::new("mount").args(&["/dev/disk/by-label/PULSAR_RECOVERY", rec_mnt]).output();
+    let _ = Command::new("mount").args(&["-L", "PULSAR_RECOVERY", rec_mnt]).output();
+
+    let base_image_names = [
+        "images/pulsaros-base.squashfs",
+        "images/x86_64/airootfs.sfs",
+        "images/airootfs.sfs",
+        "recovery-base.squashfs",
+        "pulsaros-base.squashfs",
+        "live/x86_64/airootfs.sfs",
+        "airootfs.sfs",
     ];
-    for p in &candidates {
-        if Path::new(p).exists() {
-            return Some(p.to_string());
+
+    let search_roots = [
+        "/tmp/pulsar_recovery",
+        "/run/live/medium",
+        "/lib/live/mount/medium",
+        "/run/archiso/bootmnt",
+        "/run/archiso",
+        "/recovery",
+        "/mnt/recovery",
+    ];
+
+    for root in &search_roots {
+        for img in &base_image_names {
+            let full_p = format!("{}/{}", root, img);
+            if Path::new(&full_p).exists() {
+                log(&format!("Found local base system image at: {}", full_p));
+                return Some(full_p);
+            }
         }
     }
+
+    // 2. Scan all block devices
+    if let Ok(out) = Command::new("blkid").args(&["-o", "device"]).output() {
+        let devs = String::from_utf8_lossy(&out.stdout);
+        for dev in devs.lines() {
+            let dev = dev.trim();
+            if dev.is_empty() || dev.contains("loop") || dev.contains("zram") {
+                continue;
+            }
+            let temp_mnt = format!("/tmp/mnt_{}", dev.replace('/', "_"));
+            let _ = fs::create_dir_all(&temp_mnt);
+            if Command::new("mount").args(&["-o", "ro", dev, &temp_mnt]).status().map(|s| s.success()).unwrap_or(false) {
+                for img in &base_image_names {
+                    let p = format!("{}/{}", temp_mnt, img);
+                    if Path::new(&p).exists() {
+                        log(&format!("Found base system image on {} at: {}", dev, p));
+                        return Some(p);
+                    }
+                }
+                // Check any .squashfs / .sfs under images/
+                let img_dir = format!("{}/images", temp_mnt);
+                if let Ok(entries) = fs::read_dir(&img_dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if let Some(ext) = path.extension() {
+                            if ext == "squashfs" || ext == "sfs" {
+                                let path_str = path.to_string_lossy().to_string();
+                                log(&format!("Found base image: {}", path_str));
+                                return Some(path_str);
+                            }
+                        }
+                    }
+                }
+                let _ = Command::new("umount").arg(&temp_mnt).output();
+            }
+        }
+    }
+
+    log("⚠️ No local base image found on attached partitions.");
     None
 }
 
@@ -323,7 +438,6 @@ fn build_ui(app: &Application) {
         );
     }
 
-
     let center_box = CenterBox::new();
     center_box.add_css_class("root-container");
     center_box.set_hexpand(true);
@@ -331,7 +445,7 @@ fn build_ui(app: &Application) {
 
     let card_box = GtkBox::new(Orientation::Vertical, 0);
     card_box.add_css_class("apple-box");
-    card_box.set_size_request(560, 450);
+    card_box.set_size_request(560, 470);
     card_box.set_valign(Align::Center);
     card_box.set_halign(Align::Center);
 
@@ -396,13 +510,6 @@ fn build_ui(app: &Application) {
     };
 
     add_row(
-        "backup",
-        "Restore from Time Machine",
-        "If you have a backup of your system that you want to restore.",
-        "/usr/share/pulsaros-recovery/timemachine.png",
-        "org.gnome.DejaDup",
-    );
-    add_row(
         "reinstall",
         "Reinstall Pulsar OS",
         "Install a fresh copy of Pulsar OS while keeping your home files intact.",
@@ -418,10 +525,17 @@ fn build_ui(app: &Application) {
     );
     add_row(
         "disk",
-        "Disk Utility",
-        "Repair, inspect, or manage disk partitions with GParted.",
+        "Disk Utility (GParted)",
+        "Repair, inspect, format, or resize disk partitions with GParted.",
         "/usr/share/pulsaros-recovery/diskutility.png",
         "gparted",
+    );
+    add_row(
+        "terminal",
+        "Terminal / Root Console",
+        "Open a root terminal for manual diagnosis and advanced commands.",
+        "/usr/share/pulsaros-recovery/terminal.png",
+        "utilities-terminal",
     );
 
     util_box.append(&listbox);
@@ -438,9 +552,6 @@ fn build_ui(app: &Application) {
     util_btn_box.append(&btn_util_continue);
     util_box.append(&util_btn_box);
     stack.add_named(&util_box, Some("utilities"));
-
-
-
 
     // ─────────────────────────────────────────────────────────────
     // 2. Select Target & Options Screen
@@ -492,7 +603,7 @@ fn build_ui(app: &Application) {
     prog_box.set_halign(Align::Center);
 
     let prog_icon = Image::from_icon_name("system-software-install");
-    prog_icon.set_pixel_size(72);
+    prog_icon.set_pixel_size(64);
     prog_box.append(&prog_icon);
 
     let prog_title = Label::new(Some("Restoring Pulsar OS..."));
@@ -505,11 +616,11 @@ fn build_ui(app: &Application) {
 
     let pbar = ProgressBar::new();
     pbar.add_css_class("progress-bar-thin");
-    pbar.set_size_request(380, -1);
+    pbar.set_size_request(460, -1);
     prog_box.append(&pbar);
 
     let scrolled_log = ScrolledWindow::new();
-    scrolled_log.set_size_request(440, 140);
+    scrolled_log.set_size_request(480, 160);
     scrolled_log.add_css_class("live-log-view");
 
     let log_view = TextView::new();
@@ -552,31 +663,60 @@ fn build_ui(app: &Application) {
     stack.add_named(&done_box, Some("complete"));
 
     // ─────────────────────────────────────────────────────────────
-    // 5. Error Screen
+    // 5. Error Screen (with Detailed Logs View)
     // ─────────────────────────────────────────────────────────────
-    let err_box = GtkBox::new(Orientation::Vertical, 14);
+    let err_box = GtkBox::new(Orientation::Vertical, 10);
     err_box.set_valign(Align::Center);
     err_box.set_halign(Align::Center);
 
     let err_icon = Image::from_icon_name("dialog-error");
-    err_icon.set_pixel_size(72);
+    err_icon.set_pixel_size(64);
     err_box.append(&err_icon);
 
     let err_title = Label::new(Some("Restoration Failed"));
     err_title.add_css_class("welcome-title");
     err_box.append(&err_title);
 
-    let err_desc = Label::new(Some("An error occurred during system restoration. Check the logs below for details."));
-    err_desc.add_css_class("welcome-subtitle");
-    err_box.append(&err_desc);
+    let err_msg_lbl = Label::new(Some("An error occurred during system restoration."));
+    err_msg_lbl.add_css_class("welcome-subtitle");
+    err_msg_lbl.set_wrap(true);
+    err_msg_lbl.set_max_width_chars(50);
+    err_msg_lbl.set_justify(gtk4::Justification::Center);
+    err_box.append(&err_msg_lbl);
+
+    let err_scrolled_log = ScrolledWindow::new();
+    err_scrolled_log.set_size_request(480, 140);
+    err_scrolled_log.add_css_class("live-log-view");
+
+    let err_log_view = TextView::new();
+    err_log_view.set_editable(false);
+    err_log_view.set_monospace(true);
+    err_log_view.set_wrap_mode(WrapMode::WordChar);
+    err_log_view.add_css_class("err-log-text");
+    err_scrolled_log.set_child(Some(&err_log_view));
+    err_box.append(&err_scrolled_log);
+
+    let err_btn_box = GtkBox::new(Orientation::Horizontal, 12);
+    err_btn_box.set_halign(Align::Center);
+    err_btn_box.set_margin_top(8);
 
     let btn_err_back = Button::with_label("Back to Utilities");
     btn_err_back.add_css_class("secondary-action");
     btn_err_back.connect_clicked(clone!(@weak stack => move |_| {
         stack.set_visible_child_name("utilities");
     }));
-    err_box.append(&btn_err_back);
+    err_btn_box.append(&btn_err_back);
 
+    let btn_try_internet = Button::with_label("Try Internet Recovery");
+    btn_try_internet.add_css_class("suggested-action");
+    let sel_act_c = selected_action.clone();
+    btn_try_internet.connect_clicked(clone!(@weak stack, @weak btn_util_continue => move |_| {
+        *sel_act_c.borrow_mut() = Some("internet".to_string());
+        btn_util_continue.emit_clicked();
+    }));
+    err_btn_box.append(&btn_try_internet);
+
+    err_box.append(&err_btn_box);
     stack.add_named(&err_box, Some("error"));
 
     // ─────────────────────────────────────────────────────────────
@@ -607,26 +747,21 @@ fn build_ui(app: &Application) {
      => move |_| {
         let action = selected_action.borrow().clone().unwrap_or_default();
         match action.as_str() {
-            "backup" => {
-                let _ = Command::new("timeshift-launcher")
-                    .spawn()
-                    .or_else(|_| Command::new("pkexec").arg("timeshift-gtk").spawn())
-                    .or_else(|_| Command::new("timeshift-gtk").spawn())
-                    .or_else(|_| Command::new("deja-dup").arg("--restore").spawn())
-                    .or_else(|_| Command::new("deja-dup").spawn());
-            }
             "disk" => {
-                let _ = Command::new("gparted")
+                log_msg("Launching elevated GParted partition manager...");
+                let _ = Command::new("sudo")
+                    .args(&["-E", "gparted"])
                     .spawn()
                     .or_else(|_| Command::new("pkexec").arg("gparted").spawn())
-                    .or_else(|_| Command::new("gnome-disks").spawn())
-                    .or_else(|_| Command::new("pkexec").arg("gnome-disks").spawn());
+                    .or_else(|_| Command::new("gparted").spawn());
             }
             "terminal" => {
-                let _ = Command::new("alacritty")
+                log_msg("Launching recovery root terminal...");
+                let _ = Command::new("xterm")
+                    .args(&["-bg", "#1e1e1e", "-fg", "#ffffff", "-fa", "Monospace", "-fs", "11", "-e", "bash"])
                     .spawn()
-                    .or_else(|_| Command::new("gnome-terminal").spawn())
-                    .or_else(|_| Command::new("xterm").spawn());
+                    .or_else(|_| Command::new("alacritty").spawn())
+                    .or_else(|_| Command::new("gnome-terminal").spawn());
             }
             "reinstall" | "internet" => {
                 if action == "internet" {
@@ -697,6 +832,9 @@ fn build_ui(app: &Application) {
         @weak pbar,
         @weak prog_desc,
         @weak log_view,
+        @weak scrolled_log,
+        @weak err_msg_lbl,
+        @weak err_log_view,
         @strong selected_target,
         @strong recovery_mode
      => move |_| {
@@ -713,8 +851,14 @@ fn build_ui(app: &Application) {
         let desc_c = prog_desc.clone();
         let stack_c = stack.clone();
         let buffer = log_view.buffer();
+        let err_buffer = err_log_view.buffer();
+        let err_lbl_c = err_msg_lbl.clone();
+        let scroll_c = scrolled_log.clone();
 
-        glib::timeout_add_local(std::time::Duration::from_millis(60), move || {
+        buffer.set_text("");
+        err_buffer.set_text("");
+
+        glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
             while let Ok(msg) = receiver.try_recv() {
                 match msg {
                     RecoveryUpdate::Progress(fraction, text) => {
@@ -724,6 +868,10 @@ fn build_ui(app: &Application) {
                     RecoveryUpdate::Log(line) => {
                         let mut end = buffer.end_iter();
                         buffer.insert(&mut end, &format!("{}\n", line));
+                        let mut err_end = err_buffer.end_iter();
+                        err_buffer.insert(&mut err_end, &format!("{}\n", line));
+                        let adj = scroll_c.vadjustment();
+                        adj.set_value(adj.upper());
                     }
                     RecoveryUpdate::Finished(res) => {
                         match res {
@@ -732,6 +880,7 @@ fn build_ui(app: &Application) {
                             }
                             Err(e) => {
                                 log_msg(&format!("Restoration error: {}", e));
+                                err_lbl_c.set_label(&format!("Failed: {}", e));
                                 stack_c.set_visible_child_name("error");
                             }
                         }
@@ -844,17 +993,23 @@ where
     let squashfs_path = match mode {
         RecoveryMode::Local => {
             progress(0.30, "Locating local recovery image...");
-            log("Searching for local recovery squashfs...");
-            detect_local_squashfs().ok_or_else(|| {
-                "No local recovery SquashFS found in /recovery/images or live media. Please use Internet Recovery.".to_string()
-            })?
+            match detect_local_squashfs(&log) {
+                Some(p) => p,
+                None => {
+                    log("Local image not found. Attempting Internet Recovery download...");
+                    let url = "https://github.com/Inled-Pulsar-OS/ISO/releases/download/latest/pulsaros-stable-arch-refind.squashfs";
+                    let dl_path = "/tmp/pulsaros-remote-recovery.squashfs";
+                    progress(0.35, "Downloading Pulsar OS image from GitHub Releases...");
+                    exec_cmd_stream(&format!("curl -L -C - --retry 3 -o {} {}", dl_path, url), &log)?;
+                    dl_path.to_string()
+                }
+            }
         }
         RecoveryMode::Internet(url) => {
             progress(0.25, "Downloading Pulsar OS image from GitHub Releases...");
             log(&format!("Downloading clean image from: {}", url));
             let dl_path = "/tmp/pulsaros-remote-recovery.squashfs";
-            let dl_cmd = format!("curl -L -C - --retry 3 -o {} {}", dl_path, url);
-            exec_cmd(&dl_cmd)?;
+            exec_cmd_stream(&format!("curl -L -C - --retry 3 -o {} {}", dl_path, url), &log)?;
             dl_path.to_string()
         }
     };
@@ -876,7 +1031,7 @@ where
     // 5. Unsquash clean system into @
     progress(0.55, "Unpacking clean Pulsar OS rootfs into @...");
     log(&format!("Unsquashing {} into {}/@...", squashfs_path, btrfs_mnt));
-    exec_cmd(&format!("unsquashfs -f -d {}/@ {}", btrfs_mnt, squashfs_path))?;
+    exec_cmd_stream(&format!("unsquashfs -f -d {}/@ {}", btrfs_mnt, squashfs_path), &log)?;
 
     // 6. Re-inject preserved users
     progress(0.85, "Re-injecting user credentials and settings...");
@@ -952,4 +1107,3 @@ fn main() {
     app.connect_activate(build_ui);
     app.run();
 }
-
