@@ -182,7 +182,7 @@ listboxrow:selected .utility-desc-lbl {
 
 #[derive(Clone, Debug)]
 struct BtrfsTarget {
-    disk_path: String,
+    _disk_path: String,
     part_path: String,
     label: String,
     uuid: String,
@@ -214,12 +214,11 @@ fn exec_cmd_stream<L>(cmd: &str, log: &L) -> Result<(), String>
 where
     L: Fn(&str) + Send + Sync + 'static,
 {
-    log_msg(&format!("Running: {}", cmd));
+    log_msg(&format!("Running (as root): {}", cmd));
     log(&format!("$ {}", cmd));
 
-    let mut child = Command::new("sh")
-        .arg("-c")
-        .arg(cmd)
+    let mut child = Command::new("sudo")
+        .args(&["-n", "sh", "-c", cmd])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -266,10 +265,9 @@ where
 }
 
 fn exec_cmd(cmd: &str) -> Result<String, String> {
-    log_msg(&format!("Running: {}", cmd));
-    let out = Command::new("sh")
-        .arg("-c")
-        .arg(cmd)
+    log_msg(&format!("Running (as root): {}", cmd));
+    let out = Command::new("sudo")
+        .args(&["-n", "sh", "-c", cmd])
         .output()
         .map_err(|e| format!("Failed to execute '{}': {}", cmd, e))?;
 
@@ -286,7 +284,7 @@ fn exec_cmd(cmd: &str) -> Result<String, String> {
 
 fn find_btrfs_targets() -> Vec<BtrfsTarget> {
     let mut targets = Vec::new();
-    if let Ok(out) = Command::new("lsblk").args(&["-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,PKNAME"]).output() {
+    if let Ok(out) = Command::new("sudo").args(&["-n", "lsblk", "-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,PKNAME"]).output() {
         let text = String::from_utf8_lossy(&out.stdout);
         for line in text.lines() {
             if line.contains("FSTYPE=\"btrfs\"") || line.contains("PULSAR_OS") || line.contains("PulsarOS") {
@@ -304,7 +302,7 @@ fn find_btrfs_targets() -> Vec<BtrfsTarget> {
                 let disk_path = if !pkname.is_empty() { format!("/dev/{}", pkname) } else { part_path.clone() };
 
                 targets.push(BtrfsTarget {
-                    disk_path,
+                    _disk_path: disk_path,
                     part_path,
                     label: if label.is_empty() { "PULSAR_OS".to_string() } else { label },
                     uuid,
@@ -326,8 +324,8 @@ where
     let _ = fs::create_dir_all(rec_mnt);
 
     // 1. Try mounting partition by label
-    let _ = Command::new("mount").args(&["/dev/disk/by-label/PULSAR_RECOVERY", rec_mnt]).output();
-    let _ = Command::new("mount").args(&["-L", "PULSAR_RECOVERY", rec_mnt]).output();
+    let _ = Command::new("sudo").args(&["-n", "mount", "/dev/disk/by-label/PULSAR_RECOVERY", rec_mnt]).output();
+    let _ = Command::new("sudo").args(&["-n", "mount", "-L", "PULSAR_RECOVERY", rec_mnt]).output();
 
     let base_image_names = [
         "images/pulsaros-base.squashfs",
@@ -360,7 +358,7 @@ where
     }
 
     // 2. Scan all block devices
-    if let Ok(out) = Command::new("blkid").args(&["-o", "device"]).output() {
+    if let Ok(out) = Command::new("sudo").args(&["-n", "blkid", "-o", "device"]).output() {
         let devs = String::from_utf8_lossy(&out.stdout);
         for dev in devs.lines() {
             let dev = dev.trim();
@@ -369,7 +367,7 @@ where
             }
             let temp_mnt = format!("/tmp/mnt_{}", dev.replace('/', "_"));
             let _ = fs::create_dir_all(&temp_mnt);
-            if Command::new("mount").args(&["-o", "ro", dev, &temp_mnt]).status().map(|s| s.success()).unwrap_or(false) {
+            if Command::new("sudo").args(&["-n", "mount", "-o", "ro", dev, &temp_mnt]).status().map(|s| s.success()).unwrap_or(false) {
                 for img in &base_image_names {
                     let p = format!("{}/{}", temp_mnt, img);
                     if Path::new(&p).exists() {
@@ -391,7 +389,7 @@ where
                         }
                     }
                 }
-                let _ = Command::new("umount").arg(&temp_mnt).output();
+                let _ = Command::new("sudo").args(&["-n", "umount", &temp_mnt]).output();
             }
         }
     }
@@ -656,7 +654,7 @@ fn build_ui(app: &Application) {
     let btn_reboot = Button::with_label("Restart System");
     btn_reboot.add_css_class("suggested-action");
     btn_reboot.connect_clicked(|_| {
-        let _ = Command::new("systemctl").arg("reboot").spawn();
+        let _ = Command::new("sudo").args(&["-n", "systemctl", "reboot"]).spawn();
     });
     done_box.append(&btn_reboot);
 
@@ -733,6 +731,15 @@ fn build_ui(app: &Application) {
         }
     }));
 
+    listbox.connect_row_activated(clone!(@weak btn_util_continue, @strong selected_action => move |_, row| {
+        unsafe {
+            if let Some(id) = row.data::<String>("action_id") {
+                *selected_action.borrow_mut() = Some(id.as_ref().clone());
+                btn_util_continue.emit_clicked();
+            }
+        }
+    }));
+
     btn_target_back.connect_clicked(clone!(@weak stack => move |_| {
         stack.set_visible_child_name("utilities");
     }));
@@ -752,16 +759,16 @@ fn build_ui(app: &Application) {
                 let _ = Command::new("sudo")
                     .args(&["-E", "gparted"])
                     .spawn()
-                    .or_else(|_| Command::new("pkexec").arg("gparted").spawn())
-                    .or_else(|_| Command::new("gparted").spawn());
+                    .or_else(|_| Command::new("gparted").spawn())
+                    .or_else(|_| Command::new("pkexec").arg("gparted").spawn());
             }
             "terminal" => {
                 log_msg("Launching recovery root terminal...");
                 let _ = Command::new("xterm")
-                    .args(&["-bg", "#1e1e1e", "-fg", "#ffffff", "-fa", "Monospace", "-fs", "11", "-e", "bash"])
+                    .args(&["-title", "Pulsar OS Recovery Terminal", "-bg", "#18181b", "-fg", "#ffffff", "-fa", "Monospace", "-fs", "11", "-e", "sudo", "bash"])
                     .spawn()
-                    .or_else(|_| Command::new("alacritty").spawn())
-                    .or_else(|_| Command::new("gnome-terminal").spawn());
+                    .or_else(|_| Command::new("sudo").args(&["-E", "xterm", "-bg", "#18181b", "-fg", "#ffffff", "-fa", "Monospace", "-fs", "11", "-e", "bash"]).spawn())
+                    .or_else(|_| Command::new("alacritty").spawn());
             }
             "reinstall" | "internet" => {
                 if action == "internet" {
@@ -1014,7 +1021,7 @@ where
         }
     };
 
-    // 4. Wipe and recreate @ subvolume
+    // 4. Wipe and recreate @ root subvolume
     progress(0.45, "Recreating @ root subvolume...");
     log("Removing old root (@) subvolume...");
     let _ = exec_cmd(&format!("btrfs subvolume delete {}/@ 2>/dev/null || rm -rf {}/@", btrfs_mnt, btrfs_mnt));
@@ -1038,26 +1045,33 @@ where
     log("Restoring user accounts into clean /etc...");
     let new_root = format!("{}/@", btrfs_mnt);
     if !preserved_passwd.is_empty() {
-        if let Ok(mut f) = OpenOptions::new().append(true).open(format!("{}/etc/passwd", new_root)) {
-            for l in &preserved_passwd {
-                let _ = writeln!(f, "{}", l);
-            }
+        let mut tmp_users = String::new();
+        for l in &preserved_passwd {
+            tmp_users.push_str(&format!("{}\n", l));
         }
-        if let Ok(mut f) = OpenOptions::new().append(true).open(format!("{}/etc/shadow", new_root)) {
-            for l in &preserved_shadow {
-                let _ = writeln!(f, "{}", l);
-            }
+        let _ = fs::write("/tmp/pulsar_preserved_passwd", &tmp_users);
+        let _ = exec_cmd(&format!("cat /tmp/pulsar_preserved_passwd >> {}/etc/passwd", new_root));
+
+        let mut tmp_shadow = String::new();
+        for l in &preserved_shadow {
+            tmp_shadow.push_str(&format!("{}\n", l));
         }
-        if let Ok(mut f) = OpenOptions::new().append(true).open(format!("{}/etc/group", new_root)) {
-            for l in &preserved_group {
-                let _ = writeln!(f, "{}", l);
-            }
+        let _ = fs::write("/tmp/pulsar_preserved_shadow", &tmp_shadow);
+        let _ = exec_cmd(&format!("cat /tmp/pulsar_preserved_shadow >> {}/etc/shadow", new_root));
+
+        let mut tmp_group = String::new();
+        for l in &preserved_group {
+            tmp_group.push_str(&format!("{}\n", l));
         }
-        if let Ok(mut f) = OpenOptions::new().append(true).open(format!("{}/etc/gshadow", new_root)) {
-            for l in &preserved_gshadow {
-                let _ = writeln!(f, "{}", l);
-            }
+        let _ = fs::write("/tmp/pulsar_preserved_group", &tmp_group);
+        let _ = exec_cmd(&format!("cat /tmp/pulsar_preserved_group >> {}/etc/group", new_root));
+
+        let mut tmp_gshadow = String::new();
+        for l in &preserved_gshadow {
+            tmp_gshadow.push_str(&format!("{}\n", l));
         }
+        let _ = fs::write("/tmp/pulsar_preserved_gshadow", &tmp_gshadow);
+        let _ = exec_cmd(&format!("cat /tmp/pulsar_preserved_gshadow >> {}/etc/gshadow", new_root));
     }
 
     // 7. Regenerate clean /etc/fstab with correct UUID
@@ -1086,7 +1100,8 @@ where
         }
     );
 
-    let _ = fs::write(format!("{}/etc/fstab", new_root), fstab_content);
+    let _ = fs::write("/tmp/pulsar_new_fstab", &fstab_content);
+    let _ = exec_cmd(&format!("cp -f /tmp/pulsar_new_fstab {}/etc/fstab", new_root));
 
     // 8. Cleanup and sync
     progress(0.98, "Synchronizing disks and unmounting...");
