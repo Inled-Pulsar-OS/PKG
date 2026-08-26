@@ -30,9 +30,9 @@ window, .root-container, * {
 .apple-box {
     background-color: #2c2c2e !important;
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
-    border-radius: 18px !important;
+    border-radius: 20px !important;
     padding: 28px !important;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8) !important;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85) !important;
 }
 .welcome-title {
     font-size: 24px !important;
@@ -46,36 +46,37 @@ window, .root-container, * {
     color: #98989d !important;
     margin-bottom: 16px !important;
 }
-/* Force Pure Dark ListBox & Rows */
+/* Force Spaced macOS Cards for ListBox & Rows */
 list, listview, listbox {
-    background-color: #202022 !important;
+    background-color: transparent !important;
     background-image: none !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-radius: 12px !important;
+    border: none !important;
     padding: 0 !important;
     margin: 0 !important;
 }
 listbox > row, listboxrow, row {
-    background-color: transparent !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
     background-image: none !important;
-    border: none !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
-    margin: 0 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 14px !important;
+    margin-top: 3px !important;
+    margin-bottom: 7px !important;
     padding: 0 !important;
     color: #ffffff !important;
-}
-listbox > row:last-child, listboxrow:last-child {
-    border-bottom: none !important;
+    transition: all 0.15s ease !important;
 }
 listbox > row:hover, listboxrow:hover {
-    background-color: rgba(255, 255, 255, 0.07) !important;
+    background-color: rgba(255, 255, 255, 0.09) !important;
+    border-color: rgba(255, 255, 255, 0.16) !important;
 }
 listbox > row:selected, listboxrow:selected, listbox > row:selected:focus, listboxrow:selected:focus {
-    background-color: rgba(255, 255, 255, 0.12) !important;
+    background-color: rgba(0, 113, 227, 0.22) !important;
+    border: 1px solid #0071e3 !important;
+    box-shadow: 0 0 0 1px #0071e3 !important;
     color: #ffffff !important;
 }
 .utility-row-box {
-    padding: 12px 16px !important;
+    padding: 13px 18px !important;
 }
 .utility-title-lbl {
     font-size: 15px !important;
@@ -471,7 +472,7 @@ fn build_ui(app: &Application) {
 
     let card_box = GtkBox::new(Orientation::Vertical, 0);
     card_box.add_css_class("apple-box");
-    card_box.set_size_request(560, 470);
+    card_box.set_size_request(620, 530);
     card_box.set_valign(Align::Center);
     card_box.set_halign(Align::Center);
 
