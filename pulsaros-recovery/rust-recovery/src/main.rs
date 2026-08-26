@@ -1013,19 +1013,18 @@ where
         log(&format!("Preserved {} user account(s) and credentials.", preserved_passwd.len()));
     }
 
-    // 3. Resolve SquashFS source
+    // 3. Resolve and verify SquashFS source BEFORE wiping anything
     let squashfs_path = match mode {
         RecoveryMode::Local => {
-            progress(0.30, "Locating local recovery image...");
+            progress(0.25, "Locating local Arch Linux recovery image...");
             match detect_local_squashfs(&log) {
                 Some(p) => p,
                 None => {
-                    log("Local image not found or corrupted. Attempting Internet Recovery download...");
-                    let url = "https://github.com/Inled-Pulsar-OS/ISO/releases/download/latest/pulsaros-stable-arch-refind.squashfs";
-                    let dl_path = "/tmp/pulsaros-remote-recovery.squashfs";
-                    progress(0.35, "Downloading Pulsar OS image from GitHub Releases...");
-                    exec_cmd_stream(&format!("curl -L -C - --retry 3 -o {} {}", dl_path, url), &log)?;
-                    dl_path.to_string()
+                    log("ERROR: No valid local Arch Linux base recovery image (>= 1.0 GB) found on storage devices.");
+                    return Err(
+                        "No local recovery image found on the recovery partition.\n\n\
+                        Please choose 'Pulsar Internet Recovery' from the main menu to download and restore the official release image.".to_string()
+                    );
                 }
             }
         }
@@ -1034,11 +1033,17 @@ where
             log(&format!("Downloading clean image from: {}", url));
             let dl_path = "/tmp/pulsaros-remote-recovery.squashfs";
             exec_cmd_stream(&format!("curl -L -C - --retry 3 -o {} {}", dl_path, url), &log)?;
+            if !is_valid_base_squashfs(dl_path) {
+                return Err(format!(
+                    "Downloaded recovery image from {} is corrupt or invalid.\nNo changes were made to your disk.",
+                    url
+                ));
+            }
             dl_path.to_string()
         }
     };
 
-    // 4. Wipe and recreate @ root subvolume
+    // 4. Wipe and recreate @ root subvolume (SAFE: Image is 100% verified)
     progress(0.45, "Recreating @ root subvolume...");
     log("Removing old root (@) subvolume...");
     let _ = exec_cmd(&format!("btrfs subvolume delete {}/@ 2>/dev/null || rm -rf {}/@", btrfs_mnt, btrfs_mnt));
