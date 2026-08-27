@@ -26,6 +26,7 @@ export function useRecovery() {
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [logs, setLogs] = useState<string[]>([]);
   const unlistenersRef = useRef<Array<() => void>>([]);
 
   const cleanupListeners = useCallback(() => {
@@ -35,12 +36,13 @@ export function useRecovery() {
 
   const attachRestoreListeners = useCallback(() => {
     cleanupListeners();
+    setLogs([]);
     onRestoreProgress((pct: number, status: string) => {
       setProgress(pct);
       setStatusText(status);
     }).then((unlisten: () => void) => unlistenersRef.current.push(unlisten));
-    onRestoreLog((_msg: string) => {
-      // Log lines available for future log panel
+    onRestoreLog((msg: string) => {
+      setLogs((prev) => [...prev, msg]);
     }).then((unlisten: () => void) => unlistenersRef.current.push(unlisten));
   }, [cleanupListeners]);
 
@@ -111,6 +113,27 @@ export function useRecovery() {
     }
   }, [selectedTarget, recoveryMode, attachRestoreListeners, cleanupListeners]);
 
+  const tryInternetRecovery = useCallback(async () => {
+    if (!selectedTarget) return;
+    setScreen("progress");
+    setProgress(0);
+    setStatusText("Downloading recovery image...");
+    attachRestoreListeners();
+    setRecoveryMode("internet");
+
+    try {
+      await startRestore(selectedTarget, INTERNET_RECOVERY_URL);
+      cleanupListeners();
+      setProgress(1);
+      setStatusText("Complete!");
+      setScreen("complete");
+    } catch (e) {
+      cleanupListeners();
+      setError(String(e));
+      setScreen("error");
+    }
+  }, [selectedTarget, attachRestoreListeners, cleanupListeners]);
+
   const goBack = useCallback(() => {
     cleanupListeners();
     setScreen("utilities");
@@ -145,12 +168,14 @@ export function useRecovery() {
     progress,
     statusText,
     error,
+    logs,
     selectAction,
     continueFromUtilities,
     startLocalRestoreFlow,
     launchCalamares,
     setSelectedTarget,
     startRestoreFlow,
+    tryInternetRecovery,
     goBack,
     goBackFromError,
     doReboot,

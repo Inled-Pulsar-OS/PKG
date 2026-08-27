@@ -2,16 +2,21 @@ import { Screen, Icon } from "@/modules/ui";
 import { useRecoveryContext } from "@/modules/core";
 
 export function ErrorPage() {
-  const { error, goBackFromError } = useRecoveryContext();
+  const { error, goBackFromError, tryInternetRecovery } = useRecoveryContext();
 
   return (
     <Screen
       title="Restoration Failed"
       subtitle="An error occurred during system restoration."
       footer={
-        <button className="btn-secondary" onClick={goBackFromError}>
-          Back to Utilities
-        </button>
+        <div className="flex gap-2">
+          <button className="btn-secondary" onClick={goBackFromError}>
+            Back to Utilities
+          </button>
+          <button className="btn-primary" onClick={tryInternetRecovery}>
+            Try Internet Recovery
+          </button>
+        </div>
       }
     >
       <div className="flex flex-col items-center gap-4">

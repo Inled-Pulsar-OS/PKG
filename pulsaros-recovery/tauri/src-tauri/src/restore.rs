@@ -14,9 +14,8 @@ pub enum RecoveryMode {
 }
 
 fn exec_cmd(cmd: &str) -> Result<String, String> {
-    let out = Command::new("sh")
-        .arg("-c")
-        .arg(cmd)
+    let out = Command::new("sudo")
+        .args(["-n", "sh", "-c", cmd])
         .output()
         .map_err(|e| format!("Failed to execute '{}': {}", cmd, e))?;
 
@@ -38,9 +37,8 @@ fn exec_cmd_stream(
     cmd: &str,
     log_fn: &dyn Fn(String),
 ) -> Result<String, String> {
-    let mut child = Command::new("sh")
-        .arg("-c")
-        .arg(cmd)
+    let mut child = Command::new("sudo")
+        .args(["-n", "sh", "-c", cmd])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -333,7 +331,9 @@ pub fn launch_external_app(app: &str) -> Result<(), String> {
         "gparted" => vec![
             vec!["gparted"],
             vec!["pkexec", "gparted"],
+            vec!["sudo", "-E", "gparted"],
             vec!["gnome-disks"],
+            vec!["gnome-disk-utility"],
         ],
         "terminal" => vec![
             vec!["sh", "-c", "gnome-terminal -- sudo bash"],
@@ -342,6 +342,8 @@ pub fn launch_external_app(app: &str) -> Result<(), String> {
             vec!["sh", "-c", "xfce4-terminal -e 'sudo bash'"],
             vec!["sh", "-c", "konsole -e sudo bash"],
             vec!["sh", "-c", "kitty sudo bash"],
+            vec!["sh", "-c", "xterm -title 'Pulsar OS Recovery Terminal' -bg '#18181b' -fg '#ffffff' -fa Monospace -fs 11 -e sudo bash"],
+            vec!["sh", "-c", "x-terminal-emulator -e sudo bash"],
             vec!["sh", "-c", "xterm -e sudo bash"],
         ],
         _ => return Err(format!("Unknown app: {}", app)),
@@ -360,9 +362,11 @@ pub fn launch_external_app(app: &str) -> Result<(), String> {
 }
 
 pub fn reboot() -> Result<(), String> {
-    Command::new("systemctl")
-        .arg("reboot")
-        .spawn()
-        .map_err(|e| format!("Failed to reboot: {}", e))?;
+    let _ = Command::new("sudo")
+        .args(["-n", "systemctl", "reboot", "-i", "-f"])
+        .spawn();
+    let _ = Command::new("sudo")
+        .args(["-n", "reboot", "-f"])
+        .spawn();
     Ok(())
 }

@@ -4,9 +4,8 @@ use std::path::Path;
 use std::process::Command;
 
 fn exec_cmd(cmd: &str) -> Result<String, String> {
-    let out = Command::new("sh")
-        .arg("-c")
-        .arg(cmd)
+    let out = Command::new("sudo")
+        .args(["-n", "sh", "-c", cmd])
         .output()
         .map_err(|e| format!("Failed to execute '{}': {}", cmd, e))?;
     Ok(String::from_utf8_lossy(&out.stdout).to_string())

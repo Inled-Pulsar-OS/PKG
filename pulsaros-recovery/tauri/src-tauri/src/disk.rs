@@ -1,4 +1,5 @@
 use regex::Regex;
+use std::path::Path;
 use std::process::Command;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -85,20 +86,121 @@ pub fn find_btrfs_targets() -> Vec<BtrfsTarget> {
     targets
 }
 
-pub fn detect_local_squashfs() -> Option<String> {
-    let candidates = [
-        "/recovery/images/pulsaros-base.squashfs",
-        "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
-        "/run/archiso/bootmnt/live/filesystem.squashfs",
-        "/run/live/medium/live/filesystem.squashfs",
-        "/lib/live/mount/medium/live/filesystem.squashfs",
-        "/run/archiso/airootfs.sfs",
-    ];
-    for p in &candidates {
-        if std::path::Path::new(p).exists() {
-            return Some(p.to_string());
+fn sudo_cmd(args: &[&str]) -> Result<String, String> {
+    let out = Command::new("sudo")
+        .args(["-n"])
+        .args(args)
+        .output()
+        .map_err(|e| format!("Failed to execute: {}", e))?;
+    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+}
+
+fn mount_recovery_partition() -> bool {
+    let _ = sudo_cmd(&["umount", "-l", "/tmp/pulsar_recovery"]);
+    let _ = sudo_cmd(&["mkdir", "-p", "/tmp/pulsar_recovery"]);
+
+    // Try by label first
+    if sudo_cmd(&[
+        "mount",
+        "-o", "ro",
+        "/dev/disk/by-label/PULSAR_RECOVERY",
+        "/tmp/pulsar_recovery",
+    ])
+    .is_ok()
+    {
+        return true;
+    }
+
+    // Find PULSAR_RECOVERY partition via blkid
+    if let Ok(out) = Command::new("blkid")
+        .args(["-t", "LABEL=PULSAR_RECOVERY", "-o", "device"])
+        .output()
+    {
+        let dev = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !dev.is_empty() {
+            return sudo_cmd(&["mount", "-o", "ro", &dev, "/tmp/pulsar_recovery"]).is_ok();
         }
     }
+
+    false
+}
+
+fn is_valid_squashfs(path: &str) -> bool {
+    let metadata = match std::fs::metadata(path) {
+        Ok(m) => m,
+        Err(_) => return false,
+    };
+    if metadata.len() < 1_000_000_000 {
+        return false;
+    }
+    Command::new("unsquashfs")
+        .args(["-s", path])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+pub fn detect_local_squashfs() -> Option<String> {
+    let _ = mount_recovery_partition();
+
+    let roots = [
+        "/tmp/pulsar_recovery",
+        "/run/live/medium",
+        "/lib/live/mount/medium",
+        "/run/archiso/bootmnt",
+        "/run/archiso",
+        "/recovery",
+        "/mnt/recovery",
+    ];
+
+    let names = [
+        "images/pulsaros-base.squashfs",
+        "images/x86_64/airootfs.sfs",
+        "images/airootfs.sfs",
+        "arch/x86_64/airootfs.sfs",
+        "pulsaros-base.squashfs",
+        "airootfs.sfs",
+        "live/filesystem.squashfs",
+        "live/x86_64/airootfs.sfs",
+        "live/filesystem.sfs",
+    ];
+
+    for root in &roots {
+        for name in &names {
+            let path = format!("{}/{}", root, name);
+            if Path::new(&path).exists() && is_valid_squashfs(&path) {
+                return Some(path);
+            }
+        }
+    }
+
+    // Scan block devices as last resort
+    if let Ok(out) = Command::new("blkid")
+        .args(["-o", "device"])
+        .output()
+    {
+        let text = String::from_utf8_lossy(&out.stdout);
+        for line in text.lines() {
+            let dev = line.trim();
+            if dev.is_empty() || dev == "/dev/sr0" {
+                continue;
+            }
+            let mnt = "/tmp/pulsar_blkid_scan";
+            let _ = sudo_cmd(&["mkdir", "-p", mnt]);
+            if sudo_cmd(&["mount", "-o", "ro", dev, mnt]).is_ok() {
+                for name in &names {
+                    let path = format!("{}/{}", mnt, name);
+                    if Path::new(&path).exists() && is_valid_squashfs(&path) {
+                        let result = Some(path);
+                        let _ = sudo_cmd(&["umount", "-l", mnt]);
+                        return result;
+                    }
+                }
+                let _ = sudo_cmd(&["umount", "-l", mnt]);
+            }
+        }
+    }
+
     None
 }
 
