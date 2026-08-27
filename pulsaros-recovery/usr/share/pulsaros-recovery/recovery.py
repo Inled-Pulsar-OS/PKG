@@ -1382,7 +1382,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
 UUID={root_uuid}            /               btrfs   subvol=@,compress=zstd:1,space_cache=v2         0       0
 UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1,space_cache=v2     0       0
 UUID={efi_uuid}             /boot/efi       vfat    umask=0077                                      0       2
-UUID={rec_uuid}             /recovery       ext4    defaults,noatime                                0       2
 """
                 if "TEST_MODE" not in os.environ:
                     os.makedirs("/mnt/etc", exist_ok=True)
@@ -1390,14 +1389,16 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime            
                     os.makedirs("/mnt/proc", exist_ok=True)
                     os.makedirs("/mnt/sys", exist_ok=True)
                     os.makedirs("/mnt/run", exist_ok=True)
+                    os.makedirs("/mnt/etc/udev/rules.d", exist_ok=True)
                     with open("/mnt/etc/fstab", "w") as f:
                         f.write(fstab_content)
+                    with open("/mnt/etc/udev/rules.d/99-pulsaros-hide-recovery.rules", "w") as f:
+                        f.write('# Hide PULSAR_RECOVERY partition from file managers and desktop\nENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n')
             else:
                 fstab_content = f"""# /etc/fstab: Pulsar OS Btrfs Configuration (BIOS)
 # <file system>             <mount point>   <type>  <options>                                       <dump>  <pass>
 UUID={root_uuid}            /               btrfs   subvol=@,compress=zstd:1,space_cache=v2         0       0
 UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1,space_cache=v2     0       0
-UUID={rec_uuid}             /recovery       ext4    defaults,noatime                                0       2
 """
                 if "TEST_MODE" not in os.environ:
                     os.makedirs("/mnt/etc", exist_ok=True)
@@ -1405,8 +1406,11 @@ UUID={rec_uuid}             /recovery       ext4    defaults,noatime            
                     os.makedirs("/mnt/proc", exist_ok=True)
                     os.makedirs("/mnt/sys", exist_ok=True)
                     os.makedirs("/mnt/run", exist_ok=True)
+                    os.makedirs("/mnt/etc/udev/rules.d", exist_ok=True)
                     with open("/mnt/etc/fstab", "w") as f:
                         f.write(fstab_content)
+                    with open("/mnt/etc/udev/rules.d/99-pulsaros-hide-recovery.rules", "w") as f:
+                        f.write('# Hide PULSAR_RECOVERY partition from file managers and desktop\nENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n')
                 
             def preserve_live_initramfs_for_recovery():
                 """Deploy the live/recovery initramfs to PULSAR_OS (@/boot), ESP, and PULSAR_RECOVERY."""

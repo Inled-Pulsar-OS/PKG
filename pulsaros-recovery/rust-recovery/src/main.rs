@@ -679,7 +679,8 @@ fn build_ui(app: &Application) {
     let btn_reboot = Button::with_label("Restart System");
     btn_reboot.add_css_class("suggested-action");
     btn_reboot.connect_clicked(|_| {
-        let _ = Command::new("sudo").args(&["-n", "systemctl", "reboot"]).spawn();
+        let _ = Command::new("sudo").args(&["-n", "systemctl", "reboot", "-i", "-f"]).spawn();
+        let _ = Command::new("sudo").args(&["-n", "reboot", "-f"]).spawn();
     });
     done_box.append(&btn_reboot);
 
@@ -960,22 +961,29 @@ where
     log("Mounting Btrfs root pool without subvolume...");
     exec_cmd(&format!("mount -t btrfs {} {}", target.part_path, btrfs_mnt))?;
 
-    // 2. Backup existing user accounts from old @ subvolume
+    // 2. Backup existing user accounts from old @ subvolume and discover users from @home
     progress(0.20, "Preserving user accounts and identities...");
-    log("Backing up /etc/passwd, /etc/shadow, /etc/group for users with UID >= 1000...");
+    log("Backing up /etc/passwd, /etc/shadow, /etc/group for real users (UID >= 1000)...");
     let old_root = format!("{}/@", btrfs_mnt);
-    let mut preserved_passwd = Vec::new();
-    let mut preserved_shadow = Vec::new();
-    let mut preserved_group = Vec::new();
-    let mut preserved_gshadow = Vec::new();
+    let mut preserved_passwd: Vec<String> = Vec::new();
+    let mut preserved_shadow: Vec<String> = Vec::new();
+    let mut preserved_group: Vec<String> = Vec::new();
+    let mut preserved_gshadow: Vec<String> = Vec::new();
+    let mut preserved_usernames: Vec<String> = Vec::new();
 
     if Path::new(&old_root).exists() {
         if let Ok(file) = File::open(format!("{}/etc/passwd", old_root)) {
             for line in BufReader::new(file).lines().flatten() {
                 let parts: Vec<&str> = line.split(':').collect();
                 if parts.len() >= 3 {
+                    let uname = parts[0].to_string();
+                    // NEVER preserve temporary live session users
+                    if uname == "live" || uname == "root" || uname == "pulsar-live" || uname == "archiso" || uname == "nobody" {
+                        continue;
+                    }
                     if let Ok(uid) = parts[2].parse::<u32>() {
                         if uid >= 1000 && uid < 65534 {
+                            preserved_usernames.push(uname);
                             preserved_passwd.push(line);
                         }
                     }
@@ -985,7 +993,7 @@ where
         if let Ok(file) = File::open(format!("{}/etc/shadow", old_root)) {
             for line in BufReader::new(file).lines().flatten() {
                 let uname = line.split(':').next().unwrap_or_default();
-                if preserved_passwd.iter().any(|p| p.starts_with(&format!("{}:", uname))) {
+                if preserved_usernames.iter().any(|u| u == uname) {
                     preserved_shadow.push(line);
                 }
             }
@@ -994,6 +1002,10 @@ where
             for line in BufReader::new(file).lines().flatten() {
                 let parts: Vec<&str> = line.split(':').collect();
                 if parts.len() >= 3 {
+                    let gname = parts[0];
+                    if gname == "live" || gname == "root" || gname == "archiso" {
+                        continue;
+                    }
                     if let Ok(gid) = parts[2].parse::<u32>() {
                         if gid >= 1000 && gid < 65534 {
                             preserved_group.push(line);
@@ -1005,13 +1017,32 @@ where
         if let Ok(file) = File::open(format!("{}/etc/gshadow", old_root)) {
             for line in BufReader::new(file).lines().flatten() {
                 let gname = line.split(':').next().unwrap_or_default();
-                if preserved_group.iter().any(|g| g.starts_with(&format!("{}:", gname))) {
+                if gname != "live" && gname != "root" && gname != "archiso" {
                     preserved_gshadow.push(line);
                 }
             }
         }
-        log(&format!("Preserved {} user account(s) and credentials.", preserved_passwd.len()));
     }
+
+    // Also inspect @home in case /@/etc/passwd was already corrupted or missing
+    let home_dir = format!("{}/@home", btrfs_mnt);
+    if let Ok(entries) = fs::read_dir(&home_dir) {
+        for entry in entries.flatten() {
+            if let Ok(file_type) = entry.file_type() {
+                if file_type.is_dir() {
+                    let uname = entry.file_name().to_string_lossy().to_string();
+                    if uname != "live" && uname != "root" && uname != "lost+found" && !preserved_usernames.contains(&uname) {
+                        log(&format!("Discovered existing user home directory in @home: /home/{}", uname));
+                        preserved_passwd.push(format!("{}:x:1000:1000::{}:/bin/bash", uname, format!("/home/{}", uname)));
+                        preserved_shadow.push(format!("{}:!!:19700:0:99999:7:::", uname));
+                        preserved_group.push(format!("{}:x:1000:", uname));
+                        preserved_usernames.push(uname);
+                    }
+                }
+            }
+        }
+    }
+    log(&format!("Preserved {} real user account(s): {:?}", preserved_usernames.len(), preserved_usernames));
 
     // 3. Resolve and verify SquashFS source BEFORE wiping anything
     let squashfs_path = match mode {
@@ -1070,11 +1101,19 @@ where
         exec_cmd_stream(&format!("unsquashfs -f -d {}/@ {}", btrfs_mnt, dl_path), &log)?;
     }
 
-    // 6. Re-inject preserved users
+    // 6. Re-inject preserved users and clean out any temporary live user
     progress(0.85, "Re-injecting user credentials and settings...");
     log("Restoring user accounts into clean /etc...");
     let new_root = format!("{}/@", btrfs_mnt);
+
+    // Remove any live user artifact from new rootfs
+    let _ = exec_cmd(&format!("sed -i '/^live:/d' {}/etc/passwd {}/etc/shadow {}/etc/group {}/etc/gshadow 2>/dev/null || true", new_root, new_root, new_root, new_root));
+
     if !preserved_passwd.is_empty() {
+        for l in &preserved_passwd {
+            let uname = l.split(':').next().unwrap_or_default();
+            let _ = exec_cmd(&format!("sed -i '/^{}:/d' {}/etc/passwd 2>/dev/null || true", uname, new_root));
+        }
         let mut tmp_users = String::new();
         for l in &preserved_passwd {
             tmp_users.push_str(&format!("{}\n", l));
@@ -1082,6 +1121,10 @@ where
         let _ = fs::write("/tmp/pulsar_preserved_passwd", &tmp_users);
         let _ = exec_cmd(&format!("cat /tmp/pulsar_preserved_passwd >> {}/etc/passwd", new_root));
 
+        for l in &preserved_shadow {
+            let uname = l.split(':').next().unwrap_or_default();
+            let _ = exec_cmd(&format!("sed -i '/^{}:/d' {}/etc/shadow 2>/dev/null || true", uname, new_root));
+        }
         let mut tmp_shadow = String::new();
         for l in &preserved_shadow {
             tmp_shadow.push_str(&format!("{}\n", l));
@@ -1102,6 +1145,21 @@ where
         }
         let _ = fs::write("/tmp/pulsar_preserved_gshadow", &tmp_gshadow);
         let _ = exec_cmd(&format!("cat /tmp/pulsar_preserved_gshadow >> {}/etc/gshadow", new_root));
+
+        // Add each preserved user to essential desktop/admin groups
+        for uname in &preserved_usernames {
+            let groups = ["wheel", "sudo", "video", "audio", "input", "storage", "network", "optical"];
+            for grp in &groups {
+                let _ = exec_cmd(&format!(
+                    "sed -i -E 's/^({}:[^:]*:[^:]*:)(.*)$/\\1\\2,{}/' {}/etc/group 2>/dev/null || true",
+                    grp, uname, new_root
+                ));
+                let _ = exec_cmd(&format!(
+                    "sed -i 's/:,/:/' {}/etc/group 2>/dev/null || true",
+                    new_root
+                ));
+            }
+        }
     }
 
     // 7. Regenerate clean /etc/fstab with correct UUID
@@ -1132,6 +1190,14 @@ where
 
     let _ = fs::write("/tmp/pulsar_new_fstab", &fstab_content);
     let _ = exec_cmd(&format!("cp -f /tmp/pulsar_new_fstab {}/etc/fstab", new_root));
+
+    // Deploy udev rule to hide recovery partition from file managers
+    let udev_dir = format!("{}/etc/udev/rules.d", new_root);
+    let _ = fs::create_dir_all(&udev_dir);
+    let _ = fs::write(
+        format!("{}/99-pulsaros-hide-recovery.rules", udev_dir),
+        "# Hide PULSAR_RECOVERY partition from file managers and desktop\nENV{ID_FS_LABEL}==\"PULSAR_RECOVERY\", ENV{UDISKS_IGNORE}=\"1\", ENV{UDISKS_AUTO}=\"0\"\n"
+    );
 
     // 8. Deploy boot kernels, recovery kernel, and align rEFInd
     progress(0.95, "Deploying OS & Recovery kernels to @/boot and aligning bootloader...");
