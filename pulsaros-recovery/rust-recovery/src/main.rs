@@ -585,28 +585,28 @@ fn build_ui(app: &Application) {
         "Reinstall Pulsar OS",
         "Install a fresh copy of Pulsar OS while keeping your home files intact.",
         "/usr/share/pulsaros-recovery/reinstall.png",
-        "system-software-install",
+        "restore",
     );
     add_row(
         "internet",
         "Pulsar Internet Recovery",
         "Download latest recovery image from GitHub Releases and restore core system.",
         "/usr/share/pulsaros-recovery/safari.png",
-        "preferences-system-network",
+        "safari",
     );
     add_row(
         "disk",
         "Disk Utility (GParted)",
         "Repair, inspect, format, or resize disk partitions with GParted.",
         "/usr/share/pulsaros-recovery/diskutility.png",
-        "gparted",
+        "hard-drive",
     );
     add_row(
         "terminal",
         "Terminal / Root Console",
         "Open a root terminal for manual diagnosis and advanced commands.",
         "/usr/share/pulsaros-recovery/terminal.png",
-        "utilities-terminal",
+        "terminal",
     );
 
     util_box.append(&listbox);
@@ -631,7 +631,7 @@ fn build_ui(app: &Application) {
     target_box.set_valign(Align::Center);
     target_box.set_halign(Align::Center);
 
-    let target_icon = create_icon_widget("", "hard-drive", 64);
+    let target_icon = create_icon_widget("/usr/share/pulsaros-recovery/diskutility.png", "hard-drive", 64);
     target_box.append(&target_icon);
 
     let target_title = Label::new(Some("Select Pulsar OS Partition"));
@@ -672,7 +672,7 @@ fn build_ui(app: &Application) {
     prog_box.set_valign(Align::Center);
     prog_box.set_halign(Align::Center);
 
-    let prog_icon = create_icon_widget("", "progress", 64);
+    let prog_icon = create_icon_widget("/usr/share/pulsaros-recovery/reinstall.png", "progress", 64);
     prog_box.append(&prog_icon);
 
     let prog_title = Label::new(Some("Restoring Pulsar OS..."));
@@ -709,7 +709,7 @@ fn build_ui(app: &Application) {
     done_box.set_valign(Align::Center);
     done_box.set_halign(Align::Center);
 
-    let done_icon = create_icon_widget("", "complete", 72);
+    let done_icon = create_icon_widget("/usr/share/pulsaros-recovery/os_recovery.png", "complete", 72);
     done_box.append(&done_icon);
 
     let done_title = Label::new(Some("Restoration Complete"));
@@ -1266,6 +1266,15 @@ where
             break;
         }
     }
+
+    // Remove unwanted GNOME extensions that should never be active in Pulsar OS
+    log("Removing unwanted GNOME extensions (places-menu, window-list)...");
+    let _ = exec_cmd(&format!(
+        "rm -rf {}/usr/share/gnome-shell/extensions/places-menu@gnome-shell-extensions.gcampax.github.com \
+                {}/usr/share/gnome-shell/extensions/window-list@gnome-shell-extensions.gcampax.github.com \
+                {}/usr/share/gnome-shell/extensions/search-light@icedman.github.com 2>/dev/null || true",
+        new_root, new_root, new_root
+    ));
 
     // 8. Deploy boot kernels, recovery kernel, and align rEFInd
     progress(0.95, "Deploying OS & Recovery kernels to @/boot and aligning bootloader...");
