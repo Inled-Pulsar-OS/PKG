@@ -255,19 +255,12 @@ class EffectsSettingsWindow(Gtk.Window):
                     
                     if not (has_xml or has_compiled):
                         # Silently skip folder if it doesn't contain schema definitions
-                        # Omitir la carpeta en silencio si no contiene definiciones de esquema
                         continue
                     
-                    # Compile schemas if gschemas.compiled is missing in the directory
-                    # Compilar esquemas si falta gschemas.compiled en el directorio
-                    if has_xml and not has_compiled:
-                        print(f"[Schema] Compiling schemas in: {path}")
-                        subprocess.run(["glib-compile-schemas", path], capture_output=True)
-                    
-                    # Chain the new schema source
-                    # Encadenar la nueva fuente de esquemas
-                    current_source = Gio.SettingsSchemaSource.new_from_directory(path, current_source, False)
-                    print(f"[Schema] Loaded schemas directory successfully: {path}")
+                    # Chain pre-compiled schema source if gschemas.compiled is available
+                    if has_compiled:
+                        current_source = Gio.SettingsSchemaSource.new_from_directory(path, current_source, False)
+                        print(f"[Schema] Loaded schemas directory successfully: {path}")
                 except Exception as e:
                     print(f"[Schema] Error loading custom schema path {path}: {e}")
                     
@@ -344,20 +337,20 @@ class EffectsSettingsWindow(Gtk.Window):
             print("Error configuring Dash to Dock for Liquid Glass:", e)
 
         try:
-            # 2. Configurar Liquid Glass según los ajustes del host
+            # 2. Configurar Liquid Glass según los ajustes del host (Liquid Glass solo en navegación/dock/paneles)
             settings_glass = self.get_safe_settings("org.gnome.shell.extensions.liquid-glass")
             if settings_glass:
                 settings_glass.set_int("application-blur-radius", 9)
-                settings_glass.set_double("application-content-opacity", 0.81)
+                settings_glass.set_double("application-content-opacity", 1.0)
                 settings_glass.set_double("application-corner-radius", 17.0)
-                settings_glass.set_boolean("application-glass-all-windows", True)
+                settings_glass.set_boolean("application-glass-all-windows", False)
                 settings_glass.set_string("application-tint-color", "#000000")
                 settings_glass.set_double("application-tint-strength", 0.06)
                 settings_glass.set_strv("application-window-whitelist", [])
                 settings_glass.set_double("dock-corner-radius", 24.0)
                 settings_glass.set_int("dock-glass-expand", 3)
                 settings_glass.set_string("dock-tint-color", "#000000")
-                settings_glass.set_boolean("enable-application-glass", True)
+                settings_glass.set_boolean("enable-application-glass", False)
                 settings_glass.set_boolean("enable-menu-glass", True)
                 settings_glass.set_boolean("enable-quick-settings-glass", False)
                 settings_glass.set_string("menu-tint-color", "#000000")

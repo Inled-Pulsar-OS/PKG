@@ -416,18 +416,8 @@ export default class WiggleExtension extends Extension {
     _onCheckIntervalChange(interval) {
         if (this._checkTimeoutId) {
             GLib.Source.remove(this._checkTimeoutId);
+            this._checkTimeoutId = null;
         }
-        this._checkTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, () => {
-            if (this._history && this._history.check()) {
-                if (this._effect && !this._effect.isWiggling) {
-                    this._effect.move(this._history.lastCoords.x, this._history.lastCoords.y);
-                    this._effect.magnify();
-                }
-            } else if (this._effect && this._effect.isWiggling) {
-                this._effect.unmagnify();
-            }
-            return GLib.SOURCE_CONTINUE;
-        });
     }
 
     _onDrawIntervalChange(interval) {
@@ -439,6 +429,14 @@ export default class WiggleExtension extends Extension {
             this._drawIntervalWatch = this._pointerWatcher.addWatch(interval, (x, y) => {
                 if (this._history) {
                     this._history.push(x, y);
+                    if (this._history.check()) {
+                        if (this._effect && !this._effect.isWiggling) {
+                            this._effect.move(x, y);
+                            this._effect.magnify();
+                        }
+                    } else if (this._effect && this._effect.isWiggling) {
+                        this._effect.unmagnify();
+                    }
                 }
                 if (this._effect && this._effect.isWiggling) {
                     this._effect.move(x, y);

@@ -126,6 +126,21 @@ button.accent-button.red { background-color: #ED5F5D !important; background-imag
 button.accent-button.pink { background-color: #E55E9C !important; background-image: none !important; }
 button.accent-button.purple { background-color: #9A57A3 !important; background-image: none !important; }
 button.accent-button.slate { background-color: #6f8396 !important; background-image: none !important; }
+
+/* ==============================================================================
+ * Apple Liquid Glass HIG - Specular Rim Highlight & Adaptive Focus Contrast
+ * ============================================================================== */
+.nautilus-window headerbar .linked,
+.nautilus-pathbar,
+headerbar box.linked {
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.18), 0 2px 8px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+headerbar .linked > button:focus,
+headerbar .linked > button:focus-within {
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.3), 0 0 0 2px @accent_bg_color !important;
+}
 ACCENT_BTN_FIX
 
 find "$STAGE_DIR" -path "*/gtk-4.0/gtk.css" -exec sh -c 'cat /tmp/accent_btn_fix.css >> "$1"' _ {} \; 2>/dev/null || true
