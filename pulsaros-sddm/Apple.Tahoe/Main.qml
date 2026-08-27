@@ -9,6 +9,7 @@ import "components"
 Rectangle {
     width: parent ? parent.width : 1920
     height: parent ? parent.height : 1080
+    color: "#18181b"
     LayoutMirroring.enabled: Qt.locale().textDirection === Qt.RightToLeft
     LayoutMirroring.childrenInherit: true
     property int sizeAvatar: 110
@@ -74,7 +75,7 @@ Rectangle {
             cache: false
             source: (config.background !== undefined && !config.background.toString().endsWith(".mp4") && !config.background.toString().endsWith(".webm") && !config.background.toString().endsWith(".mkv") && !config.background.toString().endsWith(".mov"))
                     ? config.background
-                    : "file:///var/lib/pulsar-sddm/pulsar-wallpaper.png"
+                    : (Qt.resolvedUrl("pulsar-os-tahoe.png"))
         }
 
         AnimatedImage {

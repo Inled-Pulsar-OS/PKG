@@ -419,13 +419,61 @@ where
     None
 }
 
+fn ensure_lucide_icon(name: &str, svg_data: &str) -> String {
+    let dir = "/tmp/pulsar_recovery_icons";
+    let _ = fs::create_dir_all(dir);
+    let p = format!("{}/{}.svg", dir, name);
+    if !Path::new(&p).exists() {
+        let _ = fs::write(&p, svg_data);
+    }
+    p
+}
+
+fn get_lucide_icon_path(name: &str) -> String {
+    match name {
+        "restore" | "timemachine" | "rotate-ccw" => ensure_lucide_icon(
+            "restore",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>"##,
+        ),
+        "safari" | "globe" | "internet" => ensure_lucide_icon(
+            "globe",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>"##,
+        ),
+        "disk" | "hard-drive" | "drive-harddisk" => ensure_lucide_icon(
+            "hard-drive",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/></svg>"##,
+        ),
+        "terminal" => ensure_lucide_icon(
+            "terminal",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>"##,
+        ),
+        "complete" | "check-circle" | "emblem-default" => ensure_lucide_icon(
+            "complete",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>"##,
+        ),
+        "error" | "alert-circle" | "dialog-error" => ensure_lucide_icon(
+            "error",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>"##,
+        ),
+        "progress" | "download" | "system-software-install" => ensure_lucide_icon(
+            "progress",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>"##,
+        ),
+        _ => ensure_lucide_icon(
+            "generic",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>"##,
+        ),
+    }
+}
+
 fn create_icon_widget(file_path: &str, fallback_icon_name: &str, size: i32) -> Image {
-    if Path::new(file_path).exists() {
+    if !file_path.is_empty() && Path::new(file_path).exists() {
         let img = Image::from_file(file_path);
         img.set_pixel_size(size);
         img
     } else {
-        let img = Image::from_icon_name(fallback_icon_name);
+        let svg_p = get_lucide_icon_path(fallback_icon_name);
+        let img = Image::from_file(&svg_p);
         img.set_pixel_size(size);
         img
     }
@@ -583,8 +631,7 @@ fn build_ui(app: &Application) {
     target_box.set_valign(Align::Center);
     target_box.set_halign(Align::Center);
 
-    let target_icon = Image::from_icon_name("drive-harddisk");
-    target_icon.set_pixel_size(64);
+    let target_icon = create_icon_widget("", "hard-drive", 64);
     target_box.append(&target_icon);
 
     let target_title = Label::new(Some("Select Pulsar OS Partition"));
@@ -625,8 +672,7 @@ fn build_ui(app: &Application) {
     prog_box.set_valign(Align::Center);
     prog_box.set_halign(Align::Center);
 
-    let prog_icon = Image::from_icon_name("system-software-install");
-    prog_icon.set_pixel_size(64);
+    let prog_icon = create_icon_widget("", "progress", 64);
     prog_box.append(&prog_icon);
 
     let prog_title = Label::new(Some("Restoring Pulsar OS..."));
@@ -663,8 +709,7 @@ fn build_ui(app: &Application) {
     done_box.set_valign(Align::Center);
     done_box.set_halign(Align::Center);
 
-    let done_icon = Image::from_icon_name("emblem-default");
-    done_icon.set_pixel_size(72);
+    let done_icon = create_icon_widget("", "complete", 72);
     done_box.append(&done_icon);
 
     let done_title = Label::new(Some("Restoration Complete"));
@@ -693,8 +738,7 @@ fn build_ui(app: &Application) {
     err_box.set_valign(Align::Center);
     err_box.set_halign(Align::Center);
 
-    let err_icon = Image::from_icon_name("dialog-error");
-    err_icon.set_pixel_size(64);
+    let err_icon = create_icon_widget("", "error", 72);
     err_box.append(&err_icon);
 
     let err_title = Label::new(Some("Restoration Failed"));
@@ -812,8 +856,7 @@ fn build_ui(app: &Application) {
                     for target in targets {
                         let card = GtkBox::new(Orientation::Vertical, 6);
                         card.add_css_class("disk-card");
-                        let disk_icon = Image::from_icon_name("drive-harddisk");
-                        disk_icon.set_pixel_size(44);
+                        let disk_icon = create_icon_widget("", "hard-drive", 44);
                         card.append(&disk_icon);
 
                         let name_lbl = Label::new(Some(&format!("{} ({})", target.label, target.size)));
@@ -1129,6 +1172,13 @@ where
         for l in &preserved_shadow {
             tmp_shadow.push_str(&format!("{}\n", l));
         }
+        // Guarantee that every preserved user has a valid line in /etc/shadow
+        for uname in &preserved_usernames {
+            if !preserved_shadow.iter().any(|s| s.starts_with(&format!("{}:", uname))) {
+                log(&format!("Adding fallback shadow entry for user: {}", uname));
+                tmp_shadow.push_str(&format!("{}::19700:0:99999:7:::\n", uname));
+            }
+        }
         let _ = fs::write("/tmp/pulsar_preserved_shadow", &tmp_shadow);
         let _ = exec_cmd(&format!("cat /tmp/pulsar_preserved_shadow >> {}/etc/shadow", new_root));
 
@@ -1198,6 +1248,24 @@ where
         format!("{}/99-pulsaros-hide-recovery.rules", udev_dir),
         "# Hide PULSAR_RECOVERY partition from file managers and desktop\nENV{ID_FS_LABEL}==\"PULSAR_RECOVERY\", ENV{UDISKS_IGNORE}=\"1\", ENV{UDISKS_AUTO}=\"0\"\n"
     );
+
+    // Deploy default non-empty SDDM wallpaper
+    let sddm_dir = format!("{}/var/lib/pulsar-sddm", new_root);
+    let _ = fs::create_dir_all(&sddm_dir);
+    let _ = exec_cmd(&format!("chmod 777 {}", sddm_dir));
+    let wallpaper_sources = [
+        format!("{}/usr/share/backgrounds/pulsar-os-tahoe.png", new_root),
+        format!("{}/usr/share/sddm/themes/Apple.Tahoe/pulsar-os-tahoe.png", new_root),
+        format!("{}/usr/share/backgrounds/gnome/pulsar-wallpaper.png", new_root),
+    ];
+    for ws in &wallpaper_sources {
+        if Path::new(ws).exists() {
+            let _ = exec_cmd(&format!("cp -f {} {}/pulsar-wallpaper.png", ws, sddm_dir));
+            let _ = exec_cmd(&format!("chmod 666 {}/pulsar-wallpaper.png", sddm_dir));
+            log(&format!("Deployed default SDDM wallpaper to {} from {}", sddm_dir, ws));
+            break;
+        }
+    }
 
     // 8. Deploy boot kernels, recovery kernel, and align rEFInd
     progress(0.95, "Deploying OS & Recovery kernels to @/boot and aligning bootloader...");
