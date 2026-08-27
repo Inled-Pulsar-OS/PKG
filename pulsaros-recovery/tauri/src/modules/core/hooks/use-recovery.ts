@@ -21,7 +21,7 @@ const INTERNET_RECOVERY_URL =
 
 export function useRecovery() {
   const [mode, setMode] = useState<SystemMode | null>(null);
-  const [screen, setScreen] = useState<Screen>("utilities");
+  const [screen, setScreen] = useState<Screen>("reinstall_choice");
   const [selectedAction, setSelectedAction] = useState<UtilityAction | null>(
     null
   );

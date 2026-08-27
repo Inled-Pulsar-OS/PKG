@@ -42,6 +42,7 @@ pub fn run() {
             commands::recovery::reboot,
             commands::installer::start_install,
             commands::installer::detect_broadcom,
+            commands::ootb::get_ootb_data,
             commands::ootb::start_ootb_setup,
             commands::ootb::ootb_final_cleanup,
         ])

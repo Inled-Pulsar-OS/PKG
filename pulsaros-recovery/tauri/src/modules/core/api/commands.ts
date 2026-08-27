@@ -77,6 +77,16 @@ export function onInstallLog(cb: (message: string) => void): Promise<() => void>
 
 // ── OOTB ──
 
+export function getOotbData(): Promise<{
+  countries: string[];
+  languages: string[];
+  keymaps: string[];
+  timezones: string[];
+  avatars: string[];
+}> {
+  return invoke("get_ootb_data");
+}
+
 export function startOotbSetup(params: {
   fullname: string;
   username: string;

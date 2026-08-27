@@ -11,6 +11,7 @@ export {
   detectBroadcom,
   onInstallProgress,
   onInstallLog,
+  getOotbData,
   startOotbSetup,
   ootbFinalCleanup,
   onOotbProgress,

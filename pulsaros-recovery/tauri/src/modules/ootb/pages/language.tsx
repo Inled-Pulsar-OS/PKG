@@ -1,25 +1,30 @@
 import { Screen } from "@/modules/ui";
 import { SearchListbox } from "../components/search-listbox";
 
-interface CountryPageProps {
-  countries: string[];
+interface LanguagePageProps {
+  languages: string[];
   selected: string | null;
-  onSelect: (country: string) => void;
+  onSelect: (lang: string) => void;
   onContinue: () => void;
+  onBack: () => void;
 }
 
-export function CountryPage({
-  countries,
+export function LanguagePage({
+  languages,
   selected,
   onSelect,
   onContinue,
-}: CountryPageProps) {
+  onBack,
+}: LanguagePageProps) {
   return (
     <Screen
-      title="Select Your Country"
-      subtitle="This will configure regional settings."
+      title="Select Language"
+      subtitle="Choose your preferred language."
       footer={
-        <div className="flex w-full items-center justify-end">
+        <div className="flex w-full items-center justify-end gap-2">
+          <button className="btn-secondary" onClick={onBack}>
+            Back
+          </button>
           <button
             className="btn-primary"
             disabled={!selected}
@@ -31,8 +36,8 @@ export function CountryPage({
       }
     >
       <SearchListbox
-        items={countries}
-        placeholder="Search countries..."
+        items={languages}
+        placeholder="Search languages..."
         selected={selected ?? undefined}
         onSelect={onSelect}
       />

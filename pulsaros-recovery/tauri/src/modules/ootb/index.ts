@@ -1,1 +1,1 @@
-export { OotbCountryPage } from "./pages/country";
+export { OotbProvider, useOotbContext } from "./components/ootb-provider";

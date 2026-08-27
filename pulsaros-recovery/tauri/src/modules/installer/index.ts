@@ -1,1 +1,1 @@
-export { InstallerWelcomePage } from "./pages/welcome";
+export { InstallerProvider, useInstallerContext } from "./components/installer-provider";

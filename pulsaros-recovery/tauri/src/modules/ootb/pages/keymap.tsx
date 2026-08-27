@@ -1,25 +1,30 @@
 import { Screen } from "@/modules/ui";
 import { SearchListbox } from "../components/search-listbox";
 
-interface CountryPageProps {
-  countries: string[];
+interface KeymapPageProps {
+  keymaps: string[];
   selected: string | null;
-  onSelect: (country: string) => void;
+  onSelect: (keymap: string) => void;
   onContinue: () => void;
+  onBack: () => void;
 }
 
-export function CountryPage({
-  countries,
+export function KeymapPage({
+  keymaps,
   selected,
   onSelect,
   onContinue,
-}: CountryPageProps) {
+  onBack,
+}: KeymapPageProps) {
   return (
     <Screen
-      title="Select Your Country"
-      subtitle="This will configure regional settings."
+      title="Select Keyboard Layout"
+      subtitle="Choose your keyboard layout."
       footer={
-        <div className="flex w-full items-center justify-end">
+        <div className="flex w-full items-center justify-end gap-2">
+          <button className="btn-secondary" onClick={onBack}>
+            Back
+          </button>
           <button
             className="btn-primary"
             disabled={!selected}
@@ -31,8 +36,8 @@ export function CountryPage({
       }
     >
       <SearchListbox
-        items={countries}
-        placeholder="Search countries..."
+        items={keymaps}
+        placeholder="Search layouts..."
         selected={selected ?? undefined}
         onSelect={onSelect}
       />
