@@ -449,7 +449,7 @@ fn get_lucide_icon_path(name: &str) -> String {
         ),
         "complete" | "check-circle" | "emblem-default" => ensure_lucide_icon(
             "complete",
-            r##"<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>"##,
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" stroke="#22c55e" stroke-width="2" fill="#22c55e" fill-opacity="0.15"/><path d="m9 12 2 2 4-4" stroke="#22c55e" stroke-width="2.5"/></svg>"##,
         ),
         "error" | "alert-circle" | "dialog-error" => ensure_lucide_icon(
             "error",
@@ -709,7 +709,7 @@ fn build_ui(app: &Application) {
     done_box.set_valign(Align::Center);
     done_box.set_halign(Align::Center);
 
-    let done_icon = create_icon_widget("/usr/share/pulsaros-recovery/os_recovery.png", "complete", 72);
+    let done_icon = create_icon_widget("", "complete", 72);
     done_box.append(&done_icon);
 
     let done_title = Label::new(Some("Restoration Complete"));
@@ -1013,6 +1013,7 @@ where
     let mut preserved_group: Vec<String> = Vec::new();
     let mut preserved_gshadow: Vec<String> = Vec::new();
     let mut preserved_usernames: Vec<String> = Vec::new();
+    let mut user_group_memberships: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
 
     if Path::new(&old_root).exists() {
         if let Ok(file) = File::open(format!("{}/etc/passwd", old_root)) {
@@ -1044,6 +1045,16 @@ where
         if let Ok(file) = File::open(format!("{}/etc/group", old_root)) {
             for line in BufReader::new(file).lines().flatten() {
                 let parts: Vec<&str> = line.split(':').collect();
+                if parts.len() >= 4 {
+                    let gname = parts[0].to_string();
+                    let members = parts[3].split(',');
+                    for m in members {
+                        let m_trim = m.trim().to_string();
+                        if !m_trim.is_empty() && m_trim != "live" && m_trim != "root" && m_trim != "archiso" {
+                            user_group_memberships.entry(m_trim).or_default().push(gname.clone());
+                        }
+                    }
+                }
                 if parts.len() >= 3 {
                     let gname = parts[0];
                     if gname == "live" || gname == "root" || gname == "archiso" {
@@ -1196,19 +1207,50 @@ where
         let _ = fs::write("/tmp/pulsar_preserved_gshadow", &tmp_gshadow);
         let _ = exec_cmd(&format!("cat /tmp/pulsar_preserved_gshadow >> {}/etc/gshadow", new_root));
 
-        // Add each preserved user to essential desktop/admin groups
+        // Add each preserved user to essential desktop/admin groups and preserved groups
+        let base_admin_groups = [
+            "wheel", "sudo", "video", "audio", "input", "storage", "network", "optical",
+            "power", "rfkill", "autologin", "users", "lp", "scanner", "kvm"
+        ];
+
+        let sudoers_d = format!("{}/etc/sudoers.d", new_root);
+        let _ = fs::create_dir_all(&sudoers_d);
+        let _ = exec_cmd(&format!("chmod 750 {}", sudoers_d));
+
+        let wheel_rule = format!("{}/10-admin-wheel", sudoers_d);
+        let _ = fs::write(&wheel_rule, "%wheel ALL=(ALL:ALL) ALL\n%sudo ALL=(ALL:ALL) ALL\n");
+        let _ = exec_cmd(&format!("chmod 0440 {}", wheel_rule));
+
         for uname in &preserved_usernames {
-            let groups = ["wheel", "sudo", "video", "audio", "input", "storage", "network", "optical"];
-            for grp in &groups {
+            let mut target_groups: Vec<String> = base_admin_groups.iter().map(|s| s.to_string()).collect();
+            if let Some(custom_grps) = user_group_memberships.get(uname) {
+                for cg in custom_grps {
+                    if !target_groups.contains(cg) {
+                        target_groups.push(cg.clone());
+                    }
+                }
+            }
+
+            for grp in &target_groups {
+                let _ = exec_cmd(&format!(
+                    "grep -q '^{}:' {}/etc/group || echo '{}:x:999:' >> {}/etc/group",
+                    grp, new_root, grp, new_root
+                ));
                 let _ = exec_cmd(&format!(
                     "sed -i -E 's/^({}:[^:]*:[^:]*:)(.*)$/\\1\\2,{}/' {}/etc/group 2>/dev/null || true",
                     grp, uname, new_root
                 ));
                 let _ = exec_cmd(&format!(
-                    "sed -i 's/:,/:/' {}/etc/group 2>/dev/null || true",
+                    "sed -i -E 's/,+/,/g; s/:,/:/g; s/,$//' {}/etc/group 2>/dev/null || true",
                     new_root
                 ));
             }
+
+            // Drop explicit sudoers rule for the user
+            let user_rule = format!("{}/pulsaros-user-{}", sudoers_d, uname);
+            let _ = fs::write(&user_rule, format!("{} ALL=(ALL:ALL) ALL\n", uname));
+            let _ = exec_cmd(&format!("chmod 0440 {}", user_rule));
+            log(&format!("Granted full sudo privileges to user '{}' via sudoers and wheel group", uname));
         }
     }
 
