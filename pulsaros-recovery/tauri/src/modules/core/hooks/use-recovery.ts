@@ -1,6 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { BtrfsTarget, RecoveryMode, Screen } from "@/modules/core/types";
+import type {
+  BtrfsTarget,
+  RecoveryMode,
+  Screen,
+  SystemMode,
+} from "@/modules/core/types";
 import {
+  getSystemMode,
   getBtrfsTargets,
   startRestore,
   launchApp,
@@ -14,6 +20,7 @@ const INTERNET_RECOVERY_URL =
   "https://github.com/Inled-Pulsar-OS/ISO/releases/download/latest/pulsaros-stable-arch-refind.squashfs";
 
 export function useRecovery() {
+  const [mode, setMode] = useState<SystemMode | null>(null);
   const [screen, setScreen] = useState<Screen>("utilities");
   const [selectedAction, setSelectedAction] = useState<UtilityAction | null>(
     null
@@ -153,6 +160,10 @@ export function useRecovery() {
   }, []);
 
   useEffect(() => {
+    getSystemMode().then(setMode);
+  }, []);
+
+  useEffect(() => {
     return () => {
       unlistenersRef.current.forEach((unlisten) => unlisten());
       unlistenersRef.current = [];
@@ -160,6 +171,7 @@ export function useRecovery() {
   }, []);
 
   return {
+    mode,
     screen,
     selectedAction,
     targets,

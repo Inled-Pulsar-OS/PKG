@@ -1,4 +1,5 @@
 export {
+  getSystemMode,
   getBtrfsTargets,
   getLocalSquashfs,
   startRestore,
@@ -6,4 +7,12 @@ export {
   reboot,
   onRestoreProgress,
   onRestoreLog,
+  startInstall,
+  detectBroadcom,
+  onInstallProgress,
+  onInstallLog,
+  startOotbSetup,
+  ootbFinalCleanup,
+  onOotbProgress,
+  onOotbLog,
 } from "./commands";
