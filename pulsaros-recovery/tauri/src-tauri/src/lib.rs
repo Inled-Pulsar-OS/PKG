@@ -1,3 +1,4 @@
+mod boot;
 mod commands;
 mod disk;
 mod fstab;

@@ -12,7 +12,7 @@ export function Screen({ title, subtitle, children, footer }: ScreenProps) {
     <div className="bg-atmosphere flex h-screen w-screen items-center justify-center p-5 sm:p-8">
       <div
         data-sys-element-name="screen"
-        className="glass screen-enter flex h-[60vh] max-h-175 min-h-50 w-[60vw] max-w-200 min-w-125 flex-col overflow-hidden"
+        className="glass screen-enter flex h-[65vh] max-h-175 min-h-50 w-[60vw] max-w-200 min-w-125 flex-col overflow-hidden"
       >
         {/* Header */}
         <header className="flex shrink-0 flex-col items-center px-8 pt-12 pb-4 sm:pt-16 select-none">

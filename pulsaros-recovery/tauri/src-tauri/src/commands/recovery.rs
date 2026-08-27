@@ -1,11 +1,22 @@
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 use crate::disk;
 use crate::restore::{self, RecoveryMode};
 
 pub struct RestoreState {
     pub running: Mutex<bool>,
+}
+
+#[derive(Clone, serde::Serialize)]
+struct ProgressPayload {
+    progress: f64,
+    status: String,
+}
+
+#[derive(Clone, serde::Serialize)]
+struct LogPayload {
+    message: String,
 }
 
 #[tauri::command]
@@ -19,26 +30,55 @@ pub fn get_local_squashfs() -> Option<String> {
 }
 
 #[tauri::command]
-pub fn start_restore(
+pub async fn start_restore(
+    app: AppHandle,
     target: disk::BtrfsTarget,
     internet_url: Option<String>,
     state: State<'_, RestoreState>,
 ) -> Result<(), String> {
-    let mut running = state.running.lock().map_err(|e| e.to_string())?;
-    if *running {
-        return Err("Restore already in progress".into());
+    {
+        let mut running = state.running.lock().map_err(|e| e.to_string())?;
+        if *running {
+            return Err("Restore already in progress".into());
+        }
+        *running = true;
     }
-    *running = true;
-    drop(running);
 
     let mode = match internet_url {
         Some(url) => RecoveryMode::Internet(url),
         None => RecoveryMode::Local,
     };
 
-    let result = restore::run_restoration(&target, mode, &|_msg| {}, &|_pct, _msg| {});
+    let state_clone = state.inner();
+    let app_clone = app.clone();
 
-    let mut running = state.running.lock().map_err(|e| e.to_string())?;
+    let result = tokio::task::spawn_blocking(move || {
+        let log_fn = {
+            let app = app_clone.clone();
+            move |msg: String| {
+                let _ = app.emit("restore-log", LogPayload { message: msg });
+            }
+        };
+
+        let progress_fn = {
+            let app = app_clone.clone();
+            move |pct: f64, msg: String| {
+                let _ = app.emit(
+                    "restore-progress",
+                    ProgressPayload {
+                        progress: pct,
+                        status: msg,
+                    },
+                );
+            }
+        };
+
+        restore::run_restoration(&target, mode, &log_fn, &progress_fn)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?;
+
+    let mut running = state_clone.running.lock().map_err(|e| e.to_string())?;
     *running = false;
 
     result

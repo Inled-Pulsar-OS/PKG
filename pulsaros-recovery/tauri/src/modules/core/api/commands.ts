@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { BtrfsTarget } from "@/modules/core/types";
 
 export function getBtrfsTargets(): Promise<BtrfsTarget[]> {
@@ -25,4 +26,19 @@ export function launchApp(app: string): Promise<void> {
 
 export function reboot(): Promise<void> {
   return invoke("reboot");
+}
+
+export function onRestoreProgress(
+  cb: (progress: number, status: string) => void
+): Promise<() => void> {
+  return listen<{ progress: number; status: string }>(
+    "restore-progress",
+    (e) => cb(e.payload.progress, e.payload.status)
+  );
+}
+
+export function onRestoreLog(cb: (message: string) => void): Promise<() => void> {
+  return listen<{ message: string }>("restore-log", (e) =>
+    cb(e.payload.message)
+  );
 }

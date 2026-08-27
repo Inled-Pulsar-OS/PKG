@@ -1,4 +1,4 @@
-export type UtilityAction = "backup" | "reinstall" | "internet" | "disk";
+export type UtilityAction = "backup" | "reinstall" | "internet" | "disk" | "terminal";
 
 export interface UtilityOption {
   id: UtilityAction;
@@ -31,5 +31,11 @@ export const UTILITIES: UtilityOption[] = [
     title: "Disk Utility",
     desc: "Repair, inspect, or manage disk partitions with GParted.",
     icon: "/icons/diskutility.png",
+  },
+  {
+    id: "terminal",
+    title: "Terminal / Root Console",
+    desc: "Open a root terminal for manual diagnosis and advanced commands.",
+    icon: "/icons/terminal.png",
   },
 ];

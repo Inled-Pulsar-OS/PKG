@@ -4,4 +4,6 @@ export {
   startRestore,
   launchApp,
   reboot,
+  onRestoreProgress,
+  onRestoreLog,
 } from "./commands";
