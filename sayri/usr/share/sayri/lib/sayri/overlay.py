@@ -95,20 +95,22 @@ class SayriOverlay:
 
     @property
     def is_visible(self) -> bool:
-        return self.win.get_visible()
+        return getattr(self, "_is_visible", False) or bool(self.win.get_visible())
 
     def show(self) -> None:
+        self._is_visible = True
         self._just_shown = time.monotonic()
         self._was_active = False
         self.win.set_visible(True)
         self.win.present()
 
     def hide(self) -> None:
+        self._is_visible = False
         self._was_active = False
         self.win.set_visible(False)
 
     def toggle(self) -> None:
-        if self.win.get_visible():
+        if self.is_visible:
             self.hide()
         else:
             self.show()
