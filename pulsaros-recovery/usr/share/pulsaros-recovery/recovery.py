@@ -1406,11 +1406,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 "python-pip",
                             ]
                             # Initialize pacman keyring inside the chroot so
-                            # signature verification works (avoids GPGME errors).
+                            # signature verification works (avoids GPGME errors),
+                            # then import the Inled repository GPG key.
                             exec_cmd(["chroot", "/mnt", "bash", "-c",
                                        "mkdir -p /etc/pacman.d/gnupg && "
-                                       "pacman-key --init 2>/dev/null && "
-                                       "pacman-key --populate archlinux 2>/dev/null"])
+                                       "pacman-key --init && "
+                                       "pacman-key --populate archlinux && "
+                                       "curl -s https://apt.inled.es/archive.key | pacman-key -a - && "
+                                       "pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F"])
                             exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
                             exec_cmd([
                                 "chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
