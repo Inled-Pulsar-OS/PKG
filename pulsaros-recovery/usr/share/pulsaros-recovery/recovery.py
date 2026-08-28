@@ -805,6 +805,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.pending_disk_path = disk_path
         self.pending_disk_name = disk_name
         self.install_broadcom = False
+        self.install_extra_packages = False
         self._show_broadcom_dialog()
 
     def build_install_progress_screen(self):
@@ -993,6 +994,33 @@ class RecoveryWindow(Adw.ApplicationWindow):
             d.destroy()
             if resp == "yes":
                 self.install_broadcom = True
+            self._show_extra_packages_dialog()
+
+        dialog.connect("response", on_response)
+        dialog.present()
+
+    def _show_extra_packages_dialog(self):
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Install Extra Packages",
+            body=(
+                "The ISO was built minimal to stay small (~3 GB). "
+                "You can now install the full set of packages that were excluded:\n\n"
+                "• Docker\n• Full firmware (GPU, audio)\n• VM guest tools\n"
+                "• Multimedia apps (VLC, Totem)\n• NVIDIA drivers\n• GNOME apps\n\n"
+                "⚠️ <b>Internet connection required</b> (WiFi or Ethernet).\n"
+                "These packages will be downloaded and installed on disk."
+            ),
+        )
+        dialog.set_body_use_markup(True)
+        dialog.add_response("no",  "No, keep minimal")
+        dialog.add_response("yes", "Yes, install everything")
+        dialog.set_response_appearance("yes", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("yes")
+
+        def on_response(d, resp):
+            d.destroy()
+            self.install_extra_packages = (resp == "yes")
             self._start_installation()
 
         dialog.connect("response", on_response)
@@ -1318,7 +1346,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
                 if is_arch:
                     # ── Arch: install via pacman from the [inled] + Arch repos ──
-                    if is_minimal:
+                    if is_minimal and self.install_extra_packages:
                         GLib.idle_add(self.update_progress, 0.80, "Installing extra packages (Docker, firmware, drivers, apps)...")
                         log_msg("Post-install: installing packages removed from minimal ISO via pacman...")
                         try:
@@ -1377,6 +1405,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 "python-setuptools",
                                 "python-pip",
                             ]
+                            # Initialize pacman keyring inside the chroot so
+                            # signature verification works (avoids GPGME errors).
+                            exec_cmd(["chroot", "/mnt", "bash", "-c",
+                                       "mkdir -p /etc/pacman.d/gnupg && "
+                                       "pacman-key --init 2>/dev/null && "
+                                       "pacman-key --populate archlinux 2>/dev/null"])
                             exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
                             exec_cmd([
                                 "chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
@@ -1391,7 +1425,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
                 else:
                     # ── Debian: install via apt from Debian + Inled repositories ──
-                    if is_minimal:
+                    if is_minimal and self.install_extra_packages:
                         GLib.idle_add(self.update_progress, 0.80, "Installing extra packages (Docker, firmware, drivers, apps)...")
                         log_msg("Post-install: installing packages removed from minimal ISO via apt...")
                         try:
