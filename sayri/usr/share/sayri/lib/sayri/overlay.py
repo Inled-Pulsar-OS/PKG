@@ -1,0 +1,160 @@
+"""Sayri overlay: single transparent window containing the native Siri Orb
+and animated Chroma-Ring Cajita, pinned to the TOP-RIGHT corner of the monitor.
+"""
+
+import time
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+from gi.repository import Gdk, GLib, Gtk  # noqa: E402
+
+from .cajita import SayriCajita
+from .orb import SiriOrb
+from .webkit import pin_window
+
+BUBBLE_WIDTH = 420
+BUBBLE_HEIGHT = 140
+GAP = 14
+MARGIN = 16
+TOP_MARGIN = 44
+
+
+class SayriOverlay:
+    """Single transparent window with both the native orb and the animated chroma cajita."""
+
+    def __init__(self, app) -> None:
+        self.app = app
+        self.cfg = app.cfg
+
+        orb_size = self.cfg.get_int("ui", "orb_size")
+        if orb_size < 100 or orb_size > 300:
+            orb_size = 140
+
+        width = BUBBLE_WIDTH + GAP + orb_size
+        height = max(BUBBLE_HEIGHT, orb_size)
+
+        # ── window ──────────────────────────────────────────────────
+        self.win = Gtk.ApplicationWindow(application=app)
+        self.win.set_default_size(width, height)
+        self.win.set_resizable(False)
+        self.win.set_decorated(False)
+        self.win.add_css_class("sayri-overlay")
+
+        try:
+            css = Gtk.CssProvider()
+            css.load_from_data(
+                b".sayri-overlay { background: transparent; background-color: transparent; } "
+                b"window.sayri-overlay { background: transparent; border: none; box-shadow: none; }"
+            )
+            Gtk.StyleContext.add_provider_for_display(
+                Gdk.Display.get_default(), css,
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        except Exception:  # noqa: BLE001
+            pass
+
+        self.win.connect("close-request", lambda *_: (self.win.set_visible(False), True)[-1])
+        self.win.connect("notify::is-active", self._on_active_changed)
+
+        # ── pin to top-right ─────────────────────────────────────────
+        pin_window(self.win, top_margin=TOP_MARGIN, right_margin=MARGIN,
+                   width=width, height=height)
+
+        # ── layout: horizontal box [ cajita · orb ] ─────────────────
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=GAP)
+        hbox.set_halign(Gtk.Align.END)
+        hbox.set_valign(Gtk.Align.CENTER)
+
+        # 1. Cajita with Chroma-Ring animated border
+        self.cajita = SayriCajita(app)
+        hbox.append(self.cajita)
+
+        # 2. Native animated Cairo Siri Orb
+        self.orb = SiriOrb(size=orb_size, on_click=app.on_orb_click)
+        hbox.append(self.orb)
+
+        self.win.set_child(hbox)
+
+    def set_state_sync(self, state: str, _opts: dict | None = None) -> None:
+        self.orb.set_state(state)
+
+    def set_audio_level(self, level: float) -> None:
+        self.orb.set_audio_level(level)
+
+    def set_content(self, kind: str, text: str) -> None:
+        self.cajita.set_content(kind, text)
+
+    def set_mic(self, active: bool) -> None:
+        self.cajita.set_mic(active)
+
+    def set_busy(self, busy: bool) -> None:
+        self.cajita.set_busy(busy)
+
+    def clear(self) -> None:
+        self.cajita.clear()
+
+    @property
+    def is_visible(self) -> bool:
+        return self.win.get_visible()
+
+    def show(self) -> None:
+        self._just_shown = time.monotonic()
+        self._was_active = False
+        self.win.set_visible(True)
+        self.win.present()
+
+    def hide(self) -> None:
+        self._was_active = False
+        self.win.set_visible(False)
+
+    def toggle(self) -> None:
+        if self.win.get_visible():
+            self.hide()
+        else:
+            self.show()
+
+    def apply_config(self) -> None:
+        orb_size = self.cfg.get_int("ui", "orb_size")
+        if orb_size < 100 or orb_size > 300:
+            orb_size = 140
+        width = BUBBLE_WIDTH + GAP + orb_size
+        height = max(BUBBLE_HEIGHT, orb_size)
+        self.orb.set_content_width(orb_size)
+        self.orb.set_content_height(orb_size)
+        self.win.set_default_size(width, height)
+        pin_window(self.win, top_margin=TOP_MARGIN, right_margin=MARGIN,
+                   width=width, height=height)
+
+    def _is_settings_open(self) -> bool:
+        if hasattr(self.app, "_settings_proc") and self.app._settings_proc and self.app._settings_proc.poll() is None:
+            return True
+        if self.app.settings_win is not None:
+            try:
+                return self.app.settings_win.win.get_visible()
+            except Exception:
+                return False
+        return False
+
+    def _on_active_changed(self, win, _pspec) -> None:
+        active = win.get_property("is-active")
+        if active:
+            self._was_active = True
+        elif getattr(self, "_was_active", False):
+            if time.monotonic() - getattr(self, "_just_shown", 0) < 1.2:
+                return
+            if self._is_settings_open():
+                return
+            GLib.timeout_add(150, self._check_dismiss)
+
+    def _check_dismiss(self) -> bool:
+        if not self.win.get_property("is-active") and getattr(self, "_was_active", False):
+            if self._is_settings_open():
+                return False
+            if time.monotonic() - getattr(self, "_just_shown", 0) < 1.2:
+                return False
+            mode = self.cfg.get_string("stt", "mode")
+            if mode in ("wakeword", "always"):
+                self.hide()
+            else:
+                self.app.quit_app()
+        return False

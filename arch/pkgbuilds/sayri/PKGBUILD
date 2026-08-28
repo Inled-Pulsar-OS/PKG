@@ -1,0 +1,31 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=sayri
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Siri-like voice assistant for Pulsar OS (whisper.cpp STT, OpenAI-compatible API, Piper TTS)"
+arch=(any)
+url="https://inled.es"
+license=(custom)
+depends=(python python-gobject gtk4 webkitgtk-6.0 gtk4-layer-shell python-httpx pipewire-audio)
+optdepends=('whisper-cpp: local speech-to-text binary (auto-downloaded if missing)'
+            'piper-tts: local text-to-speech binary (auto-downloaded if missing)')
+options=(!strip)
+
+prepare() {
+    _src="$(cd "$startdir"/../../../sayri && pwd)"
+    cd "$_src"
+    mkdir -p "$srcdir/staging"
+    cp -r "$_src"/* "$srcdir/staging/" 2>/dev/null || true
+    rm -rf "$srcdir/staging/DEBIAN" "$srcdir/staging/web" "$srcdir/staging/tests"
+    bash prepare-assets.sh "$srcdir/staging"
+}
+
+package() {
+    _src="$(cd "$startdir"/../../../sayri && pwd)"
+    cd "$_src"
+    [ -d usr ] && cp -r usr "$pkgdir/"
+    [ -d etc ] && cp -r etc "$pkgdir/"
+    if [ -d "$srcdir/staging" ]; then
+        cp -r "$srcdir/staging"/* "$pkgdir/"
+    fi
+}
