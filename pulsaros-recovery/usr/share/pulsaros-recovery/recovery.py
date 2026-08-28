@@ -1323,88 +1323,70 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         log_msg("Post-install: installing packages removed from minimal ISO via pacman...")
                         try:
                             exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
-                            # Detect if this was a minimal build by checking for a marker
-                            has_net = subprocess.run(
-                                ["ping", "-c", "1", "-W", "3", "1.1.1.1"],
-                                capture_output=True
-                            ).returncode == 0
-                            if not has_net:
-                                has_net = subprocess.run(
-                                    ["curl", "-s", "-I", "-m", "3", "https://archlinux.org"],
-                                    capture_output=True
-                                ).returncode == 0
-
-                            if has_net:
-                                # Every package removed from base-arch.list when building
-                                # base-arch-minimal.list, grouped for readability.
-                                extra_packages = [
-                                    # Docker container runtime
-                                    "docker",
-                                    # Full firmware (replaces the split sub-packages with the meta)
-                                    "linux-firmware",
-                                    "sof-firmware",
-                                    "alsa-firmware",
-                                    # VM guest tools (for VM installs)
-                                    "open-vm-tools",
-                                    "virtualbox-guest-utils",
-                                    "xf86-video-qxl",
-                                    # Old (pre-GCN) AMD video driver and misc system utils
-                                    "xf86-video-ati",
-                                    "xfsprogs",
-                                    "p7zip",
-                                    "inxi",
-                                    "wl-clipboard",
-                                    "python-yaml",
-                                    # Multimedia & image tools
-                                    "vlc",
-                                    "totem",
-                                    "imagemagick",
-                                    # Network shares & portal GVFS backends
-                                    "gvfs-smb",
-                                    "gvfs-gphoto2",
-                                    # GNOME apps
-                                    "geary",
-                                    "gnome-music",
-                                    "gnome-contacts",
-                                    "gnome-weather",
-                                    "gnome-clocks",
-                                    "xournalpp",
-                                    "papers",
-                                    "loupe",
-                                    "gnome-disk-utility",
-                                    "gnome-logs",
-                                    "baobab",
-                                    # Editor and WebKit/GTK3 extras pulled by the welcome app
-                                    "vim",
-                                    "webkitgtk-6.0",
-                                    # NVIDIA proprietary drivers
-                                    "nvidia-open",
-                                    "nvidia-settings",
-                                    # Broadcom & DKMS driver support
-                                    "dkms",
-                                    "linux-headers",
-                                    # Global menu / Fildem dependencies
-                                    "appmenu-gtk-module",
-                                    "python-xlib",
-                                    "python-setuptools",
-                                    "python-pip",
-                                ]
-                                try:
-                                    exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
-                                    exec_cmd([
-                                        "chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
-                                        *extra_packages
-                                    ])
-                                    log_msg("Post-install: extra packages installed successfully.")
-                                    extra_packages_installed = True
-                                except Exception as pkg_err:
-                                    log_msg(f"Notice: Post-install package installation had warnings: {pkg_err}")
-                            else:
-                                log_msg("Notice: No internet connection. Extra packages will be available via Driver Manager.")
-
-                            subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"])
+                            # Every package removed from base-arch.list when building
+                            # base-arch-minimal.list, grouped for readability.
+                            extra_packages = [
+                                # Docker container runtime
+                                "docker",
+                                # Full firmware (replaces the split sub-packages with the meta)
+                                "linux-firmware",
+                                "sof-firmware",
+                                "alsa-firmware",
+                                # VM guest tools (for VM installs)
+                                "open-vm-tools",
+                                "virtualbox-guest-utils",
+                                "xf86-video-qxl",
+                                # Old (pre-GCN) AMD video driver and misc system utils
+                                "xf86-video-ati",
+                                "xfsprogs",
+                                "p7zip",
+                                "inxi",
+                                "wl-clipboard",
+                                "python-yaml",
+                                # Multimedia & image tools
+                                "vlc",
+                                "totem",
+                                "imagemagick",
+                                # Network shares & portal GVFS backends
+                                "gvfs-smb",
+                                "gvfs-gphoto2",
+                                # GNOME apps
+                                "geary",
+                                "gnome-music",
+                                "gnome-contacts",
+                                "gnome-weather",
+                                "gnome-clocks",
+                                "xournalpp",
+                                "papers",
+                                "loupe",
+                                "gnome-disk-utility",
+                                "gnome-logs",
+                                "baobab",
+                                # Editor and WebKit/GTK3 extras pulled by the welcome app
+                                "vim",
+                                "webkitgtk-6.0",
+                                # NVIDIA proprietary drivers
+                                "nvidia-open",
+                                "nvidia-settings",
+                                # Broadcom & DKMS driver support
+                                "dkms",
+                                "linux-headers",
+                                # Global menu / Fildem dependencies
+                                "appmenu-gtk-module",
+                                "python-xlib",
+                                "python-setuptools",
+                                "python-pip",
+                            ]
+                            exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
+                            exec_cmd([
+                                "chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
+                                *extra_packages
+                            ])
+                            log_msg("Post-install: extra packages installed successfully.")
+                            extra_packages_installed = True
                         except Exception as post_err:
-                            log_msg(f"Notice: Post-install step failed: {post_err}")
+                            log_msg(f"Post-install package installation: {post_err}")
+                        finally:
                             subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"], capture_output=True)
 
                 else:
@@ -1414,57 +1396,40 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         log_msg("Post-install: installing packages removed from minimal ISO via apt...")
                         try:
                             exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
-                            has_net = subprocess.run(
-                                ["ping", "-c", "1", "-W", "3", "1.1.1.1"],
-                                capture_output=True
-                            ).returncode == 0
-                            if not has_net:
-                                has_net = subprocess.run(
-                                    ["curl", "-s", "-I", "-m", "3", "https://deb.debian.org"],
-                                    capture_output=True
-                                ).returncode == 0
-
-                            if has_net:
-                                extra_packages = [
-                                    "docker.io",
-                                    "firmware-linux",
-                                    "firmware-sof-signed",
-                                    "firmware-misc-nonfree",
-                                    "open-vm-tools",
-                                    "virtualbox-guest-utils",
-                                    "xserver-xorg-video-qxl",
-                                    "vlc",
-                                    "totem",
-                                    "imagemagick",
-                                    "gvfs-fuse",
-                                    "gvfs-backends",
-                                    "geary",
-                                    "gnome-music",
-                                    "gnome-contacts",
-                                    "gnome-weather",
-                                    "gnome-clocks",
-                                    "nvidia-driver",
-                                    "dkms",
-                                    "linux-headers-amd64",
-                                    "xdotool",
-                                    "python3-xlib",
-                                ]
-                                try:
-                                    exec_cmd(["chroot", "/mnt", "apt-get", "update"])
-                                    exec_cmd([
-                                        "chroot", "/mnt", "apt-get", "install", "-y", "--no-install-recommends",
-                                        *extra_packages
-                                    ])
-                                    log_msg("Post-install: extra packages installed successfully (apt).")
-                                    extra_packages_installed = True
-                                except Exception as pkg_err:
-                                    log_msg(f"Notice: Post-install apt install had warnings: {pkg_err}")
-                            else:
-                                log_msg("Notice: No internet connection. Extra packages will be available via Driver Manager.")
-
-                            subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"])
+                            extra_packages = [
+                                "docker.io",
+                                "firmware-linux",
+                                "firmware-sof-signed",
+                                "firmware-misc-nonfree",
+                                "open-vm-tools",
+                                "virtualbox-guest-utils",
+                                "xserver-xorg-video-qxl",
+                                "vlc",
+                                "totem",
+                                "imagemagick",
+                                "gvfs-fuse",
+                                "gvfs-backends",
+                                "geary",
+                                "gnome-music",
+                                "gnome-contacts",
+                                "gnome-weather",
+                                "gnome-clocks",
+                                "nvidia-driver",
+                                "dkms",
+                                "linux-headers-amd64",
+                                "xdotool",
+                                "python3-xlib",
+                            ]
+                            exec_cmd(["chroot", "/mnt", "apt-get", "update"])
+                            exec_cmd([
+                                "chroot", "/mnt", "apt-get", "install", "-y", "--no-install-recommends",
+                                *extra_packages
+                            ])
+                            log_msg("Post-install: extra packages installed successfully (apt).")
+                            extra_packages_installed = True
                         except Exception as post_err:
-                            log_msg(f"Notice: Post-install step failed: {post_err}")
+                            log_msg(f"Post-install apt installation: {post_err}")
+                        finally:
                             subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"], capture_output=True)
 
                 # Remove the marker so extra packages are not re-installed on reboot.
