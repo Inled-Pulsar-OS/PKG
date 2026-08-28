@@ -982,7 +982,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             name_info = self.selected_disk_card.disk_info.get("name", "")
             size_match = re.search(r"\(([^)]+)\)", name_info)
             if size_match:
-                display_name = f"Pulsar OS ({disk_name} • {size_match.group(1)})"
+                display_name = f"Pulsar OS ({disk_name} \u2022 {size_match.group(1)})"
             else:
                 display_name = f"Pulsar OS ({disk_name})"
         else:
@@ -990,11 +990,125 @@ class RecoveryWindow(Adw.ApplicationWindow):
             
         self.target_disk_name_lbl.set_label(display_name)
         self.stack.set_visible_child_name("install_progress")
+
+        # ── DEMO MODE: never touch the real system ──────────────────────
+        if "DEMO_MODE" in os.environ:
+            threading.Thread(
+                target=self._demo_backend,
+                args=(disk_path,),
+                daemon=True,
+            ).start()
+            return
+
         threading.Thread(
             target=self.installation_backend,
             args=(disk_path,),
             daemon=True
         ).start()
+
+    # ──────────────────────────────────────────────────────────────────
+    # DEMO MODE backend — zero side-effects, reads no disks, writes
+    # nothing.  Purely cosmetic progress + log output for UI testing.
+    # ──────────────────────────────────────────────────────────────────
+    def _demo_backend(self, disk_path):
+        import datetime
+        log_file = "/tmp/pulsaros-install.log"
+        with open(log_file, "w") as lf:
+            lf.write(f"{datetime.datetime.now()} - DEMO MODE (no real changes)\n")
+            lf.write(f"Target disk: {disk_path}\n")
+
+        def log_msg(msg):
+            ts = datetime.datetime.now().strftime("%H:%M:%S")
+            line = f"[{ts}] {msg}"
+            with open(log_file, "a") as lf:
+                lf.write(line + "\n")
+            print(msg)
+            GLib.idle_add(self.append_log, line)
+
+        def demo_sleep(secs=0.15):
+            time.sleep(secs)
+
+        log_msg("══ DEMO MODE: no real changes will be made ══")
+        log_msg(f"Target disk: {disk_path} (NOT TOUCHED)")
+
+        # ── Partitioning (simulated) ──
+        GLib.idle_add(self.update_progress, 0.03, "[DEMO] Cleaning disk...")
+        log_msg(f"[DEMO] wipefs -a -f {disk_path}")
+        demo_sleep()
+        GLib.idle_add(self.update_progress, 0.05, "[DEMO] Partitioning (GPT/UEFI)...")
+        for part in ["EFI", "PulsarRecovery", "PulsarOS"]:
+            log_msg(f"[DEMO] Creating partition: {part}")
+            demo_sleep()
+        GLib.idle_add(self.update_progress, 0.10, "[DEMO] Formatting partitions...")
+        for fs in ["mkfs.vfat EFI", "mkfs.ext4 PULSAR_RECOVERY", "mkfs.btrfs PULSAR_OS"]:
+            log_msg(f"[DEMO] {fs}")
+            demo_sleep()
+        GLib.idle_add(self.update_progress, 0.15, "[DEMO] Creating Btrfs subvolumes...")
+        log_msg("[DEMO] btrfs subvolume create /mnt/@")
+        log_msg("[DEMO] btrfs subvolume create /mnt/@home")
+        demo_sleep()
+        GLib.idle_add(self.update_progress, 0.18, "[DEMO] Mounting subvolumes...")
+        demo_sleep()
+
+        # ── Rsync (simulated) ──
+        GLib.idle_add(self.update_progress, 0.25, "[DEMO] Copying system files...")
+        log_msg("[DEMO] rsync -aAXx / -> /mnt (SIMULATED)")
+        for pct in range(26, 81, 2):
+            speed = f"{300 + pct * 2}MB/s" if pct < 50 else f"{200 + (100 - pct) * 5}MB/s"
+            GLib.idle_add(self.update_progress, pct / 100.0, f"[DEMO] Copying files: {pct}% at {speed}")
+            demo_sleep(0.04)
+
+        # ── Post-install packages (simulated) ──
+        if self.install_extra_packages:
+            GLib.idle_add(self.update_progress, 0.80, "[DEMO] Installing extra packages...")
+            log_msg("[DEMO] Minimal ISO detected — installing excluded packages...")
+            GLib.idle_add(self.update_progress, 0.81, "[DEMO] Setting up package manager...")
+            log_msg("[DEMO] pacman-key --init")
+            log_msg("[DEMO] pacman-key --populate archlinux")
+            log_msg("[DEMO] Importing Inled GPG key...")
+            demo_sleep(0.3)
+            GLib.idle_add(self.update_progress, 0.82, "[DEMO] Syncing package databases...")
+            log_msg("[DEMO] pacman -Sy --noconfirm")
+            demo_sleep(0.2)
+
+            demo_pkgs = [
+                "docker", "linux-firmware", "sof-firmware",
+                "open-vm-tools", "vlc", "totem", "imagemagick",
+                "geary", "gnome-music", "nvidia-open", "dkms", "linux-headers",
+            ]
+            GLib.idle_add(self.update_progress, 0.83, f"[DEMO] Installing {len(demo_pkgs)} packages...")
+            for i, pkg in enumerate(demo_pkgs, 1):
+                for dl_pct in range(0, 101, 20):
+                    frac = 0.83 + ((i - 1) / len(demo_pkgs)) * 0.07 + (dl_pct / 100.0) * (0.07 / len(demo_pkgs))
+                    GLib.idle_add(self.update_progress, frac, f"[DEMO] Downloading {pkg}: {dl_pct}%")
+                    demo_sleep(0.02)
+                frac = 0.83 + (i / len(demo_pkgs)) * 0.07
+                GLib.idle_add(self.update_progress, frac, f"[DEMO] Installing package {i}/{len(demo_pkgs)}: {pkg}")
+                log_msg(f"[DEMO] ({i}/{len(demo_pkgs)}) installing {pkg}")
+                demo_sleep(0.08)
+        else:
+            log_msg("[DEMO] Full ISO detected — no extra packages needed.")
+
+        # ── SquashFS regeneration (simulated) ──
+        GLib.idle_add(self.update_progress, 0.92, "[DEMO] Regenerating recovery image...")
+        log_msg("[DEMO] mksquashfs /mnt -> /mnt/recovery/images/pulsaros-base.squashfs (SIMULATED)")
+        for sq_pct in range(0, 101, 2):
+            frac = 0.92 + (sq_pct / 100.0) * 0.06
+            GLib.idle_add(self.update_progress, frac, f"[DEMO] Compressing system image: {sq_pct}%")
+            demo_sleep(0.02)
+        log_msg("[DEMO] Recovery base image regenerated: ~3.2GB (NOT ACTUAL)")
+
+        # ── Bootloader (simulated) ──
+        GLib.idle_add(self.update_progress, 0.98, "[DEMO] Configuring bootloader...")
+        log_msg("[DEMO] Writing /etc/fstab")
+        log_msg("[DEMO] Deploying vmlinuz-recovery + initramfs to ESP")
+        log_msg("[DEMO] Configuring rEFInd menu entries")
+        log_msg("[DEMO] mkinitcpio -P")
+        demo_sleep(0.2)
+
+        GLib.idle_add(self.update_progress, 1.0, "[DEMO] Demo complete — nothing was changed!")
+        log_msg("══ DEMO MODE: simulation finished, disk untouched ══")
+        GLib.idle_add(self.on_installation_completed)
 
     def on_show_live_log_clicked(self, btn):
         visible = self.log_panel.get_visible()
@@ -1094,106 +1208,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     # 3. Final recursive lazy unmount sweep to ensure absolutely nothing remains bound in the VFS
                     subprocess.run(["umount", "-f", "-l", "-R", "/mnt"], capture_output=True)
                 
-            # ═══════════════════════════════════════════════════════════════
-            # DEMO MODE: simulate the full installation flow with realistic
-            # progress updates and log output.  Activate with DEMO_MODE=1
-            # alongside TEST_MODE=1.
-            # ═══════════════════════════════════════════════════════════════
-            if "DEMO_MODE" in os.environ:
-                def demo_sleep(secs=0.12):
-                    time.sleep(secs)
-
-                log_msg("═══ DEMO MODE: Simulating full installation ═══")
-
-                # ── Partitioning ──
-                GLib.idle_add(self.update_progress, 0.03, "Demo: Cleaning disk...")
-                log_msg(f"[DEMO] wipefs -a -f {disk_path}")
-                demo_sleep()
-                GLib.idle_add(self.update_progress, 0.05, "Demo: Partitioning (GPT/UEFI)...")
-                for part in ["EFI", "PulsarRecovery", "PulsarOS"]:
-                    log_msg(f"[DEMO] Creating partition: {part}")
-                    demo_sleep()
-                GLib.idle_add(self.update_progress, 0.10, "Demo: Formatting partitions...")
-                for fs in ["mkfs.vfat EFI", "mkfs.ext4 PULSAR_RECOVERY", "mkfs.btrfs PULSAR_OS"]:
-                    log_msg(f"[DEMO] {fs}")
-                    demo_sleep()
-                GLib.idle_add(self.update_progress, 0.15, "Demo: Creating Btrfs subvolumes...")
-                log_msg("[DEMO] btrfs subvolume create /mnt/@")
-                log_msg("[DEMO] btrfs subvolume create /mnt/@home")
-                demo_sleep()
-                GLib.idle_add(self.update_progress, 0.18, "Demo: Mounting subvolumes...")
-                log_msg("[DEMO] mount subvol=@,subvol=@home,efi,recovery")
-                demo_sleep()
-
-                # ── Rsync file copy ──
-                GLib.idle_add(self.update_progress, 0.25, "Demo: Copying system files...")
-                log_msg("[DEMO] rsync -aAXx / -> /mnt")
-                for pct in range(26, 81, 2):
-                    speed = f"{300 + pct * 2}MB/s" if pct < 50 else f"{200 + (100 - pct) * 5}MB/s"
-                    GLib.idle_add(self.update_progress, pct / 100.0, f"Demo: Copying files: {pct}% at {speed}")
-                    demo_sleep(0.04)
-
-                # ── Post-install packages ──
-                if self.install_extra_packages:
-                    GLib.idle_add(self.update_progress, 0.80, "Demo: Installing extra packages...")
-                    log_msg("[DEMO] Minimal ISO detected — installing excluded packages...")
-                    GLib.idle_add(self.update_progress, 0.81, "Demo: Setting up package manager...")
-                    log_msg("[DEMO] pacman-key --init")
-                    log_msg("[DEMO] pacman-key --populate archlinux")
-                    log_msg("[DEMO] Importing Inled GPG key...")
-                    demo_sleep(0.3)
-                    GLib.idle_add(self.update_progress, 0.82, "Demo: Syncing package databases...")
-                    log_msg("[DEMO] pacman -Sy --noconfirm")
-                    demo_sleep(0.2)
-
-                    demo_pkgs = [
-                        "docker", "linux-firmware", "sof-firmware",
-                        "open-vm-tools", "vlc", "totem", "imagemagick",
-                        "geary", "gnome-music", "nvidia-open", "dkms", "linux-headers",
-                    ]
-                    GLib.idle_add(self.update_progress, 0.83, f"Demo: Installing {len(demo_pkgs)} packages...")
-                    for i, pkg in enumerate(demo_pkgs, 1):
-                        # Simulate download progress
-                        for dl_pct in range(0, 101, 20):
-                            frac = 0.83 + ((i - 1) / len(demo_pkgs)) * 0.07 + (dl_pct / 100.0) * (0.07 / len(demo_pkgs))
-                            GLib.idle_add(self.update_progress, frac, f"Demo: Downloading {pkg}: {dl_pct}%")
-                            demo_sleep(0.02)
-                        # Simulate install
-                        frac = 0.83 + (i / len(demo_pkgs)) * 0.07
-                        GLib.idle_add(self.update_progress, frac, f"Demo: Installing package {i}/{len(demo_pkgs)}: {pkg}")
-                        log_msg(f"[DEMO] ({i}/{len(demo_pkgs)}) installing {pkg}")
-                        demo_sleep(0.08)
-                    extra_packages_installed = True
-                else:
-                    log_msg("[DEMO] Full ISO detected — no extra packages needed.")
-
-                # ── SquashFS regeneration ──
-                GLib.idle_add(self.update_progress, 0.92, "Demo: Regenerating recovery image...")
-                log_msg("[DEMO] mksquashfs /mnt /mnt/recovery/images/pulsaros-base.squashfs")
-                for sq_pct in range(0, 101, 2):
-                    frac = 0.92 + (sq_pct / 100.0) * 0.06
-                    GLib.idle_add(self.update_progress, frac, f"Demo: Compressing system image: {sq_pct}%")
-                    demo_sleep(0.02)
-                log_msg("[DEMO] Recovery base image regenerated: ~3.2GB")
-
-                # ── Bootloader ──
-                GLib.idle_add(self.update_progress, 0.98, "Demo: Configuring bootloader...")
-                log_msg("[DEMO] Writing /etc/fstab")
-                log_msg("[DEMO] Deploying vmlinuz-recovery + initramfs to ESP")
-                log_msg("[DEMO] Configuring rEFInd menu entries")
-                log_msg("[DEMO] mkinitcpio -P")
-                demo_sleep(0.2)
-
-                # ── Cleanup ──
-                GLib.idle_add(self.update_progress, 0.99, "Demo: Creating setup flag...")
-                log_msg("[DEMO] Touching /etc/pulsar-need-setup")
-                demo_sleep(0.1)
-
-                GLib.idle_add(self.update_progress, 1.0, "Demo: Installation complete!")
-                log_msg("═══ DEMO MODE: Installation simulation finished ═══")
-                GLib.idle_add(self.on_installation_completed)
-                return
-
             is_efi = os.path.exists("/sys/firmware/efi")
             is_arch = os.path.exists("/etc/pacman.conf")
             esp_root = "/mnt/boot/efi"
