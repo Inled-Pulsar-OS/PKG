@@ -288,8 +288,10 @@ class SayriApp(Gtk.Application):
 
         mode = self.cfg.get_string("stt", "mode")
         matched, remainder = self._match_and_extract_wake_word(text)
+        ui_open = bool(self.overlay and self.overlay.is_visible)
 
-        if mode == "wakeword" and not self.armed:
+        # In wakeword mode while running in background (UI closed and not armed), require wake word
+        if mode == "wakeword" and not self.armed and not ui_open:
             if matched:
                 if self.overlay and not self.overlay.is_visible:
                     self.overlay.show()
@@ -304,10 +306,11 @@ class SayriApp(Gtk.Application):
                     self._msg("hint", "Listening…")
                 return
             else:
-                print(f"[Sayri] ℹ️ Wake word not found in \"{text}\" (mode=wakeword)")
+                print(f"[Sayri] ℹ️ Wake word not found in \"{text}\" (mode=wakeword, UI hidden)")
                 return
 
-        # If already armed or in manual/always mode, but user only repeated the wake word without a question
+        # If UI is showing or armed, user can say anything!
+        # If user spoke ONLY the wake word without a question, arm and wait
         if matched and (not remainder or len(remainder) <= 1):
             if self.overlay and not self.overlay.is_visible:
                 self.overlay.show()
@@ -320,6 +323,7 @@ class SayriApp(Gtk.Application):
         if self.overlay and not self.overlay.is_visible:
             self.overlay.show()
 
+        # If matched wake word with a query, send the query without the wake word; otherwise send full text
         query = remainder if (matched and remainder and len(remainder) > 1) else text
         self.armed = False
         self.send_text(query)
