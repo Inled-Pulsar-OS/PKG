@@ -516,6 +516,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                              "Browse the web to get help with your computer.", "safari")
         self.add_utility_row(self.listbox, "disk", "Disk Utility", 
                              "Repair or erase a disk using Disk Utility.", "disk")
+        self.add_utility_row(self.listbox, "packages", "Install Extra Packages",
+                             "Install Docker, drivers, firmware, and apps on the installed system.", "logo")
                              
         bottom_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         bottom_box.set_margin_top(12)
@@ -618,6 +620,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
             self._popen_as_user("seafari || epiphany || firefox")
         elif self.selected_action == "disk":
             subprocess.Popen("gparted || pkexec gparted || gnome-disks || gnome-disk-utility", shell=True)
+        elif self.selected_action == "packages":
+            self._show_install_packages_dialog()
 
 
     def show_installer_selector_dialog(self):
@@ -644,6 +648,203 @@ class RecoveryWindow(Adw.ApplicationWindow):
             
         dialog.connect("response", on_response)
         dialog.present()
+
+    def _show_install_packages_dialog(self):
+        """Show a confirmation dialog before installing extra packages."""
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Install Extra Packages",
+            body=(
+                "This will install the full set of packages that were excluded\n"
+                "from the minimal ISO:\n\n"
+                "• Docker\n• Full firmware (GPU, audio)\n• VM guest tools\n"
+                "• Multimedia apps (VLC, Totem)\n• NVIDIA drivers\n• GNOME apps\n\n"
+                "⚠️ <b>Internet connection required</b> (WiFi or Ethernet).\n"
+                "The system will be mounted and packages installed via pacman."
+            ),
+        )
+        dialog.set_body_use_markup(True)
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("install", "Install Packages")
+        dialog.set_response_appearance("install", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_response_appearance("cancel", Adw.ResponseAppearance.DEFAULT)
+
+        def on_response(d, resp):
+            d.destroy()
+            if resp == "install":
+                self._start_package_installation()
+
+        dialog.connect("response", on_response)
+        dialog.present()
+
+    def _start_package_installation(self):
+        """Switch to the progress screen and install extra packages in a thread."""
+        self.progress_subtitle.set_label("Installing extra packages on the installed system.")
+        self.target_disk_name_lbl.set_label("Extra Packages")
+        self.image.set_visible(True)
+        self.title_label.set_visible(True)
+        self.stack.set_visible_child_name("install_progress")
+        threading.Thread(target=self._packages_installation_backend, daemon=True).start()
+
+    def _packages_installation_backend(self):
+        """Install extra packages directly on the running system.
+
+        Detects whether the system is Arch (pacman) or Debian (apt) and
+        runs the appropriate package manager.  The app is already running
+        on the installed system, so no chroot or mounting is needed.
+        pkexec is used for root privileges.
+        """
+        import datetime
+        log_file = "/tmp/pulsaros-packages.log"
+        try:
+            with open(log_file, "w") as lf:
+                lf.write(f"{datetime.datetime.now()} - Extra package installation started\n")
+
+            def log_msg(msg):
+                ts = datetime.datetime.now().strftime("%H:%M:%S")
+                line = f"[{ts}] {msg}"
+                with open(log_file, "a") as lf:
+                    lf.write(line + "\n")
+                print(msg)
+                GLib.idle_add(self.append_log, line)
+
+            # ── Detect distro ──
+            GLib.idle_add(self.update_progress, 0.05, "Detecting system type...")
+            is_arch = os.path.exists("/etc/pacman.conf")
+            is_debian = os.path.exists("/etc/apt/sources.list") or os.path.exists("/etc/apt/sources.list.d")
+
+            if is_arch:
+                log_msg("Detected Arch Linux system — using pacman")
+            elif is_debian:
+                log_msg("Detected Debian system — using apt")
+            else:
+                log_msg("ERROR: Cannot detect system type (no pacman.conf or apt sources)")
+                GLib.idle_add(self.on_installation_failed, "Cannot detect system type. Is Pulsar OS installed?")
+                return
+
+            # ── Package lists ──
+            arch_packages = [
+                "docker", "linux-firmware", "sof-firmware", "alsa-firmware",
+                "open-vm-tools", "virtualbox-guest-utils", "xf86-video-qxl",
+                "xf86-video-ati", "xfsprogs", "p7zip", "inxi", "wl-clipboard",
+                "python-yaml", "vlc", "totem", "imagemagick",
+                "gvfs-smb", "gvfs-gphoto2",
+                "geary", "gnome-music", "gnome-contacts", "gnome-weather",
+                "gnome-clocks", "xournalpp", "papers", "loupe",
+                "gnome-disk-utility", "gnome-logs", "baobab",
+                "vim", "webkitgtk-6.0",
+                "nvidia-open", "nvidia-settings",
+                "dkms", "linux-headers",
+                "appmenu-gtk-module", "python-xlib",
+                "python-setuptools", "python-pip",
+            ]
+            debian_packages = [
+                "docker.io",
+                "firmware-linux", "firmware-sof-signed", "firmware-misc-nonfree",
+                "open-vm-tools", "virtualbox-guest-utils", "xserver-xorg-video-qxl",
+                "vlc", "totem", "imagemagick",
+                "gvfs-fuse", "gvfs-backends",
+                "geary", "gnome-music", "gnome-contacts", "gnome-weather",
+                "gnome-clocks",
+                "nvidia-driver", "dkms", "linux-headers-amd64",
+                "xdotool", "python3-xlib",
+            ]
+
+            if is_arch:
+                packages = arch_packages
+                # Ensure Inled repo key is imported
+                GLib.idle_add(self.update_progress, 0.10, "Setting up package manager...")
+                log_msg("Importing Inled repository key...")
+                keyring_cmd = (
+                    "mkdir -p /etc/pacman.d/gnupg && "
+                    "pacman-key --init 2>/dev/null; "
+                    "pacman-key --populate archlinux 2>/dev/null; "
+                    "curl -s https://apt.inled.es/archive.key | pacman-key -a - 2>/dev/null; "
+                    "pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F 2>/dev/null"
+                )
+                subprocess.run(["pkexec", "bash", "-c", keyring_cmd], capture_output=True, text=True)
+
+                # Sync databases
+                GLib.idle_add(self.update_progress, 0.15, "Syncing package databases...")
+                log_msg("Syncing package databases...")
+                subprocess.run(["pkexec", "pacman", "-Sy", "--noconfirm"], capture_output=True, text=True)
+
+                # Install packages with streaming progress
+                GLib.idle_add(self.update_progress, 0.20, f"Installing {len(packages)} packages...")
+                log_msg(f"Installing {len(packages)} extra packages via pacman...")
+                install_cmd = ["pkexec", "pacman", "-S", "--noconfirm", "--needed"] + packages
+                proc = subprocess.Popen(install_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                _buf = ""
+                while True:
+                    ch = proc.stdout.read(1)
+                    if not ch:
+                        break
+                    if ch in ('\r', '\n'):
+                        line = _buf.strip()
+                        _buf = ""
+                        if not line:
+                            continue
+                        log_msg(f"  pacman: {line}")
+                        m_dl = re.search(r"(\d+)%", line)
+                        if m_dl and '[#' in line:
+                            pct = int(m_dl.group(1))
+                            frac = 0.20 + (pct / 100.0) * 0.70
+                            GLib.idle_add(self.update_progress, frac, f"Downloading: {pct}%")
+                        m_inst = re.search(r"\((\d+)/(\d+)\)\s+installing\s+", line)
+                        if m_inst:
+                            cur, total = int(m_inst.group(1)), int(m_inst.group(2))
+                            frac = 0.90 + (cur / total) * 0.05
+                            GLib.idle_add(self.update_progress, frac, f"Installing {cur}/{total}")
+                    else:
+                        _buf += ch
+                proc.wait()
+                if proc.returncode != 0:
+                    log_msg(f"WARNING: pacman finished with code {proc.returncode}")
+                else:
+                    log_msg("All extra packages installed successfully.")
+
+            elif is_debian:
+                packages = debian_packages
+                # Update and install with streaming progress
+                GLib.idle_add(self.update_progress, 0.10, "Updating package lists...")
+                log_msg("Running apt-get update...")
+                subprocess.run(["pkexec", "apt-get", "update"], capture_output=True, text=True)
+
+                GLib.idle_add(self.update_progress, 0.20, f"Installing {len(packages)} packages...")
+                log_msg(f"Installing {len(packages)} extra packages via apt...")
+                install_cmd = ["pkexec", "apt-get", "install", "-y", "--no-install-recommends"] + packages
+                proc = subprocess.Popen(install_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                _buf = ""
+                while True:
+                    ch = proc.stdout.read(1)
+                    if not ch:
+                        break
+                    if ch in ('\r', '\n'):
+                        line = _buf.strip()
+                        _buf = ""
+                        if not line:
+                            continue
+                        log_msg(f"  apt: {line}")
+                        m_inst = re.search(r"(\d+)/(\d+)", line)
+                        if m_inst:
+                            cur, total = int(m_inst.group(1)), int(m_inst.group(2))
+                            frac = 0.20 + (cur / total) * 0.70
+                            GLib.idle_add(self.update_progress, frac, f"Installing {cur}/{total}")
+                    else:
+                        _buf += ch
+                proc.wait()
+                if proc.returncode != 0:
+                    log_msg(f"WARNING: apt finished with code {proc.returncode}")
+                else:
+                    log_msg("All extra packages installed successfully.")
+
+            GLib.idle_add(self.update_progress, 1.0, "Extra packages installed successfully!")
+            log_msg("Done! All extra packages have been installed.")
+            GLib.idle_add(self.on_installation_completed)
+
+        except Exception as err:
+            log_msg(f"FAILED: {err}")
+            GLib.idle_add(self.on_installation_failed, str(err))
 
     def build_install_welcome_screen(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -1698,10 +1899,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 freshly installed packages AND the final initramfs (with nouveau/
                 nvidia/firmware modules). Best-effort: an error never fails the
                 whole installation."""
-                if "TEST_MODE" in os.environ:
+                if not extra_packages_installed or "TEST_MODE" in os.environ:
                     return
-                if not extra_packages_installed:
-                    log_msg("No extra packages were installed — regenerating base image from the standard rootfs.")
                 GLib.idle_add(self.update_progress, 0.92, "Preparing recovery image...")
                 log_msg("Regenerating pulsaros-base.squashfs from /mnt with installed packages...")
                 try:
