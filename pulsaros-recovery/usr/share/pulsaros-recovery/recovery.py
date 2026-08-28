@@ -1116,7 +1116,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 exec_cmd(["sgdisk", "--zap-all", disk_path])
                 exec_cmd(["sgdisk", "--clear", disk_path])
                 exec_cmd(["sgdisk", "--new=1:0:+512M", "--typecode=1:ef00", "--change-name=1:EFI", disk_path])
-                exec_cmd(["sgdisk", "--new=2:0:+4G", "--typecode=2:8300", "--change-name=2:PulsarRecovery", disk_path])
+                exec_cmd(["sgdisk", "--new=2:0:+8G", "--typecode=2:8300", "--change-name=2:PulsarRecovery", disk_path])
                 exec_cmd(["sgdisk", "--new=3:0:0", "--typecode=3:8300", "--change-name=3:PulsarOS", disk_path])
                 exec_cmd(["sync"])
                 exec_cmd(["udevadm", "settle"])
@@ -1177,7 +1177,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 GLib.idle_add(self.update_progress, 0.05, "Cleaning and partitioning (MBR for BIOS: Recovery, Btrfs)...")
                 exec_cmd(["wipefs", "-a", "-f", disk_path])
                 exec_cmd(["dd", "if=/dev/zero", f"of={disk_path}", "bs=512", "count=2048"])
-                sfdisk_script = "label: dos\nsize=4096M, type=83\nsize=+, type=83, bootable\n"
+                # Recovery partition sized to hold the regenerated base SquashFS
+                # (~3.5-4GB) plus the Debian recovery environment (374MB) and kernel.
+                sfdisk_script = "label: dos\nsize=8192M, type=83\nsize=+, type=83, bootable\n"
                 if "TEST_MODE" in os.environ:
                     print(f"[TEST_MODE] Simulating sfdisk partitioning script:\n{sfdisk_script}")
                 else:
@@ -1300,77 +1302,236 @@ class RecoveryWindow(Adw.ApplicationWindow):
             # ── Post-install: install packages removed from minimal ISO ───────────
             # In minimal ISO mode, heavy packages (Docker, VM tools, full firmware,
             # multimedia apps) were excluded to keep the ISO under 3GB. Install them
-            # now that the system is on disk and has space.
-            if is_arch and "TEST_MODE" not in os.environ:
-                GLib.idle_add(self.update_progress, 0.80, "Installing extra packages (Docker, firmware, drivers)...")
-                log_msg("Post-install: installing packages removed from minimal ISO...")
+            # now that the system is on disk, then regenerate the recovery base
+            # SquashFS so the deployed image carries the full system (not the
+            # trimmed one shipped on the ISO).
+            extra_packages_installed = False
+            if "TEST_MODE" not in os.environ:
+                # Detect whether this came from a minimal build by checking for a marker
+                minimal_marker = "/mnt/etc/pulsaros-minimal-build"
+                is_minimal = os.path.exists(minimal_marker)
+
+                if is_minimal:
+                    log_msg("Minimal ISO detected — installing excluded packages...")
+                else:
+                    log_msg("Full ISO detected — no extra packages needed.")
+
+                if is_arch:
+                    # ── Arch: install via pacman from the [inled] + Arch repos ──
+                    if is_minimal:
+                        GLib.idle_add(self.update_progress, 0.80, "Installing extra packages (Docker, firmware, drivers, apps)...")
+                        log_msg("Post-install: installing packages removed from minimal ISO via pacman...")
+                        try:
+                            exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
+                            # Detect if this was a minimal build by checking for a marker
+                            has_net = subprocess.run(
+                                ["ping", "-c", "1", "-W", "3", "1.1.1.1"],
+                                capture_output=True
+                            ).returncode == 0
+                            if not has_net:
+                                has_net = subprocess.run(
+                                    ["curl", "-s", "-I", "-m", "3", "https://archlinux.org"],
+                                    capture_output=True
+                                ).returncode == 0
+
+                            if has_net:
+                                # Every package removed from base-arch.list when building
+                                # base-arch-minimal.list, grouped for readability.
+                                extra_packages = [
+                                    # Docker container runtime
+                                    "docker",
+                                    # Full firmware (replaces the split sub-packages with the meta)
+                                    "linux-firmware",
+                                    "sof-firmware",
+                                    "alsa-firmware",
+                                    # VM guest tools (for VM installs)
+                                    "open-vm-tools",
+                                    "virtualbox-guest-utils",
+                                    "xf86-video-qxl",
+                                    # Old (pre-GCN) AMD video driver and misc system utils
+                                    "xf86-video-ati",
+                                    "xfsprogs",
+                                    "p7zip",
+                                    "inxi",
+                                    "wl-clipboard",
+                                    "python-yaml",
+                                    # Multimedia & image tools
+                                    "vlc",
+                                    "totem",
+                                    "imagemagick",
+                                    # Network shares & portal GVFS backends
+                                    "gvfs-smb",
+                                    "gvfs-gphoto2",
+                                    # GNOME apps
+                                    "geary",
+                                    "gnome-music",
+                                    "gnome-contacts",
+                                    "gnome-weather",
+                                    "gnome-clocks",
+                                    "xournalpp",
+                                    "papers",
+                                    "loupe",
+                                    "gnome-disk-utility",
+                                    "gnome-logs",
+                                    "baobab",
+                                    # Editor and WebKit/GTK3 extras pulled by the welcome app
+                                    "vim",
+                                    "webkitgtk-6.0",
+                                    # NVIDIA proprietary drivers
+                                    "nvidia-open",
+                                    "nvidia-settings",
+                                    # Broadcom & DKMS driver support
+                                    "dkms",
+                                    "linux-headers",
+                                    # Global menu / Fildem dependencies
+                                    "appmenu-gtk-module",
+                                    "python-xlib",
+                                    "python-setuptools",
+                                    "python-pip",
+                                ]
+                                try:
+                                    exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
+                                    exec_cmd([
+                                        "chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
+                                        *extra_packages
+                                    ])
+                                    log_msg("Post-install: extra packages installed successfully.")
+                                    extra_packages_installed = True
+                                except Exception as pkg_err:
+                                    log_msg(f"Notice: Post-install package installation had warnings: {pkg_err}")
+                            else:
+                                log_msg("Notice: No internet connection. Extra packages will be available via Driver Manager.")
+
+                            subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"])
+                        except Exception as post_err:
+                            log_msg(f"Notice: Post-install step failed: {post_err}")
+                            subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"], capture_output=True)
+
+                else:
+                    # ── Debian: install via apt from Debian + Inled repositories ──
+                    if is_minimal:
+                        GLib.idle_add(self.update_progress, 0.80, "Installing extra packages (Docker, firmware, drivers, apps)...")
+                        log_msg("Post-install: installing packages removed from minimal ISO via apt...")
+                        try:
+                            exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
+                            has_net = subprocess.run(
+                                ["ping", "-c", "1", "-W", "3", "1.1.1.1"],
+                                capture_output=True
+                            ).returncode == 0
+                            if not has_net:
+                                has_net = subprocess.run(
+                                    ["curl", "-s", "-I", "-m", "3", "https://deb.debian.org"],
+                                    capture_output=True
+                                ).returncode == 0
+
+                            if has_net:
+                                extra_packages = [
+                                    "docker.io",
+                                    "firmware-linux",
+                                    "firmware-sof-signed",
+                                    "firmware-misc-nonfree",
+                                    "open-vm-tools",
+                                    "virtualbox-guest-utils",
+                                    "xserver-xorg-video-qxl",
+                                    "vlc",
+                                    "totem",
+                                    "imagemagick",
+                                    "gvfs-fuse",
+                                    "gvfs-backends",
+                                    "geary",
+                                    "gnome-music",
+                                    "gnome-contacts",
+                                    "gnome-weather",
+                                    "gnome-clocks",
+                                    "nvidia-driver",
+                                    "dkms",
+                                    "linux-headers-amd64",
+                                    "xdotool",
+                                    "python3-xlib",
+                                ]
+                                try:
+                                    exec_cmd(["chroot", "/mnt", "apt-get", "update"])
+                                    exec_cmd([
+                                        "chroot", "/mnt", "apt-get", "install", "-y", "--no-install-recommends",
+                                        *extra_packages
+                                    ])
+                                    log_msg("Post-install: extra packages installed successfully (apt).")
+                                    extra_packages_installed = True
+                                except Exception as pkg_err:
+                                    log_msg(f"Notice: Post-install apt install had warnings: {pkg_err}")
+                            else:
+                                log_msg("Notice: No internet connection. Extra packages will be available via Driver Manager.")
+
+                            subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"])
+                        except Exception as post_err:
+                            log_msg(f"Notice: Post-install step failed: {post_err}")
+                            subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"], capture_output=True)
+
+                # Remove the marker so extra packages are not re-installed on reboot.
                 try:
-                    # Mount network config so pacman can reach the internet
-                    exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
-                    has_net = subprocess.run(
-                        ["ping", "-c", "1", "-W", "3", "1.1.1.1"],
-                        capture_output=True
-                    ).returncode == 0
+                    if os.path.exists(minimal_marker):
+                        os.remove(minimal_marker)
+                except Exception:
+                    pass
 
-                    if has_net:
-                        # Detect if this was a minimal build by checking for a marker
-                        minimal_marker = "/mnt/etc/pulsaros-minimal-build"
-                        is_minimal = os.path.exists(minimal_marker)
-
-                        if is_minimal:
-                            log_msg("Minimal ISO detected — installing excluded packages...")
-                            # Heavy packages that were excluded from the minimal ISO
-                            extra_packages = [
-                                # Docker
-                                "docker",
-                                # Full firmware (replaces the split sub-packages with the meta)
-                                "linux-firmware",
-                                "sof-firmware",
-                                "alsa-firmware",
-                                # VM guest tools (for VM installs)
-                                "open-vm-tools",
-                                "virtualbox-guest-utils",
-                                "xf86-video-qxl",
-                                # Multimedia
-                                "vlc",
-                                "totem",
-                                # GNOME apps
-                                "geary",
-                                "gnome-music",
-                                "gnome-contacts",
-                                "gnome-weather",
-                                "gnome-clocks",
-                                "xournalpp",
-                                "papers",
-                                "loupe",
-                                # NVIDIA proprietary drivers
-                                "nvidia-open",
-                                "nvidia-settings",
-                                # Broadcom driver support
-                                "dkms",
-                                "linux-headers",
-                                # Global menu / Fildem dependencies
-                                "appmenu-gtk-module",
-                                "python-xlib",
-                            ]
-                            try:
-                                exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
-                                exec_cmd([
-                                    "chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
-                                    *extra_packages
-                                ])
-                                log_msg("Post-install: extra packages installed successfully.")
-                                # Remove the marker so this doesn't run again
-                                os.remove(minimal_marker)
-                            except Exception as pkg_err:
-                                log_msg(f"Notice: Post-install package installation had warnings: {pkg_err}")
+            def _regenerate_base_squashfs():
+                """Regenerate pulsaros-base.squashfs from /mnt AFTER the bootloader
+                and mkinitcpio pass, so the deployed recovery image carries the
+                freshly installed packages AND the final initramfs (with nouveau/
+                nvidia/firmware modules). Best-effort: an error never fails the
+                whole installation."""
+                if not extra_packages_installed or "TEST_MODE" in os.environ:
+                    return
+                GLib.idle_add(self.update_progress, 0.99, "Regenerating recovery image with installed packages...")
+                log_msg("Regenerating pulsaros-base.squashfs from /mnt with installed packages...")
+                try:
+                    # Write directly to the final destination on the recovery
+                    # partition (ext4, mounted at /mnt/recovery). /tmp is usually a
+                    # small tmpfs in the live environment and cannot hold a
+                    # multi-GB image. /mnt/recovery is excluded from the source, so
+                    # mksquashfs will not re-read its own output.
+                    os.makedirs("/mnt/recovery/images/x86_64", exist_ok=True)
+                    base_dst = "/mnt/recovery/images/pulsaros-base.squashfs"
+                    if os.path.exists(base_dst):
+                        os.remove(base_dst)
+                    # Mirror mksquashfs exclusion rules used by the ISO build: drop
+                    # virtual filesystems, dynamic dirs, and the recovery/EFI mount
+                    # points so they are not embedded (and to avoid recursion).
+                    sqfs_excludes = [
+                        "/mnt/proc", "/mnt/sys", "/mnt/dev", "/mnt/run",
+                        "/mnt/tmp", "/mnt/var/tmp", "/mnt/var/log",
+                        "/mnt/recovery", "/mnt/boot/efi",
+                        "/mnt/root/.bash_history",
+                    ]
+                    mksqfs = ["mksquashfs", "/mnt", base_dst, "-noappend",
+                              "-comp", "zstd", "-Xcompression-level", "19"]
+                    for ex in sqfs_excludes:
+                        mksqfs += ["-e", ex]
+                    res = subprocess.run(mksqfs, capture_output=True, text=True)
+                    if res.returncode != 0:
+                        log_msg(f"WARNING: mksquashfs regeneration failed:\n{res.stderr[-1500:]}")
+                    elif os.path.isfile(base_dst) and os.path.getsize(base_dst) > 100 * 1024 * 1024:
+                        # Arch-stype layouts expect airootfs.sfs; hardlink to avoid
+                        # duplicating the multi-GB image on the recovery partition.
+                        arch_dst = "/mnt/recovery/images/x86_64/airootfs.sfs"
+                        try:
+                            if os.path.exists(arch_dst):
+                                os.remove(arch_dst)
+                            os.link(base_dst, arch_dst)
+                        except Exception:
+                            shutil.copy2(base_dst, arch_dst)
+                        try:
+                            loose_dst = "/mnt/recovery/pulsaros-base.squashfs"
+                            if os.path.exists(loose_dst):
+                                os.remove(loose_dst)
+                            os.link(base_dst, loose_dst)
+                        except Exception:
+                            shutil.copy2(base_dst, loose_dst)
+                        log_msg(f"Regenerated recovery base image: {os.path.getsize(base_dst)} bytes")
                     else:
-                        log_msg("Notice: No internet connection. Extra packages will be available via Driver Manager.")
-
-                    subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"])
-                except Exception as post_err:
-                    log_msg(f"Notice: Post-install step completed: {post_err}")
-                    subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"], capture_output=True)
+                        log_msg("WARNING: regenerated SquashFS too small or missing — keeping the ISO-provided base image.")
+                except Exception as sq_err:
+                    log_msg(f"WARNING: SquashFS regeneration step failed (non-fatal): {sq_err}")
 
             # Populate Recovery Partition with dedicated Debian Recovery image, clean base image, and assistant.
             try:
@@ -1429,16 +1590,25 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     "/run/live/medium/images/pulsaros-base.squashfs",
                     "/recovery/images/pulsaros-base.squashfs",
                 ]
+                base_dst = "/mnt/recovery/images/pulsaros-base.squashfs"
+                # If we already regenerated the base image with post-install
+                # packages above, keep it — do not overwrite it with the trimmed
+                # ISO-provided copy. Only backfill the archiso-style .sfs link.
+                regenerated_existing = os.path.isfile(base_dst) and os.path.getsize(base_dst) > 500 * 1024 * 1024
                 found_base_squash = next((p for p in base_squash_sources if os.path.isfile(p) and os.path.getsize(p) > 500 * 1024 * 1024), None)
-                if found_base_squash and "TEST_MODE" not in os.environ:
-                    base_dst = "/mnt/recovery/images/pulsaros-base.squashfs"
-                    shutil.copy2(found_base_squash, base_dst)
+                if (found_base_squash or regenerated_existing) and "TEST_MODE" not in os.environ:
+                    if not regenerated_existing:
+                        shutil.copy2(found_base_squash, base_dst)
+                        log_msg(f"Base system restoration image deployed from {found_base_squash} -> {base_dst}")
+                    else:
+                        log_msg(f"Base system restoration image already regenerated at {base_dst} — keeping it.")
+                    # Ensure the archiso-style path also points at the base image.
                     try:
                         arch_dst = "/mnt/recovery/images/x86_64/airootfs.sfs"
-                        os.link(base_dst, arch_dst)
+                        if os.path.isfile(base_dst) and not os.path.isfile(arch_dst):
+                            os.link(base_dst, arch_dst)
                     except Exception:
                         pass
-                    log_msg(f"Base system restoration image deployed from {found_base_squash} -> {base_dst}")
             except Exception as rec_copy_err:
                 print(f"Notice: Recovery squashfs copy: {rec_copy_err}")
 
@@ -2103,6 +2273,11 @@ UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1
                     print(f"Notice: Driver configuration step completed: {drv_err}")
                 finally:
                     subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"])
+
+            # ── Regenerate recovery base image AFTER bootloader/mkinitcpio ──
+            # so the fixed-image we store for factory-restore includes the extra
+            # packages just installed AND the final initramfs (nvidia/firmware).
+            _regenerate_base_squashfs()
 
             # ──────────────────────────────────────────────────────────
             
