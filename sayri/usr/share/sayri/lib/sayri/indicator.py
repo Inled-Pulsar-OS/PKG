@@ -95,15 +95,20 @@ class SayriIndicator:
         self.cfg = config.config
         self._sayri_proc: subprocess.Popen | None = None
         self.icon_theme_path = _ensure_local_icon()
-
-        self._init_dbus_sni()
-
-    def _init_dbus_sni(self) -> None:
         self.node_info = Gio.DBusNodeInfo.new_for_xml(SNI_XML)
-        self.bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
 
-        service_name = f"org.kde.StatusNotifierItem-{os.getpid()}-1"
-        self.bus.register_object(
+        self.bus_name = f"org.kde.StatusNotifierItem-{os.getpid()}-1"
+        self.owner_id = Gio.bus_own_name(
+            Gio.BusType.SESSION,
+            self.bus_name,
+            Gio.BusNameOwnerFlags.NONE,
+            self._on_bus_acquired,
+            self._on_name_acquired,
+            self._on_name_lost,
+        )
+
+    def _on_bus_acquired(self, conn: Gio.DBusConnection, name: str) -> None:
+        conn.register_object(
             "/StatusNotifierItem",
             self.node_info.interfaces[0],
             self._handle_method_call,
@@ -111,13 +116,14 @@ class SayriIndicator:
             None,
         )
 
+    def _on_name_acquired(self, conn: Gio.DBusConnection, name: str) -> None:
         try:
-            self.bus.call_sync(
+            conn.call_sync(
                 "org.kde.StatusNotifierWatcher",
                 "/StatusNotifierWatcher",
                 "org.kde.StatusNotifierWatcher",
                 "RegisterStatusNotifierItem",
-                GLib.Variant("(s)", ("/StatusNotifierItem",)),
+                GLib.Variant("(s)", (self.bus_name,)),
                 None,
                 Gio.DBusCallFlags.NONE,
                 1000,
@@ -126,6 +132,9 @@ class SayriIndicator:
             print("[Sayri] ✓ Native StatusNotifierItem registered (Direct Click Mode)")
         except Exception as exc:
             print(f"[Sayri] StatusNotifierWatcher register warning: {exc}")
+
+    def _on_name_lost(self, conn: Gio.DBusConnection, name: str) -> None:
+        pass
 
     def _handle_method_call(self, conn, sender, path, iface, method, params, invocation) -> None:
         if method in ("Activate", "SecondaryActivate", "ContextMenu"):
