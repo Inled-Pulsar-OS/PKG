@@ -220,6 +220,22 @@ textview.live-log-text text {
     font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
     font-size: 11px;
 }
+.demo-banner {
+    background-color: #ff9f0a;
+    color: #000000;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 4px;
+}
+.live-log-view-flat {
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+}
 """
 
 def get_system_disks():
@@ -301,7 +317,10 @@ class DiskCard(Gtk.Box):
 class RecoveryWindow(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app)
-        self.set_title("Pulsar OS Recovery")
+        title = "Pulsar OS Recovery"
+        if "DEMO_MODE" in os.environ:
+            title += " [DEMO MODE]"
+        self.set_title(title)
         self.set_default_size(720, 560)
         self.set_resizable(True)
         
@@ -317,6 +336,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
         center_container.set_hexpand(True)
         center_container.set_vexpand(True)
         
+        self.center_container = center_container
+
         self.card_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.card_box.add_css_class("apple-box")
         self.card_box.set_size_request(480, 380)
@@ -475,6 +496,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
         screen_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         screen_box.set_valign(Gtk.Align.CENTER)
         
+        # DEMO MODE banner (visible on the first screen)
+        if "DEMO_MODE" in os.environ:
+            demo_banner = Gtk.Label(label="⚠ DEMO MODE — No changes will be made to your system")
+            demo_banner.add_css_class("demo-banner")
+            demo_banner.set_halign(Gtk.Align.CENTER)
+            screen_box.append(demo_banner)
+        
         self.listbox = Gtk.ListBox()
         self.listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self.listbox.connect("row-selected", self.on_utility_row_selected)
@@ -622,6 +650,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
         box.set_valign(Gtk.Align.CENTER)
         box.set_halign(Gtk.Align.CENTER)
         
+        if "DEMO_MODE" in os.environ:
+            demo_banner = Gtk.Label(label="⚠ DEMO MODE — No changes will be made to your system")
+            demo_banner.add_css_class("demo-banner")
+            box.append(demo_banner)
+        
         # Large Pulsar OS Logo (160px size)
         image = self.get_logo_image(160, is_installer=False)
         box.append(image)
@@ -660,6 +693,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.disk_select_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.disk_select_box.set_valign(Gtk.Align.CENTER)
         self.disk_select_box.set_halign(Gtk.Align.CENTER)
+        
+        if "DEMO_MODE" in os.environ:
+            demo_banner = Gtk.Label(label="⚠ DEMO MODE — No changes will be made to your system")
+            demo_banner.add_css_class("demo-banner")
+            self.disk_select_box.append(demo_banner)
         
         image = self.get_logo_image(100, is_installer=True)
         self.disk_select_box.append(image)
@@ -732,9 +770,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self._show_broadcom_dialog()
 
     def build_install_progress_screen(self):
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        box.set_valign(Gtk.Align.CENTER)
-        box.set_halign(Gtk.Align.CENTER)
+        self.progress_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.progress_box.set_valign(Gtk.Align.CENTER)
+        self.progress_box.set_halign(Gtk.Align.CENTER)
+        box = self.progress_box
         
         self.image = self.get_logo_image(90, is_installer=True)
         box.append(self.image)
@@ -775,14 +814,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.log_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.log_panel.set_vexpand(True)
         self.log_panel.set_hexpand(True)
-        self.log_panel.set_size_request(-1, 180)
         self.log_panel.set_visible(False)
 
         log_scrolled = Gtk.ScrolledWindow()
         log_scrolled.set_hexpand(True)
         log_scrolled.set_vexpand(True)
         log_scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        log_scrolled.add_css_class("live-log-view")
+        log_scrolled.add_css_class("live-log-view-flat")
 
         self.log_text_view = Gtk.TextView()
         self.log_text_view.set_editable(False)
@@ -814,7 +852,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         
         box.append(bottom_row)
         
-        self.stack.add_named(box, "install_progress")
+        self.stack.add_named(self.progress_box, "install_progress")
 
     def build_install_error_screen(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -1114,19 +1152,38 @@ class RecoveryWindow(Adw.ApplicationWindow):
         visible = self.log_panel.get_visible()
         self.log_panel.set_visible(not visible)
         self.btn_log.set_tooltip_text("Hide Installer Log" if not visible else "Show Installer Log")
-        # When log is visible, hide everything in the card except the
-        # progress bar, the log panel itself, and the bottom controls.
-        # This keeps the card at a constant size instead of growing.
         show_log = not visible
+        # Hide everything except progress bar + terminal + bottom controls
         self.image.set_visible(not show_log)
         self.title_label.set_visible(not show_log)
         self.progress_subtitle.set_visible(not show_log)
         self.target_disk_box.set_visible(not show_log)
         self.progress_label.set_visible(not show_log)
         if show_log:
-            self.card_box.set_size_request(480, 420)
+            # Progress bar: thin strip at the top, full width of the card
+            self.progress_bar.set_size_request(-1, 4)
+            self.progress_bar.set_margin_top(0)
+            self.progress_bar.set_margin_bottom(0)
+            self.progress_bar.set_hexpand(True)
+            # Inner box: fill the card area
+            self.progress_box.set_valign(Gtk.Align.FILL)
+            self.progress_box.set_halign(Gtk.Align.FILL)
+            self.progress_box.set_hexpand(True)
+            self.progress_box.set_vexpand(True)
+            # Log panel: take all remaining space inside the card
+            self.log_panel.set_vexpand(True)
+            self.log_panel.set_hexpand(True)
         else:
-            self.card_box.set_size_request(480, 380)
+            # Restore inner progress screen box
+            self.progress_box.set_valign(Gtk.Align.CENTER)
+            self.progress_box.set_halign(Gtk.Align.CENTER)
+            self.progress_box.set_hexpand(False)
+            self.progress_box.set_vexpand(False)
+            # Restore progress bar
+            self.progress_bar.set_size_request(280, -1)
+            self.progress_bar.set_margin_top(12)
+            self.progress_bar.set_margin_bottom(12)
+            self.progress_bar.set_hexpand(False)
 
     def append_log(self, msg):
         """Write a line to the inline log panel and auto-scroll."""
@@ -1642,19 +1699,18 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 nvidia/firmware modules). Best-effort: an error never fails the
                 whole installation."""
                 if not extra_packages_installed or "TEST_MODE" in os.environ:
+                    log_msg("Skipping squashfs regeneration: no extra packages installed.")
                     return
                 GLib.idle_add(self.update_progress, 0.92, "Preparing recovery image...")
                 log_msg("Regenerating pulsaros-base.squashfs from /mnt with installed packages...")
                 try:
-                    # Write directly to the final destination on the recovery
-                    # partition (ext4, mounted at /mnt/recovery). /tmp is usually a
-                    # small tmpfs in the live environment and cannot hold a
-                    # multi-GB image. /mnt/recovery is excluded from the source, so
-                    # mksquashfs will not re-read its own output.
+                    # Write to a TEMPORARY file first, then atomically swap.
+                    # This avoids a gap where the old file is deleted but the new
+                    # one hasn't been written yet (which would leave the recovery
+                    # system with no base image at all).
                     os.makedirs("/mnt/recovery/images/x86_64", exist_ok=True)
                     base_dst = "/mnt/recovery/images/pulsaros-base.squashfs"
-                    if os.path.exists(base_dst):
-                        os.remove(base_dst)
+                    tmp_dst = "/mnt/recovery/images/pulsaros-base.squashfs.tmp"
                     # Mirror mksquashfs exclusion rules used by the ISO build: drop
                     # virtual filesystems, dynamic dirs, and the recovery/EFI mount
                     # points so they are not embedded (and to avoid recursion).
@@ -1702,8 +1758,15 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             _sqbuf += ch
                     sq_proc.wait()
                     if sq_proc.returncode != 0:
-                        log_msg(f"WARNING: mksquashfs regeneration failed (code {sq_proc.returncode})")
-                    elif os.path.isfile(base_dst) and os.path.getsize(base_dst) > 100 * 1024 * 1024:
+                        log_msg(f"WARNING: mksquashfs regeneration failed (code {sq_proc.returncode}). Keeping old base image.")
+                        if os.path.exists(tmp_dst):
+                            os.remove(tmp_dst)
+                    elif os.path.isfile(tmp_dst) and os.path.getsize(tmp_dst) > 100 * 1024 * 1024:
+                        # Atomic swap: remove old, rename temp to final
+                        if os.path.exists(base_dst):
+                            os.remove(base_dst)
+                        os.rename(tmp_dst, base_dst)
+                        log_msg(f"Regenerated recovery base image: {os.path.getsize(base_dst)} bytes")
                         # Arch-stype layouts expect airootfs.sfs; hardlink to avoid
                         # duplicating the multi-GB image on the recovery partition.
                         arch_dst = "/mnt/recovery/images/x86_64/airootfs.sfs"
@@ -1720,11 +1783,18 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             os.link(base_dst, loose_dst)
                         except Exception:
                             shutil.copy2(base_dst, loose_dst)
-                        log_msg(f"Regenerated recovery base image: {os.path.getsize(base_dst)} bytes")
                     else:
                         log_msg("WARNING: regenerated SquashFS too small or missing — keeping the ISO-provided base image.")
+                        if os.path.exists(tmp_dst):
+                            os.remove(tmp_dst)
                 except Exception as sq_err:
                     log_msg(f"WARNING: SquashFS regeneration step failed (non-fatal): {sq_err}")
+                    # Clean up temp file if it exists
+                    try:
+                        if os.path.exists(tmp_dst):
+                            os.remove(tmp_dst)
+                    except Exception:
+                        pass
 
             # Populate Recovery Partition with dedicated Debian Recovery image, clean base image, and assistant.
             try:
