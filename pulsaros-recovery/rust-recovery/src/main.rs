@@ -645,6 +645,43 @@ fn build_ui(app: &Application) {
     target_desc.set_justify(gtk4::Justification::Center);
     target_box.append(&target_desc);
 
+    // ── Network check box (shown only for Internet Recovery) ──
+    let network_box = GtkBox::new(Orientation::Vertical, 8);
+    network_box.set_halign(Align::Center);
+    network_box.set_visible(false); // hidden until internet recovery is selected
+
+    let net_icon = create_icon_widget("", "globe", 48);
+    network_box.append(&net_icon);
+
+    let net_status_lbl = Label::new(Some("Internet connection required for recovery"));
+    net_status_lbl.add_css_class("welcome-subtitle");
+    network_box.append(&net_status_lbl);
+
+    let btn_net_config = Button::with_label("Open Network Settings");
+    btn_net_config.add_css_class("suggested-action");
+    btn_net_config.connect_clicked(|_| {
+        let _ = Command::new("nm-connection-editor").spawn();
+    });
+    network_box.append(&btn_net_config);
+
+    // Refresh network status label periodically
+    let net_status_lbl_c = net_status_lbl.clone();
+    glib::timeout_add_local(std::time::Duration::from_secs(3), move || {
+        let online = Command::new("nmcli")
+            .args(["-t", "-f", "STATE", "general"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "connected")
+            .unwrap_or(false);
+        if online {
+            net_status_lbl_c.set_text("✅ Network connected — ready for Internet Recovery");
+        } else {
+            net_status_lbl_c.set_text("⚠️ No network — connect to WiFi or Ethernet first");
+        }
+        glib::ControlFlow::Continue
+    });
+
+    target_box.append(&network_box);
+
     let targets_flow = GtkBox::new(Orientation::Horizontal, 10);
     targets_flow.set_halign(Align::Center);
     target_box.append(&targets_flow);
@@ -812,6 +849,7 @@ fn build_ui(app: &Application) {
         @weak stack,
         @weak targets_flow,
         @weak btn_target_restore,
+        @weak network_box,
         @strong selected_action,
         @strong selected_target,
         @strong recovery_mode
@@ -833,13 +871,16 @@ fn build_ui(app: &Application) {
                     .spawn();
             }
             "reinstall" | "internet" => {
-                if action == "internet" {
+                let is_internet = action == "internet";
+                if is_internet {
                     *recovery_mode.borrow_mut() = RecoveryMode::Internet(
                         "https://github.com/Inled-Pulsar-OS/ISO/releases/download/latest/pulsaros-stable-arch-refind.squashfs".to_string()
                     );
                 } else {
                     *recovery_mode.borrow_mut() = RecoveryMode::Local;
                 }
+                // Show network panel only for internet recovery
+                network_box.set_visible(is_internet);
 
                 // Refresh targets
                 while let Some(child) = targets_flow.first_child() {
