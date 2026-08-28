@@ -49,6 +49,16 @@ def send_sock_command(cmd: str) -> bool:
         return False
 
 
+def _get_icon_dir() -> str:
+    local = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "icons", "hicolor", "256x256", "apps"))
+    if os.path.isdir(local):
+        return local
+    sys_dir = "/usr/share/icons/hicolor/256x256/apps"
+    if os.path.isdir(sys_dir):
+        return sys_dir
+    return ""
+
+
 class SayriIndicator:
     def __init__(self) -> None:
         self.cfg = config.config
@@ -61,78 +71,36 @@ class SayriIndicator:
     def _create_menu(self) -> None:
         self.menu = Gtk.Menu()
 
-        # Title / Status
-        self.title_item = Gtk.MenuItem(label="Sayri Assistant")
-        self.title_item.set_sensitive(False)
-        self.menu.append(self.title_item)
-
-        self.menu.append(Gtk.SeparatorMenuItem())
-
-        # Toggle Sayri
-        self.toggle_item = Gtk.MenuItem(label="Toggle Sayri (Show / Hide)")
+        # Direct Toggle Item
+        self.toggle_item = Gtk.MenuItem(label="Open Sayri")
         self.toggle_item.connect("activate", self._on_toggle_sayri)
         self.menu.append(self.toggle_item)
-
-        self.listen_item = Gtk.MenuItem(label="🎙️ Ask Sayri (Listen)")
-        self.listen_item.connect("activate", self._on_listen)
-        self.menu.append(self.listen_item)
-
-        self.menu.append(Gtk.SeparatorMenuItem())
-
-        # Mode Submenu
-        mode_menu = Gtk.Menu()
-        mode_item = Gtk.MenuItem(label="Listening Mode")
-        mode_item.set_submenu(mode_menu)
-
-        curr_mode = self.cfg.get_string("stt", "mode")
-
-        self.radio_wake = Gtk.RadioMenuItem(label="Wake Word (Hey Sayri)")
-        self.radio_wake.set_active(curr_mode == "wakeword")
-        self.radio_wake.connect("toggled", lambda w: w.get_active() and self._set_mode("wakeword"))
-        mode_menu.append(self.radio_wake)
-
-        self.radio_always = Gtk.RadioMenuItem.new_from_widget(self.radio_wake)
-        self.radio_always.set_label("Always Listening")
-        self.radio_always.set_active(curr_mode == "always")
-        self.radio_always.connect("toggled", lambda w: w.get_active() and self._set_mode("always"))
-        mode_menu.append(self.radio_always)
-
-        self.radio_manual = Gtk.RadioMenuItem.new_from_widget(self.radio_wake)
-        self.radio_manual.set_label("Manual (Click to talk)")
-        self.radio_manual.set_active(curr_mode == "manual")
-        self.radio_manual.connect("toggled", lambda w: w.get_active() and self._set_mode("manual"))
-        mode_menu.append(self.radio_manual)
-
-        self.menu.append(mode_item)
-
-        # Settings
-        self.settings_item = Gtk.MenuItem(label="⚙ Settings…")
-        self.settings_item.connect("activate", self._on_open_settings)
-        self.menu.append(self.settings_item)
-
-        self.menu.append(Gtk.SeparatorMenuItem())
-
-        # Quit
-        self.quit_item = Gtk.MenuItem(label="Quit Sayri")
-        self.quit_item.connect("activate", self._on_quit)
-        self.menu.append(self.quit_item)
 
         self.menu.show_all()
 
     def _create_indicator(self) -> None:
+        icon_dir = _get_icon_dir()
         if AppIndicator is not None:
             self.indicator = AppIndicator.Indicator.new(
                 "sayri-indicator",
-                "microphone-sensitivity-high-symbolic",
+                "sayri-tray",
                 AppIndicator.IndicatorCategory.APPLICATION_STATUS,
             )
+            if icon_dir:
+                self.indicator.set_icon_theme_path(icon_dir)
+            self.indicator.set_icon_full("sayri-tray", "Sayri")
             self.indicator.set_status(AppIndicator.IndicatorStatus.ACTIVE)
             self.indicator.set_title("Sayri")
             self.indicator.set_menu(self.menu)
+            self.indicator.set_secondary_activate_target(self.toggle_item)
         else:
-            self.status_icon = Gtk.StatusIcon.new_from_icon_name("microphone-sensitivity-high-symbolic")
+            self.status_icon = Gtk.StatusIcon.new()
+            icon_file = os.path.join(icon_dir, "sayri-tray.png") if icon_dir else ""
+            if os.path.isfile(icon_file):
+                self.status_icon.set_from_file(icon_file)
+            else:
+                self.status_icon.set_from_icon_name("sayri-tray")
             self.status_icon.set_tooltip_text("Sayri Voice Assistant")
-            self.status_icon.connect("popup-menu", lambda _i, btn, time: self.menu.popup(None, None, None, None, btn, time))
             self.status_icon.connect("activate", lambda _i: self._on_toggle_sayri(None))
 
     def _set_mode(self, mode: str) -> None:
