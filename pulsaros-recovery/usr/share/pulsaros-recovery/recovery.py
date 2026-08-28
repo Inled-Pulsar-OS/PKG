@@ -294,85 +294,8 @@ class DiskCard(Gtk.Box):
         self.add_controller(gesture)
         
     def on_clicked(self, gesture, n_press, x, y):
-        self.select_callback(self)
+        self.select_callback(self)# InstallerLogWindow removed — logs are now inline in the progress card.
 
-
-class InstallerLogWindow(Adw.Window):
-    def __init__(self, parent_window):
-        super().__init__()
-        self.parent_win = parent_window
-        self.set_transient_for(parent_window)
-        self.set_title("Installer Log")
-        self.set_default_size(680, 420)
-        self.set_modal(False)
-        self.add_css_class("log-window")
-        
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        
-        header = Adw.HeaderBar()
-        header.set_show_end_title_buttons(True)
-        title_widget = Adw.WindowTitle(title="Pulsar OS Installer Log", subtitle="Live installation output")
-        header.set_title_widget(title_widget)
-        main_box.append(header)
-        
-        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        content_box.set_margin_top(10)
-        content_box.set_margin_bottom(12)
-        content_box.set_margin_start(14)
-        content_box.set_margin_end(14)
-        content_box.set_hexpand(True)
-        content_box.set_vexpand(True)
-        
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.set_hexpand(True)
-        scrolled.set_vexpand(True)
-        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scrolled.add_css_class("live-log-view")
-        
-        self.text_view = Gtk.TextView()
-        self.text_view.set_editable(False)
-        self.text_view.set_monospace(True)
-        self.text_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-        self.text_view.add_css_class("live-log-text")
-        
-        self.buffer = self.text_view.get_buffer()
-        scrolled.set_child(self.text_view)
-        content_box.append(scrolled)
-        
-        main_box.append(content_box)
-        self.set_content(main_box)
-        
-        self.last_pos = 0
-        self.poll_log()
-        self.timer_id = GLib.timeout_add(300, self.poll_log)
-        self.connect("close-request", self.on_close)
-        
-    def poll_log(self):
-        log_path = "/tmp/pulsaros-install.log"
-        if os.path.exists(log_path):
-            try:
-                with open(log_path, "r", encoding="utf-8", errors="replace") as f:
-                    f.seek(self.last_pos)
-                    new_text = f.read()
-                    if new_text:
-                        self.last_pos = f.tell()
-                        iter_end = self.buffer.get_end_iter()
-                        self.buffer.insert(iter_end, new_text)
-                        
-                        # Auto-scroll to end
-                        mark = self.buffer.create_mark(None, self.buffer.get_end_iter(), False)
-                        self.text_view.scroll_to_mark(mark, 0.0, True, 0.0, 1.0)
-            except Exception:
-                pass
-        return True
-
-    def on_close(self, *args):
-        if self.timer_id:
-            GLib.source_remove(self.timer_id)
-            self.timer_id = None
-        if hasattr(self.parent_win, 'log_window'):
-            self.parent_win.log_window = None
-        return False
 
 
 class RecoveryWindow(Adw.ApplicationWindow):
@@ -848,6 +771,29 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.progress_label.add_css_class("progress-text")
         box.append(self.progress_label)
         
+        # ── Inline log panel (hidden by default, toggled by terminal button) ──
+        self.log_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.log_panel.set_vexpand(True)
+        self.log_panel.set_hexpand(True)
+        self.log_panel.set_size_request(-1, 180)
+        self.log_panel.set_visible(False)
+
+        log_scrolled = Gtk.ScrolledWindow()
+        log_scrolled.set_hexpand(True)
+        log_scrolled.set_vexpand(True)
+        log_scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        log_scrolled.add_css_class("live-log-view")
+
+        self.log_text_view = Gtk.TextView()
+        self.log_text_view.set_editable(False)
+        self.log_text_view.set_monospace(True)
+        self.log_text_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self.log_text_view.add_css_class("live-log-text")
+        self.log_buffer = self.log_text_view.get_buffer()
+        log_scrolled.set_child(self.log_text_view)
+        self.log_panel.append(log_scrolled)
+        box.append(self.log_panel)
+
         # Bottom controls row (Cancel button centered, flat terminal log button on bottom right)
         bottom_row = Gtk.CenterBox()
         bottom_row.set_margin_top(8)
@@ -1051,9 +997,21 @@ class RecoveryWindow(Adw.ApplicationWindow):
         ).start()
 
     def on_show_live_log_clicked(self, btn):
-        if not hasattr(self, 'log_window') or self.log_window is None:
-            self.log_window = InstallerLogWindow(self)
-        self.log_window.present()
+        visible = self.log_panel.get_visible()
+        self.log_panel.set_visible(not visible)
+        self.btn_log.set_tooltip_text("Hide Installer Log" if not visible else "Show Installer Log")
+
+    def append_log(self, msg):
+        """Write a line to the inline log panel and auto-scroll."""
+        if not hasattr(self, 'log_buffer'):
+            return
+        try:
+            iter_end = self.log_buffer.get_end_iter()
+            self.log_buffer.insert(iter_end, msg + "\n")
+            mark = self.log_buffer.create_mark(None, self.log_buffer.get_end_iter(), False)
+            self.log_text_view.scroll_to_mark(mark, 0.0, True, 0.0, 1.0)
+        except Exception:
+            pass
 
     def installation_backend(self, disk_path):
         import datetime
@@ -1068,9 +1026,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
             def log_msg(msg):
                 ts = datetime.datetime.now().strftime("%H:%M:%S")
+                line = f"[{ts}] {msg}"
                 with open(log_file, "a") as lf:
-                    lf.write(f"[{ts}] {msg}\n")
+                    lf.write(line + "\n")
                 print(msg)
+                GLib.idle_add(self.append_log, line)
 
             def exec_cmd(cmd, shell=False):
                 cmd_str = ' '.join(cmd) if isinstance(cmd, list) else cmd
@@ -1408,13 +1368,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             # Initialize pacman keyring inside the chroot so
                             # signature verification works (avoids GPGME errors),
                             # then import the Inled repository GPG key.
+                            GLib.idle_add(self.update_progress, 0.81, "Setting up package manager...")
+                            log_msg("Initializing pacman keyring and Inled repo key...")
                             exec_cmd(["chroot", "/mnt", "bash", "-c",
                                        "mkdir -p /etc/pacman.d/gnupg && "
                                        "pacman-key --init && "
                                        "pacman-key --populate archlinux && "
                                        "curl -s https://apt.inled.es/archive.key | pacman-key -a - && "
                                        "pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F"])
+                            GLib.idle_add(self.update_progress, 0.82, "Syncing package databases...")
                             exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
+                            GLib.idle_add(self.update_progress, 0.83, f"Installing {len(extra_packages)} extra packages...")
                             exec_cmd([
                                 "chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
                                 *extra_packages
@@ -1484,7 +1448,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 whole installation."""
                 if not extra_packages_installed or "TEST_MODE" in os.environ:
                     return
-                GLib.idle_add(self.update_progress, 0.99, "Regenerating recovery image with installed packages...")
+                GLib.idle_add(self.update_progress, 0.92, "Preparing recovery image...")
                 log_msg("Regenerating pulsaros-base.squashfs from /mnt with installed packages...")
                 try:
                     # Write directly to the final destination on the recovery
@@ -1505,10 +1469,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         "/mnt/recovery", "/mnt/boot/efi",
                         "/mnt/root/.bash_history",
                     ]
+                    GLib.idle_add(self.update_progress, 0.93, "Compressing system image (this may take several minutes)...")
                     mksqfs = ["mksquashfs", "/mnt", base_dst, "-noappend",
-                              "-comp", "zstd", "-Xcompression-level", "19"]
+                              "-comp", "zstd", "-Xcompression-level", "19",
+                              "-processors", str(os.cpu_count() or 1)]
                     for ex in sqfs_excludes:
                         mksqfs += ["-e", ex]
+                    log_msg(f"Running: {' '.join(mksqfs)}")
                     res = subprocess.run(mksqfs, capture_output=True, text=True)
                     if res.returncode != 0:
                         log_msg(f"WARNING: mksquashfs regeneration failed:\n{res.stderr[-1500:]}")
