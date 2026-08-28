@@ -1250,7 +1250,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     time.sleep(0.08)
             else:
                 rsync_cmd = [
-                    "rsync", "-aHAXx",
+                    "rsync", "-aAXx",
                     "--info=progress2",
                     "--exclude=/dev/*",
                     "--exclude=/proc/*",
@@ -1265,6 +1265,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     "--exclude=/home/*/.local/share/gvfs-metadata/*",
                     "--exclude=/home/*/.cache/*",
                     "--exclude=/root/.cache/*",
+                    "--exclude=/recovery/*",
+                    "--exclude=/live/*",
                     "/", "/mnt"
                 ]
                 proc = subprocess.Popen(rsync_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
@@ -1295,6 +1297,81 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     err_output = proc.stderr.read()
                     raise Exception(f"System replication failed (code {proc.returncode})\n{err_output}")
                 
+            # ── Post-install: install packages removed from minimal ISO ───────────
+            # In minimal ISO mode, heavy packages (Docker, VM tools, full firmware,
+            # multimedia apps) were excluded to keep the ISO under 3GB. Install them
+            # now that the system is on disk and has space.
+            if is_arch and "TEST_MODE" not in os.environ:
+                GLib.idle_add(self.update_progress, 0.80, "Installing extra packages (Docker, firmware, drivers)...")
+                log_msg("Post-install: installing packages removed from minimal ISO...")
+                try:
+                    # Mount network config so pacman can reach the internet
+                    exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
+                    has_net = subprocess.run(
+                        ["ping", "-c", "1", "-W", "3", "1.1.1.1"],
+                        capture_output=True
+                    ).returncode == 0
+
+                    if has_net:
+                        # Detect if this was a minimal build by checking for a marker
+                        minimal_marker = "/mnt/etc/pulsaros-minimal-build"
+                        is_minimal = os.path.exists(minimal_marker)
+
+                        if is_minimal:
+                            log_msg("Minimal ISO detected — installing excluded packages...")
+                            # Heavy packages that were excluded from the minimal ISO
+                            extra_packages = [
+                                # Docker
+                                "docker",
+                                # Full firmware (replaces the split sub-packages with the meta)
+                                "linux-firmware",
+                                "sof-firmware",
+                                "alsa-firmware",
+                                # VM guest tools (for VM installs)
+                                "open-vm-tools",
+                                "virtualbox-guest-utils",
+                                "xf86-video-qxl",
+                                # Multimedia
+                                "vlc",
+                                "totem",
+                                # GNOME apps
+                                "geary",
+                                "gnome-music",
+                                "gnome-contacts",
+                                "gnome-weather",
+                                "gnome-clocks",
+                                "xournalpp",
+                                "papers",
+                                "loupe",
+                                # NVIDIA proprietary drivers
+                                "nvidia-open",
+                                "nvidia-settings",
+                                # Broadcom driver support
+                                "dkms",
+                                "linux-headers",
+                                # Global menu / Fildem dependencies
+                                "appmenu-gtk-module",
+                                "python-xlib",
+                            ]
+                            try:
+                                exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
+                                exec_cmd([
+                                    "chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
+                                    *extra_packages
+                                ])
+                                log_msg("Post-install: extra packages installed successfully.")
+                                # Remove the marker so this doesn't run again
+                                os.remove(minimal_marker)
+                            except Exception as pkg_err:
+                                log_msg(f"Notice: Post-install package installation had warnings: {pkg_err}")
+                    else:
+                        log_msg("Notice: No internet connection. Extra packages will be available via Driver Manager.")
+
+                    subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"])
+                except Exception as post_err:
+                    log_msg(f"Notice: Post-install step completed: {post_err}")
+                    subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"], capture_output=True)
+
             # Populate Recovery Partition with dedicated Debian Recovery image, clean base image, and assistant.
             try:
                 os.makedirs("/mnt/recovery/images/x86_64", exist_ok=True)

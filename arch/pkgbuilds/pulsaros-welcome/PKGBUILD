@@ -6,7 +6,7 @@ pkgdesc="Welcome and onboarding app for Pulsar OS (macOS-like setup assistant)"
 arch=(any)
 url="https://inled.es"
 license=(custom)
-depends=(python-gobject python-dbus gtk3 webkitgtk-6.0 xorg-xrandr gtk4 libadwaita driverman)
+depends=(python-gobject python-cairo python-dbus gtk3 webkitgtk-6.0 xorg-xrandr gtk4 libadwaita driverman)
 options=(!strip)
 install=pulsaros-welcome.install
 
