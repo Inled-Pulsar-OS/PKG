@@ -1698,9 +1698,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 freshly installed packages AND the final initramfs (with nouveau/
                 nvidia/firmware modules). Best-effort: an error never fails the
                 whole installation."""
-                if not extra_packages_installed or "TEST_MODE" in os.environ:
-                    log_msg("Skipping squashfs regeneration: no extra packages installed.")
+                if "TEST_MODE" in os.environ:
                     return
+                if not extra_packages_installed:
+                    log_msg("No extra packages were installed — regenerating base image from the standard rootfs.")
                 GLib.idle_add(self.update_progress, 0.92, "Preparing recovery image...")
                 log_msg("Regenerating pulsaros-base.squashfs from /mnt with installed packages...")
                 try:
