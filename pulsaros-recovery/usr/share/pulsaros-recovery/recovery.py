@@ -1893,109 +1893,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 except Exception:
                     pass
 
-            def _regenerate_base_squashfs():
-                """Regenerate pulsaros-base.squashfs from /mnt AFTER the bootloader
-                and mkinitcpio pass, so the deployed recovery image carries the
-                freshly installed packages AND the final initramfs (with nouveau/
-                nvidia/firmware modules). Best-effort: an error never fails the
-                whole installation."""
-                if not extra_packages_installed or "TEST_MODE" in os.environ:
-                    return
-                GLib.idle_add(self.update_progress, 0.92, "Preparing recovery image...")
-                log_msg("Regenerating pulsaros-base.squashfs from /mnt with installed packages...")
-                try:
-                    # Write to a TEMPORARY file first, then atomically swap.
-                    # This avoids a gap where the old file is deleted but the new
-                    # one hasn't been written yet (which would leave the recovery
-                    # system with no base image at all).
-                    os.makedirs("/mnt/recovery/images/x86_64", exist_ok=True)
-                    base_dst = "/mnt/recovery/images/pulsaros-base.squashfs"
-                    tmp_dst = "/mnt/recovery/images/pulsaros-base.squashfs.tmp"
-                    # Mirror mksquashfs exclusion rules used by the ISO build: drop
-                    # virtual filesystems, dynamic dirs, and the recovery/EFI mount
-                    # points so they are not embedded (and to avoid recursion).
-                    sqfs_excludes = [
-                        "/mnt/proc", "/mnt/sys", "/mnt/dev", "/mnt/run",
-                        "/mnt/tmp", "/mnt/var/tmp", "/mnt/var/log",
-                        "/mnt/recovery", "/mnt/boot/efi",
-                        "/mnt/root/.bash_history",
-                    ]
-                    GLib.idle_add(self.update_progress, 0.93, "Compressing system image (this may take several minutes)...")
-                    mksqfs = ["mksquashfs", "/mnt", base_dst, "-noappend",
-                              "-comp", "zstd", "-Xcompression-level", "19",
-                              "-progress",
-                              "-processors", str(os.cpu_count() or 1)]
-                    for ex in sqfs_excludes:
-                        mksqfs += ["-e", ex]
-                    log_msg(f"Running: {' '.join(mksqfs)}")
-                    # Stream mksquashfs stderr to parse compression progress
-                    sq_proc = subprocess.Popen(
-                        mksqfs,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=True,
-                        bufsize=1,
-                    )
-                    _sqbuf = ""
-                    # mksquashfs -progress writes to stderr:
-                    # "  progress  42% " or " progress 42%"
-                    while True:
-                        ch = sq_proc.stderr.read(1)
-                        if not ch:
-                            break
-                        if ch in ('\r', '\n'):
-                            line = _sqbuf.strip()
-                            _sqbuf = ""
-                            if not line:
-                                continue
-                            log_msg(f"  squashfs: {line}")
-                            m_sq = re.search(r"(\d+)%", line)
-                            if m_sq:
-                                pct = int(m_sq.group(1))
-                                frac = 0.93 + (pct / 100.0) * 0.05
-                                GLib.idle_add(self.update_progress, frac, f"Compressing system image: {pct}%")
-                        else:
-                            _sqbuf += ch
-                    sq_proc.wait()
-                    if sq_proc.returncode != 0:
-                        log_msg(f"WARNING: mksquashfs regeneration failed (code {sq_proc.returncode}). Keeping old base image.")
-                        if os.path.exists(tmp_dst):
-                            os.remove(tmp_dst)
-                    elif os.path.isfile(tmp_dst) and os.path.getsize(tmp_dst) > 100 * 1024 * 1024:
-                        # Atomic swap: remove old, rename temp to final
-                        if os.path.exists(base_dst):
-                            os.remove(base_dst)
-                        os.rename(tmp_dst, base_dst)
-                        log_msg(f"Regenerated recovery base image: {os.path.getsize(base_dst)} bytes")
-                        # Arch-stype layouts expect airootfs.sfs; hardlink to avoid
-                        # duplicating the multi-GB image on the recovery partition.
-                        arch_dst = "/mnt/recovery/images/x86_64/airootfs.sfs"
-                        try:
-                            if os.path.exists(arch_dst):
-                                os.remove(arch_dst)
-                            os.link(base_dst, arch_dst)
-                        except Exception:
-                            shutil.copy2(base_dst, arch_dst)
-                        try:
-                            loose_dst = "/mnt/recovery/pulsaros-base.squashfs"
-                            if os.path.exists(loose_dst):
-                                os.remove(loose_dst)
-                            os.link(base_dst, loose_dst)
-                        except Exception:
-                            shutil.copy2(base_dst, loose_dst)
-                    else:
-                        log_msg("WARNING: regenerated SquashFS too small or missing — keeping the ISO-provided base image.")
-                        if os.path.exists(tmp_dst):
-                            os.remove(tmp_dst)
-                except Exception as sq_err:
-                    log_msg(f"WARNING: SquashFS regeneration step failed (non-fatal): {sq_err}")
-                    # Clean up temp file if it exists
-                    try:
-                        if os.path.exists(tmp_dst):
-                            os.remove(tmp_dst)
-                    except Exception:
-                        pass
-
             # Populate Recovery Partition with dedicated Debian Recovery image, clean base image, and assistant.
             try:
                 os.makedirs("/mnt/recovery/images/x86_64", exist_ok=True)
@@ -2736,11 +2633,6 @@ UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1
                     print(f"Notice: Driver configuration step completed: {drv_err}")
                 finally:
                     subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"])
-
-            # ── Regenerate recovery base image AFTER bootloader/mkinitcpio ──
-            # so the fixed-image we store for factory-restore includes the extra
-            # packages just installed AND the final initramfs (nvidia/firmware).
-            _regenerate_base_squashfs()
 
             # ──────────────────────────────────────────────────────────
             
