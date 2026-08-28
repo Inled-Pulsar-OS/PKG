@@ -152,9 +152,5 @@ class SayriOverlay:
                 return False
             if time.monotonic() - getattr(self, "_just_shown", 0) < 1.2:
                 return False
-            mode = self.cfg.get_string("stt", "mode")
-            if mode in ("wakeword", "always"):
-                self.hide()
-            else:
-                self.app.quit_app()
+            self.hide()
         return False
