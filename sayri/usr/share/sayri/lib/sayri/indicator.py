@@ -77,28 +77,12 @@ class SayriIndicator:
     def _create_menu(self) -> None:
         self.menu = Gtk.Menu()
 
-        # Toggle Sayri (Main action)
-        self.toggle_item = Gtk.MenuItem(label="Abrir Sayri")
+        # When the user clicks the tray icon, immediately toggle Sayri and dismiss the menu popup
+        self.menu.connect("show", lambda m: (self._on_toggle_sayri(), GLib.idle_add(m.popdown)))
+
+        self.toggle_item = Gtk.MenuItem(label="Sayri")
         self.toggle_item.connect("activate", self._on_toggle_sayri)
         self.menu.append(self.toggle_item)
-
-        self.listen_item = Gtk.MenuItem(label="🎙️ Escuchar")
-        self.listen_item.connect("activate", self._on_listen)
-        self.menu.append(self.listen_item)
-
-        self.menu.append(Gtk.SeparatorMenuItem())
-
-        # Settings
-        self.settings_item = Gtk.MenuItem(label="⚙ Ajustes…")
-        self.settings_item.connect("activate", self._on_open_settings)
-        self.menu.append(self.settings_item)
-
-        self.menu.append(Gtk.SeparatorMenuItem())
-
-        # Quit
-        self.quit_item = Gtk.MenuItem(label="Cerrar Sayri")
-        self.quit_item.connect("activate", self._on_quit)
-        self.menu.append(self.quit_item)
 
         self.menu.show_all()
 
