@@ -736,12 +736,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
         box.set_valign(Gtk.Align.CENTER)
         box.set_halign(Gtk.Align.CENTER)
         
-        image = self.get_logo_image(90, is_installer=True)
-        box.append(image)
+        self.image = self.get_logo_image(90, is_installer=True)
+        box.append(self.image)
         
-        title = Gtk.Label()
-        title.set_markup("<span font_weight='bold' size='18000'>Pulsar OS</span>")
-        box.append(title)
+        self.title_label = Gtk.Label()
+        self.title_label.set_markup("<span font_weight='bold' size='18000'>Pulsar OS</span>")
+        box.append(self.title_label)
         
         self.progress_subtitle = Gtk.Label(label="Pulsar OS will be installed on the selected disk.")
         self.progress_subtitle.add_css_class("progress-text")
@@ -1000,6 +1000,19 @@ class RecoveryWindow(Adw.ApplicationWindow):
         visible = self.log_panel.get_visible()
         self.log_panel.set_visible(not visible)
         self.btn_log.set_tooltip_text("Hide Installer Log" if not visible else "Show Installer Log")
+        # When log is visible, hide everything in the card except the
+        # progress bar, the log panel itself, and the bottom controls.
+        # This keeps the card at a constant size instead of growing.
+        show_log = not visible
+        self.image.set_visible(not show_log)
+        self.title_label.set_visible(not show_log)
+        self.progress_subtitle.set_visible(not show_log)
+        self.target_disk_box.set_visible(not show_log)
+        self.progress_label.set_visible(not show_log)
+        if show_log:
+            self.card_box.set_size_request(480, 420)
+        else:
+            self.card_box.set_size_request(480, 380)
 
     def append_log(self, msg):
         """Write a line to the inline log panel and auto-scroll."""
@@ -1081,6 +1094,106 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     # 3. Final recursive lazy unmount sweep to ensure absolutely nothing remains bound in the VFS
                     subprocess.run(["umount", "-f", "-l", "-R", "/mnt"], capture_output=True)
                 
+            # ═══════════════════════════════════════════════════════════════
+            # DEMO MODE: simulate the full installation flow with realistic
+            # progress updates and log output.  Activate with DEMO_MODE=1
+            # alongside TEST_MODE=1.
+            # ═══════════════════════════════════════════════════════════════
+            if "DEMO_MODE" in os.environ:
+                def demo_sleep(secs=0.12):
+                    time.sleep(secs)
+
+                log_msg("═══ DEMO MODE: Simulating full installation ═══")
+
+                # ── Partitioning ──
+                GLib.idle_add(self.update_progress, 0.03, "Demo: Cleaning disk...")
+                log_msg(f"[DEMO] wipefs -a -f {disk_path}")
+                demo_sleep()
+                GLib.idle_add(self.update_progress, 0.05, "Demo: Partitioning (GPT/UEFI)...")
+                for part in ["EFI", "PulsarRecovery", "PulsarOS"]:
+                    log_msg(f"[DEMO] Creating partition: {part}")
+                    demo_sleep()
+                GLib.idle_add(self.update_progress, 0.10, "Demo: Formatting partitions...")
+                for fs in ["mkfs.vfat EFI", "mkfs.ext4 PULSAR_RECOVERY", "mkfs.btrfs PULSAR_OS"]:
+                    log_msg(f"[DEMO] {fs}")
+                    demo_sleep()
+                GLib.idle_add(self.update_progress, 0.15, "Demo: Creating Btrfs subvolumes...")
+                log_msg("[DEMO] btrfs subvolume create /mnt/@")
+                log_msg("[DEMO] btrfs subvolume create /mnt/@home")
+                demo_sleep()
+                GLib.idle_add(self.update_progress, 0.18, "Demo: Mounting subvolumes...")
+                log_msg("[DEMO] mount subvol=@,subvol=@home,efi,recovery")
+                demo_sleep()
+
+                # ── Rsync file copy ──
+                GLib.idle_add(self.update_progress, 0.25, "Demo: Copying system files...")
+                log_msg("[DEMO] rsync -aAXx / -> /mnt")
+                for pct in range(26, 81, 2):
+                    speed = f"{300 + pct * 2}MB/s" if pct < 50 else f"{200 + (100 - pct) * 5}MB/s"
+                    GLib.idle_add(self.update_progress, pct / 100.0, f"Demo: Copying files: {pct}% at {speed}")
+                    demo_sleep(0.04)
+
+                # ── Post-install packages ──
+                if self.install_extra_packages:
+                    GLib.idle_add(self.update_progress, 0.80, "Demo: Installing extra packages...")
+                    log_msg("[DEMO] Minimal ISO detected — installing excluded packages...")
+                    GLib.idle_add(self.update_progress, 0.81, "Demo: Setting up package manager...")
+                    log_msg("[DEMO] pacman-key --init")
+                    log_msg("[DEMO] pacman-key --populate archlinux")
+                    log_msg("[DEMO] Importing Inled GPG key...")
+                    demo_sleep(0.3)
+                    GLib.idle_add(self.update_progress, 0.82, "Demo: Syncing package databases...")
+                    log_msg("[DEMO] pacman -Sy --noconfirm")
+                    demo_sleep(0.2)
+
+                    demo_pkgs = [
+                        "docker", "linux-firmware", "sof-firmware",
+                        "open-vm-tools", "vlc", "totem", "imagemagick",
+                        "geary", "gnome-music", "nvidia-open", "dkms", "linux-headers",
+                    ]
+                    GLib.idle_add(self.update_progress, 0.83, f"Demo: Installing {len(demo_pkgs)} packages...")
+                    for i, pkg in enumerate(demo_pkgs, 1):
+                        # Simulate download progress
+                        for dl_pct in range(0, 101, 20):
+                            frac = 0.83 + ((i - 1) / len(demo_pkgs)) * 0.07 + (dl_pct / 100.0) * (0.07 / len(demo_pkgs))
+                            GLib.idle_add(self.update_progress, frac, f"Demo: Downloading {pkg}: {dl_pct}%")
+                            demo_sleep(0.02)
+                        # Simulate install
+                        frac = 0.83 + (i / len(demo_pkgs)) * 0.07
+                        GLib.idle_add(self.update_progress, frac, f"Demo: Installing package {i}/{len(demo_pkgs)}: {pkg}")
+                        log_msg(f"[DEMO] ({i}/{len(demo_pkgs)}) installing {pkg}")
+                        demo_sleep(0.08)
+                    extra_packages_installed = True
+                else:
+                    log_msg("[DEMO] Full ISO detected — no extra packages needed.")
+
+                # ── SquashFS regeneration ──
+                GLib.idle_add(self.update_progress, 0.92, "Demo: Regenerating recovery image...")
+                log_msg("[DEMO] mksquashfs /mnt /mnt/recovery/images/pulsaros-base.squashfs")
+                for sq_pct in range(0, 101, 2):
+                    frac = 0.92 + (sq_pct / 100.0) * 0.06
+                    GLib.idle_add(self.update_progress, frac, f"Demo: Compressing system image: {sq_pct}%")
+                    demo_sleep(0.02)
+                log_msg("[DEMO] Recovery base image regenerated: ~3.2GB")
+
+                # ── Bootloader ──
+                GLib.idle_add(self.update_progress, 0.98, "Demo: Configuring bootloader...")
+                log_msg("[DEMO] Writing /etc/fstab")
+                log_msg("[DEMO] Deploying vmlinuz-recovery + initramfs to ESP")
+                log_msg("[DEMO] Configuring rEFInd menu entries")
+                log_msg("[DEMO] mkinitcpio -P")
+                demo_sleep(0.2)
+
+                # ── Cleanup ──
+                GLib.idle_add(self.update_progress, 0.99, "Demo: Creating setup flag...")
+                log_msg("[DEMO] Touching /etc/pulsar-need-setup")
+                demo_sleep(0.1)
+
+                GLib.idle_add(self.update_progress, 1.0, "Demo: Installation complete!")
+                log_msg("═══ DEMO MODE: Installation simulation finished ═══")
+                GLib.idle_add(self.on_installation_completed)
+                return
+
             is_efi = os.path.exists("/sys/firmware/efi")
             is_arch = os.path.exists("/etc/pacman.conf")
             esp_root = "/mnt/boot/efi"
@@ -1379,10 +1492,46 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             GLib.idle_add(self.update_progress, 0.82, "Syncing package databases...")
                             exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
                             GLib.idle_add(self.update_progress, 0.83, f"Installing {len(extra_packages)} extra packages...")
-                            exec_cmd([
+                            # ── Streaming pacman install (parse download progress) ──
+                            pacman_cmd = [
                                 "chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
                                 *extra_packages
-                            ])
+                            ]
+                            pacman_proc = subprocess.Popen(
+                                pacman_cmd,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT,
+                                text=True,
+                                bufsize=1,
+                            )
+                            _pbuf = ""
+                            while True:
+                                ch = pacman_proc.stdout.read(1)
+                                if not ch:
+                                    break
+                                if ch in ('\r', '\n'):
+                                    line = _pbuf.strip()
+                                    _pbuf = ""
+                                    if not line:
+                                        continue
+                                    log_msg(f"  pacman: {line}")
+                                    # Download progress: "pkgname  123.4 KiB  0.5 MiB/s 00:00 [####] 100%"
+                                    m_dl = re.search(r"(\d+)%", line)
+                                    if m_dl and '[#' in line:
+                                        pct = int(m_dl.group(1))
+                                        frac = 0.83 + (pct / 100.0) * 0.07
+                                        GLib.idle_add(self.update_progress, frac, f"Downloading packages: {pct}%")
+                                    # Install progress: "(1/3) installing pkg..."
+                                    m_inst = re.search(r"\((\d+)/(\d+)\)\s+installing\s+", line)
+                                    if m_inst:
+                                        cur, total = int(m_inst.group(1)), int(m_inst.group(2))
+                                        frac = 0.90 + (cur / total) * 0.02
+                                        GLib.idle_add(self.update_progress, frac, f"Installing package {cur}/{total}: {line.split('installing ')[-1]}")
+                                else:
+                                    _pbuf += ch
+                            pacman_proc.wait()
+                            if pacman_proc.returncode != 0:
+                                raise Exception(f"pacman -S failed (code {pacman_proc.returncode})")
                             log_msg("Post-install: extra packages installed successfully.")
                             extra_packages_installed = True
                         except Exception as post_err:
@@ -1422,10 +1571,42 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 "python3-xlib",
                             ]
                             exec_cmd(["chroot", "/mnt", "apt-get", "update"])
-                            exec_cmd([
-                                "chroot", "/mnt", "apt-get", "install", "-y", "--no-install-recommends",
-                                *extra_packages
-                            ])
+                            # ── Streaming apt install (parse progress) ──
+                            apt_cmd = [
+                                "chroot", "/mnt", "apt-get", "install", "-y",
+                                "--no-install-recommends",
+                                *extra_packages,
+                            ]
+                            apt_proc = subprocess.Popen(
+                                apt_cmd,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT,
+                                text=True,
+                                bufsize=1,
+                            )
+                            _abuf = ""
+                            while True:
+                                ch = apt_proc.stdout.read(1)
+                                if not ch:
+                                    break
+                                if ch in ('\r', '\n'):
+                                    line = _abuf.strip()
+                                    _abuf = ""
+                                    if not line:
+                                        continue
+                                    log_msg(f"  apt: {line}")
+                                    # Progress: "Do you want to continue? [Y/n]"
+                                    # or "Unpacking pkg (1/23)..."
+                                    m_inst = re.search(r"(\d+)/(\d+)", line)
+                                    if m_inst:
+                                        cur, total = int(m_inst.group(1)), int(m_inst.group(2))
+                                        frac = 0.83 + (cur / total) * 0.07
+                                        GLib.idle_add(self.update_progress, frac, f"Installing package {cur}/{total}")
+                                else:
+                                    _abuf += ch
+                            apt_proc.wait()
+                            if apt_proc.returncode != 0:
+                                raise Exception(f"apt-get install failed (code {apt_proc.returncode})")
                             log_msg("Post-install: extra packages installed successfully (apt).")
                             extra_packages_installed = True
                         except Exception as post_err:
@@ -1472,13 +1653,42 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     GLib.idle_add(self.update_progress, 0.93, "Compressing system image (this may take several minutes)...")
                     mksqfs = ["mksquashfs", "/mnt", base_dst, "-noappend",
                               "-comp", "zstd", "-Xcompression-level", "19",
+                              "-progress",
                               "-processors", str(os.cpu_count() or 1)]
                     for ex in sqfs_excludes:
                         mksqfs += ["-e", ex]
                     log_msg(f"Running: {' '.join(mksqfs)}")
-                    res = subprocess.run(mksqfs, capture_output=True, text=True)
-                    if res.returncode != 0:
-                        log_msg(f"WARNING: mksquashfs regeneration failed:\n{res.stderr[-1500:]}")
+                    # Stream mksquashfs stderr to parse compression progress
+                    sq_proc = subprocess.Popen(
+                        mksqfs,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        bufsize=1,
+                    )
+                    _sqbuf = ""
+                    # mksquashfs -progress writes to stderr:
+                    # "  progress  42% " or " progress 42%"
+                    while True:
+                        ch = sq_proc.stderr.read(1)
+                        if not ch:
+                            break
+                        if ch in ('\r', '\n'):
+                            line = _sqbuf.strip()
+                            _sqbuf = ""
+                            if not line:
+                                continue
+                            log_msg(f"  squashfs: {line}")
+                            m_sq = re.search(r"(\d+)%", line)
+                            if m_sq:
+                                pct = int(m_sq.group(1))
+                                frac = 0.93 + (pct / 100.0) * 0.05
+                                GLib.idle_add(self.update_progress, frac, f"Compressing system image: {pct}%")
+                        else:
+                            _sqbuf += ch
+                    sq_proc.wait()
+                    if sq_proc.returncode != 0:
+                        log_msg(f"WARNING: mksquashfs regeneration failed (code {sq_proc.returncode})")
                     elif os.path.isfile(base_dst) and os.path.getsize(base_dst) > 100 * 1024 * 1024:
                         # Arch-stype layouts expect airootfs.sfs; hardlink to avoid
                         # duplicating the multi-GB image on the recovery partition.
