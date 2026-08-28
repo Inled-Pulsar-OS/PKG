@@ -220,6 +220,22 @@ textview.live-log-text text {
     font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
     font-size: 11px;
 }
+.demo-banner {
+    background-color: #ff9f0a;
+    color: #000000;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 4px;
+}
+.live-log-view-flat {
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+}
 """
 
 def get_system_disks():
@@ -294,91 +310,17 @@ class DiskCard(Gtk.Box):
         self.add_controller(gesture)
         
     def on_clicked(self, gesture, n_press, x, y):
-        self.select_callback(self)
+        self.select_callback(self)# InstallerLogWindow removed — logs are now inline in the progress card.
 
-
-class InstallerLogWindow(Adw.Window):
-    def __init__(self, parent_window):
-        super().__init__()
-        self.parent_win = parent_window
-        self.set_transient_for(parent_window)
-        self.set_title("Installer Log")
-        self.set_default_size(680, 420)
-        self.set_modal(False)
-        self.add_css_class("log-window")
-        
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        
-        header = Adw.HeaderBar()
-        header.set_show_end_title_buttons(True)
-        title_widget = Adw.WindowTitle(title="Pulsar OS Installer Log", subtitle="Live installation output")
-        header.set_title_widget(title_widget)
-        main_box.append(header)
-        
-        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        content_box.set_margin_top(10)
-        content_box.set_margin_bottom(12)
-        content_box.set_margin_start(14)
-        content_box.set_margin_end(14)
-        content_box.set_hexpand(True)
-        content_box.set_vexpand(True)
-        
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.set_hexpand(True)
-        scrolled.set_vexpand(True)
-        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scrolled.add_css_class("live-log-view")
-        
-        self.text_view = Gtk.TextView()
-        self.text_view.set_editable(False)
-        self.text_view.set_monospace(True)
-        self.text_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-        self.text_view.add_css_class("live-log-text")
-        
-        self.buffer = self.text_view.get_buffer()
-        scrolled.set_child(self.text_view)
-        content_box.append(scrolled)
-        
-        main_box.append(content_box)
-        self.set_content(main_box)
-        
-        self.last_pos = 0
-        self.poll_log()
-        self.timer_id = GLib.timeout_add(300, self.poll_log)
-        self.connect("close-request", self.on_close)
-        
-    def poll_log(self):
-        log_path = "/tmp/pulsaros-install.log"
-        if os.path.exists(log_path):
-            try:
-                with open(log_path, "r", encoding="utf-8", errors="replace") as f:
-                    f.seek(self.last_pos)
-                    new_text = f.read()
-                    if new_text:
-                        self.last_pos = f.tell()
-                        iter_end = self.buffer.get_end_iter()
-                        self.buffer.insert(iter_end, new_text)
-                        
-                        # Auto-scroll to end
-                        mark = self.buffer.create_mark(None, self.buffer.get_end_iter(), False)
-                        self.text_view.scroll_to_mark(mark, 0.0, True, 0.0, 1.0)
-            except Exception:
-                pass
-        return True
-
-    def on_close(self, *args):
-        if self.timer_id:
-            GLib.source_remove(self.timer_id)
-            self.timer_id = None
-        if hasattr(self.parent_win, 'log_window'):
-            self.parent_win.log_window = None
-        return False
 
 
 class RecoveryWindow(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app)
-        self.set_title("Pulsar OS Recovery")
+        title = "Pulsar OS Recovery"
+        if "DEMO_MODE" in os.environ:
+            title += " [DEMO MODE]"
+        self.set_title(title)
         self.set_default_size(720, 560)
         self.set_resizable(True)
         
@@ -394,6 +336,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
         center_container.set_hexpand(True)
         center_container.set_vexpand(True)
         
+        self.center_container = center_container
+
         self.card_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.card_box.add_css_class("apple-box")
         self.card_box.set_size_request(480, 380)
@@ -552,6 +496,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
         screen_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         screen_box.set_valign(Gtk.Align.CENTER)
         
+        # DEMO MODE banner (visible on the first screen)
+        if "DEMO_MODE" in os.environ:
+            demo_banner = Gtk.Label(label="⚠ DEMO MODE — No changes will be made to your system")
+            demo_banner.add_css_class("demo-banner")
+            demo_banner.set_halign(Gtk.Align.CENTER)
+            screen_box.append(demo_banner)
+        
         self.listbox = Gtk.ListBox()
         self.listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self.listbox.connect("row-selected", self.on_utility_row_selected)
@@ -565,6 +516,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                              "Browse the web to get help with your computer.", "safari")
         self.add_utility_row(self.listbox, "disk", "Disk Utility", 
                              "Repair or erase a disk using Disk Utility.", "disk")
+        self.add_utility_row(self.listbox, "packages", "Install Extra Packages",
+                             "Install Docker, drivers, firmware, and apps on the installed system.", "logo")
                              
         bottom_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         bottom_box.set_margin_top(12)
@@ -667,6 +620,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
             self._popen_as_user("seafari || epiphany || firefox")
         elif self.selected_action == "disk":
             subprocess.Popen("gparted || pkexec gparted || gnome-disks || gnome-disk-utility", shell=True)
+        elif self.selected_action == "packages":
+            self._show_install_packages_dialog()
 
 
     def show_installer_selector_dialog(self):
@@ -694,10 +649,212 @@ class RecoveryWindow(Adw.ApplicationWindow):
         dialog.connect("response", on_response)
         dialog.present()
 
+    def _show_install_packages_dialog(self):
+        """Show a confirmation dialog before installing extra packages."""
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Install Extra Packages",
+            body=(
+                "This will install the full set of packages that were excluded\n"
+                "from the minimal ISO:\n\n"
+                "• Docker\n• Full firmware (GPU, audio)\n• VM guest tools\n"
+                "• Multimedia apps (VLC, Totem)\n• NVIDIA drivers\n• GNOME apps\n\n"
+                "⚠️ <b>Internet connection required</b> (WiFi or Ethernet).\n"
+                "The system will be mounted and packages installed via pacman."
+            ),
+        )
+        dialog.set_body_use_markup(True)
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("install", "Install Packages")
+        dialog.set_response_appearance("install", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_response_appearance("cancel", Adw.ResponseAppearance.DEFAULT)
+
+        def on_response(d, resp):
+            d.destroy()
+            if resp == "install":
+                self._start_package_installation()
+
+        dialog.connect("response", on_response)
+        dialog.present()
+
+    def _start_package_installation(self):
+        """Switch to the progress screen and install extra packages in a thread."""
+        self.progress_subtitle.set_label("Installing extra packages on the installed system.")
+        self.target_disk_name_lbl.set_label("Extra Packages")
+        self.image.set_visible(True)
+        self.title_label.set_visible(True)
+        self.stack.set_visible_child_name("install_progress")
+        threading.Thread(target=self._packages_installation_backend, daemon=True).start()
+
+    def _packages_installation_backend(self):
+        """Install extra packages directly on the running system.
+
+        Detects whether the system is Arch (pacman) or Debian (apt) and
+        runs the appropriate package manager.  The app is already running
+        on the installed system, so no chroot or mounting is needed.
+        pkexec is used for root privileges.
+        """
+        import datetime
+        log_file = "/tmp/pulsaros-packages.log"
+        try:
+            with open(log_file, "w") as lf:
+                lf.write(f"{datetime.datetime.now()} - Extra package installation started\n")
+
+            def log_msg(msg):
+                ts = datetime.datetime.now().strftime("%H:%M:%S")
+                line = f"[{ts}] {msg}"
+                with open(log_file, "a") as lf:
+                    lf.write(line + "\n")
+                print(msg)
+                GLib.idle_add(self.append_log, line)
+
+            # ── Detect distro ──
+            GLib.idle_add(self.update_progress, 0.05, "Detecting system type...")
+            is_arch = os.path.exists("/etc/pacman.conf")
+            is_debian = os.path.exists("/etc/apt/sources.list") or os.path.exists("/etc/apt/sources.list.d")
+
+            if is_arch:
+                log_msg("Detected Arch Linux system — using pacman")
+            elif is_debian:
+                log_msg("Detected Debian system — using apt")
+            else:
+                log_msg("ERROR: Cannot detect system type (no pacman.conf or apt sources)")
+                GLib.idle_add(self.on_installation_failed, "Cannot detect system type. Is Pulsar OS installed?")
+                return
+
+            # ── Package lists ──
+            arch_packages = [
+                "docker", "linux-firmware", "sof-firmware", "alsa-firmware",
+                "open-vm-tools", "virtualbox-guest-utils", "xf86-video-qxl",
+                "xf86-video-ati", "xfsprogs", "p7zip", "inxi", "wl-clipboard",
+                "python-yaml", "vlc", "totem", "imagemagick",
+                "gvfs-smb", "gvfs-gphoto2",
+                "geary", "gnome-music", "gnome-contacts", "gnome-weather",
+                "gnome-clocks", "xournalpp", "papers", "loupe",
+                "gnome-disk-utility", "gnome-logs", "baobab",
+                "vim", "webkitgtk-6.0",
+                "nvidia-open", "nvidia-settings",
+                "dkms", "linux-headers",
+                "appmenu-gtk-module", "python-xlib",
+                "python-setuptools", "python-pip",
+            ]
+            debian_packages = [
+                "docker.io",
+                "firmware-linux", "firmware-sof-signed", "firmware-misc-nonfree",
+                "open-vm-tools", "virtualbox-guest-utils", "xserver-xorg-video-qxl",
+                "vlc", "totem", "imagemagick",
+                "gvfs-fuse", "gvfs-backends",
+                "geary", "gnome-music", "gnome-contacts", "gnome-weather",
+                "gnome-clocks",
+                "nvidia-driver", "dkms", "linux-headers-amd64",
+                "xdotool", "python3-xlib",
+            ]
+
+            if is_arch:
+                packages = arch_packages
+                # Ensure Inled repo key is imported
+                GLib.idle_add(self.update_progress, 0.10, "Setting up package manager...")
+                log_msg("Importing Inled repository key...")
+                keyring_cmd = (
+                    "mkdir -p /etc/pacman.d/gnupg && "
+                    "pacman-key --init 2>/dev/null; "
+                    "pacman-key --populate archlinux 2>/dev/null; "
+                    "curl -s https://apt.inled.es/archive.key | pacman-key -a - 2>/dev/null; "
+                    "pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F 2>/dev/null"
+                )
+                subprocess.run(["pkexec", "bash", "-c", keyring_cmd], capture_output=True, text=True)
+
+                # Sync databases
+                GLib.idle_add(self.update_progress, 0.15, "Syncing package databases...")
+                log_msg("Syncing package databases...")
+                subprocess.run(["pkexec", "pacman", "-Sy", "--noconfirm"], capture_output=True, text=True)
+
+                # Install packages with streaming progress
+                GLib.idle_add(self.update_progress, 0.20, f"Installing {len(packages)} packages...")
+                log_msg(f"Installing {len(packages)} extra packages via pacman...")
+                install_cmd = ["pkexec", "pacman", "-S", "--noconfirm", "--needed"] + packages
+                proc = subprocess.Popen(install_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                _buf = ""
+                while True:
+                    ch = proc.stdout.read(1)
+                    if not ch:
+                        break
+                    if ch in ('\r', '\n'):
+                        line = _buf.strip()
+                        _buf = ""
+                        if not line:
+                            continue
+                        log_msg(f"  pacman: {line}")
+                        m_dl = re.search(r"(\d+)%", line)
+                        if m_dl and '[#' in line:
+                            pct = int(m_dl.group(1))
+                            frac = 0.20 + (pct / 100.0) * 0.70
+                            GLib.idle_add(self.update_progress, frac, f"Downloading: {pct}%")
+                        m_inst = re.search(r"\((\d+)/(\d+)\)\s+installing\s+", line)
+                        if m_inst:
+                            cur, total = int(m_inst.group(1)), int(m_inst.group(2))
+                            frac = 0.90 + (cur / total) * 0.05
+                            GLib.idle_add(self.update_progress, frac, f"Installing {cur}/{total}")
+                    else:
+                        _buf += ch
+                proc.wait()
+                if proc.returncode != 0:
+                    log_msg(f"WARNING: pacman finished with code {proc.returncode}")
+                else:
+                    log_msg("All extra packages installed successfully.")
+
+            elif is_debian:
+                packages = debian_packages
+                # Update and install with streaming progress
+                GLib.idle_add(self.update_progress, 0.10, "Updating package lists...")
+                log_msg("Running apt-get update...")
+                subprocess.run(["pkexec", "apt-get", "update"], capture_output=True, text=True)
+
+                GLib.idle_add(self.update_progress, 0.20, f"Installing {len(packages)} packages...")
+                log_msg(f"Installing {len(packages)} extra packages via apt...")
+                install_cmd = ["pkexec", "apt-get", "install", "-y", "--no-install-recommends"] + packages
+                proc = subprocess.Popen(install_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                _buf = ""
+                while True:
+                    ch = proc.stdout.read(1)
+                    if not ch:
+                        break
+                    if ch in ('\r', '\n'):
+                        line = _buf.strip()
+                        _buf = ""
+                        if not line:
+                            continue
+                        log_msg(f"  apt: {line}")
+                        m_inst = re.search(r"(\d+)/(\d+)", line)
+                        if m_inst:
+                            cur, total = int(m_inst.group(1)), int(m_inst.group(2))
+                            frac = 0.20 + (cur / total) * 0.70
+                            GLib.idle_add(self.update_progress, frac, f"Installing {cur}/{total}")
+                    else:
+                        _buf += ch
+                proc.wait()
+                if proc.returncode != 0:
+                    log_msg(f"WARNING: apt finished with code {proc.returncode}")
+                else:
+                    log_msg("All extra packages installed successfully.")
+
+            GLib.idle_add(self.update_progress, 1.0, "Extra packages installed successfully!")
+            log_msg("Done! All extra packages have been installed.")
+            GLib.idle_add(self.on_installation_completed)
+
+        except Exception as err:
+            log_msg(f"FAILED: {err}")
+            GLib.idle_add(self.on_installation_failed, str(err))
+
     def build_install_welcome_screen(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         box.set_valign(Gtk.Align.CENTER)
         box.set_halign(Gtk.Align.CENTER)
+        
+        if "DEMO_MODE" in os.environ:
+            demo_banner = Gtk.Label(label="⚠ DEMO MODE — No changes will be made to your system")
+            demo_banner.add_css_class("demo-banner")
+            box.append(demo_banner)
         
         # Large Pulsar OS Logo (160px size)
         image = self.get_logo_image(160, is_installer=False)
@@ -737,6 +894,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.disk_select_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.disk_select_box.set_valign(Gtk.Align.CENTER)
         self.disk_select_box.set_halign(Gtk.Align.CENTER)
+        
+        if "DEMO_MODE" in os.environ:
+            demo_banner = Gtk.Label(label="⚠ DEMO MODE — No changes will be made to your system")
+            demo_banner.add_css_class("demo-banner")
+            self.disk_select_box.append(demo_banner)
         
         image = self.get_logo_image(100, is_installer=True)
         self.disk_select_box.append(image)
@@ -805,19 +967,21 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.pending_disk_path = disk_path
         self.pending_disk_name = disk_name
         self.install_broadcom = False
+        self.install_extra_packages = False
         self._show_broadcom_dialog()
 
     def build_install_progress_screen(self):
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        box.set_valign(Gtk.Align.CENTER)
-        box.set_halign(Gtk.Align.CENTER)
+        self.progress_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.progress_box.set_valign(Gtk.Align.CENTER)
+        self.progress_box.set_halign(Gtk.Align.CENTER)
+        box = self.progress_box
         
-        image = self.get_logo_image(90, is_installer=True)
-        box.append(image)
+        self.image = self.get_logo_image(90, is_installer=True)
+        box.append(self.image)
         
-        title = Gtk.Label()
-        title.set_markup("<span font_weight='bold' size='18000'>Pulsar OS</span>")
-        box.append(title)
+        self.title_label = Gtk.Label()
+        self.title_label.set_markup("<span font_weight='bold' size='18000'>Pulsar OS</span>")
+        box.append(self.title_label)
         
         self.progress_subtitle = Gtk.Label(label="Pulsar OS will be installed on the selected disk.")
         self.progress_subtitle.add_css_class("progress-text")
@@ -847,6 +1011,28 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.progress_label.add_css_class("progress-text")
         box.append(self.progress_label)
         
+        # ── Inline log panel (hidden by default, toggled by terminal button) ──
+        self.log_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.log_panel.set_vexpand(True)
+        self.log_panel.set_hexpand(True)
+        self.log_panel.set_visible(False)
+
+        log_scrolled = Gtk.ScrolledWindow()
+        log_scrolled.set_hexpand(True)
+        log_scrolled.set_vexpand(True)
+        log_scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        log_scrolled.add_css_class("live-log-view-flat")
+
+        self.log_text_view = Gtk.TextView()
+        self.log_text_view.set_editable(False)
+        self.log_text_view.set_monospace(True)
+        self.log_text_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self.log_text_view.add_css_class("live-log-text")
+        self.log_buffer = self.log_text_view.get_buffer()
+        log_scrolled.set_child(self.log_text_view)
+        self.log_panel.append(log_scrolled)
+        box.append(self.log_panel)
+
         # Bottom controls row (Cancel button centered, flat terminal log button on bottom right)
         bottom_row = Gtk.CenterBox()
         bottom_row.set_margin_top(8)
@@ -867,7 +1053,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         
         box.append(bottom_row)
         
-        self.stack.add_named(box, "install_progress")
+        self.stack.add_named(self.progress_box, "install_progress")
 
     def build_install_error_screen(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -993,6 +1179,33 @@ class RecoveryWindow(Adw.ApplicationWindow):
             d.destroy()
             if resp == "yes":
                 self.install_broadcom = True
+            self._show_extra_packages_dialog()
+
+        dialog.connect("response", on_response)
+        dialog.present()
+
+    def _show_extra_packages_dialog(self):
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Install Extra Packages",
+            body=(
+                "The ISO was built minimal to stay small (~3 GB). "
+                "You can now install the full set of packages that were excluded:\n\n"
+                "• Docker\n• Full firmware (GPU, audio)\n• VM guest tools\n"
+                "• Multimedia apps (VLC, Totem)\n• NVIDIA drivers\n• GNOME apps\n\n"
+                "⚠️ <b>Internet connection required</b> (WiFi or Ethernet).\n"
+                "These packages will be downloaded and installed on disk."
+            ),
+        )
+        dialog.set_body_use_markup(True)
+        dialog.add_response("no",  "No, keep minimal")
+        dialog.add_response("yes", "Yes, install everything")
+        dialog.set_response_appearance("yes", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("yes")
+
+        def on_response(d, resp):
+            d.destroy()
+            self.install_extra_packages = (resp == "yes")
             self._start_installation()
 
         dialog.connect("response", on_response)
@@ -1008,7 +1221,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             name_info = self.selected_disk_card.disk_info.get("name", "")
             size_match = re.search(r"\(([^)]+)\)", name_info)
             if size_match:
-                display_name = f"Pulsar OS ({disk_name} • {size_match.group(1)})"
+                display_name = f"Pulsar OS ({disk_name} \u2022 {size_match.group(1)})"
             else:
                 display_name = f"Pulsar OS ({disk_name})"
         else:
@@ -1016,16 +1229,174 @@ class RecoveryWindow(Adw.ApplicationWindow):
             
         self.target_disk_name_lbl.set_label(display_name)
         self.stack.set_visible_child_name("install_progress")
+
+        # ── DEMO MODE: never touch the real system ──────────────────────
+        if "DEMO_MODE" in os.environ:
+            threading.Thread(
+                target=self._demo_backend,
+                args=(disk_path,),
+                daemon=True,
+            ).start()
+            return
+
         threading.Thread(
             target=self.installation_backend,
             args=(disk_path,),
             daemon=True
         ).start()
 
+    # ──────────────────────────────────────────────────────────────────
+    # DEMO MODE backend — zero side-effects, reads no disks, writes
+    # nothing.  Purely cosmetic progress + log output for UI testing.
+    # ──────────────────────────────────────────────────────────────────
+    def _demo_backend(self, disk_path):
+        import datetime
+        log_file = "/tmp/pulsaros-install.log"
+        with open(log_file, "w") as lf:
+            lf.write(f"{datetime.datetime.now()} - DEMO MODE (no real changes)\n")
+            lf.write(f"Target disk: {disk_path}\n")
+
+        def log_msg(msg):
+            ts = datetime.datetime.now().strftime("%H:%M:%S")
+            line = f"[{ts}] {msg}"
+            with open(log_file, "a") as lf:
+                lf.write(line + "\n")
+            print(msg)
+            GLib.idle_add(self.append_log, line)
+
+        def demo_sleep(secs=0.15):
+            time.sleep(secs)
+
+        log_msg("══ DEMO MODE: no real changes will be made ══")
+        log_msg(f"Target disk: {disk_path} (NOT TOUCHED)")
+
+        # ── Partitioning (simulated) ──
+        GLib.idle_add(self.update_progress, 0.03, "[DEMO] Cleaning disk...")
+        log_msg(f"[DEMO] wipefs -a -f {disk_path}")
+        demo_sleep()
+        GLib.idle_add(self.update_progress, 0.05, "[DEMO] Partitioning (GPT/UEFI)...")
+        for part in ["EFI", "PulsarRecovery", "PulsarOS"]:
+            log_msg(f"[DEMO] Creating partition: {part}")
+            demo_sleep()
+        GLib.idle_add(self.update_progress, 0.10, "[DEMO] Formatting partitions...")
+        for fs in ["mkfs.vfat EFI", "mkfs.ext4 PULSAR_RECOVERY", "mkfs.btrfs PULSAR_OS"]:
+            log_msg(f"[DEMO] {fs}")
+            demo_sleep()
+        GLib.idle_add(self.update_progress, 0.15, "[DEMO] Creating Btrfs subvolumes...")
+        log_msg("[DEMO] btrfs subvolume create /mnt/@")
+        log_msg("[DEMO] btrfs subvolume create /mnt/@home")
+        demo_sleep()
+        GLib.idle_add(self.update_progress, 0.18, "[DEMO] Mounting subvolumes...")
+        demo_sleep()
+
+        # ── Rsync (simulated) ──
+        GLib.idle_add(self.update_progress, 0.25, "[DEMO] Copying system files...")
+        log_msg("[DEMO] rsync -aAXx / -> /mnt (SIMULATED)")
+        for pct in range(26, 81, 2):
+            speed = f"{300 + pct * 2}MB/s" if pct < 50 else f"{200 + (100 - pct) * 5}MB/s"
+            GLib.idle_add(self.update_progress, pct / 100.0, f"[DEMO] Copying files: {pct}% at {speed}")
+            demo_sleep(0.04)
+
+        # ── Post-install packages (simulated) ──
+        if self.install_extra_packages:
+            GLib.idle_add(self.update_progress, 0.80, "[DEMO] Installing extra packages...")
+            log_msg("[DEMO] Minimal ISO detected — installing excluded packages...")
+            GLib.idle_add(self.update_progress, 0.81, "[DEMO] Setting up package manager...")
+            log_msg("[DEMO] pacman-key --init")
+            log_msg("[DEMO] pacman-key --populate archlinux")
+            log_msg("[DEMO] Importing Inled GPG key...")
+            demo_sleep(0.3)
+            GLib.idle_add(self.update_progress, 0.82, "[DEMO] Syncing package databases...")
+            log_msg("[DEMO] pacman -Sy --noconfirm")
+            demo_sleep(0.2)
+
+            demo_pkgs = [
+                "docker", "linux-firmware", "sof-firmware",
+                "open-vm-tools", "vlc", "totem", "imagemagick",
+                "geary", "gnome-music", "nvidia-open", "dkms", "linux-headers",
+            ]
+            GLib.idle_add(self.update_progress, 0.83, f"[DEMO] Installing {len(demo_pkgs)} packages...")
+            for i, pkg in enumerate(demo_pkgs, 1):
+                for dl_pct in range(0, 101, 20):
+                    frac = 0.83 + ((i - 1) / len(demo_pkgs)) * 0.07 + (dl_pct / 100.0) * (0.07 / len(demo_pkgs))
+                    GLib.idle_add(self.update_progress, frac, f"[DEMO] Downloading {pkg}: {dl_pct}%")
+                    demo_sleep(0.02)
+                frac = 0.83 + (i / len(demo_pkgs)) * 0.07
+                GLib.idle_add(self.update_progress, frac, f"[DEMO] Installing package {i}/{len(demo_pkgs)}: {pkg}")
+                log_msg(f"[DEMO] ({i}/{len(demo_pkgs)}) installing {pkg}")
+                demo_sleep(0.08)
+        else:
+            log_msg("[DEMO] Full ISO detected — no extra packages needed.")
+
+        # ── SquashFS regeneration (simulated) ──
+        GLib.idle_add(self.update_progress, 0.92, "[DEMO] Regenerating recovery image...")
+        log_msg("[DEMO] mksquashfs /mnt -> /mnt/recovery/images/pulsaros-base.squashfs (SIMULATED)")
+        for sq_pct in range(0, 101, 2):
+            frac = 0.92 + (sq_pct / 100.0) * 0.06
+            GLib.idle_add(self.update_progress, frac, f"[DEMO] Compressing system image: {sq_pct}%")
+            demo_sleep(0.02)
+        log_msg("[DEMO] Recovery base image regenerated: ~3.2GB (NOT ACTUAL)")
+
+        # ── Bootloader (simulated) ──
+        GLib.idle_add(self.update_progress, 0.98, "[DEMO] Configuring bootloader...")
+        log_msg("[DEMO] Writing /etc/fstab")
+        log_msg("[DEMO] Deploying vmlinuz-recovery + initramfs to ESP")
+        log_msg("[DEMO] Configuring rEFInd menu entries")
+        log_msg("[DEMO] mkinitcpio -P")
+        demo_sleep(0.2)
+
+        GLib.idle_add(self.update_progress, 1.0, "[DEMO] Demo complete — nothing was changed!")
+        log_msg("══ DEMO MODE: simulation finished, disk untouched ══")
+        GLib.idle_add(self.on_installation_completed)
+
     def on_show_live_log_clicked(self, btn):
-        if not hasattr(self, 'log_window') or self.log_window is None:
-            self.log_window = InstallerLogWindow(self)
-        self.log_window.present()
+        visible = self.log_panel.get_visible()
+        self.log_panel.set_visible(not visible)
+        self.btn_log.set_tooltip_text("Hide Installer Log" if not visible else "Show Installer Log")
+        show_log = not visible
+        # Hide everything except progress bar + terminal + bottom controls
+        self.image.set_visible(not show_log)
+        self.title_label.set_visible(not show_log)
+        self.progress_subtitle.set_visible(not show_log)
+        self.target_disk_box.set_visible(not show_log)
+        self.progress_label.set_visible(not show_log)
+        if show_log:
+            # Progress bar: thin strip at the top, full width of the card
+            self.progress_bar.set_size_request(-1, 4)
+            self.progress_bar.set_margin_top(0)
+            self.progress_bar.set_margin_bottom(0)
+            self.progress_bar.set_hexpand(True)
+            # Inner box: fill the card area
+            self.progress_box.set_valign(Gtk.Align.FILL)
+            self.progress_box.set_halign(Gtk.Align.FILL)
+            self.progress_box.set_hexpand(True)
+            self.progress_box.set_vexpand(True)
+            # Log panel: take all remaining space inside the card
+            self.log_panel.set_vexpand(True)
+            self.log_panel.set_hexpand(True)
+        else:
+            # Restore inner progress screen box
+            self.progress_box.set_valign(Gtk.Align.CENTER)
+            self.progress_box.set_halign(Gtk.Align.CENTER)
+            self.progress_box.set_hexpand(False)
+            self.progress_box.set_vexpand(False)
+            # Restore progress bar
+            self.progress_bar.set_size_request(280, -1)
+            self.progress_bar.set_margin_top(12)
+            self.progress_bar.set_margin_bottom(12)
+            self.progress_bar.set_hexpand(False)
+
+    def append_log(self, msg):
+        """Write a line to the inline log panel and auto-scroll."""
+        if not hasattr(self, 'log_buffer'):
+            return
+        try:
+            iter_end = self.log_buffer.get_end_iter()
+            self.log_buffer.insert(iter_end, msg + "\n")
+            mark = self.log_buffer.create_mark(None, self.log_buffer.get_end_iter(), False)
+            self.log_text_view.scroll_to_mark(mark, 0.0, True, 0.0, 1.0)
+        except Exception:
+            pass
 
     def installation_backend(self, disk_path):
         import datetime
@@ -1040,9 +1411,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
             def log_msg(msg):
                 ts = datetime.datetime.now().strftime("%H:%M:%S")
+                line = f"[{ts}] {msg}"
                 with open(log_file, "a") as lf:
-                    lf.write(f"[{ts}] {msg}\n")
+                    lf.write(line + "\n")
                 print(msg)
+                GLib.idle_add(self.append_log, line)
 
             def exec_cmd(cmd, shell=False):
                 cmd_str = ' '.join(cmd) if isinstance(cmd, list) else cmd
@@ -1116,7 +1489,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 exec_cmd(["sgdisk", "--zap-all", disk_path])
                 exec_cmd(["sgdisk", "--clear", disk_path])
                 exec_cmd(["sgdisk", "--new=1:0:+512M", "--typecode=1:ef00", "--change-name=1:EFI", disk_path])
-                exec_cmd(["sgdisk", "--new=2:0:+4G", "--typecode=2:8300", "--change-name=2:PulsarRecovery", disk_path])
+                exec_cmd(["sgdisk", "--new=2:0:+8G", "--typecode=2:8300", "--change-name=2:PulsarRecovery", disk_path])
                 exec_cmd(["sgdisk", "--new=3:0:0", "--typecode=3:8300", "--change-name=3:PulsarOS", disk_path])
                 exec_cmd(["sync"])
                 exec_cmd(["udevadm", "settle"])
@@ -1177,7 +1550,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 GLib.idle_add(self.update_progress, 0.05, "Cleaning and partitioning (MBR for BIOS: Recovery, Btrfs)...")
                 exec_cmd(["wipefs", "-a", "-f", disk_path])
                 exec_cmd(["dd", "if=/dev/zero", f"of={disk_path}", "bs=512", "count=2048"])
-                sfdisk_script = "label: dos\nsize=4096M, type=83\nsize=+, type=83, bootable\n"
+                # Recovery partition sized to hold the regenerated base SquashFS
+                # (~3.5-4GB) plus the Debian recovery environment (374MB) and kernel.
+                sfdisk_script = "label: dos\nsize=8192M, type=83\nsize=+, type=83, bootable\n"
                 if "TEST_MODE" in os.environ:
                     print(f"[TEST_MODE] Simulating sfdisk partitioning script:\n{sfdisk_script}")
                 else:
@@ -1250,7 +1625,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     time.sleep(0.08)
             else:
                 rsync_cmd = [
-                    "rsync", "-aHAXx",
+                    "rsync", "-aAXx",
                     "--info=progress2",
                     "--exclude=/dev/*",
                     "--exclude=/proc/*",
@@ -1265,6 +1640,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     "--exclude=/home/*/.local/share/gvfs-metadata/*",
                     "--exclude=/home/*/.cache/*",
                     "--exclude=/root/.cache/*",
+                    "--exclude=/recovery/*",
+                    "--exclude=/live/*",
                     "/", "/mnt"
                 ]
                 proc = subprocess.Popen(rsync_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
@@ -1295,6 +1672,227 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     err_output = proc.stderr.read()
                     raise Exception(f"System replication failed (code {proc.returncode})\n{err_output}")
                 
+            # ── Post-install: install packages removed from minimal ISO ───────────
+            # In minimal ISO mode, heavy packages (Docker, VM tools, full firmware,
+            # multimedia apps) were excluded to keep the ISO under 3GB. Install them
+            # now that the system is on disk, then regenerate the recovery base
+            # SquashFS so the deployed image carries the full system (not the
+            # trimmed one shipped on the ISO).
+            extra_packages_installed = False
+            if "TEST_MODE" not in os.environ:
+                # Detect whether this came from a minimal build by checking for a marker
+                minimal_marker = "/mnt/etc/pulsaros-minimal-build"
+                is_minimal = os.path.exists(minimal_marker)
+
+                if is_minimal:
+                    log_msg("Minimal ISO detected — installing excluded packages...")
+                else:
+                    log_msg("Full ISO detected — no extra packages needed.")
+
+                if is_arch:
+                    # ── Arch: install via pacman from the [inled] + Arch repos ──
+                    if is_minimal and self.install_extra_packages:
+                        GLib.idle_add(self.update_progress, 0.80, "Installing extra packages (Docker, firmware, drivers, apps)...")
+                        log_msg("Post-install: installing packages removed from minimal ISO via pacman...")
+                        try:
+                            exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
+                            # Every package removed from base-arch.list when building
+                            # base-arch-minimal.list, grouped for readability.
+                            extra_packages = [
+                                # Docker container runtime
+                                "docker",
+                                # Full firmware (replaces the split sub-packages with the meta)
+                                "linux-firmware",
+                                "sof-firmware",
+                                "alsa-firmware",
+                                # VM guest tools (for VM installs)
+                                "open-vm-tools",
+                                "virtualbox-guest-utils",
+                                "xf86-video-qxl",
+                                # Old (pre-GCN) AMD video driver and misc system utils
+                                "xf86-video-ati",
+                                "xfsprogs",
+                                "p7zip",
+                                "inxi",
+                                "wl-clipboard",
+                                "python-yaml",
+                                # Multimedia & image tools
+                                "vlc",
+                                "totem",
+                                "imagemagick",
+                                # Network shares & portal GVFS backends
+                                "gvfs-smb",
+                                "gvfs-gphoto2",
+                                # GNOME apps
+                                "geary",
+                                "gnome-music",
+                                "gnome-contacts",
+                                "gnome-weather",
+                                "gnome-clocks",
+                                "xournalpp",
+                                "papers",
+                                "loupe",
+                                "gnome-disk-utility",
+                                "gnome-logs",
+                                "baobab",
+                                # Editor and WebKit/GTK3 extras pulled by the welcome app
+                                "vim",
+                                "webkitgtk-6.0",
+                                # NVIDIA proprietary drivers
+                                "nvidia-open",
+                                "nvidia-settings",
+                                # Broadcom & DKMS driver support
+                                "dkms",
+                                "linux-headers",
+                                # Global menu / Fildem dependencies
+                                "appmenu-gtk-module",
+                                "python-xlib",
+                                "python-setuptools",
+                                "python-pip",
+                            ]
+                            # Initialize pacman keyring inside the chroot so
+                            # signature verification works (avoids GPGME errors),
+                            # then import the Inled repository GPG key.
+                            GLib.idle_add(self.update_progress, 0.81, "Setting up package manager...")
+                            log_msg("Initializing pacman keyring and Inled repo key...")
+                            exec_cmd(["chroot", "/mnt", "bash", "-c",
+                                       "mkdir -p /etc/pacman.d/gnupg && "
+                                       "pacman-key --init && "
+                                       "pacman-key --populate archlinux && "
+                                       "curl -s https://apt.inled.es/archive.key | pacman-key -a - && "
+                                       "pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F"])
+                            GLib.idle_add(self.update_progress, 0.82, "Syncing package databases...")
+                            exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
+                            GLib.idle_add(self.update_progress, 0.83, f"Installing {len(extra_packages)} extra packages...")
+                            # ── Streaming pacman install (parse download progress) ──
+                            pacman_cmd = [
+                                "chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
+                                *extra_packages
+                            ]
+                            pacman_proc = subprocess.Popen(
+                                pacman_cmd,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT,
+                                text=True,
+                                bufsize=1,
+                            )
+                            _pbuf = ""
+                            while True:
+                                ch = pacman_proc.stdout.read(1)
+                                if not ch:
+                                    break
+                                if ch in ('\r', '\n'):
+                                    line = _pbuf.strip()
+                                    _pbuf = ""
+                                    if not line:
+                                        continue
+                                    log_msg(f"  pacman: {line}")
+                                    # Download progress: "pkgname  123.4 KiB  0.5 MiB/s 00:00 [####] 100%"
+                                    m_dl = re.search(r"(\d+)%", line)
+                                    if m_dl and '[#' in line:
+                                        pct = int(m_dl.group(1))
+                                        frac = 0.83 + (pct / 100.0) * 0.07
+                                        GLib.idle_add(self.update_progress, frac, f"Downloading packages: {pct}%")
+                                    # Install progress: "(1/3) installing pkg..."
+                                    m_inst = re.search(r"\((\d+)/(\d+)\)\s+installing\s+", line)
+                                    if m_inst:
+                                        cur, total = int(m_inst.group(1)), int(m_inst.group(2))
+                                        frac = 0.90 + (cur / total) * 0.02
+                                        GLib.idle_add(self.update_progress, frac, f"Installing package {cur}/{total}: {line.split('installing ')[-1]}")
+                                else:
+                                    _pbuf += ch
+                            pacman_proc.wait()
+                            if pacman_proc.returncode != 0:
+                                raise Exception(f"pacman -S failed (code {pacman_proc.returncode})")
+                            log_msg("Post-install: extra packages installed successfully.")
+                            extra_packages_installed = True
+                        except Exception as post_err:
+                            log_msg(f"Post-install package installation: {post_err}")
+                        finally:
+                            subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"], capture_output=True)
+
+                else:
+                    # ── Debian: install via apt from Debian + Inled repositories ──
+                    if is_minimal and self.install_extra_packages:
+                        GLib.idle_add(self.update_progress, 0.80, "Installing extra packages (Docker, firmware, drivers, apps)...")
+                        log_msg("Post-install: installing packages removed from minimal ISO via apt...")
+                        try:
+                            exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
+                            extra_packages = [
+                                "docker.io",
+                                "firmware-linux",
+                                "firmware-sof-signed",
+                                "firmware-misc-nonfree",
+                                "open-vm-tools",
+                                "virtualbox-guest-utils",
+                                "xserver-xorg-video-qxl",
+                                "vlc",
+                                "totem",
+                                "imagemagick",
+                                "gvfs-fuse",
+                                "gvfs-backends",
+                                "geary",
+                                "gnome-music",
+                                "gnome-contacts",
+                                "gnome-weather",
+                                "gnome-clocks",
+                                "nvidia-driver",
+                                "dkms",
+                                "linux-headers-amd64",
+                                "xdotool",
+                                "python3-xlib",
+                            ]
+                            exec_cmd(["chroot", "/mnt", "apt-get", "update"])
+                            # ── Streaming apt install (parse progress) ──
+                            apt_cmd = [
+                                "chroot", "/mnt", "apt-get", "install", "-y",
+                                "--no-install-recommends",
+                                *extra_packages,
+                            ]
+                            apt_proc = subprocess.Popen(
+                                apt_cmd,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT,
+                                text=True,
+                                bufsize=1,
+                            )
+                            _abuf = ""
+                            while True:
+                                ch = apt_proc.stdout.read(1)
+                                if not ch:
+                                    break
+                                if ch in ('\r', '\n'):
+                                    line = _abuf.strip()
+                                    _abuf = ""
+                                    if not line:
+                                        continue
+                                    log_msg(f"  apt: {line}")
+                                    # Progress: "Do you want to continue? [Y/n]"
+                                    # or "Unpacking pkg (1/23)..."
+                                    m_inst = re.search(r"(\d+)/(\d+)", line)
+                                    if m_inst:
+                                        cur, total = int(m_inst.group(1)), int(m_inst.group(2))
+                                        frac = 0.83 + (cur / total) * 0.07
+                                        GLib.idle_add(self.update_progress, frac, f"Installing package {cur}/{total}")
+                                else:
+                                    _abuf += ch
+                            apt_proc.wait()
+                            if apt_proc.returncode != 0:
+                                raise Exception(f"apt-get install failed (code {apt_proc.returncode})")
+                            log_msg("Post-install: extra packages installed successfully (apt).")
+                            extra_packages_installed = True
+                        except Exception as post_err:
+                            log_msg(f"Post-install apt installation: {post_err}")
+                        finally:
+                            subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"], capture_output=True)
+
+                # Remove the marker so extra packages are not re-installed on reboot.
+                try:
+                    if os.path.exists(minimal_marker):
+                        os.remove(minimal_marker)
+                except Exception:
+                    pass
+
             # Populate Recovery Partition with dedicated Debian Recovery image, clean base image, and assistant.
             try:
                 os.makedirs("/mnt/recovery/images/x86_64", exist_ok=True)
@@ -1352,16 +1950,25 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     "/run/live/medium/images/pulsaros-base.squashfs",
                     "/recovery/images/pulsaros-base.squashfs",
                 ]
+                base_dst = "/mnt/recovery/images/pulsaros-base.squashfs"
+                # If we already regenerated the base image with post-install
+                # packages above, keep it — do not overwrite it with the trimmed
+                # ISO-provided copy. Only backfill the archiso-style .sfs link.
+                regenerated_existing = os.path.isfile(base_dst) and os.path.getsize(base_dst) > 500 * 1024 * 1024
                 found_base_squash = next((p for p in base_squash_sources if os.path.isfile(p) and os.path.getsize(p) > 500 * 1024 * 1024), None)
-                if found_base_squash and "TEST_MODE" not in os.environ:
-                    base_dst = "/mnt/recovery/images/pulsaros-base.squashfs"
-                    shutil.copy2(found_base_squash, base_dst)
+                if (found_base_squash or regenerated_existing) and "TEST_MODE" not in os.environ:
+                    if not regenerated_existing:
+                        shutil.copy2(found_base_squash, base_dst)
+                        log_msg(f"Base system restoration image deployed from {found_base_squash} -> {base_dst}")
+                    else:
+                        log_msg(f"Base system restoration image already regenerated at {base_dst} — keeping it.")
+                    # Ensure the archiso-style path also points at the base image.
                     try:
                         arch_dst = "/mnt/recovery/images/x86_64/airootfs.sfs"
-                        os.link(base_dst, arch_dst)
+                        if os.path.isfile(base_dst) and not os.path.isfile(arch_dst):
+                            os.link(base_dst, arch_dst)
                     except Exception:
                         pass
-                    log_msg(f"Base system restoration image deployed from {found_base_squash} -> {base_dst}")
             except Exception as rec_copy_err:
                 print(f"Notice: Recovery squashfs copy: {rec_copy_err}")
 

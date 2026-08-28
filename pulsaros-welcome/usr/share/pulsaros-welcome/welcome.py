@@ -30,9 +30,22 @@ import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
-gi.require_version("WebKit2", "4.1")
 
-from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, WebKit2
+# WebKit2 is optional — skip the Hello animation if the typelib is absent
+try:
+    gi.require_version("WebKit2", "4.1")
+    from gi.repository import WebKit2
+    HAS_WEBKIT = True
+except (ValueError, ImportError):
+    try:
+        gi.require_version("WebKit2", "6.0")
+        from gi.repository import WebKit2
+        HAS_WEBKIT = True
+    except (ValueError, ImportError):
+        HAS_WEBKIT = False
+        print("Warning: WebKit2 not found — skipping Hello animation")
+
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk
 
 
 def is_arch_system():
@@ -1429,8 +1442,12 @@ def main():
     force = "--force" in sys.argv or "-f" in sys.argv
 
     if not os.path.exists(done_file) or force or first_boot:
-        HelloWindow(start_assistant)
-        Gtk.main()
+        if HAS_WEBKIT:
+            HelloWindow(start_assistant)
+            Gtk.main()
+        else:
+            # No WebKit available — skip Hello animation, launch OOTB directly
+            start_assistant()
     else:
         print("Welcome app already completed. Use --force to run again.")
 

@@ -78,15 +78,22 @@ class CleanupWindow(Adw.ApplicationWindow):
 
     def _cleanup_thread(self):
         error_msg = None
-        try:
-            res = subprocess.run(
-                ["pkexec", "/usr/libexec/pulsar-cleanup-live.sh"],
-                capture_output=True, text=True
-            )
-            if res.returncode != 0 and "authorized" not in res.stderr.lower():
-                error_msg = res.stderr.strip() or "Permission denied"
-        except Exception as e:
-            error_msg = str(e)
+        # Try sudo first (user has sudoers access from OOTB), fall back to pkexec
+        ran_ok = False
+        for cmd in [
+            ["sudo", "/usr/libexec/pulsar-cleanup-live.sh"],
+            ["pkexec", "/usr/libexec/pulsar-cleanup-live.sh"],
+        ]:
+            try:
+                res = subprocess.run(cmd, capture_output=True, text=True)
+                if res.returncode == 0:
+                    ran_ok = True
+                    break
+                # pkexec returns 126/127 on auth failure — try next method
+            except Exception:
+                continue
+        if not ran_ok:
+            error_msg = "Could not run cleanup with sudo or pkexec."
 
         # Always remove sentinel to prevent infinite loop
         try:
@@ -94,7 +101,7 @@ class CleanupWindow(Adw.ApplicationWindow):
         except FileNotFoundError:
             pass
         except PermissionError:
-            subprocess.run(["pkexec", "rm", "-f", CLEANUP_SENTINEL], capture_output=True)
+            subprocess.run(["sudo", "rm", "-f", CLEANUP_SENTINEL], capture_output=True)
 
         time.sleep(1)
 
