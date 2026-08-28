@@ -1,7 +1,7 @@
-"""Native DBus StatusNotifierItem for Sayri.
+"""Pure GTK3 Tray AppIndicator for Sayri.
 
-Provides a system tray indicator with official Siri iOS 2021 icon,
-direct click toggle (no dropdown menus), and clean lifecycle management.
+Provides a permanent system tray indicator with official Siri iOS 2021 icon,
+fast toggle, settings launcher, and clean lifecycle management.
 """
 
 from __future__ import annotations
@@ -14,50 +14,25 @@ import threading
 
 import gi
 
-gi.require_version("Gio", "2.0")
-gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gio, GLib, Gtk
+from gi.repository import GLib, Gtk
+
+try:
+    gi.require_version("AyatanaAppIndicator3", "0.1")
+    from gi.repository import AyatanaAppIndicator3 as AppIndicator
+except Exception:
+    try:
+        gi.require_version("AppIndicator3", "0.1")
+        from gi.repository import AppIndicator3 as AppIndicator
+    except Exception:
+        AppIndicator = None
 
 from sayri import config, paths
 
-SNI_XML = """
-<node>
-  <interface name="org.kde.StatusNotifierItem">
-    <property name="Category" type="s" access="read"/>
-    <property name="Id" type="s" access="read"/>
-    <property name="Title" type="s" access="read"/>
-    <property name="Status" type="s" access="read"/>
-    <property name="IconName" type="s" access="read"/>
-    <property name="IconThemePath" type="s" access="read"/>
-    <property name="ItemIsMenu" type="b" access="read"/>
-    <method name="ContextMenu">
-      <arg name="x" type="i" direction="in"/>
-      <arg name="y" type="i" direction="in"/>
-    </method>
-    <method name="Activate">
-      <arg name="x" type="i" direction="in"/>
-      <arg name="y" type="i" direction="in"/>
-    </method>
-    <method name="SecondaryActivate">
-      <arg name="x" type="i" direction="in"/>
-      <arg name="y" type="i" direction="in"/>
-    </method>
-    <method name="Scroll">
-      <arg name="delta" type="i" direction="in"/>
-      <arg name="orientation" type="s" direction="in"/>
-    </method>
-    <signal name="NewTitle"/>
-    <signal name="NewIcon"/>
-    <signal name="NewStatus">
-      <arg name="status" type="s"/>
-    </signal>
-  </interface>
-</node>
-"""
+Gtk.init(sys.argv)
 
 
-def _ensure_local_icon() -> str:
+def _ensure_local_icon() -> None:
     user_icons = os.path.expanduser("~/.local/share/icons/hicolor")
     src = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "icons", "hicolor", "256x256", "apps", "sayri-tray.png"))
     if os.path.isfile(src):
@@ -70,7 +45,6 @@ def _ensure_local_icon() -> str:
                     shutil.copy2(src, dest)
                 except OSError:
                     pass
-    return os.path.expanduser("~/.local/share/icons")
 
 
 def send_sock_command(cmd: str) -> bool:
@@ -94,72 +68,63 @@ class SayriIndicator:
     def __init__(self) -> None:
         self.cfg = config.config
         self._sayri_proc: subprocess.Popen | None = None
-        self.icon_theme_path = _ensure_local_icon()
-        self.node_info = Gio.DBusNodeInfo.new_for_xml(SNI_XML)
+        self._settings_proc: subprocess.Popen | None = None
+        _ensure_local_icon()
 
-        self.bus_name = f"org.kde.StatusNotifierItem-{os.getpid()}-1"
-        self.owner_id = Gio.bus_own_name(
-            Gio.BusType.SESSION,
-            self.bus_name,
-            Gio.BusNameOwnerFlags.NONE,
-            self._on_bus_acquired,
-            self._on_name_acquired,
-            self._on_name_lost,
-        )
+        self._create_menu()
+        self._create_indicator()
 
-    def _on_bus_acquired(self, conn: Gio.DBusConnection, name: str) -> None:
-        conn.register_object(
-            "/StatusNotifierItem",
-            self.node_info.interfaces[0],
-            self._handle_method_call,
-            self._handle_get_property,
-            None,
-        )
+    def _create_menu(self) -> None:
+        self.menu = Gtk.Menu()
 
-    def _on_name_acquired(self, conn: Gio.DBusConnection, name: str) -> None:
-        try:
-            conn.call_sync(
-                "org.kde.StatusNotifierWatcher",
-                "/StatusNotifierWatcher",
-                "org.kde.StatusNotifierWatcher",
-                "RegisterStatusNotifierItem",
-                GLib.Variant("(s)", (self.bus_name,)),
-                None,
-                Gio.DBusCallFlags.NONE,
-                1000,
-                None,
+        # Toggle Sayri (Main action)
+        self.toggle_item = Gtk.MenuItem(label="Abrir Sayri")
+        self.toggle_item.connect("activate", self._on_toggle_sayri)
+        self.menu.append(self.toggle_item)
+
+        self.listen_item = Gtk.MenuItem(label="🎙️ Escuchar")
+        self.listen_item.connect("activate", self._on_listen)
+        self.menu.append(self.listen_item)
+
+        self.menu.append(Gtk.SeparatorMenuItem())
+
+        # Settings
+        self.settings_item = Gtk.MenuItem(label="⚙ Ajustes…")
+        self.settings_item.connect("activate", self._on_open_settings)
+        self.menu.append(self.settings_item)
+
+        self.menu.append(Gtk.SeparatorMenuItem())
+
+        # Quit
+        self.quit_item = Gtk.MenuItem(label="Cerrar Sayri")
+        self.quit_item.connect("activate", self._on_quit)
+        self.menu.append(self.quit_item)
+
+        self.menu.show_all()
+
+    def _create_indicator(self) -> None:
+        if AppIndicator is not None:
+            self.indicator = AppIndicator.Indicator.new(
+                "sayri-indicator",
+                "sayri-tray",
+                AppIndicator.IndicatorCategory.APPLICATION_STATUS,
             )
-            print("[Sayri] ✓ Native StatusNotifierItem registered (Direct Click Mode)")
-        except Exception as exc:
-            print(f"[Sayri] StatusNotifierWatcher register warning: {exc}")
+            self.indicator.set_status(AppIndicator.IndicatorStatus.ACTIVE)
+            self.indicator.set_title("Sayri")
+            self.indicator.set_menu(self.menu)
+            self.indicator.set_secondary_activate_target(self.toggle_item)
+        else:
+            self.status_icon = Gtk.StatusIcon.new_from_icon_name("sayri-tray")
+            self.status_icon.set_tooltip_text("Sayri Voice Assistant")
+            self.status_icon.connect("popup-menu", lambda _i, btn, time: self.menu.popup(None, None, None, None, btn, time))
+            self.status_icon.connect("activate", lambda _i: self._on_toggle_sayri(None))
 
-    def _on_name_lost(self, conn: Gio.DBusConnection, name: str) -> None:
-        pass
-
-    def _handle_method_call(self, conn, sender, path, iface, method, params, invocation) -> None:
-        if method in ("Activate", "SecondaryActivate", "ContextMenu"):
-            self._on_toggle_sayri()
-        invocation.return_value(None)
-
-    def _handle_get_property(self, conn, sender, path, iface, prop):
-        if prop == "Category":
-            return GLib.Variant("s", "ApplicationStatus")
-        elif prop == "Id":
-            return GLib.Variant("s", "sayri")
-        elif prop == "Title":
-            return GLib.Variant("s", "Sayri")
-        elif prop == "Status":
-            return GLib.Variant("s", "Active")
-        elif prop == "IconName":
-            return GLib.Variant("s", "sayri-tray")
-        elif prop == "IconThemePath":
-            return GLib.Variant("s", self.icon_theme_path)
-        elif prop == "ItemIsMenu":
-            return GLib.Variant("b", False)
-        return None
-
-    def _on_toggle_sayri(self) -> None:
+    def _on_toggle_sayri(self, _item=None) -> None:
         if not send_sock_command("toggle"):
+            self._ensure_sayri()
+
+    def _on_listen(self, _item=None) -> None:
+        if not send_sock_command("listen"):
             self._ensure_sayri()
 
     def _ensure_sayri(self) -> None:
@@ -170,11 +135,27 @@ class SayriIndicator:
         env["PYTHONPATH"] = lib_path + (":" + env["PYTHONPATH"] if "PYTHONPATH" in env else "")
         self._sayri_proc = subprocess.Popen([sys.executable, "-m", "sayri"], env=env)
 
+    def _on_open_settings(self, _item=None) -> None:
+        if self._settings_proc and self._settings_proc.poll() is None:
+            return
+        env = dict(os.environ)
+        lib_path = os.path.dirname(os.path.dirname(__file__))
+        env["PYTHONPATH"] = lib_path + (":" + env["PYTHONPATH"] if "PYTHONPATH" in env else "")
+        env.pop("LD_PRELOAD", None)
+        self._settings_proc = subprocess.Popen([sys.executable, "-m", "sayri.settings_gtk3"], env=env)
+
+    def _on_quit(self, _item=None) -> None:
+        send_sock_command("quit")
+        if self._sayri_proc and self._sayri_proc.poll() is None:
+            self._sayri_proc.terminate()
+        if self._settings_proc and self._settings_proc.poll() is None:
+            self._settings_proc.terminate()
+        Gtk.main_quit()
+
 
 def main() -> None:
     app = SayriIndicator()
-    loop = GLib.MainLoop()
-    loop.run()
+    Gtk.main()
 
 
 if __name__ == "__main__":
