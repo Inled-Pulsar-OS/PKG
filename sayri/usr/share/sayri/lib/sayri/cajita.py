@@ -308,18 +308,19 @@ class SayriCajita(Gtk.Box):
         self.card_overlay.set_size_request(400, -1)
         self.card_overlay.set_hexpand(True)
 
-        card_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        card_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         card_content.set_margin_start(16)
         card_content.set_margin_end(16)
         card_content.set_margin_top(14)
         card_content.set_margin_bottom(14)
 
+        # AI text response scroll
         self.scroll = Gtk.ScrolledWindow()
         self.scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.scroll.set_propagate_natural_height(True)
         self.scroll.set_max_content_height(240)
 
-        self.response_label = Gtk.Label(label="")
+        self.response_label = Gtk.Label()
         self.response_label.add_css_class("sayri-response-label")
         self.response_label.set_halign(Gtk.Align.START)
         self.response_label.set_valign(Gtk.Align.START)
@@ -328,6 +329,26 @@ class SayriCajita(Gtk.Box):
         self.response_label.set_selectable(True)
         self.scroll.set_child(self.response_label)
         card_content.append(self.scroll)
+
+        # Expandable command terminal output box
+        self.cmd_expander = Gtk.Expander(label="⚙️ Comando y salida de terminal")
+        self.cmd_expander.add_css_class("sayri-cmd-expander")
+
+        self.cmd_scroll = Gtk.ScrolledWindow()
+        self.cmd_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        self.cmd_scroll.set_propagate_natural_height(True)
+        self.cmd_scroll.set_max_content_height(160)
+
+        self.cmd_label = Gtk.Label()
+        self.cmd_label.add_css_class("sayri-terminal-label")
+        self.cmd_label.set_halign(Gtk.Align.FILL)
+        self.cmd_label.set_wrap(True)
+        self.cmd_label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        self.cmd_label.set_selectable(True)
+        self.cmd_scroll.set_child(self.cmd_label)
+        self.cmd_expander.set_child(self.cmd_scroll)
+        card_content.append(self.cmd_expander)
+        self.cmd_expander.set_visible(False)
 
         self.card_overlay.set_child(card_content)
 
@@ -372,14 +393,29 @@ class SayriCajita(Gtk.Box):
                 self.entry.set_text(text)
                 self.pill_bg.set_mode("active")
         elif kind == "assistant":
-            self.response_label.set_label(text)
+            escaped = GLib.markup_escape_text(text)
+            self.response_label.set_markup(f"<span foreground='#ffffff' font='11.5'>{escaped}</span>")
             self.card_overlay.set_visible(True)
-            self.card_bg.queue_draw()
+            self.card_bg.set_mode("rotating")
         elif kind == "hint":
             pass
         elif kind == "error":
-            self.response_label.set_label(f"⚠️ {text}")
+            escaped = GLib.markup_escape_text(text)
+            self.response_label.set_markup(f"<span foreground='#fca5a5' font='11.5'>⚠️ {escaped}</span>")
             self.card_overlay.set_visible(True)
+
+    def set_tool_output(self, cmd: str, output: str) -> None:
+        if not cmd:
+            self.cmd_expander.set_visible(False)
+            return
+        escaped_cmd = GLib.markup_escape_text(cmd)
+        escaped_out = GLib.markup_escape_text(output.strip()) if output else "(sin salida)"
+        markup = f"<span font_family='monospace' size='10500'><span foreground='#38bdf8'><b>$ {escaped_cmd}</b></span>\n\n<span foreground='#e2e8f0'>{escaped_out}</span></span>"
+        self.cmd_label.set_markup(markup)
+        self.cmd_expander.set_label(f"⚙️ Comando: {cmd[:32]}…")
+        self.cmd_expander.set_visible(True)
+        self.card_overlay.set_visible(True)
+        self.card_bg.set_mode("rotating")
 
     def set_mic(self, active: bool) -> None:
         if active:
@@ -405,7 +441,8 @@ class SayriCajita(Gtk.Box):
             self.card_bg.set_mode("idle")
 
     def clear(self) -> None:
-        self.response_label.set_label("")
+        self.response_label.set_markup("")
+        self.cmd_expander.set_visible(False)
         self.card_overlay.set_visible(False)
         self.card_bg.set_mode("idle")
         self.entry.set_sensitive(True)
