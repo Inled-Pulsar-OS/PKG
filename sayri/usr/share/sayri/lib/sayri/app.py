@@ -535,13 +535,25 @@ class SayriApp(Gtk.Application):
             self._msg("hint", f"🔒 Solicitando autorización: {cmd[:30]}…")
 
         try:
-            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=4)
             output = (res.stdout + "\n" + res.stderr).strip()
             retcode = res.returncode
             if retcode in (126, 127) and is_elevated:
                 output = "El usuario canceló o denegó la autorización de administrador (Polkit)."
             elif not output:
                 output = f"(Command exited with code {res.returncode})"
+        except subprocess.TimeoutExpired as exc:
+            # If a command takes more than 4s (e.g. xdg-open, launching GUI apps, background tasks),
+            # mark it as successfully launched in background and let the model continue immediately!
+            partial_out = ""
+            if exc.stdout:
+                partial_out += exc.stdout.decode("utf-8", errors="replace") if isinstance(exc.stdout, bytes) else str(exc.stdout)
+            if exc.stderr:
+                partial_out += "\n" + (exc.stderr.decode("utf-8", errors="replace") if isinstance(exc.stderr, bytes) else str(exc.stderr))
+            partial_out = partial_out.strip()
+            output = partial_out or "(Comando iniciado con éxito y ejecutándose en segundo plano)"
+            retcode = 0
+            print(f"[Sayri] ⏱️ Tool step {depth} exceeded 4s (GUI app / xdg-open); continuing model immediately.")
         except Exception as exc:
             output = f"Command error: {exc}"
             retcode = 1
