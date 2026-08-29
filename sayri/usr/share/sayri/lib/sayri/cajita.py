@@ -143,6 +143,8 @@ SVG_MIC = b"""<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" vie
 
 SVG_MIC_ACTIVE = b"""<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#ffffff" stroke="none"><circle cx="12" cy="12" r="6"/></svg>"""
 
+SVG_CLOSE = b"""<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>"""
+
 
 def markdown_to_pango(text: str) -> str:
     """Convert standard Markdown to formatted Pango markup with bright white text."""
@@ -376,6 +378,26 @@ class SayriCajita(Gtk.Box):
         self.mic_btn.set_tooltip_text("Toggle Microphone")
         self.mic_btn.connect("clicked", lambda _b: self.app.toggle_listening())
         pill_row.append(self.mic_btn)
+
+        # Rightmost: Close button
+        self.close_btn = Gtk.Button()
+        self.close_btn.set_child(_svg_icon(SVG_CLOSE))
+        self.close_btn.set_has_frame(False)
+        self.close_btn.add_css_class("sayri-icon-btn")
+        self.close_btn.set_tooltip_text("Close Sayri (Esc)")
+        self.close_btn.connect("clicked", lambda _b: self.app.overlay.hide() if self.app.overlay else None)
+        pill_row.append(self.close_btn)
+
+        # ESC key controller on entry
+        key_ctrl = Gtk.EventControllerKey.new()
+        def _on_key_pressed(_ctrl, keyval, _keycode, _state):
+            if keyval == Gdk.KEY_Escape:
+                if self.app.overlay:
+                    self.app.overlay.hide()
+                return True
+            return False
+        key_ctrl.connect("key-pressed", _on_key_pressed)
+        self.entry.add_controller(key_ctrl)
 
         self.pill_overlay.add_overlay(pill_row)
         self.append(self.pill_overlay)

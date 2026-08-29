@@ -134,6 +134,7 @@ class SayriApp(Gtk.Application):
         self._mic_on = False
         self.session = None
         self._assistant_text = ""
+        self._current_query_id = 0
         self.history: list[tuple[str, str]] = []
 
         self.cfg.on_change(self._on_config_change)
@@ -222,8 +223,20 @@ class SayriApp(Gtk.Application):
             self.overlay.toggle()
 
     def on_shown(self) -> None:
-        """Called when Sayri is shown: play activation sound and start listening."""
-        print("[Sayri] 👁️ Overlay shown: playing activation sound.")
+        """Called when Sayri is shown: clean UI, play activation sound, and start listening."""
+        print("[Sayri] 👁️ Overlay shown: cleaning UI and playing activation sound.")
+        self._current_query_id += 1
+        self.tts.cancel()
+        sound.stop_all()
+        self._set_busy(False)
+        self._assistant_text = ""
+        self._last_assistant_reply = ""
+        self._on_level(0.0)
+        if self.overlay:
+            self.overlay.clear()
+            self.overlay.cajita.clear()
+            self.overlay.cajita.entry.set_text("")
+            self.overlay.cajita.card_overlay.set_visible(False)
         sound.play("activate")
         self.start_listening()
 
@@ -247,15 +260,21 @@ class SayriApp(Gtk.Application):
             self.overlay.set_state_sync(state)
 
     def on_hidden(self) -> None:
-        """Called when Sayri is hidden: stop all speech, sounds, and active execution."""
+        """Called when Sayri is hidden: stop all speech, sounds, active execution, and clear history display."""
         print("[Sayri] 🙈 Overlay hidden: halting all speech, sounds, and active execution.")
+        self._current_query_id += 1
         self.tts.cancel()
         sound.stop_all()
         self._set_busy(False)
         self._assistant_text = ""
+        self._last_assistant_reply = ""
         self._on_level(0.0)
         if self.overlay:
             self.overlay.cajita.set_speaking(False)
+            self.overlay.clear()
+            self.overlay.cajita.clear()
+            self.overlay.cajita.entry.set_text("")
+            self.overlay.cajita.card_overlay.set_visible(False)
         self.stop_listening()
         mode = self.cfg.get_string("stt", "mode")
         if mode in ("always", "wakeword"):
@@ -405,11 +424,6 @@ class SayriApp(Gtk.Application):
         self._set_partial(f"“{text}…”")
 
     def _handle_utterance(self, text: str) -> None:
-        # If user explicitly stopped/muted, discard buffered audio
-        if not self.armed and self.state == "idle":
-            sound.stop_all()
-            return
-
         if not text.strip():
             self._set_partial("")
             mode = self.cfg.get_string("stt", "mode")
@@ -529,6 +543,8 @@ class SayriApp(Gtk.Application):
         text = text.strip()
         if not text:
             return
+        self._current_query_id += 1
+        query_id = self._current_query_id
         self._stop_session()
         self.tts.cancel()
         self.armed = False
@@ -549,10 +565,12 @@ class SayriApp(Gtk.Application):
         messages.append({"role": "user", "content": text})
         self.history.append(("user", text))
 
-        threading.Thread(target=self._llm_worker, args=(messages, 1),
+        threading.Thread(target=self._llm_worker, args=(messages, 1, query_id),
                          daemon=True).start()
 
-    def _llm_worker(self, messages: list[dict], depth: int = 1) -> None:
+    def _llm_worker(self, messages: list[dict], depth: int = 1, query_id: int = 0) -> None:
+        if query_id != self._current_query_id:
+            return
         llm.stream_chat(
             self.cfg.get_string("provider", "base_url"),
             self.cfg.get_string("provider", "api_key"),
@@ -562,16 +580,20 @@ class SayriApp(Gtk.Application):
             max_tokens=self.cfg.get_int("provider", "max_tokens") or None,
             stream=self.cfg.get_bool("provider", "stream"),
             timeout=self.cfg.get_int("provider", "timeout"),
-            on_delta=lambda d: GLib.idle_add(self._on_delta, d),
-            on_done=lambda full: GLib.idle_add(self._on_done, full, messages, depth),
-            on_error=lambda e: GLib.idle_add(self._on_error, e),
+            on_delta=lambda d: GLib.idle_add(self._on_delta, d, query_id),
+            on_done=lambda full: GLib.idle_add(self._on_done, full, messages, depth, query_id),
+            on_error=lambda e: GLib.idle_add(self._on_error, e, query_id),
         )
 
-    def _on_delta(self, delta: str) -> None:
+    def _on_delta(self, delta: str, query_id: int = 0) -> None:
+        if query_id != self._current_query_id:
+            return
         self._assistant_text += delta
         self._set_assistant(self._assistant_text)
 
-    def _on_done(self, full: str, messages: list[dict] | None = None, depth: int = 1) -> None:
+    def _on_done(self, full: str, messages: list[dict] | None = None, depth: int = 1, query_id: int = 0) -> None:
+        if query_id != self._current_query_id:
+            return
         import re
         if full and self.cfg.get_bool("provider", "agent_mode") and messages and depth < 6:
             m = re.search(r"```(?:bash|sh)?\s*\n(.*?)\n```", full, re.DOTALL)
@@ -581,7 +603,7 @@ class SayriApp(Gtk.Application):
                     print(f"[Sayri] ⚙️ Agent step {depth} executing: `{cmd}`")
                     self._msg("hint", f"⚙️ Ejecutando ({depth}): {cmd[:36]}…")
                     threading.Thread(target=self._execute_tool_and_followup,
-                                     args=(messages, full, cmd, depth), daemon=True).start()
+                                     args=(messages, full, cmd, depth, query_id), daemon=True).start()
                     return
 
         if full:
@@ -589,9 +611,11 @@ class SayriApp(Gtk.Application):
             self._set_assistant(full)
             self.history.append(("assistant", full))
             self.history = self.history[-HISTORY_MAX * 2:]
-        self._finish_reply(full)
+        self._finish_reply(full, query_id)
 
-    def _execute_tool_and_followup(self, messages: list[dict], full_reply: str, cmd: str, depth: int = 1) -> None:
+    def _execute_tool_and_followup(self, messages: list[dict], full_reply: str, cmd: str, depth: int = 1, query_id: int = 0) -> None:
+        if query_id != self._current_query_id:
+            return
         retcode = 0
         raw_cmd = cmd.strip()
         is_elevated = "pkexec" in raw_cmd or "sudo" in raw_cmd
@@ -624,6 +648,9 @@ class SayriApp(Gtk.Application):
             output = f"Command error: {exc}"
             retcode = 1
 
+        if query_id != self._current_query_id:
+            return
+
         print(f"[Sayri] ✓ Tool step {depth} exit {retcode} ({len(output)} bytes): \"{output[:100]}...\"")
         followup_messages = list(messages)
         followup_messages.append({"role": "assistant", "content": full_reply})
@@ -646,16 +673,20 @@ class SayriApp(Gtk.Application):
 
         GLib.idle_add(lambda: self.overlay and self.overlay.cajita.set_tool_output(cmd, output))
         self._assistant_text = ""
-        self._llm_worker(followup_messages, depth + 1)
+        self._llm_worker(followup_messages, depth + 1, query_id)
 
-    def _on_error(self, exc: Exception) -> None:
+    def _on_error(self, exc: Exception, query_id: int = 0) -> None:
+        if query_id != self._current_query_id:
+            return
         self._msg("error", f"Provider error: {exc}")
         self._set_busy(False)
         if self.overlay:
             self.overlay.cajita.set_speaking(False)
         self._after_reply()
 
-    def _finish_reply(self, full: str) -> None:
+    def _finish_reply(self, full: str, query_id: int = 0) -> None:
+        if query_id != self._current_query_id:
+            return
         self._last_assistant_reply = full
         spoken = markdown_to_plain_speech(full)
         if self.cfg.get_bool("tts", "enabled") and spoken and self.tts.ready:
