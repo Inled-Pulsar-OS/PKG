@@ -42,9 +42,8 @@ def list_skills() -> list[dict[str, Any]]:
                         if line_s.startswith("description:"):
                             desc = line_s.split("description:", 1)[1].strip(" \"'")
                             break
-                        elif line_s and not line_s.startswith(("#", "---")):
+                        elif line_s and not line_s.startswith(("#", "---", "name:")) and not desc:
                             desc = line_s
-                            break
             except Exception:
                 pass
         result.append({
