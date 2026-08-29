@@ -397,12 +397,11 @@ class SayriCajita(Gtk.Box):
         card_content.append(self.cmd_expander)
         self.cmd_expander.set_visible(False)
 
-        self.card_overlay.set_child(card_content)
-
-        # card_bg drawn behind/around the card
         self.card_bg = ChromaBackground(is_pill=False)
-        self.card_bg.set_can_target(False)
-        self.card_overlay.add_overlay(self.card_bg)
+        self.card_overlay.set_child(self.card_bg)
+
+        # card_content drawn ON TOP of the background
+        self.card_overlay.add_overlay(card_content)
 
         self.append(self.card_overlay)
 
