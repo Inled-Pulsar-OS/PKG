@@ -30,11 +30,17 @@ CAJITA_CSS = b"""
     background-color: transparent;
 }
 
+entry,
 entry.sayri-pill-entry,
 entry.sayri-pill-entry:focus,
 entry.sayri-pill-entry:backdrop,
 entry.sayri-pill-entry text,
-entry.sayri-pill-entry text:focus {
+entry.sayri-pill-entry text:focus,
+entry.sayri-pill-entry text:backdrop,
+entry.sayri-pill-entry > text,
+entry.sayri-pill-entry > text:focus,
+entry.sayri-pill-entry > text:backdrop,
+entry.sayri-pill-entry > text > placeholder {
     background: transparent;
     background-color: transparent;
     background-image: none;
@@ -48,13 +54,16 @@ entry.sayri-pill-entry text:focus {
     min-height: 36px;
 }
 
+button,
+button.flat,
 button.sayri-icon-btn,
 button.sayri-icon-btn:hover,
 button.sayri-icon-btn:active,
 button.sayri-icon-btn:focus,
 button.sayri-icon-btn:checked,
 button.sayri-icon-btn:disabled,
-button.sayri-icon-btn:backdrop {
+button.sayri-icon-btn:backdrop,
+button.sayri-icon-btn * {
     background: transparent;
     background-color: transparent;
     background-image: none;
@@ -75,11 +84,6 @@ button.sayri-icon-btn:backdrop {
     border-radius: 20px;
     padding: 16px 20px;
     min-height: 48px;
-}
-
-.sayri-response-card-speaking {
-    border: 1.5px solid #a855f7;
-    box-shadow: 0 0 16px rgba(168, 85, 247, 0.55), 0 0 30px rgba(56, 189, 248, 0.40);
 }
 
 .sayri-response-label {
@@ -275,6 +279,7 @@ class SayriCajita(Gtk.Box):
 
         # Center: Text input entry
         self.entry = Gtk.Entry()
+        self.entry.set_has_frame(False)
         self.entry.add_css_class("sayri-pill-entry")
         self.entry.set_placeholder_text("Talk to Siri…")
         self.entry.set_hexpand(True)
@@ -360,16 +365,15 @@ class SayriCajita(Gtk.Box):
             self.entry.set_text(text)
             self.pill_bg.set_mode("active")
         elif kind == "partial":
-            self.entry.set_text(text)
-            self.pill_bg.set_mode("active")
+            if not self.entry.has_focus():
+                self.entry.set_text(text)
+                self.pill_bg.set_mode("active")
         elif kind == "assistant":
             self.response_label.set_label(text)
             self.card_overlay.set_visible(True)
             self.card_bg.queue_draw()
         elif kind == "hint":
-            if self.response_label.get_label() == "":
-                self.response_label.set_label(text)
-                self.card_overlay.set_visible(True)
+            pass
         elif kind == "error":
             self.response_label.set_label(f"⚠️ {text}")
             self.card_overlay.set_visible(True)
