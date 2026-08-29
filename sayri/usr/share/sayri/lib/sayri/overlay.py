@@ -122,12 +122,14 @@ class SayriOverlay:
             self.cajita.entry.grab_focus()
             self.cajita.entry.set_position(-1)
         GLib.idle_add(_focus)
+        if hasattr(self, "app") and self.app and hasattr(self.app, "on_shown"):
+            self.app.on_shown()
 
     def hide(self) -> None:
         self._is_visible = False
         self._was_active = False
         self.win.set_visible(False)
-        if hasattr(self, "app") and self.app:
+        if hasattr(self, "app") and self.app and hasattr(self.app, "on_hidden"):
             self.app.on_hidden()
 
     def toggle(self) -> None:
