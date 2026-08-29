@@ -126,10 +126,16 @@ def _get_effective_system_prompt(cfg) -> str:
         "Para tareas que requieran privilegios de administrador / root (instalar o actualizar paquetes del sistema con pacman, modificar /etc, systemctl del sistema), usa siempre `pkexec <comando>`.\n"
         "El sistema interceptará la elevación y solicitará confirmación gráfica al usuario mediante Polkit antes de proceder.\n\n"
         "FLUJO AGÉNTICO AUTÓNOMO:\n"
-        "Cuando el usuario te pida una tarea, abrir aplicaciones, modificar ajustes o consultar datos, emite un bloque:\n"
+        "Cuando el usuario te pida una tarea, abrir aplicaciones, modificar ajustes o consultar datos, DEBES usar EXACTAMENTE este formato para emitir comandos:\n\n"
         "```bash\n"
         "<comando bash>\n"
-        "```\n"
+        "```\n\n"
+        "REGLAS CRÍTICAS (no las incumplas):\n"
+        "1. SIEMPRE usa bloques de código markdown con 'bash' después de las triples comillas: \"```bash\".\n"
+        "2. NUNCA uses etiquetas XML como <bash>, <sh>, <tool>, etc.\n"
+        "3. Un bloque bash contiene UN SOLO comando. No metas múltiples comandos separados por punto y coma.\n"
+        "4. Primero responde con una frase breve describiendo qué vas a hacer, Y LUEGO el bloque bash.\n"
+        "5. Si necesitas ejecutar varios pasos, hazlo en turnos separados: un bloque por turno.\n\n"
         "Ejecutarás comandos de forma interactiva. Si un comando falla o necesitas más pasos, recibirás el código de salida y error en el siguiente turno y podrás emitir nuevos comandos bash para corregir el error hasta lograr el objetivo.\n"
         "Responde siempre de forma natural, concisa y agradable (1 a 3 frases habladas para voz)."
     )
@@ -621,7 +627,10 @@ class SayriApp(Gtk.Application):
             return
         import re
         if full and self.cfg.get_bool("provider", "agent_mode") and messages and depth < 6:
+            # Support markdown code blocks AND XML-style tags
             m = re.search(r"```(?:bash|sh)?\s*\n(.*?)\n```", full, re.DOTALL)
+            if not m:
+                m = re.search(r"<(?:bash|sh|tool)>(.*?)</(?:bash|sh|tool)>", full, re.DOTALL)
             if m:
                 cmd = m.group(1).strip()
                 if cmd:

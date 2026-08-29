@@ -137,6 +137,21 @@ viewport:backdrop {
 }
 """
 
+def _find_sayri_icon() -> bytes | None:
+    """Locate the installed sayri icon PNG for the cajita button."""
+    import os
+    for candidate in (
+        "/usr/share/icons/hicolor/48x48/apps/sayri.png",
+        "/usr/share/icons/hicolor/256x256/apps/sayri.png",
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", "icons", "hicolor", "48x48", "apps", "sayri.png"),
+    ):
+        if os.path.isfile(candidate):
+            with open(candidate, "rb") as f:
+                return f.read()
+    return None
+
+_SAYRI_ICON_BYTES = _find_sayri_icon()
+
 SVG_SIRI_ICON = b"""<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#a855f7" stroke-width="2.2"/><path d="M6 12c3-4 9-4 12 0" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round"/><path d="M6 12c3 4 9 4 12 0" stroke="#ec4899" stroke-width="2.2" stroke-linecap="round"/></svg>"""
 
 SVG_MIC = b"""<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f1f5f9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>"""
@@ -344,9 +359,21 @@ class SayriCajita(Gtk.Box):
         pill_row.set_margin_bottom(6)
         pill_row.set_valign(Gtk.Align.CENTER)
 
-        # Left: Siri / Settings icon button
+        # Left: Sayri / Settings icon button
         self.siri_btn = Gtk.Button()
-        self.siri_btn.set_child(_svg_icon(SVG_SIRI_ICON))
+        if _SAYRI_ICON_BYTES:
+            try:
+                texture = Gdk.Texture.new_from_bytes(GLib.Bytes.new(_SAYRI_ICON_BYTES))
+                pic = Gtk.Picture.new_for_paintable(texture)
+                pic.set_content_fit(Gtk.ContentFit.CONTAIN)
+                pic.set_size_request(28, 28)
+                pic.set_valign(Gtk.Align.CENTER)
+                pic.set_halign(Gtk.Align.CENTER)
+                self.siri_btn.set_child(pic)
+            except Exception:
+                self.siri_btn.set_child(_svg_icon(SVG_SIRI_ICON))
+        else:
+            self.siri_btn.set_child(_svg_icon(SVG_SIRI_ICON))
         self.siri_btn.set_has_frame(False)
         self.siri_btn.add_css_class("flat")
         self.siri_btn.add_css_class("sayri-icon-btn")
