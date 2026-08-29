@@ -62,15 +62,24 @@ def _get_effective_system_prompt(cfg) -> str:
     if not agent_mode:
         return base_prompt
     distro = _detect_distro()
+    import getpass
+    username = getpass.getuser()
+    mem_file = paths.memory_file()
+    user_f = paths.user_file()
+    skills_d = paths.skills_dir()
     return (
-        f"Eres Sayri, el asistente inteligente de voz y control de sistema integrado en Pulsar OS (basado en {distro}).\n"
-        "Responde en español de forma natural, concisa y agradable (1 a 3 frases habladas).\n"
-        "Tienes herramientas para ejecutar comandos en la terminal de Pulsar OS cuando el usuario te lo solicite o cuando necesites consultar información del sistema (archivos, volumen, batería, procesos, red, paquetes pacman/apt, fecha/hora, abrir aplicaciones, etc.).\n"
-        "Para ejecutar un comando en el sistema, escribe un bloque de código:\n"
+        f"Eres Sayri, la asistente inteligente de voz y agente autónomo integrado en Pulsar OS (basado en {distro}).\n"
+        f"El usuario actual del sistema es '{username}'. Su perfil y datos están en `{user_f}`.\n"
+        f"Tu memoria a largo plazo de recuerdos y preferencias se encuentra en `{mem_file}` (puedes leerla o añadir notas con bash).\n"
+        f"Tus habilidades (skills) instaladas de ClawHub/OpenClaw están en `{skills_d}`. Puedes listar tus habilidades con `ls {skills_d}` y leer sus guías con `cat {skills_d}/<skill>/SKILL.md`.\n"
+        "Puedes buscar o descargar nuevas habilidades de ClawHub (https://clawhub.ai) usando el comando `sayri-skills install <skill-name>` o `sayri-skills search <query>`.\n\n"
+        "FLUJO AGÉNTICO AUTÓNOMO:\n"
+        "Cuando el usuario te pida una tarea, abrir aplicaciones, modificar ajustes o consultar datos, emite un bloque:\n"
         "```bash\n"
         "<comando bash>\n"
         "```\n"
-        "El sistema ejecutará el comando y te entregará el resultado para que formules la respuesta final."
+        "Ejecutarás comandos de forma interactiva. Si un comando falla o necesitas más pasos, recibirás el código de salida y error en el siguiente turno y podrás emitir nuevos comandos bash para corregir el error hasta lograr el objetivo.\n"
+        "Responde siempre de forma natural, concisa y agradable (1 a 3 frases habladas para voz)."
     )
 
 
@@ -289,6 +298,7 @@ class SayriApp(Gtk.Application):
         self._msg("hint", "Listening…")
 
     def _on_transcribe_start(self) -> None:
+        self._stop_session()
         if self._busy:
             return
         self.set_state("thinking")
@@ -422,6 +432,7 @@ class SayriApp(Gtk.Application):
         text = text.strip()
         if not text:
             return
+        self._stop_session()
         self.tts.cancel()
         self.armed = False
         if self.overlay:
@@ -441,10 +452,10 @@ class SayriApp(Gtk.Application):
         messages.append({"role": "user", "content": text})
         self.history.append(("user", text))
 
-        threading.Thread(target=self._llm_worker, args=(messages,),
+        threading.Thread(target=self._llm_worker, args=(messages, 1),
                          daemon=True).start()
 
-    def _llm_worker(self, messages: list[dict]) -> None:
+    def _llm_worker(self, messages: list[dict], depth: int = 1) -> None:
         llm.stream_chat(
             self.cfg.get_string("provider", "base_url"),
             self.cfg.get_string("provider", "api_key"),
@@ -455,7 +466,7 @@ class SayriApp(Gtk.Application):
             stream=self.cfg.get_bool("provider", "stream"),
             timeout=self.cfg.get_int("provider", "timeout"),
             on_delta=lambda d: GLib.idle_add(self._on_delta, d),
-            on_done=lambda full: GLib.idle_add(self._on_done, full, messages),
+            on_done=lambda full: GLib.idle_add(self._on_done, full, messages, depth),
             on_error=lambda e: GLib.idle_add(self._on_error, e),
         )
 
@@ -463,17 +474,17 @@ class SayriApp(Gtk.Application):
         self._assistant_text += delta
         self._set_assistant(self._assistant_text)
 
-    def _on_done(self, full: str, messages: list[dict] | None = None) -> None:
+    def _on_done(self, full: str, messages: list[dict] | None = None, depth: int = 1) -> None:
         import re
-        if full and self.cfg.get_bool("provider", "agent_mode") and messages:
+        if full and self.cfg.get_bool("provider", "agent_mode") and messages and depth < 6:
             m = re.search(r"```(?:bash|sh)?\s*\n(.*?)\n```", full, re.DOTALL)
             if m:
                 cmd = m.group(1).strip()
                 if cmd:
-                    print(f"[Sayri] ⚙️ Agent executing tool command: `{cmd}`")
-                    self._msg("hint", f"⚙️ Ejecutando: {cmd[:40]}…")
+                    print(f"[Sayri] ⚙️ Agent step {depth} executing: `{cmd}`")
+                    self._msg("hint", f"⚙️ Ejecutando ({depth}): {cmd[:36]}…")
                     threading.Thread(target=self._execute_tool_and_followup,
-                                     args=(messages, full, cmd), daemon=True).start()
+                                     args=(messages, full, cmd, depth), daemon=True).start()
                     return
 
         if full:
@@ -483,26 +494,41 @@ class SayriApp(Gtk.Application):
             self.history = self.history[-HISTORY_MAX * 2:]
         self._finish_reply(full)
 
-    def _execute_tool_and_followup(self, messages: list[dict], full_reply: str, cmd: str) -> None:
+    def _execute_tool_and_followup(self, messages: list[dict], full_reply: str, cmd: str, depth: int = 1) -> None:
+        retcode = 0
         try:
-            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=45)
             output = (res.stdout + "\n" + res.stderr).strip()
+            retcode = res.returncode
             if not output:
-                output = f"(Comando ejecutado con código de salida {res.returncode})"
+                output = f"(Command exited with code {res.returncode})"
         except Exception as exc:
-            output = f"Error al ejecutar comando: {exc}"
+            output = f"Command error: {exc}"
+            retcode = 1
 
-        print(f"[Sayri] ✓ Tool output ({len(output)} bytes): \"{output[:100]}...\"")
+        print(f"[Sayri] ✓ Tool step {depth} exit {retcode} ({len(output)} bytes): \"{output[:100]}...\"")
         followup_messages = list(messages)
         followup_messages.append({"role": "assistant", "content": full_reply})
+
+        if retcode != 0:
+            prompt_content = (
+                f"[Tool Error - Exit code {retcode}]:\nCommand: `{cmd}`\nOutput:\n{output}\n\n"
+                "The command failed. Analyze what went wrong, fix the command and emit a new ```bash ... ``` block to retry, or explain the error."
+            )
+        else:
+            prompt_content = (
+                f"[Tool Output - Exit code 0]:\nCommand: `{cmd}`\nOutput:\n{output}\n\n"
+                "If you need another command, emit a ```bash ... ``` block. Otherwise, summarize the final result naturally for voice in 1-2 sentences."
+            )
+
         followup_messages.append({
             "role": "user",
-            "content": f"[Resultado del comando `{cmd}`]:\n{output}\nExplica el resultado de forma concisa y natural para voz."
+            "content": prompt_content,
         })
 
         GLib.idle_add(lambda: self.overlay and self.overlay.cajita.set_tool_output(cmd, output))
         self._assistant_text = ""
-        self._llm_worker(followup_messages)
+        self._llm_worker(followup_messages, depth + 1)
 
     def _on_error(self, exc: Exception) -> None:
         self._msg("error", f"Provider error: {exc}")

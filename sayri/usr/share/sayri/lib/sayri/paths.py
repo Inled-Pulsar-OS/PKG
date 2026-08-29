@@ -65,9 +65,39 @@ def tmp_dir() -> str:
     return os.path.join(state_dir(), "tmp")
 
 
+def skills_dir() -> str:
+    return os.path.join(config_dir(), "skills")
+
+
+def memory_file() -> str:
+    return os.path.join(config_dir(), "memory.md")
+
+
+def user_file() -> str:
+    return os.path.join(config_dir(), "USER.md")
+
+
 def ensure_dirs() -> None:
-    for d in (config_dir(), models_dir(), voices_dir(), bin_dir(), tmp_dir()):
+    for d in (config_dir(), skills_dir(), models_dir(), voices_dir(), bin_dir(), tmp_dir()):
         os.makedirs(d, exist_ok=True)
+
+    uf = user_file()
+    if not os.path.isfile(uf):
+        try:
+            import getpass
+            u = getpass.getuser()
+            with open(uf, "w", encoding="utf-8") as f:
+                f.write(f"# User Profile\n\n- **Username**: {u}\n- **OS**: Pulsar OS\n- **Assistant**: Sayri\n")
+        except Exception:
+            pass
+
+    mf = memory_file()
+    if not os.path.isfile(mf):
+        try:
+            with open(mf, "w", encoding="utf-8") as f:
+                f.write("# Sayri Long-Term Memory\n\nThis file contains persistent memories, notes, and user preferences learned by Sayri.\n")
+        except Exception:
+            pass
 
 
 def find_binary(name: str) -> str | None:

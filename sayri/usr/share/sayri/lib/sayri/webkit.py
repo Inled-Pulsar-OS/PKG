@@ -76,7 +76,7 @@ def pin_layer_shell(win: Gtk.Window, *, top_margin: int = 12,
             LayerShell.set_anchor(win, LayerShell.Edge.RIGHT, True)
             LayerShell.set_margin(win, LayerShell.Edge.RIGHT, right_margin)
         LayerShell.set_margin(win, LayerShell.Edge.TOP, top_margin)
-        LayerShell.auto_exclusive_zone_enable(win)
+        LayerShell.set_exclusive_zone(win, -1)
         LayerShell.set_keyboard_mode(win, LayerShell.KeyboardMode.ON_DEMAND)
         return True
     except Exception as exc:  # noqa: BLE001
