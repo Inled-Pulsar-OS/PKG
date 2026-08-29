@@ -128,6 +128,7 @@ class STTEngine:
             "-nt",          # no timestamps
             "-np",          # no prints beyond the result
             "-oj",          # also write JSON (keeps stdout clean)
+            "--prompt", "Sayri, Oye Sayri, Hey Sayri, Hola Sayri.",
         ]
         try:
             proc = subprocess.run(

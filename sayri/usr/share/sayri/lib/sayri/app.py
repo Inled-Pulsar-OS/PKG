@@ -230,7 +230,18 @@ class SayriApp(Gtk.Application):
 
     # ── orb events
     def on_orb_click(self) -> None:
-        """The orb toggles the microphone on/off."""
+        """The orb halts any active generation/speech/action and listens immediately for new instructions."""
+        if self._busy or self.tts.is_speaking or self.state in ("speaking", "thinking"):
+            print("[Sayri] ⏹️ Orb clicked during speech/activity: halting all operations and listening...")
+            self.tts.cancel()
+            self._set_busy(False)
+            self._assistant_text = ""
+            self._on_level(0.0)
+            if self.overlay:
+                self.overlay.cajita.set_speaking(False)
+            self.start_listening()
+            return
+
         self.toggle_listening()
 
     # ── bridge to the cajita (via overlay)
@@ -286,8 +297,7 @@ class SayriApp(Gtk.Application):
         self._set_mic(False)
 
     def start_listening(self) -> None:
-        if self._busy:
-            return
+        self._busy = False
         self.armed = True
         if not (self.session and self.session.is_running()):
             self._start_session()
@@ -388,6 +398,7 @@ class SayriApp(Gtk.Application):
                     self.armed = True
                     self.set_state("activated")
                     self._msg("hint", "Listening…")
+                    print(f"[Sayri] 🎯 Wake word activated from background: \"{text}\"")
                 return
             else:
                 print(f"[Sayri] ℹ️ Wake word not found in \"{text}\" (mode=wakeword, UI hidden)")
@@ -427,15 +438,20 @@ class SayriApp(Gtk.Application):
                 if clean:
                     candidates.add(clean)
 
-        # Common phonetic variants of Sayri / Siri
+        # Extended phonetic Spanish & English wake word variants
         candidates.update([
-            "hey sayri", "oye sayri", "sayri", "hola sayri",
-            "hey sairi", "oye sairi", "sairi", "hola sairi",
-            "hey sari", "oye sari", "sari", "hola sari",
-            "hey seiri", "oye seiri", "seiri",
-            "hey seyri", "oye seyri", "seyri",
-            "hey siri", "oye siri", "siri", "hola siri",
-            "hey sara", "oye sara", "sara",
+            "hey sayri", "oye sayri", "sayri", "hola sayri", "ok sayri",
+            "hey sairi", "oye sairi", "sairi", "hola sairi", "ok sairi",
+            "hey sari", "oye sari", "sari", "hola sari", "ok sari",
+            "hey seiri", "oye seiri", "seiri", "hola seiri",
+            "hey seyri", "oye seyri", "seyri", "hola seyri",
+            "hey salir", "oye salir", "hola salir", "salir",
+            "hey sabri", "oye sabri", "hola sabri", "sabri",
+            "hey siri", "oye siri", "siri", "hola siri", "ok siri",
+            "hey sara", "oye sara", "sara", "hola sara",
+            "hey zairi", "oye zairi", "zairi",
+            "hey saydy", "oye saydy", "saydy",
+            "hey say", "oye say", "hola say",
         ])
 
         # Convert spaces to flexible \s+
