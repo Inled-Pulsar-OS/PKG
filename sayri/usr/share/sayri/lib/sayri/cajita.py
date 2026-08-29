@@ -54,6 +54,14 @@ entry.sayri-pill-entry > text > placeholder {
     min-height: 36px;
 }
 
+entry selection,
+entry text selection,
+entry.sayri-pill-entry text selection,
+entry.sayri-pill-entry selection {
+    background-color: #38bdf8;
+    color: #0f172a;
+}
+
 button.sayri-icon-btn,
 button.sayri-icon-btn:hover,
 button.sayri-icon-btn:active,
@@ -82,15 +90,43 @@ button.sayri-icon-btn * {
     min-height: 48px;
 }
 
+window:backdrop,
+window.sayri-overlay:backdrop,
+.sayri-overlay:backdrop,
+.sayri-overlay *:backdrop,
+.sayri-cajita-container:backdrop,
+.sayri-pill-container:backdrop,
 .sayri-response-label,
+.sayri-response-label:backdrop,
 label.sayri-response-label,
-.sayri-response-card label,
-.sayri-response-card text {
+label.sayri-response-label:backdrop,
+label:backdrop,
+scrolledwindow:backdrop,
+viewport:backdrop {
+    opacity: 1.0;
     color: #ffffff;
-    font-size: 15.5px;
-    font-weight: 500;
-    line-height: 1.5;
-    background: transparent;
+}
+
+.sayri-cmd-expander {
+    color: #38bdf8;
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+
+.sayri-cmd-expander title {
+    color: #38bdf8;
+}
+
+.sayri-terminal-label {
+    font-family: monospace, monospace;
+    font-size: 12.5px;
+    line-height: 1.4;
+    padding: 8px 10px;
+    background: rgba(15, 23, 42, 0.85);
+    border-radius: 8px;
+    color: #e2e8f0;
 }
 """
 
@@ -101,10 +137,14 @@ SVG_MIC = b"""<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" vie
 SVG_MIC_ACTIVE = b"""<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#ffffff" stroke="none"><circle cx="12" cy="12" r="6"/></svg>"""
 
 
+_TEXTURE_CACHE: dict[bytes, Gdk.Texture] = {}
+
+
 def _svg_icon(svg_bytes: bytes) -> Gtk.Widget:
     try:
-        tex = Gdk.Texture.new_from_bytes(GLib.Bytes.new(svg_bytes))
-        pic = Gtk.Picture.new_for_paintable(tex)
+        if svg_bytes not in _TEXTURE_CACHE:
+            _TEXTURE_CACHE[svg_bytes] = Gdk.Texture.new_from_bytes(GLib.Bytes.new(svg_bytes))
+        pic = Gtk.Picture.new_for_paintable(_TEXTURE_CACHE[svg_bytes])
         pic.set_content_fit(Gtk.ContentFit.CONTAIN)
         pic.set_size_request(16, 16)
         pic.set_valign(Gtk.Align.CENTER)
@@ -142,11 +182,14 @@ class ChromaBackground(Gtk.DrawingArea):
 
     def set_audio_level(self, lvl: float) -> None:
         self.audio_level = lvl
-        self.queue_draw()
+        if self.mode != "idle":
+            self.queue_draw()
 
     def _on_tick(self, _widget, _frame_clock) -> bool:
+        if self.mode == "idle" or not self.get_mapped():
+            return GLib.SOURCE_CONTINUE
         now = time.monotonic()
-        dt = now - self.last_tick
+        dt = min(0.1, now - self.last_tick)
         self.last_tick = now
         if self.mode in ("active", "rotating"):
             self.phase = (self.phase + dt * self.speed) % (2.0 * math.pi)
@@ -178,7 +221,7 @@ class ChromaBackground(Gtk.DrawingArea):
 
         # 1. Frosted Dark Glass Interior
         self._draw_rounded_rect(cr, bx, by, bw, bh, r)
-        cr.set_source_rgba(0.08, 0.09, 0.14, 0.90)
+        cr.set_source_rgba(0.08, 0.09, 0.14, 0.98 if not self.is_pill else 0.92)
         cr.fill()
 
         # 2. Border & Glow rendering based on state
@@ -292,8 +335,12 @@ class SayriCajita(Gtk.Box):
         pill_row.append(self.entry)
 
         # Right: Mic toggle button
+        self._mic_idle_pic = _svg_icon(SVG_MIC)
+        self._mic_active_pic = _svg_icon(SVG_MIC_ACTIVE)
+        self._mic_is_active = False
+
         self.mic_btn = Gtk.Button()
-        self.mic_btn.set_child(_svg_icon(SVG_MIC))
+        self.mic_btn.set_child(self._mic_idle_pic)
         self.mic_btn.set_has_frame(False)
         self.mic_btn.add_css_class("sayri-icon-btn")
         self.mic_btn.set_tooltip_text("Toggle Microphone")
@@ -330,8 +377,8 @@ class SayriCajita(Gtk.Box):
         self.scroll.set_child(self.response_label)
         card_content.append(self.scroll)
 
-        # Expandable command terminal output box
-        self.cmd_expander = Gtk.Expander(label="⚙️ Comando y salida de terminal")
+        # Expandable command terminal output box (in English, without emojis)
+        self.cmd_expander = Gtk.Expander(label="Command Output")
         self.cmd_expander.add_css_class("sayri-cmd-expander")
 
         self.cmd_scroll = Gtk.ScrolledWindow()
@@ -394,14 +441,14 @@ class SayriCajita(Gtk.Box):
                 self.pill_bg.set_mode("active")
         elif kind == "assistant":
             escaped = GLib.markup_escape_text(text)
-            self.response_label.set_markup(f"<span foreground='#ffffff' font='11.5'>{escaped}</span>")
+            self.response_label.set_markup(f"<span foreground='#ffffff' font='12' weight='medium'>{escaped}</span>")
             self.card_overlay.set_visible(True)
             self.card_bg.set_mode("rotating")
         elif kind == "hint":
             pass
         elif kind == "error":
             escaped = GLib.markup_escape_text(text)
-            self.response_label.set_markup(f"<span foreground='#fca5a5' font='11.5'>⚠️ {escaped}</span>")
+            self.response_label.set_markup(f"<span foreground='#fca5a5' font='12'>⚠️ {escaped}</span>")
             self.card_overlay.set_visible(True)
 
     def set_tool_output(self, cmd: str, output: str) -> None:
@@ -409,22 +456,26 @@ class SayriCajita(Gtk.Box):
             self.cmd_expander.set_visible(False)
             return
         escaped_cmd = GLib.markup_escape_text(cmd)
-        escaped_out = GLib.markup_escape_text(output.strip()) if output else "(sin salida)"
+        escaped_out = GLib.markup_escape_text(output.strip()) if output else "(empty output)"
         markup = f"<span font_family='monospace' size='10500'><span foreground='#38bdf8'><b>$ {escaped_cmd}</b></span>\n\n<span foreground='#e2e8f0'>{escaped_out}</span></span>"
         self.cmd_label.set_markup(markup)
-        self.cmd_expander.set_label(f"⚙️ Comando: {cmd[:32]}…")
+        self.cmd_expander.set_label(f"Command: {cmd[:36]}…")
         self.cmd_expander.set_visible(True)
         self.card_overlay.set_visible(True)
         self.card_bg.set_mode("rotating")
 
     def set_mic(self, active: bool) -> None:
         if active:
-            self.mic_btn.set_child(_svg_icon(SVG_MIC_ACTIVE))
-            self.pill_bg.set_mode("active")
+            if not self._mic_is_active:
+                self._mic_is_active = True
+                self.mic_btn.set_child(self._mic_active_pic)
+                self.pill_bg.set_mode("active")
         else:
-            self.mic_btn.set_child(_svg_icon(SVG_MIC))
-            if not self.entry.get_text().strip():
-                self.pill_bg.set_mode("idle")
+            if self._mic_is_active:
+                self._mic_is_active = False
+                self.mic_btn.set_child(self._mic_idle_pic)
+                if not self.entry.get_text().strip():
+                    self.pill_bg.set_mode("idle")
 
     def set_busy(self, busy: bool) -> None:
         if busy:

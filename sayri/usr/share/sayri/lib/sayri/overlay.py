@@ -67,10 +67,12 @@ class SayriOverlay:
 
         # 1. Cajita with Chroma-Ring animated border
         self.cajita = SayriCajita(app)
+        self.cajita.set_valign(Gtk.Align.START)
         hbox.append(self.cajita)
 
         # 2. Native animated Cairo Siri Orb
         self.orb = SiriOrb(size=orb_size, on_click=app.on_orb_click)
+        self.orb.set_valign(Gtk.Align.START)
         hbox.append(self.orb)
 
         self.win.set_child(hbox)

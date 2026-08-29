@@ -237,7 +237,9 @@ class STTSession:
                 continue
 
             level = audio.rms_level(chunk)
-            if self.on_level:
+            now = time.monotonic()
+            if self.on_level and (now - getattr(self, "_last_lvl_emit", 0.0) >= 0.05):
+                self._last_lvl_emit = now
                 self.on_level(level)
 
             # Adaptive noise floor tracking (bounded so room noise never masks voice)
