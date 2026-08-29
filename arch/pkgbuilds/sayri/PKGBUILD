@@ -11,6 +11,7 @@ optdepends=('whisper-cpp: local speech-to-text binary (auto-downloaded if missin
             'piper-tts: local text-to-speech binary (auto-downloaded if missing)'
             'grim: Wayland screenshot capture tool')
 options=(!strip)
+install=sayri.install
 
 prepare() {
     _src="$(cd "$startdir"/../../../sayri && pwd)"

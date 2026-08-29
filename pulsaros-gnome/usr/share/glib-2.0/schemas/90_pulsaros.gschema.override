@@ -68,6 +68,7 @@ brightness=0.6
 sigma=30
 
 [org.gnome.shell.extensions.blur-my-shell.applications]
+blacklist=['Plank', 'Conky', 'gjs', 'sayri', 'Sayri', 'es.inled.sayri', 'sayri-overlay', 'sayri-indicator', '*sayri*', '*Sayri*']
 blur=true
 blur-on-overview=false
 corner-when-maximized=true
