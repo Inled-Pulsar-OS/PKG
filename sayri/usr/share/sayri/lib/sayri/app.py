@@ -219,9 +219,13 @@ class SayriApp(Gtk.Application):
 
     def toggle_visible(self) -> None:
         if self.overlay:
-            if not self.overlay.is_visible:
-                sound.play("activate")
             self.overlay.toggle()
+
+    def on_shown(self) -> None:
+        """Called when Sayri is shown: play activation sound and start listening."""
+        print("[Sayri] 👁️ Overlay shown: playing activation sound.")
+        sound.play("activate")
+        self.start_listening()
 
     def _build_ui(self) -> None:
         self.overlay = overlay_mod.SayriOverlay(self)
@@ -338,6 +342,13 @@ class SayriApp(Gtk.Application):
     def stop_listening(self) -> None:
         self.armed = False
         self._stop_session()
+        self.tts.cancel()
+        sound.stop_all()
+        self._set_busy(False)
+        self._assistant_text = ""
+        self._on_level(0.0)
+        if self.overlay:
+            self.overlay.cajita.set_speaking(False)
         self.set_state("idle")
         self._set_mic(False)
 
@@ -345,13 +356,8 @@ class SayriApp(Gtk.Application):
         """Toggle microphone listening state on/off."""
         # 1. If currently busy, speaking, or thinking: halt everything immediately!
         if self._busy or self.tts.is_speaking or self.state in ("speaking", "thinking"):
-            self.tts.cancel()
-            self._set_busy(False)
-            self._assistant_text = ""
-            self._on_level(0.0)
-            if self.overlay:
-                self.overlay.cajita.set_speaking(False)
             self.stop_listening()
+            self._msg("hint", "Microphone off. Click to talk.")
             return
 
         # 2. If actively listening / armed: stop listening!
@@ -372,13 +378,13 @@ class SayriApp(Gtk.Application):
 
     # ── STT callbacks (threads)
     def _on_speech_start(self) -> None:
-        if self._busy:
+        if self._busy or not self.armed:
             return
         self.set_state("listening")
         self._msg("hint", "Listening…")
 
     def _on_transcribe_start(self) -> None:
-        if self._busy:
+        if self._busy or not self.armed:
             return
         self.set_state("thinking")
         self._msg("hint", "Transcribing…")
@@ -394,11 +400,16 @@ class SayriApp(Gtk.Application):
             self.overlay.set_audio_level(level)
 
     def _handle_partial(self, text: str) -> None:
-        if self._busy:
+        if self._busy or not self.armed:
             return
         self._set_partial(f"“{text}…”")
 
     def _handle_utterance(self, text: str) -> None:
+        # If user explicitly stopped/muted, discard buffered audio
+        if not self.armed and self.state == "idle":
+            sound.stop_all()
+            return
+
         if not text.strip():
             self._set_partial("")
             mode = self.cfg.get_string("stt", "mode")
