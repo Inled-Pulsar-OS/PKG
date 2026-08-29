@@ -44,12 +44,25 @@ class SayriOverlay:
         try:
             css = Gtk.CssProvider()
             css.load_from_data(
-                b".sayri-overlay { background: transparent; background-color: transparent; } "
-                b"window.sayri-overlay { background: transparent; border: none; box-shadow: none; }"
+                b"window.sayri-overlay, "
+                b"window.sayri-overlay.background, "
+                b"window.sayri-overlay.csd, "
+                b"window.sayri-overlay decoration, "
+                b"window.sayri-overlay > contents, "
+                b"window.sayri-overlay > box, "
+                b".sayri-overlay, "
+                b".sayri-overlay.background { "
+                b"    background: none; "
+                b"    background-color: transparent; "
+                b"    background-image: none; "
+                b"    border: none; "
+                b"    box-shadow: none; "
+                b"    outline: none; "
+                b"}"
             )
             Gtk.StyleContext.add_provider_for_display(
                 Gdk.Display.get_default(), css,
-                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+                Gtk.STYLE_PROVIDER_PRIORITY_USER)
         except Exception:  # noqa: BLE001
             pass
 
