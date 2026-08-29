@@ -84,6 +84,27 @@ def pin_layer_shell(win: Gtk.Window, *, top_margin: int = 12,
         return False
 
 
+class _XClientMessageEvent(ctypes.Structure):
+    _fields_ = [
+        ("type", ctypes.c_int),
+        ("serial", ctypes.c_ulong),
+        ("send_event", ctypes.c_int),
+        ("display", ctypes.c_void_p),
+        ("window", ctypes.c_ulong),
+        ("message_type", ctypes.c_ulong),
+        ("format", ctypes.c_int),
+        ("data_l", ctypes.c_long * 5),
+    ]
+
+
+class _XEvent(ctypes.Union):
+    _fields_ = [
+        ("type", ctypes.c_int),
+        ("xclient", _XClientMessageEvent),
+        ("pad", ctypes.c_long * 24),
+    ]
+
+
 def pin_x11_window(win: Gtk.Window, *, top_margin: int = 44,
                    right_margin: int = 16, width: int, height: int) -> bool:
     """Position an X11/XWayland window at the top-right corner, always on top."""
@@ -94,15 +115,22 @@ def pin_x11_window(win: Gtk.Window, *, top_margin: int = 44,
         libx11.XOpenDisplay.argtypes = [ctypes.c_char_p]
         libx11.XCloseDisplay.argtypes = [ctypes.c_void_p]
         libx11.XFlush.argtypes = [ctypes.c_void_p]
+        libx11.XDefaultRootWindow.restype = ctypes.c_ulong
+        libx11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
         libx11.XMoveResizeWindow.argtypes = [
             ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.c_uint, ctypes.c_uint
         ]
+        libx11.XRaiseWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
         libx11.XInternAtom.restype = ctypes.c_ulong
         libx11.XInternAtom.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
         libx11.XChangeProperty.argtypes = [
             ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong,
             ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int
         ]
+        libx11.XSendEvent.argtypes = [
+            ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_long, ctypes.POINTER(_XEvent)
+        ]
+        libx11.XSendEvent.restype = ctypes.c_int
     except Exception as exc:  # noqa: BLE001
         print(f"[sayri] aviso: libX11 no disponible: {exc}")
         return False
@@ -159,13 +187,36 @@ def pin_x11_window(win: Gtk.Window, *, top_margin: int = 44,
                 ctypes.cast(states, ctypes.c_void_p), 4
             )
 
+            # Set DOCK / NOTIFICATION window type so Mutter pins it in the top Overlay layer
             net_wm_wtype = libx11.XInternAtom(dpy, b"_NET_WM_WINDOW_TYPE", 0)
-            wtype_utility = libx11.XInternAtom(dpy, b"_NET_WM_WINDOW_TYPE_UTILITY", 0)
-            wtypes = (ctypes.c_ulong * 1)(wtype_utility)
+            wtype_dock = libx11.XInternAtom(dpy, b"_NET_WM_WINDOW_TYPE_DOCK", 0)
+            wtype_notification = libx11.XInternAtom(dpy, b"_NET_WM_WINDOW_TYPE_NOTIFICATION", 0)
+            wtypes = (ctypes.c_ulong * 2)(wtype_dock, wtype_notification)
             libx11.XChangeProperty(
                 dpy, xid, net_wm_wtype, XA_ATOM, 32, 2,
-                ctypes.cast(wtypes, ctypes.c_void_p), 1
+                ctypes.cast(wtypes, ctypes.c_void_p), 2
             )
+
+            # Send EWMH ClientMessage to Root Window to notify Mutter window manager
+            root = libx11.XDefaultRootWindow(dpy)
+            ev = _XEvent()
+            ev.type = 33  # ClientMessage
+            ev.xclient.type = 33
+            ev.xclient.serial = 0
+            ev.xclient.send_event = 1
+            ev.xclient.display = dpy
+            ev.xclient.window = xid
+            ev.xclient.message_type = net_wm_state
+            ev.xclient.format = 32
+            ev.xclient.data_l[0] = 1  # _NET_WM_STATE_ADD
+            ev.xclient.data_l[1] = state_above
+            ev.xclient.data_l[2] = state_sticky
+            ev.xclient.data_l[3] = 1
+            ev.xclient.data_l[4] = 0
+
+            mask = 0x00100000 | 0x00080000  # SubstructureRedirectMask | SubstructureNotifyMask
+            libx11.XSendEvent(dpy, root, 0, mask, ctypes.byref(ev))
+            libx11.XRaiseWindow(dpy, xid)
 
             libx11.XFlush(dpy)
             libx11.XCloseDisplay(dpy)
@@ -174,6 +225,7 @@ def pin_x11_window(win: Gtk.Window, *, top_margin: int = 44,
 
     win.connect("realize", lambda *_: GLib.idle_add(_apply_position))
     win.connect("map", lambda *_: (GLib.idle_add(_apply_position), GLib.timeout_add(100, _apply_position)))
+    setattr(win, "_reassert_x11_position", _apply_position)
     return True
 
 

@@ -50,11 +50,6 @@ if [ "${SAYRI_SKIP_PRELOAD:-0}" != "1" ]; then
     esac
 fi
 
-# Default to x11,wayland so GNOME Wayland uses XWayland for reliable top-right positioning
-if [ -z "$GDK_BACKEND" ] && [ -n "$DISPLAY" ]; then
-    export GDK_BACKEND="x11,wayland"
-fi
-
 export PYTHONPATH="$SAYRI_PYTHONPATH${PYTHONPATH:+:$PYTHONPATH}"
 
 if [ "$1" = "skills" ]; then

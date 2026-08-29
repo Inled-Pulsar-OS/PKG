@@ -6,9 +6,10 @@ pkgdesc="Siri-like voice assistant for Pulsar OS (whisper.cpp STT, OpenAI-compat
 arch=(any)
 url="https://inled.es"
 license=(custom)
-depends=(python python-gobject gtk4 webkitgtk-6.0 gtk4-layer-shell python-httpx pipewire-audio)
+depends=(python python-gobject gtk4 webkitgtk-6.0 gtk4-layer-shell python-httpx pipewire-audio ydotool)
 optdepends=('whisper-cpp: local speech-to-text binary (auto-downloaded if missing)'
-            'piper-tts: local text-to-speech binary (auto-downloaded if missing)')
+            'piper-tts: local text-to-speech binary (auto-downloaded if missing)'
+            'grim: Wayland screenshot capture tool')
 options=(!strip)
 
 prepare() {

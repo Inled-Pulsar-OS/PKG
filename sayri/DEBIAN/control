@@ -4,8 +4,8 @@ Section: utils
 Priority: optional
 Architecture: all
 Maintainer: Jaime <info@inled.es>
-Depends: python3, python3-gi, gir1.2-gtk-4.0, gir1.2-webkit-6.0, libgtk4-layer-shell0, python3-httpx, pipewire-utils
-Suggests: whisper.cpp
+Depends: python3, python3-gi, gir1.2-gtk-4.0, gir1.2-webkit-6.0, libgtk4-layer-shell0, python3-httpx, pipewire-utils, ydotool
+Suggests: whisper.cpp, grim
 Description: Siri-like voice assistant for Pulsar OS (GTK4).
  Sayri is an always-available Siri-style assistant. A reactive orb pinned to
  the top-left corner of the screen reacts to your voice: whisper.cpp
