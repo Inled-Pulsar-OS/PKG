@@ -127,6 +127,8 @@ class SayriOverlay:
         self._is_visible = False
         self._was_active = False
         self.win.set_visible(False)
+        if hasattr(self, "app") and self.app:
+            self.app.on_hidden()
 
     def toggle(self) -> None:
         if self.is_visible:

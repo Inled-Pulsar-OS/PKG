@@ -77,6 +77,21 @@ def user_file() -> str:
     return os.path.join(config_dir(), "USER.md")
 
 
+def find_sound(name: str) -> Optional[str]:
+    """Find path to a sound file (activate, thinking, etc.)."""
+    for base in (
+        os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "sounds")),
+        os.path.join(data_dir(), "sounds"),
+        os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")),
+        "/usr/share/sayri/sounds",
+    ):
+        for ext in (".mp3", ".wav", ".ogg"):
+            candidate = os.path.join(base, f"{name}{ext}")
+            if os.path.isfile(candidate):
+                return os.path.abspath(candidate)
+    return None
+
+
 def ensure_dirs() -> None:
     for d in (config_dir(), skills_dir(), models_dir(), voices_dir(), bin_dir(), tmp_dir()):
         os.makedirs(d, exist_ok=True)

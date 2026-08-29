@@ -31,6 +31,7 @@ from . import (  # noqa: E402
     overlay as overlay_mod,
     paths,
     settings_window,
+    sound,
     stt as stt_mod,
     tts as tts_mod,
 )
@@ -226,8 +227,34 @@ class SayriApp(Gtk.Application):
     # ── state
     def set_state(self, state: str) -> None:
         self.state = state
+        if state == "activated":
+            sound.play("activate")
+            sound.stop_loop()
+        elif state == "thinking":
+            sound.start_loop("thinking")
+        elif state == "speaking":
+            sound.stop_loop()
+        elif state in ("idle", "listening"):
+            sound.stop_loop()
+
         if self.overlay:
             self.overlay.set_state_sync(state)
+
+    def on_hidden(self) -> None:
+        """Called when Sayri is hidden: stop all speech, sounds, and active execution."""
+        print("[Sayri] 🙈 Overlay hidden: halting all speech, sounds, and active execution.")
+        self.tts.cancel()
+        sound.stop_all()
+        self._set_busy(False)
+        self._assistant_text = ""
+        self._on_level(0.0)
+        if self.overlay:
+            self.overlay.cajita.set_speaking(False)
+        self.stop_listening()
+        mode = self.cfg.get_string("stt", "mode")
+        if mode in ("always", "wakeword"):
+            self._start_session()
+            self.set_state("idle")
 
     # ── orb events
     def on_orb_click(self) -> None:
@@ -235,6 +262,7 @@ class SayriApp(Gtk.Application):
         if self._busy or self.tts.is_speaking or self.state in ("speaking", "thinking"):
             print("[Sayri] ⏹️ Orb clicked during speech/activity: halting all operations and listening...")
             self.tts.cancel()
+            sound.stop_all()
             self._set_busy(False)
             self._assistant_text = ""
             self._on_level(0.0)
@@ -713,11 +741,13 @@ class SayriApp(Gtk.Application):
                 pass
         self._stop_session()
         self.tts.cancel()
+        sound.stop_all()
         self.quit()
 
     def _on_shutdown(self, _app) -> None:
         self._stop_session()
         self.tts.cancel()
+        sound.stop_all()
 
 
 def main() -> int:
