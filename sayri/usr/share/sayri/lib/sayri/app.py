@@ -339,7 +339,6 @@ class SayriApp(Gtk.Application):
         self._msg("hint", "Listening…")
 
     def _on_transcribe_start(self) -> None:
-        self._stop_session()
         if self._busy:
             return
         self.set_state("thinking")
@@ -396,20 +395,21 @@ class SayriApp(Gtk.Application):
                 else:
                     # User only said the wake word
                     self.armed = True
+                    self.start_listening()
                     self.set_state("activated")
                     self._msg("hint", "Listening…")
-                    print(f"[Sayri] 🎯 Wake word activated from background: \"{text}\"")
+                    print(f"[Sayri] 🎯 Wake word activated from background: \"{text}\", listening for prompt...")
                 return
             else:
                 print(f"[Sayri] ℹ️ Wake word not found in \"{text}\" (mode=wakeword, UI hidden)")
                 return
 
-        # If UI is showing or armed, user can say anything!
         # If user spoke ONLY the wake word without a question, arm and wait
         if matched and (not remainder or len(remainder) <= 1):
             if self.overlay and not self.overlay.is_visible:
                 self.overlay.show()
             self.armed = True
+            self.start_listening()
             self.set_state("activated")
             self._msg("hint", "Listening…")
             print("[Sayri] ℹ️ Wake word detected without question, waiting for prompt...")
