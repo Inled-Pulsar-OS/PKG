@@ -12,6 +12,7 @@ reply display and settings/quit buttons.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -307,20 +308,28 @@ class SayriApp(Gtk.Application):
     def stop_listening(self) -> None:
         self.armed = False
         self._stop_session()
-        if not self._busy:
-            self.set_state("idle")
+        self.set_state("idle")
+        self._set_mic(False)
 
     def toggle_listening(self) -> None:
-        if self.session and self.session.is_running():
-            if self.armed:
-                self.session.flush()
-                self.armed = False
-                self.set_state("idle")
-            else:
-                self.armed = True
-                self.set_state("activated")
-                self._msg("hint", "Listening…")
+        """Toggle microphone listening state on/off."""
+        # 1. If currently busy, speaking, or thinking: halt everything immediately!
+        if self._busy or self.tts.is_speaking or self.state in ("speaking", "thinking"):
+            self.tts.cancel()
+            self._set_busy(False)
+            self._assistant_text = ""
+            self._on_level(0.0)
+            if self.overlay:
+                self.overlay.cajita.set_speaking(False)
+            self.stop_listening()
+            return
+
+        # 2. If actively listening / armed: stop listening!
+        if self.armed or self.state in ("listening", "activated") or (self.session and self.session.is_running()):
+            self.stop_listening()
+            self._msg("hint", "Microphone off. Click to talk.")
         else:
+            # 3. If idle: start listening immediately!
             self.start_listening()
 
     def _apply_mode(self) -> None:
