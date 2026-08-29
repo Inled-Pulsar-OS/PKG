@@ -74,23 +74,31 @@ vec4 main(vec2 fragCoord) {
   float ny = fbm(uv * 2.0 * noiseIntensity + t * 0.4 + 86.31, 4);
   float n = fbm(uv * noiseScale + 2.0 * vec2(nx, ny), 3);
   
-  vec3 col = vec3(n * 0.5 + 0.25);
   float a = atan(uv.y, uv.x) / TAU + t * 0.1 * rotationSpeed;
   
-  // Use custom colors in palette
-  vec3 palA = mix(vec3(0.3), primaryColor * 0.5, 0.5);
-  vec3 palD = mix(vec3(0.0, 0.8, 0.8), secondaryColor, 0.7);
-  col *= pal(a, palA, vec3(0.5, 0.5, 0.5), vec3(1.0), palD);
+  // Exact brand colors: #0e1734 (negro azulado), #4834cc (azul oscuro), #7f1458 (rosa/morado)
+  vec3 dark_bg = vec3(14.0 / 255.0, 23.0 / 255.0, 52.0 / 255.0); // #0e1734
+  
+  // Swirling harmonic blend between primaryColor (#4834cc) and secondaryColor (#7f1458)
+  float blend = 0.5 + 0.5 * sin(a * TAU * 2.0 + (nx - ny) * 2.5 + t * 0.8);
+  vec3 fluid_col = mix(primaryColor, secondaryColor, blend);
+  
+  // Mix dark bluish background with dynamic fluid colors
+  vec3 col = mix(dark_bg, fluid_col, smoothstep(0.15, 0.85, n));
   col *= saturation;
   
   vec3 cd = abs(col);
   vec3 c = col * d;
-  c += (c * 0.5 + vec3(1.0) - luma(c)) * vec3(max(0.0, pow(dot(norm, vec3(0.0, 0.0, -1.0)), 5.0) * 3.0));
   
+  // Specular light from angle
+  c += (c * 0.5 + primaryColor * 0.6 + secondaryColor * 0.4 - luma(c) * 0.5) * vec3(max(0.0, pow(dot(norm, vec3(0.0, 0.0, -1.0)), 5.0) * 3.0));
+  
+  // Ambient outer glow using primary + secondary colors
   float g = glowIntensity * smoothstep(0.6, 1.0, fbm(norm.xy * 3.0 / (1.0 + norm.z), 2)) * d;
-  c += g;
+  c += mix(primaryColor, secondaryColor, blend) * g * 1.5;
   
-  col = c + col * pow((1.0 - smoothstep(1.0, 0.98, l) - pow(max(0.0, length(uv) - 1.0), 0.2)) * 2.0, 4.0);
+  // Rim glow
+  col = c + mix(primaryColor, secondaryColor, 0.5) * pow((1.0 - smoothstep(1.0, 0.98, l) - pow(max(0.0, length(uv) - 1.0), 0.2)) * 2.0, 4.0);
   
   float f = fbm(normalize(uv) * 2.0 + t, 2) + 0.1;
   uv *= f + 0.1;
@@ -103,8 +111,10 @@ vec4 main(vec2 fragCoord) {
   ind = 1.0 / ind;
   ins *= ind;
   
-  col += ins * ins * sm * smoothstep(0.7, 1.0, ind) * coreIntensity * 2.0;
-  col += abs(norm) * (1.0 - d) * sm * 0.25;
+  // Core highlights using blended primary and secondary
+  vec3 core_col = mix(primaryColor * 1.2, vec3(0.9, 0.85, 1.0), 0.5);
+  col += core_col * ins * ins * sm * smoothstep(0.7, 1.0, ind) * coreIntensity * 2.0;
+  col += abs(norm) * (1.0 - d) * sm * 0.25 * dark_bg;
   
   col *= brightness;
   

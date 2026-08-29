@@ -57,7 +57,7 @@ def _preload_layer_shell() -> None:
 
 _preload_layer_shell()
 
-if "GDK_BACKEND" not in os.environ and os.environ.get("DISPLAY"):
+if os.environ.get("DISPLAY") and os.environ.get("SAYRI_FORCE_WAYLAND") != "1":
     os.environ["GDK_BACKEND"] = "x11,wayland"
 
 import faulthandler  # noqa: E402

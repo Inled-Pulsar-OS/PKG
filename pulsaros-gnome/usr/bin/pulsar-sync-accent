@@ -1,0 +1,169 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - GTK & Application Accent Color Synchronizer Daemon
+# ==============================================================================
+# English: Synchronizes GNOME Desktop Accent Color with GTK 3, GTK 4 and Browsers.
+# Español: Sincroniza el color de acento de GNOME con GTK 3, GTK 4 y navegadores.
+# ==============================================================================
+
+get_accent_hex() {
+    local color_name="$1"
+    case "$color_name" in
+        blue)   echo "#3584e4" ;;
+        teal)   echo "#2190a4" ;;
+        green)  echo "#3a944a" ;;
+        yellow) echo "#e5a50a" ;;
+        orange) echo "#e66100" ;;
+        red)    echo "#e01b24" ;;
+        pink)   echo "#d56199" ;;
+        purple) echo "#9141ac" ;;
+        slate)  echo "#6f8396" ;;
+        *)      echo "#3584e4" ;;
+    esac
+}
+
+sync_accent() {
+    local raw_accent=$(gsettings get org.gnome.desktop.interface accent-color 2>/dev/null | tr -d "'\"")
+    [ -z "$raw_accent" ] && raw_accent="blue"
+    local hex=$(get_accent_hex "$raw_accent")
+
+    local gtk3_dir="$HOME/.config/gtk-3.0"
+    local gtk4_dir="$HOME/.config/gtk-4.0"
+    mkdir -p "$gtk3_dir" "$gtk4_dir"
+
+    local gtk3_css="$gtk3_dir/gtk.css"
+
+    # Write ~/.config/gtk-3.0/gtk.css
+    cat <<CSS_EOF > "$gtk3_css"
+/* ==============================================================================
+ * Pulsar OS - GTK3 Dynamic Accent Color & Selection Highlight
+ * Generated dynamically for accent color: ${raw_accent} (${hex})
+ * ============================================================================== */
+@define-color accent_color ${hex};
+@define-color accent_bg_color ${hex};
+@define-color accent_fg_color #ffffff;
+@define-color theme_selected_bg_color ${hex};
+@define-color theme_selected_fg_color #ffffff;
+@define-color selected_bg_color ${hex};
+@define-color selected_fg_color #ffffff;
+
+/* Universal Solid Text Selection */
+selection {
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+
+entry selection,
+entry:focus selection,
+textview text selection,
+textview selection,
+label:selected,
+.view:selected,
+.view:selected:focus,
+*:selected {
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+
+/* Context Menu / Popup Menu Hover & Highlight */
+menu > menuitem:hover,
+menu > menuitem:selected,
+menuitem.button.flat:hover,
+menuitem.button.flat:selected,
+modelbutton.flat:hover,
+modelbutton.flat:selected {
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+
+menu > menuitem:hover label,
+menu > menuitem:selected label,
+menu > menuitem:hover arrow,
+menu > menuitem:selected arrow,
+menuitem.button.flat:hover label,
+menuitem.button.flat:selected label,
+modelbutton.flat:hover label,
+modelbutton.flat:selected label {
+  color: @accent_fg_color;
+}
+
+popover.menu modelbutton:hover,
+popover.menu modelbutton:selected,
+popover.menu modelbutton:focus:hover {
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+
+popover.menu modelbutton:hover label,
+popover.menu modelbutton:selected label,
+popover.menu modelbutton:hover arrow,
+popover.menu modelbutton:selected arrow {
+  color: @accent_fg_color;
+}
+CSS_EOF
+
+    # In ~/.config/gtk-4.0/gtk.css (if present, update accent variables at top)
+    local gtk4_css="$gtk4_dir/gtk.css"
+    if [ -f "$gtk4_css" ]; then
+        sed -i '/@define-color accent_/d' "$gtk4_css"
+        sed -i '/@define-color theme_selected_/d' "$gtk4_css"
+        sed -i '/@define-color selected_/d' "$gtk4_css"
+        sed -i "1s|^|@define-color accent_color ${hex};\n@define-color accent_bg_color ${hex};\n@define-color accent_fg_color #ffffff;\n@define-color theme_selected_bg_color ${hex};\n@define-color theme_selected_fg_color #ffffff;\n@define-color selected_bg_color ${hex};\n@define-color selected_fg_color #ffffff;\n|" "$gtk4_css"
+    fi
+
+    # Sync Seafari profile if exists
+    local seafari_profile="${SEAFARI_PROFILE:-$HOME/.mozilla/seafari-profile}"
+    if [ -d "$seafari_profile/chrome" ]; then
+        local user_content="$seafari_profile/chrome/userContent.css"
+        if [ -f "$user_content" ]; then
+            if ! grep -q "Pulsar OS Dynamic Selection Highlight" "$user_content" 2>/dev/null; then
+                cat <<'SEAFARI_FIX' >> "$user_content"
+
+/* Pulsar OS Dynamic Selection Highlight */
+::selection {
+    background-color: Highlight !important;
+    color: HighlightText !important;
+}
+SEAFARI_FIX
+            fi
+        fi
+        local custom_chrome="$seafari_profile/chrome/customChrome.css"
+        if [ -f "$custom_chrome" ]; then
+            if ! grep -q "Pulsar OS Context Menu Accent Highlight" "$custom_chrome" 2>/dev/null; then
+                cat <<'SEAFARI_CHROME_FIX' >> "$custom_chrome"
+
+/* Pulsar OS Context Menu Accent Highlight */
+menupopup menuitem:not([disabled="true"]):is(:hover, [_moz-menuactive]),
+menupopup menu:not([disabled="true"]):is(:hover, [_moz-menuactive]) {
+    background-color: Highlight !important;
+    color: HighlightText !important;
+}
+menupopup menuitem:not([disabled="true"]):is(:hover, [_moz-menuactive]) label,
+menupopup menu:not([disabled="true"]):is(:hover, [_moz-menuactive]) label {
+    color: HighlightText !important;
+}
+SEAFARI_CHROME_FIX
+            fi
+        fi
+    fi
+}
+
+# Initial synchronization
+sync_accent
+
+if [ "$1" = "--once" ]; then
+    exit 0
+fi
+
+# Lock file for daemon mode
+LOCK_FILE="/tmp/pulsar-sync-accent-$UID.lock"
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    echo "Accent sync daemon already running for UID $UID. Exiting."
+    exit 0
+fi
+
+# Monitor for live accent color changes in GNOME settings
+gsettings monitor org.gnome.desktop.interface accent-color 2>/dev/null | while read -r _; do
+    sync_accent
+done

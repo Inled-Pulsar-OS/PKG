@@ -77,7 +77,14 @@ if [ -z "$GNOME_VER" ]; then
         fi
     fi
 
-    # 3. Final static fallback / Fallback estático final
+    # 3. Check host gnome-shell version if available
+    if [ -z "$GNOME_VER" ] && command -v gnome-shell >/dev/null 2>&1; then
+        GNOME_VER=$(gnome-shell --version | grep -o '[0-9]\+' | head -n 1)
+        echo "🔍 [ES] Detectada versión de GNOME Shell en host: $GNOME_VER"
+        echo "🔍 [EN] Detected GNOME Shell version on host: $GNOME_VER"
+    fi
+
+    # 4. Final static fallback / Fallback estático final
     if [ -z "$GNOME_VER" ]; then
         case "$DEBIAN_VERSION" in
             bookworm) GNOME_VER="43" ;;
@@ -114,7 +121,11 @@ for uuid in "${EGO_EXTENSIONS[@]}"; do
 
     while [ "$download_path" = "null" ] || [ -z "$download_path" ]; do
         info_url="https://extensions.gnome.org/extension-info/?uuid=${uuid}&shell_version=${current_ver}"
-        download_path=$(curl -s "$info_url" | jq -r '.download_url')
+        if command -v jq >/dev/null 2>&1; then
+            download_path=$(curl -s "$info_url" | jq -r '.download_url')
+        else
+            download_path=$(curl -s "$info_url" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('download_url') or '')" 2>/dev/null || echo "null")
+        fi
 
         if [ "$download_path" != "null" ] && [ -n "$download_path" ]; then
             if [ "$current_ver" -ne "$GNOME_VER" ]; then
@@ -582,9 +593,12 @@ if [ -d "$STAGE_DIR/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github
     find "$STAGE_DIR/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/service" -name "*.js" -exec chmod 755 {} \; 2>/dev/null || true
 fi
 
-# Ensure executable permissions for the hide-overview script
+# Ensure executable permissions for scripts
 if [ -f "$STAGE_DIR/usr/bin/pulsaros-hide-overview" ]; then
     chmod 755 "$STAGE_DIR/usr/bin/pulsaros-hide-overview"
+fi
+if [ -f "$STAGE_DIR/usr/bin/pulsar-sync-accent" ]; then
+    chmod 755 "$STAGE_DIR/usr/bin/pulsar-sync-accent"
 fi
 
 echo "✅ Proceso de extensiones finalizado."

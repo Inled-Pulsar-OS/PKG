@@ -9,6 +9,8 @@ interface IColor {
 interface IUnstableSiriORB {
   /** Size of the orb in pixels */
   readonly size?: number;
+  /** Audio input/output level (0-1) to react to speech */
+  readonly audioLevel?: number;
   /** Animation speed multiplier (default: 1) */
   readonly speed?: number;
   /** Container style */

@@ -52,6 +52,10 @@ fi
 
 export PYTHONPATH="$SAYRI_PYTHONPATH${PYTHONPATH:+:$PYTHONPATH}"
 
+if [ -z "$GDK_BACKEND" ] && [ -n "$DISPLAY" ]; then
+    export GDK_BACKEND="x11,wayland"
+fi
+
 if [ "$1" = "skills" ]; then
     shift
     exec python3 -m sayri.skills "$@"

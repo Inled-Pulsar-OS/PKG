@@ -40,49 +40,49 @@ const MODE = currentMode();
 // window.sayriBridge.setState(name, opts) (see orb_window.py / cajita_window.py).
 const VISUALS = {
   idle: {
-    speed: 0.6,
-    glowIntensity: 1.2,
-    coreIntensity: 0.42,
-    brightness: 0.85,
-    primaryColor: { r: 0.4, g: 0.6, b: 1.0 },
-    secondaryColor: { r: 0.0, g: 0.8, b: 0.8 },
-    ringGlow: "#6ea8fe",
+    speed: 0.65,
+    glowIntensity: 1.4,
+    coreIntensity: 0.55,
+    brightness: 0.95,
+    primaryColor: { r: 0.282, g: 0.204, b: 0.800 },  // Azul oscuro (#4834cc)
+    secondaryColor: { r: 0.498, g: 0.078, b: 0.345 }, // Rosa / Morado (#7f1458)
+    ringGlow: "#4834cc",
   },
   listening: {
     speed: 2.0,
-    glowIntensity: 2.0,
-    coreIntensity: 0.6,
-    brightness: 1.0,
-    primaryColor: { r: 0.45, g: 0.65, b: 1.0 },
-    secondaryColor: { r: 0.0, g: 0.85, b: 0.8 },
-    ringGlow: "#5ea0ff",
+    glowIntensity: 2.2,
+    coreIntensity: 0.70,
+    brightness: 1.1,
+    primaryColor: { r: 0.320, g: 0.240, b: 0.900 },  // Azul eléctrico (#4834cc vibrante)
+    secondaryColor: { r: 0.580, g: 0.100, b: 0.420 }, // Rosa / Morado (#7f1458 vibrante)
+    ringGlow: "#4834cc",
   },
   activated: {
-    speed: 2.6,
-    glowIntensity: 2.2,
-    coreIntensity: 0.7,
-    brightness: 1.1,
-    primaryColor: { r: 0.5, g: 0.7, b: 1.0 },
-    secondaryColor: { r: 0.2, g: 0.9, b: 0.9 },
-    ringGlow: "#7bb0ff",
+    speed: 2.8,
+    glowIntensity: 2.4,
+    coreIntensity: 0.80,
+    brightness: 1.2,
+    primaryColor: { r: 0.550, g: 0.090, b: 0.380 },  // Rosa / Morado (#7f1458)
+    secondaryColor: { r: 0.300, g: 0.220, b: 0.850 }, // Azul oscuro (#4834cc)
+    ringGlow: "#7f1458",
   },
   thinking: {
-    speed: 3.0,
-    glowIntensity: 2.4,
-    coreIntensity: 0.75,
-    brightness: 1.15,
-    primaryColor: { r: 0.55, g: 0.6, b: 1.0 },
-    secondaryColor: { r: 0.6, g: 0.4, b: 1.0 },
-    ringGlow: "#9a8cff",
+    speed: 3.2,
+    glowIntensity: 2.6,
+    coreIntensity: 0.85,
+    brightness: 1.2,
+    primaryColor: { r: 0.498, g: 0.078, b: 0.345 },  // Rosa / Morado (#7f1458)
+    secondaryColor: { r: 0.282, g: 0.204, b: 0.800 }, // Azul oscuro (#4834cc)
+    ringGlow: "#7f1458",
   },
   speaking: {
-    speed: 1.4,
-    glowIntensity: 2.2,
-    coreIntensity: 0.65,
-    brightness: 1.1,
-    primaryColor: { r: 0.4, g: 0.9, b: 0.7 },
-    secondaryColor: { r: 0.1, g: 0.8, b: 0.9 },
-    ringGlow: "#72e0b0",
+    speed: 1.6,
+    glowIntensity: 2.3,
+    coreIntensity: 0.75,
+    brightness: 1.15,
+    primaryColor: { r: 0.282, g: 0.204, b: 0.800 },  // Azul oscuro (#4834cc)
+    secondaryColor: { r: 0.498, g: 0.078, b: 0.345 }, // Rosa / Morado (#7f1458)
+    ringGlow: "#4834cc",
   },
 };
 
@@ -111,7 +111,7 @@ function postToHost(msg) {
 }
 
 // ---------------------------------------------------------------- orb mode
-function OrbMode({ Orb, size, visuals }) {
+function OrbMode({ Orb, size, visuals, audioLevel }) {
   if (!Orb) return null; // CanvasKit / component not loaded yet
   return (
     <View style={styles.orbContainer}>
@@ -121,6 +121,7 @@ function OrbMode({ Orb, size, visuals }) {
       >
         <Orb
           size={size}
+          audioLevel={audioLevel}
           speed={visuals.speed}
           glowIntensity={visuals.glowIntensity}
           coreIntensity={visuals.coreIntensity}
@@ -253,6 +254,7 @@ export default function App() {
   const [Comp, setComp] = useState(null); // {Orb, Chrome}
   const [state, setState] = useState("idle");
   const [size, setSize] = useState(DEFAULT_SIZE);
+  const [audioLevel, setAudioLevel] = useState(0);
   const [content, setContent] = useState([]); // bubble lines
   const [micOn, setMicOn] = useState(false);
   const stateRef = useRef(state);
@@ -298,6 +300,10 @@ export default function App() {
           setState(name);
         }
         if (opts && opts.size) setSize(opts.size);
+      },
+      setAudioLevel: (lvl) => {
+        const val = Math.max(0, Math.min(1, Number(lvl) || 0));
+        setAudioLevel(val);
       },
       getState: () => stateRef.current,
       clear: () => {
@@ -368,7 +374,7 @@ export default function App() {
   return (
     <View style={styles.root}>
       {MODE === "orb" && (
-        <OrbMode Orb={Comp && Comp.Orb} size={size} visuals={v} />
+        <OrbMode Orb={Comp && Comp.Orb} size={size} visuals={v} audioLevel={audioLevel} />
       )}
       {MODE === "bubble" && (
         <BubbleMode
@@ -398,7 +404,7 @@ export default function App() {
             onSettings={() => postToHost({ type: "settings" })}
             onQuit={() => postToHost({ type: "quit" })}
           />
-          <OrbMode Orb={Comp && Comp.Orb} size={size} visuals={v} />
+          <OrbMode Orb={Comp && Comp.Orb} size={size} visuals={v} audioLevel={audioLevel} />
         </View>
       )}
     </View>
@@ -420,14 +426,17 @@ const styles = StyleSheet.create({
   },
   // --- orb mode ---
   orbContainer: {
-    width: DEFAULT_SIZE,
-    height: DEFAULT_SIZE,
+    width: "100%",
+    height: "100%",
+    flex: 1,
     backgroundColor: "transparent",
     alignItems: "center",
     justifyContent: "center",
   },
   press: {
     borderRadius: 1000,
+    alignItems: "center",
+    justifyContent: "center",
   },
   // --- bubble mode ---
   bubbleRoot: {

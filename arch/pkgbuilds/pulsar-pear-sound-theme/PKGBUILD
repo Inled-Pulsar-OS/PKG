@@ -2,7 +2,7 @@
 pkgname=pulsar-pear-sound-theme
 pkgver=1.0.0
 pkgrel=1
-pkgdesc="macOS-like system sound theme for Pulsar OS Pear Edition"
+pkgdesc="macOS-like system sound theme for Pulsar OS Bitten Fruit Arch Based"
 arch=(any)
 url="https://github.com/Inled-Pulsar-OS/pulsar-pear-sound-theme"
 license=(custom)

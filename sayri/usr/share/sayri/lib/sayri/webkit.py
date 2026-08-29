@@ -84,6 +84,29 @@ def pin_layer_shell(win: Gtk.Window, *, top_margin: int = 12,
         return False
 
 
+class _XSizeHints(ctypes.Structure):
+    _fields_ = [
+        ("flags", ctypes.c_long),
+        ("x", ctypes.c_int),
+        ("y", ctypes.c_int),
+        ("width", ctypes.c_int),
+        ("height", ctypes.c_int),
+        ("min_width", ctypes.c_int),
+        ("min_height", ctypes.c_int),
+        ("max_width", ctypes.c_int),
+        ("max_height", ctypes.c_int),
+        ("width_inc", ctypes.c_int),
+        ("height_inc", ctypes.c_int),
+        ("min_aspect_x", ctypes.c_int),
+        ("min_aspect_y", ctypes.c_int),
+        ("max_aspect_x", ctypes.c_int),
+        ("max_aspect_y", ctypes.c_int),
+        ("base_width", ctypes.c_int),
+        ("base_height", ctypes.c_int),
+        ("win_gravity", ctypes.c_int),
+    ]
+
+
 class _XClientMessageEvent(ctypes.Structure):
     _fields_ = [
         ("type", ctypes.c_int),
@@ -126,6 +149,10 @@ def pin_x11_window(win: Gtk.Window, *, top_margin: int = 44,
         libx11.XChangeProperty.argtypes = [
             ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong,
             ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int
+        ]
+        libx11.XSetWMNormalHints.restype = None
+        libx11.XSetWMNormalHints.argtypes = [
+            ctypes.c_void_p, ctypes.c_ulong, ctypes.POINTER(_XSizeHints)
         ]
         libx11.XSendEvent.argtypes = [
             ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_long, ctypes.POINTER(_XEvent)
@@ -172,6 +199,17 @@ def pin_x11_window(win: Gtk.Window, *, top_margin: int = 44,
             x = max(screen_x, screen_x + screen_w - width - right_margin)
             y = screen_y + top_margin
 
+            # 1. Set WM_NORMAL_HINTS with USPosition (1) | USSize (2) | PPosition (4) | PSize (8)
+            # This tells Mutter / EWMH that the position is user-defined and prevents auto-centering.
+            hints = _XSizeHints()
+            hints.flags = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3)
+            hints.x = x
+            hints.y = y
+            hints.width = width
+            hints.height = height
+            libx11.XSetWMNormalHints(dpy, xid, ctypes.byref(hints))
+
+            # 2. Direct MoveResize
             libx11.XMoveResizeWindow(dpy, xid, x, y, width, height)
 
             XA_ATOM = 4
@@ -191,14 +229,17 @@ def pin_x11_window(win: Gtk.Window, *, top_margin: int = 44,
             net_wm_wtype = libx11.XInternAtom(dpy, b"_NET_WM_WINDOW_TYPE", 0)
             wtype_dock = libx11.XInternAtom(dpy, b"_NET_WM_WINDOW_TYPE_DOCK", 0)
             wtype_notification = libx11.XInternAtom(dpy, b"_NET_WM_WINDOW_TYPE_NOTIFICATION", 0)
-            wtypes = (ctypes.c_ulong * 2)(wtype_dock, wtype_notification)
+            wtype_utility = libx11.XInternAtom(dpy, b"_NET_WM_WINDOW_TYPE_UTILITY", 0)
+            wtypes = (ctypes.c_ulong * 3)(wtype_dock, wtype_notification, wtype_utility)
             libx11.XChangeProperty(
                 dpy, xid, net_wm_wtype, XA_ATOM, 32, 2,
-                ctypes.cast(wtypes, ctypes.c_void_p), 2
+                ctypes.cast(wtypes, ctypes.c_void_p), 3
             )
 
             # Send EWMH ClientMessage to Root Window to notify Mutter window manager
             root = libx11.XDefaultRootWindow(dpy)
+            mask = 0x00100000 | 0x00080000  # SubstructureRedirectMask | SubstructureNotifyMask
+
             ev = _XEvent()
             ev.type = 33  # ClientMessage
             ev.xclient.type = 33
@@ -213,11 +254,28 @@ def pin_x11_window(win: Gtk.Window, *, top_margin: int = 44,
             ev.xclient.data_l[2] = state_sticky
             ev.xclient.data_l[3] = 1
             ev.xclient.data_l[4] = 0
-
-            mask = 0x00100000 | 0x00080000  # SubstructureRedirectMask | SubstructureNotifyMask
             libx11.XSendEvent(dpy, root, 0, mask, ctypes.byref(ev))
-            libx11.XRaiseWindow(dpy, xid)
 
+            # Send _NET_MOVERESIZE_WINDOW message
+            net_moveresize = libx11.XInternAtom(dpy, b"_NET_MOVERESIZE_WINDOW", 0)
+            ev_mr = _XEvent()
+            ev_mr.type = 33
+            ev_mr.xclient.type = 33
+            ev_mr.xclient.serial = 0
+            ev_mr.xclient.send_event = 1
+            ev_mr.xclient.display = dpy
+            ev_mr.xclient.window = xid
+            ev_mr.xclient.message_type = net_moveresize
+            ev_mr.xclient.format = 32
+            # flags: 0x0F00 = x, y, width, height specified, source = 1 (normal application)
+            ev_mr.xclient.data_l[0] = 0x0F00 | (1 << 12)
+            ev_mr.xclient.data_l[1] = x
+            ev_mr.xclient.data_l[2] = y
+            ev_mr.xclient.data_l[3] = width
+            ev_mr.xclient.data_l[4] = height
+            libx11.XSendEvent(dpy, root, 0, mask, ctypes.byref(ev_mr))
+
+            libx11.XRaiseWindow(dpy, xid)
             libx11.XFlush(dpy)
             libx11.XCloseDisplay(dpy)
         except Exception as exc:  # noqa: BLE001

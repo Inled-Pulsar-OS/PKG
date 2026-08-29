@@ -25,9 +25,9 @@ package() {
     mkdir -p "$pkgdir/etc" "$pkgdir/usr/lib"
     cat <<EOF > "$pkgdir/etc/os-release"
 NAME="Pulsar OS"
-PRETTY_NAME="Pulsar OS Pear Edition Arch $os_ver"
+PRETTY_NAME="Pulsar OS Bitten Fruit Arch Based $os_ver"
 VERSION_ID="$os_ver"
-VERSION="Pear Edition Arch $os_ver"
+VERSION="Bitten Fruit Arch Based $os_ver"
 ID=pulsaros
 ID_LIKE=arch
 HOME_URL="https://inled.es"

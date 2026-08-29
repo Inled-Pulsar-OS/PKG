@@ -59,6 +59,8 @@ cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-4.0/"* "$STAGE_DIR/root/.c
 # Permitir que el sistema nativo de colores de acento de GNOME / Libadwaita controle los botones y temas
 echo "Habilitando colores de acento dinámicos en temas MacTahoe..."
 find "$STAGE_DIR" -name "*.css" -exec sed -i '/@define-color accent_/d' {} + 2>/dev/null || true
+find "$STAGE_DIR" -name "*.css" -exec sed -i '/@define-color theme_selected_/d' {} + 2>/dev/null || true
+find "$STAGE_DIR" -name "*.css" -exec sed -i '/@define-color selected_/d' {} + 2>/dev/null || true
 find "$STAGE_DIR/usr/share/themes" -name "*.css" -exec sed -i 's/#0088FF/@accent_bg_color/g' {} + 2>/dev/null || true
 find "$STAGE_DIR/usr/share/themes" -name "*.css" -exec sed -i 's/#0088ff/@accent_bg_color/g' {} + 2>/dev/null || true
 find "$STAGE_DIR/etc/skel" -name "*.css" -exec sed -i 's/#0088FF/@accent_bg_color/g' {} + 2>/dev/null || true
@@ -66,10 +68,10 @@ find "$STAGE_DIR/etc/skel" -name "*.css" -exec sed -i 's/#0088ff/@accent_bg_colo
 find "$STAGE_DIR/root" -name "*.css" -exec sed -i 's/#0088FF/@accent_bg_color/g' {} + 2>/dev/null || true
 find "$STAGE_DIR/root" -name "*.css" -exec sed -i 's/#0088ff/@accent_bg_color/g' {} + 2>/dev/null || true
 
-# Definir variables de acento solo en GTK3 como fallback dinámico
-find "$STAGE_DIR" -path "*/gtk-3.0/*.css" | while read -r css_file; do
+# Prepend clean fallback accent definitions to ALL gtk-3.0 and gtk-4.0 css files
+find "$STAGE_DIR" -type f -name "*.css" | while read -r css_file; do
     if [ -f "$css_file" ]; then
-        sed -i '1s/^/@define-color accent_color @theme_selected_bg_color;\n@define-color accent_bg_color @theme_selected_bg_color;\n@define-color accent_fg_color @theme_selected_fg_color;\n/' "$css_file"
+        sed -i '1s/^/@define-color accent_color #3584e4;\n@define-color accent_bg_color #3584e4;\n@define-color accent_fg_color #ffffff;\n@define-color theme_selected_bg_color #3584e4;\n@define-color theme_selected_fg_color #ffffff;\n@define-color selected_bg_color #3584e4;\n@define-color selected_fg_color #ffffff;\n/' "$css_file"
     fi
 done
 
@@ -90,8 +92,47 @@ textview text selection,
 textview selection,
 label:selected,
 .view:selected,
-.view:selected:focus {
+.view:selected:focus,
+*:selected {
   background-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+
+/* ==============================================================================
+ * Pulsar OS - Context Menu / Popup Menu Hover & Highlight
+ * ============================================================================== */
+menu > menuitem:hover,
+menu > menuitem:selected,
+menuitem.button.flat:hover,
+menuitem.button.flat:selected,
+modelbutton.flat:hover,
+modelbutton.flat:selected {
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+
+menu > menuitem:hover label,
+menu > menuitem:selected label,
+menu > menuitem:hover arrow,
+menu > menuitem:selected arrow,
+menuitem.button.flat:hover label,
+menuitem.button.flat:selected label,
+modelbutton.flat:hover label,
+modelbutton.flat:selected label {
+  color: @accent_fg_color;
+}
+
+popover.menu modelbutton:hover,
+popover.menu modelbutton:selected,
+popover.menu modelbutton:focus:hover {
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+
+popover.menu modelbutton:hover label,
+popover.menu modelbutton:selected label,
+popover.menu modelbutton:hover arrow,
+popover.menu modelbutton:selected arrow {
   color: @accent_fg_color;
 }
 
@@ -109,23 +150,21 @@ button.accent-button {
   transition: all 150ms ease;
 }
 button.accent-button:hover {
-  transform: scale(1.1);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.35);
 }
 button.accent-button:checked {
   border: 2.5px solid #ffffff;
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6), 0 4px 10px rgba(0, 0, 0, 0.4);
-  transform: scale(1.15);
 }
-button.accent-button.blue { background-color: #0088FF !important; background-image: none !important; }
-button.accent-button.teal { background-color: #2190a4 !important; background-image: none !important; }
-button.accent-button.green { background-color: #79B757 !important; background-image: none !important; }
-button.accent-button.yellow { background-color: #F3BA4B !important; background-image: none !important; }
-button.accent-button.orange { background-color: #E9873A !important; background-image: none !important; }
-button.accent-button.red { background-color: #ED5F5D !important; background-image: none !important; }
-button.accent-button.pink { background-color: #E55E9C !important; background-image: none !important; }
-button.accent-button.purple { background-color: #9A57A3 !important; background-image: none !important; }
-button.accent-button.slate { background-color: #6f8396 !important; background-image: none !important; }
+button.accent-button.blue { background-color: #3584e4; background-image: none; }
+button.accent-button.teal { background-color: #2190a4; background-image: none; }
+button.accent-button.green { background-color: #3a944a; background-image: none; }
+button.accent-button.yellow { background-color: #e5a50a; background-image: none; }
+button.accent-button.orange { background-color: #e66100; background-image: none; }
+button.accent-button.red { background-color: #e01b24; background-image: none; }
+button.accent-button.pink { background-color: #d56199; background-image: none; }
+button.accent-button.purple { background-color: #9141ac; background-image: none; }
+button.accent-button.slate { background-color: #6f8396; background-image: none; }
 
 /* ==============================================================================
  * Apple Liquid Glass HIG - Specular Rim Highlight & Adaptive Focus Contrast
@@ -134,12 +173,12 @@ button.accent-button.slate { background-color: #6f8396 !important; background-im
 .nautilus-pathbar,
 headerbar box.linked {
   box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.18), 0 2px 8px rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 headerbar .linked > button:focus,
 headerbar .linked > button:focus-within {
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.3), 0 0 0 2px @accent_bg_color !important;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.3), 0 0 0 2px @accent_bg_color;
 }
 ACCENT_BTN_FIX
 
@@ -148,6 +187,12 @@ find "$STAGE_DIR" -path "*/gtk-3.0/gtk.css" -exec sh -c 'cat /tmp/accent_btn_fix
 find "$STAGE_DIR" -path "*/gtk-4.0/gtk-dark.css" -exec sh -c 'cat /tmp/accent_btn_fix.css >> "$1"' _ {} \; 2>/dev/null || true
 find "$STAGE_DIR" -path "*/gtk-3.0/gtk-dark.css" -exec sh -c 'cat /tmp/accent_btn_fix.css >> "$1"' _ {} \; 2>/dev/null || true
 rm -f /tmp/accent_btn_fix.css
+
+# Copiar también configuración básica de GTK3 a Skel y Root
+mkdir -p "$STAGE_DIR/etc/skel/.config/gtk-3.0"
+mkdir -p "$STAGE_DIR/root/.config/gtk-3.0"
+cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-3.0/gtk-dark.css" "$STAGE_DIR/etc/skel/.config/gtk-3.0/gtk.css" 2>/dev/null || true
+cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-3.0/gtk-dark.css" "$STAGE_DIR/root/.config/gtk-3.0/gtk.css" 2>/dev/null || true
 
 # 2.2 Aplicar fix para Nautilus moderno (Libadwaita en GNOME 46+)
 echo "Aplicando fix de Libadwaita moderno para Nautilus..."

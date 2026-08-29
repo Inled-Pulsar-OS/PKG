@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Pulsar Accent Color Sync
+Comment=Synchronize GNOME Accent Color with GTK and Web Browsers
+Exec=/usr/bin/pulsar-sync-accent
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+OnlyShowIn=GNOME;

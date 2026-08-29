@@ -8,6 +8,7 @@ import time
 import gi
 
 gi.require_version("Gtk", "4.0")
+gi.require_version("WebKit", "6.0")
 from gi.repository import Gdk, GLib, Gtk, WebKit  # noqa: E402
 
 from .cajita import SayriCajita
@@ -73,14 +74,17 @@ class SayriOverlay:
                    width=width, height=height)
 
         # ── layout: horizontal box [ cajita · orb ] ─────────────────
-        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=GAP)
-        hbox.set_halign(Gtk.Align.END)
-        hbox.set_valign(Gtk.Align.START)
+        self.hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=GAP)
+        self.hbox.set_halign(Gtk.Align.END)
+        self.hbox.set_valign(Gtk.Align.START)
+        self.hbox.set_hexpand(False)
+        self.hbox.set_vexpand(False)
 
         # 1. Cajita with Chroma-Ring animated border
         self.cajita = SayriCajita(app)
         self.cajita.set_valign(Gtk.Align.START)
-        hbox.append(self.cajita)
+        self.cajita.set_hexpand(False)
+        self.hbox.append(self.cajita)
 
         # 2. WebKit-based animated Siri Orb (React Native/Skia)
         self._orb_size = orb_size
@@ -89,13 +93,20 @@ class SayriOverlay:
         self.web = WebKit.WebView.new()
         ensure_scheme(self.web.get_context())
         ucm = webview_setup(self.web, on_message=self._on_orb_message)
-        self.web.set_size_request(orb_size, orb_size)
-        self.web.set_halign(Gtk.Align.END)
-        self.web.set_valign(Gtk.Align.START)
+        # Wrap WebKit in a fixed-size container (WebKit ignores set_size_request)
+        self._orb_box = Gtk.Box()
+        self._orb_box.set_size_request(orb_size, orb_size)
+        self._orb_box.set_halign(Gtk.Align.END)
+        self._orb_box.set_valign(Gtk.Align.START)
+        self._orb_box.set_hexpand(False)
+        self._orb_box.set_vexpand(False)
+        self._orb_box.append(self.web)
+        self.web.set_hexpand(True)
+        self.web.set_vexpand(True)
         self.web.load_uri(f"{SCHEME}://app/index.html?mode=orb")
-        hbox.append(self.web)
+        self.hbox.append(self._orb_box)
 
-        self.win.set_child(hbox)
+        self.win.set_child(self.hbox)
 
     def _on_orb_message(self, text: str) -> None:
         try:
@@ -134,7 +145,11 @@ class SayriOverlay:
                 self.cajita.pill_bg.set_mode("idle")
 
     def set_audio_level(self, level: float) -> None:
-        pass  # WebKit orb does not support audio level feedback
+        if not self._orb_ready:
+            return
+        lvl = max(0.0, min(1.0, float(level)))
+        js = f"window.sayriBridge && window.sayriBridge.setAudioLevel && window.sayriBridge.setAudioLevel({lvl:.3f})"
+        self.web.evaluate_javascript(js, len(js), None, f"{SCHEME}://app", None, None, None)
 
     def set_content(self, kind: str, text: str) -> None:
         self.cajita.set_content(kind, text)
@@ -152,6 +167,12 @@ class SayriOverlay:
     def is_visible(self) -> bool:
         return getattr(self, "_is_visible", False) or bool(self.win.get_visible())
 
+    def reassert_position(self) -> bool:
+        fn = getattr(self.win, "_reassert_x11_position", None)
+        if fn:
+            fn()
+        return GLib.SOURCE_REMOVE
+
     def show(self) -> None:
         self._is_visible = True
         self._just_shown = time.monotonic()
@@ -162,6 +183,9 @@ class SayriOverlay:
             self.win.present_with_time(0)
         except Exception:
             self.win.present()
+        self.reassert_position()
+        GLib.timeout_add(50, self.reassert_position)
+        GLib.timeout_add(150, self.reassert_position)
         def _focus():
             self.cajita.entry.grab_focus()
             self.cajita.entry.set_position(-1)
@@ -189,7 +213,8 @@ class SayriOverlay:
         self._orb_size = orb_size
         width = BUBBLE_WIDTH + GAP + orb_size
         height = max(BUBBLE_HEIGHT, orb_size)
-        self.web.set_size_request(orb_size, orb_size)
+        self._orb_box.set_size_request(orb_size, orb_size)
         self.win.set_default_size(width, height)
         pin_window(self.win, top_margin=TOP_MARGIN, right_margin=MARGIN,
                    width=width, height=height)
+        self.reassert_position()
