@@ -14,7 +14,7 @@ from .orb import SiriOrb
 from .webkit import pin_window
 
 BUBBLE_WIDTH = 420
-BUBBLE_HEIGHT = 140
+BUBBLE_HEIGHT = 380
 GAP = 14
 MARGIN = 16
 TOP_MARGIN = 44
@@ -32,7 +32,7 @@ class SayriOverlay:
             orb_size = 140
 
         width = BUBBLE_WIDTH + GAP + orb_size
-        height = max(BUBBLE_HEIGHT, orb_size)
+        height = BUBBLE_HEIGHT
 
         # ── window ──────────────────────────────────────────────────
         self.win = Gtk.ApplicationWindow(application=app)
@@ -63,7 +63,7 @@ class SayriOverlay:
         # ── layout: horizontal box [ cajita · orb ] ─────────────────
         hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=GAP)
         hbox.set_halign(Gtk.Align.END)
-        hbox.set_valign(Gtk.Align.CENTER)
+        hbox.set_valign(Gtk.Align.START)
 
         # 1. Cajita with Chroma-Ring animated border
         self.cajita = SayriCajita(app)

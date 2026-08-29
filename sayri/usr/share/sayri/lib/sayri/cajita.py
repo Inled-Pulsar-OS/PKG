@@ -25,80 +25,68 @@ CAJITA_CSS = b"""
     background-color: transparent;
 }
 
-.sayri-pill-container,
-.sayri-card-container {
+.sayri-pill-container {
     background: transparent;
     background-color: transparent;
 }
 
 entry.sayri-pill-entry,
 entry.sayri-pill-entry:focus,
-entry.sayri-pill-entry:backdrop {
-    background: transparent;
-    background-color: transparent;
-    background-image: none;
-    border: none;
-    color: #f8fafc;
-    font-size: 14px;
-    font-weight: 500;
-    padding: 0 8px;
-    min-height: 36px;
-    box-shadow: none;
-    outline: none;
-}
-
+entry.sayri-pill-entry:backdrop,
 entry.sayri-pill-entry text,
 entry.sayri-pill-entry text:focus {
     background: transparent;
     background-color: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    outline: none;
     color: #f8fafc;
+    font-size: 14.5px;
+    font-weight: 500;
+    padding: 0 6px;
+    min-height: 36px;
 }
 
 button.sayri-icon-btn,
+button.sayri-icon-btn:hover,
 button.sayri-icon-btn:active,
 button.sayri-icon-btn:focus,
 button.sayri-icon-btn:checked,
 button.sayri-icon-btn:disabled,
 button.sayri-icon-btn:backdrop {
-    background: rgba(255, 255, 255, 0.08);
-    background-color: rgba(255, 255, 255, 0.08);
+    background: transparent;
+    background-color: transparent;
     background-image: none;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 18px;
-    color: #cbd5e1;
-    min-width: 32px;
-    min-height: 32px;
-    padding: 0;
+    border: none;
+    border-radius: 0;
     box-shadow: none;
     outline: none;
+    color: #cbd5e1;
+    min-width: 28px;
+    min-height: 28px;
+    padding: 0 4px;
 }
 
-button.sayri-icon-btn:hover {
-    background: rgba(255, 255, 255, 0.20);
-    background-color: rgba(255, 255, 255, 0.20);
-    border-color: rgba(255, 255, 255, 0.30);
-    color: #ffffff;
+.sayri-response-card {
+    background: rgba(18, 21, 30, 0.92);
+    background-color: rgba(18, 21, 30, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    padding: 16px 20px;
+    min-height: 48px;
 }
 
-button.sayri-icon-btn-active,
-button.sayri-icon-btn-active:hover,
-button.sayri-icon-btn-active:focus {
-    background: linear-gradient(135deg, #38bdf8, #a855f7);
-    background-color: #a855f7;
-    border-color: rgba(255, 255, 255, 0.5);
-    color: #ffffff;
+.sayri-response-card-speaking {
+    border: 1.5px solid #a855f7;
+    box-shadow: 0 0 16px rgba(168, 85, 247, 0.55), 0 0 30px rgba(56, 189, 248, 0.40);
 }
 
 .sayri-response-label {
     color: #f8fafc;
     font-size: 14.5px;
-    line-height: 1.42;
-}
-
-.sayri-response-hint {
-    color: #94a3b8;
-    font-size: 13px;
-    font-style: italic;
+    line-height: 1.45;
+    background: transparent;
 }
 """
 
@@ -306,20 +294,10 @@ class SayriCajita(Gtk.Box):
         self.append(self.pill_overlay)
 
         # ── 2. Bottom Response Card ───────────────────────────────────
-        self.card_overlay = Gtk.Overlay()
-        self.card_overlay.add_css_class("sayri-card-container")
-        self.card_overlay.set_size_request(400, -1)
-
-        # Background drawing area for Card
-        self.card_bg = ChromaBackground(is_pill=False)
-        self.card_overlay.set_child(self.card_bg)
-
-        # Foreground content of Card
-        card_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        card_content.set_margin_start(16)
-        card_content.set_margin_end(16)
-        card_content.set_margin_top(12)
-        card_content.set_margin_bottom(12)
+        self.card_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.card_box.add_css_class("sayri-response-card")
+        self.card_box.set_size_request(400, -1)
+        self.card_box.set_hexpand(True)
 
         self.scroll = Gtk.ScrolledWindow()
         self.scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
@@ -334,13 +312,12 @@ class SayriCajita(Gtk.Box):
         self.response_label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
         self.response_label.set_selectable(True)
         self.scroll.set_child(self.response_label)
-        card_content.append(self.scroll)
+        self.card_box.append(self.scroll)
 
-        self.card_overlay.add_overlay(card_content)
-        self.append(self.card_overlay)
+        self.append(self.card_box)
 
         # Hide bottom card initially until response exists
-        self.card_overlay.set_visible(False)
+        self.card_box.set_visible(False)
 
     def _on_entry_activate(self, entry: Gtk.Entry) -> None:
         text = entry.get_text().strip()
@@ -373,15 +350,14 @@ class SayriCajita(Gtk.Box):
             self.pill_bg.set_mode("active")
         elif kind == "assistant":
             self.response_label.set_label(text)
-            self.card_overlay.set_visible(True)
-            self.card_bg.queue_draw()
+            self.card_box.set_visible(True)
         elif kind == "hint":
             if self.response_label.get_label() == "":
                 self.response_label.set_label(text)
-                self.card_overlay.set_visible(True)
+                self.card_box.set_visible(True)
         elif kind == "error":
             self.response_label.set_label(f"⚠️ {text}")
-            self.card_overlay.set_visible(True)
+            self.card_box.set_visible(True)
 
     def set_mic(self, active: bool) -> None:
         if active:
@@ -404,13 +380,13 @@ class SayriCajita(Gtk.Box):
 
     def set_speaking(self, speaking: bool) -> None:
         if speaking:
-            self.card_bg.set_mode("rotating")
+            self.card_box.add_css_class("sayri-response-card-speaking")
         else:
-            self.card_bg.set_mode("idle")
+            self.card_box.remove_css_class("sayri-response-card-speaking")
 
     def clear(self) -> None:
         self.response_label.set_label("")
-        self.card_overlay.set_visible(False)
-        self.card_bg.set_mode("idle")
+        self.card_box.set_visible(False)
+        self.card_box.remove_css_class("sayri-response-card-speaking")
         if not self.app.listening_now() and not self.entry.get_text().strip():
             self.pill_bg.set_mode("idle")
