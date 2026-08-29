@@ -20,42 +20,40 @@ gi.require_version("Gtk", "4.0")
 from gi.repository import Gdk, GLib, Gtk, Pango  # noqa: E402
 
 CAJITA_CSS = b"""
-.sayri-cajita-container {
-    background: transparent;
+.sayri-cajita-container,
+.sayri-pill-container,
+.sayri-pill-row,
+.sayri-pill-row > * {
+    background: none;
     background-color: transparent;
+    background-image: none;
 }
 
-.sayri-pill-container {
-    background: transparent;
-    background-color: transparent;
-}
-
-entry,
 entry.sayri-pill-entry,
 entry.sayri-pill-entry:focus,
+entry.sayri-pill-entry:hover,
 entry.sayri-pill-entry:backdrop,
 entry.sayri-pill-entry text,
 entry.sayri-pill-entry text:focus,
+entry.sayri-pill-entry text:hover,
 entry.sayri-pill-entry text:backdrop,
 entry.sayri-pill-entry > text,
 entry.sayri-pill-entry > text:focus,
-entry.sayri-pill-entry > text:backdrop,
 entry.sayri-pill-entry > text > placeholder {
-    background: transparent;
+    background: none;
     background-color: transparent;
     background-image: none;
     border: none;
+    border-radius: 0;
     box-shadow: none;
     outline: none;
-    color: #f8fafc;
-    font-size: 14.5px;
+    color: #ffffff;
+    font-size: 15px;
     font-weight: 500;
-    padding: 0 6px;
+    padding: 0 4px;
     min-height: 36px;
 }
 
-button,
-button.flat,
 button.sayri-icon-btn,
 button.sayri-icon-btn:hover,
 button.sayri-icon-btn:active,
@@ -64,32 +62,34 @@ button.sayri-icon-btn:checked,
 button.sayri-icon-btn:disabled,
 button.sayri-icon-btn:backdrop,
 button.sayri-icon-btn * {
-    background: transparent;
+    background: none;
     background-color: transparent;
     background-image: none;
     border: none;
     border-radius: 0;
     box-shadow: none;
     outline: none;
-    color: #cbd5e1;
+    color: #f1f5f9;
     min-width: 28px;
     min-height: 28px;
     padding: 0 4px;
 }
 
 .sayri-response-card {
-    background: rgba(18, 21, 30, 0.92);
-    background-color: rgba(18, 21, 30, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 20px;
-    padding: 16px 20px;
+    background: transparent;
+    background-color: transparent;
+    border: none;
     min-height: 48px;
 }
 
-.sayri-response-label {
-    color: #f8fafc;
-    font-size: 14.5px;
-    line-height: 1.45;
+.sayri-response-label,
+label.sayri-response-label,
+.sayri-response-card label,
+.sayri-response-card text {
+    color: #ffffff;
+    font-size: 15.5px;
+    font-weight: 500;
+    line-height: 1.5;
     background: transparent;
 }
 """
@@ -245,7 +245,7 @@ class SayriCajita(Gtk.Box):
             provider.load_from_data(CAJITA_CSS)
             Gtk.StyleContext.add_provider_for_display(
                 Gdk.Display.get_default(), provider,
-                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+                Gtk.STYLE_PROVIDER_PRIORITY_USER,
             )
         except Exception:
             pass
@@ -262,6 +262,7 @@ class SayriCajita(Gtk.Box):
 
         # Foreground content of Pill
         pill_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        pill_row.add_css_class("sayri-pill-row")
         pill_row.set_margin_start(8)
         pill_row.set_margin_end(8)
         pill_row.set_margin_top(6)
@@ -272,6 +273,7 @@ class SayriCajita(Gtk.Box):
         self.siri_btn = Gtk.Button()
         self.siri_btn.set_child(_svg_icon(SVG_SIRI_ICON))
         self.siri_btn.set_has_frame(False)
+        self.siri_btn.add_css_class("flat")
         self.siri_btn.add_css_class("sayri-icon-btn")
         self.siri_btn.set_tooltip_text("Sayri Settings")
         self.siri_btn.connect("clicked", lambda _b: self.app.open_settings())
@@ -280,6 +282,7 @@ class SayriCajita(Gtk.Box):
         # Center: Text input entry
         self.entry = Gtk.Entry()
         self.entry.set_has_frame(False)
+        self.entry.add_css_class("flat")
         self.entry.add_css_class("sayri-pill-entry")
         self.entry.set_placeholder_text("Talk to Siri…")
         self.entry.set_hexpand(True)
