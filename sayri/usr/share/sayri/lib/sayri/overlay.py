@@ -54,9 +54,8 @@ class SayriOverlay:
             pass
 
         self.win.connect("close-request", lambda *_: (self.win.set_visible(False), True)[-1])
-        self.win.connect("notify::is-active", self._on_active_changed)
 
-        # ── pin to top-right ─────────────────────────────────────────
+        # ── pin to top-right (always on top, fixed) ───────────────────
         pin_window(self.win, top_margin=TOP_MARGIN, right_margin=MARGIN,
                    width=width, height=height)
 
@@ -146,33 +145,3 @@ class SayriOverlay:
         self.win.set_default_size(width, height)
         pin_window(self.win, top_margin=TOP_MARGIN, right_margin=MARGIN,
                    width=width, height=height)
-
-    def _is_settings_open(self) -> bool:
-        if hasattr(self.app, "_settings_proc") and self.app._settings_proc and self.app._settings_proc.poll() is None:
-            return True
-        if self.app.settings_win is not None:
-            try:
-                return self.app.settings_win.win.get_visible()
-            except Exception:
-                return False
-        return False
-
-    def _on_active_changed(self, win, _pspec) -> None:
-        active = win.get_property("is-active")
-        if active:
-            self._was_active = True
-        elif getattr(self, "_was_active", False):
-            if time.monotonic() - getattr(self, "_just_shown", 0) < 1.2:
-                return
-            if self._is_settings_open():
-                return
-            GLib.timeout_add(150, self._check_dismiss)
-
-    def _check_dismiss(self) -> bool:
-        if not self.win.get_property("is-active") and getattr(self, "_was_active", False):
-            if self._is_settings_open():
-                return False
-            if time.monotonic() - getattr(self, "_just_shown", 0) < 1.2:
-                return False
-            self.hide()
-        return False

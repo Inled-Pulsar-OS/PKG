@@ -62,4 +62,9 @@ if [ "$1" = "skills" ]; then
     exec python3 -m sayri.skills "$@"
 fi
 
+if [ "$1" = "screenshot" ]; then
+    shift
+    exec python3 -m sayri.screenshot "$@"
+fi
+
 exec python3 -m sayri "$@"
