@@ -15,6 +15,7 @@ DEFAULTS: dict[str, dict[str, object]] = {
             "You are Sayri, a concise and natural voice assistant. "
             "Answer in short, spoken-style sentences."
         ),
+        "agent_mode": True,
         "temperature": 0.7,
         "max_tokens": 512,
         "stream": True,
@@ -51,6 +52,7 @@ _TYPES: dict[str, dict[str, str]] = {
         "api_key": "string",
         "model": "string",
         "system_prompt": "string",
+        "agent_mode": "bool",
         "temperature": "double",
         "max_tokens": "int",
         "stream": "bool",

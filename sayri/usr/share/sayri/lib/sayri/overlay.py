@@ -114,6 +114,7 @@ class SayriOverlay:
         self._was_active = False
         self.win.set_visible(True)
         self.win.present()
+        GLib.idle_add(self.cajita.entry.grab_focus)
 
     def hide(self) -> None:
         self._is_visible = False

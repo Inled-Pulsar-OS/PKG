@@ -374,6 +374,41 @@ class SayriApp(Gtk.Application):
 
         return False, ""
 
+def _detect_distro() -> str:
+    if os.path.exists("/etc/arch-release"):
+        return "Arch Linux"
+    elif os.path.exists("/etc/debian_version"):
+        return "Debian"
+    try:
+        with open("/etc/os-release") as f:
+            content = f.read().lower()
+            if "arch" in content:
+                return "Arch Linux"
+            elif "debian" in content or "ubuntu" in content:
+                return "Debian"
+    except Exception:
+        pass
+    return "Linux"
+
+
+def _get_effective_system_prompt(cfg) -> str:
+    agent_mode = cfg.get_bool("provider", "agent_mode")
+    base_prompt = cfg.get_string("provider", "system_prompt")
+    if not agent_mode:
+        return base_prompt
+    distro = _detect_distro()
+    return (
+        f"Eres Sayri, el asistente inteligente de voz y control de sistema integrado en Pulsar OS (basado en {distro}).\n"
+        "Responde en español de forma natural, concisa y agradable (1 a 3 frases habladas).\n"
+        "Tienes herramientas para ejecutar comandos en la terminal de Pulsar OS cuando el usuario te lo solicite o cuando necesites consultar información del sistema (archivos, volumen, batería, procesos, red, paquetes pacman/apt, fecha/hora, abrir aplicaciones, etc.).\n"
+        "Para ejecutar un comando en el sistema, escribe un bloque de código:\n"
+        "```bash\n"
+        "<comando bash>\n"
+        "```\n"
+        "El sistema ejecutará el comando y te entregará el resultado para que formules la respuesta final."
+    )
+
+
     # ── LLM
     def send_text(self, text: str) -> None:
         text = text.strip()
@@ -391,7 +426,7 @@ class SayriApp(Gtk.Application):
 
         messages = [{
             "role": "system",
-            "content": self.cfg.get_string("provider", "system_prompt"),
+            "content": _get_effective_system_prompt(self.cfg),
         }]
         for role, content in self.history[-HISTORY_MAX:]:
             messages.append({"role": role, "content": content})
@@ -412,7 +447,7 @@ class SayriApp(Gtk.Application):
             stream=self.cfg.get_bool("provider", "stream"),
             timeout=self.cfg.get_int("provider", "timeout"),
             on_delta=lambda d: GLib.idle_add(self._on_delta, d),
-            on_done=lambda full: GLib.idle_add(self._on_done, full),
+            on_done=lambda full: GLib.idle_add(self._on_done, full, messages),
             on_error=lambda e: GLib.idle_add(self._on_error, e),
         )
 
@@ -420,13 +455,46 @@ class SayriApp(Gtk.Application):
         self._assistant_text += delta
         self._set_assistant(self._assistant_text)
 
-    def _on_done(self, full: str) -> None:
+    def _on_done(self, full: str, messages: list[dict] | None = None) -> None:
+        import re
+        if full and self.cfg.get_bool("provider", "agent_mode") and messages:
+            m = re.search(r"```(?:bash|sh)?\s*\n(.*?)\n```", full, re.DOTALL)
+            if m:
+                cmd = m.group(1).strip()
+                if cmd:
+                    print(f"[Sayri] ⚙️ Agent executing tool command: `{cmd}`")
+                    self._msg("hint", f"⚙️ Ejecutando: {cmd[:40]}…")
+                    threading.Thread(target=self._execute_tool_and_followup,
+                                     args=(messages, full, cmd), daemon=True).start()
+                    return
+
         if full:
             self._assistant_text = full
             self._set_assistant(full)
             self.history.append(("assistant", full))
             self.history = self.history[-HISTORY_MAX * 2:]
         self._finish_reply(full)
+
+    def _execute_tool_and_followup(self, messages: list[dict], full_reply: str, cmd: str) -> None:
+        try:
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+            output = (res.stdout + "\n" + res.stderr).strip()
+            if not output:
+                output = f"(Comando ejecutado con código de salida {res.returncode})"
+        except Exception as exc:
+            output = f"Error al ejecutar comando: {exc}"
+
+        print(f"[Sayri] ✓ Tool output ({len(output)} bytes): \"{output[:100]}...\"")
+        followup_messages = list(messages)
+        followup_messages.append({"role": "assistant", "content": full_reply})
+        followup_messages.append({
+            "role": "user",
+            "content": f"[Resultado del comando `{cmd}`]:\n{output}\nExplica el resultado de forma concisa y natural para voz."
+        })
+
+        GLib.idle_add(lambda: self._msg("hint", "Procesando resultado…"))
+        self._assistant_text = ""
+        self._llm_worker(followup_messages)
 
     def _on_error(self, exc: Exception) -> None:
         self._msg("error", f"Provider error: {exc}")

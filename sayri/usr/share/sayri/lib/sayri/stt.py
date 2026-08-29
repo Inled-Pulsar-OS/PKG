@@ -246,7 +246,7 @@ class STTSession:
 
             # Dynamic thresholds adapting to environment
             speech_thresh = min(0.030, max(0.012, self._noise_floor * 1.30 + 0.004))
-            silence_thresh = max(0.016, self._noise_floor * 1.15 + 0.005)
+            silence_thresh = max(0.018, self._noise_floor * 1.20 + 0.005)
 
             if not self._speaking:
                 if level >= speech_thresh:
@@ -266,7 +266,7 @@ class STTSession:
                 if level < silence_thresh:
                     self._silence_ms += audio.CHUNK_MS
                 else:
-                    self._silence_ms = max(0, self._silence_ms - (audio.CHUNK_MS // 2))
+                    self._silence_ms = max(0, self._silence_ms - 25)
 
             # utterance end: silence tail or cap
             elapsed = (time.monotonic() - self._utt_started) * 1000.0 if self._speaking else 0.0

@@ -267,6 +267,7 @@ class SayriCajita(Gtk.Box):
         # Left: Siri / Settings icon button
         self.siri_btn = Gtk.Button()
         self.siri_btn.set_child(_svg_icon(SVG_SIRI_ICON))
+        self.siri_btn.set_has_frame(False)
         self.siri_btn.add_css_class("sayri-icon-btn")
         self.siri_btn.set_tooltip_text("Sayri Settings")
         self.siri_btn.connect("clicked", lambda _b: self.app.open_settings())
@@ -285,6 +286,7 @@ class SayriCajita(Gtk.Box):
         # Right: Mic toggle button
         self.mic_btn = Gtk.Button()
         self.mic_btn.set_child(_svg_icon(SVG_MIC))
+        self.mic_btn.set_has_frame(False)
         self.mic_btn.add_css_class("sayri-icon-btn")
         self.mic_btn.set_tooltip_text("Toggle Microphone")
         self.mic_btn.connect("clicked", lambda _b: self.app.toggle_listening())
@@ -294,10 +296,15 @@ class SayriCajita(Gtk.Box):
         self.append(self.pill_overlay)
 
         # ── 2. Bottom Response Card ───────────────────────────────────
-        self.card_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        self.card_box.add_css_class("sayri-response-card")
-        self.card_box.set_size_request(400, -1)
-        self.card_box.set_hexpand(True)
+        self.card_overlay = Gtk.Overlay()
+        self.card_overlay.set_size_request(400, -1)
+        self.card_overlay.set_hexpand(True)
+
+        card_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        card_content.set_margin_start(16)
+        card_content.set_margin_end(16)
+        card_content.set_margin_top(14)
+        card_content.set_margin_bottom(14)
 
         self.scroll = Gtk.ScrolledWindow()
         self.scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
@@ -312,12 +319,19 @@ class SayriCajita(Gtk.Box):
         self.response_label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
         self.response_label.set_selectable(True)
         self.scroll.set_child(self.response_label)
-        self.card_box.append(self.scroll)
+        card_content.append(self.scroll)
 
-        self.append(self.card_box)
+        self.card_overlay.set_child(card_content)
+
+        # card_bg drawn behind/around the card
+        self.card_bg = ChromaBackground(is_pill=False)
+        self.card_bg.set_can_target(False)
+        self.card_overlay.add_overlay(self.card_bg)
+
+        self.append(self.card_overlay)
 
         # Hide bottom card initially until response exists
-        self.card_box.set_visible(False)
+        self.card_overlay.set_visible(False)
 
     def _on_entry_activate(self, entry: Gtk.Entry) -> None:
         text = entry.get_text().strip()
@@ -350,43 +364,43 @@ class SayriCajita(Gtk.Box):
             self.pill_bg.set_mode("active")
         elif kind == "assistant":
             self.response_label.set_label(text)
-            self.card_box.set_visible(True)
+            self.card_overlay.set_visible(True)
+            self.card_bg.queue_draw()
         elif kind == "hint":
             if self.response_label.get_label() == "":
                 self.response_label.set_label(text)
-                self.card_box.set_visible(True)
+                self.card_overlay.set_visible(True)
         elif kind == "error":
             self.response_label.set_label(f"⚠️ {text}")
-            self.card_box.set_visible(True)
+            self.card_overlay.set_visible(True)
 
     def set_mic(self, active: bool) -> None:
         if active:
             self.mic_btn.set_child(_svg_icon(SVG_MIC_ACTIVE))
-            self.mic_btn.add_css_class("sayri-icon-btn-active")
             self.pill_bg.set_mode("active")
         else:
             self.mic_btn.set_child(_svg_icon(SVG_MIC))
-            self.mic_btn.remove_css_class("sayri-icon-btn-active")
             if not self.entry.get_text().strip():
                 self.pill_bg.set_mode("idle")
 
     def set_busy(self, busy: bool) -> None:
-        self.entry.set_sensitive(not busy)
         if busy:
             self.pill_bg.set_mode("rotating")
         else:
+            self.entry.set_sensitive(True)
             if not self.app.listening_now() and not self.entry.get_text().strip():
                 self.pill_bg.set_mode("idle")
 
     def set_speaking(self, speaking: bool) -> None:
         if speaking:
-            self.card_box.add_css_class("sayri-response-card-speaking")
+            self.card_bg.set_mode("rotating")
         else:
-            self.card_box.remove_css_class("sayri-response-card-speaking")
+            self.card_bg.set_mode("idle")
 
     def clear(self) -> None:
         self.response_label.set_label("")
-        self.card_box.set_visible(False)
-        self.card_box.remove_css_class("sayri-response-card-speaking")
+        self.card_overlay.set_visible(False)
+        self.card_bg.set_mode("idle")
+        self.entry.set_sensitive(True)
         if not self.app.listening_now() and not self.entry.get_text().strip():
             self.pill_bg.set_mode("idle")
