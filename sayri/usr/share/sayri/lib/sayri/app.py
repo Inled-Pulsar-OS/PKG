@@ -39,6 +39,41 @@ HISTORY_MAX = 10
 AUTOSTART_SRC = "/etc/xdg/autostart/sayri.desktop"
 
 
+def _detect_distro() -> str:
+    if os.path.exists("/etc/arch-release"):
+        return "Arch Linux"
+    elif os.path.exists("/etc/debian_version"):
+        return "Debian"
+    try:
+        with open("/etc/os-release") as f:
+            content = f.read().lower()
+            if "arch" in content:
+                return "Arch Linux"
+            elif "debian" in content or "ubuntu" in content:
+                return "Debian"
+    except Exception:
+        pass
+    return "Linux"
+
+
+def _get_effective_system_prompt(cfg) -> str:
+    agent_mode = cfg.get_bool("provider", "agent_mode")
+    base_prompt = cfg.get_string("provider", "system_prompt")
+    if not agent_mode:
+        return base_prompt
+    distro = _detect_distro()
+    return (
+        f"Eres Sayri, el asistente inteligente de voz y control de sistema integrado en Pulsar OS (basado en {distro}).\n"
+        "Responde en español de forma natural, concisa y agradable (1 a 3 frases habladas).\n"
+        "Tienes herramientas para ejecutar comandos en la terminal de Pulsar OS cuando el usuario te lo solicite o cuando necesites consultar información del sistema (archivos, volumen, batería, procesos, red, paquetes pacman/apt, fecha/hora, abrir aplicaciones, etc.).\n"
+        "Para ejecutar un comando en el sistema, escribe un bloque de código:\n"
+        "```bash\n"
+        "<comando bash>\n"
+        "```\n"
+        "El sistema ejecutará el comando y te entregará el resultado para que formules la respuesta final."
+    )
+
+
 class SayriApp(Gtk.Application):
     def __init__(self) -> None:
         super().__init__(application_id=APP_ID,
@@ -373,41 +408,6 @@ class SayriApp(Gtk.Application):
             return True, remainder
 
         return False, ""
-
-def _detect_distro() -> str:
-    if os.path.exists("/etc/arch-release"):
-        return "Arch Linux"
-    elif os.path.exists("/etc/debian_version"):
-        return "Debian"
-    try:
-        with open("/etc/os-release") as f:
-            content = f.read().lower()
-            if "arch" in content:
-                return "Arch Linux"
-            elif "debian" in content or "ubuntu" in content:
-                return "Debian"
-    except Exception:
-        pass
-    return "Linux"
-
-
-def _get_effective_system_prompt(cfg) -> str:
-    agent_mode = cfg.get_bool("provider", "agent_mode")
-    base_prompt = cfg.get_string("provider", "system_prompt")
-    if not agent_mode:
-        return base_prompt
-    distro = _detect_distro()
-    return (
-        f"Eres Sayri, el asistente inteligente de voz y control de sistema integrado en Pulsar OS (basado en {distro}).\n"
-        "Responde en español de forma natural, concisa y agradable (1 a 3 frases habladas).\n"
-        "Tienes herramientas para ejecutar comandos en la terminal de Pulsar OS cuando el usuario te lo solicite o cuando necesites consultar información del sistema (archivos, volumen, batería, procesos, red, paquetes pacman/apt, fecha/hora, abrir aplicaciones, etc.).\n"
-        "Para ejecutar un comando en el sistema, escribe un bloque de código:\n"
-        "```bash\n"
-        "<comando bash>\n"
-        "```\n"
-        "El sistema ejecutará el comando y te entregará el resultado para que formules la respuesta final."
-    )
-
 
     # ── LLM
     def send_text(self, text: str) -> None:
