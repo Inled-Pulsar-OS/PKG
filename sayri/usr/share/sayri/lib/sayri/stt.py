@@ -342,21 +342,22 @@ class STTSession:
         def work() -> None:
             text = ""
             t0 = time.time()
+            model_name = os.path.basename(self.engine.model_path)
             try:
                 raw_text = self.engine.transcribe(wav_path)
                 took = time.time() - t0
                 cleaned_text = clean_transcription(raw_text)
                 if cleaned_text:
-                    print(f"[STT] ✓ Whisper transcribed in {took:.2f}s: \"{cleaned_text}\"")
+                    print(f"[STT] ✓ Whisper [{model_name}] transcribed in {took:.2f}s: \"{cleaned_text}\"")
                     text = cleaned_text
                 elif raw_text:
-                    print(f"[STT] ℹ️ Ignored non-speech artifact in {took:.2f}s: \"{raw_text}\"")
+                    print(f"[STT] ℹ️ Ignored non-speech artifact [{model_name}] in {took:.2f}s: \"{raw_text}\"")
                     text = ""
                 else:
-                    print(f"[STT] ℹ️ Whisper transcribed in {took:.2f}s: (no words detected)")
+                    print(f"[STT] ℹ️ Whisper [{model_name}] transcribed in {took:.2f}s: (no words detected)")
                     text = ""
             except Exception as exc:  # noqa: BLE001
-                print(f"[STT] ❌ Transcription error: {exc}")
+                print(f"[STT] ❌ Transcription error [{model_name}]: {exc}")
             finally:
                 if partial:
                     if text:
