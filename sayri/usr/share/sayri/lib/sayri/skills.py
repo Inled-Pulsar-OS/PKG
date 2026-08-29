@@ -68,54 +68,98 @@ def read_skill(name: str) -> Optional[str]:
 
 
 def search_clawhub(query: str) -> list[dict[str, Any]]:
-    """Search ClawHub registry for skills."""
-    url = f"{CLAWHUB_API_BASE}/skills/search?q={urllib.parse.quote(query)}"
+    """Search ClawHub registry (https://clawhub.ai) for skills."""
+    url = f"{CLAWHUB_API_BASE}/search?q={urllib.parse.quote(query)}"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Sayri-Pulsar/1.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-            if isinstance(data, list):
-                return data
-            return data.get("skills", data.get("results", []))
+            results = data.get("results", data.get("skills", []))
+            out = []
+            for r in results:
+                out.append({
+                    "slug": r.get("slug") or r.get("name"),
+                    "name": r.get("displayName") or r.get("name") or r.get("slug"),
+                    "owner": r.get("ownerHandle") or (r.get("owner") or {}).get("handle", ""),
+                    "description": r.get("summary") or r.get("description") or "",
+                    "downloads": r.get("downloads", 0),
+                })
+            return out
     except Exception as exc:
-        print(f"[Skills] ClawHub search warning ({exc}), fallback to query matching")
-        return [
-            {"slug": query.lower().replace(" ", "-"), "name": query, "description": "ClawHub skill"}
-        ]
+        print(f"[Skills] ClawHub search warning: {exc}")
+        return []
 
 
 def install_skill(slug_or_name: str) -> bool:
-    """Download and install a skill from ClawHub / OpenClaw into ~/.config/sayri/skills/<name>/."""
-    slug = slug_or_name.strip().lower().replace(" ", "-")
+    """Download and extract official skill package from ClawHub into ~/.config/sayri/skills/<name>/."""
+    import io
+    import zipfile
+
+    slug_raw = slug_or_name.strip().lstrip("@")
+    owner = None
+    slug = slug_raw
+    if "/" in slug_raw:
+        owner, slug = slug_raw.split("/", 1)
+
+    # If owner not specified, search ClawHub to find top matching owner
+    if not owner:
+        search_res = search_clawhub(slug)
+        if search_res:
+            owner = search_res[0].get("owner")
+            if search_res[0].get("slug"):
+                slug = search_res[0]["slug"]
+
     target_dir = os.path.join(paths.skills_dir(), slug)
     os.makedirs(target_dir, exist_ok=True)
-    target_file = os.path.join(target_dir, "SKILL.md")
 
-    # Try downloading from ClawHub API or GitHub raw repo
-    urls_to_try = [
-        f"{CLAWHUB_API_BASE}/skills/{slug}/SKILL.md",
+    # 1. Download official ZIP from ClawHub API
+    dl_url = f"{CLAWHUB_API_BASE}/download?slug={slug}" + (f"&ownerHandle={owner}" if owner else "")
+    print(f"[Skills] 🌐 Fetching from ClawHub: {dl_url}")
+
+    try:
+        req = urllib.request.Request(dl_url, headers={"User-Agent": "Sayri-Pulsar/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            content = resp.read()
+            if content.startswith(b"PK\x03\x04") or b"SKILL.md" in content:
+                with zipfile.ZipFile(io.BytesIO(content)) as z:
+                    z.extractall(target_dir)
+                print(f"[Skills] ✓ Extracted official ClawHub skill '{slug}' into {target_dir}")
+                return True
+            elif content.startswith(b"{"):
+                # JSON redirect with archiveUrl
+                meta = json.loads(content.decode("utf-8"))
+                if meta.get("archiveUrl"):
+                    arc_req = urllib.request.Request(meta["archiveUrl"], headers={"User-Agent": "Sayri-Pulsar/1.0"})
+                    with urllib.request.urlopen(arc_req, timeout=20) as a_resp:
+                        with zipfile.ZipFile(io.BytesIO(a_resp.read())) as z:
+                            z.extractall(target_dir)
+                    print(f"[Skills] ✓ Downloaded and extracted '{slug}' from archiveUrl")
+                    return True
+    except Exception as exc:
+        print(f"[Skills] Warning: ClawHub download error ({exc})")
+
+    # 2. Fallback to GitHub OpenClaw skills repo
+    github_urls = [
         f"{CLAWHUB_RAW_BASE}/skills/{slug}/SKILL.md",
         f"{CLAWHUB_RAW_BASE}/{slug}/SKILL.md",
     ]
-
-    downloaded = False
-    for url in urls_to_try:
+    for g_url in github_urls:
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Sayri-Pulsar/1.0"})
+            req = urllib.request.Request(g_url, headers={"User-Agent": "Sayri-Pulsar/1.0"})
             with urllib.request.urlopen(req, timeout=10) as resp:
-                content = resp.read().decode("utf-8")
-                if content and "404" not in content[:50]:
+                data = resp.read().decode("utf-8")
+                if data and "404" not in data[:40]:
+                    target_file = os.path.join(target_dir, "SKILL.md")
                     with open(target_file, "w", encoding="utf-8") as f:
-                        f.write(content)
-                    downloaded = True
-                    print(f"[Skills] ✓ Installed skill '{slug}' from {url}")
-                    break
+                        f.write(data)
+                    print(f"[Skills] ✓ Downloaded '{slug}' from GitHub repository: {g_url}")
+                    return True
         except Exception:
             continue
 
-    if not downloaded:
-        # Create a clean OpenClaw SKILL template if not found on registry
-        template = f"""---
+    # 3. If neither available, create local template
+    target_file = os.path.join(target_dir, "SKILL.md")
+    template = f"""---
 name: {slug}
 description: Skill for {slug} in Sayri / Pulsar OS
 ---
@@ -125,10 +169,9 @@ description: Skill for {slug} in Sayri / Pulsar OS
 ## Instructions
 When the user asks for tasks related to {slug}, use appropriate bash commands.
 """
-        with open(target_file, "w", encoding="utf-8") as f:
-            f.write(template)
-        print(f"[Skills] ✓ Created local skill template for '{slug}' at {target_file}")
-
+    with open(target_file, "w", encoding="utf-8") as f:
+        f.write(template)
+    print(f"[Skills] ✓ Created local skill template for '{slug}' at {target_file}")
     return True
 
 

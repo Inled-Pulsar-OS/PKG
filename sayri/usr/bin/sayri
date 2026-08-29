@@ -19,7 +19,12 @@
 #   SAYRI_SKIP_PRELOAD=1 -> do not set LD_PRELOAD (e.g. when already set)
 
 if [ -z "$SAYRI_PYTHONPATH" ]; then
-    SAYRI_PYTHONPATH="/usr/share/sayri/lib"
+    _script_dir="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+    if [ -d "$_script_dir/../share/sayri/lib" ]; then
+        SAYRI_PYTHONPATH="$_script_dir/../share/sayri/lib"
+    else
+        SAYRI_PYTHONPATH="/usr/share/sayri/lib"
+    fi
 fi
 
 # Preload gtk4-layer-shell so its libwayland-client wins over WebKit's.
@@ -51,4 +56,10 @@ if [ -z "$GDK_BACKEND" ] && [ -n "$DISPLAY" ]; then
 fi
 
 export PYTHONPATH="$SAYRI_PYTHONPATH${PYTHONPATH:+:$PYTHONPATH}"
+
+if [ "$1" = "skills" ]; then
+    shift
+    exec python3 -m sayri.skills "$@"
+fi
+
 exec python3 -m sayri "$@"

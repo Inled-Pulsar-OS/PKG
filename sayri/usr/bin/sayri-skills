@@ -2,8 +2,9 @@
 import os
 import sys
 
-# Add package lib to python path if not installed
-lib = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "share", "sayri", "lib"))
+# Resolve real path of script in case it was invoked through a symlink
+real_script = os.path.realpath(__file__)
+lib = os.path.normpath(os.path.join(os.path.dirname(real_script), "..", "share", "sayri", "lib"))
 if os.path.isdir(lib) and lib not in sys.path:
     sys.path.insert(0, lib)
 
