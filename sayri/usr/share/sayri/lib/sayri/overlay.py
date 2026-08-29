@@ -113,6 +113,8 @@ class SayriOverlay:
         self._is_visible = True
         self._just_shown = time.monotonic()
         self._was_active = False
+        if hasattr(self, "orb") and self.orb:
+            self.orb.set_active_animation(True)
         self.win.set_visible(True)
         try:
             self.win.present_with_time(0)
@@ -128,6 +130,8 @@ class SayriOverlay:
     def hide(self) -> None:
         self._is_visible = False
         self._was_active = False
+        if hasattr(self, "orb") and self.orb:
+            self.orb.set_active_animation(False)
         self.win.set_visible(False)
         if hasattr(self, "app") and self.app and hasattr(self.app, "on_hidden"):
             self.app.on_hidden()

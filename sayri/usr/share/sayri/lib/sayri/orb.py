@@ -74,6 +74,7 @@ class SiriOrb(Gtk.DrawingArea):
         self.phase = 0.0
         self.last_tick = time.monotonic()
         self.level = 0.0  # audio level 0..1 (voice or TTS)
+        self.active_animation = True
 
         self.set_content_width(size)
         self.set_content_height(size)
@@ -93,6 +94,12 @@ class SiriOrb(Gtk.DrawingArea):
         # 60 FPS animation tick
         self.add_tick_callback(self._on_tick)
 
+    def set_active_animation(self, active: bool) -> None:
+        self.active_animation = active
+        if active:
+            self.last_tick = time.monotonic()
+            self.queue_draw()
+
     def set_state(self, state: str) -> None:
         if state in PALETTES:
             self.state = state
@@ -106,7 +113,7 @@ class SiriOrb(Gtk.DrawingArea):
             self.on_click()
 
     def _on_tick(self, _widget, _frame_clock) -> bool:
-        if not self.get_mapped() or not self.get_visible():
+        if not self.active_animation or not self.get_mapped() or not self.get_visible():
             return GLib.SOURCE_CONTINUE
         now = time.monotonic()
         dt = min(0.1, now - self.last_tick)

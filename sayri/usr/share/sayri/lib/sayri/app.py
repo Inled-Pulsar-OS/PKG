@@ -82,6 +82,25 @@ def markdown_to_plain_speech(text: str) -> str:
     cleaned = re.sub(r"https?://\S+", "", cleaned)
     # Remove leftover markdown symbols
     cleaned = re.sub(r"[\*\_~`#><]", "", cleaned)
+    # Strip emojis and pictographs so TTS speaks pure words without reciting emoji names
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F600-\U0001F64F"  # emoticons
+        "\U0001F300-\U0001F5FF"  # symbols & pictographs
+        "\U0001F680-\U0001F6FF"  # transport & map symbols
+        "\U0001F1E0-\U0001F1FF"  # flags
+        "\U0001F900-\U0001F9FF"  # supplemental symbols & pictographs
+        "\U0001FA00-\U0001FAFF"  # chess, symbols extended
+        "\U00002700-\U000027BF"  # dingbats
+        "\U00002600-\U000026FF"  # misc symbols
+        "\U00002B50"              # star
+        "\U0000200D"              # zero-width joiner
+        "\U0000FE0F"              # variation selector-16
+        "]+",
+        flags=re.UNICODE,
+    )
+    cleaned = emoji_pattern.sub("", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
     cleaned = re.sub(r"\n{2,}", "\n", cleaned).strip()
     return cleaned
 
@@ -277,9 +296,13 @@ class SayriApp(Gtk.Application):
             self.overlay.cajita.card_overlay.set_visible(False)
         self.stop_listening()
         mode = self.cfg.get_string("stt", "mode")
-        if mode in ("always", "wakeword"):
+        if mode in ("always", "wakeword") and self.stt.ready:
             self._start_session()
             self.set_state("idle")
+        else:
+            self.set_state("idle")
+        import gc
+        gc.collect()
 
     # ── orb events
     def on_orb_click(self) -> None:
@@ -294,27 +317,26 @@ class SayriApp(Gtk.Application):
             if self.overlay:
                 self.overlay.cajita.set_speaking(False)
             self.start_listening()
-            return
+        else:
+            self.toggle_listening()
 
-        self.toggle_listening()
-
-    # ── bridge to the cajita (via overlay)
+    # ── helpers
     def _msg(self, kind: str, text: str) -> None:
         if self.overlay:
             self.overlay.set_content(kind, text)
-
-    def _set_partial(self, text: str) -> None:
-        if self.overlay:
-            self.overlay.set_content("partial", text)
 
     def _set_assistant(self, text: str) -> None:
         if self.overlay:
             self.overlay.set_content("assistant", text)
 
-    def _set_mic(self, active: bool) -> None:
-        self._mic_on = bool(active)
+    def _set_partial(self, text: str) -> None:
         if self.overlay:
-            self.overlay.set_mic(self._mic_on)
+            self.overlay.set_content("partial", text)
+
+    def _set_mic(self, active: bool) -> None:
+        self._mic_on = active
+        if self.overlay:
+            self.overlay.set_mic(active)
 
     def _set_busy(self, busy: bool) -> None:
         self._busy = busy
@@ -326,9 +348,6 @@ class SayriApp(Gtk.Application):
         if self.session and self.session.is_running():
             return
         if not self.stt.ready:
-            self._msg("hint",
-                      "Missing: " + ", ".join(self.stt.missing())
-                      + ". Download in Settings → Speech Recognition.")
             return
         self.session = self.stt.create_session(
             on_partial=self._on_partial,
@@ -352,6 +371,12 @@ class SayriApp(Gtk.Application):
 
     def start_listening(self) -> None:
         self._busy = False
+        mode = self.cfg.get_string("stt", "mode")
+        if mode == "disabled" or not self.stt.ready:
+            self.armed = False
+            self.set_state("idle")
+            self._set_mic(False)
+            return
         self.armed = True
         if not (self.session and self.session.is_running()):
             self._start_session()
