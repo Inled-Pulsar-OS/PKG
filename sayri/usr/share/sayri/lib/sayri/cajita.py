@@ -441,14 +441,24 @@ class SayriCajita(Gtk.Box):
                 self.pill_bg.set_mode("active")
         elif kind == "assistant":
             escaped = GLib.markup_escape_text(text)
-            self.response_label.set_markup(f"<span foreground='#ffffff' font='12' weight='medium'>{escaped}</span>")
+            ok, attrs, txt, _ = Pango.parse_markup(f"<span foreground='#ffffff' size='12000' weight='500'>{escaped}</span>", -1, chr(0))
+            if ok and attrs:
+                self.response_label.set_attributes(attrs)
+                self.response_label.set_text(txt)
+            else:
+                self.response_label.set_text(text)
             self.card_overlay.set_visible(True)
             self.card_bg.set_mode("rotating")
         elif kind == "hint":
             pass
         elif kind == "error":
             escaped = GLib.markup_escape_text(text)
-            self.response_label.set_markup(f"<span foreground='#fca5a5' font='12'>⚠️ {escaped}</span>")
+            ok, attrs, txt, _ = Pango.parse_markup(f"<span foreground='#fca5a5' size='12000'>⚠️ {escaped}</span>", -1, chr(0))
+            if ok and attrs:
+                self.response_label.set_attributes(attrs)
+                self.response_label.set_text(txt)
+            else:
+                self.response_label.set_text(f"⚠️ {text}")
             self.card_overlay.set_visible(True)
 
     def set_tool_output(self, cmd: str, output: str) -> None:
@@ -457,8 +467,12 @@ class SayriCajita(Gtk.Box):
             return
         escaped_cmd = GLib.markup_escape_text(cmd)
         escaped_out = GLib.markup_escape_text(output.strip()) if output else "(empty output)"
-        markup = f"<span font_family='monospace' size='10500'><span foreground='#38bdf8'><b>$ {escaped_cmd}</b></span>\n\n<span foreground='#e2e8f0'>{escaped_out}</span></span>"
-        self.cmd_label.set_markup(markup)
+        ok, attrs, txt, _ = Pango.parse_markup(f"<span font_family='monospace' size='10500'><span foreground='#38bdf8'><b>$ {escaped_cmd}</b></span>\n\n<span foreground='#f8fafc'>{escaped_out}</span></span>", -1, chr(0))
+        if ok and attrs:
+            self.cmd_label.set_attributes(attrs)
+            self.cmd_label.set_text(txt)
+        else:
+            self.cmd_label.set_text(f"$ {cmd}\n\n{output}")
         self.cmd_expander.set_label(f"Command: {cmd[:36]}…")
         self.cmd_expander.set_visible(True)
         self.card_overlay.set_visible(True)
@@ -492,7 +506,10 @@ class SayriCajita(Gtk.Box):
             self.card_bg.set_mode("idle")
 
     def clear(self) -> None:
-        self.response_label.set_markup("")
+        self.response_label.set_attributes(Pango.AttrList())
+        self.response_label.set_text("")
+        self.cmd_label.set_attributes(Pango.AttrList())
+        self.cmd_label.set_text("")
         self.cmd_expander.set_visible(False)
         self.card_overlay.set_visible(False)
         self.card_bg.set_mode("idle")
