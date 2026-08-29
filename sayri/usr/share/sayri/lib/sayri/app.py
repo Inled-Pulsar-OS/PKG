@@ -219,6 +219,8 @@ class SayriApp(Gtk.Application):
 
     def toggle_visible(self) -> None:
         if self.overlay:
+            if not self.overlay.is_visible:
+                sound.play("activate")
             self.overlay.toggle()
 
     def _build_ui(self) -> None:

@@ -80,9 +80,9 @@ def user_file() -> str:
 def find_sound(name: str) -> Optional[str]:
     """Find path to a sound file (activate, thinking, etc.)."""
     for base in (
-        os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "sounds")),
-        os.path.join(data_dir(), "sounds"),
+        os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "sounds")),
         os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")),
+        os.path.join(data_dir(), "sounds"),
         "/usr/share/sayri/sounds",
     ):
         for ext in (".mp3", ".wav", ".ogg"):

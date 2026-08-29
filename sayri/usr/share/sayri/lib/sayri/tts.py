@@ -40,6 +40,10 @@ class TTSEngine:
     def ready(self) -> bool:
         return bool(self.binary) and self.voice_files is not None
 
+    @property
+    def is_speaking(self) -> bool:
+        return bool(self._proc and self._proc.poll() is None)
+
     def missing(self) -> list[str]:
         out = []
         if not self.binary:
