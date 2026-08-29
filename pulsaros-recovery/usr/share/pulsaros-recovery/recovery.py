@@ -104,6 +104,24 @@ progressbar.progress-bar-thin progress,
     font-size: 12px;
     color: #aeaeb2;
 }
+.net-status {
+    font-size: 15px;
+    font-weight: bold;
+    margin-top: 6px;
+}
+.net-status.ok {
+    color: #30d158;
+}
+.net-status.warn {
+    color: #ff9f0a;
+}
+.net-status.error {
+    color: #ff453a;
+}
+.net-detail {
+    font-size: 12px;
+    color: #aeaeb2;
+}
 list, listbox {
     background-color: transparent;
     border: none;
@@ -355,6 +373,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         
         # Build views
         self.build_utilities_screen()
+        self.build_network_check_screen()
         self.build_install_welcome_screen()
         self.build_install_disk_select_screen()
         self.build_install_progress_screen()
@@ -621,7 +640,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         elif self.selected_action == "disk":
             subprocess.Popen("gparted || pkexec gparted || gnome-disks || gnome-disk-utility", shell=True)
         elif self.selected_action == "packages":
-            self._show_install_packages_dialog()
+            self._show_network_check_screen()
 
 
     def show_installer_selector_dialog(self):
@@ -737,6 +756,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 "dkms", "linux-headers",
                 "appmenu-gtk-module", "python-xlib",
                 "python-setuptools", "python-pip",
+                # LocalSend (AUR) — WiFi/Bluetooth file transfer
+                "localsend-bin",
             ]
             debian_packages = [
                 "docker.io",
@@ -748,6 +769,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 "gnome-clocks",
                 "nvidia-driver", "dkms", "linux-headers-amd64",
                 "xdotool", "python3-xlib",
+                # LocalSend
+                "localsend",
             ]
 
             if is_arch:
@@ -1108,6 +1131,305 @@ class RecoveryWindow(Adw.ApplicationWindow):
         box.append(nav_box)
         self.stack.add_named(box, "install_error")
 
+    def build_network_check_screen(self):
+        """Connectivity slide shown before installing extra packages.
+
+        Detects whether the machine has an active network, tests whether the
+        Inled repository (apt.inled.es) is reachable, and offers the user the
+        chance to open the GNOME network settings or enable Cloudflare WARP
+        (bundled in the minimal ISO) when connectivity is missing or blocked.
+        """
+        self.net_check_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.net_check_box.set_valign(Gtk.Align.CENTER)
+        self.net_check_box.set_halign(Gtk.Align.CENTER)
+
+        self.net_icon = Gtk.Image.new_from_icon_name("network-wireless")
+        self.net_icon.set_pixel_size(64)
+        self.net_check_box.append(self.net_icon)
+
+        self.net_title = Gtk.Label()
+        self.net_title.set_markup("<span font_weight='bold' size='18000'>Check Internet Connection</span>")
+        self.net_check_box.append(self.net_title)
+
+        # Spinner shown while checks run (or WARP connects)
+        self.net_spinner = Gtk.Spinner()
+        self.net_spinner.set_size_request(40, 40)
+        self.net_spinner.set_halign(Gtk.Align.CENTER)
+        self.net_spinner.set_visible(False)
+        self.net_check_box.append(self.net_spinner)
+
+        self.net_status_lbl = Gtk.Label(label="Checking your Internet connection...")
+        self.net_status_lbl.add_css_class("net-status")
+        self.net_status_lbl.set_wrap(True)
+        self.net_check_box.append(self.net_status_lbl)
+
+        self.net_detail_lbl = Gtk.Label(label="")
+        self.net_detail_lbl.add_css_class("net-detail")
+        self.net_detail_lbl.set_wrap(True)
+        self.net_detail_lbl.set_max_width_chars(45)
+        self.net_check_box.append(self.net_detail_lbl)
+
+        # Button to open GNOME network settings (shown when no connectivity)
+        self.btn_open_network = Gtk.Button(label="Open Network Settings")
+        self.btn_open_network.add_css_class("secondary-action")
+        self.btn_open_network.set_visible(False)
+        self.btn_open_network.set_halign(Gtk.Align.CENTER)
+        self.btn_open_network.connect("clicked", self._open_network_settings)
+        self.net_check_box.append(self.btn_open_network)
+
+        # Button to enable/activate the Cloudflare WARP VPN (shown when apt.inled.es is blocked)
+        self.btn_enable_warp = Gtk.Button(label="Enable Cloudflare WARP VPN")
+        self.btn_enable_warp.add_css_class("suggested-action")
+        self.btn_enable_warp.set_visible(False)
+        self.btn_enable_warp.set_halign(Gtk.Align.CENTER)
+        self.btn_enable_warp.connect("clicked", self._enable_warp_vpn)
+        self.net_check_box.append(self.btn_enable_warp)
+
+        self.net_warp_lbl = Gtk.Label(label="")
+        self.net_warp_lbl.add_css_class("net-detail")
+        self.net_warp_lbl.set_wrap(True)
+        self.net_warp_lbl.set_max_width_chars(45)
+        self.net_warp_lbl.set_visible(False)
+        self.net_check_box.append(self.net_warp_lbl)
+
+        nav_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        nav_box.set_halign(Gtk.Align.CENTER)
+        nav_box.set_margin_top(14)
+
+        btn_back = Gtk.Button(label="Back")
+        btn_back.add_css_class("secondary-action")
+        btn_back.connect("clicked", lambda x: self.stack.set_visible_child_name("utilities"))
+        nav_box.append(btn_back)
+
+        self.btn_net_continue = Gtk.Button(label="Continue")
+        self.btn_net_continue.add_css_class("suggested-action")
+        self.btn_net_continue.set_sensitive(False)
+        self.btn_net_continue.connect("clicked", self._net_continue_clicked)
+        nav_box.append(self.btn_net_continue)
+
+        self.net_check_box.append(nav_box)
+        self.stack.add_named(self.net_check_box, "network_check")
+
+    def _set_net_spinner(self, running):
+        """Toggle the connectivity spinner (safe to call from worker threads)."""
+        def _apply():
+            self.net_spinner.set_visible(running)
+            if running:
+                self.net_spinner.start()
+            else:
+                self.net_spinner.stop()
+        GLib.idle_add(_apply)
+
+    def _show_network_check_screen(self):
+        """Reset the connectivity slide and start the network checks."""
+        self.net_status_lbl.set_text("Checking your Internet connection...")
+        self.net_status_lbl.remove_css_class("ok")
+        self.net_status_lbl.remove_css_class("warn")
+        self.net_status_lbl.remove_css_class("error")
+        self.net_detail_lbl.set_text("")
+        self.net_warp_lbl.set_text("")
+        self.net_warp_lbl.set_visible(False)
+        self.btn_open_network.set_visible(False)
+        self.btn_enable_warp.set_visible(False)
+        self.btn_net_continue.set_sensitive(False)
+        self.stack.set_visible_child_name("network_check")
+        self._set_net_spinner(True)
+
+        # Run checks in a background thread so the UI does not freeze
+        threading.Thread(target=self._network_check_backend, daemon=True).start()
+
+    def _network_check_backend(self):
+        """Test global connectivity and reachability of the Inled repository.
+
+        Connectivity is only offered (Continue enabled) when apt.inled.es is
+        actually reachable over HTTPS. If there is no network at all we point
+        the user at the GNOME network settings; if there is network but the
+        Inled repo is blocked/unreachable (censorship) we recommend WARP.
+        """
+        import socket
+
+        def set_status(css, text):
+            def _apply():
+                self.net_status_lbl.set_text(text)
+                self.net_status_lbl.remove_css_class("ok")
+                self.net_status_lbl.remove_css_class("warn")
+                self.net_status_lbl.remove_css_class("error")
+                self.net_status_lbl.add_css_class(css)
+            GLib.idle_add(_apply)
+
+        def set_detail(text):
+            GLib.idle_add(lambda: self.net_detail_lbl.set_text(text))
+
+        # 1) Is the machine connected at all (wifi / ethernet)?
+        online = False
+        try:
+            out = subprocess.run(
+                ["nmcli", "-t", "-f", "STATE", "general"],
+                capture_output=True, text=True, timeout=8,
+            )
+            online = "connected" in out.stdout
+        except Exception:
+            pass
+
+        # Fallback: try to reach a well-known host even if nmcli is unavailable
+        if not online:
+            try:
+                socket.setdefaulttimeout(5)
+                socket.create_connection(("1.1.1.1", 443), timeout=5)
+                online = True
+            except Exception:
+                online = False
+
+        if not online:
+            self._set_net_spinner(False)
+            set_status("error", "⚠️ No Internet connection detected.")
+            set_detail(
+                "Connect to a Wi-Fi or Ethernet network and tap \"Open Network Settings\" to configure it.\n\n"
+                "Once connected we will automatically retry the connection to the Inled repository."
+            )
+            GLib.idle_add(lambda: self.btn_open_network.set_visible(True))
+            # Keep polling so the Continue button unlocks as soon as the user connects
+            self._poll_until_inled_reachable()
+            return
+
+        # 2) Check whether the Inled repository is reachable over HTTPS
+        set_status("warn", "✅ Internet detected — checking the Pulsar repository...")
+        repo_reachable = self._inled_reachable()
+        self._set_net_spinner(False)
+
+        if repo_reachable:
+            set_status("ok", "✅ Internet OK — repository reachable.")
+            set_detail(
+                "You have an Internet connection and the Pulsar OS repository (apt.inled.es) "
+                "is reachable. You can now install the extra packages."
+            )
+            GLib.idle_add(lambda: self.btn_net_continue.set_sensitive(True))
+        else:
+            set_status("warn", "⚠️ Internet OK, but the repository seems blocked.")
+            set_detail(
+                "You appear to be online, but the Pulsar OS repository (apt.inled.es) "
+                "could not be reached. This is common in regions where Cloudflare is censored.\n\n"
+                "Enable the bundled Cloudflare WARP VPN to route around the block, or "
+                "check your network settings if you believe the connection is wrong."
+            )
+            GLib.idle_add(lambda: self.btn_enable_warp.set_visible(True))
+            # Keep polling so Continue unlocks if connectivity is restored
+            self._poll_until_inled_reachable()
+
+    def _inled_reachable(self):
+        """Return True if https://apt.inled.es answers a quick HTTPS request.
+
+        NOTE: we use curl on purpose. Cloudflare's edge blocks urllib/libcurl's
+        default user-agent (it returns 403 Forbidden), but a real browser-like
+        user-agent succeeds with 200. Using curl with a normal UA makes the
+        check accurate: the repo is reachable exactly when curl gets a 2xx/3xx.
+        """
+        try:
+            res = subprocess.run(
+                ["curl", "-skI", "--max-time", "8", "-A", "Mozilla/5.0",
+                 "-o", "/dev/null", "-w", "%{http_code}", "https://apt.inled.es/"],
+                capture_output=True, text=True, timeout=12,
+            )
+            code = res.stdout.strip()
+            # Accept any 2xx or 3xx; reject 4xx/5xx (notably 403 from UA-blocking)
+            return code.startswith("2") or code.startswith("3")
+        except Exception:
+            return False
+
+    def _poll_until_inled_reachable(self):
+        """Periodically re-check the repository so the Continue button unlocks on its own."""
+        def poll():
+            import time
+            for _ in range(60):  # poll for up to ~5 minutes
+                if self._inled_reachable():
+                    GLib.idle_add(self._mark_repository_ok)
+                    break
+                time.sleep(5)
+        threading.Thread(target=poll, daemon=True).start()
+
+    def _mark_repository_ok(self):
+        self.net_status_lbl.set_text("✅ Internet OK — repository reachable.")
+        self.net_status_lbl.remove_css_class("error")
+        self.net_status_lbl.remove_css_class("warn")
+        self.net_status_lbl.add_css_class("ok")
+        self.net_detail_lbl.set_text("You have an Internet connection and the Pulsar OS repository is reachable.")
+        self.btn_open_network.set_visible(False)
+        self.btn_enable_warp.set_visible(False)
+        self.btn_net_continue.set_sensitive(True)
+
+    def _open_network_settings(self, btn=None):
+        self._popen_as_user("gnome-control-center network || nm-connection-editor || nmtui")
+
+    def _enable_warp_vpn(self, btn=None):
+        """Enable and activate the bundled Cloudflare WARP VPN (via warp-cli).
+
+        WARP is bundled in the minimal ISO precisely so we can reach the Inled
+        repository in regions where Cloudflare (or the repo) is censored.
+        Activating it needs root, so we run through pkexec. We pass the
+        --accept-tos flag (works fully headless, no TTY/prompt needed) and
+        clear any stale registration first, since WARP refuses to re-register
+        while an old one is still around.
+        """
+        def run():
+            warp_svc = "systemctl enable --now warp-svc 2>/dev/null; sleep 2; "
+            reg_clear = "warp-cli --accept-tos registration delete 2>/dev/null || true; "
+            reg_new = "warp-cli --accept-tos registration new 2>/dev/null; "
+            connect = "warp-cli --accept-tos connect 2>/dev/null || true"
+            cmd = warp_svc + reg_clear + reg_new + connect
+            output = ""
+            try:
+                res = subprocess.run(
+                    ["pkexec", "bash", "-c", cmd],
+                    timeout=90, capture_output=True, text=True,
+                )
+                output = (res.stdout + "\n" + res.stderr).strip()
+            except Exception as e:
+                print(f"WARP enable failed: {e}")
+                GLib.idle_add(self._warp_failed, "WARP could not be enabled.")
+                return
+
+            if "Error" in output:
+                print(f"WARP output had an error:\n{output}")
+
+            # Re-test the repository a few times; WARP needs a moment to connect
+            for _ in range(12):
+                time.sleep(4)
+                if self._inled_reachable():
+                    GLib.idle_add(self._warp_success)
+                    return
+            GLib.idle_add(self._warp_failed)
+
+        GLib.idle_add(lambda: self.btn_enable_warp.set_sensitive(False))
+        GLib.idle_add(lambda: self.net_warp_lbl.set_text("Enabling WARP VPN... this takes a few seconds."))
+        GLib.idle_add(lambda: self.net_warp_lbl.set_visible(True))
+        GLib.idle_add(lambda: self.net_spinner.set_visible(True))
+        GLib.idle_add(lambda: self.net_spinner.start())
+        threading.Thread(target=run, daemon=True).start()
+
+    def _warp_success(self):
+        self.net_spinner.stop()
+        self.net_spinner.set_visible(False)
+        self.net_warp_lbl.set_text("✅ WARP VPN connected — repository reachable.")
+        self.net_warp_lbl.remove_css_class("warn")
+        self.net_warp_lbl.add_css_class("ok")
+        self.btn_enable_warp.set_sensitive(True)
+        self._mark_repository_ok()
+
+    def _warp_failed(self, detail=None):
+        self.net_spinner.stop()
+        self.net_spinner.set_visible(False)
+        self.net_warp_lbl.remove_css_class("ok")
+        self.net_warp_lbl.add_css_class("warn")
+        msg = "⚠️ Could not connect via WARP. Try again or check your network."
+        if detail:
+            msg += f"\n{detail}"
+        self.net_warp_lbl.set_text(msg)
+        self.btn_enable_warp.set_sensitive(True)
+
+    def _net_continue_clicked(self, btn):
+        self.stack.set_visible_child_name("utilities")
+        self._show_install_packages_dialog()
+
     def on_progress_cancel_clicked(self, btn):
         if btn.get_label() == "Restart System":
             if "TEST_MODE" in os.environ:
@@ -1314,6 +1636,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 "docker", "linux-firmware", "sof-firmware",
                 "open-vm-tools", "vlc", "totem", "imagemagick",
                 "geary", "gnome-music", "nvidia-open", "dkms", "linux-headers",
+                "localsend-bin",
             ]
             GLib.idle_add(self.update_progress, 0.83, f"[DEMO] Installing {len(demo_pkgs)} packages...")
             for i, pkg in enumerate(demo_pkgs, 1):
@@ -1749,6 +2072,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 "python-xlib",
                                 "python-setuptools",
                                 "python-pip",
+                                # LocalSend (AUR) — WiFi/Bluetooth file transfer
+                                "localsend-bin",
                             ]
                             # Initialize pacman keyring inside the chroot so
                             # signature verification works (avoids GPGME errors),
@@ -1841,6 +2166,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 "linux-headers-amd64",
                                 "xdotool",
                                 "python3-xlib",
+                                # LocalSend
+                                "localsend",
                             ]
                             exec_cmd(["chroot", "/mnt", "apt-get", "update"])
                             # ── Streaming apt install (parse progress) ──
