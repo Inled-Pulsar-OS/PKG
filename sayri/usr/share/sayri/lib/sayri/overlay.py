@@ -1,17 +1,17 @@
-"""Sayri overlay: single transparent window containing the native Siri Orb
+"""Sayri overlay: single transparent window containing the WebKit Siri Orb
 and animated Chroma-Ring Cajita, pinned to the TOP-RIGHT corner of the monitor.
 """
 
+import json
 import time
 
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gdk, GLib, Gtk  # noqa: E402
+from gi.repository import Gdk, GLib, Gtk, WebKit  # noqa: E402
 
 from .cajita import SayriCajita
-from .orb import SiriOrb
-from .webkit import pin_window
+from .webkit import pin_window, webview_setup, SCHEME, ensure_scheme
 
 BUBBLE_WIDTH = 420
 BUBBLE_HEIGHT = 380
@@ -82,15 +82,45 @@ class SayriOverlay:
         self.cajita.set_valign(Gtk.Align.START)
         hbox.append(self.cajita)
 
-        # 2. Native animated Cairo Siri Orb
-        self.orb = SiriOrb(size=orb_size, on_click=app.on_orb_click)
-        self.orb.set_valign(Gtk.Align.START)
-        hbox.append(self.orb)
+        # 2. WebKit-based animated Siri Orb (React Native/Skia)
+        self._orb_size = orb_size
+        self._orb_ready = False
+        self._orb_pending: list[tuple[str, dict]] = []
+        self.web = WebKit.WebView.new()
+        ensure_scheme(self.web.get_context())
+        ucm = webview_setup(self.web, on_message=self._on_orb_message)
+        self.web.set_size_request(orb_size, orb_size)
+        self.web.set_halign(Gtk.Align.END)
+        self.web.set_valign(Gtk.Align.START)
+        self.web.load_uri(f"{SCHEME}://app/index.html?mode=orb")
+        hbox.append(self.web)
 
         self.win.set_child(hbox)
 
+    def _on_orb_message(self, text: str) -> None:
+        try:
+            msg = json.loads(text)
+        except Exception:  # noqa: BLE001
+            return
+        if msg.get("type") == "ready":
+            self._orb_ready = True
+            for s, o in self._orb_pending:
+                self._orb_set_state(s, o)
+            self._orb_pending = []
+        elif msg.get("type") == "click":
+            self.app.on_orb_click()
+
+    def _orb_set_state(self, state: str, opts: dict | None = None) -> None:
+        opts = opts or {}
+        if not self._orb_ready:
+            self._orb_pending.append((state, opts))
+            return
+        js = (f"window.sayriBridge && window.sayriBridge.setState("
+              f"{json.dumps(state)}, {json.dumps(opts)})")
+        self.web.evaluate_javascript(js, len(js), None, f"{SCHEME}://app", None, None, None)
+
     def set_state_sync(self, state: str, _opts: dict | None = None) -> None:
-        self.orb.set_state(state)
+        self._orb_set_state(state, {"size": self._orb_size})
         if state == "speaking":
             self.cajita.set_speaking(True)
         else:
@@ -104,7 +134,7 @@ class SayriOverlay:
                 self.cajita.pill_bg.set_mode("idle")
 
     def set_audio_level(self, level: float) -> None:
-        self.orb.set_audio_level(level)
+        pass  # WebKit orb does not support audio level feedback
 
     def set_content(self, kind: str, text: str) -> None:
         self.cajita.set_content(kind, text)
@@ -126,8 +156,7 @@ class SayriOverlay:
         self._is_visible = True
         self._just_shown = time.monotonic()
         self._was_active = False
-        if hasattr(self, "orb") and self.orb:
-            self.orb.set_active_animation(True)
+        self._orb_set_state("idle", {"size": self._orb_size})
         self.win.set_visible(True)
         try:
             self.win.present_with_time(0)
@@ -143,8 +172,6 @@ class SayriOverlay:
     def hide(self) -> None:
         self._is_visible = False
         self._was_active = False
-        if hasattr(self, "orb") and self.orb:
-            self.orb.set_active_animation(False)
         self.win.set_visible(False)
         if hasattr(self, "app") and self.app and hasattr(self.app, "on_hidden"):
             self.app.on_hidden()
@@ -159,10 +186,10 @@ class SayriOverlay:
         orb_size = self.cfg.get_int("ui", "orb_size")
         if orb_size < 100 or orb_size > 300:
             orb_size = 140
+        self._orb_size = orb_size
         width = BUBBLE_WIDTH + GAP + orb_size
         height = max(BUBBLE_HEIGHT, orb_size)
-        self.orb.set_content_width(orb_size)
-        self.orb.set_content_height(orb_size)
+        self.web.set_size_request(orb_size, orb_size)
         self.win.set_default_size(width, height)
         pin_window(self.win, top_margin=TOP_MARGIN, right_margin=MARGIN,
                    width=width, height=height)
