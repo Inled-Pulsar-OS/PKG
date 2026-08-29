@@ -756,7 +756,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 "dkms", "linux-headers",
                 "appmenu-gtk-module", "python-xlib",
                 "python-setuptools", "python-pip",
-                # LocalSend (AUR) — WiFi/Bluetooth file transfer
+            ]
+            # Packages that live only in the AUR (not in official or Inled repos)
+            arch_aur_packages = [
                 "localsend-bin",
             ]
             debian_packages = [
@@ -791,6 +793,67 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 GLib.idle_add(self.update_progress, 0.15, "Syncing package databases...")
                 log_msg("Syncing package databases...")
                 subprocess.run(["pkexec", "pacman", "-Sy", "--noconfirm"], capture_output=True, text=True)
+
+                # Install AUR packages (not in official/Inled repos). We build
+                # them from source with makepkg when no helper (yay/paru) is
+                # installed, which is the common case in a fresh Pulsar OS.
+                if arch_aur_packages:
+                    log_msg(f"Installing {len(arch_aur_packages)} AUR package(s)...")
+                    GLib.idle_add(self.update_progress, 0.18, f"Installing {len(arch_aur_packages)} AUR packages...")
+                    aur_helper = None
+                    for helper in ("yay", "paru"):
+                        if subprocess.run(["which", helper], capture_output=True).returncode == 0:
+                            aur_helper = helper
+                            break
+                    if aur_helper:
+                        aur_cmd = [aur_helper, "-S", "--noconfirm", "--needed"] + arch_aur_packages
+                        aur_res = subprocess.run(aur_cmd, capture_output=True, text=True, timeout=300)
+                        if aur_res.returncode != 0:
+                            log_msg(f"WARNING: {aur_helper} failed: {aur_res.stderr.strip()}")
+                        else:
+                            log_msg(f"AUR packages installed successfully via {aur_helper}.")
+                    else:
+                        # No helper available: clone each AUR repo, build with
+                        # makepkg, and install the resulting .pkg.tar.zst.
+                        real_user = self._get_real_user() or "root"
+                        aur_tmp = "/tmp/pulsaros-aur-build"
+                        os.makedirs(aur_tmp, exist_ok=True)
+                        for pkg in arch_aur_packages:
+                            log_msg(f"Building {pkg} from AUR (no helper available)...")
+                            pkg_dir = os.path.join(aur_tmp, pkg)
+                            shutil.rmtree(pkg_dir, ignore_errors=True)
+                            clone_res = subprocess.run(
+                                ["git", "clone", "--depth", "1",
+                                 f"https://aur.archlinux.org/{pkg}.git", pkg_dir],
+                                capture_output=True, text=True, timeout=60,
+                            )
+                            if clone_res.returncode != 0:
+                                log_msg(f"WARNING: Could not clone AUR repo for {pkg}: {clone_res.stderr.strip()}")
+                                continue
+                            # Build as the real user (makepkg refuses root)
+                            build_res = subprocess.run(
+                                ["sudo", "-u", real_user, "makepkg", "-s", "--noconfirm",
+                                 "--skippgpcheck", "--nocheck"],
+                                cwd=pkg_dir, capture_output=True, text=True, timeout=600,
+                            )
+                            if build_res.returncode != 0:
+                                log_msg(f"WARNING: makepkg failed for {pkg}: {build_res.stdout[-200:]}")
+                                continue
+                            # Find and install the built package
+                            import glob as glob_mod
+                            built = glob_mod.glob(os.path.join(pkg_dir, "*.pkg.tar.zst"))
+                            if not built:
+                                log_msg(f"WARNING: No .pkg.tar.zst found for {pkg} after build.")
+                                continue
+                            install_res = subprocess.run(
+                                ["pkexec", "pacman", "-U", "--noconfirm", built[0]],
+                                capture_output=True, text=True, timeout=120,
+                            )
+                            if install_res.returncode != 0:
+                                log_msg(f"WARNING: pacman -U failed for {pkg}: {install_res.stderr.strip()}")
+                            else:
+                                log_msg(f"{pkg} installed successfully from AUR.")
+                        shutil.rmtree(aur_tmp, ignore_errors=True)
 
                 # Install packages with streaming progress
                 GLib.idle_add(self.update_progress, 0.20, f"Installing {len(packages)} packages...")
@@ -2072,8 +2135,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 "python-xlib",
                                 "python-setuptools",
                                 "python-pip",
-                                # LocalSend (AUR) — WiFi/Bluetooth file transfer
-                                "localsend-bin",
                             ]
                             # Initialize pacman keyring inside the chroot so
                             # signature verification works (avoids GPGME errors),
