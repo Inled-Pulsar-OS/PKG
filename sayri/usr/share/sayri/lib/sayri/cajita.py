@@ -144,6 +144,29 @@ SVG_MIC = b"""<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" vie
 SVG_MIC_ACTIVE = b"""<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#ffffff" stroke="none"><circle cx="12" cy="12" r="6"/></svg>"""
 
 
+def markdown_to_pango(text: str) -> str:
+    """Convert standard Markdown to formatted Pango markup with bright white text."""
+    if not text:
+        return ""
+    import re
+    escaped = GLib.markup_escape_text(text)
+    escaped = re.sub(
+        r"```(?:[a-zA-Z0-9_\-]+)?\n?(.*?)\n?```",
+        r"\n<span font_family='monospace' foreground='#38bdf8'>\1</span>\n",
+        escaped,
+        flags=re.DOTALL
+    )
+    escaped = re.sub(r"`([^`]+)`", r"<tt><span foreground='#38bdf8'><b>\1</b></span></tt>", escaped)
+    escaped = re.sub(r"\*\*([^\*]+)\*\*", r"<b>\1</b>", escaped)
+    escaped = re.sub(r"__([^_]+)__", r"<b>\1</b>", escaped)
+    escaped = re.sub(r"(?<!\*)\*(?!\*)([^\*\n]+?)(?<!\*)\*(?!\*)", r"<i>\1</i>", escaped)
+    escaped = re.sub(r"(?<!\w)_([^\_\n]+?)_(?!\w)", r"<i>\1</i>", escaped)
+    escaped = re.sub(r"^(?:#{1,6})\s+(.+)$", r"<b><span size='13000' foreground='#38bdf8'>\1</span></b>", escaped, flags=re.MULTILINE)
+    escaped = re.sub(r"^[\*\-]\s+(.+)$", r"  • \1", escaped, flags=re.MULTILINE)
+    escaped = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"<span foreground='#38bdf8'><u>\1</u></span>", escaped)
+    return f"<span foreground='#ffffff' size='12000' weight='500'>{escaped}</span>"
+
+
 _TEXTURE_CACHE: dict[bytes, Gdk.Texture] = {}
 
 
@@ -448,8 +471,8 @@ class SayriCajita(Gtk.Box):
                 self.entry.set_text(text)
                 self.pill_bg.set_mode("active")
         elif kind == "assistant":
-            escaped = GLib.markup_escape_text(text)
-            ok, attrs, txt, _ = Pango.parse_markup(f"<span foreground='#ffffff' size='12000' weight='500'>{escaped}</span>", -1, chr(0))
+            markup = markdown_to_pango(text)
+            ok, attrs, txt, _ = Pango.parse_markup(markup, -1, chr(0))
             if ok and attrs:
                 self.response_label.set_attributes(attrs)
                 self.response_label.set_text(txt)

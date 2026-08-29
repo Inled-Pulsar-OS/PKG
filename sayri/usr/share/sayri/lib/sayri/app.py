@@ -56,6 +56,34 @@ def _detect_distro() -> str:
     return "Linux"
 
 
+def markdown_to_plain_speech(text: str) -> str:
+    """Clean markdown syntax into natural, clean spoken text for Piper TTS."""
+    if not text:
+        return ""
+    import re
+    # Remove code blocks completely so TTS doesn't dictate raw scripts
+    cleaned = re.sub(r"```(?:[a-zA-Z0-9_\-]+)?\n?(.*?)\n?```", "", text, flags=re.DOTALL)
+    # Convert inline code `foo` -> foo
+    cleaned = re.sub(r"`([^`]+)`", r"\1", cleaned)
+    # Convert bold / italic
+    cleaned = re.sub(r"\*\*([^\*]+)\*\*", r"\1", cleaned)
+    cleaned = re.sub(r"__([^_]+)__", r"\1", cleaned)
+    cleaned = re.sub(r"(?<!\*)\*(?!\*)([^\*\n]+?)(?<!\*)\*(?!\*)", r"\1", cleaned)
+    cleaned = re.sub(r"(?<!\w)_([^\_\n]+?)_(?!\w)", r"\1", cleaned)
+    # Convert headers # Header -> Header
+    cleaned = re.sub(r"^(?:#{1,6})\s+(.+)$", r"\1", cleaned, flags=re.MULTILINE)
+    # Convert list bullets - / *
+    cleaned = re.sub(r"^[\*\-]\s+", "", cleaned, flags=re.MULTILINE)
+    # Links [text](url) -> text
+    cleaned = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", cleaned)
+    # Strip URLs
+    cleaned = re.sub(r"https?://\S+", "", cleaned)
+    # Remove leftover markdown symbols
+    cleaned = re.sub(r"[\*\_~`#><]", "", cleaned)
+    cleaned = re.sub(r"\n{2,}", "\n", cleaned).strip()
+    return cleaned
+
+
 def _get_effective_system_prompt(cfg) -> str:
     agent_mode = cfg.get_bool("provider", "agent_mode")
     base_prompt = cfg.get_string("provider", "system_prompt")
@@ -539,13 +567,14 @@ class SayriApp(Gtk.Application):
 
     def _finish_reply(self, full: str) -> None:
         self._last_assistant_reply = full
-        if self.cfg.get_bool("tts", "enabled") and full and self.tts.ready:
+        spoken = markdown_to_plain_speech(full)
+        if self.cfg.get_bool("tts", "enabled") and spoken and self.tts.ready:
             # Stop microphone during TTS speech to prevent feedback loop!
             self._stop_session()
             self.set_state("speaking")
-            print(f"[Sayri] 🔊 Speaking response with Piper TTS: \"{full[:60]}...\"")
+            print(f"[Sayri] 🔊 Speaking response with Piper TTS: \"{spoken[:60]}...\"")
             self.tts.speak_async(
-                full,
+                spoken,
                 on_level=lambda lvl: GLib.idle_add(self._on_level, lvl),
                 on_end=lambda: GLib.idle_add(self._after_reply),
                 on_error=lambda e: GLib.idle_add(self._on_error, e),
