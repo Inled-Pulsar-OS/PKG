@@ -77,6 +77,17 @@ class SayriOverlay:
 
     def set_state_sync(self, state: str, _opts: dict | None = None) -> None:
         self.orb.set_state(state)
+        if state == "speaking":
+            self.cajita.set_speaking(True)
+        else:
+            self.cajita.set_speaking(False)
+        if state in ("listening", "activated"):
+            self.cajita.pill_bg.set_mode("active")
+        elif state == "thinking":
+            self.cajita.pill_bg.set_mode("rotating")
+        elif state == "idle":
+            if not self.cajita.entry.get_text().strip():
+                self.cajita.pill_bg.set_mode("idle")
 
     def set_audio_level(self, level: float) -> None:
         self.orb.set_audio_level(level)

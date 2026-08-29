@@ -133,6 +133,8 @@ class TTSEngine:
 
                 try:
                     player.wait()
+                    import time
+                    time.sleep(0.35)
                 finally:
                     self._proc = None
             if on_level:

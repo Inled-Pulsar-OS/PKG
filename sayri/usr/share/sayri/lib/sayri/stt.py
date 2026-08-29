@@ -39,6 +39,22 @@ def _whisper_lang(raw: str) -> str:
     return raw[:2]
 
 
+def clean_transcription(text: str) -> str:
+    if not text:
+        return ""
+    import re
+    # Remove bracketed, parenthesized, or starred sound annotations e.g. [musica], (motor), [toc, toc], *aplausos*
+    cleaned = re.sub(r"\[.*?\]", "", text)
+    cleaned = re.sub(r"\(.*?\)", "", cleaned)
+    cleaned = re.sub(r"\*.*?\*", "", cleaned)
+    cleaned = cleaned.strip(" \t\n\r.,;:¿?¡!-_'\"")
+    # Check if there are actual words left
+    words = re.findall(r"\w+", cleaned)
+    if not words or len("".join(words)) < 2:
+        return ""
+    return cleaned
+
+
 class STTEngine:
     def __init__(self, cfg) -> None:
         self.cfg = cfg
@@ -296,12 +312,18 @@ class STTSession:
             text = ""
             t0 = time.time()
             try:
-                text = self.engine.transcribe(wav_path)
+                raw_text = self.engine.transcribe(wav_path)
                 took = time.time() - t0
-                if text:
-                    print(f"[STT] ✓ Whisper transcribed in {took:.2f}s: \"{text}\"")
+                cleaned_text = clean_transcription(raw_text)
+                if cleaned_text:
+                    print(f"[STT] ✓ Whisper transcribed in {took:.2f}s: \"{cleaned_text}\"")
+                    text = cleaned_text
+                elif raw_text:
+                    print(f"[STT] ℹ️ Ignored non-speech artifact in {took:.2f}s: \"{raw_text}\"")
+                    text = ""
                 else:
                     print(f"[STT] ℹ️ Whisper transcribed in {took:.2f}s: (no words detected)")
+                    text = ""
             except Exception as exc:  # noqa: BLE001
                 print(f"[STT] ❌ Transcription error: {exc}")
             finally:
