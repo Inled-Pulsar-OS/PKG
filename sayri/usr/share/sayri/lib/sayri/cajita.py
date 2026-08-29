@@ -471,6 +471,9 @@ class SayriCajita(Gtk.Box):
                 self.entry.set_text(text)
                 self.pill_bg.set_mode("active")
         elif kind == "assistant":
+            # Clear user input text as the assistant is replying
+            self.entry.set_text("")
+            self.pill_bg.set_mode("idle")
             markup = markdown_to_pango(text)
             ok, attrs, txt, _ = Pango.parse_markup(markup, -1, chr(0))
             if ok and attrs:

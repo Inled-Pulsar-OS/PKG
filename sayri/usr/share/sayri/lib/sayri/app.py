@@ -102,7 +102,8 @@ def _get_effective_system_prompt(cfg) -> str:
         f"Tus habilidades (skills) instaladas de ClawHub/OpenClaw están en `{skills_d}`. Puedes listar tus habilidades con `ls {skills_d}` y leer sus guías con `cat {skills_d}/<skill>/SKILL.md`.\n"
         "Puedes buscar o descargar nuevas habilidades de ClawHub (https://clawhub.ai) usando el comando `sayri-skills install <skill-name>` o `sayri-skills search <query>`.\n"
         "Para capturar la pantalla, puedes usar el comando `sayri screenshot [ruta_destino]` o portales de GNOME.\n"
-        "Para mover el cursor o automatizar clics/teclado en Wayland/X11, dispones de `ydotool` (`ydotool mousemove -a X Y`, `ydotool click 0xC0`) y `xdotool`.\n\n"
+        "Para tareas que requieran privilegios de administrador / root (instalar o actualizar paquetes del sistema con pacman, modificar /etc, systemctl del sistema), usa siempre `pkexec <comando>`.\n"
+        "El sistema interceptará la elevación y solicitará confirmación gráfica al usuario mediante Polkit antes de proceder.\n\n"
         "FLUJO AGÉNTICO AUTÓNOMO:\n"
         "Cuando el usuario te pida una tarea, abrir aplicaciones, modificar ajustes o consultar datos, emite un bloque:\n"
         "```bash\n"
@@ -526,11 +527,20 @@ class SayriApp(Gtk.Application):
 
     def _execute_tool_and_followup(self, messages: list[dict], full_reply: str, cmd: str, depth: int = 1) -> None:
         retcode = 0
+        raw_cmd = cmd.strip()
+        is_elevated = "pkexec" in raw_cmd or "sudo" in raw_cmd
+        if is_elevated:
+            if raw_cmd.startswith("sudo "):
+                cmd = "pkexec " + raw_cmd[5:]
+            self._msg("hint", f"🔒 Solicitando autorización: {cmd[:30]}…")
+
         try:
-            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=45)
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
             output = (res.stdout + "\n" + res.stderr).strip()
             retcode = res.returncode
-            if not output:
+            if retcode in (126, 127) and is_elevated:
+                output = "El usuario canceló o denegó la autorización de administrador (Polkit)."
+            elif not output:
                 output = f"(Command exited with code {res.returncode})"
         except Exception as exc:
             output = f"Command error: {exc}"
