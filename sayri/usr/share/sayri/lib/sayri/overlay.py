@@ -115,7 +115,10 @@ class SayriOverlay:
         self._just_shown = time.monotonic()
         self._was_active = False
         self.win.set_visible(True)
-        self.win.present()
+        try:
+            self.win.present_with_time(0)
+        except Exception:
+            self.win.present()
         def _focus():
             self.cajita.entry.grab_focus()
             self.cajita.entry.set_position(-1)

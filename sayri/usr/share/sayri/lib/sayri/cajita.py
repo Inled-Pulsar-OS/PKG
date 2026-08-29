@@ -84,10 +84,17 @@ button.sayri-icon-btn * {
 }
 
 .sayri-response-card {
-    background: transparent;
-    background-color: transparent;
-    border: none;
+    background-color: rgba(14, 18, 26, 0.96);
+    background: rgba(14, 18, 26, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 20px;
+    padding: 16px 20px;
     min-height: 48px;
+}
+
+.sayri-response-card-rotating {
+    border: 1.5px solid #a855f7;
+    box-shadow: 0 0 16px rgba(168, 85, 247, 0.65), 0 0 32px rgba(56, 189, 248, 0.45);
 }
 
 window:backdrop,
@@ -351,15 +358,10 @@ class SayriCajita(Gtk.Box):
         self.append(self.pill_overlay)
 
         # ── 2. Bottom Response Card ───────────────────────────────────
-        self.card_overlay = Gtk.Overlay()
-        self.card_overlay.set_size_request(400, -1)
-        self.card_overlay.set_hexpand(True)
-
-        card_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        card_content.set_margin_start(16)
-        card_content.set_margin_end(16)
-        card_content.set_margin_top(14)
-        card_content.set_margin_bottom(14)
+        self.card_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.card_box.add_css_class("sayri-response-card")
+        self.card_box.set_size_request(400, -1)
+        self.card_box.set_hexpand(True)
 
         # AI text response scroll
         self.scroll = Gtk.ScrolledWindow()
@@ -375,7 +377,7 @@ class SayriCajita(Gtk.Box):
         self.response_label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
         self.response_label.set_selectable(True)
         self.scroll.set_child(self.response_label)
-        card_content.append(self.scroll)
+        self.card_box.append(self.scroll)
 
         # Expandable command terminal output box (in English, without emojis)
         self.cmd_expander = Gtk.Expander(label="Command Output")
@@ -394,19 +396,13 @@ class SayriCajita(Gtk.Box):
         self.cmd_label.set_selectable(True)
         self.cmd_scroll.set_child(self.cmd_label)
         self.cmd_expander.set_child(self.cmd_scroll)
-        card_content.append(self.cmd_expander)
+        self.card_box.append(self.cmd_expander)
         self.cmd_expander.set_visible(False)
 
-        self.card_bg = ChromaBackground(is_pill=False)
-        self.card_overlay.set_child(self.card_bg)
-
-        # card_content drawn ON TOP of the background
-        self.card_overlay.add_overlay(card_content)
-
-        self.append(self.card_overlay)
+        self.append(self.card_box)
 
         # Hide bottom card initially until response exists
-        self.card_overlay.set_visible(False)
+        self.card_box.set_visible(False)
 
     def _on_entry_activate(self, entry: Gtk.Entry) -> None:
         text = entry.get_text().strip()
@@ -446,8 +442,8 @@ class SayriCajita(Gtk.Box):
                 self.response_label.set_text(txt)
             else:
                 self.response_label.set_text(text)
-            self.card_overlay.set_visible(True)
-            self.card_bg.set_mode("rotating")
+            self.card_box.set_visible(True)
+            self.card_box.add_css_class("sayri-response-card-rotating")
         elif kind == "hint":
             pass
         elif kind == "error":
@@ -458,7 +454,7 @@ class SayriCajita(Gtk.Box):
                 self.response_label.set_text(txt)
             else:
                 self.response_label.set_text(f"⚠️ {text}")
-            self.card_overlay.set_visible(True)
+            self.card_box.set_visible(True)
 
     def set_tool_output(self, cmd: str, output: str) -> None:
         if not cmd:
@@ -474,8 +470,8 @@ class SayriCajita(Gtk.Box):
             self.cmd_label.set_text(f"$ {cmd}\n\n{output}")
         self.cmd_expander.set_label(f"Command: {cmd[:36]}…")
         self.cmd_expander.set_visible(True)
-        self.card_overlay.set_visible(True)
-        self.card_bg.set_mode("rotating")
+        self.card_box.set_visible(True)
+        self.card_box.add_css_class("sayri-response-card-rotating")
 
     def set_mic(self, active: bool) -> None:
         if active:
@@ -500,9 +496,9 @@ class SayriCajita(Gtk.Box):
 
     def set_speaking(self, speaking: bool) -> None:
         if speaking:
-            self.card_bg.set_mode("rotating")
+            self.card_box.add_css_class("sayri-response-card-rotating")
         else:
-            self.card_bg.set_mode("idle")
+            self.card_box.remove_css_class("sayri-response-card-rotating")
 
     def clear(self) -> None:
         self.response_label.set_attributes(Pango.AttrList())
@@ -510,8 +506,8 @@ class SayriCajita(Gtk.Box):
         self.cmd_label.set_attributes(Pango.AttrList())
         self.cmd_label.set_text("")
         self.cmd_expander.set_visible(False)
-        self.card_overlay.set_visible(False)
-        self.card_bg.set_mode("idle")
+        self.card_box.remove_css_class("sayri-response-card-rotating")
+        self.card_box.set_visible(False)
         self.entry.set_sensitive(True)
         if not self.app.listening_now() and not self.entry.get_text().strip():
             self.pill_bg.set_mode("idle")

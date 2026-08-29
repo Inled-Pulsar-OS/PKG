@@ -106,8 +106,10 @@ class SiriOrb(Gtk.DrawingArea):
             self.on_click()
 
     def _on_tick(self, _widget, _frame_clock) -> bool:
+        if not self.get_mapped() or not self.get_visible():
+            return GLib.SOURCE_CONTINUE
         now = time.monotonic()
-        dt = now - self.last_tick
+        dt = min(0.1, now - self.last_tick)
         self.last_tick = now
 
         speed = SPEEDS.get(self.state, 0.55)

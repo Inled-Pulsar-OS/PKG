@@ -500,7 +500,7 @@ class SayriApp(Gtk.Application):
         self._msg("error", f"Provider error: {exc}")
         self._set_busy(False)
         if self.overlay:
-            self.overlay.cajita.card_bg.set_mode("idle")
+            self.overlay.cajita.set_speaking(False)
         self._after_reply()
 
     def _finish_reply(self, full: str) -> None:
@@ -523,7 +523,7 @@ class SayriApp(Gtk.Application):
         self._on_level(0.0)
         self._assistant_text = ""
         if self.overlay:
-            self.overlay.cajita.card_bg.set_mode("idle")
+            self.overlay.cajita.set_speaking(False)
         mode = self.cfg.get_string("stt", "mode")
         if mode in ("always", "wakeword"):
             self._start_session()
