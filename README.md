@@ -42,6 +42,11 @@ This repository contains the **source packages** that make up Pulsar OS. PulsarO
 | `gnome-macos-remap-wayland` | **macOS keyboard remap** for GNOME on Wayland (based on `xremap`) |
 | `pulsaros-spotlight-launcher` | GNOME Shell extension: **Spotlight-like search launcher** icon in the top bar (GNOME 45-50, Wayland). Fully native **Rust/GTK4 binary** at `/usr/bin/pulsaros-spotlight` |
 
+### Apps & assistants
+| Package | What it does |
+|---------|--------------|
+| `sayri` | **Siri-like voice assistant**: a reactive orb in the top-right corner (Expo/reacticx orb in a WebKitGTK window), whisper.cpp STT, any OpenAI-compatible provider, Piper TTS, AppIndicator tray icon and a settings window to download models/voices and configure the API |
+
 ### System utilities & installer
 | Package | What it does |
 |---------|--------------|

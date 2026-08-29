@@ -1,36 +1,25 @@
 # Sayri
 
-Siri-like voice assistant for Pulsar OS.
+Agent assistant for Pulsar OS. Like Openclaw, but with less token consumption.
 
 A reactive orb pinned to the **top-left** corner of the screen reacts to your
 voice:
 
 - **STT**: [whisper.cpp](https://github.com/ggml-org/whisper.cpp) transcribes what you say.
-- The live transcript appears in an Apple-intelligence style **cajita** (with
+- The live transcript appears in an Apple-intelligence style **box** (with
   a chroma-ring animated border) right next to the orb, at the same height.
 - When you pause (silence) or press **Enter**, the query is sent to the provider.
 - **LLM**: any **OpenAI-compatible** API (`/v1/chat/completions`) — OpenAI, Ollama,
   LM Studio, OpenClaw, etc. — configurable endpoint, key, model and options.
 - **TTS**: [Piper](https://github.com/rhasspy/piper) speaks the answer back while
-  the orb animates, and the text is shown in the cajita.
+  the orb animates, and the text is shown in the box.
 
-**Clicking the orb toggles the microphone on/off.** The cajita is both the
+**Clicking the orb toggles the microphone on/off.** The box is both the
 assistant's reply and the text input (enter to send). You can also type your
 query directly. Activation is configurable: always listening, wake word
 ("hey sayri" / "hey siri", configurable), or manual.
 
-The whole UI is **GTK4** and uses
-[gtk4-layer-shell](https://github.com/wmww/gtk4-layer-shell) for window
-positioning (always-on-top overlay, pinned to the top-right corner, so
-compositor blur is skipped). Sayri also adds itself to the blur-my-shell
-application blacklist on startup.
-
-> **Layer-shell requirement**: GNOME Shell does **not** support the
-> wlr-layer-shell protocol by default. To use Sayri on GNOME, install a
-> layer-shell extension (e.g., [gnome-shell-extension-layer-shell](https://github.com/AsamK/gnome-shell-extension-layer-shell))
-> or switch to a compositor that supports it natively (Sway, Hyprland,
-> river, etc.). Without layer-shell, the overlay window will appear at the
-> screen center instead of the top-right corner.
+The assistante its in GTK4, settings and appindicator in gtk3.
 
 ## Package layout
 
@@ -44,13 +33,13 @@ sayri/
 ├── usr/share/sayri/
 │   ├── lib/sayri/              Python package (GTK4 + WebKitGTK 6.0)
 │   └── web/                    Committed static build (Expo web)
-├── web/                        Expo/React Native source: the orb and the cajita
+├── web/                        Expo/React Native source: the orb and the box
 │                               (reacticx `unstable_siri_orb` + `chroma-ring`)
 ├── tests/                      Unit tests (tests/run-tests.sh)
 └── prepare-assets.sh           Rebuilds web/ into usr/share/sayri/web if node exists
 ```
 
-## The web build (orb + cajita)
+## The web build (orb + box)
 
 Two windows are rendered from the same Expo web bundle (selected via
 `?mode=orb` / `?mode=bubble`):
@@ -58,7 +47,7 @@ Two windows are rendered from the same Expo web bundle (selected via
 - the **orb** is the `unstable_siri_orb` component from
   [reacticx](https://www.reacticx.com/docs/components/siri-orb) (a Skia
   shader);
-- the **cajita** is the apple-intelligence chat card with the `chroma-ring`
+- the **box** is the apple-intelligence chat card with the `chroma-ring`
   animated border (also from reacticx) and a `TextInput`.
 
 Both components are vendored under `web/component/organisms/` (the equivalent
