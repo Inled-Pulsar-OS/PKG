@@ -468,6 +468,42 @@ class SettingsWindowGTK3:
 
         self.d_whisper_btn.connect("clicked", dl_whisper)
         self.d_whisper_bin_btn.connect("clicked", dl_whisper_bin)
+
+        # ONNX Wake Word Engine Card
+        card_kws = self._card(page, "ONNX Wake Word Engine (openWakeWord)")
+        h_kws = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        self.d_kws_btn = Gtk.Button(label="Download ONNX Models")
+        self.kws_pbar = Gtk.ProgressBar()
+        self.kws_pbar.set_hexpand(True)
+        self.kws_pbar.set_valign(Gtk.Align.CENTER)
+        self.kws_status_lbl = Gtk.Label(label="")
+        self.kws_status_lbl.get_style_context().add_class("sayri-row-subtitle")
+        h_kws.pack_start(self.d_kws_btn, False, False, 0)
+        h_kws.pack_start(self.kws_pbar, True, True, 0)
+        h_kws.pack_start(self.kws_status_lbl, False, False, 0)
+        card_kws.pack_start(h_kws, False, False, 0)
+
+        def dl_kws(_b):
+            self.d_kws_btn.set_sensitive(False)
+            self.kws_status_lbl.set_label("Downloading…")
+
+            def worker():
+                try:
+                    from . import wakeword
+                    ok = wakeword.download_models()
+                    if ok:
+                        GLib.idle_add(self.kws_status_lbl.set_label, "Installed ✓")
+                        GLib.idle_add(self.kws_pbar.set_fraction, 1.0)
+                    else:
+                        GLib.idle_add(self.kws_status_lbl.set_label, "Failed")
+                except Exception as exc:
+                    GLib.idle_add(self.kws_status_lbl.set_label, f"Failed: {exc}")
+                finally:
+                    GLib.idle_add(self.d_kws_btn.set_sensitive, True)
+
+            threading.Thread(target=worker, daemon=True).start()
+
+        self.d_kws_btn.connect("clicked", dl_kws)
         self._update_stt_status()
 
     def _on_stt_lang_changed(self) -> None:
@@ -485,6 +521,14 @@ class SettingsWindowGTK3:
 
         has_bin = bool(shutil.which("whisper-cli") or shutil.which("whisper.cpp") or os.path.isfile(os.path.join(paths.bin_dir(), "whisper-cli")))
         self.whisper_bin_status.set_label("Installed ✓" if has_bin else "Binary missing")
+
+        from . import wakeword
+        if wakeword.is_onnx_ready():
+            self.kws_status_lbl.set_label("Installed ✓")
+            self.kws_pbar.set_fraction(1.0)
+        else:
+            self.kws_status_lbl.set_label("Not downloaded")
+            self.kws_pbar.set_fraction(0.0)
 
     def _build_tts_tab(self) -> None:
         page = self._page_scrolled("Text to Speech", "tts")
