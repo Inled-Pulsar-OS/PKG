@@ -39,15 +39,38 @@ def _whisper_lang(raw: str) -> str:
     return raw[:2]
 
 
+GHOST_PATTERNS = [
+    r"^[\s\.\,\!\?\:\;\-_]*$",
+    r"subt[ií]tulos",
+    r"suscr[ií]bete",
+    r"gracias por ver",
+    r"amara\.org",
+    r"transcripci[oó]n por",
+    r"para m[aá]s videos",
+    r"siguiente video",
+    r"hasta la pr[oó]xima",
+    r"dale like",
+    r"v[ií]deo siguiente",
+    r"todos los derechos reservados",
+]
+
+
 def clean_transcription(text: str) -> str:
     if not text:
         return ""
     import re
     # Remove bracketed, parenthesized, or starred sound annotations e.g. [musica], (motor), [toc, toc], *aplausos*
-    cleaned = re.sub(r"\[.*?\]", "", text)
-    cleaned = re.sub(r"\(.*?\)", "", cleaned)
-    cleaned = re.sub(r"\*.*?\*", "", cleaned)
+    cleaned = re.sub(r"\[.*?\]", "", text, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\(.*?\)", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\*.*?\*", "", cleaned, flags=re.IGNORECASE)
     cleaned = cleaned.strip(" \t\n\r.,;:¿?¡!-_'\"")
+
+    # Filter out known ghost word hallucinations
+    lower = cleaned.lower()
+    for pat in GHOST_PATTERNS:
+        if re.search(pat, lower):
+            return ""
+
     # Check if there are actual words left
     words = re.findall(r"\w+", cleaned)
     if not words or len("".join(words)) < 2:
@@ -228,12 +251,17 @@ class STTSession:
             return
         silence_ms = max(200, self.cfg.get_int("stt", "silence_ms"))
         live = self.cfg.get_bool("stt", "live_transcript")
+        discard_until = time.monotonic() + 0.45
 
         while self._running:
             chunk = mic.stdout.read(audio.CHUNK_BYTES)
             if not chunk:
                 if mic.poll() is not None:
                     break
+                continue
+
+            # Flush out hardware PipeWire residue / speaker echo on startup
+            if time.monotonic() < discard_until:
                 continue
 
             level = audio.rms_level(chunk)

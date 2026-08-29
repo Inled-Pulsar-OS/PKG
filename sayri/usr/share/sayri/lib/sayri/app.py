@@ -321,6 +321,14 @@ class SayriApp(Gtk.Application):
             self._msg("hint", "Please wait for the response to finish.")
             return
 
+        # Check if text is self-echo from the last assistant response
+        if getattr(self, "_last_assistant_reply", None):
+            prev_clean = re.sub(r"[^\w\s]", "", self._last_assistant_reply.lower())
+            curr_clean = re.sub(r"[^\w\s]", "", text.lower())
+            if len(curr_clean) > 3 and (curr_clean in prev_clean or (len(prev_clean) > 3 and prev_clean in curr_clean)):
+                print(f"[Sayri] ℹ️ Ignored TTS self-echo: \"{text}\"")
+                return
+
         mode = self.cfg.get_string("stt", "mode")
         matched, remainder = self._match_and_extract_wake_word(text)
         ui_open = bool(self.overlay and self.overlay.is_visible)
@@ -504,6 +512,7 @@ class SayriApp(Gtk.Application):
         self._after_reply()
 
     def _finish_reply(self, full: str) -> None:
+        self._last_assistant_reply = full
         if self.cfg.get_bool("tts", "enabled") and full and self.tts.ready:
             # Stop microphone during TTS speech to prevent feedback loop!
             self._stop_session()
