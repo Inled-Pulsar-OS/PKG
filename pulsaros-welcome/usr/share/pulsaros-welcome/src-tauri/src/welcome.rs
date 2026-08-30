@@ -109,6 +109,38 @@ pub fn get_resolutions() -> Vec<Resolution> {
     resolutions
 }
 
+fn get_active_output() -> Option<String> {
+    let output = Command::new("xrandr")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+    let mut current_output = None;
+    for line in output.lines() {
+        if line.contains(" connected") {
+            let name = line.split_whitespace().next()?.to_string();
+            current_output = Some(name);
+        }
+        if line.contains(" connected") && line.contains(" active") {
+            return Some(line.split_whitespace().next()?.to_string());
+        }
+    }
+    current_output
+}
+
+pub fn set_resolution(width: u32, height: u32) -> Result<(), String> {
+    let output = get_active_output().ok_or("No active display output found")?;
+    let mode = format!("{}x{}", width, height);
+    let out = Command::new("xrandr")
+        .args(["--output", &output, "--mode", &mode])
+        .output()
+        .map_err(|e| format!("Failed to run xrandr: {}", e))?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).to_string())
+    }
+}
+
 // ── App Launcher ──
 
 pub fn launch_app_with_fallback(primary: &str, fallback: Option<&str>) -> Result<(), String> {

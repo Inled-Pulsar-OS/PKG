@@ -26,6 +26,11 @@ pub fn get_resolutions() -> Vec<welcome::Resolution> {
 }
 
 #[tauri::command]
+pub fn set_resolution(width: u32, height: u32) -> Result<(), String> {
+    welcome::set_resolution(width, height)
+}
+
+#[tauri::command]
 pub fn launch_display_settings() -> Result<(), String> {
     welcome::launch_display_settings()
 }

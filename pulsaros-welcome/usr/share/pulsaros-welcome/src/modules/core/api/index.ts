@@ -6,6 +6,7 @@ export {
   checkSentinel,
   writeSentinel,
   getResolutions,
+  setResolution,
   launchDisplaySettings,
   launchWifiSettings,
   launchBluetoothSettings,

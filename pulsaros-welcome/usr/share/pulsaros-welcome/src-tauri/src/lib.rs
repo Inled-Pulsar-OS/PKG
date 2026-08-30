@@ -18,6 +18,7 @@ pub fn run() {
             commands::welcome::check_sentinel,
             commands::welcome::write_sentinel,
             commands::welcome::get_resolutions,
+            commands::welcome::set_resolution,
             commands::welcome::launch_display_settings,
             commands::welcome::launch_wifi_settings,
             commands::welcome::launch_bluetooth_settings,

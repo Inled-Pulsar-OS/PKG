@@ -31,6 +31,10 @@ export function getResolutions(): Promise<
   return invoke("get_resolutions");
 }
 
+export function setResolution(width: number, height: number): Promise<void> {
+  return invoke("set_resolution", { width, height });
+}
+
 export function launchDisplaySettings(): Promise<void> {
   return invoke("launch_display_settings");
 }
