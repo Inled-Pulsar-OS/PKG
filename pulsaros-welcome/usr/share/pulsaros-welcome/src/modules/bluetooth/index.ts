@@ -1,0 +1,1 @@
+export { BluetoothPage } from "./pages";

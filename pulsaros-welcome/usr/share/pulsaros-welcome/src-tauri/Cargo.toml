@@ -1,0 +1,18 @@
+[package]
+name = "pulsaros-welcome"
+version = "2.0.0"
+description = "Pulsar OS Welcome Assistant"
+authors = ["Inled <info@inled.es>"]
+edition = "2021"
+
+[lib]
+name = "pulsaros_welcome_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }

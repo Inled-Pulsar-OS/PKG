@@ -1,0 +1,1 @@
+export { GpuPage } from "./pages";

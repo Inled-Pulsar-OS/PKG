@@ -1,18 +1,28 @@
 #!/bin/bash
 # ==============================================================================
-# Pulsar OS - Welcome Application Wrapper
+# Pulsar OS - Welcome Application (Tauri)
 # ==============================================================================
 
-# If we are running in the Live ISO environment, we always launch the welcome screen
-# Debian live uses 'boot=live', Arch live uses 'archisobasedir=live'.
-# Si estamos en el entorno Live de la ISO, siempre lanzamos la pantalla de bienvenida
-# (Debian usa 'boot=live', Arch usa 'archisobasedir=live').
-if grep -qE "boot=live|archisobasedir=live" /proc/cmdline; then
-    exec /usr/share/pulsaros-welcome/welcome.py "$@"
+BINARY="/usr/share/pulsaros-welcome/src-tauri/target/release/pulsaros-welcome"
+
+# If binary not found, try to build it
+if [ ! -f "$BINARY" ]; then
+    echo "Building pulsaros-welcome..."
+    cd /usr/share/pulsaros-welcome
+    if command -v pnpm &>/dev/null; then
+        pnpm tauri build 2>/dev/null || true
+    elif command -v npm &>/dev/null; then
+        npm run tauri build 2>/dev/null || true
+    fi
 fi
 
-DONE_FILE="$HOME/.config/pulsaros-welcome.done"
+# If live user cleanup is pending, run cleanup via the binary
+if [ -f "/etc/pulsar-need-cleanup" ]; then
+    exec "$BINARY" "$@"
+fi
 
+# If the done file exists and we are not forcing, exit
+DONE_FILE="$HOME/.config/pulsaros-welcome.done"
 FORCE=false
 for arg in "$@"; do
     if [ "$arg" == "--force" ] || [ "$arg" == "-f" ]; then
@@ -20,27 +30,9 @@ for arg in "$@"; do
     fi
 done
 
-# If live user cleanup is pending, launch the cleanup spinner app first.
-# That app deletes the live user, removes the sentinel, then relaunches us.
-if [ -f "/etc/pulsar-need-cleanup" ]; then
-    exec /usr/bin/pulsar-cleanup-user "$@"
-fi
-
-# If OOTB setup is pending, show Hello animation first (welcome.py --first-boot),
-# which will then launch welcome_ootb.py automatically after the animation.
-# The systemd service (pulsar-ootb.service) already granted us sudoers access
-# and created the sentinel file before the display manager started.
-if [ -f "/etc/pulsar-need-setup" ]; then
-    if command -v xhost &>/dev/null; then
-        xhost +SI:localuser:root &>/dev/null
-    fi
-    exec /usr/share/pulsaros-welcome/welcome.py --first-boot
-fi
-
-# If the done file exists and we are not forcing, exit
 if [ -f "$DONE_FILE" ] && ! $FORCE; then
     exit 0
 fi
 
-# Run the post-install welcome configurator
-exec /usr/share/pulsaros-welcome/welcome.py "$@"
+# Run the welcome application
+exec "$BINARY" "$@"
