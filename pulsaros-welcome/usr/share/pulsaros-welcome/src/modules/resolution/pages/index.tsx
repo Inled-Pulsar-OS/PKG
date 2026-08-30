@@ -1,6 +1,7 @@
 import { Screen } from "@/modules/ui";
 import { launchDisplaySettings } from "@/modules/core/api";
 import type { Resolution } from "@/modules/core/types";
+import { cn } from "@/modules/ui/utils";
 
 interface ResolutionPageProps {
   resolutions: Resolution[];
@@ -33,11 +34,12 @@ export function ResolutionPage({
           {resolutions.map((r) => (
             <div
               key={`${r.width}x${r.height}`}
-              className={`cursor-pointer rounded-lg px-4 py-2.5 text-[13px] transition-colors ${
+              className={cn(
+                "cursor-pointer rounded-lg px-4 py-2.5 text-[13px] transition-colors",
                 r.active
                   ? "bg-accent text-white"
-                  : "text-text-primary hover:bg-black/5"
-              }`}
+                  : "text-text-primary hover:bg-black/5",
+              )}
             >
               {r.width} x {r.height}
               {r.active && (

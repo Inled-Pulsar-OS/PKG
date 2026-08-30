@@ -1,4 +1,5 @@
 import { Screen } from "@/modules/ui";
+import { cn } from "@/modules/ui/utils";
 
 interface EffectsPageProps {
   effectsState: boolean;
@@ -30,9 +31,10 @@ export function EffectsPage({
     >
       <div className="flex flex-col gap-3">
         <button
-          className={`glass-grouped rounded-xl p-4 text-left transition-all ${
-            !effectsState ? "ring-2 ring-accent" : ""
-          }`}
+          className={cn(
+            "glass-grouped rounded-xl p-4 text-left transition-all",
+            !effectsState && "ring-2 ring-accent",
+          )}
           onClick={() => onSetEffects(false)}
         >
           <div className="text-[14px] font-semibold text-text-primary">
@@ -44,9 +46,10 @@ export function EffectsPage({
         </button>
 
         <button
-          className={`glass-grouped rounded-xl p-4 text-left transition-all ${
-            effectsState ? "ring-2 ring-accent" : ""
-          }`}
+          className={cn(
+            "glass-grouped rounded-xl p-4 text-left transition-all",
+            effectsState && "ring-2 ring-accent",
+          )}
           onClick={() => onSetEffects(true)}
         >
           <div className="text-[14px] font-semibold text-text-primary">

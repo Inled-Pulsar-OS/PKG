@@ -17,3 +17,11 @@ export interface Resolution {
   height: number;
   active: boolean;
 }
+
+
+export type DataState = {
+  isLive: boolean;
+  isArch: boolean;
+  resolutions: Resolution[];
+  effectsState: boolean;
+};

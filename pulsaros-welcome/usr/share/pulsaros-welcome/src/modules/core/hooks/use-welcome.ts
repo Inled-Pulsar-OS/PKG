@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import type { WelcomeScreen, Resolution } from "@/modules/core/types";
+import type { WelcomeScreen, DataState } from "@/modules/core/types";
 import {
   isLiveSystem,
   isArchSystem,
@@ -23,10 +23,17 @@ const WELCOME_STEPS: WelcomeScreen[] = [
 
 export function useWelcome() {
   const [screen, setScreen] = useState<WelcomeScreen>("hello");
-  const [isLive, setIsLive] = useState(false);
-  const [isArch, setIsArch] = useState(false);
-  const [resolutions, setResolutions] = useState<Resolution[]>([]);
-  const [effectsState, setEffectsState] = useState(false);
+  const [{
+    effectsState,
+    isArch,
+    isLive,
+    resolutions
+  }, setData] = useState<DataState>({
+    isLive: false,
+    isArch: false,
+    resolutions: [],
+    effectsState: false,
+  });
 
   const loadSystemInfo = useCallback(async () => {
     const [live, arch, res, effects] = await Promise.all([
@@ -35,10 +42,13 @@ export function useWelcome() {
       getResolutions(),
       getEffectsState(),
     ]);
-    setIsLive(live);
-    setIsArch(arch);
-    setResolutions(res);
-    setEffectsState(effects);
+    setData((prev) => ({
+      ...prev,
+      isLive: live,
+      isArch: arch,
+      resolutions: res,
+      effectsState: effects
+    }));
   }, []);
 
   const goNext = useCallback(() => {
@@ -59,7 +69,7 @@ export function useWelcome() {
 
   const setEffectsValue = useCallback(async (useLiquidGlass: boolean) => {
     await apiSetEffects(useLiquidGlass);
-    setEffectsState(useLiquidGlass);
+    setData((prev) => ({ ...prev, effectsState: useLiquidGlass }));
   }, []);
 
   const complete = useCallback(async () => {
