@@ -488,6 +488,31 @@ DOCK_HOVER_FIX
 find "$STAGE_DIR" -path "*/gnome-shell/gnome-shell.css" -exec sh -c 'cat /tmp/dock_hover_fix.css >> "$1"' _ {} \; 2>/dev/null || true
 rm -f /tmp/dock_hover_fix.css
 
+# 2.4 Pulsar OS - macOS Tahoe Modal Dialogs (Wi-Fi, Polkit, Authentication)
+cat <<'MODAL_FIX' > /tmp/modal_fix.css
+/* ==============================================================================
+ * Pulsar OS - macOS Tahoe Dialogs
+ * ============================================================================== */
+.modal-dialog {
+  border-radius: 24px;
+  background-color: rgba(30, 30, 30, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  color: white;
+}
+
+.modal-dialog-linked-button:first-child {
+  border-right: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.prompt-dialog-password-entry {
+  border-radius: 8px;
+}
+MODAL_FIX
+
+find "$STAGE_DIR" -path "*/gnome-shell/gnome-shell.css" -exec sh -c 'cat /tmp/modal_fix.css >> "$1"' _ {} \; 2>/dev/null || true
+rm -f /tmp/modal_fix.css
+
 
 
 # Ejecutar instalador de iconos

@@ -167,8 +167,7 @@ build_single_package() {
         done
         if [ ${#to_install[@]} -gt 0 ]; then
             echo "📦 Installing official build dependencies for $name..."
-            local auth_cmd="pkexec"
-            command -v pkexec >/dev/null 2>&1 || auth_cmd="sudo"
+            local auth_cmd="sudo"
             $auth_cmd pacman -S --needed --noconfirm "${to_install[@]}" 2>/dev/null || {
                 for d in "${to_install[@]}"; do
                     $auth_cmd pacman -S --needed --noconfirm "$d" 2>/dev/null || true

@@ -44,6 +44,7 @@ depends=(
   libcups
   libepoxy
   libgcc
+  libgmobile
   libgoa
   libgtop
   libgudev
