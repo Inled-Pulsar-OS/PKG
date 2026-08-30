@@ -1,4 +1,4 @@
-import { Screen } from "@/modules/ui";
+import { Layout } from "@/modules/ui";
 import { launchApp } from "@/modules/core/api";
 
 interface GpuPageProps {
@@ -8,7 +8,7 @@ interface GpuPageProps {
 
 export function GpuPage({ onContinue, onBack }: GpuPageProps) {
   return (
-    <Screen
+    <Layout
       title="GPU Driver Manager"
       subtitle="Pulsar OS detects your GPU automatically and recommends the best open-source or proprietary driver for it. Use Driver Manager to install, switch, or remove GPU drivers. Package conflicts can be resolved directly from the app."
       footer={
@@ -28,6 +28,6 @@ export function GpuPage({ onContinue, onBack }: GpuPageProps) {
       >
         Open Driver Manager
       </button>
-    </Screen>
+    </Layout>
   );
 }

@@ -1,4 +1,4 @@
-import { Screen } from "@/modules/ui";
+import { Layout } from "@/modules/ui";
 import { open } from "@tauri-apps/plugin-shell";
 
 interface FeedbackPageProps {
@@ -25,12 +25,9 @@ const links = [
   },
 ];
 
-export function FeedbackPage({
-  onContinue,
-  onBack,
-}: FeedbackPageProps) {
+export function FeedbackPage({ onContinue, onBack }: FeedbackPageProps) {
   return (
-    <Screen
+    <Layout
       title="Beta Feedback & Support"
       subtitle="Pulsar OS is in active development. Help us improve stability by reporting installation bugs, hardware issues or user interface feedback directly to our official issue tracker on GitHub."
       footer={
@@ -55,6 +52,6 @@ export function FeedbackPage({
           </button>
         ))}
       </div>
-    </Screen>
+    </Layout>
   );
 }

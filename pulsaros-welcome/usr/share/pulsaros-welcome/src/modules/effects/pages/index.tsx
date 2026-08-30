@@ -1,5 +1,6 @@
-import { Screen } from "@/modules/ui";
+import { Layout } from "@/modules/ui";
 import { cn } from "@/modules/ui/utils";
+import { DESKTOP_EFFECTS } from "../constants";
 
 interface EffectsPageProps {
   effectsState: boolean;
@@ -15,7 +16,7 @@ export function EffectsPage({
   onBack,
 }: EffectsPageProps) {
   return (
-    <Screen
+    <Layout
       title="Desktop Special Effects"
       subtitle='Choose the desktop effect you like best. The basic "blur-my-shell" effect is perfect for older computers or those with mid-range hardware. The "Liquid Glass" effect consumes more resources but gives a premium Apple-like look.'
       footer={
@@ -30,41 +31,34 @@ export function EffectsPage({
       }
     >
       <div className="flex flex-col gap-3">
-        <button
-          className={cn(
-            "glass-grouped rounded-xl p-4 text-left transition-all",
-            !effectsState && "ring-2 ring-accent",
-          )}
-          onClick={() => onSetEffects(false)}
-        >
-          <div className="text-[14px] font-semibold text-text-primary">
-            Enable Blur my Shell
-          </div>
-          <div className="mt-1 text-[12px] text-text-secondary">
-            Standard performance — Recommended
-          </div>
-        </button>
-
-        <button
-          className={cn(
-            "glass-grouped rounded-xl p-4 text-left transition-all",
-            effectsState && "ring-2 ring-accent",
-          )}
-          onClick={() => onSetEffects(true)}
-        >
-          <div className="text-[14px] font-semibold text-text-primary">
-            Enable Liquid Glass
-          </div>
-          <div className="mt-1 text-[12px] text-text-secondary">
-            Premium Apple look — High Resource Consumption!
-          </div>
-        </button>
+        {DESKTOP_EFFECTS.map((effect) => (
+          <button
+            key={effect.id}
+            className={cn(
+              "glass-grouped rounded-xl p-4 text-left transition-all cursor-pointer",
+              effect.id === "blur-shell" &&
+                !effectsState &&
+                "ring-2 ring-accent",
+              effect.id === "liquid-glass" &&
+                effectsState &&
+                "ring-2 ring-accent",
+            )}
+            onClick={() => onSetEffects(effect.value)}
+          >
+            <div className="text-[14px] font-semibold text-text-primary">
+              {effect.name}
+            </div>
+            <div className="mt-1 text-[12px] text-text-secondary">
+              {effect.description}
+            </div>
+          </button>
+        ))}
 
         <p className="text-[12px] text-red-500">
           <strong>Warning:</strong> Liquid Glass consumes significant system
           resources. May cause lag on older GPUs or virtual machines.
         </p>
       </div>
-    </Screen>
+    </Layout>
   );
 }

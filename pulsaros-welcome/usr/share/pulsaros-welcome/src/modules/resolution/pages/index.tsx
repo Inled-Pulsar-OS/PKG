@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Screen } from "@/modules/ui";
+import { Layout } from "@/modules/ui";
 import { launchDisplaySettings, setResolution } from "@/modules/core/api";
 import type { Resolution } from "@/modules/core/types";
 import { cn } from "@/modules/ui/utils";
@@ -28,7 +28,7 @@ export function ResolutionPage({
   };
 
   return (
-    <Screen
+    <Layout
       title="Select Screen Resolution"
       subtitle="Adjust the desktop screen resolution to best fit your monitor. In virtual machine environments, opening system display settings will allow you to configure the ideal size."
       footer={
@@ -79,6 +79,6 @@ export function ResolutionPage({
           Open Display Settings
         </button>
       </div>
-    </Screen>
+    </Layout>
   );
 }

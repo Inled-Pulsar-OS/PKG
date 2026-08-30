@@ -1,4 +1,4 @@
-import { Screen } from "@/modules/ui";
+import { Layout } from "@/modules/ui";
 
 interface IntroPageProps {
   isLive: boolean;
@@ -7,7 +7,7 @@ interface IntroPageProps {
 
 export function IntroPage({ isLive, onContinue }: IntroPageProps) {
   return (
-    <Screen
+    <Layout
       title="Welcome to Pulsar OS"
       subtitle={
         isLive
@@ -25,6 +25,6 @@ export function IntroPage({ isLive, onContinue }: IntroPageProps) {
       <div className="flex flex-col items-center gap-4 py-4">
         <img src="/logo.png" alt="Pulsar OS" className="h-20 w-20" />
       </div>
-    </Screen>
+    </Layout>
   );
 }

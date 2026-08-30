@@ -1,4 +1,4 @@
-import { Screen } from "@/modules/ui";
+import { Layout } from "@/modules/ui";
 import { launchBluetoothSettings } from "@/modules/core/api";
 
 interface BluetoothPageProps {
@@ -6,12 +6,9 @@ interface BluetoothPageProps {
   onBack: () => void;
 }
 
-export function BluetoothPage({
-  onContinue,
-  onBack,
-}: BluetoothPageProps) {
+export function BluetoothPage({ onContinue, onBack }: BluetoothPageProps) {
   return (
-    <Screen
+    <Layout
       title="Set Up Bluetooth Connection"
       subtitle="Connect wireless controllers, headphones, keyboards, or mice. Pulsar OS scans and listens for both Bluetooth Low Energy (BLE) and classic Bluetooth devices simultaneously for maximum hardware compatibility."
       footer={
@@ -31,6 +28,6 @@ export function BluetoothPage({
       >
         Configure Bluetooth Devices
       </button>
-    </Screen>
+    </Layout>
   );
 }

@@ -1,4 +1,4 @@
-import { Screen } from "@/modules/ui";
+import { Layout } from "@/modules/ui";
 import { launchApp } from "@/modules/core/api";
 
 interface SoftwarePageProps {
@@ -6,12 +6,9 @@ interface SoftwarePageProps {
   onBack: () => void;
 }
 
-export function SoftwarePage({
-  onContinue,
-  onBack,
-}: SoftwarePageProps) {
+export function SoftwarePage({ onContinue, onBack }: SoftwarePageProps) {
   return (
-    <Screen
+    <Layout
       title="Installing Applications"
       subtitle="Pulsar OS Software Center allows you to easily install Linux applications from both the official repositories and Flathub. Additionally, you can download standard .deb installation files from your web browser and install them by simply double-clicking on them."
       footer={
@@ -31,6 +28,6 @@ export function SoftwarePage({
       >
         Open Software Center
       </button>
-    </Screen>
+    </Layout>
   );
 }
