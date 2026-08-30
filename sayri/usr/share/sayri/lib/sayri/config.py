@@ -99,8 +99,11 @@ class Config:
 
     # ------------------------------------------------------------------ I/O
     def load(self) -> None:
+        import os
+        cfg_path = paths.config_file()
+        self._is_first_run = not os.path.exists(cfg_path)
         try:
-            self._kf.load_from_file(paths.config_file(), GLib.KeyFileFlags.NONE)
+            self._kf.load_from_file(cfg_path, GLib.KeyFileFlags.NONE)
         except GLib.Error:
             pass  # first run: defaults only
 

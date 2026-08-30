@@ -142,10 +142,11 @@ def _get_effective_system_prompt(cfg) -> str:
 
 
 class SayriApp(Gtk.Application):
-    def __init__(self) -> None:
+    def __init__(self, is_autostart: bool = False) -> None:
         super().__init__(application_id=APP_ID,
                          flags=Gio.ApplicationFlags.NON_UNIQUE)
         self.cfg = config.config
+        self.is_autostart = is_autostart
 
         self.stt = stt_mod.STTEngine(self.cfg)
         self.tts = tts_mod.TTSEngine(self.cfg)
@@ -179,9 +180,29 @@ class SayriApp(Gtk.Application):
     def _on_activate(self, _app) -> None:
         paths.ensure_dirs()
         blur_exclusion.apply_blur_exclusion()
+        self.apply_autostart()
         if self.overlay is None:
             self._build_ui()
-        self.overlay.show()
+
+        # Check if first run or no AI provider configured
+        has_api_key = bool(self.cfg.get_string("provider", "api_key").strip())
+        is_first_run = getattr(self.cfg, "_is_first_run", False) or not has_api_key
+
+        if is_first_run or not has_api_key:
+            self.overlay.show()
+            welcome_msg = (
+                "👋 **Welcome to Sayri!**\n\n"
+                "To get started, please configure an **AI Provider**:\n"
+                "• Click the **Sayri logo** on the left of the input bar (or ⚙) to open **Settings**.\n"
+                "• Select a provider and add your API key (OpenAI, Anthropic, Groq, OpenRouter, or Ollama).\n"
+                "• In Settings, you can also download local **Speech-to-Text (STT)** and **Text-to-Speech (TTS)** models for voice interaction."
+            )
+            self._set_assistant(welcome_msg)
+            self._msg("hint", "Click the Sayri logo on the left to set up AI Provider & Voice")
+        else:
+            if not self.is_autostart:
+                self.overlay.show()
+
         mode = self.cfg.get_string("stt", "mode")
         if mode in ("always", "wakeword"):
             self._start_session()
@@ -788,18 +809,34 @@ class SayriApp(Gtk.Application):
         if self.cfg.get_bool("ui", "autostart"):
             try:
                 os.makedirs(autostart_dir, exist_ok=True)
-                shutil.copy2(AUTOSTART_SRC, dest)
+                content = (
+                    "[Desktop Entry]\n"
+                    "Type=Application\n"
+                    "Name=Sayri\n"
+                    "Comment=Sayri voice assistant orb\n"
+                    "Exec=/usr/bin/sayri --autostart\n"
+                    "Terminal=false\n"
+                    "X-GNOME-Autostart-enabled=true\n"
+                )
+                with open(dest, "w", encoding="utf-8") as f:
+                    f.write(content)
+                print(f"[sayri] Ensured autostart desktop file at {dest}")
             except OSError as exc:
-                print(f"[sayri] autostart: {exc}")
+                print(f"[sayri] autostart error: {exc}")
         else:
             try:
-                os.remove(dest)
+                if os.path.exists(dest):
+                    os.remove(dest)
+                    print(f"[sayri] Removed autostart desktop file from {dest}")
             except OSError:
                 pass
 
     def _on_config_change(self, group: str, key: str, _value) -> None:
         if group == "ui":
-            self.apply_ui_config()
+            if key == "autostart":
+                self.apply_autostart()
+            else:
+                self.apply_ui_config()
         elif group == "stt" and key == "mode":
             self._apply_mode()
 
@@ -829,7 +866,14 @@ class SayriApp(Gtk.Application):
 
 
 def main() -> int:
-    # If an instance is already running, toggle it and exit
+    args = list(sys.argv[1:])
+    is_autostart = "--autostart" in args
+    is_toggle = "--toggle" in args or "-t" in args
+    is_show = "--show" in args
+    is_hide = "--hide" in args
+    is_settings = "--settings" in args or "-s" in args
+    is_quit = "--quit" in args or "-q" in args
+
     sock_path = os.path.join(paths.state_dir(), "sayri.sock")
     if os.path.exists(sock_path):
         try:
@@ -837,21 +881,47 @@ def main() -> int:
             s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             s.settimeout(0.5)
             s.connect(sock_path)
-            s.sendall(b"toggle\n")
+            if is_show:
+                cmd = b"show\n"
+            elif is_hide:
+                cmd = b"hide\n"
+            elif is_settings:
+                cmd = b"settings\n"
+            elif is_quit:
+                cmd = b"quit\n"
+            elif is_autostart:
+                # Already running instance, autostart finishes silently
+                s.close()
+                return 0
+            else:
+                cmd = b"toggle\n"
+            s.sendall(cmd)
             s.recv(1024)
             s.close()
-            print("[Sayri] Toggled running instance via IPC.")
+            print(f"[Sayri] Forwarded command {cmd.decode().strip()} to running instance via IPC.")
             return 0
         except Exception:
-            pass
+            try:
+                os.remove(sock_path)
+            except OSError:
+                pass
 
-    app = SayriApp()
+    if is_quit:
+        return 0
+
+    # Filter out custom CLI arguments so Gtk.Application argument parser does not fail with "Opción desconocida"
+    filtered_argv = [sys.argv[0]]
+    for a in sys.argv[1:]:
+        if a not in ("--autostart", "--toggle", "-t", "--show", "--hide", "--settings", "-s", "--quit", "-q"):
+            filtered_argv.append(a)
+
+    app = SayriApp(is_autostart=is_autostart)
     app.hold()
     if os.environ.get("SAYRI_AUTOQUIT_MS"):
         try:
             GLib.timeout_add(int(os.environ["SAYRI_AUTOQUIT_MS"]), app.quit)
         except ValueError:
             pass
-    code = app.run(sys.argv)
+    code = app.run(filtered_argv)
     print(f"[sayri] run() terminó con código {code}")
     return code

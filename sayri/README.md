@@ -117,7 +117,7 @@ available; otherwise the committed static build is used.
 ```bash
 sudo apt install -y \
   python3 python3-gi gir1.2-gtk-4.0 gir1.2-webkit-6.0 \
-  libgtk4-layer-shell0 python3-httpx pipewire-utils
+  libgtk4-layer-shell0 python3-httpx pipewire
 
 # optional: distro STT binary (Sayri auto-downloads it otherwise)
 sudo apt install -y whisper.cpp

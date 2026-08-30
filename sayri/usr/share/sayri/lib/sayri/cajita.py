@@ -386,7 +386,7 @@ class SayriCajita(Gtk.Box):
         self.entry.set_has_frame(False)
         self.entry.add_css_class("flat")
         self.entry.add_css_class("sayri-pill-entry")
-        self.entry.set_placeholder_text("Talk to sairy…")
+        self.entry.set_placeholder_text("Ask Sayri anything…")
         self.entry.set_hexpand(True)
         self.entry.connect("activate", self._on_entry_activate)
         self.entry.connect("changed", self._on_entry_changed)
