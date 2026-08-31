@@ -32,7 +32,7 @@ export function ResolutionPage({
       title="Select Screen Resolution"
       subtitle="Adjust the desktop screen resolution to best fit your monitor. In virtual machine environments, opening system display settings will allow you to configure the ideal size."
       footer={
-        <div className="flex w-full items-center justify-between">
+        <div className="flex w-full items-center justify-end gap-2">
           <button className="btn-secondary" onClick={onBack}>
             Back
           </button>

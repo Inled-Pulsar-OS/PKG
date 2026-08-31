@@ -12,7 +12,7 @@ export function SoftwarePage({ onContinue, onBack }: SoftwarePageProps) {
       title="Installing Applications"
       subtitle="Pulsar OS Software Center allows you to easily install Linux applications from both the official repositories and Flathub. Additionally, you can download standard .deb installation files from your web browser and install them by simply double-clicking on them."
       footer={
-        <div className="flex w-full items-center justify-between">
+        <div className="flex w-full items-center justify-end gap-2">
           <button className="btn-secondary" onClick={onBack}>
             Back
           </button>

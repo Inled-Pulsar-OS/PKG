@@ -20,7 +20,7 @@ export function EffectsPage({
       title="Desktop Special Effects"
       subtitle='Choose the desktop effect you like best. The basic "blur-my-shell" effect is perfect for older computers or those with mid-range hardware. The "Liquid Glass" effect consumes more resources but gives a premium Apple-like look.'
       footer={
-        <div className="flex w-full items-center justify-between">
+        <div className="flex w-full items-center justify-end gap-2">
           <button className="btn-secondary" onClick={onBack}>
             Back
           </button>

@@ -12,7 +12,7 @@ export function WifiPage({ onContinue, onBack }: WifiPageProps) {
       title="Connect to Wi-Fi"
       subtitle="Connect to your Wi-Fi network to access online services, software updates, and app downloads. Pulsar OS uses NetworkManager, which manages wireless, Ethernet and mobile broadband connections automatically."
       footer={
-        <div className="flex w-full items-center justify-between">
+        <div className="flex w-full items-center justify-end gap-2">
           <button className="btn-secondary" onClick={onBack}>
             Back
           </button>

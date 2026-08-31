@@ -25,7 +25,7 @@ export function HelloPage({ onContinue }: HelloPageProps) {
       />
       <button
         onClick={onContinue}
-        className="mb-20 rounded-full bg-white px-10 py-3 text-[15px] font-medium text-black shadow-md transition-all hover:bg-white/90 active:scale-95"
+        className="cursor-pointer mb-20 rounded-full bg-white px-10 py-3 text-[15px] font-medium text-black shadow-md transition-all hover:bg-white/90 active:scale-95"
       >
         Continue
       </button>
