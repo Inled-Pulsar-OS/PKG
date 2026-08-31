@@ -1,10 +1,10 @@
 Package: pulsaros-meta
-Version: 1.0.1
+Version: 1.0.2
 Section: admin
 Priority: optional
 Architecture: all
 Maintainer: Jaime <info@inled.es>
-Depends: pulsaros-branding, pulsaros-theme, pulsaros-gnome, pulsaros-global-menu, pulsaros-spotlight-launcher, pulsaros-sddm, pulsaros-plymouth, pulsaros-calamares, pulsaros-welcome, pulsaros-recovery, pulsaros-live-wallpaper, pulsaros-bootsound, pulsaros-hibernate, pulsar-pear-sound-theme, pulsaros-boot-icons, gnome-macos-remap-wayland, droidtux, macboat, appinstall, seafari, sayri
+Depends: pulsaros-branding, pulsaros-theme, pulsaros-gnome, pulsaros-global-menu, pulsaros-spotlight-launcher, pulsaros-sddm, pulsaros-plymouth, pulsaros-calamares, pulsaros-welcome, pulsaros-recovery, pulsaros-live-wallpaper, pulsaros-bootsound, pulsaros-hibernate, pulsar-pear-sound-theme, pulsaros-boot-icons, pulsaros-emoji-fonts, gnome-macos-remap-wayland, droidtux, macboat, appinstall, seafari, sayri
 Description: Metapackage that pulls in every Pulsar OS package.
  Installs newly added Pulsar OS packages on pre-existing installations:
  bump the version whenever new depends are appended so updates propagate them.

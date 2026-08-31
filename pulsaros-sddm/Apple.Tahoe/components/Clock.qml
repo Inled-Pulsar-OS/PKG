@@ -1,10 +1,12 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
+import Qt5Compat.GraphicalEffects
 
-ColumnLayout {
+Item {
     id: clockRoot
-    spacing: 2
+    implicitWidth: clockLayout.implicitWidth
+    implicitHeight: clockLayout.implicitHeight
 
     FontLoader {
         id: fontbold
@@ -23,28 +25,51 @@ ColumnLayout {
         }
     }
 
-    Label {
-        text: Qt.formatDateTime(clockRoot.currentTime, "dddd, MMMM d")
-        color: "white"
-        opacity: 0.5
-        style: softwareRendering ? Text.Outline : Text.Normal
-        styleColor: softwareRendering ? ColorScope.backgroundColor : "transparent"
-        font.pointSize: 20
-        font.weight: Font.DemiBold
-        font.capitalization: Font.Capitalize
-        Layout.alignment: Qt.AlignHCenter
-        font.family: fontbold.name
-    }
+    ColumnLayout {
+        id: clockLayout
+        anchors.centerIn: parent
+        spacing: 4
 
-    Label {
-        text: Qt.formatDateTime(clockRoot.currentTime, "h:mm")
-        color: "white"
-        opacity: 0.5
-        style: softwareRendering ? Text.Outline : Text.Normal
-        styleColor: softwareRendering ? ColorScope.backgroundColor : "transparent"
-        font.pointSize: 100
-        font.bold: true
-        Layout.alignment: Qt.AlignHCenter
-        font.family: fontbold.name
+        Label {
+            text: Qt.formatDateTime(clockRoot.currentTime, "dddd, MMMM d")
+            color: "#ffffff"
+            opacity: 0.9
+            style: softwareRendering ? Text.Outline : Text.Normal
+            styleColor: softwareRendering ? ColorScope.backgroundColor : "transparent"
+            font.pointSize: 16
+            font.weight: Font.DemiBold
+            font.capitalization: Font.Capitalize
+            Layout.alignment: Qt.AlignHCenter
+            font.family: fontbold.name
+
+            layer.enabled: true
+            layer.effect: DropShadow {
+                horizontalOffset: 0
+                verticalOffset: 2
+                radius: 8
+                samples: 16
+                color: "#60000000"
+            }
+        }
+
+        Label {
+            text: Qt.formatDateTime(clockRoot.currentTime, "H:mm")
+            color: "#ffffff"
+            style: softwareRendering ? Text.Outline : Text.Normal
+            styleColor: softwareRendering ? ColorScope.backgroundColor : "transparent"
+            font.pointSize: 84
+            font.bold: true
+            Layout.alignment: Qt.AlignHCenter
+            font.family: fontbold.name
+
+            layer.enabled: true
+            layer.effect: DropShadow {
+                horizontalOffset: 0
+                verticalOffset: 4
+                radius: 18
+                samples: 24
+                color: "#70000000"
+            }
+        }
     }
 }

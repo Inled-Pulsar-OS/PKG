@@ -473,6 +473,9 @@ const LockScreen = GObject.registerClass({
         this._monitorContainers = [];
         this._clocks = [];
         this._passwordEntry = null;
+        this._lockIdleTimerId = 0;
+        this._lockIdleTimeoutSeconds = 60;
+        this._stageEventId = 0;
 
         this._bgSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.background' });
         this._ifaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
@@ -879,17 +882,17 @@ const LockScreen = GObject.registerClass({
             });
             contentLayout.add_child(clockBox);
 
-            let timeLabel = new St.Label({
-                style_class: 'pulsaros-lockscreen-time-label',
-                text: '00:00'
-            });
-            clockBox.add_child(timeLabel);
-
             let dateLabel = new St.Label({
                 style_class: 'pulsaros-lockscreen-date-label',
                 text: ''
             });
             clockBox.add_child(dateLabel);
+
+            let timeLabel = new St.Label({
+                style_class: 'pulsaros-lockscreen-time-label',
+                text: '00:00'
+            });
+            clockBox.add_child(timeLabel);
 
             this._clocks.push({ timeLabel, dateLabel });
 
@@ -1007,7 +1010,7 @@ const LockScreen = GObject.registerClass({
             });
             contentLayout.add_child(bottomSpacer);
         } else {
-            // Secondary Monitor: Center a huge clock vertically and horizontally
+            // Secondary Monitor: Center clean standard clock
             let topSpacer = new St.Widget({
                 y_expand: true
             });
@@ -1021,19 +1024,19 @@ const LockScreen = GObject.registerClass({
             });
             contentLayout.add_child(clockBox);
 
-            let timeLabel = new St.Label({
-                style_class: 'pulsaros-lockscreen-time-label',
-                style: 'font-size: 140px; font-weight: bold; text-shadow: 0px 4px 15px rgba(0, 0, 0, 0.3); font-family: "SF Pro Display", "SF Pro Text", "Cantarell", sans-serif; color: #ffffff; text-align: center;',
-                text: '00:00'
-            });
-            clockBox.add_child(timeLabel);
-
             let dateLabel = new St.Label({
                 style_class: 'pulsaros-lockscreen-date-label',
-                style: 'font-size: 28px; font-weight: 500; text-shadow: 0px 2px 10px rgba(0, 0, 0, 0.3); font-family: "SF Pro Text", "Cantarell", sans-serif; color: rgba(255, 255, 255, 0.85); text-align: center;',
+                style: 'font-size: 28px; font-weight: 500; text-shadow: 0px 2px 10px rgba(0, 0, 0, 0.4); font-family: "SF Pro Text", "Cantarell", sans-serif; color: rgba(255, 255, 255, 0.9); text-align: center;',
                 text: ''
             });
             clockBox.add_child(dateLabel);
+
+            let timeLabel = new St.Label({
+                style_class: 'pulsaros-lockscreen-time-label',
+                style: 'font-size: 140px; font-weight: bold; text-shadow: 0px 4px 18px rgba(0, 0, 0, 0.5); font-family: "SF Pro Display", "SF Pro Text", "Cantarell", sans-serif; color: #ffffff; text-align: center;',
+                text: '00:00'
+            });
+            clockBox.add_child(timeLabel);
 
             this._clocks.push({ timeLabel, dateLabel });
 
@@ -1048,21 +1051,74 @@ const LockScreen = GObject.registerClass({
         let now = GLib.DateTime.new_now_local();
         let timeStr = now.format('%H:%M');
         let dateStr = now.format('%A, %B %d');
-        
+
         if (this._clocks) {
             for (let clock of this._clocks) {
-                if (clock.timeLabel) {
-                    clock.timeLabel.set_text(timeStr);
-                }
-                if (clock.dateLabel) {
-                    clock.dateLabel.set_text(dateStr);
-                }
+                if (clock.dateLabel) clock.dateLabel.set_text(dateStr);
+                if (clock.timeLabel) clock.timeLabel.set_text(timeStr);
             }
         }
     }
     
+    _resetLockIdleTimer() {
+        if (!this._isLocked) return;
+        if (this._lockIdleTimerId) {
+            GLib.source_remove(this._lockIdleTimerId);
+            this._lockIdleTimerId = 0;
+        }
+        this._lockIdleTimerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, this._lockIdleTimeoutSeconds, () => {
+            this._lockIdleTimerId = 0;
+            if (this._isLocked) {
+                this._suspendOnLockIdle();
+            }
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _suspendOnLockIdle() {
+        if (!this._isLocked) return;
+        try {
+            let bus = Gio.DBus.system;
+            bus.call(
+                'org.freedesktop.login1',
+                '/org/freedesktop/login1',
+                'org.freedesktop.login1.Manager',
+                'Suspend',
+                new GLib.Variant('(b)', [true]),
+                null,
+                Gio.DBusCallFlags.NONE,
+                -1,
+                null,
+                (connection, res) => {
+                    try {
+                        connection.call_finish(res);
+                    } catch (e) {
+                        GLib.spawn_command_line_async("systemctl suspend");
+                    }
+                }
+            );
+        } catch (e) {
+            console.error("[LockScreen] Failed to trigger lockscreen idle suspend:", e);
+            GLib.spawn_command_line_async("systemctl suspend");
+        }
+    }
+    
     lock() {
-        if (this._isLocked) return;
+        if (this._isLocked) {
+            // Already locked: ensure top of uiGroup stack and reset lock idle timer
+            try {
+                let parent = this.get_parent();
+                if (parent) {
+                    parent.set_child_at_index(this, -1);
+                }
+            } catch (e) {}
+            this._resetLockIdleTimer();
+            if (this._passwordEntry) {
+                let activeText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText || this._passwordEntry;
+                if (activeText && activeText.grab_key_focus) activeText.grab_key_focus();
+            }
+            return;
+        }
         this._isLocked = true;
         this.visible = true;
         this.opacity = 255;
@@ -1107,7 +1163,7 @@ const LockScreen = GObject.registerClass({
             
             if (this._passwordEntry) {
                 let activeText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText || this._passwordEntry;
-                activeText.grab_key_focus();
+                if (activeText && activeText.grab_key_focus) activeText.grab_key_focus();
             }
             return GLib.SOURCE_REMOVE;
         });
@@ -1118,6 +1174,19 @@ const LockScreen = GObject.registerClass({
             this._updateClock();
             return GLib.SOURCE_CONTINUE;
         });
+
+        // Start lockscreen inactivity timer for automatic suspension
+        this._resetLockIdleTimer();
+
+        // Listen to global events to reset the inactivity timer
+        if (!this._stageEventId) {
+            this._stageEventId = global.stage.connect('captured-event', () => {
+                if (this._isLocked) {
+                    this._resetLockIdleTimer();
+                }
+                return Clutter.EVENT_PROPAGATE;
+            });
+        }
     }
     
     unlock() {
@@ -1150,6 +1219,16 @@ const LockScreen = GObject.registerClass({
         if (this._timerId) {
             GLib.source_remove(this._timerId);
             this._timerId = 0;
+        }
+
+        // Clean lock idle timer and stage event listener
+        if (this._lockIdleTimerId) {
+            GLib.source_remove(this._lockIdleTimerId);
+            this._lockIdleTimerId = 0;
+        }
+        if (this._stageEventId) {
+            global.stage.disconnect(this._stageEventId);
+            this._stageEventId = 0;
         }
     }
     
@@ -1269,6 +1348,14 @@ const LockScreen = GObject.registerClass({
         if (this._timerId) {
             GLib.source_remove(this._timerId);
             this._timerId = 0;
+        }
+        if (this._lockIdleTimerId) {
+            GLib.source_remove(this._lockIdleTimerId);
+            this._lockIdleTimerId = 0;
+        }
+        if (this._stageEventId) {
+            global.stage.disconnect(this._stageEventId);
+            this._stageEventId = 0;
         }
         if (this._isLocked && this._hasGrab) {
             Main.popModal(this);
@@ -1940,6 +2027,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         this._activeChangedId = 0;
         this._activePowerDialog = null;
         this._prepareForSleepId = 0;
+        this._login1SessionLockId = 0;
 
         try {
             this._prepareForSleepId = Gio.DBus.system.signal_subscribe(
@@ -1952,14 +2040,20 @@ export default class PulsarosGlobalMenuExtension extends Extension {
                 (connection, senderName, objectPath, interfaceName, signalName, parameters) => {
                     try {
                         let [aboutToSuspend] = parameters.deep_unpack();
-                        if (!aboutToSuspend) {
+                        if (aboutToSuspend) {
+                            // System is about to suspend: Lock immediately before power down
+                            if (this._lockScreenOverlay) {
+                                this._lockScreenOverlay.lock();
+                            }
+                        } else {
+                            // System woke up: Ensure our LockScreen is raised, active and focused
                             if (this._activePowerDialog) {
                                 this._activePowerDialog._cleanup();
                                 this._activePowerDialog.close();
                                 this._activePowerDialog = null;
                             }
-                            if (Main.notify) {
-                                Main.notify("Pulsar OS", _isSpanish() ? "Sesión restaurada correctamente." : "Session restored successfully.");
+                            if (this._lockScreenOverlay) {
+                                this._lockScreenOverlay.lock();
                             }
                         }
                     } catch (e) {
@@ -1969,6 +2063,25 @@ export default class PulsarosGlobalMenuExtension extends Extension {
             );
         } catch (e) {
             console.error("[GlobalMenu] Failed to subscribe to PrepareForSleep signal:", e);
+        }
+
+        // Also subscribe to login1 Session Lock signal
+        try {
+            this._login1SessionLockId = Gio.DBus.system.signal_subscribe(
+                'org.freedesktop.login1',
+                'org.freedesktop.login1.Session',
+                'Lock',
+                null,
+                null,
+                Gio.DBusSignalFlags.NONE,
+                () => {
+                    if (this._lockScreenOverlay) {
+                        this._lockScreenOverlay.lock();
+                    }
+                }
+            );
+        } catch (e) {
+            console.error("[GlobalMenu] Failed to subscribe to login1 Session Lock signal:", e);
         }
 
         // Desktop Live Wallpaper Manager
@@ -2191,6 +2304,13 @@ export default class PulsarosGlobalMenuExtension extends Extension {
                 Gio.DBus.system.signal_unsubscribe(this._prepareForSleepId);
             } catch (e) {}
             this._prepareForSleepId = 0;
+        }
+
+        if (this._login1SessionLockId) {
+            try {
+                Gio.DBus.system.signal_unsubscribe(this._login1SessionLockId);
+            } catch (e) {}
+            this._login1SessionLockId = 0;
         }
 
         if (this._activePowerDialog) {

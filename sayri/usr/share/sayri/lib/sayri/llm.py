@@ -158,6 +158,8 @@ def stream_chat(
                     raise LLMError(_parse_error(r.status_code, detail))
                 full: list[str] = []
                 for line in r.iter_lines():
+                    if isinstance(line, bytes):
+                        line = line.decode("utf-8", errors="replace")
                     if not line or not line.startswith("data:"):
                         continue
                     data = line[5:].strip()
@@ -171,9 +173,14 @@ def stream_chat(
                     if not choices:
                         continue
                     delta = (choices[0].get("delta") or {}).get("content")
-                    if delta:
-                        full.append(delta)
-                        on_delta(delta)
+                    if delta is not None:
+                        if isinstance(delta, bytes):
+                            delta = delta.decode("utf-8", errors="replace")
+                        elif not isinstance(delta, str):
+                            delta = str(delta)
+                        if delta:
+                            full.append(delta)
+                            on_delta(delta)
                 on_done("".join(full))
     except Exception as exc:  # noqa: BLE001 - surface any transport error
         on_error(exc)

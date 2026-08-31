@@ -764,15 +764,15 @@ class RecoveryWindow(Adw.ApplicationWindow):
             debian_packages = [
                 "docker.io",
                 "firmware-linux", "firmware-sof-signed", "firmware-misc-nonfree",
-                "open-vm-tools", "virtualbox-guest-utils", "xserver-xorg-video-qxl",
+                "open-vm-tools", "xserver-xorg-video-qxl",
                 "vlc", "totem", "imagemagick",
                 "gvfs-fuse", "gvfs-backends",
                 "geary", "gnome-music", "gnome-contacts", "gnome-weather",
                 "gnome-clocks",
                 "nvidia-driver", "dkms", "linux-headers-amd64",
                 "xdotool", "python3-xlib",
-                # LocalSend
-                "localsend",
+                # LocalSend is NOT packaged in Debian stable; it is installed
+                # separately from its official .deb below (_install_localsend_debian).
             ]
 
             if is_arch:
@@ -923,6 +923,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     log_msg(f"WARNING: apt finished with code {proc.returncode}")
                 else:
                     log_msg("All extra packages installed successfully.")
+                # LocalSend is not in Debian stable; install from its .deb.
+                self._install_localsend_debian(
+                    log_msg,
+                    ["pkexec", "apt-get"],
+                    "/tmp/LocalSend-latest-linux-x86-64.deb",
+                )
 
             GLib.idle_add(self.update_progress, 1.0, "Extra packages installed successfully!")
             log_msg("Done! All extra packages have been installed.")
@@ -931,6 +937,60 @@ class RecoveryWindow(Adw.ApplicationWindow):
         except Exception as err:
             log_msg(f"FAILED: {err}")
             GLib.idle_add(self.on_installation_failed, str(err))
+
+    def _install_localsend_debian(self, log_msg, apt_prefix, deb_install_path, deb_host_path=None):
+        """Install LocalSend from its official x86-64 .deb (best-effort).
+
+        LocalSend is NOT packaged in Debian stable, so `apt-get install
+        localsend` would fail and abort the whole extra-packages batch. We
+        instead download the latest linux-x86-64 .deb from the official
+        GitHub releases and install it with `apt-get install ./...deb` so any
+        dependencies are resolved automatically. Never raises: a LocalSend
+        failure must not fail the whole install (e.g. when offline).
+
+        - apt_prefix: list that prefixes apt (e.g. ["pkexec","apt-get"] for
+          the live system, or ["chroot","/mnt","apt-get"] inside the chroot).
+        - deb_install_path: path apt will operate on as seen from apt's root
+          (e.g. "/tmp/LocalSend-...deb" inside the chroot).
+        - deb_host_path: host filesystem location to write the .deb. Defaults
+          to deb_install_path (correct for the live system); for a chroot at
+          /mnt it must be "/mnt" + deb_install_path.
+        """
+        import json
+        import urllib.request
+        if deb_host_path is None:
+            deb_host_path = deb_install_path
+        try:
+            req = urllib.request.Request(
+                "https://api.github.com/repos/localsend/localsend/releases/latest",
+                headers={"User-Agent": "PulsarOS-Recovery/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = json.load(resp)
+            asset = next(
+                (a for a in data.get("assets", [])
+                 if a.get("name", "").endswith("linux-x86-64.deb")),
+                None,
+            )
+            if not asset:
+                raise RuntimeError("No linux-x86-64.deb asset found in latest release")
+            tag = data.get("tag_name", "latest")
+            os.makedirs(os.path.dirname(deb_host_path) or "/tmp", exist_ok=True)
+            log_msg(f"Downloading LocalSend {tag} .deb ...")
+            urllib.request.urlretrieve(asset["browser_download_url"], deb_host_path)
+            if not os.path.isfile(deb_host_path) or os.path.getsize(deb_host_path) == 0:
+                raise RuntimeError("Downloaded .deb is missing or empty")
+            log_msg(f"Installing LocalSend {tag} ...")
+            res = subprocess.run(
+                apt_prefix + ["install", "-y", "./" + deb_install_path],
+                capture_output=True, text=True,
+            )
+            if res.returncode != 0:
+                log_msg(f"WARNING: LocalSend install failed: {res.stderr.strip()}")
+            else:
+                log_msg("LocalSend installed successfully.")
+        except Exception as loc_err:
+            log_msg(f"WARNING: could not install LocalSend: {loc_err}")
 
     def build_install_welcome_screen(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -2210,7 +2270,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 "firmware-sof-signed",
                                 "firmware-misc-nonfree",
                                 "open-vm-tools",
-                                "virtualbox-guest-utils",
                                 "xserver-xorg-video-qxl",
                                 "vlc",
                                 "totem",
@@ -2227,8 +2286,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 "linux-headers-amd64",
                                 "xdotool",
                                 "python3-xlib",
-                                # LocalSend
-                                "localsend",
+                                # LocalSend is not in Debian stable; installed
+                                # separately from its official .deb below.
                             ]
                             exec_cmd(["chroot", "/mnt", "apt-get", "update"])
                             # ── Streaming apt install (parse progress) ──
@@ -2269,6 +2328,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 raise Exception(f"apt-get install failed (code {apt_proc.returncode})")
                             log_msg("Post-install: extra packages installed successfully (apt).")
                             extra_packages_installed = True
+                            # LocalSend is not in Debian stable; install from its .deb
+                            # (downloaded to /mnt/tmp so the chroot can see it at /tmp).
+                            self._install_localsend_debian(
+                                log_msg,
+                                ["chroot", "/mnt", "apt-get"],
+                                "/tmp/LocalSend-latest-linux-x86-64.deb",
+                                "/mnt/tmp/LocalSend-latest-linux-x86-64.deb",
+                            )
                         except Exception as post_err:
                             log_msg(f"Post-install apt installation: {post_err}")
                         finally:

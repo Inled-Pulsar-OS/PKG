@@ -1,3 +1,18 @@
+pre_install() {
+    echo "⏹️ Deteniendo instancias activas de Sayri..."
+    pkill -f "python3 -m sayri" 2>/dev/null || true
+    pkill -f "sayri.indicator" 2>/dev/null || true
+    sleep 0.5
+}
+
+pre_upgrade() {
+    pre_install
+}
+
+pre_remove() {
+    pre_install
+}
+
 post_install() {
     gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor 2>/dev/null || true
     update-desktop-database -q /usr/share/applications 2>/dev/null || true

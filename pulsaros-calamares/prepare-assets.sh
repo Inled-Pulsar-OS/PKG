@@ -355,6 +355,7 @@ script:
     - "rm -rf /usr/share/gnome-shell/extensions/places-menu@gnome-shell-extensions.gcampax.github.com"
     - "rm -rf /usr/share/gnome-shell/extensions/window-list@gnome-shell-extensions.gcampax.github.com"
     - "rm -rf /usr/share/gnome-shell/extensions/search-light@icedman.github.com"
+    - "rm -f /etc/sudoers.d/live /etc/sudoers.d/jaime /etc/sudoers.d/pulsar-ootb-live 2>/dev/null || true"
     - "dconf update || true"
 EOF
 

@@ -14,9 +14,9 @@ from gi.repository import Gdk, GLib, Gtk, WebKit  # noqa: E402
 from .cajita import SayriCajita
 from .webkit import pin_window, webview_setup, SCHEME, ensure_scheme
 
-BUBBLE_WIDTH = 420
-BUBBLE_HEIGHT = 380
-GAP = 14
+BUBBLE_WIDTH = 440
+BUBBLE_HEIGHT = 580
+GAP = 22
 MARGIN = 16
 TOP_MARGIN = 44
 
@@ -32,7 +32,7 @@ class SayriOverlay:
         if orb_size < 100 or orb_size > 300:
             orb_size = 140
 
-        width = BUBBLE_WIDTH + GAP + orb_size
+        width = BUBBLE_WIDTH + GAP + orb_size + 24
         height = BUBBLE_HEIGHT
 
         # ── window ──────────────────────────────────────────────────

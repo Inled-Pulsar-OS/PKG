@@ -35,6 +35,12 @@ from . import (  # noqa: E402
     stt as stt_mod,
     tts as tts_mod,
 )
+from sayri.domain.models import AgentProfile, SandboxLevel
+from sayri.domain.agent_engine import AgentEngine
+from sayri.domain.agent_creator import AgentCreator
+from sayri.domain.triggers import TriggerEngine
+from sayri.adapters.sandbox.executor import SandboxExecutor
+from sayri.adapters.storage.sqlite_sessions import SQLiteSessionRepository
 
 APP_ID = "es.inled.sayri"
 HISTORY_MAX = 10
@@ -166,7 +172,65 @@ class SayriApp(Gtk.Application):
         self.cfg.on_change(self._on_config_change)
         self.connect("activate", self._on_activate)
         self.connect("shutdown", self._on_shutdown)
+
+        # Hexagonal Domain & Adapters
+        self.storage = SQLiteSessionRepository()
+        self.sandbox = SandboxExecutor()
+        self.engine = AgentEngine(self.storage, self.sandbox)
+        self.triggers = TriggerEngine()
+        self.active_agent: AgentProfile = AgentCreator.get_agent("default") or AgentProfile(
+            id="default",
+            name="Sayri Principal",
+            description="Asistente de sistema operativo para Pulsar OS",
+            system_prompt="Eres Sayri, la asistente inteligente de Pulsar OS.",
+        )
+        self.active_session_id = self.storage.create_session(agent_id=self.active_agent.id).id
+
         self.hold()
+
+    def new_conversation(self) -> None:
+        """Starts a fresh conversation session."""
+        self.tts.cancel()
+        sound.stop_all()
+        self._current_query_id += 1
+        self.active_session_id = self.storage.create_session(agent_id=self.active_agent.id).id
+        self._set_busy(False)
+        self._assistant_text = ""
+        self.history = []
+        if self.overlay:
+            self.overlay.cajita.set_speaking(False)
+            self.overlay.clear()
+            self.overlay.cajita.clear()
+            self.overlay.cajita.entry.set_text("")
+            self.overlay.cajita.card_overlay.set_visible(False)
+            self.overlay.cajita.update_agent_badge(self.active_agent.name, self.active_agent.sandbox.level.value)
+        self._msg("hint", "✨ Nueva conversación iniciada.")
+        sound.play("activate")
+        print(f"[Sayri] ✨ Started new conversation session: {self.active_session_id}")
+
+    def switch_session(self, session_id: str) -> None:
+        """Loads and switches to an existing conversation session."""
+        self.tts.cancel()
+        sound.stop_all()
+        self._current_query_id += 1
+        sess = self.storage.get_session(session_id)
+        if not sess:
+            return
+        self.active_session_id = sess.id
+        self.active_agent = AgentCreator.get_agent(sess.agent_id) or self.active_agent
+        self.history = []
+        for m in sess.messages:
+            self.history.append((m.role, m.content))
+        self._set_busy(False)
+        self._assistant_text = ""
+        if self.overlay:
+            self.overlay.cajita.set_speaking(False)
+            self.overlay.clear()
+            self.overlay.cajita.update_agent_badge(self.active_agent.name, self.active_agent.sandbox.level.value)
+            self.overlay.cajita.render_session_history(sess.title or "Conversation", sess.messages)
+        self._msg("hint", f"Conversation: {sess.title[:24]}…")
+        sound.play("activate")
+        print(f"[Sayri] Switched to session: {sess.id} ({sess.title})")
 
     # ── public state helpers
     @property
@@ -270,7 +334,7 @@ class SayriApp(Gtk.Application):
 
     def on_shown(self) -> None:
         """Called when Sayri is shown: clean UI, play activation sound, and start listening."""
-        print("[Sayri] 👁️ Overlay shown: cleaning UI and playing activation sound.")
+        print("[Sayri] Overlay shown: cleaning UI and playing activation sound.")
         self._current_query_id += 1
         self.tts.cancel()
         sound.stop_all()
@@ -590,7 +654,7 @@ class SayriApp(Gtk.Application):
 
         return False, ""
 
-    # ── LLM
+    # ── LLM & Agent Engine
     def send_text(self, text: str) -> None:
         text = text.strip()
         if not text:
@@ -602,23 +666,36 @@ class SayriApp(Gtk.Application):
         self.armed = False
         if self.overlay:
             self.overlay.clear()
+            self.overlay.cajita.show_chat_view()
         self._assistant_text = ""
         self._set_busy(True)
         self.set_state("thinking")
         self._msg("user", text)
-        print(f"[Sayri] 🤖 Querying AI ({self.cfg.get_string('provider', 'model')}): \"{text}\"")
+        print(f"[Sayri] 🤖 Querying AI ({self.active_agent.name}): \"{text}\"")
 
-        messages = [{
-            "role": "system",
-            "content": _get_effective_system_prompt(self.cfg),
-        }]
-        for role, content in self.history[-HISTORY_MAX:]:
-            messages.append({"role": role, "content": content})
-        messages.append({"role": "user", "content": text})
-        self.history.append(("user", text))
+        self.engine.process_query(
+            session_id=self.active_session_id,
+            user_text=text,
+            profile=self.active_agent,
+            cfg=self.cfg,
+            on_delta=lambda d: GLib.idle_add(self._on_delta, d, query_id),
+            on_done=lambda full: GLib.idle_add(self._finish_engine_reply, full, query_id),
+            on_tool_start=lambda cmd: GLib.idle_add(self._msg, "hint", f"⚙️ Ejecutando: {cmd[:36]}…"),
+            on_tool_finish=lambda cmd, out, code: GLib.idle_add(
+                lambda: self.overlay and self.overlay.cajita.set_tool_output(cmd, out)
+            ),
+            on_error=lambda e: GLib.idle_add(self._on_error, e, query_id),
+        )
 
-        threading.Thread(target=self._llm_worker, args=(messages, 1, query_id),
-                         daemon=True).start()
+    def _finish_engine_reply(self, full: str, query_id: int = 0) -> None:
+        if query_id != self._current_query_id:
+            return
+        if full:
+            self._assistant_text = full
+            self._set_assistant(full)
+            self.history.append(("assistant", full))
+            self.history = self.history[-HISTORY_MAX * 2:]
+        self._finish_reply(full, query_id)
 
     def _llm_worker(self, messages: list[dict], depth: int = 1, query_id: int = 0) -> None:
         if query_id != self._current_query_id:
@@ -640,6 +717,10 @@ class SayriApp(Gtk.Application):
     def _on_delta(self, delta: str, query_id: int = 0) -> None:
         if query_id != self._current_query_id:
             return
+        if isinstance(delta, bytes):
+            delta = delta.decode("utf-8", errors="replace")
+        elif not isinstance(delta, str):
+            delta = str(delta) if delta is not None else ""
         self._assistant_text += delta
         self._set_assistant(self._assistant_text)
 
@@ -780,6 +861,10 @@ class SayriApp(Gtk.Application):
             self.overlay.toggle()
 
     def open_settings(self) -> None:
+        if self.overlay:
+            self.overlay.show()
+            self.overlay.cajita.switch_tab("settings")
+            return
         import subprocess
         import sys
         try:

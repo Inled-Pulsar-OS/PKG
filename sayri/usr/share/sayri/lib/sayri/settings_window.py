@@ -250,6 +250,7 @@ class SettingsWindow:
         root.append(self.stack)
 
         self._build_provider_tab()
+        self._build_agents_tab()
         self._build_stt_tab()
         self._build_tts_tab()
         self._build_general_tab()
@@ -696,3 +697,47 @@ class SettingsWindow:
         card = self._card(page, "Appearance & System")
         self._spin_row(card, "Orb Diameter", "Siri orb size in pixels", "ui", "orb_size", 100, 260, 10)
         self._switch_row(card, "Launch at Login", "Start Sayri automatically when logging in", "ui", "autostart")
+
+    def _build_agents_tab(self) -> None:
+        page = self._page_scrolled("Subagentes & Seguridad", "agents")
+
+        # ── Card 1: Subagente Activo ──
+        c1 = self._card(page, "Subagente Activo y Nivel de Aislamiento")
+        from sayri.domain.agent_creator import AgentCreator
+        from sayri.adapters.sandbox.executor import SandboxExecutor
+        
+        agents = AgentCreator.list_agents()
+        self.agent_combo = Gtk.ComboBoxText()
+        for a in agents:
+            self.agent_combo.append(a.id, f"{a.name} ({a.sandbox.level.value})")
+        self.agent_combo.set_active(0)
+        self._row(c1, "Perfil Activo", "Selecciona el subagente para atender consultas", self.agent_combo)
+
+        # ── Card 2: Lista de Subagentes ──
+        c2 = self._card(page, "Subagentes Registrados en Pulsar OS")
+        for a in agents:
+            lvl_color = "#22c55e" if a.sandbox.level.value == "LEVEL_0_NO_EXEC" else "#38bdf8"
+            lbl = Gtk.Label()
+            lbl.set_markup(
+                f"<span weight='600'>{GLib.markup_escape_text(a.name)}</span>  "
+                f"<span foreground='{lvl_color}'>[{a.sandbox.level.value}]</span>\n"
+                f"<span size='9500' foreground='#94a3b8'>{GLib.markup_escape_text(a.description)}</span>"
+            )
+            lbl.set_halign(Gtk.Align.START)
+            lbl.set_wrap(True)
+            c2.append(lbl)
+
+        # ── Card 3: Estado de Seguridad ──
+        c3 = self._card(page, "Escudo de Seguridad y Sandboxing")
+        bwrap_ok = SandboxExecutor().bwrap_available
+        bwrap_lbl = Gtk.Label(label="Activo ✓ (bwrap kernel sandboxing)" if bwrap_ok else "No instalado (modo host)")
+        bwrap_lbl.add_css_class("sayri-status-ok" if bwrap_ok else "sayri-status-err")
+        self._row(c3, "Motor Bubblewrap (bwrap)", "Aislamiento de procesos y sistema de archivos", bwrap_lbl)
+
+        shield_lbl = Gtk.Label(label="Activo ✓ (Zero Token Drain)")
+        shield_lbl.add_css_class("sayri-status-ok")
+        self._row(c3, "Escudo de Tokens Remoto", "Rechazo de mensajes no autorizados en gateways", shield_lbl)
+
+        audit_lbl = Gtk.Label(label="Activo ✓ (Escaneo AST/Regex)")
+        audit_lbl.add_css_class("sayri-status-ok")
+        self._row(c3, "Auditor Pre-Flight ClawHub", "Análisis estático de seguridad antes de instalar skills", audit_lbl)

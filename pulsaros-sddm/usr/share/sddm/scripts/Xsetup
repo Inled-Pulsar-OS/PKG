@@ -5,5 +5,45 @@
 if command -v xrandr >/dev/null 2>&1; then
     xrandr --setprovideroutputsource 1 0 2>/dev/null || true
     xrandr --setprovideroutputsource 2 0 2>/dev/null || true
-    xrandr --auto
+
+    # Extract all connected outputs
+    CONNECTED=$(xrandr --query 2>/dev/null | awk '/ connected/ {print $1}')
+
+    # Detect internal / primary display (prefer eDP, LVDS, DSI)
+    PRIMARY=""
+    for out in $CONNECTED; do
+        case "$out" in
+            eDP*|LVDS*|DSI*)
+                PRIMARY="$out"
+                break
+                ;;
+        esac
+    done
+
+    # Fallback to first connected output if no internal screen was found
+    if [ -z "$PRIMARY" ]; then
+        PRIMARY=$(echo "$CONNECTED" | head -n1)
+    fi
+
+    if [ -n "$PRIMARY" ]; then
+        CMD="xrandr --output $PRIMARY --auto --primary"
+        PREV="$PRIMARY"
+        for out in $CONNECTED; do
+            if [ "$out" != "$PRIMARY" ]; then
+                CMD="$CMD --output $out --auto --right-of $PREV"
+                PREV="$out"
+            fi
+        done
+
+        # Turn off disconnected displays to prevent virtual framebuffer stretching or ghost displays
+        DISCONNECTED=$(xrandr --query 2>/dev/null | awk '/ disconnected/ {print $1}')
+        for disc in $DISCONNECTED; do
+            CMD="$CMD --output $disc --off"
+        done
+
+        eval "$CMD" 2>/dev/null || xrandr --auto 2>/dev/null || true
+    else
+        xrandr --auto 2>/dev/null || true
+    fi
 fi
+

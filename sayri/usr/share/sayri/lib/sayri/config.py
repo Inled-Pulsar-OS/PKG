@@ -153,7 +153,6 @@ class Config:
     def get_bool(self, group: str, key: str) -> bool:
         return bool(self.get(group, key))
 
-    # ------------------------------------------------------------- setters
     def set(self, group: str, key: str, value: object, persist: bool = True) -> None:
         self._set(group, key, value)
         if persist:
@@ -163,6 +162,18 @@ class Config:
                     cb(group, key, value)
                 except Exception as exc:  # noqa: BLE001 - UI callbacks must not kill us
                     print(f"[sayri] config listener error: {exc}")
+
+    def set_string(self, group: str, key: str, value: str, persist: bool = True) -> None:
+        self.set(group, key, str(value), persist=persist)
+
+    def set_int(self, group: str, key: str, value: int, persist: bool = True) -> None:
+        self.set(group, key, int(value), persist=persist)
+
+    def set_float(self, group: str, key: str, value: float, persist: bool = True) -> None:
+        self.set(group, key, float(value), persist=persist)
+
+    def set_bool(self, group: str, key: str, value: bool, persist: bool = True) -> None:
+        self.set(group, key, bool(value), persist=persist)
 
     def on_change(self, callback: callable) -> None:
         self._listeners.append(callback)

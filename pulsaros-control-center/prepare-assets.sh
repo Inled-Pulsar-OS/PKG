@@ -96,7 +96,15 @@ echo "🏷️ [EN] Build tag: $FULL_TAG"
 if [ "$(id -u)" -eq 0 ]; then
     echo "📦 [ES] Instalando dependencias de compilación..."
     echo "📦 [EN] Installing build dependencies..."
+    # Mirrors Debian trixie's official gnome-control-center 48 Build-Depends
+    # (sources.debian.org, gnome-control-center 1:48.4-1~deb13u1) plus build
+    # tooling (build-essential, meson, ninja, git, gettext, blueprint-compiler).
+    # libpulse-dev: required by the bundled gvc subproject (libpulse +
+    # libpulse-mainloop-glib); libmalcontent-0-dev: correct trixie name.
+    # libtracker-sparql-3.0-dev (transitional to libtinysparql-dev) pulls in the
+    # full tracker/tinysparql dev stack for panels that need tracker-sparql-3.0.
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        build-essential \
         meson \
         ninja-build \
         git \
@@ -105,16 +113,26 @@ if [ "$(id -u)" -eq 0 ]; then
         libgtk-4-dev \
         libadwaita-1-dev \
         libgnome-desktop-4-dev \
+        libgnome-bg-4-dev \
+        libgnome-rr-4-dev \
+        libgnome-bluetooth-ui-3.0-dev \
+        libcolord-dev \
         libcolord-gtk4-dev \
         libgoa-1.0-dev \
+        libgoa-backend-1.0-dev \
         libgtop2-dev \
+        libgudev-1.0-dev \
+        libupower-glib-dev \
         libpwquality-dev \
         libnm-dev \
+        libnma-gtk4-dev \
         libsecret-1-dev \
         libpolkit-gobject-1-dev \
-        libmalcontent-dev \
+        libmalcontent-0-dev \
         libaccountsservice-dev \
         libglib2.0-dev \
+        libgdk-pixbuf-2.0-dev \
+        libgirepository1.0-dev \
         libgsound-dev \
         libjson-glib-dev \
         libsoup-3.0-dev \
@@ -124,6 +142,18 @@ if [ "$(id -u)" -eq 0 ]; then
         libgnutls28-dev \
         libxi-dev \
         libx11-dev \
+        libxft-dev \
+        libxklavier-dev \
+        libxml2-dev \
+        libxml2-utils \
+        libcups2-dev \
+        libgcr-4-dev \
+        libsmbclient-dev \
+        libudisks2-dev \
+        libpulse-dev \
+        libtracker-sparql-3.0-dev \
+        gnome-settings-daemon-dev \
+        gsettings-desktop-schemas-dev \
         docbook-xsl \
         xsltproc \
         modemmanager-dev \
@@ -224,6 +254,27 @@ if ! $IS_DEBIAN_HOST && [ -d "$DEBIAN_CHROOT/usr/bin" ]; then
     pkexec cp -rf "$SRC_DIR" "$CHROOT_BUILD_ROOT/src"
     
     pkexec chroot "$DEBIAN_CHROOT" /bin/bash -c "
+        set -e
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update || true
+        apt-get install -y --no-install-recommends \
+            build-essential cmake meson ninja-build git gettext blueprint-compiler \
+            libgtk-4-dev libadwaita-1-dev libgnome-desktop-4-dev libgnome-bg-4-dev \
+            libgnome-rr-4-dev libgnome-bluetooth-ui-3.0-dev \
+            libcolord-dev libcolord-gtk4-dev libgoa-1.0-dev libgoa-backend-1.0-dev \
+            libgtop2-dev libgudev-1.0-dev libupower-glib-dev \
+            libpwquality-dev libnm-dev libnma-gtk4-dev \
+            libsecret-1-dev libpolkit-gobject-1-dev \
+            libmalcontent-0-dev libaccountsservice-dev \
+            libglib2.0-dev libgdk-pixbuf-2.0-dev libgirepository1.0-dev \
+            libgsound-dev libjson-glib-dev libsoup-3.0-dev \
+            libwacom-dev libibus-1.0-dev libkrb5-dev libgnutls28-dev \
+            libxi-dev libx11-dev libxft-dev libxklavier-dev \
+            libxml2-dev libxml2-utils libcups2-dev libgcr-4-dev \
+            libsmbclient-dev libudisks2-dev libpulse-dev \
+            libtracker-sparql-3.0-dev \
+            gnome-settings-daemon-dev gsettings-desktop-schemas-dev \
+            docbook-xsl xsltproc modemmanager-dev libmm-glib-dev udisks2
         cd /tmp/gcc-chroot-build
         meson setup \
             --prefix=/usr \

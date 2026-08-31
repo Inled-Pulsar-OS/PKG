@@ -69,6 +69,26 @@ def skills_dir() -> str:
     return os.path.join(config_dir(), "skills")
 
 
+def agents_dir() -> str:
+    return os.path.join(config_dir(), "agents")
+
+
+def plugins_dir() -> str:
+    return os.path.join(config_dir(), "plugins")
+
+
+def triggers_dir() -> str:
+    return os.path.join(config_dir(), "triggers")
+
+
+def sandboxes_dir() -> str:
+    return os.path.join(state_dir(), "sandboxes")
+
+
+def sessions_db() -> str:
+    return os.path.join(state_dir(), "sessions.db")
+
+
 def memory_file() -> str:
     return os.path.join(config_dir(), "memory.md")
 
@@ -93,7 +113,18 @@ def find_sound(name: str) -> Optional[str]:
 
 
 def ensure_dirs() -> None:
-    for d in (config_dir(), skills_dir(), models_dir(), voices_dir(), bin_dir(), tmp_dir()):
+    for d in (
+        config_dir(),
+        skills_dir(),
+        agents_dir(),
+        plugins_dir(),
+        triggers_dir(),
+        sandboxes_dir(),
+        models_dir(),
+        voices_dir(),
+        bin_dir(),
+        tmp_dir(),
+    ):
         os.makedirs(d, exist_ok=True)
 
     uf = user_file()

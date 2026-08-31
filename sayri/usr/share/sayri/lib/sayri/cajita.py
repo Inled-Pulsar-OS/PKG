@@ -1,23 +1,48 @@
-"""Apple-Intelligence style Cajita widget matching macOS / iPadOS Siri UI (GTK4).
+"""Apple-Intelligence style Cajita widget for Sayri (GTK4).
 
 Features:
-- Top Input Pill with Siri/Settings button, live transcription text entry, and Mic toggle.
-  - Border glow activates when speech is detected or typing.
-  - Border glow rotates around the pill while processing (thinking).
-- Bottom Response Card with frosted acrylic card.
-  - Border glow rotates around the response card during TTS dictation playback (speaking).
+- Top Input Pill with native Siri/Sayri tray PNG icon, transcription entry, history toggle, and Mic toggle.
+- Dynamic Localized Outward Wave & Shadow Glow (#7c166e, #1e74fb, #0b1533):
+  * Outward wave pulses radiate specifically from localized crest sections.
+  * Internal padding prevents clipping against container edges and adjacent WebKit Orb.
+- Bottom Acrylic Card with multi-view Stack:
+  1. Live Chat Response Mode (Full Pango Markdown rendering with headers, bold, code, lists, larger typography, centered, no top clipping)
+  2. Conversation History Manager (Toggleable, rename, delete, switch)
+  3. Historical Thread Transcript Inspector
+  4. Subagents Manager (with Sandboxing, Gateway selection, Store instructions, and Delete)
+  5. Channel Gateways & Plugins Manager (Discord, Telegram, MCP with Store & Voice instructions)
+  6. Zero-Plaintext Secrets Vault (Token Shield with prompt copy & clear explanation)
+  7. In-Card Preferences & Live Progress Downloader (Whisper STT models/binaries with % bar, Piper TTS voices/binaries with % bar)
 """
 
 from __future__ import annotations
 
 import math
+import os
+import re
+import threading
 import time
+from pathlib import Path
+from typing import Any, Optional
 
 import cairo
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gdk, GLib, Gtk, Pango  # noqa: E402
+gi.require_version("Gdk", "4.0")
+gi.require_version("GdkPixbuf", "2.0")
+gi.require_version("Pango", "1.0")
+from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, Pango  # noqa: E402
+
+from sayri import downloads, paths
+from sayri.domain.agent_creator import AgentCreator
+from sayri.domain.models import (
+    AgentModelConfig,
+    AgentProfile,
+    SandboxConfig,
+    SandboxLevel,
+)
+from sayri.domain.secrets_manager import secrets_manager
 
 CAJITA_CSS = b"""
 .sayri-cajita-container,
@@ -58,273 +83,444 @@ entry selection,
 entry text selection,
 entry.sayri-pill-entry text selection,
 entry.sayri-pill-entry selection {
-    background-color: #38bdf8;
-    color: #0f172a;
+    background-color: rgba(30, 116, 251, 0.45);
+    color: #ffffff;
 }
 
 button.sayri-icon-btn,
-button.sayri-icon-btn:hover,
-button.sayri-icon-btn:active,
-button.sayri-icon-btn:focus,
-button.sayri-icon-btn:checked,
-button.sayri-icon-btn:disabled,
 button.sayri-icon-btn:backdrop,
 button.sayri-icon-btn * {
     background: none;
     background-color: transparent;
     background-image: none;
     border: none;
-    border-radius: 0;
+    border-radius: 8px;
     box-shadow: none;
     outline: none;
-    color: #f1f5f9;
+    color: #94a3b8;
     min-width: 28px;
     min-height: 28px;
     padding: 0 4px;
+    transition: all 120ms ease;
 }
 
-.sayri-response-card {
-    background-color: rgba(14, 18, 26, 0.96);
-    background: rgba(14, 18, 26, 0.96);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    border-radius: 20px;
-    padding: 16px 20px;
-    min-height: 48px;
-}
-
-.sayri-response-card-rotating {
-    border: 1.5px solid #a855f7;
-    box-shadow: 0 0 16px rgba(168, 85, 247, 0.65), 0 0 32px rgba(56, 189, 248, 0.45);
-}
-
-window:backdrop,
-window.sayri-overlay:backdrop,
-.sayri-overlay:backdrop,
-.sayri-overlay *:backdrop,
-.sayri-cajita-container:backdrop,
-.sayri-pill-container:backdrop,
-.sayri-response-label,
-.sayri-response-label:backdrop,
-label.sayri-response-label,
-label.sayri-response-label:backdrop,
-label:backdrop,
-scrolledwindow:backdrop,
-viewport:backdrop {
-    opacity: 1.0;
+button.sayri-icon-btn:hover {
+    background-color: rgba(255, 255, 255, 0.12);
     color: #ffffff;
+}
+
+.sayri-tab-btn {
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 9999px;
+    padding: 2px 9px;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 100ms ease;
+}
+
+.sayri-tab-btn:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.sayri-tab-btn.active {
+    background-color: rgba(30, 116, 251, 0.25);
+    border-color: rgba(30, 116, 251, 0.65);
+    color: #ffffff;
+}
+
+.sayri-action-btn {
+    background-color: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 6px;
+    padding: 3px 8px;
+    color: #e2e8f0;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.sayri-action-btn:hover {
+    background-color: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+}
+
+.sayri-action-btn.primary {
+    background-color: rgba(30, 116, 251, 0.35);
+    border-color: rgba(30, 116, 251, 0.70);
+    color: #ffffff;
+}
+
+.sayri-card-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 10px;
+    padding: 7px 11px;
+    transition: all 100ms ease;
+}
+
+.sayri-card-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.16);
+}
+
+.sayri-card-item-active {
+    border-color: rgba(30, 116, 251, 0.55);
+    background: rgba(30, 116, 251, 0.10);
+}
+
+.sayri-response-label {
+    color: #f8fafc;
+    font-size: 15.5px;
+    line-height: 1.65;
+    font-weight: 450;
+    margin-top: 6px;
+    margin-bottom: 6px;
 }
 
 .sayri-cmd-expander {
     color: #38bdf8;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     margin-top: 4px;
-    margin-bottom: 4px;
-}
-
-.sayri-cmd-expander title {
-    color: #38bdf8;
 }
 
 .sayri-terminal-label {
     font-family: monospace, monospace;
-    font-size: 12.5px;
+    font-size: 12px;
     line-height: 1.4;
     padding: 8px 10px;
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(11, 21, 51, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
-    color: #e2e8f0;
+    color: #38bdf8;
+}
+
+.sayri-settings-entry {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    padding: 4px 8px;
+    color: #ffffff;
+    font-size: 12px;
+}
+
+.sayri-settings-entry:focus {
+    border-color: rgba(30, 116, 251, 0.6);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.sayri-info-banner {
+    background: rgba(30, 116, 251, 0.08);
+    border: 1px solid rgba(30, 116, 251, 0.25);
+    border-radius: 8px;
+    padding: 7px 10px;
+    color: #93c5fd;
+    font-size: 11.5px;
+    line-height: 1.4;
+}
+
+progressbar.sayri-progress {
+    min-height: 4px;
+    border-radius: 9999px;
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+progressbar.sayri-progress > trough > progress {
+    background: linear-gradient(90deg, #7c166e, #1e74fb);
+    border-radius: 9999px;
 }
 """
 
-def _find_sayri_icon() -> bytes | None:
-    """Locate the installed sayri icon PNG for the cajita button."""
-    import os
-    for candidate in (
-        "/usr/share/icons/hicolor/48x48/apps/sayri.png",
+SVG_MIC = """<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>
+</svg>"""
+
+SVG_MIC_ACTIVE = """<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+<rect x="9" y="2" width="6" height="12" rx="3" fill="#ec4899" fill-opacity="0.3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>
+</svg>"""
+
+SVG_HISTORY = """<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>
+</svg>"""
+
+SVG_PLUS = """<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+</svg>"""
+
+SVG_EDIT = """<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+</svg>"""
+
+SVG_TRASH = """<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+</svg>"""
+
+SVG_COPY = """<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+</svg>"""
+
+
+def _svg_icon(svg_str: str) -> Gtk.Image:
+    try:
+        loader = GdkPixbuf.PixbufLoader.new_with_type("svg")
+        loader.write(svg_str.encode("utf-8"))
+        loader.close()
+        pixbuf = loader.get_pixbuf()
+        if pixbuf:
+            tex = Gdk.Texture.new_for_pixbuf(pixbuf)
+            return Gtk.Image.new_from_paintable(tex)
+    except Exception:
+        pass
+    img = Gtk.Image.new_from_icon_name("image-missing")
+    img.set_pixel_size(16)
+    return img
+
+
+def get_sayri_logo_widget(size: int = 24) -> Gtk.Widget:
+    """Loads the official appindicator Siri/Sayri tray PNG icon."""
+    icon_paths = [
+        "/usr/share/icons/hicolor/256x256/apps/sayri-tray.png",
+        os.path.expanduser("~/Documentos/pulsar/PKG/sayri/usr/share/icons/hicolor/256x256/apps/sayri-tray.png"),
+        "/usr/share/icons/hicolor/scalable/apps/sayri-tray.png",
         "/usr/share/icons/hicolor/256x256/apps/sayri.png",
-        os.path.join(os.path.dirname(__file__), "..", "..", "..", "icons", "hicolor", "48x48", "apps", "sayri.png"),
-    ):
-        if os.path.isfile(candidate):
-            with open(candidate, "rb") as f:
-                return f.read()
-    return None
-
-_SAYRI_ICON_BYTES = _find_sayri_icon()
-
-SVG_SIRI_ICON = b"""<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#a855f7" stroke-width="2.2"/><path d="M6 12c3-4 9-4 12 0" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round"/><path d="M6 12c3 4 9 4 12 0" stroke="#ec4899" stroke-width="2.2" stroke-linecap="round"/></svg>"""
-
-SVG_MIC = b"""<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f1f5f9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>"""
-
-SVG_MIC_ACTIVE = b"""<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#ffffff" stroke="none"><circle cx="12" cy="12" r="6"/></svg>"""
-
-SVG_CLOSE = b"""<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>"""
+    ]
+    for p in icon_paths:
+        if os.path.isfile(p):
+            try:
+                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(p, size, size, True)
+                if pixbuf:
+                    tex = Gdk.Texture.new_for_pixbuf(pixbuf)
+                    pic = Gtk.Picture.new_for_paintable(tex)
+                    pic.set_size_request(size, size)
+                    pic.set_valign(Gtk.Align.CENTER)
+                    pic.set_halign(Gtk.Align.CENTER)
+                    return pic
+            except Exception:
+                pass
+    img = Gtk.Image.new_from_icon_name("sayri-tray")
+    img.set_pixel_size(size)
+    return img
 
 
 def markdown_to_pango(text: str) -> str:
-    """Convert standard Markdown to formatted Pango markup with bright white text."""
+    """Converts markdown text to valid Pango markup format."""
+    # 1. Protect code blocks
+    code_blocks = []
+    def _cb_repl(m):
+        code_blocks.append(m.group(2))
+        return f"__CODE_BLOCK_{len(code_blocks)-1}__"
+    text = re.sub(r"```([a-zA-Z0-9_\-]*)\n?(.*?)```", _cb_repl, text, flags=re.DOTALL)
+
+    # 2. Protect inline code
+    inline_codes = []
+    def _ic_repl(m):
+        inline_codes.append(m.group(1))
+        return f"__INLINE_CODE_{len(inline_codes)-1}__"
+    text = re.sub(r"`([^`]+)`", _ic_repl, text)
+
+    # 3. Escape XML/HTML special characters
+    text = GLib.markup_escape_text(text)
+
+    # 4. Headers
+    text = re.sub(r"(?m)^###\s+(.*?)$", r"<b><span foreground='#38bdf8' size='11000'>\1</span></b>", text)
+    text = re.sub(r"(?m)^##\s+(.*?)$", r"<b><span foreground='#c084fc' size='12000'>\1</span></b>", text)
+    text = re.sub(r"(?m)^#\s+(.*?)$", r"<b><span foreground='#ffffff' size='13500'>\1</span></b>", text)
+
+    # 5. Bold & Italics
+    text = re.sub(r"\*\*\*(.+?)\*\*\*", r"<b><i>\1</i></b>", text)
+    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+    text = re.sub(r"\*(.+?)\*", r"<i>\1</i>", text)
+
+    # 6. Bullet lists
+    text = re.sub(r"(?m)^[\*\-]\s+(.*?)$", r"  • \1", text)
+
+    # 7. Restore inline codes
+    for i, code in enumerate(inline_codes):
+        esc_c = GLib.markup_escape_text(code)
+        text = text.replace(f"__INLINE_CODE_{i}__", f"<span font_family='monospace' foreground='#38bdf8'> {esc_c} </span>")
+
+    # 8. Restore code blocks
+    for i, code in enumerate(code_blocks):
+        esc_c = GLib.markup_escape_text(code.strip())
+        text = text.replace(f"__CODE_BLOCK_{i}__", f"\n<span font_family='monospace' foreground='#93c5fd'>\n{esc_c}\n</span>\n")
+
+    return text
+
+
+def _safe_set_markup(label: Gtk.Label, text: str) -> None:
     if not text:
-        return ""
-    import re
-    escaped = GLib.markup_escape_text(text)
-    escaped = re.sub(
-        r"```(?:[a-zA-Z0-9_\-]+)?\n?(.*?)\n?```",
-        r"\n<span font_family='monospace' foreground='#38bdf8'>\1</span>\n",
-        escaped,
-        flags=re.DOTALL
-    )
-    escaped = re.sub(r"`([^`]+)`", r"<tt><span foreground='#38bdf8'><b>\1</b></span></tt>", escaped)
-    escaped = re.sub(r"\*\*([^\*]+)\*\*", r"<b>\1</b>", escaped)
-    escaped = re.sub(r"__([^_]+)__", r"<b>\1</b>", escaped)
-    escaped = re.sub(r"(?<!\*)\*(?!\*)([^\*\n]+?)(?<!\*)\*(?!\*)", r"<i>\1</i>", escaped)
-    escaped = re.sub(r"(?<!\w)_([^\_\n]+?)_(?!\w)", r"<i>\1</i>", escaped)
-    escaped = re.sub(r"^(?:#{1,6})\s+(.+)$", r"<b><span size='13000' foreground='#38bdf8'>\1</span></b>", escaped, flags=re.MULTILINE)
-    escaped = re.sub(r"^[\*\-]\s+(.+)$", r"  • \1", escaped, flags=re.MULTILINE)
-    escaped = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"<span foreground='#38bdf8'><u>\1</u></span>", escaped)
-    return f"<span foreground='#ffffff' size='12000' weight='500'>{escaped}</span>"
-
-
-_TEXTURE_CACHE: dict[bytes, Gdk.Texture] = {}
-
-
-def _svg_icon(svg_bytes: bytes) -> Gtk.Widget:
+        label.set_attributes(Pango.AttrList())
+        label.set_text("")
+        return
     try:
-        if svg_bytes not in _TEXTURE_CACHE:
-            _TEXTURE_CACHE[svg_bytes] = Gdk.Texture.new_from_bytes(GLib.Bytes.new(svg_bytes))
-        pic = Gtk.Picture.new_for_paintable(_TEXTURE_CACHE[svg_bytes])
-        pic.set_content_fit(Gtk.ContentFit.CONTAIN)
-        pic.set_size_request(16, 16)
-        pic.set_valign(Gtk.Align.CENTER)
-        pic.set_halign(Gtk.Align.CENTER)
-        return pic
+        markup = markdown_to_pango(text)
+        label.set_markup(markup)
+        return
     except Exception:
-        return Gtk.Box()
+        pass
+    label.set_attributes(Pango.AttrList())
+    label.set_text(text)
 
 
 class ChromaBackground(Gtk.DrawingArea):
-    """Draws frosted acrylic surface with dynamic Apple Intelligence Chroma-Ring glow."""
+    """Frosted Glass background with localized outward wave glow using palette #7c166e, #1e74fb, #0b1533."""
 
-    def __init__(self, is_pill: bool = True) -> None:
+    def __init__(self, is_pill: bool = True):
         super().__init__()
         self.is_pill = is_pill
-        self.mode = "idle"  # "idle", "active", "rotating"
-        self.phase = 0.0
-        self.last_tick = time.monotonic()
-        self.speed = 2.0
-        self.audio_level = 0.0
-
-        self.set_hexpand(True)
-        self.set_vexpand(True)
+        self.mode = "idle"  # "idle" | "active" | "thinking" | "speaking"
+        self.angle = 0.0
+        self._anim_tag = None
+        self._memory_bloom_alpha = 0.0
         self.set_draw_func(self._draw)
-        self.add_tick_callback(self._on_tick)
 
     def set_mode(self, mode: str) -> None:
-        if self.mode != mode:
-            self.mode = mode
-            if mode == "rotating":
-                self.speed = 3.5
-            else:
-                self.speed = 1.8
-            self.queue_draw()
-
-    def set_audio_level(self, lvl: float) -> None:
-        self.audio_level = lvl
-        if self.mode != "idle":
-            self.queue_draw()
-
-    def _on_tick(self, _widget, _frame_clock) -> bool:
-        if self.mode == "idle" or not self.get_mapped():
-            return GLib.SOURCE_CONTINUE
-        now = time.monotonic()
-        dt = min(0.1, now - self.last_tick)
-        self.last_tick = now
-        if self.mode in ("active", "rotating"):
-            self.phase = (self.phase + dt * self.speed) % (2.0 * math.pi)
-            self.queue_draw()
-        return GLib.SOURCE_CONTINUE
-
-    def _draw_rounded_rect(self, cr: cairo.Context, x: float, y: float, w: float, h: float, r: float) -> None:
-        cr.new_sub_path()
-        cr.arc(x + w - r, y + r, r, -math.pi / 2.0, 0)
-        cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2.0)
-        cr.arc(x + r, y + h - r, r, math.pi / 2.0, math.pi)
-        cr.arc(x + r, y + r, r, math.pi, 3.0 * math.pi / 2.0)
-        cr.close_path()
-
-    def _draw(self, _area, cr: cairo.Context, w: int, h: int) -> None:
-        if w <= 0 or h <= 0:
+        if self.mode == mode:
             return
+        self.mode = mode
+        if mode in ("active", "thinking", "speaking"):
+            if not self._anim_tag:
+                self._anim_tag = GLib.timeout_add(16, self._on_tick)
+        else:
+            if self._anim_tag:
+                GLib.source_remove(self._anim_tag)
+                self._anim_tag = None
+        self.queue_draw()
 
-        pad = 4.0
-        r = (h - 2 * pad) / 2.0 if self.is_pill else 18.0
-        bx = pad
-        by = pad
-        bw = w - 2 * pad
-        bh = h - 2 * pad
+    def trigger_memory_effect(self) -> None:
+        self._memory_bloom_alpha = 1.0
+        self.queue_draw()
+        def _fade_step():
+            self._memory_bloom_alpha -= 0.05
+            if self._memory_bloom_alpha <= 0.0:
+                self._memory_bloom_alpha = 0.0
+                self.queue_draw()
+                return False
+            self.queue_draw()
+            return True
+        GLib.timeout_add(20, _fade_step)
 
-        cx = w / 2.0
-        cy = h / 2.0
-        t = self.phase
+    def _on_tick(self) -> bool:
+        if self.mode == "thinking":
+            self.angle = (self.angle + 0.085) % (2 * math.pi)
+        elif self.mode == "speaking":
+            self.angle = (self.angle + 0.035) % (2 * math.pi)
+        elif self.mode == "active":
+            self.angle = (self.angle + 0.022) % (2 * math.pi)
+        else:
+            return False
+        self.queue_draw()
+        return True
 
-        # 1. Frosted Dark Glass Interior
-        self._draw_rounded_rect(cr, bx, by, bw, bh, r)
-        cr.set_source_rgba(0.08, 0.09, 0.14, 0.98 if not self.is_pill else 0.92)
-        cr.fill()
+    def _draw(self, area, cr: cairo.Context, w: int, h: int) -> None:
+        pad = 6.0
+        r = (24.0 if self.is_pill else 18.0)
+        bx, by, bw, bh = pad, pad, w - 2 * pad, h - 2 * pad
 
-        # 2. Border & Glow rendering based on state
-        if self.mode == "idle":
-            # Subtle neutral acrylic glass border
-            self._draw_rounded_rect(cr, bx, by, bw, bh, r)
-            cr.set_source_rgba(1.0, 1.0, 1.0, 0.14)
-            cr.set_line_width(1.0)
+        # 1. Dark Frosted Glass Background
+        cr.save()
+        self._rounded_rect(cr, bx, by, bw, bh, r)
+        cr.clip()
+
+        cr.set_source_rgba(0.05, 0.08, 0.14, 0.96)
+        cr.paint()
+
+        # Memory bloom effect
+        if self._memory_bloom_alpha > 0.0:
+            rg = cairo.RadialGradient(w / 2, h / 2, 10, w / 2, h / 2, max(w, h) / 1.2)
+            rg.add_color_stop_rgba(0.0, 0.486, 0.086, 0.431, self._memory_bloom_alpha * 0.50) # #7c166e
+            rg.add_color_stop_rgba(0.5, 0.118, 0.455, 0.984, self._memory_bloom_alpha * 0.35) # #1e74fb
+            rg.add_color_stop_rgba(1.0, 0.043, 0.082, 0.200, 0.0)                             # #0b1533
+            cr.set_source(rg)
+            cr.paint()
+
+        cr.restore()
+
+        # 2. Outward Localized Wave & Glow
+        cr.save()
+        if self.mode in ("active", "thinking", "speaking"):
+            wave_cos = math.cos(self.angle)
+            wave_sin = math.sin(self.angle)
+
+            # Palette: #7c166e (Magenta), #1e74fb (Electric Blue), #0b1533 (Midnight Navy)
+            lg = cairo.LinearGradient(
+                w / 2 + wave_cos * (w / 1.5),
+                h / 2 + wave_sin * (h / 1.5),
+                w / 2 - wave_cos * (w / 1.5),
+                h / 2 - wave_sin * (h / 1.5),
+            )
+            lg.add_color_stop_rgba(0.00, 0.486, 0.086, 0.431, 0.98) # #7c166e
+            lg.add_color_stop_rgba(0.40, 0.118, 0.455, 0.984, 0.98) # #1e74fb
+            lg.add_color_stop_rgba(0.75, 0.486, 0.086, 0.431, 0.98) # #7c166e
+            lg.add_color_stop_rgba(1.00, 0.043, 0.082, 0.200, 0.98) # #0b1533
+
+            # Asymmetric wave crest radiating outward at specific angles
+            wave_factor = 0.5 + 0.5 * math.sin(self.angle * 2.0)
+            if self.mode == "thinking":
+                outward_bloom = 8.0 * wave_factor
+                core_width = 2.8 + 1.2 * wave_factor
+            elif self.mode == "speaking":
+                outward_bloom = 6.0 * wave_factor
+                core_width = 2.2 + 0.8 * wave_factor
+            else:
+                outward_bloom = 4.5 * wave_factor
+                core_width = 1.8 + 0.5 * wave_factor
+
+            # Outward localized wave bloom layer (only from active crest sections)
+            if outward_bloom > 1.5:
+                bloom_lg = cairo.LinearGradient(
+                    w / 2 + wave_cos * (w / 1.5),
+                    h / 2 + wave_sin * (h / 1.5),
+                    w / 2 - wave_cos * (w / 1.5),
+                    h / 2 - wave_sin * (h / 1.5),
+                )
+                bloom_lg.add_color_stop_rgba(0.00, 0.486, 0.086, 0.431, 0.45 * wave_factor)
+                bloom_lg.add_color_stop_rgba(0.40, 0.118, 0.455, 0.984, 0.55 * wave_factor)
+                bloom_lg.add_color_stop_rgba(1.00, 0.043, 0.082, 0.200, 0.10)
+
+                cr.set_source(bloom_lg)
+                cr.set_line_width(outward_bloom)
+                self._rounded_rect(cr, bx, by, bw, bh, r)
+                cr.stroke()
+
+            # Crisp Core border
+            cr.set_source(lg)
+            cr.set_line_width(core_width)
+            self._rounded_rect(cr, bx, by, bw, bh, r)
             cr.stroke()
         else:
-            # Chromatic glow (Active or Rotating)
-            glow_dist = math.hypot(bw, bh) * 0.5
-            angle = t if self.mode == "rotating" else 0.5
-            x0 = cx + glow_dist * math.cos(angle)
-            y0 = cy + glow_dist * math.sin(angle)
-            x1 = cx - glow_dist * math.cos(angle)
-            y1 = cy - glow_dist * math.sin(angle)
-
-            # Outer glow halo
-            cr.set_operator(cairo.OPERATOR_ADD)
-            grad = cairo.LinearGradient(x0, y0, x1, y1)
-            grad.add_color_stop_rgba(0.00, 0.22, 0.74, 0.98, 0.35)  # Cyan
-            grad.add_color_stop_rgba(0.50, 0.66, 0.33, 0.97, 0.40)  # Violet
-            grad.add_color_stop_rgba(1.00, 0.93, 0.28, 0.60, 0.35)  # Magenta
-
-            halo_w = 4.5 + 2.0 * math.sin(t * 2.0)
-            self._draw_rounded_rect(cr, bx, by, bw, bh, r)
-            cr.set_source(grad)
-            cr.set_line_width(halo_w)
+            # Idle subtle border
+            cr.set_source_rgba(0.118, 0.455, 0.984, 0.22)
+            cr.set_line_width(1.0)
+            self._rounded_rect(cr, bx, by, bw, bh, r)
             cr.stroke()
 
-            # Dynamic Chroma-Ring border
-            cr.set_operator(cairo.OPERATOR_OVER)
-            ring_grad = cairo.LinearGradient(x0, y0, x1, y1)
-            ring_grad.add_color_stop_rgba(0.00, 0.22, 0.74, 0.98, 0.95)
-            ring_grad.add_color_stop_rgba(0.50, 0.66, 0.33, 0.97, 0.95)
-            ring_grad.add_color_stop_rgba(1.00, 0.93, 0.28, 0.60, 0.95)
+        cr.restore()
 
-            border_w = 1.6 + 0.8 * math.sin(t * 2.0)
-            self._draw_rounded_rect(cr, bx, by, bw, bh, r)
-            cr.set_source(ring_grad)
-            cr.set_line_width(border_w)
-            cr.stroke()
+    def _rounded_rect(self, cr: cairo.Context, x: float, y: float, w: float, h: float, r: float) -> None:
+        cr.new_sub_path()
+        cr.arc(x + w - r, y + r, r, -math.pi / 2, 0)
+        cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
+        cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
+        cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
+        cr.close_path()
 
 
 class SayriCajita(Gtk.Box):
-    """Apple-Intelligence style Dual-Card UI (Top Input Pill + Bottom Response Card)."""
+    """Main Siri / Sayri interface widget."""
 
-    def __init__(self, app) -> None:
-        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+    def __init__(self, app: Any):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.app = app
+        self._live_text = ""
+        self._mic_is_active = False
+
         self.add_css_class("sayri-cajita-container")
-        self.set_size_request(400, -1)
-        self.set_hexpand(False)
-        self.set_vexpand(False)
-        self.set_valign(Gtk.Align.CENTER)
+        self.set_halign(Gtk.Align.CENTER)
+        self.set_valign(Gtk.Align.START)
 
         self._load_css()
         self._build_ui()
@@ -343,45 +539,28 @@ class SayriCajita(Gtk.Box):
     def _build_ui(self) -> None:
         # ── 1. Top Input Pill ─────────────────────────────────────────
         self.pill_overlay = Gtk.Overlay()
-        self.pill_overlay.add_css_class("sayri-pill-container")
-        self.pill_overlay.set_size_request(400, 48)
+        self.pill_overlay.set_size_request(420, 52)
 
-        # Background drawing area for Pill
         self.pill_bg = ChromaBackground(is_pill=True)
         self.pill_overlay.set_child(self.pill_bg)
 
-        # Foreground content of Pill
         pill_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        pill_row.add_css_class("sayri-pill-row")
-        pill_row.set_margin_start(8)
-        pill_row.set_margin_end(8)
-        pill_row.set_margin_top(6)
-        pill_row.set_margin_bottom(6)
+        pill_row.set_margin_start(12)
+        pill_row.set_margin_end(12)
+        pill_row.set_margin_top(8)
+        pill_row.set_margin_bottom(8)
         pill_row.set_valign(Gtk.Align.CENTER)
 
-        # Left: Sayri / Settings icon button
+        # Official Sayri AppIndicator Tray PNG Logo (left)
         self.siri_btn = Gtk.Button()
-        if _SAYRI_ICON_BYTES:
-            try:
-                texture = Gdk.Texture.new_from_bytes(GLib.Bytes.new(_SAYRI_ICON_BYTES))
-                pic = Gtk.Picture.new_for_paintable(texture)
-                pic.set_content_fit(Gtk.ContentFit.CONTAIN)
-                pic.set_size_request(28, 28)
-                pic.set_valign(Gtk.Align.CENTER)
-                pic.set_halign(Gtk.Align.CENTER)
-                self.siri_btn.set_child(pic)
-            except Exception:
-                self.siri_btn.set_child(_svg_icon(SVG_SIRI_ICON))
-        else:
-            self.siri_btn.set_child(_svg_icon(SVG_SIRI_ICON))
+        self.siri_btn.set_child(get_sayri_logo_widget(24))
         self.siri_btn.set_has_frame(False)
-        self.siri_btn.add_css_class("flat")
         self.siri_btn.add_css_class("sayri-icon-btn")
-        self.siri_btn.set_tooltip_text("Sayri Settings")
-        self.siri_btn.connect("clicked", lambda _b: self.app.open_settings())
+        self.siri_btn.set_tooltip_text("Toggle Preferences & Navigation")
+        self.siri_btn.connect("clicked", lambda _b: self.toggle_navigation())
         pill_row.append(self.siri_btn)
 
-        # Center: Text input entry
+        # Text Entry
         self.entry = Gtk.Entry()
         self.entry.set_has_frame(False)
         self.entry.add_css_class("flat")
@@ -393,29 +572,25 @@ class SayriCajita(Gtk.Box):
         self.entry.connect("notify::is-focus", self._on_entry_focus)
         pill_row.append(self.entry)
 
-        # Right: Mic toggle button
-        self._mic_idle_pic = _svg_icon(SVG_MIC)
-        self._mic_active_pic = _svg_icon(SVG_MIC_ACTIVE)
-        self._mic_is_active = False
+        # History Button (Toggleable: opens history or closes card if open)
+        self.history_btn = Gtk.Button()
+        self.history_btn.set_child(_svg_icon(SVG_HISTORY))
+        self.history_btn.set_has_frame(False)
+        self.history_btn.add_css_class("sayri-icon-btn")
+        self.history_btn.set_tooltip_text("History")
+        self.history_btn.connect("clicked", lambda _b: self.toggle_history())
+        pill_row.append(self.history_btn)
 
+        # Mic Button
         self.mic_btn = Gtk.Button()
-        self.mic_btn.set_child(self._mic_idle_pic)
+        self.mic_btn.set_child(_svg_icon(SVG_MIC))
         self.mic_btn.set_has_frame(False)
         self.mic_btn.add_css_class("sayri-icon-btn")
-        self.mic_btn.set_tooltip_text("Toggle Microphone")
+        self.mic_btn.set_tooltip_text("Microphone")
         self.mic_btn.connect("clicked", lambda _b: self.app.toggle_listening())
         pill_row.append(self.mic_btn)
 
-        # Rightmost: Close button
-        self.close_btn = Gtk.Button()
-        self.close_btn.set_child(_svg_icon(SVG_CLOSE))
-        self.close_btn.set_has_frame(False)
-        self.close_btn.add_css_class("sayri-icon-btn")
-        self.close_btn.set_tooltip_text("Close Sayri (Esc)")
-        self.close_btn.connect("clicked", lambda _b: self.app.overlay.hide() if self.app.overlay else None)
-        pill_row.append(self.close_btn)
-
-        # ESC key controller on entry
+        # ESC key handler
         key_ctrl = Gtk.EventControllerKey.new()
         def _on_key_pressed(_ctrl, keyval, _keycode, _state):
             if keyval == Gdk.KEY_Escape:
@@ -429,9 +604,9 @@ class SayriCajita(Gtk.Box):
         self.pill_overlay.add_overlay(pill_row)
         self.append(self.pill_overlay)
 
-        # ── 2. Bottom Response Card ───────────────────────────────────
+        # ── 2. Bottom Acrylic Card & Multi-View Stack ────────────────
         self.card_overlay = Gtk.Overlay()
-        self.card_overlay.set_size_request(400, -1)
+        self.card_overlay.set_size_request(420, -1)
         self.card_overlay.set_hexpand(True)
 
         self.card_bg = ChromaBackground(is_pill=False)
@@ -442,34 +617,78 @@ class SayriCajita(Gtk.Box):
         card_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         card_content.set_margin_start(16)
         card_content.set_margin_end(16)
-        card_content.set_margin_top(14)
-        card_content.set_margin_bottom(14)
+        card_content.set_margin_top(12)
+        card_content.set_margin_bottom(12)
 
-        # AI text response scroll
+        # Tab Navigation Bar
+        self.tab_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        self.tab_bar.set_halign(Gtk.Align.CENTER)
+        self.tab_bar.set_margin_bottom(2)
+
+        self._tab_btns = {}
+        for tab_id, label in [
+            ("chat", "Chat"),
+            ("history", "History"),
+            ("agents", "Agents"),
+            ("plugins", "Gateways"),
+            ("secrets", "Vault"),
+            ("settings", "Settings"),
+        ]:
+            btn = Gtk.Button(label=label)
+            btn.add_css_class("sayri-tab-btn")
+            btn.connect("clicked", lambda _b, tid=tab_id: self.switch_tab(tid))
+            self.tab_bar.append(btn)
+            self._tab_btns[tab_id] = btn
+
+        card_content.append(self.tab_bar)
+
+        # Card Stack with smooth crossfade
+        self.card_stack = Gtk.Stack()
+        self.card_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.card_stack.set_transition_duration(120)
+
+        # ── View 1: Live Chat (Markdown Enabled, Larger Typography, No Clipping) ──
+        self.chat_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+
+        self.badge_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.badge_box.set_halign(Gtk.Align.START)
+        self.badge_box.set_valign(Gtk.Align.CENTER)
+        self.badge_box.set_margin_top(2)
+        self.badge_box.set_margin_bottom(4)
+
+        self.agent_badge = Gtk.Label()
+        self.agent_badge.set_markup("<span size='9500' weight='600' foreground='#38bdf8'>Sayri Primary</span>")
+        self.badge_box.append(self.agent_badge)
+
+        self.sandbox_badge = Gtk.Label()
+        self.sandbox_badge.set_markup("<span size='9000' foreground='#94a3b8'>• Host L3 (User)</span>")
+        self.badge_box.append(self.sandbox_badge)
+
+        self.chat_view.append(self.badge_box)
+
         self.scroll = Gtk.ScrolledWindow()
         self.scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.scroll.set_propagate_natural_height(True)
-        self.scroll.set_max_content_height(240)
+        self.scroll.set_max_content_height(340)
+        self.scroll.set_margin_top(4)
+        self.scroll.set_margin_bottom(4)
 
         self.response_label = Gtk.Label()
         self.response_label.add_css_class("sayri-response-label")
-        self.response_label.set_halign(Gtk.Align.START)
-        self.response_label.set_valign(Gtk.Align.START)
+        self.response_label.set_halign(Gtk.Align.FILL)
+        self.response_label.set_valign(Gtk.Align.CENTER)
         self.response_label.set_wrap(True)
         self.response_label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
         self.response_label.set_selectable(True)
         self.scroll.set_child(self.response_label)
-        card_content.append(self.scroll)
+        self.chat_view.append(self.scroll)
 
-        # Expandable command terminal output box (in English, without emojis)
         self.cmd_expander = Gtk.Expander(label="Command Output")
         self.cmd_expander.add_css_class("sayri-cmd-expander")
-
         self.cmd_scroll = Gtk.ScrolledWindow()
         self.cmd_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         self.cmd_scroll.set_propagate_natural_height(True)
         self.cmd_scroll.set_max_content_height(160)
-
         self.cmd_label = Gtk.Label()
         self.cmd_label.add_css_class("sayri-terminal-label")
         self.cmd_label.set_halign(Gtk.Align.FILL)
@@ -478,21 +697,262 @@ class SayriCajita(Gtk.Box):
         self.cmd_label.set_selectable(True)
         self.cmd_scroll.set_child(self.cmd_label)
         self.cmd_expander.set_child(self.cmd_scroll)
-        card_content.append(self.cmd_expander)
+        self.chat_view.append(self.cmd_expander)
         self.cmd_expander.set_visible(False)
 
+        self.card_stack.add_named(self.chat_view, "chat")
+
+        # ── View 2: History ──
+        self.history_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        hist_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        hist_header.set_valign(Gtk.Align.CENTER)
+
+        hist_title = Gtk.Label()
+        hist_title.set_markup("<span weight='700' size='10500' foreground='#f8fafc'>CONVERSATION HISTORY</span>")
+        hist_title.set_halign(Gtk.Align.START)
+        hist_title.set_hexpand(True)
+        hist_header.append(hist_title)
+
+        new_btn = Gtk.Button(label="+ New Chat")
+        new_btn.add_css_class("sayri-action-btn")
+        new_btn.add_css_class("primary")
+        def _on_new_click(_b):
+            if hasattr(self.app, "new_conversation"):
+                self.app.new_conversation()
+            self.switch_tab("chat")
+        new_btn.connect("clicked", _on_new_click)
+        hist_header.append(new_btn)
+        self.history_view.append(hist_header)
+
+        self.hist_scroll = Gtk.ScrolledWindow()
+        self.hist_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.hist_scroll.set_propagate_natural_height(True)
+        self.hist_scroll.set_max_content_height(240)
+        self.sessions_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.hist_scroll.set_child(self.sessions_box)
+        self.history_view.append(self.hist_scroll)
+
+        self.card_stack.add_named(self.history_view, "history")
+
+        # ── View 3: Thread Viewer ──
+        self.thread_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        thread_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        thread_header.set_valign(Gtk.Align.CENTER)
+
+        back_btn = Gtk.Button(label="← Back to History")
+        back_btn.add_css_class("sayri-action-btn")
+        back_btn.connect("clicked", lambda _b: self.switch_tab("history"))
+        thread_header.append(back_btn)
+
+        self.thread_title_lbl = Gtk.Label()
+        self.thread_title_lbl.set_markup("<span weight='600' size='10500' foreground='#f8fafc'>Conversation</span>")
+        self.thread_title_lbl.set_halign(Gtk.Align.START)
+        self.thread_title_lbl.set_ellipsize(Pango.EllipsizeMode.END)
+        self.thread_title_lbl.set_hexpand(True)
+        thread_header.append(self.thread_title_lbl)
+        self.thread_view.append(thread_header)
+
+        self.thread_scroll = Gtk.ScrolledWindow()
+        self.thread_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.thread_scroll.set_propagate_natural_height(True)
+        self.thread_scroll.set_max_content_height(250)
+        self.thread_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.thread_scroll.set_child(self.thread_box)
+        self.thread_view.append(self.thread_scroll)
+
+        self.card_stack.add_named(self.thread_view, "thread")
+
+        # ── View 4: Subagents Manager ──
+        self.agents_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        agents_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        agents_header.set_valign(Gtk.Align.CENTER)
+
+        ag_title = Gtk.Label()
+        ag_title.set_markup("<span weight='700' size='10500' foreground='#f8fafc'>SUBAGENTS</span>")
+        ag_title.set_halign(Gtk.Align.START)
+        ag_title.set_hexpand(True)
+        agents_header.append(ag_title)
+
+        create_ag_btn = Gtk.Button(label="+ Create Subagent")
+        create_ag_btn.add_css_class("sayri-action-btn")
+        create_ag_btn.add_css_class("primary")
+        create_ag_btn.connect("clicked", lambda _b: self._prompt_create_agent())
+        agents_header.append(create_ag_btn)
+        self.agents_view.append(agents_header)
+
+        ag_banner = Gtk.Label()
+        ag_banner.add_css_class("sayri-info-banner")
+        ag_banner.set_markup(
+            "<b>Ecosystem Note:</b> You can create specialized subagents here with custom sandboxes, download new skills from the <b>Pulsar Store</b>, or ask naturally: <i>'Sayri, create a customer support agent in read-only sandbox'</i>."
+        )
+        ag_banner.set_wrap(True)
+        ag_banner.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        self.agents_view.append(ag_banner)
+
+        self.agents_scroll = Gtk.ScrolledWindow()
+        self.agents_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.agents_scroll.set_propagate_natural_height(True)
+        self.agents_scroll.set_max_content_height(220)
+        self.agents_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.agents_scroll.set_child(self.agents_box)
+        self.agents_view.append(self.agents_scroll)
+
+        self.card_stack.add_named(self.agents_view, "agents")
+
+        # ── View 5: Plugins & Channel Gateways ──
+        self.plugins_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        pl_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        pl_header.set_valign(Gtk.Align.CENTER)
+
+        pl_title = Gtk.Label()
+        pl_title.set_markup("<span weight='700' size='10500' foreground='#f8fafc'>CHANNELS &amp; GATEWAYS</span>")
+        pl_title.set_halign(Gtk.Align.START)
+        pl_title.set_hexpand(True)
+        pl_header.append(pl_title)
+
+        store_btn = Gtk.Button(label="Pulsar Store ↗")
+        store_btn.add_css_class("sayri-action-btn")
+        store_btn.connect("clicked", lambda _b: os.system("xdg-open https://store-os.inled.es &"))
+        pl_header.append(store_btn)
+
+        self.plugins_view.append(pl_header)
+
+        gw_banner = Gtk.Label()
+        gw_banner.add_css_class("sayri-info-banner")
+        gw_banner.set_markup(
+            "<b>Extensions &amp; Store:</b> Manage remote gateways (Telegram, Discord, MCP). Each gateway enforces isolated Bubblewrap sandboxes and OTP desktop pairing. Browse more plugins on <b><a href='https://store-os.inled.es'>store-os.inled.es</a></b>."
+        )
+        gw_banner.set_wrap(True)
+        gw_banner.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        self.plugins_view.append(gw_banner)
+
+        self.plugins_scroll = Gtk.ScrolledWindow()
+        self.plugins_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.plugins_scroll.set_propagate_natural_height(True)
+        self.plugins_scroll.set_max_content_height(220)
+        self.plugins_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.plugins_scroll.set_child(self.plugins_box)
+        self.plugins_view.append(self.plugins_scroll)
+
+        self.card_stack.add_named(self.plugins_view, "plugins")
+
+        # ── View 6: Zero-Plaintext Secrets Vault ──
+        self.secrets_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        sec_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        sec_header.set_valign(Gtk.Align.CENTER)
+
+        sec_title = Gtk.Label()
+        sec_title.set_markup("<span weight='700' size='10500' foreground='#f8fafc'>TOKEN SHIELD &amp; VAULT</span>")
+        sec_title.set_halign(Gtk.Align.START)
+        sec_title.set_hexpand(True)
+        sec_header.append(sec_title)
+
+        add_sec_btn = Gtk.Button(label="+ Add Secret")
+        add_sec_btn.add_css_class("sayri-action-btn")
+        add_sec_btn.add_css_class("primary")
+        add_sec_btn.connect("clicked", lambda _b: self._prompt_add_secret())
+        sec_header.append(add_sec_btn)
+        self.secrets_view.append(sec_header)
+
+        sec_banner = Gtk.Label()
+        sec_banner.add_css_class("sayri-info-banner")
+        sec_banner.set_markup(
+            "<b>How Token Shield Works:</b> Secrets are stored in a zero-plaintext local vault and never transmitted in LLM prompts. Reference them in prompts or skills as <tt>$SECRET:KEY_NAME</tt>. Sayri injects the real tokens directly into child process environments during execution."
+        )
+        sec_banner.set_wrap(True)
+        sec_banner.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        self.secrets_view.append(sec_banner)
+
+        self.sec_scroll = Gtk.ScrolledWindow()
+        self.sec_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.sec_scroll.set_propagate_natural_height(True)
+        self.sec_scroll.set_max_content_height(220)
+        self.secrets_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.sec_scroll.set_child(self.secrets_box)
+        self.secrets_view.append(self.sec_scroll)
+
+        self.card_stack.add_named(self.secrets_view, "secrets")
+
+        # ── View 7: In-Card Settings & Full Model Downloader with Live Progress ──
+        self.settings_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        set_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        set_header.set_valign(Gtk.Align.CENTER)
+
+        set_title = Gtk.Label()
+        set_title.set_markup("<span weight='700' size='10500' foreground='#f8fafc'>PREFERENCES &amp; MODELS</span>")
+        set_title.set_halign(Gtk.Align.START)
+        set_title.set_hexpand(True)
+        set_header.append(set_title)
+        self.settings_view.append(set_header)
+
+        self.settings_scroll = Gtk.ScrolledWindow()
+        self.settings_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.settings_scroll.set_propagate_natural_height(True)
+        self.settings_scroll.set_max_content_height(280)
+        self.settings_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.settings_scroll.set_child(self.settings_box)
+        self.settings_view.append(self.settings_scroll)
+
+        self.card_stack.add_named(self.settings_view, "settings")
+
+        card_content.append(self.card_stack)
         self.card_overlay.add_overlay(card_content)
         self.card_overlay.set_measure_overlay(card_content, True)
-
         self.append(self.card_overlay)
 
-        # Hide bottom card initially until response exists
+        # Initially hidden
         self.card_overlay.set_visible(False)
+
+    def switch_tab(self, tab_id: str, trigger_effect: bool = True) -> None:
+        """Switch between views inside the response card."""
+        for tid, btn in self._tab_btns.items():
+            if tid == tab_id:
+                btn.add_css_class("active")
+            else:
+                btn.remove_css_class("active")
+
+        if tab_id == "history":
+            self._populate_history()
+        elif tab_id == "agents":
+            self._populate_agents()
+        elif tab_id == "plugins":
+            self._populate_plugins()
+        elif tab_id == "secrets":
+            self._populate_secrets()
+        elif tab_id == "settings":
+            self._populate_settings()
+
+        self.card_stack.set_visible_child_name(tab_id)
+        if trigger_effect:
+            self.card_bg.trigger_memory_effect()
+        self.card_overlay.set_visible(True)
+
+    def toggle_navigation(self) -> None:
+        """Toggles response card: closes if already open on settings, otherwise opens settings."""
+        if self.card_overlay.get_visible() and self.card_stack.get_visible_child_name() == "settings":
+            self.card_overlay.set_visible(False)
+        else:
+            self.switch_tab("settings")
+
+    def toggle_history(self) -> None:
+        """Toggles response card: closes if already open on history, otherwise opens history."""
+        if self.card_overlay.get_visible() and self.card_stack.get_visible_child_name() == "history":
+            self.card_overlay.set_visible(False)
+        else:
+            self.switch_tab("history")
+
+    def show_history_view(self) -> None:
+        self.switch_tab("history")
+
+    def show_chat_view(self) -> None:
+        self.switch_tab("chat")
 
     def _on_entry_activate(self, entry: Gtk.Entry) -> None:
         text = entry.get_text().strip()
         if text:
             entry.set_text("")
+            self.clear()
+            self.switch_tab("chat", trigger_effect=False)
             self.app.send_text(text)
 
     def _on_entry_changed(self, entry: Gtk.Entry) -> None:
@@ -505,97 +965,1088 @@ class SayriCajita(Gtk.Box):
     def _on_entry_focus(self, entry: Gtk.Entry, _pspec) -> None:
         if entry.has_focus():
             self.pill_bg.set_mode("active")
-        elif not entry.get_text().strip() and not self.app.listening_now():
+        elif not entry.get_text().strip() and not self.app.listening_now() and self.pill_bg.mode == "active":
             self.pill_bg.set_mode("idle")
 
-    def set_content(self, kind: str, text: str) -> None:
-        if not text:
+    # ── History Logic ──
+    def _populate_history(self) -> None:
+        while True:
+            child = self.sessions_box.get_first_child()
+            if not child:
+                break
+            self.sessions_box.remove(child)
+
+        sessions = []
+        if hasattr(self.app, "storage") and self.app.storage:
+            try:
+                sessions = self.app.storage.list_sessions(limit=30)
+            except Exception:
+                sessions = []
+
+        if not sessions:
+            lbl = Gtk.Label(label="No saved conversations yet.")
+            lbl.set_halign(Gtk.Align.START)
+            self.sessions_box.append(lbl)
             return
 
-        if kind == "user":
-            self.entry.set_text(text)
-            self.pill_bg.set_mode("active")
-        elif kind == "partial":
-            if not self.entry.has_focus():
-                self.entry.set_text(text)
-                self.pill_bg.set_mode("active")
-        elif kind == "assistant":
-            # Clear user input text as the assistant is replying
-            self.entry.set_text("")
-            self.pill_bg.set_mode("idle")
-            markup = markdown_to_pango(text)
-            ok, attrs, txt, _ = Pango.parse_markup(markup, -1, chr(0))
-            if ok and attrs:
-                self.response_label.set_attributes(attrs)
-                self.response_label.set_text(txt)
-            else:
-                self.response_label.set_text(text)
-            self.card_overlay.set_visible(True)
-            self.card_bg.set_mode("rotating")
-        elif kind == "hint":
-            pass
-        elif kind == "error":
-            escaped = GLib.markup_escape_text(text)
-            ok, attrs, txt, _ = Pango.parse_markup(f"<span foreground='#fca5a5' size='12000'>⚠️ {escaped}</span>", -1, chr(0))
-            if ok and attrs:
-                self.response_label.set_attributes(attrs)
-                self.response_label.set_text(txt)
-            else:
-                self.response_label.set_text(f"⚠️ {text}")
-            self.card_overlay.set_visible(True)
+        import datetime
+        active_id = getattr(self.app, "active_session_id", "")
+        now = datetime.datetime.now()
 
-    def set_tool_output(self, cmd: str, output: str) -> None:
-        if not cmd:
-            self.cmd_expander.set_visible(False)
+        for s in sessions:
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            row.add_css_class("sayri-card-item")
+            if s.id == active_id:
+                row.add_css_class("sayri-card-item-active")
+
+            btn = Gtk.Button()
+            btn.set_has_frame(False)
+            btn.add_css_class("flat")
+            btn.set_hexpand(True)
+
+            v = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            title = s.title if s.title else "Conversation"
+            if s.id == active_id:
+                title = f"[Active] {title}"
+
+            t = Gtk.Label()
+            t.set_markup(f"<span foreground='#ffffff' weight='600' size='10000'>{GLib.markup_escape_text(title)}</span>")
+            t.set_halign(Gtk.Align.START)
+            t.set_ellipsize(Pango.EllipsizeMode.END)
+
+            sess_dt = datetime.datetime.fromtimestamp(s.updated_at)
+            dt_str = f"Today {sess_dt.strftime('%H:%M')}" if sess_dt.date() == now.date() else sess_dt.strftime("%d/%m %H:%M")
+
+            sub = Gtk.Label()
+            sub.set_markup(f"<span foreground='#94a3b8' size='9000'>{dt_str} • {GLib.markup_escape_text(s.agent_id)}</span>")
+            sub.set_halign(Gtk.Align.START)
+
+            v.append(t)
+            v.append(sub)
+            btn.set_child(v)
+
+            sid = s.id
+            btn.connect("clicked", lambda _b, session_id=sid: self.app.switch_session(session_id))
+            row.append(btn)
+
+            # Edit Title
+            ren = Gtk.Button()
+            ren.set_child(_svg_icon(SVG_EDIT))
+            ren.set_has_frame(False)
+            ren.add_css_class("sayri-icon-btn")
+            ren.set_tooltip_text("Rename conversation")
+            ren.connect("clicked", lambda _b, session_id=sid, cur_t=s.title: self._prompt_rename_session(session_id, cur_t))
+            row.append(ren)
+
+            # Delete
+            del_b = Gtk.Button()
+            del_b.set_child(_svg_icon(SVG_TRASH))
+            del_b.set_has_frame(False)
+            del_b.add_css_class("sayri-icon-btn")
+            del_b.set_tooltip_text("Delete conversation")
+            def _del(_b, session_id=sid):
+                if hasattr(self.app, "storage") and self.app.storage:
+                    self.app.storage.delete_session(session_id)
+                    self._populate_history()
+            del_b.connect("clicked", _del)
+            row.append(del_b)
+
+            self.sessions_box.append(row)
+
+    # ── Subagents Logic ──
+    def _populate_agents(self) -> None:
+        while True:
+            child = self.agents_box.get_first_child()
+            if not child:
+                break
+            self.agents_box.remove(child)
+
+        agents = AgentCreator.list_agents()
+        active_agent = getattr(self.app, "active_agent", None)
+        active_id = active_agent.id if active_agent else "default"
+
+        for ag in agents:
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            row.add_css_class("sayri-card-item")
+            is_active = (ag.id == active_id)
+            if is_active:
+                row.add_css_class("sayri-card-item-active")
+
+            v = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            v.set_hexpand(True)
+
+            t = Gtk.Label()
+            prefix = "[Active] " if is_active else ""
+            t.set_markup(f"<span foreground='#ffffff' weight='700' size='10500'>{prefix}{GLib.markup_escape_text(ag.name)}</span>")
+            t.set_halign(Gtk.Align.START)
+
+            sub = Gtk.Label()
+            sb_text = ag.sandbox.level.value
+            sub.set_markup(f"<span foreground='#94a3b8' size='9000'>{sb_text} • Model: <tt>{GLib.markup_escape_text(ag.model.model_name)}</tt></span>")
+            sub.set_halign(Gtk.Align.START)
+
+            v.append(t)
+            v.append(sub)
+            row.append(v)
+
+            # Select button
+            sw_btn = Gtk.Button(label="Active" if is_active else "Select")
+            sw_btn.add_css_class("sayri-action-btn")
+            if is_active:
+                sw_btn.add_css_class("primary")
+            def _switch(_b, profile=ag):
+                self.app.active_agent = profile
+                self.update_agent_badge(profile.name, profile.sandbox.level.value)
+                self._populate_agents()
+                self.switch_tab("chat")
+            sw_btn.connect("clicked", _switch)
+            row.append(sw_btn)
+
+            # Delete button (custom agents only)
+            if not getattr(ag, "is_builtin", False) and ag.id != "default":
+                del_ag_btn = Gtk.Button()
+                del_ag_btn.set_child(_svg_icon(SVG_TRASH))
+                del_ag_btn.set_has_frame(False)
+                del_ag_btn.add_css_class("sayri-icon-btn")
+                del_ag_btn.set_tooltip_text("Delete Subagent")
+                del_ag_btn.connect("clicked", lambda _b, aid=ag.id: (AgentCreator.delete_agent(aid), self._populate_agents()))
+                row.append(del_ag_btn)
+
+            self.agents_box.append(row)
+
+    # ── Plugins / Gateways Logic ──
+    def _populate_plugins(self) -> None:
+        while True:
+            child = self.plugins_box.get_first_child()
+            if not child:
+                break
+            self.plugins_box.remove(child)
+
+        # 1. Load paired accounts from authorizations.json
+        auth_file = Path.home() / ".config" / "sayri" / "authorizations.json"
+        allowed_tg_users = []
+        if auth_file.is_file():
+            try:
+                auth_data = json.loads(auth_file.read_text(encoding="utf-8"))
+                allowed_tg_users = auth_data.get("allowed_telegram_users", [])
+            except Exception:
+                pass
+
+        tg_status = f"{len(allowed_tg_users)} Paired ({', '.join(allowed_tg_users[:2])})" if allowed_tg_users else "No paired users (OTP Pairing Ready)"
+
+        sample_plugins = [
+            ("Telegram Bot Gateway", f"Bridges Sayri subagents to Telegram with OTP pairing. {tg_status}", True, "OTP_PAIRING_ACTIVE"),
+            ("Discord Voice & Chat Gateway", "Bridges Sayri voice and text to Discord channels.", True, "WHITELIST_ACTIVE"),
+            ("Model Context Protocol (MCP)", "Exposes local system tools via secure standard JSON-RPC.", True, "LOCAL_SANDBOX"),
+        ]
+
+        for name, desc, enabled, shield in sample_plugins:
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            row.add_css_class("sayri-card-item")
+
+            v = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            v.set_hexpand(True)
+
+            t = Gtk.Label()
+            t.set_markup(f"<span foreground='#ffffff' weight='700' size='10500'>{GLib.markup_escape_text(name)}</span>")
+            t.set_halign(Gtk.Align.START)
+
+            sub = Gtk.Label()
+            sub.set_markup(f"<span foreground='#94a3b8' size='9000'>{GLib.markup_escape_text(desc)} • <span foreground='#22c55e'>{shield}</span></span>")
+            sub.set_halign(Gtk.Align.START)
+            sub.set_wrap(True)
+
+            v.append(t)
+            v.append(sub)
+            row.append(v)
+
+            sw = Gtk.Switch()
+            sw.set_active(enabled)
+            sw.set_valign(Gtk.Align.CENTER)
+            row.append(sw)
+
+            self.plugins_box.append(row)
+
+    # ── Zero-Plaintext Secrets Vault Logic ──
+    def _populate_secrets(self) -> None:
+        while True:
+            child = self.secrets_box.get_first_child()
+            if not child:
+                break
+            self.secrets_box.remove(child)
+
+        secrets = secrets_manager.list_secrets()
+        if not secrets:
+            lbl = Gtk.Label(label="No secret credentials stored yet. Click (+ Add Secret) to add tokens with zero plaintext leakage.")
+            lbl.set_halign(Gtk.Align.START)
+            lbl.set_wrap(True)
+            lbl.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+            self.secrets_box.append(lbl)
             return
-        escaped_cmd = GLib.markup_escape_text(cmd)
-        escaped_out = GLib.markup_escape_text(output.strip()) if output else "(empty output)"
-        ok, attrs, txt, _ = Pango.parse_markup(f"<span font_family='monospace' size='10500'><span foreground='#38bdf8'><b>$ {escaped_cmd}</b></span>\n\n<span foreground='#f8fafc'>{escaped_out}</span></span>", -1, chr(0))
-        if ok and attrs:
-            self.cmd_label.set_attributes(attrs)
-            self.cmd_label.set_text(txt)
-        else:
-            self.cmd_label.set_text(f"$ {cmd}\n\n{output}")
-        self.cmd_expander.set_label(f"Command: {cmd[:36]}…")
+
+        for sec in secrets:
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            row.add_css_class("sayri-card-item")
+
+            v = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            v.set_hexpand(True)
+
+            t = Gtk.Label()
+            t.set_markup(f"<span foreground='#38bdf8' weight='700' size='10500'>${GLib.markup_escape_text(sec['key'])}</span>")
+            t.set_halign(Gtk.Align.START)
+
+            sub = Gtk.Label()
+            desc = sec['description'] or 'Injected into sandbox environment variables at runtime'
+            sub.set_markup(f"<span foreground='#94a3b8' size='9000'>{GLib.markup_escape_text(desc)} • Value: <tt>{GLib.markup_escape_text(sec['masked'])}</tt></span>")
+            sub.set_halign(Gtk.Align.START)
+
+            handle_lbl = Gtk.Label()
+            handle_lbl.set_markup(f"<span foreground='#1e74fb' size='8500'>Prompt handle: <tt>$SECRET:{GLib.markup_escape_text(sec['key'])}</tt></span>")
+            handle_lbl.set_halign(Gtk.Align.START)
+
+            v.append(t)
+            v.append(sub)
+            v.append(handle_lbl)
+            row.append(v)
+
+            # Copy handle button
+            copy_b = Gtk.Button()
+            copy_b.set_child(_svg_icon(SVG_COPY))
+            copy_b.set_has_frame(False)
+            copy_b.add_css_class("sayri-icon-btn")
+            copy_b.set_tooltip_text("Copy $SECRET handle to clipboard")
+            def _copy(_b, k=sec['key']):
+                clipboard = Gdk.Display.get_default().get_clipboard()
+                clipboard.set(f"$SECRET:{k}")
+            copy_b.connect("clicked", _copy)
+            row.append(copy_b)
+
+            # Delete button
+            del_b = Gtk.Button()
+            del_b.set_child(_svg_icon(SVG_TRASH))
+            del_b.set_has_frame(False)
+            del_b.add_css_class("sayri-icon-btn")
+            del_b.set_tooltip_text("Delete secret")
+            del_b.connect("clicked", lambda _b, k=sec['key']: (secrets_manager.delete_secret(k), self._populate_secrets()))
+            row.append(del_b)
+
+            self.secrets_box.append(row)
+
+    # ── In-Card Settings & Full Model Downloader with Live Progress ──
+    def _populate_settings(self) -> None:
+        while True:
+            child = self.settings_box.get_first_child()
+            if not child:
+                break
+            self.settings_box.remove(child)
+
+        cfg = getattr(self.app, "cfg", None)
+        cur_url = cfg.get_string("provider", "base_url") if cfg else "https://api.groq.com/openai/v1"
+        cur_key = cfg.get_string("provider", "api_key") if cfg else ""
+        cur_model = cfg.get_string("provider", "model") if cfg else "llama-3.3-70b-versatile"
+        cur_wakeword = cfg.get_string("stt", "wake_word") if cfg else "hey sayri"
+        cur_stt_model = cfg.get_string("stt", "model_size") if cfg else "base"
+        cur_stt_lang = cfg.get_string("stt", "language") if cfg else "es"
+        cur_tts_voice = cfg.get_string("tts", "voice") if cfg else "sharvard"
+        cur_tts_lang = cfg.get_string("tts", "language") if cfg else "es_ES"
+
+        def _field(label_text, default_val, is_secret=False):
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            l = Gtk.Label()
+            l.set_halign(Gtk.Align.START)
+            l.set_markup(f"<span foreground='#94a3b8' size='9000'><b>{label_text}</b></span>")
+            e = Gtk.Entry()
+            e.add_css_class("sayri-settings-entry")
+            e.set_text(default_val or "")
+            if is_secret:
+                e.set_visibility(False)
+            box.append(l)
+            box.append(e)
+            return box, e
+
+        # Section 1: LLM
+        sec1_title = Gtk.Label()
+        sec1_title.set_markup("<span weight='700' size='9500' foreground='#1e74fb'>LLM PROVIDER CONFIGURATION</span>")
+        sec1_title.set_halign(Gtk.Align.START)
+        self.settings_box.append(sec1_title)
+
+        b1, url_entry = _field("Base URL", cur_url)
+        b2, key_entry = _field("API Key (Token Shield Protected)", cur_key, is_secret=True)
+        b3, model_entry = _field("Model Name", cur_model)
+        b4, wake_entry = _field("Wakeword Trigger", cur_wakeword)
+
+        self.settings_box.append(b1)
+        self.settings_box.append(b2)
+        self.settings_box.append(b3)
+        self.settings_box.append(b4)
+
+        save_btn = Gtk.Button(label="Save LLM Settings")
+        save_btn.add_css_class("sayri-action-btn")
+        save_btn.add_css_class("primary")
+        save_btn.set_halign(Gtk.Align.END)
+        save_btn.set_margin_top(4)
+
+        def _on_save(_b):
+            if cfg:
+                cfg.set("provider", "base_url", url_entry.get_text().strip())
+                cfg.set("provider", "api_key", key_entry.get_text().strip())
+                cfg.set("provider", "model", model_entry.get_text().strip())
+                cfg.set("stt", "wake_word", wake_entry.get_text().strip())
+                save_btn.set_label("✓ Settings Saved!")
+                GLib.timeout_add(1500, lambda: (save_btn.set_label("Save LLM Settings"), False))
+
+        save_btn.connect("clicked", _on_save)
+        self.settings_box.append(save_btn)
+
+        # Section 2: Speech-to-Text (STT Whisper)
+        sep1 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        sep1.set_margin_top(6)
+        sep1.set_margin_bottom(6)
+        self.settings_box.append(sep1)
+
+        sec2_title = Gtk.Label()
+        sec2_title.set_markup("<span weight='700' size='9500' foreground='#1e74fb'>SPEECH-TO-TEXT (WHISPER ALL MODELS &amp; LANGUAGES)</span>")
+        sec2_title.set_halign(Gtk.Align.START)
+        self.settings_box.append(sec2_title)
+
+        stt_config_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        stt_config_box.add_css_class("sayri-card-item")
+
+        # STT Mode Selector (Enable / Disable / Wakeword / Manual)
+        stt_mode_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        stt_enable_lbl = Gtk.Label()
+        stt_enable_lbl.set_markup("<span size='9500' foreground='#ffffff'><b>Speech Recognition (STT):</b></span>")
+        stt_enable_lbl.set_halign(Gtk.Align.START)
+        stt_enable_lbl.set_hexpand(True)
+        stt_mode_row.append(stt_enable_lbl)
+
+        stt_modes = ["wakeword", "always", "manual", "disabled"]
+        stt_mode_labels = [
+            "Wakeword ('Hey Sayri')",
+            "Always Listening",
+            "Manual (Push to Talk)",
+            "Disabled (No Voice Input)"
+        ]
+        stt_mode_model = Gtk.StringList.new(stt_mode_labels)
+        stt_mode_drop = Gtk.DropDown.new(stt_mode_model, None)
+        cur_stt_mode = cfg.get_string("stt", "mode") if cfg else "wakeword"
+        try:
+            stt_mode_drop.set_selected(stt_modes.index(cur_stt_mode))
+        except Exception:
+            stt_mode_drop.set_selected(0)
+
+        def _on_stt_mode_changed(*_):
+            m = stt_modes[stt_mode_drop.get_selected()]
+            if cfg:
+                cfg.set("stt", "mode", m)
+            if hasattr(self.app, "_apply_mode"):
+                self.app._apply_mode()
+        stt_mode_drop.connect("notify::selected", _on_stt_mode_changed)
+        stt_mode_row.append(stt_mode_drop)
+        stt_config_box.append(stt_mode_row)
+
+        # Full Whisper Models & Languages Dropdowns
+        stt_ctrl_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+
+        stt_sizes = ["tiny", "tiny.en", "base", "base.en", "small", "small.en", "medium", "medium.en", "large-v3"]
+        stt_size_labels = [
+            "tiny (~75MB)", "tiny.en (English, ~75MB)",
+            "base (~142MB)", "base.en (English, ~142MB)",
+            "small (~466MB)", "small.en (English, ~466MB)",
+            "medium (~1.5GB)", "medium.en (English, ~1.5GB)",
+            "large-v3 (~3.1GB, Best Quality)"
+        ]
+        stt_size_model = Gtk.StringList.new(stt_size_labels)
+        stt_size_drop = Gtk.DropDown.new(stt_size_model, None)
+        try:
+            stt_size_drop.set_selected(stt_sizes.index(cur_stt_model))
+        except Exception:
+            stt_size_drop.set_selected(2)
+
+        stt_langs = ["auto", "es", "en", "fr", "de", "it", "pt", "ca", "gl", "eu", "nl", "pl", "ru", "uk", "sv", "tr", "el", "ar", "zh", "ja", "ko", "hi"]
+        stt_lang_labels = [
+            "auto (Auto Detect)", "es (Spanish - Español)", "en (English)",
+            "fr (French - Français)", "de (German - Deutsch)", "it (Italian - Italiano)",
+            "pt (Portuguese - Português)", "ca (Catalan - Català)", "gl (Galician - Galego)",
+            "eu (Basque - Euskara)", "nl (Dutch - Nederlands)", "pl (Polish - Polski)",
+            "ru (Russian - Русский)", "uk (Ukrainian - Українська)", "sv (Swedish - Svenska)",
+            "tr (Turkish - Türkçe)", "el (Greek - Ελληνικά)", "ar (Arabic - العربية)",
+            "zh (Chinese - 中文)", "ja (Japanese - 日本語)", "ko (Korean - 한국어)", "hi (Hindi - हिन्दी)"
+        ]
+        stt_lang_model = Gtk.StringList.new(stt_lang_labels)
+        stt_lang_drop = Gtk.DropDown.new(stt_lang_model, None)
+        try:
+            stt_lang_drop.set_selected(stt_langs.index(cur_stt_lang))
+        except Exception:
+            stt_lang_drop.set_selected(1)
+
+        stt_ctrl_row.append(stt_size_drop)
+        stt_ctrl_row.append(stt_lang_drop)
+        stt_config_box.append(stt_ctrl_row)
+
+        # Status & Action Row
+        stt_act_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        stt_act_row.set_margin_top(2)
+
+        stt_status_lbl = Gtk.Label()
+        stt_status_lbl.set_halign(Gtk.Align.START)
+        stt_status_lbl.set_hexpand(True)
+        stt_act_row.append(stt_status_lbl)
+
+        dl_stt_btn = Gtk.Button()
+        dl_stt_btn.add_css_class("sayri-action-btn")
+        stt_act_row.append(dl_stt_btn)
+
+        # Live Progress Bar
+        stt_prog_bar = Gtk.ProgressBar()
+        stt_prog_bar.add_css_class("sayri-progress")
+        stt_prog_bar.set_visible(False)
+
+        def _update_stt_status():
+            sz = stt_sizes[stt_size_drop.get_selected()]
+            lg = stt_langs[stt_lang_drop.get_selected()]
+            has_m = downloads.has_whisper_model(sz, lg)
+            stt_status_lbl.set_markup(f"<span foreground='{'#22c55e' if has_m else '#eab308'}' size='9000'>{'✓ Ready &amp; Downloaded' if has_m else 'Not downloaded'}</span>")
+            dl_stt_btn.set_label("Downloaded" if has_m else "Download Model")
+            if has_m:
+                dl_stt_btn.remove_css_class("primary")
+            else:
+                dl_stt_btn.add_css_class("primary")
+            if cfg:
+                cfg.set("stt", "model_size", sz)
+                cfg.set("stt", "language", lg)
+
+        stt_size_drop.connect("notify::selected", lambda *_: _update_stt_status())
+        stt_lang_drop.connect("notify::selected", lambda *_: _update_stt_status())
+        _update_stt_status()
+
+        def _do_dl_stt(_b):
+            sz = stt_sizes[stt_size_drop.get_selected()]
+            lg = stt_langs[stt_lang_drop.get_selected()]
+            dl_stt_btn.set_sensitive(False)
+            dl_stt_btn.set_label("Downloading…")
+            stt_prog_bar.set_fraction(0.0)
+            stt_prog_bar.set_visible(True)
+
+            def _on_prog(frac: float):
+                GLib.idle_add(lambda: (
+                    stt_prog_bar.set_fraction(frac),
+                    stt_status_lbl.set_markup(f"<span foreground='#1e74fb' size='9000'>Downloading model… <b>{int(frac*100)}%</b></span>")
+                ))
+
+            def _thread():
+                try:
+                    downloads.download_whisper_model(sz, lg, progress=_on_prog)
+                    GLib.idle_add(lambda: (
+                        stt_prog_bar.set_visible(False),
+                        _update_stt_status(),
+                        dl_stt_btn.set_sensitive(True)
+                    ))
+                except Exception as exc:
+                    GLib.idle_add(lambda: (
+                        stt_prog_bar.set_visible(False),
+                        dl_stt_btn.set_label("Retry"),
+                        dl_stt_btn.set_sensitive(True),
+                        stt_status_lbl.set_markup(f"<span foreground='#ef4444' size='9000'>Error: {exc}</span>")
+                    ))
+            threading.Thread(target=_thread, daemon=True).start()
+
+        dl_stt_btn.connect("clicked", _do_dl_stt)
+        stt_config_box.append(stt_act_row)
+        stt_config_box.append(stt_prog_bar)
+
+        # Whisper-cli Binary Row
+        has_w_bin = paths.find_binary("whisper-cli") is not None
+        w_bin_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        w_bin_row.set_margin_top(4)
+
+        w_bin_lbl = Gtk.Label()
+        w_bin_lbl.set_markup(f"<span size='9000' foreground='{'#22c55e' if has_w_bin else '#94a3b8'}'>whisper-cli binary: {'✓ Installed' if has_w_bin else 'Not installed'}</span>")
+        w_bin_lbl.set_halign(Gtk.Align.START)
+        w_bin_lbl.set_hexpand(True)
+        w_bin_row.append(w_bin_lbl)
+
+        dl_w_bin_btn = Gtk.Button(label="Installed" if has_w_bin else "Download Binary")
+        dl_w_bin_btn.add_css_class("sayri-action-btn")
+        if not has_w_bin:
+            dl_w_bin_btn.add_css_class("primary")
+
+        w_bin_prog = Gtk.ProgressBar()
+        w_bin_prog.add_css_class("sayri-progress")
+        w_bin_prog.set_visible(False)
+
+        def _do_dl_w_bin(_b):
+            dl_w_bin_btn.set_sensitive(False)
+            dl_w_bin_btn.set_label("Downloading…")
+            w_bin_prog.set_fraction(0.0)
+            w_bin_prog.set_visible(True)
+
+            def _on_w_prog(frac: float):
+                GLib.idle_add(lambda: (
+                    w_bin_prog.set_fraction(frac),
+                    w_bin_lbl.set_markup(f"<span size='9000' foreground='#1e74fb'>Downloading binary… <b>{int(frac*100)}%</b></span>")
+                ))
+
+            def _thread():
+                try:
+                    downloads.install_whisper_cli(progress=_on_w_prog)
+                    GLib.idle_add(lambda: (
+                        w_bin_prog.set_visible(False),
+                        dl_w_bin_btn.set_label("Installed"),
+                        dl_w_bin_btn.remove_css_class("primary"),
+                        w_bin_lbl.set_markup("<span size='9000' foreground='#22c55e'>whisper-cli binary: ✓ Installed</span>")
+                    ))
+                except Exception as exc:
+                    GLib.idle_add(lambda: (
+                        w_bin_prog.set_visible(False),
+                        dl_w_bin_btn.set_label("Retry"),
+                        dl_w_bin_btn.set_sensitive(True),
+                        w_bin_lbl.set_markup(f"<span size='9000' foreground='#ef4444'>Error: {exc}</span>")
+                    ))
+            threading.Thread(target=_thread, daemon=True).start()
+
+        dl_w_bin_btn.connect("clicked", _do_dl_w_bin)
+        w_bin_row.append(dl_w_bin_btn)
+        stt_config_box.append(w_bin_row)
+        stt_config_box.append(w_bin_prog)
+
+        self.settings_box.append(stt_config_box)
+
+        # Section 3: Text-to-Speech (TTS Piper - Exhaustive Voice Catalog & Progress)
+        sep2 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        sep2.set_margin_top(6)
+        sep2.set_margin_bottom(6)
+        self.settings_box.append(sep2)
+
+        sec3_title = Gtk.Label()
+        sec3_title.set_markup("<span weight='700' size='9500' foreground='#1e74fb'>TEXT-TO-SPEECH (PIPER ALL VOICES &amp; LANGUAGES)</span>")
+        sec3_title.set_halign(Gtk.Align.START)
+        self.settings_box.append(sec3_title)
+
+        tts_config_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        tts_config_box.add_css_class("sayri-card-item")
+
+        # TTS Enable Switch
+        tts_toggle_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        tts_enable_lbl = Gtk.Label()
+        tts_enable_lbl.set_markup("<span size='9500' foreground='#ffffff'><b>Voice Audio Playback (TTS):</b></span>")
+        tts_enable_lbl.set_halign(Gtk.Align.START)
+        tts_enable_lbl.set_hexpand(True)
+        tts_toggle_row.append(tts_enable_lbl)
+
+        tts_sw = Gtk.Switch()
+        tts_sw.set_valign(Gtk.Align.CENTER)
+        tts_sw.set_active(cfg.get_bool("tts", "enabled") if cfg else True)
+        def _on_tts_toggled(sw, _gparam):
+            if cfg:
+                cfg.set("tts", "enabled", sw.get_active())
+        tts_sw.connect("notify::active", _on_tts_toggled)
+        tts_toggle_row.append(tts_sw)
+        tts_config_box.append(tts_toggle_row)
+
+        voice_options = [
+            ("es_ES", "sharvard", "medium", "es_ES: sharvard (medium, ~63MB)"),
+            ("es_ES", "davefx", "medium", "es_ES: davefx (medium, ~63MB)"),
+            ("es_ES", "carlfm", "x_low", "es_ES: carlfm (fast, ~16MB)"),
+            ("es_MX", "ald", "medium", "es_MX: ald (medium, ~63MB)"),
+            ("es_MX", "claude", "high", "es_MX: claude (high quality, ~120MB)"),
+            ("ca_ES", "upc_ona", "medium", "ca_ES: upc_ona (medium, ~63MB)"),
+            ("ca_ES", "upc_pau", "medium", "ca_ES: upc_pau (medium, ~63MB)"),
+            ("en_US", "amy", "medium", "en_US: amy (medium, ~63MB)"),
+            ("en_US", "lessac", "medium", "en_US: lessac (medium, ~63MB)"),
+            ("en_US", "ryan", "high", "en_US: ryan (high quality, ~120MB)"),
+            ("en_US", "joe", "medium", "en_US: joe (medium, ~62MB)"),
+            ("en_US", "kathleen", "low", "en_US: kathleen (low, ~41MB)"),
+            ("en_GB", "alan", "medium", "en_GB: alan (medium, ~63MB)"),
+            ("en_GB", "alba", "medium", "en_GB: alba (medium, ~63MB)"),
+            ("en_GB", "northern_english_male", "medium", "en_GB: northern_english (medium, ~63MB)"),
+            ("en_GB", "cori", "medium", "en_GB: cori (medium, ~63MB)"),
+            ("fr_FR", "siwis", "medium", "fr_FR: siwis (medium, ~62MB)"),
+            ("fr_FR", "upmc", "medium", "fr_FR: upmc (medium, ~62MB)"),
+            ("de_DE", "thorsten", "medium", "de_DE: thorsten (medium, ~63MB)"),
+            ("de_DE", "ramona", "low", "de_DE: ramona (low, ~19MB)"),
+            ("it_IT", "paola", "medium", "it_IT: paola (medium, ~63MB)"),
+            ("pt_BR", "faber", "medium", "pt_BR: faber (medium, ~63MB)"),
+            ("pt_BR", "edresson", "low", "pt_BR: edresson (low, ~28MB)"),
+            ("nl_NL", "mls_7432", "low", "nl_NL: mls_7432 (low, ~28MB)"),
+            ("ru_RU", "irina", "medium", "ru_RU: irina (medium, ~62MB)"),
+            ("pl_PL", "darkman", "medium", "pl_PL: darkman (medium, ~62MB)"),
+            ("zh_CN", "huayan", "medium", "zh_CN: huayan (medium, ~63MB)"),
+            ("sv_SE", "nst", "medium", "sv_SE: nst (medium, ~63MB)"),
+            ("uk_UA", "lada", "medium", "uk_UA: lada (medium, ~63MB)"),
+            ("tr_TR", "fdf", "medium", "tr_TR: fdf (medium, ~63MB)"),
+            ("el_GR", "rapunzelina", "low", "el_GR: rapunzelina (low, ~28MB)"),
+            ("ar_JO", "kareem", "medium", "ar_JO: kareem (medium, ~63MB)"),
+        ]
+
+        voice_labels = [opt[3] for opt in voice_options]
+        voice_model = Gtk.StringList.new(voice_labels)
+        voice_drop = Gtk.DropDown.new(voice_model, None)
+
+        selected_voice_idx = 0
+        for i, opt in enumerate(voice_options):
+            if opt[0] == cur_tts_lang and opt[1] == cur_tts_voice:
+                selected_voice_idx = i
+                break
+        voice_drop.set_selected(selected_voice_idx)
+        tts_config_box.append(voice_drop)
+
+        # Voice Status & Action Row
+        tts_act_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        tts_act_row.set_margin_top(2)
+
+        tts_status_lbl = Gtk.Label()
+        tts_status_lbl.set_halign(Gtk.Align.START)
+        tts_status_lbl.set_hexpand(True)
+        tts_act_row.append(tts_status_lbl)
+
+        dl_tts_btn = Gtk.Button()
+        dl_tts_btn.add_css_class("sayri-action-btn")
+        tts_act_row.append(dl_tts_btn)
+
+        # Live Progress Bar for Voice
+        tts_prog_bar = Gtk.ProgressBar()
+        tts_prog_bar.add_css_class("sayri-progress")
+        tts_prog_bar.set_visible(False)
+
+        def _update_tts_status():
+            idx = voice_drop.get_selected()
+            opt = voice_options[idx]
+            has_v = downloads.has_piper_voice(opt[0], opt[1], opt[2])
+            tts_status_lbl.set_markup(f"<span foreground='{'#22c55e' if has_v else '#eab308'}' size='9000'>{'✓ Ready &amp; Downloaded' if has_v else 'Not downloaded'}</span>")
+            dl_tts_btn.set_label("Downloaded" if has_v else "Download Voice")
+            if has_v:
+                dl_tts_btn.remove_css_class("primary")
+            else:
+                dl_tts_btn.add_css_class("primary")
+            if cfg:
+                cfg.set("tts", "language", opt[0])
+                cfg.set("tts", "voice", opt[1])
+                cfg.set("tts", "quality", opt[2])
+
+        voice_drop.connect("notify::selected", lambda *_: _update_tts_status())
+        _update_tts_status()
+
+        def _do_dl_tts(_b):
+            idx = voice_drop.get_selected()
+            opt = voice_options[idx]
+            dl_tts_btn.set_sensitive(False)
+            dl_tts_btn.set_label("Downloading…")
+            tts_prog_bar.set_fraction(0.0)
+            tts_prog_bar.set_visible(True)
+
+            def _on_tts_prog(frac: float):
+                GLib.idle_add(lambda: (
+                    tts_prog_bar.set_fraction(frac),
+                    tts_status_lbl.set_markup(f"<span foreground='#1e74fb' size='9000'>Downloading voice… <b>{int(frac*100)}%</b></span>")
+                ))
+
+            def _thread():
+                try:
+                    downloads.download_piper_voice(opt[0], opt[1], opt[2], progress=_on_tts_prog)
+                    GLib.idle_add(lambda: (
+                        tts_prog_bar.set_visible(False),
+                        _update_tts_status(),
+                        dl_tts_btn.set_sensitive(True)
+                    ))
+                except Exception as exc:
+                    GLib.idle_add(lambda: (
+                        tts_prog_bar.set_visible(False),
+                        dl_tts_btn.set_label("Retry"),
+                        dl_tts_btn.set_sensitive(True),
+                        tts_status_lbl.set_markup(f"<span foreground='#ef4444' size='9000'>Error: {exc}</span>")
+                    ))
+            threading.Thread(target=_thread, daemon=True).start()
+
+        dl_tts_btn.connect("clicked", _do_dl_tts)
+        tts_config_box.append(tts_act_row)
+        tts_config_box.append(tts_prog_bar)
+
+        # Piper Binary Row
+        has_p_bin = paths.find_binary("piper") is not None
+        p_bin_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        p_bin_row.set_margin_top(4)
+
+        p_bin_lbl = Gtk.Label()
+        p_bin_lbl.set_markup(f"<span size='9000' foreground='{'#22c55e' if has_p_bin else '#94a3b8'}'>piper binary: {'✓ Installed' if has_p_bin else 'Not installed'}</span>")
+        p_bin_lbl.set_halign(Gtk.Align.START)
+        p_bin_lbl.set_hexpand(True)
+        p_bin_row.append(p_bin_lbl)
+
+        dl_p_bin_btn = Gtk.Button(label="Installed" if has_p_bin else "Download Binary")
+        dl_p_bin_btn.add_css_class("sayri-action-btn")
+        if not has_p_bin:
+            dl_p_bin_btn.add_css_class("primary")
+
+        p_bin_prog = Gtk.ProgressBar()
+        p_bin_prog.add_css_class("sayri-progress")
+        p_bin_prog.set_visible(False)
+
+        def _do_dl_p_bin(_b):
+            dl_p_bin_btn.set_sensitive(False)
+            dl_p_bin_btn.set_label("Downloading…")
+            p_bin_prog.set_fraction(0.0)
+            p_bin_prog.set_visible(True)
+
+            def _on_p_prog(frac: float):
+                GLib.idle_add(lambda: (
+                    p_bin_prog.set_fraction(frac),
+                    p_bin_lbl.set_markup(f"<span size='9000' foreground='#1e74fb'>Downloading binary… <b>{int(frac*100)}%</b></span>")
+                ))
+
+            def _thread():
+                try:
+                    downloads.install_piper(progress=_on_p_prog)
+                    GLib.idle_add(lambda: (
+                        p_bin_prog.set_visible(False),
+                        dl_p_bin_btn.set_label("Installed"),
+                        dl_p_bin_btn.remove_css_class("primary"),
+                        p_bin_lbl.set_markup("<span size='9000' foreground='#22c55e'>piper binary: ✓ Installed</span>")
+                    ))
+                except Exception as exc:
+                    GLib.idle_add(lambda: (
+                        p_bin_prog.set_visible(False),
+                        dl_p_bin_btn.set_label("Retry"),
+                        dl_p_bin_btn.set_sensitive(True),
+                        p_bin_lbl.set_markup(f"<span size='9000' foreground='#ef4444'>Error: {exc}</span>")
+                    ))
+            threading.Thread(target=_thread, daemon=True).start()
+
+        dl_p_bin_btn.connect("clicked", _do_dl_p_bin)
+        tts_config_box.append(p_bin_row)
+        tts_config_box.append(p_bin_prog)
+
+        self.settings_box.append(tts_config_box)
+
+    # ── Dialogs ──
+    def _prompt_add_secret(self) -> None:
+        dialog = Gtk.Window(title="Add Secret Key to Vault")
+        dialog.set_default_size(340, 200)
+        dialog.set_modal(True)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.set_margin_top(12)
+        box.set_margin_bottom(12)
+        box.set_margin_start(14)
+        box.set_margin_end(14)
+
+        lbl = Gtk.Label(label="Key Identifier (e.g. DISCORD_BOT_TOKEN):")
+        lbl.set_halign(Gtk.Align.START)
+        box.append(lbl)
+
+        key_entry = Gtk.Entry()
+        key_entry.add_css_class("sayri-settings-entry")
+        box.append(key_entry)
+
+        lbl2 = Gtk.Label(label="Secret Value:")
+        lbl2.set_halign(Gtk.Align.START)
+        box.append(lbl2)
+
+        val_entry = Gtk.Entry()
+        val_entry.add_css_class("sayri-settings-entry")
+        val_entry.set_visibility(False)
+        box.append(val_entry)
+
+        lbl3 = Gtk.Label(label="Description / Purpose:")
+        lbl3.set_halign(Gtk.Align.START)
+        box.append(lbl3)
+
+        desc_entry = Gtk.Entry()
+        desc_entry.add_css_class("sayri-settings-entry")
+        desc_entry.set_placeholder_text("Optional description")
+        box.append(desc_entry)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        btn_box.set_halign(Gtk.Align.END)
+        btn_box.set_margin_top(6)
+
+        cancel_b = Gtk.Button(label="Cancel")
+        cancel_b.add_css_class("sayri-action-btn")
+        cancel_b.connect("clicked", lambda _: dialog.close())
+        btn_box.append(cancel_b)
+
+        save_b = Gtk.Button(label="Save Secret")
+        save_b.add_css_class("sayri-action-btn")
+        save_b.add_css_class("primary")
+        def _save(_):
+            k = key_entry.get_text().strip()
+            v = val_entry.get_text().strip()
+            d = desc_entry.get_text().strip()
+            if k and v:
+                secrets_manager.set_secret(k, v, d)
+                self._populate_secrets()
+            dialog.close()
+        save_b.connect("clicked", _save)
+        btn_box.append(save_b)
+
+        box.append(btn_box)
+        dialog.set_child(box)
+        dialog.present()
+
+    def _prompt_create_agent(self) -> None:
+        dialog = Gtk.Window(title="Create Subagent")
+        dialog.set_default_size(360, 320)
+        dialog.set_modal(True)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.set_margin_top(12)
+        box.set_margin_bottom(12)
+        box.set_margin_start(14)
+        box.set_margin_end(14)
+
+        # Name
+        lbl = Gtk.Label(label="Subagent Name:")
+        lbl.set_halign(Gtk.Align.START)
+        box.append(lbl)
+        name_entry = Gtk.Entry()
+        name_entry.add_css_class("sayri-settings-entry")
+        name_entry.set_placeholder_text("e.g. Discord Voice Assistant")
+        box.append(name_entry)
+
+        # Role
+        lbl2 = Gtk.Label(label="Instructions / System Prompt:")
+        lbl2.set_halign(Gtk.Align.START)
+        box.append(lbl2)
+        prompt_entry = Gtk.Entry()
+        prompt_entry.add_css_class("sayri-settings-entry")
+        prompt_entry.set_placeholder_text("e.g. You are a concise discord voice bot")
+        box.append(prompt_entry)
+
+        # Sandbox DropDown
+        lbl_sb = Gtk.Label(label="Sandbox Isolation Level:")
+        lbl_sb.set_halign(Gtk.Align.START)
+        box.append(lbl_sb)
+
+        sb_options = [
+            ("LEVEL_0_NO_EXEC", "LEVEL_0: Pure Chat (No Execution)"),
+            ("LEVEL_1_READONLY", "LEVEL_1: Sandbox L1 (Read-Only FS)"),
+            ("LEVEL_2_ISOLATED_DEV", "LEVEL_2: Sandbox L2 (Isolated Workspace)"),
+            ("LEVEL_3_HOST_USER", "LEVEL_3: Host L3 (Active Desktop User)"),
+            ("LEVEL_4_HOST_ROOT", "LEVEL_4: Host L4 (Elevated / Root)"),
+        ]
+        sb_model = Gtk.StringList.new([opt[1] for opt in sb_options])
+        sb_drop = Gtk.DropDown.new(sb_model, None)
+        sb_drop.set_selected(0)
+        box.append(sb_drop)
+
+        # Gateway DropDown
+        lbl_gw = Gtk.Label(label="Channel Gateway:")
+        lbl_gw.set_halign(Gtk.Align.START)
+        box.append(lbl_gw)
+
+        gw_options = [
+            "None (Direct Assistant)",
+            "Discord Voice & Chat Gateway",
+            "Telegram Bot Bridge",
+            "Model Context Protocol (MCP)",
+        ]
+        gw_model = Gtk.StringList.new(gw_options)
+        gw_drop = Gtk.DropDown.new(gw_model, None)
+        gw_drop.set_selected(0)
+        box.append(gw_drop)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        btn_box.set_halign(Gtk.Align.END)
+        btn_box.set_margin_top(8)
+
+        cancel_b = Gtk.Button(label="Cancel")
+        cancel_b.add_css_class("sayri-action-btn")
+        cancel_b.connect("clicked", lambda _: dialog.close())
+        btn_box.append(cancel_b)
+
+        save_b = Gtk.Button(label="Create Subagent")
+        save_b.add_css_class("sayri-action-btn")
+        save_b.add_css_class("primary")
+
+        def _save(_):
+            n = name_entry.get_text().strip()
+            p = prompt_entry.get_text().strip()
+            if n:
+                sel_sb_idx = sb_drop.get_selected()
+                sb_level_enum = getattr(SandboxLevel, sb_options[sel_sb_idx][0], SandboxLevel.LEVEL_0_NO_EXEC)
+                aid = re.sub(r"[^a-zA-Z0-9_\-]", "-", n.lower()).strip("-") or f"agent-{int(time.time())}"
+                profile = AgentProfile(
+                    id=aid,
+                    name=n,
+                    description=f"Created via Sayri Subagent Manager",
+                    system_prompt=p or f"You are {n}, an autonomous assistant for Sayri.",
+                    model=AgentModelConfig(model_name="default"),
+                    sandbox=SandboxConfig(level=sb_level_enum),
+                )
+                AgentCreator.save_agent(profile)
+                self._populate_agents()
+            dialog.close()
+
+        save_b.connect("clicked", _save)
+        btn_box.append(save_b)
+
+        box.append(btn_box)
+        dialog.set_child(box)
+        dialog.present()
+
+    def _prompt_rename_session(self, session_id: str, current_title: str) -> None:
+        dialog = Gtk.Window(title="Rename Conversation")
+        dialog.set_default_size(320, 120)
+        dialog.set_modal(True)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.set_margin_top(12)
+        box.set_margin_bottom(12)
+        box.set_margin_start(14)
+        box.set_margin_end(14)
+
+        lbl = Gtk.Label(label="New Title:")
+        lbl.set_halign(Gtk.Align.START)
+        box.append(lbl)
+
+        entry = Gtk.Entry()
+        entry.add_css_class("sayri-settings-entry")
+        entry.set_text(current_title)
+        box.append(entry)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        btn_box.set_halign(Gtk.Align.END)
+        btn_box.set_margin_top(6)
+
+        cancel_b = Gtk.Button(label="Cancel")
+        cancel_b.add_css_class("sayri-action-btn")
+        cancel_b.connect("clicked", lambda _: dialog.close())
+        btn_box.append(cancel_b)
+
+        save_b = Gtk.Button(label="Save")
+        save_b.add_css_class("sayri-action-btn")
+        save_b.add_css_class("primary")
+        def _save(_):
+            new_t = entry.get_text().strip()
+            if new_t and hasattr(self.app, "storage") and self.app.storage:
+                self.app.storage.update_session_title(session_id, new_t)
+                self._populate_history()
+            dialog.close()
+        save_b.connect("clicked", _save)
+        entry.connect("activate", _save)
+        btn_box.append(save_b)
+
+        box.append(btn_box)
+        dialog.set_child(box)
+        dialog.present()
+
+    def render_session_history(self, title: str, messages: list) -> None:
+        """Shows historical thread transcript."""
+        self.thread_title_lbl.set_markup(f"<span weight='600' size='10000' foreground='#f8fafc'>{GLib.markup_escape_text(title)}</span>")
+        while True:
+            child = self.thread_box.get_first_child()
+            if not child:
+                break
+            self.thread_box.remove(child)
+
+        for m in messages:
+            role = getattr(m, "role", "") if hasattr(m, "role") else m.get("role", "")
+            content = getattr(m, "content", "") if hasattr(m, "content") else m.get("content", "")
+            if role == "user" and content:
+                u_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+                u_lbl = Gtk.Label()
+                u_lbl.set_markup(f"<span foreground='#38bdf8' weight='600'>You:</span> {GLib.markup_escape_text(content)}")
+                u_lbl.set_wrap(True)
+                u_lbl.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+                u_box.append(u_lbl)
+                self.thread_box.append(u_box)
+            elif role == "assistant" and content:
+                a_lbl = Gtk.Label()
+                a_lbl.set_wrap(True)
+                a_lbl.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+                _safe_set_markup(a_lbl, content)
+                self.thread_box.append(a_lbl)
+
+        self.switch_tab("thread")
+
+    def update_agent_badge(self, agent_name: str, sandbox_level: str) -> None:
+        short_sb = {
+            "LEVEL_0_NO_EXEC": "No Exec",
+            "LEVEL_1_READONLY": "Sandbox L1 (Read-Only)",
+            "LEVEL_2_ISOLATED_DEV": "Sandbox L2 (Isolated Dev)",
+            "LEVEL_3_HOST_USER": "Host L3 (User)",
+            "LEVEL_4_HOST_ROOT": "Host L4 (Elevated)",
+        }.get(sandbox_level, sandbox_level)
+        self.agent_badge.set_markup(f"<span size='9500' weight='600' foreground='#38bdf8'>{GLib.markup_escape_text(agent_name)}</span>")
+        self.sandbox_badge.set_markup(f"<span size='9000' foreground='#94a3b8'>• {GLib.markup_escape_text(short_sb)}</span>")
+
+    def append_token(self, token: str) -> None:
+        self._live_text += token
+        _safe_set_markup(self.response_label, self._live_text)
+        if self.card_stack.get_visible_child_name() != "chat":
+            self.switch_tab("chat", trigger_effect=False)
+        self.card_overlay.set_visible(True)
+        # Settle pill animation and transfer to card
+        self.pill_bg.set_mode("idle")
+        self.card_bg.set_mode("speaking")
+
+    def set_response(self, text: str) -> None:
+        self._live_text = text
+        _safe_set_markup(self.response_label, text)
+        if self.card_stack.get_visible_child_name() != "chat":
+            self.switch_tab("chat", trigger_effect=False)
+        self.card_overlay.set_visible(True)
+        # Settle pill animation and transfer to card
+        self.pill_bg.set_mode("idle")
+        self.card_bg.set_mode("speaking")
+
+    def set_command_output(self, cmd: str, output: str, exit_code: int = 0) -> None:
+        self.cmd_expander.set_label(f"Command: {cmd[:28]}… (code {exit_code})")
+        self.cmd_label.set_text(f"$ {cmd}\n\n{output}")
         self.cmd_expander.set_visible(True)
         self.card_overlay.set_visible(True)
-        self.card_bg.set_mode("rotating")
 
-    def set_mic(self, active: bool) -> None:
-        if active:
-            if not self._mic_is_active:
-                self._mic_is_active = True
-                self.mic_btn.set_child(self._mic_active_pic)
-                self.pill_bg.set_mode("active")
-        else:
-            if self._mic_is_active:
-                self._mic_is_active = False
-                self.mic_btn.set_child(self._mic_idle_pic)
-                if not self.entry.get_text().strip():
-                    self.pill_bg.set_mode("idle")
+    def set_tool_output(self, cmd: str, output: str) -> None:
+        self.set_command_output(cmd, output, exit_code=0)
 
     def set_busy(self, busy: bool) -> None:
         if busy:
-            self.pill_bg.set_mode("rotating")
+            self.pill_bg.set_mode("thinking")
+            self.card_bg.set_mode("idle")
+            self.switch_tab("chat", trigger_effect=False)
         else:
             self.entry.set_sensitive(True)
-            if not self.app.listening_now() and not self.entry.get_text().strip():
-                self.pill_bg.set_mode("idle")
+            self.pill_bg.set_mode("idle")
 
     def set_speaking(self, speaking: bool) -> None:
         if speaking:
-            self.card_bg.set_mode("rotating")
+            self.card_bg.set_mode("speaking")
         else:
             self.card_bg.set_mode("idle")
 
+    def set_mic(self, active: bool) -> None:
+        self._mic_is_active = active
+        if active:
+            self.mic_btn.set_child(_svg_icon(SVG_MIC_ACTIVE))
+            self.pill_bg.set_mode("active")
+        else:
+            self.mic_btn.set_child(_svg_icon(SVG_MIC))
+            if not self.entry.get_text().strip() and self.pill_bg.mode == "active":
+                self.pill_bg.set_mode("idle")
+
+    def set_content(self, kind: str, text: str) -> None:
+        if kind in ("transcription", "user", "partial"):
+            self.entry.set_text(text)
+            self.entry.set_position(-1)
+            if text:
+                self.pill_bg.set_mode("active")
+        elif kind == "hint":
+            if not self._live_text:
+                self.response_label.set_markup(f"<span foreground='#94a3b8'><i>{GLib.markup_escape_text(text)}</i></span>")
+                self.card_overlay.set_visible(True)
+        elif kind == "error":
+            self.response_label.set_markup(f"<span foreground='#ef4444' size='10500'><b>Error:</b> {GLib.markup_escape_text(text)}</span>")
+            self.card_overlay.set_visible(True)
+        elif kind in ("assistant", "answer"):
+            self.set_response(text)
+
     def clear(self) -> None:
+        self._live_text = ""
         self.response_label.set_attributes(Pango.AttrList())
         self.response_label.set_text("")
-        self.cmd_label.set_attributes(Pango.AttrList())
         self.cmd_label.set_text("")
         self.cmd_expander.set_visible(False)
         self.card_bg.set_mode("idle")
-        self.card_overlay.set_visible(False)
-        self.entry.set_sensitive(True)
-        if not self.app.listening_now() and not self.entry.get_text().strip():
-            self.pill_bg.set_mode("idle")
+
+
+Cajita = SayriCajita

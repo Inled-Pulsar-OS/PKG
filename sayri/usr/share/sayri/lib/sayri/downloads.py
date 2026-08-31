@@ -100,6 +100,25 @@ PIPER_VOICES: dict[str, list[dict]] = {
     "zh_CN": [
         {"voice": "huayan", "quality": "medium", "path": "zh/zh_CN/huayan/medium/zh_CN-huayan-medium.onnx", "size": "~63 MB"},
     ],
+    "ca_ES": [
+        {"voice": "upc_ona", "quality": "medium", "path": "ca/ca_ES/upc_ona/medium/ca_ES-upc_ona-medium.onnx", "size": "~63 MB"},
+        {"voice": "upc_pau", "quality": "medium", "path": "ca/ca_ES/upc_pau/medium/ca_ES-upc_pau-medium.onnx", "size": "~63 MB"},
+    ],
+    "sv_SE": [
+        {"voice": "nst", "quality": "medium", "path": "sv/sv_SE/nst/medium/sv_SE-nst-medium.onnx", "size": "~63 MB"},
+    ],
+    "uk_UA": [
+        {"voice": "lada", "quality": "medium", "path": "uk/uk_UA/lada/medium/uk_UA-lada-medium.onnx", "size": "~63 MB"},
+    ],
+    "tr_TR": [
+        {"voice": "fdf", "quality": "medium", "path": "tr/tr_TR/fdf/medium/tr_TR-fdf-medium.onnx", "size": "~63 MB"},
+    ],
+    "el_GR": [
+        {"voice": "rapunzelina", "quality": "low", "path": "el/el_GR/rapunzelina/low/el_GR-rapunzelina-low.onnx", "size": "~28 MB"},
+    ],
+    "ar_JO": [
+        {"voice": "kareem", "quality": "medium", "path": "ar/ar_JO/kareem/medium/ar_JO-kareem-medium.onnx", "size": "~63 MB"},
+    ],
 }
 
 # ---------------------------------------------------------------------------

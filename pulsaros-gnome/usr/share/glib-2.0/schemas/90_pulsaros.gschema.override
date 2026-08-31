@@ -103,8 +103,13 @@ enable-unblank=false
 lockscreen-mode='cupertino'
 
 [org.gnome.settings-daemon.plugins.power]
-sleep-inactive-ac-type='nothing'
-sleep-inactive-battery-type='nothing'
+sleep-inactive-ac-type='suspend'
+sleep-inactive-ac-timeout=900
+sleep-inactive-battery-type='suspend'
+sleep-inactive-battery-timeout=600
+
+[org.gnome.desktop.session]
+idle-delay=uint32 300
 
 [org.gnome.shell.keybindings]
 toggle-overview=['<Super>s', '<Control>Up']
