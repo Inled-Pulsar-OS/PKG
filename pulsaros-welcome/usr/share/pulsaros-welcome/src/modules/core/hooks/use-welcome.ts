@@ -68,8 +68,8 @@ export function useWelcome() {
   const goTo = useCallback((s: WelcomeScreen) => setScreen(s), []);
 
   const setEffectsValue = useCallback(async (useLiquidGlass: boolean) => {
-    await apiSetEffects(useLiquidGlass);
     setData((prev) => ({ ...prev, effectsState: useLiquidGlass }));
+    await apiSetEffects(useLiquidGlass);
   }, []);
 
   const complete = useCallback(async () => {

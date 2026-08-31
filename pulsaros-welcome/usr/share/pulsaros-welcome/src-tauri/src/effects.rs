@@ -21,6 +21,22 @@ fn gsettings_set(schema: &str, key: &str, value: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn gsettings_batch(commands: &[(&str, &str, &str)]) -> Result<(), String> {
+    if commands.is_empty() {
+        return Ok(());
+    }
+    let script: String = commands
+        .iter()
+        .map(|(schema, key, value)| format!("gsettings set '{}' '{}' {}", schema, key, value))
+        .collect::<Vec<_>>()
+        .join(" && ");
+    Command::new("bash")
+        .args(["-c", &script])
+        .output()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn get_enabled_extensions() -> Vec<String> {
     let raw = gsettings_get("org.gnome.shell", "enabled-extensions").unwrap_or_default();
     let inner = raw.trim().trim_start_matches('[').trim_end_matches(']');
@@ -73,46 +89,47 @@ pub fn set_effects(use_liquid_glass: bool) -> Result<(), String> {
 }
 
 fn apply_blur_settings() -> Result<(), String> {
-    let schema = "org.gnome.shell.extensions.dash-to-dock";
-    gsettings_set(schema, "background-opacity", "0.8")?;
-    gsettings_set(schema, "custom-theme-shrink", "false")?;
-    gsettings_set(schema, "show-show-apps-button", "false")?;
-    gsettings_set(schema, "height-fraction", "0.9")?;
-    gsettings_set(schema, "apply-custom-theme", "true")?;
-    gsettings_set(schema, "transparency-mode", "'FIXED'")?;
-    gsettings_set(schema, "customize-alphas", "false")?;
-    Ok(())
+    let s = "org.gnome.shell.extensions.dash-to-dock";
+    gsettings_batch(&[
+        (s, "background-opacity", "0.8"),
+        (s, "custom-theme-shrink", "false"),
+        (s, "show-show-apps-button", "false"),
+        (s, "height-fraction", "0.9"),
+        (s, "apply-custom-theme", "true"),
+        (s, "transparency-mode", "'FIXED'"),
+        (s, "customize-alphas", "false"),
+    ])
 }
 
 fn apply_glass_settings() -> Result<(), String> {
     let dock = "org.gnome.shell.extensions.dash-to-dock";
-    gsettings_set(dock, "background-opacity", "0.0")?;
-    gsettings_set(dock, "custom-theme-shrink", "false")?;
-    gsettings_set(dock, "show-show-apps-button", "false")?;
-    gsettings_set(dock, "height-fraction", "0.9")?;
-    gsettings_set(dock, "apply-custom-theme", "false")?;
-    gsettings_set(dock, "transparency-mode", "'FIXED'")?;
-    gsettings_set(dock, "customize-alphas", "true")?;
-    gsettings_set(dock, "min-alpha", "0.0")?;
-    gsettings_set(dock, "max-alpha", "0.0")?;
-
     let glass = "org.gnome.shell.extensions.liquid-glass";
-    gsettings_set(glass, "application-blur-radius", "9")?;
-    gsettings_set(glass, "application-content-opacity", "1.0")?;
-    gsettings_set(glass, "application-corner-radius", "17.0")?;
-    gsettings_set(glass, "application-glass-all-windows", "false")?;
-    gsettings_set(glass, "application-tint-color", "'#000000'")?;
-    gsettings_set(glass, "application-tint-strength", "0.06")?;
-    gsettings_set(glass, "application-window-whitelist", "[]")?;
-    gsettings_set(glass, "dock-corner-radius", "24.0")?;
-    gsettings_set(glass, "dock-glass-expand", "3")?;
-    gsettings_set(glass, "dock-tint-color", "'#000000'")?;
-    gsettings_set(glass, "enable-application-glass", "false")?;
-    gsettings_set(glass, "enable-menu-glass", "true")?;
-    gsettings_set(glass, "enable-quick-settings-glass", "false")?;
-    gsettings_set(glass, "menu-tint-color", "'#000000'")?;
-    gsettings_set(glass, "notification-tint-color", "'#000000'")?;
-    gsettings_set(glass, "osd-tint-color", "'#000000'")?;
-    gsettings_set(glass, "output-logs", "false")?;
-    Ok(())
+    gsettings_batch(&[
+        (dock, "background-opacity", "0.0"),
+        (dock, "custom-theme-shrink", "false"),
+        (dock, "show-show-apps-button", "false"),
+        (dock, "height-fraction", "0.9"),
+        (dock, "apply-custom-theme", "false"),
+        (dock, "transparency-mode", "'FIXED'"),
+        (dock, "customize-alphas", "true"),
+        (dock, "min-alpha", "0.0"),
+        (dock, "max-alpha", "0.0"),
+        (glass, "application-blur-radius", "9"),
+        (glass, "application-content-opacity", "1.0"),
+        (glass, "application-corner-radius", "17.0"),
+        (glass, "application-glass-all-windows", "false"),
+        (glass, "application-tint-color", "'#000000'"),
+        (glass, "application-tint-strength", "0.06"),
+        (glass, "application-window-whitelist", "[]"),
+        (glass, "dock-corner-radius", "24.0"),
+        (glass, "dock-glass-expand", "3"),
+        (glass, "dock-tint-color", "'#000000'"),
+        (glass, "enable-application-glass", "false"),
+        (glass, "enable-menu-glass", "true"),
+        (glass, "enable-quick-settings-glass", "false"),
+        (glass, "menu-tint-color", "'#000000'"),
+        (glass, "notification-tint-color", "'#000000'"),
+        (glass, "osd-tint-color", "'#000000'"),
+        (glass, "output-logs", "false"),
+    ])
 }

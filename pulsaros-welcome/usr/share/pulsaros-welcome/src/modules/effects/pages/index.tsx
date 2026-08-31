@@ -35,7 +35,7 @@ export function EffectsPage({
           <button
             key={effect.id}
             className={cn(
-              "glass-grouped rounded-xl p-4 text-left transition-all cursor-pointer",
+              "glass-grouped rounded-xl p-4 text-left transition-shadow cursor-pointer",
               effect.id === "blur-shell" &&
                 !effectsState &&
                 "ring-2 ring-accent",
