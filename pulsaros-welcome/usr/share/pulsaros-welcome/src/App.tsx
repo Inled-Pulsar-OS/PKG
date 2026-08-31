@@ -9,6 +9,7 @@ import { SoftwarePage } from "@/modules/software";
 import { EffectsPage } from "@/modules/effects";
 import { GpuPage } from "@/modules/gpu";
 import { FeedbackPage } from "@/modules/feedback";
+import { FeaturesPage } from "@/modules/features";
 
 function WelcomeApp() {
   const {
@@ -57,8 +58,12 @@ function WelcomeApp() {
       );
     case "gpu":
       return <GpuPage onContinue={goNext} onBack={goBack} />;
-    case "feedback":
-      return <FeedbackPage onContinue={complete} onBack={goBack} />;
+      case "feedback":
+        return <FeedbackPage onContinue={goNext} onBack={goBack} />;
+      case "features":
+        return (
+          <FeaturesPage onContinue={complete} onBack={goBack} />
+        );
     case "done":
       return (
         <div className="bg-atmosphere flex h-screen w-screen items-center justify-center p-5 sm:p-8">

@@ -10,6 +10,7 @@ export type WelcomeScreen =
   | "effects"
   | "gpu"
   | "feedback"
+  | "features"
   | "done";
 
 export interface Resolution {
