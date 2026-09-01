@@ -4,7 +4,8 @@ Section: admin
 Priority: optional
 Architecture: amd64
 Maintainer: Jaime <info@inled.es>
-Depends: x11-xserver-utils, driverman
+Build-Depends: nodejs, npm, cargo, rustc, libwebkit2gtk-4.1-dev
+Depends: x11-xserver-utils, driverman, libwebkit2gtk-4.1-0, libappindicator3-1
 Description: Welcome application for Pulsar OS.
  Shows a beautiful Apple-like hello animation and guides the user through
  screen resolution, bluetooth, software center, desktop effects, GPU drivers

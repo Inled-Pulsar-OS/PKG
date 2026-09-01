@@ -5,17 +5,6 @@
 
 BINARY="/usr/share/pulsaros-welcome/src-tauri/target/release/pulsaros-welcome"
 
-# If binary not found, try to build it
-if [ ! -f "$BINARY" ]; then
-    echo "Building pulsaros-welcome..."
-    cd /usr/share/pulsaros-welcome
-    if command -v pnpm &>/dev/null; then
-        pnpm tauri build 2>/dev/null || true
-    elif command -v npm &>/dev/null; then
-        npm run tauri build 2>/dev/null || true
-    fi
-fi
-
 # If live user cleanup is pending, run cleanup via the binary
 if [ -f "/etc/pulsar-need-cleanup" ]; then
     exec "$BINARY" "$@"

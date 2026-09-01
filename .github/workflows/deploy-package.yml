@@ -102,7 +102,7 @@ jobs:
             libibus-1.0-dev libkrb5-dev libgnutls28-dev \
             libxi-dev libx11-dev docbook-xsl xsltproc \
             modemmanager-dev libmm-glib-dev \
-            cargo rustc
+            cargo rustc nodejs npm
 
       # 6. Parse package and branch from issue or inputs
       - name: Parse Package and Branch
