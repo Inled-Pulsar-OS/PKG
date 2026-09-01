@@ -51,8 +51,7 @@ This repository contains the **source packages** that make up Pulsar OS. PulsarO
 | Package | What it does |
 |---------|--------------|
 | `pulsaros-essential` | Essential config and utilities: Fildem HUD, network interface config, global locales, passwordless sudo and polkit. Pulls in the core app set (droidtux, macboat, appinstall, seafari, etc.) |
-| `pulsaros-calamares` | **Calamares installer** branding, slideshows, settings, launchers and autostart for the live installer; replaces `calamares-settings-debian` |
-| `pulsaros-recovery` | Apple-like **Recovery Utilities + Disk selector** UI shown before Calamares launches in the installer |
+| `pulsaros-recovery` | Apple-like **Native Installer + Recovery Assistant** (Rust/GTK4 & Python): full system installation, Btrfs subvolumes, ESP/rEFInd setup, and restoration |
 | `pulsaros-welcome` | **Welcome/onboarding** app: Apple-like "hello" animation and guides for resolution, Bluetooth, GSConnect, USB debugging, macOS, and feedback |
 | `pulsaros-meta` | **Metapackage**: depends on the whole Pulsar OS package set. Bump its version whenever new packages are added so existing installations pull them on update |
 
