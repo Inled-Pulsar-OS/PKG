@@ -6,7 +6,7 @@ After=local-fs.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'if ! awk -F: '\''$3 >= 1000 && $3 != 65534 && $1 != "live" {print $1}'\'' /etc/passwd | grep -q .; then touch /etc/pulsar-need-setup && echo "live ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/pulsar-ootb-live && chmod 0440 /etc/sudoers.d/pulsar-ootb-live; fi'
+ExecStart=/bin/bash -c 'if ! grep -q -E "boot=live|archisobasedir|archisolabel|img_dev|rootfstype=9p" /proc/cmdline && [ ! -d /run/archiso ] && [ ! -d /run/live ] && [ ! -d /lib/live ]; then if ! awk -F: '\''$3 >= 1000 && $3 != 65534 && $1 != "live" {print $1}'\'' /etc/passwd | grep -q .; then touch /etc/pulsar-need-setup && echo "live ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/pulsar-ootb-live && chmod 0440 /etc/sudoers.d/pulsar-ootb-live; fi; fi'
 RemainAfterExit=yes
 TimeoutStartSec=30
 

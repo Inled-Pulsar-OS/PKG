@@ -53,13 +53,13 @@ export function useWelcome() {
    * - Otherwise proceed through the normal slideshow.
    */
   const proceedFromHello = useCallback(async () => {
-    if (ootbPending) {
+    if (ootbPending && !isLive) {
       await launchOotb();
       await closeWindow();
       return;
     }
     setScreen("features");
-  }, [ootbPending]);
+  }, [ootbPending, isLive]);
 
   const goNext = useCallback(() => {
     setScreen((prev) => {

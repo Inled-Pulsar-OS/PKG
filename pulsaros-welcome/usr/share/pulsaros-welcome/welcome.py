@@ -33,19 +33,17 @@ from gi.repository import Gtk, Gdk, GLib, Gio
 
 def is_live_system():
     """Detects if we are running in the Live ISO environment."""
-    # If OOTB setup is pending on an installed system, we are NOT in live mode
-    if os.path.exists("/etc/pulsar-need-setup"):
-        return False
-
-    # Check live medium mount points
-    if os.path.exists("/lib/live/mount") or os.path.exists("/run/archiso/bootmnt") or os.path.exists("/run/archiso/airootfs") or os.path.exists("/run/live/medium"):
-        return True
+    # Check live filesystem mount points and directories
+    for p in ["/run/archiso/bootmnt", "/run/archiso/airootfs", "/run/archiso", "/lib/live/mount", "/run/live/medium", "/run/live/overlay"]:
+        if os.path.exists(p):
+            return True
 
     try:
         with open("/proc/cmdline", "r") as f:
             cmd = f.read()
-            if "boot=live" in cmd or "archisobasedir=" in cmd or "archisolabel=" in cmd or "img_dev=" in cmd:
-                return True
+            for flag in ["boot=live", "archisobasedir=", "archisolabel=", "img_dev=", "rootfstype=9p", "live-media"]:
+                if flag in cmd:
+                    return True
     except Exception:
         pass
     return False
@@ -66,7 +64,9 @@ def is_arch_system():
 
 
 def is_ootb_pending():
-    """Detects if initial user account setup is required."""
+    """Detects if initial user account setup is required on an installed disk."""
+    if is_live_system():
+        return False
     return os.path.exists("/etc/pulsar-need-setup")
 
 
