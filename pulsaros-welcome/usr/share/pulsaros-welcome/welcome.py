@@ -33,14 +33,18 @@ from gi.repository import Gtk, Gdk, GLib, Gio
 
 def is_live_system():
     """Detects if we are running in the Live ISO environment."""
-    if os.path.exists("/lib/live/mount") or os.path.exists("/run/archiso/bootmnt") or os.path.exists("/run/live/medium"):
+    # If OOTB setup is pending on an installed system, we are NOT in live mode
+    if os.path.exists("/etc/pulsar-need-setup"):
+        return False
+
+    # Check live medium mount points
+    if os.path.exists("/lib/live/mount") or os.path.exists("/run/archiso/bootmnt") or os.path.exists("/run/archiso/airootfs") or os.path.exists("/run/live/medium"):
         return True
-    if os.environ.get("USER") == "live":
-        return True
+
     try:
         with open("/proc/cmdline", "r") as f:
             cmd = f.read()
-            if "boot=live" in cmd or "archisobasedir=live" in cmd or "rootfstype=9p" in cmd:
+            if "boot=live" in cmd or "archisobasedir=" in cmd or "archisolabel=" in cmd or "img_dev=" in cmd:
                 return True
     except Exception:
         pass

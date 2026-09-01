@@ -3231,19 +3231,29 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         src = next((p for p in candidates if os.path.isfile(p) and os.path.getsize(p) > 1024), None)
 
                     if not src:
-                        log_msg("WARNING: dedicated recovery initramfs not found. Skipping recovery bootloader entry to avoid boot failure.")
-                        return
-                    esp_root = "/mnt/boot/efi"
-                    os.makedirs("/mnt/boot", exist_ok=True)
-                    os.makedirs("/mnt/recovery/boot", exist_ok=True)
-                    os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
-                    shutil.copy2(src, "/mnt/boot/initramfs-recovery.img")
-                    shutil.copy2(src, "/mnt/recovery/boot/initramfs-recovery.img")
-                    shutil.copy2(src, "/mnt/recovery/initramfs-recovery.img")
-                    shutil.copy2(src, f"{esp_root}/EFI/recovery/initramfs-recovery.img")
-                    shutil.copy2(src, f"{esp_root}/EFI/recovery/initrd.img")
-                    subprocess.run(["sync"])
-                    log_msg(f"Recovery initramfs deployed to PULSAR_OS, PULSAR_RECOVERY, and ESP from {src}")
+                        # Fallback to installed system's initramfs
+                        for fb_dir in ("/mnt/boot", "/boot"):
+                            for p in glob.glob(f"{fb_dir}/initramfs-*.img") + glob.glob(f"{fb_dir}/initrd.img*"):
+                                if os.path.isfile(p) and "fallback" not in p and "ucode" not in p and os.path.getsize(p) > 1024:
+                                    src = p
+                                    break
+                            if src:
+                                break
+
+                    if not src:
+                        log_msg("WARNING: dedicated recovery initramfs not found.")
+                    else:
+                        esp_root = "/mnt/boot/efi"
+                        os.makedirs("/mnt/boot", exist_ok=True)
+                        os.makedirs("/mnt/recovery/boot", exist_ok=True)
+                        os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
+                        shutil.copy2(src, "/mnt/boot/initramfs-recovery.img")
+                        shutil.copy2(src, "/mnt/recovery/boot/initramfs-recovery.img")
+                        shutil.copy2(src, "/mnt/recovery/initramfs-recovery.img")
+                        shutil.copy2(src, f"{esp_root}/EFI/recovery/initramfs-recovery.img")
+                        shutil.copy2(src, f"{esp_root}/EFI/recovery/initrd.img")
+                        subprocess.run(["sync"])
+                        log_msg(f"Recovery initramfs deployed to PULSAR_OS, PULSAR_RECOVERY, and ESP from {src}")
                 except Exception as p_err:
                     log_msg(f"ERROR preserving live initramfs for recovery: {p_err}")
 
@@ -3270,7 +3280,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     found_k = next((k for k in kernel_cand if os.path.isfile(k) and not k.endswith(".kver") and os.path.getsize(k) > 1024), None)
                 try:
                     if not found_k:
-                        log_msg("WARNING: dedicated recovery kernel not found. Skipping recovery kernel deployment.")
+                        # Fallback to installed system's kernel
+                        for fb_dir in ("/mnt/boot", "/boot"):
+                            for p in glob.glob(f"{fb_dir}/vmlinuz-linux") + glob.glob(f"{fb_dir}/vmlinuz-*") + glob.glob(f"{fb_dir}/vmlinuz"):
+                                if os.path.isfile(p) and not p.endswith(".kver") and os.path.getsize(p) > 1024:
+                                    found_k = p
+                                    break
+                            if found_k:
+                                break
+
+                    if not found_k:
+                        log_msg("WARNING: dedicated recovery kernel not found.")
                         return
                     esp_root = "/mnt/boot/efi"
                     os.makedirs("/mnt/boot", exist_ok=True)
@@ -3475,8 +3495,23 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
     insmod part_msdos
     insmod ext2
     search --no-floppy --fs-uuid --set=root {root_uuid}
-    linux /@/boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media-path=live fsck.mode=skip quiet splash
-    initrd /@/boot/initramfs-recovery.img
+    if [ -f /@/boot/vmlinuz-recovery ]; then
+        linux /@/boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media-path=live fsck.mode=skip quiet splash
+        initrd /@/boot/initramfs-recovery.img
+    elif [ -f /boot/vmlinuz-recovery ]; then
+        linux /boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media-path=live fsck.mode=skip quiet splash
+        initrd /boot/initramfs-recovery.img
+    elif [ -f /@/boot/vmlinuz-linux ]; then
+        linux /@/boot/vmlinuz-linux root=UUID={root_uuid} rootflags=subvol=@ rw quiet splash single
+        if [ -f /@/boot/initramfs-linux.img ]; then
+            initrd /@/boot/initramfs-linux.img
+        fi
+    else
+        linux /boot/vmlinuz-linux root=UUID={root_uuid} rw quiet splash single
+        if [ -f /boot/initramfs-linux.img ]; then
+            initrd /boot/initramfs-linux.img
+        fi
+    fi
 }}
 """
                 rec_script_path = f"{grub_d}/15_pulsar_recovery"
