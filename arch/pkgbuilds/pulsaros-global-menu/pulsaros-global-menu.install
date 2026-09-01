@@ -70,14 +70,34 @@ EOF
     # 4. Disable zswap in kernel cmdline — zswap intercepts hibernation image writes
     #    and stores them in RAM instead of disk. When HibernateMode=shutdown powers off,
     #    the zswap pool is lost and the kernel finds no image on next boot (EINVAL).
-    ROOT_UUID=$(findmnt -no UUID / 2>/dev/null || true)
-    OFFSET=$(filefrag -v /swapfile 2>/dev/null | awk '$1=="0:" {print substr($4, 1, length($4)-2)}' || true)
+    ROOT_UUID=$(findmnt -no UUID -T /swapfile 2>/dev/null || findmnt -no UUID / 2>/dev/null || true)
+    FSTYPE=$(findmnt -no FSTYPE / 2>/dev/null || echo "ext4")
+    OFFSET=""
+    if [ "$FSTYPE" = "btrfs" ] && command -v btrfs >/dev/null 2>&1; then
+        OFFSET=$(btrfs inspect-internal map-swapfile -r /swapfile 2>/dev/null | tail -n 1)
+    fi
+    if [ -z "$OFFSET" ]; then
+        OFFSET=$(filefrag -v /swapfile 2>/dev/null | awk '$1=="0:" {print substr($4, 1, length($4)-2)}' || true)
+    fi
+
     if [ -n "$ROOT_UUID" ] && [ -n "$OFFSET" ]; then
         HIBERNATE_PARAMS="resume=UUID=${ROOT_UUID} resume_offset=${OFFSET} zswap.enabled=0"
         if [ -f /boot/refind_linux.conf ]; then
             sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' /boot/refind_linux.conf 2>/dev/null || true
             sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${HIBERNATE_PARAMS}|g" /boot/refind_linux.conf 2>/dev/null || true
         fi
+        for rc in \
+            /boot/efi/EFI/refind/refind.conf \
+            /boot/efi/EFI/BOOT/refind.conf \
+            /efi/EFI/refind/refind.conf \
+            /efi/EFI/BOOT/refind.conf \
+            /boot/EFI/refind/refind.conf \
+            /boot/EFI/BOOT/refind.conf; do
+            if [ -f "$rc" ]; then
+                sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' "$rc" 2>/dev/null || true
+                sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${HIBERNATE_PARAMS}|g" "$rc" 2>/dev/null || true
+            fi
+        done
         if [ -f /etc/default/grub ]; then
             sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' /etc/default/grub 2>/dev/null || true
             sed -i "s|GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${HIBERNATE_PARAMS}\"|" /etc/default/grub 2>/dev/null || true

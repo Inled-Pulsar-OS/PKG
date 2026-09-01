@@ -190,6 +190,20 @@ listboxrow:selected .utility-desc-lbl,
     border-color: #0071e3;
     box-shadow: 0 0 0 2px #0071e3;
 }
+.bottom-power-btn {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 20px !important;
+    padding: 8px 24px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    transition: all 0.15s ease !important;
+}
+.bottom-power-btn:hover {
+    background-color: rgba(255, 255, 255, 0.16) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+}
 "#;
 
 #[derive(Clone, Debug)]
@@ -503,8 +517,12 @@ fn build_ui(app: &Application) {
         );
     }
 
+    let root_box = GtkBox::new(Orientation::Vertical, 0);
+    root_box.add_css_class("root-container");
+    root_box.set_hexpand(true);
+    root_box.set_vexpand(true);
+
     let center_box = CenterBox::new();
-    center_box.add_css_class("root-container");
     center_box.set_hexpand(true);
     center_box.set_vexpand(true);
 
@@ -520,7 +538,37 @@ fn build_ui(app: &Application) {
     card_box.append(&stack);
 
     center_box.set_center_widget(Some(&card_box));
-    window.set_content(Some(&center_box));
+    root_box.append(&center_box);
+
+    // Bottom center control buttons: Restart & Shut Down
+    let bottom_bar = GtkBox::new(Orientation::Horizontal, 16);
+    bottom_bar.set_halign(Align::Center);
+    bottom_bar.set_valign(Align::End);
+    bottom_bar.set_margin_bottom(24);
+
+    let btn_restart = Button::with_label("Reiniciar");
+    btn_restart.add_css_class("bottom-power-btn");
+    btn_restart.connect_clicked(|_| {
+        let _ = Command::new("sh")
+            .arg("-c")
+            .arg("systemctl reboot || reboot || sudo reboot")
+            .spawn();
+    });
+
+    let btn_shutdown = Button::with_label("Apagar");
+    btn_shutdown.add_css_class("bottom-power-btn");
+    btn_shutdown.connect_clicked(|_| {
+        let _ = Command::new("sh")
+            .arg("-c")
+            .arg("systemctl poweroff || poweroff || sudo poweroff")
+            .spawn();
+    });
+
+    bottom_bar.append(&btn_restart);
+    bottom_bar.append(&btn_shutdown);
+    root_box.append(&bottom_bar);
+
+    window.set_content(Some(&root_box));
 
     // Shared state
     let selected_action: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
@@ -857,17 +905,17 @@ fn build_ui(app: &Application) {
         let action = selected_action.borrow().clone().unwrap_or_default();
         match action.as_str() {
             "disk" => {
-                log_msg("Launching elevated Disk Utility (GParted / Disks)...");
+                log_msg("Launching elevated Disk Utility (GParted)...");
                 let _ = Command::new("sh")
                     .arg("-c")
-                    .arg("gparted || pkexec gparted || sudo -E gparted || gnome-disks || gnome-disk-utility &")
+                    .arg("xhost +local: >/dev/null 2>&1 || xhost + >/dev/null 2>&1; (sudo -E gparted || sudo gparted || gparted || gnome-disks || gnome-disk-utility) >/tmp/gparted.log 2>&1 &")
                     .spawn();
             }
             "terminal" => {
                 log_msg("Launching recovery root terminal...");
                 let _ = Command::new("sh")
                     .arg("-c")
-                    .arg("gnome-terminal -- sudo bash || kgx -e 'sudo bash' || alacritty -e sudo bash || xfce4-terminal -e 'sudo bash' || konsole -e sudo bash || kitty sudo bash || xterm -title 'Pulsar OS Recovery Terminal' -bg '#18181b' -fg '#ffffff' -fa Monospace -fs 11 -e sudo bash || x-terminal-emulator -e sudo bash || xterm -e sudo bash || gnome-terminal || alacritty || xterm &")
+                    .arg("xhost +local: >/dev/null 2>&1 || xhost + >/dev/null 2>&1; (xterm -title 'Pulsar OS Recovery Terminal' -bg '#18181b' -fg '#ffffff' -fa Monospace -fs 11 -e sudo bash || gnome-terminal -- sudo bash || alacritty -e sudo bash || x-terminal-emulator -e sudo bash || xterm -e sudo bash) &")
                     .spawn();
             }
             "reinstall" | "internet" => {

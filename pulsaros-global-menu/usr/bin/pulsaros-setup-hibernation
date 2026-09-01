@@ -36,15 +36,28 @@ elif [ "$SWAP_GB" -gt 32 ]; then
 fi
 
 # 1. Crear /swapfile si no existe o activar si ya existe
+FSTYPE=$(findmnt -no FSTYPE / 2>/dev/null || echo "ext4")
+
 if [ ! -f /swapfile ]; then
     FREE_SPACE_GB=$(df -BG / | awk 'NR==2 {print $4}' | tr -d 'G')
     REQUIRED_SPACE=$((SWAP_GB + 4))
 
     if [ "$FREE_SPACE_GB" -gt "$REQUIRED_SPACE" ]; then
-        echo "💾 Creando /swapfile de ${SWAP_GB}GB para soporte de hibernación..."
-        fallocate -l "${SWAP_GB}G" /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=$((SWAP_GB * 1024)) status=progress
-        chmod 600 /swapfile
-        mkswap /swapfile
+        echo "💾 Creando /swapfile de ${SWAP_GB}GB en sistema de archivos ${FSTYPE} para soporte de hibernación..."
+        if [ "$FSTYPE" = "btrfs" ]; then
+            btrfs filesystem mkswapfile --size "${SWAP_GB}g" --uuid clear /swapfile 2>/dev/null || {
+                truncate -s 0 /swapfile
+                chattr +C /swapfile 2>/dev/null || true
+                btrfs property set /swapfile compression none 2>/dev/null || true
+                dd if=/dev/zero of=/swapfile bs=1M count=$((SWAP_GB * 1024)) status=none
+                chmod 600 /swapfile
+                mkswap /swapfile
+            }
+        else
+            fallocate -l "${SWAP_GB}G" /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=$((SWAP_GB * 1024)) status=none
+            chmod 600 /swapfile
+            mkswap /swapfile
+        fi
     else
         echo "⚠️ Espacio en disco insuficiente para crear swapfile de ${SWAP_GB}GB."
     fi
@@ -63,18 +76,40 @@ if [ -f /swapfile ]; then
 
     # 3. Configurar parámetros de reanudación (resume) en gestores de arranque
     ROOT_UUID=$(findmnt -no UUID -T /swapfile 2>/dev/null || findmnt -no UUID / 2>/dev/null || true)
-    OFFSET=$(filefrag -v /swapfile 2>/dev/null | awk '$1=="0:" {print substr($4, 1, length($4)-2)}' || true)
+    OFFSET=""
+    if [ "$FSTYPE" = "btrfs" ] && command -v btrfs >/dev/null 2>&1; then
+        OFFSET=$(btrfs inspect-internal map-swapfile -r /swapfile 2>/dev/null | tail -n 1)
+    fi
+    if [ -z "$OFFSET" ]; then
+        OFFSET=$(filefrag -v /swapfile 2>/dev/null | awk '$1=="0:" {print substr($4, 1, length($4)-2)}' || true)
+    fi
 
     if [ -n "$ROOT_UUID" ] && [ -n "$OFFSET" ]; then
         RESUME_PARAMS="resume=UUID=${ROOT_UUID} resume_offset=${OFFSET} zswap.enabled=0"
+        echo "✅ Parámetros de hibernación calculados: ${RESUME_PARAMS}"
 
-        # rEFInd
+        # rEFInd refind_linux.conf
         if [ -f /boot/refind_linux.conf ]; then
             echo "⚙️ Configurando resume y zswap en /boot/refind_linux.conf..."
             # Remove any existing resume and zswap parameters first, then append correct ones
             sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' /boot/refind_linux.conf 2>/dev/null || true
             sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${RESUME_PARAMS}|g" /boot/refind_linux.conf 2>/dev/null || true
         fi
+        
+        # rEFInd refind.conf (todas las posibles rutas de ESP)
+        for rc in \
+            /boot/efi/EFI/refind/refind.conf \
+            /boot/efi/EFI/BOOT/refind.conf \
+            /efi/EFI/refind/refind.conf \
+            /efi/EFI/BOOT/refind.conf \
+            /boot/EFI/refind/refind.conf \
+            /boot/EFI/BOOT/refind.conf; do
+            if [ -f "$rc" ]; then
+                echo "⚙️ Configurando resume y zswap en $rc..."
+                sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' "$rc" 2>/dev/null || true
+                sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${RESUME_PARAMS}|g" "$rc" 2>/dev/null || true
+            fi
+        done
 
         # GRUB
         if [ -f /etc/default/grub ]; then

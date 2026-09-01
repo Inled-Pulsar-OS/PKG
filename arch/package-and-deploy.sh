@@ -48,6 +48,22 @@ is_manual_upload_only() {
     return 1
 }
 
+# Determine non-root user for makepkg if running under sudo/root
+BUILD_USER=""
+if [ "$EUID" -eq 0 ]; then
+    if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+        BUILD_USER="$SUDO_USER"
+    elif [ -n "$PKEXEC_UID" ] && [ "$PKEXEC_UID" != "0" ]; then
+        BUILD_USER=$(id -un "$PKEXEC_UID" 2>/dev/null || true)
+    fi
+    if [ -z "$BUILD_USER" ] || [ "$BUILD_USER" = "root" ]; then
+        BUILD_USER=$(stat -c '%U' "$PKG_DIR" 2>/dev/null || true)
+    fi
+    if [ -z "$BUILD_USER" ] || [ "$BUILD_USER" = "root" ]; then
+        BUILD_USER="nobody"
+    fi
+fi
+
 INCREMENTAL=false
 
 while [[ $# -gt 0 ]]; do
@@ -167,8 +183,10 @@ build_single_package() {
         done
         if [ ${#to_install[@]} -gt 0 ]; then
             echo "📦 Installing official build dependencies for $name..."
-            local auth_cmd="pkexec"
-            command -v pkexec >/dev/null 2>&1 || auth_cmd="sudo"
+            local auth_cmd=""
+            if [ "$EUID" -ne 0 ]; then
+                command -v pkexec >/dev/null 2>&1 && auth_cmd="pkexec" || auth_cmd="sudo"
+            fi
             $auth_cmd pacman -S --needed --noconfirm "${to_install[@]}" 2>/dev/null || {
                 for d in "${to_install[@]}"; do
                     $auth_cmd pacman -S --needed --noconfirm "$d" 2>/dev/null || true
@@ -177,7 +195,16 @@ build_single_package() {
         fi
     fi
 
-    PKGDEST="$OUTPUT_DIR" makepkg -cfd --noconfirm --nosign
+    if [ "$EUID" -eq 0 ] && [ -n "$BUILD_USER" ] && [ "$BUILD_USER" != "root" ]; then
+        chown -R "$BUILD_USER":"$BUILD_USER" "$BUILD_DIR" "$pkgbuild_dir" 2>/dev/null || true
+        if command -v runuser >/dev/null 2>&1; then
+            runuser -u "$BUILD_USER" -- env PULSAR_VERSION="$PULSAR_VERSION" PKGDEST="$OUTPUT_DIR" makepkg -cfd --noconfirm --nosign
+        else
+            sudo -u "$BUILD_USER" env PULSAR_VERSION="$PULSAR_VERSION" PKGDEST="$OUTPUT_DIR" makepkg -cfd --noconfirm --nosign
+        fi
+    else
+        PKGDEST="$OUTPUT_DIR" makepkg -cfd --noconfirm --nosign
+    fi
 
     local pkg_file=$(ls "$OUTPUT_DIR/${name}-"*.pkg.tar.zst 2>/dev/null | head -n 1)
     if [ -n "$pkg_file" ]; then

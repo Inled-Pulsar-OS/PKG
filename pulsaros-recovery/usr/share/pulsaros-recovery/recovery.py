@@ -3365,11 +3365,58 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         icon_os = f"{icon_prefix}/themes/rEFInd-Regular-Dark/icons/os_pulsaros_normal.png"
                         icon_rec = f"{icon_prefix}/themes/rEFInd-Regular-Dark/icons/os_recovery.png"
 
+                        # Check for existing resume parameters (hibernation to disk)
+                        resume_opts = ""
+                        if os.path.isfile("/mnt/boot/refind_linux.conf"):
+                            try:
+                                with open("/mnt/boot/refind_linux.conf", "r") as rf:
+                                    r_content = rf.read()
+                                    m = re.search(r"(resume=UUID=[^\s\"]+\s+resume_offset=\d+(\s+zswap\.enabled=0)?)", r_content)
+                                    if m:
+                                        resume_opts = " " + m.group(1)
+                            except Exception:
+                                pass
+                        if not resume_opts and os.path.isfile("/mnt/etc/default/grub"):
+                            try:
+                                with open("/mnt/etc/default/grub", "r") as gf:
+                                    g_content = gf.read()
+                                    m = re.search(r"(resume=UUID=[^\s\"]+\s+resume_offset=\d+(\s+zswap\.enabled=0)?)", g_content)
+                                    if m:
+                                        resume_opts = " " + m.group(1)
+                            except Exception:
+                                pass
+
+                        # Check if dual boot is present (Windows Boot Manager, other EFI entries, or detected via os-prober)
+                        other_os_entries = []
+                        has_dual_boot = False
+                        win_loader = f"{esp_root}/EFI/Microsoft/Boot/bootmgfw.efi"
+                        if os.path.isfile(win_loader):
+                            has_dual_boot = True
+                            win_icon = f"{icon_prefix}/themes/rEFInd-Regular-Dark/icons/os_win.png"
+                            other_os_entries.append(
+                                'menuentry "Windows Boot Manager" {\n'
+                                f"    icon {win_icon}\n"
+                                "    loader /EFI/Microsoft/Boot/bootmgfw.efi\n"
+                                "}\n"
+                            )
+
+                        if not has_dual_boot:
+                            try:
+                                prober_res = subprocess.check_output(["os-prober"], stderr=subprocess.DEVNULL, universal_newlines=True).strip()
+                                if prober_res:
+                                    has_dual_boot = True
+                            except Exception:
+                                pass
+
+                        scanfor_mode = "scanfor manual\ndont_scan_dirs EFI,boot,recovery,live,@,@/boot,themes,drivers_x64\ndont_scan_files *"
+                        extra_entries_str = ("\n" + "\n".join(other_os_entries)) if other_os_entries else ""
+
                         menu_block = (
                             f"\n{MENU_BEGIN}\n"
-                            "# Enable auto-detection of internal systems (Windows, other Linux) and optical/external drives\n"
-                            "scanfor internal,external,optical,manual\n"
-                            'default_selection "Pulsar OS"\n'
+                            "# Only show our explicit curated entries: exactly\n"
+                            "# 'Pulsar OS' and 'Pulsar OS Recovery'.\n"
+                            f"{scanfor_mode}\n"
+                            "default_selection 1\n"
                             "\n"
                             'menuentry "Pulsar OS" {\n'
                             f"    icon {icon_os}\n"
@@ -3377,9 +3424,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             f"    loader /@/boot/{k_name}\n"
                             f"{ucode_lines}"
                             f"    initrd /@/boot/{initrd_name}\n"
-                            f'    options "root=UUID={root_uuid} rootflags=subvol=@ rw quiet splash"\n'
+                            f'    options "root=UUID={root_uuid} rootflags=subvol=@ rw quiet splash{resume_opts}"\n'
                             '    submenuentry "Boot to single-user mode" {\n'
-                            f'        options "root=UUID={root_uuid} rootflags=subvol=@ rw single"\n'
+                            f'        options "root=UUID={root_uuid} rootflags=subvol=@ rw single{resume_opts}"\n'
                             "    }\n"
                             "}\n"
                             "\n"
@@ -3410,6 +3457,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             f'        options "{rec_net_opts}"\n'
                             "    }\n"
                             "}\n"
+                            f"{extra_entries_str}"
                             f"{MENU_END}\n"
                         )
 

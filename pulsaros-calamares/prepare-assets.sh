@@ -366,10 +366,11 @@ EOF
 cat <<EOF > "$CALAMARES_CONFIGS_DEST/modules/shellprocess@refind.conf"
 ---
 dontChroot: false
-timeout: 120
+timeout: 180
 script:
     - "if [ -d /sys/firmware/efi ]; then echo '⚙️ Instalando rEFInd... / Installing rEFInd...' && (refind-install --yes || echo '⚠️ Advertencia: refind-install falló o reportó advertencias, pero continuamos...'); else echo '⚠️ Sistema en modo BIOS, omitiendo rEFInd.'; fi"
-    - "if [ -d /sys/firmware/efi ]; then echo '🎨 Instalando tema macOS para rEFInd... / Installing macOS theme...'; mkdir -p /boot/efi/EFI/refind/themes; rm -rf /boot/efi/EFI/refind/themes/rEFInd-Regular-Dark; if [ -d /usr/share/refind/themes/rEFInd-Regular-Dark ]; then cp -r /usr/share/refind/themes/rEFInd-Regular-Dark /boot/efi/EFI/refind/themes/; fi; if [ -f /boot/efi/EFI/refind/refind.conf ]; then sed -i 's/^#enable_mouse/enable_mouse/' /boot/efi/EFI/refind/refind.conf && sed -i 's/^enable_mouse.*/enable_mouse/' /boot/efi/EFI/refind/refind.conf && grep -q \"^enable_mouse\" /boot/efi/EFI/refind/refind.conf || echo \"enable_mouse\" >> /boot/efi/EFI/refind/refind.conf; grep -q \"themes/rEFInd-Regular-Dark/theme.conf\" /boot/efi/EFI/refind/refind.conf || echo \"include themes/rEFInd-Regular-Dark/theme.conf\" >> /boot/efi/EFI/refind/refind.conf; fi; fi"
+    - "if [ -d /sys/firmware/efi ]; then echo '🎨 Configurando tema y menú limpio de rEFInd...'; mkdir -p /boot/efi/EFI/refind/themes; rm -rf /boot/efi/EFI/refind/themes/rEFInd-Regular-Dark; if [ -d /usr/share/refind/themes/rEFInd-Regular-Dark ]; then cp -r /usr/share/refind/themes/rEFInd-Regular-Dark /boot/efi/EFI/refind/themes/; fi; if [ -f /boot/efi/EFI/refind/refind.conf ]; then sed -i 's/^#enable_mouse/enable_mouse/' /boot/efi/EFI/refind/refind.conf && sed -i 's/^enable_mouse.*/enable_mouse/' /boot/efi/EFI/refind/refind.conf && grep -q \"^enable_mouse\" /boot/efi/EFI/refind/refind.conf || echo \"enable_mouse\" >> /boot/efi/EFI/refind/refind.conf; grep -q \"themes/rEFInd-Regular-Dark/theme.conf\" /boot/efi/EFI/refind/refind.conf || echo \"include themes/rEFInd-Regular-Dark/theme.conf\" >> /boot/efi/EFI/refind/refind.conf; sed -i 's/^scanfor .*/scanfor manual/' /boot/efi/EFI/refind/refind.conf; grep -q \"^dont_scan_dirs\" /boot/efi/EFI/refind/refind.conf || echo \"dont_scan_dirs EFI,boot,recovery,live,@,@/boot,themes,drivers_x64\" >> /boot/efi/EFI/refind/refind.conf; grep -q \"^dont_scan_files\" /boot/efi/EFI/refind/refind.conf || echo \"dont_scan_files *\" >> /boot/efi/EFI/refind/refind.conf; fi; fi"
+    - "if [ -x /usr/bin/pulsaros-setup-hibernation ]; then echo '⚙️ Configurando swapfile e hibernación...'; /usr/bin/pulsaros-setup-hibernation || true; fi"
 EOF
 
 
