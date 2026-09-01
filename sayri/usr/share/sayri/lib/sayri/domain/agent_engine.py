@@ -44,23 +44,30 @@ class AgentEngine:
 
         sandbox_info = f"Nivel de Aislamiento Activo: {profile.sandbox.level.value}."
         if profile.sandbox.level == SandboxLevel.LEVEL_0_NO_EXEC:
-            sandbox_info += " (TIENES ESTRICTAMENTE PROHIBIDO EJECUTAR COMANDOS BASH/SISTEMA; eres un agente puramente conversacional de soporte)."
+            sandbox_info += " (ESTRICTAMENTE PROHIBIDO EJECUTAR COMANDOS BASH/SISTEMA; eres un agente puramente conversacional. Si te piden ejecutar algo, explica que tu sandbox LEVEL_0_NO_EXEC lo prohíbe)."
+        elif profile.sandbox.level in (SandboxLevel.LEVEL_1_READONLY, SandboxLevel.LEVEL_2_ISOLATED_DEV):
+            sandbox_info += " (Estás en un contenedor aislado Bubblewrap sin servidor gráfico Wayland/X11. NO puedes abrir ventanas de aplicaciones gráficas en la pantalla del host)."
 
         base = (
             f"Eres Sayri, la asistente inteligente, orquestadora agéntica y copiloto de sistema operativo en Pulsar OS.\n"
-            f"Perfil activo: {profile.name} (ID: {profile.id}). {sandbox_info}\n\n"
-            "TUS CAPACIDADES Y PODERES EN PULSAR OS:\n"
-            "1. Orquestación del Sistema: Puedes consultar archivos, abrir aplicaciones, modificar ajustes y ejecutar comandos con bash.\n"
-            "2. Creación y Gestión de Subagentes: Puedes crear subagentes y configurarlos con diferentes modelos y niveles de sandbox (LEVEL_0_NO_EXEC, LEVEL_1_READONLY, LEVEL_2_ISOLATED_DEV, LEVEL_3_HOST_USER, LEVEL_4_HOST_ROOT). Si el usuario te pide crear un subagente (ej. para Discord, código o chat), puedes crearlo de inmediato.\n"
-            "3. Creación y Gestión de Habilidades (Skills): Puedes crear y descargar habilidades de ClawHub (https://clawhub.ai) usando `sayri-skills install <nombre>` o creando plantillas en `~/.config/sayri/skills/`.\n"
-            "4. Aislamiento y Sandboxing: El sistema ejecuta tus tareas dentro de contenedores ultraligeros Bubblewrap (bwrap) o con elevación Polkit (pkexec).\n"
-            "5. Historial Persistente: Todas las conversaciones se guardan en SQLite y puedes consultarlas.\n"
+            f"Perfil activo: {profile.name} (ID: {profile.id}).\n"
+            f"Seguridad: {sandbox_info}\n\n"
+            "POLÍTICA DE SANDBOX Y EJECUCIÓN:\n"
+            "- LEVEL_0_NO_EXEC: Modo puramente conversacional. Bloqueado para ejecutar comandos.\n"
+            "- LEVEL_1_READONLY / LEVEL_2_ISOLATED_DEV: Entorno aislado en Bubblewrap para operaciones de lectura, inspección o desarrollo aislado. No tiene acceso al servidor de pantalla (Wayland/X11); por tanto, NO puede abrir aplicaciones de interfaz gráfica (como calculadora, editores o navegadores) en la pantalla del usuario.\n"
+            "- LEVEL_3_HOST_USER: Acceso completo al host del usuario local. Puede interactuar con el sistema y lanzar aplicaciones gráficas (ej. `gnome-calculator &` o `gtk-launch org.gnome.Calculator`).\n"
+            "- LEVEL_4_HOST_ROOT: Acceso administrativo con elevación Polkit (pkexec).\n\n"
+            "TUS CAPACIDADES EN PULSAR OS:\n"
+            "1. Orquestación del Sistema: Puedes consultar archivos, abrir aplicaciones y ejecutar herramientas dentro de los límites de tu sandbox.\n"
+            "2. Creación y Gestión de Subagentes: Puedes crear subagentes configurados con distintos modelos y niveles de sandbox.\n"
+            "3. Habilidades (Skills) y Plugins: Puedes buscar e instalar extensiones de la Pulsar Store (https://store-os.inled.es).\n"
             f"{skills_summary}\n\n"
-            "REGLAS DE EJECUCIÓN (Crítico):\n"
-            "1. Si necesitas realizar una acción o consultar datos, emite un bloque:\n"
+            "REGLAS CRÍTICAS DE EJECUCIÓN Y VERACIDAD:\n"
+            "1. Si necesitas realizar una acción en el sistema, emite un bloque:\n"
             "```bash\n<comando>\n```\n"
-            "2. Nunca digas 'No puedo crear subagentes' ni 'No tengo acceso a la terminal': SI TIENES acceso y puedes orquestar subagentes y herramientas dentro de tu sandbox.\n"
-            "3. Responde siempre en español de forma natural, concisa y agradable (1 a 3 frases habladas para voz)."
+            "2. VERACIDAD ABSOLUTA: NUNCA afirmes que una aplicación se ha abierto o que una acción se ha completado a menos que la observación del sistema confirme código de salida 0 sin errores de sandbox.\n"
+            "3. Si un comando falla por sandbox (código distinto de 0 o error de display/permisos), explica al usuario con total honestidad y claridad la restricción de sandbox que impidió la acción y cómo solucionarlo (por ejemplo cambiando el gateway/agente a LEVEL_3_HOST_USER).\n"
+            "4. Responde siempre en el idioma en el que te haya hablado el usuario de forma natural, concisa y agradable (1 a 3 frases habladas para voz)."
         )
         return base
 
@@ -88,21 +95,52 @@ class AgentEngine:
         user_msg = Message(role="user", content=user_text)
         self.storage.add_message(session.id, user_msg)
 
-        # 1. Natural Language Subagent Intent Detection & Action
+        # 1. Natural Language Subagent Intent Detection & Non-Escalation Enforcement
         clean_prompt = user_text.strip().lower()
         subagent_triggers = [
             "crea un subagente", "crear un subagente", "crear subagente", "crea subagente",
             "nuevo subagente", "configura un subagente", "configurar subagente", "quiero un subagente"
         ]
         if any(trig in clean_prompt for trig in subagent_triggers):
-            ok, msg, created_profile = AgentCreator.create_agent_from_prompt(user_text)
+            if profile.sandbox.level in (SandboxLevel.LEVEL_0_NO_EXEC, SandboxLevel.LEVEL_1_READONLY, SandboxLevel.LEVEL_2_ISOLATED_DEV):
+                err_msg = (
+                    f"⚠️ Error de Seguridad: El agente actual está ejecutándose en un entorno restringido ({profile.sandbox.level.value}). "
+                    "Para prevenir escalada de privilegios, este nivel de sandbox tiene terminantemente prohibido crear o configurar subagentes en el sistema. "
+                    "Esta acción debe realizarse desde la aplicación de escritorio de Sayri o mediante un agente con nivel LEVEL_3_HOST_USER."
+                )
+                reply_msg = Message(role="assistant", content=err_msg)
+                self.storage.add_message(session.id, reply_msg)
+                on_delta(err_msg)
+                on_done(err_msg)
+                return query_id
+
+            ok, msg, created_profile = AgentCreator.create_agent_from_prompt(
+                user_text, max_allowed_level=profile.sandbox.level
+            )
             reply_msg = Message(role="assistant", content=msg)
             self.storage.add_message(session.id, reply_msg)
             on_delta(msg)
             on_done(msg)
             return query_id
 
-        # 2. Async AI Title Generator
+        # 2. Natural Language Skill/Plugin Creation Intent Detection
+        skill_triggers = [
+            "crea una habilidad", "crear una habilidad", "crea habilidad", "crear habilidad",
+            "instala la habilidad", "instalar habilidad", "instala el plugin", "instalar plugin"
+        ]
+        if any(trig in clean_prompt for trig in skill_triggers) and profile.sandbox.level in (SandboxLevel.LEVEL_0_NO_EXEC, SandboxLevel.LEVEL_1_READONLY, SandboxLevel.LEVEL_2_ISOLATED_DEV):
+            err_msg = (
+                f"⚠️ Error de Seguridad: El agente actual está ejecutándose en nivel {profile.sandbox.level.value}. "
+                "No tiene permisos para instalar o registrar nuevas habilidades/plugins en el sistema. "
+                "Para instalar extensiones, utiliza la Pulsar Store o la interfaz de Ajustes de Sayri."
+            )
+            reply_msg = Message(role="assistant", content=err_msg)
+            self.storage.add_message(session.id, reply_msg)
+            on_delta(err_msg)
+            on_done(err_msg)
+            return query_id
+
+        # 3. Async AI Title Generator
         if len(session.messages) <= 2 or session.title.startswith("Nueva Conversación") or session.title == user_text[:30]:
             self._generate_session_title_async(session.id, user_text, cfg)
 
@@ -224,7 +262,7 @@ class AgentEngine:
             if not m:
                 m = re.search(r"<(?:bash|sh|tool)>(.*?)</(?:bash|sh|tool)>", full_text, re.DOTALL)
 
-            if m and profile.sandbox.level != SandboxLevel.LEVEL_0_NO_EXEC and depth < 6:
+            if m and depth < 6:
                 cmd = m.group(1).strip()
                 if cmd:
                     on_tool_start(cmd)
@@ -233,12 +271,16 @@ class AgentEngine:
                     )
                     on_tool_finish(cmd, output, retcode)
 
+                    # Redact any accidental secret tokens from tool output
+                    from sayri.domain.secrets_manager import secrets_manager
+                    sanitized_output = secrets_manager.sanitize_text_for_llm(output)
+
                     # Store tool execution
                     tc = ToolCall(
                         name="bash",
                         arguments={"command": cmd},
                         status=ToolCallStatus.SUCCESS if retcode == 0 else ToolCallStatus.FAILED,
-                        output=output,
+                        output=sanitized_output,
                         exit_code=retcode,
                         duration_ms=duration,
                     )
@@ -250,11 +292,21 @@ class AgentEngine:
                     # Followup
                     next_messages = list(messages)
                     next_messages.append({"role": "assistant", "content": full_text})
-                    observation = (
-                        f"[Tool Output - Código {retcode}]:\n{output}\n\n"
-                        "Si la tarea está completada, responde de forma concisa y natural para el usuario. "
-                        "Si requieres otro comando, emite un nuevo bloque ```bash."
-                    )
+
+                    if retcode != 0:
+                        observation = (
+                            f"⚠️ [ERROR EN EJECUCIÓN (Exit Code {retcode})]:\n{sanitized_output}\n\n"
+                            "REGLA CRÍTICA: El comando anterior NO se ejecutó o falló debido a restricciones de seguridad/sandbox o error del sistema. "
+                            "Debes informar explícitamente al usuario de que la acción NO se ha podido realizar, "
+                            "explicando la causa exacta de sandbox o entorno y qué nivel de sandbox se requeriría (ej. LEVEL_3_HOST_USER para apps gráficas). "
+                            "NUNCA digas que la aplicación se abrió o que el comando funcionó."
+                        )
+                    else:
+                        observation = (
+                            f"[Resultado de la Ejecución (Código 0)]:\n{sanitized_output}\n\n"
+                            "El comando se ejecutó exitosamente. Responde al usuario de forma concisa y natural informando del resultado."
+                        )
+
                     next_messages.append({"role": "user", "content": observation})
 
                     self._react_loop(

@@ -17,9 +17,11 @@ Features:
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import re
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -258,8 +260,16 @@ SVG_TRASH = """<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" vi
 <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
 </svg>"""
 
+SVG_SETTINGS = """<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+</svg>"""
+
 SVG_COPY = """<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+</svg>"""
+
+SVG_BACK = """<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
 </svg>"""
 
 
@@ -542,6 +552,7 @@ class SayriCajita(Gtk.Box):
         self.pill_overlay.set_size_request(420, 52)
 
         self.pill_bg = ChromaBackground(is_pill=True)
+        self.pill_bg.set_can_target(False)
         self.pill_overlay.set_child(self.pill_bg)
 
         pill_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
@@ -602,6 +613,7 @@ class SayriCajita(Gtk.Box):
         self.entry.add_controller(key_ctrl)
 
         self.pill_overlay.add_overlay(pill_row)
+        self.pill_overlay.set_measure_overlay(pill_row, True)
         self.append(self.pill_overlay)
 
         # ── 2. Bottom Acrylic Card & Multi-View Stack ────────────────
@@ -610,6 +622,7 @@ class SayriCajita(Gtk.Box):
         self.card_overlay.set_hexpand(True)
 
         self.card_bg = ChromaBackground(is_pill=False)
+        self.card_bg.set_can_target(False)
         self.card_bg.set_hexpand(True)
         self.card_bg.set_vexpand(True)
         self.card_overlay.set_child(self.card_bg)
@@ -630,6 +643,7 @@ class SayriCajita(Gtk.Box):
             ("chat", "Chat"),
             ("history", "History"),
             ("agents", "Agents"),
+            ("skills", "Skills"),
             ("plugins", "Gateways"),
             ("secrets", "Vault"),
             ("settings", "Settings"),
@@ -651,18 +665,29 @@ class SayriCajita(Gtk.Box):
         self.chat_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
 
         self.badge_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        self.badge_box.set_halign(Gtk.Align.START)
         self.badge_box.set_valign(Gtk.Align.CENTER)
         self.badge_box.set_margin_top(2)
         self.badge_box.set_margin_bottom(4)
 
         self.agent_badge = Gtk.Label()
-        self.agent_badge.set_markup("<span size='9500' weight='600' foreground='#38bdf8'>Sayri Primary</span>")
+        self.agent_badge.set_markup("<span size='9500' weight='600' foreground='#38bdf8'>🤖 Sayri Primary</span>")
         self.badge_box.append(self.agent_badge)
 
         self.sandbox_badge = Gtk.Label()
-        self.sandbox_badge.set_markup("<span size='9000' foreground='#94a3b8'>• Host L3 (User)</span>")
+        self.sandbox_badge.set_markup("<span size='9000' foreground='#94a3b8'>• 🛡️ Host L3</span>")
         self.badge_box.append(self.sandbox_badge)
+
+        chat_spacer = Gtk.Box()
+        chat_spacer.set_hexpand(True)
+        self.badge_box.append(chat_spacer)
+
+        quick_new_btn = Gtk.Button(label="+ New Chat")
+        quick_new_btn.add_css_class("sayri-action-btn")
+        def _on_quick_new(_b):
+            if hasattr(self.app, "new_conversation"):
+                self.app.new_conversation()
+        quick_new_btn.connect("clicked", _on_quick_new)
+        self.badge_box.append(quick_new_btn)
 
         self.chat_view.append(self.badge_box)
 
@@ -739,13 +764,15 @@ class SayriCajita(Gtk.Box):
         thread_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         thread_header.set_valign(Gtk.Align.CENTER)
 
-        back_btn = Gtk.Button(label="← Back to History")
-        back_btn.add_css_class("sayri-action-btn")
-        back_btn.connect("clicked", lambda _b: self.switch_tab("history"))
-        thread_header.append(back_btn)
+        thread_back = Gtk.Button()
+        thread_back.set_child(_svg_icon(SVG_HISTORY))
+        thread_back.set_tooltip_text("Back to History")
+        thread_back.add_css_class("sayri-icon-btn")
+        thread_back.connect("clicked", lambda _b: self.switch_tab("history"))
+        thread_header.append(thread_back)
 
         self.thread_title_lbl = Gtk.Label()
-        self.thread_title_lbl.set_markup("<span weight='600' size='10500' foreground='#f8fafc'>Conversation</span>")
+        self.thread_title_lbl.set_markup("<span weight='700' size='10500' foreground='#f8fafc'>Thread</span>")
         self.thread_title_lbl.set_halign(Gtk.Align.START)
         self.thread_title_lbl.set_ellipsize(Pango.EllipsizeMode.END)
         self.thread_title_lbl.set_hexpand(True)
@@ -799,9 +826,51 @@ class SayriCajita(Gtk.Box):
 
         self.card_stack.add_named(self.agents_view, "agents")
 
+        # ── View 5: Skills & Tools Manager (Dedicated) ──
+        self.skills_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        sk_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        sk_header.set_valign(Gtk.Align.CENTER)
+
+        sk_title = Gtk.Label()
+        sk_title.set_markup("<span weight='700' size='10500' foreground='#f8fafc'>SKILLS &amp; TOOLS</span>")
+        sk_title.set_halign(Gtk.Align.START)
+        sk_title.set_hexpand(True)
+        sk_header.append(sk_title)
+
+        sk_install_btn = Gtk.Button(label="+ Install Skill")
+        sk_install_btn.add_css_class("sayri-action-btn")
+        sk_install_btn.add_css_class("primary")
+        sk_install_btn.connect("clicked", lambda _b: self.show_install_skill_view())
+        sk_header.append(sk_install_btn)
+
+        sk_store_btn = Gtk.Button(label="Pulsar Store ↗")
+        sk_store_btn.add_css_class("sayri-action-btn")
+        sk_store_btn.connect("clicked", lambda _b: os.system("xdg-open https://store-os.inled.es &"))
+        sk_header.append(sk_store_btn)
+        self.skills_view.append(sk_header)
+
+        sk_banner = Gtk.Label()
+        sk_banner.add_css_class("sayri-info-banner")
+        sk_banner.set_markup(
+            "<b>Skills &amp; Capabilities:</b> Skills extend Sayri with domain tools (web search, coding, docs) executed inside isolated <b>Bubblewrap</b> sandboxes. Official store packages (⭐) are prioritized."
+        )
+        sk_banner.set_wrap(True)
+        sk_banner.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        self.skills_view.append(sk_banner)
+
+        self.skills_scroll = Gtk.ScrolledWindow()
+        self.skills_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.skills_scroll.set_propagate_natural_height(True)
+        self.skills_scroll.set_max_content_height(220)
+        self.skills_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.skills_scroll.set_child(self.skills_box)
+        self.skills_view.append(self.skills_scroll)
+
+        self.card_stack.add_named(self.skills_view, "skills")
+
         # ── View 5: Plugins & Channel Gateways ──
         self.plugins_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        pl_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        pl_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         pl_header.set_valign(Gtk.Align.CENTER)
 
         pl_title = Gtk.Label()
@@ -809,6 +878,12 @@ class SayriCajita(Gtk.Box):
         pl_title.set_halign(Gtk.Align.START)
         pl_title.set_hexpand(True)
         pl_header.append(pl_title)
+
+        add_gw_btn = Gtk.Button(label="+ Add Gateway")
+        add_gw_btn.add_css_class("sayri-action-btn")
+        add_gw_btn.add_css_class("primary")
+        add_gw_btn.connect("clicked", lambda _b: self.show_create_gateway_view())
+        pl_header.append(add_gw_btn)
 
         store_btn = Gtk.Button(label="Pulsar Store ↗")
         store_btn.add_css_class("sayri-action-btn")
@@ -850,7 +925,7 @@ class SayriCajita(Gtk.Box):
         add_sec_btn = Gtk.Button(label="+ Add Secret")
         add_sec_btn.add_css_class("sayri-action-btn")
         add_sec_btn.add_css_class("primary")
-        add_sec_btn.connect("clicked", lambda _b: self._prompt_add_secret())
+        add_sec_btn.connect("clicked", lambda _b: self.show_add_secret_view())
         sec_header.append(add_sec_btn)
         self.secrets_view.append(sec_header)
 
@@ -895,6 +970,29 @@ class SayriCajita(Gtk.Box):
 
         self.card_stack.add_named(self.settings_view, "settings")
 
+        # ── View 8: Generic Dynamic In-Card Subview (Zero Popups API) ──
+        self.subview_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        sub_hdr = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        sub_hdr.set_valign(Gtk.Align.CENTER)
+
+        self.subview_back_btn = Gtk.Button()
+        self.subview_back_btn.set_child(_svg_icon(SVG_BACK))
+        self.subview_back_btn.set_has_frame(False)
+        self.subview_back_btn.add_css_class("sayri-icon-btn")
+        self.subview_back_btn.set_tooltip_text("Back")
+        sub_hdr.append(self.subview_back_btn)
+
+        self.subview_title_lbl = Gtk.Label()
+        self.subview_title_lbl.set_halign(Gtk.Align.START)
+        self.subview_title_lbl.set_hexpand(True)
+        sub_hdr.append(self.subview_title_lbl)
+        self.subview_box.append(sub_hdr)
+
+        self.subview_body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.subview_box.append(self.subview_body)
+
+        self.card_stack.add_named(self.subview_box, "subview")
+
         card_content.append(self.card_stack)
         self.card_overlay.add_overlay(card_content)
         self.card_overlay.set_measure_overlay(card_content, True)
@@ -905,6 +1003,8 @@ class SayriCajita(Gtk.Box):
 
     def switch_tab(self, tab_id: str, trigger_effect: bool = True) -> None:
         """Switch between views inside the response card."""
+        is_subview = tab_id in ("subview", "thread_view")
+        self.tab_bar.set_visible(not is_subview)
         for tid, btn in self._tab_btns.items():
             if tid == tab_id:
                 btn.add_css_class("active")
@@ -915,6 +1015,8 @@ class SayriCajita(Gtk.Box):
             self._populate_history()
         elif tab_id == "agents":
             self._populate_agents()
+        elif tab_id == "skills":
+            self._populate_skills()
         elif tab_id == "plugins":
             self._populate_plugins()
         elif tab_id == "secrets":
@@ -1114,33 +1216,38 @@ class SayriCajita(Gtk.Box):
 
             self.agents_box.append(row)
 
-    # ── Plugins / Gateways Logic ──
-    def _populate_plugins(self) -> None:
+    # ── Skills Logic (Dedicated View) ──
+    def _populate_skills(self) -> None:
         while True:
-            child = self.plugins_box.get_first_child()
+            child = self.skills_box.get_first_child()
             if not child:
                 break
-            self.plugins_box.remove(child)
+            self.skills_box.remove(child)
 
-        # 1. Load paired accounts from authorizations.json
-        auth_file = Path.home() / ".config" / "sayri" / "authorizations.json"
-        allowed_tg_users = []
-        if auth_file.is_file():
-            try:
-                auth_data = json.loads(auth_file.read_text(encoding="utf-8"))
-                allowed_tg_users = auth_data.get("allowed_telegram_users", [])
-            except Exception:
-                pass
+        from sayri import skills as skills_mod
+        installed = skills_mod.list_skills()
+        # Filter out gateways that run as daemons (entrypoint)
+        skill_items = []
+        for s in installed:
+            m_path = Path(s["path"]) / "manifest.json"
+            if m_path.is_file():
+                try:
+                    m = json.loads(m_path.read_text(encoding="utf-8"))
+                    if m.get("entrypoint"):
+                        continue
+                except Exception:
+                    pass
+            skill_items.append(s)
 
-        tg_status = f"{len(allowed_tg_users)} Paired ({', '.join(allowed_tg_users[:2])})" if allowed_tg_users else "No paired users (OTP Pairing Ready)"
+        if not skill_items:
+            empty_lbl = Gtk.Label(label="No custom skills installed yet. Click (+ Install Skill) to add tools from Pulsar Store.")
+            empty_lbl.set_halign(Gtk.Align.START)
+            empty_lbl.set_wrap(True)
+            empty_lbl.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+            self.skills_box.append(empty_lbl)
+            return
 
-        sample_plugins = [
-            ("Telegram Bot Gateway", f"Bridges Sayri subagents to Telegram with OTP pairing. {tg_status}", True, "OTP_PAIRING_ACTIVE"),
-            ("Discord Voice & Chat Gateway", "Bridges Sayri voice and text to Discord channels.", True, "WHITELIST_ACTIVE"),
-            ("Model Context Protocol (MCP)", "Exposes local system tools via secure standard JSON-RPC.", True, "LOCAL_SANDBOX"),
-        ]
-
-        for name, desc, enabled, shield in sample_plugins:
+        for sk in skill_items:
             row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
             row.add_css_class("sayri-card-item")
 
@@ -1148,11 +1255,11 @@ class SayriCajita(Gtk.Box):
             v.set_hexpand(True)
 
             t = Gtk.Label()
-            t.set_markup(f"<span foreground='#ffffff' weight='700' size='10500'>{GLib.markup_escape_text(name)}</span>")
+            t.set_markup(f"<span foreground='#ffffff' weight='700' size='10500'>{GLib.markup_escape_text(sk['name'])}</span>")
             t.set_halign(Gtk.Align.START)
 
             sub = Gtk.Label()
-            sub.set_markup(f"<span foreground='#94a3b8' size='9000'>{GLib.markup_escape_text(desc)} • <span foreground='#22c55e'>{shield}</span></span>")
+            sub.set_markup(f"<span foreground='#94a3b8' size='9000'>{GLib.markup_escape_text(sk['description'])} • <span foreground='#38bdf8'>SANDBOXED</span></span>")
             sub.set_halign(Gtk.Align.START)
             sub.set_wrap(True)
 
@@ -1160,12 +1267,180 @@ class SayriCajita(Gtk.Box):
             v.append(sub)
             row.append(v)
 
-            sw = Gtk.Switch()
-            sw.set_active(enabled)
-            sw.set_valign(Gtk.Align.CENTER)
-            row.append(sw)
+            # View SKILL.md button
+            view_btn = Gtk.Button(label="SKILL.md")
+            view_btn.add_css_class("sayri-action-btn")
+            view_btn.connect("clicked", lambda _b, name=sk["name"]: self.show_skill_details_view(name))
+            row.append(view_btn)
 
-            self.plugins_box.append(row)
+            # Delete button (🗑️)
+            del_btn = Gtk.Button()
+            del_btn.set_child(_svg_icon(SVG_TRASH))
+            del_btn.set_has_frame(False)
+            del_btn.add_css_class("sayri-icon-btn")
+            del_btn.set_tooltip_text("Delete Skill")
+            del_btn.connect("clicked", lambda _b, name=sk["name"]: (skills_mod.uninstall_skill(name), self._populate_skills()))
+            row.append(del_btn)
+
+            self.skills_box.append(row)
+
+    # ── Plugins / Gateways Logic (Multi-Instance Channel Architecture) ──
+    def _populate_plugins(self) -> None:
+        while True:
+            child = self.plugins_box.get_first_child()
+            if not child:
+                break
+            self.plugins_box.remove(child)
+
+        from sayri.gateway_supervisor import gateway_supervisor
+        from sayri.domain.agent_creator import AgentCreator
+
+        installed_plugins = {p["id"]: p for p in gateway_supervisor.list_installed_plugins()}
+        instances = gateway_supervisor.list_instances()
+        all_agents = {a.id: a.name for a in AgentCreator.list_agents()}
+
+        if not instances:
+            empty_lbl = Gtk.Label(label="No channel gateways configured. Click (+ Add Gateway) to bind a Telegram/Discord bot to an agent or install from the Pulsar Store.")
+            empty_lbl.set_halign(Gtk.Align.START)
+            empty_lbl.set_wrap(True)
+            empty_lbl.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+            self.plugins_box.append(empty_lbl)
+            return
+
+        for inst in instances:
+            inst_id = inst["id"]
+            plugin_meta = installed_plugins.get(inst.get("plugin_id", inst_id), {})
+            agent_id = inst.get("agent_id", "default")
+            agent_name = all_agents.get(agent_id, agent_id)
+            sandbox_lvl = inst.get("sandbox_level", "LEVEL_1_READONLY")
+
+            card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            card.add_css_class("sayri-card-item")
+
+            # Header row: Title, Agent Badge, Sandbox Badge, Settings, Trash, Switch
+            header_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            header_row.set_valign(Gtk.Align.CENTER)
+
+            t = Gtk.Label()
+            t.set_markup(f"<span foreground='#ffffff' weight='700' size='10000'>{GLib.markup_escape_text(inst.get('name', inst_id))}</span>")
+            t.set_halign(Gtk.Align.START)
+            t.set_hexpand(True)
+            header_row.append(t)
+
+            # Agent Badge
+            ag_badge = Gtk.Label()
+            ag_badge.set_markup(f"<span foreground='#38bdf8' size='8500' weight='600'>🤖 {GLib.markup_escape_text(agent_name)}</span>")
+            header_row.append(ag_badge)
+
+            # Sandbox Badge
+            sb_badge = Gtk.Label()
+            sb_color = "#22c55e" if "READONLY" in sandbox_lvl or "NO_EXEC" in sandbox_lvl else "#f59e0b"
+            sb_badge.set_markup(f"<span foreground='{sb_color}' size='8500' weight='600'>🛡️ {sandbox_lvl.replace('LEVEL_', 'L')}</span>")
+            header_row.append(sb_badge)
+
+            # Guests Access Badge
+            guests_enabled = inst.get("allow_channel_guests", False)
+            auth_file = Path.home() / ".config" / "sayri" / f"authorizations_{inst_id}.json"
+            if auth_file.is_file():
+                try:
+                    auth_d = json.loads(auth_file.read_text(encoding="utf-8"))
+                    if "allow_channel_guests" in auth_d:
+                        guests_enabled = auth_d["allow_channel_guests"]
+                except Exception:
+                    pass
+            g_badge = Gtk.Label()
+            if guests_enabled:
+                g_badge.set_markup("<span foreground='#10b981' size='8500' weight='600'>👥 Invitados: ON</span>")
+            else:
+                g_badge.set_markup("<span foreground='#94a3b8' size='8500' weight='600'>🔒 Solo Dueño</span>")
+            header_row.append(g_badge)
+
+            # Edit / Configure Button
+            edit_btn = Gtk.Button()
+            edit_btn.set_child(_svg_icon(SVG_SETTINGS))
+            edit_btn.set_has_frame(False)
+            edit_btn.add_css_class("sayri-icon-btn")
+            edit_btn.set_tooltip_text("Edit Gateway Instance Settings")
+            edit_btn.connect("clicked", lambda _b, it=inst: self.show_edit_gateway_view(it))
+            header_row.append(edit_btn)
+
+            # Delete Button
+            del_gw_btn = Gtk.Button()
+            del_gw_btn.set_child(_svg_icon(SVG_TRASH))
+            del_gw_btn.set_has_frame(False)
+            del_gw_btn.add_css_class("sayri-icon-btn")
+            del_gw_btn.set_tooltip_text("Delete Gateway Instance")
+            del_gw_btn.connect("clicked", lambda _b, i_id=inst_id: (gateway_supervisor.delete_instance(i_id), self._populate_plugins()))
+            header_row.append(del_gw_btn)
+
+            # Running status & switch
+            is_running = gateway_supervisor.is_instance_running(inst_id)
+            sec_key = inst.get("secret_key", "")
+            has_secret = bool(secrets_manager.get_secret(sec_key) or sec_key in os.environ) if sec_key else False
+
+            sw = Gtk.Switch()
+            sw.set_active(is_running)
+            sw.set_valign(Gtk.Align.CENTER)
+            def _on_sw_toggle(switch, _param, i_id=inst_id):
+                if switch.get_active():
+                    ok, msg = gateway_supervisor.start_instance(i_id)
+                    if not ok:
+                        switch.set_active(False)
+                else:
+                    gateway_supervisor.stop_instance(i_id)
+                self._populate_plugins()
+            sw.connect("notify::active", _on_sw_toggle)
+            header_row.append(sw)
+
+            card.append(header_row)
+
+            # Description / Status row
+            if is_running:
+                status_text = "<span foreground='#22c55e' weight='600'>● Active (Listening)</span>"
+            elif not has_secret and sec_key:
+                status_text = f"<span foreground='#eab308' weight='600'>Set {sec_key} to Start</span>"
+            else:
+                status_text = "<span foreground='#94a3b8'>○ Daemon Stopped</span>"
+
+            # Check paired accounts for this instance
+            auth_file = Path.home() / ".config" / "sayri" / f"authorizations_{inst_id}.json"
+            if not auth_file.is_file():
+                auth_file = Path.home() / ".config" / "sayri" / "authorizations.json"
+            if auth_file.is_file():
+                try:
+                    auth_data = json.loads(auth_file.read_text(encoding="utf-8"))
+                    paired = auth_data.get("allowed_telegram_users", [])
+                    if paired:
+                        paired_str = ', '.join(str(p) for p in paired[:2])
+                        status_text += f" • {len(paired)} Paired ({paired_str})"
+                except Exception:
+                    pass
+
+            desc_lbl = Gtk.Label()
+            p_desc = plugin_meta.get("description", "Channel Gateway instance")
+            desc_lbl.set_markup(f"<span foreground='#94a3b8' size='9000'>{GLib.markup_escape_text(p_desc)} • {status_text}</span>")
+            desc_lbl.set_halign(Gtk.Align.START)
+            desc_lbl.set_wrap(True)
+            card.append(desc_lbl)
+
+            # Action bar: Show Pairing PIN or Set Token
+            act_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            act_bar.set_margin_top(2)
+
+            if inst.get("auth_mode") == "pairing_otp":
+                pair_btn = Gtk.Button(label="Show Pairing PIN")
+                pair_btn.add_css_class("sayri-action-btn")
+                pair_btn.connect("clicked", lambda _b, it=inst, pm=plugin_meta: self.show_generic_otp_pairing_view(pm, instance_id=it["id"]))
+                act_bar.append(pair_btn)
+
+            if sec_key and not has_secret:
+                cfg_btn = Gtk.Button(label=f"Set {sec_key}")
+                cfg_btn.add_css_class("sayri-action-btn")
+                cfg_btn.connect("clicked", lambda _b, it=inst: self.show_edit_gateway_view(it))
+                act_bar.append(cfg_btn)
+
+            card.append(act_bar)
+            self.plugins_box.append(card)
 
     # ── Zero-Plaintext Secrets Vault Logic ──
     def _populate_secrets(self) -> None:
@@ -1718,70 +1993,553 @@ class SayriCajita(Gtk.Box):
 
         self.settings_box.append(tts_config_box)
 
-    # ── Dialogs ──
-    def _prompt_add_secret(self) -> None:
-        dialog = Gtk.Window(title="Add Secret Key to Vault")
-        dialog.set_default_size(340, 200)
-        dialog.set_modal(True)
+        # Section 4: System Daemons & Process Management
+        sys_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        sys_box.add_css_class("sayri-card-item")
+        sys_box.set_margin_top(8)
 
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        box.set_margin_top(12)
-        box.set_margin_bottom(12)
-        box.set_margin_start(14)
-        box.set_margin_end(14)
+        sys_title = Gtk.Label()
+        sys_title.set_markup("<span weight='700' size='9500' foreground='#ef4444'>PROCESS MANAGEMENT</span>")
+        sys_title.set_halign(Gtk.Align.START)
+        sys_box.append(sys_title)
 
-        lbl = Gtk.Label(label="Key Identifier (e.g. DISCORD_BOT_TOKEN):")
-        lbl.set_halign(Gtk.Align.START)
-        box.append(lbl)
+        sys_desc = Gtk.Label()
+        sys_desc.set_markup("<span size='8500' foreground='#94a3b8'>Stop and terminate all running Sayri background daemons, gateways, and processes.</span>")
+        sys_desc.set_halign(Gtk.Align.START)
+        sys_desc.set_wrap(True)
+        sys_box.append(sys_desc)
 
-        key_entry = Gtk.Entry()
-        key_entry.add_css_class("sayri-settings-entry")
-        box.append(key_entry)
+        kill_btn = Gtk.Button(label="Terminate All Sayri Processes")
+        kill_btn.add_css_class("sayri-action-btn")
+        kill_btn.set_margin_top(4)
 
-        lbl2 = Gtk.Label(label="Secret Value:")
-        lbl2.set_halign(Gtk.Align.START)
-        box.append(lbl2)
+        def _kill_all_procs(_b):
+            try:
+                subprocess.run(["pkill", "-9", "-f", "gateway.py"], capture_output=True)
+                subprocess.run(["pkill", "-9", "-f", "sayri.indicator"], capture_output=True)
+                subprocess.run(["pkill", "-9", "-f", "python3 -m sayri"], capture_output=True)
+            except Exception:
+                pass
+            os._exit(0)
 
-        val_entry = Gtk.Entry()
-        val_entry.add_css_class("sayri-settings-entry")
-        val_entry.set_visibility(False)
-        box.append(val_entry)
+        kill_btn.connect("clicked", _kill_all_procs)
+        sys_box.append(kill_btn)
+        self.settings_box.append(sys_box)
 
-        lbl3 = Gtk.Label(label="Description / Purpose:")
-        lbl3.set_halign(Gtk.Align.START)
-        box.append(lbl3)
+    # ── Generic Dynamic In-Card Subviews (Zero Popups API) ──
+    def open_subview(self, title: str, build_content_cb, on_back_tab: str = "plugins") -> None:
+        """Generic in-card drawer/sub-view for plugins, skills, and extensions."""
+        self.subview_title_lbl.set_markup(f"<span weight='700' size='10500' foreground='#f8fafc'>{GLib.markup_escape_text(title.upper())}</span>")
 
-        desc_entry = Gtk.Entry()
-        desc_entry.add_css_class("sayri-settings-entry")
-        desc_entry.set_placeholder_text("Optional description")
-        box.append(desc_entry)
+        # Disconnect old handler if present
+        if hasattr(self, "_subview_back_conn") and self._subview_back_conn:
+            try:
+                self.subview_back_btn.disconnect(self._subview_back_conn)
+            except Exception:
+                pass
+        self._subview_back_conn = self.subview_back_btn.connect("clicked", lambda _b: self.switch_tab(on_back_tab))
 
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        btn_box.set_halign(Gtk.Align.END)
-        btn_box.set_margin_top(6)
+        # Clear previous content
+        while True:
+            child = self.subview_body.get_first_child()
+            if not child:
+                break
+            self.subview_body.remove(child)
 
-        cancel_b = Gtk.Button(label="Cancel")
-        cancel_b.add_css_class("sayri-action-btn")
-        cancel_b.connect("clicked", lambda _: dialog.close())
-        btn_box.append(cancel_b)
+        build_content_cb(self.subview_body)
+        self.switch_tab("subview")
 
-        save_b = Gtk.Button(label="Save Secret")
-        save_b.add_css_class("sayri-action-btn")
-        save_b.add_css_class("primary")
-        def _save(_):
-            k = key_entry.get_text().strip()
-            v = val_entry.get_text().strip()
-            d = desc_entry.get_text().strip()
-            if k and v:
-                secrets_manager.set_secret(k, v, d)
-                self._populate_secrets()
-            dialog.close()
-        save_b.connect("clicked", _save)
-        btn_box.append(save_b)
+    def show_skill_details_view(self, skill_name: str) -> None:
+        def _builder(box: Gtk.Box):
+            from sayri import skills as skills_mod
+            md_content = skills_mod.read_skill(skill_name) or "No documentation found for this skill."
+            scroll = Gtk.ScrolledWindow()
+            scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+            scroll.set_propagate_natural_height(True)
+            scroll.set_max_content_height(240)
+            lbl = Gtk.Label()
+            lbl.set_markup(f"<tt>{GLib.markup_escape_text(md_content)}</tt>")
+            lbl.set_wrap(True)
+            lbl.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+            lbl.set_selectable(True)
+            lbl.set_halign(Gtk.Align.START)
+            scroll.set_child(lbl)
+            box.append(scroll)
+        self.open_subview(f"Skill: {skill_name}", _builder, on_back_tab="skills")
 
-        box.append(btn_box)
-        dialog.set_child(box)
-        dialog.present()
+    def show_install_skill_view(self) -> None:
+        def _builder(box: Gtk.Box):
+            lbl = Gtk.Label(label="Package name (e.g. sayri-skill-web-search):")
+            lbl.set_halign(Gtk.Align.START)
+            box.append(lbl)
+
+            entry = Gtk.Entry()
+            entry.set_placeholder_text("sayri-package-name…")
+            entry.add_css_class("sayri-settings-entry")
+            box.append(entry)
+
+            status_lbl = Gtk.Label()
+            status_lbl.set_halign(Gtk.Align.START)
+            box.append(status_lbl)
+
+            btn = Gtk.Button(label="Download & Install")
+            btn.add_css_class("sayri-action-btn")
+            btn.add_css_class("primary")
+
+            def _do_install(_):
+                val = entry.get_text().strip()
+                if not val:
+                    return
+                btn.set_sensitive(False)
+                status_lbl.set_markup("<span foreground='#38bdf8' size='9000'>Fetching &amp; installing from Store…</span>")
+                def _thread():
+                    from sayri import skills as skills_mod
+                    ok = skills_mod.install_skill(val)
+                    GLib.idle_add(lambda: (
+                        self._populate_skills(),
+                        self._populate_plugins(),
+                        self.switch_tab("skills") if ok else status_lbl.set_markup("<span foreground='#ef4444' size='9000'>Failed to install package.</span>"),
+                        btn.set_sensitive(True)
+                    ))
+                threading.Thread(target=_thread, daemon=True).start()
+
+            btn.connect("clicked", _do_install)
+            box.append(btn)
+        self.open_subview("Install from Store", _builder, on_back_tab="skills")
+
+    def show_create_gateway_view(self) -> None:
+        def _builder(box: Gtk.Box):
+            from sayri.gateway_supervisor import gateway_supervisor
+            from sayri.domain.agent_creator import AgentCreator
+
+            installed_plugins = gateway_supervisor.list_installed_plugins()
+            agents = AgentCreator.list_agents()
+
+            if not installed_plugins:
+                lbl = Gtk.Label(label="No gateway plugins found. Please install Telegram or Discord gateway from the Pulsar Store.")
+                lbl.set_wrap(True)
+                box.append(lbl)
+                return
+
+            # 1. Platform Plugin selection
+            p_lbl = Gtk.Label(label="Platform / Gateway Plugin:")
+            p_lbl.set_halign(Gtk.Align.START)
+            box.append(p_lbl)
+
+            plugin_labels = [f"{p['name']} ({p['id']})" for p in installed_plugins]
+            plugin_model = Gtk.StringList.new(plugin_labels)
+            plugin_drop = Gtk.DropDown.new(plugin_model, None)
+            box.append(plugin_drop)
+
+            # 2. Instance Name
+            n_lbl = Gtk.Label(label="Gateway Instance Name:")
+            n_lbl.set_halign(Gtk.Align.START)
+            box.append(n_lbl)
+
+            name_entry = Gtk.Entry()
+            name_entry.set_placeholder_text("e.g. My Bot Gateway")
+            name_entry.add_css_class("sayri-settings-entry")
+            name_entry.set_text(installed_plugins[0]["name"] if installed_plugins else "Gateway Bot")
+            box.append(name_entry)
+
+            # 3. Bound AI Agent
+            ag_lbl = Gtk.Label(label="Bound AI Agent (Receiver):")
+            ag_lbl.set_halign(Gtk.Align.START)
+            box.append(ag_lbl)
+
+            agent_labels = [f"{a.name} ({a.id})" for a in agents]
+            agent_model = Gtk.StringList.new(agent_labels)
+            agent_drop = Gtk.DropDown.new(agent_model, None)
+            box.append(agent_drop)
+
+            # 4. Sandbox Level
+            sb_lbl = Gtk.Label(label="Sandbox Security Level:")
+            sb_lbl.set_halign(Gtk.Align.START)
+            box.append(sb_lbl)
+
+            sb_levels = [
+                "LEVEL_1_READONLY (Read-Only Host + Temp)",
+                "LEVEL_0_NO_EXEC (Pure Conversation / No Exec)",
+                "LEVEL_2_ISOLATED_DEV (Read-Only Root + Workspace)",
+                "LEVEL_3_HOST_USER (Full User Host Execution)",
+            ]
+            sb_keys = [
+                "LEVEL_1_READONLY",
+                "LEVEL_0_NO_EXEC",
+                "LEVEL_2_ISOLATED_DEV",
+                "LEVEL_3_HOST_USER",
+            ]
+            sb_model = Gtk.StringList.new(sb_levels)
+            sb_drop = Gtk.DropDown.new(sb_model, None)
+            box.append(sb_drop)
+
+            # 5. Bot Token / Secret
+            tok_lbl = Gtk.Label(label="Bot Token / API Secret:")
+            tok_lbl.set_halign(Gtk.Align.START)
+            box.append(tok_lbl)
+
+            tok_entry = Gtk.Entry()
+            tok_entry.set_visibility(False)
+            tok_entry.set_placeholder_text("Paste required bot token or API key…")
+            tok_entry.add_css_class("sayri-settings-entry")
+            box.append(tok_entry)
+
+            def _on_plugin_selected(_drop, _param):
+                idx = plugin_drop.get_selected()
+                if 0 <= idx < len(installed_plugins):
+                    sel = installed_plugins[idx]
+                    name_entry.set_text(sel["name"])
+                    req_sec = ", ".join(sel.get("required_secrets", [])) or "API Secret"
+                    tok_lbl.set_label(f"Token / Secret ({req_sec}):")
+                    tok_entry.set_placeholder_text(f"Paste token for {sel['name']}…")
+
+            plugin_drop.connect("notify::selected", _on_plugin_selected)
+
+            # Create Button
+            create_btn = Gtk.Button(label="Create Gateway Instance")
+            create_btn.add_css_class("sayri-action-btn")
+            create_btn.add_css_class("primary")
+            create_btn.set_margin_top(6)
+
+            def _create(_b):
+                p_idx = plugin_drop.get_selected()
+                ag_idx = agent_drop.get_selected()
+                sb_idx = sb_drop.get_selected()
+
+                selected_plugin = installed_plugins[p_idx]
+                selected_agent = agents[ag_idx]
+                selected_sb = sb_keys[sb_idx]
+
+                import re, time
+                raw_name = name_entry.get_text().strip() or f"{selected_plugin['name']} ({selected_agent.name})"
+                inst_slug = re.sub(r'[^a-zA-Z0-9_-]', '-', raw_name.lower()).strip('-')
+                inst_id = f"{selected_plugin['id'][:12]}-{inst_slug[:16]}-{int(time.time()) % 10000}"
+                sec_key = f"TOKEN_{inst_id.upper().replace('-', '_')}"
+
+                # Save token if provided
+                token_val = tok_entry.get_text().strip()
+                if token_val:
+                    secrets_manager.set_secret(sec_key, token_val, f"Token for {raw_name}")
+                else:
+                    sec_key = selected_plugin["required_secrets"][0] if selected_plugin["required_secrets"] else sec_key
+
+                inst_data = {
+                    "id": inst_id,
+                    "name": raw_name,
+                    "plugin_id": selected_plugin["id"],
+                    "agent_id": selected_agent.id,
+                    "sandbox_level": selected_sb,
+                    "secret_key": sec_key,
+                    "auth_mode": selected_plugin.get("auth_mode", "pairing_otp"),
+                    "enabled": True,
+                    "created_at": time.time(),
+                }
+                gateway_supervisor.save_instance(inst_data)
+                if token_val:
+                    gateway_supervisor.start_instance(inst_id)
+                self._populate_plugins()
+                self.switch_tab("plugins")
+
+            create_btn.connect("clicked", _create)
+            box.append(create_btn)
+
+        self.open_subview("Add Gateway Instance", _builder, on_back_tab="plugins")
+
+    def show_edit_gateway_view(self, instance_data: dict) -> None:
+        def _builder(box: Gtk.Box):
+            from sayri.gateway_supervisor import gateway_supervisor
+            from sayri.domain.agent_creator import AgentCreator
+
+            agents = AgentCreator.list_agents()
+            inst_id = instance_data["id"]
+
+            # 1. Instance Name
+            n_lbl = Gtk.Label(label="Instance Name:")
+            n_lbl.set_halign(Gtk.Align.START)
+            box.append(n_lbl)
+
+            name_entry = Gtk.Entry()
+            name_entry.set_text(instance_data.get("name", inst_id))
+            name_entry.add_css_class("sayri-settings-entry")
+            box.append(name_entry)
+
+            # 2. Bound AI Agent
+            ag_lbl = Gtk.Label(label="Bound AI Agent (Receiver):")
+            ag_lbl.set_halign(Gtk.Align.START)
+            box.append(ag_lbl)
+
+            agent_labels = [f"{a.name} ({a.id})" for a in agents]
+            agent_model = Gtk.StringList.new(agent_labels)
+            agent_drop = Gtk.DropDown.new(agent_model, None)
+            cur_ag_id = instance_data.get("agent_id", "default")
+            cur_ag_idx = next((i for i, a in enumerate(agents) if a.id == cur_ag_id), 0)
+            agent_drop.set_selected(cur_ag_idx)
+            box.append(agent_drop)
+
+            # 3. Sandbox Level
+            sb_lbl = Gtk.Label(label="Sandbox Security Level:")
+            sb_lbl.set_halign(Gtk.Align.START)
+            box.append(sb_lbl)
+
+            sb_levels = [
+                "LEVEL_1_READONLY (Read-Only Host + Temp)",
+                "LEVEL_0_NO_EXEC (Pure Conversation / No Exec)",
+                "LEVEL_2_ISOLATED_DEV (Read-Only Root + Workspace)",
+                "LEVEL_3_HOST_USER (Full User Host Execution)",
+            ]
+            sb_keys = [
+                "LEVEL_1_READONLY",
+                "LEVEL_0_NO_EXEC",
+                "LEVEL_2_ISOLATED_DEV",
+                "LEVEL_3_HOST_USER",
+            ]
+            sb_model = Gtk.StringList.new(sb_levels)
+            sb_drop = Gtk.DropDown.new(sb_model, None)
+            cur_sb = instance_data.get("sandbox_level", "LEVEL_1_READONLY")
+            cur_sb_idx = next((i for i, k in enumerate(sb_keys) if k == cur_sb), 0)
+            sb_drop.set_selected(cur_sb_idx)
+            box.append(sb_drop)
+
+            # 4. Token
+            sec_key = instance_data.get("secret_key") or f"TOKEN_{inst_id.upper().replace('-', '_')}"
+            cur_tok = secrets_manager.get_secret(sec_key) or ""
+            tok_lbl = Gtk.Label(label=f"Bot Token ({sec_key}):")
+            tok_lbl.set_halign(Gtk.Align.START)
+            box.append(tok_lbl)
+
+            tok_entry = Gtk.Entry()
+            tok_entry.set_visibility(False)
+            tok_entry.set_text(cur_tok)
+            tok_entry.set_placeholder_text("Enter or update bot token…")
+            tok_entry.add_css_class("sayri-settings-entry")
+            box.append(tok_entry)
+
+            # 5. Channel Guests Access (Kill Switch)
+            guests_check = Gtk.CheckButton(label="👥 Permitir interacción a miembros en canales (Guest Access)")
+            guests_val = instance_data.get("allow_channel_guests", False)
+            auth_f = Path.home() / ".config" / "sayri" / f"authorizations_{inst_id}.json"
+            if auth_f.is_file():
+                try:
+                    auth_json_d = json.loads(auth_f.read_text(encoding="utf-8"))
+                    if "allow_channel_guests" in auth_json_d:
+                        guests_val = bool(auth_json_d["allow_channel_guests"])
+                except Exception:
+                    pass
+            guests_check.set_active(guests_val)
+            guests_check.set_margin_top(4)
+            box.append(guests_check)
+
+            # Save Button
+            save_btn = Gtk.Button(label="Save Configuration")
+            save_btn.add_css_class("sayri-action-btn")
+            save_btn.add_css_class("primary")
+            save_btn.set_margin_top(6)
+
+            def _save(_b):
+                ag_idx = agent_drop.get_selected()
+                sb_idx = sb_drop.get_selected()
+
+                selected_agent = agents[ag_idx]
+                selected_sb = sb_keys[sb_idx]
+                new_tok = tok_entry.get_text().strip()
+
+                if new_tok:
+                    secrets_manager.set_secret(sec_key, new_tok, f"Token for {instance_data.get('name')}")
+
+                instance_data["name"] = name_entry.get_text().strip() or instance_data.get("name")
+                instance_data["agent_id"] = selected_agent.id
+                instance_data["sandbox_level"] = selected_sb
+                instance_data["secret_key"] = sec_key
+                instance_data["allow_channel_guests"] = guests_check.get_active()
+                gateway_supervisor.save_instance(instance_data)
+
+                # Sync to authorizations file
+                if auth_f.is_file():
+                    try:
+                        auth_json_d = json.loads(auth_f.read_text(encoding="utf-8"))
+                        auth_json_d["allow_channel_guests"] = guests_check.get_active()
+                        auth_f.write_text(json.dumps(auth_json_d, indent=2), encoding="utf-8")
+                    except Exception:
+                        pass
+
+                # Restart instance if already running
+                if gateway_supervisor.is_instance_running(inst_id):
+                    gateway_supervisor.start_instance(inst_id)
+
+                self._populate_plugins()
+                self.switch_tab("plugins")
+
+            save_btn.connect("clicked", _save)
+            box.append(save_btn)
+
+        self.open_subview(f"Edit {instance_data.get('name')}", _builder, on_back_tab="plugins")
+
+    def show_generic_otp_pairing_view(self, plugin_meta: dict, instance_id: str = "default") -> None:
+        def _builder(box: Gtk.Box):
+            pin_file = Path.home() / ".config" / "sayri" / f"pairing_pin_{instance_id}.json"
+            if not pin_file.is_file() and (Path.home() / ".config" / "sayri" / "pairing_pin.json").is_file():
+                pin_file = Path.home() / ".config" / "sayri" / "pairing_pin.json"
+
+            raw_pin = None
+            if pin_file.is_file():
+                try:
+                    data = json.loads(pin_file.read_text(encoding="utf-8"))
+                    saved_pin = str(data.get("pin", "")).strip()
+                    expires_at = data.get("expires_at", 0)
+                    if saved_pin and time.time() <= expires_at:
+                        raw_pin = saved_pin
+                except Exception:
+                    pass
+
+            if not raw_pin:
+                import random
+                raw_pin = f"{random.randint(100000, 999999)}"
+                try:
+                    pin_file.parent.mkdir(parents=True, exist_ok=True)
+                    pin_file.write_text(json.dumps({
+                        "pin": raw_pin,
+                        "created_at": time.time(),
+                        "expires_at": time.time() + 86400
+                    }, indent=2), encoding="utf-8")
+                except Exception as e:
+                    print(f"[Cajita] Error writing pairing pin file: {e}")
+
+            formatted_pin = f"{raw_pin[:3]} {raw_pin[3:]}"
+            pair_cmd = f"/pair {raw_pin}"
+
+            pin_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            pin_card.add_css_class("sayri-card-item")
+            pin_lbl = Gtk.Label()
+            pin_lbl.set_markup(f"<span font_family='monospace' weight='800' size='22000' foreground='#38bdf8'>{formatted_pin}</span>")
+            pin_lbl.set_halign(Gtk.Align.CENTER)
+            pin_card.append(pin_lbl)
+            box.append(pin_card)
+
+            cmd_entry = Gtk.Entry()
+            cmd_entry.set_text(pair_cmd)
+            cmd_entry.set_editable(False)
+            cmd_entry.add_css_class("sayri-settings-entry")
+            box.append(cmd_entry)
+
+            copy_btn = Gtk.Button(label=f"📋 Copy Command ({pair_cmd})")
+            copy_btn.add_css_class("sayri-action-btn")
+            copy_btn.add_css_class("primary")
+
+            def _copy(_b):
+                try:
+                    subprocess.Popen(["wl-copy", pair_cmd])
+                except Exception:
+                    pass
+                try:
+                    cb = Gdk.Display.get_default().get_clipboard()
+                    cb.set(pair_cmd)
+                except Exception:
+                    pass
+                copy_btn.set_label("✓ Copied to Clipboard!")
+                copy_btn.remove_css_class("primary")
+
+            copy_btn.connect("clicked", _copy)
+            box.append(copy_btn)
+
+            chat_url = plugin_meta.get("ui", {}).get("chat_url") or plugin_meta.get("chat_url", "")
+            if chat_url:
+                open_btn = Gtk.Button(label="💬 Open Channel ↗")
+                open_btn.add_css_class("sayri-action-btn")
+                open_btn.connect("clicked", lambda _: os.system(f"xdg-open {chat_url} &"))
+                box.append(open_btn)
+
+            hint_text = plugin_meta.get("ui", {}).get("sync_instructions") or plugin_meta.get("sync_instructions") or "Send this command to authorize your account."
+            hint_lbl = Gtk.Label()
+            hint_lbl.set_markup(f"<span size='8500' foreground='#94a3b8'>{GLib.markup_escape_text(hint_text)}</span>")
+            hint_lbl.set_halign(Gtk.Align.CENTER)
+            hint_lbl.set_wrap(True)
+            box.append(hint_lbl)
+
+        p_name = plugin_meta.get("name", "Gateway")
+        self.open_subview(f"{p_name} Pairing ({instance_id})", _builder, on_back_tab="plugins")
+
+    def show_generic_secret_config_view(self, plugin_id: str, plugin_name: str, secret_key: str) -> None:
+        def _builder(box: Gtk.Box):
+            info = Gtk.Label()
+            info.set_markup(f"<span size='8500' foreground='#94a3b8'>Set zero-plaintext secret <tt>${GLib.markup_escape_text(secret_key)}</tt>:</span>")
+            info.set_halign(Gtk.Align.START)
+            box.append(info)
+
+            val_entry = Gtk.Entry()
+            val_entry.set_visibility(False)
+            val_entry.set_placeholder_text(f"Enter {secret_key} token…")
+            val_entry.add_css_class("sayri-settings-entry")
+            box.append(val_entry)
+
+            save_btn = Gtk.Button(label="Save in Zero-Plaintext Vault")
+            save_btn.add_css_class("sayri-action-btn")
+            save_btn.add_css_class("primary")
+
+            def _save(_b):
+                val = val_entry.get_text().strip()
+                if val:
+                    secrets_manager.set_secret(secret_key, val, f"Token for {plugin_id}")
+                    try:
+                        from sayri.gateway_supervisor import gateway_supervisor
+                        gateway_supervisor.start_gateway(plugin_id)
+                    except Exception as e:
+                        print(f"[Cajita] Error starting gateway {plugin_id}: {e}")
+                    self._populate_secrets()
+                    self._populate_plugins()
+                self.switch_tab("plugins")
+
+            save_btn.connect("clicked", _save)
+            box.append(save_btn)
+
+        self.open_subview(f"Configure {plugin_name}", _builder, on_back_tab="plugins")
+
+    def show_add_secret_view(self) -> None:
+        def _builder(box: Gtk.Box):
+            lbl_k = Gtk.Label(label="Key Identifier (e.g. API_KEY):")
+            lbl_k.set_halign(Gtk.Align.START)
+            box.append(lbl_k)
+
+            sec_k_entry = Gtk.Entry()
+            sec_k_entry.set_placeholder_text("API_KEY…")
+            sec_k_entry.add_css_class("sayri-settings-entry")
+            box.append(sec_k_entry)
+
+            lbl_v = Gtk.Label(label="Secret Value / API Token:")
+            lbl_v.set_halign(Gtk.Align.START)
+            box.append(lbl_v)
+
+            sec_v_entry = Gtk.Entry()
+            sec_v_entry.set_visibility(False)
+            sec_v_entry.set_placeholder_text("Paste token…")
+            sec_v_entry.add_css_class("sayri-settings-entry")
+            box.append(sec_v_entry)
+
+            lbl_d = Gtk.Label(label="Description (optional):")
+            lbl_d.set_halign(Gtk.Align.START)
+            box.append(lbl_d)
+
+            sec_d_entry = Gtk.Entry()
+            sec_d_entry.set_placeholder_text("Description…")
+            sec_d_entry.add_css_class("sayri-settings-entry")
+            box.append(sec_d_entry)
+
+            save_btn = Gtk.Button(label="Save in Zero-Plaintext Vault")
+            save_btn.add_css_class("sayri-action-btn")
+            save_btn.add_css_class("primary")
+
+            def _save(_):
+                k = sec_k_entry.get_text().strip()
+                v = sec_v_entry.get_text().strip()
+                d = sec_d_entry.get_text().strip()
+                if k and v:
+                    secrets_manager.set_secret(k, v, d)
+                    self._populate_secrets()
+                    self.switch_tab("secrets")
+
+            save_btn.connect("clicked", _save)
+            box.append(save_btn)
+
+        self.open_subview("Add Vault Secret", _builder, on_back_tab="secrets")
 
     def _prompt_create_agent(self) -> None:
         dialog = Gtk.Window(title="Create Subagent")
@@ -1800,7 +2558,7 @@ class SayriCajita(Gtk.Box):
         box.append(lbl)
         name_entry = Gtk.Entry()
         name_entry.add_css_class("sayri-settings-entry")
-        name_entry.set_placeholder_text("e.g. Discord Voice Assistant")
+        name_entry.set_placeholder_text("e.g. Code Reviewer, Research Assistant")
         box.append(name_entry)
 
         # Role
@@ -1809,7 +2567,7 @@ class SayriCajita(Gtk.Box):
         box.append(lbl2)
         prompt_entry = Gtk.Entry()
         prompt_entry.add_css_class("sayri-settings-entry")
-        prompt_entry.set_placeholder_text("e.g. You are a concise discord voice bot")
+        prompt_entry.set_placeholder_text("e.g. You are a senior software engineer assisting with code analysis.")
         box.append(prompt_entry)
 
         # Sandbox DropDown
@@ -1830,16 +2588,20 @@ class SayriCajita(Gtk.Box):
         box.append(sb_drop)
 
         # Gateway DropDown
-        lbl_gw = Gtk.Label(label="Channel Gateway:")
+        lbl_gw = Gtk.Label(label="Channel Gateway / Plugin:")
         lbl_gw.set_halign(Gtk.Align.START)
         box.append(lbl_gw)
 
-        gw_options = [
-            "None (Direct Assistant)",
-            "Discord Voice & Chat Gateway",
-            "Telegram Bot Bridge",
-            "Model Context Protocol (MCP)",
-        ]
+        gw_options = ["None (Direct Assistant)"]
+        for d in [Path.home() / ".config" / "sayri" / "skills", Path.home() / ".config" / "sayri" / "plugins"]:
+            if d.is_dir():
+                for sub in d.iterdir():
+                    if sub.is_dir() and (sub / "manifest.json").is_file():
+                        try:
+                            m = json.loads((sub / "manifest.json").read_text(encoding="utf-8"))
+                            gw_options.append(m.get("name", sub.name))
+                        except Exception:
+                            pass
         gw_model = Gtk.StringList.new(gw_options)
         gw_drop = Gtk.DropDown.new(gw_model, None)
         gw_drop.set_selected(0)
@@ -1982,6 +2744,7 @@ class SayriCajita(Gtk.Box):
 
     def set_response(self, text: str) -> None:
         self._live_text = text
+        self.entry.set_text("")
         _safe_set_markup(self.response_label, text)
         if self.card_stack.get_visible_child_name() != "chat":
             self.switch_tab("chat", trigger_effect=False)
@@ -2001,6 +2764,7 @@ class SayriCajita(Gtk.Box):
 
     def set_busy(self, busy: bool) -> None:
         if busy:
+            self.entry.set_text("")
             self.pill_bg.set_mode("thinking")
             self.card_bg.set_mode("idle")
             self.switch_tab("chat", trigger_effect=False)

@@ -84,9 +84,16 @@ class AgentCreator:
 
     @classmethod
     def save_agent(cls, profile: AgentProfile) -> str:
-        agents_dir = paths.agents_dir()
+        clean_id = re.sub(r"[^\w\-]", "_", profile.id).strip("_")
+        if not clean_id:
+            clean_id = f"agent_{int(time.time())}"
+        profile.id = clean_id
+
+        agents_dir = os.path.abspath(paths.agents_dir())
         os.makedirs(agents_dir, exist_ok=True)
-        fpath = os.path.join(agents_dir, f"{profile.id}.json")
+        fpath = os.path.abspath(os.path.join(agents_dir, f"{clean_id}.json"))
+        if not fpath.startswith(agents_dir):
+            raise ValueError("Security violation: Invalid agent storage path.")
 
         payload = {
             "id": profile.id,
@@ -111,14 +118,21 @@ class AgentCreator:
 
         with open(fpath, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
+        try:
+            os.chmod(fpath, 0o600)
+        except OSError:
+            pass
         return fpath
 
     @classmethod
     def delete_agent(cls, agent_id: str) -> bool:
-        if agent_id == "default":
+        clean_id = re.sub(r"[^\w\-]", "_", agent_id).strip("_")
+        if not clean_id or clean_id == "default":
             return False
-        agents_dir = paths.agents_dir()
-        fpath = os.path.join(agents_dir, f"{agent_id}.json")
+        agents_dir = os.path.abspath(paths.agents_dir())
+        fpath = os.path.abspath(os.path.join(agents_dir, f"{clean_id}.json"))
+        if not fpath.startswith(agents_dir):
+            return False
         if os.path.isfile(fpath):
             try:
                 os.remove(fpath)
@@ -128,8 +142,21 @@ class AgentCreator:
         return False
 
     @classmethod
-    def create_agent_from_prompt(cls, prompt_text: str) -> Tuple[bool, str, Optional[AgentProfile]]:
-        """Parses natural language prompt into a structured AgentProfile."""
+    def create_agent_from_prompt(
+        cls,
+        prompt_text: str,
+        max_allowed_level: SandboxLevel = SandboxLevel.LEVEL_3_HOST_USER,
+    ) -> Tuple[bool, str, Optional[AgentProfile]]:
+        """Parses natural language prompt into a structured AgentProfile with privilege containment."""
+        # Non-escalation enforcement: Restricted sandboxes cannot create subagents
+        if max_allowed_level in (SandboxLevel.LEVEL_0_NO_EXEC, SandboxLevel.LEVEL_1_READONLY, SandboxLevel.LEVEL_2_ISOLATED_DEV):
+            return (
+                False,
+                f"Error de seguridad: El entorno actual está restringido a nivel '{max_allowed_level.value}'. "
+                "No tiene permisos para crear o registrar subagentes en el sistema.",
+                None,
+            )
+
         text = prompt_text.lower()
 
         # Heuristic determination of Sandbox Level
@@ -138,6 +165,19 @@ class AgentCreator:
             sandbox_level = SandboxLevel.LEVEL_0_NO_EXEC
         elif "solo lectura" in text or "aislado" in text or "sandbox" in text:
             sandbox_level = SandboxLevel.LEVEL_2_ISOLATED_DEV
+
+        # Enforce privilege boundary: target level can never exceed max_allowed_level
+        levels_order = [
+            SandboxLevel.LEVEL_0_NO_EXEC,
+            SandboxLevel.LEVEL_1_READONLY,
+            SandboxLevel.LEVEL_2_ISOLATED_DEV,
+            SandboxLevel.LEVEL_3_HOST_USER,
+            SandboxLevel.LEVEL_4_HOST_ROOT,
+        ]
+        caller_idx = levels_order.index(max_allowed_level) if max_allowed_level in levels_order else 3
+        target_idx = levels_order.index(sandbox_level) if sandbox_level in levels_order else 3
+        if target_idx > caller_idx:
+            sandbox_level = max_allowed_level
 
         # Model heuristics
         model_name = "default"

@@ -107,11 +107,12 @@ def search_clawhub(query: str) -> list[dict[str, Any]]:
 
 
 def search_skills(query: str) -> list[dict[str, Any]]:
-    """Search both Pulsar Store (https://store-os.inled.es) and ClawHub."""
-    out = []
+    """Search both Pulsar Store (https://store-os.inled.es) and ClawHub, prioritizing official store packages."""
+    official_results = []
+    community_results = []
     seen = set()
 
-    # 1. Pulsar Store Official
+    # 1. Pulsar Store Official (Highest Priority)
     packages = fetch_store_catalog()
     q = query.strip().lower()
     for p in packages:
@@ -122,36 +123,70 @@ def search_skills(query: str) -> list[dict[str, Any]]:
             if not q or q in name or q in pkg_id or q in desc:
                 slug = p.get("id")
                 seen.add(slug)
-                out.append({
+                official_results.append({
                     "slug": slug,
                     "name": p.get("name"),
-                    "owner": p.get("author", "Pulsar"),
+                    "owner": p.get("author", "Pulsar OS"),
                     "description": p.get("description", ""),
                     "download_url": p.get("download_url"),
                     "version": p.get("version", "1.0.0"),
-                    "source": "Pulsar Store"
+                    "is_official": True,
+                    "source": "OFFICIAL (Pulsar Store)"
                 })
 
-    # 2. ClawHub Registry
+    # 2. ClawHub Registry (Secondary Community Fallback)
     if q:
         for r in search_clawhub(query):
             if r["slug"] not in seen:
                 seen.add(r["slug"])
-                out.append(r)
+                r["is_official"] = False
+                r["source"] = "Community (ClawHub)"
+                community_results.append(r)
 
-    return out
+    # Official store packages always come first
+    return official_results + community_results
+
+
+def _safe_extract_zip(zip_bytes: bytes, target_dir: str) -> bool:
+    """Extracts zip archive while strictly preventing Zip Slip path traversal."""
+    import io
+    import zipfile
+    from pathlib import Path
+
+    target_path = Path(target_dir).resolve()
+    target_path.mkdir(parents=True, exist_ok=True)
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
+            for member in z.infolist():
+                # Disallow absolute paths or parent directory traversal
+                member_path = (target_path / member.filename).resolve()
+                if not str(member_path).startswith(str(target_path)):
+                    print(f"[Skills Security] 🚨 Blocked Zip Slip path traversal attempt: {member.filename}", file=sys.stderr)
+                    return False
+
+            for member in z.infolist():
+                z.extract(member, str(target_path))
+        return True
+    except Exception as exc:
+        print(f"[Skills Security] Zip extraction error: {exc}", file=sys.stderr)
+        return False
 
 
 def install_skill(slug_or_name: str) -> bool:
     """Download and extract official skill package from Pulsar Store or ClawHub into ~/.config/sayri/skills/<name>/."""
-    import io
-    import zipfile
+    import re
 
     slug_raw = slug_or_name.strip().lstrip("@")
     owner = None
     slug = slug_raw
     if "/" in slug_raw:
         owner, slug = slug_raw.split("/", 1)
+
+    # Strictly sanitize slug to prevent path traversal
+    slug = re.sub(r"[^\w\-]", "", slug).strip("_")
+    if not slug:
+        return False
 
     target_dir = os.path.join(paths.skills_dir(), slug)
     os.makedirs(target_dir, exist_ok=True)
@@ -168,10 +203,9 @@ def install_skill(slug_or_name: str) -> bool:
             with urllib.request.urlopen(req, timeout=15) as resp:
                 content = resp.read()
                 if content.startswith(b"PK\x03\x04"):
-                    with zipfile.ZipFile(io.BytesIO(content)) as z:
-                        z.extractall(target_dir)
-                    print(f"[Skills] ✓ Extracted Pulsar Store skill '{slug}' into {target_dir}")
-                    return True
+                    if _safe_extract_zip(content, target_dir):
+                        print(f"[Skills] ✓ Safely extracted Pulsar Store skill '{slug}' into {target_dir}")
+                        return True
         except Exception as exc:
             print(f"[Skills] Pulsar Store download notice: {exc}")
 
@@ -183,10 +217,9 @@ def install_skill(slug_or_name: str) -> bool:
         with urllib.request.urlopen(req, timeout=15) as resp:
             content = resp.read()
             if content.startswith(b"PK\x03\x04") or b"SKILL.md" in content:
-                with zipfile.ZipFile(io.BytesIO(content)) as z:
-                    z.extractall(target_dir)
-                print(f"[Skills] ✓ Extracted official ClawHub skill '{slug}' into {target_dir}")
-                return True
+                if _safe_extract_zip(content, target_dir):
+                    print(f"[Skills] ✓ Safely extracted ClawHub skill '{slug}' into {target_dir}")
+                    return True
     except Exception as exc:
         print(f"[Skills] ClawHub download notice: {exc}")
 
@@ -209,24 +242,7 @@ def install_skill(slug_or_name: str) -> bool:
         except Exception:
             continue
 
-    # 2. Fallback to GitHub OpenClaw skills repo
-    github_urls = [
-        f"{CLAWHUB_RAW_BASE}/skills/{slug}/SKILL.md",
-        f"{CLAWHUB_RAW_BASE}/{slug}/SKILL.md",
-    ]
-    for g_url in github_urls:
-        try:
-            req = urllib.request.Request(g_url, headers={"User-Agent": "Sayri-Pulsar/1.0"})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                data = resp.read().decode("utf-8")
-                if data and "404" not in data[:40]:
-                    target_file = os.path.join(target_dir, "SKILL.md")
-                    with open(target_file, "w", encoding="utf-8") as f:
-                        f.write(data)
-                    print(f"[Skills] ✓ Downloaded '{slug}' from GitHub repository: {g_url}")
-                    return True
-        except Exception:
-            continue
+    return False
 
     # 3. If neither available, create local template
     target_file = os.path.join(target_dir, "SKILL.md")
@@ -263,16 +279,46 @@ When the user asks for tasks related to {slug}, use appropriate bash commands.
     return True
 
 
+def uninstall_skill(slug_or_name: str) -> bool:
+    """Remove an installed skill or plugin from ~/.config/sayri/skills/<name>/."""
+    slug = slug_or_name.strip()
+    target_dir = os.path.join(paths.skills_dir(), slug)
+    plugin_dir = os.path.join(paths.config_dir(), "plugins", slug)
+
+    removed = False
+    for d in [target_dir, plugin_dir]:
+        if os.path.isdir(d):
+            try:
+                shutil.rmtree(d)
+                print(f"[Skills] ✓ Removed '{slug}' from {d}")
+                removed = True
+            except Exception as exc:
+                print(f"[Skills] Error removing {d}: {exc}")
+
+    if not removed:
+        print(f"[Skills] Skill or plugin '{slug}' is not currently installed.")
+        return False
+    return True
+
+
+def remove_skill(slug_or_name: str) -> bool:
+    """Alias for uninstall_skill."""
+    return uninstall_skill(slug_or_name)
+
+
 def main() -> int:
-    """CLI tool for sayri-skills."""
+    """CLI tool for sayri-skills and sayri-plugins."""
     args = sys.argv[1:]
+    prog_name = os.path.basename(sys.argv[0])
     if not args or args[0] in ("-h", "--help"):
-        print("Usage: sayri-skills <command> [args]")
+        print(f"Usage: {prog_name} <command> [args]")
         print("Commands:")
-        print("  list                List installed skills")
-        print("  read <name>         Read SKILL.md for a skill")
-        print("  search <query>      Search ClawHub for skills")
-        print("  install <name>      Install skill from ClawHub")
+        print("  list                       List installed skills and plugins")
+        print("  search <query>             Search Pulsar Store (store-os.inled.es) & ClawHub")
+        print("  install <name|id>          Install skill or plugin from Pulsar Store or ClawHub")
+        print("  uninstall <name|id>        Remove installed skill or plugin")
+        print("  remove <name|id>           Alias for uninstall")
+        print("  read <name|id>             Read SKILL.md for an installed skill")
         return 0
 
     cmd = args[0]
@@ -283,14 +329,16 @@ def main() -> int:
         if not skills:
             print(f"No skills installed in {paths.skills_dir()}")
             return 0
-        print(f"Installed skills ({len(skills)}):")
+        print(f"\n🤖 Installed Sayri Skills & Plugins ({len(skills)}):\n")
+        print(f"{'NAME / ID':<32} | {'DESCRIPTION'}")
+        print("-" * 75)
         for s in skills:
-            print(f"  - {s['name']}: {s['description']}")
+            print(f"{s['name']:<32} | {s['description']}")
         return 0
 
     elif cmd == "read":
         if len(args) < 2:
-            print("Error: Specify skill name. Usage: sayri-skills read <name>")
+            print(f"Error: Specify skill name. Usage: {prog_name} read <name>")
             return 1
         content = read_skill(args[1])
         if content:
@@ -302,20 +350,38 @@ def main() -> int:
 
     elif cmd == "search":
         query = " ".join(args[1:]) if len(args) > 1 else ""
-        results = search_clawhub(query)
-        print(f"ClawHub results for '{query}':")
+        results = search_skills(query)
+        print(f"\n🔍 Search results for '{query}' ({len(results)} found):\n")
+        print(f"{'STATUS / SOURCE':<28} | {'ID / SLUG':<30} | {'NAME & SUMMARY'}")
+        print("=" * 95)
         for r in results:
-            print(f"  - {r.get('slug', r.get('name'))}: {r.get('description', '')}")
+            if r.get("is_official"):
+                src_badge = "\033[1;32m⭐ OFFICIAL (Pulsar)\033[0m"
+            else:
+                src_badge = "\033[90m🌐 Community (ClawHub)\033[0m"
+            slug = r.get('slug', r.get('name'))
+            desc = r.get('description', '')[:45].replace('\n', ' ')
+            print(f"{src_badge:<37} | {slug:<30} | {r.get('name')} - {desc}")
+        print("\n💡 Tip: Official Pulsar Store packages (⭐) are audited with OpenCode & VirusTotal for Pulsar OS.")
+        print(f"👉 Run '{prog_name} install <id>' to install any skill or plugin.")
         return 0
 
     elif cmd == "install":
         if len(args) < 2:
-            print("Error: Specify skill name. Usage: sayri-skills install <name>")
+            print(f"Error: Specify skill name. Usage: {prog_name} install <name>")
             return 1
         name = args[1]
         ok = install_skill(name)
         if ok:
-            print(f"Skill '{name}' ready in {os.path.join(paths.skills_dir(), name)}")
+            print(f"🎉 Skill/Plugin '{name}' is ready in {os.path.join(paths.skills_dir(), name)}")
+        return 0 if ok else 1
+
+    elif cmd in ("uninstall", "remove"):
+        if len(args) < 2:
+            print(f"Error: Specify skill name. Usage: {prog_name} {cmd} <name>")
+            return 1
+        name = args[1]
+        ok = uninstall_skill(name)
         return 0 if ok else 1
 
     else:

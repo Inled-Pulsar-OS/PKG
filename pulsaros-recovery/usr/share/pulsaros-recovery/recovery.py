@@ -13,6 +13,7 @@ import re
 import datetime
 import glob
 import shutil
+import json
 import gi
 
 
@@ -179,6 +180,92 @@ listrow:selected, listboxrow:selected {
     color: #8e8e93;
     text-align: center;
 }
+.mode-card {
+    background-color: #2a2a2a;
+    border: 1px solid #3c3c3c;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin: 6px 0;
+    transition: all 0.15s ease;
+}
+.mode-card:hover {
+    background-color: #323236;
+}
+.mode-card.selected {
+    background-color: #323236;
+    border-color: #0071e3;
+    box-shadow: 0 0 0 2px #0071e3;
+}
+.mode-title {
+    font-size: 14px;
+    font-weight: bold;
+    color: #ffffff;
+}
+.mode-desc {
+    font-size: 11px;
+    color: #aeaeb2;
+    margin-top: 2px;
+}
+.partition-card {
+    background-color: #2a2a2a;
+    border: 1px solid #3c3c3c;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin: 3px 0;
+    transition: all 0.15s ease;
+}
+.partition-card:hover {
+    background-color: #323236;
+}
+.partition-card.selected {
+    background-color: #323236;
+    border-color: #0071e3;
+    box-shadow: 0 0 0 2px #0071e3;
+}
+.partition-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+}
+.partition-desc {
+    font-size: 11px;
+    color: #aeaeb2;
+}
+.partition-badge {
+    background-color: #3a3a3c;
+    color: #30d158;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: bold;
+}
+.partition-badge-win {
+    background-color: #1e3a5f;
+    color: #5ac8fa;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: bold;
+}
+.partition-badge-efi {
+    background-color: #3a3a3c;
+    color: #ff9f0a;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: bold;
+}
+.efi-info-box {
+    background-color: #222224;
+    border: 1px solid #333336;
+    border-radius: 8px;
+    padding: 8px 14px;
+    margin-top: 6px;
+}
+.efi-info-text {
+    font-size: 11px;
+    color: #30d158;
+}
 .error-icon {
     color: #ff453a;
 }
@@ -299,6 +386,175 @@ def get_system_disks():
     return disks
 
 
+def get_system_partitions(disk_path):
+    partitions = []
+    try:
+        out = subprocess.check_output(
+            ["lsblk", "-J", "-o", "NAME,PATH,SIZE,TYPE,FSTYPE,LABEL,PARTLABEL,MOUNTPOINT,UUID", disk_path],
+            text=True, stderr=subprocess.DEVNULL
+        )
+        data = json.loads(out)
+        devices = data.get("blockdevices", [])
+        
+        def collect_parts(dev_list):
+            for dev in dev_list:
+                dtype = dev.get("type", "")
+                if dtype in ("part", "lvm"):
+                    partitions.append(dev)
+                if "children" in dev and dev["children"]:
+                    collect_parts(dev["children"])
+                    
+        collect_parts(devices)
+    except Exception as e:
+        print(f"Error parsing partitions with lsblk for {disk_path}: {e}")
+        try:
+            disk_base = os.path.basename(disk_path)
+            with open("/proc/partitions", "r") as f:
+                for line in f:
+                    parts = line.split()
+                    if len(parts) == 4:
+                        pname = parts[3]
+                        if pname.startswith(disk_base) and pname != disk_base:
+                            partitions.append({
+                                "name": pname,
+                                "path": f"/dev/{pname}",
+                                "size": f"{int(parts[2]) // 1024}M",
+                                "type": "part",
+                                "fstype": "",
+                                "label": "",
+                                "partlabel": "",
+                                "mountpoint": None,
+                                "uuid": None
+                            })
+        except Exception as ex:
+            print(f"Fallback reading /proc/partitions failed: {ex}")
+
+    return partitions
+
+
+def detect_efi_partition(disk_path=None):
+    """Find the EFI System Partition (ESP) on a given disk, or across the whole system."""
+    candidate_parts = []
+    try:
+        cmd = ["lsblk", "-J", "-o", "NAME,PATH,SIZE,TYPE,FSTYPE,LABEL,PARTLABEL,PARTTYPE,PARTTYPENAME,MOUNTPOINT,UUID"]
+        if disk_path:
+            cmd.append(disk_path)
+        out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+        data = json.loads(out)
+        
+        def collect_parts(dev_list):
+            for dev in dev_list:
+                if dev.get("type") in ("part", "lvm"):
+                    candidate_parts.append(dev)
+                if "children" in dev and dev["children"]:
+                    collect_parts(dev["children"])
+                    
+        collect_parts(data.get("blockdevices", []))
+    except Exception as e:
+        print(f"Error detecting EFI partition: {e}")
+        
+    def is_live_usb(p):
+        lbl = (p.get("label") or "").upper()
+        mp = (p.get("mountpoint") or "")
+        return "PULSAR_ISO" in lbl or "ARCHISO" in lbl or "/run/archiso" in mp or "/run/live" in mp
+
+    # First pass: explicit EFI typecode, GUID, label, partlabel or mountpoint
+    for p in candidate_parts:
+        if is_live_usb(p):
+            continue
+        fstype = (p.get("fstype") or "").lower()
+        label = (p.get("label") or "").lower()
+        partlabel = (p.get("partlabel") or "").lower()
+        parttype = (p.get("parttype") or "").lower()
+        parttypename = (p.get("parttypename") or "").lower()
+        mountpoint = (p.get("mountpoint") or "").lower()
+        
+        if "c12a7328" in parttype or parttype in ("ef00", "0xef") or "efi" in parttypename:
+            return p.get("path") or f"/dev/{p.get('name')}"
+            
+        if fstype in ("vfat", "fat32", "fat16"):
+            if "efi" in label or "efi" in partlabel or "boot" in mountpoint or "efi" in mountpoint or "system" in label:
+                return p.get("path") or f"/dev/{p.get('name')}"
+                
+    # Second pass: any vfat partition on internal target disk
+    for p in candidate_parts:
+        if is_live_usb(p):
+            continue
+        fstype = (p.get("fstype") or "").lower()
+        if fstype in ("vfat", "fat32", "fat16"):
+            return p.get("path") or f"/dev/{p.get('name')}"
+            
+    if disk_path:
+        return detect_efi_partition(None)
+        
+    return None
+
+
+def format_partition_display(part):
+    name = part.get("name", "")
+    path = part.get("path") or f"/dev/{name}"
+    size = part.get("size", "Unknown")
+    fstype = part.get("fstype") or "unformatted"
+    label = part.get("label") or ""
+    partlabel = part.get("partlabel") or ""
+    mountpoint = part.get("mountpoint") or ""
+    
+    fstype_lower = fstype.lower()
+    label_lower = label.lower()
+    partlabel_lower = partlabel.lower()
+    
+    is_efi = False
+    is_recovery = False
+    is_windows = False
+    is_linux = False
+    
+    if "efi" in label_lower or "efi" in partlabel_lower or (fstype_lower in ("vfat", "fat32", "fat16") and ("boot" in mountpoint or "efi" in mountpoint)):
+        is_efi = True
+        os_desc = "EFI System Partition"
+    elif "recovery" in label_lower or "recovery" in partlabel_lower or label == "PULSAR_RECOVERY":
+        is_recovery = True
+        os_desc = "Recovery Partition"
+    elif fstype_lower in ("ntfs", "exfat") or "msftdata" in partlabel_lower or "windows" in label_lower:
+        is_windows = True
+        os_desc = f"Windows ({fstype.upper()})"
+    elif fstype_lower in ("ext4", "ext3", "ext2", "btrfs", "xfs", "f2fs"):
+        is_linux = True
+        if label == "PULSAR_OS":
+            os_desc = "Pulsar OS (Btrfs)"
+        else:
+            os_desc = f"Linux ({fstype.upper()})"
+    elif fstype_lower == "swap":
+        os_desc = "Linux Swap"
+    elif fstype_lower in ("apfs", "hfsplus"):
+        os_desc = "macOS (APFS/HFS+)"
+    else:
+        os_desc = f"{fstype.upper()}" if fstype != "unformatted" else "Unformatted / Free Space"
+
+    title = f"{path} ({size})"
+    detail = os_desc
+    if label and label != os_desc and label != "PULSAR_OS":
+        detail += f" • {label}"
+    if mountpoint and mountpoint not in ("None", ""):
+        detail += f" • {mountpoint}"
+
+    return {
+        "path": path,
+        "name": name,
+        "size": size,
+        "fstype": fstype,
+        "label": label,
+        "partlabel": partlabel,
+        "mountpoint": mountpoint,
+        "os_desc": os_desc,
+        "title": title,
+        "detail": detail,
+        "is_efi": is_efi,
+        "is_recovery": is_recovery,
+        "is_windows": is_windows,
+        "is_linux": is_linux,
+    }
+
+
 class DiskCard(Gtk.Box):
     def __init__(self, disk_info, select_callback):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -328,7 +584,97 @@ class DiskCard(Gtk.Box):
         self.add_controller(gesture)
         
     def on_clicked(self, gesture, n_press, x, y):
-        self.select_callback(self)# InstallerLogWindow removed — logs are now inline in the progress card.
+        self.select_callback(self)
+
+
+class InstallModeCard(Gtk.Box):
+    def __init__(self, mode_id, title, desc, icon_name, select_callback):
+        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        self.mode_id = mode_id
+        self.select_callback = select_callback
+        self.add_css_class("mode-card")
+        
+        icon = Gtk.Image.new_from_icon_name(icon_name)
+        icon.set_pixel_size(36)
+        icon.set_valign(Gtk.Align.CENTER)
+        self.append(icon)
+        
+        text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        text_box.set_valign(Gtk.Align.CENTER)
+        text_box.set_hexpand(True)
+        
+        title_lbl = Gtk.Label(label=title)
+        title_lbl.add_css_class("mode-title")
+        title_lbl.set_halign(Gtk.Align.START)
+        text_box.append(title_lbl)
+        
+        desc_lbl = Gtk.Label(label=desc)
+        desc_lbl.add_css_class("mode-desc")
+        desc_lbl.set_halign(Gtk.Align.START)
+        desc_lbl.set_wrap(True)
+        desc_lbl.set_max_width_chars(38)
+        text_box.append(desc_lbl)
+        
+        self.append(text_box)
+        
+        gesture = Gtk.GestureClick()
+        gesture.connect("released", lambda g, n, x, y: self.select_callback(self))
+        self.add_controller(gesture)
+
+
+class PartitionCardRow(Gtk.ListBoxRow):
+    def __init__(self, part_info):
+        super().__init__()
+        self.part_info = part_info
+        
+        row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        row_box.add_css_class("partition-card")
+        
+        icon_name = "drive-harddisk"
+        if part_info["is_efi"]:
+            icon_name = "emblem-system-symbolic"
+        elif part_info["is_windows"]:
+            icon_name = "preferences-system-windows"
+        elif part_info["is_linux"]:
+            icon_name = "system-software-install"
+            
+        icon = Gtk.Image.new_from_icon_name(icon_name)
+        icon.set_pixel_size(28)
+        icon.set_valign(Gtk.Align.CENTER)
+        row_box.append(icon)
+        
+        text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        text_box.set_valign(Gtk.Align.CENTER)
+        text_box.set_hexpand(True)
+        
+        header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        name_lbl = Gtk.Label(label=part_info["title"])
+        name_lbl.add_css_class("partition-name")
+        name_lbl.set_halign(Gtk.Align.START)
+        header_box.append(name_lbl)
+        
+        if part_info["is_efi"]:
+            badge = Gtk.Label(label="EFI")
+            badge.add_css_class("partition-badge-efi")
+            header_box.append(badge)
+        elif part_info["is_windows"]:
+            badge = Gtk.Label(label="WINDOWS")
+            badge.add_css_class("partition-badge-win")
+            header_box.append(badge)
+        elif part_info["label"] == "PULSAR_OS":
+            badge = Gtk.Label(label="PULSAR OS")
+            badge.add_css_class("partition-badge")
+            header_box.append(badge)
+            
+        text_box.append(header_box)
+        
+        desc_lbl = Gtk.Label(label=part_info["detail"])
+        desc_lbl.add_css_class("partition-desc")
+        desc_lbl.set_halign(Gtk.Align.START)
+        text_box.append(desc_lbl)
+        
+        row_box.append(text_box)
+        self.set_child(row_box)
 
 
 
@@ -358,7 +704,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
         self.card_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.card_box.add_css_class("apple-box")
-        self.card_box.set_size_request(480, 380)
+        self.card_box.set_size_request(500, 420)
         self.card_box.set_valign(Gtk.Align.CENTER)
         self.card_box.set_halign(Gtk.Align.CENTER)
         
@@ -371,17 +717,30 @@ class RecoveryWindow(Adw.ApplicationWindow):
         center_container.set_center_widget(self.card_box)
         self.set_content(center_container)
         
+        # State variables
+        self.install_mode = "clean"  # "clean" or "dualboot"
+        self.pending_disk_path = None
+        self.pending_disk_name = None
+        self.target_partition = None
+        self.target_partition_info = None
+        self.target_efi_partition = None
+        self.install_broadcom = False
+        self.install_extra_packages = False
+        self.selected_action = None
+        self.selected_disk_card = None
+        self.selected_install_mode = None
+        
         # Build views
         self.build_utilities_screen()
         self.build_network_check_screen()
         self.build_install_welcome_screen()
         self.build_install_disk_select_screen()
+        self.build_install_mode_select_screen()
+        self.build_install_partition_select_screen()
         self.build_install_progress_screen()
         self.build_install_error_screen()
         
         self.stack.set_visible_child_name("utilities")
-        self.selected_action = None
-        self.selected_disk_card = None
 
     def apply_css(self):
         provider = Gtk.CssProvider()
@@ -634,39 +993,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
         if self.selected_action == "backup":
             subprocess.Popen("timeshift-launcher || pkexec timeshift-gtk || timeshift-gtk || deja-dup --restore || deja-dup", shell=True)
         elif self.selected_action == "install":
-            self.show_installer_selector_dialog()
+            self.stack.set_visible_child_name("install_welcome")
         elif self.selected_action == "safari":
             self._popen_as_user("seafari || epiphany || firefox")
         elif self.selected_action == "disk":
             subprocess.Popen("gparted || pkexec gparted || gnome-disks || gnome-disk-utility", shell=True)
         elif self.selected_action == "packages":
             self._show_network_check_screen()
-
-
-    def show_installer_selector_dialog(self):
-        # Emergent selector popup matching Apple design
-        dialog = Adw.MessageDialog(
-            transient_for=self,
-            heading="Install Pulsar OS",
-            body="Choose the installation method you want to use for your computer."
-        )
-        dialog.add_response("quick", "MacOS like UI (recommended)")
-        dialog.add_response("guided", "Dual boot and more reliable (calamares)")
-        dialog.add_response("cancel", "Cancel")
-        
-        dialog.set_response_appearance("quick", Adw.ResponseAppearance.SUGGESTED)
-        dialog.set_response_appearance("guided", Adw.ResponseAppearance.DEFAULT)
-        dialog.set_response_appearance("cancel", Adw.ResponseAppearance.DESTRUCTIVE)
-        
-        def on_response(d, response_id):
-            if response_id == "quick":
-                self.stack.set_visible_child_name("install_welcome")
-            elif response_id == "guided":
-                self.on_guided_install_clicked(None)
-            d.destroy()
-            
-        dialog.connect("response", on_response)
-        dialog.present()
 
     def _show_install_packages_dialog(self):
         """Show a confirmation dialog before installing extra packages."""
@@ -1114,7 +1447,241 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.pending_disk_name = disk_name
         self.install_broadcom = False
         self.install_extra_packages = False
+        self.install_mode = "clean"
+        self.target_partition = None
+        self.target_partition_info = None
+        self.target_efi_partition = None
+
+        # Reset selection on mode cards
+        self.card_clean.remove_css_class("selected")
+        self.card_dual.remove_css_class("selected")
+        self.selected_install_mode = None
+        self.btn_mode_continue.set_sensitive(False)
+        self.mode_subtitle.set_label(f"Choose an installation method for \"{disk_name}\".")
+
+        self.stack.set_visible_child_name("install_mode_select")
+
+    def build_install_mode_select_screen(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.set_valign(Gtk.Align.CENTER)
+        box.set_halign(Gtk.Align.CENTER)
+        box.set_size_request(460, -1)
+
+        if "DEMO_MODE" in os.environ:
+            demo_banner = Gtk.Label(label="⚠ DEMO MODE — No changes will be made to your system")
+            demo_banner.add_css_class("demo-banner")
+            box.append(demo_banner)
+
+        image = self.get_logo_image(80, is_installer=True)
+        box.append(image)
+
+        title = Gtk.Label()
+        title.set_markup("<span font_weight='bold' size='18000'>Installation Type</span>")
+        box.append(title)
+
+        self.mode_subtitle = Gtk.Label(label="Choose how to install Pulsar OS on this computer.")
+        self.mode_subtitle.add_css_class("welcome-subtitle")
+        box.append(self.mode_subtitle)
+
+        modes_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        modes_box.set_margin_top(4)
+        modes_box.set_margin_bottom(8)
+
+        self.card_clean = InstallModeCard(
+            "clean",
+            "Erase Entire Disk",
+            "Erase all contents on the disk and perform a clean installation with dedicated recovery.",
+            "drive-harddisk",
+            self.on_mode_selected
+        )
+        modes_box.append(self.card_clean)
+
+        self.card_dual = InstallModeCard(
+            "dualboot",
+            "Install Alongside (Dual Boot)",
+            "Install Pulsar OS on a specific partition while preserving your existing operating systems (e.g. Windows or Linux).",
+            "preferences-system-windows",
+            self.on_mode_selected
+        )
+        modes_box.append(self.card_dual)
+
+        box.append(modes_box)
+
+        nav_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        nav_box.set_halign(Gtk.Align.CENTER)
+        nav_box.set_margin_top(8)
+
+        btn_back = Gtk.Button(label="Back")
+        btn_back.add_css_class("secondary-action")
+        btn_back.connect("clicked", lambda x: self.stack.set_visible_child_name("install_disk_select"))
+        nav_box.append(btn_back)
+
+        self.btn_mode_continue = Gtk.Button(label="Continue")
+        self.btn_mode_continue.add_css_class("suggested-action")
+        self.btn_mode_continue.set_sensitive(False)
+        self.btn_mode_continue.connect("clicked", self.on_mode_continue_clicked)
+        nav_box.append(self.btn_mode_continue)
+
+        box.append(nav_box)
+        self.stack.add_named(box, "install_mode_select")
+
+    def on_mode_selected(self, selected_card):
+        self.card_clean.remove_css_class("selected")
+        self.card_dual.remove_css_class("selected")
+        selected_card.add_css_class("selected")
+        self.selected_install_mode = selected_card.mode_id
+        self.btn_mode_continue.set_sensitive(True)
+
+    def on_mode_continue_clicked(self, btn):
+        if not self.selected_install_mode:
+            return
+            
+        self.install_mode = self.selected_install_mode
+        if self.install_mode == "clean":
+            self._show_broadcom_dialog()
+        elif self.install_mode == "dualboot":
+            self.refresh_partitions()
+            self.stack.set_visible_child_name("install_partition_select")
+
+    def build_install_partition_select_screen(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.set_valign(Gtk.Align.CENTER)
+        box.set_halign(Gtk.Align.CENTER)
+        box.set_size_request(460, -1)
+
+        if "DEMO_MODE" in os.environ:
+            demo_banner = Gtk.Label(label="⚠ DEMO MODE — No changes will be made to your system")
+            demo_banner.add_css_class("demo-banner")
+            box.append(demo_banner)
+
+        title = Gtk.Label()
+        title.set_markup("<span font_weight='bold' size='17000'>Select Target Partition</span>")
+        box.append(title)
+
+        subtitle = Gtk.Label(label="Choose a partition for Pulsar OS (will be formatted as Btrfs).")
+        subtitle.add_css_class("progress-text")
+        box.append(subtitle)
+
+        # Scrolled list of partitions
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_min_content_height(160)
+        scrolled.set_max_content_height(200)
+        scrolled.set_min_content_width(440)
+        scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scrolled.add_css_class("live-log-view-flat")
+
+        self.partition_listbox = Gtk.ListBox()
+        self.partition_listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.partition_listbox.connect("row-selected", self.on_partition_row_selected)
+        scrolled.set_child(self.partition_listbox)
+        box.append(scrolled)
+
+        # EFI status banner
+        self.efi_info_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self.efi_info_box.add_css_class("efi-info-box")
+        self.efi_info_icon = Gtk.Image.new_from_icon_name("emblem-system-symbolic")
+        self.efi_info_icon.set_pixel_size(18)
+        self.efi_info_box.append(self.efi_info_icon)
+        self.efi_info_lbl = Gtk.Label(label="Detecting EFI System Partition...")
+        self.efi_info_lbl.add_css_class("efi-info-text")
+        self.efi_info_lbl.set_halign(Gtk.Align.START)
+        self.efi_info_box.append(self.efi_info_lbl)
+        box.append(self.efi_info_box)
+
+        # Extra utility tools row (GParted, Refresh)
+        tools_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        tools_box.set_halign(Gtk.Align.CENTER)
+        tools_box.set_margin_top(4)
+
+        btn_gparted = Gtk.Button(label="Open Disk Utility (GParted)...")
+        btn_gparted.add_css_class("secondary-action")
+        btn_gparted.connect("clicked", lambda x: subprocess.Popen("gparted || pkexec gparted || gnome-disks || gnome-disk-utility", shell=True))
+        tools_box.append(btn_gparted)
+
+        btn_refresh_parts = Gtk.Button(label="Refresh")
+        btn_refresh_parts.add_css_class("secondary-action")
+        btn_refresh_parts.connect("clicked", lambda x: self.refresh_partitions())
+        tools_box.append(btn_refresh_parts)
+
+        box.append(tools_box)
+
+        # Navigation row
+        nav_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        nav_box.set_halign(Gtk.Align.CENTER)
+        nav_box.set_margin_top(8)
+
+        btn_back = Gtk.Button(label="Back")
+        btn_back.add_css_class("secondary-action")
+        btn_back.connect("clicked", lambda x: self.stack.set_visible_child_name("install_mode_select"))
+        nav_box.append(btn_back)
+
+        self.btn_partition_continue = Gtk.Button(label="Continue")
+        self.btn_partition_continue.add_css_class("suggested-action")
+        self.btn_partition_continue.set_sensitive(False)
+        self.btn_partition_continue.connect("clicked", self.on_partition_continue_clicked)
+        nav_box.append(self.btn_partition_continue)
+
+        box.append(nav_box)
+        self.stack.add_named(box, "install_partition_select")
+
+    def refresh_partitions(self):
+        while (child := self.partition_listbox.get_first_child()):
+            self.partition_listbox.remove(child)
+
+        self.btn_partition_continue.set_sensitive(False)
+        self.target_partition = None
+        self.target_partition_info = None
+
+        disk_path = self.pending_disk_path
+        partitions = get_system_partitions(disk_path)
+
+        detected_efi = detect_efi_partition(disk_path)
+        self.target_efi_partition = detected_efi
+
+        if detected_efi:
+            self.efi_info_lbl.set_markup(f"Preserving EFI System Partition: <b>{detected_efi}</b>")
+            self.efi_info_box.set_visible(True)
+        else:
+            self.efi_info_lbl.set_markup("<i>No dedicated EFI partition detected (BIOS/MBR mode).</i>")
+            self.efi_info_box.set_visible(True)
+
+        has_candidates = False
+        for raw_part in partitions:
+            part_info = format_partition_display(raw_part)
+            row = PartitionCardRow(part_info)
+            self.partition_listbox.append(row)
+            has_candidates = True
+
+        if not has_candidates:
+            empty_row = Gtk.ListBoxRow()
+            empty_lbl = Gtk.Label(label="No partitions found. Click 'Disk Utility' to create partitions.")
+            empty_lbl.add_css_class("progress-text")
+            empty_lbl.set_margin_top(16)
+            empty_lbl.set_margin_bottom(16)
+            empty_row.set_child(empty_lbl)
+            self.partition_listbox.append(empty_row)
+
+    def on_partition_row_selected(self, listbox, row):
+        if row is not None and hasattr(row, 'part_info'):
+            part_info = row.part_info
+            if part_info.get("is_efi"):
+                self.btn_partition_continue.set_sensitive(False)
+                self.target_partition = None
+                self.target_partition_info = None
+                return
+            self.target_partition = part_info["path"]
+            self.target_partition_info = part_info
+            self.btn_partition_continue.set_sensitive(True)
+        else:
+            self.btn_partition_continue.set_sensitive(False)
+            self.target_partition = None
+            self.target_partition_info = None
+
+    def on_partition_continue_clicked(self, btn):
+        if not self.target_partition or not self.target_partition_info:
+            return
         self._show_broadcom_dialog()
+
 
     def build_install_progress_screen(self):
         self.progress_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -1321,7 +1888,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
         btn_back = Gtk.Button(label="Back")
         btn_back.add_css_class("secondary-action")
-        btn_back.connect("clicked", lambda x: self.stack.set_visible_child_name("utilities"))
+        btn_back.connect("clicked", lambda x: self._on_network_check_back())
         nav_box.append(btn_back)
 
         self.btn_net_continue = Gtk.Button(label="Continue")
@@ -1549,9 +2116,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.net_warp_lbl.set_text(msg)
         self.btn_enable_warp.set_sensitive(True)
 
+    def _on_network_check_back(self):
+        if self.install_mode == "dualboot":
+            self.stack.set_visible_child_name("install_partition_select")
+        else:
+            self.stack.set_visible_child_name("install_disk_select")
+
     def _net_continue_clicked(self, btn):
-        self.stack.set_visible_child_name("utilities")
-        self._show_install_packages_dialog()
+        if self.install_mode == "dualboot":
+            self._show_dualboot_confirmation_dialog()
+        else:
+            self._show_clean_install_warning_dialog()
 
     def on_progress_cancel_clicked(self, btn):
         if btn.get_label() == "Restart System":
@@ -1650,8 +2225,76 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
         def on_response(d, resp):
             d.destroy()
-            self.install_extra_packages = (resp == "yes")
-            self._start_installation()
+            if resp == "yes":
+                self.install_extra_packages = True
+                self._show_network_check_screen()
+            else:
+                self.install_extra_packages = False
+                if self.install_mode == "dualboot":
+                    self._show_dualboot_confirmation_dialog()
+                else:
+                    self._show_clean_install_warning_dialog()
+
+        dialog.connect("response", on_response)
+        dialog.present()
+
+    def _show_clean_install_warning_dialog(self):
+        disk_name = self.pending_disk_name
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Erase Disk & Install Pulsar OS",
+            body=(
+                f"⚠️ <b>Warning: All data on /dev/{disk_name} will be permanently erased!</b>\n\n"
+                "The entire disk will be partitioned for Pulsar OS (EFI, Recovery, and Btrfs root).\n\n"
+                "Are you sure you want to proceed?"
+            )
+        )
+        dialog.set_body_use_markup(True)
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("erase", "Erase and Install")
+        dialog.set_response_appearance("erase", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_response_appearance("cancel", Adw.ResponseAppearance.DEFAULT)
+        dialog.set_default_response("cancel")
+
+        def on_response(d, resp):
+            d.destroy()
+            if resp == "erase":
+                self._start_installation()
+
+        dialog.connect("response", on_response)
+        dialog.present()
+
+    def _show_dualboot_confirmation_dialog(self):
+        part = self.target_partition
+        part_info = self.target_partition_info or {}
+        size = part_info.get("size", "")
+        desc = part_info.get("os_desc", "")
+        efi_desc = f"<b>{self.target_efi_partition}</b>" if self.target_efi_partition else "System EFI"
+
+        body = (
+            f"Pulsar OS will be installed on partition <b>{part}</b> ({size}, {desc}).\n\n"
+            f"• <b>Only {part} will be formatted as Btrfs</b> with subvolumes <tt>@</tt> and <tt>@home</tt>.\n"
+            f"• Your EFI bootloader ({efi_desc}) will be preserved and configured with rEFInd dual-boot.\n"
+            f"• All other partitions on your disk (including Windows/Linux) will remain intact.\n\n"
+            f"Do you want to proceed with the installation?"
+        )
+
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Confirm Dual Boot Installation",
+            body=body
+        )
+        dialog.set_body_use_markup(True)
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("install", "Install Pulsar OS")
+        dialog.set_response_appearance("install", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_response_appearance("cancel", Adw.ResponseAppearance.DEFAULT)
+        dialog.set_default_response("install")
+
+        def on_response(d, resp):
+            d.destroy()
+            if resp == "install":
+                self._start_installation()
 
         dialog.connect("response", on_response)
         dialog.present()
@@ -1659,20 +2302,29 @@ class RecoveryWindow(Adw.ApplicationWindow):
     def _start_installation(self):
         disk_path = self.pending_disk_path
         disk_name = self.pending_disk_name
-        self.progress_subtitle.set_label("Pulsar OS will be installed on the selected disk.")
         
-        display_name = disk_name
-        if hasattr(self, 'selected_disk_card') and self.selected_disk_card:
-            name_info = self.selected_disk_card.disk_info.get("name", "")
-            size_match = re.search(r"\(([^)]+)\)", name_info)
-            if size_match:
-                display_name = f"Pulsar OS ({disk_name} \u2022 {size_match.group(1)})"
+        if self.install_mode == "dualboot" and self.target_partition:
+            display_name = f"Pulsar OS (Dual Boot • {self.target_partition})"
+            self.progress_subtitle.set_label(f"Installing Pulsar OS alongside other systems on {self.target_partition}.")
+        else:
+            if hasattr(self, 'selected_disk_card') and self.selected_disk_card:
+                name_info = self.selected_disk_card.disk_info.get("name", "")
+                size_match = re.search(r"\(([^)]+)\)", name_info)
+                if size_match:
+                    display_name = f"Pulsar OS ({disk_name} \u2022 {size_match.group(1)})"
+                else:
+                    display_name = f"Pulsar OS ({disk_name})"
             else:
                 display_name = f"Pulsar OS ({disk_name})"
-        else:
-            display_name = f"Pulsar OS ({disk_name})"
+            self.progress_subtitle.set_label("Pulsar OS will be installed on the selected disk.")
             
         self.target_disk_name_lbl.set_label(display_name)
+        self.image.set_visible(True)
+        self.title_label.set_visible(True)
+        self.target_disk_box.set_visible(True)
+        self.progress_label.set_visible(True)
+        self.log_panel.set_visible(False)
+        self.btn_log.set_tooltip_text("Show Installer Log")
         self.stack.set_visible_child_name("install_progress")
 
         # ── DEMO MODE: never touch the real system ──────────────────────
@@ -1700,6 +2352,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
         with open(log_file, "w") as lf:
             lf.write(f"{datetime.datetime.now()} - DEMO MODE (no real changes)\n")
             lf.write(f"Target disk: {disk_path}\n")
+            if self.install_mode == "dualboot":
+                lf.write(f"Mode: Dual Boot on {self.target_partition}\n")
 
         def log_msg(msg):
             ts = datetime.datetime.now().strftime("%H:%M:%S")
@@ -1713,26 +2367,38 @@ class RecoveryWindow(Adw.ApplicationWindow):
             time.sleep(secs)
 
         log_msg("══ DEMO MODE: no real changes will be made ══")
-        log_msg(f"Target disk: {disk_path} (NOT TOUCHED)")
-
-        # ── Partitioning (simulated) ──
-        GLib.idle_add(self.update_progress, 0.03, "[DEMO] Cleaning disk...")
-        log_msg(f"[DEMO] wipefs -a -f {disk_path}")
-        demo_sleep()
-        GLib.idle_add(self.update_progress, 0.05, "[DEMO] Partitioning (GPT/UEFI)...")
-        for part in ["EFI", "PulsarRecovery", "PulsarOS"]:
-            log_msg(f"[DEMO] Creating partition: {part}")
+        
+        if self.install_mode == "dualboot":
+            log_msg(f"Target partition: {self.target_partition} (NOT TOUCHED)")
+            log_msg(f"Preserving EFI partition: {self.target_efi_partition}")
+            GLib.idle_add(self.update_progress, 0.05, f"[DEMO] Formatting target partition {self.target_partition} as Btrfs...")
             demo_sleep()
-        GLib.idle_add(self.update_progress, 0.10, "[DEMO] Formatting partitions...")
-        for fs in ["mkfs.vfat EFI", "mkfs.ext4 PULSAR_RECOVERY", "mkfs.btrfs PULSAR_OS"]:
-            log_msg(f"[DEMO] {fs}")
+            GLib.idle_add(self.update_progress, 0.15, "[DEMO] Creating Btrfs subvolumes (@ and @home)...")
+            log_msg("[DEMO] btrfs subvolume create /mnt/@")
+            log_msg("[DEMO] btrfs subvolume create /mnt/@home")
             demo_sleep()
-        GLib.idle_add(self.update_progress, 0.15, "[DEMO] Creating Btrfs subvolumes...")
-        log_msg("[DEMO] btrfs subvolume create /mnt/@")
-        log_msg("[DEMO] btrfs subvolume create /mnt/@home")
-        demo_sleep()
-        GLib.idle_add(self.update_progress, 0.18, "[DEMO] Mounting subvolumes...")
-        demo_sleep()
+            GLib.idle_add(self.update_progress, 0.18, "[DEMO] Mounting subvolumes and existing EFI...")
+            demo_sleep()
+        else:
+            log_msg(f"Target disk: {disk_path} (NOT TOUCHED)")
+            # ── Partitioning (simulated) ──
+            GLib.idle_add(self.update_progress, 0.03, "[DEMO] Cleaning disk...")
+            log_msg(f"[DEMO] wipefs -a -f {disk_path}")
+            demo_sleep()
+            GLib.idle_add(self.update_progress, 0.05, "[DEMO] Partitioning (GPT/UEFI)...")
+            for part in ["EFI", "PulsarRecovery", "PulsarOS"]:
+                log_msg(f"[DEMO] Creating partition: {part}")
+                demo_sleep()
+            GLib.idle_add(self.update_progress, 0.10, "[DEMO] Formatting partitions...")
+            for fs in ["mkfs.vfat EFI", "mkfs.ext4 PULSAR_RECOVERY", "mkfs.btrfs PULSAR_OS"]:
+                log_msg(f"[DEMO] {fs}")
+                demo_sleep()
+            GLib.idle_add(self.update_progress, 0.15, "[DEMO] Creating Btrfs subvolumes...")
+            log_msg("[DEMO] btrfs subvolume create /mnt/@")
+            log_msg("[DEMO] btrfs subvolume create /mnt/@home")
+            demo_sleep()
+            GLib.idle_add(self.update_progress, 0.18, "[DEMO] Mounting subvolumes...")
+            demo_sleep()
 
         # ── Rsync (simulated) ──
         GLib.idle_add(self.update_progress, 0.25, "[DEMO] Copying system files...")
@@ -1784,11 +2450,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
         log_msg("[DEMO] Recovery base image regenerated: ~3.2GB (NOT ACTUAL)")
 
         # ── Bootloader (simulated) ──
-        GLib.idle_add(self.update_progress, 0.98, "[DEMO] Configuring bootloader...")
+        GLib.idle_add(self.update_progress, 0.98, "[DEMO] Configuring bootloader (rEFInd / GRUB)...")
         log_msg("[DEMO] Writing /etc/fstab")
         log_msg("[DEMO] Deploying vmlinuz-recovery + initramfs to ESP")
-        log_msg("[DEMO] Configuring rEFInd menu entries")
-        log_msg("[DEMO] mkinitcpio -P")
+        log_msg("[DEMO] Configuring multi-boot menu entries (rEFInd / GRUB with os-prober)")
+        log_msg("[DEMO] Generating bootloader configuration...")
         demo_sleep(0.2)
 
         GLib.idle_add(self.update_progress, 1.0, "[DEMO] Demo complete — nothing was changed!")
@@ -1887,6 +2553,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     for mount_path in [
                         "/mnt/etc/resolv.conf",
                         "/mnt/run",
+                        "/mnt/sys/firmware/efi/efivars",
                         "/mnt/sys",
                         "/mnt/proc",
                         "/mnt/dev/pts",
@@ -1929,7 +2596,61 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     print(f"Warning during unmount prep: {umount_err}")
                 subprocess.run(["swapoff", "-a"], capture_output=True)
 
-            if is_efi:
+            if self.install_mode == "dualboot":
+                root_part = self.target_partition
+                efi_part = self.target_efi_partition or detect_efi_partition(disk_path)
+                recovery_part = None
+                try:
+                    parts = get_system_partitions(disk_path)
+                    for p in parts:
+                        if (p.get("label") or "") == "PULSAR_RECOVERY":
+                            recovery_part = p.get("path") or f"/dev/{p.get('name')}"
+                            break
+                except Exception:
+                    pass
+
+                GLib.idle_add(self.update_progress, 0.05, f"Formatting target partition {root_part} as Btrfs...")
+                exec_cmd(["wipefs", "-a", "-f", root_part])
+                exec_cmd(["mkfs.btrfs", "-f", "-L", "PULSAR_OS", root_part])
+                exec_cmd(["sync"])
+                exec_cmd(["udevadm", "settle"])
+                time.sleep(1)
+
+                subprocess.run(["modprobe", "btrfs"], capture_output=True)
+                if is_efi:
+                    subprocess.run(["modprobe", "vfat"], capture_output=True)
+                if recovery_part:
+                    subprocess.run(["modprobe", "ext4"], capture_output=True)
+
+                GLib.idle_add(self.update_progress, 0.15, "Creating Btrfs subvolumes (@ and @home)...")
+                if "TEST_MODE" not in os.environ:
+                    subprocess.run(["umount", "-l", "/mnt"])
+                os.makedirs("/mnt", exist_ok=True)
+                exec_cmd(["mount", "-t", "btrfs", root_part, "/mnt"])
+                exec_cmd(["btrfs", "subvolume", "create", "/mnt/@"])
+                exec_cmd(["btrfs", "subvolume", "create", "/mnt/@home"])
+                exec_cmd(["umount", "/mnt"])
+
+                GLib.idle_add(self.update_progress, 0.18, "Mounting Btrfs subvolumes and EFI...")
+                exec_cmd(["mount", "-t", "btrfs", "-o", "subvol=@,compress=zstd:1", root_part, "/mnt"])
+                exec_cmd(["mount", "--make-rprivate", "/mnt"])
+                os.makedirs("/mnt/home", exist_ok=True)
+                exec_cmd(["mount", "-t", "btrfs", "-o", "subvol=@home,compress=zstd:1", root_part, "/mnt/home"])
+                if is_efi:
+                    if not efi_part:
+                        efi_part = detect_efi_partition(disk_path) or detect_efi_partition(None)
+                    if efi_part:
+                        os.makedirs("/mnt/boot/efi", exist_ok=True)
+                        exec_cmd(["mount", "-t", "vfat", efi_part, "/mnt/boot/efi"])
+                        log_msg(f"Dual Boot: Mounted EFI partition {efi_part} at /mnt/boot/efi")
+                    else:
+                        log_msg("Warning: No EFI partition could be detected for dual boot!")
+                if recovery_part:
+                    os.makedirs("/mnt/recovery", exist_ok=True)
+                    exec_cmd(["mount", "-t", "ext4", recovery_part, "/mnt/recovery"])
+                else:
+                    os.makedirs("/mnt/recovery", exist_ok=True)
+            elif is_efi:
                 GLib.idle_add(self.update_progress, 0.05, "Cleaning and partitioning (GPT for UEFI: EFI, Recovery, Btrfs)...")
                 exec_cmd(["wipefs", "-a", "-f", disk_path])
                 exec_cmd(["sgdisk", "--zap-all", disk_path])
@@ -2435,16 +3156,22 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 return val.strip()
                 
             root_uuid = get_partition_uuid(root_part)
-            rec_uuid = get_partition_uuid(recovery_part)
+            rec_uuid = get_partition_uuid(recovery_part) if recovery_part else None
             
             if is_efi:
-                efi_uuid = get_partition_uuid(efi_part)
-                fstab_content = f"""# /etc/fstab: Pulsar OS Btrfs Configuration
-# <file system>             <mount point>   <type>  <options>                                       <dump>  <pass>
-UUID={root_uuid}            /               btrfs   subvol=@,compress=zstd:1,space_cache=v2         0       0
-UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1,space_cache=v2     0       0
-UUID={efi_uuid}             /boot/efi       vfat    umask=0077                                      0       2
-"""
+                efi_uuid = get_partition_uuid(efi_part) if efi_part else None
+                fstab_lines = [
+                    "# /etc/fstab: Pulsar OS Btrfs Configuration",
+                    "# <file system>             <mount point>   <type>  <options>                                       <dump>  <pass>",
+                    f"UUID={root_uuid}            /               btrfs   subvol=@,compress=zstd:1,space_cache=v2         0       0",
+                    f"UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1,space_cache=v2     0       0",
+                ]
+                if efi_uuid:
+                    fstab_lines.append(f"UUID={efi_uuid}             /boot/efi       vfat    umask=0077                                      0       2")
+                if rec_uuid:
+                    fstab_lines.append(f"UUID={rec_uuid}            /recovery       ext4    defaults,noatime                                0       2")
+                fstab_content = "\n".join(fstab_lines) + "\n"
+                
                 if "TEST_MODE" not in os.environ:
                     os.makedirs("/mnt/etc", exist_ok=True)
                     os.makedirs("/mnt/dev", exist_ok=True)
@@ -2457,11 +3184,16 @@ UUID={efi_uuid}             /boot/efi       vfat    umask=0077                  
                     with open("/mnt/etc/udev/rules.d/99-pulsaros-hide-recovery.rules", "w") as f:
                         f.write('# Hide PULSAR_RECOVERY partition from file managers and desktop\nENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n')
             else:
-                fstab_content = f"""# /etc/fstab: Pulsar OS Btrfs Configuration (BIOS)
-# <file system>             <mount point>   <type>  <options>                                       <dump>  <pass>
-UUID={root_uuid}            /               btrfs   subvol=@,compress=zstd:1,space_cache=v2         0       0
-UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1,space_cache=v2     0       0
-"""
+                fstab_lines = [
+                    "# /etc/fstab: Pulsar OS Btrfs Configuration (BIOS)",
+                    "# <file system>             <mount point>   <type>  <options>                                       <dump>  <pass>",
+                    f"UUID={root_uuid}            /               btrfs   subvol=@,compress=zstd:1,space_cache=v2         0       0",
+                    f"UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1,space_cache=v2     0       0",
+                ]
+                if rec_uuid:
+                    fstab_lines.append(f"UUID={rec_uuid}            /recovery       ext4    defaults,noatime                                0       2")
+                fstab_content = "\n".join(fstab_lines) + "\n"
+                
                 if "TEST_MODE" not in os.environ:
                     os.makedirs("/mnt/etc", exist_ok=True)
                     os.makedirs("/mnt/dev", exist_ok=True)
@@ -2568,7 +3300,7 @@ UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1
                     log_msg(f"ERROR deploying recovery kernel: {cp_err}")
 
             def configure_refind_menus():
-                """Write the deterministic two-entry boot menu to EVERY rEFInd
+                """Write the deterministic multi-boot menu to EVERY rEFInd
                 configuration location (NVRAM path and fallback)."""
                 if "TEST_MODE" in os.environ or not is_efi:
                     return
@@ -2615,10 +3347,9 @@ UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1
 
                         menu_block = (
                             f"\n{MENU_BEGIN}\n"
-                            "# Only show our explicit curated entries: exactly\n"
-                            "# 'Pulsar OS' and 'Pulsar OS Recovery'.\n"
-                            "scanfor manual,external,optical\n"
-                            "default_selection 1\n"
+                            "# Enable auto-detection of internal systems (Windows, other Linux) and optical/external drives\n"
+                            "scanfor internal,external,optical,manual\n"
+                            'default_selection "Pulsar OS"\n'
                             "\n"
                             'menuentry "Pulsar OS" {\n'
                             f"    icon {icon_os}\n"
@@ -2691,14 +3422,103 @@ UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1
                     except Exception as cfg_err:
                         log_msg(f"ERROR configuring {conf_path}: {cfg_err}")
 
+            def configure_grub_menus():
+                """Configure GRUB default parameters, os-prober for Dual Boot, theme, and recovery entry."""
+                if "TEST_MODE" in os.environ:
+                    return
+
+                grub_default = "/mnt/etc/default/grub"
+                grub_params = {
+                    "GRUB_DISTRIBUTOR": '"Pulsar OS"',
+                    "GRUB_DISABLE_OS_PROBER": "false",
+                    "GRUB_TIMEOUT": "5",
+                    "GRUB_TIMEOUT_STYLE": "menu",
+                    "GRUB_GFXMODE": '"1920x1080,1280x720,1024x768,auto"',
+                    "GRUB_GFXPAYLOAD_LINUX": '"keep"',
+                }
+
+                # Check if GRUB theme exists
+                theme_candidates = [
+                    "/mnt/boot/grub/themes/Particle-circle-window/theme.txt",
+                    "/mnt/boot/grub/themes/grub-theme/theme.txt",
+                ]
+                theme_found = next((t for t in theme_candidates if os.path.isfile(t)), None)
+                if theme_found:
+                    rel_theme = theme_found.replace("/mnt", "")
+                    grub_params["GRUB_THEME"] = f'"{rel_theme}"'
+
+                content = ""
+                if os.path.isfile(grub_default):
+                    with open(grub_default, "r") as f:
+                        content = f.read()
+
+                for key, val in grub_params.items():
+                    pattern = rf"^#?\s*{re.escape(key)}=.*$"
+                    if re.search(pattern, content, flags=re.MULTILINE):
+                        content = re.sub(pattern, f"{key}={val}", content, flags=re.MULTILINE)
+                    else:
+                        content += f"\n{key}={val}\n"
+
+                os.makedirs(os.path.dirname(grub_default), exist_ok=True)
+                with open(grub_default, "w") as f:
+                    f.write(content)
+
+                # Deploy Recovery Entry to /etc/grub.d/15_pulsar_recovery
+                grub_d = "/mnt/etc/grub.d"
+                os.makedirs(grub_d, exist_ok=True)
+                rec_script = f"""#!/bin/sh
+exec tail -n +3 $0
+# Pulsar OS Recovery Mode Menu Entry
+menuentry "Pulsar OS Recovery" --class recovery --class os {{
+    insmod btrfs
+    insmod part_gpt
+    insmod part_msdos
+    insmod ext2
+    search --no-floppy --fs-uuid --set=root {root_uuid}
+    linux /@/boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media-path=live fsck.mode=skip quiet splash
+    initrd /@/boot/initramfs-recovery.img
+}}
+"""
+                rec_script_path = f"{grub_d}/15_pulsar_recovery"
+                with open(rec_script_path, "w") as f:
+                    f.write(rec_script)
+                os.chmod(rec_script_path, 0o755)
+
+                # Run update-grub or grub-mkconfig
+                GLib.idle_add(self.update_progress, 0.94, "Generating GRUB multi-boot configuration...")
+                try:
+                    if is_arch:
+                        exec_cmd(["chroot", "/mnt", "grub-mkconfig", "-o", "/boot/grub/grub.cfg"])
+                    else:
+                        if os.path.exists("/mnt/usr/sbin/update-grub") or os.path.exists("/mnt/usr/bin/update-grub"):
+                            exec_cmd(["chroot", "/mnt", "update-grub"])
+                        else:
+                            exec_cmd(["chroot", "/mnt", "grub-mkconfig", "-o", "/boot/grub/grub.cfg"])
+                    log_msg("GRUB configuration updated with dual-boot (os-prober) and recovery support.")
+                except Exception as g_cfg_err:
+                    log_msg(f"Warning: GRUB config generation error: {g_cfg_err}")
+
             GLib.idle_add(self.update_progress, 0.90, "Installing bootloader...")
             exec_cmd(["mount", "--bind", "/dev", "/mnt/dev"])
             if "TEST_MODE" not in os.environ:
                 os.makedirs("/mnt/dev/pts", exist_ok=True)
             exec_cmd(["mount", "-t", "devpts", "devpts", "/mnt/dev/pts"])
             exec_cmd(["mount", "--bind", "/proc", "/mnt/proc"])
-            exec_cmd(["mount", "--bind", "/sys", "/mnt/sys"])
+            exec_cmd(["mount", "--rbind", "/sys", "/mnt/sys"])
+            exec_cmd(["mount", "--make-rslave", "/mnt/sys"])
+            if os.path.exists("/sys/firmware/efi/efivars"):
+                os.makedirs("/mnt/sys/firmware/efi/efivars", exist_ok=True)
+                subprocess.run(["mount", "-t", "efivarfs", "efivarfs", "/mnt/sys/firmware/efi/efivars"], capture_output=True)
             exec_cmd(["mount", "-t", "tmpfs", "tmpfs", "/mnt/run"])
+
+            if is_efi:
+                os.makedirs("/mnt/boot/efi", exist_ok=True)
+                if not os.path.ismount("/mnt/boot/efi") and efi_part:
+                    try:
+                        exec_cmd(["mount", "-t", "vfat", efi_part, "/mnt/boot/efi"])
+                        log_msg(f"Verified EFI partition mounted at /mnt/boot/efi: {efi_part}")
+                    except Exception as me_err:
+                        log_msg(f"Warning: Re-mounting EFI partition failed: {me_err}")
 
             refind_installed = False
             refind_available = any(
@@ -2710,7 +3530,7 @@ UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1
                 )
             )
 
-            if is_efi and refind_available:
+            if is_efi and efi_part and refind_available:
                 GLib.idle_add(self.update_progress, 0.90, "Installing rEFInd bootloader...")
                 try:
                     live_refind_install = next(
@@ -2727,11 +3547,22 @@ UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1
                     )
                     if live_refind_install is None:
                         raise RuntimeError("refind-install not found in the live system")
-                    exec_cmd([live_refind_install, "--root", "/mnt", "--yes"])
+                    try:
+                        exec_cmd([live_refind_install, "--root", "/mnt", "--yes"])
+                    except Exception as r_std_err:
+                        log_msg(f"Notice: Standard refind-install failed ({r_std_err}), attempting --usedefault fallback...")
+                        exec_cmd([live_refind_install, "--root", "/mnt", "--yes", "--usedefault", efi_part or disk_path])
                     refind_installed = True
                 except Exception as ref_err:
                     print(f"Warning: refind-install failed: {ref_err}. Falling back to GRUB.")
-                    exec_cmd(["chroot", "/mnt", "grub-install", "--force", "--removable", disk_path])
+                    if efi_part:
+                        try:
+                            exec_cmd(["chroot", "/mnt", "grub-install", "--target=x86_64-efi", "--efi-directory=/boot/efi", "--bootloader-id=PulsarOS", "--recheck"])
+                        except Exception:
+                            pass
+                        exec_cmd(["chroot", "/mnt", "grub-install", "--target=x86_64-efi", "--efi-directory=/boot/efi", "--removable", "--recheck"])
+                    else:
+                        exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", "--force", disk_path])
                 else:
                     GLib.idle_add(self.update_progress, 0.92, "Configuring rEFInd...")
                     esp_root = "/mnt/boot/efi"
@@ -2902,15 +3733,19 @@ UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1
                                             pass
                     except Exception as theme_err:
                         print(f"Warning: rEFInd theme configuration failed: {theme_err}")
-            elif is_efi:
-                GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader...")
+            elif is_efi and efi_part:
+                GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader (UEFI)...")
                 try:
-                    exec_cmd(["chroot", "/mnt", "grub-install", "--force", disk_path])
+                    exec_cmd(["chroot", "/mnt", "grub-install", "--target=x86_64-efi", "--efi-directory=/boot/efi", "--bootloader-id=PulsarOS", "--recheck"])
                 except Exception as g_err:
                     print(f"Warning: Standard grub-install failed: {g_err}. Proceeding with removable fallback...")
-                exec_cmd(["chroot", "/mnt", "grub-install", "--force", "--removable", disk_path])
+                try:
+                    exec_cmd(["chroot", "/mnt", "grub-install", "--target=x86_64-efi", "--efi-directory=/boot/efi", "--removable", "--recheck"])
+                except Exception as g_rem_err:
+                    print(f"Warning: Removable fallback grub-install: {g_rem_err}")
             else:
-                GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader...")
+                GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader (BIOS/MBR)...")
+                log_msg(f"Installing BIOS/MBR GRUB onto {disk_path}...")
                 exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", "--force", disk_path])
                 
             esp_root = "/mnt/boot/efi"
@@ -2935,19 +3770,6 @@ UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1
                         with open(mkinit_path, "w") as f:
                             f.write(mk_content)
 
-                grub_default = "/mnt/etc/default/grub"
-                if os.path.exists(grub_default):
-                    with open(grub_default) as f:
-                        content = f.read()
-                    content = re.sub(
-                        r"^#?\s*GRUB_DISTRIBUTOR=.*$",
-                        'GRUB_DISTRIBUTOR="Pulsar OS"',
-                        content,
-                        flags=re.MULTILINE,
-                    )
-                    with open(grub_default, "w") as f:
-                        f.write(content)
-
                 preserve_live_initramfs_for_recovery()
 
                 try:
@@ -2957,17 +3779,18 @@ UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1
 
                 deploy_kernel_to_recovery()
 
-                if not refind_installed:
-                    exec_cmd(["chroot", "/mnt", "grub-mkconfig", "-o", "/boot/grub/grub.cfg"])
-                else:
+                if refind_installed:
                     configure_refind_menus()
+                else:
+                    configure_grub_menus()
             else:
                 preserve_live_initramfs_for_recovery()
-                if not refind_installed:
-                    exec_cmd(["chroot", "/mnt", "update-grub"])
                 deploy_kernel_to_recovery()
                 if refind_installed:
                     configure_refind_menus()
+                else:
+                    configure_grub_menus()
+
 
 
 
@@ -3150,19 +3973,6 @@ UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1
         mark = buffer.get_insert()
         self.error_log_text.scroll_to_mark(mark, 0.0, True, 0.5, 1.0)
         return False
-
-    def on_guided_install_clicked(self, btn):
-        if "TEST_MODE" in os.environ:
-            print("[TEST_MODE] Simulating Calamares installer GUI launcher...")
-            self.close()
-        else:
-            installer_cmd = ["/usr/local/bin/launch-calamares"]
-            if not os.path.exists(installer_cmd[0]):
-                installer_cmd = ["/usr/bin/launch-calamares"]
-            if not os.path.exists(installer_cmd[0]):
-                installer_cmd = ["sudo", "calamares", "-platform", "xcb"]
-            subprocess.Popen(installer_cmd)
-            self.close()
 
 
 class RecoveryApp(Adw.Application):

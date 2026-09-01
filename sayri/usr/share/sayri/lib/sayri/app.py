@@ -11,6 +11,7 @@ reply display and settings/quit buttons.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -274,6 +275,13 @@ class SayriApp(Gtk.Application):
         self._start_ipc_server()
         self._launch_indicator()
 
+        # Auto-start installed gateways with configured secrets
+        try:
+            from sayri.gateway_supervisor import gateway_supervisor
+            gateway_supervisor.auto_start_all()
+        except Exception as e:
+            print(f"[Sayri] Gateway supervisor auto-start notice: {e}")
+
     def _launch_indicator(self) -> None:
         if hasattr(self, "_indicator_proc") and self._indicator_proc and self._indicator_proc.poll() is None:
             return
@@ -289,34 +297,76 @@ class SayriApp(Gtk.Application):
             print(f"[Sayri] Indicator launch error: {exc}")
 
     def _start_ipc_server(self) -> None:
+        """Lightweight UNIX domain socket listener for CLI triggers and remote Gateways."""
         sock_path = os.path.join(paths.state_dir(), "sayri.sock")
         if os.path.exists(sock_path):
             try:
-                os.remove(sock_path)
+                os.unlink(sock_path)
             except OSError:
                 pass
 
-        def _worker() -> None:
+        def _worker():
             try:
                 import socket
+                import struct
                 self._ipc_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                 self._ipc_sock.bind(sock_path)
+                try:
+                    os.chmod(sock_path, 0o600)
+                except OSError:
+                    pass
                 self._ipc_sock.listen(5)
                 while getattr(self, "_ipc_running", False):
                     try:
                         conn, _ = self._ipc_sock.accept()
-                        data = conn.recv(1024).decode("utf-8").strip()
-                        if data == "toggle":
+                        conn.settimeout(40.0)
+
+                        # Enforce peer UID validation on Linux to prevent cross-user socket hijacking
+                        try:
+                            cred = conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i"))
+                            peer_pid, peer_uid, peer_gid = struct.unpack("3i", cred)
+                            if peer_uid != os.getuid() and peer_uid != 0:
+                                print(f"[Sayri IPC Security] 🚨 Rejected socket connection from untrusted UID {peer_uid}")
+                                conn.close()
+                                continue
+                        except Exception:
+                            pass
+
+                        raw_data = conn.recv(8192).decode("utf-8").strip()
+                        if raw_data.startswith("{"):
+                            try:
+                                msg = json.loads(raw_data)
+                                if msg.get("type") in ("INCOMING_MSG", "remote_message"):
+                                    prompt_text = msg.get("text", "")
+                                    author = msg.get("author", "User")
+                                    target_agent_id = msg.get("target_agent", "default")
+                                    sandbox_level = msg.get("sandbox_level")
+                                    instance_id = msg.get("instance_id", "default")
+                                    custom_session_id = msg.get("session_id")
+                                    reply = self.process_remote_message(
+                                        text=prompt_text,
+                                        author=author,
+                                        target_agent_id=target_agent_id,
+                                        sandbox_level=sandbox_level,
+                                        instance_id=instance_id,
+                                        session_id=custom_session_id,
+                                    )
+                                    conn.sendall(reply.encode("utf-8") + b"\n")
+                                    conn.close()
+                                    continue
+                            except Exception as e:
+                                print(f"[Sayri IPC] Message processing error: {e}")
+                        elif raw_data == "toggle":
                             GLib.idle_add(self.toggle_visible)
-                        elif data == "show":
+                        elif raw_data == "show":
                             GLib.idle_add(lambda: self.overlay.show() if self.overlay else None)
-                        elif data == "hide":
+                        elif raw_data == "hide":
                             GLib.idle_add(lambda: self.overlay.hide() if self.overlay else None)
-                        elif data == "listen":
+                        elif raw_data == "listen":
                             GLib.idle_add(self.start_listening)
-                        elif data == "settings":
+                        elif raw_data == "settings":
                             GLib.idle_add(self.open_settings)
-                        elif data == "quit":
+                        elif raw_data == "quit":
                             GLib.idle_add(self.quit_app)
                         conn.sendall(b"OK\n")
                         conn.close()
@@ -327,6 +377,75 @@ class SayriApp(Gtk.Application):
 
         self._ipc_running = True
         threading.Thread(target=_worker, daemon=True).start()
+
+    def process_remote_message(
+        self,
+        text: str,
+        author: str,
+        target_agent_id: Optional[str] = None,
+        sandbox_level: Optional[str] = None,
+        instance_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> str:
+        """Processes an incoming message from a channel gateway (Telegram/Discord) via AgentEngine."""
+        import copy
+        done_event = threading.Event()
+        result_holder = {"text": "", "error": None}
+
+        def _on_delta(d: str):
+            result_holder["text"] += d
+
+        def _on_done(full: str):
+            if full:
+                result_holder["text"] = full
+            done_event.set()
+
+        def _on_error(exc: Exception):
+            result_holder["error"] = str(exc)
+            done_event.set()
+
+        # 1. Resolve target agent profile
+        agent_profile = None
+        if target_agent_id:
+            agent_profile = AgentCreator.get_agent(target_agent_id)
+        if not agent_profile:
+            agent_profile = self.active_agent or AgentCreator.get_agent("default")
+
+        # 2. Apply custom Sandbox Level override if specified
+        if sandbox_level:
+            try:
+                agent_profile = copy.deepcopy(agent_profile)
+                lvl_enum = getattr(SandboxLevel, sandbox_level, None) or SandboxLevel(sandbox_level)
+                agent_profile.sandbox.level = lvl_enum
+            except Exception as exc:
+                print(f"[Sayri Remote] Could not set custom sandbox level {sandbox_level}: {exc}")
+
+        if not session_id:
+            inst_tag = f"-{instance_id}" if instance_id else ""
+            session_id = f"remote{inst_tag}-{agent_profile.id}-{author.replace('@', '')}"
+        try:
+            self.engine.process_query(
+                session_id=session_id,
+                user_text=text,
+                profile=agent_profile,
+                cfg=self.cfg,
+                on_delta=_on_delta,
+                on_done=_on_done,
+                on_tool_start=lambda _: None,
+                on_tool_finish=lambda _t, _o, _c: None,
+                on_error=_on_error,
+            )
+            # Wait up to 35 seconds for the LLM response
+            done_event.wait(timeout=35.0)
+            if result_holder["text"]:
+                return result_holder["text"].strip()
+            if result_holder["error"]:
+                return f"⚠️ Error de Sayri: {result_holder['error']}"
+        except Exception as exc:
+            print(f"[Sayri Remote] Engine error: {exc}")
+            return f"⚠️ Error procesando mensaje: {exc}"
+
+        return result_holder["text"].strip() or f"Hola {author}, recibí tu mensaje: '{text}'."
 
     def toggle_visible(self) -> None:
         if self.overlay:

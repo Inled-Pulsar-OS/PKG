@@ -1,7 +1,8 @@
 [Desktop Entry]
 Type=Application
 Name=Pulsar OS Desktop Recovery Icon Setup
-Comment=Ensures the recovery icon is present on the desktop and calamares is hidden
+Comment=Ensures the installer and recovery icon is present on the desktop
+
 Exec=/usr/bin/pulsaros-recovery-desktop-setup
 OnlyShowIn=GNOME;
 NoDisplay=true

@@ -38,11 +38,23 @@ def data_dir() -> str:
 
 
 def config_dir() -> str:
-    return _env("SAYRI_CONFIG_DIR", DEFAULT_CONFIG_DIR)
+    p = _env("SAYRI_CONFIG_DIR", DEFAULT_CONFIG_DIR)
+    os.makedirs(p, mode=0o700, exist_ok=True)
+    try:
+        os.chmod(p, 0o700)
+    except OSError:
+        pass
+    return p
 
 
 def state_dir() -> str:
-    return _env("SAYRI_STATE_DIR", DEFAULT_STATE_DIR)
+    p = _env("SAYRI_STATE_DIR", DEFAULT_STATE_DIR)
+    os.makedirs(p, mode=0o700, exist_ok=True)
+    try:
+        os.chmod(p, 0o700)
+    except OSError:
+        pass
+    return p
 
 
 def config_file() -> str:

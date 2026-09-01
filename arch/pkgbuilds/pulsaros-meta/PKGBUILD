@@ -18,7 +18,6 @@ depends=(
   pulsaros-boot-icons
   pulsaros-bootsound
   pulsaros-branding
-  pulsaros-calamares
   pulsaros-global-menu
   pulsaros-gnome
   pulsaros-hibernate

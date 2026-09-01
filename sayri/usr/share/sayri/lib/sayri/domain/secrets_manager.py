@@ -141,10 +141,21 @@ class SecretsManager:
                 sanitized = sanitized.replace(raw, f"$SECRET:{k}")
         return sanitized
 
-    def inject_environment(self, base_env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
-        """Injects all stored secrets into child process environment dictionary."""
+    def inject_environment(
+        self,
+        base_env: Optional[Dict[str, str]] = None,
+        allowed_keys: Optional[List[str]] = None,
+    ) -> Dict[str, str]:
+        """Injects authorized secrets into child process environment dictionary."""
         env = dict(base_env) if base_env is not None else dict(os.environ)
+        # If allowed_keys is explicitly an empty list, inject no vault secrets
+        if allowed_keys is not None and not allowed_keys:
+            return env
+
+        allowed_set = set(k.upper() for k in allowed_keys) if allowed_keys is not None else None
         for k, v in self._cache.items():
+            if allowed_set is not None and k not in allowed_set:
+                continue
             raw = self._deobfuscate(v.get("value", ""))
             if raw:
                 env[k] = raw
