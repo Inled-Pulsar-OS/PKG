@@ -25,7 +25,7 @@ mkdir -p "$STAGE_DIR/etc/polkit-1/rules.d"
 cat <<EOF > "$STAGE_DIR/etc/polkit-1/rules.d/90-pulsaros-nopasswd.rules"
 polkit.addRule(function(action, subject) {
     if (action.id == "org.freedesktop.policykit.exec" &&
-        subject.user == "live") {
+        (subject.isInGroup("wheel") || subject.isInGroup("sudo") || subject.user == "live")) {
         return polkit.Result.YES;
     }
 });

@@ -185,7 +185,7 @@ build_single_package() {
             echo "📦 Installing official build dependencies for $name..."
             local auth_cmd=""
             if [ "$EUID" -ne 0 ]; then
-                command -v pkexec >/dev/null 2>&1 && auth_cmd="pkexec" || auth_cmd="sudo"
+                command -v sudo >/dev/null 2>&1 && auth_cmd="sudo" || auth_cmd="pkexec"
             fi
             $auth_cmd pacman -S --needed --noconfirm "${to_install[@]}" 2>/dev/null || {
                 for d in "${to_install[@]}"; do
