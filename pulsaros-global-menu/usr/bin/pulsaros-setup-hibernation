@@ -38,6 +38,15 @@ fi
 # 1. Crear /swapfile si no existe o activar si ya existe
 FSTYPE=$(findmnt -no FSTYPE / 2>/dev/null || echo "ext4")
 
+# Si estamos en Btrfs y el swapfile existente no es NOCOW o está corrupto, recrearlo limpiamente
+if [ "$FSTYPE" = "btrfs" ] && [ -f /swapfile ]; then
+    if ! btrfs inspect-internal map-swapfile -r /swapfile >/dev/null 2>&1; then
+        echo "⚠️ /swapfile existente no tiene atributos NOCOW en Btrfs. Recreándolo correctamente..."
+        swapoff /swapfile 2>/dev/null || true
+        rm -f /swapfile
+    fi
+fi
+
 if [ ! -f /swapfile ]; then
     FREE_SPACE_GB=$(df -BG / | awk 'NR==2 {print $4}' | tr -d 'G')
     REQUIRED_SPACE=$((SWAP_GB + 4))
@@ -45,7 +54,7 @@ if [ ! -f /swapfile ]; then
     if [ "$FREE_SPACE_GB" -gt "$REQUIRED_SPACE" ]; then
         echo "💾 Creando /swapfile de ${SWAP_GB}GB en sistema de archivos ${FSTYPE} para soporte de hibernación..."
         if [ "$FSTYPE" = "btrfs" ]; then
-            btrfs filesystem mkswapfile --size "${SWAP_GB}g" --uuid clear /swapfile 2>/dev/null || {
+            btrfs filesystem mkswapfile --size "${SWAP_GB}g" /swapfile 2>/dev/null || {
                 truncate -s 0 /swapfile
                 chattr +C /swapfile 2>/dev/null || true
                 btrfs property set /swapfile compression none 2>/dev/null || true

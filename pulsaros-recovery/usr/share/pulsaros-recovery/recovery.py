@@ -3170,6 +3170,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     fstab_lines.append(f"UUID={efi_uuid}             /boot/efi       vfat    umask=0077                                      0       2")
                 if rec_uuid:
                     fstab_lines.append(f"UUID={rec_uuid}            /recovery       ext4    defaults,noatime                                0       2")
+                fstab_lines.append("/swapfile                   none            swap    defaults                                        0       0")
                 fstab_content = "\n".join(fstab_lines) + "\n"
                 
                 if "TEST_MODE" not in os.environ:
@@ -3183,6 +3184,20 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         f.write(fstab_content)
                     with open("/mnt/etc/udev/rules.d/99-pulsaros-hide-recovery.rules", "w") as f:
                         f.write('# Hide PULSAR_RECOVERY partition from file managers and desktop\nENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n')
+                    
+                    # Create non-COW swapfile for hibernation support on Btrfs
+                    if not os.path.isfile("/mnt/swapfile"):
+                        try:
+                            log_msg("Creating contiguous non-COW /swapfile (8GB) for hibernation support...")
+                            subprocess.run(["btrfs", "filesystem", "mkswapfile", "--size", "8g", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            if not os.path.isfile("/mnt/swapfile"):
+                                subprocess.run(["truncate", "-s", "0", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                subprocess.run(["chattr", "+C", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                subprocess.run(["dd", "if=/dev/zero", "of=/mnt/swapfile", "bs=1M", "count=8192", "status=none"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                subprocess.run(["chmod", "600", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                subprocess.run(["mkswap", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        except Exception as sw_err:
+                            log_msg(f"Notice: swapfile creation error: {sw_err}")
             else:
                 fstab_lines = [
                     "# /etc/fstab: Pulsar OS Btrfs Configuration (BIOS)",
@@ -3192,6 +3207,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 ]
                 if rec_uuid:
                     fstab_lines.append(f"UUID={rec_uuid}            /recovery       ext4    defaults,noatime                                0       2")
+                fstab_lines.append("/swapfile                   none            swap    defaults                                        0       0")
                 fstab_content = "\n".join(fstab_lines) + "\n"
                 
                 if "TEST_MODE" not in os.environ:
@@ -3205,6 +3221,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         f.write(fstab_content)
                     with open("/mnt/etc/udev/rules.d/99-pulsaros-hide-recovery.rules", "w") as f:
                         f.write('# Hide PULSAR_RECOVERY partition from file managers and desktop\nENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n')
+                    
+                    if not os.path.isfile("/mnt/swapfile"):
+                        try:
+                            subprocess.run(["btrfs", "filesystem", "mkswapfile", "--size", "8g", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        except Exception:
+                            pass
                 
             def preserve_live_initramfs_for_recovery():
                 """Deploy the live/recovery initramfs to PULSAR_OS (@/boot), ESP, and PULSAR_RECOVERY."""
@@ -3367,7 +3389,15 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
                         # Check for existing resume parameters (hibernation to disk)
                         resume_opts = ""
-                        if os.path.isfile("/mnt/boot/refind_linux.conf"):
+                        if not resume_opts and os.path.isfile("/mnt/swapfile") and root_uuid:
+                            try:
+                                swap_out = subprocess.check_output(["btrfs", "inspect-internal", "map-swapfile", "-r", "/mnt/swapfile"], stderr=subprocess.DEVNULL, universal_newlines=True).strip()
+                                if swap_out.isdigit():
+                                    resume_opts = f" resume=UUID={root_uuid} resume_offset={swap_out} zswap.enabled=0"
+                            except Exception:
+                                pass
+
+                        if not resume_opts and os.path.isfile("/mnt/boot/refind_linux.conf"):
                             try:
                                 with open("/mnt/boot/refind_linux.conf", "r") as rf:
                                     r_content = rf.read()
@@ -3383,6 +3413,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                     m = re.search(r"(resume=UUID=[^\s\"]+\s+resume_offset=\d+(\s+zswap\.enabled=0)?)", g_content)
                                     if m:
                                         resume_opts = " " + m.group(1)
+                            except Exception:
+                                pass
+
+                        if resume_opts and os.path.isfile("/mnt/boot/refind_linux.conf"):
+                            try:
+                                with open("/mnt/boot/refind_linux.conf", "r") as rf:
+                                    rl_data = rf.read()
+                                if "resume=" not in rl_data:
+                                    rl_data = re.sub(r'(root=UUID=[^\s"\']*)', r'\1' + resume_opts, rl_data)
+                                    with open("/mnt/boot/refind_linux.conf", "w") as rf:
+                                        rf.write(rl_data)
                             except Exception:
                                 pass
 

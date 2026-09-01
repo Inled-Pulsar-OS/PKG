@@ -72,11 +72,22 @@ EOF
     #    the zswap pool is lost and the kernel finds no image on next boot (EINVAL).
     ROOT_UUID=$(findmnt -no UUID -T /swapfile 2>/dev/null || findmnt -no UUID / 2>/dev/null || true)
     FSTYPE=$(findmnt -no FSTYPE / 2>/dev/null || echo "ext4")
+
+    if [ "$FSTYPE" = "btrfs" ] && [ -f /swapfile ]; then
+        if ! btrfs inspect-internal map-swapfile -r /swapfile >/dev/null 2>&1; then
+            echo "⚠️ /swapfile no es NOCOW en Btrfs. Recreándolo correctamente..."
+            swapoff /swapfile 2>/dev/null || true
+            rm -f /swapfile
+            btrfs filesystem mkswapfile --size 8g /swapfile 2>/dev/null || true
+            swapon /swapfile 2>/dev/null || true
+        fi
+    fi
+
     OFFSET=""
-    if [ "$FSTYPE" = "btrfs" ] && command -v btrfs >/dev/null 2>&1; then
+    if [ "$FSTYPE" = "btrfs" ] && command -v btrfs >/dev/null 2>&1 && [ -f /swapfile ]; then
         OFFSET=$(btrfs inspect-internal map-swapfile -r /swapfile 2>/dev/null | tail -n 1)
     fi
-    if [ -z "$OFFSET" ]; then
+    if [ -z "$OFFSET" ] && [ -f /swapfile ]; then
         OFFSET=$(filefrag -v /swapfile 2>/dev/null | awk '$1=="0:" {print substr($4, 1, length($4)-2)}' || true)
     fi
 
