@@ -26,18 +26,13 @@ echo "✅ Assets downloaded."
 echo "🔨 Building Tauri binary..."
 cd "$TAURI_DIR"
 
-if ! command -v pnpm &>/dev/null && ! command -v npm &>/dev/null; then
-    echo "❌ Error: Neither pnpm nor npm found. Install Node.js first."
+if ! command -v npm &>/dev/null; then
+    echo "❌ Error: npm not found. Install Node.js first."
     exit 1
 fi
 
-if command -v pnpm &>/dev/null; then
-    pnpm install --frozen-lockfile
-    pnpm tauri build
-else
-    npm ci
-    npx tauri build
-fi
+npm ci
+npx tauri build
 
 BINARY="$TAURI_DIR/src-tauri/target/release/pulsaros-welcome"
 if [ ! -f "$BINARY" ]; then
