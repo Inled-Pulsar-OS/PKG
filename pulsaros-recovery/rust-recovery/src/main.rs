@@ -473,6 +473,14 @@ fn get_lucide_icon_path(name: &str) -> String {
             "progress",
             r##"<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>"##,
         ),
+        "restart" | "rotate-cw" | "refresh-cw" => ensure_lucide_icon(
+            "restart",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>"##,
+        ),
+        "shutdown" | "power" | "power-off" => ensure_lucide_icon(
+            "power",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>"##,
+        ),
         _ => ensure_lucide_icon(
             "generic",
             r##"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>"##,
@@ -546,8 +554,14 @@ fn build_ui(app: &Application) {
     bottom_bar.set_valign(Align::End);
     bottom_bar.set_margin_bottom(24);
 
-    let btn_restart = Button::with_label("Reiniciar");
+    let btn_restart = Button::new();
     btn_restart.add_css_class("bottom-power-btn");
+    let restart_box = GtkBox::new(Orientation::Horizontal, 8);
+    let restart_icon = create_icon_widget("", "restart", 18);
+    let restart_lbl = Label::new(Some("Reiniciar"));
+    restart_box.append(&restart_icon);
+    restart_box.append(&restart_lbl);
+    btn_restart.set_child(Some(&restart_box));
     btn_restart.connect_clicked(|_| {
         let _ = Command::new("sh")
             .arg("-c")
@@ -555,8 +569,14 @@ fn build_ui(app: &Application) {
             .spawn();
     });
 
-    let btn_shutdown = Button::with_label("Apagar");
+    let btn_shutdown = Button::new();
     btn_shutdown.add_css_class("bottom-power-btn");
+    let shutdown_box = GtkBox::new(Orientation::Horizontal, 8);
+    let shutdown_icon = create_icon_widget("", "shutdown", 18);
+    let shutdown_lbl = Label::new(Some("Apagar"));
+    shutdown_box.append(&shutdown_icon);
+    shutdown_box.append(&shutdown_lbl);
+    btn_shutdown.set_child(Some(&shutdown_box));
     btn_shutdown.connect_clicked(|_| {
         let _ = Command::new("sh")
             .arg("-c")
@@ -908,14 +928,14 @@ fn build_ui(app: &Application) {
                 log_msg("Launching elevated Disk Utility (GParted)...");
                 let _ = Command::new("sh")
                     .arg("-c")
-                    .arg("xhost +local: >/dev/null 2>&1 || xhost + >/dev/null 2>&1; (sudo -E gparted || sudo gparted || gparted || gnome-disks || gnome-disk-utility) >/tmp/gparted.log 2>&1 &")
+                    .arg("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; xhost +local: >/dev/null 2>&1 || xhost + >/dev/null 2>&1; (sudo -E /usr/sbin/gparted || sudo -E gparted || sudo /usr/sbin/gparted || sudo gparted || /usr/sbin/gparted || gparted || gnome-disks || gnome-disk-utility) >/tmp/gparted.log 2>&1 &")
                     .spawn();
             }
             "terminal" => {
                 log_msg("Launching recovery root terminal...");
                 let _ = Command::new("sh")
                     .arg("-c")
-                    .arg("xhost +local: >/dev/null 2>&1 || xhost + >/dev/null 2>&1; (xterm -title 'Pulsar OS Recovery Terminal' -bg '#18181b' -fg '#ffffff' -fa Monospace -fs 11 -e sudo bash || gnome-terminal -- sudo bash || alacritty -e sudo bash || x-terminal-emulator -e sudo bash || xterm -e sudo bash) &")
+                    .arg("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; xhost +local: >/dev/null 2>&1 || xhost + >/dev/null 2>&1; (xterm -title 'Pulsar OS Recovery Terminal' -bg '#18181b' -fg '#ffffff' -fa Monospace -fs 11 -e sudo bash || gnome-terminal -- sudo bash || alacritty -e sudo bash || x-terminal-emulator -e sudo bash || xterm -e sudo bash) &")
                     .spawn();
             }
             "reinstall" | "internet" => {
