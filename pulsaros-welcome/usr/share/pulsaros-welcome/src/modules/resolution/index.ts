@@ -1,0 +1,1 @@
+export { ResolutionPage } from "./pages";

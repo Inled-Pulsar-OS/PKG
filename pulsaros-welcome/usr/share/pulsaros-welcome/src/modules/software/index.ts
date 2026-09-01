@@ -1,0 +1,1 @@
+export { SoftwarePage } from "./pages";
