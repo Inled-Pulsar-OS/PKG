@@ -18,8 +18,8 @@ const WELCOME_STEPS: WelcomeScreen[] = [
   "software",
   "effects",
   "gpu",
-  "feedback",
   "features",
+  "feedback",
 ];
 
 export function useWelcome() {

@@ -1,0 +1,1 @@
+export { CompletePage } from "./pages"
