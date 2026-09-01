@@ -30,11 +30,17 @@ log() { echo "pulsaros-resume-offset: $*"; }
 is_num() { [ -n "$1" ] && [ "$1" -eq "$1" ] 2>/dev/null; }
 
 # ------------------------------------------------------------------------------
-# 1) Real offset of the swapfile's first extent (4k blocks, filefrag)
+# 1) Real offset of the swapfile (btrfs inspect-internal or filefrag on ext4)
 # ------------------------------------------------------------------------------
 real=""
-if command -v filefrag >/dev/null 2>&1 && [ -f "$SWAPFILE" ]; then
-    real=$(filefrag -v "$SWAPFILE" 2>/dev/null | awk '$1=="0:" {gsub(/\.\./,"",$4); print $4; exit}')
+if [ -f "$SWAPFILE" ]; then
+    FSTYPE=$(stat -f -c %T "$SWAPFILE" 2>/dev/null || true)
+    if [ "$FSTYPE" = "btrfs" ] && command -v btrfs >/dev/null 2>&1; then
+        real=$(btrfs inspect-internal map-swapfile -r "$SWAPFILE" 2>/dev/null || true)
+    fi
+    if ! is_num "$real" && command -v filefrag >/dev/null 2>&1; then
+        real=$(filefrag -v "$SWAPFILE" 2>/dev/null | awk '$1=="0:" {gsub(/\.\./,"",$4); print $4; exit}')
+    fi
 fi
 if ! is_num "$real"; then
     log "No se pudo determinar el offset real de $SWAPFILE (¿no existe? ¿sin swapfile?). Nada que hacer."
@@ -71,23 +77,30 @@ fi
 # ------------------------------------------------------------------------------
 # 3) Repair rEFInd configuration
 # ------------------------------------------------------------------------------
-repair_refind() {
-    if [ ! -f "$REFIND_CONF" ]; then
-        log "⚠ $REFIND_CONF no encontrado; no se puede reparar rEFInd."
-        return 1
-    fi
+repair_refind_file() {
+    local target="$1"
+    [ -f "$target" ] || return 0
     if [ "$DRY_RUN" = 1 ]; then
-        log "[dry-run] Se actualizaría resume_offset a $real en $REFIND_CONF"
+        log "[dry-run] Se actualizaría resume_offset a $real en $target"
         return 0
     fi
-    cp -a "$REFIND_CONF" "${REFIND_CONF}.bak" || true
-    if grep -q "resume_offset=" "$REFIND_CONF"; then
-        sed -i -E "s/resume_offset=[0-9]+/resume_offset=$real/g" "$REFIND_CONF"
+    cp -a "$target" "${target}.bak" || true
+    if grep -q "resume_offset=" "$target"; then
+        sed -i -E "s/resume_offset=[0-9]+/resume_offset=$real/g" "$target"
     else
-        # Append to every entry line that already carries resume=
-        sed -i -E "\|resume=| s/\"[[:space:]]*$/ resume_offset=$real\"/" "$REFIND_CONF"
+        sed -i -E "\|resume=| s/\"[[:space:]]*$/ resume_offset=$real\"/" "$target"
     fi
-    log "✔ $REFIND_CONF actualizado a resume_offset=$real (copia previa en ${REFIND_CONF}.bak)"
+    if ! grep -q "zswap.enabled=0" "$target"; then
+        sed -i -E "s/resume_offset=([0-9]+)/resume_offset=\1 zswap.enabled=0/g" "$target"
+    fi
+    log "✔ $target actualizado a resume_offset=$real"
+}
+
+repair_refind() {
+    repair_refind_file "$REFIND_CONF"
+    repair_refind_file "/boot/efi/EFI/refind/refind.conf"
+    repair_refind_file "/efi/EFI/refind/refind.conf"
+    repair_refind_file "/boot/efi/EFI/BOOT/refind.conf"
 }
 
 # ------------------------------------------------------------------------------
