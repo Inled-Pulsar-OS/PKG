@@ -6,7 +6,7 @@ Before=sddm.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'if ! grep -q -E "boot=live|rootfstype=9p" /proc/cmdline; then if [ -f /etc/sddm.conf.d/autologin.conf ] && grep -q "User=live" /etc/sddm.conf.d/autologin.conf && [ ! -f /etc/pulsar-need-setup ]; then rm -f /etc/sddm.conf.d/autologin.conf; fi; else systemctl mask plymouth-quit.service plymouth-quit-wait.service || true; fi'
+ExecStart=/bin/bash -c 'if ! grep -q -E "boot=live|rootfstype=9p|archisobasedir|archisolabel|img_dev|live-media" /proc/cmdline && [ ! -d /run/archiso ] && [ ! -d /run/live ] && [ ! -d /lib/live ]; then if [ -f /etc/sddm.conf.d/autologin.conf ] && grep -q "User=live" /etc/sddm.conf.d/autologin.conf && [ ! -f /etc/pulsar-need-setup ]; then rm -f /etc/sddm.conf.d/autologin.conf; fi; else systemctl mask plymouth-quit.service plymouth-quit-wait.service 2>/dev/null || true; fi'
 RemainAfterExit=yes
 
 [Install]

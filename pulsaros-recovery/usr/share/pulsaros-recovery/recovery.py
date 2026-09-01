@@ -3491,25 +3491,41 @@ exec tail -n +3 $0
 # Pulsar OS Recovery Mode Menu Entry
 menuentry "Pulsar OS Recovery" --class recovery --class os {{
     insmod btrfs
+    insmod ext2
     insmod part_gpt
     insmod part_msdos
-    insmod ext2
-    search --no-floppy --fs-uuid --set=root {root_uuid}
-    if [ -f /@/boot/vmlinuz-recovery ]; then
-        linux /@/boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media-path=live fsck.mode=skip quiet splash
-        initrd /@/boot/initramfs-recovery.img
-    elif [ -f /boot/vmlinuz-recovery ]; then
-        linux /boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media-path=live fsck.mode=skip quiet splash
-        initrd /boot/initramfs-recovery.img
-    elif [ -f /@/boot/vmlinuz-linux ]; then
-        linux /@/boot/vmlinuz-linux root=UUID={root_uuid} rootflags=subvol=@ rw quiet splash single
-        if [ -f /@/boot/initramfs-linux.img ]; then
-            initrd /@/boot/initramfs-linux.img
+    if search --no-floppy --label --set=rec_dev PULSAR_RECOVERY; then
+        if [ -f ($rec_dev)/boot/vmlinuz-recovery ]; then
+            linux ($rec_dev)/boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash
+            initrd ($rec_dev)/boot/initramfs-recovery.img
+        elif [ -f ($rec_dev)/vmlinuz-recovery ]; then
+            linux ($rec_dev)/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash
+            initrd ($rec_dev)/initramfs-recovery.img
+        else
+            search --no-floppy --fs-uuid --set=root {root_uuid}
+            linux /@/boot/vmlinuz-linux root=UUID={root_uuid} rootflags=subvol=@ rw quiet splash
+            if [ -f /@/boot/initramfs-linux.img ]; then
+                initrd /@/boot/initramfs-linux.img
+            fi
         fi
     else
-        linux /boot/vmlinuz-linux root=UUID={root_uuid} rw quiet splash single
-        if [ -f /boot/initramfs-linux.img ]; then
-            initrd /boot/initramfs-linux.img
+        search --no-floppy --fs-uuid --set=root {root_uuid}
+        if [ -f /@/boot/vmlinuz-recovery ]; then
+            linux /@/boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash
+            initrd /@/boot/initramfs-recovery.img
+        elif [ -f /boot/vmlinuz-recovery ]; then
+            linux /boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash
+            initrd /boot/initramfs-recovery.img
+        elif [ -f /@/boot/vmlinuz-linux ]; then
+            linux /@/boot/vmlinuz-linux root=UUID={root_uuid} rootflags=subvol=@ rw quiet splash
+            if [ -f /@/boot/initramfs-linux.img ]; then
+                initrd /@/boot/initramfs-linux.img
+            fi
+        else
+            linux /boot/vmlinuz-linux root=UUID={root_uuid} rw quiet splash
+            if [ -f /boot/initramfs-linux.img ]; then
+                initrd /boot/initramfs-linux.img
+            fi
         fi
     fi
 }}
