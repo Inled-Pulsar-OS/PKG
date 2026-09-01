@@ -16,6 +16,11 @@ pub fn check_sentinel() -> bool {
 }
 
 #[tauri::command]
+pub fn is_ootb_pending() -> bool {
+    core::is_ootb_pending()
+}
+
+#[tauri::command]
 pub fn write_sentinel() -> Result<(), String> {
     core::write_sentinel()
 }

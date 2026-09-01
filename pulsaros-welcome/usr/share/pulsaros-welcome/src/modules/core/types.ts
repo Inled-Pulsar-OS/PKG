@@ -2,15 +2,11 @@ export type SystemMode = "welcome";
 
 export type WelcomeScreen =
   | "hello"
-  | "intro"
-  | "resolution"
-  | "wifi"
-  | "bluetooth"
-  | "software"
-  | "effects"
-  | "gpu"
-  | "feedback"
   | "features"
+  | "compatibility"
+  | "settings"
+  | "sayri"
+  | "recovery"
   | "done";
 
 export interface Resolution {
@@ -23,6 +19,7 @@ export interface Resolution {
 export type DataState = {
   isLive: boolean;
   isArch: boolean;
+  ootbPending: boolean;
   resolutions: Resolution[];
   effectsState: boolean;
 };

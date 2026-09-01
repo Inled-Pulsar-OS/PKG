@@ -1,0 +1,1 @@
+export { RecoveryPage } from "./pages";

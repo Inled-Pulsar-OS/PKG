@@ -11,11 +11,26 @@ pub fn launch_display_settings() -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn launch_appearance_settings() -> Result<(), String> {
+    software::launch_appearance_settings()
+}
+
+#[tauri::command]
 pub fn check_adb_devices() -> Result<String, String> {
     software::check_adb_devices()
 }
 
 #[tauri::command]
 pub fn run_cleanup() -> Result<(), String> {
-    software::run_cleanup()
+    software::launch_run_cleanup()
+}
+
+#[tauri::command]
+pub fn launch_ootb() -> Result<(), String> {
+    software::launch_ootb()
+}
+
+#[tauri::command]
+pub fn launch_recovery() -> Result<(), String> {
+    software::launch_recovery()
 }

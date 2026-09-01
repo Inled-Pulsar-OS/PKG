@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pulsar OS Welcome</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ===================================================================== -->
+  <!-- 0. HELLO ANIMATION SCREEN                                             -->
+  <!-- ===================================================================== -->
+  <div id="screen-hello" class="screen-container active">
+    <div class="anim-container">
+      <div class="anim-svg-wrapper">
+        <svg id="hello-svg" class="hello__svg" viewBox="0 0 900 300"></svg>
+      </div>
+      <button id="btn-hello-continue" class="btn-anim-continue" onclick="onHelloContinue()">
+        Continue
+      </button>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 1. FEATURES CAROUSEL SCREEN                                           -->
+  <!-- ===================================================================== -->
+  <div id="screen-features" class="screen-backdrop">
+    <div class="welcome-card">
+      <div class="carousel-dots" id="carousel-dots">
+        <button class="carousel-dot active" onclick="goToCarouselSlide(0)"></button>
+        <button class="carousel-dot" onclick="goToCarouselSlide(1)"></button>
+        <button class="carousel-dot" onclick="goToCarouselSlide(2)"></button>
+        <button class="carousel-dot" onclick="goToCarouselSlide(3)"></button>
+      </div>
+      <div class="carousel-progress">
+        <div id="carousel-progress-bar" class="carousel-progress-fill"></div>
+      </div>
+
+      <header class="card-header">
+        <h1 id="carousel-title" class="card-title">Intelligent Window Snapping</h1>
+        <p id="carousel-subtitle" class="card-subtitle">
+          Organize your workflow effortlessly with magnetic window tiling, intuitive edge-snapping, and smooth keyboard shortcuts.
+        </p>
+      </header>
+
+      <main class="card-body" id="carousel-body">
+        <!-- Injected dynamically by app.js -->
+      </main>
+
+      <footer class="card-footer">
+        <button class="btn-secondary" onclick="prevSlide()">Back</button>
+        <button class="btn-primary" onclick="nextSlide()">Continue</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 2. COMPATIBILITY SCREEN                                               -->
+  <!-- ===================================================================== -->
+  <div id="screen-compatibility" class="screen-backdrop">
+    <div class="welcome-card">
+      <header class="card-header">
+        <h1 class="card-title">Connected everywhere</h1>
+        <p class="card-subtitle">
+          Your other devices aren't islands. Pulsar OS bridges macOS, Windows, and Android natively.
+        </p>
+      </header>
+
+      <main class="card-body card-body-scroll">
+        <div style="width: 100%; max-width: 680px; display: flex; flex-direction: column; gap: 14px;">
+          <div class="grid-2">
+            <div class="card-grouped" style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+              <img src="../public/logos/macboat.png" alt="Mac Connector" style="height: 48px; width: 48px; margin-bottom: 8px; object-fit: contain;">
+              <div class="card-grouped-title">Mac Connector</div>
+              <p class="card-grouped-desc">Seamless integration with macOS services, files, and AirDrop equivalents.</p>
+              <button class="btn-primary" style="margin-top: 12px; font-size: 13px; padding: 6px 16px;" onclick="callBackend('launch_app', { app: 'macboat', fallback: 'mac-connector' })">
+                Open Connector
+              </button>
+            </div>
+            <div class="card-grouped" style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+              <img src="../public/logos/winboat.svg" alt="Winboat" style="height: 48px; width: 48px; margin-bottom: 8px; object-fit: contain;">
+              <div class="card-grouped-title">Winboat</div>
+              <p class="card-grouped-desc">Run Windows applications natively with seamless DirectX and container acceleration.</p>
+              <button class="btn-primary" style="margin-top: 12px; font-size: 13px; padding: 6px 16px;" onclick="callBackend('launch_app', { app: 'winboat', fallback: '/opt/winboat/winboat' })">
+                Open Winboat
+              </button>
+            </div>
+          </div>
+
+          <!-- KDE Connect / Phone Pairing -->
+          <div class="card-grouped" style="display: flex; align-items: center; gap: 18px; padding: 14px 20px;">
+            <img src="../public/logos/kdeconnect-qr.png" alt="KDE Connect QR" style="height: 90px; width: 90px; background: white; border-radius: 8px; padding: 4px; flex-shrink: 0;">
+            <div>
+              <div class="card-grouped-title">KDE Connect for your phone</div>
+              <p class="card-grouped-desc">Scan to install KDE Connect and pair with Pulsar OS for notifications, clipboard sharing, and remote input.</p>
+              <button class="btn-secondary" style="margin-top: 10px; font-size: 12px; padding: 5px 14px;" onclick="callBackend('open_url', { url: 'https://kdeconnect.kde.org/download.html' })">
+                Download page
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer class="card-footer">
+        <button class="btn-secondary" onclick="prevSlide()">Back</button>
+        <button class="btn-primary" onclick="nextSlide()">Continue</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 3. SETTINGS SCREEN                                                    -->
+  <!-- ===================================================================== -->
+  <div id="screen-settings" class="screen-backdrop">
+    <div class="welcome-card">
+      <header class="card-header">
+        <h1 class="card-title">Settings you might like</h1>
+        <p class="card-subtitle">
+          Quick access to the most useful settings and system configurations in Pulsar OS.
+        </p>
+      </header>
+
+      <main class="card-body card-body-scroll">
+        <div class="grid-2">
+          <button class="settings-btn" onclick="callBackend('launch_wifi')">
+            <div class="settings-icon-box">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+            </div>
+            <div>
+              <div class="card-grouped-title">Wi-Fi & Networks</div>
+              <p class="card-grouped-desc">Connect to Wi-Fi networks and view network status.</p>
+            </div>
+          </button>
+
+          <button class="settings-btn" onclick="callBackend('launch_driverman')">
+            <div class="settings-icon-box">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>
+            </div>
+            <div>
+              <div class="card-grouped-title">Hardware & Drivers</div>
+              <p class="card-grouped-desc">Manage proprietary graphics and hardware drivers.</p>
+            </div>
+          </button>
+
+          <button class="settings-btn" onclick="callBackend('launch_display')">
+            <div class="settings-icon-box">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+            </div>
+            <div>
+              <div class="card-grouped-title">Display & Resolution</div>
+              <p class="card-grouped-desc">Change resolution, refresh rates, and multi-monitor layout.</p>
+            </div>
+          </button>
+
+          <button class="settings-btn" onclick="callBackend('launch_appearance')">
+            <div class="settings-icon-box">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a7 7 0 0 0 0 14v6"></path></svg>
+            </div>
+            <div>
+              <div class="card-grouped-title">Appearance & Wallpapers</div>
+              <p class="card-grouped-desc">Customize desktop themes, dark mode, and wallpapers.</p>
+            </div>
+          </button>
+
+          <button class="settings-btn" onclick="callBackend('launch_bluetooth')">
+            <div class="settings-icon-box">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline></svg>
+            </div>
+            <div>
+              <div class="card-grouped-title">Bluetooth Devices</div>
+              <p class="card-grouped-desc">Pair wireless headphones, keyboards, and accessories.</p>
+            </div>
+          </button>
+
+          <button class="settings-btn" onclick="callBackend('launch_app', { app: 'appinstall' })">
+            <div class="settings-icon-box">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+            </div>
+            <div>
+              <div class="card-grouped-title">App Store</div>
+              <p class="card-grouped-desc">Discover and install thousands of curated applications.</p>
+            </div>
+          </button>
+        </div>
+      </main>
+
+      <footer class="card-footer">
+        <button class="btn-secondary" onclick="prevSlide()">Back</button>
+        <button class="btn-primary" onclick="nextSlide()">Continue</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 4. MEET SAYRI SCREEN                                                  -->
+  <!-- ===================================================================== -->
+  <div id="screen-sayri" class="screen-backdrop">
+    <div class="welcome-card">
+      <main class="card-body">
+        <img src="../public/logos/sayri.png" alt="Sayri" style="height: 100px; width: 100px; border-radius: 24px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15); margin-bottom: 16px;">
+        <h1 class="card-title">Meet Sayri</h1>
+        <p class="card-subtitle" style="text-align: center; max-width: 580px;">
+          Your AI assistant, built directly into Pulsar OS. Sayri uses the model you choose and acts through skills, plugins, and extensions while always respecting your permissions.
+        </p>
+
+        <div class="grid-3" style="margin-top: 24px;">
+          <div class="card-grouped" style="text-align: center;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0071e3" stroke-width="2" style="margin: 0 auto 8px auto;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+            <div class="card-grouped-title">Skills & Agents</div>
+            <p class="card-grouped-desc">Execute complex multi-step tasks safely.</p>
+          </div>
+          <div class="card-grouped" style="text-align: center;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0071e3" stroke-width="2" style="margin: 0 auto 8px auto;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            <div class="card-grouped-title">Permissions</div>
+            <p class="card-grouped-desc">Every action is sandboxed under your control.</p>
+          </div>
+          <div class="card-grouped" style="text-align: center;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0071e3" stroke-width="2" style="margin: 0 auto 8px auto;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            <div class="card-grouped-title">Sayri Store</div>
+            <p class="card-grouped-desc">Plugins, extensions, and custom workflows.</p>
+          </div>
+        </div>
+
+        <button class="btn-primary" style="margin-top: 24px;" onclick="callBackend('open_url', { url: 'https://store-os.inled.es' })">
+          Explore the Sayri Store
+        </button>
+      </main>
+
+      <footer class="card-footer">
+        <button class="btn-secondary" onclick="prevSlide()">Back</button>
+        <button class="btn-primary" onclick="nextSlide()">Continue</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 5. RECOVERY SCREEN (Live ISO mode only)                              -->
+  <!-- ===================================================================== -->
+  <div id="screen-recovery" class="screen-backdrop">
+    <div class="welcome-card">
+      <main class="card-body" style="text-align: center;">
+        <div style="width: 80px; height: 80px; border-radius: 20px; background: rgba(0, 113, 227, 0.1); color: #0071e3; display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="4"></circle><line x1="4.93" y1="4.93" x2="9.17" y2="9.17"></line><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"></line><line x1="14.83" y1="9.17" x2="19.07" y2="4.93"></line><line x1="14.83" y1="9.17" x2="18.36" y2="5.64"></line><line x1="4.93" y1="19.07" x2="9.17" y2="14.83"></line></svg>
+        </div>
+        <h1 class="card-title">Recovery & Installation</h1>
+        <p class="card-subtitle">
+          You are running the Pulsar OS live environment. Repair, reset or roll back the system, restore a snapshot, or install Pulsar OS to your drive.
+        </p>
+        <button class="btn-primary" style="margin-top: 28px; padding: 12px 28px; font-size: 15px;" onclick="callBackend('launch_recovery')">
+          Open Pulsar Recovery
+        </button>
+        <p style="font-size: 12px; color: #86868b; margin-top: 12px;">This will open the Pulsar OS installer and system recovery utilities.</p>
+      </main>
+
+      <footer class="card-footer">
+        <button class="btn-secondary" onclick="prevSlide()">Back</button>
+        <button class="btn-primary" onclick="nextSlide()">Finish</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 6. DONE SCREEN                                                        -->
+  <!-- ===================================================================== -->
+  <div id="screen-done" class="screen-container">
+    <div class="anim-container">
+      <div class="anim-svg-wrapper">
+        <svg id="done-svg" class="hello__svg" viewBox="0 0 900 300"></svg>
+      </div>
+      <button class="btn-anim-continue" onclick="onDoneFinish()">
+        Get Started
+      </button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

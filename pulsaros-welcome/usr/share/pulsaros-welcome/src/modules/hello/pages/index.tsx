@@ -13,7 +13,9 @@ export function HelloPage({ onContinue }: HelloPageProps) {
     document.body.style.backgroundColor = "transparent";
     const lang = getLang();
     loadAndAnimate(lang, svgRef.current);
-    return () => { document.body.style.backgroundColor = prev; };
+    return () => {
+      document.body.style.backgroundColor = prev;
+    };
   }, []);
 
   return (
@@ -25,7 +27,7 @@ export function HelloPage({ onContinue }: HelloPageProps) {
       />
       <button
         onClick={onContinue}
-        className="cursor-pointer mb-20 rounded-full bg-white px-10 py-3 text-[15px] font-medium text-black shadow-md transition-all hover:bg-white/90 active:scale-95"
+        className="mb-20 cursor-pointer rounded-full bg-white px-10 py-3 text-[15px] font-medium text-black shadow-md transition-all hover:bg-white/90 active:scale-95"
       >
         Continue
       </button>

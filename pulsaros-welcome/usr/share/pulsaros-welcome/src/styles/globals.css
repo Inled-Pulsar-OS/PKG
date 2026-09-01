@@ -1,35 +1,43 @@
 @import "tailwindcss";
 
+:root, html, body, #root {
+  background: transparent !important;
+  background-color: transparent !important;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  user-select: none;
+}
+
 @theme {
   /* Background */
-  --color-background: #e8e8ed;
-  --color-background-atmo-1: rgba(196, 168, 120, 0.3);
-  --color-background-atmo-2: rgba(120, 156, 196, 0.2);
+  --color-background: transparent;
 
-  /* Surface */
-  --color-surface: rgba(255, 255, 255, 0.72);
+  /* Surface - solid clean white */
+  --color-surface: #ffffff;
   --color-surface-solid: #ffffff;
-  --color-surface-elevated: rgba(255, 255, 255, 0.82);
-  --color-surface-grouped: rgba(245, 245, 247, 0.65);
+  --color-surface-elevated: #ffffff;
+  --color-surface-grouped: #f5f5f7;
 
   /* Border / Separator */
-  --color-border: rgba(0, 0, 0, 0.08);
-  --color-separator: rgba(0, 0, 0, 0.06);
+  --color-border: #e5e5ea;
+  --color-separator: #e5e5ea;
 
-  /* Text */
-  --color-text-primary: #1d1d1f;
-  --color-text-secondary: #6e6e73;
-  --color-text-tertiary: #aeaeb2;
+  /* Text - High contrast dark colors */
+  --color-text-primary: #111111;
+  --color-text-secondary: #3a3a3c;
+  --color-text-tertiary: #555558;
 
-  /* Accent */
+  /* Accent (Apple blue) */
   --color-accent: #0071e3;
   --color-accent-hover: #0077ed;
   --color-accent-active: #006edb;
+
+  --color-apple-blue: #0071e3;
 }
 
 body {
-  background-color: var(--color-background);
-  color: var(--color-text-primary);
+  color: #111111;
   font-family:
     "Inter",
     "SF Pro Display",
@@ -41,39 +49,44 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Atmospheric background */
-.bg-atmosphere {
-  background-color: var(--color-background);
-  background-image:
-    radial-gradient(
-      ellipse at 20% 50%,
-      var(--color-background-atmo-1),
-      transparent 60%
-    ),
-    radial-gradient(
-      ellipse at 80% 30%,
-      var(--color-background-atmo-2),
-      transparent 60%
-    );
+/* Fullscreen backdrop — soft dim over desktop */
+.screen-backdrop {
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
-/* Glass surface */
+/* Clean white box that contains everything (macOS Setup Assistant aesthetic) */
 .glass {
-  background: var(--color-surface);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  border: 1px solid var(--color-border);
-  border-radius: 20px;
+  background: #ffffff !important;
+  color: #111111 !important;
+  border: 1px solid #e5e5ea;
+  border-radius: 24px;
   box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.04),
-    0 12px 40px rgba(0, 0, 0, 0.06);
+    0 20px 60px rgba(0, 0, 0, 0.2),
+    0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Ensure all titles and headings inside the card are dark, crisp and bold */
+.glass h1, .glass h2, .glass h3 {
+  color: #111111 !important;
+  font-weight: 700;
+}
+
+.glass p {
+  color: #3a3a3c !important;
 }
 
 /* Grouped content card (rows container) */
 .glass-grouped {
-  background: var(--color-surface-grouped);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
+  background: #f5f5f7 !important;
+  border: 1px solid #e5e5ea !important;
+  border-radius: 14px;
+  color: #111111 !important;
+}
+
+.glass-grouped p {
+  color: #48484a !important;
 }
 
 /* Primary button */
@@ -99,18 +112,18 @@ body {
   transform: scale(0.98);
 }
 .btn-primary:disabled {
-  background: rgba(0, 0, 0, 0.04);
-  color: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.18);
+  color: rgba(255, 255, 255, 0.6);
   cursor: default;
   transform: none;
 }
 
 /* Secondary button */
 .btn-secondary {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.6);
   color: var(--color-text-primary);
   font-weight: 500;
-  border: none;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 7px 18px;
   font-size: 14px;
@@ -121,10 +134,10 @@ body {
   font-family: inherit;
 }
 .btn-secondary:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.85);
 }
 .btn-secondary:active {
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.9);
   transform: scale(0.98);
 }
 
@@ -146,11 +159,55 @@ body {
 
 .hello__svg {
   width: 100%;
-  height: auto;
+  height: 100%;
+}
+
+/* Slide fade for the features carousel */
+@keyframes slide-fade {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-fade {
+  animation: slide-fade 0.45s ease-out both;
+}
+
+/* Dots indicator */
+.slide-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.18);
+  transition: all 0.25s ease;
+}
+.slide-dot.active {
+  background: var(--color-accent);
+  width: 22px;
+}
+
+/* Progress bar for carousel timing */
+@keyframes progress-bar {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.progress-bar-fill {
+  animation: progress-bar 10s linear forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .screen-enter {
+  .screen-enter,
+  .slide-fade {
     animation: none;
   }
 }

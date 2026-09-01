@@ -1,1 +1,0 @@
-export { EffectsPage } from "./pages";

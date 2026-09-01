@@ -7,7 +7,7 @@ arch=(any)
 url="https://inled.es"
 license=(custom)
 depends=(python-gobject python-cairo python-dbus gtk3 webkitgtk-6.0 xorg-xrandr gtk4 libadwaita driverman)
-options=(!strip)
+options=(!strip !debug)
 install=pulsaros-welcome.install
 
 prepare() {
@@ -20,13 +20,7 @@ prepare() {
 }
 
 package() {
-    _src="$(cd "$startdir"/../../../pulsaros-welcome && pwd)"
-    cd "$_src"
-    [ -d usr ] && cp -r usr "$pkgdir/"
-    [ -d etc ] && cp -r etc "$pkgdir/"
     if [ -d "$srcdir/staging" ]; then
         cp -r "$srcdir/staging"/* "$pkgdir/"
-    elif [ -d "$srcdir/usr" ]; then
-        cp -r "$srcdir/usr" "$pkgdir/"
     fi
 }

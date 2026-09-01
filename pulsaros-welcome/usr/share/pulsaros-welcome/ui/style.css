@@ -1,0 +1,444 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+html, body {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #111111;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+/* Fullscreen Screen Container */
+.screen-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  transform: translateY(6px);
+}
+
+.screen-container.active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+/* Fullscreen backdrop for assistant slides */
+.screen-backdrop {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.35);
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.screen-backdrop.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Solid White macOS Setup Assistant Card */
+.welcome-card {
+  background: #ffffff;
+  color: #111111;
+  width: 100%;
+  max-width: 860px;
+  height: 86vh;
+  max-height: 740px;
+  border-radius: 24px;
+  border: 1px solid #e5e5ea;
+  box-shadow: 0 25px 65px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header */
+.card-header {
+  padding: 40px 32px 12px 32px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.card-title {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #111111;
+  margin-bottom: 8px;
+}
+
+.card-subtitle {
+  font-size: 15px;
+  line-height: 1.45;
+  color: #3a3a3c;
+  max-width: 580px;
+  margin: 0 auto;
+}
+
+/* Body / Main */
+.card-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 36px 20px 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-body-scroll {
+  justify-content: flex-start;
+}
+
+/* Footer */
+.card-footer {
+  padding: 14px 28px;
+  border-top: 1px solid #e5e5ea;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  background: #fafafa;
+}
+
+/* Grouped panel / cards */
+.card-grouped {
+  background: #f5f5f7;
+  border: 1px solid #e5e5ea;
+  border-radius: 14px;
+  padding: 18px;
+  color: #111111;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card-grouped:hover {
+  background: #f0f0f3;
+  border-color: #d1d1d6;
+}
+
+.card-grouped-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111111;
+  margin-bottom: 4px;
+}
+
+.card-grouped-desc {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #48484a;
+}
+
+/* Buttons */
+.btn-primary {
+  background: #0071e3;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 22px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.15s ease, transform 0.1s ease;
+  font-family: inherit;
+}
+
+.btn-primary:hover {
+  background: #0077ed;
+}
+
+.btn-primary:active {
+  background: #006edb;
+  transform: scale(0.98);
+}
+
+.btn-secondary {
+  background: #ffffff;
+  color: #1d1d1f;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 20px;
+  border-radius: 8px;
+  border: 1px solid #d2d2d7;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  font-family: inherit;
+}
+
+.btn-secondary:hover {
+  background: #f5f5f7;
+  border-color: #c5c5ca;
+}
+
+.btn-secondary:active {
+  background: #e5e5ea;
+  transform: scale(0.98);
+}
+
+/* Hello / Done Animation Screens */
+.anim-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 90%;
+  max-width: 900px;
+}
+
+.anim-svg-wrapper {
+  width: 100%;
+  max-width: 900px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hello__svg {
+  fill: none;
+  stroke: #ffffff;
+  stroke-linecap: round;
+  stroke-miterlimit: 10;
+  stroke-width: 48px;
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.hello__svg path {
+  stroke: #ffffff;
+  stroke-linecap: round;
+  stroke-width: 48px;
+}
+
+.btn-anim-continue {
+  margin-top: 40px;
+  background: #ffffff;
+  color: #111111;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 12px 38px;
+  border-radius: 9999px;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.btn-anim-continue:hover {
+  background: #f5f5f7;
+  transform: scale(1.03);
+}
+
+.btn-anim-continue:active {
+  transform: scale(0.97);
+}
+
+/* Carousel */
+.carousel-dots {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding-top: 12px;
+}
+
+.carousel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.18);
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.carousel-dot.active {
+  background: #0071e3;
+  width: 24px;
+}
+
+.carousel-progress {
+  width: 160px;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 9999px;
+  margin: 8px auto 0 auto;
+  overflow: hidden;
+}
+
+.carousel-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: #0071e3;
+  border-radius: 9999px;
+}
+
+/* Grid Layouts */
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  width: 100%;
+  max-width: 680px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  width: 100%;
+  max-width: 680px;
+}
+
+/* Settings Card Buttons */
+.settings-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  text-align: left;
+  border: 1px solid #e5e5ea;
+  background: #f5f5f7;
+  border-radius: 14px;
+  padding: 16px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  font-family: inherit;
+}
+
+.settings-btn:hover {
+  background: #ebebee;
+  border-color: #d1d1d6;
+}
+
+.settings-btn:active {
+  transform: scale(0.98);
+}
+
+.settings-icon-box {
+  background: rgba(0, 113, 227, 0.1);
+  color: #0071e3;
+  padding: 10px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Provider Icons Grid */
+.providers-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.provider-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border: 1px solid #e5e5ea;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  border-radius: 14px;
+  width: 72px;
+  height: 72px;
+  padding: 8px;
+}
+
+.provider-chip img {
+  max-width: 34px;
+  max-height: 34px;
+  object-fit: contain;
+}
+
+.provider-chip span {
+  font-size: 10px;
+  font-weight: 600;
+  color: #3a3a3c;
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+/* Videos in Carousel */
+.slide-video-box {
+  position: relative;
+  width: 100%;
+  max-width: 620px;
+  margin-top: 14px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #e5e5ea;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.slide-video-box video {
+  width: 100%;
+  max-height: 42vh;
+  display: block;
+  object-fit: cover;
+}
+
+.carousel-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: white;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.carousel-nav-btn:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.carousel-nav-prev {
+  left: 10px;
+}
+
+.carousel-nav-next {
+  right: 10px;
+}

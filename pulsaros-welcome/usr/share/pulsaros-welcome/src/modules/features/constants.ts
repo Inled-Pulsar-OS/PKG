@@ -1,68 +1,74 @@
-export const FEATURES = [
+export interface ProviderLog {
+  name: string;
+  src: string;
+}
+
+export interface FeatureSlide {
+  id: string;
+  title: string;
+  subtitle: string;
+  video?: string;
+  providers?: ProviderLog[];
+}
+
+export const FEATURE_SLIDES: FeatureSlide[] = [
   {
-    icon: "🔄",
-    name: "Session Restore",
-    description:
-      "Everything comes back exactly as you left it. Reboot or power on, and every app, window and document reopens on its own.",
+    id: "session-restore",
+    title: "Session Restore",
+    subtitle:
+      "Everything comes back exactly as you left it. Reboot or power on, and every app, window and document reopens on its own, just like on a Mac.",
+    video: "./videos/session-restore.mp4",
   },
   {
-    icon: "🤖",
-    name: "Sayri — AI Assistant",
-    description:
+    id: "sayri",
+    title: "Sayri, AI Assistant",
+    subtitle:
       "An AI assistant that uses the model you want. It's not like Siri, it's smart.",
+    video: "./videos/sayri.mp4",
   },
   {
-    icon: "📁",
-    name: "Finder",
-    description:
-      "A true Finder clone: Nautilus completely rebuilt with Mac-style navigation, previews, tags and sidebar.",
+    id: "finder-providers",
+    title: "Finder & 55 Cloud Providers",
+    subtitle:
+      "A true Finder clone with Mac-style navigation, previews, tags and sidebar. Up to 55 cloud storage providers supported natively.",
+    providers: [
+      { name: "Finder", src: "./logos/providers/finder.png" },
+      { name: "Google Drive", src: "./logos/providers/googledrive.svg" },
+      { name: "Dropbox", src: "./logos/providers/dropbox.svg" },
+      { name: "OneDrive", src: "./logos/providers/onedrive.svg" },
+      { name: "iCloud", src: "./logos/providers/icloud.svg" },
+      { name: "Box", src: "./logos/providers/box.svg" },
+      { name: "MEGA", src: "./logos/providers/mega.svg" },
+      { name: "Nextcloud", src: "./logos/providers/nextcloud.svg" },
+      { name: "Proton", src: "./logos/providers/proton.svg" },
+    ],
   },
   {
-    icon: "☁️",
-    name: "55 Cloud Providers",
-    description:
-      "Up to 55 cloud storage providers supported natively inside Finder: Google Drive, Dropbox, OneDrive, Nextcloud and many more.",
+    id: "app-store",
+    title: "App Store",
+    subtitle:
+      "Browse and install apps from all the package managers. Update your system, uninstall ANY system package and clean system trash.",
+    video: "./videos/app-store.mp4",
   },
   {
-    icon: "🛡️",
-    name: "Recovery System",
-    description:
-      "Repair, reset or roll back Pulsar OS from a built-in recovery environment. No USB stick required.",
-  },
-  {
-    icon: "📦",
-    name: "PKM",
-    description:
-      "Universal package manager. Install from pacman, apt, Flathub and AUR with natural commands.",
-  },
-  {
-    icon: "🛒",
-    name: "App Store",
-    description:
-      "Browse and install apps from all package managers. Update your system, uninstall packages, clean trash and run virus scan.",
-  },
-  {
-    icon: "🔍",
-    name: "Spotlight",
-    description:
+    id: "spotlight",
+    title: "Spotlight",
+    subtitle:
       "Search apps, documents, clipboard, images and any file. Navigate dirs and uninstall apps.",
+    video: "./videos/spotlight.mp4",
   },
   {
-    icon: "⌨️",
-    name: "Keyboard Remap",
-    description:
-      "Mac or Linux shortcuts? Change all shortcuts from Mac to Linux and vice versa.",
-  },
-  {
-    icon: "🪟",
-    name: "Window Mode",
-    description:
+    id: "window-mode",
+    title: "Window Mode",
+    subtitle:
       "Full screen on new workspace. Full macOS tiling, floating, and split-view window management.",
+    video: "./videos/window-mode.mp4",
   },
   {
-    icon: "🎨",
-    name: "Live Wallpapers",
-    description:
-      "Animated wallpapers on the Desktop and SDDM that respond to system state.",
+    id: "remap-wallpaper",
+    title: "Remap & Live Wallpapers",
+    subtitle:
+      "Switch between Mac or Linux shortcuts in one click, and enjoy animated wallpapers on the Desktop and SDDM.",
+    video: "./videos/remap-live-wallpaper.mp4",
   },
 ];

@@ -11,7 +11,10 @@ pub fn is_live_system() -> bool {
         }
     }
     if let Ok(cmdline) = std::fs::read_to_string("/proc/cmdline") {
-        if cmdline.contains("boot=live") || cmdline.contains("rootfstype=9p") {
+        if cmdline.contains("boot=live")
+            || cmdline.contains("archisobasedir=live")
+            || cmdline.contains("rootfstype=9p")
+        {
             return true;
         }
     }
@@ -40,6 +43,12 @@ pub fn is_arch_system() -> bool {
 pub fn sentinel_path() -> String {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/root".into());
     format!("{}/.config/pulsaros-welcome.done", home)
+}
+
+pub const OOTB_SENTINEL: &str = "/etc/pulsar-need-setup";
+
+pub fn is_ootb_pending() -> bool {
+    Path::new(OOTB_SENTINEL).exists()
 }
 
 pub fn check_sentinel() -> bool {

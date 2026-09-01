@@ -2,5 +2,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    pulsaros_welcome_lib::run()
+    #[cfg(target_os = "linux")]
+    {
+        // Fix WebKitGTK transparent window black background bug on Linux (DMABUF renderer)
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+
+    pulsaros_welcome_lib::run();
 }

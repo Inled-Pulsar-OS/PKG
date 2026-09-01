@@ -7,6 +7,7 @@ import tailwindcss from "@tailwindcss/vite";
 const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig(async () => ({
+  base: "./",
   plugins: [react(), tailwindcss()],
 
   resolve: {

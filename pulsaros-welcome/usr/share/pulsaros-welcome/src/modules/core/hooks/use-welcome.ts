@@ -3,24 +3,14 @@ import type { WelcomeScreen, DataState } from "@/modules/core/types";
 import {
   isLiveSystem,
   isArchSystem,
+  isOotbPending,
   getResolutions,
   getEffectsState,
   setEffects as apiSetEffects,
+  launchOotb,
   writeSentinel,
+  closeWindow,
 } from "@/modules/core/api";
-
-const WELCOME_STEPS: WelcomeScreen[] = [
-  "hello",
-  "intro",
-  "resolution",
-  "wifi",
-  "bluetooth",
-  "software",
-  "effects",
-  "gpu",
-  "feedback",
-  "features",
-];
 
 export function useWelcome() {
   const [screen, setScreen] = useState<WelcomeScreen>("hello");
@@ -28,18 +18,21 @@ export function useWelcome() {
     effectsState,
     isArch,
     isLive,
+    ootbPending,
     resolutions
   }, setData] = useState<DataState>({
     isLive: false,
     isArch: false,
+    ootbPending: false,
     resolutions: [],
     effectsState: false,
   });
 
   const loadSystemInfo = useCallback(async () => {
-    const [live, arch, res, effects] = await Promise.all([
+    const [live, arch, ootb, res, effects] = await Promise.all([
       isLiveSystem(),
       isArchSystem(),
+      isOotbPending(),
       getResolutions(),
       getEffectsState(),
     ]);
@@ -47,22 +40,64 @@ export function useWelcome() {
       ...prev,
       isLive: live,
       isArch: arch,
+      ootbPending: ootb,
       resolutions: res,
       effectsState: effects
     }));
   }, []);
 
+  /**
+   * After the hello animation the user clicks Continue:
+   * - If the OOTB setup assistant is pending (first boot after install),
+   *   launch pulsaros-ootb and let it take over.
+   * - Otherwise proceed through the normal slideshow.
+   */
+  const proceedFromHello = useCallback(async () => {
+    if (ootbPending && !isLive) {
+      await launchOotb();
+      await closeWindow();
+      return;
+    }
+    setScreen("features");
+  }, [ootbPending, isLive]);
+
   const goNext = useCallback(() => {
     setScreen((prev) => {
-      const idx = WELCOME_STEPS.indexOf(prev);
-      return WELCOME_STEPS[Math.min(idx + 1, WELCOME_STEPS.length - 1)];
+      switch (prev) {
+        case "hello":
+          return "features";
+        case "features":
+          return "compatibility";
+        case "compatibility":
+          return "settings";
+        case "settings":
+          return "sayri";
+        case "sayri":
+          return isLive ? "recovery" : "done";
+        case "recovery":
+          return "done";
+        default:
+          return "done";
+      }
     });
-  }, []);
+  }, [isLive]);
 
   const goBack = useCallback(() => {
     setScreen((prev) => {
-      const idx = WELCOME_STEPS.indexOf(prev);
-      return WELCOME_STEPS[Math.max(idx - 1, 0)];
+      switch (prev) {
+        case "features":
+          return "hello";
+        case "compatibility":
+          return "features";
+        case "settings":
+          return "compatibility";
+        case "sayri":
+          return "settings";
+        case "recovery":
+          return "sayri";
+        default:
+          return "hello";
+      }
     });
   }, []);
 
@@ -78,17 +113,24 @@ export function useWelcome() {
     setScreen("done");
   }, []);
 
+  const restart = useCallback(() => {
+    setScreen("hello");
+  }, []);
+
   return {
     screen,
     isLive,
     isArch,
+    ootbPending,
     resolutions,
     effectsState,
     loadSystemInfo,
+    proceedFromHello,
     goNext,
     goBack,
     goTo,
     setEffects: setEffectsValue,
     complete,
+    restart,
   };
 }

@@ -1,4 +1,5 @@
 import { SUPPORTED } from "@/modules/hello/contants";
+import { HELLO_SVGS } from "@/modules/hello/svg-map";
 
 export function getLang(): string {
   const forced = new URLSearchParams(window.location.search).get("lang");
@@ -15,34 +16,38 @@ export function getLang(): string {
   return SUPPORTED.includes(code) ? code : "en";
 }
 
+function extractSvg(xml: string): { viewBox: string; body: string } | null {
+  const doc = new DOMParser().parseFromString(xml, "image/svg+xml");
+  const svg = doc.querySelector("svg");
+  if (!svg) return null;
+  return {
+    viewBox: svg.getAttribute("viewBox") || "0 0 820 320",
+    body: svg.innerHTML,
+  };
+}
 
-export async function loadAndAnimate(lang: string, container: HTMLDivElement | null) {
+export async function loadAndAnimate(
+  lang: string,
+  container: HTMLDivElement | null
+) {
   if (!container) return;
-  let svgEl: SVGSVGElement | null = null;
-  for (const candidate of [lang, "en"]) {
-    try {
-      const res = await fetch(`/hello/svg/hello-${candidate}.svg`);
-      console.log(`Fetching /hello/svg/hello-${candidate}.svg:`, res.status);
-      const text = await res.text();
-      const doc = new DOMParser().parseFromString(text, "image/svg+xml");
-      svgEl = doc.querySelector("svg");
-      if (svgEl) break;
-    } catch {
-      continue;
-    }
+  let xml = HELLO_SVGS[lang] || HELLO_SVGS["en"];
+  let parsed = extractSvg(xml);
+  if (!parsed) {
+    xml = HELLO_SVGS["en"];
+    parsed = extractSvg(xml);
   }
-  if (!svgEl) return;
+  if (!parsed) return;
 
-  const inner = svgEl.innerHTML;
+  const { viewBox, body } = parsed;
 
   container.innerHTML = `
-    <svg class="hello__svg" viewBox="${svgEl.getAttribute("viewBox") || "0 0 820 320"}">
-      ${inner}
+    <svg class="hello__svg" viewBox="${viewBox}" xmlns="http://www.w3.org/2000/svg">
+      ${body}
     </svg>
   `;
 
   const svg = container.querySelector("svg") as SVGSVGElement;
-
   const paths = svg.querySelectorAll("path");
   const totalDuration = 5000;
   let totalLength = 0;
@@ -56,21 +61,23 @@ export async function loadAndAnimate(lang: string, container: HTMLDivElement | n
     path.removeAttribute("stroke-miterlimit");
     path.removeAttribute("fill");
 
-    path.style.stroke = "black";
+    path.style.stroke = "white";
     path.style.fill = "none";
     path.style.strokeWidth = "32px";
 
     const len = path.getTotalLength();
-    const duration = (len / totalLength) * totalDuration;
+    const duration = len > 0 ? (len / totalLength) * totalDuration : 100;
 
     path.style.strokeDasharray = String(len);
     path.style.strokeDashoffset = String(len);
-    path.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }], {
-      duration,
-      delay: currentTime,
-      fill: "forwards",
-      easing: "linear",
-    });
-    currentTime += duration;
+    if (len > 0) {
+      path.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }], {
+        duration,
+        delay: currentTime,
+        fill: "forwards",
+        easing: "linear",
+      });
+      currentTime += duration;
+    }
   });
 }
