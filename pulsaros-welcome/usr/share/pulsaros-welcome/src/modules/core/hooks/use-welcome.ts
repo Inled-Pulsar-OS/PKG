@@ -12,8 +12,17 @@ import {
   closeWindow,
 } from "@/modules/core/api";
 
+const BASE_FLOW: WelcomeScreen[] = [
+  "hello",
+  "features",
+  "compatibility",
+  "settings",
+  "wifi",
+  "sayri",
+];
+
 export function useWelcome() {
-  const [screen, setScreen] = useState<WelcomeScreen>("hello");
+  const [screen, setScreen] = useState<WelcomeScreen>("wifi");
   const [{
     effectsState,
     isArch,
@@ -46,12 +55,6 @@ export function useWelcome() {
     }));
   }, []);
 
-  /**
-   * After the hello animation the user clicks Continue:
-   * - If the OOTB setup assistant is pending (first boot after install),
-   *   launch pulsaros-ootb and let it take over.
-   * - Otherwise proceed through the normal slideshow.
-   */
   const proceedFromHello = useCallback(async () => {
     if (ootbPending && !isLive) {
       await launchOotb();
@@ -63,41 +66,20 @@ export function useWelcome() {
 
   const goNext = useCallback(() => {
     setScreen((prev) => {
-      switch (prev) {
-        case "hello":
-          return "features";
-        case "features":
-          return "compatibility";
-        case "compatibility":
-          return "settings";
-        case "settings":
-          return "sayri";
-        case "sayri":
-          return isLive ? "recovery" : "done";
-        case "recovery":
-          return "done";
-        default:
-          return "done";
+      const idx = BASE_FLOW.indexOf(prev);
+      if (idx !== -1 && idx < BASE_FLOW.length - 1) {
+        return BASE_FLOW[idx + 1];
       }
+      if (prev === "sayri") return isLive ? "recovery" : "done";
+      return prev;
     });
   }, [isLive]);
 
   const goBack = useCallback(() => {
     setScreen((prev) => {
-      switch (prev) {
-        case "features":
-          return "hello";
-        case "compatibility":
-          return "features";
-        case "settings":
-          return "compatibility";
-        case "sayri":
-          return "settings";
-        case "recovery":
-          return "sayri";
-        default:
-          return "hello";
-      }
+      const idx = BASE_FLOW.indexOf(prev);
+      if (idx > 0) return BASE_FLOW[idx - 1];
+      return prev;
     });
   }, []);
 

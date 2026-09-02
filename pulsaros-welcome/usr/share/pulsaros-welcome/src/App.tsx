@@ -7,6 +7,7 @@ import { SettingsPage } from "@/modules/settings";
 import { SayriPage } from "@/modules/sayri";
 import { RecoveryPage } from "@/modules/recovery";
 import { DonePage } from "@/modules/done";
+import { WifiPage } from "@/modules/wifi";
 
 function WelcomeApp() {
   const {
@@ -34,6 +35,8 @@ function WelcomeApp() {
       return <SayriPage onContinue={goNext} onBack={goBack} />;
     case "recovery":
       return <RecoveryPage onContinue={goNext} onBack={goBack} />;
+    case "wifi":
+      return <WifiPage onContinue={goNext} onBack={goBack} />;
     case "done":
       return <DonePage />;
   }

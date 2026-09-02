@@ -72,6 +72,8 @@ pub fn run() {
             commands::software::launch_display_settings,
             commands::software::launch_appearance_settings,
             commands::wifi::launch_wifi_settings,
+            commands::wifi::scan_wifi_networks,
+            commands::wifi::connect_to_wifi,
             commands::bluetooth::launch_bluetooth_settings,
             commands::effects::get_effects_state,
             commands::effects::set_effects,
