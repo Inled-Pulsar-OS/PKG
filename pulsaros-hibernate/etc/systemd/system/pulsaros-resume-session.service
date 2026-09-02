@@ -1,22 +1,11 @@
 [Unit]
-Description=Pulsar OS - Restore off-screen graphical session after hibernate resume
-# Runs on every boot, but only acts if there is a graphical session on a VT
-# that differs from the currently active VT. This is only true after a hibernate
-# resume (where the restored GNOME session is on VT2 but Plymouth left the
-# display on VT1). On normal boots there are no pre-existing sessions so the
-# script exits immediately without doing anything.
-After=display-manager.service
-Wants=display-manager.service
+Description=Pulsar OS - Restore graphical session after hibernate resume
+After=systemd-hibernate.service systemd-suspend-then-hibernate.service
+DefaultDependencies=no
 
 [Service]
 Type=oneshot
-RemainAfterExit=no
-# Wait for the display manager to finish starting up
-ExecStartPre=/bin/sleep 3
 ExecStart=/usr/lib/pulsaros/resume-session
 StandardOutput=journal
 StandardError=journal
 User=root
-
-[Install]
-WantedBy=graphical.target

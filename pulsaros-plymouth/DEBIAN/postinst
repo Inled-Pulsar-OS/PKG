@@ -18,7 +18,7 @@ plymouth-set-default-theme -R pulsar-plymouth || plymouth-set-default-theme puls
 
 # Configurar GRUB para que use splash y sea silencioso
 if [ -f "/etc/default/grub" ]; then
-    sed -i "s/GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet splash plymouth.use-simpledrm=1\"/" /etc/default/grub
+    sed -i "s/GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet splash plymouth.use-simpledrm=0\"/" /etc/default/grub
 fi
 
 # Configurar KMS (Kernel Mode Setting) para Plymouth en initramfs

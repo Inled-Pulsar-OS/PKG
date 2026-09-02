@@ -1,75 +1,89 @@
 #!/bin/bash
 # ==============================================================================
-# Pulsar OS - Post-Hibernate Display Restoration
+# Pulsar OS - Post-Hibernate Display & Session Restoration
+#
+# Called after the kernel restores memory and thaws userspace processes.
 #
 # ROOT CAUSE of the "Booting OS..." freeze:
-# - Plymouth runs on VT1. On hibernate resume (HibernateMode=shutdown),
-#   the restored GNOME session is still on VT2 (where it was before hibernate).
-# - When Plymouth quits, the display stays on VT1 (which shows the EFI/rEFInd
-#   framebuffer = "Booting OS..."). Nobody switches to VT2.
-# - On normal boot this doesn't happen because SDDM starts on VT1 directly.
+# 1. During resume, the firmware and rEFInd paint "Booting OS..." in the EFI framebuffer.
+# 2. Early-boot initramfs starts Plymouth which binds to the DRM device.
+# 3. Kernel restores RAM and thaws Mutter / GNOME Shell.
+# 4. Mutter is unaware the GPU was reset and does not initiate a modeset.
+# 5. Display hardware continues scanning out stale UEFI/rEFInd pixels.
 #
-# FIX: After the display manager is up, if a Wayland/X11 session exists on a
-# VT that is NOT the currently active VT, switch to it.
-# On a normal boot there are no pre-existing sessions → this script does nothing.
-# On hibernate resume the restored session is on a different VT → we switch to it.
+# FIX:
+# 1. Terminate early-boot Plymouth.
+# 2. Mandatory VT toggle (chvt OTHER -> chvt TARGET): forces Mutter to release
+#    and re-acquire DRM master, reinitializing CRTC scanout buffers.
+# 3. Reactivate logind session and fire DRM change udev event.
 # ==============================================================================
 set -u
 
 log() { echo "[pulsaros-resume] $*" | tee /dev/kmsg 2>/dev/null || echo "[pulsaros-resume] $*" >&2; }
 
-log "=== Checking for off-screen graphical sessions ==="
+log "=== Post-hibernate restoration starting ==="
 
-# Current active VT
-ACTIVE_VT=$(cat /sys/class/tty/tty0/active 2>/dev/null | tr -d 'tty' || echo "1")
-log "Active VT: $ACTIVE_VT"
+# 1. Terminate early-boot Plymouth from initramfs
+if command -v plymouth >/dev/null 2>&1; then
+    plymouth --quit 2>/dev/null || true
+fi
+pkill -9 plymouthd 2>/dev/null || true
 
-FOUND_SESSION=""
-SESSION_VT=""
+# 2. Find the graphical session and its VT
+TARGET_VT=""
+TARGET_SESSION=""
 
 for s in $(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}'); do
     STYPE=$(loginctl show-session "$s" -p Type --value 2>/dev/null || true)
     if [ "$STYPE" = "wayland" ] || [ "$STYPE" = "x11" ]; then
+        TARGET_SESSION="$s"
         S_VT=$(loginctl show-session "$s" -p VTNr --value 2>/dev/null || true)
-        log "Found graphical session $s type=$STYPE VT=$S_VT"
-        if [ -n "$S_VT" ] && [ "$S_VT" != "0" ] && [ "$S_VT" != "$ACTIVE_VT" ]; then
-            FOUND_SESSION="$s"
-            SESSION_VT="$S_VT"
+        if [ -n "$S_VT" ] && [ "$S_VT" != "0" ]; then
+            TARGET_VT="$S_VT"
+            log "Found graphical session $s on VT$TARGET_VT (type=$STYPE)"
             break
         fi
     fi
 done
 
-if [ -z "$FOUND_SESSION" ]; then
-    log "No off-screen graphical session found — nothing to do (normal boot or already on correct VT)."
-    exit 0
+# Fallback VT if session query returned empty
+if [ -z "$TARGET_VT" ] || [ "$TARGET_VT" = "0" ]; then
+    ACTIVE_VT=$(cat /sys/class/tty/tty0/active 2>/dev/null | tr -d 'tty' || echo "2")
+    TARGET_VT="${ACTIVE_VT:-2}"
+    log "Fallback to VT$TARGET_VT"
 fi
 
-log "Session $FOUND_SESSION is on VT$SESSION_VT but display is on VT$ACTIVE_VT — switching..."
-
-# 1. Force Plymouth to quit and release DRM master
-if pgrep -x plymouthd >/dev/null 2>&1; then
-    log "Restarting plymouth-quit.service to release DRM master..."
-    systemctl restart plymouth-quit.service 2>/dev/null || {
-        plymouth --quit 2>/dev/null || true
-        pkill -TERM plymouthd 2>/dev/null || true
-        sleep 0.3
-        pkill -KILL plymouthd 2>/dev/null || true
-    }
-    sleep 0.3
+# 3. Mandatory VT Toggle:
+# Switching away and back forces Mutter/Wayland to drop DRM master and re-acquire it,
+# which rebinds CRTCs, planes, and repaints desktop framebuffers onto hardware scanout.
+if [ "$TARGET_VT" = "1" ]; then
+    OTHER_VT="2"
+else
+    OTHER_VT="1"
 fi
 
-# 2. Switch to the VT of the restored GNOME session
-log "chvt $SESSION_VT"
-chvt "$SESSION_VT" 2>/dev/null || true
+log "Performing DRM master recovery VT toggle (chvt $OTHER_VT -> 200ms -> chvt $TARGET_VT)..."
+if command -v chvt >/dev/null 2>&1; then
+    chvt "$OTHER_VT" 2>/dev/null || true
+    sleep 0.2
+    chvt "$TARGET_VT" 2>/dev/null || true
+fi
 
-# 3. Reactivate the logind session
-log "loginctl activate-session $FOUND_SESSION"
-loginctl activate-session "$FOUND_SESSION" 2>/dev/null || true
+# 4. Reactivate the logind session
+if [ -n "$TARGET_SESSION" ] && command -v loginctl >/dev/null 2>&1; then
+    log "Reactivating session $TARGET_SESSION..."
+    loginctl activate-session "$TARGET_SESSION" 2>/dev/null || true
+fi
 
-# 4. Trigger DRM udev event to help Mutter repaint
-log "udevadm trigger drm"
-udevadm trigger --subsystem-match=drm --action=change 2>/dev/null || true
+# 5. Trigger DRM subsystem udev event so Mutter forces a full frame repaint
+log "Triggering DRM udev change event..."
+if command -v udevadm >/dev/null 2>&1; then
+    udevadm trigger --subsystem-match=drm --action=change 2>/dev/null || true
+fi
 
-log "=== Done ==="
+# 6. Cleanup temporary sleep drop-ins and restore kernel printk level
+rm -f /run/systemd/sleep.conf.d/*pulsar*.conf 2>/dev/null || true
+echo "4 4 1 7" > /proc/sys/kernel/printk 2>/dev/null || true
+
+log "=== Post-hibernate restoration completed ==="
 exit 0
