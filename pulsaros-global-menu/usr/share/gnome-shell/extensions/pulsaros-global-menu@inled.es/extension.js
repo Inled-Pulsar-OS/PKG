@@ -1641,10 +1641,15 @@ class MacOSFullscreenManager {
     }
 
     _isSpaceWorkspace(ws) {
-        if (!ws) return false;
+        if (!this._enabled || !ws) return false;
+        if (this._spaceWindows.size === 0) return false;
+
         for (let [win] of this._spaceWindows) {
             try {
-                if (!win.unmanaged && win.get_workspace() === ws) return true;
+                if (win && !win.unmanaged && !win.minimized && win.get_workspace() === ws) {
+                    let isMax = (win.maximized_horizontally && win.maximized_vertically) || (win.is_fullscreen && win.is_fullscreen());
+                    if (isMax) return true;
+                }
             } catch (_) {}
         }
         return false;
@@ -1701,7 +1706,9 @@ class MacOSFullscreenManager {
         let sigs = [
             win.connect('notify::maximized-horizontally', () => this._onMaximizeChanged(win)),
             win.connect('notify::maximized-vertically',   () => this._onMaximizeChanged(win)),
-            win.connect('unmanaged', () => this._untrackWindow(win)),
+            win.connect('notify::minimized',              () => this._syncPanelForCurrentWorkspace()),
+            win.connect('workspace-changed',              () => this._syncPanelForCurrentWorkspace()),
+            win.connect('unmanaged',                      () => this._untrackWindow(win)),
         ];
         this._windowSignals.set(id, { win, sigs });
     }
@@ -1734,10 +1741,11 @@ class MacOSFullscreenManager {
             } finally {
                 win._pulsarLock = false;
             }
-            // syncPanel is triggered by workspace-changed signal
+            this._syncPanelForCurrentWorkspace();
 
         } else if (!isMax && isTracked) {
             this._restoreWindow(win);
+            this._syncPanelForCurrentWorkspace();
         }
     }
 
@@ -1764,8 +1772,8 @@ class MacOSFullscreenManager {
             console.error('[MacOSFullscreen] restore window:', e);
         } finally {
             win._pulsarLock = false;
+            this._syncPanelForCurrentWorkspace();
         }
-        // syncPanel is triggered by workspace-changed signal
     }
 
     // ─── Struts ────────────────────────────────────────────────────────────────
@@ -1936,7 +1944,13 @@ class MacOSFullscreenManager {
 
     _onPointerMoved(x, y) {
         if (!this._enabled) return;
-        if (!this._isCurrentWorkspaceFullscreenSpace()) return;
+        if (!this._isCurrentWorkspaceFullscreenSpace()) {
+            if (!this._panelVisible || (Main.layoutManager.panelBox && Main.layoutManager.panelBox.y !== 0)) {
+                this._setPanelStruts(true);
+                this._showPanel(false);
+            }
+            return;
+        }
 
         let panelH = (Main.panel.height || 36) + 16;
 
@@ -1976,6 +1990,7 @@ class MacOSFullscreenManager {
             this._windowSignals.delete(id);
         }
         this._spaceWindows.delete(win);
+        this._syncPanelForCurrentWorkspace();
     }
 
     destroy() {
