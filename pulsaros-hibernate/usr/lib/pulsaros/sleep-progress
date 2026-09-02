@@ -1,12 +1,14 @@
 #!/bin/bash
 # ==============================================================================
-# Pulsar OS - Hibernate Pre-Sleep Cleanup & Post-Resume Session Restoration
+# Pulsar OS - Hibernate Pre-Sleep Cleanup
+# Simple handler: sync, drop caches, show Plymouth message.
+# Post-resume session restoration is done by pulsaros-resume-session.service.
 # ==============================================================================
 set -u
 
 ACTION="${1:-}"
 
-# Map system-sleep verbs (pre/post) to internal verbs (start/end)
+# Map system-sleep verbs to internal verbs
 case "$ACTION" in
     pre)  ACTION="start" ;;
     post) ACTION="end"   ;;
@@ -14,26 +16,16 @@ esac
 
 case "$ACTION" in
     start)
-        # Pre-sleep: sync and show message only. Do NOT touch framebuffer or tty
-        # here — blanking them before the kernel writes the hibernation image
-        # would capture the blank framebuffer instead of the desktop, meaning
-        # on resume the display stays black.
         sync
-
-        # If Plymouth is running, show a message (non-critical)
+        echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
         if command -v plymouth >/dev/null 2>&1 && plymouth --ping 2>/dev/null; then
-            plymouth message --text="Guardando la sesión en disco…" 2>/dev/null || true
+            plymouth message --text="Guardando sesión en disco…" 2>/dev/null || true
         fi
         ;;
-
     end)
-        # Post-resume: restore default quiet kernel printk loglevel
         echo "4 4 1 7" > /proc/sys/kernel/printk 2>/dev/null || true
-
-        # Clean up temporary sleep drop-ins and state files
         rm -f /run/systemd/sleep.conf.d/*pulsar*.conf 2>/dev/null || true
         ;;
-
     *)
         echo "Usage: $0 {start|end|pre|post}" >&2
         exit 1
