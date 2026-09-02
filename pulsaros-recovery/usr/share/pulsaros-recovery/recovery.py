@@ -3905,10 +3905,19 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
                 if os.path.exists(mkinit_path):
                     with open(mkinit_path, "r") as f:
                         mk_content = f.read()
-                    if "btrfs" not in mk_content and "HOOKS=" in mk_content:
-                        mk_content = re.sub(r'HOOKS=\((.*?)\)', r'HOOKS=(\1 btrfs)', mk_content)
-                        with open(mkinit_path, "w") as f:
-                            f.write(mk_content)
+                    # CRITICAL: With the systemd hook, systemd-hibernate-resume handles
+                    # resume from hibernation natively. The legacy busybox 'resume' hook
+                    # MUST NOT coexist with 'systemd' or the kernel will hang after
+                    # Plymouth splash on every resume attempt. Hard-write the canonical
+                    # HOOKS line to eliminate any inherited stale state.
+                    canonical_hooks = (
+                        "HOOKS=(base systemd autodetect microcode modconf kms "
+                        "keyboard sd-vconsole plymouth block filesystems fsck btrfs)"
+                    )
+                    mk_content = re.sub(r'^HOOKS=\(.*?\)', canonical_hooks, mk_content, flags=re.MULTILINE)
+                    with open(mkinit_path, "w") as f:
+                        f.write(mk_content)
+                    log_msg(f"✅ mkinitcpio HOOKS establecidos: {canonical_hooks}")
 
                 preserve_live_initramfs_for_recovery()
 
