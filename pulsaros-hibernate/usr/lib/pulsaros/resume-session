@@ -1,0 +1,48 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Post-Hibernate Session Restoration
+# Runs as root via systemd after hibernate resume is complete.
+# ==============================================================================
+set -u
+
+# 1. Kill any lingering Plymouth daemon from the early-boot initramfs that may
+#    be holding the DRM master device, blocking GNOME Shell from repainting.
+if command -v plymouth >/dev/null 2>&1; then
+    plymouth --quit 2>/dev/null || true
+fi
+# Belt-and-suspenders: kill plymouthd directly in case --quit didn't work
+pkill -9 plymouthd 2>/dev/null || true
+
+# Give the kernel a moment to release DRM master after Plymouth exits
+sleep 0.5
+
+# 2. Find the active Wayland/X11 session and its VT
+SAVED_VT="2"
+SAVED_SESSION=""
+
+for s in $(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}'); do
+    STYPE=$(loginctl show-session "$s" -p Type --value 2>/dev/null || true)
+    if [ "$STYPE" = "wayland" ] || [ "$STYPE" = "x11" ]; then
+        SAVED_SESSION="$s"
+        S_VT=$(loginctl show-session "$s" -p VTNr --value 2>/dev/null || true)
+        [ -n "$S_VT" ] && [ "$S_VT" != "0" ] && SAVED_VT="$S_VT"
+        break
+    fi
+done
+
+# 3. Switch VT back to the graphical session
+if command -v chvt >/dev/null 2>&1; then
+    chvt "$SAVED_VT" 2>/dev/null || true
+fi
+
+# 4. Reactivate the logind session so GNOME Shell gets input and DRM focus back
+if [ -n "$SAVED_SESSION" ] && command -v loginctl >/dev/null 2>&1; then
+    loginctl activate-session "$SAVED_SESSION" 2>/dev/null || true
+fi
+
+# 5. Trigger a DRM subsystem udev event so Mutter forces a full repaint
+if command -v udevadm >/dev/null 2>&1; then
+    udevadm trigger --subsystem-match=drm --action=change 2>/dev/null || true
+fi
+
+exit 0

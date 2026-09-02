@@ -1,6 +1,9 @@
 post_install() {
+    chmod +x /usr/lib/pulsaros/sleep-progress /usr/lib/pulsaros/resume-session \
+              /usr/lib/systemd/system-sleep/pulsaros-hibernate.sh 2>/dev/null || true
     systemctl daemon-reload 2>/dev/null || true
     systemctl enable pulsaros-verify-resume-offset.service 2>/dev/null || true
+    systemctl enable pulsaros-resume-session.service 2>/dev/null || true
 }
 
 post_remove() {

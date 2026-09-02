@@ -1,0 +1,18 @@
+[Unit]
+Description=Pulsar OS - Restore graphical session after hibernate resume
+# Run after the kernel has fully restored userspace from the hibernation image
+After=systemd-hibernate-resume.service graphical.target plymouth-quit.service
+Requires=graphical.target
+ConditionPathExists=/sys/power/resume
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+# Give userspace a moment to settle before reactivating session
+ExecStartPre=/bin/sleep 1
+ExecStart=/usr/lib/pulsaros/resume-session
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target
