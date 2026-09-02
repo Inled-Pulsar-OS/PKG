@@ -54,6 +54,11 @@ if [ "$RESTORE" = "restore" ]; then
 
     sync
 
+    # Preparar pantalla, limpiar consola tty1 y registrar sesión gráfica para reanudación
+    if [ -x /usr/lib/pulsaros/sleep-progress ]; then
+        /usr/lib/pulsaros/sleep-progress start 2>/dev/null || true
+    fi
+
     # Ejecutar hibernación gestionada por systemd
     # systemctl hibernate se encarga del ciclo completo:
     # 1. Notificar a las aplicaciones y congelar procesos
