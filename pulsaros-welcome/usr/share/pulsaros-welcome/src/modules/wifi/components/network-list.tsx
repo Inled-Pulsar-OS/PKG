@@ -20,7 +20,7 @@ export function WifiNetworkList({
       key={network.ssid}
       onClick={() => handleSelect(network.ssid)}
       className={cn(
-        "cursor-pointer flex w-65 items-center gap-3 px-4 py-3 text-left transition-colors",
+        "cursor-pointer flex w-full items-center gap-3 px-4 py-3 text-left transition-colors",
         networkSelected === network.ssid
           ? "bg-accent/10"
           : "hover:bg-accent/10",

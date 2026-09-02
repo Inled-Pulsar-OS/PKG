@@ -78,7 +78,7 @@ export function WifiPage({ onContinue, onBack }: WifiPageProps) {
         </div>
       }
     >
-      <div className="flex w-full gap-4">
+      <div className="flex items-center w-full gap-4">
         {loading && (
           <div className="flex-1 overflow-hidden rounded-xl border border-border bg-white/5">
             <WifiLoading />
@@ -89,12 +89,13 @@ export function WifiPage({ onContinue, onBack }: WifiPageProps) {
           className={cn(
             "flex flex-col items-center gap-2",
             !loading && !networks.length && "w-full",
+            !form.selected && networks.length > 0 && "w-full",
           )}
         >
           <div className="overflow-hidden rounded-xl border border-border bg-white/5 w-full">
             {!networks.length && !loading && <WifiNotNetwork scan={scan} />}
             {networks.length > 0 && !loading && (
-              <div className="max-h-100 overflow-y-auto">
+              <div className="max-h-100 overflow-y-auto w-full">
                 {networks.map((n) => (
                   <WifiNetworkList
                     key={n.ssid}
