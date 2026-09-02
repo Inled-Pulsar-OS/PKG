@@ -7,11 +7,13 @@ pub struct WifiNetwork {
     pub ssid: String,
     pub signal: u8,
     pub security: String,
+    pub band: String,
+    pub rate: String,
 }
 
 pub fn scan_networks() -> Vec<WifiNetwork> {
     let output = match Command::new("nmcli")
-        .args(["-t", "-f", "SSID,SIGNAL,SECURITY", "dev", "wifi", "list"])
+        .args(["-t", "-f", "SSID,SIGNAL,SECURITY,BAND,RATE", "dev", "wifi", "list"])
         .output()
     {
         Ok(o) => o,
@@ -26,7 +28,7 @@ pub fn scan_networks() -> Vec<WifiNetwork> {
     let mut seen: HashMap<String, WifiNetwork> = HashMap::new();
 
     for line in stdout.lines() {
-        let parts: Vec<&str> = line.splitn(3, ':').collect();
+        let parts: Vec<&str> = line.splitn(5, ':').collect();
         if parts.len() < 2 {
             continue;
         }
@@ -42,6 +44,16 @@ pub fn scan_networks() -> Vec<WifiNetwork> {
         } else {
             String::new()
         };
+        let band = if parts.len() > 3 {
+            parts[3].trim().to_string()
+        } else {
+            String::new()
+        };
+        let rate = if parts.len() > 4 {
+            parts[4].trim().to_string()
+        } else {
+            String::new()
+        };
 
         // Keep the entry with the strongest signal per SSID
         match seen.get(&ssid) {
@@ -53,6 +65,8 @@ pub fn scan_networks() -> Vec<WifiNetwork> {
                         ssid,
                         signal,
                         security,
+                        band,
+                        rate,
                     },
                 );
             }

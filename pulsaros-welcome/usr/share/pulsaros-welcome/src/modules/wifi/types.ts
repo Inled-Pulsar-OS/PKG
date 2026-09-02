@@ -2,6 +2,8 @@ export interface WifiNetwork {
     ssid: string;
     signal: number;
     security: string;
+    band: string;
+    rate: string;
 }
 
 export interface ConnectForm {
