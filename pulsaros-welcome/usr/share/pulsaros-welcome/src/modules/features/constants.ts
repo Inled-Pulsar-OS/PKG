@@ -1,15 +1,6 @@
-export interface ProviderLog {
-  name: string;
-  src: string;
-}
+import { FeatureSlide } from "./types";
 
-export interface FeatureSlide {
-  id: string;
-  title: string;
-  subtitle: string;
-  video?: string;
-  providers?: ProviderLog[];
-}
+export const SLIDE_MS = 10000;
 
 export const FEATURE_SLIDES: FeatureSlide[] = [
   {
