@@ -3,10 +3,10 @@ post_install() {
               /usr/lib/systemd/system-sleep/pulsaros-hibernate.sh 2>/dev/null || true
     systemctl daemon-reload 2>/dev/null || true
     systemctl enable pulsaros-verify-resume-offset.service 2>/dev/null || true
-    # pulsaros-resume-session.service is activated by the drop-in of
-    # systemd-hibernate-clear.service — no explicit enable needed.
+    systemctl enable pulsaros-resume-session.service 2>/dev/null || true
 }
 
 post_remove() {
+    systemctl disable pulsaros-resume-session.service 2>/dev/null || true
     systemctl daemon-reload 2>/dev/null || true
 }

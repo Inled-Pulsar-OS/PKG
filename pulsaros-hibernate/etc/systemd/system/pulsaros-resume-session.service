@@ -1,21 +1,22 @@
 [Unit]
-Description=Pulsar OS - Restore graphical session after hibernate resume
-# Triggered by systemd-hibernate-clear.service.d/pulsaros-resume-session.conf
-# ONLY runs when the EFI HibernateLocation variable is present = genuine hibernate resume.
-# On normal boots this service never starts.
-#
-# ROOT CAUSE fixed: plymouth-quit.service has RemainAfterExit=yes so it never
-# re-runs after resume. This service restarts plymouth-quit.service to force
-# plymouthd to release DRM master, then reactivates the GNOME session.
-After=systemd-hibernate-clear.service display-manager.service multi-user.target
-DefaultDependencies=no
+Description=Pulsar OS - Restore off-screen graphical session after hibernate resume
+# Runs on every boot, but only acts if there is a graphical session on a VT
+# that differs from the currently active VT. This is only true after a hibernate
+# resume (where the restored GNOME session is on VT2 but Plymouth left the
+# display on VT1). On normal boots there are no pre-existing sessions so the
+# script exits immediately without doing anything.
+After=display-manager.service
+Wants=display-manager.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=no
-# Wait 2s for display manager and SDDM to finish starting the restored session
-ExecStartPre=/bin/sleep 2
+# Wait for the display manager to finish starting up
+ExecStartPre=/bin/sleep 3
 ExecStart=/usr/lib/pulsaros/resume-session
 StandardOutput=journal
 StandardError=journal
 User=root
+
+[Install]
+WantedBy=graphical.target

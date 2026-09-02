@@ -1,73 +1,75 @@
 #!/bin/bash
 # ==============================================================================
-# Pulsar OS - Post-Hibernate Session Restoration
-# Runs as root via pulsaros-resume-session.service, triggered by
-# systemd-hibernate-clear.service (which only activates when the EFI
-# HibernateLocation variable exists = genuine hibernate resume).
+# Pulsar OS - Post-Hibernate Display Restoration
 #
-# ROOT CAUSE:
-# On hibernate resume with HibernateMode=shutdown, the system boots fresh.
-# The initramfs systemd activates plymouth-start.service (plymouthd --mode=boot)
-# which grabs DRM master. After switch_root, plymouth-quit.service has
-# RemainAfterExit=yes so systemd considers it "already done" — it does NOT
-# re-run "plymouth quit". plymouthd stays alive holding DRM master.
-# GNOME Shell cannot acquire DRM → display freezes on "Booting OS..." screen.
+# ROOT CAUSE of the "Booting OS..." freeze:
+# - Plymouth runs on VT1. On hibernate resume (HibernateMode=shutdown),
+#   the restored GNOME session is still on VT2 (where it was before hibernate).
+# - When Plymouth quits, the display stays on VT1 (which shows the EFI/rEFInd
+#   framebuffer = "Booting OS..."). Nobody switches to VT2.
+# - On normal boot this doesn't happen because SDDM starts on VT1 directly.
 #
-# FIX: Force plymouth-quit.service to restart, killing plymouthd and releasing
-# DRM master, then reactivate the GNOME logind session.
+# FIX: After the display manager is up, if a Wayland/X11 session exists on a
+# VT that is NOT the currently active VT, switch to it.
+# On a normal boot there are no pre-existing sessions → this script does nothing.
+# On hibernate resume the restored session is on a different VT → we switch to it.
 # ==============================================================================
 set -u
 
 log() { echo "[pulsaros-resume] $*" | tee /dev/kmsg 2>/dev/null || echo "[pulsaros-resume] $*" >&2; }
 
-log "=== Post-hibernate session restoration starting ==="
+log "=== Checking for off-screen graphical sessions ==="
 
-# 1. Force plymouth-quit.service to re-run, releasing DRM master.
-#    'systemctl restart' works even with RemainAfterExit=yes.
-log "Restarting plymouth-quit.service to release DRM master..."
-systemctl restart plymouth-quit.service 2>/dev/null || {
-    log "systemctl restart failed, trying direct kill..."
-    plymouth --quit 2>/dev/null || true
-    pkill -TERM plymouthd 2>/dev/null || true
-    sleep 0.3
-    pkill -KILL plymouthd 2>/dev/null || true
-}
+# Current active VT
+ACTIVE_VT=$(cat /sys/class/tty/tty0/active 2>/dev/null | tr -d 'tty' || echo "1")
+log "Active VT: $ACTIVE_VT"
 
-# 2. Small delay to let the kernel reclaim DRM master
-sleep 0.5
-
-# 3. Find the active Wayland/X11 logind session and its VT
-SAVED_VT="2"
-SAVED_SESSION=""
+FOUND_SESSION=""
+SESSION_VT=""
 
 for s in $(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}'); do
     STYPE=$(loginctl show-session "$s" -p Type --value 2>/dev/null || true)
     if [ "$STYPE" = "wayland" ] || [ "$STYPE" = "x11" ]; then
-        SAVED_SESSION="$s"
         S_VT=$(loginctl show-session "$s" -p VTNr --value 2>/dev/null || true)
-        [ -n "$S_VT" ] && [ "$S_VT" != "0" ] && SAVED_VT="$S_VT"
-        log "Found graphical session $s on VT$SAVED_VT (type=$STYPE)"
-        break
+        log "Found graphical session $s type=$STYPE VT=$S_VT"
+        if [ -n "$S_VT" ] && [ "$S_VT" != "0" ] && [ "$S_VT" != "$ACTIVE_VT" ]; then
+            FOUND_SESSION="$s"
+            SESSION_VT="$S_VT"
+            break
+        fi
     fi
 done
 
-if [ -z "$SAVED_SESSION" ]; then
-    log "No graphical session found — GNOME may not be started yet, skipping session activation."
+if [ -z "$FOUND_SESSION" ]; then
+    log "No off-screen graphical session found — nothing to do (normal boot or already on correct VT)."
+    exit 0
 fi
 
-# 4. Switch back to the graphical VT
-log "Switching to VT$SAVED_VT..."
-chvt "$SAVED_VT" 2>/dev/null || true
+log "Session $FOUND_SESSION is on VT$SESSION_VT but display is on VT$ACTIVE_VT — switching..."
 
-# 5. Reactivate the logind session so GNOME gets input/DRM focus
-if [ -n "$SAVED_SESSION" ]; then
-    log "Activating session $SAVED_SESSION..."
-    loginctl activate-session "$SAVED_SESSION" 2>/dev/null || true
+# 1. Force Plymouth to quit and release DRM master
+if pgrep -x plymouthd >/dev/null 2>&1; then
+    log "Restarting plymouth-quit.service to release DRM master..."
+    systemctl restart plymouth-quit.service 2>/dev/null || {
+        plymouth --quit 2>/dev/null || true
+        pkill -TERM plymouthd 2>/dev/null || true
+        sleep 0.3
+        pkill -KILL plymouthd 2>/dev/null || true
+    }
+    sleep 0.3
 fi
 
-# 6. Trigger DRM udev event to force Mutter to repaint
-log "Triggering DRM udev change event..."
+# 2. Switch to the VT of the restored GNOME session
+log "chvt $SESSION_VT"
+chvt "$SESSION_VT" 2>/dev/null || true
+
+# 3. Reactivate the logind session
+log "loginctl activate-session $FOUND_SESSION"
+loginctl activate-session "$FOUND_SESSION" 2>/dev/null || true
+
+# 4. Trigger DRM udev event to help Mutter repaint
+log "udevadm trigger drm"
 udevadm trigger --subsystem-match=drm --action=change 2>/dev/null || true
 
-log "=== Resume session restoration complete ==="
+log "=== Done ==="
 exit 0
