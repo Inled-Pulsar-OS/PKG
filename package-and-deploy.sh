@@ -96,6 +96,31 @@ if [ -z "$PACKAGE_NAME" ]; then
     exit 1
 fi
 
+# Stamp directory holding the last git HEAD that each package source was built
+# from, so incremental builds can detect changes committed inside nested git
+# subrepos (e.g. PKG/sayri) even when git operations preserve file mtimes.
+GIT_STAMP_DIR="$BUILD_DIR/.git-stamps"
+mkdir -p "$GIT_STAMP_DIR" 2>/dev/null || true
+
+# If $dir is inside a git work tree return the current HEAD commit hash
+# (covering nested git repos and git submodules alike).
+git_source_commit() {
+    local dir="$1"
+    local repo_head
+    repo_head=$(git -C "$dir" rev-parse HEAD 2>/dev/null) || return 1
+    echo "$repo_head"
+    return 0
+}
+
+# Record the git HEAD the package was built from.
+stamp_git_commit() {
+    local name="$1"
+    local src="$PKG_DIR/$name"
+    local commit
+    commit=$(git_source_commit "$src") || return 0
+    printf '%s\n' "$commit" > "$GIT_STAMP_DIR/$name" 2>/dev/null || true
+}
+
 is_deb_up_to_date() {
     local name="$1"
     local existing_deb=$(ls -t "$OUTPUT_DIR/${name}_"*.deb 2>/dev/null | head -n 1)
@@ -108,6 +133,17 @@ is_deb_up_to_date() {
 
     local newest_src=$(find "$pkg_src_dir" -type f -not -path "*/target/*" -not -path "*/.git/*" -printf '%T@\n' 2>/dev/null | sort -nr | head -n 1 | cut -d. -f1)
     [ -n "$newest_src" ] && [ "$newest_src" -gt "$deb_time" ] && return 1
+
+    # Detect changes inside nested git subrepos (e.g. sayri) by comparing the
+    # current HEAD commit to the commit this package was built from.
+    local current_commit built_commit
+    current_commit=$(git_source_commit "$pkg_src_dir")
+    if [ -n "$current_commit" ]; then
+        built_commit=$(cat "$GIT_STAMP_DIR/$name" 2>/dev/null || true)
+        if [ -z "$built_commit" ] || [ "$current_commit" != "$built_commit" ]; then
+            return 1
+        fi
+    fi
 
     return 0
 }
@@ -253,6 +289,7 @@ build_single_package() {
     # Add to global list of compiled packages for final bulk deployment
     # Añadir a la lista global de paquetes compilados para el despliegue final en masa
     COMPILED_DEBS+=("$deb_file")
+    stamp_git_commit "$name"
 }
 
 # ==============================================================================
@@ -512,6 +549,7 @@ if [ "$PACKAGE_NAME" == "all" ]; then
             existing_deb=$(ls -t "$OUTPUT_DIR/${pkg}_"*.deb 2>/dev/null | head -n 1)
             echo "⚡ [CACHED] Reutilizando $pkg: $(basename "$existing_deb") (sin cambios)"
             COMPILED_DEBS+=("$existing_deb")
+            stamp_git_commit "$pkg"
         else
             build_single_package "$pkg"
         fi

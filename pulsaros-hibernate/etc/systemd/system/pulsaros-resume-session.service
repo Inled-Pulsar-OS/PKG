@@ -9,3 +9,6 @@ ExecStart=/usr/lib/pulsaros/resume-session
 StandardOutput=journal
 StandardError=journal
 User=root
+
+[Install]
+WantedBy=sleep.target

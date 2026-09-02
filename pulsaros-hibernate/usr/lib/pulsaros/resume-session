@@ -4,26 +4,40 @@
 #
 # Called after the kernel restores memory and thaws userspace processes.
 #
-# ROOT CAUSE of the "Booting OS..." freeze:
-# 1. During resume, the firmware and rEFInd paint "Booting OS..." in the EFI framebuffer.
-# 2. Early-boot initramfs starts Plymouth which binds to the DRM device.
-# 3. Kernel restores RAM and thaws Mutter / GNOME Shell.
-# 4. Mutter is unaware the GPU was reset and does not initiate a modeset.
-# 5. Display hardware continues scanning out stale UEFI/rEFInd pixels.
+# ROOT CAUSE OF THE FREEZE IDENTIFIED:
+# 1. Before poweroff, GNOME thaws/drops DRM scanout, revealing VT1 which still
+#    had rEFInd's "Booting OS..." text from the original morning boot. That text
+#    was then frozen and written into the swap snapshot!
+# 2. On resume, the restored memory brings back VT1 showing that exact screen.
+# 3. Regular 'chvt' commands inside systemd hooks were FAILING with:
+#    "chvt: No se puede conseguir un descriptor de fichero que refiera a la consola"
+#    because stdin in systemd services is /dev/null, not a TTY!
+# 4. As a result, Mutter never received a VT switch to re-acquire DRM master.
 #
 # FIX:
-# 1. Terminate early-boot Plymouth.
-# 2. Mandatory VT toggle (chvt OTHER -> chvt TARGET): forces Mutter to release
-#    and re-acquire DRM master, reinitializing CRTC scanout buffers.
-# 3. Reactivate logind session and fire DRM change udev event.
+# 1. Kill any early Plymouth daemon left over from initramfs.
+# 2. Use 'chvt' with stdin redirected from /dev/tty0 or /dev/console so it succeeds.
+# 3. Cycle VTs (VT2 -> VT1 or VT1 -> VT2) to force Mutter to release and re-acquire
+#    DRM master, triggering a hardware modeset and repainting the desktop.
 # ==============================================================================
 set -u
 
 log() { echo "[pulsaros-resume] $*" | tee /dev/kmsg 2>/dev/null || echo "[pulsaros-resume] $*" >&2; }
 
+# Helper to execute chvt reliably even when stdin is /dev/null
+do_chvt() {
+    local vt="$1"
+    for dev in /dev/tty0 /dev/tty1 /dev/console; do
+        if [ -c "$dev" ]; then
+            chvt "$vt" < "$dev" 2>/dev/null && return 0
+        fi
+    done
+    chvt "$vt" 2>/dev/null || true
+}
+
 log "=== Post-hibernate restoration starting ==="
 
-# 1. Terminate early-boot Plymouth from initramfs
+# 1. Terminate early-boot Plymouth from initramfs to free the DRM device
 if command -v plymouth >/dev/null 2>&1; then
     plymouth --quit 2>/dev/null || true
 fi
@@ -48,8 +62,8 @@ done
 
 # Fallback VT if session query returned empty
 if [ -z "$TARGET_VT" ] || [ "$TARGET_VT" = "0" ]; then
-    ACTIVE_VT=$(cat /sys/class/tty/tty0/active 2>/dev/null | tr -d 'tty' || echo "2")
-    TARGET_VT="${ACTIVE_VT:-2}"
+    ACTIVE_VT=$(cat /sys/class/tty/tty0/active 2>/dev/null | tr -d 'tty' || echo "1")
+    TARGET_VT="${ACTIVE_VT:-1}"
     log "Fallback to VT$TARGET_VT"
 fi
 
@@ -63,11 +77,9 @@ else
 fi
 
 log "Performing DRM master recovery VT toggle (chvt $OTHER_VT -> 200ms -> chvt $TARGET_VT)..."
-if command -v chvt >/dev/null 2>&1; then
-    chvt "$OTHER_VT" 2>/dev/null || true
-    sleep 0.2
-    chvt "$TARGET_VT" 2>/dev/null || true
-fi
+do_chvt "$OTHER_VT"
+sleep 0.2
+do_chvt "$TARGET_VT"
 
 # 4. Reactivate the logind session
 if [ -n "$TARGET_SESSION" ] && command -v loginctl >/dev/null 2>&1; then

@@ -112,6 +112,45 @@ fi
 
 COMPILED_PKGS=()
 
+# Stamp directory holding the last git HEAD that each package source was built
+# from, so incremental builds can detect changes committed inside nested git
+# subrepos (e.g. PKG/sayri) even when git operations preserve file mtimes.
+GIT_STAMP_DIR="$BUILD_DIR/.git-stamps"
+mkdir -p "$GIT_STAMP_DIR"
+
+# Resolve the source dir used to build package $name (mirrors each PKGBUILD's
+# prepare()/package() reference to its source subrepo).
+resolve_src_dir() {
+    local name="$1"
+    local d
+    # Prefer the sibling source dir referenced as startdir/../../../sayri (i.e. PKG/<name>)
+    d="$PKG_DIR/../../PKG/$name"
+    [ -d "$d" ] && { echo "$d"; return; }
+    d="$PKG_DIR/../$name"
+    [ -d "$d" ] && { echo "$d"; return; }
+    return 1
+}
+
+# If $dir is inside a git work tree return the current HEAD commit hash
+# (covering nested git repos and git submodules alike).
+git_source_commit() {
+    local dir="$1"
+    local repo_head
+    repo_head=$(git -C "$dir" rev-parse HEAD 2>/dev/null) || return 1
+    echo "$repo_head"
+    return 0
+}
+
+# Record the git HEAD the package was built from.
+stamp_git_commit() {
+    local name="$1"
+    local src
+    src=$(resolve_src_dir "$name") || return 0
+    local commit
+    commit=$(git_source_commit "$src") || return 0
+    printf '%s\n' "$commit" > "$GIT_STAMP_DIR/$name" 2>/dev/null || true
+}
+
 is_pkg_up_to_date() {
     local name="$1"
     local pkgbuild_dir="$PKGBUILDS_DIR/$name"
@@ -131,6 +170,17 @@ is_pkg_up_to_date() {
     if [ -d "$root_src_dir" ]; then
         local newest_root_src=$(find "$root_src_dir" -type f -not -path "*/target/*" -not -path "*/.git/*" -printf '%T@\n' 2>/dev/null | sort -nr | head -n 1 | cut -d. -f1)
         [ -n "$newest_root_src" ] && [ "$newest_root_src" -gt "$pkg_time" ] && return 1
+
+        # Detect changes inside nested git subrepos (e.g. sayri) by comparing
+        # the current HEAD commit to the commit this package was built from.
+        local current_commit built_commit
+        current_commit=$(git_source_commit "$root_src_dir")
+        if [ -n "$current_commit" ]; then
+            built_commit=$(cat "$GIT_STAMP_DIR/$name" 2>/dev/null || true)
+            if [ -z "$built_commit" ] || [ "$current_commit" != "$built_commit" ]; then
+                return 1
+            fi
+        fi
     fi
 
     return 0
@@ -210,6 +260,7 @@ build_single_package() {
     if [ -n "$pkg_file" ]; then
         echo "✅ Package built: $(basename "$pkg_file")"
         COMPILED_PKGS+=("$pkg_file")
+        stamp_git_commit "$name"
     else
         echo "❌ Error: Package built successfully but binary file could not be found."
         return 1
@@ -421,6 +472,7 @@ if [ "$PACKAGE_NAME" == "all" ]; then
                 existing_pkg=$(ls -t "$OUTPUT_DIR/${pkg_name}-"*.pkg.tar.zst 2>/dev/null | head -n 1)
                 echo "⚡ [CACHED] Reusing $pkg_name: $(basename "$existing_pkg") (unmodified)"
                 COMPILED_PKGS+=("$existing_pkg")
+                stamp_git_commit "$pkg_name"
             else
                 build_single_package "$pkg_name"
             fi

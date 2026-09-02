@@ -1,8 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# Pulsar OS - Hibernate Pre-Sleep Cleanup
-# Simple handler: sync, drop caches, show Plymouth message.
-# Post-resume session restoration is done by pulsaros-resume-session.service.
+# Pulsar OS - Hibernate Pre-Sleep Cleanup & Post-Resume Handler
 # ==============================================================================
 set -u
 
@@ -18,14 +16,29 @@ case "$ACTION" in
     start)
         sync
         echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
+
+        # Clear text console so stale UEFI/rEFInd "Booting OS..." text is
+        # erased before the kernel freezes processes, preventing it from
+        # flashing before poweroff and being captured into the swap image.
+        for dev in /dev/tty1 /dev/tty0 /dev/console; do
+            if [ -c "$dev" ]; then
+                setterm --clear all --cursor off > "$dev" 2>/dev/null || true
+                printf '\033[2J\033[H\033[?25l' > "$dev" 2>/dev/null || true
+            fi
+        done
+
         if command -v plymouth >/dev/null 2>&1 && plymouth --ping 2>/dev/null; then
             plymouth message --text="Guardando sesión en disco…" 2>/dev/null || true
         fi
         ;;
+
     end)
-        echo "4 4 1 7" > /proc/sys/kernel/printk 2>/dev/null || true
-        rm -f /run/systemd/sleep.conf.d/*pulsar*.conf 2>/dev/null || true
+        # Forward directly to the session restoration engine
+        if [ -x /usr/lib/pulsaros/resume-session ]; then
+            /usr/lib/pulsaros/resume-session
+        fi
         ;;
+
     *)
         echo "Usage: $0 {start|end|pre|post}" >&2
         exit 1
