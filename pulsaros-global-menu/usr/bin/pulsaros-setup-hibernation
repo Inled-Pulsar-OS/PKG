@@ -151,42 +151,19 @@ INITRAMFS_CHANGED=0
 if [ -f /etc/mkinitcpio.conf ]; then
     # Arch Linux — mkinitcpio
     if grep -q "^HOOKS=" /etc/mkinitcpio.conf; then
-        HAS_RESUME_HOOK=0
-        grep -q "\bresume\b" /etc/mkinitcpio.conf && HAS_RESUME_HOOK=1
-
-        # Add resume hook if missing
-        if [ "$HAS_RESUME_HOOK" -eq 0 ]; then
-            echo "⚙️ Añadiendo hook resume a /etc/mkinitcpio.conf..."
-            if grep -q "sd-vconsole" /etc/mkinitcpio.conf; then
-                sed -i 's/\(sd-vconsole[^)]*\))/\1 resume/' /etc/mkinitcpio.conf
-            else
-                sed -i 's/\(block\)/\1 resume/' /etc/mkinitcpio.conf
+        if grep -q "\bsystemd\b" /etc/mkinitcpio.conf; then
+            # En initramfs basado en systemd, systemd incluye de forma nativa el generador
+            # systemd-hibernate-resume. El hook legacy 'resume' entra en conflicto directo y cuelga el arranque.
+            if grep -q "\bresume\b" /etc/mkinitcpio.conf; then
+                echo "⚙️ Eliminando hook conflictivo 'resume' de initramfs systemd..."
+                sed -i 's/\bresume\b//g; s/  */ /g; s/( /(/' /etc/mkinitcpio.conf
+                INITRAMFS_CHANGED=1
             fi
-            INITRAMFS_CHANGED=1
-        fi
-
-        # Ensure resume comes AFTER block and filesystems (needed for swapfile on ext4)
-        if grep -q "\bresume\b" /etc/mkinitcpio.conf; then
-            HOOKS_LINE=$(grep "^HOOKS=" /etc/mkinitcpio.conf)
-            # Extract just the hook names between parentheses
-            HOOKS_CONTENT=$(echo "$HOOKS_LINE" | sed 's/^HOOKS=(//; s/)$//')
-            # Check if resume appears before filesystems or before block
-            RESUME_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^resume$" | cut -d: -f1)
-            FILESYSTEMS_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^filesystems$" | cut -d: -f1)
-            BLOCK_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^block$" | cut -d: -f1)
-            NEEDS_REORDER=0
-            if [ -n "$RESUME_POS" ] && [ -n "$BLOCK_POS" ] && [ "$RESUME_POS" -lt "$BLOCK_POS" ]; then
-                NEEDS_REORDER=1
-            fi
-            if [ -n "$RESUME_POS" ] && [ -n "$FILESYSTEMS_POS" ] && [ "$RESUME_POS" -gt "$FILESYSTEMS_POS" ]; then
-                NEEDS_REORDER=1
-            fi
-            if [ "$NEEDS_REORDER" -eq 1 ]; then
-                echo "⚙️ Reordenando hooks: resume debe ir después de block y antes de filesystems..."
-                # Remove resume from its current position, then insert after block
-                NEW_HOOKS=$(echo "$HOOKS_CONTENT" | sed 's/\bresume\b//; s/  */ /g; s/^ //; s/ $//')
-                NEW_HOOKS=$(echo "$NEW_HOOKS" | sed 's/\bblock\b/block resume/')
-                sed -i "s|^HOOKS=.*|HOOKS=(${NEW_HOOKS})|" /etc/mkinitcpio.conf
+        else
+            # Initramfs basado en busybox/udev: el hook 'resume' sí es requerido después de 'block'
+            if ! grep -q "\bresume\b" /etc/mkinitcpio.conf; then
+                echo "⚙️ Añadiendo hook resume a /etc/mkinitcpio.conf..."
+                sed -i 's/\bblock\b/block resume/' /etc/mkinitcpio.conf
                 INITRAMFS_CHANGED=1
             fi
         fi

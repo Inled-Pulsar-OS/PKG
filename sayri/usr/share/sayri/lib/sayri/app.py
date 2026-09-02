@@ -165,6 +165,7 @@ class SayriApp(Gtk.Application):
         self.armed = False
         self._busy = False
         self._mic_on = False
+        self._setup_needed = False
         self.session = None
         self._assistant_text = ""
         self._current_query_id = 0
@@ -252,9 +253,9 @@ class SayriApp(Gtk.Application):
         # Check if first run or no AI provider configured
         has_api_key = bool(self.cfg.get_string("provider", "api_key").strip())
         is_first_run = getattr(self.cfg, "_is_first_run", False) or not has_api_key
+        self._setup_needed = is_first_run or not has_api_key
 
         if is_first_run or not has_api_key:
-            self.overlay.show()
             welcome_msg = (
                 "👋 **Welcome to Sayri!**\n\n"
                 "To get started, please configure an **AI Provider**:\n"
@@ -264,6 +265,7 @@ class SayriApp(Gtk.Application):
             )
             self._set_assistant(welcome_msg)
             self._msg("hint", "Click the Sayri logo on the left to set up AI Provider & Voice")
+            self.overlay.show()
         else:
             if not self.is_autostart:
                 self.overlay.show()
@@ -454,6 +456,12 @@ class SayriApp(Gtk.Application):
     def on_shown(self) -> None:
         """Called when Sayri is shown: clean UI, play activation sound, and start listening."""
         print("[Sayri] Overlay shown: cleaning UI and playing activation sound.")
+        if self._setup_needed:
+            # Setup not finished yet: keep the setup message visible and do not
+            # wipe it or start listening until an AI provider is configured.
+            if self.overlay:
+                self.overlay.cajita.card_overlay.set_visible(True)
+            return
         self._current_query_id += 1
         self.tts.cancel()
         sound.stop_all()
@@ -1043,6 +1051,13 @@ class SayriApp(Gtk.Application):
                 self.apply_ui_config()
         elif group == "stt" and key == "mode":
             self._apply_mode()
+        elif group == "provider" and key == "api_key":
+            # Setup (first-run welcome) is done once an AI provider key is set.
+            has_key = bool(self.cfg.get_string("provider", "api_key").strip())
+            if self._setup_needed and has_key:
+                self._setup_needed = False
+                self._set_busy(False)
+                self._after_reply()
 
     # ── shutdown
     def quit_app(self) -> None:
