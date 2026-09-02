@@ -131,14 +131,16 @@ resolve_src_dir() {
     return 1
 }
 
-# If $dir is inside a git work tree return the current HEAD commit hash
-# (covering nested git repos and git submodules alike).
+# If $dir is itself a git work tree root, return the current HEAD commit hash.
+# This covers nested git repos and git submodules (e.g. PKG/sayri). It does NOT
+# walk up to an enclosing repository, so a plain folder inside the main PKG repo
+# (which is not itself a git repo) is deliberately ignored here.
 git_source_commit() {
     local dir="$1"
-    local repo_head
-    repo_head=$(git -C "$dir" rev-parse HEAD 2>/dev/null) || return 1
-    echo "$repo_head"
-    return 0
+    local toplevel
+    toplevel=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || return 1
+    [ "$toplevel" = "$dir" ] || return 1
+    git -C "$dir" rev-parse HEAD 2>/dev/null || return 1
 }
 
 # Record the git HEAD the package was built from.
@@ -167,6 +169,8 @@ is_pkg_up_to_date() {
     # Also check corresponding root PKG directory if present
     local root_src_dir="$PKG_DIR/../../PKG/$name"
     [ ! -d "$root_src_dir" ] && root_src_dir="$PKG_DIR/../$name"
+    [ ! -d "$root_src_dir" ] && root_src_dir="$PKG_DIR/../${name#pulsaros-}"
+    [ ! -d "$root_src_dir" ] && root_src_dir="$PKG_DIR/../pulsar-${name#pulsaros-}"
     if [ -d "$root_src_dir" ]; then
         local newest_root_src=$(find "$root_src_dir" -type f -not -path "*/target/*" -not -path "*/.git/*" -printf '%T@\n' 2>/dev/null | sort -nr | head -n 1 | cut -d. -f1)
         [ -n "$newest_root_src" ] && [ "$newest_root_src" -gt "$pkg_time" ] && return 1
@@ -184,6 +188,41 @@ is_pkg_up_to_date() {
     fi
 
     return 0
+}
+
+clean_orphan_packages() {
+    [ ! -d "$OUTPUT_DIR" ] && return 0
+    local active_names=()
+    for d in "$PKGBUILDS_DIR"/*/; do
+        [ -f "$d/PKGBUILD" ] && active_names+=("$(basename "$d")")
+    done
+    local extra_allowed=("pamtester" "xremap-gnome-bin" "autokey-gtk" "autokey" "winboat-bin" "cloudflare-warp-bin" "localsend-bin")
+
+    for f in "$OUTPUT_DIR"/*.pkg.tar.zst; do
+        [ -f "$f" ] || continue
+        local pkg_name
+        pkg_name=$(LC_ALL=C pacman -Qip "$f" 2>/dev/null | awk -F': ' '/^Name/{print $2; exit}')
+        [ -z "$pkg_name" ] && continue
+
+        if [[ "$pkg_name" == *calamares* ]] || [[ "$pkg_name" == *-debug* ]]; then
+            echo "🗑️  Removing obsolete/debug package from cache: $(basename "$f")"
+            rm -f "$f"
+            continue
+        fi
+
+        local found=false
+        for a in "${active_names[@]}" "${extra_allowed[@]}"; do
+            if [ "$pkg_name" = "$a" ]; then
+                found=true
+                break
+            fi
+        done
+
+        if [ "$found" = false ]; then
+            echo "🗑️  Removing orphan package with no PKGBUILD from cache: $(basename "$f")"
+            rm -f "$f"
+        fi
+    done
 }
 
 build_single_package() {
@@ -447,6 +486,7 @@ if [ -n "$DEPLOY_ONLY_FLAG" ]; then
 fi
 
 if [ "$PACKAGE_NAME" == "all" ]; then
+    clean_orphan_packages
     if $INCREMENTAL; then
         echo "⚡  INCREMENTAL BUILD: Rebuilding only modified packages..."
     else

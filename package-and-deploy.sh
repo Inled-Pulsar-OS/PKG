@@ -102,14 +102,16 @@ fi
 GIT_STAMP_DIR="$BUILD_DIR/.git-stamps"
 mkdir -p "$GIT_STAMP_DIR" 2>/dev/null || true
 
-# If $dir is inside a git work tree return the current HEAD commit hash
-# (covering nested git repos and git submodules alike).
+# If $dir is itself a git work tree root, return the current HEAD commit hash.
+# This covers nested git repos and git submodules (e.g. PKG/sayri). It does NOT
+# walk up to an enclosing repository, so a plain folder inside the main PKG repo
+# (which is not itself a git repo) is deliberately ignored here.
 git_source_commit() {
     local dir="$1"
-    local repo_head
-    repo_head=$(git -C "$dir" rev-parse HEAD 2>/dev/null) || return 1
-    echo "$repo_head"
-    return 0
+    local toplevel
+    toplevel=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || return 1
+    [ "$toplevel" = "$dir" ] || return 1
+    git -C "$dir" rev-parse HEAD 2>/dev/null || return 1
 }
 
 # Record the git HEAD the package was built from.
@@ -146,6 +148,27 @@ is_deb_up_to_date() {
     fi
 
     return 0
+}
+
+clean_orphan_packages() {
+    [ ! -d "$OUTPUT_DIR" ] && return 0
+    for f in "$OUTPUT_DIR"/*.deb; do
+        [ -f "$f" ] || continue
+        local pkg_name
+        pkg_name=$(dpkg-deb -f "$f" Package 2>/dev/null || echo "")
+        [ -z "$pkg_name" ] && continue
+
+        if [[ "$pkg_name" == *calamares* ]] || [[ "$pkg_name" == *-debug* ]]; then
+            echo "🗑️  Removing obsolete/debug deb from cache: $(basename "$f")"
+            rm -f "$f"
+            continue
+        fi
+
+        if [ ! -d "$PKG_DIR/$pkg_name" ] && [ ! -d "$PKG_DIR/${pkg_name#pulsaros-}" ]; then
+            echo "🗑️  Removing orphan deb with no source from cache: $(basename "$f")"
+            rm -f "$f"
+        fi
+    done
 }
 
 if [ "$BRANCH" != "stable" ] && [ "$BRANCH" != "forky" ] && [ "$BRANCH" != "rolling" ]; then
@@ -519,6 +542,7 @@ fi
 
 # 2. Build logic / Lógica de construcción
 if [ "$PACKAGE_NAME" == "all" ]; then
+    clean_orphan_packages
     echo "🏗️  MODO COMPILACIÓN TOTAL: Detectando y compilando todos los paquetes..."
     echo "🏗️  FULL BUILD MODE: Detecting and compiling all packages..."
     
