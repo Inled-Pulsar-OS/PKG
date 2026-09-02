@@ -73,7 +73,7 @@ export function WifiPage({ onContinue, onBack }: WifiPageProps) {
             Back
           </button>
           <button className="btn-primary" onClick={onContinue}>
-            Continue
+            {!loading && !networks.length ? "Skip" : "Continue"}
           </button>
         </div>
       }

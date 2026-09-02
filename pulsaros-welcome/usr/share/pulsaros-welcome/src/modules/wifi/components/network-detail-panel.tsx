@@ -21,7 +21,7 @@ export function WifiDetailPanel({
   const secured = isSecured(network.security);
 
   return (
-    <div className="rounded-xl border border-border bg-white/5 p-4">
+    <div className="animate-in fade-in zoom-in duration-200 rounded-xl border border-border bg-white/5 p-4">
       {/* Network header */}
       <div className="flex items-center gap-2.5">
         <SignalBars signal={network.signal} />
