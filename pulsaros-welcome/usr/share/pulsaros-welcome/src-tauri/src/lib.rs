@@ -66,6 +66,7 @@ pub fn run() {
             commands::core::check_sentinel,
             commands::core::is_ootb_pending,
             commands::core::write_sentinel,
+            commands::core::close,
             commands::resolution::get_resolutions,
             commands::resolution::set_resolution,
             commands::software::launch_display_settings,

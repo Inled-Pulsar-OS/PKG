@@ -1,11 +1,14 @@
 #!/bin/bash
 # ==============================================================================
 # Pulsar OS - Welcome Application Wrapper
+# Tauri binary first, Python+WebKitGTK fallback
 # ==============================================================================
 
-SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-if [ -f "$SCRIPT_DIR/../share/pulsaros-welcome/welcome.py" ]; then
-    exec /usr/bin/python3 "$SCRIPT_DIR/../share/pulsaros-welcome/welcome.py" "$@"
+TAURI_BIN="/usr/lib/pulsaros-welcome/pulsaros-welcome"
+PYTHON_APP="/usr/share/pulsaros-welcome/welcome.py"
+
+if [ -x "$TAURI_BIN" ]; then
+    exec "$TAURI_BIN" "$@"
 fi
 
-exec /usr/bin/python3 /usr/share/pulsaros-welcome/welcome.py "$@"
+exec /usr/bin/python3 "$PYTHON_APP" "$@"

@@ -24,3 +24,8 @@ pub fn is_ootb_pending() -> bool {
 pub fn write_sentinel() -> Result<(), String> {
     core::write_sentinel()
 }
+
+#[tauri::command]
+pub fn close(window: tauri::Window) {
+    let _ = window.close();
+}
