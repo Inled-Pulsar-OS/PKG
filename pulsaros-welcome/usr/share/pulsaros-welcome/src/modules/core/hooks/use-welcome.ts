@@ -22,7 +22,7 @@ const BASE_FLOW: WelcomeScreen[] = [
 ];
 
 export function useWelcome() {
-  const [screen, setScreen] = useState<WelcomeScreen>("wifi");
+  const [screen, setScreen] = useState<WelcomeScreen>("hello");
   const [{
     effectsState,
     isArch,
