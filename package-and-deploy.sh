@@ -376,18 +376,20 @@ deploy_packages() {
     # 2. Subir cada deb y obtener su URL
     for deb_file in "${debs[@]}"; do
         local file_name=$(basename "$deb_file")
+        local file_name_github="${file_name//:/.}"
         local package_url=""
         
-        echo "⬆️ Subiendo asset / Uploading asset: $file_name..."
+        echo "⬆️ Subiendo asset / Uploading asset: $file_name (GitHub asset: $file_name_github)..."
         
         if [ "$use_gh" = true ]; then
+            gh release delete-asset "$RELEASE_TAG" "$file_name_github" --repo "$OWNER_REPO" -y >/dev/null 2>&1 || true
             gh release upload "$RELEASE_TAG" "$deb_file" --clobber --repo "$OWNER_REPO"
-            package_url="https://github.com/${OWNER_REPO}/releases/download/${RELEASE_TAG}/${file_name}"
+            package_url="https://github.com/${OWNER_REPO}/releases/download/${RELEASE_TAG}/${file_name_github}"
         else
             # Delete previous asset if it exists / Eliminar asset anterior si existe
             local asset_id=$(curl -s -H "Authorization: token $INLED_REPO_PAT" \
                 "https://api.github.com/repos/${OWNER_REPO}/releases/$release_id" | \
-                jq -r ".assets[] | select(.name==\"$file_name\") | .id")
+                jq -r ".assets[] | select(.name==\"$file_name_github\") | .id")
                 
             if [ -n "$asset_id" ] && [ "$asset_id" != "null" ]; then
                 echo "🗑️ Eliminando asset anterior / Deleting previous asset: $file_name..."

@@ -357,19 +357,21 @@ deploy_packages() {
     
     for pkg_file in "${pkgs[@]}"; do
         local file_name=$(basename "$pkg_file")
-        echo "⬆️ Uploading: $file_name..."
+        local file_name_github="${file_name//:/.}"
+        echo "⬆️ Uploading: $file_name (GitHub asset: $file_name_github)..."
         local package_url=""
         
         if [ "$use_gh" = true ]; then
             # Delete asset if already exists in release to overwrite
+            gh release delete-asset "$RELEASE_TAG" "$file_name_github" --repo "$OWNER_REPO" -y >/dev/null 2>&1 || true
             gh release delete-asset "$RELEASE_TAG" "$file_name" --repo "$OWNER_REPO" -y >/dev/null 2>&1 || true
             local upload_response=$(gh release upload "$RELEASE_TAG" "$pkg_file" --repo "$OWNER_REPO" --clobber)
-            package_url="https://github.com/${OWNER_REPO}/releases/download/${RELEASE_TAG}/${file_name}"
+            package_url="https://github.com/${OWNER_REPO}/releases/download/${RELEASE_TAG}/${file_name_github}"
         else
             # Delete asset using curl fallback if exists
             local asset_id=$(curl -s -H "Authorization: token $INLED_REPO_PAT" \
                 "https://api.github.com/repos/${OWNER_REPO}/releases/tags/${RELEASE_TAG}" | \
-                jq -r --arg name "$file_name" '.assets[] | select(.name==$name) | .id')
+                jq -r --arg name "$file_name_github" '.assets[] | select(.name==$name) | .id')
                 
             if [ -n "$asset_id" ] && [ "$asset_id" != "null" ]; then
                 echo "🗑️ Deleting existing asset ID: $asset_id..."
@@ -384,7 +386,7 @@ deploy_packages() {
                 rm -f "$del_resp"
             fi
             
-            local upload_url="https://uploads.github.com/repos/${OWNER_REPO}/releases/${release_id}/assets?name=${file_name}"
+            local upload_url="https://uploads.github.com/repos/${OWNER_REPO}/releases/${release_id}/assets?name=${file_name_github}"
             local upload_response=$(curl -s -X POST -H "Authorization: token $INLED_REPO_PAT" \
                 -H "Content-Type: application/octet-stream" \
                 --data-binary @"$pkg_file" \
