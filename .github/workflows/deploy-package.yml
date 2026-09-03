@@ -202,7 +202,10 @@ jobs:
                 libgnome-autoar-0-dev libportal-dev libportal-gtk4-dev libtinysparql-dev \
                 libgexiv2-dev libcloudproviders-dev libgraphene-1.0-dev \
                 libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base desktop-file-utils \
-                cargo rustc nodejs npm
+                nodejs npm
+
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+              export PATH="/root/.cargo/bin:$PATH"
 
               chmod +x /workspace/package-and-deploy.sh
               if [ '$TARGET_BRANCH' = 'all' ]; then
