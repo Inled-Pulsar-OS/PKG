@@ -98,25 +98,49 @@ export default class ShotzyExtension extends Extension {
     _setupShakeDetector() {
         try {
             this._pointerWatcher = getPointerWatcher();
-            let lastX = 0;
-            let lastY = 0;
+            const startTime = Date.now();
+            let lastX = null;
+            let lastY = null;
+            let lastMoveTime = 0;
             let strokeDx = 0;
             let strokeDir = 0;
             let reversals = [];
             let lastTrigger = 0;
 
             this._shakeWatch = this._pointerWatcher.addWatch(20, (x, y) => {
-                if (lastX === 0 && lastY === 0) {
+                const now = Date.now();
+                // 1. Startup Warmup: Ignore cursor coordinates during first 1.5s to prevent jump triggers
+                if (now - startTime < 1500) {
                     lastX = x;
                     lastY = y;
                     return;
                 }
+
+                if (lastX === null || lastY === null) {
+                    lastX = x;
+                    lastY = y;
+                    lastMoveTime = now;
+                    return;
+                }
+
+                const dt = now - lastMoveTime;
+                lastMoveTime = now;
+
+                // 2. Movement Gap: If mouse was idle or moved slowly (> 200ms gap), reset shake tracking
+                if (dt > 200) {
+                    strokeDx = 0;
+                    strokeDir = 0;
+                    reversals = [];
+                    lastX = x;
+                    lastY = y;
+                    return;
+                }
+
                 const dx = x - lastX;
                 lastX = x;
                 lastY = y;
 
-                if (dx === 0) return;
-                const now = Date.now();
+                if (Math.abs(dx) < 4) return;
                 const d = dx > 0 ? 1 : -1;
 
                 if (strokeDir === 0) {
@@ -129,13 +153,14 @@ export default class ShotzyExtension extends Extension {
                     strokeDx += dx;
                 } else {
                     const strokeLen = Math.abs(strokeDx);
-                    if (strokeLen >= 20) {
+                    // 3. Calibrated threshold: Require 4 rapid direction changes of >= 50px each (>280px total)
+                    if (strokeLen >= 50) {
                         reversals.push({ time: now, len: strokeLen });
-                        reversals = reversals.filter(r => now - r.time <= 650);
+                        reversals = reversals.filter(r => now - r.time <= 500);
                         const totalDist = reversals.reduce((acc, r) => acc + r.len, 0);
 
-                        if (reversals.length >= 3 && totalDist >= 80) {
-                            if (now - lastTrigger >= 2000) {
+                        if (reversals.length >= 4 && totalDist >= 280) {
+                            if (now - lastTrigger >= 3000) {
                                 lastTrigger = now;
                                 reversals = [];
                                 strokeDx = 0;
@@ -151,7 +176,7 @@ export default class ShotzyExtension extends Extension {
                 }
             });
         } catch (e) {
-            log(`Shotzy shake detector error: ${e.message}`);
+            log(`Pulsar Circle to Search shake detector error: ${e.message}`);
         }
     }
 

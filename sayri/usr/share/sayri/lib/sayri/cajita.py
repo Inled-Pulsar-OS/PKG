@@ -234,6 +234,35 @@ progressbar.sayri-progress > trough > progress {
     background: linear-gradient(90deg, #7c166e, #1e74fb);
     border-radius: 9999px;
 }
+
+.sayri-attachment-chip {
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(0, 0, 0, 0.35);
+    margin-left: 2px;
+    margin-right: 6px;
+}
+
+.sayri-attachment-pic {
+    border-radius: 7px;
+}
+
+.sayri-attach-close-btn {
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 9999px;
+    padding: 0px;
+    min-width: 16px;
+    min-height: 16px;
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: bold;
+}
+
+.sayri-attach-close-btn:hover {
+    background: rgba(239, 68, 68, 0.95);
+    color: #ffffff;
+}
 """
 
 SVG_MIC = """<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -571,6 +600,37 @@ class SayriCajita(Gtk.Box):
         self.siri_btn.connect("clicked", lambda _b: self.toggle_navigation())
         pill_row.append(self.siri_btn)
 
+        # Inline Google-style Attachment Chip (Inside input pill, beside logo)
+        self.attach_chip = Gtk.Overlay()
+        self.attach_chip.set_visible(False)
+        self.attach_chip.add_css_class("sayri-attachment-chip")
+        self.attach_chip.set_valign(Gtk.Align.CENTER)
+        self.attach_chip.set_size_request(34, 34)
+
+        self.attach_pic = Gtk.Picture()
+        self.attach_pic.set_size_request(34, 34)
+        self.attach_pic.set_can_shrink(True)
+        self.attach_pic.set_content_fit(Gtk.ContentFit.COVER)
+        self.attach_pic.add_css_class("sayri-attachment-pic")
+        self.attach_chip.set_child(self.attach_pic)
+
+        self.attach_close_btn = Gtk.Button(label="✕")
+        self.attach_close_btn.set_has_frame(False)
+        self.attach_close_btn.add_css_class("sayri-attach-close-btn")
+        self.attach_close_btn.set_halign(Gtk.Align.END)
+        self.attach_close_btn.set_valign(Gtk.Align.START)
+        self.attach_close_btn.set_visible(False)
+        self.attach_close_btn.connect("clicked", lambda _: self.clear_attached_image())
+        self.attach_chip.add_overlay(self.attach_close_btn)
+
+        # Hover controller to reveal close 'X' badge
+        hover_ctrl = Gtk.EventControllerMotion.new()
+        hover_ctrl.connect("enter", lambda _c, _x, _y: self.attach_close_btn.set_visible(True))
+        hover_ctrl.connect("leave", lambda _c: self.attach_close_btn.set_visible(False))
+        self.attach_chip.add_controller(hover_ctrl)
+
+        pill_row.append(self.attach_chip)
+
         # Text Entry
         self.entry = Gtk.Entry()
         self.entry.set_has_frame(False)
@@ -615,34 +675,6 @@ class SayriCajita(Gtk.Box):
         self.pill_overlay.add_overlay(pill_row)
         self.pill_overlay.set_measure_overlay(pill_row, True)
         self.append(self.pill_overlay)
-
-        # ── Attachment Preview Chip (Circle to Search & screenshots) ──
-        self.attachment_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        self.attachment_box.set_visible(False)
-        self.attachment_box.set_margin_start(16)
-        self.attachment_box.set_margin_end(16)
-        self.attachment_box.set_margin_top(4)
-        self.attachment_box.set_margin_bottom(4)
-        self.attachment_box.add_css_class("sayri-card-item")
-
-        self.attachment_pic = Gtk.Picture()
-        self.attachment_pic.set_size_request(60, 42)
-        self.attachment_pic.set_can_shrink(True)
-        self.attachment_pic.set_content_fit(Gtk.ContentFit.COVER)
-        self.attachment_box.append(self.attachment_pic)
-
-        self.attachment_label = Gtk.Label(label="Screenshot attached")
-        self.attachment_label.set_hexpand(True)
-        self.attachment_label.set_xalign(0.0)
-        self.attachment_box.append(self.attachment_label)
-
-        self.attachment_close_btn = Gtk.Button(label="✕")
-        self.attachment_close_btn.set_has_frame(False)
-        self.attachment_close_btn.add_css_class("flat")
-        self.attachment_close_btn.connect("clicked", lambda _: self.clear_attached_image())
-        self.attachment_box.append(self.attachment_close_btn)
-
-        self.append(self.attachment_box)
 
         # ── 2. Bottom Acrylic Card & Multi-View Stack ────────────────
         self.card_overlay = Gtk.Overlay()
@@ -1158,17 +1190,17 @@ class SayriCajita(Gtk.Box):
     def set_attached_image(self, path: str) -> None:
         self._attached_image = path
         if path and os.path.isfile(path):
-            self.attachment_pic.set_filename(path)
-            self.attachment_label.set_text("Screenshot attached")
-            self.attachment_box.set_visible(True)
+            self.attach_pic.set_filename(path)
+            self.attach_chip.set_visible(True)
+            self.attach_close_btn.set_visible(False)
             self.entry.grab_focus()
-            self.entry.set_placeholder_text("Ask Sayri about this screenshot…")
+            self.entry.set_placeholder_text("Ask about this screenshot…")
         else:
-            self.attachment_box.set_visible(False)
+            self.attach_chip.set_visible(False)
 
     def clear_attached_image(self) -> None:
         self._attached_image = None
-        self.attachment_box.set_visible(False)
+        self.attach_chip.set_visible(False)
         self.entry.set_placeholder_text("Ask Sayri anything…")
 
     def _on_entry_activate(self, entry: Gtk.Entry) -> None:
