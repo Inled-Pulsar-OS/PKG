@@ -96,7 +96,7 @@ jobs:
             libgtk-4-dev libadwaita-1-dev libgnome-desktop-4-dev \
             libcolord-gtk4-dev libgoa-1.0-dev libgtop2-dev \
             libpwquality-dev libnm-dev libsecret-1-dev \
-            libpolkit-gobject-1-dev libmalcontent-dev \
+            libpolkit-gobject-1-dev libmalcontent-0-dev \
             libaccountsservice-dev libglib2.0-dev libgsound-dev \
             libjson-glib-dev libsoup-3.0-dev libwacom-dev \
             libibus-1.0-dev libkrb5-dev libgnutls28-dev \

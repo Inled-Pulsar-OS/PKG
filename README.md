@@ -78,7 +78,7 @@ sudo apt-get install -y \
   libgtk-4-dev libadwaita-1-dev libgnome-desktop-4-dev \
   libcolord-gtk4-dev libgoa-1.0-dev libgtop2-dev \
   libpwquality-dev libnm-dev libsecret-1-dev \
-  libpolkit-gobject-1-dev libmalcontent-dev \
+  libpolkit-gobject-1-dev libmalcontent-0-dev \
   libaccountsservice-dev libglib2.0-dev libgsound-dev \
   libjson-glib-dev libsoup-3.0-dev libwacom-dev \
   libibus-1.0-dev libkrb5-dev libgnutls28-dev \
@@ -116,3 +116,4 @@ The ISO build script (`/ISO`) can consume the packages from this repo's `build/p
   `PULSAR_DOCK_LOCAL_DIR=../dash-to-dock ./package-and-deploy.sh pulsaros-gnome`
 - Install the Spotlight Rust binary into your session for quick testing:
   `./install-spotlight-local.sh` (goes to `~/.local/bin`)
+# test
