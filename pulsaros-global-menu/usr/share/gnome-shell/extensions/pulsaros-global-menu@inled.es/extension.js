@@ -432,12 +432,14 @@ const PowerConfirmDialog = GObject.registerClass({
                 statusLabel.text = "Writing memory snapshot to SSD…";
             }
 
-            // Trigger the power action after giving the user 1.2 seconds of clear visual splash feedback
-            if (elapsedSec >= 1.2 && !powerTriggered) {
+            // Trigger the power action and close modal immediately so snapshot is clean
+            if (elapsedSec >= 0.4 && !powerTriggered) {
                 powerTriggered = true;
                 if (this._callback) {
                     this._callback(true);
                 }
+                this._cleanup();
+                this.close();
             }
 
             return GLib.SOURCE_CONTINUE;
@@ -2055,21 +2057,10 @@ export default class PulsarosGlobalMenuExtension extends Extension {
                 (connection, senderName, objectPath, interfaceName, signalName, parameters) => {
                     try {
                         let [aboutToSuspend] = parameters.deep_unpack();
-                        if (aboutToSuspend) {
-                            // System is about to suspend: Lock immediately before power down
-                            if (this._lockScreenOverlay) {
-                                this._lockScreenOverlay.lock();
-                            }
-                        } else {
-                            // System woke up: Ensure our LockScreen is raised, active and focused
-                            if (this._activePowerDialog) {
-                                this._activePowerDialog._cleanup();
-                                this._activePowerDialog.close();
-                                this._activePowerDialog = null;
-                            }
-                            if (this._lockScreenOverlay) {
-                                this._lockScreenOverlay.lock();
-                            }
+                        if (this._activePowerDialog) {
+                            this._activePowerDialog._cleanup();
+                            this._activePowerDialog.close();
+                            this._activePowerDialog = null;
                         }
                     } catch (e) {
                         console.error("[GlobalMenu] Error handling PrepareForSleep:", e);

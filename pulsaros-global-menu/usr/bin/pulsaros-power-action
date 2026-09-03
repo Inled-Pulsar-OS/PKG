@@ -44,12 +44,10 @@ if [ "$RESTORE" = "restore" ]; then
         printf '[Sleep]\nHibernateMode=reboot\n' > /run/systemd/sleep.conf.d/pulsaros-hibernate.conf
         printf '[Sleep]\nHibernateMode=reboot\n' > /run/systemd/sleep.conf.d/zz-pulsar-mode.conf
         echo reboot > /sys/power/disk 2>/dev/null || true
-        notify_sessions "Saving session state to disk… The computer will restart automatically when finished."
     else
         printf '[Sleep]\nHibernateMode=shutdown\n' > /run/systemd/sleep.conf.d/pulsaros-hibernate.conf
         printf '[Sleep]\nHibernateMode=shutdown\n' > /run/systemd/sleep.conf.d/zz-pulsar-mode.conf
         echo shutdown > /sys/power/disk 2>/dev/null || true
-        notify_sessions "Saving session state to disk… The computer will power off automatically when finished."
     fi
 
     sync
