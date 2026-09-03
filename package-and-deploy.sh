@@ -336,6 +336,12 @@ deploy_packages() {
     echo "=============================================================================="
     
     if [ -z "$INLED_REPO_PAT" ]; then
+        if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+            INLED_REPO_PAT="$(gh auth token 2>/dev/null || true)"
+        fi
+    fi
+    
+    if [ -z "$INLED_REPO_PAT" ]; then
         echo "❌ Error: La variable INLED_REPO_PAT no está definida. / Error: INLED_REPO_PAT variable is not defined."
         return 1
     fi
