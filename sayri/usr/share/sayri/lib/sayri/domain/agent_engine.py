@@ -294,6 +294,11 @@ class AgentEngine:
         def _handle_error(exc: Exception) -> None:
             if not self._active_queries.get(query_id, False):
                 return
+            err_msg = f"⚠️ Sayri Error: {exc}"
+            try:
+                self.storage.add_message(session_id, Message(role="assistant", content=err_msg))
+            except Exception:
+                pass
             on_error(exc)
 
         def _handle_done(full_text: str) -> None:

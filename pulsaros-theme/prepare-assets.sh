@@ -42,8 +42,11 @@ sed -i 's/elif \[\[ ! -d "${FIREFOX_DIR_HOME}" && ! -d "${FIREFOX_FLATPAK_DIR_HO
 
 # También neutralizar en libs/lib-core.sh por seguridad
 if [ -f "libs/lib-core.sh" ]; then
+    sed -i 's/MY_USERNAME=.*/MY_USERNAME=\"\${USER:-root}\"/g' libs/lib-core.sh || true
+    sed -i 's/MY_HOME=.*/MY_HOME=\"\${HOME:-\/root}\"/g' libs/lib-core.sh || true
+    sed -i 's/SUDO_BIN=.*/SUDO_BIN=\"\"/g' libs/lib-core.sh || true
     sed -i 's/! -w "\/root"/false/g' libs/lib-core.sh || true
-    sed -i 's/! -w "${value}" && ! -w "$(dirname ${value})"/false/g' libs/lib-core.sh || true
+    sed -i 's/elif \[\[ ! -w .*/elif false; then/g' libs/lib-core.sh || true
 fi
 
 mkdir -p "$STAGE_DIR/usr/share/themes"
@@ -495,6 +498,7 @@ rm -f /tmp/dock_hover_fix.css
 # Ejecutar instalador de iconos
 echo "Instalando iconos en staging..."
 cd "$TEMP_BUILD/icons"
+sed -i 's/gtk-update-icon-cache/true/g' install.sh || true
 ./install.sh -t blue -d "$STAGE_DIR/usr/share/icons"
 
 # 2.1 Mapear el icono de AppInstall a la App Store y Seafari a Safari
