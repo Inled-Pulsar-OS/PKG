@@ -132,18 +132,40 @@ repair_refind() {
 }
 
 # ------------------------------------------------------------------------------
-# 4) GRUB (best effort, only warns: regeneration left to the admin)
+# 4) GRUB automatic injection and configuration repair
 # ------------------------------------------------------------------------------
-check_grub() {
+repair_grub() {
     [ -f "$GRUB_DEFAULT" ] || return 0
-    grub_offset=$(sed -n 's/^GRUB_CMDLINE_LINUX_DEFAULT=".*resume_offset=\([0-9]\+\).*"$/\1/p' "$GRUB_DEFAULT")
-    if is_num "$grub_offset" && [ "$grub_offset" != "$real" ]; then
-        log "⚠ GRUB configurado con resume_offset=$grub_offset pero el real es $real."
-        log "⚠ Actualiza $GRUB_DEFAULT y ejecuta grub-mkconfig manualmente."
+    local ru
+    ru=$(get_root_uuid)
+    [ -n "$ru" ] || return 0
+    local modified=0
+
+    if ! grep -q "resume=" "$GRUB_DEFAULT"; then
+        sed -i "s/^GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"/GRUB_CMDLINE_LINUX_DEFAULT=\"\1 resume=UUID=${ru} resume_offset=${real} zswap.enabled=0\"/" "$GRUB_DEFAULT"
+        modified=1
+    elif ! grep -q "resume_offset=$real" "$GRUB_DEFAULT"; then
+        sed -i -E "s/resume_offset=[0-9]+/resume_offset=$real/g" "$GRUB_DEFAULT"
+        modified=1
+    fi
+
+    if [ "$modified" = 1 ]; then
+        log "✔ $GRUB_DEFAULT actualizado con resume=UUID=$ru resume_offset=$real zswap.enabled=0"
+        if [ "$DRY_RUN" = 0 ]; then
+            if command -v grub-mkconfig >/dev/null 2>&1; then
+                if [ -f /boot/grub/grub.cfg ]; then
+                    grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || true
+                elif [ -f /boot/efi/EFI/grub/grub.cfg ]; then
+                    grub-mkconfig -o /boot/efi/EFI/grub/grub.cfg >/dev/null 2>&1 || true
+                fi
+            elif command -v update-grub >/dev/null 2>&1; then
+                update-grub >/dev/null 2>&1 || true
+            fi
+        fi
     fi
 }
 
 repair_refind
-check_grub
+repair_grub
 
 exit 0
