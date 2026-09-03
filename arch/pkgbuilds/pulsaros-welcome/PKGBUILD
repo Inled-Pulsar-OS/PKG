@@ -1,7 +1,7 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-welcome
-pkgver=2.0.0
-pkgrel=3
+pkgver=2.0.2
+pkgrel=1
 pkgdesc="Welcome and onboarding app for Pulsar OS (Tauri + Python fallback)"
 arch=(any)
 url="https://inled.es"

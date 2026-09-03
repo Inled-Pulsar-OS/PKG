@@ -1,6 +1,6 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-hibernate
-pkgver=1.0.4
+pkgver=1.0.7
 pkgrel=1
 pkgdesc="Hibernation UX for Pulsar OS: Plymouth progress feedback and resume-offset guardian"
 arch=(any)
