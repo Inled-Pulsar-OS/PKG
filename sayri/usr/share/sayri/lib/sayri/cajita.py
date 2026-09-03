@@ -298,6 +298,28 @@ SVG_TRASH = """<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" vi
 <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
 </svg>"""
 
+def _load_square_thumbnail(path: str, size: int = 32) -> Optional[Gdk.Texture]:
+    """Loads an image, center-crops to a strict 1:1 square, and scales it to size x size."""
+    try:
+        pixbuf = GdkPixbuf.Pixbuf.new_from_file(path)
+        w = pixbuf.get_width()
+        h = pixbuf.get_height()
+        if w > h:
+            x = (w - h) // 2
+            y = 0
+            crop = pixbuf.new_subpixbuf(x, y, h, h)
+        elif h > w:
+            x = 0
+            y = (h - w) // 2
+            crop = pixbuf.new_subpixbuf(x, y, w, w)
+        else:
+            crop = pixbuf
+        scaled = crop.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
+        return Gdk.Texture.new_for_pixbuf(scaled)
+    except Exception as e:
+        print(f"[Sayri] Square thumbnail load notice: {e}")
+        return None
+
 SVG_SETTINGS = """<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
 </svg>"""
@@ -1211,7 +1233,11 @@ class SayriCajita(Gtk.Box):
     def set_attached_image(self, path: str) -> None:
         self._attached_image = path
         if path and os.path.isfile(path):
-            self.attach_pic.set_filename(path)
+            texture = _load_square_thumbnail(path, 32)
+            if texture:
+                self.attach_pic.set_paintable(texture)
+            else:
+                self.attach_pic.set_filename(path)
             self.attach_hover_box.remove_css_class("hovered")
             self.attach_chip.set_visible(True)
             self.entry.grab_focus()
