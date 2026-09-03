@@ -23,6 +23,7 @@ set -e
 
 STAGE_DIR="$(realpath -m "$1")"
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+DISTRIBUTOR_LOGO="${DISTRIBUTOR_LOGO:-pulsar-logo}"
 
 # ==============================================================================
 # 0. Detect the gnome-control-center version matching the target Debian suite
@@ -67,6 +68,15 @@ if [ -z "$GNOME_CC_VER" ]; then
     esac
     echo "🔍 [ES] Suite Debian '$SUITE' → usando versión $GNOME_CC_VER.x"
     echo "🔍 [EN] Debian suite '$SUITE' → using version $GNOME_CC_VER.x"
+fi
+
+# 3. Check if host GTK4 can support target GNOME_CC_VER when building directly on host
+if [ "$GNOME_CC_VER" -ge 48 ] 2>/dev/null; then
+    if ! pkg-config --atleast-version=4.15.2 gtk4 2>/dev/null; then
+        echo "⚠️ [ES] GTK4 del host es menor que 4.15.2 → usando GNOME Control Center 46 para compatibilidad con el entorno."
+        echo "⚠️ [EN] Host GTK4 is less than 4.15.2 → using GNOME Control Center 46 for build environment compatibility."
+        GNOME_CC_VER="46"
+    fi
 fi
 
 # Now resolve the full upstream tag (e.g. "48.0", "48.1", …).
@@ -320,7 +330,7 @@ fi
 # ==============================================================================
 # 5. Install Pulsar OS panel icons (squircle macOS-style)
 # ==============================================================================
-ICONS_DIR="$OVERLAY_DIR/icons"
+ICONS_DIR="${OVERLAY_DIR:-$SCRIPT_DIR/overlay-gnome48}/icons"
 if [ -d "$ICONS_DIR" ]; then
     echo "🖼️ [ES] Instalando iconos de paneles de Pulsar OS..."
     echo "🖼️ [EN] Installing Pulsar OS panel icons..."
