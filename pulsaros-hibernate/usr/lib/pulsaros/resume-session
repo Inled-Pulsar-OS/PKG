@@ -193,34 +193,29 @@ if [ -n "$TARGET_VT" ] && [ "$TARGET_VT" != "0" ]; then
     drm_force_redetect
 
     IS_VM=0
+    # Solo consideramos VM si systemd-detect-virt confirma hipervisor Y la GPU activa es virtual
     if command -v systemd-detect-virt >/dev/null 2>&1; then
-        systemd-detect-virt -q --vm && IS_VM=1
-    fi
-    if lsmod 2>/dev/null | grep -qE "^(virtio_gpu|bochs|qxl) "; then
-        IS_VM=1
+        if systemd-detect-virt -q --vm; then
+            if grep -qsE "(virtio-pci|virtio_gpu|bochs-drm|qxl-drm)" /sys/class/drm/card*/device/uevent 2>/dev/null; then
+                IS_VM=1
+            fi
+        fi
     fi
 
     if [ "$IS_VM" = 1 ]; then
-        # virtio-gpu/bochs: el scanout no sobrevive al S4; el round-trip de VT
+        # virtio-gpu/bochs en VM: el scanout virtual no sobrevive al S4; el round-trip de VT
         # deadlockea la consola. Reinicio del DM + switch al VT del DM.
         log "VM con GPU virtual detectada: reiniciando display manager..."
         restart_display_manager
         switch_to_dm_vt_after_restart
     else
-        OTHER_VT=$([ "$TARGET_VT" = "1" ] && echo 2 || echo 1)
-        log "Toggle DRM (HW real): VT$TARGET_VT -> VT$OTHER_VT -> VT$TARGET_VT"
-        if switch_vt "$OTHER_VT" && sleep 0.3 && switch_vt "$TARGET_VT"; then
-            log "Toggle completado."
-            sleep 2
-            drm_force_redetect
-        else
-            log "⚠️ El toggle ha hecho timeout: driver GPU muerto tras el resume."
-            if [ -n "$TARGET_SESSION" ]; then
-                timeout 10 loginctl terminate-session "$TARGET_SESSION" 2>/dev/null || true
-            fi
-            restart_display_manager
-            switch_to_dm_vt_after_restart
+        # Hardware real (AMD/Intel/NVIDIA): Preservar sesión de usuario viva.
+        log "Hardware real detectado: reactivando sesión y refrescando DRM..."
+        if [ -n "$TARGET_SESSION" ] && command -v loginctl >/dev/null 2>&1; then
+            timeout 5 loginctl activate-session "$TARGET_SESSION" 2>/dev/null || true
         fi
+        sleep 0.5
+        drm_force_redetect
     fi
 
     # 4. Reactivar la sesión logind (best-effort)
@@ -235,14 +230,13 @@ else
         fi
     done
 
-    # En VM la pantalla queda muerta aunque el sistema haya resumido bien.
-    # Reiniciar el DM y switchear al su VT.
     IS_VM_NOGT=0
     if command -v systemd-detect-virt >/dev/null 2>&1; then
-        systemd-detect-virt -q --vm && IS_VM_NOGT=1
-    fi
-    if lsmod 2>/dev/null | grep -qE "^(virtio_gpu|bochs|qxl) "; then
-        IS_VM_NOGT=1
+        if systemd-detect-virt -q --vm; then
+            if grep -qsE "(virtio-pci|virtio_gpu|bochs-drm|qxl-drm)" /sys/class/drm/card*/device/uevent 2>/dev/null; then
+                IS_VM_NOGT=1
+            fi
+        fi
     fi
     if [ "$IS_VM_NOGT" = 1 ]; then
         log "VM sin sesión gráfica detectada: reiniciando display manager..."
