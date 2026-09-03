@@ -160,17 +160,17 @@ export default class ShotzyExtension extends Extension {
                     const strokeDuration = Math.max(now - strokeStartTime, 1);
                     const speed = (strokeDist / strokeDuration) * 1000; // px/sec
 
-                    // Must be a rapid, intentional twitch stroke:
-                    // - Stroke length >= 80px
-                    // - Stroke duration <= 130ms (fast back-and-forth)
-                    // - Speed >= 1200 px/sec
-                    if (strokeDist >= 80 && strokeDuration <= 130 && speed >= 1200) {
+                    // Must be a wide, energetic, vigorous sweep across the screen ("a lo bruto"):
+                    // - Wide stroke amplitude >= 220px
+                    // - High speed >= 1400 px/sec
+                    // - Fast stroke duration <= 220ms
+                    if (strokeDist >= 220 && strokeDuration <= 220 && speed >= 1400) {
                         reversals.push({ time: now, dist: strokeDist });
-                        reversals = reversals.filter(r => now - r.time <= 450);
+                        reversals = reversals.filter(r => now - r.time <= 700);
                         const totalDist = reversals.reduce((acc, r) => acc + r.dist, 0);
 
-                        // Require at least 6 fast reversals (3 full vigorous shakes) and >= 480px total distance
-                        if (reversals.length >= 6 && totalDist >= 480) {
+                        // Require at least 4 wide sweeps (>= 950px total travel across screen)
+                        if (reversals.length >= 4 && totalDist >= 950) {
                             if (now - lastTrigger >= 3500) {
                                 lastTrigger = now;
                                 reversals = [];
@@ -181,7 +181,7 @@ export default class ShotzyExtension extends Extension {
                             }
                         }
                     } else {
-                        // Slow or long stroke is normal mouse movement -> clear prior reversals
+                        // Small or slow movement -> reset
                         reversals = [];
                     }
 
