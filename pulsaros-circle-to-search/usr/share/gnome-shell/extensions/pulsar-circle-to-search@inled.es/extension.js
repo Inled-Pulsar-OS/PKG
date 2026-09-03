@@ -96,6 +96,13 @@ export default class ShotzyExtension extends Extension {
     }
 
     _setupShakeDetector() {
+        if (this._shakeWatch) {
+            try {
+                this._shakeWatch.remove();
+            } catch (e) {}
+            this._shakeWatch = null;
+        }
+
         try {
             this._pointerWatcher = getPointerWatcher();
             const startTime = Date.now();
@@ -110,8 +117,8 @@ export default class ShotzyExtension extends Extension {
 
             this._shakeWatch = this._pointerWatcher.addWatch(16, (x, y) => {
                 const now = Date.now();
-                // 1. Startup Warmup: Ignore cursor coordinates during first 2.0s
-                if (now - startTime < 2000) {
+                // 1. Startup Warmup: Ignore cursor coordinates during first 2.5s
+                if (now - startTime < 2500) {
                     lastX = x;
                     lastY = y;
                     return;
@@ -129,8 +136,8 @@ export default class ShotzyExtension extends Extension {
                 const dt = now - lastMoveTime;
                 lastMoveTime = now;
 
-                // 2. Idle timeout: If mouse stopped or stuttered (> 100ms between ticks), reset shake
-                if (dt > 100) {
+                // 2. Idle timeout: If mouse stopped or stuttered (> 80ms between ticks), reset shake
+                if (dt > 80) {
                     strokeDir = 0;
                     reversals = [];
                     lastX = x;
@@ -144,7 +151,7 @@ export default class ShotzyExtension extends Extension {
                 lastX = x;
                 lastY = y;
 
-                if (Math.abs(dx) < 6) return;
+                if (Math.abs(dx) < 8) return;
                 const d = dx > 0 ? 1 : -1;
 
                 if (strokeDir === 0) {
@@ -161,17 +168,17 @@ export default class ShotzyExtension extends Extension {
                     const speed = (strokeDist / strokeDuration) * 1000; // px/sec
 
                     // Must be a wide, energetic, vigorous sweep across the screen ("a lo bruto"):
-                    // - Wide stroke amplitude >= 220px
-                    // - High speed >= 1400 px/sec
+                    // - Wide stroke amplitude >= 260px per sweep
+                    // - High speed >= 1600 px/sec
                     // - Fast stroke duration <= 220ms
-                    if (strokeDist >= 220 && strokeDuration <= 220 && speed >= 1400) {
+                    if (strokeDist >= 260 && strokeDuration <= 220 && speed >= 1600) {
                         reversals.push({ time: now, dist: strokeDist });
-                        reversals = reversals.filter(r => now - r.time <= 700);
+                        reversals = reversals.filter(r => now - r.time <= 750);
                         const totalDist = reversals.reduce((acc, r) => acc + r.dist, 0);
 
-                        // Require at least 4 wide sweeps (>= 950px total travel across screen)
-                        if (reversals.length >= 4 && totalDist >= 950) {
-                            if (now - lastTrigger >= 3500) {
+                        // Require at least 5 wide sweeps (>= 1300px total travel across screen)
+                        if (reversals.length >= 5 && totalDist >= 1300) {
+                            if (now - lastTrigger >= 4000) {
                                 lastTrigger = now;
                                 reversals = [];
                                 strokeDir = 0;
@@ -196,8 +203,10 @@ export default class ShotzyExtension extends Extension {
     }
 
     disable() {
-        if (this._shakeWatch && this._pointerWatcher) {
-            this._pointerWatcher._removeWatch(this._shakeWatch);
+        if (this._shakeWatch) {
+            try {
+                this._shakeWatch.remove();
+            } catch (e) {}
             this._shakeWatch = null;
         }
 
