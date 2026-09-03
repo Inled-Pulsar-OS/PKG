@@ -102,15 +102,16 @@ export default class ShotzyExtension extends Extension {
             let lastX = null;
             let lastY = null;
             let lastMoveTime = 0;
-            let strokeDx = 0;
+            let strokeStartPos = 0;
+            let strokeStartTime = 0;
             let strokeDir = 0;
             let reversals = [];
             let lastTrigger = 0;
 
-            this._shakeWatch = this._pointerWatcher.addWatch(20, (x, y) => {
+            this._shakeWatch = this._pointerWatcher.addWatch(16, (x, y) => {
                 const now = Date.now();
-                // 1. Startup Warmup: Ignore cursor coordinates during first 1.5s to prevent jump triggers
-                if (now - startTime < 1500) {
+                // 1. Startup Warmup: Ignore cursor coordinates during first 2.0s
+                if (now - startTime < 2000) {
                     lastX = x;
                     lastY = y;
                     return;
@@ -120,19 +121,22 @@ export default class ShotzyExtension extends Extension {
                     lastX = x;
                     lastY = y;
                     lastMoveTime = now;
+                    strokeStartPos = x;
+                    strokeStartTime = now;
                     return;
                 }
 
                 const dt = now - lastMoveTime;
                 lastMoveTime = now;
 
-                // 2. Movement Gap: If mouse was idle or moved slowly (> 200ms gap), reset shake tracking
-                if (dt > 200) {
-                    strokeDx = 0;
+                // 2. Idle timeout: If mouse stopped or stuttered (> 100ms between ticks), reset shake
+                if (dt > 100) {
                     strokeDir = 0;
                     reversals = [];
                     lastX = x;
                     lastY = y;
+                    strokeStartPos = x;
+                    strokeStartTime = now;
                     return;
                 }
 
@@ -140,39 +144,50 @@ export default class ShotzyExtension extends Extension {
                 lastX = x;
                 lastY = y;
 
-                if (Math.abs(dx) < 4) return;
+                if (Math.abs(dx) < 6) return;
                 const d = dx > 0 ? 1 : -1;
 
                 if (strokeDir === 0) {
                     strokeDir = d;
-                    strokeDx = dx;
+                    strokeStartPos = x;
+                    strokeStartTime = now;
                     return;
                 }
 
-                if (d === strokeDir) {
-                    strokeDx += dx;
-                } else {
-                    const strokeLen = Math.abs(strokeDx);
-                    // 3. Calibrated threshold: Require 4 rapid direction changes of >= 50px each (>280px total)
-                    if (strokeLen >= 50) {
-                        reversals.push({ time: now, len: strokeLen });
-                        reversals = reversals.filter(r => now - r.time <= 500);
-                        const totalDist = reversals.reduce((acc, r) => acc + r.len, 0);
+                // If direction reversed
+                if (d !== strokeDir) {
+                    const strokeDist = Math.abs(x - strokeStartPos);
+                    const strokeDuration = Math.max(now - strokeStartTime, 1);
+                    const speed = (strokeDist / strokeDuration) * 1000; // px/sec
 
-                        if (reversals.length >= 4 && totalDist >= 280) {
-                            if (now - lastTrigger >= 3000) {
+                    // Must be a rapid, intentional twitch stroke:
+                    // - Stroke length >= 80px
+                    // - Stroke duration <= 130ms (fast back-and-forth)
+                    // - Speed >= 1200 px/sec
+                    if (strokeDist >= 80 && strokeDuration <= 130 && speed >= 1200) {
+                        reversals.push({ time: now, dist: strokeDist });
+                        reversals = reversals.filter(r => now - r.time <= 450);
+                        const totalDist = reversals.reduce((acc, r) => acc + r.dist, 0);
+
+                        // Require at least 6 fast reversals (3 full vigorous shakes) and >= 480px total distance
+                        if (reversals.length >= 6 && totalDist >= 480) {
+                            if (now - lastTrigger >= 3500) {
                                 lastTrigger = now;
                                 reversals = [];
-                                strokeDx = 0;
                                 strokeDir = 0;
                                 if (Main.screenshotUI && !Main.screenshotUI._isOpen) {
                                     Main.screenshotUI.open();
                                 }
                             }
                         }
+                    } else {
+                        // Slow or long stroke is normal mouse movement -> clear prior reversals
+                        reversals = [];
                     }
+
                     strokeDir = d;
-                    strokeDx = dx;
+                    strokeStartPos = x;
+                    strokeStartTime = now;
                 }
             });
         } catch (e) {
