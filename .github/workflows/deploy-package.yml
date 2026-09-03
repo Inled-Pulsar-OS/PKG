@@ -171,6 +171,8 @@ jobs:
             -w /workspace \
             -e PULSAR_VERSION="$PULSAR_VERSION" \
             -e DEBIAN_FRONTEND=noninteractive \
+            -e GITHUB_ACTIONS="true" \
+            -e CI="true" \
             debian:trixie bash -c "
               set -eo pipefail
               apt-get update
@@ -220,6 +222,8 @@ jobs:
             -v "$PWD:/workspace" \
             -w /workspace \
             -e PULSAR_VERSION="$PULSAR_VERSION" \
+            -e GITHUB_ACTIONS="true" \
+            -e CI="true" \
             archlinux:latest bash -c "
               pacman-key --init
               pacman-key --populate archlinux
