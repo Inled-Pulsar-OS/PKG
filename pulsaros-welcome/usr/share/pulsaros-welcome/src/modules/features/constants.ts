@@ -8,14 +8,14 @@ export const FEATURE_SLIDES: FeatureSlide[] = [
     title: "Session Restore",
     subtitle:
       "Everything comes back exactly as you left it. Reboot or power on, and every app, window and document reopens on its own, just like on a Mac.",
-    video: "./videos/session-restore.mp4",
+    video: "./videos/session-restore.webp",
   },
   {
     id: "sayri",
     title: "Sayri, AI Assistant",
     subtitle:
       "An AI assistant that uses the model you want. It's not like Siri, it's smart.",
-    video: "./videos/sayri.mp4",
+    video: "./videos/sayri.webp",
   },
   {
     id: "finder-providers",
@@ -39,27 +39,27 @@ export const FEATURE_SLIDES: FeatureSlide[] = [
     title: "App Store",
     subtitle:
       "Browse and install apps from all the package managers. Update your system, uninstall ANY system package and clean system trash.",
-    video: "./videos/app-store.mp4",
+    video: "./videos/app-store.webp",
   },
   {
     id: "spotlight",
     title: "Spotlight",
     subtitle:
       "Search apps, documents, clipboard, images and any file. Navigate dirs and uninstall apps.",
-    video: "./videos/spotlight.mp4",
+    video: "./videos/spotlight.webp",
   },
   {
     id: "window-mode",
     title: "Window Mode",
     subtitle:
       "Full screen on new workspace. Full macOS tiling, floating, and split-view window management.",
-    video: "./videos/window-mode.mp4",
+    video: "./videos/window-mode.webp",
   },
   {
     id: "remap-wallpaper",
     title: "Remap & Live Wallpapers",
     subtitle:
       "Switch between Mac or Linux shortcuts in one click, and enjoy animated wallpapers on the Desktop and SDDM.",
-    video: "./videos/remap-live-wallpaper.mp4",
+    video: "./videos/remap-live-wallpaper.webp",
   },
 ];

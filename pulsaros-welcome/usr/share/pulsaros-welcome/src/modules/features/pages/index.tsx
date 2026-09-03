@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FEATURE_SLIDES, SLIDE_MS } from "../constants";
 import { SliceCard } from "../components/slice-card";
 
@@ -9,7 +9,6 @@ interface FeaturesPageProps {
 
 export function FeaturesPage({ onContinue, onBack }: FeaturesPageProps) {
   const [index, setIndex] = useState(0);
-  const videoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
   const total = FEATURE_SLIDES.length;
 
   const next = useCallback(() => setIndex((i) => (i + 1) % total), [total]);
@@ -31,15 +30,6 @@ export function FeaturesPage({ onContinue, onBack }: FeaturesPageProps) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [next, prev]);
-
-  const slide = FEATURE_SLIDES[index];
-
-  useEffect(() => {
-    const v = videoRefs.current.get(slide.id);
-    if (!v) return;
-    v.currentTime = 0;
-    v.play().catch(() => {});
-  }, [index, slide.id]);
 
   return (
     <div className="screen-backdrop flex h-screen w-screen flex-col items-center justify-center p-5 sm:p-8">
@@ -71,7 +61,6 @@ export function FeaturesPage({ onContinue, onBack }: FeaturesPageProps) {
               slide={slide}
               prev={prev}
               next={next}
-              videoRefs={videoRefs}
             />
           ))}
         </main>

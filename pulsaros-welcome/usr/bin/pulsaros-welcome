@@ -7,6 +7,14 @@
 TAURI_BIN="/usr/lib/pulsaros-welcome/pulsaros-welcome"
 PYTHON_APP="/usr/share/pulsaros-welcome/welcome.py"
 
+# Fix: videos appear black in WebKit on Linux due to DMA-BUF/VA-API issues.
+# Disabling the DMA-BUF renderer forces WebKit to use software-based video
+# decoding, which is universally compatible across all GPU configurations.
+export WEBKIT_DISABLE_DMABUF_RENDERER=1
+# Also disable accelerated compositing to prevent black-frame rendering bugs
+# in some WebKit/GStreamer combinations on Wayland and X11.
+export WEBKIT_DISABLE_COMPOSITING_MODE=1
+
 if [ -x "$TAURI_BIN" ]; then
     exec "$TAURI_BIN" "$@"
 fi

@@ -8,17 +8,9 @@ interface SliceCardProps {
   index: number;
   prev: () => void;
   next: () => void;
-  videoRefs: React.RefObject<Map<string, HTMLVideoElement>>;
 }
 
-export function SliceCard({
-  slide,
-  idx,
-  index,
-  prev,
-  next,
-  videoRefs,
-}: SliceCardProps) {
+export function SliceCard({ slide, idx, index, prev, next }: SliceCardProps) {
   return (
     <div
       className={cn(
@@ -35,7 +27,7 @@ export function SliceCard({
 
       <div className="relative mt-8 w-full max-w-3xl">
         {slide.providers && <PictureSlice slide={slide} />}
-        {slide.video && <VideoSlice slide={slide} videoRefs={videoRefs} />}
+        {slide.video && <AnimatedSlice src={slide.video} />}
         <button
           aria-label="Previous slide"
           onClick={prev}
@@ -52,6 +44,19 @@ export function SliceCard({
         </button>
       </div>
     </div>
+  );
+}
+
+/** Animated WebP — no video pipeline, no GStreamer, no DMA-BUF. Just an <img>. */
+function AnimatedSlice({ src }: { src: string }) {
+  return (
+    <img
+      src={src}
+      alt=""
+      draggable={false}
+      className="w-full rounded-2xl border border-border shadow-lg"
+      style={{ maxHeight: "55vh", objectFit: "contain" }}
+    />
   );
 }
 
@@ -76,36 +81,5 @@ function PictureSlice({ slide }: { slide: FeatureSlide }) {
         </div>
       ))}
     </div>
-  );
-}
-
-function VideoSlice({
-  slide,
-  videoRefs,
-}: {
-  slide: FeatureSlide;
-  videoRefs: React.RefObject<Map<string, HTMLVideoElement>>;
-}) {
-  return (
-    <video
-      ref={(el) => {
-        if (el) {
-          videoRefs.current.set(slide.id, el);
-        } else {
-          videoRefs.current.delete(slide.id);
-        }
-      }}
-      src={slide.video}
-      muted
-      loop
-      playsInline
-      onError={(e) => {
-        const v = e.currentTarget;
-        v.removeAttribute("src");
-        v.load();
-      }}
-      className="w-full rounded-2xl border border-border shadow-lg"
-      style={{ maxHeight: "55vh" }}
-    />
   );
 }
