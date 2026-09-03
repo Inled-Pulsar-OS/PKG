@@ -180,7 +180,7 @@ jobs:
                 build-essential cmake meson ninja-build git gettext blueprint-compiler \
                 python3-gi python3-gi-cairo gobject-introspection gir1.2-glib-2.0 gir1.2-gtk-4.0 gir1.2-adw-1 \
                 dpkg-dev fakeroot jq python3-pil python3-httpx ca-certificates curl pkg-config \
-                unzip sassc libglib2.0-bin \
+                unzip sassc libglib2.0-bin wget rsync \
                 libgtk-4-dev libadwaita-1-dev libgnome-desktop-4-dev libgnome-bg-4-dev \
                 libgnome-rr-4-dev libgnome-bluetooth-ui-3.0-dev \
                 libcolord-dev libcolord-gtk4-dev libgoa-1.0-dev libgoa-backend-1.0-dev \
