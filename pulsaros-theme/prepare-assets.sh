@@ -48,7 +48,7 @@ fi
 
 
 # Ejecutar instalador apuntando al staging
-./install.sh -b -c dark -l -d "$STAGE_DIR/usr/share/themes" --silent-mode
+./install.sh -b -c dark -d "$STAGE_DIR/usr/share/themes" --silent-mode
 
 # Copiar configuración de GTK4 para Skel y Root (Libadwaita Fix)
 mkdir -p "$STAGE_DIR/etc/skel/.config/gtk-4.0"
