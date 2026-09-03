@@ -8,6 +8,7 @@ ConditionPathExists=/swapfile
 Type=oneshot
 ExecStart=/usr/lib/pulsaros/verify-resume-offset
 RemainAfterExit=yes
+TimeoutStartSec=30
 
 [Install]
 WantedBy=multi-user.target

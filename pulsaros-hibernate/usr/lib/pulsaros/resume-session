@@ -4,98 +4,281 @@
 #
 # Called after the kernel restores memory and thaws userspace processes.
 #
-# ROOT CAUSE OF THE FREEZE IDENTIFIED:
-# 1. Before poweroff, GNOME thaws/drops DRM scanout, revealing VT1 which still
-#    had rEFInd's "Booting OS..." text from the original morning boot. That text
-#    was then frozen and written into the swap snapshot!
-# 2. On resume, the restored memory brings back VT1 showing that exact screen.
-# 3. Regular 'chvt' commands inside systemd hooks were FAILING with:
-#    "chvt: No se puede conseguir un descriptor de fichero que refiera a la consola"
-#    because stdin in systemd services is /dev/null, not a TTY!
-# 4. As a result, Mutter never received a VT switch to re-acquire DRM master.
+# WHY THE SCREEN STAYS FROZEN ON THE SPLASH AFTER RESUME:
+# The resume boot starts a Plymouth daemon inside the initramfs which takes
+# DRM master and paints the splash. When the image restore completes, the
+# kernel jumps back into the hibernated state, where Mutter/GNOME Shell
+# *believes* it still owns scanout and never re-modesets. The display keeps
+# scanning out the dead initramfs splash (or, when a VT switch hands the
+# screen to the console, VT1 which still shows rEFInd's "Booting OS" text
+# plus the getty banner — the "second booting OS with a cursor" symptom).
 #
-# FIX:
-# 1. Kill any early Plymouth daemon left over from initramfs.
-# 2. Use 'chvt' with stdin redirected from /dev/tty0 or /dev/console so it succeeds.
-# 3. Cycle VTs (VT2 -> VT1 or VT1 -> VT2) to force Mutter to release and re-acquire
-#    DRM master, triggering a hardware modeset and repainting the desktop.
+# FIX: force a real VT round-trip (session VT -> console VT -> session VT).
+# Dropping and re-acquiring DRM master triggers a full hardware modeset and
+# repaint in Mutter. This implementation:
+#   1. Never uses kbd's chvt as the primary mechanism. Its getfd() opens its
+#      own descriptors (redirecting stdin does NOT fix "Couldn't get a file
+#      descriptor referring to the console") and VT_WAITACTIVE can block
+#      forever. We do the VT_ACTIVATE/VT_WAITACTIVE ioctls directly on
+#      /dev/tty0 via python3, with hard timeouts.
+#   2. Guards against concurrent invocations with flock (the post-resume
+#      hook, the ExecStartPost drop-in and the sleep.target unit can all
+#      call this script).
+#   3. Logs a diagnostic trail to /var/log/pulsaros-hibernate.log.
 # ==============================================================================
 set -u
 
-log() { echo "[pulsaros-resume] $*" | tee /dev/kmsg 2>/dev/null || echo "[pulsaros-resume] $*" >&2; }
+LOG_FILE=/var/log/pulsaros-hibernate.log
+LOCK_FILE=/run/pulsaros-resume-session.lock
 
-# Helper to execute chvt reliably even when stdin is /dev/null
-do_chvt() {
-    local vt="$1"
-    for dev in /dev/tty0 /dev/tty1 /dev/console; do
-        if [ -c "$dev" ]; then
-            chvt "$vt" < "$dev" 2>/dev/null && return 0
-        fi
-    done
-    chvt "$vt" 2>/dev/null || true
+log() {
+    local line
+    line="[pulsaros-resume $(date '+%Y-%m-%d %H:%M:%S')] $*"
+    echo "$line" | tee -a "$LOG_FILE" 2>/dev/null
+    echo "$line" > /dev/kmsg 2>/dev/null || true
 }
 
-log "=== Post-hibernate restoration starting ==="
-
-# 1. Terminate early-boot Plymouth from initramfs to free the DRM device
-if command -v plymouth >/dev/null 2>&1; then
-    plymouth --quit 2>/dev/null || true
+# Single-flight guard: first writer holds the lock for the whole run.
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    log "Otra instancia de resume-session está en curso; saliendo."
+    exit 0
 fi
-pkill -9 plymouthd 2>/dev/null || true
 
-# 2. Find the graphical session and its VT
+# ------------------------------------------------------------------------------
+# VT switch with hard timeout. Uses the VT_ACTIVATE (0x5606) and VT_WAITACTIVE
+# (0x5607) ioctls directly on /dev/tty0 — independent of kbd's chvt and of the
+# service's stdin/stdout. Falls back to chvt (also under timeout) if python3
+# or the ioctl path fails.
+# ------------------------------------------------------------------------------
+switch_vt() {
+    local vt="$1"
+    [ -n "$vt" ] && [ "$vt" -ge 1 ] 2>/dev/null || return 1
+
+    if command -v python3 >/dev/null 2>&1 && [ -c /dev/tty0 ]; then
+        if timeout 8 python3 - "$vt" <<'PYEOF' 2>>"$LOG_FILE"
+import fcntl, os, sys
+vt = int(sys.argv[1])
+fd = os.open("/dev/tty0", os.O_RDWR | os.O_NONBLOCK)
+fcntl.ioctl(fd, 0x5606, vt)      # VT_ACTIVATE: asynchronous request
+fcntl.ioctl(fd, 0x5607, vt)      # VT_WAITACTIVE: block until complete
+print(f"VT {vt} activado")
+PYEOF
+        then
+            return 0
+        fi
+        log "python3 VT_ACTIVATE falló para VT$vt; probando chvt..."
+    fi
+
+    if command -v chvt >/dev/null 2>&1; then
+        timeout 8 chvt "$vt" < /dev/tty0 >>"$LOG_FILE" 2>&1 && return 0
+    fi
+    log "No se pudo cambiar al VT$vt."
+    return 1
+}
+
+log "=== Restauración post-hibernate iniciada ==="
+
+# 1. Terminate any leftover early-boot Plymouth daemon to free the DRM device.
+#    After a successful image restore the initramfs plymouthd is already gone
+#    (its memory was overwritten by the restored image), but on failed/partial
+#    resumes a live daemon would hold DRM master and block the VT round-trip.
+if command -v plymouth >/dev/null 2>&1; then
+    timeout 5 plymouth --quit 2>/dev/null || true
+fi
+timeout 5 pkill -9 plymouthd 2>/dev/null || true
+
+# 2. Find the graphical session and its VT.
 TARGET_VT=""
 TARGET_SESSION=""
-
-for s in $(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}'); do
-    STYPE=$(loginctl show-session "$s" -p Type --value 2>/dev/null || true)
+for s in $(timeout 5 loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}'); do
+    STYPE=$(timeout 5 loginctl show-session "$s" -p Type --value 2>/dev/null || true)
     if [ "$STYPE" = "wayland" ] || [ "$STYPE" = "x11" ]; then
         TARGET_SESSION="$s"
-        S_VT=$(loginctl show-session "$s" -p VTNr --value 2>/dev/null || true)
+        S_VT=$(timeout 5 loginctl show-session "$s" -p VTNr --value 2>/dev/null || true)
         if [ -n "$S_VT" ] && [ "$S_VT" != "0" ]; then
             TARGET_VT="$S_VT"
-            log "Found graphical session $s on VT$TARGET_VT (type=$STYPE)"
+            log "Sesión gráfica $s en VT$TARGET_VT (type=$STYPE)"
             break
         fi
     fi
 done
 
-# Fallback VT if session query returned empty
-if [ -z "$TARGET_VT" ] || [ "$TARGET_VT" = "0" ]; then
-    ACTIVE_VT=$(cat /sys/class/tty/tty0/active 2>/dev/null | tr -d 'tty' || echo "1")
-    TARGET_VT="${ACTIVE_VT:-1}"
-    log "Fallback to VT$TARGET_VT"
-fi
+# 3. Display recovery — SIN round-trip de VT.
+#    CRÍTICO (reproducido en laboratorio): un cambio de VT contra un
+#    compositor wedged tras el resume produce un DEADLOCK del kernel
+#    (consola clavada, sistema entero muerto, 0% CPU). La recuperación
+#    segura es:
+#      a) forzar re-detección de conectores DRM (hotplug) → Mutter
+#         re-modesetea sin tocar VTs;
+#      b) en VMs (virtio-gpu) el scanout no sobrevive al S4 de forma
+#         fiable → reiniciar el display manager (sesión perdida, pero
+#         la máquina SIEMPRE recupera imagen);
+#      c) en hardware real se intenta el round-trip de VT con timeouts;
+#         si falla, escalación a reinicio del DM.
+drm_force_redetect() {
+    for st in /sys/class/drm/card*-*/status; do
+        [ -w "$st" ] && echo detect > "$st" 2>/dev/null || true
+    done
+    if command -v udevadm >/dev/null 2>&1; then
+        timeout 10 udevadm trigger --subsystem-match=drm --action=change 2>/dev/null || true
+        timeout 10 udevadm trigger --subsystem-match=drm --action=hotplug 2>/dev/null || true
+    fi
+}
 
-# 3. Mandatory VT Toggle:
-# Switching away and back forces Mutter/Wayland to drop DRM master and re-acquire it,
-# which rebinds CRTCs, planes, and repaints desktop framebuffers onto hardware scanout.
-if [ "$TARGET_VT" = "1" ]; then
-    OTHER_VT="2"
+restart_display_manager() {
+    DM_RESTARTED=1
+    log "Reiniciando el display manager para recuperar imagen..."
+    timeout 40 systemctl restart display-manager.service 2>/dev/null \
+        || timeout 40 systemctl restart sddm.service 2>/dev/null \
+        || timeout 40 systemctl restart gdm.service 2>/dev/null || true
+    log "Display manager reiniciado."
+}
+
+# ------------------------------------------------------------------------------
+# Tras reiniciar el DM en VM: esperar a que abra sesión y switchear al su VT.
+# Mutter está muerto (lo mató el restart) → NO puede ocurrir el deadlock de VT.
+# Limpiamos VT1 del texto fantasma "Booting OS" de rEFInd antes de saltar.
+# ------------------------------------------------------------------------------
+switch_to_dm_vt_after_restart() {
+    log "Esperando a que el DM abra sesión gráfica (máx 20s)..."
+    local dm_vt=""
+    local i=0
+    while [ $i -lt 20 ] && [ -z "$dm_vt" ]; do
+        sleep 1
+        i=$((i + 1))
+        for s in $(timeout 5 loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}'); do
+            local stype
+            stype=$(timeout 5 loginctl show-session "$s" -p Type --value 2>/dev/null || true)
+            if [ "$stype" = "wayland" ] || [ "$stype" = "x11" ] || [ "$stype" = "mir" ]; then
+                dm_vt=$(timeout 5 loginctl show-session "$s" -p VTNr --value 2>/dev/null || true)
+                [ -n "$dm_vt" ] && [ "$dm_vt" != "0" ] && break
+                dm_vt=""
+            fi
+        done
+    done
+
+    # Limpiar VT1 del texto fantasma de rEFInd (independientemente de si
+    # encontramos el VT del DM: el texto ya no debe verse).
+    for dev in /dev/tty1 /dev/tty0; do
+        [ -c "$dev" ] && printf '\033[H\033[2J\033[3J\033[?25l' > "$dev" 2>/dev/null || true
+    done
+
+    if [ -n "$dm_vt" ] && [ "$dm_vt" != "0" ]; then
+        log "DM en VT$dm_vt: switcheando pantalla..."
+        # Usar chvt directamente: Mutter está muerto, sin riesgo de deadlock.
+        if timeout 5 chvt "$dm_vt" < /dev/tty0 >> "$LOG_FILE" 2>&1; then
+            log "✔ Pantalla switcheada a VT$dm_vt (login visible)."
+        else
+            # Fallback: python3 ioctl
+            if command -v python3 >/dev/null 2>&1 && [ -c /dev/tty0 ]; then
+                timeout 8 python3 - "$dm_vt" <<'PYEOF' >> "$LOG_FILE" 2>&1 || true
+import fcntl, os, sys
+vt = int(sys.argv[1])
+fd = os.open("/dev/tty0", os.O_RDWR | os.O_NONBLOCK)
+fcntl.ioctl(fd, 0x5606, vt)
+fcntl.ioctl(fd, 0x5607, vt)
+print(f"VT {vt} activado (ioctl)")
+PYEOF
+                log "VT switch vía ioctl completado."
+            fi
+        fi
+    else
+        log "⚠️ DM no abrió sesión gráfica en 20s; la pantalla queda en consola de texto."
+    fi
+}
+
+if [ -n "$TARGET_VT" ] && [ "$TARGET_VT" != "0" ]; then
+    log "Forzando re-detección DRM (sin tocar VTs)..."
+    drm_force_redetect
+
+    IS_VM=0
+    if command -v systemd-detect-virt >/dev/null 2>&1; then
+        systemd-detect-virt -q --vm && IS_VM=1
+    fi
+    if lsmod 2>/dev/null | grep -qE "^(virtio_gpu|bochs|qxl) "; then
+        IS_VM=1
+    fi
+
+    if [ "$IS_VM" = 1 ]; then
+        # virtio-gpu/bochs: el scanout no sobrevive al S4; el round-trip de VT
+        # deadlockea la consola. Reinicio del DM + switch al VT del DM.
+        log "VM con GPU virtual detectada: reiniciando display manager..."
+        restart_display_manager
+        switch_to_dm_vt_after_restart
+    else
+        OTHER_VT=$([ "$TARGET_VT" = "1" ] && echo 2 || echo 1)
+        log "Toggle DRM (HW real): VT$TARGET_VT -> VT$OTHER_VT -> VT$TARGET_VT"
+        if switch_vt "$OTHER_VT" && sleep 0.3 && switch_vt "$TARGET_VT"; then
+            log "Toggle completado."
+            sleep 2
+            drm_force_redetect
+        else
+            log "⚠️ El toggle ha hecho timeout: driver GPU muerto tras el resume."
+            if [ -n "$TARGET_SESSION" ]; then
+                timeout 10 loginctl terminate-session "$TARGET_SESSION" 2>/dev/null || true
+            fi
+            restart_display_manager
+            switch_to_dm_vt_after_restart
+        fi
+    fi
+
+    # 4. Reactivar la sesión logind (best-effort)
+    if [ -n "$TARGET_SESSION" ] && command -v loginctl >/dev/null 2>&1; then
+        timeout 5 loginctl activate-session "$TARGET_SESSION" 2>/dev/null || true
+    fi
 else
-    OTHER_VT="1"
+    log "Sin sesión gráfica activa tras el resume."
+    for dev in /dev/tty1 /dev/tty0; do
+        if [ -c "$dev" ]; then
+            printf '\033[H\033[2J\033[3J' > "$dev" 2>/dev/null || true
+        fi
+    done
+
+    # En VM la pantalla queda muerta aunque el sistema haya resumido bien.
+    # Reiniciar el DM y switchear al su VT.
+    IS_VM_NOGT=0
+    if command -v systemd-detect-virt >/dev/null 2>&1; then
+        systemd-detect-virt -q --vm && IS_VM_NOGT=1
+    fi
+    if lsmod 2>/dev/null | grep -qE "^(virtio_gpu|bochs|qxl) "; then
+        IS_VM_NOGT=1
+    fi
+    if [ "$IS_VM_NOGT" = 1 ]; then
+        log "VM sin sesión gráfica detectada: reiniciando display manager..."
+        restart_display_manager
+        switch_to_dm_vt_after_restart
+    fi
 fi
 
-log "Performing DRM master recovery VT toggle (chvt $OTHER_VT -> 200ms -> chvt $TARGET_VT)..."
-do_chvt "$OTHER_VT"
-sleep 0.2
-do_chvt "$TARGET_VT"
-
-# 4. Reactivate the logind session
-if [ -n "$TARGET_SESSION" ] && command -v loginctl >/dev/null 2>&1; then
-    log "Reactivating session $TARGET_SESSION..."
-    loginctl activate-session "$TARGET_SESSION" 2>/dev/null || true
+# 5. Safety net: nunca dejar la máquina clavada en una pantalla muerta.
+#    Tras dar margen a la recuperación, si NO hay ninguna sesión gráfica viva
+#    (la sesión de GNOME no sobrevivió la hibernación) y todavía no hemos
+#    reiniciado el display manager, hacerlo para aterrizar en el login.
+sleep 8
+if [ "${DM_RESTARTED:-0}" != "1" ]; then
+    HAS_GFX=0
+    for s in $(timeout 5 loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}'); do
+        STYPE=$(timeout 5 loginctl show-session "$s" -p Type --value 2>/dev/null || true)
+        if [ "$STYPE" = "wayland" ] || [ "$STYPE" = "x11" ]; then
+            HAS_GFX=1
+            break
+        fi
+    done
+    if [ "$HAS_GFX" = 0 ]; then
+        for dm in sddm.service gdm.service display-manager.service; do
+            if systemctl list-unit-files "$dm" >/dev/null 2>&1 && systemctl is-enabled "$dm" >/dev/null 2>&1; then
+                log "⚠️ Sin sesión gráfica tras el resume; reiniciando $dm como red de seguridad"
+                timeout 30 systemctl restart "$dm" 2>/dev/null || true
+                break
+            fi
+        done
+    fi
 fi
 
-# 5. Trigger DRM subsystem udev event so Mutter forces a full frame repaint
-log "Triggering DRM udev change event..."
-if command -v udevadm >/dev/null 2>&1; then
-    udevadm trigger --subsystem-match=drm --action=change 2>/dev/null || true
-fi
-
-# 6. Cleanup temporary sleep drop-ins and restore kernel printk level
+# 6. Cleanup temporary sleep drop-ins and restore kernel printk level.
 rm -f /run/systemd/sleep.conf.d/*pulsar*.conf 2>/dev/null || true
 echo "4 4 1 7" > /proc/sys/kernel/printk 2>/dev/null || true
 
-log "=== Post-hibernate restoration completed ==="
+log "=== Restauración post-hibernate completada ==="
 exit 0

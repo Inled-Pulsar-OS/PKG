@@ -1,12 +1,14 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-welcome
 pkgver=2.0.0
-pkgrel=1
+pkgrel=3
 pkgdesc="Welcome and onboarding app for Pulsar OS (Tauri + Python fallback)"
 arch=(any)
 url="https://inled.es"
 license=(custom)
-depends=(python-gobject python-cairo python-dbus gtk3 webkitgtk-6.0 libsoup3 xorg-xrandr gtk4 libadwaita driverman)
+# gstreamer + gst-plugins-*: runtime decode plugins WebKitGTK needs to render
+# the H.264 videos in the welcome slideshow (black-frame fix).
+depends=(python-gobject python-cairo python-dbus gtk3 webkitgtk-6.0 libsoup3 xorg-xrandr gtk4 libadwaita driverman gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav)
 makedepends=(rust npm)
 options=(!strip !debug)
 install=pulsaros-welcome.install

@@ -33,8 +33,13 @@ from gi.repository import Gtk, Gdk, GLib, Gio
 
 def is_live_system():
     """Detects if we are running in the Live ISO environment."""
-    # Check live filesystem mount points and directories
-    for p in ["/run/archiso/bootmnt", "/run/archiso/airootfs", "/run/archiso", "/lib/live/mount", "/run/live/medium", "/run/live/overlay"]:
+    for p in [
+        "/run/archiso/bootmnt",
+        "/run/archiso/airootfs",
+        "/run/live/medium",
+        "/run/live/overlay",
+        "/lib/live/mount/overlay",
+    ]:
         if os.path.exists(p):
             return True
 
@@ -149,6 +154,7 @@ class WelcomeApp(Gtk.Window):
                 window.IS_LIVE = {'true' if is_live else 'false'};
                 window.IS_ARCH = {'true' if is_arch else 'false'};
                 window.IS_OOTB = {'true' if needs_ootb else 'false'};
+                window.NEEDS_OOTB = {'true' if needs_ootb else 'false'};
             """,
             WebKit2.UserContentInjectedFrames.ALL_FRAMES,
             WebKit2.UserScriptInjectionTime.START,

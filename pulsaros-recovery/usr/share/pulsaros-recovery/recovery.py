@@ -2520,6 +2520,23 @@ class RecoveryWindow(Adw.ApplicationWindow):
             # Stop udisks2 automount daemon during formatting and system replication
             if "TEST_MODE" not in os.environ:
                 subprocess.run(["systemctl", "stop", "udisks2.service"], capture_output=True)
+                # Hide Pulsar OS partitions from udisks2/gvfs IN THE LIVE SYSTEM too.
+                # udisks2 is restarted when the install finishes; without this rule
+                # gvfs auto-mounts the freshly installed PULSAR_OS / PULSAR_RECOVERY
+                # partitions under /media, and those late mounts are exactly the
+                # "failed to unmount disk" errors seen when shutting down the live
+                # session after installing.
+                try:
+                    os.makedirs("/etc/udev/rules.d", exist_ok=True)
+                    with open("/etc/udev/rules.d/99-pulsaros-hide-installer-targets.rules", "w") as rf:
+                        rf.write(
+                            "# Pulsar OS installer: hide install targets from udisks2/gvfs\n"
+                            'ENV{ID_FS_LABEL}=="PULSAR_OS", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n'
+                            'ENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n'
+                        )
+                    subprocess.run(["udevadm", "control", "--reload"], capture_output=True)
+                except Exception as rule_err:
+                    print(f"Notice: could not install live udisks hide rule: {rule_err}")
 
             def log_msg(msg):
                 ts = datetime.datetime.now().strftime("%H:%M:%S")
@@ -2578,6 +2595,19 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         
                     # 3. Final recursive lazy unmount sweep to ensure absolutely nothing remains bound in the VFS
                     subprocess.run(["umount", "-f", "-l", "-R", "/mnt"], capture_output=True)
+
+                    # 4. Lazy-unmount any gvfs/udisks automounts of the install
+                    #    targets (e.g. /media/live/PULSAR_OS) that may have appeared
+                    #    before the hide rule took effect, so the post-install
+                    #    shutdown never trips over "device busy" unmount failures.
+                    try:
+                        with open("/proc/mounts", "r") as mf:
+                            for line in mf:
+                                parts = line.split()
+                                if len(parts) >= 2 and "/media/" in parts[1] and "PULSAR" in parts[1]:
+                                    subprocess.run(["umount", "-l", parts[1]], capture_output=True)
+                    except Exception:
+                        pass
                 
             is_efi = os.path.exists("/sys/firmware/efi")
             is_arch = os.path.exists("/etc/pacman.conf")
@@ -2838,7 +2868,50 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 if proc.returncode not in (0, 24):
                     err_output = proc.stderr.read()
                     raise Exception(f"System replication failed (code {proc.returncode})\n{err_output}")
-                
+
+                # ── Remove live-only systemd state copied by the rsync ──────────
+                # The live session masks plymouth-quit(.wait) via
+                # pulsaros-live-autologin.service so the splash lasts the whole
+                # live boot. Those mask symlinks (-> /dev/null) land in /etc of
+                # the target and leave the installed system without any
+                # deterministic way to terminate the boot splash. Restore the
+                # stock units.
+                for _unit in ("plymouth-quit.service", "plymouth-quit-wait.service"):
+                    _p = f"/mnt/etc/systemd/system/{_unit}"
+                    try:
+                        if os.path.islink(_p) and os.readlink(_p) == "/dev/null":
+                            os.unlink(_p)
+                            log_msg(f"Removed live-only mask for {_unit} in target")
+                    except Exception as m_err:
+                        log_msg(f"Notice: could not clean mask {_unit}: {m_err}")
+
+                # ── Remove live-only mountpoints copied by the rsync ─────────────
+                # The live session carries /lib/live (-> /usr/lib/live on
+                # merged-usr systems). The rsync excludes /run/* and /live/* but
+                # NOT /lib/*, so the (usually empty) /usr/lib/live dir lands in
+                # the target and makes pulsaros-welcome's is_live_system()
+                # misdetect the installed system as live, skipping the OOTB flow.
+                # Remove the leftovers; complain if they are not empty.
+                for _live_dir in ("/mnt/lib/live", "/mnt/usr/lib/live"):
+                    try:
+                        if os.path.isdir(_live_dir) and not os.listdir(_live_dir):
+                            os.rmdir(_live_dir)
+                            log_msg(f"Removed live-only empty dir {_live_dir} in target")
+                        elif os.path.isdir(_live_dir):
+                            log_msg(f"Notice: {_live_dir} not empty in target; left in place")
+                    except Exception as l_err:
+                        log_msg(f"Notice: could not clean {_live_dir}: {l_err}")
+
+                # ── Persistent journald on the installed system ────────────────
+                # If a hibernate resume hangs and the machine has to be hard-reset,
+                # the failed boot's journal must survive for diagnosis
+                # (journalctl -b -1). Storage=auto persists only when the dir exists.
+                try:
+                    os.makedirs("/mnt/var/log/journal", exist_ok=True)
+                    log_msg("Enabled persistent systemd journal in target (/var/log/journal)")
+                except Exception as j_err:
+                    log_msg(f"Notice: could not enable persistent journal: {j_err}")
+
             # ── Post-install: install packages removed from minimal ISO ───────────
             # In minimal ISO mode, heavy packages (Docker, VM tools, full firmware,
             # multimedia apps) were excluded to keep the ISO under 3GB. Install them
@@ -3154,7 +3227,53 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     return "simulated-uuid-1234-abcd"
                 val = exec_cmd(["blkid", "-o", "value", "-s", "UUID", part])
                 return val.strip()
-                
+
+            def compute_swap_size_gb():
+                """Size the hibernation swapfile to RAM (clamped 4-32 GB) and to
+                the free space on the target. A swapfile smaller than RAM makes
+                'systemctl hibernate' fail with 'not enough free swap' and the
+                session is silently lost on every shutdown."""
+                swap_gb = 8
+                try:
+                    with open("/proc/meminfo", "r") as mf:
+                        for line in mf:
+                            if line.startswith("MemTotal:"):
+                                total_kb = int(line.split()[1])
+                                swap_gb = (total_kb + 1048575) // 1048576
+                                break
+                except Exception:
+                    pass
+                swap_gb = max(4, min(32, swap_gb))
+                try:
+                    st = os.statvfs("/mnt")
+                    free_gb = (st.f_bavail * st.f_frsize) // (1024 ** 3)
+                    # Keep 6 GB of headroom for the system itself
+                    if free_gb < (swap_gb + 6):
+                        swap_gb = max(0, free_gb - 6)
+                except Exception:
+                    pass
+                return swap_gb
+
+            def create_target_swapfile():
+                """Create a non-COW /swapfile on the target for hibernation."""
+                if os.path.isfile("/mnt/swapfile"):
+                    return
+                swap_gb = compute_swap_size_gb()
+                if swap_gb < 4:
+                    log_msg("Notice: not enough free space for a hibernation swapfile (needs 4GB+).")
+                    return
+                try:
+                    log_msg(f"Creating contiguous non-COW /swapfile ({swap_gb}GB) for hibernation support...")
+                    subprocess.run(["btrfs", "filesystem", "mkswapfile", "--size", f"{swap_gb}g", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    if not os.path.isfile("/mnt/swapfile"):
+                        subprocess.run(["truncate", "-s", "0", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        subprocess.run(["chattr", "+C", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        subprocess.run(["dd", "if=/dev/zero", "of=/mnt/swapfile", "bs=1M", "count=" + str(swap_gb * 1024), "status=none"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        subprocess.run(["chmod", "600", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        subprocess.run(["mkswap", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except Exception as sw_err:
+                    log_msg(f"Notice: swapfile creation error: {sw_err}")
+
             root_uuid = get_partition_uuid(root_part)
             rec_uuid = get_partition_uuid(recovery_part) if recovery_part else None
             
@@ -3186,18 +3305,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         f.write('# Hide PULSAR_RECOVERY partition from file managers and desktop\nENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n')
                     
                     # Create non-COW swapfile for hibernation support on Btrfs
-                    if not os.path.isfile("/mnt/swapfile"):
-                        try:
-                            log_msg("Creating contiguous non-COW /swapfile (8GB) for hibernation support...")
-                            subprocess.run(["btrfs", "filesystem", "mkswapfile", "--size", "8g", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                            if not os.path.isfile("/mnt/swapfile"):
-                                subprocess.run(["truncate", "-s", "0", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                                subprocess.run(["chattr", "+C", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                                subprocess.run(["dd", "if=/dev/zero", "of=/mnt/swapfile", "bs=1M", "count=8192", "status=none"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                                subprocess.run(["chmod", "600", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                                subprocess.run(["mkswap", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                        except Exception as sw_err:
-                            log_msg(f"Notice: swapfile creation error: {sw_err}")
+                    create_target_swapfile()
             else:
                 fstab_lines = [
                     "# /etc/fstab: Pulsar OS Btrfs Configuration (BIOS)",
@@ -3221,12 +3329,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         f.write(fstab_content)
                     with open("/mnt/etc/udev/rules.d/99-pulsaros-hide-recovery.rules", "w") as f:
                         f.write('# Hide PULSAR_RECOVERY partition from file managers and desktop\nENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n')
-                    
-                    if not os.path.isfile("/mnt/swapfile"):
-                        try:
-                            subprocess.run(["btrfs", "filesystem", "mkswapfile", "--size", "8g", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                        except Exception:
-                            pass
+
+                    create_target_swapfile()
                 
             def preserve_live_initramfs_for_recovery():
                 """Deploy the live/recovery initramfs to PULSAR_OS (@/boot), ESP, and PULSAR_RECOVERY."""
@@ -3735,9 +3839,31 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
                                 )
 
                         refind_linux_conf = "/mnt/boot/refind_linux.conf"
+                        # Include hibernation resume parameters here too: entries
+                        # auto-detected by rEFInd and tools that rewrite this file
+                        # must keep resume= / resume_offset= / zswap.enabled=0.
+                        rl_resume_opts = ""
+                        if os.path.isfile("/mnt/swapfile") and root_uuid:
+                            try:
+                                swap_out = subprocess.check_output(
+                                    ["btrfs", "inspect-internal", "map-swapfile", "-r", "/mnt/swapfile"],
+                                    stderr=subprocess.DEVNULL, universal_newlines=True,
+                                ).strip()
+                                if swap_out.isdigit():
+                                    rl_resume_opts = f" resume=UUID={root_uuid} resume_offset={swap_out} zswap.enabled=0"
+                            except Exception:
+                                pass
+                        if not rl_resume_opts:
+                            try:
+                                with open(refind_linux_conf, "r") as rf:
+                                    m = re.search(r"(resume=UUID=[^\s\"]+\s+resume_offset=\d+(\s+zswap\.enabled=0)?)", rf.read())
+                                    if m:
+                                        rl_resume_opts = " " + m.group(1)
+                            except Exception:
+                                pass
                         conf_content = (
-                            f'"Boot with standard options"  "root=UUID={root_uuid} rootflags=subvol=@ rw quiet splash"\n'
-                            f'"Boot to single-user mode"    "root=UUID={root_uuid} rootflags=subvol=@ rw single"\n'
+                            f'"Boot with standard options"  "root=UUID={root_uuid} rootflags=subvol=@ rw quiet splash{rl_resume_opts}"\n'
+                            f'"Boot to single-user mode"    "root=UUID={root_uuid} rootflags=subvol=@ rw single{rl_resume_opts}"\n'
                             f'"Boot with minimal options"   "ro root=UUID={root_uuid} rootflags=subvol=@"\n'
                         )
                         if "TEST_MODE" not in os.environ:

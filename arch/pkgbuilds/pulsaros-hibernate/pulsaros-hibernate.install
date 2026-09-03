@@ -1,9 +1,14 @@
 post_install() {
     chmod +x /usr/lib/pulsaros/sleep-progress /usr/lib/pulsaros/resume-session \
-              /usr/lib/systemd/system-sleep/pulsaros-hibernate.sh 2>/dev/null || true
+              /usr/lib/systemd/system-sleep/pulsaros-hibernate.sh \
+              /usr/bin/pulsaros-hibernate-doctor 2>/dev/null || true
     systemctl daemon-reload 2>/dev/null || true
     systemctl enable pulsaros-verify-resume-offset.service 2>/dev/null || true
-    systemctl enable pulsaros-resume-session.service 2>/dev/null || true
+    systemctl enable pulsaros-console-clean.service 2>/dev/null || true
+    # NOTE: pulsaros-resume-session.service is intentionally NOT enabled.
+    # The display restoration already runs via the systemd-hibernate.service
+    # ExecStartPost drop-in and the /usr/lib/systemd/system-sleep hook; a third
+    # concurrent trigger via sleep.target only adds VT-switch races.
 }
 
 post_remove() {

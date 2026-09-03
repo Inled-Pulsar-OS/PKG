@@ -1,0 +1,15 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - OOTB Setup Assistant Invoker
+# ==============================================================================
+set -e
+
+if [ -f /usr/share/pulsaros/welcome_ootb.py ]; then
+    if command -v xhost >/dev/null 2>&1; then
+        xhost +SI:localuser:root 2>/dev/null || true
+    fi
+    exec sudo -E /usr/bin/python3 /usr/share/pulsaros/welcome_ootb.py "$@"
+fi
+
+echo "Error: /usr/share/pulsaros/welcome_ootb.py not found" >&2
+exit 1

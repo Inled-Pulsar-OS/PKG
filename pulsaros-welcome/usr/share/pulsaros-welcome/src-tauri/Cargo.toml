@@ -17,6 +17,15 @@ tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 
+[features]
+# CRITICAL: production builds MUST enable this feature. It switches the app
+# from "dev" mode (load frontend from devUrl http://localhost:1420, which
+# fails with "connection refused" when the dev server isn't running) to
+# production mode (serve the embedded frontendDist ../dist assets).
+# The `tauri build` CLI enables it automatically; plain `cargo build` must
+# pass it explicitly: cargo build --release --features custom-protocol
+custom-protocol = ["tauri/custom-protocol"]
+
 [profile.release]
 opt-level = "z"
 lto = true

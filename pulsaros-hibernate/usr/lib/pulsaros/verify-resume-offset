@@ -76,7 +76,21 @@ fi
 
 # ------------------------------------------------------------------------------
 # 3) Repair rEFInd configuration
+#    - offset-only repair when resume= already exists
+#    - FULL injection (resume=UUID resume_offset zswap.enabled=0) when the boot
+#      entries lack resume parameters entirely (e.g. the installer could not
+#      resolve the swapfile offset). Without this, hibernation would stay
+#      permanently broken: the image gets written but the next boot never
+#      resumes it.
 # ------------------------------------------------------------------------------
+real_root_uuid=""
+get_root_uuid() {
+    if [ -z "$real_root_uuid" ]; then
+        real_root_uuid=$(findmnt -no UUID -T "$SWAPFILE" 2>/dev/null || findmnt -no UUID / 2>/dev/null || true)
+    fi
+    echo "$real_root_uuid"
+}
+
 repair_refind_file() {
     local target="$1"
     [ -f "$target" ] || return 0
@@ -85,15 +99,29 @@ repair_refind_file() {
         return 0
     fi
     cp -a "$target" "${target}.bak" || true
-    if grep -q "resume_offset=" "$target"; then
-        sed -i -E "s/resume_offset=[0-9]+/resume_offset=$real/g" "$target"
+
+    if ! grep -q "resume=" "$target"; then
+        # No resume parameters at all: inject the complete set on every root= line.
+        local ru
+        ru=$(get_root_uuid)
+        if [ -n "$ru" ]; then
+            sed -i 's/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' "$target" 2>/dev/null || true
+            sed -i "s|\(root=UUID=[^ \"']*\)|\1 resume=UUID=${ru} resume_offset=${real} zswap.enabled=0|g" "$target" 2>/dev/null || true
+            log "✔ $target: parámetros resume inyectados (resume=UUID=$ru resume_offset=$real zswap.enabled=0)"
+        else
+            log "⚠ $target no tiene resume= y no pude determinar el UUID de root; no se inyecta nada"
+        fi
     else
-        sed -i -E "\|resume=| s/\"[[:space:]]*$/ resume_offset=$real\"/" "$target"
+        if grep -q "resume_offset=" "$target"; then
+            sed -i -E "s/resume_offset=[0-9]+/resume_offset=$real/g" "$target"
+        else
+            sed -i -E "\|resume=| s/\"[[:space:]]*$/ resume_offset=$real\"/" "$target"
+        fi
+        if ! grep -q "zswap.enabled=0" "$target"; then
+            sed -i -E "s/resume_offset=([0-9]+)/resume_offset=\1 zswap.enabled=0/g" "$target"
+        fi
+        log "✔ $target actualizado a resume_offset=$real"
     fi
-    if ! grep -q "zswap.enabled=0" "$target"; then
-        sed -i -E "s/resume_offset=([0-9]+)/resume_offset=\1 zswap.enabled=0/g" "$target"
-    fi
-    log "✔ $target actualizado a resume_offset=$real"
 }
 
 repair_refind() {

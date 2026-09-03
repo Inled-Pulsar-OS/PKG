@@ -1,10 +1,10 @@
 Package: pulsaros-welcome
-Version: 2.0.0
+Version: 2.0.1
 Section: admin
 Priority: optional
 Architecture: amd64
 Maintainer: Jaime <info@inled.es>
-Depends: libwebkit2gtk-4.1-0, libgtk-3-0, libsoup-3.0-0, libjavascriptcoregtk-4.1-0, librsvg2-2, x11-xserver-utils, python3-gi, python3-dbus, gir1.2-gtk-4.0, gir1.2-adw-1, driverman
+Depends: libwebkit2gtk-4.1-0, libgtk-3-0, libsoup-3.0-0, libjavascriptcoregtk-4.1-0, librsvg2-2, x11-xserver-utils, python3-gi, python3-dbus, gir1.2-gtk-4.0, gir1.2-adw-1, driverman, gstreamer1.0-libav, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-plugins-ugly, gstreamer1.0-gl
 Description: Welcome application for Pulsar OS.
  Native Tauri welcome that detects live / first-boot (OOTB) / installed
  systems, shows an Apple-like hello animation, a feature slideshow, app

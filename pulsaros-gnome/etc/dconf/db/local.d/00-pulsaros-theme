@@ -107,9 +107,15 @@ enable-unblank=false
 lockscreen-mode='cupertino'
 
 [org/gnome/settings-daemon/plugins/power]
-sleep-inactive-ac-type='suspend'
+# Pulsar OS: el auto-suspend S3 por inactividad está DESACTIVADO a propósito.
+# gsd-power re-evalúa su temporizador de inactividad al reanudar de un
+# hibernate y ordena un suspend S3 ~60s después del resume (el reloj de idle
+# no se resetea), dejando la pantalla muerta justo tras restaurar la sesión.
+# El reposo del sistema en Pulsar OS es el flujo propio: "Guardar sesión y
+# apagar" (hibernate S4 + shutdown).
+sleep-inactive-ac-type='nothing'
 sleep-inactive-ac-timeout=900
-sleep-inactive-battery-type='suspend'
+sleep-inactive-battery-type='nothing'
 sleep-inactive-battery-timeout=600
 
 [org/gnome/desktop/session]

@@ -1,12 +1,12 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-hibernate
-pkgver=1.0.2
+pkgver=1.0.4
 pkgrel=1
 pkgdesc="Hibernation UX for Pulsar OS: Plymouth progress feedback and resume-offset guardian"
 arch=(any)
 url="https://inled.es"
 license=(custom)
-depends=(plymouth e2fsprogs systemd)
+depends=(plymouth e2fsprogs systemd python util-linux)
 options=(!strip)
 install=pulsaros-hibernate.install
 

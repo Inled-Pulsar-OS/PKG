@@ -2,18 +2,24 @@ use std::path::Path;
 use std::process::Command;
 
 pub fn is_live_system() -> bool {
-    if Path::new("/lib/live/mount").exists() {
+    // Only detect genuine live environments (cmdline or actual live mountpoints).
+    // Do NOT check USER == "live" because the first boot of an installed system
+    // runs under the temporary live user before OOTB user setup.
+    if Path::new("/run/archiso/bootmnt").exists()
+        || Path::new("/run/archiso/airootfs").exists()
+        || Path::new("/run/live/medium").exists()
+        || Path::new("/run/live/overlay").exists()
+        || Path::new("/lib/live/mount/overlay").exists()
+    {
         return true;
-    }
-    if let Ok(user) = std::env::var("USER") {
-        if user == "live" {
-            return true;
-        }
     }
     if let Ok(cmdline) = std::fs::read_to_string("/proc/cmdline") {
         if cmdline.contains("boot=live")
-            || cmdline.contains("archisobasedir=live")
+            || cmdline.contains("archisobasedir=")
+            || cmdline.contains("archisolabel=")
+            || cmdline.contains("img_dev=")
             || cmdline.contains("rootfstype=9p")
+            || cmdline.contains("live-media")
         {
             return true;
         }

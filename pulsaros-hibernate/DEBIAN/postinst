@@ -6,8 +6,13 @@ set -e
 
 echo "🌙 Configurando hibernación de Pulsar OS..."
 
+# Scripts SIEMPRE ejecutables (defensa contra fuentes sin +x)
+chmod 755 /usr/lib/pulsaros/sleep-progress /usr/lib/pulsaros/resume-session \
+          /usr/lib/pulsaros/verify-resume-offset \
+          /usr/bin/pulsaros-hibernate-doctor 2>/dev/null || true
 systemctl daemon-reload || true
 systemctl enable pulsaros-verify-resume-offset.service || true
+systemctl enable pulsaros-console-clean.service || true
 
 # Run the offset check once on real systems (skip chroot/live ISO builds)
 if [ -e /run/systemd/system ] && [ -f /swapfile ]; then

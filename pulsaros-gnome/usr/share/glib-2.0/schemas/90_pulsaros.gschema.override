@@ -103,9 +103,11 @@ enable-unblank=false
 lockscreen-mode='cupertino'
 
 [org.gnome.settings-daemon.plugins.power]
-sleep-inactive-ac-type='suspend'
+# Pulsar OS: sin auto-suspend S3 por inactividad (rompe el resume del hibernate,
+# ver INFORME-hibernacion-apagado.md). El reposo del OS es hibernate S4 propio.
+sleep-inactive-ac-type='nothing'
 sleep-inactive-ac-timeout=900
-sleep-inactive-battery-type='suspend'
+sleep-inactive-battery-type='nothing'
 sleep-inactive-battery-timeout=600
 
 [org.gnome.desktop.session]

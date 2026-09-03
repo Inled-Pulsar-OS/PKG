@@ -1,74 +1,135 @@
 #!/bin/bash
 # ==============================================================================
-# Pulsar OS - pulsaros-welcome prepare-assets.sh
+# Pulsar OS - Welcome App Asset Preparer (Tauri RELEASE build)
 # ==============================================================================
-# Builds the Tauri binary (primary) and stages the Python+WebKitGTK fallback.
-# Tauri build embeds the React frontend in the binary; Python loads dist/ from
-# disk, so both dist/ and the binary are staged.
+# English: Builds the React frontend and the Tauri shell in RELEASE mode with
+#          the bundled dist/ assets, installs the binary at
+#          /usr/lib/pulsaros-welcome/pulsaros-welcome (where the wrapper looks
+#          for it) and purges all dev-mode artifacts (cargo target/, node_modules,
+#          __pycache__) from the package.
+# Español: Compila el frontend React y el shell Tauri en modo RELEASE con los
+#          assets de dist/ empaquetados, instala el binario en
+#          /usr/lib/pulsaros-welcome/pulsaros-welcome (donde lo busca el wrapper)
+#          y purga todos los artefactos de desarrollo (cargo target/,
+#          node_modules, __pycache__) del paquete.
+#
+# CRITICAL: a Tauri binary compiled in debug mode starts in "dev" behavior and
+# tries to connect to the Vite dev server (devUrl, http://localhost:1420),
+# showing a black window with "could not connect to localhost: connection
+# refused". Shipping ANY debug binary is forbidden — this script only ever
+# produces and installs release builds, and the wrapper refuses to launch the
+# binary without the RELEASE_BUILD marker.
+#
+# Usage: prepare-assets.sh <STAGE_DIR>
+#   PULSAR_WELCOME_SKIP_BUILD=1  → skip compilation (stage existing artifacts)
 # ==============================================================================
 
 set -e
 
-STAGE_DIR="$(realpath -m "$1")"
-SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-APP_SRC="$SCRIPT_DIR/usr/share/pulsaros-welcome"
+STAGE_DIR="$(realpath -m "${1:?Usage: prepare-assets.sh <STAGE_DIR>}")"
+PKG_ROOT="$(cd "$(dirname "$0")" && pwd)"
+SRC_DIR="$PKG_ROOT/usr/share/pulsaros-welcome"
 
-echo "🧹 Limpieza inicial del staging..."
-find "$STAGE_DIR" -mindepth 1 -maxdepth 1 ! -name DEBIAN ! -name etc -exec rm -rf {} +
+echo "🎨 pulsaros-welcome: preparando assets (build RELEASE) → $STAGE_DIR"
 
-# Build Tauri binary (embeds React frontend via beforeBuildCommand)
-TAURI_BINARY=""
-if command -v npx >/dev/null 2>&1 && [ -f "$APP_SRC/src-tauri/Cargo.toml" ]; then
-    echo "🦀 Compilando Tauri binary..."
-    cd "$APP_SRC"
-    npx tauri build 2>/dev/null || echo "⚠️  Tauri build failed, continuing with Python fallback only"
-    cd "$SCRIPT_DIR"
-    TAURI_BINARY="$APP_SRC/src-tauri/target/release/pulsaros-welcome"
-fi
+# Directorios que NUNCA deben entrar en el paquete
+JUNK_DIRS="src-tauri/target node_modules usr/bin/__pycache__"
 
-# Fallback: build React frontend separately if Tauri didn't produce dist/
-if [ ! -f "$APP_SRC/dist/index.html" ]; then
-    echo "🏗️  Compilando frontend React con pnpm..."
-    cd "$APP_SRC"
-    if command -v pnpm >/dev/null 2>&1; then
-        pnpm build
-    elif command -v npm >/dev/null 2>&1; then
-        npm run build
+# ------------------------------------------------------------------------------
+# 0. Purga en el árbol fuente (para que futuros cp -r del empaquetador sean
+#    rápidos y nunca arrastren artefactos de desarrollo)
+# ------------------------------------------------------------------------------
+purge_source() {
+    for d in $JUNK_DIRS; do
+        if [ -e "$SRC_DIR/$d" ]; then
+            echo "🧹 Purgando artefactos de desarrollo del árbol fuente: $d"
+            rm -rf "$SRC_DIR/$d"
+        fi
+    done
+}
+
+# ------------------------------------------------------------------------------
+# 1. Frontend: dist/ ya construido tiene prioridad; si falta o hay node_modules
+#    se reconstruye con vite (build de producción, nunca dev)
+# ------------------------------------------------------------------------------
+build_frontend() {
+    if [ ! -f "$SRC_DIR/dist/index.html" ]; then
+        echo "📦 dist/ ausente — compilando frontend de producción (vite)..."
+        cd "$SRC_DIR"
+        if [ -d node_modules ] || command -v pnpm >/dev/null 2>&1; then
+            command -v pnpm >/dev/null 2>&1 && pnpm install --frozen-lockfile || npm ci
+        else
+            npm ci
+        fi
+        command -v pnpm >/dev/null 2>&1 && pnpm run build || npm run build
+        [ -f "$SRC_DIR/dist/index.html" ] || { echo "❌ El build de vite no generó dist/index.html"; exit 1; }
+    else
+        echo "✔ dist/ ya compilado — reutilizando assets de producción"
     fi
-    cd "$SCRIPT_DIR"
-fi
+}
 
-echo "📦 Preparando archivos de pulsaros-welcome..."
-mkdir -p "$STAGE_DIR/usr/bin" "$STAGE_DIR/usr/lib" "$STAGE_DIR/usr/libexec" \
-         "$STAGE_DIR/usr/share/pulsaros" "$STAGE_DIR/usr/share/pulsaros-welcome" "$STAGE_DIR/etc"
+# ------------------------------------------------------------------------------
+# 2. Shell Tauri en RELEASE con los assets de dist/ embebidos
+# ------------------------------------------------------------------------------
+build_tauri() {
+    cd "$SRC_DIR/src-tauri"
+    echo "🦀 Compilando Tauri en RELEASE (frontendDist=../dist embebido)..."
+    # CRITICAL: --features custom-protocol es OBLIGATORIO en builds de
+    # producción. Sin él, el binario arranca en modo dev y espera el dev
+    # server de Vite (http://localhost:1420) → "connection refused".
+    cargo build --release --features custom-protocol --frozen 2>/dev/null \
+        || cargo build --release --features custom-protocol
+    [ -f "target/release/pulsaros-welcome" ] || { echo "❌ cargo no generó el binario release"; exit 1; }
+    # Verificación: un binario de producción embebe dist/ (frontendDist), por
+    # lo que pesa mucho más que uno en modo dev (~4.5 MB). Nota: devUrl aparece
+    # en TODO binario (la config se embebe íntegra), así que strings/grep no
+    # sirve para discriminar.
+    _size=$(stat -c%s "target/release/pulsaros-welcome" 2>/dev/null || echo 0)
+    _dist_size=$(du -sb "$SRC_DIR/dist" 2>/dev/null | cut -f1 || echo 0)
+    if [ "${_size:-0}" -lt "$((_dist_size + 3000000))" ] 2>/dev/null; then
+        echo "❌ el binario (${_size}B) no embebe dist/ (${_dist_size}B) — ¿se compiló sin --features custom-protocol?"
+        exit 1
+    fi
+    echo "✔ Binario RELEASE con assets embebidos (${_size} bytes)"
+}
 
-# Copy executables and wrappers
-cp -f "$SCRIPT_DIR/usr/bin/pulsaros-welcome" "$STAGE_DIR/usr/bin/"
-[ -f "$SCRIPT_DIR/usr/bin/pulsar-cleanup-user" ] && cp -f "$SCRIPT_DIR/usr/bin/pulsar-cleanup-user" "$STAGE_DIR/usr/bin/"
-[ -f "$SCRIPT_DIR/usr/libexec/pulsar-cleanup-live.sh" ] && cp -f "$SCRIPT_DIR/usr/libexec/pulsar-cleanup-live.sh" "$STAGE_DIR/usr/libexec/"
-
-# Install Tauri binary (primary)
-if [ -n "$TAURI_BINARY" ] && [ -f "$TAURI_BINARY" ]; then
-    echo "🦀 Instalando Tauri binary..."
+# ------------------------------------------------------------------------------
+# 3. Instalación en staging
+# ------------------------------------------------------------------------------
+install_to_stage() {
     mkdir -p "$STAGE_DIR/usr/lib/pulsaros-welcome"
-    cp -f "$TAURI_BINARY" "$STAGE_DIR/usr/lib/pulsaros-welcome/pulsaros-welcome"
-    chmod 755 "$STAGE_DIR/usr/lib/pulsaros-welcome/pulsaros-welcome"
+    install -m 755 "$SRC_DIR/src-tauri/target/release/pulsaros-welcome" \
+        "$STAGE_DIR/usr/lib/pulsaros-welcome/pulsaros-welcome"
+    strip --strip-unneeded "$STAGE_DIR/usr/lib/pulsaros-welcome/pulsaros-welcome" 2>/dev/null || true
+    # Marcador: el wrapper SOLO lanza el binario Tauri si existe este archivo,
+    # garantizando que jamás se ejecute un binario en modo dev.
+    echo "release $(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$STAGE_DIR/usr/lib/pulsaros-welcome/RELEASE_BUILD"
+    echo "✔ Binario RELEASE instalado en usr/lib/pulsaros-welcome/pulsaros-welcome"
+}
+
+# ------------------------------------------------------------------------------
+# 4. Purga en staging (defensa en profundidad: el empaquetador copia el árbol
+#    completo ANTES de ejecutar este hook)
+# ------------------------------------------------------------------------------
+purge_stage() {
+    for d in $JUNK_DIRS; do
+        if [ -e "$STAGE_DIR/usr/share/pulsaros-welcome/$d" ]; then
+            echo "🧹 Purgando artefactos de desarrollo del staging: $d"
+            rm -rf "$STAGE_DIR/usr/share/pulsaros-welcome/$d"
+        fi
+    done
+    rm -rf "$STAGE_DIR/usr/share/pulsaros-welcome/src-tauri/target" 2>/dev/null || true
+}
+
+if [ "${PULSAR_WELCOME_SKIP_BUILD:-0}" = "1" ]; then
+    echo "⏭️ PULSAR_WELCOME_SKIP_BUILD=1 — sin compilación (solo staging/purga)"
+else
+    build_frontend
+    build_tauri
+    install_to_stage
 fi
 
-# Copy Python+WebKitGTK fallback app and compiled frontend
-cp -f "$APP_SRC/welcome.py" "$STAGE_DIR/usr/share/pulsaros-welcome/"
-[ -d "$APP_SRC/dist" ] && cp -rf "$APP_SRC/dist" "$STAGE_DIR/usr/share/pulsaros-welcome/"
-[ -d "$APP_SRC/public" ] && cp -rf "$APP_SRC/public" "$STAGE_DIR/usr/share/pulsaros-welcome/"
-[ -f "$APP_SRC/logo.png" ] && cp -f "$APP_SRC/logo.png" "$STAGE_DIR/usr/share/pulsaros-welcome/"
+purge_stage
+purge_source
 
-# Copy OOTB helpers
-[ -d "$SCRIPT_DIR/usr/share/pulsaros" ] && cp -rf "$SCRIPT_DIR/usr/share/pulsaros/." "$STAGE_DIR/usr/share/pulsaros/"
-[ -d "$SCRIPT_DIR/etc" ] && cp -rf "$SCRIPT_DIR/etc/." "$STAGE_DIR/etc/"
-
-# Set permissions
-chmod 755 "$STAGE_DIR/usr/bin/pulsaros-welcome"
-chmod 755 "$STAGE_DIR/usr/share/pulsaros-welcome/welcome.py"
-[ -f "$STAGE_DIR/usr/bin/pulsar-cleanup-user" ] && chmod 755 "$STAGE_DIR/usr/bin/pulsar-cleanup-user"
-[ -f "$STAGE_DIR/usr/libexec/pulsar-cleanup-live.sh" ] && chmod 755 "$STAGE_DIR/usr/libexec/pulsar-cleanup-live.sh"
-
-echo "✅ pulsaros-welcome preparado con éxito."
+echo "✅ pulsaros-welcome: assets preparados (RELEASE, sin artefactos dev)"

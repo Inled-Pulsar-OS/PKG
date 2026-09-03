@@ -3,7 +3,7 @@
 // ==============================================================================
 
 const IS_LIVE = window.IS_LIVE !== undefined ? window.IS_LIVE : false;
-const NEEDS_OOTB = window.NEEDS_OOTB !== undefined ? window.NEEDS_OOTB : false;
+const NEEDS_OOTB = window.NEEDS_OOTB !== undefined ? window.NEEDS_OOTB : (window.IS_OOTB !== undefined ? window.IS_OOTB : false);
 
 const SLIDES = ['hello', 'features', 'compatibility', 'settings', 'sayri'];
 if (IS_LIVE) {

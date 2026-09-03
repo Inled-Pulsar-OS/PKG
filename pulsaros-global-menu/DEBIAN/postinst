@@ -19,31 +19,45 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ]; then
 HibernateMode=shutdown
 EOF
 
-    # Fix mkinitcpio HOOKS order: resume after block, before filesystems
+    # Fix mkinitcpio HOOKS: keep legacy 'resume' hook ONLY on busybox initramfs.
+    # CRITICAL: with the 'systemd' hook, systemd-hibernate-resume handles resume
+    # natively; the legacy busybox 'resume' hook MUST NOT coexist with 'systemd'
+    # or the kernel hangs after the Plymouth splash on every resume attempt.
     if [ -f /etc/mkinitcpio.conf ] && grep -q "^HOOKS=" /etc/mkinitcpio.conf; then
-        if ! grep -q "\bresume\b" /etc/mkinitcpio.conf; then
-            if grep -q "sd-vconsole" /etc/mkinitcpio.conf; then
-                sed -i 's/\(sd-vconsole[^)]*\))/\1 resume/' /etc/mkinitcpio.conf
-            else
-                sed -i 's/\(block\)/\1 resume/' /etc/mkinitcpio.conf
+        if grep "^HOOKS=" /etc/mkinitcpio.conf | grep -q "\bsystemd\b"; then
+            # systemd-based initramfs: remove any conflicting legacy 'resume' hook
+            if grep "^HOOKS=" /etc/mkinitcpio.conf | grep -q "\bresume\b"; then
+                echo "⚙️ Eliminando hook conflictivo 'resume' de initramfs systemd..."
+                sed -i 's/\bresume\b//g; s/  */ /g; s/( /(/' /etc/mkinitcpio.conf
+                NEEDS_INITRAMFS_REGEN=1
             fi
-        fi
-        HOOKS_CONTENT=$(grep "^HOOKS=" /etc/mkinitcpio.conf | sed 's/^HOOKS=(//; s/)$//')
-        RESUME_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^resume$" | cut -d: -f1)
-        BLOCK_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^block$" | cut -d: -f1)
-        FILESYSTEMS_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^filesystems$" | cut -d: -f1)
-        NEEDS_REORDER=0
-        if [ -n "$RESUME_POS" ] && [ -n "$BLOCK_POS" ] && [ "$RESUME_POS" -lt "$BLOCK_POS" ]; then
-            NEEDS_REORDER=1
-        fi
-        if [ -n "$RESUME_POS" ] && [ -n "$FILESYSTEMS_POS" ] && [ "$RESUME_POS" -gt "$FILESYSTEMS_POS" ]; then
-            NEEDS_REORDER=1
-        fi
-        if [ "$NEEDS_REORDER" -eq 1 ]; then
-            echo "⚙️ Reordenando hooks: resume después de block, antes de filesystems..."
-            NEW_HOOKS=$(echo "$HOOKS_CONTENT" | sed 's/\bresume\b//; s/  */ /g; s/^ //; s/ $//')
-            NEW_HOOKS=$(echo "$NEW_HOOKS" | sed 's/\bblock\b/block resume/')
-            sed -i "s|^HOOKS=.*|HOOKS=(${NEW_HOOKS})|" /etc/mkinitcpio.conf
+        else
+            # busybox/udev initramfs: the 'resume' hook is required after 'block'
+            if ! grep -q "\bresume\b" /etc/mkinitcpio.conf; then
+                echo "⚙️ Añadiendo hook resume a /etc/mkinitcpio.conf..."
+                sed -i 's/\bblock\b/block resume/' /etc/mkinitcpio.conf
+                NEEDS_INITRAMFS_REGEN=1
+            else
+                # Reorder: resume must come after block and before filesystems
+                HOOKS_CONTENT=$(grep "^HOOKS=" /etc/mkinitcpio.conf | sed 's/^HOOKS=(//; s/)$//')
+                RESUME_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^resume$" | cut -d: -f1)
+                BLOCK_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^block$" | cut -d: -f1)
+                FILESYSTEMS_POS=$(echo "$HOOKS_CONTENT" | tr ' ' '\n' | grep -n "^filesystems$" | cut -d: -f1)
+                NEEDS_REORDER=0
+                if [ -n "$RESUME_POS" ] && [ -n "$BLOCK_POS" ] && [ "$RESUME_POS" -lt "$BLOCK_POS" ]; then
+                    NEEDS_REORDER=1
+                fi
+                if [ -n "$RESUME_POS" ] && [ -n "$FILESYSTEMS_POS" ] && [ "$RESUME_POS" -gt "$FILESYSTEMS_POS" ]; then
+                    NEEDS_REORDER=1
+                fi
+                if [ "$NEEDS_REORDER" -eq 1 ]; then
+                    echo "⚙️ Reordenando hooks: resume después de block, antes de filesystems..."
+                    NEW_HOOKS=$(echo "$HOOKS_CONTENT" | sed 's/\bresume\b//; s/  */ /g; s/^ //; s/ $//')
+                    NEW_HOOKS=$(echo "$NEW_HOOKS" | sed 's/\bblock\b/block resume/')
+                    sed -i "s|^HOOKS=.*|HOOKS=(${NEW_HOOKS})|" /etc/mkinitcpio.conf
+                    NEEDS_INITRAMFS_REGEN=1
+                fi
+            fi
         fi
     fi
 

@@ -48,7 +48,17 @@ fn preflight() {
 pub fn run() {
     #[cfg(target_os = "linux")]
     {
+        // Videos played black because the WebKitWebProcess bubblewrap sandbox
+        // hides the gstreamer decode plugins from the web process (CLI decode
+        // works, the page shows a black frame). Disable the sandbox so the web
+        // process can dlopen the gst plugins. WEBKIT_DISABLE_COMPOSITING_MODE=1
+        // is REQUIRED: without it video surfaces render as black frames on
+        // these WebKitGTK builds (verified on host: removing it reintroduced
+        // the black-video regression). Keep DMABUF renderer disabled too
+        // (transparent-window black-background bug).
+        std::env::set_var("WEBKIT_FORCE_SANDBOX", "0");
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
     }
 
     // Skip the wrapper preflight in development builds so `tauri dev` always

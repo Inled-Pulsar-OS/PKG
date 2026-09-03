@@ -1,0 +1,17 @@
+[Unit]
+Description=Pulsar OS - Clear stale boot text from VT1 console
+# Runs once at boot, after the console is initialized and before the display
+# manager or getty claim VT1. rEFInd leaves its "Booting OS" message on VT1
+# and (when no getty owns it) it stays there for the whole session; any DRM
+# master drop (hibernate, failed resume, GPU reset) would then expose that
+# ghost text. Clearing it here makes every such exposure a clean black screen.
+After=systemd-vconsole-setup.service
+Before=display-manager.service plymouth-quit.service getty@tty1.service
+ConditionVirtualization=!container
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'for dev in /dev/tty1 /dev/tty0; do [ -c "$dev" ] && printf "\033[H\033[2J\033[3J" > "$dev" 2>/dev/null || true; done; exit 0'
+
+[Install]
+WantedBy=multi-user.target

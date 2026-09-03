@@ -1,0 +1,60 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Hibernation diagnostics collector
+# Run on the installed system:  pulsaros-hibernate-doctor
+# Paste the output when reporting resume/hibernate issues.
+# ==============================================================================
+set -u
+
+sec() { printf '\n=== %s ===\n' "$1"; }
+
+sec "Kernel cmdline"
+cat /proc/cmdline 2>/dev/null
+
+sec "Swap activo"
+swapon --show 2>/dev/null
+awk '/Swap(Total|Free)/' /proc/meminfo 2>/dev/null
+
+sec "Swapfile y offset real"
+ls -la /swapfile 2>/dev/null
+if command -v btrfs >/dev/null 2>&1; then
+    btrfs inspect-internal map-swapfile -r /swapfile 2>&1
+fi
+filefrag -v /swapfile 2>/dev/null | head -5
+echo "sysfs resume=$(cat /sys/power/resume 2>/dev/null) resume_offset=$(cat /sys/power/resume_offset 2>/dev/null)"
+
+sec "mkinitcpio HOOKS"
+grep "^HOOKS=" /etc/mkinitcpio.conf 2>/dev/null
+ls /etc/mkinitcpio.conf.d/ 2>/dev/null
+
+sec "rEFInd: parámetros resume en uso"
+for rc in /boot/refind_linux.conf /boot/efi/EFI/refind/refind.conf /boot/efi/EFI/BOOT/refind.conf; do
+    if [ -f "$rc" ]; then
+        echo "--- $rc"
+        grep -o "resume=[^ \"]*" "$rc" 2>/dev/null | sort -u
+        grep -o "resume_offset=[^ \"]*" "$rc" 2>/dev/null | sort -u
+    fi
+done
+
+sec "Máscaras plymouth heredadas del live (no debería haber)"
+ls -la /etc/systemd/system/plymouth-quit.service /etc/systemd/system/plymouth-quit-wait.service 2>&1
+
+sec "Servicios Pulsar OS de hibernación"
+systemctl is-enabled pulsaros-verify-resume-offset.service pulsaros-console-clean.service 2>&1
+ls /etc/systemd/system/systemd-hibernate.service.d/ 2>/dev/null
+
+sec "GPU"
+lspci 2>/dev/null | grep -iE "vga|3d|display"
+lsmod 2>/dev/null | grep -E "^(virtio_gpu|i915|amdgpu|nvidia|bochs|qxl)"
+
+sec "sleep.conf efectivo"
+systemd-analyze cat-config systemd/sleep.conf 2>/dev/null | grep -v "^#" | grep -v "^$"
+
+sec "Log de hibernación Pulsar OS"
+tail -40 /var/log/pulsaros-hibernate.log 2>/dev/null || echo "(sin log todavía)"
+
+sec "Último intento de hibernate/resume (journal boot actual)"
+journalctl -b 2>/dev/null | grep -iE "hibernat|resume" | tail -20
+
+sec "Boot anterior: cuelgues de resume (si hubo hard reset)"
+journalctl -b -1 2>/dev/null | grep -iE "hibernat|resume|panic|watchdog" | tail -30 || echo "(journal no persistente)"

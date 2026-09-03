@@ -151,17 +151,17 @@ INITRAMFS_CHANGED=0
 if [ -f /etc/mkinitcpio.conf ]; then
     # Arch Linux — mkinitcpio
     if grep -q "^HOOKS=" /etc/mkinitcpio.conf; then
-        if grep -q "\bsystemd\b" /etc/mkinitcpio.conf; then
+        if grep "^HOOKS=" /etc/mkinitcpio.conf | grep -q "\bsystemd\b"; then
             # En initramfs basado en systemd, systemd incluye de forma nativa el generador
             # systemd-hibernate-resume. El hook legacy 'resume' entra en conflicto directo y cuelga el arranque.
-            if grep -q "\bresume\b" /etc/mkinitcpio.conf; then
+            if grep "^HOOKS=" /etc/mkinitcpio.conf | grep -q "\bresume\b"; then
                 echo "⚙️ Eliminando hook conflictivo 'resume' de initramfs systemd..."
                 sed -i 's/\bresume\b//g; s/  */ /g; s/( /(/' /etc/mkinitcpio.conf
                 INITRAMFS_CHANGED=1
             fi
         else
             # Initramfs basado en busybox/udev: el hook 'resume' sí es requerido después de 'block'
-            if ! grep -q "\bresume\b" /etc/mkinitcpio.conf; then
+            if ! grep "^HOOKS=" /etc/mkinitcpio.conf | grep -q "\bresume\b"; then
                 echo "⚙️ Añadiendo hook resume a /etc/mkinitcpio.conf..."
                 sed -i 's/\bblock\b/block resume/' /etc/mkinitcpio.conf
                 INITRAMFS_CHANGED=1
@@ -197,27 +197,34 @@ fi
 NVIDIA_MODPROBE_FILE=/etc/modprobe.d/pulsaros-nvidia-hibernate.conf
 if lsmod | grep -q "^nvidia "; then
     echo "🎮 NVIDIA detectada — aplicando fixes de hibernación..."
-    cat << 'NVEOF' > "$NVIDIA_MODPROBE_FILE"
-# Pulsar OS - NVIDIA hibernate fixes (auto-generado por pulsaros-setup-hibernation)
+    NVIDIA_CONF_NEW="# Pulsar OS - NVIDIA hibernate fixes (auto-generado por pulsaros-setup-hibernation)
 # Solo se aplica en sistemas con NVIDIA. Seguro ignorar en sistemas sin NVIDIA.
 # PreserveVideoMemoryAllocations: preserva VRAM para restaurar estado tras hibernate.
 # UseKernelSuspendNotifiers=0: evita que NVIDIA aborte la hibernación cuando la GPU está en uso.
-options nvidia NVreg_PreserveVideoMemoryAllocations=1 NVreg_TemporaryFilePath=/var/tmp NVreg_UseKernelSuspendNotifiers=0
-NVEOF
+options nvidia NVreg_PreserveVideoMemoryAllocations=1 NVreg_TemporaryFilePath=/var/tmp NVreg_UseKernelSuspendNotifiers=0"
+    NVIDIA_CHANGED=1
+    if [ -f "$NVIDIA_MODPROBE_FILE" ] && [ "$(cat "$NVIDIA_MODPROBE_FILE" 2>/dev/null)" = "$NVIDIA_CONF_NEW" ]; then
+        NVIDIA_CHANGED=0
+    else
+        printf '%s\n' "$NVIDIA_CONF_NEW" > "$NVIDIA_MODPROBE_FILE"
+    fi
 
     # Habilitar servicios NVIDIA de hibernate si están disponibles
     if command -v systemctl >/dev/null 2>&1; then
         systemctl enable nvidia-hibernate.service nvidia-resume.service nvidia-suspend.service 2>/dev/null || true
     fi
 
-    # Regenerar initramfs para que las opciones del módulo se incluyan
-    echo "🔄 Regenerando initramfs con configuración NVIDIA..."
-    if command -v update-initramfs >/dev/null 2>&1; then
-        update-initramfs -u 2>/dev/null || true
-    elif command -v mkinitcpio >/dev/null 2>&1; then
-        mkinitcpio -P 2>/dev/null || true
-    elif command -v dracut >/dev/null 2>&1; then
-        dracut --force 2>/dev/null || true
+    # Regenerar initramfs SOLO si la configuración del módulo cambió (regenerar
+    # en cada hibernación añade 30-60s de retraso al apagado).
+    if [ "$NVIDIA_CHANGED" -eq 1 ]; then
+        echo "🔄 Regenerando initramfs con configuración NVIDIA..."
+        if command -v update-initramfs >/dev/null 2>&1; then
+            update-initramfs -u 2>/dev/null || true
+        elif command -v mkinitcpio >/dev/null 2>&1; then
+            mkinitcpio -P 2>/dev/null || true
+        elif command -v dracut >/dev/null 2>&1; then
+            dracut --force 2>/dev/null || true
+        fi
     fi
 elif [ -f "$NVIDIA_MODPROBE_FILE" ]; then
     # Limpiar si se había instalado antes y ahora no hay NVIDIA

@@ -80,6 +80,7 @@ pub fn launch_run_cleanup() -> Result<(), String> {
 }
 
 pub fn launch_ootb() -> Result<(), String> {
+    let _ = Command::new("xhost").args(["+SI:localuser:root"]).status();
     if which("pulsaros-ootb") {
         return Command::new("pulsaros-ootb")
             .spawn()

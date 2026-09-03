@@ -5,6 +5,14 @@
 set -u
 
 ACTION="${1:-}"
+LOG_FILE=/var/log/pulsaros-hibernate.log
+
+log() {
+    local line
+    line="[pulsaros-sleep $(date '+%Y-%m-%d %H:%M:%S')] $*"
+    echo "$line" | tee -a "$LOG_FILE" 2>/dev/null
+    echo "$line" > /dev/kmsg 2>/dev/null || true
+}
 
 # Map system-sleep verbs to internal verbs
 case "$ACTION" in
@@ -14,16 +22,40 @@ esac
 
 case "$ACTION" in
     start)
+        log "=== Preparando hibernación ==="
         sync
         echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
 
-        # Clear text console so stale UEFI/rEFInd "Booting OS..." text is
-        # erased before the kernel freezes processes, preventing it from
-        # flashing before poweroff and being captured into the swap image.
+        # Pre-flight check: the image must fit in swap or 'systemctl hibernate'
+        # will fail and the session is lost. Log it (and surface on the splash)
+        # so the failure is never silent.
+        if [ -r /proc/meminfo ]; then
+            MEM_TOTAL=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)
+            MEM_AVAIL=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)
+            SWAP_FREE=$(awk '/^SwapFree:/ {print $2}' /proc/meminfo)
+            if [ -n "$MEM_TOTAL" ] && [ -n "$MEM_AVAIL" ] && [ -n "$SWAP_FREE" ]; then
+                NEEDED=$(( MEM_TOTAL - MEM_AVAIL ))
+                if [ "$SWAP_FREE" -lt "$NEEDED" ]; then
+                    log "⚠️ Swap libre (${SWAP_FREE}kB) insuficiente para la imagen (~${NEEDED}kB). El hibernate fallará."
+                    if command -v plymouth >/dev/null 2>&1 && plymouth --ping 2>/dev/null; then
+                        plymouth message --text="No hay swap suficiente para guardar la sesión" 2>/dev/null || true
+                    fi
+                else
+                    log "Swap suficiente: libre=${SWAP_FREE}kB, imagen estimada=${NEEDED}kB"
+                fi
+            fi
+        fi
+
+        # Clear text console (visible buffer AND scrollback) so stale UEFI/rEFInd
+        # "Booting OS..." text is erased before the kernel freezes processes,
+        # preventing it from flashing before poweroff, being captured into the
+        # swap image, and resurfacing after a VT switch on resume.
+        # \033[3J clears the scrollback buffer — essential: rEFInd's boot text
+        # usually lives there once the getty banner pushed it up.
         for dev in /dev/tty1 /dev/tty0 /dev/console; do
             if [ -c "$dev" ]; then
                 setterm --clear all --cursor off > "$dev" 2>/dev/null || true
-                printf '\033[2J\033[H\033[?25l' > "$dev" 2>/dev/null || true
+                printf '\033[H\033[2J\033[3J\033[?25l' > "$dev" 2>/dev/null || true
             fi
         done
 

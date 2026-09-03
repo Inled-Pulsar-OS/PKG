@@ -1,7 +1,6 @@
 [Unit]
 Description=Pulsar OS - Restore graphical session after hibernate resume
-After=systemd-hibernate.service systemd-suspend-then-hibernate.service
-DefaultDependencies=no
+After=systemd-hibernate.service systemd-suspend-then-hibernate.service hibernate.target suspend-then-hibernate.target
 
 [Service]
 Type=oneshot
