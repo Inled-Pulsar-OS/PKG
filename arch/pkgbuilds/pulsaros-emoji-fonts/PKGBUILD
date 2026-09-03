@@ -1,0 +1,16 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsaros-emoji-fonts
+pkgver=1.0.1
+pkgrel=1
+pkgdesc="Emoji fonts for Pulsar OS (Arch edition)"
+arch=(any)
+url="https://inled.es"
+license=(custom)
+depends=(noto-fonts-emoji)
+options=(!strip)
+
+package() {
+    mkdir -p "$pkgdir/usr/share/doc/pulsaros-emoji-fonts"
+    echo "Pulsar OS Emoji Fonts metapackage. Pulls noto-fonts-emoji." \
+        > "$pkgdir/usr/share/doc/pulsaros-emoji-fonts/README"
+}

@@ -43,9 +43,11 @@ sed -i 's/elif \[\[ ! -d "${FIREFOX_DIR_HOME}" && ! -d "${FIREFOX_FLATPAK_DIR_HO
 # También neutralizar en libs/lib-core.sh por seguridad
 if [ -f "libs/lib-core.sh" ]; then
     sed -i 's/! -w "\/root"/false/g' libs/lib-core.sh || true
+    sed -i 's/! -w "${value}" && ! -w "$(dirname ${value})"/false/g' libs/lib-core.sh || true
 fi
 
-
+mkdir -p "$STAGE_DIR/usr/share/themes"
+mkdir -p "$STAGE_DIR/usr/share/icons"
 
 # Ejecutar instalador apuntando al staging
 ./install.sh -b -c dark -d "$STAGE_DIR/usr/share/themes" --silent-mode

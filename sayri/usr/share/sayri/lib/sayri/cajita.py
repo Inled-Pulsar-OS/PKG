@@ -947,6 +947,8 @@ class SayriCajita(Gtk.Box):
         self.sec_scroll.set_child(self.secrets_box)
         self.secrets_view.append(self.sec_scroll)
 
+        self.card_stack.add_named(self.secrets_view, "secrets")
+
         # ── View 8: Automated Routines & Cron Jobs ──
         self.routines_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         rt_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)

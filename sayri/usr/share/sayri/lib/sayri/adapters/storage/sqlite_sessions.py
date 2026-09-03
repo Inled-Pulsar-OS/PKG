@@ -1,7 +1,6 @@
 """SQLite Storage Adapter for Sayri Sessions, Messages, and Gateway Authorizations."""
 
-from __future__ import annotations
-
+from dataclasses import asdict, is_dataclass
 import json
 import os
 import sqlite3
@@ -151,18 +150,24 @@ class SQLiteSessionRepository:
             ).fetchall()
             for mr in m_rows:
                 tc_data = json.loads(mr["tool_calls_json"] or "[]")
-                tool_calls = [
-                    ToolCall(
-                        name=tc["name"],
-                        arguments=tc.get("arguments", {}),
-                        id=tc.get("id"),
-                        status=ToolCallStatus(tc.get("status", "success")),
-                        output=tc.get("output"),
-                        exit_code=tc.get("exit_code"),
-                        duration_ms=tc.get("duration_ms", 0.0),
+                tool_calls = []
+                for tc in tc_data:
+                    status_str = tc.get("status", "success")
+                    try:
+                        status_enum = ToolCallStatus(status_str)
+                    except ValueError:
+                        status_enum = ToolCallStatus.SUCCESS
+                    tool_calls.append(
+                        ToolCall(
+                            name=tc.get("name", "bash"),
+                            arguments=tc.get("arguments", {}),
+                            id=tc.get("id", ""),
+                            status=status_enum,
+                            output=tc.get("output"),
+                            exit_code=tc.get("exit_code"),
+                            duration_ms=tc.get("duration_ms", 0.0),
+                        )
                     )
-                    for tc in tc_data
-                ]
                 msg = Message(
                     id=str(mr["id"]),
                     role=mr["role"],
@@ -176,9 +181,30 @@ class SQLiteSessionRepository:
 
             return s
 
+    @staticmethod
+    def _serialize_tool_call(tc: Any) -> Dict[str, Any]:
+        if isinstance(tc, ToolCall):
+            return {
+                "id": tc.id,
+                "name": tc.name,
+                "arguments": tc.arguments,
+                "status": tc.status.value if isinstance(tc.status, ToolCallStatus) else str(tc.status),
+                "output": tc.output,
+                "exit_code": tc.exit_code,
+                "duration_ms": tc.duration_ms,
+            }
+        elif isinstance(tc, dict):
+            return tc
+        elif is_dataclass(tc):
+            d = asdict(tc)
+            if "status" in d and hasattr(d["status"], "value"):
+                d["status"] = d["status"].value
+            return d
+        return {"name": str(tc)}
+
     def add_message(self, session_id: str, message: Message) -> None:
         now = time.time()
-        tc_json = json.dumps([asdict(tc) for tc in message.tool_calls])
+        tc_json = json.dumps([self._serialize_tool_call(tc) for tc in message.tool_calls])
         with self._get_conn() as conn:
             # Ensure session exists in sessions table to maintain referential integrity
             conn.execute(
