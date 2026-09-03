@@ -2425,17 +2425,15 @@ export default class PulsarosGlobalMenuExtension extends Extension {
 
             // OS Name & Version from /etc/os-release
             let osName = "Pulsar OS";
-            let osVersion = "rolling";
+            let distroBase = "debian";
             try {
                 let [ok, content] = GLib.file_get_contents("/etc/os-release");
                 if (ok) {
                     let contentStr = new TextDecoder().decode(content);
                     let prettyNameMatch = contentStr.match(/^PRETTY_NAME="?([^"\n]+)"?/m);
                     let nameMatch = contentStr.match(/^NAME="?([^"\n]+)"?/m);
-                    let versionMatch = contentStr.match(/^VERSION_ID="?([^"\n]+)"?/m) ||
-                                       contentStr.match(/^VERSION="?([^"\n]+)"?/m) ||
-                                       contentStr.match(/^BUILD_ID="?([^"\n]+)"?/m) ||
-                                       contentStr.match(/^IMAGE_VERSION="?([^"\n]+)"?/m);
+                    let idLikeMatch = contentStr.match(/^ID_LIKE="?([^"\n]+)"?/m);
+                    let idMatch = contentStr.match(/^ID="?([^"\n]+)"?/m);
 
                     if (prettyNameMatch) {
                         osName = prettyNameMatch[1];
@@ -2443,14 +2441,21 @@ export default class PulsarosGlobalMenuExtension extends Extension {
                         osName = nameMatch[1];
                     }
 
-                    if (versionMatch) {
-                        osVersion = versionMatch[1];
+                    if (idLikeMatch) {
+                        distroBase = idLikeMatch[1].split(/\s+/)[0].toLowerCase();
+                    } else if (idMatch && idMatch[1].toLowerCase() !== "pulsaros") {
+                        distroBase = idMatch[1].toLowerCase();
+                    } else if (/arch/i.test(contentStr)) {
+                        distroBase = "arch";
+                    } else if (/debian/i.test(contentStr)) {
+                        distroBase = "debian";
                     }
                 }
             } catch (e) {
                 console.error("[GlobalMenu] Failed to read /etc/os-release:", e);
             }
 
+            let osVersion = `0.3-beta-bittenfruit-${distroBase}`;
             let dialog = new AboutDialog(osName, osVersion, hostName, cpuModel, memTotal, gpuModel, diskInfo);
             dialog.open();
         });
