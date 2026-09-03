@@ -616,6 +616,34 @@ class SayriCajita(Gtk.Box):
         self.pill_overlay.set_measure_overlay(pill_row, True)
         self.append(self.pill_overlay)
 
+        # ── Attachment Preview Chip (Circle to Search & screenshots) ──
+        self.attachment_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self.attachment_box.set_visible(False)
+        self.attachment_box.set_margin_start(16)
+        self.attachment_box.set_margin_end(16)
+        self.attachment_box.set_margin_top(4)
+        self.attachment_box.set_margin_bottom(4)
+        self.attachment_box.add_css_class("sayri-card-item")
+
+        self.attachment_pic = Gtk.Picture()
+        self.attachment_pic.set_size_request(60, 42)
+        self.attachment_pic.set_can_shrink(True)
+        self.attachment_pic.set_content_fit(Gtk.ContentFit.COVER)
+        self.attachment_box.append(self.attachment_pic)
+
+        self.attachment_label = Gtk.Label(label="Screenshot attached")
+        self.attachment_label.set_hexpand(True)
+        self.attachment_label.set_xalign(0.0)
+        self.attachment_box.append(self.attachment_label)
+
+        self.attachment_close_btn = Gtk.Button(label="✕")
+        self.attachment_close_btn.set_has_frame(False)
+        self.attachment_close_btn.add_css_class("flat")
+        self.attachment_close_btn.connect("clicked", lambda _: self.clear_attached_image())
+        self.attachment_box.append(self.attachment_close_btn)
+
+        self.append(self.attachment_box)
+
         # ── 2. Bottom Acrylic Card & Multi-View Stack ────────────────
         self.card_overlay = Gtk.Overlay()
         self.card_overlay.set_size_request(420, -1)
@@ -1127,13 +1155,34 @@ class SayriCajita(Gtk.Box):
     def show_chat_view(self) -> None:
         self.switch_tab("chat")
 
+    def set_attached_image(self, path: str) -> None:
+        self._attached_image = path
+        if path and os.path.isfile(path):
+            self.attachment_pic.set_filename(path)
+            self.attachment_label.set_text("Screenshot attached")
+            self.attachment_box.set_visible(True)
+            self.entry.grab_focus()
+            self.entry.set_placeholder_text("Ask Sayri about this screenshot…")
+        else:
+            self.attachment_box.set_visible(False)
+
+    def clear_attached_image(self) -> None:
+        self._attached_image = None
+        self.attachment_box.set_visible(False)
+        self.entry.set_placeholder_text("Ask Sayri anything…")
+
     def _on_entry_activate(self, entry: Gtk.Entry) -> None:
         text = entry.get_text().strip()
-        if text:
+        attached_img = getattr(self, "_attached_image", None)
+        if text or attached_img:
             entry.set_text("")
             self.clear()
             self.switch_tab("chat", trigger_effect=False)
-            self.app.send_text(text)
+            prompt = text or "Analiza esta imagen seleccionada."
+            if attached_img:
+                prompt = f"[Attachment: {attached_img}]\n{prompt}"
+            self.app.send_text(prompt)
+            self.clear_attached_image()
 
     def _on_entry_changed(self, entry: Gtk.Entry) -> None:
         text = entry.get_text().strip()

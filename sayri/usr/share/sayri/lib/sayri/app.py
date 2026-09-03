@@ -309,6 +309,8 @@ class SayriApp(Gtk.Application):
             except OSError:
                 pass
 
+        self._ipc_running = True
+
         def _worker():
             try:
                 import socket
@@ -340,7 +342,14 @@ class SayriApp(Gtk.Application):
                         if raw_data.startswith("{"):
                             try:
                                 msg = json.loads(raw_data)
-                                if msg.get("type") in ("INCOMING_MSG", "remote_message"):
+                                if msg.get("type") in ("ATTACH_IMAGE", "attach") or ("image_path" in msg and msg.get("type") != "INCOMING_MSG"):
+                                    img_path = msg.get("image_path") or msg.get("path")
+                                    if img_path:
+                                        GLib.idle_add(lambda p=img_path: self.overlay and (self.overlay.show(), self.overlay.cajita.set_attached_image(p)))
+                                        conn.sendall(b"OK\n")
+                                        conn.close()
+                                        continue
+                                elif msg.get("type") in ("INCOMING_MSG", "remote_message"):
                                     prompt_text = msg.get("text", "")
                                     author = msg.get("author", "User")
                                     target_agent_id = msg.get("target_agent", "default")
@@ -363,6 +372,10 @@ class SayriApp(Gtk.Application):
                                     continue
                             except Exception as e:
                                 print(f"[Sayri IPC] Message processing error: {e}")
+                        elif raw_data.startswith("attach "):
+                            img_path = raw_data[7:].strip()
+                            if img_path:
+                                GLib.idle_add(lambda p=img_path: self.overlay and (self.overlay.show(), self.overlay.cajita.set_attached_image(p)))
                         elif raw_data == "toggle":
                             GLib.idle_add(self.toggle_visible)
                         elif raw_data == "show":

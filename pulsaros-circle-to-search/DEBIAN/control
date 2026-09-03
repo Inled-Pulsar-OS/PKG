@@ -1,0 +1,12 @@
+Package: pulsaros-circle-to-search
+Version: 1.0.10
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: Jaime <info@inled.es>
+Depends: python3, python3-gi, gir1.2-gtk-4.0, gir1.2-gdkpixbuf-2.0, libgtk4-layer-shell0, tesseract-ocr, wl-clipboard, xdg-utils
+Suggests: sayri, grim, gnome-screenshot
+Description: Circle to Search feature with AI and Google integration for Pulsar OS.
+ High-tech interactive screen selection tool triggered by mouse shaking or global shortcut.
+ Features real-time OCR extraction with Tesseract, a floating Sayri AI query box with
+ dynamic glassmorphic design, and instant visual Google Search.
