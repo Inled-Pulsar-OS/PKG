@@ -70,15 +70,6 @@ if [ -z "$GNOME_CC_VER" ]; then
     echo "🔍 [EN] Debian suite '$SUITE' → using version $GNOME_CC_VER.x"
 fi
 
-# 3. Check if host GTK4 can support target GNOME_CC_VER when building directly on host
-if [ "$GNOME_CC_VER" -ge 48 ] 2>/dev/null; then
-    if ! pkg-config --atleast-version=4.15.2 gtk4 2>/dev/null; then
-        echo "⚠️ [ES] GTK4 del host es menor que 4.15.2 → usando GNOME Control Center 46 para compatibilidad con el entorno."
-        echo "⚠️ [EN] Host GTK4 is less than 4.15.2 → using GNOME Control Center 46 for build environment compatibility."
-        GNOME_CC_VER="46"
-    fi
-fi
-
 # Now resolve the full upstream tag (e.g. "48.0", "48.1", …).
 # Query the GNOME GitLab tags API to find the latest tag matching our major.
 FULL_TAG=""

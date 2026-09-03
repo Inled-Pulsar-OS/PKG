@@ -86,30 +86,11 @@ jobs:
             exit 1
           fi
 
-      # 5. Install build dependencies on host for Debian builds
-      - name: Install Build Dependencies
+      # 5. Install basic host utilities
+      - name: Install Host Utilities
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            dpkg-dev fakeroot jq python3-pil \
-            meson ninja-build git gettext blueprint-compiler \
-            libgtk-4-dev libadwaita-1-dev libgnome-desktop-4-dev \
-            libgnome-bg-4-dev libgnome-rr-4-dev libgnome-bluetooth-ui-3.0-dev \
-            libcolord-dev libcolord-gtk4-dev libgoa-1.0-dev libgoa-backend-1.0-dev \
-            libgtop2-dev libgudev-1.0-dev libupower-glib-dev \
-            libpwquality-dev libnm-dev libnma-gtk4-dev libsecret-1-dev \
-            libpolkit-gobject-1-dev libmalcontent-0-dev \
-            libaccountsservice-dev libglib2.0-dev libgdk-pixbuf-2.0-dev \
-            libgirepository1.0-dev libgsound-dev libjson-glib-dev \
-            libsoup-3.0-dev libwacom-dev libibus-1.0-dev \
-            libkrb5-dev libgnutls28-dev libxi-dev libx11-dev \
-            libxft-dev libxklavier-dev libxml2-dev libxml2-utils \
-            libcups2-dev libgcr-4-dev libsmbclient-dev libudisks2-dev \
-            libpulse-dev libtracker-sparql-3.0-dev \
-            gnome-settings-daemon-dev gsettings-desktop-schemas-dev \
-            docbook-xsl xsltproc \
-            modemmanager-dev libmm-glib-dev \
-            cargo rustc
+          sudo apt-get install -y dpkg-dev fakeroot jq curl git
 
       # 6. Parse package and branch from issue or inputs
       - name: Parse Package and Branch
@@ -178,21 +159,51 @@ jobs:
             gh issue comment "$ISSUE_NUMBER" --body "🏗️ **Comenzando la compilación:** Empaquetando \`${{ steps.parse-package.outputs.package_name }}\` para la rama \`${{ steps.parse-package.outputs.branch }}\`..."
           fi
 
-      # 8. Build Debian Packages
+      # 8. Build Debian Packages inside Docker (Debian Trixie)
       - name: Build Debian Packages
         if: steps.parse-package.outputs.is_debian == 'true'
         env:
           PULSAR_VERSION: "${{ steps.parse-package.outputs.pulsar_version }}"
         run: |
-          chmod +x package-and-deploy.sh
           TARGET_BRANCH="${{ steps.parse-package.outputs.branch }}"
-          if [ "$TARGET_BRANCH" = "all" ]; then
-            for b in stable forky rolling; do
-              ./package-and-deploy.sh "${{ steps.parse-package.outputs.package_name }}" --branch "$b"
-            done
-          else
-            ./package-and-deploy.sh "${{ steps.parse-package.outputs.package_name }}" --branch "$TARGET_BRANCH"
-          fi
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            -e PULSAR_VERSION="$PULSAR_VERSION" \
+            -e DEBIAN_FRONTEND=noninteractive \
+            debian:trixie bash -c "
+              apt-get update
+              apt-get install -y --no-install-recommends \
+                build-essential cmake meson ninja-build git gettext blueprint-compiler \
+                dpkg-dev fakeroot jq python3-pil python3-httpx ca-certificates curl pkg-config \
+                libgtk-4-dev libadwaita-1-dev libgnome-desktop-4-dev libgnome-bg-4-dev \
+                libgnome-rr-4-dev libgnome-bluetooth-ui-3.0-dev \
+                libcolord-dev libcolord-gtk4-dev libgoa-1.0-dev libgoa-backend-1.0-dev \
+                libgtop2-dev libgudev-1.0-dev libupower-glib-dev \
+                libpwquality-dev libnm-dev libnma-gtk4-dev libsecret-1-dev \
+                libpolkit-gobject-1-dev libmalcontent-0-dev \
+                libaccountsservice-dev libglib2.0-dev libgdk-pixbuf-2.0-dev \
+                libgirepository1.0-dev libgsound-dev libjson-glib-dev \
+                libsoup-3.0-dev libwacom-dev libibus-1.0-dev \
+                libkrb5-dev libgnutls28-dev libxi-dev libx11-dev \
+                libxft-dev libxklavier-dev libxml2-dev libxml2-utils \
+                libcups2-dev libgcr-4-dev libsmbclient-dev libudisks2-dev \
+                libpulse-dev libtracker-sparql-3.0-dev \
+                gnome-settings-daemon-dev gsettings-desktop-schemas-dev \
+                docbook-xsl xsltproc modemmanager-dev libmm-glib-dev udisks2 \
+                cargo rustc nodejs npm
+
+              chmod +x /workspace/package-and-deploy.sh
+              if [ '$TARGET_BRANCH' = 'all' ]; then
+                for b in stable forky rolling; do
+                  ./package-and-deploy.sh '${{ steps.parse-package.outputs.package_name }}' --branch \"\$b\"
+                done
+              else
+                ./package-and-deploy.sh '${{ steps.parse-package.outputs.package_name }}' --branch '$TARGET_BRANCH'
+              fi
+
+              chmod -R a+rwX /workspace/build /workspace/PKG 2>/dev/null || true
+            "
 
       # 9. Build Arch Packages inside Docker
       - name: Build Arch Packages
