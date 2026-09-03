@@ -189,6 +189,7 @@ jobs:
                 libxft-dev libxklavier-dev libxml2-dev libxml2-utils \
                 libcups2-dev libgcr-4-dev libsmbclient-dev libudisks2-dev \
                 libpulse-dev libtracker-sparql-3.0-dev \
+                libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
                 gnome-settings-daemon-dev gsettings-desktop-schemas-dev \
                 docbook-xsl xsltproc modemmanager-dev libmm-glib-dev udisks2 \
                 cargo rustc nodejs npm
@@ -219,7 +220,7 @@ jobs:
             archlinux:latest bash -c "
               pacman-key --init
               pacman-key --populate archlinux
-              pacman -Syu --noconfirm base-devel git sudo jq curl wget gtk-update-icon-cache cmake meson ninja blueprint-compiler glib2-devel docbook-xsl rust
+              pacman -Syu --noconfirm base-devel git sudo jq curl wget gtk-update-icon-cache cmake meson ninja blueprint-compiler glib2-devel docbook-xsl rust webkit2gtk-4.1
 
               useradd -m builder
               echo 'builder ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers

@@ -8,8 +8,8 @@ url="https://inled.es"
 license=(custom)
 # gstreamer + gst-plugins-*: runtime decode plugins WebKitGTK needs to render
 # the H.264 videos in the welcome slideshow (black-frame fix).
-depends=(python-gobject python-cairo python-dbus gtk3 webkitgtk-6.0 libsoup3 xorg-xrandr gtk4 libadwaita driverman gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav)
-makedepends=(rust npm)
+depends=(python-gobject python-cairo python-dbus gtk3 webkit2gtk-4.1 webkitgtk-6.0 libsoup3 xorg-xrandr gtk4 libadwaita driverman gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav)
+makedepends=(rust npm webkit2gtk-4.1)
 options=(!strip !debug)
 install=pulsaros-welcome.install
 
