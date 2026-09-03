@@ -236,34 +236,43 @@ progressbar.sayri-progress > trough > progress {
 }
 
 .sayri-attachment-chip {
-    border-radius: 6px;
+    border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.22);
     background: rgba(0, 0, 0, 0.35);
     margin-left: 2px;
     margin-right: 6px;
-    min-width: 28px;
-    max-width: 28px;
-    min-height: 28px;
-    max-height: 28px;
+    min-width: 32px;
+    max-width: 32px;
+    min-height: 32px;
+    max-height: 32px;
+    padding: 0px;
 }
 
 .sayri-attachment-pic {
-    border-radius: 5px;
+    border-radius: 7px;
+    min-width: 32px;
+    max-width: 32px;
+    min-height: 32px;
+    max-height: 32px;
 }
 
 .sayri-attachment-hover-overlay {
     background: rgba(0, 0, 0, 0.65);
-    border-radius: 5px;
-    color: #ffffff;
-    font-size: 13px;
-    font-weight: bold;
+    border-radius: 7px;
+    opacity: 0.0;
+    transition: opacity 180ms cubic-bezier(0.4, 0, 0.2, 1), background-color 180ms ease;
 }
 
-.sayri-attachment-hover-overlay:hover {
-    background: rgba(239, 68, 68, 0.88);
-    color: #ffffff;
+.sayri-attachment-hover-overlay.hovered {
+    opacity: 1.0;
+    background: rgba(220, 38, 38, 0.88);
 }
 """
+
+SVG_CLOSE_BOLD = """<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+<line x1="18" y1="6" x2="6" y2="18"></line>
+<line x1="6" y1="6" x2="18" y2="18"></line>
+</svg>"""
 
 SVG_MIC = """<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 <rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>
@@ -605,30 +614,29 @@ class SayriCajita(Gtk.Box):
         self.attach_chip.set_visible(False)
         self.attach_chip.add_css_class("sayri-attachment-chip")
         self.attach_chip.set_valign(Gtk.Align.CENTER)
-        self.attach_chip.set_size_request(28, 28)
+        self.attach_chip.set_size_request(32, 32)
 
         self.attach_pic = Gtk.Picture()
-        self.attach_pic.set_size_request(28, 28)
+        self.attach_pic.set_size_request(32, 32)
         self.attach_pic.set_can_shrink(True)
         self.attach_pic.set_content_fit(Gtk.ContentFit.COVER)
         self.attach_pic.add_css_class("sayri-attachment-pic")
         self.attach_chip.set_child(self.attach_pic)
 
-        # Full-cover hover layer with centered bold ✕
+        # Full-cover hover layer with centered bold ✕ and smooth fade animation
         self.attach_hover_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.attach_hover_box.add_css_class("sayri-attachment-hover-overlay")
         self.attach_hover_box.set_hexpand(True)
         self.attach_hover_box.set_vexpand(True)
         self.attach_hover_box.set_halign(Gtk.Align.FILL)
         self.attach_hover_box.set_valign(Gtk.Align.FILL)
-        self.attach_hover_box.set_visible(False)
 
-        x_lbl = Gtk.Label(label="✕")
-        x_lbl.set_hexpand(True)
-        x_lbl.set_vexpand(True)
-        x_lbl.set_halign(Gtk.Align.CENTER)
-        x_lbl.set_valign(Gtk.Align.CENTER)
-        self.attach_hover_box.append(x_lbl)
+        x_icon = _svg_icon(SVG_CLOSE_BOLD)
+        x_icon.set_hexpand(True)
+        x_icon.set_vexpand(True)
+        x_icon.set_halign(Gtk.Align.CENTER)
+        x_icon.set_valign(Gtk.Align.CENTER)
+        self.attach_hover_box.append(x_icon)
         self.attach_chip.add_overlay(self.attach_hover_box)
 
         # Click gesture to discard attachment
@@ -636,10 +644,10 @@ class SayriCajita(Gtk.Box):
         click_ctrl.connect("released", lambda _g, _n, _x, _y: self.clear_attached_image())
         self.attach_chip.add_controller(click_ctrl)
 
-        # Hover controller to reveal centered ✕ layer
+        # Smooth hover transition controller
         hover_ctrl = Gtk.EventControllerMotion.new()
-        hover_ctrl.connect("enter", lambda _c, _x, _y: self.attach_hover_box.set_visible(True))
-        hover_ctrl.connect("leave", lambda _c: self.attach_hover_box.set_visible(False))
+        hover_ctrl.connect("enter", lambda _c, _x, _y: self.attach_hover_box.add_css_class("hovered"))
+        hover_ctrl.connect("leave", lambda _c: self.attach_hover_box.remove_css_class("hovered"))
         self.attach_chip.add_controller(hover_ctrl)
 
         pill_row.append(self.attach_chip)
@@ -1204,8 +1212,8 @@ class SayriCajita(Gtk.Box):
         self._attached_image = path
         if path and os.path.isfile(path):
             self.attach_pic.set_filename(path)
+            self.attach_hover_box.remove_css_class("hovered")
             self.attach_chip.set_visible(True)
-            self.attach_hover_box.set_visible(False)
             self.entry.grab_focus()
             self.entry.set_placeholder_text("Ask about this screenshot…")
         else:
