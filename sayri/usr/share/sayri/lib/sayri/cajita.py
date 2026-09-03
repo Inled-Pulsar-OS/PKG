@@ -236,31 +236,31 @@ progressbar.sayri-progress > trough > progress {
 }
 
 .sayri-attachment-chip {
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
     background: rgba(0, 0, 0, 0.35);
     margin-left: 2px;
     margin-right: 6px;
+    min-width: 28px;
+    max-width: 28px;
+    min-height: 28px;
+    max-height: 28px;
 }
 
 .sayri-attachment-pic {
-    border-radius: 7px;
+    border-radius: 5px;
 }
 
-.sayri-attach-close-btn {
-    background: rgba(15, 23, 42, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    border-radius: 9999px;
-    padding: 0px;
-    min-width: 16px;
-    min-height: 16px;
+.sayri-attachment-hover-overlay {
+    background: rgba(0, 0, 0, 0.65);
+    border-radius: 5px;
     color: #ffffff;
-    font-size: 9px;
+    font-size: 13px;
     font-weight: bold;
 }
 
-.sayri-attach-close-btn:hover {
-    background: rgba(239, 68, 68, 0.95);
+.sayri-attachment-hover-overlay:hover {
+    background: rgba(239, 68, 68, 0.88);
     color: #ffffff;
 }
 """
@@ -605,28 +605,41 @@ class SayriCajita(Gtk.Box):
         self.attach_chip.set_visible(False)
         self.attach_chip.add_css_class("sayri-attachment-chip")
         self.attach_chip.set_valign(Gtk.Align.CENTER)
-        self.attach_chip.set_size_request(34, 34)
+        self.attach_chip.set_size_request(28, 28)
 
         self.attach_pic = Gtk.Picture()
-        self.attach_pic.set_size_request(34, 34)
+        self.attach_pic.set_size_request(28, 28)
         self.attach_pic.set_can_shrink(True)
         self.attach_pic.set_content_fit(Gtk.ContentFit.COVER)
         self.attach_pic.add_css_class("sayri-attachment-pic")
         self.attach_chip.set_child(self.attach_pic)
 
-        self.attach_close_btn = Gtk.Button(label="✕")
-        self.attach_close_btn.set_has_frame(False)
-        self.attach_close_btn.add_css_class("sayri-attach-close-btn")
-        self.attach_close_btn.set_halign(Gtk.Align.END)
-        self.attach_close_btn.set_valign(Gtk.Align.START)
-        self.attach_close_btn.set_visible(False)
-        self.attach_close_btn.connect("clicked", lambda _: self.clear_attached_image())
-        self.attach_chip.add_overlay(self.attach_close_btn)
+        # Full-cover hover layer with centered bold ✕
+        self.attach_hover_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self.attach_hover_box.add_css_class("sayri-attachment-hover-overlay")
+        self.attach_hover_box.set_hexpand(True)
+        self.attach_hover_box.set_vexpand(True)
+        self.attach_hover_box.set_halign(Gtk.Align.FILL)
+        self.attach_hover_box.set_valign(Gtk.Align.FILL)
+        self.attach_hover_box.set_visible(False)
 
-        # Hover controller to reveal close 'X' badge
+        x_lbl = Gtk.Label(label="✕")
+        x_lbl.set_hexpand(True)
+        x_lbl.set_vexpand(True)
+        x_lbl.set_halign(Gtk.Align.CENTER)
+        x_lbl.set_valign(Gtk.Align.CENTER)
+        self.attach_hover_box.append(x_lbl)
+        self.attach_chip.add_overlay(self.attach_hover_box)
+
+        # Click gesture to discard attachment
+        click_ctrl = Gtk.GestureClick.new()
+        click_ctrl.connect("released", lambda _g, _n, _x, _y: self.clear_attached_image())
+        self.attach_chip.add_controller(click_ctrl)
+
+        # Hover controller to reveal centered ✕ layer
         hover_ctrl = Gtk.EventControllerMotion.new()
-        hover_ctrl.connect("enter", lambda _c, _x, _y: self.attach_close_btn.set_visible(True))
-        hover_ctrl.connect("leave", lambda _c: self.attach_close_btn.set_visible(False))
+        hover_ctrl.connect("enter", lambda _c, _x, _y: self.attach_hover_box.set_visible(True))
+        hover_ctrl.connect("leave", lambda _c: self.attach_hover_box.set_visible(False))
         self.attach_chip.add_controller(hover_ctrl)
 
         pill_row.append(self.attach_chip)
@@ -1192,7 +1205,7 @@ class SayriCajita(Gtk.Box):
         if path and os.path.isfile(path):
             self.attach_pic.set_filename(path)
             self.attach_chip.set_visible(True)
-            self.attach_close_btn.set_visible(False)
+            self.attach_hover_box.set_visible(False)
             self.entry.grab_focus()
             self.entry.set_placeholder_text("Ask about this screenshot…")
         else:
