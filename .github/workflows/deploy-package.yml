@@ -197,6 +197,9 @@ jobs:
                 libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
                 gnome-settings-daemon-dev gsettings-desktop-schemas-dev \
                 docbook-xsl xsltproc modemmanager-dev libmm-glib-dev udisks2 \
+                libgnome-autoar-0-dev libportal-dev libportal-gtk4-dev libtinysparql-dev \
+                libgexiv2-dev libcloudproviders-dev libgraphene-1.0-dev \
+                libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base desktop-file-utils \
                 cargo rustc nodejs npm
 
               chmod +x /workspace/package-and-deploy.sh
