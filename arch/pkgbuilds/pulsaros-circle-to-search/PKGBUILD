@@ -1,12 +1,12 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-circle-to-search
 pkgver=1.0.0
-pkgrel=2
+pkgrel=3
 pkgdesc="Circle to Search with Sayri AI, Google Lens, and OCR text extraction for Pulsar OS"
 arch=(any)
 url="https://inled.es"
 license=(GPL3)
-depends=(gnome-shell tesseract tesseract-data-eng tesseract-data-spa sayri)
+depends=(gnome-shell tesseract tesseract-data-eng tesseract-data-spa sayri ydotool)
 install=pulsaros-circle-to-search.install
 options=(!strip)
 
@@ -14,15 +14,19 @@ package() {
     _src="$(cd "$startdir"/../../../pulsaros-circle-to-search && pwd)"
     cd "$_src"
 
+    mkdir -p "$pkgdir/usr/bin"
+    install -Dm755 usr/bin/pulsar-circle-to-search "$pkgdir/usr/bin/pulsar-circle-to-search"
+
+    mkdir -p "$pkgdir/usr/share/applications"
+    install -Dm644 usr/share/applications/pulsar-circle-to-search.desktop "$pkgdir/usr/share/applications/pulsar-circle-to-search.desktop"
+
     mkdir -p "$pkgdir/usr/share/gnome-shell/extensions"
     cp -r usr/share/gnome-shell/extensions/pulsar-circle-to-search@inled.es "$pkgdir/usr/share/gnome-shell/extensions/"
     ln -s "pulsar-circle-to-search@inled.es" "$pkgdir/usr/share/gnome-shell/extensions/shotzy@SamkitJain660.github.io"
 
-    # Set proper permissions
     chmod -R a+rX "$pkgdir/usr"
     find "$pkgdir/usr" -type d -exec chmod 755 {} +
-    find "$pkgdir/usr" -type f -exec chmod 644 {} +
+    find "$pkgdir/usr/share" -type f -exec chmod 644 {} +
 
-    # Compile schemas inside package
     glib-compile-schemas "$pkgdir/usr/share/gnome-shell/extensions/pulsar-circle-to-search@inled.es/schemas"
 }

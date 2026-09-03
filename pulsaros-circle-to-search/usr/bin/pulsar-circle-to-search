@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Trigger GNOME Interactive Screenshot / Circle to Search overlay
+if command -v ydotool >/dev/null 2>&1; then
+    ydotool key 107:1 107:0 2>/dev/null || gnome-screenshot -i 2>/dev/null || true
+else
+    gnome-screenshot -i 2>/dev/null || true
+fi

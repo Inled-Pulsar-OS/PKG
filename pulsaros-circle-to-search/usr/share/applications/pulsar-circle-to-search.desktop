@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Circle to Search
+GenericName=Circle to Search
+Comment=Search with Sayri AI, Google Lens, and OCR text extraction
+Exec=pulsar-circle-to-search
+Icon=sayri
+Terminal=false
+Categories=GNOME;GTK;Utility;
+Keywords=circle;search;screenshot;lens;sayri;ai;ocr;
