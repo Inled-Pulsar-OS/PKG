@@ -136,8 +136,8 @@ export default class ShotzyExtension extends Extension {
                 const dt = now - lastMoveTime;
                 lastMoveTime = now;
 
-                // 2. Idle timeout: If mouse stopped or stuttered (> 80ms between ticks), reset shake
-                if (dt > 80) {
+                // 2. Idle timeout: If mouse stopped or stuttered (> 70ms between ticks), reset shake
+                if (dt > 70) {
                     strokeDir = 0;
                     reversals = [];
                     lastX = x;
@@ -151,7 +151,7 @@ export default class ShotzyExtension extends Extension {
                 lastX = x;
                 lastY = y;
 
-                if (Math.abs(dx) < 8) return;
+                if (Math.abs(dx) < 10) return;
                 const d = dx > 0 ? 1 : -1;
 
                 if (strokeDir === 0) {
@@ -167,18 +167,18 @@ export default class ShotzyExtension extends Extension {
                     const strokeDuration = Math.max(now - strokeStartTime, 1);
                     const speed = (strokeDist / strokeDuration) * 1000; // px/sec
 
-                    // Must be a wide, energetic, vigorous sweep across the screen ("a lo bruto"):
-                    // - Wide stroke amplitude >= 260px per sweep
-                    // - High speed >= 1600 px/sec
-                    // - Fast stroke duration <= 220ms
-                    if (strokeDist >= 260 && strokeDuration <= 220 && speed >= 1600) {
+                    // Must be an ultra-wide, energetic sweep across the entire screen:
+                    // - Wide stroke amplitude >= 350px per sweep
+                    // - High speed >= 1800 px/sec
+                    // - Fast stroke duration <= 250ms
+                    if (strokeDist >= 350 && strokeDuration <= 250 && speed >= 1800) {
                         reversals.push({ time: now, dist: strokeDist });
-                        reversals = reversals.filter(r => now - r.time <= 750);
+                        reversals = reversals.filter(r => now - r.time <= 800);
                         const totalDist = reversals.reduce((acc, r) => acc + r.dist, 0);
 
-                        // Require at least 5 wide sweeps (>= 1300px total travel across screen)
-                        if (reversals.length >= 5 && totalDist >= 1300) {
-                            if (now - lastTrigger >= 4000) {
+                        // Require at least 6 wide sweeps (>= 2100px total travel across screen)
+                        if (reversals.length >= 6 && totalDist >= 2100) {
+                            if (now - lastTrigger >= 4500) {
                                 lastTrigger = now;
                                 reversals = [];
                                 strokeDir = 0;
