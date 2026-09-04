@@ -1,7 +1,7 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-circle-to-search
 pkgver=1.0.0
-pkgrel=3
+pkgrel=7
 pkgdesc="Circle to Search with Sayri AI, Google Lens, and OCR text extraction for Pulsar OS"
 arch=(any)
 url="https://inled.es"
@@ -23,6 +23,10 @@ package() {
     mkdir -p "$pkgdir/usr/share/gnome-shell/extensions"
     cp -r usr/share/gnome-shell/extensions/pulsar-circle-to-search@inled.es "$pkgdir/usr/share/gnome-shell/extensions/"
     ln -s "pulsar-circle-to-search@inled.es" "$pkgdir/usr/share/gnome-shell/extensions/shotzy@SamkitJain660.github.io"
+
+    # Install schema to system glib path so nested GNOME Shell sessions can find it
+    install -Dm644 usr/share/gnome-shell/extensions/pulsar-circle-to-search@inled.es/schemas/org.gnome.shell.extensions.shotzy.gschema.xml \
+        "$pkgdir/usr/share/glib-2.0/schemas/org.gnome.shell.extensions.shotzy.gschema.xml"
 
     chmod -R a+rX "$pkgdir/usr"
     find "$pkgdir/usr" -type d -exec chmod 755 {} +

@@ -72,5 +72,16 @@
       <summary>Show QR code button</summary>
       <description>Show the QR code button in the screenshot UI.</description>
     </key>
+    <key name="shake-enabled" type="b">
+      <default>true</default>
+      <summary>Enable shake to search</summary>
+      <description>Open the screenshot search overlay when the pointer is shaken quickly.</description>
+    </key>
+    <key name="shake-sensitivity" type="i">
+      <default>8</default>
+      <range min="1" max="10"/>
+      <summary>Shake sensitivity</summary>
+      <description>How small a mouse shake opens the overlay. Higher values trigger with smaller movements (10 = very light shake, 1 = must shake very hard).</description>
+    </key>
   </schema>
 </schemalist>

@@ -7,9 +7,17 @@ arch=(any)
 url="https://inled.es"
 license=(custom)
 depends=(python-gobject python-dbus gtk4 libadwaita python-xlib parted psmisc deja-dup timeshift gparted gptfdisk rsync dosfstools e2fsprogs grub btrfs-progs squashfs-tools curl)
+makedepends=(cargo)
 options=(!strip)
 install=pulsaros-recovery.install
 
+build() {
+    _src="$(cd "$startdir"/../../../pulsaros-recovery && pwd)"
+    if [ -d "$_src/rust-recovery" ]; then
+        cd "$_src/rust-recovery"
+        cargo build --release
+    fi
+}
 
 package() {
     _src="$(cd "$startdir"/../../../pulsaros-recovery && pwd)"
@@ -20,6 +28,9 @@ package() {
         cp -r "$srcdir/staging"/* "$pkgdir/"
     elif [ -d "$srcdir/usr" ]; then
         cp -r "$srcdir/usr" "$pkgdir/"
+    fi
+    if [ -f "$_src/rust-recovery/target/release/pulsar-recovery-assistant" ]; then
+        install -Dm755 "$_src/rust-recovery/target/release/pulsar-recovery-assistant" "$pkgdir/usr/bin/pulsar-recovery-assistant"
     fi
     # Remove Debian-specific __pycache__
     rm -rf "$pkgdir/usr/share/pulsaros-recovery/__pycache__"

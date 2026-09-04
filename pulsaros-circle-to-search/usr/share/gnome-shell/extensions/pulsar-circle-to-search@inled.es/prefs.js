@@ -180,6 +180,34 @@ export default class ShotzyPreferences extends ExtensionPreferences {
         settings.bind('show-qr-button', qrButtonRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         actionsGroup.add(qrButtonRow);
 
+        const shakePage = new Adw.PreferencesPage({
+            title: 'Shake',
+            icon_name: 'input-mouse-symbolic',
+        });
+        window.add(shakePage);
+
+        const shakeGroup = new Adw.PreferencesGroup({
+            title: 'Shake to search',
+            description: 'Move the mouse rapidly from side to side to open the search overlay.',
+        });
+        shakePage.add(shakeGroup);
+
+        const shakeEnabledRow = new Adw.SwitchRow({
+            title: 'Enable shake detection',
+            subtitle: 'Open the overlay when the pointer is shaken quickly.',
+        });
+        settings.bind('shake-enabled', shakeEnabledRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+        shakeGroup.add(shakeEnabledRow);
+
+        shakeGroup.add(this._createSpinRow(settings, {
+            key: 'shake-sensitivity',
+            title: 'Sensitivity',
+            subtitle: 'Higher values trigger with smaller movements. 10 = light shake, 1 = must shake very hard.',
+            min: 1,
+            max: 10,
+            step: 1,
+        }));
+
         window._settings = settings;
     }
 

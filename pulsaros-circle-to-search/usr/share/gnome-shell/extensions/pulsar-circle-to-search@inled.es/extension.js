@@ -92,6 +92,8 @@ export default class ShotzyExtension extends Extension {
         this._settingsChangedId = this._settings.connect('changed', (_settings, key) => {
             if (key === 'show-google-lens-button' || key === 'show-qr-button')
                 this._syncActionButtons();
+            else if (key === 'shake-enabled' || key === 'shake-sensitivity')
+                this._setupShakeDetector();
         });
     }
 
@@ -103,8 +105,35 @@ export default class ShotzyExtension extends Extension {
             this._shakeWatch = null;
         }
 
+        if (!this._settings || !this._settings.get_boolean('shake-enabled'))
+            return;
+
         try {
             this._pointerWatcher = getPointerWatcher();
+
+            // Tunable sensitivity (1 = very hard shake, 10 = light shake).
+            let sens = 7;
+            try {
+                sens = Math.min(10, Math.max(1, this._settings.get_int('shake-sensitivity')));
+            } catch (e) {
+                sens = 7;
+            }
+
+            let screenWidth = 1920;
+            try {
+                const monitorIndex = global.display.get_current_monitor();
+                const geom = global.display.get_monitor_geometry(monitorIndex);
+                if (geom && geom.width) screenWidth = geom.width;
+            } catch (e) {
+                screenWidth = 1920;
+            }
+
+            const minStroke = Math.max(45, Math.round(screenWidth * (0.08 - 0.005 * sens)));
+            const requiredReversals = sens >= 8 ? 3 : sens >= 5 ? 4 : 5;
+            const windowMs = 600 + sens * 40;
+            const idleResetMs = 180;
+            const cooldownMs = 2500;
+
             const startTime = Date.now();
             let lastX = null;
             let lastY = null;
@@ -117,8 +146,8 @@ export default class ShotzyExtension extends Extension {
 
             this._shakeWatch = this._pointerWatcher.addWatch(16, (x, y) => {
                 const now = Date.now();
-                // 1. Startup Warmup: Ignore cursor coordinates during first 2.5s
-                if (now - startTime < 2500) {
+                // 1. Startup Warmup: Ignore cursor coordinates during first 1.5s
+                if (now - startTime < 1500) {
                     lastX = x;
                     lastY = y;
                     return;
@@ -136,8 +165,8 @@ export default class ShotzyExtension extends Extension {
                 const dt = now - lastMoveTime;
                 lastMoveTime = now;
 
-                // 2. Idle timeout: If mouse stopped or stuttered (> 70ms between ticks), reset shake
-                if (dt > 70) {
+                // 2. Idle timeout: If the mouse stopped or stuttered, restart the gesture
+                if (dt > idleResetMs) {
                     strokeDir = 0;
                     reversals = [];
                     lastX = x;
@@ -151,7 +180,7 @@ export default class ShotzyExtension extends Extension {
                 lastX = x;
                 lastY = y;
 
-                if (Math.abs(dx) < 10) return;
+                if (Math.abs(dx) < 4) return;
                 const d = dx > 0 ? 1 : -1;
 
                 if (strokeDir === 0) {
@@ -161,37 +190,23 @@ export default class ShotzyExtension extends Extension {
                     return;
                 }
 
-                // If direction reversed
+                // Direction reversed: a half-sweep completed
                 if (d !== strokeDir) {
                     const strokeDist = Math.abs(x - strokeStartPos);
-                    const strokeDuration = Math.max(now - strokeStartTime, 1);
-                    const speed = (strokeDist / strokeDuration) * 1000; // px/sec
+                    if (strokeDist >= minStroke) {
+                        reversals.push(now);
+                        reversals = reversals.filter(r => now - r <= windowMs);
 
-                    // Must be an ultra-wide, energetic sweep across the entire screen:
-                    // - Wide stroke amplitude >= 350px per sweep
-                    // - High speed >= 1800 px/sec
-                    // - Fast stroke duration <= 250ms
-                    if (strokeDist >= 350 && strokeDuration <= 250 && speed >= 1800) {
-                        reversals.push({ time: now, dist: strokeDist });
-                        reversals = reversals.filter(r => now - r.time <= 800);
-                        const totalDist = reversals.reduce((acc, r) => acc + r.dist, 0);
-
-                        // Require at least 6 wide sweeps (>= 2100px total travel across screen)
-                        if (reversals.length >= 6 && totalDist >= 2100) {
-                            if (now - lastTrigger >= 4500) {
-                                lastTrigger = now;
-                                reversals = [];
-                                strokeDir = 0;
-                                if (Main.screenshotUI && !Main.screenshotUI._isOpen) {
-                                    Main.screenshotUI.open();
-                                }
+                        if (reversals.length >= requiredReversals &&
+                            now - lastTrigger >= cooldownMs) {
+                            lastTrigger = now;
+                            reversals = [];
+                            strokeDir = 0;
+                            if (Main.screenshotUI && !Main.screenshotUI._isOpen) {
+                                Main.screenshotUI.open();
                             }
                         }
-                    } else {
-                        // Small or slow movement -> reset
-                        reversals = [];
                     }
-
                     strokeDir = d;
                     strokeStartPos = x;
                     strokeStartTime = now;
@@ -282,7 +297,11 @@ export default class ShotzyExtension extends Extension {
         }
 
         if (this._tooltips) {
-            this._tooltips.forEach(t => t.destroy());
+            this._tooltips.forEach(t => {
+                try {
+                    t.destroy();
+                } catch (e) {}
+            });
             this._tooltips = [];
         }
 
