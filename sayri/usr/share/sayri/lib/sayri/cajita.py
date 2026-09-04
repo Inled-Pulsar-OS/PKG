@@ -47,25 +47,18 @@ from sayri.domain.models import (
 from sayri.domain.secrets_manager import secrets_manager
 
 CAJITA_CSS = b"""
-.sayri-cajita-container {
-    background: none;
-    background-color: transparent;
-    background-image: none;
-}
-
-.sayri-pill-box,
-.sayri-pill-overlay {
-    background-color: rgba(13, 20, 36, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    border-radius: 26px;
-}
-
+.sayri-cajita-container,
 .sayri-pill-container,
+.sayri-pill-box,
+.sayri-pill-overlay,
 .sayri-pill-row,
 .sayri-pill-row > * {
     background: none;
     background-color: transparent;
     background-image: none;
+    border: none;
+    box-shadow: none;
+    outline: none;
 }
 
 entry.sayri-pill-entry,
@@ -505,7 +498,7 @@ class ChromaBackground(Gtk.DrawingArea):
         return True
 
     def _draw(self, area, cr: cairo.Context, w: int, h: int) -> None:
-        pad = 6.0
+        pad = 2.0
         r = (24.0 if self.is_pill else 18.0)
         bx, by, bw, bh = pad, pad, w - 2 * pad, h - 2 * pad
 
