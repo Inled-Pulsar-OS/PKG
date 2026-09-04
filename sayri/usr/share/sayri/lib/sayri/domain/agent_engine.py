@@ -165,9 +165,9 @@ class AgentEngine:
             self._generate_session_title_async(session.id, user_text, cfg)
 
         # Prepare messages payload with token-efficient context window
-        messages = [{"role": "system", "content": self.build_system_prompt(profile)}]
-
+        system_prompt = self.build_system_prompt(profile)
         all_past_msgs = session.messages
+        
         if len(all_past_msgs) > 4:
             # Compact older context summary to save tokens while keeping conversation state
             older_msgs = all_past_msgs[:-4]
@@ -178,19 +178,20 @@ class AgentEngine:
                     role_tag = "User" if om.role == "user" else "Sayri"
                     topics_summary.append(f"{role_tag}: {snippet}")
             if topics_summary:
-                compact_note = (
-                    "[Previous context summary in this session:\n"
+                system_prompt += (
+                    "\n\n[Previous context summary in this session:\n"
                     + "\n".join(topics_summary)
                     + "\n(Use ```search_history <keyword>``` if you need older verbatim details)]"
                 )
-                messages.append({"role": "system", "content": compact_note})
 
-            # Append the most recent 4 messages for immediate conversational continuity
-            for m in all_past_msgs[-4:]:
-                messages.append({"role": m.role, "content": m.content})
-        else:
-            for m in all_past_msgs:
-                messages.append({"role": m.role, "content": m.content})
+        messages = [{"role": "system", "content": system_prompt}]
+
+        recent_msgs = all_past_msgs[-4:] if len(all_past_msgs) > 4 else all_past_msgs
+        for m in recent_msgs:
+            if m.role == "system":
+                continue
+            role = "assistant" if m.role == "assistant" else "user"
+            messages.append({"role": role, "content": m.content})
 
         messages.append({"role": "user", "content": user_text})
 

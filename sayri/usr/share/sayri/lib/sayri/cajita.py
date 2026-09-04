@@ -46,6 +46,7 @@ from sayri.domain.models import (
 )
 from sayri.domain.secrets_manager import secrets_manager
 
+CAJITA_CSS = b"""
 .sayri-cajita-container {
     background: none;
     background-color: transparent;
