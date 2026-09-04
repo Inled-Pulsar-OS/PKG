@@ -1,20 +1,15 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-meta
-pkgver=1.0.2
+pkgver=1.0.3
 pkgrel=1
 pkgdesc="Metapackage that pulls in every Pulsar OS package (delivers newly added packages to existing installations)"
 arch=(any)
 url="https://inled.es"
 license=(custom)
 depends=(
-  droidtux
   gnome-keybindings
   gnome-macos-remap-wayland
-  appinstall
-  macboat
   pulsar-pear-sound-theme
-  seafari
-  winboat-bin
   pulsaros-boot-icons
   pulsaros-bootsound
   pulsaros-branding
@@ -31,6 +26,13 @@ depends=(
   pulsaros-theme
   pulsaros-welcome
   sayri
+)
+optdepends=(
+  'droidtux: Android integration and syncing'
+  'macboat: macOS in Docker container'
+  'appinstall: Application installer'
+  'seafari: Safari-like web browser'
+  'winboat-bin: Windows app compatibility runner'
 )
 options=(!strip)
 

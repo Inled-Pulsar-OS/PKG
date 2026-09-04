@@ -1,12 +1,12 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-essential
-pkgver=1.0.118
-pkgrel=2
+pkgver=1.0.119
+pkgrel=1
 pkgdesc="Essential configurations and system utilities for Pulsar OS (Arch edition)"
 arch=(any)
 url="https://inled.es"
 license=(custom)
-depends=(sudo polkit flatpak appmenu-gtk-module python-gobject python-dbus bamf libkeybinder3 gtk3 python-xlib docker droidtux macboat appinstall seafari freerdp winboat pulsaros-meta)
+depends=(sudo polkit flatpak appmenu-gtk-module python-gobject python-dbus bamf libkeybinder3 gtk3 python-xlib pulsaros-meta)
 options=(!strip)
 install=pulsaros-essential.install
 

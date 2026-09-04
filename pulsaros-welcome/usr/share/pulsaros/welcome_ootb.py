@@ -1501,15 +1501,44 @@ class OOTBWindow(Adw.ApplicationWindow):
             try:
                 run_cmd(["localectl", "set-locale", f"LANG={locale_full}"])
             except Exception:
-                if os.path.exists("/etc/debian_version"):
-                    write_temp_and_move(f'LANG="{locale_full}"\n', "/etc/default/locale")
-                    run_cmd(["chown", "root:root", "/etc/default/locale"], check=False)
-                    run_cmd(["chmod", "644", "/etc/default/locale"], check=False)
-                else:
-                    # Arch reads /etc/locale.conf (not /etc/default/locale)
-                    write_temp_and_move(f"LANG={locale_full}\n", "/etc/locale.conf")
-                    run_cmd(["chown", "root:root", "/etc/locale.conf"], check=False)
-                    run_cmd(["chmod", "644", "/etc/locale.conf"], check=False)
+                pass
+
+            if os.path.exists("/etc/debian_version"):
+                write_temp_and_move(f'LANG="{locale_full}"\nLC_ALL="{locale_full}"\n', "/etc/default/locale")
+                run_cmd(["chown", "root:root", "/etc/default/locale"], check=False)
+                run_cmd(["chmod", "644", "/etc/default/locale"], check=False)
+                run_cmd(["update-locale", f"LANG={locale_full}", f"LC_ALL={locale_full}"], check=False)
+            else:
+                write_temp_and_move(f"LANG={locale_full}\n", "/etc/locale.conf")
+                run_cmd(["chown", "root:root", "/etc/locale.conf"], check=False)
+                run_cmd(["chmod", "644", "/etc/locale.conf"], check=False)
+
+            # Update AccountsService and GNOME locale for active user
+            try:
+                run_cmd(["gsettings", "set", "org.gnome.system.locale", "region", f"'{locale_full}'"], check=False)
+                as_dir = "/var/lib/AccountsService/users"
+                if os.path.exists(as_dir):
+                    for u_file in os.listdir(as_dir):
+                        u_path = os.path.join(as_dir, u_file)
+                        if os.path.isfile(u_path):
+                            with open(u_path, "r") as f:
+                                as_txt = f.read()
+                            lines = []
+                            has_lang = False
+                            for l in as_txt.splitlines():
+                                if l.startswith("Language="):
+                                    lines.append(f"Language={locale_full}")
+                                    has_lang = True
+                                elif l.startswith("FormatsLocale="):
+                                    lines.append(f"FormatsLocale={locale_full}")
+                                else:
+                                    lines.append(l)
+                            if not has_lang:
+                                lines.append(f"Language={locale_full}")
+                                lines.append(f"FormatsLocale={locale_full}")
+                            write_temp_and_move("\n".join(lines) + "\n", u_path)
+            except Exception as e:
+                log_msg(f"Warning updating AccountsService locale: {e}")
 
             # ── OCR & Tesseract Language Pack ──────────────────────
             try:
