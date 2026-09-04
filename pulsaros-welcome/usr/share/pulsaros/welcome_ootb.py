@@ -243,15 +243,15 @@ window label.theme-card-title {
     color: var(--text-color);
 }
 window .theme-preview-light {
-    width: 140px;
-    height: 90px;
+    min-width: 140px;
+    min-height: 90px;
     border-radius: 8px;
     background-color: #f5f5f7;
     border: 1px solid #d2d2d7;
 }
 window .theme-preview-dark {
-    width: 140px;
-    height: 90px;
+    min-width: 140px;
+    min-height: 90px;
     border-radius: 8px;
     background-color: #1e1e1f;
     border: 1px solid #424242;
@@ -721,12 +721,12 @@ class OOTBWindow(Adw.ApplicationWindow):
             self.btn_next.set_sensitive(True)
 
     def build_wifi_page(self):
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         box.set_valign(Gtk.Align.CENTER)
         box.set_halign(Gtk.Align.CENTER)
 
         icon = Gtk.Image.new_from_icon_name("network-wireless-symbolic")
-        icon.set_pixel_size(64)
+        icon.set_pixel_size(72)
         icon.add_css_class("symbolic-blue")
         box.append(icon)
 
@@ -735,8 +735,11 @@ class OOTBWindow(Adw.ApplicationWindow):
         title.add_css_class("welcome-title")
         box.append(title)
 
-        desc = Gtk.Label(label="Connect to a Wi-Fi network to install system languages and updates.")
+        desc = Gtk.Label(label="Connect to the internet to download language packages and system components.")
         desc.add_css_class("welcome-subtitle")
+        desc.set_max_width_chars(45)
+        desc.set_wrap(True)
+        desc.set_justify(Gtk.Justification.CENTER)
         box.append(desc)
 
         # Status Badge
@@ -745,191 +748,71 @@ class OOTBWindow(Adw.ApplicationWindow):
         self.wifi_status_badge.set_halign(Gtk.Align.CENTER)
         box.append(self.wifi_status_badge)
 
-        # Wi-Fi List
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.set_size_request(340, 130)
-        scrolled.add_css_class("country-scroll")
-        self.wifi_listbox = Gtk.ListBox()
-        self.wifi_listbox.connect("row-selected", self.on_wifi_row_selected)
-        scrolled.set_child(self.wifi_listbox)
-        box.append(scrolled)
+        # Open GNOME Settings Button
+        settings_btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        settings_btn_box.set_halign(Gtk.Align.CENTER)
+        settings_btn_box.set_margin_top(8)
 
-        # Password / Connection Box
-        self.wifi_connect_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        self.wifi_connect_box.set_size_request(340, -1)
-        self.wifi_connect_box.set_halign(Gtk.Align.CENTER)
-        self.wifi_connect_box.set_visible(False)
+        self.open_wifi_btn = Gtk.Button()
+        btn_content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        btn_icon = Gtk.Image.new_from_icon_name("network-wireless-symbolic")
+        btn_lbl = Gtk.Label(label="Open Wi-Fi Settings")
+        btn_content.append(btn_icon)
+        btn_content.append(btn_lbl)
+        self.open_wifi_btn.set_child(btn_content)
+        self.open_wifi_btn.add_css_class("pulsar-continue-btn")
+        self.open_wifi_btn.connect("clicked", self.on_open_wifi_settings_clicked)
+        settings_btn_box.append(self.open_wifi_btn)
 
-        self.wifi_password_entry = Gtk.PasswordEntry()
-        self.wifi_password_entry.set_placeholder_text("Wi-Fi Password")
-        self.wifi_password_entry.set_hexpand(True)
-        self.wifi_password_entry.connect("activate", lambda e: self.on_wifi_connect_btn_clicked(None))
-        self.wifi_connect_box.append(self.wifi_password_entry)
-
-        self.wifi_connect_btn = Gtk.Button(label="Connect")
-        self.wifi_connect_btn.add_css_class("pulsar-continue-btn")
-        self.wifi_connect_btn.connect("clicked", self.on_wifi_connect_btn_clicked)
-        self.wifi_connect_box.append(self.wifi_connect_btn)
-
-        box.append(self.wifi_connect_box)
-
-        # Bottom Bar (Refresh button + Spinner)
-        bottom_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        bottom_row.set_halign(Gtk.Align.CENTER)
-
+        # Refresh / Check button
         self.wifi_refresh_btn = Gtk.Button()
         self.wifi_refresh_btn.set_icon_name("view-refresh-symbolic")
-        self.wifi_refresh_btn.set_tooltip_text("Rescan Wi-Fi networks")
+        self.wifi_refresh_btn.set_tooltip_text("Check connection status")
         self.wifi_refresh_btn.add_css_class("back-arrow-btn")
-        self.wifi_refresh_btn.connect("clicked", lambda b: self.refresh_wifi_networks(manual=True))
-        bottom_row.append(self.wifi_refresh_btn)
+        self.wifi_refresh_btn.connect("clicked", lambda b: self.refresh_wifi_status())
+        settings_btn_box.append(self.wifi_refresh_btn)
 
-        self.wifi_spinner = Gtk.Spinner()
-        self.wifi_spinner.set_visible(False)
-        bottom_row.append(self.wifi_spinner)
+        box.append(settings_btn_box)
 
-        box.append(bottom_row)
+        hint = Gtk.Label(label="Configure your network in GNOME Settings and click Continue.")
+        hint.add_css_class("input-subtext")
+        hint.set_halign(Gtk.Align.CENTER)
+        hint.set_margin_top(4)
+        box.append(hint)
 
         self.stack.add_named(box, "wifi_select")
 
-    def refresh_wifi_networks(self, manual=False):
-        self.wifi_spinner.set_visible(True)
-        self.wifi_spinner.start()
-        self.wifi_refresh_btn.set_sensitive(False)
+    def on_open_wifi_settings_clicked(self, btn):
+        try:
+            subprocess.Popen(["gnome-control-center", "wifi"])
+        except Exception:
+            try:
+                subprocess.Popen(["gnome-control-center", "network"])
+            except Exception:
+                pass
+        # Periodically check status after opening settings
+        GLib.timeout_add(1500, self.refresh_wifi_status)
 
-        def _scan():
+    def refresh_wifi_status(self):
+        def _check():
             active = get_active_network()
-            networks = get_wifi_scan_results()
-            GLib.idle_add(self._update_wifi_ui, active, networks)
+            GLib.idle_add(self._update_wifi_status_ui, active)
 
-        threading.Thread(target=_scan, daemon=True).start()
+        threading.Thread(target=_check, daemon=True).start()
+        return False
 
-    def _update_wifi_ui(self, active, networks):
-        self.wifi_spinner.stop()
-        self.wifi_spinner.set_visible(False)
-        self.wifi_refresh_btn.set_sensitive(True)
-
-        while True:
-            row = self.wifi_listbox.get_first_child()
-            if row is None:
-                break
-            self.wifi_listbox.remove(row)
-
+    def _update_wifi_status_ui(self, active):
         if active:
             conn_type = "Wi-Fi" if active["type"] == "wifi" else "Ethernet"
             name = active["name"]
             self.wifi_status_badge.set_label(f"✓ Connected to {name} ({conn_type})")
             self.wifi_status_badge.remove_css_class("error")
             self.wifi_status_badge.add_css_class("connected")
-            self.btn_next.set_sensitive(True)
         else:
-            self.wifi_status_badge.set_label("Select a Wi-Fi network or continue")
+            self.wifi_status_badge.set_label("Not connected — You can connect via Settings or skip")
             self.wifi_status_badge.remove_css_class("connected")
             self.wifi_status_badge.remove_css_class("error")
-            self.btn_next.set_sensitive(True)
-
-        if not networks:
-            if not active:
-                self.wifi_status_badge.set_label("No Wi-Fi networks found")
-            return
-
-        for net in networks:
-            row = Gtk.ListBoxRow()
-            row.wifi_data = net
-            row.add_css_class("country-row")
-
-            h = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-
-            sig = net["signal"]
-            icon_name = "network-wireless-signal-excellent-symbolic" if sig >= 75 else \
-                        "network-wireless-signal-good-symbolic" if sig >= 50 else \
-                        "network-wireless-signal-ok-symbolic" if sig >= 25 else \
-                        "network-wireless-signal-weak-symbolic"
-            sig_icon = Gtk.Image.new_from_icon_name(icon_name)
-            h.append(sig_icon)
-
-            lbl = Gtk.Label(label=net["ssid"])
-            lbl.add_css_class("country-row-label")
-            lbl.set_hexpand(True)
-            lbl.set_halign(Gtk.Align.START)
-            h.append(lbl)
-
-            if net["security"] and net["security"] != "--":
-                lock = Gtk.Image.new_from_icon_name("channel-secure-symbolic")
-                lock.set_opacity(0.6)
-                h.append(lock)
-
-            if net["in_use"]:
-                check = Gtk.Image.new_from_icon_name("emblem-ok-symbolic")
-                check.add_css_class("symbolic-blue")
-                h.append(check)
-
-            row.set_child(h)
-            self.wifi_listbox.append(row)
-
-    def on_wifi_row_selected(self, listbox, row):
-        if row is None or not hasattr(row, "wifi_data"):
-            self.wifi_connect_box.set_visible(False)
-            return
-
-        data = row.wifi_data
-        self.selected_wifi_ssid = data["ssid"]
-        if data["in_use"]:
-            self.wifi_connect_box.set_visible(False)
-            self.btn_next.set_sensitive(True)
-            return
-
-        sec = data.get("security", "")
-        self.wifi_password_entry.set_text("")
-        self.wifi_connect_box.set_visible(True)
-
-        if not sec or sec == "--":
-            self.wifi_password_entry.set_visible(False)
-            self.wifi_connect_btn.set_label("Connect")
-        else:
-            self.wifi_password_entry.set_visible(True)
-            self.wifi_password_entry.grab_focus()
-            self.wifi_connect_btn.set_label("Connect")
-
-    def on_wifi_connect_btn_clicked(self, widget):
-        selected_row = self.wifi_listbox.get_selected_row()
-        if not selected_row or not hasattr(selected_row, "wifi_data"):
-            return
-
-        ssid = selected_row.wifi_data["ssid"]
-        password = self.wifi_password_entry.get_text().strip()
-
-        self.wifi_connect_btn.set_sensitive(False)
-        self.wifi_password_entry.set_sensitive(False)
-        self.wifi_status_badge.remove_css_class("connected")
-        self.wifi_status_badge.remove_css_class("error")
-        self.wifi_status_badge.set_label(f"Connecting to {ssid}...")
-        self.wifi_spinner.set_visible(True)
-        self.wifi_spinner.start()
-
-        def _connect():
-            ok, msg = nmcli_connect_wifi(ssid, password)
-            GLib.idle_add(self._on_wifi_connected_result, ok, msg, ssid)
-
-        threading.Thread(target=_connect, daemon=True).start()
-
-    def _on_wifi_connected_result(self, ok, msg, ssid):
-        self.wifi_spinner.stop()
-        self.wifi_spinner.set_visible(False)
-        self.wifi_connect_btn.set_sensitive(True)
-        self.wifi_password_entry.set_sensitive(True)
-
-        if ok:
-            self.wifi_status_badge.set_label(f"✓ Connected to {ssid}")
-            self.wifi_status_badge.remove_css_class("error")
-            self.wifi_status_badge.add_css_class("connected")
-            self.wifi_connect_box.set_visible(False)
-            self.btn_next.set_sensitive(True)
-            self.refresh_wifi_networks()
-        else:
-            self.wifi_status_badge.set_label(f"Connection failed: {msg}")
-            self.wifi_status_badge.remove_css_class("connected")
-            self.wifi_status_badge.add_css_class("error")
+        self.btn_next.set_sensitive(True)
 
     def build_language_page(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -1500,7 +1383,7 @@ class OOTBWindow(Adw.ApplicationWindow):
             self.stack.set_visible_child_name("wifi_select")
             self.btn_back.set_visible(True)
             self.btn_header_back.set_visible(True)
-            self.refresh_wifi_networks()
+            self.refresh_wifi_status()
 
         elif current_page == "wifi_select":
             self.btn_next.set_sensitive(bool(self.selected_language))
