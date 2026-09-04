@@ -1,6 +1,6 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-grub
-pkgver=1.0.114
+pkgver=1.0.115
 pkgrel=1
 pkgdesc="macOS-like GRUB bootloader theme for Pulsar OS"
 arch=(any)
