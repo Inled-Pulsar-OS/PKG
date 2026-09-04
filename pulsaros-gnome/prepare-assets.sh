@@ -16,8 +16,7 @@ STAGE_DIR="$(realpath -m "$1")"
 # Intentamos detectar la versión instalada de GNOME Shell para descargar zips de extensión compatibles.
 GNOME_VER=""
 
-# 1. Search in target/base chroot dpkg database (no root permissions required)
-# 1. Buscar en la base de datos dpkg del chroot target/base (no requiere permisos de root)
+# 1. Search in target/base chroot dpkg or pacman databases
 POSSIBLE_DPKG_STATUS=(
     "$STAGE_DIR/var/lib/dpkg/status"
     "../../ISO/build/rootfs-target/var/lib/dpkg/status"
@@ -26,27 +25,46 @@ POSSIBLE_DPKG_STATUS=(
     "../../build/rootfs-base/var/lib/dpkg/status"
 )
 
-for status_file in "${POSSIBLE_DPKG_STATUS[@]}"; do
-    if [ -f "$status_file" ]; then
-        ver_str=$(grep -A 10 "Package: gnome-shell$" "$status_file" | grep "^Version:" | cut -d' ' -f2 || true)
-        if [ -n "$ver_str" ]; then
-            # Extract major version number (e.g., 48 from 48.7-0+deb13u2)
-            # Extraer el número principal de la versión (ej. 48 de 48.7-0+deb13u2)
-            GNOME_VER=$(echo "$ver_str" | cut -d'.' -f1 | cut -d'-' -f1)
-            echo "🔍 [ES] Detectada versión de GNOME Shell en chroot ($status_file): $GNOME_VER"
-            echo "🔍 [EN] Detected GNOME Shell version in chroot ($status_file): $GNOME_VER"
-            break
-        fi
+POSSIBLE_PACMAN_DB=(
+    "$STAGE_DIR/var/lib/pacman/local"
+    "../../ISO/build/rootfs-target-stable-arch/var/lib/pacman/local"
+    "../../ISO/build/rootfs-base-stable-arch/var/lib/pacman/local"
+    "../../build/rootfs-target-stable-arch/var/lib/pacman/local"
+    "../../build/rootfs-base-stable-arch/var/lib/pacman/local"
+)
+
+for db_dir in "${POSSIBLE_PACMAN_DB[@]}"; do
+    if [ -d "$db_dir" ]; then
+        for pkg_dir in "$db_dir"/gnome-shell-[0-9]*; do
+            if [ -d "$pkg_dir" ]; then
+                ver_str=$(basename "$pkg_dir" | sed 's/^gnome-shell-//' | cut -d. -f1 | sed 's/^[0-9]*://')
+                if [ -n "$ver_str" ]; then
+                    GNOME_VER="$ver_str"
+                    echo "🔍 [ES] Detectada versión de GNOME Shell en Pacman DB ($pkg_dir): $GNOME_VER"
+                    echo "🔍 [EN] Detected GNOME Shell version in Pacman DB ($pkg_dir): $GNOME_VER"
+                    break 2
+                fi
+            fi
+        done
     fi
 done
 
-# 2. Fallback to distribution settings and Madison API if chroot is not found or empty
-# 2. Fallback a la configuración de la distribución y Madison API si el chroot no existe o está vacío
 if [ -z "$GNOME_VER" ]; then
-    DEBIAN_VERSION="trixie" # Default fallback / Fallback por defecto
+    for status_file in "${POSSIBLE_DPKG_STATUS[@]}"; do
+        if [ -f "$status_file" ]; then
+            ver_str=$(grep -A 10 "Package: gnome-shell$" "$status_file" | grep "^Version:" | cut -d' ' -f2 || true)
+            if [ -n "$ver_str" ]; then
+                GNOME_VER=$(echo "$ver_str" | cut -d'.' -f1 | cut -d'-' -f1)
+                echo "🔍 [ES] Detectada versión de GNOME Shell en chroot ($status_file): $GNOME_VER"
+                echo "🔍 [EN] Detected GNOME Shell version in chroot ($status_file): $GNOME_VER"
+                break
+            fi
+        fi
+    done
+fi
 
-    # Try loading environment variables
-    # Intentar cargar variables de entorno
+# 2. Check TARGET_DISTRO or host environment if chroot is not found
+if [ -z "$GNOME_VER" ]; then
     for env_file in "../../configs/env.sh" "../configs/env.sh" "configs/env.sh"; do
         if [ -f "$env_file" ]; then
             source "$env_file"
@@ -54,25 +72,53 @@ if [ -z "$GNOME_VER" ]; then
         fi
     done
 
-    echo "🔍 [ES] No se encontró chroot. Dediciendo según versión de Debian: $DEBIAN_VERSION"
-    echo "🔍 [EN] Chroot not found. Inferring version from Debian suite: $DEBIAN_VERSION"
+    IS_ARCH=false
+    if [ "$TARGET_DISTRO" = "arch" ] || [ "$DISTRO" = "arch" ] || [ -f /etc/arch-release ] || [ -n "$PACMAN" ]; then
+        IS_ARCH=true
+    fi
 
-    # Optional online query to Debian Madison API (with quick timeout)
-    # Consulta opcional en línea a la API Debian Madison (con timeout rápido)
-    if command -v curl >/dev/null 2>&1; then
-        suite_indicator=""
-        case "$DEBIAN_VERSION" in
-            trixie) suite_indicator="deb13" ;;
-            bookworm) suite_indicator="deb12" ;;
-            sid|unstable) suite_indicator="unstable" ;;
-        esac
+    if [ "$IS_ARCH" = true ]; then
+        echo "🔍 [ES] Detectando versión de GNOME para Arch Linux..."
+        echo "🔍 [EN] Detecting GNOME version for Arch Linux..."
+        if command -v pacman >/dev/null 2>&1; then
+            pacman_ver=$(pacman -Si gnome-shell 2>/dev/null | grep -i '^vers' | awk '{print $NF}' | sed 's/^[0-9]*://' | cut -d. -f1 || true)
+            if [ -n "$pacman_ver" ]; then
+                GNOME_VER="$pacman_ver"
+                echo "🌐 [ES] Pacman devolvió versión de GNOME: $GNOME_VER"
+                echo "🌐 [EN] Pacman returned GNOME version: $GNOME_VER"
+            fi
+        fi
+        if [ -z "$GNOME_VER" ] && command -v curl >/dev/null 2>&1; then
+            arch_api_ver=$(curl --max-time 3 -s "https://archlinux.org/packages/extra/x86_64/gnome-shell/json/" 2>/dev/null | grep -o '"pkgver": "[^"]*"' | cut -d'"' -f4 | cut -d. -f1 || true)
+            if [ -n "$arch_api_ver" ]; then
+                GNOME_VER="$arch_api_ver"
+                echo "🌐 [ES] API Arch Linux devolvió versión de GNOME: $GNOME_VER"
+                echo "🌐 [EN] Arch Linux API returned GNOME version: $GNOME_VER"
+            fi
+        fi
+        if [ -z "$GNOME_VER" ]; then
+            GNOME_VER="50"
+        fi
+    else
+        DEBIAN_VERSION="${DEBIAN_VERSION:-trixie}"
+        echo "🔍 [ES] No se encontró chroot. Decidiendo según versión de Debian: $DEBIAN_VERSION"
+        echo "🔍 [EN] Chroot not found. Inferring version from Debian suite: $DEBIAN_VERSION"
 
-        if [ -n "$suite_indicator" ]; then
-            madison_ver=$(curl --max-time 3 -s "https://api.ftp-master.debian.org/madison?package=gnome-shell&text=on" | grep "$suite_indicator" | head -n 1 | cut -d'|' -f2 | tr -d '[:space:]' || true)
-            if [ -n "$madison_ver" ]; then
-                GNOME_VER=$(echo "$madison_ver" | cut -d'.' -f1 | cut -d'-' -f1)
-                echo "🌐 [ES] API Debian devolvió versión de GNOME: $GNOME_VER"
-                echo "🌐 [EN] Debian API returned GNOME version: $GNOME_VER"
+        if command -v curl >/dev/null 2>&1; then
+            suite_indicator=""
+            case "$DEBIAN_VERSION" in
+                trixie) suite_indicator="deb13" ;;
+                bookworm) suite_indicator="deb12" ;;
+                sid|unstable) suite_indicator="unstable" ;;
+            esac
+
+            if [ -n "$suite_indicator" ]; then
+                madison_ver=$(curl --max-time 3 -s "https://api.ftp-master.debian.org/madison?package=gnome-shell&text=on" | grep "$suite_indicator" | head -n 1 | cut -d'|' -f2 | tr -d '[:space:]' || true)
+                if [ -n "$madison_ver" ]; then
+                    GNOME_VER=$(echo "$madison_ver" | cut -d'.' -f1 | cut -d'-' -f1)
+                    echo "🌐 [ES] API Debian devolvió versión de GNOME: $GNOME_VER"
+                    echo "🌐 [EN] Debian API returned GNOME version: $GNOME_VER"
+                fi
             fi
         fi
     fi
@@ -84,15 +130,11 @@ if [ -z "$GNOME_VER" ]; then
         echo "🔍 [EN] Detected GNOME Shell version on host: $GNOME_VER"
     fi
 
-    # 4. Final static fallback / Fallback estático final
+    # 4. Final static fallback
     if [ -z "$GNOME_VER" ]; then
-        case "$DEBIAN_VERSION" in
-            bookworm) GNOME_VER="43" ;;
-            trixie) GNOME_VER="48" ;;
-            *) GNOME_VER="48" ;;
-        esac
-        echo "🔍 [ES] Usando fallback estático de GNOME para $DEBIAN_VERSION: $GNOME_VER"
-        echo "🔍 [EN] Using static GNOME fallback for $DEBIAN_VERSION: $GNOME_VER"
+        GNOME_VER="48"
+        echo "🔍 [ES] Usando fallback estático de GNOME: $GNOME_VER"
+        echo "🔍 [EN] Using static GNOME fallback: $GNOME_VER"
     fi
 fi
 

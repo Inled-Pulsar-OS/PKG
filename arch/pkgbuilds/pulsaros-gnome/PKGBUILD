@@ -20,7 +20,7 @@ prepare() {
     cp -r "$_src"/* "$srcdir/staging/" 2>/dev/null || true
     rm -rf "$srcdir/staging/DEBIAN" "$srcdir/staging/arch"
     cp prepare-assets.sh "$srcdir/prepare-assets.sh"
-    bash "$srcdir/prepare-assets.sh" "$srcdir/staging"
+    TARGET_DISTRO="arch" bash "$srcdir/prepare-assets.sh" "$srcdir/staging"
 }
 
 package() {
