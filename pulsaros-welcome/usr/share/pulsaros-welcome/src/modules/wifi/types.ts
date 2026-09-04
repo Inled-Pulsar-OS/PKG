@@ -4,6 +4,7 @@ export interface WifiNetwork {
     security: string;
     band: string;
     rate: string;
+    in_use?: boolean;
 }
 
 export interface ConnectForm {

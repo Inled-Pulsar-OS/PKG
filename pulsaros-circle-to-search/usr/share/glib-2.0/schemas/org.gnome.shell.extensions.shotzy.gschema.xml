@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.shotzy"
+          path="/org/gnome/shell/extensions/shotzy/">
+    <key name="highlight-fill-color" type="s">
+      <default>'0.10,0.11,0.13,0.34'</default>
+      <summary>Highlight fill color</summary>
+      <description>RGBA color used for OCR highlight fill.</description>
+    </key>
+    <key name="highlight-border-color" type="s">
+      <default>'0.92,0.94,0.97,0.34'</default>
+      <summary>Highlight border color</summary>
+      <description>RGBA color used for OCR highlight borders.</description>
+    </key>
+    <key name="highlight-shadow-opacity" type="d">
+      <default>0.18</default>
+      <summary>Highlight shadow opacity</summary>
+      <description>Opacity of the drop shadow rendered under OCR highlights.</description>
+    </key>
+    <key name="highlight-padding" type="i">
+      <default>3</default>
+      <summary>Highlight padding</summary>
+      <description>Extra pixels added around each OCR box.</description>
+    </key>
+    <key name="highlight-radius" type="i">
+      <default>6</default>
+      <summary>Highlight corner radius</summary>
+      <description>Rounded corner radius used for OCR highlights.</description>
+    </key>
+    <key name="highlight-border-width" type="d">
+      <default>1.25</default>
+      <summary>Highlight border width</summary>
+      <description>Stroke width of the OCR highlight outline.</description>
+    </key>
+    <key name="ocr-enabled" type="b">
+      <default>true</default>
+      <summary>Enable OCR highlighting</summary>
+      <description>Enable OCR processing and highlight rendering in the screenshot UI.</description>
+    </key>
+    <key name="selection-confidence" type="i">
+      <default>10</default>
+      <summary>OCR confidence threshold</summary>
+      <description>Minimum confidence used for the selected-area OCR pass.</description>
+    </key>
+    <key name="selection-max-edge" type="i">
+      <default>2400</default>
+      <summary>OCR max edge</summary>
+      <description>Maximum long edge for the selected-area OCR image.</description>
+    </key>
+    <key name="ocr-languages" type="as">
+      <default>['eng']</default>
+      <summary>OCR languages</summary>
+      <description>Tesseract language codes to use for OCR processing.</description>
+    </key>
+    <key name="close-after-copy" type="b">
+      <default>false</default>
+      <summary>Close screenshot tool after copying OCR text</summary>
+      <description>Automatically close the screenshot UI once OCR text is copied to the clipboard.</description>
+    </key>
+    <key name="search-engine" type="s">
+      <default>'google'</default>
+      <summary>Search engine</summary>
+      <description>The search engine to use for the OCR 'Search' button.</description>
+    </key>
+    <key name="show-google-lens-button" type="b">
+      <default>true</default>
+      <summary>Show Google Lens button</summary>
+      <description>Show the Google Lens button in the screenshot UI.</description>
+    </key>
+    <key name="show-qr-button" type="b">
+      <default>true</default>
+      <summary>Show QR code button</summary>
+      <description>Show the QR code button in the screenshot UI.</description>
+    </key>
+    <key name="shake-enabled" type="b">
+      <default>true</default>
+      <summary>Enable shake to search</summary>
+      <description>Open the screenshot search overlay when the pointer is shaken quickly.</description>
+    </key>
+    <key name="shake-sensitivity" type="i">
+      <default>8</default>
+      <range min="1" max="10"/>
+      <summary>Shake sensitivity</summary>
+      <description>How small a mouse shake opens the overlay. Higher values trigger with smaller movements (10 = very light shake, 1 = must shake very hard).</description>
+    </key>
+  </schema>
+</schemalist>

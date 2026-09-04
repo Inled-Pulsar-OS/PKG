@@ -47,10 +47,25 @@ from sayri.domain.models import (
 from sayri.domain.secrets_manager import secrets_manager
 
 CAJITA_CSS = b"""
-.sayri-cajita-container,
-.sayri-pill-container,
-.sayri-pill-box,
-.sayri-pill-overlay,
+.sayri-cajita-container {
+    background: none;
+    background-color: transparent;
+}
+
+.sayri-pill-box {
+    background-color: rgba(13, 20, 36, 0.94);
+    border-radius: 26px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+.sayri-card-box {
+    background-color: rgba(13, 20, 36, 0.94);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+}
+
 .sayri-pill-row,
 .sayri-pill-row > * {
     background: none;
@@ -739,6 +754,7 @@ class SayriCajita(Gtk.Box):
         self.card_overlay = Gtk.Overlay()
         self.card_overlay.set_size_request(420, -1)
         self.card_overlay.set_hexpand(True)
+        self.card_overlay.add_css_class("sayri-card-box")
 
         self.card_bg = ChromaBackground(is_pill=False)
         self.card_bg.set_can_target(False)

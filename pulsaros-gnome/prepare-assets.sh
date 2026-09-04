@@ -148,6 +148,7 @@ EGO_EXTENSIONS=(
     "ding@rastersoft.com"
     "gsconnect@andyholmes.github.io"
     "gnome-ui-tune@itstime.tech"
+    "appindicatorsupport@rgcjonas.gmail.com"
 )
 
 echo "🧩 Descargando extensiones de GNOME Shell desde Extensions.gnome.org (EGO)..."

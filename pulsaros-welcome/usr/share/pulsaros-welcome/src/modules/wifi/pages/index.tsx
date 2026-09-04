@@ -29,6 +29,10 @@ export function WifiPage({ onContinue, onBack }: WifiPageProps) {
     const result = await scanWifiNetworks();
     setNetworks(result);
     setLoading(false);
+    const connected = result.find((n) => n.in_use);
+    if (connected) {
+      setForm((f) => (f.selected ? f : { ...INITIAL_FORM, selected: connected.ssid }));
+    }
   }, []);
 
   const selectedNetwork = networks.find((n) => n.ssid === form.selected);

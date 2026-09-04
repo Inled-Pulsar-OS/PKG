@@ -9,17 +9,12 @@ export function HelloPage({ onContinue }: HelloPageProps) {
   const svgRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const prev = document.body.style.backgroundColor;
-    document.body.style.backgroundColor = "transparent";
     const lang = getLang();
     loadAndAnimate(lang, svgRef.current);
-    return () => {
-      document.body.style.backgroundColor = prev;
-    };
   }, []);
 
   return (
-    <div className="flex h-screen w-screen flex-col items-center justify-center bg-transparent">
+    <div className="screen-backdrop flex h-screen w-screen flex-col items-center justify-center">
       <div
         ref={svgRef}
         className="flex flex-1 items-center justify-center px-[5%]"

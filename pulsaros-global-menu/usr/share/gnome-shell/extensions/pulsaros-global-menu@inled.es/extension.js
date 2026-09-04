@@ -2951,6 +2951,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
 
             // OS Name & Version from /etc/os-release
             let osName = "Pulsar OS";
+            let osVersion = "";
             let distroBase = "debian";
             try {
                 let [ok, content] = GLib.file_get_contents("/etc/os-release");
@@ -2960,6 +2961,8 @@ export default class PulsarosGlobalMenuExtension extends Extension {
                     let nameMatch = contentStr.match(/^NAME="?([^"\n]+)"?/m);
                     let idLikeMatch = contentStr.match(/^ID_LIKE="?([^"\n]+)"?/m);
                     let idMatch = contentStr.match(/^ID="?([^"\n]+)"?/m);
+                    let verMatch = contentStr.match(/^VERSION="?([^"\n]+)"?/m);
+                    let verIdMatch = contentStr.match(/^VERSION_ID="?([^"\n]+)"?/m);
 
                     if (prettyNameMatch) {
                         osName = prettyNameMatch[1];
@@ -2967,21 +2970,27 @@ export default class PulsarosGlobalMenuExtension extends Extension {
                         osName = nameMatch[1];
                     }
 
-                    if (idLikeMatch) {
-                        distroBase = idLikeMatch[1].split(/\s+/)[0].toLowerCase();
-                    } else if (idMatch && idMatch[1].toLowerCase() !== "pulsaros") {
-                        distroBase = idMatch[1].toLowerCase();
-                    } else if (/arch/i.test(contentStr)) {
-                        distroBase = "arch";
-                    } else if (/debian/i.test(contentStr)) {
+                    if (/debian/i.test(osName) || (idLikeMatch && /debian/i.test(idLikeMatch[1])) || (idMatch && /debian/i.test(idMatch[1]))) {
                         distroBase = "debian";
+                    } else if (/arch/i.test(osName) || (idLikeMatch && /arch/i.test(idLikeMatch[1])) || (idMatch && /arch/i.test(idMatch[1]))) {
+                        distroBase = "arch";
+                    } else if (idLikeMatch) {
+                        distroBase = idLikeMatch[1].split(/\s+/)[0].toLowerCase();
+                    }
+
+                    if (verMatch) {
+                        osVersion = verMatch[1];
+                    } else if (verIdMatch) {
+                        osVersion = verIdMatch[1];
                     }
                 }
             } catch (e) {
                 console.error("[GlobalMenu] Failed to read /etc/os-release:", e);
             }
 
-            let osVersion = `0.3-beta-bittenfruit-${distroBase}`;
+            if (!osVersion) {
+                osVersion = distroBase === "debian" ? "13 (Debian)" : "rolling (Arch)";
+            }
             let dialog = new AboutDialog(osName, osVersion, hostName, cpuModel, memTotal, gpuModel, diskInfo);
             dialog.open();
         });

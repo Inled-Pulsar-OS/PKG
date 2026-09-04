@@ -1,4 +1,4 @@
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, ShieldCheck } from "lucide-react";
 import type { WifiNetwork, ConnectForm } from "../types";
 import { isSecured } from "../utils";
 import { SignalBars } from "./signal-bar";
@@ -23,15 +23,22 @@ export function WifiDetailPanel({
   return (
     <div className="animate-in fade-in zoom-in duration-200 rounded-xl border border-border bg-white/5 p-4">
       {/* Network header */}
-      <div className="flex items-center gap-2.5">
-        <SignalBars signal={network.signal} />
-        <span className="text-sm font-medium text-text-primary">
-          {network.ssid}
-        </span>
+      <div className="flex items-center justify-between gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <SignalBars signal={network.signal} />
+          <span className="text-base font-semibold text-text-primary truncate">
+            {network.ssid}
+          </span>
+        </div>
+        {network.in_use && (
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+            Connected
+          </span>
+        )}
       </div>
 
       {/* Security type + Band */}
-      <div className="mt-1.5 flex items-center gap-1.5 pl-6.5 text-xs text-text-secondary">
+      <div className="mt-2 flex items-center gap-1.5 pl-6.5 text-xs text-text-secondary">
         {secured && <span>{network.security}</span>}
         {secured && network.band && <span>·</span>}
         {network.band && <span>{network.band}</span>}
@@ -45,7 +52,7 @@ export function WifiDetailPanel({
       )}
 
       {/* Password field + Show password */}
-      {secured && (
+      {secured && !network.in_use && (
         <div className="mt-4">
           <div className="relative">
             <input
@@ -77,7 +84,7 @@ export function WifiDetailPanel({
       {/* Join button */}
       <button
         onClick={onJoin}
-        disabled={form.connecting || form.success}
+        disabled={form.connecting || form.success || network.in_use}
         className="btn-primary mt-4 w-full"
       >
         {form.connecting ? (
@@ -85,8 +92,11 @@ export function WifiDetailPanel({
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
             Joining...
           </span>
-        ) : form.success ? (
-          "Connected"
+        ) : form.success || network.in_use ? (
+          <span className="flex items-center justify-center gap-2 text-emerald-300">
+            <ShieldCheck size={16} />
+            Connected
+          </span>
         ) : (
           "Join"
         )}

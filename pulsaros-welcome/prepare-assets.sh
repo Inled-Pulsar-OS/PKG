@@ -43,7 +43,7 @@ purge_source() {
     for d in $JUNK_DIRS; do
         if [ -e "$SRC_DIR/$d" ]; then
             echo "🧹 Purgando artefactos de desarrollo del árbol fuente: $d"
-            rm -rf "$SRC_DIR/$d"
+            rm -rf "$SRC_DIR/$d" 2>/dev/null || true
         fi
     done
 }

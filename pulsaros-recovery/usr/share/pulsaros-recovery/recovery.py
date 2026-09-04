@@ -3142,84 +3142,58 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 except Exception:
                     pass
 
-            # Populate Recovery Partition with dedicated Debian Recovery image, clean base image, and assistant.
+            # Populate Recovery Partition with dedicated recovery image, clean base image, and assistant.
             try:
                 os.makedirs("/mnt/recovery/images/x86_64", exist_ok=True)
                 os.makedirs("/mnt/recovery/live", exist_ok=True)
                 os.makedirs("/mnt/recovery/boot", exist_ok=True)
+                os.makedirs("/mnt/recovery/recovery", exist_ok=True)
 
-                # 1. Recovery OS SquashFS (Debian + Fluxbox + Rust Assistant)
-                rec_squash_sources = [
+                # SquashFS search sources (covers Arch archiso, Debian live-boot, and installed staging)
+                squash_sources = [
                     "/recovery/filesystem.squashfs",
-                    "/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
-                    "/mnt/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
-                    "/run/archiso/bootmnt/recovery/filesystem.squashfs",
-                    "/run/live/medium/recovery/filesystem.squashfs",
-                    "/lib/live/mount/medium/recovery/filesystem.squashfs",
+                    "/run/live/medium/images/pulsaros-base.squashfs",
                     "/run/live/medium/live/filesystem.squashfs",
+                    "/lib/live/mount/medium/images/pulsaros-base.squashfs",
                     "/lib/live/mount/medium/live/filesystem.squashfs",
-                    "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
-                    "/run/archiso/bootmnt/live/filesystem.squashfs",
-                    "/run/archiso/airootfs.sfs",
-                    "/live/filesystem.squashfs",
-                ]
-                found_rec_squash = next((p for p in rec_squash_sources if os.path.isfile(p)), None)
-                if found_rec_squash and "TEST_MODE" not in os.environ:
-                    deb_dst = "/mnt/recovery/live/filesystem.squashfs"
-                    shutil.copy2(found_rec_squash, deb_dst)
-                    try:
-                        os.makedirs("/mnt/recovery/recovery", exist_ok=True)
-                        shutil.copy2(found_rec_squash, "/mnt/recovery/recovery/filesystem.squashfs")
-                        shutil.copy2(found_rec_squash, "/mnt/recovery/filesystem.squashfs")
-                    except Exception:
-                        pass
-                    try:
-                        os.makedirs("/mnt/live", exist_ok=True)
-                        os.makedirs("/mnt/recovery", exist_ok=True)
-                        shutil.copy2(found_rec_squash, "/mnt/live/filesystem.squashfs")
-                    except Exception:
-                        pass
-                    arch_dst = "/mnt/recovery/images/x86_64/airootfs.sfs"
-                    log_msg(f"Recovery OS squashfs deployed from {found_rec_squash} -> {deb_dst}")
-
-                    # Verify the critical live-boot path exists
-                    if not os.path.isfile(deb_dst) or os.path.getsize(deb_dst) == 0:
-                        raise Exception(f"SquashFS verification failed: {deb_dst} is missing or empty after copy")
-                    log_msg(f"Live-boot SquashFS verified at {deb_dst} ({os.path.getsize(deb_dst)} bytes)")
-                elif not found_rec_squash:
-                    log_msg("WARNING: No recovery squashfs found in any search path — live-boot will fail")
-                    log_msg(f"Searched: {rec_squash_sources}")
-
-                # 2. Base System SquashFS (for restoring root @ subvolume - must be the Arch Linux image)
-                base_squash_sources = [
                     "/run/archiso/bootmnt/images/pulsaros-base.squashfs",
                     "/run/archiso/bootmnt/arch/x86_64/airootfs.sfs",
                     "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
-                    "/run/archiso/airootfs.sfs",
-                    "/run/live/medium/images/pulsaros-base.squashfs",
+                    "/run/archiso/bootmnt/recovery/filesystem.squashfs",
+                    "/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
+                    "/mnt/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
                     "/recovery/images/pulsaros-base.squashfs",
+                    "/live/filesystem.squashfs",
                 ]
-                base_dst = "/mnt/recovery/images/pulsaros-base.squashfs"
-                # If we already regenerated the base image with post-install
-                # packages above, keep it — do not overwrite it with the trimmed
-                # ISO-provided copy. Only backfill the archiso-style .sfs link.
-                regenerated_existing = os.path.isfile(base_dst) and os.path.getsize(base_dst) > 500 * 1024 * 1024
-                found_base_squash = next((p for p in base_squash_sources if os.path.isfile(p) and os.path.getsize(p) > 500 * 1024 * 1024), None)
-                if (found_base_squash or regenerated_existing) and "TEST_MODE" not in os.environ:
-                    if not regenerated_existing:
-                        shutil.copy2(found_base_squash, base_dst)
-                        log_msg(f"Base system restoration image deployed from {found_base_squash} -> {base_dst}")
-                    else:
-                        log_msg(f"Base system restoration image already regenerated at {base_dst} — keeping it.")
-                    # Ensure the archiso-style path also points at the base image.
-                    try:
-                        arch_dst = "/mnt/recovery/images/x86_64/airootfs.sfs"
-                        if os.path.isfile(base_dst) and not os.path.isfile(arch_dst):
-                            os.link(base_dst, arch_dst)
-                    except Exception:
-                        pass
+                found_squash = next((p for p in squash_sources if os.path.isfile(p) and os.path.getsize(p) > 100 * 1024 * 1024), None)
+                if found_squash and "TEST_MODE" not in os.environ:
+                    primary_dst = "/mnt/recovery/live/filesystem.squashfs"
+                    if not os.path.isfile(primary_dst) or os.path.getsize(primary_dst) == 0:
+                        shutil.copy2(found_squash, primary_dst)
+                        log_msg(f"Recovery SquashFS deployed from {found_squash} -> {primary_dst}")
+
+                    # Create hardlinks for all standard recovery & live paths on the recovery partition
+                    alias_paths = [
+                        "/mnt/recovery/filesystem.squashfs",
+                        "/mnt/recovery/recovery/filesystem.squashfs",
+                        "/mnt/recovery/images/pulsaros-base.squashfs",
+                        "/mnt/recovery/images/x86_64/airootfs.sfs",
+                    ]
+                    for alias in alias_paths:
+                        try:
+                            if not os.path.isfile(alias):
+                                os.link(primary_dst, alias)
+                        except Exception:
+                            try:
+                                shutil.copy2(primary_dst, alias)
+                            except Exception:
+                                pass
+
+                    log_msg(f"Recovery SquashFS verified ({os.path.getsize(primary_dst)} bytes)")
+                elif not found_squash:
+                    log_msg("WARNING: No recovery squashfs found in any search path")
             except Exception as rec_copy_err:
-                print(f"Notice: Recovery squashfs copy: {rec_copy_err}")
+                print(f"Notice: Recovery squashfs setup: {rec_copy_err}")
 
             GLib.idle_add(self.update_progress, 0.85, "Configuring bootloader (fstab)...")
             def get_partition_uuid(part):

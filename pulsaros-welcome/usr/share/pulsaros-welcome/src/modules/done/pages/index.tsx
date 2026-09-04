@@ -6,7 +6,6 @@ export function DonePage() {
   const svgRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    document.body.style.backgroundColor = "transparent";
     const lang = getLang();
     loadAndAnimate(lang, svgRef.current);
 
@@ -22,7 +21,7 @@ export function DonePage() {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen flex-col items-center justify-center bg-transparent">
+    <div className="screen-backdrop flex h-screen w-screen flex-col items-center justify-center">
       <div
         ref={svgRef}
         className="flex flex-1 items-center justify-center px-[5%]"

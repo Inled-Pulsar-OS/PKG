@@ -9,11 +9,12 @@ pub struct WifiNetwork {
     pub security: String,
     pub band: String,
     pub rate: String,
+    pub in_use: bool,
 }
 
 pub fn scan_networks() -> Vec<WifiNetwork> {
     let output = match Command::new("nmcli")
-        .args(["-t", "-f", "SSID,SIGNAL,SECURITY,BAND,RATE", "dev", "wifi", "list"])
+        .args(["-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY,BAND,RATE", "dev", "wifi", "list"])
         .output()
     {
         Ok(o) => o,
@@ -28,37 +29,47 @@ pub fn scan_networks() -> Vec<WifiNetwork> {
     let mut seen: HashMap<String, WifiNetwork> = HashMap::new();
 
     for line in stdout.lines() {
-        let parts: Vec<&str> = line.splitn(5, ':').collect();
-        if parts.len() < 2 {
+        let parts: Vec<&str> = line.splitn(6, ':').collect();
+        if parts.len() < 3 {
             continue;
         }
 
-        let ssid = parts[0].trim().to_string();
+        let in_use = parts[0].trim() == "*";
+        let ssid = parts[1].trim().to_string();
         if ssid.is_empty() {
             continue;
         }
 
-        let signal: u8 = parts[1].trim().parse().unwrap_or(0);
-        let security = if parts.len() > 2 {
-            parts[2].trim().to_string()
-        } else {
-            String::new()
-        };
-        let band = if parts.len() > 3 {
+        let signal: u8 = parts[2].trim().parse().unwrap_or(0);
+        let security = if parts.len() > 3 {
             parts[3].trim().to_string()
         } else {
             String::new()
         };
-        let rate = if parts.len() > 4 {
+        let band = if parts.len() > 4 {
             parts[4].trim().to_string()
         } else {
             String::new()
         };
+        let rate = if parts.len() > 5 {
+            parts[5].trim().to_string()
+        } else {
+            String::new()
+        };
 
-        // Keep the entry with the strongest signal per SSID
-        match seen.get(&ssid) {
-            Some(existing) if existing.signal >= signal => {}
-            _ => {
+        match seen.get_mut(&ssid) {
+            Some(existing) => {
+                if in_use {
+                    existing.in_use = true;
+                }
+                if signal > existing.signal {
+                    existing.signal = signal;
+                    existing.security = security;
+                    existing.band = band;
+                    existing.rate = rate;
+                }
+            }
+            None => {
                 seen.insert(
                     ssid.clone(),
                     WifiNetwork {
@@ -67,6 +78,7 @@ pub fn scan_networks() -> Vec<WifiNetwork> {
                         security,
                         band,
                         rate,
+                        in_use,
                     },
                 );
             }
@@ -74,7 +86,9 @@ pub fn scan_networks() -> Vec<WifiNetwork> {
     }
 
     let mut networks: Vec<WifiNetwork> = seen.into_values().collect();
-    networks.sort_by(|a, b| b.signal.cmp(&a.signal));
+    networks.sort_by(|a, b| {
+        b.in_use.cmp(&a.in_use).then_with(|| b.signal.cmp(&a.signal))
+    });
     networks
 }
 
