@@ -540,6 +540,18 @@ if [ "$PACKAGE_NAME" == "all" ]; then
         echo "   or, if the package is already built locally:"
         echo "     ./package-and-deploy.sh <pkg> --onlyupload --branch <stable|forky|rolling>"
     fi
+elif [[ "$PACKAGE_NAME" == *","* ]]; then
+    IFS=',' read -ra PKG_LIST <<< "$PACKAGE_NAME"
+    for raw_pkg in "${PKG_LIST[@]}"; do
+        pkg_trim=$(echo "$raw_pkg" | tr -d '[:space:]')
+        if [ -n "$pkg_trim" ]; then
+            if [ -d "$PKGBUILDS_DIR/$pkg_trim" ]; then
+                build_single_package "$pkg_trim"
+            else
+                echo "⏭️  Skipping '$pkg_trim' (not an Arch PKGBUILD package)"
+            fi
+        fi
+    done
 else
     build_single_package "$PACKAGE_NAME"
 fi

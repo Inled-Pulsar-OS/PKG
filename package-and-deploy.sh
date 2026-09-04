@@ -600,6 +600,18 @@ if [ "$PACKAGE_NAME" == "all" ]; then
         echo "   o, si el paquete ya está compilado en local:"
         echo "     ./package-and-deploy.sh <paquete> --onlyupload --branch <stable|forky|rolling>"
     fi
+elif [[ "$PACKAGE_NAME" == *","* ]]; then
+    IFS=',' read -ra PKG_LIST <<< "$PACKAGE_NAME"
+    for raw_pkg in "${PKG_LIST[@]}"; do
+        pkg_trim=$(echo "$raw_pkg" | tr -d '[:space:]')
+        if [ -n "$pkg_trim" ]; then
+            if [ -f "$PKG_DIR/$pkg_trim/DEBIAN/control" ]; then
+                build_single_package "$pkg_trim"
+            else
+                echo "⏭️  Omitiendo / Skipping '$pkg_trim' (no es un paquete Debian / not a Debian package)"
+            fi
+        fi
+    done
 else
     # Build only requested package / Compilar solo el paquete solicitado
     build_single_package "$PACKAGE_NAME"

@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       package_name:
-        description: 'Nombre del paquete a compilar o "all" para todos / Package name or "all"'
+        description: 'Nombre del paquete(s) separados por comas o "all" para todos / Package name(s) (comma-separated) or "all"'
         required: true
         default: 'all'
       branch:
@@ -102,10 +102,10 @@ jobs:
             PULSAR_VER="${{ github.event.inputs.pulsar_version }}"
           else
             BODY="${{ github.event.issue.body }}"
-            PACKAGE=$(echo "$BODY" | grep -A 2 -i "Nombre del Paquete" | tail -n 1 | tr -d '[:space:]')
+            PACKAGE=$(echo "$BODY" | grep -A 2 -i "Nombre del Paquete" | tail -n 1 | tr -d '\r\n')
             if [ -z "$PACKAGE" ] || [ "$PACKAGE" = "--" ]; then
               TITLE="${{ github.event.issue.title }}"
-              PACKAGE=$(echo "$TITLE" | sed -r 's/\[Deploy\]\s*//i' | tr -d '[:space:]')
+              PACKAGE=$(echo "$TITLE" | sed -r 's/\[Deploy\]\s*//i' | tr -d '\r\n')
             fi
             BRANCH=$(echo "$BODY" | grep -A 2 -i "Rama de la Distribución" | tail -n 1 | tr -d '[:space:]')
             if [ -z "$BRANCH" ] || [ "$BRANCH" = "--" ]; then
@@ -114,14 +114,11 @@ jobs:
             PULSAR_VER=""
           fi
 
-          echo "Detected package: '$PACKAGE'"
-          echo "Detected branch: '$BRANCH'"
+          # Trim leading/trailing whitespace
+          PACKAGE=$(echo "$PACKAGE" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
-          # Verify folder existence
-          if [ "$PACKAGE" != "all" ] && [ ! -d "$PACKAGE" ] && [ ! -d "arch/pkgbuilds/$PACKAGE" ]; then
-            echo "❌ Error: Package '$PACKAGE' does not exist in the repository."
-            exit 1
-          fi
+          echo "Detected package(s): '$PACKAGE'"
+          echo "Detected branch: '$BRANCH'"
 
           # Determine package type
           IS_DEBIAN="false"
@@ -130,14 +127,22 @@ jobs:
             IS_DEBIAN="true"
             IS_ARCH="true"
           else
-            # Check both formats independently: a package can exist as a Debian
-            # folder AND as an Arch PKGBUILD (e.g. pulsaros-welcome).
-            if [ -d "$PACKAGE" ]; then
-              IS_DEBIAN="true"
-            fi
-            if [ -d "arch/pkgbuilds/$PACKAGE" ]; then
-              IS_ARCH="true"
-            fi
+            IFS=',' read -ra PKG_LIST <<< "$PACKAGE"
+            for raw_pkg in "${PKG_LIST[@]}"; do
+              p=$(echo "$raw_pkg" | tr -d '[:space:]')
+              if [ -z "$p" ]; then continue; fi
+
+              if [ ! -d "$p" ] && [ ! -d "arch/pkgbuilds/$p" ]; then
+                echo "❌ Error: Package '$p' does not exist in the repository."
+                exit 1
+              fi
+              if [ -d "$p" ]; then
+                IS_DEBIAN="true"
+              fi
+              if [ -d "arch/pkgbuilds/$p" ]; then
+                IS_ARCH="true"
+              fi
+            done
           fi
 
           echo "is_debian=$IS_DEBIAN" >> $GITHUB_OUTPUT
