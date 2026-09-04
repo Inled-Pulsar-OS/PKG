@@ -23,7 +23,7 @@ button-layout='close,minimize,maximize:'
 name='MacTahoe-Dark'
 
 [org/gnome/shell]
-enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'pulsar-dock@inled.es', 'blur-my-shell@aunetx', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'just-perfection-desktop@just-perfection', 'pulsaros-global-menu@inled.es', 'pulsaros-spotlight-launcher@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'notification-position@drugo.dev', 'wiggle@mechtifs', 'gsconnect@andyholmes.github.io', 'wack-lockscreen-clock@rinzler69-wastaken.github.com', 'no-overview@fthx', 'ding@rastersoft.com', 'gnome-ui-tune@itstime.tech']
+enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'pulsar-dock@inled.es', 'blur-my-shell@aunetx', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'just-perfection-desktop@just-perfection', 'pulsaros-global-menu@inled.es', 'pulsaros-spotlight-launcher@inled.es', 'pulsar-circle-to-search@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'notification-position@drugo.dev', 'wiggle@mechtifs', 'gsconnect@andyholmes.github.io', 'wack-lockscreen-clock@rinzler69-wastaken.github.com', 'no-overview@fthx', 'ding@rastersoft.com', 'gnome-ui-tune@itstime.tech']
 favorite-apps=['org.gnome.Nautilus.desktop', 'pulsaros-recovery.desktop', 'pulsaros-spotlight.desktop', 'brave-browser.desktop', 'seafari.desktop', 'org.gnome.Terminal.desktop', 'org.gnome.Geary.desktop', 'org.gnome.Calendar.desktop', 'org.gnome.Calculator.desktop', 'com.github.xournalpp.xournalpp.desktop', 'org.gnome.Loupe.desktop', 'io.bassi.Amberol.desktop', 'org.gnome.clocks.desktop', 'org.gnome.Weather.desktop', 'es.inled.AppInstall.desktop']
 disable-extension-version-validation=true
 
