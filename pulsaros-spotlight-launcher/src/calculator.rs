@@ -10,7 +10,7 @@ impl Calculator {
         }
 
         // Clean query to convert human operations
-        let mut clean = q.replace('×', "*")
+        let clean = q.replace('×', "*")
             .replace('÷', "/")
             .replace("**", "^");
 
@@ -25,29 +25,30 @@ impl Calculator {
         let mut parser = Parser::new(&clean);
         match parser.parse() {
             Ok(val) => {
-                // If it's a whole number, format as integer
-                let val_str = if val.fract() == 0.0 {
+                if val.is_nan() || val.is_infinite() {
+                    return None;
+                }
+                // Pretty format result
+                let val_str = if (val.fract()).abs() < 1e-9 {
                     format!("{}", val as i64)
                 } else {
-                    format!("{:.6}", val).trim_end_matches('0').trim_end_matches('.').to_string()
+                    format!("{:.4}", val).trim_end_matches('0').trim_end_matches('.').to_string()
                 };
-                Some((val_str.clone(), format!("{} = {}", q, val_str)))
+                Some((val_str, format!("= {}", clean)))
             }
             Err(_) => None,
         }
     }
 }
 
-struct Parser<'a> {
-    input: &'a str,
+struct Parser {
     chars: Vec<char>,
     pos: usize,
 }
 
-impl<'a> Parser<'a> {
-    fn new(input: &'a str) -> Self {
+impl Parser {
+    fn new(input: &str) -> Self {
         Self {
-            input,
             chars: input.chars().collect(),
             pos: 0,
         }
@@ -187,7 +188,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_number(&mut self) -> Result<f64, ()> {
-        let mut start = self.pos;
+        let start = self.pos;
         let mut has_dot = false;
         while let Some(c) = self.peek() {
             if c.is_ascii_digit() {

@@ -1,14 +1,10 @@
-use crate::apps::DesktopApp;
 use crate::search::SearchResult;
 use crate::utils::{get_file_icon, open_file};
 use gtk4::gdk;
-use gtk4::glib;
 use gtk4::prelude::*;
 use std::cell::RefCell;
-use std::os::unix::process::CommandExt;
 use std::process::Command;
 use std::rc::Rc;
-use std::time::Duration;
 
 fn find_icon_file(name: &str) -> Option<String> {
     const EXTS: [&str; 3] = ["png", "svg", "xpm"];
@@ -341,7 +337,7 @@ impl ResultView {
             if let Some(r) = row {
                 list_box_c.select_row(Some(&r));
                 let idx = r.index() as usize;
-                if let Some(res) = results_cc.borrow().get(idx) {
+                if results_cc.borrow().get(idx).is_some() {
                     *ctx_menu_idx.borrow_mut() = Some(idx);
                     if popover_c.parent().as_ref() != Some(r.upcast_ref()) {
                         popover_c.set_parent(&r);
@@ -366,7 +362,7 @@ impl ResultView {
             if let Some(c) = child {
                 grid_c.select_child(&c);
                 let idx = c.index() as usize;
-                if let Some(res) = results_ccc.borrow().get(idx) {
+                if results_ccc.borrow().get(idx).is_some() {
                     *ctx_menu_idx_c.borrow_mut() = Some(idx);
                     if popover_cc.parent().as_ref() != Some(c.upcast_ref()) {
                         popover_cc.set_parent(&c);

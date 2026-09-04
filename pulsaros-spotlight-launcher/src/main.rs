@@ -10,7 +10,7 @@ use crate::clipboard::ClipboardManager;
 use crate::config::SpotlightConfig;
 use crate::search::SearchBackend;
 use crate::ui::window::SpotlightWindow;
-use crate::utils::{get_icon_dir, get_local_icon_dir};
+use crate::utils::get_local_icon_dir;
 use gtk4::gdk;
 use gtk4::gio;
 use gtk4::prelude::*;

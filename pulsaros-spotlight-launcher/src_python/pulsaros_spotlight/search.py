@@ -343,12 +343,18 @@ class SearchBackend:
         threading.Thread(target=_worker, daemon=True).start()
 
     def _search_apps(self, query: str, limit: int = 500) -> list[SearchResult]:
-        """Search desktop applications by name and comment."""
+        """Search desktop applications by name, comment, keywords, and filename."""
         query_lower = query.lower()
         results: list[SearchResult] = []
 
         for app in self._apps:
-            if not query_lower or query_lower in app.lower_name or (app.lower_comment and query_lower in app.lower_comment):
+            if (
+                not query_lower
+                or query_lower in app.lower_name
+                or (app.lower_comment and query_lower in app.lower_comment)
+                or (app.lower_keywords and query_lower in app.lower_keywords)
+                or query_lower in app.filename.lower()
+            ):
                 app_url = f"app://{app.filename}"
                 results.append(
                     SearchResult(

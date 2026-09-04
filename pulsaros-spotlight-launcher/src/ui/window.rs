@@ -43,8 +43,11 @@ pub struct SpotlightWindow {
     indexing_pbar: gtk4::ProgressBar,
     indexing_timer_id: Rc<RefCell<Option<glib::SourceId>>>,
 
+    #[allow(dead_code)]
     progress_revealer: gtk4::Revealer,
+    #[allow(dead_code)]
     progress_spinner: gtk4::Spinner,
+    #[allow(dead_code)]
     progress_label: gtk4::Label,
 }
 
@@ -200,7 +203,6 @@ impl SpotlightWindow {
         indexing_revealer.set_child(Some(&indexing_box));
 
         // -- Result View Setup --
-        let window_c = window.clone();
         let current_dir = Rc::new(RefCell::new(None));
         let current_dir_c = current_dir.clone();
         let search_entry_c = search_entry.clone();
@@ -370,7 +372,7 @@ impl SpotlightWindow {
     }
 
     fn check_indexing_status(&self) {
-        let (is_indexing, status, progress) = self.backend.get_indexing_status();
+        let (is_indexing, _status, progress) = self.backend.get_indexing_status();
         if is_indexing {
             let percent = (progress * 100.0) as i32;
             let label_text = if percent > 0 {

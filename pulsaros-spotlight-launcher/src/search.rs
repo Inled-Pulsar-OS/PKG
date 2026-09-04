@@ -3,10 +3,9 @@ use crate::calculator::Calculator;
 use crate::clipboard::ClipboardManager;
 use rusqlite::{Connection as SqliteConnection, OpenFlags};
 use std::cell::RefCell;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
 use std::thread;
 use zbus::blocking::Connection as ZbusConnection;
 
@@ -317,12 +316,18 @@ impl SearchBackend {
             if q_lower.is_empty()
                 || app.lower_name.contains(&q_lower)
                 || app.lower_comment.contains(&q_lower)
+                || app.lower_keywords.contains(&q_lower)
+                || app.filename.to_lowercase().contains(&q_lower)
             {
                 results.push(SearchResult {
                     url: format!("app://{}", app.filename),
                     title: app.name.clone(),
                     mime: "application/x-desktop".to_string(),
-                    snippet: app.comment.clone(),
+                    snippet: if !app.comment.is_empty() {
+                        app.comment.clone()
+                    } else {
+                        app.filename.clone()
+                    },
                     app: Some(app),
                 });
 
@@ -335,6 +340,7 @@ impl SearchBackend {
         results
     }
 
+    #[allow(dead_code)]
     pub fn search_sync(&self, query: &str, category: &str, limit: usize) -> Vec<SearchResult> {
         let mut results = self.search_instant(query, category, limit);
         if category == "apps" || category == "applications" || category == "clipboard" || category == "web" {
@@ -424,6 +430,7 @@ impl SearchBackend {
         }
     }
 
+    #[allow(dead_code)]
     fn execute_sparql(&self, sparql: &str) -> Vec<SearchResult> {
         execute_sparql_external(sparql)
     }

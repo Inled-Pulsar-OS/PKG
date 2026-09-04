@@ -134,12 +134,10 @@ pub fn get_file_icon(url: &str, mime: Option<&str>, is_dir: bool) -> gtk4::Image
     // Ask the system theme for an icon matching the file's content type
     let (content_type, _) = gtk4::gio::content_type_guess(Some(clean_path), &[]);
     let themed = gtk4::gio::content_type_get_symbolic_icon(&content_type);
-    return gtk4::Image::from_gicon(&themed);
-
-    let fallback = icon_for_mime(mime.unwrap_or(""));
-    gtk4::Image::from_icon_name(fallback)
+    gtk4::Image::from_gicon(&themed)
 }
 
+#[allow(dead_code)]
 pub fn icon_for_mime(mime: &str) -> &'static str {
     if mime.is_empty() {
         return "text-x-generic-symbolic";

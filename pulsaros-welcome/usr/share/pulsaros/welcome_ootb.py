@@ -262,6 +262,22 @@ window .theme-preview-dark {
 .input-label   { font-size: 13px; font-weight: 600; color: #1d1d1f; }
 .input-subtext { font-size: 11px; color: #86868b; }
 .error-text    { font-size: 11px; font-weight: bold; margin-top: 2px; }
+.wifi-badge {
+    background-color: rgba(0, 113, 227, 0.08);
+    color: #0071e3;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.wifi-badge.connected {
+    background-color: rgba(52, 199, 89, 0.15);
+    color: #248a3d;
+}
+.wifi-badge.error {
+    background-color: rgba(255, 59, 48, 0.15);
+    color: #d70015;
+}
 """
 
 
@@ -367,6 +383,87 @@ def get_existing_groups():
     return groups
 
 
+def get_active_network():
+    """Returns dict with active connection info or None: {'type': 'wifi'|'ethernet', 'name': str, 'device': str}"""
+    if "TEST_MODE" in os.environ:
+        return {"type": "wifi", "name": "Skynet-5", "device": "wlan0"}
+    try:
+        res = subprocess.run(
+            ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "dev"],
+            capture_output=True, text=True, timeout=3
+        )
+        if res.returncode == 0:
+            for line in res.stdout.strip().splitlines():
+                parts = line.split(":")
+                if len(parts) >= 4:
+                    dev, dev_type, state, conn = parts[0], parts[1], parts[2], parts[3]
+                    if state == "connected":
+                        return {"type": dev_type, "name": conn or dev, "device": dev}
+    except Exception:
+        pass
+    return None
+
+
+def get_wifi_scan_results():
+    """Returns list of unique wifi networks sorted by signal strength."""
+    if "TEST_MODE" in os.environ:
+        return [
+            {"ssid": "Skynet-5", "signal": 100, "security": "WPA3", "in_use": True},
+            {"ssid": "Office_WiFi", "signal": 80, "security": "WPA2", "in_use": False},
+            {"ssid": "Guest_Network", "signal": 60, "security": "", "in_use": False},
+        ]
+    networks = []
+    seen = set()
+    try:
+        res = subprocess.run(
+            ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "dev", "wifi", "list"],
+            capture_output=True, text=True, timeout=6
+        )
+        if res.returncode == 0:
+            for line in res.stdout.strip().splitlines():
+                parts = line.split(":")
+                if len(parts) >= 4:
+                    ssid = parts[0].replace("\\:", ":").strip()
+                    if not ssid:
+                        continue
+                    if ssid in seen:
+                        continue
+                    seen.add(ssid)
+                    try:
+                        sig = int(parts[1])
+                    except Exception:
+                        sig = 50
+                    sec = parts[2].strip()
+                    in_use = "*" in parts[3]
+                    networks.append({
+                        "ssid": ssid,
+                        "signal": sig,
+                        "security": sec,
+                        "in_use": in_use
+                    })
+    except Exception:
+        pass
+    networks.sort(key=lambda x: (not x["in_use"], -x["signal"]))
+    return networks
+
+
+def nmcli_connect_wifi(ssid, password=""):
+    """Connect to a Wi-Fi network. Returns (success: bool, message: str)"""
+    if "TEST_MODE" in os.environ:
+        return True, "Connected successfully."
+    try:
+        cmd = ["nmcli", "dev", "wifi", "connect", ssid]
+        if password:
+            cmd.extend(["password", password])
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
+        if res.returncode == 0:
+            return True, res.stdout.strip() or "Connected successfully."
+        else:
+            return False, res.stderr.strip() or res.stdout.strip() or "Connection failed."
+    except Exception as e:
+        return False, str(e)
+
+
 class OOTBWindow(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app)
@@ -454,6 +551,7 @@ class OOTBWindow(Adw.ApplicationWindow):
 
         # Build pages
         self.build_country_page()
+        self.build_wifi_page()
         self.build_language_page()
         self.build_keymap_page()
         self.build_timezone_page()
@@ -469,6 +567,7 @@ class OOTBWindow(Adw.ApplicationWindow):
 
         # States
         self.selected_country = None
+        self.selected_wifi_ssid = None
         self.selected_language = None
         self.selected_keymap = None
         self.selected_timezone = None
@@ -620,6 +719,217 @@ class OOTBWindow(Adw.ApplicationWindow):
         if row is not None:
             self.selected_country = row.country_name
             self.btn_next.set_sensitive(True)
+
+    def build_wifi_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_valign(Gtk.Align.CENTER)
+        box.set_halign(Gtk.Align.CENTER)
+
+        icon = Gtk.Image.new_from_icon_name("network-wireless-symbolic")
+        icon.set_pixel_size(64)
+        icon.add_css_class("symbolic-blue")
+        box.append(icon)
+
+        title = Gtk.Label()
+        title.set_markup("<span font_weight='bold' size='16000'>Wi-Fi Connection</span>")
+        title.add_css_class("welcome-title")
+        box.append(title)
+
+        desc = Gtk.Label(label="Connect to a Wi-Fi network to install system languages and updates.")
+        desc.add_css_class("welcome-subtitle")
+        box.append(desc)
+
+        # Status Badge
+        self.wifi_status_badge = Gtk.Label(label="Checking network status...")
+        self.wifi_status_badge.add_css_class("wifi-badge")
+        self.wifi_status_badge.set_halign(Gtk.Align.CENTER)
+        box.append(self.wifi_status_badge)
+
+        # Wi-Fi List
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_size_request(340, 130)
+        scrolled.add_css_class("country-scroll")
+        self.wifi_listbox = Gtk.ListBox()
+        self.wifi_listbox.connect("row-selected", self.on_wifi_row_selected)
+        scrolled.set_child(self.wifi_listbox)
+        box.append(scrolled)
+
+        # Password / Connection Box
+        self.wifi_connect_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self.wifi_connect_box.set_size_request(340, -1)
+        self.wifi_connect_box.set_halign(Gtk.Align.CENTER)
+        self.wifi_connect_box.set_visible(False)
+
+        self.wifi_password_entry = Gtk.PasswordEntry()
+        self.wifi_password_entry.set_placeholder_text("Wi-Fi Password")
+        self.wifi_password_entry.set_hexpand(True)
+        self.wifi_password_entry.connect("activate", lambda e: self.on_wifi_connect_btn_clicked(None))
+        self.wifi_connect_box.append(self.wifi_password_entry)
+
+        self.wifi_connect_btn = Gtk.Button(label="Connect")
+        self.wifi_connect_btn.add_css_class("pulsar-continue-btn")
+        self.wifi_connect_btn.connect("clicked", self.on_wifi_connect_btn_clicked)
+        self.wifi_connect_box.append(self.wifi_connect_btn)
+
+        box.append(self.wifi_connect_box)
+
+        # Bottom Bar (Refresh button + Spinner)
+        bottom_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        bottom_row.set_halign(Gtk.Align.CENTER)
+
+        self.wifi_refresh_btn = Gtk.Button()
+        self.wifi_refresh_btn.set_icon_name("view-refresh-symbolic")
+        self.wifi_refresh_btn.set_tooltip_text("Rescan Wi-Fi networks")
+        self.wifi_refresh_btn.add_css_class("back-arrow-btn")
+        self.wifi_refresh_btn.connect("clicked", lambda b: self.refresh_wifi_networks(manual=True))
+        bottom_row.append(self.wifi_refresh_btn)
+
+        self.wifi_spinner = Gtk.Spinner()
+        self.wifi_spinner.set_visible(False)
+        bottom_row.append(self.wifi_spinner)
+
+        box.append(bottom_row)
+
+        self.stack.add_named(box, "wifi_select")
+
+    def refresh_wifi_networks(self, manual=False):
+        self.wifi_spinner.set_visible(True)
+        self.wifi_spinner.start()
+        self.wifi_refresh_btn.set_sensitive(False)
+
+        def _scan():
+            active = get_active_network()
+            networks = get_wifi_scan_results()
+            GLib.idle_add(self._update_wifi_ui, active, networks)
+
+        threading.Thread(target=_scan, daemon=True).start()
+
+    def _update_wifi_ui(self, active, networks):
+        self.wifi_spinner.stop()
+        self.wifi_spinner.set_visible(False)
+        self.wifi_refresh_btn.set_sensitive(True)
+
+        while True:
+            row = self.wifi_listbox.get_first_child()
+            if row is None:
+                break
+            self.wifi_listbox.remove(row)
+
+        if active:
+            conn_type = "Wi-Fi" if active["type"] == "wifi" else "Ethernet"
+            name = active["name"]
+            self.wifi_status_badge.set_label(f"✓ Connected to {name} ({conn_type})")
+            self.wifi_status_badge.remove_css_class("error")
+            self.wifi_status_badge.add_css_class("connected")
+            self.btn_next.set_sensitive(True)
+        else:
+            self.wifi_status_badge.set_label("Select a Wi-Fi network or continue")
+            self.wifi_status_badge.remove_css_class("connected")
+            self.wifi_status_badge.remove_css_class("error")
+            self.btn_next.set_sensitive(True)
+
+        if not networks:
+            if not active:
+                self.wifi_status_badge.set_label("No Wi-Fi networks found")
+            return
+
+        for net in networks:
+            row = Gtk.ListBoxRow()
+            row.wifi_data = net
+            row.add_css_class("country-row")
+
+            h = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+
+            sig = net["signal"]
+            icon_name = "network-wireless-signal-excellent-symbolic" if sig >= 75 else \
+                        "network-wireless-signal-good-symbolic" if sig >= 50 else \
+                        "network-wireless-signal-ok-symbolic" if sig >= 25 else \
+                        "network-wireless-signal-weak-symbolic"
+            sig_icon = Gtk.Image.new_from_icon_name(icon_name)
+            h.append(sig_icon)
+
+            lbl = Gtk.Label(label=net["ssid"])
+            lbl.add_css_class("country-row-label")
+            lbl.set_hexpand(True)
+            lbl.set_halign(Gtk.Align.START)
+            h.append(lbl)
+
+            if net["security"] and net["security"] != "--":
+                lock = Gtk.Image.new_from_icon_name("channel-secure-symbolic")
+                lock.set_opacity(0.6)
+                h.append(lock)
+
+            if net["in_use"]:
+                check = Gtk.Image.new_from_icon_name("emblem-ok-symbolic")
+                check.add_css_class("symbolic-blue")
+                h.append(check)
+
+            row.set_child(h)
+            self.wifi_listbox.append(row)
+
+    def on_wifi_row_selected(self, listbox, row):
+        if row is None or not hasattr(row, "wifi_data"):
+            self.wifi_connect_box.set_visible(False)
+            return
+
+        data = row.wifi_data
+        self.selected_wifi_ssid = data["ssid"]
+        if data["in_use"]:
+            self.wifi_connect_box.set_visible(False)
+            self.btn_next.set_sensitive(True)
+            return
+
+        sec = data.get("security", "")
+        self.wifi_password_entry.set_text("")
+        self.wifi_connect_box.set_visible(True)
+
+        if not sec or sec == "--":
+            self.wifi_password_entry.set_visible(False)
+            self.wifi_connect_btn.set_label("Connect")
+        else:
+            self.wifi_password_entry.set_visible(True)
+            self.wifi_password_entry.grab_focus()
+            self.wifi_connect_btn.set_label("Connect")
+
+    def on_wifi_connect_btn_clicked(self, widget):
+        selected_row = self.wifi_listbox.get_selected_row()
+        if not selected_row or not hasattr(selected_row, "wifi_data"):
+            return
+
+        ssid = selected_row.wifi_data["ssid"]
+        password = self.wifi_password_entry.get_text().strip()
+
+        self.wifi_connect_btn.set_sensitive(False)
+        self.wifi_password_entry.set_sensitive(False)
+        self.wifi_status_badge.remove_css_class("connected")
+        self.wifi_status_badge.remove_css_class("error")
+        self.wifi_status_badge.set_label(f"Connecting to {ssid}...")
+        self.wifi_spinner.set_visible(True)
+        self.wifi_spinner.start()
+
+        def _connect():
+            ok, msg = nmcli_connect_wifi(ssid, password)
+            GLib.idle_add(self._on_wifi_connected_result, ok, msg, ssid)
+
+        threading.Thread(target=_connect, daemon=True).start()
+
+    def _on_wifi_connected_result(self, ok, msg, ssid):
+        self.wifi_spinner.stop()
+        self.wifi_spinner.set_visible(False)
+        self.wifi_connect_btn.set_sensitive(True)
+        self.wifi_password_entry.set_sensitive(True)
+
+        if ok:
+            self.wifi_status_badge.set_label(f"✓ Connected to {ssid}")
+            self.wifi_status_badge.remove_css_class("error")
+            self.wifi_status_badge.add_css_class("connected")
+            self.wifi_connect_box.set_visible(False)
+            self.btn_next.set_sensitive(True)
+            self.refresh_wifi_networks()
+        else:
+            self.wifi_status_badge.set_label(f"Connection failed: {msg}")
+            self.wifi_status_badge.remove_css_class("connected")
+            self.wifi_status_badge.add_css_class("error")
 
     def build_language_page(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -1121,11 +1431,14 @@ class OOTBWindow(Adw.ApplicationWindow):
     def on_back_clicked(self, btn):
         current_page = self.stack.get_visible_child_name()
 
-        if current_page == "language_select":
+        if current_page == "wifi_select":
             self.btn_next.set_sensitive(bool(self.selected_country))
             self.stack.set_visible_child_name("country_select")
             self.btn_back.set_visible(False)
             self.btn_header_back.set_visible(False)
+        elif current_page == "language_select":
+            self.btn_next.set_sensitive(True)
+            self.stack.set_visible_child_name("wifi_select")
         elif current_page == "keymap_select":
             self.btn_next.set_sensitive(bool(self.selected_language))
             self.stack.set_visible_child_name("language_select")
@@ -1183,10 +1496,15 @@ class OOTBWindow(Adw.ApplicationWindow):
         if current_page == "country_select":
             if not self.selected_country:
                 return
-            self.btn_next.set_sensitive(bool(self.selected_language))
-            self.stack.set_visible_child_name("language_select")
+            self.btn_next.set_sensitive(True)
+            self.stack.set_visible_child_name("wifi_select")
             self.btn_back.set_visible(True)
             self.btn_header_back.set_visible(True)
+            self.refresh_wifi_networks()
+
+        elif current_page == "wifi_select":
+            self.btn_next.set_sensitive(bool(self.selected_language))
+            self.stack.set_visible_child_name("language_select")
 
         elif current_page == "language_select":
             if not self.selected_language:
@@ -1319,11 +1637,16 @@ class OOTBWindow(Adw.ApplicationWindow):
                 }
                 lang_prefix = locale_code.split("_")[0].lower() if "_" in locale_code else locale_code.lower()
                 tess_pkg = TESS_MAP.get(lang_prefix, "eng")
-                log_msg(f"Installing Tesseract OCR data for language: {tess_pkg} (locale: {locale_code})")
-                if os.path.exists("/etc/debian_version"):
-                    run_cmd(["apt-get", "install", "-y", f"tesseract-ocr-{tess_pkg}"], check=False)
+                log_msg(f"Configuring Tesseract OCR data for language: {tess_pkg} (locale: {locale_code})")
+                active_net = get_active_network()
+                if active_net:
+                    log_msg("Network connected, installing OCR data package...")
+                    if os.path.exists("/etc/debian_version"):
+                        run_cmd(["apt-get", "install", "-y", f"tesseract-ocr-{tess_pkg}"], check=False)
+                    else:
+                        run_cmd(["pacman", "-S", "--noconfirm", "--needed", f"tesseract-data-{tess_pkg}"], check=False)
                 else:
-                    run_cmd(["pacman", "-S", "--noconfirm", "--needed", f"tesseract-data-{tess_pkg}"], check=False)
+                    log_msg("Offline mode: skipping remote package installation for tesseract data.")
             except Exception as e:
                 log_msg(f"Warning: failed to install tesseract language pack: {e}")
 
