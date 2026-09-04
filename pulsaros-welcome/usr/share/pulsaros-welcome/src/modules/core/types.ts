@@ -7,6 +7,7 @@ export type WelcomeScreen =
   | "settings"
   | "sayri"
   | "recovery"
+  | "wifi"
   | "done";
 
 export interface Resolution {

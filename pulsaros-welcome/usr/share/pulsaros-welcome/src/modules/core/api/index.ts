@@ -13,6 +13,8 @@ export {
   launchDisplaySettings,
   launchAppearanceSettings,
   launchWifiSettings,
+  scanWifiNetworks,
+  connectToWifi,
   launchBluetoothSettings,
   getEffectsState,
   setEffects,

@@ -1,4 +1,5 @@
 import type { SystemMode } from "@/modules/core/types";
+import type { WifiNetwork } from "@/modules/wifi/types";
 
 declare global {
   interface Window {
@@ -55,6 +56,8 @@ export async function invoke<T = any>(cmd: string, args: Record<string, any> = {
   if (cmd === "get_resolutions") return [] as any;
   if (cmd === "get_effects_state") return false as any;
   if (cmd === "check_adb_devices") return "" as any;
+  if (cmd === "scan_wifi_networks") return [] as any;
+  if (cmd === "connect_to_wifi") return false as any;
 
   return undefined as any;
 }
@@ -143,4 +146,12 @@ export function checkAdbDevices(): Promise<string> {
 
 export function runCleanup(): Promise<void> {
   return invoke("run_cleanup");
+}
+
+export function scanWifiNetworks(): Promise<WifiNetwork[]> {
+  return invoke("scan_wifi_networks");
+}
+
+export function connectToWifi(ssid: string, password?: string): Promise<boolean> {
+  return invoke("connect_to_wifi", { ssid, password: password ?? null });
 }

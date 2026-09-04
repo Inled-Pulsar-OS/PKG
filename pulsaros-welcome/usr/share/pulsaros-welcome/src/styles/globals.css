@@ -1,6 +1,10 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-:root, html, body, #root {
+:root,
+html,
+body,
+#root {
   background: transparent !important;
   background-color: transparent !important;
   margin: 0;
@@ -68,7 +72,9 @@ body {
 }
 
 /* Ensure all titles and headings inside the card are dark, crisp and bold */
-.glass h1, .glass h2, .glass h3 {
+.glass h1,
+.glass h2,
+.glass h3 {
   color: #111111 !important;
   font-weight: 700;
 }

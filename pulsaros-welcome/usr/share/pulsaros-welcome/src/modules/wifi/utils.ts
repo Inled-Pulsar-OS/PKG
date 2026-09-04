@@ -1,0 +1,1 @@
+export const isSecured = (s: string) => s.length > 0;

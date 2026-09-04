@@ -1,0 +1,1 @@
+export { WifiPage } from "./pages";
