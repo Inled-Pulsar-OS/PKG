@@ -46,8 +46,19 @@ from sayri.domain.models import (
 )
 from sayri.domain.secrets_manager import secrets_manager
 
-CAJITA_CSS = b"""
-.sayri-cajita-container,
+.sayri-cajita-container {
+    background: none;
+    background-color: transparent;
+    background-image: none;
+}
+
+.sayri-pill-box,
+.sayri-pill-overlay {
+    background-color: rgba(13, 20, 36, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 26px;
+}
+
 .sayri-pill-container,
 .sayri-pill-row,
 .sayri-pill-row > * {
@@ -445,6 +456,13 @@ class ChromaBackground(Gtk.DrawingArea):
         self.angle = 0.0
         self._anim_tag = None
         self._memory_bloom_alpha = 0.0
+        self.set_hexpand(True)
+        self.set_vexpand(True)
+        if is_pill:
+            self.set_content_width(420)
+            self.set_content_height(52)
+        else:
+            self.set_content_width(420)
         self.set_draw_func(self._draw)
 
     def set_mode(self, mode: str) -> None:
@@ -610,9 +628,13 @@ class SayriCajita(Gtk.Box):
         # ── 1. Top Input Pill ─────────────────────────────────────────
         self.pill_overlay = Gtk.Overlay()
         self.pill_overlay.set_size_request(420, 52)
+        self.pill_overlay.add_css_class("sayri-pill-box")
+        self.pill_overlay.add_css_class("sayri-pill-overlay")
 
         self.pill_bg = ChromaBackground(is_pill=True)
         self.pill_bg.set_can_target(False)
+        self.pill_bg.set_hexpand(True)
+        self.pill_bg.set_vexpand(True)
         self.pill_overlay.set_child(self.pill_bg)
 
         pill_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
