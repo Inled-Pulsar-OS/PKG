@@ -1310,6 +1310,23 @@ class OOTBWindow(Adw.ApplicationWindow):
                     run_cmd(["chown", "root:root", "/etc/locale.conf"], check=False)
                     run_cmd(["chmod", "644", "/etc/locale.conf"], check=False)
 
+            # ── OCR & Tesseract Language Pack ──────────────────────
+            try:
+                TESS_MAP = {
+                    "es": "spa", "en": "eng", "fr": "fra", "de": "deu",
+                    "it": "ita", "pt": "por", "zh": "chi_sim", "ja": "jpn",
+                    "ru": "rus", "ar": "ara", "ca": "cat", "gl": "glg", "eu": "eus"
+                }
+                lang_prefix = locale_code.split("_")[0].lower() if "_" in locale_code else locale_code.lower()
+                tess_pkg = TESS_MAP.get(lang_prefix, "eng")
+                log_msg(f"Installing Tesseract OCR data for language: {tess_pkg} (locale: {locale_code})")
+                if os.path.exists("/etc/debian_version"):
+                    run_cmd(["apt-get", "install", "-y", f"tesseract-ocr-{tess_pkg}"], check=False)
+                else:
+                    run_cmd(["pacman", "-S", "--noconfirm", "--needed", f"tesseract-data-{tess_pkg}"], check=False)
+            except Exception as e:
+                log_msg(f"Warning: failed to install tesseract language pack: {e}")
+
             # ── Keyboard ──────────────────────────────────────────
             # console-setup / keyboard-configuration only exist on Debian.
             # On Arch, localectl set-keymap works out of the box and kbd is

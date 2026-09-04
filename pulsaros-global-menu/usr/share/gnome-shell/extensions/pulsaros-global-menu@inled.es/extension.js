@@ -29,6 +29,532 @@ import Pango from 'gi://Pango';
 import Gst from 'gi://Gst';
 import GstApp from 'gi://GstApp';
 
+const I18N = {
+    en: {
+        aboutPulsar: "About Pulsar OS",
+        systemSettings: "System Settings...",
+        appStore: "App Store...",
+        lockScreen: "Lock Screen",
+        logOut: "Log Out...",
+        sleep: "Sleep",
+        restart: "Restart...",
+        shutDown: "Shut Down...",
+        aboutApp: "About %s",
+        hideApp: "Hide %s",
+        hideOthers: "Hide Others",
+        showAll: "Show All",
+        quitApp: "Quit %s",
+        file: "File",
+        newWindow: "New Window",
+        closeWindow: "Close Window",
+        edit: "Edit",
+        undo: "Undo",
+        redo: "Redo",
+        cut: "Cut",
+        copy: "Copy",
+        paste: "Paste",
+        go: "Go",
+        back: "Back",
+        home: "Home",
+        documents: "Documents",
+        downloads: "Downloads",
+        pictures: "Pictures",
+        window: "Window",
+        minimize: "Minimize",
+        maximize: "Maximize",
+        close: "Close",
+        help: "Help",
+        confirmRestartTitle: "Are you sure you want to restart your computer now?",
+        confirmShutdownTitle: "Are you sure you want to shut down your computer now?",
+        confirmRestartDesc: "If you do nothing, the computer will restart automatically in %d seconds.",
+        confirmShutdownDesc: "If you do nothing, the computer will shut down automatically in %d seconds.",
+        reopenWindows: "Reopen windows when logging in",
+        cancel: "Cancel",
+        restartBtn: "Restart",
+        shutDownBtn: "Shut Down",
+        deviceName: "Device Name:",
+        processor: "Processor:",
+        memory: "Memory:",
+        graphics: "Graphics:",
+        storage: "Storage:",
+        copyInfo: "Copy Info",
+        version: "Version",
+    },
+    es: {
+        aboutPulsar: "Acerca de Pulsar OS",
+        systemSettings: "Ajustes del Sistema...",
+        appStore: "App Store...",
+        lockScreen: "Bloquear Pantalla",
+        logOut: "Cerrar Sesión...",
+        sleep: "Reposo",
+        restart: "Reiniciar...",
+        shutDown: "Apagar...",
+        aboutApp: "Acerca de %s",
+        hideApp: "Ocultar %s",
+        hideOthers: "Ocultar Otros",
+        showAll: "Mostrar Todo",
+        quitApp: "Salir de %s",
+        file: "Archivo",
+        newWindow: "Nueva Ventana",
+        closeWindow: "Cerrar Ventana",
+        edit: "Edición",
+        undo: "Deshacer",
+        redo: "Rehacer",
+        cut: "Cortar",
+        copy: "Copiar",
+        paste: "Pegar",
+        go: "Ir",
+        back: "Atrás",
+        home: "Inicio",
+        documents: "Documentos",
+        downloads: "Descargas",
+        pictures: "Imágenes",
+        window: "Ventana",
+        minimize: "Minimizar",
+        maximize: "Maximizar",
+        close: "Cerrar",
+        help: "Ayuda",
+        confirmRestartTitle: "¿Seguro que quieres reiniciar el ordenador ahora?",
+        confirmShutdownTitle: "¿Seguro que quieres apagar el ordenador ahora?",
+        confirmRestartDesc: "Si no haces nada, el ordenador se reiniciará automáticamente en %d segundos.",
+        confirmShutdownDesc: "Si no haces nada, el ordenador se apagará automáticamente en %d segundos.",
+        reopenWindows: "Volver a abrir las ventanas al reiniciar sesión",
+        cancel: "Cancelar",
+        restartBtn: "Reiniciar",
+        shutDownBtn: "Apagar",
+        deviceName: "Nombre del dispositivo:",
+        processor: "Procesador:",
+        memory: "Memoria:",
+        graphics: "Gráficos:",
+        storage: "Almacenamiento:",
+        copyInfo: "Copiar información",
+        version: "Versión",
+    },
+    fr: {
+        aboutPulsar: "À propos de Pulsar OS",
+        systemSettings: "Réglages Système...",
+        appStore: "App Store...",
+        lockScreen: "Verrouiller l'écran",
+        logOut: "Fermer la session...",
+        sleep: "Suspendre",
+        restart: "Redémarrer...",
+        shutDown: "Éteindre...",
+        aboutApp: "À propos de %s",
+        hideApp: "Masquer %s",
+        hideOthers: "Masquer les autres",
+        showAll: "Tout afficher",
+        quitApp: "Quitter %s",
+        file: "Fichier",
+        newWindow: "Nouvelle fenêtre",
+        closeWindow: "Fermer la fenêtre",
+        edit: "Édition",
+        undo: "Annuler",
+        redo: "Rétablir",
+        cut: "Couper",
+        copy: "Copier",
+        paste: "Coller",
+        go: "Aller",
+        back: "Retour",
+        home: "Départ",
+        documents: "Documents",
+        downloads: "Téléchargements",
+        pictures: "Images",
+        window: "Fenêtre",
+        minimize: "Réduire",
+        maximize: "Agrandir",
+        close: "Fermer",
+        help: "Aide",
+        confirmRestartTitle: "Voulez-vous vraiment redémarrer votre ordinateur maintenant ?",
+        confirmShutdownTitle: "Voulez-vous vraiment éteindre votre ordinateur maintenant ?",
+        confirmRestartDesc: "Sans action de votre part, l'ordinateur redémarrera automatiquement dans %d secondes.",
+        confirmShutdownDesc: "Sans action de votre part, l'ordinateur s'éteindra automatiquement dans %d secondes.",
+        reopenWindows: "Rouvrir toutes les fenêtres à la réouverture de session",
+        cancel: "Annuler",
+        restartBtn: "Redémarrer",
+        shutDownBtn: "Éteindre",
+        deviceName: "Nom de l'appareil :",
+        processor: "Processeur :",
+        memory: "Mémoire :",
+        graphics: "Graphismes :",
+        storage: "Stockage :",
+        copyInfo: "Copier les infos",
+        version: "Version",
+    },
+    de: {
+        aboutPulsar: "Über Pulsar OS",
+        systemSettings: "Systemeinstellungen...",
+        appStore: "App Store...",
+        lockScreen: "Bildschirm sperren",
+        logOut: "Abmelden...",
+        sleep: "Ruhezustand",
+        restart: "Neustart...",
+        shutDown: "Ausschalten...",
+        aboutApp: "Über %s",
+        hideApp: "%s ausblenden",
+        hideOthers: "Andere ausblenden",
+        showAll: "Alle einblenden",
+        quitApp: "%s beenden",
+        file: "Ablage",
+        newWindow: "Neues Fenster",
+        closeWindow: "Fenster schließen",
+        edit: "Bearbeiten",
+        undo: "Widerrufen",
+        redo: "Wiederholen",
+        cut: "Ausschneiden",
+        copy: "Kopieren",
+        paste: "Einsetzen",
+        go: "Gehe zu",
+        back: "Zurück",
+        home: "Benutzerordner",
+        documents: "Dokumente",
+        downloads: "Downloads",
+        pictures: "Bilder",
+        window: "Fenster",
+        minimize: "Minimieren",
+        maximize: "Maximieren",
+        close: "Schließen",
+        help: "Hilfe",
+        confirmRestartTitle: "Möchtest du deinen Computer jetzt wirklich neu starten?",
+        confirmShutdownTitle: "Möchtest du deinen Computer jetzt wirklich ausschalten?",
+        confirmRestartDesc: "Wenn du nichts tust, startet der Computer in %d Sekunden automatisch neu.",
+        confirmShutdownDesc: "Wenn du nichts tust, schaltet sich der Computer in %d Sekunden automatisch aus.",
+        reopenWindows: "Beim nächsten Anmelden alle Fenster wieder öffnen",
+        cancel: "Abbrechen",
+        restartBtn: "Neustart",
+        shutDownBtn: "Ausschalten",
+        deviceName: "Gerätename:",
+        processor: "Prozessor:",
+        memory: "Speicher:",
+        graphics: "Grafik:",
+        storage: "Festplatte:",
+        copyInfo: "Info kopieren",
+        version: "Version",
+    },
+    it: {
+        aboutPulsar: "Informazioni su Pulsar OS",
+        systemSettings: "Impostazioni di Sistema...",
+        appStore: "App Store...",
+        lockScreen: "Blocca schermo",
+        logOut: "Esci...",
+        sleep: "Stop",
+        restart: "Riavvia...",
+        shutDown: "Spegni...",
+        aboutApp: "Informazioni su %s",
+        hideApp: "Nascondi %s",
+        hideOthers: "Nascondi altre",
+        showAll: "Mostra tutte",
+        quitApp: "Esci da %s",
+        file: "File",
+        newWindow: "Nuova finestra",
+        closeWindow: "Chiudi finestra",
+        edit: "Modifica",
+        undo: "Annulla",
+        redo: "Ripristina",
+        cut: "Taglia",
+        copy: "Copia",
+        paste: "Incolla",
+        go: "Vai",
+        back: "Indietro",
+        home: "Inizio",
+        documents: "Documenti",
+        downloads: "Download",
+        pictures: "Immagini",
+        window: "Finestra",
+        minimize: "Contrai",
+        maximize: "Ingrandisci",
+        close: "Chiudi",
+        help: "Aiuto",
+        confirmRestartTitle: "Sei sicuro di voler riavviare il computer adesso?",
+        confirmShutdownTitle: "Sei sicuro di voler spegnere il computer adesso?",
+        confirmRestartDesc: "Se non esegui alcuna operazione, il computer si riavvierà automaticamente tra %d secondi.",
+        confirmShutdownDesc: "Se non esegui alcuna operazione, il computer si spegnerà automaticamente tra %d secondi.",
+        reopenWindows: "Riapri le finestre al login successivo",
+        cancel: "Annulla",
+        restartBtn: "Riavvia",
+        shutDownBtn: "Spegni",
+        deviceName: "Nome dispositivo:",
+        processor: "Processore:",
+        memory: "Memoria:",
+        graphics: "Grafica:",
+        storage: "Spazio:",
+        copyInfo: "Copia info",
+        version: "Versione",
+    },
+    pt: {
+        aboutPulsar: "Acerca do Pulsar OS",
+        systemSettings: "Definições do Sistema...",
+        appStore: "App Store...",
+        lockScreen: "Bloquear ecrã",
+        logOut: "Terminar sessão...",
+        sleep: "Suspender",
+        restart: "Reiniciar...",
+        shutDown: "Desligar...",
+        aboutApp: "Acerca de %s",
+        hideApp: "Ocultar %s",
+        hideOthers: "Ocultar outras",
+        showAll: "Mostrar tudo",
+        quitApp: "Sair do %s",
+        file: "Ficheiro",
+        newWindow: "Nova janela",
+        closeWindow: "Fechar janela",
+        edit: "Editar",
+        undo: "Desfazer",
+        redo: "Refazer",
+        cut: "Cortar",
+        copy: "Copiar",
+        paste: "Colar",
+        go: "Ir",
+        back: "Recuar",
+        home: "Pasta pessoal",
+        documents: "Documentos",
+        downloads: "Descargas",
+        pictures: "Imagens",
+        window: "Janela",
+        minimize: "Minimizar",
+        maximize: "Maximizar",
+        close: "Fechar",
+        help: "Ajuda",
+        confirmRestartTitle: "Tem a certeza de que pretende reiniciar o computador agora?",
+        confirmShutdownTitle: "Tem a certeza de que pretende desligar o computador agora?",
+        confirmRestartDesc: "Se não fizer nada, o computador será reiniciado automaticamente em %d segundos.",
+        confirmShutdownDesc: "Se não fizer nada, o computador será desligado automaticamente em %d segundos.",
+        reopenWindows: "Reabrir janelas ao iniciar sessão",
+        cancel: "Cancelar",
+        restartBtn: "Reiniciar",
+        shutDownBtn: "Desligar",
+        deviceName: "Nome do dispositivo:",
+        processor: "Processador:",
+        memory: "Memória:",
+        graphics: "Placa gráfica:",
+        storage: "Armazenamento:",
+        copyInfo: "Copiar informações",
+        version: "Versão",
+    },
+    zh: {
+        aboutPulsar: "关于 Pulsar OS",
+        systemSettings: "系统设置...",
+        appStore: "App Store...",
+        lockScreen: "锁定屏幕",
+        logOut: "退出登录...",
+        sleep: "睡眠",
+        restart: "重新启动...",
+        shutDown: "关机...",
+        aboutApp: "关于 %s",
+        hideApp: "隐藏 %s",
+        hideOthers: "隐藏其他",
+        showAll: "显示全部",
+        quitApp: "退出 %s",
+        file: "文件",
+        newWindow: "新建窗口",
+        closeWindow: "关闭窗口",
+        edit: "编辑",
+        undo: "撤销",
+        redo: "重做",
+        cut: "剪切",
+        copy: "拷贝",
+        paste: "粘贴",
+        go: "前往",
+        back: "返回",
+        home: "个人目录",
+        documents: "文稿",
+        downloads: "下载",
+        pictures: "图片",
+        window: "窗口",
+        minimize: "最小化",
+        maximize: "最大化",
+        close: "关闭",
+        help: "帮助",
+        confirmRestartTitle: "您确定现在要重新启动电脑吗？",
+        confirmShutdownTitle: "您确定现在要将电脑关机吗？",
+        confirmRestartDesc: "如果您不采取任何操作，电脑将在 %d 秒后自动重新启动。",
+        confirmShutdownDesc: "如果您不采取任何操作，电脑将在 %d 秒后自动关机。",
+        reopenWindows: "再次登录时重新打开窗口",
+        cancel: "取消",
+        restartBtn: "重新启动",
+        shutDownBtn: "关机",
+        deviceName: "设备名称：",
+        processor: "处理器：",
+        memory: "内存：",
+        graphics: "图形卡：",
+        storage: "存储空间：",
+        copyInfo: "拷贝信息",
+        version: "版本",
+    },
+    ja: {
+        aboutPulsar: "このコンピュータについて",
+        systemSettings: "システム設定...",
+        appStore: "App Store...",
+        lockScreen: "画面をロック",
+        logOut: "ログアウト...",
+        sleep: "スリープ",
+        restart: "再起動...",
+        shutDown: "システム終了...",
+        aboutApp: "%s について",
+        hideApp: "%s を非表示",
+        hideOthers: "ほかを非表示",
+        showAll: "すべてを表示",
+        quitApp: "%s を終了",
+        file: "ファイル",
+        newWindow: "新規ウインドウ",
+        closeWindow: "ウインドウを閉じる",
+        edit: "編集",
+        undo: "取り消す",
+        redo: "やり直す",
+        cut: "カット",
+        copy: "コピー",
+        paste: "ペースト",
+        go: "移動",
+        back: "戻る",
+        home: "ホーム",
+        documents: "書類",
+        downloads: "ダウンロード",
+        pictures: "ピクチャ",
+        window: "ウインドウ",
+        minimize: "しまう",
+        maximize: "拡大",
+        close: "閉じる",
+        help: "ヘルプ",
+        confirmRestartTitle: "今すぐコンピュータを再起動してもよろしいですか？",
+        confirmShutdownTitle: "今すぐコンピュータをシステム終了してもよろしいですか？",
+        confirmRestartDesc: "何もしない場合、コンピュータは %d 秒後に自動的に再起動します。",
+        confirmShutdownDesc: "何もしない場合、コンピュータは %d 秒後に自動的にシステム終了します。",
+        reopenWindows: "再ログイン時にウインドウを再度開く",
+        cancel: "キャンセル",
+        restartBtn: "再起動",
+        shutDownBtn: "システム終了",
+        deviceName: "デバイス名:",
+        processor: "プロセッサ:",
+        memory: "メモリ:",
+        graphics: "グラフィックス:",
+        storage: "ストレージ:",
+        copyInfo: "情報をコピー",
+        version: "バージョン",
+    },
+    ru: {
+        aboutPulsar: "Об этом компьютере",
+        systemSettings: "Системные настройки...",
+        appStore: "App Store...",
+        lockScreen: "Заблокировать экран",
+        logOut: "Завершить сеанс...",
+        sleep: "Режим сна",
+        restart: "Перезагрузить...",
+        shutDown: "Выключить...",
+        aboutApp: "О программе %s",
+        hideApp: "Скрыть %s",
+        hideOthers: "Скрыть остальные",
+        showAll: "Показать все",
+        quitApp: "Завершить %s",
+        file: "Файл",
+        newWindow: "Новое окно",
+        closeWindow: "Закрыть окно",
+        edit: "Правка",
+        undo: "Отменить",
+        redo: "Повторить",
+        cut: "Вырезать",
+        copy: "Скопировать",
+        paste: "Вставить",
+        go: "Переход",
+        back: "Назад",
+        home: "Личная папка",
+        documents: "Документы",
+        downloads: "Загрузки",
+        pictures: "Изображения",
+        window: "Окно",
+        minimize: "Свернуть",
+        maximize: "Развернуть",
+        close: "Закрыть",
+        help: "Справка",
+        confirmRestartTitle: "Вы действительно хотите перезагрузить компьютер?",
+        confirmShutdownTitle: "Вы действительно хотите выключить компьютер?",
+        confirmRestartDesc: "Если не выполнить никаких действий, компьютер перезагрузится через %d сек.",
+        confirmShutdownDesc: "Если не выполнить никаких действий, компьютер выключится через %d сек.",
+        reopenWindows: "Снова открывать окна при повторном входе в систему",
+        cancel: "Отменить",
+        restartBtn: "Перезагрузить",
+        shutDownBtn: "Выключить",
+        deviceName: "Имя устройства:",
+        processor: "Процессор:",
+        memory: "Память:",
+        graphics: "Графика:",
+        storage: "Хранилище:",
+        copyInfo: "Скопировать сведения",
+        version: "Версия",
+    },
+    ar: {
+        aboutPulsar: "حول Pulsar OS",
+        systemSettings: "إعدادات النظام...",
+        appStore: "App Store...",
+        lockScreen: "قفل الشاشة",
+        logOut: "تسجيل الخروج...",
+        sleep: "إسبات",
+        restart: "إعادة التشغيل...",
+        shutDown: "إيقاف التشغيل...",
+        aboutApp: "حول %s",
+        hideApp: "إخفاء %s",
+        hideOthers: "إخفاء البقية",
+        showAll: "إظهار الكل",
+        quitApp: "إنهاء %s",
+        file: "ملف",
+        newWindow: "نافذة جديدة",
+        closeWindow: "إغلاق النافذة",
+        edit: "تعديل",
+        undo: "تراجع",
+        redo: "إعادة",
+        cut: "قص",
+        copy: "نسخ",
+        paste: "لصق",
+        go: "انتقال",
+        back: "رجوع",
+        home: "الصفحة الرئيسية",
+        documents: "المستندات",
+        downloads: "التنزيلات",
+        pictures: "الصور",
+        window: "نافذة",
+        minimize: "تصغير",
+        maximize: "تكبير",
+        close: "إغلاق",
+        help: "مساعدة",
+        confirmRestartTitle: "هل أنت متأكد من أنك تريد إعادة تشغيل الكمبيوتر الآن؟",
+        confirmShutdownTitle: "هل أنت متأكد من أنك تريد إيقاف تشغيل الكمبيوتر الآن؟",
+        confirmRestartDesc: "إذا لم تقم بأي إجراء، فستتم إعادة تشغيل الكمبيوتر تلقائيًا خلال %d ثانية.",
+        confirmShutdownDesc: "إذا لم تقم بأي إجراء، فسيتم إيقاف تشغيل الكمبيوتر تلقائيًا خلال %d ثانية.",
+        reopenWindows: "إعادة فتح النوافذ عند تسجيل الدخول مرة أخرى",
+        cancel: "إلغاء",
+        restartBtn: "إعادة التشغيل",
+        shutDownBtn: "إيقاف التشغيل",
+        deviceName: "اسم الجهاز:",
+        processor: "المعالج:",
+        memory: "الذاكرة:",
+        graphics: "الرسومات:",
+        storage: "مساحة التخزين:",
+        copyInfo: "نسخ المعلومات",
+        version: "الإصدار",
+    }
+};
+
+function _t(key, ...args) {
+    let lang = "en";
+    try {
+        let langs = GLib.get_language_names();
+        for (let l of langs) {
+            let prefix = l.split(/[@._-]/)[0].toLowerCase();
+            if (I18N[prefix]) {
+                lang = prefix;
+                break;
+            }
+        }
+    } catch (e) {
+        lang = "en";
+    }
+    let dict = I18N[lang] || I18N.en;
+    let text = dict[key] || I18N.en[key] || key;
+    if (args.length > 0) {
+        let idx = 0;
+        text = text.replace(/%[sd]/g, () => args[idx++] !== undefined ? args[idx - 1] : '');
+    }
+    return text;
+}
+
 // Custom GObject class to construct the menu buttons in the panel
 // Clase GObject personalizada para construir los botones de menú en el panel
 const GlobalMenuButton = GObject.registerClass({
@@ -93,7 +619,7 @@ const AboutDialog = GObject.registerClass({
 
         // Version Info
         let verLabel = new St.Label({
-            text: `Version ${osVersion}`,
+            text: `${_t('version')} ${osVersion}`,
             style_class: 'pulsaros-about-subtitle',
             x_align: Clutter.ActorAlign.CENTER
         });
@@ -127,15 +653,15 @@ const AboutDialog = GObject.registerClass({
             detailsBox.add_child(row);
         };
 
-        addDetail("Device Name:", hostName);
-        addDetail("Processor:", cpuModel);
-        addDetail("Memory:", memTotal);
-        addDetail("Graphics:", gpuModel);
-        addDetail("Storage:", diskInfo);
+        addDetail(_t('deviceName'), hostName);
+        addDetail(_t('processor'), cpuModel);
+        addDetail(_t('memory'), memTotal);
+        addDetail(_t('graphics'), gpuModel);
+        addDetail(_t('storage'), diskInfo);
 
         // Copy Info Button
         this.addButton({
-            label: "Copy Info",
+            label: _t('copyInfo'),
             action: () => {
                 let clipboardText = `${osName || "Pulsar OS"}\n` +
                                     `Version: ${osVersion}\n` +
@@ -211,8 +737,8 @@ const PowerConfirmDialog = GObject.registerClass({
         // Title (Left aligned, wrapping, full text)
         let isRestart = actionType === 'restart';
         let titleText = isRestart
-            ? "Are you sure you want to restart your computer now?"
-            : "Are you sure you want to shut down your computer now?";
+            ? _t('confirmRestartTitle')
+            : _t('confirmShutdownTitle');
         this._titleLabel = new St.Label({
             text: titleText,
             style_class: 'pulsaros-power-title',
@@ -225,8 +751,8 @@ const PowerConfirmDialog = GObject.registerClass({
 
         // Subtitle / Countdown prompt (Left aligned, wrapping)
         let getDescText = (secs) => isRestart
-            ? `If you do nothing, the computer will restart automatically in ${secs} seconds.`
-            : `If you do nothing, the computer will shut down automatically in ${secs} seconds.`;
+            ? _t('confirmRestartDesc', secs)
+            : _t('confirmShutdownDesc', secs);
 
         this._descLabel = new St.Label({
             text: getDescText(this._countdown),
@@ -270,7 +796,7 @@ const PowerConfirmDialog = GObject.registerClass({
         checkLayout.add_child(checkIcon);
 
         let checkLabel = new St.Label({
-            text: "Reopen windows when logging in",
+            text: _t('reopenWindows'),
             style_class: 'pulsaros-power-checkbox-label',
             y_align: Clutter.ActorAlign.CENTER
         });
@@ -297,7 +823,7 @@ const PowerConfirmDialog = GObject.registerClass({
 
         // Cancel Button
         this._cancelBtn = this.addButton({
-            label: "Cancel",
+            label: _t('cancel'),
             action: () => {
                 this._cleanup();
                 this.close();
@@ -309,7 +835,7 @@ const PowerConfirmDialog = GObject.registerClass({
         }
 
         // Action Button (Restart / Shut Down)
-        let actionLabel = isRestart ? "Restart" : "Shut Down";
+        let actionLabel = isRestart ? _t('restartBtn') : _t('shutDownBtn');
         this._actionBtn = this.addButton({
             label: actionLabel,
             action: () => {
@@ -2347,7 +2873,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         this.logoMenuButton.add_child(this.logoMenuButton.icon);
         
         // About Pulsar OS
-        let aboutItem = new PopupMenu.PopupMenuItem("About Pulsar OS");
+        let aboutItem = new PopupMenu.PopupMenuItem(_t('aboutPulsar'));
         aboutItem.connect('activate', () => {
             let hostName = GLib.get_host_name();
             
@@ -2394,8 +2920,8 @@ export default class PulsarosGlobalMenuExtension extends Extension {
                             let parts = line.split(": ");
                             if (parts.length > 1) {
                                 gpuModel = parts[1].trim();
-                                break;
                             }
+                            break;
                         }
                     }
                 }
@@ -2462,14 +2988,14 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         this.logoMenuButton.menu.addMenuItem(aboutItem);
         
         // System Settings
-        let settingsItem = new PopupMenu.PopupMenuItem("System Settings...");
+        let settingsItem = new PopupMenu.PopupMenuItem(_t('systemSettings'));
         settingsItem.connect('activate', () => {
             this._runCommand("gnome-control-center");
         });
         this.logoMenuButton.menu.addMenuItem(settingsItem);
         
         // App Store
-        let appStoreItem = new PopupMenu.PopupMenuItem("App Store...");
+        let appStoreItem = new PopupMenu.PopupMenuItem(_t('appStore'));
         appStoreItem.connect('activate', () => {
             this._openUri("appstream://");
         });
@@ -2479,14 +3005,14 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         
         // Lock Screen (Solves missing lock option in system menu when not using GDM)
         // Bloquear Pantalla (Soluciona la falta de opción de bloqueo en el menú del sistema al no usar GDM)
-        let lockItem = new PopupMenu.PopupMenuItem("Lock Screen");
+        let lockItem = new PopupMenu.PopupMenuItem(_t('lockScreen'));
         lockItem.connect('activate', () => {
             this._lockScreen();
         });
         this.logoMenuButton.menu.addMenuItem(lockItem);
         
         // Log Out
-        let logoutItem = new PopupMenu.PopupMenuItem("Log Out...");
+        let logoutItem = new PopupMenu.PopupMenuItem(_t('logOut'));
         logoutItem.connect('activate', () => {
             try {
                 let actions = SystemActions?.getDefault ? SystemActions.getDefault() : null;
@@ -2502,7 +3028,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         this.logoMenuButton.menu.addMenuItem(logoutItem);
         
         // Sleep
-        let sleepItem = new PopupMenu.PopupMenuItem("Sleep");
+        let sleepItem = new PopupMenu.PopupMenuItem(_t('sleep'));
         sleepItem.connect('activate', () => {
             try {
                 let actions = SystemActions?.getDefault ? SystemActions.getDefault() : null;
@@ -2518,7 +3044,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         this.logoMenuButton.menu.addMenuItem(sleepItem);
         
         // Restart
-        let restartItem = new PopupMenu.PopupMenuItem("Restart...");
+        let restartItem = new PopupMenu.PopupMenuItem(_t('restart'));
         restartItem.connect('activate', () => {
             let dialog = new PowerConfirmDialog('restart', (restore) => {
                 this._executePowerAction('restart', restore);
@@ -2529,7 +3055,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         this.logoMenuButton.menu.addMenuItem(restartItem);
         
         // Shut Down
-        let shutdownItem = new PopupMenu.PopupMenuItem("Shut Down...");
+        let shutdownItem = new PopupMenu.PopupMenuItem(_t('shutDown'));
         shutdownItem.connect('activate', () => {
             let dialog = new PowerConfirmDialog('shutdown', (restore) => {
                 this._executePowerAction('shutdown', restore);
@@ -2550,14 +3076,14 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         
         // Dynamic items that will adapt their labels to the active window title
         // Elementos dinámicos que adaptarán sus etiquetas al título de la ventana activa
-        this.aboutItem = new PopupMenu.PopupMenuItem("About Finder");
+        this.aboutItem = new PopupMenu.PopupMenuItem(_t('aboutApp', 'Finder'));
         this.aboutItem.connect('activate', () => {
             let activeApp = this._getAppName(this._activeAppWindow);
             Main.notify("Pulsar OS", `Active App: ${activeApp}`);
         });
         this.appMenuButton.menu.addMenuItem(this.aboutItem);
         
-        this.hideItem = new PopupMenu.PopupMenuItem("Hide Finder");
+        this.hideItem = new PopupMenu.PopupMenuItem(_t('hideApp', 'Finder'));
         this.hideItem.connect('activate', () => {
             let window = this._activeAppWindow;
             if (window) {
@@ -2566,7 +3092,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         });
         this.appMenuButton.menu.addMenuItem(this.hideItem);
         
-        this.quitItem = new PopupMenu.PopupMenuItem("Quit Finder");
+        this.quitItem = new PopupMenu.PopupMenuItem(_t('quitApp', 'Finder'));
         this.quitItem.connect('activate', () => {
             let window = this._activeAppWindow;
             if (window) {
@@ -2581,10 +3107,10 @@ export default class PulsarosGlobalMenuExtension extends Extension {
     // --- File Menu Button ---
     // --- Botón de menú de Archivo ---
     _createFileMenu() {
-        let fileBtn = new GlobalMenuButton("File");
+        let fileBtn = new GlobalMenuButton(_t('file'));
         fileBtn.uuid_suffix = "file";
         
-        let newWindowItem = new PopupMenu.PopupMenuItem("New Window");
+        let newWindowItem = new PopupMenu.PopupMenuItem(_t('newWindow'));
         newWindowItem.connect('activate', () => {
             let window = this._activeAppWindow;
             if (window) {
@@ -2601,7 +3127,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         });
         fileBtn.menu.addMenuItem(newWindowItem);
         
-        let closeItem = new PopupMenu.PopupMenuItem("Close Window");
+        let closeItem = new PopupMenu.PopupMenuItem(_t('closeWindow'));
         closeItem.connect('activate', () => {
             let window = this._activeAppWindow;
             if (window) {
@@ -2616,38 +3142,36 @@ export default class PulsarosGlobalMenuExtension extends Extension {
     // --- Edit Menu Button ---
     // --- Botón de menú de Edición ---
     _createEditMenu() {
-        let editBtn = new GlobalMenuButton("Edit");
+        let editBtn = new GlobalMenuButton(_t('edit'));
         editBtn.uuid_suffix = "edit";
         
-        let undoItem = new PopupMenu.PopupMenuItem("Undo");
+        let undoItem = new PopupMenu.PopupMenuItem(_t('undo'));
         undoItem.connect('activate', () => {
             this._sendKeyStroke([Clutter.KEY_Control_L], Clutter.KEY_z);
         });
         editBtn.menu.addMenuItem(undoItem);
         
-        let redoItem = new PopupMenu.PopupMenuItem("Redo");
+        let redoItem = new PopupMenu.PopupMenuItem(_t('redo'));
         redoItem.connect('activate', () => {
-            // CTRL + Y is widely supported on Debian Gtk applications for Redo
-            // CTRL + Y tiene soporte generalizado en aplicaciones Gtk de Debian para Rehacer
             this._sendKeyStroke([Clutter.KEY_Control_L], Clutter.KEY_y);
         });
         editBtn.menu.addMenuItem(redoItem);
         
         editBtn.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         
-        let cutItem = new PopupMenu.PopupMenuItem("Cut");
+        let cutItem = new PopupMenu.PopupMenuItem(_t('cut'));
         cutItem.connect('activate', () => {
             this._sendKeyStroke([Clutter.KEY_Control_L], Clutter.KEY_x);
         });
         editBtn.menu.addMenuItem(cutItem);
         
-        let copyItem = new PopupMenu.PopupMenuItem("Copy");
+        let copyItem = new PopupMenu.PopupMenuItem(_t('copy'));
         copyItem.connect('activate', () => {
             this._sendKeyStroke([Clutter.KEY_Control_L], Clutter.KEY_c);
         });
         editBtn.menu.addMenuItem(copyItem);
         
-        let pasteItem = new PopupMenu.PopupMenuItem("Paste");
+        let pasteItem = new PopupMenu.PopupMenuItem(_t('paste'));
         pasteItem.connect('activate', () => {
             this._sendKeyStroke([Clutter.KEY_Control_L], Clutter.KEY_v);
         });
@@ -2659,10 +3183,10 @@ export default class PulsarosGlobalMenuExtension extends Extension {
     // --- Go Menu Button ---
     // --- Botón de menú de Ir ---
     _createGoMenu() {
-        let goBtn = new GlobalMenuButton("Go");
+        let goBtn = new GlobalMenuButton(_t('go'));
         goBtn.uuid_suffix = "go";
         
-        let backItem = new PopupMenu.PopupMenuItem("Back");
+        let backItem = new PopupMenu.PopupMenuItem(_t('back'));
         backItem.connect('activate', () => {
             this._sendKeyStroke([Clutter.KEY_Alt_L], Clutter.KEY_Left);
         });
@@ -2670,27 +3194,27 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         
         goBtn.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         
-        let homeItem = new PopupMenu.PopupMenuItem("Home");
+        let homeItem = new PopupMenu.PopupMenuItem(_t('home'));
         homeItem.connect('activate', () => {
             this._openUri("file://" + GLib.get_home_dir());
         });
         goBtn.menu.addMenuItem(homeItem);
         
-        let docsItem = new PopupMenu.PopupMenuItem("Documents");
+        let docsItem = new PopupMenu.PopupMenuItem(_t('documents'));
         docsItem.connect('activate', () => {
             let docsPath = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOCUMENTS) || (GLib.get_home_dir() + "/Documents");
             this._openUri("file://" + docsPath);
         });
         goBtn.menu.addMenuItem(docsItem);
         
-        let downloadsItem = new PopupMenu.PopupMenuItem("Downloads");
+        let downloadsItem = new PopupMenu.PopupMenuItem(_t('downloads'));
         downloadsItem.connect('activate', () => {
             let dlPath = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD) || (GLib.get_home_dir() + "/Downloads");
             this._openUri("file://" + dlPath);
         });
         goBtn.menu.addMenuItem(downloadsItem);
         
-        let picsItem = new PopupMenu.PopupMenuItem("Pictures");
+        let picsItem = new PopupMenu.PopupMenuItem(_t('pictures'));
         picsItem.connect('activate', () => {
             let picsPath = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES) || (GLib.get_home_dir() + "/Pictures");
             this._openUri("file://" + picsPath);
@@ -2703,10 +3227,10 @@ export default class PulsarosGlobalMenuExtension extends Extension {
     // --- Window Menu Button ---
     // --- Botón de menú de Ventana ---
     _createWindowMenu() {
-        let winBtn = new GlobalMenuButton("Window");
+        let winBtn = new GlobalMenuButton(_t('window'));
         winBtn.uuid_suffix = "window";
         
-        let minimizeItem = new PopupMenu.PopupMenuItem("Minimize");
+        let minimizeItem = new PopupMenu.PopupMenuItem(_t('minimize'));
         minimizeItem.connect('activate', () => {
             let window = this._activeAppWindow;
             if (window) {
@@ -2715,7 +3239,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         });
         winBtn.menu.addMenuItem(minimizeItem);
         
-        let maximizeItem = new PopupMenu.PopupMenuItem("Maximize");
+        let maximizeItem = new PopupMenu.PopupMenuItem(_t('maximize'));
         maximizeItem.connect('activate', () => {
             let window = this._activeAppWindow;
             if (window) {
@@ -2728,7 +3252,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         });
         winBtn.menu.addMenuItem(maximizeItem);
         
-        let closeItem = new PopupMenu.PopupMenuItem("Close");
+        let closeItem = new PopupMenu.PopupMenuItem(_t('close'));
         closeItem.connect('activate', () => {
             let window = this._activeAppWindow;
             if (window) {
@@ -2743,7 +3267,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
     // --- Help Menu Button ---
     // --- Botón de menú de Ayuda ---
     _createHelpMenu() {
-        let helpBtn = new GlobalMenuButton("Help");
+        let helpBtn = new GlobalMenuButton(_t('help'));
         helpBtn.uuid_suffix = "help";
         
         // English: Link to Pulsar OS Wiki
@@ -2835,9 +3359,9 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         
         // Dynamically update the app menu items
         // Actualizar dinámicamente los elementos del menú de la aplicación
-        this.aboutItem.label.set_text(`About ${appName}`);
-        this.hideItem.label.set_text(`Hide ${appName}`);
-        this.quitItem.label.set_text(`Quit ${appName}`);
+        this.aboutItem.label.set_text(_t('aboutApp', appName));
+        this.hideItem.label.set_text(_t('hideApp', appName));
+        this.quitItem.label.set_text(_t('quitApp', appName));
         
         // Deactivate Hide/Quit if no app is open (Finder mode)
         // Desactivar Ocultar/Salir si no hay app abierta (modo Finder)

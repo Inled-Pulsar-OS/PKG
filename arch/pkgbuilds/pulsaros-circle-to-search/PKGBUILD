@@ -6,7 +6,11 @@ pkgdesc="Circle to Search with Sayri AI, Google Lens, and OCR text extraction fo
 arch=(any)
 url="https://inled.es"
 license=(GPL3)
-depends=(gnome-shell tesseract tesseract-data-eng tesseract-data-spa sayri ydotool)
+depends=(gnome-shell tesseract sayri ydotool)
+optdepends=(
+    'tesseract-data-eng: English OCR data'
+    'tesseract-data-spa: Spanish OCR data'
+)
 install=pulsaros-circle-to-search.install
 options=(!strip)
 
