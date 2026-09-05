@@ -249,11 +249,20 @@ else
     fi
 fi
 
-if ! (cd "$PULSAR_DOCK_SRC" && make _build >/dev/null 2>&1); then
+if [ -d "$PULSAR_DOCK_SRC/_build" ]; then
+    rm -rf "$PULSAR_DOCK_SRC/_build" 2>/dev/null || rm -rf "$PULSAR_DOCK_SRC/_build" || true
+fi
+
+PULSAR_DOCK_BUILD_LOG=$(mktemp)
+if ! (cd "$PULSAR_DOCK_SRC" && make _build >"$PULSAR_DOCK_BUILD_LOG" 2>&1); then
     echo "❌ [ES] Fallo al compilar Pulsar Dock. Asegúrate de tener make, sassc, msgfmt y glib-compile-schemas en el entorno de build."
     echo "❌ [EN] Failed to build Pulsar Dock. Make sure make, sassc, msgfmt and glib-compile-schemas are available in the build environment."
+    echo "--- Build Log ---"
+    cat "$PULSAR_DOCK_BUILD_LOG"
+    rm -f "$PULSAR_DOCK_BUILD_LOG"
     exit 1
 fi
+rm -f "$PULSAR_DOCK_BUILD_LOG"
 
 PULSAR_DOCK_DEST="$STAGE_DIR/usr/share/gnome-shell/extensions/${PULSAR_DOCK_UUID}"
 mkdir -p "$PULSAR_DOCK_DEST"
