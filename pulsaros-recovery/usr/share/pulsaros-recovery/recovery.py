@@ -1327,10 +1327,28 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
     def _install_onlyoffice_flatpak(self, log_msg, chroot_target=None):
         """Install ONLYOFFICE Desktop Editors from Flathub via Flatpak (best-effort)."""
+        mounts_to_clean = []
         if chroot_target:
             prefix = ["chroot", chroot_target]
+            # Flatpak strictly requires /proc, /sys, /dev, and /etc/resolv.conf inside the chroot
+            for src, tgt in [
+                ("/proc", f"{chroot_target}/proc"),
+                ("/sys", f"{chroot_target}/sys"),
+                ("/dev", f"{chroot_target}/dev"),
+                ("/dev/pts", f"{chroot_target}/dev/pts"),
+                ("/etc/resolv.conf", f"{chroot_target}/etc/resolv.conf"),
+            ]:
+                if os.path.exists(src) and os.path.exists(tgt):
+                    try:
+                        res = subprocess.run(["mountpoint", "-q", tgt])
+                        if res.returncode != 0:
+                            subprocess.run(["mount", "--bind", src, tgt], check=True)
+                            mounts_to_clean.append(tgt)
+                    except Exception as m_err:
+                        log_msg(f"Notice: bind mount {tgt}: {m_err}")
         else:
             prefix = [] if os.geteuid() == 0 else ["pkexec"]
+
         try:
             log_msg("Configuring Flathub repository...")
             GLib.idle_add(self.update_progress, 0.90, "Setting up Flathub for ONLYOFFICE...")
@@ -1350,6 +1368,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 log_msg("ONLYOFFICE Desktop Editors installed successfully via Flathub.")
         except Exception as e:
             log_msg(f"WARNING: could not install ONLYOFFICE from Flathub: {e}")
+        finally:
+            for tgt in reversed(mounts_to_clean):
+                try:
+                    subprocess.run(["umount", "-l", tgt], capture_output=True)
+                except Exception:
+                    pass
 
     def _install_localsend_debian(self, log_msg, apt_prefix, deb_install_path, deb_host_path=None):
         """Install LocalSend from its official x86-64 .deb (best-effort).
