@@ -1258,13 +1258,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         m_dl = re.search(r"(\d+)%", line)
                         if m_dl and '[#' in line:
                             pct = int(m_dl.group(1))
-                            frac = 0.20 + (pct / 100.0) * 0.70
+                            frac = 0.20 + (pct / 100.0) * 0.40
                             GLib.idle_add(self.update_progress, frac, f"Downloading: {pct}%")
                         m_inst = re.search(r"\((\d+)/(\d+)\)\s+installing\s+", line)
                         if m_inst:
                             cur, total = int(m_inst.group(1)), int(m_inst.group(2))
-                            frac = 0.90 + (cur / total) * 0.05
-                            GLib.idle_add(self.update_progress, frac, f"Installing {cur}/{total}")
+                            frac = 0.60 + (cur / total) * 0.30
+                            GLib.idle_add(self.update_progress, frac, f"Installing {cur}/{total}: {line.split('installing ')[-1]}")
                     else:
                         _buf += ch
                 proc.wait()
@@ -1314,13 +1314,39 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     "/tmp/LocalSend-latest-linux-x86-64.deb",
                 )
 
+            # Install ONLYOFFICE Desktop Editors from Flathub via Flatpak
+            self._install_onlyoffice_flatpak(log_msg, chroot_target=None)
+
             GLib.idle_add(self.update_progress, 1.0, "Extra packages installed successfully!")
-            log_msg("Done! All extra packages have been installed.")
+            log_msg("Done! All extra packages and ONLYOFFICE have been installed.")
             GLib.idle_add(self.on_installation_completed)
 
         except Exception as err:
             log_msg(f"FAILED: {err}")
             GLib.idle_add(self.on_installation_failed, str(err))
+
+    def _install_onlyoffice_flatpak(self, log_msg, chroot_target=None):
+        """Install ONLYOFFICE Desktop Editors from Flathub via Flatpak (best-effort)."""
+        prefix = ["chroot", chroot_target] if chroot_target else ["pkexec"]
+        try:
+            log_msg("Configuring Flathub repository...")
+            GLib.idle_add(self.update_progress, 0.90, "Setting up Flathub for ONLYOFFICE...")
+            subprocess.run(
+                prefix + ["flatpak", "remote-add", "--if-not-exists", "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo"],
+                capture_output=True, text=True, timeout=60,
+            )
+            log_msg("Installing ONLYOFFICE Desktop Editors from Flathub (Flatpak)...")
+            GLib.idle_add(self.update_progress, 0.91, "Installing ONLYOFFICE from Flathub...")
+            res = subprocess.run(
+                prefix + ["flatpak", "install", "-y", "--noninteractive", "flathub", "org.onlyoffice.desktopeditors"],
+                capture_output=True, text=True, timeout=900,
+            )
+            if res.returncode != 0:
+                log_msg(f"WARNING: ONLYOFFICE flatpak install returned {res.returncode}: {res.stderr.strip()}")
+            else:
+                log_msg("ONLYOFFICE Desktop Editors installed successfully via Flathub.")
+        except Exception as e:
+            log_msg(f"WARNING: could not install ONLYOFFICE from Flathub: {e}")
 
     def _install_localsend_debian(self, log_msg, apt_prefix, deb_install_path, deb_host_path=None):
         """Install LocalSend from its official x86-64 .deb (best-effort).
@@ -2586,7 +2612,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 "docker", "linux-firmware", "sof-firmware",
                 "open-vm-tools", "vlc", "totem", "imagemagick",
                 "geary", "gnome-music", "nvidia-open", "dkms", "linux-headers",
-                "localsend-bin",
+                "localsend-bin", "flatpak", "onlyoffice-desktopeditors (flathub)",
             ]
             GLib.idle_add(self.update_progress, 0.83, f"[DEMO] Installing {len(demo_pkgs)} packages...")
             for i, pkg in enumerate(demo_pkgs, 1):
@@ -3121,6 +3147,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 "vlc",
                                 "totem",
                                 "imagemagick",
+                                "flatpak",
                                 # Network shares & portal GVFS backends
                                 "gvfs-smb",
                                 "gvfs-gphoto2",
@@ -3207,6 +3234,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 raise Exception(f"pacman -S failed (code {pacman_proc.returncode})")
                             log_msg("Post-install: extra packages installed successfully.")
                             extra_packages_installed = True
+
+                            # Install ONLYOFFICE via Flatpak from Flathub
+                            self._install_onlyoffice_flatpak(log_msg, chroot_target="/mnt")
                         except Exception as post_err:
                             log_msg(f"Post-install package installation: {post_err}")
                         finally:
@@ -3226,6 +3256,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 "firmware-misc-nonfree",
                                 "open-vm-tools",
                                 "xserver-xorg-video-qxl",
+                                "flatpak",
                                 "vlc",
                                 "totem",
                                 "imagemagick",
@@ -3291,6 +3322,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 "/tmp/LocalSend-latest-linux-x86-64.deb",
                                 "/mnt/tmp/LocalSend-latest-linux-x86-64.deb",
                             )
+
+                            # Install ONLYOFFICE via Flatpak from Flathub
+                            self._install_onlyoffice_flatpak(log_msg, chroot_target="/mnt")
                         except Exception as post_err:
                             log_msg(f"Post-install apt installation: {post_err}")
                         finally:
