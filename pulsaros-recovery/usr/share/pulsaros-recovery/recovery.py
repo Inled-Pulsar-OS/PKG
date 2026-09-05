@@ -1327,18 +1327,21 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
     def _install_onlyoffice_flatpak(self, log_msg, chroot_target=None):
         """Install ONLYOFFICE Desktop Editors from Flathub via Flatpak (best-effort)."""
-        prefix = ["chroot", chroot_target] if chroot_target else ["pkexec"]
+        if chroot_target:
+            prefix = ["chroot", chroot_target]
+        else:
+            prefix = [] if os.geteuid() == 0 else ["pkexec"]
         try:
             log_msg("Configuring Flathub repository...")
             GLib.idle_add(self.update_progress, 0.90, "Setting up Flathub for ONLYOFFICE...")
             subprocess.run(
-                prefix + ["flatpak", "remote-add", "--if-not-exists", "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo"],
+                prefix + ["flatpak", "remote-add", "--if-not-exists", "--system", "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo"],
                 capture_output=True, text=True, timeout=60,
             )
             log_msg("Installing ONLYOFFICE Desktop Editors from Flathub (Flatpak)...")
             GLib.idle_add(self.update_progress, 0.91, "Installing ONLYOFFICE from Flathub...")
             res = subprocess.run(
-                prefix + ["flatpak", "install", "-y", "--noninteractive", "flathub", "org.onlyoffice.desktopeditors"],
+                prefix + ["flatpak", "install", "-y", "--noninteractive", "--system", "flathub", "org.onlyoffice.desktopeditors"],
                 capture_output=True, text=True, timeout=900,
             )
             if res.returncode != 0:
@@ -3118,9 +3121,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
                 if is_arch:
                     # ── Arch: install via pacman from the [inled] + Arch repos ──
-                    if is_minimal and self.install_extra_packages:
+                    if self.install_extra_packages:
                         GLib.idle_add(self.update_progress, 0.80, "Installing extra packages (Docker, firmware, drivers, apps)...")
-                        log_msg("Post-install: installing packages removed from minimal ISO via pacman...")
+                        log_msg("Post-install: installing extra packages and ONLYOFFICE...")
                         try:
                             exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
                             # Every package removed from base-arch.list when building
@@ -3244,7 +3247,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
                 else:
                     # ── Debian: install via apt from Debian + Inled repositories ──
-                    if is_minimal and self.install_extra_packages:
+                    if self.install_extra_packages:
                         GLib.idle_add(self.update_progress, 0.80, "Installing extra packages (Docker, firmware, drivers, apps)...")
                         log_msg("Post-install: installing packages removed from minimal ISO via apt...")
                         try:
