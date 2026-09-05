@@ -215,6 +215,16 @@ build_single_package() {
     local name="$1"
     local source_folder="$PKG_DIR/$name"
     
+    if [ ! -d "$source_folder" ]; then
+        for ctrl in "$PKG_DIR"/*/DEBIAN/control; do
+            if [ -f "$ctrl" ] && [ "$(grep -E '^Package:' "$ctrl" | awk '{print $2}')" = "$name" ]; then
+                source_folder="$(dirname "$(dirname "$ctrl")")"
+                name="$(basename "$source_folder")"
+                break
+            fi
+        done
+    fi
+
     echo "=============================================================================="
     echo "📦 INICIANDO COMPILACIÓN DE: $name"
     echo "=============================================================================="
@@ -299,12 +309,20 @@ build_single_package() {
     fi
     
     # Obtener el nombre del deb
+    local pkg_deb_name=$(grep "^Package:" "$source_folder/DEBIAN/control" | cut -d' ' -f2)
+    [ -z "$pkg_deb_name" ] && pkg_deb_name="$name"
     local version=$(grep "^Version:" "$source_folder/DEBIAN/control" | cut -d' ' -f2)
     local arch=$(grep "^Architecture:" "$source_folder/DEBIAN/control" | cut -d' ' -f2)
-    deb_file="${OUTPUT_DIR}/${name}_${version}_${arch}.deb"
+    deb_file="${OUTPUT_DIR}/${pkg_deb_name}_${version}_${arch}.deb"
     
     if [ ! -f "$deb_file" ]; then
-        deb_file=$(ls "$OUTPUT_DIR/${name}"*.deb | head -n 1)
+        deb_file="${OUTPUT_DIR}/${name}_${version}_${arch}.deb"
+    fi
+    if [ ! -f "$deb_file" ]; then
+        deb_file=$(ls -t "$OUTPUT_DIR/${pkg_deb_name}_"*.deb 2>/dev/null | head -n 1)
+    fi
+    if [ ! -f "$deb_file" ]; then
+        deb_file=$(ls -t "$OUTPUT_DIR/${name}_"*.deb 2>/dev/null | head -n 1)
     fi
     
     echo "✅ Paquete compilado con éxito: $(basename "$deb_file")"
@@ -494,7 +512,18 @@ if [ -n "$UPLOAD_FLAG" ] || [ -n "$ONLY_UPLOAD_FLAG" ]; then
         else
             echo "⏫  MODO SOLO SUBIDA / ONLY-UPLOAD MODE: Subiendo un paquete .deb ya compilado..."
         fi
-        UPLOAD_DEB=$(ls -t "$OUTPUT_DIR/${PACKAGE_NAME}_"*.deb 2>/dev/null | head -n 1)
+        local pkg_lookup="$PACKAGE_NAME"
+        for ctrl in "$PKG_DIR"/*/DEBIAN/control; do
+            if [ -f "$ctrl" ]; then
+                local ctrl_pkg=$(grep -E '^Package:' "$ctrl" | awk '{print $2}')
+                local ctrl_dir=$(basename "$(dirname "$(dirname "$ctrl")")")
+                if [ "$ctrl_pkg" = "$PACKAGE_NAME" ] || [ "$ctrl_dir" = "$PACKAGE_NAME" ]; then
+                    pkg_lookup="$ctrl_pkg"
+                    break
+                fi
+            fi
+        done
+        UPLOAD_DEB=$(ls -t "$OUTPUT_DIR/${pkg_lookup}_"*.deb "$OUTPUT_DIR/${PACKAGE_NAME}_"*.deb 2>/dev/null | head -n 1)
     fi
     if [ -z "$UPLOAD_DEB" ] || [ ! -f "$UPLOAD_DEB" ]; then
         echo "❌ Error: No se encontró ningún .deb para '$PACKAGE_NAME' en $OUTPUT_DIR."

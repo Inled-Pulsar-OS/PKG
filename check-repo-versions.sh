@@ -180,7 +180,10 @@ if [ "$MODE_DEB" = true ]; then
 
     for control in "$PKG_ROOT"/*/DEBIAN/control; do
         [ -f "$control" ] || continue
-        pkg_name=$(basename "$(dirname "$(dirname "$control")")")
+        pkg_folder=$(basename "$(dirname "$(dirname "$control")")")
+        actual_pkg_name=$(grep -E '^Package:' "$control" | awk '{print $2}' | tr -d '[:space:]')
+        [ -z "$actual_pkg_name" ] && actual_pkg_name="$pkg_folder"
+        pkg_name="$actual_pkg_name"
         total_deb=$((total_deb + 1))
 
         local_ver=$(grep -E '^Version:' "$control" | awk '{print $2}' | tr -d '[:space:]')
@@ -188,20 +191,24 @@ if [ "$MODE_DEB" = true ]; then
         matched_remote_vers=()
         in_prod="NO"
         for asset in "${ALL_REMOTE_ASSETS[@]}"; do
-            if [[ "$asset" == "${pkg_name}_"*".deb" ]] || [[ "$asset" == "${pkg_name}-"*".deb" ]]; then
-                raw="${asset#"${pkg_name}_"}"
-                [ "$raw" = "$asset" ] && raw="${asset#"${pkg_name}-"}"
-                raw="${raw%.deb}"
-                ver_part="${raw%_*}"
-                [ -n "$ver_part" ] && matched_remote_vers+=("$ver_part")
-            fi
+            for name_candidate in "$pkg_name" "$pkg_folder"; do
+                if [[ "$asset" == "${name_candidate}_"*".deb" ]] || [[ "$asset" == "${name_candidate}-"*".deb" ]]; then
+                    raw="${asset#"${name_candidate}_"}"
+                    [ "$raw" = "$asset" ] && raw="${asset#"${name_candidate}-"}"
+                    raw="${raw%.deb}"
+                    ver_part="${raw%_*}"
+                    [ -n "$ver_part" ] && matched_remote_vers+=("$ver_part")
+                fi
+            done
         done
 
         for asset in "${REMOTE_PROD_ASSETS[@]}"; do
-            if [[ "$asset" == "${pkg_name}_"*".deb" ]] || [[ "$asset" == "${pkg_name}-"*".deb" ]]; then
-                in_prod="SÍ"
-                break
-            fi
+            for name_candidate in "$pkg_name" "$pkg_folder"; do
+                if [[ "$asset" == "${name_candidate}_"*".deb" ]] || [[ "$asset" == "${name_candidate}-"*".deb" ]]; then
+                    in_prod="SÍ"
+                    break 2
+                fi
+            done
         done
 
         if [ ${#matched_remote_vers[@]} -eq 0 ]; then
