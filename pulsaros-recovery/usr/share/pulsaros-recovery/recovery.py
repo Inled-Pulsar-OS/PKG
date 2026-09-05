@@ -4133,7 +4133,12 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
                         "HOOKS=(base systemd autodetect microcode modconf kms "
                         "keyboard sd-vconsole plymouth block filesystems btrfs)"
                     )
+                    canonical_modules = (
+                        "MODULES=(i915 amdgpu radeon nouveau virtio_gpu bochs_drm vboxvideo vmwgfx "
+                        "9p 9pnet 9pnet_virtio virtio_pci virtio_blk)"
+                    )
                     mk_content = re.sub(r'^HOOKS=\(.*?\)', canonical_hooks, mk_content, flags=re.MULTILINE)
+                    mk_content = re.sub(r'^MODULES=\(.*?\)', canonical_modules, mk_content, flags=re.MULTILINE)
                     with open(mkinit_path, "w") as f:
                         f.write(mk_content)
                     log_msg(f"✅ mkinitcpio HOOKS establecidos: {canonical_hooks}")
@@ -4223,20 +4228,31 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
                         except Exception:
                             pass
 
-                # 3. Configure /etc/environment with cursor theme
+                # 3. Configure /etc/environment with cursor theme and VM Wayland compatibility
                 env_path = "/mnt/etc/environment"
                 env_lines = []
                 if os.path.isfile(env_path):
                     with open(env_path, "r") as ef:
                         env_lines = ef.read().splitlines()
-                env_lines = [l for l in env_lines if not l.startswith("XCURSOR_THEME=") and not l.startswith("XCURSOR_SIZE=")]
+                env_lines = [l for l in env_lines if not l.startswith("XCURSOR_THEME=") and not l.startswith("XCURSOR_SIZE=") and not l.startswith("MUTTER_DEBUG_") and not l.startswith("WLR_NO_HARDWARE_CURSORS")]
                 env_lines.append("XCURSOR_THEME=MacTahoe-dark")
                 env_lines.append("XCURSOR_SIZE=24")
+                env_lines.append("MUTTER_DEBUG_ENABLE_ATOMIC_KMS=0")
+                env_lines.append("MUTTER_DEBUG_FORCE_KMS_MODE=fallback")
+                env_lines.append("WLR_NO_HARDWARE_CURSORS=1")
                 os.makedirs(os.path.dirname(env_path), exist_ok=True)
                 with open(env_path, "w") as ef:
                     ef.write("\n".join(env_lines) + "\n")
 
-                # 4. Configure user skeleton and existing home directories
+                # 4. Configure SDDM cursor theme
+                sddm_dir = "/mnt/etc/sddm.conf.d"
+                os.makedirs(sddm_dir, exist_ok=True)
+                sddm_theme_conf = f"{sddm_dir}/theme.conf"
+                sddm_body = "[Theme]\nCurrent=Apple.Tahoe\nCursorTheme=MacTahoe-dark\nCursorSize=24\n"
+                with open(sddm_theme_conf, "w") as sf:
+                    sf.write(sddm_body)
+
+                # 5. Configure user skeleton and existing home directories
                 for target_home in ["/mnt/etc/skel", "/mnt/root"] + glob.glob("/mnt/home/*"):
                     if os.path.isdir(target_home):
                         os.makedirs(f"{target_home}/.icons/default", exist_ok=True)
