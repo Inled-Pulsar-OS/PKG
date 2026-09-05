@@ -1886,7 +1886,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
         else:
             self.selected_bootloader = "grub"
 
-        self._proceed_to_confirm_screen()
+        if self.install_extra_packages or self.install_broadcom:
+            self._show_network_check_screen()
+        else:
+            self._proceed_to_confirm_screen()
 
     def build_install_confirm_screen(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
