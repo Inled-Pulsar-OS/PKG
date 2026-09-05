@@ -993,7 +993,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             return
             
         if self.selected_action == "backup":
-            subprocess.Popen("timeshift-launcher || pkexec timeshift-gtk || timeshift-gtk || deja-dup --restore || deja-dup", shell=True)
+            subprocess.Popen("pulsaros-timemachine gui || pulsaros-timemachine || timeshift-launcher || pkexec timeshift-gtk || timeshift-gtk || deja-dup --restore || deja-dup", shell=True)
         elif self.selected_action == "install":
             self.stack.set_visible_child_name("install_welcome")
         elif self.selected_action == "safari":
@@ -2137,6 +2137,43 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 "/bin/refind-install",
             )
         )
+
+        if is_efi and not refind_available:
+            self.selected_bootloader = "grub"
+            dialog = Adw.MessageDialog(
+                transient_for=self,
+                heading="UEFI System Detected (GRUB Edition)",
+                body=(
+                    "⚠️ <b>Compatibility Notice</b>:\n\n"
+                    "Your computer supports modern <b>UEFI</b> firmware, but you are currently running the <b>GRUB Edition</b> of Pulsar OS.\n\n"
+                    "On modern UEFI hardware, the <b>rEFInd Edition</b> of Pulsar OS provides optimal bootloader compatibility, automated kernel discovery, and graphical boot menus. "
+                    "Installing GRUB on UEFI systems may lead to visual or bootloader glitches.\n\n"
+                    "We recommend downloading and using the <b>Pulsar OS rEFInd ISO</b> instead.\n\n"
+                    "Do you want to accept the risk and continue, or cancel and shut down the system?"
+                ),
+            )
+            dialog.set_body_use_markup(True)
+            dialog.add_response("cancel", "Cancel & Shut Down")
+            dialog.add_response("continue", "I Accept the Risk & Continue")
+            dialog.set_response_appearance("cancel", Adw.ResponseAppearance.DESTRUCTIVE)
+            dialog.set_response_appearance("continue", Adw.ResponseAppearance.SUGGESTED)
+            dialog.set_default_response("cancel")
+
+            def on_response(d, resp):
+                d.destroy()
+                if resp == "continue":
+                    self._proceed_to_final_confirmation()
+                else:
+                    if "TEST_MODE" in os.environ:
+                        print("[TEST_MODE] Simulating systemctl poweroff...")
+                        self.close()
+                    else:
+                        subprocess.Popen(["systemctl", "poweroff"])
+                        self.close()
+
+            dialog.connect("response", on_response)
+            dialog.present()
+            return
 
         if is_efi and refind_available:
             self.selected_bootloader = "refind"

@@ -72,7 +72,8 @@ export function useWelcome() {
         return BASE_FLOW[idx + 1];
       }
       if (prev === "sayri") return isLive ? "recovery" : "done";
-      return prev;
+      if (prev === "recovery") return "done";
+      return "done";
     });
   }, [isLive]);
 

@@ -1,12 +1,12 @@
 import { LifeBuoy, ArrowRight } from "lucide-react";
-import { launchRecovery, closeWindow } from "@/modules/core/api";
+import { launchRecovery, closeWindow, writeSentinel } from "@/modules/core/api";
 
 interface RecoveryPageProps {
-  onContinue: () => void;
+  onContinue?: () => void;
   onBack: () => void;
 }
 
-export function RecoveryPage({ onContinue, onBack }: RecoveryPageProps) {
+export function RecoveryPage({ onBack }: RecoveryPageProps) {
   return (
     <div className="screen-backdrop flex h-screen w-screen flex-col items-center justify-center p-5 sm:p-8">
       <div className="screen-enter glass flex h-[88vh] max-h-[740px] w-full max-w-[860px] flex-col overflow-hidden">
@@ -44,7 +44,10 @@ export function RecoveryPage({ onContinue, onBack }: RecoveryPageProps) {
           </button>
           <button
             className="btn-primary flex items-center gap-2"
-            onClick={onContinue}
+            onClick={async () => {
+              await writeSentinel();
+              await closeWindow();
+            }}
           >
             Finish
             <ArrowRight className="h-4 w-4" strokeWidth={2} />

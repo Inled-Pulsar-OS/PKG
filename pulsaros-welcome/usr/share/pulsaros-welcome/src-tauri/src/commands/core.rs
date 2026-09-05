@@ -26,6 +26,8 @@ pub fn write_sentinel() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn close(window: tauri::Window) {
-    let _ = window.close();
+pub fn close(app: tauri::AppHandle, window: tauri::Window) {
+    let _ = window.destroy();
+    app.exit(0);
+    std::process::exit(0);
 }
