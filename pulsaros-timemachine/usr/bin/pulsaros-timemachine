@@ -1,0 +1,19 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Time Machine Launcher
+# ==============================================================================
+
+# Allow local X11 connections for root when using Wayland
+xhost +local:root > /dev/null 2>&1 || true
+
+export QT_QPA_PLATFORM=xcb
+APP_SCRIPT="/usr/share/pulsaros-timemachine/cli.py"
+
+# If local dev environment, point to local script
+if [ ! -f "$APP_SCRIPT" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    APP_SCRIPT="$SCRIPT_DIR/../share/pulsaros-timemachine/cli.py"
+fi
+
+# Run with python3
+exec python3 "$APP_SCRIPT" "$@"

@@ -1,0 +1,38 @@
+# Maintainer: Pulsar OS Team <info@inled.es>
+pkgname=pulsaros-timemachine
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Pulsar OS Time Machine - Btrfs + Restic Continuous Backup & Restore"
+arch=('any')
+url="https://github.com/pulsar-os"
+license=('GPL3')
+depends=('python' 'python-gobject' 'gtk4' 'libadwaita' 'btrfs-progs' 'restic' 'rclone' 'cifs-utils' 'smbclient' 'udisks2')
+source=()
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-timemachine && pwd)"
+    
+    mkdir -p "$pkgdir/usr/bin"
+    install -m 755 "$_src/usr/bin/pulsaros-timemachine" "$pkgdir/usr/bin/pulsaros-timemachine"
+    
+    mkdir -p "$pkgdir/usr/share/pulsaros-timemachine"
+    cp -rf "$_src/usr/share/pulsaros-timemachine/." "$pkgdir/usr/share/pulsaros-timemachine/"
+    chmod -R 755 "$pkgdir/usr/share/pulsaros-timemachine"
+    
+    mkdir -p "$pkgdir/usr/share/applications"
+    install -m 644 "$_src/usr/share/applications/pulsaros-timemachine.desktop" "$pkgdir/usr/share/applications/"
+
+    if [ -d "$_src/usr/share/icons" ]; then
+        mkdir -p "$pkgdir/usr/share/icons"
+        cp -rf "$_src/usr/share/icons/." "$pkgdir/usr/share/icons/"
+    fi
+
+    if [ -d "$_src/usr/share/pixmaps" ]; then
+        mkdir -p "$pkgdir/usr/share/pixmaps"
+        cp -rf "$_src/usr/share/pixmaps/." "$pkgdir/usr/share/pixmaps/"
+    fi
+    
+    mkdir -p "$pkgdir/usr/lib/systemd/system"
+    install -m 644 "$_src/usr/lib/systemd/system/pulsaros-timemachine.service" "$pkgdir/usr/lib/systemd/system/" 2>/dev/null || true
+    install -m 644 "$_src/usr/lib/systemd/system/pulsaros-timemachine.timer" "$pkgdir/usr/lib/systemd/system/" 2>/dev/null || true
+}

@@ -1,0 +1,10 @@
+Package: pulsaros-timemachine
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: Pulsar OS Team <info@inled.es>
+Depends: python3, python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, btrfs-progs, restic, rclone, cifs-utils, smbclient, udisks2
+Description: Pulsar OS Time Machine - Continuous Btrfs & Restic Protection
+ Native backup and recovery suite for Pulsar OS supporting local Btrfs
+ snapshots synced with Restic across USB, remote Samba/NAS, and Rclone cloud.

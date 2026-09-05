@@ -1,0 +1,15 @@
+[Desktop Entry]
+Name=Time Machine
+Name[es]=Time Machine
+GenericName=Backup & Restore
+GenericName[es]=Copias de Seguridad y Restauración
+Comment=Continuous Btrfs & Restic backup and restore protection
+Comment[es]=Copias de seguridad continuas y restauración con Btrfs y Restic
+Exec=pulsaros-timemachine gui
+Icon=pulsaros-timemachine
+Terminal=false
+Type=Application
+Categories=GNOME;GTK;System;Archiving;Utility;Settings;
+Keywords=backup;restore;timemachine;btrfs;restic;copia;seguridad;restaurar;
+StartupNotify=true
+StartupWMClass=org.pulsaros.TimeMachine

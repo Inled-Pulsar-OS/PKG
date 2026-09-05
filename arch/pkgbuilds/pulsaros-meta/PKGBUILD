@@ -1,6 +1,6 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-meta
-pkgver=1.0.3
+pkgver=1.0.4
 pkgrel=1
 pkgdesc="Metapackage that pulls in every Pulsar OS package (delivers newly added packages to existing installations)"
 arch=(any)
@@ -24,6 +24,7 @@ depends=(
   pulsaros-sddm
   pulsaros-spotlight-launcher
   pulsaros-theme
+  pulsaros-timemachine
   pulsaros-welcome
   sayri
 )

@@ -211,8 +211,7 @@ listboxrow:selected .utility-desc-lbl,
 }
 .disk-card.selected {
     background-color: #323236;
-    border-color: #0071e3;
-    box-shadow: 0 0 0 2px #0071e3;
+    border: 2px solid #0071e3;
 }
 .bottom-power-btn {
     background-color: rgba(255, 255, 255, 0.08) !important;
@@ -1660,21 +1659,21 @@ fn build_ui(app: &Application) {
                 log_msg("Launching Pulsar OS Time Machine Recovery Suite...");
                 let _ = Command::new("sh")
                     .arg("-c")
-                    .arg("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; xhost +local: >/dev/null 2>&1 || xhost + >/dev/null 2>&1; (pulsaros-timemachine gui || python3 /usr/share/pulsaros-timemachine/cli.py gui || python3 /usr/share/pulsaros-timemachine/cli.py restore --help) >/tmp/timemachine-recovery.log 2>&1 &")
+                    .arg("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; xhost +SI:localuser:root >/dev/null 2>&1 || xhost +local: >/dev/null 2>&1 || xhost + >/dev/null 2>&1 || true; (pulsaros-timemachine gui || python3 /usr/share/pulsaros-timemachine/cli.py gui || python3 /usr/share/pulsaros-timemachine/cli.py restore --help) >/tmp/timemachine-recovery.log 2>&1 &")
                     .spawn();
             }
             "disk" => {
                 log_msg("Launching elevated Disk Utility (GParted)...");
                 let _ = Command::new("sh")
                     .arg("-c")
-                    .arg("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; xhost +local: >/dev/null 2>&1 || xhost + >/dev/null 2>&1; (sudo -E /usr/sbin/gparted || sudo -E gparted || sudo /usr/sbin/gparted || sudo gparted || /usr/sbin/gparted || gparted || gnome-disks || gnome-disk-utility) >/tmp/gparted.log 2>&1 &")
+                    .arg("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; xhost +SI:localuser:root >/dev/null 2>&1 || xhost +local: >/dev/null 2>&1 || xhost + >/dev/null 2>&1 || true; (sudo -E /usr/sbin/gparted || sudo -E gparted || sudo /usr/sbin/gparted || sudo gparted || /usr/sbin/gparted || gparted || gnome-disks || gnome-disk-utility) >/tmp/gparted.log 2>&1 &")
                     .spawn();
             }
             "terminal" => {
                 log_msg("Launching recovery root terminal...");
                 let _ = Command::new("sh")
                     .arg("-c")
-                    .arg("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; xhost +local: >/dev/null 2>&1 || xhost + >/dev/null 2>&1; (xterm -title 'Pulsar OS Recovery Terminal' -bg '#18181b' -fg '#ffffff' -fa Monospace -fs 11 -e sudo bash || gnome-terminal -- sudo bash || alacritty -e sudo bash || x-terminal-emulator -e sudo bash || xterm -e sudo bash) &")
+                    .arg("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; xhost +SI:localuser:root >/dev/null 2>&1 || xhost +local: >/dev/null 2>&1 || xhost + >/dev/null 2>&1 || true; (xterm -title 'Pulsar OS Recovery Terminal' -bg '#18181b' -fg '#ffffff' -fa Monospace -fs 11 -e sudo bash || gnome-terminal -- sudo bash || alacritty -e sudo bash || x-terminal-emulator -e sudo bash || xterm -e sudo bash) &")
                     .spawn();
             }
             "internet_info" => {
