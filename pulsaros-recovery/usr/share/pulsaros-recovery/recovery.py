@@ -4134,7 +4134,7 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
                         "keyboard sd-vconsole plymouth block filesystems btrfs)"
                     )
                     canonical_modules = (
-                        "MODULES=(i915 amdgpu radeon nouveau virtio_gpu bochs_drm vboxvideo vmwgfx "
+                        "MODULES=(i915 amdgpu radeon nouveau virtio_gpu bochs vboxvideo vmwgfx "
                         "9p 9pnet 9pnet_virtio virtio_pci virtio_blk)"
                     )
                     mk_content = re.sub(r'^HOOKS=\(.*?\)', canonical_hooks, mk_content, flags=re.MULTILINE)
