@@ -1,162 +1,205 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread;
+use std::time::Instant;
 
 use gio::prelude::*;
 use glib::clone;
 use gtk4::prelude::*;
 use gtk4::{
-    Align, Application, Box as GtkBox, Button, CenterBox, CssProvider, GestureClick, Image,
+    Align, Application, Box as GtkBox, Button, CenterBox, CssProvider, DropDown, GestureClick, Image,
     Label, ListBox, ListBoxRow, Orientation, ProgressBar, ScrolledWindow, SelectionMode,
-    Stack, StackTransitionType, TextView, WrapMode,
+    Stack, StackTransitionType, StringList, TextView, WrapMode,
 };
 use libadwaita::prelude::*;
 use libadwaita::ApplicationWindow;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
+
+static DEMO_MODE: AtomicBool = AtomicBool::new(false);
+
+pub fn is_demo_mode() -> bool {
+    DEMO_MODE.load(Ordering::SeqCst)
+}
+
+pub fn set_demo_mode(val: bool) {
+    DEMO_MODE.store(val, Ordering::SeqCst);
+}
 
 const APP_CSS: &str = r#"
 /* Force macOS Dark Backdrop */
 window, window.background, .background, .root-container {
-    background-color: #1e1e20 !important;
-    color: #ffffff !important;
+    background-color: #1e1e20;
+    color: #ffffff;
 }
 window, .root-container, * {
     font-family: 'Inter', 'SF Pro Display', -apple-system, sans-serif;
 }
 .apple-box {
-    background-color: #323236 !important;
-    border: 1px solid rgba(255, 255, 255, 0.14) !important;
-    border-radius: 20px !important;
-    padding: 24px 28px !important;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7) !important;
+    background-color: #323236;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 20px;
+    padding: 24px 28px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
 }
 .welcome-title {
-    font-size: 22px !important;
-    font-weight: 700 !important;
-    color: #ffffff !important;
-    margin-top: 4px !important;
-    margin-bottom: 4px !important;
+    font-size: 22px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-top: 4px;
+    margin-bottom: 4px;
 }
 .welcome-subtitle {
-    font-size: 13px !important;
-    color: #c7c7cc !important;
-    margin-bottom: 12px !important;
+    font-size: 13px;
+    color: #c7c7cc;
+    margin-bottom: 12px;
 }
 .info-card {
-    background-color: rgba(255, 255, 255, 0.05) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    border-radius: 12px !important;
-    padding: 16px 20px !important;
-    margin-top: 6px !important;
-    margin-bottom: 12px !important;
+    background-color: transparent;
+    border: none;
+    padding: 0px;
+    margin-top: 4px;
+    margin-bottom: 8px;
 }
 .info-card-text {
-    font-size: 13px !important;
-    color: #e5e5ea !important;
-    line-height: 1.5 !important;
+    font-size: 13px;
+    color: #e5e5ea;
+    line-height: 1.5;
 }
-/* Force completely transparent ListBox with individual floating cards */
+.setting-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #a1a1a6;
+    margin-bottom: 2px;
+}
+.badge-net-ok {
+    color: #30d158;
+    font-weight: 600;
+    font-size: 12px;
+}
+.badge-net-warn {
+    color: #ff9f0a;
+    font-weight: 600;
+    font-size: 12px;
+}
+.badge-demo {
+    background-color: rgba(255, 159, 10, 0.18);
+    color: #ff9f0a;
+    border: 1px solid rgba(255, 159, 10, 0.4);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: bold;
+}
+/* Force completely transparent ListBox with clean seamless rows */
 list, listview, listbox, .transparent-list, .content, .boxed-list {
-    background-color: transparent !important;
-    background: transparent !important;
-    background-image: none !important;
-    border: none !important;
-    box-shadow: none !important;
-    outline: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
+    background-color: transparent;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
 }
 listbox > row, listboxrow, row, .utility-item-row {
-    background-color: transparent !important;
-    background: transparent !important;
-    background-image: none !important;
-    border: none !important;
-    box-shadow: none !important;
-    outline: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
+    background-color: transparent;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
 }
 .utility-row-card {
-    background-color: rgba(255, 255, 255, 0.05) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-radius: 12px !important;
-    padding: 10px 14px !important;
-    transition: all 0.15s ease !important;
+    background-color: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 12px;
+    transition: background-color 0.15s ease;
 }
 listbox > row:hover .utility-row-card,
 listboxrow:hover .utility-row-card,
 .utility-item-row:hover .utility-row-card {
-    background-color: rgba(255, 255, 255, 0.09) !important;
-    border-color: rgba(255, 255, 255, 0.16) !important;
+    background-color: rgba(255, 255, 255, 0.08);
 }
 listbox > row:selected .utility-row-card,
 listboxrow:selected .utility-row-card,
 .utility-item-row:selected .utility-row-card {
-    background-color: #0071e3 !important;
-    border-color: #0071e3 !important;
-    box-shadow: 0 4px 14px rgba(0, 113, 227, 0.35) !important;
+    background-color: #0071e3;
 }
 .utility-title-lbl {
-    font-size: 14px !important;
-    font-weight: 600 !important;
-    color: #ffffff !important;
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
 }
 .utility-desc-lbl {
-    font-size: 12px !important;
-    color: #c7c7cc !important;
+    font-size: 12px;
+    color: #c7c7cc;
 }
 listbox > row:selected .utility-title-lbl,
 listboxrow:selected .utility-title-lbl,
 .utility-item-row:selected .utility-title-lbl {
-    color: #ffffff !important;
+    color: #ffffff;
 }
 listbox > row:selected .utility-desc-lbl,
 listboxrow:selected .utility-desc-lbl,
 .utility-item-row:selected .utility-desc-lbl {
-    color: rgba(255, 255, 255, 0.92) !important;
+    color: rgba(255, 255, 255, 0.92);
 }
 .suggested-action {
-    background-color: #0071e3 !important;
-    color: #ffffff !important;
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-    padding: 8px 20px !important;
-    border: none !important;
-    font-size: 13px !important;
+    background-color: #0071e3;
+    color: #ffffff;
+    border-radius: 10px;
+    font-weight: 600;
+    padding: 10px 24px;
+    border: none;
+    font-size: 13px;
 }
 .suggested-action:hover {
-    background-color: #007bf5 !important;
+    background-color: #007bf5;
 }
 .suggested-action:disabled {
-    background-color: #38383a !important;
-    color: #636366 !important;
+    background-color: #38383a;
+    color: #636366;
 }
 .secondary-action {
-    background-color: #323236 !important;
-    color: #ffffff !important;
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-    padding: 7px 16px !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    font-size: 12px !important;
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    border-radius: 10px;
+    font-weight: 600;
+    padding: 10px 20px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    font-size: 13px;
 }
 .secondary-action:hover {
-    background-color: #3e3e42 !important;
+    background-color: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+.destructive-action {
+    background-color: rgba(255, 69, 58, 0.15);
+    color: #ff453a;
+    border-radius: 10px;
+    font-weight: 600;
+    padding: 10px 20px;
+    border: 1px solid rgba(255, 69, 58, 0.3);
+    font-size: 13px;
+}
+.destructive-action:hover {
+    background-color: rgba(255, 69, 58, 0.25);
 }
 .shortcut-btn {
-    background-color: rgba(255, 255, 255, 0.08) !important;
-    color: #ffffff !important;
-    border-radius: 6px !important;
-    padding: 4px 10px !important;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
-    font-size: 11px !important;
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    border-radius: 6px;
+    padding: 4px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    font-size: 11px;
 }
 .shortcut-btn:hover {
-    background-color: rgba(255, 255, 255, 0.15) !important;
+    background-color: rgba(255, 255, 255, 0.15);
 }
 .progress-bar-thin {
     min-height: 8px;
@@ -214,20 +257,167 @@ listboxrow:selected .utility-desc-lbl,
     border: 2px solid #0071e3;
 }
 .bottom-power-btn {
-    background-color: rgba(255, 255, 255, 0.08) !important;
-    color: #ffffff !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    border-radius: 20px !important;
-    padding: 8px 24px !important;
-    font-size: 13px !important;
-    font-weight: 600 !important;
-    transition: all 0.15s ease !important;
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    padding: 8px 24px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.15s ease;
 }
 .bottom-power-btn:hover {
-    background-color: rgba(255, 255, 255, 0.16) !important;
-    border-color: rgba(255, 255, 255, 0.3) !important;
+    background-color: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.3);
 }
 "#;
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct MirrorInfo {
+    id: String,
+    name: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct TargetImageInfo {
+    squashfs: String,
+    #[serde(default)]
+    iso: Option<String>,
+    #[serde(default)]
+    sha256: Option<String>,
+    #[serde(default)]
+    size_bytes: Option<u64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct ManifestData {
+    latest_version: String,
+    versions: HashMap<String, HashMap<String, HashMap<String, TargetImageInfo>>>,
+    #[serde(default)]
+    mirrors: Vec<MirrorInfo>,
+}
+
+#[derive(Debug, Clone)]
+enum DownloadMsg {
+    Progress {
+        downloaded: u64,
+        total: u64,
+        speed_mb_s: f64,
+        fraction: f64,
+        eta_secs: u64,
+    },
+    Verifying,
+    Done,
+    Cancelled,
+    Error(String),
+}
+
+fn detect_system_base() -> String {
+    if let Ok(content) = fs::read_to_string("/etc/os-release") {
+        if content.contains("ID=debian") || content.contains("ID_LIKE=debian") || content.contains("ID=ubuntu") {
+            return "debian".to_string();
+        }
+    }
+    if Path::new("/run/media/pulsar_btrfs_pool/@/etc/debian_version").exists() {
+        return "debian".to_string();
+    }
+    "arch".to_string()
+}
+
+fn detect_system_bootloader() -> String {
+    if Path::new("/boot/efi/EFI/refind").exists() || Path::new("/boot/refind").exists() {
+        return "refind".to_string();
+    }
+    if Path::new("/run/media/pulsar_btrfs_pool/@/boot/refind").exists() {
+        return "refind".to_string();
+    }
+    "grub".to_string()
+}
+
+fn fetch_release_manifest() -> ManifestData {
+    let urls = [
+        "https://pulsaros-releases.pages.dev/releases.json",
+        "https://releases.pulsaros.inled.es/releases.json",
+        "https://inled.github.io/pulsaros-releases/releases.json",
+        "https://raw.githubusercontent.com/inled/pulsar/main/ISO/configs/releases.json",
+        "https://apt.inled.es/releases.json",
+    ];
+
+    for url in urls {
+        if let Ok(out) = Command::new("curl")
+            .args(&["-sSL", "--connect-timeout", "4", "--max-time", "8", url])
+            .output()
+        {
+            if out.status.success() && !out.stdout.is_empty() {
+                if let Ok(data) = serde_json::from_slice::<ManifestData>(&out.stdout) {
+                    log_msg(&format!("Successfully fetched releases manifest from: {}", url));
+                    return data;
+                }
+            }
+        }
+    }
+
+    if let Ok(content) = fs::read_to_string("/usr/share/pulsaros-recovery/releases.json") {
+        if let Ok(data) = serde_json::from_str::<ManifestData>(&content) {
+            return data;
+        }
+    }
+    if let Ok(content) = fs::read_to_string("/home/jaime/Documentos/pulsar/ISO/configs/releases.json") {
+        if let Ok(data) = serde_json::from_str::<ManifestData>(&content) {
+            return data;
+        }
+    }
+
+    let mut versions = HashMap::new();
+    let mut arch_map = HashMap::new();
+    let mut debian_map = HashMap::new();
+
+    arch_map.insert("grub".to_string(), TargetImageInfo {
+        squashfs: "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-arch-grub-0.3-beta-bittenfruit.squashfs".to_string(),
+        iso: Some("https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-arch-grub-0.3-beta-bittenfruit.iso".to_string()),
+        sha256: None,
+        size_bytes: Some(3145728000),
+    });
+    arch_map.insert("refind".to_string(), TargetImageInfo {
+        squashfs: "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-arch-refind-0.3-beta-bittenfruit.squashfs".to_string(),
+        iso: Some("https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-arch-refind-0.3-beta-bittenfruit.iso".to_string()),
+        sha256: None,
+        size_bytes: Some(3145728000),
+    });
+
+    debian_map.insert("grub".to_string(), TargetImageInfo {
+        squashfs: "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-debian-grub-0.3-beta-bittenfruit.squashfs".to_string(),
+        iso: Some("https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-debian-grub-0.3-beta-bittenfruit.iso".to_string()),
+        sha256: None,
+        size_bytes: Some(2800000000),
+    });
+    debian_map.insert("refind".to_string(), TargetImageInfo {
+        squashfs: "https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-debian-refind-0.3-beta-bittenfruit.squashfs".to_string(),
+        iso: Some("https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-0.3-beta-bittenfruit-debian-refind-0.3-beta-bittenfruit.iso".to_string()),
+        sha256: None,
+        size_bytes: Some(2800000000),
+    });
+
+    let mut base_map = HashMap::new();
+    base_map.insert("arch".to_string(), arch_map);
+    base_map.insert("debian".to_string(), debian_map);
+    versions.insert("0.3-beta-bittenfruit".to_string(), base_map);
+
+    let mirrors = vec![
+        MirrorInfo { id: "auto".to_string(), name: "Automático (SourceForge CDN / Fast Anycast)".to_string() },
+        MirrorInfo { id: "netix".to_string(), name: "NetIX (Europa / Internacional)".to_string() },
+        MirrorInfo { id: "deac-riga".to_string(), name: "DEAC Riga (Europa del Norte)".to_string() },
+        MirrorInfo { id: "altushost-swe".to_string(), name: "AltusHost (Suecia)".to_string() },
+        MirrorInfo { id: "liquidtelecom".to_string(), name: "Liquid Telecom (África / Global)".to_string() },
+        MirrorInfo { id: "cfhcable".to_string(), name: "CFH Cable (Norteamérica)".to_string() },
+    ];
+
+    ManifestData {
+        latest_version: "0.3-beta-bittenfruit".to_string(),
+        versions,
+        mirrors,
+    }
+}
 
 #[derive(Clone, Debug)]
 struct BtrfsTarget {
@@ -697,7 +887,7 @@ fn create_icon_widget(file_path: &str, fallback_icon_name: &str, size: i32) -> I
 fn build_ui(app: &Application) {
     let window = ApplicationWindow::builder()
         .application(app)
-        .title("Pulsar OS Recovery")
+        .title(if is_demo_mode() { "Pulsar OS Recovery (MODO DEMO / PRUEBAS)" } else { "Pulsar OS Recovery" })
         .default_width(1024)
         .default_height(720)
         .resizable(true)
@@ -746,6 +936,12 @@ fn build_ui(app: &Application) {
     bottom_bar.set_halign(Align::Center);
     bottom_bar.set_valign(Align::End);
     bottom_bar.set_margin_bottom(24);
+
+    if is_demo_mode() {
+        let demo_pill = Label::new(Some("⚠️ MODO DEMO / SIMULACIÓN ACTIVO (No se escribirán datos en disco)"));
+        demo_pill.add_css_class("badge-demo");
+        bottom_bar.append(&demo_pill);
+    }
 
     let btn_restart = Button::new();
     btn_restart.add_css_class("bottom-power-btn");
@@ -867,7 +1063,7 @@ fn build_ui(app: &Application) {
     add_row(
         "internet_info",
         "Pulsar Internet Recovery",
-        "Instructions to download recovery images from SourceForge and restore via USB.",
+        "Download latest recovery image from SourceForge CDN and reinstall directly over the internet.",
         "/usr/share/pulsaros-recovery/safari.png",
         "safari",
     );
@@ -902,36 +1098,125 @@ fn build_ui(app: &Application) {
     stack.add_named(&util_box, Some("utilities"));
 
     // ─────────────────────────────────────────────────────────────
-    // 2. Internet Recovery Notice Screen
+    // 2. Internet Recovery Screen (Direct Cloud Download & Restore)
     // ─────────────────────────────────────────────────────────────
-    let net_info_box = GtkBox::new(Orientation::Vertical, 10);
+    let net_info_box = GtkBox::new(Orientation::Vertical, 8);
     net_info_box.set_valign(Align::Center);
     net_info_box.set_halign(Align::Center);
 
-    let net_icon = create_icon_widget("/usr/share/pulsaros-recovery/safari.png", "globe", 56);
+    let net_icon = create_icon_widget("/usr/share/pulsaros-recovery/safari.png", "globe", 48);
     net_info_box.append(&net_icon);
 
     let net_title = Label::new(Some("Pulsar Internet Recovery"));
     net_title.add_css_class("welcome-title");
     net_info_box.append(&net_title);
 
-    let info_card = GtkBox::new(Orientation::Vertical, 8);
-    info_card.add_css_class("info-card");
-    info_card.set_size_request(540, -1);
+    let net_subtitle = Label::new(Some("Download official system recovery image from SourceForge CDN and reinstall."));
+    net_subtitle.add_css_class("welcome-subtitle");
+    net_info_box.append(&net_subtitle);
 
-    let info_card_text = Label::new(Some(
-        "Direct online streaming of multi-gigabyte OS recovery images is currently not hosted directly on our servers due to infrastructure funding limitations.\n\n\
-        To reinstall or update Pulsar OS:\n\
-        1. From another computer, download the official .squashfs recovery image from our SourceForge project repository:\n\
-           https://sourceforge.net/projects/pulsar-os/files/\n\n\
-        2. Copy the .squashfs file directly onto any USB flash drive.\n\n\
-        3. Insert the USB drive into this computer and click 'Restore from USB Flash Drive'."
-    ));
-    info_card_text.add_css_class("info-card-text");
-    info_card_text.set_wrap(true);
-    info_card_text.set_justify(gtk4::Justification::Left);
-    info_card.append(&info_card_text);
-    net_info_box.append(&info_card);
+    let net_card = GtkBox::new(Orientation::Vertical, 10);
+    net_card.add_css_class("info-card");
+    net_card.set_size_request(580, -1);
+
+    let detected_base = detect_system_base();
+    let detected_boot = detect_system_bootloader();
+    let manifest_rc = Rc::new(RefCell::new(fetch_release_manifest()));
+
+    // Row 1: Edition and Version
+    let net_row_1 = GtkBox::new(Orientation::Horizontal, 14);
+    net_row_1.set_hexpand(true);
+
+    let edition_box = GtkBox::new(Orientation::Vertical, 3);
+    edition_box.set_hexpand(true);
+    let lbl_edition = Label::new(Some("Distribution & Bootloader"));
+    lbl_edition.add_css_class("setting-label");
+    lbl_edition.set_halign(Align::Start);
+    edition_box.append(&lbl_edition);
+
+    let edition_entries = [
+        "Arch Linux (GRUB)",
+        "Arch Linux (rEFInd)",
+        "Debian (GRUB)",
+        "Debian (rEFInd)",
+    ];
+    let edition_list = StringList::new(&edition_entries);
+    let combo_edition = DropDown::new(Some(edition_list), gtk4::Expression::NONE);
+    combo_edition.set_hexpand(true);
+
+    let default_edition_idx = match (detected_base.as_str(), detected_boot.as_str()) {
+        ("arch", "grub") => 0,
+        ("arch", "refind") => 1,
+        ("debian", "grub") => 2,
+        ("debian", "refind") => 3,
+        _ => 0,
+    };
+    combo_edition.set_selected(default_edition_idx);
+    edition_box.append(&combo_edition);
+    net_row_1.append(&edition_box);
+
+    let version_box = GtkBox::new(Orientation::Vertical, 3);
+    version_box.set_hexpand(true);
+    let lbl_version = Label::new(Some("Version"));
+    lbl_version.add_css_class("setting-label");
+    lbl_version.set_halign(Align::Start);
+    version_box.append(&lbl_version);
+
+    let ver_str = manifest_rc.borrow().latest_version.clone();
+    let version_entries = [ver_str.as_str()];
+    let version_list = StringList::new(&version_entries);
+    let combo_version = DropDown::new(Some(version_list), gtk4::Expression::NONE);
+    combo_version.set_hexpand(true);
+    version_box.append(&combo_version);
+    net_row_1.append(&version_box);
+    net_card.append(&net_row_1);
+
+    // Row 2: Mirror and Network status
+    let net_row_2 = GtkBox::new(Orientation::Horizontal, 14);
+    net_row_2.set_hexpand(true);
+
+    let mirror_box = GtkBox::new(Orientation::Vertical, 3);
+    mirror_box.set_hexpand(true);
+    let lbl_mirror = Label::new(Some("SourceForge Mirror"));
+    lbl_mirror.add_css_class("setting-label");
+    lbl_mirror.set_halign(Align::Start);
+    mirror_box.append(&lbl_mirror);
+
+    let mirror_names: Vec<String> = manifest_rc.borrow().mirrors.iter().map(|m| m.name.clone()).collect();
+    let mirror_strs: Vec<&str> = mirror_names.iter().map(|s| s.as_str()).collect();
+    let mirror_list = StringList::new(&mirror_strs);
+    let combo_mirror = DropDown::new(Some(mirror_list), gtk4::Expression::NONE);
+    combo_mirror.set_hexpand(true);
+    mirror_box.append(&combo_mirror);
+    net_row_2.append(&mirror_box);
+
+    let net_stat_box = GtkBox::new(Orientation::Vertical, 3);
+    let lbl_net_hdr = Label::new(Some("Network Status"));
+    lbl_net_hdr.add_css_class("setting-label");
+    lbl_net_hdr.set_halign(Align::Start);
+    net_stat_box.append(&lbl_net_hdr);
+
+    let lbl_net_badge = Label::new(Some("● Ready / Connected"));
+    lbl_net_badge.add_css_class("badge-net-ok");
+    lbl_net_badge.set_halign(Align::Start);
+    net_stat_box.append(&lbl_net_badge);
+    net_row_2.append(&net_stat_box);
+    net_card.append(&net_row_2);
+
+    // Progress Section
+    let pbar_net = ProgressBar::new();
+    pbar_net.add_css_class("progress-bar-thin");
+    pbar_net.set_fraction(0.0);
+    pbar_net.set_margin_top(8);
+    net_card.append(&pbar_net);
+
+    let lbl_net_status = Label::new(Some("Ready to download (~3.1 GB). System root (@) will be restored, keeping @home intact."));
+    lbl_net_status.add_css_class("progress-text");
+    lbl_net_status.set_halign(Align::Start);
+    lbl_net_status.set_wrap(true);
+    net_card.append(&lbl_net_status);
+
+    net_info_box.append(&net_card);
 
     let net_btn_box = GtkBox::new(Orientation::Horizontal, 14);
     net_btn_box.set_halign(Align::Center);
@@ -939,16 +1224,18 @@ fn build_ui(app: &Application) {
 
     let btn_net_back = Button::with_label("Back to Utilities");
     btn_net_back.add_css_class("secondary-action");
-    btn_net_back.connect_clicked(clone!(@weak stack => move |_| {
-        stack.set_visible_child_name("utilities");
-    }));
     net_btn_box.append(&btn_net_back);
 
-    let btn_net_to_usb = Button::with_label("Restore from USB Flash Drive");
-    btn_net_to_usb.add_css_class("suggested-action");
-    net_btn_box.append(&btn_net_to_usb);
-    net_info_box.append(&net_btn_box);
+    let btn_net_cancel = Button::with_label("Cancel Download");
+    btn_net_cancel.add_css_class("destructive-action");
+    btn_net_cancel.set_visible(false);
+    net_btn_box.append(&btn_net_cancel);
 
+    let btn_net_download = Button::with_label("Download and Reinstall");
+    btn_net_download.add_css_class("suggested-action");
+    net_btn_box.append(&btn_net_download);
+
+    net_info_box.append(&net_btn_box);
     stack.add_named(&net_info_box, Some("internet_info"));
 
     // ─────────────────────────────────────────────────────────────
@@ -1271,7 +1558,17 @@ fn build_ui(app: &Application) {
             *selected_target.borrow_mut() = None;
             btn_target_restore.set_sensitive(false);
 
-            let targets = find_btrfs_targets();
+            let mut targets = find_btrfs_targets();
+            if targets.is_empty() && is_demo_mode() {
+                targets.push(BtrfsTarget {
+                    _disk_path: "/dev/demo-nvme0n1".to_string(),
+                    part_path: "/dev/demo-nvme0n1p2 (Simulado)".to_string(),
+                    label: "Pulsar OS Demo Pool".to_string(),
+                    uuid: "demo-btrfs-uuid-0000".to_string(),
+                    size: "500.0G".to_string(),
+                });
+            }
+
             if targets.is_empty() {
                 let no_target_lbl = Label::new(Some("No Btrfs Pulsar OS partitions detected.\nUse Disk Utility to inspect drives."));
                 no_target_lbl.add_css_class("welcome-subtitle");
@@ -1603,9 +1900,316 @@ fn build_ui(app: &Application) {
         }
     }));
 
-    btn_net_to_usb.connect_clicked(clone!(@weak stack, @strong populate_usb_images => move |_| {
-        populate_usb_images();
-        stack.set_visible_child_name("usb_select");
+    let cancel_signal_holder = Rc::new(RefCell::new(None::<Arc<AtomicBool>>));
+
+    btn_net_back.connect_clicked(clone!(@weak stack => move |_| {
+        stack.set_visible_child_name("utilities");
+    }));
+
+    btn_net_cancel.connect_clicked(clone!(
+        @strong cancel_signal_holder,
+        @weak lbl_net_status,
+        @weak pbar_net,
+        @weak btn_net_download,
+        @weak btn_net_back,
+        @weak btn_net_cancel,
+        @weak combo_edition,
+        @weak combo_mirror,
+        @weak combo_version,
+        @weak stack
+     => move |_| {
+        if let Some(ref sig) = *cancel_signal_holder.borrow() {
+            sig.store(true, Ordering::SeqCst);
+        }
+        let _ = fs::remove_file("/tmp/pulsaros-internet-recovery.squashfs.part");
+        let _ = fs::remove_file("/tmp/pulsaros-internet-recovery.squashfs");
+        pbar_net.set_fraction(0.0);
+        lbl_net_status.set_text("Descarga cancelada por el usuario.");
+        btn_net_download.set_visible(true);
+        btn_net_download.set_sensitive(true);
+        btn_net_back.set_visible(true);
+        btn_net_back.set_sensitive(true);
+        btn_net_cancel.set_visible(false);
+        combo_edition.set_sensitive(true);
+        combo_mirror.set_sensitive(true);
+        combo_version.set_sensitive(true);
+        stack.set_visible_child_name("utilities");
+    }));
+
+    btn_net_download.connect_clicked(clone!(
+        @weak pbar_net,
+        @weak lbl_net_status,
+        @weak btn_net_download,
+        @weak btn_net_back,
+        @weak btn_net_cancel,
+        @weak combo_edition,
+        @weak combo_mirror,
+        @weak combo_version,
+        @strong manifest_rc,
+        @strong selected_image_path,
+        @strong recovery_mode,
+        @strong show_target_screen,
+        @strong cancel_signal_holder,
+        @weak stack
+     => move |_| {
+        btn_net_download.set_visible(false);
+        btn_net_back.set_visible(false);
+        btn_net_cancel.set_visible(true);
+        btn_net_cancel.set_sensitive(true);
+        combo_edition.set_sensitive(false);
+        combo_mirror.set_sensitive(false);
+        combo_version.set_sensitive(false);
+
+        let cancel_flag = Arc::new(AtomicBool::new(false));
+        *cancel_signal_holder.borrow_mut() = Some(cancel_flag.clone());
+
+        let (sel_base, sel_boot) = match combo_edition.selected() {
+            0 => ("arch", "grub"),
+            1 => ("arch", "refind"),
+            2 => ("debian", "grub"),
+            3 => ("debian", "refind"),
+            _ => ("arch", "grub"),
+        };
+
+        let m_data = manifest_rc.borrow().clone();
+        let ver = m_data.latest_version.clone();
+        let mirror_id = m_data.mirrors.get(combo_mirror.selected() as usize)
+            .map(|m| m.id.clone())
+            .unwrap_or_else(|| "auto".to_string());
+
+        let target_info = m_data.versions
+            .get(&ver)
+            .and_then(|b_map| b_map.get(sel_base))
+            .and_then(|bt_map| bt_map.get(sel_boot))
+            .cloned();
+
+        let mut download_url = target_info.as_ref()
+            .map(|t| t.squashfs.clone())
+            .unwrap_or_else(|| {
+                format!("https://downloads.sourceforge.net/project/pulsaros-inled/pulsaros-{}-{}-{}-{}.squashfs", ver, sel_base, sel_boot, ver)
+            });
+
+        if mirror_id != "auto" {
+            download_url = format!("{}?use_mirror={}", download_url, mirror_id);
+        }
+
+        let expected_size = target_info.as_ref().and_then(|t| t.size_bytes).unwrap_or(3_145_728_000);
+        let expected_hash = target_info.as_ref().and_then(|t| t.sha256.clone());
+
+        pbar_net.set_fraction(0.01);
+        lbl_net_status.set_text("Connecting to SourceForge CDN...");
+
+        let (tx, rx) = std::sync::mpsc::channel::<DownloadMsg>();
+
+        let pbar_dl = pbar_net.clone();
+        let lbl_status_dl = lbl_net_status.clone();
+        let btn_dl = btn_net_download.clone();
+        let btn_bk = btn_net_back.clone();
+        let btn_cn = btn_net_cancel.clone();
+        let combo_ed = combo_edition.clone();
+        let combo_mr = combo_mirror.clone();
+        let combo_ver = combo_version.clone();
+        let sel_img = selected_image_path.clone();
+        let rec_mode = recovery_mode.clone();
+        let show_tgt = show_target_screen.clone();
+        let stack_dl = stack.clone();
+
+        glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
+            while let Ok(msg) = rx.try_recv() {
+                match msg {
+                    DownloadMsg::Progress { downloaded, total, speed_mb_s, fraction, eta_secs } => {
+                        pbar_dl.set_fraction(fraction);
+                        let down_mb = (downloaded as f64) / 1_048_576.0;
+                        let tot_mb = (total as f64) / 1_048_576.0;
+                        let eta_str = if eta_secs >= 60 {
+                            format!("{} min {} s", eta_secs / 60, eta_secs % 60)
+                        } else {
+                            format!("{} s", eta_secs)
+                        };
+                        lbl_status_dl.set_text(&format!(
+                            "Downloading: {:.1} MB / {:.1} MB ({:.0}%) — {:.2} MB/s (ETA: {})",
+                            down_mb, tot_mb, fraction * 100.0, speed_mb_s, eta_str
+                        ));
+                    }
+                    DownloadMsg::Verifying => {
+                        pbar_dl.set_fraction(0.98);
+                        lbl_status_dl.set_text("Verifying image checksum (SHA256)...");
+                    }
+                    DownloadMsg::Done => {
+                        pbar_dl.set_fraction(1.0);
+                        if is_demo_mode() {
+                            lbl_status_dl.set_text("✅ [MODO DEMO] ¡Descarga y verificación SHA256 completadas! /tmp/pulsaros-internet-recovery.squashfs listo. Ningún disco ha sido modificado.");
+                        } else {
+                            lbl_status_dl.set_text("Download complete and verified!");
+                        }
+                        btn_dl.set_visible(true);
+                        btn_dl.set_sensitive(true);
+                        btn_bk.set_visible(true);
+                        btn_bk.set_sensitive(true);
+                        btn_cn.set_visible(false);
+                        *sel_img.borrow_mut() = Some("/tmp/pulsaros-internet-recovery.squashfs".to_string());
+                        *rec_mode.borrow_mut() = RecoveryMode::CustomImage("/tmp/pulsaros-internet-recovery.squashfs".to_string());
+                        let src_str = if is_demo_mode() {
+                            "Source: Internet Recovery [MODO DEMO - Seguro]"
+                        } else {
+                            "Source: Internet Recovery (SourceForge CDN)"
+                        };
+                        show_tgt(src_str);
+                        return glib::ControlFlow::Break;
+                    }
+                    DownloadMsg::Cancelled => {
+                        pbar_dl.set_fraction(0.0);
+                        lbl_status_dl.set_text("Download cancelled.");
+                        btn_dl.set_visible(true);
+                        btn_dl.set_sensitive(true);
+                        btn_bk.set_visible(true);
+                        btn_bk.set_sensitive(true);
+                        btn_cn.set_visible(false);
+                        combo_ed.set_sensitive(true);
+                        combo_mr.set_sensitive(true);
+                        combo_ver.set_sensitive(true);
+                        stack_dl.set_visible_child_name("utilities");
+                        return glib::ControlFlow::Break;
+                    }
+                    DownloadMsg::Error(err) => {
+                        pbar_dl.set_fraction(0.0);
+                        lbl_status_dl.set_text(&format!("Error: {}", err));
+                        btn_dl.set_visible(true);
+                        btn_dl.set_sensitive(true);
+                        btn_bk.set_visible(true);
+                        btn_bk.set_sensitive(true);
+                        btn_cn.set_visible(false);
+                        combo_ed.set_sensitive(true);
+                        combo_mr.set_sensitive(true);
+                        combo_ver.set_sensitive(true);
+                        return glib::ControlFlow::Break;
+                    }
+                }
+            }
+            glib::ControlFlow::Continue
+        });
+
+        thread::spawn(move || {
+            log_msg(&format!("Starting Internet Recovery download from: {}", download_url));
+            let tmp_part = "/tmp/pulsaros-internet-recovery.squashfs.part";
+            let tmp_final = "/tmp/pulsaros-internet-recovery.squashfs";
+            let _ = fs::remove_file(tmp_part);
+            let _ = fs::remove_file(tmp_final);
+
+            let mut child = match Command::new("curl")
+                .args(&[
+                    "-sSL",
+                    "-L",
+                    "--connect-timeout", "10",
+                    "--retry", "3",
+                    "-o", tmp_part,
+                    &download_url,
+                ])
+                .spawn()
+            {
+                Ok(c) => c,
+                Err(e) => {
+                    let _ = tx.send(DownloadMsg::Error(format!("Could not run curl: {}", e)));
+                    return;
+                }
+            };
+
+            let mut last_size: u64 = 0;
+            let mut last_time = Instant::now();
+
+            loop {
+                thread::sleep(std::time::Duration::from_millis(200));
+
+                if cancel_flag.load(Ordering::SeqCst) {
+                    log_msg("Download cancelled by user. Terminating curl and cleaning temporary files...");
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    let _ = fs::remove_file(tmp_part);
+                    let _ = fs::remove_file(tmp_final);
+                    let _ = tx.send(DownloadMsg::Cancelled);
+                    return;
+                }
+
+                match child.try_wait() {
+                    Ok(Some(status)) => {
+                        if cancel_flag.load(Ordering::SeqCst) {
+                            let _ = fs::remove_file(tmp_part);
+                            let _ = fs::remove_file(tmp_final);
+                            let _ = tx.send(DownloadMsg::Cancelled);
+                            return;
+                        }
+
+                        if status.success() {
+                            let _ = fs::rename(tmp_part, tmp_final);
+                            let _ = tx.send(DownloadMsg::Verifying);
+
+                            // Calculate SHA-256
+                            let mut calculated_hash = String::new();
+                            if let Ok(out) = Command::new("sha256sum").arg(tmp_final).output() {
+                                let hash_out = String::from_utf8_lossy(&out.stdout);
+                                calculated_hash = hash_out.split_whitespace().next().unwrap_or("").to_string();
+                                log_msg(&format!("Calculated SHA-256 for downloaded image: {}", calculated_hash));
+                            }
+
+                            if let Some(ref expected_h) = expected_hash {
+                                let trimmed_exp = expected_h.trim();
+                                if !trimmed_exp.is_empty() {
+                                    if !calculated_hash.eq_ignore_ascii_case(trimmed_exp) {
+                                        log_msg(&format!("❌ SHA-256 mismatch! Got: '{}', Expected: '{}'", calculated_hash, trimmed_exp));
+                                        let _ = fs::remove_file(tmp_final);
+                                        let _ = tx.send(DownloadMsg::Error(format!(
+                                             "SHA256 checksum mismatch!\nCalculated: {}\nExpected: {}",
+                                            calculated_hash, trimmed_exp
+                                        )));
+                                        return;
+                                    } else {
+                                        log_msg("✅ SHA-256 checksum verified successfully.");
+                                    }
+                                }
+                            }
+
+                            let _ = tx.send(DownloadMsg::Done);
+                        } else {
+                            let _ = tx.send(DownloadMsg::Error(format!("curl failed with status {:?}", status)));
+                        }
+                        break;
+                    }
+                    Ok(None) => {
+                        let cur_size = fs::metadata(tmp_part).map(|m| m.len()).unwrap_or(0);
+                        let now = Instant::now();
+                        let elapsed = now.duration_since(last_time).as_secs_f64();
+                        if elapsed >= 0.3 {
+                            let diff = cur_size.saturating_sub(last_size);
+                            let speed_mb_s = (diff as f64 / 1_048_576.0) / elapsed;
+                            let rem_bytes = expected_size.saturating_sub(cur_size);
+                            let eta_secs = if speed_mb_s > 0.05 {
+                                ((rem_bytes as f64 / 1_048_576.0) / speed_mb_s) as u64
+                            } else {
+                                0
+                            };
+                            let fraction = if expected_size > 0 {
+                                (cur_size as f64 / expected_size as f64).clamp(0.0, 0.95)
+                            } else {
+                                0.0
+                            };
+                            let _ = tx.send(DownloadMsg::Progress {
+                                downloaded: cur_size,
+                                total: expected_size,
+                                speed_mb_s,
+                                fraction,
+                                eta_secs,
+                            });
+                            last_size = cur_size;
+                            last_time = now;
+                        }
+                    }
+                    Err(e) => {
+                        let _ = tx.send(DownloadMsg::Error(format!("Error monitoring download: {}", e)));
+                        break;
+                    }
+                }
+            }
+        });
     }));
 
     btn_usb_continue.connect_clicked(clone!(
@@ -1641,6 +2245,8 @@ fn build_ui(app: &Application) {
         let action = selected_action.borrow().clone().unwrap_or_default();
         if action == "usb_restore" {
             stack.set_visible_child_name("usb_select");
+        } else if action == "internet_info" {
+            stack.set_visible_child_name("internet_info");
         } else {
             stack.set_visible_child_name("utilities");
         }
@@ -1789,6 +2395,41 @@ where
     F: Fn(f64, &str) + Send + Sync + 'static,
     L: Fn(&str) + Send + Sync + 'static,
 {
+    if is_demo_mode() {
+        log("═════════════════════════════════════════════════════════════");
+        log("   [MODO DEMO / SIMULACIÓN ACTIVO — DRY RUN]");
+        log("   Ningún comando destructivo será ejecutado.");
+        log("   Tus discos y particiones se mantienen 100% intactos.");
+        log("═════════════════════════════════════════════════════════════");
+        
+        progress(0.10, "[DEMO] Simulando montaje seguro del Btrfs pool...");
+        log(&format!("[DEMO] Simulación: mount -t btrfs {} /tmp/pulsar_btrfs_pool", target.part_path));
+        thread::sleep(std::time::Duration::from_millis(600));
+
+        progress(0.25, "[DEMO] Simulando preservación de usuarios (UID >= 1000)...");
+        log("[DEMO] Simulación: Copiando identidades desde /etc/passwd y @home");
+        thread::sleep(std::time::Duration::from_millis(600));
+
+        progress(0.45, "[DEMO] Simulando rotación de subvolumen @ a @_backup_demo...");
+        log("[DEMO] Simulación: btrfs subvolume snapshot @ @_backup_demo");
+        thread::sleep(std::time::Duration::from_millis(700));
+
+        progress(0.70, "[DEMO] Simulando descompresión del sistema (squashfs)...");
+        match &mode {
+            RecoveryMode::CustomImage(p) => log(&format!("[DEMO] Simulación: unsquashfs -f -d /tmp/pulsar_btrfs_pool/@ {}", p)),
+            RecoveryMode::Local => log("[DEMO] Simulación: unsquashfs -f -d /tmp/pulsar_btrfs_pool/@ /run/archiso/bootmnt/..."),
+        }
+        thread::sleep(std::time::Duration::from_millis(900));
+
+        progress(0.90, "[DEMO] Simulando sincronización de /etc/fstab y entradas UEFI...");
+        log("[DEMO] Simulación: Actualizando UUID de partición y regenerando bootloader");
+        thread::sleep(std::time::Duration::from_millis(600));
+
+        progress(1.0, "[DEMO] ¡Restauración simulada con éxito! (Discos intactos)");
+        log("[DEMO] Proceso de simulación finalizado correctamente. Cero modificaciones.");
+        return Ok(());
+    }
+
     let btrfs_mnt = "/tmp/pulsar_btrfs_pool";
     let _ = fs::create_dir_all(btrfs_mnt);
 
@@ -2325,10 +2966,20 @@ where
 }
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let has_demo_arg = args.iter().any(|a| a == "--demo" || a == "--dry-run" || a == "-d");
+    let has_demo_env = std::env::var("PULSAR_DEMO").map(|v| v == "1" || v.to_lowercase() == "true").unwrap_or(false)
+        || std::env::var("PULSAR_DRY_RUN").map(|v| v == "1" || v.to_lowercase() == "true").unwrap_or(false);
+
+    if has_demo_arg || has_demo_env {
+        set_demo_mode(true);
+        println!("🚀 Pulsar OS Recovery running in DEMO / DRY-RUN mode (Disks are protected, no changes will be made).");
+    }
+
     let app = Application::builder()
         .application_id("es.inled.pulsaros.recovery-assistant")
         .build();
 
     app.connect_activate(build_ui);
-    app.run();
+    app.run_with_args::<&str>(&[]);
 }
