@@ -79,13 +79,25 @@ EOF
             sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' /boot/refind_linux.conf 2>/dev/null || true
             sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${HIBERNATE_PARAMS}|g" /boot/refind_linux.conf 2>/dev/null || true
         fi
-        for rc in \
-            /boot/efi/EFI/refind/refind.conf \
-            /boot/efi/EFI/BOOT/refind.conf \
-            /efi/EFI/refind/refind.conf \
-            /efi/EFI/BOOT/refind.conf \
-            /boot/EFI/refind/refind.conf \
-            /boot/EFI/BOOT/refind.conf; do
+        REFIND_TARGETS=(
+            /boot/efi/EFI/refind/refind.conf
+            /boot/efi/EFI/BOOT/refind.conf
+            /boot/efi/EFI/debian/refind.conf
+            /boot/efi/EFI/PulsarOS/refind.conf
+            /efi/EFI/refind/refind.conf
+            /efi/EFI/BOOT/refind.conf
+            /boot/EFI/refind/refind.conf
+            /boot/EFI/BOOT/refind.conf
+        )
+        for esp in /boot/efi /efi /boot /boot/EFI; do
+            if [ -d "$esp/EFI" ]; then
+                for conf in "$esp"/EFI/*/refind.conf; do
+                    [ -f "$conf" ] && REFIND_TARGETS+=("$conf")
+                done
+            fi
+        done
+
+        for rc in "${REFIND_TARGETS[@]}"; do
             if [ -f "$rc" ]; then
                 sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' "$rc" 2>/dev/null || true
                 sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${HIBERNATE_PARAMS}|g" "$rc" 2>/dev/null || true

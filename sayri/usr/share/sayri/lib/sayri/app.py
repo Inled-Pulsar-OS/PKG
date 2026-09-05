@@ -70,8 +70,11 @@ def markdown_to_plain_speech(text: str) -> str:
     if not text:
         return ""
     import re
+    # Remove thinking tags <think>...</think> and <thought>...</thought>
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r"<thought>.*?</thought>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
     # Remove code blocks completely so TTS doesn't dictate raw scripts
-    cleaned = re.sub(r"```(?:[a-zA-Z0-9_\-]+)?\n?(.*?)\n?```", "", text, flags=re.DOTALL)
+    cleaned = re.sub(r"```(?:[a-zA-Z0-9_\-]+)?\n?(.*?)\n?```", "", cleaned, flags=re.DOTALL)
     # Convert inline code `foo` -> foo
     cleaned = re.sub(r"`([^`]+)`", r"\1", cleaned)
     # Convert bold / italic
@@ -325,7 +328,7 @@ class SayriApp(Gtk.Application):
                 while getattr(self, "_ipc_running", False):
                     try:
                         conn, _ = self._ipc_sock.accept()
-                        conn.settimeout(40.0)
+                        conn.settimeout(120.0)
 
                         # Enforce peer UID validation on Linux to prevent cross-user socket hijacking
                         try:
@@ -489,8 +492,8 @@ class SayriApp(Gtk.Application):
                 on_tool_finish=_on_tool_finish,
                 on_error=_on_error,
             )
-            # Wait up to 45 seconds for the LLM response
-            done_event.wait(timeout=45.0)
+            # Wait up to 120 seconds for multi-step LLM investigation loop
+            done_event.wait(timeout=120.0)
 
             # Sync session changes with active desktop UI
             self._notify_sessions_updated()
@@ -916,7 +919,7 @@ class SayriApp(Gtk.Application):
             on_done=lambda full: GLib.idle_add(self._finish_engine_reply, full, query_id),
             on_tool_start=lambda cmd: GLib.idle_add(self._msg, "hint", f"⚙️ Running: {cmd[:36]}…"),
             on_tool_finish=lambda cmd, out, code: GLib.idle_add(
-                lambda: self.overlay and self.overlay.cajita.set_tool_output(cmd, out)
+                lambda c=cmd, o=out, rc=code: self.overlay and self.overlay.cajita.set_command_output(c, o, rc)
             ),
             on_error=lambda e: GLib.idle_add(self._on_error, e, query_id),
         )

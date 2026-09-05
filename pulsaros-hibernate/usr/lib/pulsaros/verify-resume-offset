@@ -3,23 +3,35 @@
 # Pulsar OS - Hibernate resume_offset guardian
 # ==============================================================================
 # Verifies that the hibernate resume_offset configured in the bootloader
-# (rEFInd) and the kernel cmdline match the REAL geometry of /swapfile.
-# If the swapfile is recreated or moved, the offset changes and old images
-# become unreachable ("Unable to resume"). This unit repairs the config
-# automatically at boot.
+# (rEFInd / GRUB), Debian initramfs-tools, and live kernel sysfs match the
+# REAL geometry of /swapfile.
 #
 # Usage: verify-resume-offset [--dry-run]
 #
 # Paths can be overridden for testing:
 #   PULSAR_SWAPFILE, PULSAR_REFIND_CONF, PULSAR_CMDLINE,
-#   PULSAR_SYSFS_OFFSET, PULSAR_GRUB_DEFAULT
+#   PULSAR_SYSFS_OFFSET, PULSAR_SYSFS_RESUME, PULSAR_GRUB_DEFAULT,
+#   PULSAR_ROOT_UUID
 # ==============================================================================
 set -u
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
+# Ensure EFI partitions are mounted if configured in fstab
+if [ -f /etc/fstab ]; then
+    if grep -qs '[[:space:]]/boot/efi[[:space:]]' /etc/fstab && ! mountpoint -q /boot/efi 2>/dev/null; then
+        mount /boot/efi 2>/dev/null || true
+    fi
+    if grep -qs '[[:space:]]/efi[[:space:]]' /etc/fstab && ! mountpoint -q /efi 2>/dev/null; then
+        mount /efi 2>/dev/null || true
+    fi
+fi
 
 SWAPFILE="${PULSAR_SWAPFILE:-/swapfile}"
 REFIND_CONF="${PULSAR_REFIND_CONF:-/boot/refind_linux.conf}"
 CMDLINE="${PULSAR_CMDLINE:-/proc/cmdline}"
 SYSFS_OFFSET="${PULSAR_SYSFS_OFFSET:-/sys/power/resume_offset}"
+SYSFS_RESUME="${PULSAR_SYSFS_RESUME:-/sys/power/resume}"
 GRUB_DEFAULT="${PULSAR_GRUB_DEFAULT:-/etc/default/grub}"
 
 DRY_RUN=0
@@ -34,101 +46,140 @@ is_num() { [ -n "$1" ] && [ "$1" -eq "$1" ] 2>/dev/null; }
 # ------------------------------------------------------------------------------
 real=""
 if [ -f "$SWAPFILE" ]; then
-    FSTYPE=$(stat -f -c %T "$SWAPFILE" 2>/dev/null || true)
+    FSTYPE=$(stat -f -c %T "$SWAPFILE" 2>/dev/null || findmnt -no FSTYPE "$SWAPFILE" 2>/dev/null || true)
     if [ "$FSTYPE" = "btrfs" ] && command -v btrfs >/dev/null 2>&1; then
-        real=$(btrfs inspect-internal map-swapfile -r "$SWAPFILE" 2>/dev/null || true)
+        real=$(btrfs inspect-internal map-swapfile -r "$SWAPFILE" 2>/dev/null | tail -n 1 || true)
     fi
     if ! is_num "$real" && command -v filefrag >/dev/null 2>&1; then
         real=$(filefrag -v "$SWAPFILE" 2>/dev/null | awk '$1=="0:" {gsub(/\.\./,"",$4); print $4; exit}')
     fi
 fi
+
 if ! is_num "$real"; then
     log "No se pudo determinar el offset real de $SWAPFILE (¿no existe? ¿sin swapfile?). Nada que hacer."
     exit 0
 fi
 
 # ------------------------------------------------------------------------------
-# 2) Currently configured offsets
+# 2) Currently configured offsets and UUID
 # ------------------------------------------------------------------------------
 cmdline_offset=""
 if [ -r "$CMDLINE" ]; then
-    cmdline_offset=$(sed -n 's/.*\bresume_offset=\([0-9]\+\).*/\1/p' "$CMDLINE")
+    cmdline_offset=$(sed -n 's/.*\bresume_offset=\([0-9]\+\).*/\1/p' "$CMDLINE" | head -n 1)
 fi
 kernel_offset=""
-[ -r "$SYSFS_OFFSET" ] && kernel_offset=$(cat "$SYSFS_OFFSET" 2>/dev/null)
+[ -r "$SYSFS_OFFSET" ] && kernel_offset=$(cat "$SYSFS_OFFSET" 2>/dev/null || true)
 
 log "offset real=$real | cmdline=${cmdline_offset:-<ausente>} | kernel=${kernel_offset:-<desconocido>}"
 
-# Only a *configured* offset can mismatch; absence is handled by the repair step
-cmdline_ok=1
-if is_num "$cmdline_offset" && [ "$cmdline_offset" != "$real" ]; then
-    cmdline_ok=0
-fi
-kernel_ok=1
-if is_num "$kernel_offset" && [ "$kernel_offset" != "$real" ]; then
-    kernel_ok=0
-fi
-
-if [ "$cmdline_ok" = 1 ] && [ "$kernel_ok" = 1 ]; then
-    log "OK: resume_offset sincronizado ($real)"
-    exit 0
-fi
-
-# ------------------------------------------------------------------------------
-# 3) Repair rEFInd configuration
-#    - offset-only repair when resume= already exists
-#    - FULL injection (resume=UUID resume_offset zswap.enabled=0) when the boot
-#      entries lack resume parameters entirely (e.g. the installer could not
-#      resolve the swapfile offset). Without this, hibernation would stay
-#      permanently broken: the image gets written but the next boot never
-#      resumes it.
-# ------------------------------------------------------------------------------
 real_root_uuid=""
 get_root_uuid() {
+    if [ -n "$real_root_uuid" ]; then
+        echo "$real_root_uuid"
+        return 0
+    fi
+    if [ -n "${PULSAR_ROOT_UUID:-}" ]; then
+        real_root_uuid="$PULSAR_ROOT_UUID"
+        echo "$real_root_uuid"
+        return 0
+    fi
+    # Fallback 1: findmnt on SWAPFILE
+    real_root_uuid=$(findmnt -no UUID -T "$SWAPFILE" 2>/dev/null || true)
+    # Fallback 2: findmnt on /
+    [ -z "$real_root_uuid" ] && real_root_uuid=$(findmnt -no UUID / 2>/dev/null || true)
+    # Fallback 3: blkid on SOURCE of /
     if [ -z "$real_root_uuid" ]; then
-        real_root_uuid=$(findmnt -no UUID -T "$SWAPFILE" 2>/dev/null || findmnt -no UUID / 2>/dev/null || true)
+        local src
+        src=$(findmnt -no SOURCE / 2>/dev/null || true)
+        [ -n "$src" ] && real_root_uuid=$(blkid -s UUID -o value "$src" 2>/dev/null || true)
+    fi
+    # Fallback 4: /proc/cmdline root=UUID=...
+    if [ -z "$real_root_uuid" ] && [ -r "$CMDLINE" ]; then
+        real_root_uuid=$(sed -n 's/.*root=UUID=\([^ "]*\).*/\1/p' "$CMDLINE" | head -n 1)
+    fi
+    # Fallback 5: refind_linux.conf root=UUID=...
+    if [ -z "$real_root_uuid" ] && [ -r /boot/refind_linux.conf ]; then
+        real_root_uuid=$(sed -n 's/.*root=UUID=\([^ "]*\).*/\1/p' /boot/refind_linux.conf | head -n 1)
+    fi
+    # Fallback 6: /etc/fstab
+    if [ -z "$real_root_uuid" ] && [ -r /etc/fstab ]; then
+        real_root_uuid=$(awk '$2=="/" && $1~/^UUID=/ {sub(/^UUID=/,"",$1); print $1; exit}' /etc/fstab)
     fi
     echo "$real_root_uuid"
 }
 
+# ------------------------------------------------------------------------------
+# 3) Repair rEFInd configuration
+#    - Clean any stale resume=, resume_offset=, and zswap.enabled=
+#    - Inject valid resume=UUID=${ru} resume_offset=${real} zswap.enabled=0
+# ------------------------------------------------------------------------------
 repair_refind_file() {
     local target="$1"
+    local ru="$2"
     [ -f "$target" ] || return 0
+
     if [ "$DRY_RUN" = 1 ]; then
         log "[dry-run] Se actualizaría resume_offset a $real en $target"
         return 0
     fi
-    cp -a "$target" "${target}.bak" || true
 
-    if ! grep -q "resume=" "$target"; then
-        # No resume parameters at all: inject the complete set on every root= line.
-        local ru
-        ru=$(get_root_uuid)
-        if [ -n "$ru" ]; then
-            sed -i 's/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' "$target" 2>/dev/null || true
-            sed -i "s|\(root=UUID=[^ \"']*\)|\1 resume=UUID=${ru} resume_offset=${real} zswap.enabled=0|g" "$target" 2>/dev/null || true
-            log "✔ $target: parámetros resume inyectados (resume=UUID=$ru resume_offset=$real zswap.enabled=0)"
-        else
-            log "⚠ $target no tiene resume= y no pude determinar el UUID de root; no se inyecta nada"
-        fi
-    else
-        if grep -q "resume_offset=" "$target"; then
-            sed -i -E "s/resume_offset=[0-9]+/resume_offset=$real/g" "$target"
-        else
-            sed -i -E "\|resume=| s/\"[[:space:]]*$/ resume_offset=$real\"/" "$target"
-        fi
-        if ! grep -q "zswap.enabled=0" "$target"; then
-            sed -i -E "s/resume_offset=([0-9]+)/resume_offset=\1 zswap.enabled=0/g" "$target"
-        fi
-        log "✔ $target actualizado a resume_offset=$real"
+    local desired="resume=UUID=${ru} resume_offset=${real} zswap.enabled=0"
+    if grep -q "resume=UUID=${ru}" "$target" 2>/dev/null && \
+       grep -q "resume_offset=${real}" "$target" 2>/dev/null && \
+       grep -q "zswap\.enabled=0" "$target" 2>/dev/null; then
+        return 0
     fi
+
+    cp -a "$target" "${target}.bak" 2>/dev/null || true
+
+    # Strip existing resume parameters cleanly
+    sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' "$target" 2>/dev/null || true
+    sed -i 's/resume=UUID=[^ "]* //g; s/resume_offset=[^ "]* //g; s/zswap\.enabled=[^ "]* //g' "$target" 2>/dev/null || true
+
+    # Inject new resume parameters right after root=UUID=...
+    sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${desired}|g" "$target" 2>/dev/null || true
+
+    log "✔ $target: parámetros resume sincronizados (${desired})"
 }
 
 repair_refind() {
-    repair_refind_file "$REFIND_CONF"
-    repair_refind_file "/boot/efi/EFI/refind/refind.conf"
-    repair_refind_file "/efi/EFI/refind/refind.conf"
-    repair_refind_file "/boot/efi/EFI/BOOT/refind.conf"
+    local ru
+    ru=$(get_root_uuid)
+    if [ -z "$ru" ]; then
+        log "⚠ No se pudo determinar el UUID de root para rEFInd."
+        return 0
+    fi
+
+    local targets=(
+        "$REFIND_CONF"
+        /boot/refind_linux.conf
+        /boot/efi/EFI/refind/refind.conf
+        /boot/efi/EFI/BOOT/refind.conf
+        /efi/EFI/refind/refind.conf
+        /efi/EFI/BOOT/refind.conf
+        /boot/EFI/refind/refind.conf
+        /boot/EFI/BOOT/refind.conf
+    )
+
+    for esp in /boot/efi /efi /boot /boot/EFI; do
+        if [ -d "$esp/EFI" ]; then
+            for conf in "$esp"/EFI/*/refind.conf; do
+                [ -f "$conf" ] && targets+=("$conf")
+            done
+        fi
+    done
+
+    # Deduplicate targets
+    local seen_targets=()
+    for tgt in "${targets[@]}"; do
+        [ -f "$tgt" ] || continue
+        local real_tgt
+        real_tgt=$(realpath "$tgt" 2>/dev/null || echo "$tgt")
+        if [[ ! " ${seen_targets[*]:-} " =~ " ${real_tgt} " ]]; then
+            seen_targets+=("$real_tgt")
+            repair_refind_file "$real_tgt" "$ru"
+        fi
+    done
 }
 
 # ------------------------------------------------------------------------------
@@ -139,33 +190,84 @@ repair_grub() {
     local ru
     ru=$(get_root_uuid)
     [ -n "$ru" ] || return 0
-    local modified=0
 
-    if ! grep -q "resume=" "$GRUB_DEFAULT"; then
-        sed -i "s/^GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"/GRUB_CMDLINE_LINUX_DEFAULT=\"\1 resume=UUID=${ru} resume_offset=${real} zswap.enabled=0\"/" "$GRUB_DEFAULT"
-        modified=1
-    elif ! grep -q "resume_offset=$real" "$GRUB_DEFAULT"; then
-        sed -i -E "s/resume_offset=[0-9]+/resume_offset=$real/g" "$GRUB_DEFAULT"
-        modified=1
+    local desired="resume=UUID=${ru} resume_offset=${real} zswap.enabled=0"
+    if grep -q "resume=UUID=${ru}" "$GRUB_DEFAULT" 2>/dev/null && \
+       grep -q "resume_offset=${real}" "$GRUB_DEFAULT" 2>/dev/null && \
+       grep -q "zswap\.enabled=0" "$GRUB_DEFAULT" 2>/dev/null; then
+        return 0
     fi
 
-    if [ "$modified" = 1 ]; then
-        log "✔ $GRUB_DEFAULT actualizado con resume=UUID=$ru resume_offset=$real zswap.enabled=0"
-        if [ "$DRY_RUN" = 0 ]; then
-            if command -v grub-mkconfig >/dev/null 2>&1; then
-                if [ -f /boot/grub/grub.cfg ]; then
-                    grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || true
-                elif [ -f /boot/efi/EFI/grub/grub.cfg ]; then
-                    grub-mkconfig -o /boot/efi/EFI/grub/grub.cfg >/dev/null 2>&1 || true
+    if [ "$DRY_RUN" = 1 ]; then
+        log "[dry-run] Se actualizaría GRUB con ${desired} en $GRUB_DEFAULT"
+        return 0
+    fi
+
+    cp -a "$GRUB_DEFAULT" "${GRUB_DEFAULT}.bak" 2>/dev/null || true
+
+    # Strip existing resume parameters from GRUB_CMDLINE_LINUX_DEFAULT
+    sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' "$GRUB_DEFAULT" 2>/dev/null || true
+    sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${desired}\"|" "$GRUB_DEFAULT" 2>/dev/null || true
+
+    log "✔ $GRUB_DEFAULT actualizado con ${desired}"
+    if command -v grub-mkconfig >/dev/null 2>&1; then
+        if [ -f /boot/grub/grub.cfg ]; then
+            grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || true
+        elif [ -f /boot/efi/EFI/grub/grub.cfg ]; then
+            grub-mkconfig -o /boot/efi/EFI/grub/grub.cfg >/dev/null 2>&1 || true
+        fi
+    elif command -v update-grub >/dev/null 2>&1; then
+        update-grub >/dev/null 2>&1 || true
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# 5) Debian initramfs-tools repair
+# ------------------------------------------------------------------------------
+repair_debian_initramfs() {
+    if [ -d /etc/initramfs-tools/conf.d ] || command -v update-initramfs >/dev/null 2>&1; then
+        local ru
+        ru=$(get_root_uuid)
+        [ -n "$ru" ] || return 0
+        local resume_file="/etc/initramfs-tools/conf.d/resume"
+        local expected="RESUME=UUID=${ru}"
+        mkdir -p /etc/initramfs-tools/conf.d 2>/dev/null || true
+        if [ ! -f "$resume_file" ] || ! grep -q "^${expected}$" "$resume_file" 2>/dev/null; then
+            if [ "$DRY_RUN" = 0 ]; then
+                echo "$expected" > "$resume_file" 2>/dev/null || true
+                log "✔ $resume_file actualizado a $expected"
+                if command -v update-initramfs >/dev/null 2>&1; then
+                    update-initramfs -u 2>/dev/null || true
                 fi
-            elif command -v update-grub >/dev/null 2>&1; then
-                update-grub >/dev/null 2>&1 || true
+            else
+                log "[dry-run] Se actualizaría $resume_file a $expected"
             fi
+        fi
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# 6) Arm live sysfs runtime parameters immediately
+# ------------------------------------------------------------------------------
+arm_sysfs() {
+    [ "$DRY_RUN" = 0 ] || return 0
+    if [ -w "$SYSFS_OFFSET" ] && is_num "$real"; then
+        echo "$real" > "$SYSFS_OFFSET" 2>/dev/null || true
+        log "✔ $SYSFS_OFFSET armado con $real"
+    fi
+    if [ -w "$SYSFS_RESUME" ]; then
+        local maj_min
+        maj_min=$(findmnt -no MAJ:MIN -T "$SWAPFILE" 2>/dev/null || findmnt -no MAJ:MIN / 2>/dev/null || true)
+        if [ -n "$maj_min" ]; then
+            echo "$maj_min" > "$SYSFS_RESUME" 2>/dev/null || true
+            log "✔ $SYSFS_RESUME armado con $maj_min"
         fi
     fi
 }
 
 repair_refind
 repair_grub
+repair_debian_initramfs
+arm_sysfs
 
 exit 0

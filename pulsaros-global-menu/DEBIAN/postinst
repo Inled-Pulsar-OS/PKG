@@ -16,7 +16,11 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ]; then
     mkdir -p /etc/systemd/sleep.conf.d
     cat << 'EOF' > /etc/systemd/sleep.conf.d/pulsaros-hibernate.conf
 [Sleep]
+AllowHibernation=yes
+AllowHybridSleep=yes
+AllowSuspendThenHibernate=yes
 HibernateMode=shutdown
+HibernateState=disk
 EOF
 
     # Fix mkinitcpio HOOKS: keep legacy 'resume' hook ONLY on busybox initramfs.
@@ -100,13 +104,25 @@ EOF
             sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' /boot/refind_linux.conf 2>/dev/null || true
             sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${HIBERNATE_PARAMS}|g" /boot/refind_linux.conf 2>/dev/null || true
         fi
-        for rc in \
-            /boot/efi/EFI/refind/refind.conf \
-            /boot/efi/EFI/BOOT/refind.conf \
-            /efi/EFI/refind/refind.conf \
-            /efi/EFI/BOOT/refind.conf \
-            /boot/EFI/refind/refind.conf \
-            /boot/EFI/BOOT/refind.conf; do
+        REFIND_TARGETS=(
+            /boot/efi/EFI/refind/refind.conf
+            /boot/efi/EFI/BOOT/refind.conf
+            /boot/efi/EFI/debian/refind.conf
+            /boot/efi/EFI/PulsarOS/refind.conf
+            /efi/EFI/refind/refind.conf
+            /efi/EFI/BOOT/refind.conf
+            /boot/EFI/refind/refind.conf
+            /boot/EFI/BOOT/refind.conf
+        )
+        for esp in /boot/efi /efi /boot /boot/EFI; do
+            if [ -d "$esp/EFI" ]; then
+                for conf in "$esp"/EFI/*/refind.conf; do
+                    [ -f "$conf" ] && REFIND_TARGETS+=("$conf")
+                done
+            fi
+        done
+
+        for rc in "${REFIND_TARGETS[@]}"; do
             if [ -f "$rc" ]; then
                 sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' "$rc" 2>/dev/null || true
                 sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${HIBERNATE_PARAMS}|g" "$rc" 2>/dev/null || true
@@ -117,6 +133,12 @@ EOF
             sed -i "s|GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${HIBERNATE_PARAMS}\"|" /etc/default/grub 2>/dev/null || true
             if command -v grub-mkconfig >/dev/null 2>&1; then
                 grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
+            fi
+        fi
+        if [ -d /etc/initramfs-tools/conf.d ] || command -v update-initramfs >/dev/null 2>&1; then
+            mkdir -p /etc/initramfs-tools/conf.d
+            if [ -n "$ROOT_UUID" ]; then
+                echo "RESUME=UUID=${ROOT_UUID}" > /etc/initramfs-tools/conf.d/resume 2>/dev/null || true
             fi
         fi
     fi

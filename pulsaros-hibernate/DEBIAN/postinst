@@ -10,6 +10,17 @@ echo "🌙 Configurando hibernación de Pulsar OS..."
 chmod 755 /usr/lib/pulsaros/sleep-progress /usr/lib/pulsaros/resume-session \
           /usr/lib/pulsaros/verify-resume-offset \
           /usr/bin/pulsaros-hibernate-doctor 2>/dev/null || true
+# Ensure sleep drop-in exists
+mkdir -p /etc/systemd/sleep.conf.d
+cat << 'EOF' > /etc/systemd/sleep.conf.d/pulsaros-hibernate.conf
+[Sleep]
+AllowHibernation=yes
+AllowHybridSleep=yes
+AllowSuspendThenHibernate=yes
+HibernateMode=shutdown
+HibernateState=disk
+EOF
+
 systemctl daemon-reload || true
 systemctl enable pulsaros-verify-resume-offset.service || true
 systemctl enable pulsaros-console-clean.service || true

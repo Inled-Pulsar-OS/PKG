@@ -23,7 +23,7 @@ disable-lock-screen=false
 
 [org.gnome.desktop.interface]
 gtk-theme='MacTahoe-Dark'
-cursor-theme='MacTahoe-blue-dark'
+cursor-theme='MacTahoe-dark'
 icon-theme='MacTahoe-blue-dark'
 color-scheme='prefer-dark'
 enable-animations=true

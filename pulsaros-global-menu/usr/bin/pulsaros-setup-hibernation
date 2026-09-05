@@ -4,6 +4,18 @@
 
 set -e
 
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
+# Ensure EFI partitions are mounted if configured in fstab
+if [ -f /etc/fstab ]; then
+    if grep -qs '[[:space:]]/boot/efi[[:space:]]' /etc/fstab && ! mountpoint -q /boot/efi 2>/dev/null; then
+        mount /boot/efi 2>/dev/null || true
+    fi
+    if grep -qs '[[:space:]]/efi[[:space:]]' /etc/fstab && ! mountpoint -q /efi 2>/dev/null; then
+        mount /efi 2>/dev/null || true
+    fi
+fi
+
 # Evitar ejecución en Live ISO de instalación
 if [ -d /run/archiso ] || [ -f /run/archiso/bootmnt ]; then
     echo "ℹ️ Entorno Live ISO detectado; posponiendo configuración de swapfile hasta instalación en disco."
@@ -85,37 +97,72 @@ if [ -f /swapfile ]; then
 
     # 3. Configurar parámetros de reanudación (resume) en gestores de arranque
     ROOT_UUID=$(findmnt -no UUID -T /swapfile 2>/dev/null || findmnt -no UUID / 2>/dev/null || true)
-    OFFSET=""
-    if [ "$FSTYPE" = "btrfs" ] && command -v btrfs >/dev/null 2>&1; then
-        OFFSET=$(btrfs inspect-internal map-swapfile -r /swapfile 2>/dev/null | tail -n 1)
+    if [ -z "$ROOT_UUID" ]; then
+        SRC_DEV=$(findmnt -no SOURCE / 2>/dev/null || true)
+        [ -n "$SRC_DEV" ] && ROOT_UUID=$(blkid -s UUID -o value "$SRC_DEV" 2>/dev/null || true)
     fi
-    if [ -z "$OFFSET" ]; then
-        OFFSET=$(filefrag -v /swapfile 2>/dev/null | awk '$1=="0:" {print substr($4, 1, length($4)-2)}' || true)
+    if [ -z "$ROOT_UUID" ] && [ -r /etc/fstab ]; then
+        ROOT_UUID=$(awk '$2=="/" && $1~/^UUID=/ {sub(/^UUID=/,"",$1); print $1; exit}' /etc/fstab)
     fi
 
-    if [ -n "$ROOT_UUID" ] && [ -n "$OFFSET" ]; then
+    OFFSET=""
+    if [ "$FSTYPE" = "btrfs" ] && command -v btrfs >/dev/null 2>&1; then
+        OFFSET=$(btrfs inspect-internal map-swapfile -r /swapfile 2>/dev/null | tail -n 1 || true)
+    fi
+    if [ -z "$OFFSET" ] || ! [ "$OFFSET" -eq "$OFFSET" ] 2>/dev/null; then
+        if command -v filefrag >/dev/null 2>&1; then
+            OFFSET=$(filefrag -v /swapfile 2>/dev/null | awk '$1=="0:" {gsub(/\.\./,"",$4); print $4; exit}' || true)
+        fi
+    fi
+
+    if [ -n "$ROOT_UUID" ] && [ -n "$OFFSET" ] && [ "$OFFSET" -eq "$OFFSET" ] 2>/dev/null; then
         RESUME_PARAMS="resume=UUID=${ROOT_UUID} resume_offset=${OFFSET} zswap.enabled=0"
         echo "✅ Parámetros de hibernación calculados: ${RESUME_PARAMS}"
+
+        # Armar sysfs runtime inmediatamente para asegurar soporte en el kernel activo
+        if [ -w /sys/power/resume_offset ]; then
+            echo "$OFFSET" > /sys/power/resume_offset 2>/dev/null || true
+        fi
+        if [ -w /sys/power/resume ]; then
+            SWAP_MAJMIN=$(findmnt -no MAJ:MIN -T /swapfile 2>/dev/null || findmnt -no MAJ:MIN / 2>/dev/null || true)
+            if [ -n "$SWAP_MAJMIN" ]; then
+                echo "$SWAP_MAJMIN" > /sys/power/resume 2>/dev/null || true
+            fi
+        fi
 
         # rEFInd refind_linux.conf
         if [ -f /boot/refind_linux.conf ]; then
             echo "⚙️ Configurando resume y zswap en /boot/refind_linux.conf..."
             # Remove any existing resume and zswap parameters first, then append correct ones
             sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' /boot/refind_linux.conf 2>/dev/null || true
+            sed -i 's/resume=UUID=[^ "]* //g; s/resume_offset=[^ "]* //g; s/zswap\.enabled=[^ "]* //g' /boot/refind_linux.conf 2>/dev/null || true
             sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${RESUME_PARAMS}|g" /boot/refind_linux.conf 2>/dev/null || true
         fi
         
         # rEFInd refind.conf (todas las posibles rutas de ESP)
-        for rc in \
-            /boot/efi/EFI/refind/refind.conf \
-            /boot/efi/EFI/BOOT/refind.conf \
-            /efi/EFI/refind/refind.conf \
-            /efi/EFI/BOOT/refind.conf \
-            /boot/EFI/refind/refind.conf \
-            /boot/EFI/BOOT/refind.conf; do
+        REFIND_TARGETS=(
+            /boot/efi/EFI/refind/refind.conf
+            /boot/efi/EFI/BOOT/refind.conf
+            /boot/efi/EFI/debian/refind.conf
+            /boot/efi/EFI/PulsarOS/refind.conf
+            /efi/EFI/refind/refind.conf
+            /efi/EFI/BOOT/refind.conf
+            /boot/EFI/refind/refind.conf
+            /boot/EFI/BOOT/refind.conf
+        )
+        for esp in /boot/efi /efi /boot /boot/EFI; do
+            if [ -d "$esp/EFI" ]; then
+                for conf in "$esp"/EFI/*/refind.conf; do
+                    [ -f "$conf" ] && REFIND_TARGETS+=("$conf")
+                done
+            fi
+        done
+
+        for rc in "${REFIND_TARGETS[@]}"; do
             if [ -f "$rc" ]; then
                 echo "⚙️ Configurando resume y zswap en $rc..."
                 sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' "$rc" 2>/dev/null || true
+                sed -i 's/resume=UUID=[^ "]* //g; s/resume_offset=[^ "]* //g; s/zswap\.enabled=[^ "]* //g' "$rc" 2>/dev/null || true
                 sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${RESUME_PARAMS}|g" "$rc" 2>/dev/null || true
             fi
         done
@@ -139,7 +186,11 @@ fi
 mkdir -p /etc/systemd/sleep.conf.d
 cat << 'DROPEOF' > /etc/systemd/sleep.conf.d/pulsaros-hibernate.conf
 [Sleep]
+AllowHibernation=yes
+AllowHybridSleep=yes
+AllowSuspendThenHibernate=yes
 HibernateMode=shutdown
+HibernateState=disk
 DROPEOF
 
 # 5. Asegurar hook de resume en initramfs para que el kernel detecte la imagen de hibernación
@@ -168,14 +219,16 @@ if [ -f /etc/mkinitcpio.conf ]; then
             fi
         fi
     fi
-elif [ -f /etc/initramfs-tools/conf.d/resume ]; then
-    # Debian — initramfs-tools already configured
-    true
-elif [ -f /etc/initramfs-tools/conf.d/ ] && command -v update-initramfs >/dev/null 2>&1; then
+elif [ -d /etc/initramfs-tools/conf.d ] || command -v update-initramfs >/dev/null 2>&1; then
     # Debian — write resume config
-    if [ -n "$ROOT_UUID" ] && [ -n "$OFFSET" ]; then
-        echo "BOOTUUID=${ROOT_UUID}" > /etc/initramfs-tools/conf.d/resume 2>/dev/null || true
-        INITRAMFS_CHANGED=1
+    mkdir -p /etc/initramfs-tools/conf.d
+    if [ -n "$ROOT_UUID" ]; then
+        RESUME_LINE="RESUME=UUID=${ROOT_UUID}"
+        if [ ! -f /etc/initramfs-tools/conf.d/resume ] || ! grep -q "^${RESUME_LINE}$" /etc/initramfs-tools/conf.d/resume; then
+            echo "$RESUME_LINE" > /etc/initramfs-tools/conf.d/resume
+            echo "⚙️ Configurado /etc/initramfs-tools/conf.d/resume con ${RESUME_LINE}..."
+            INITRAMFS_CHANGED=1
+        fi
     fi
 fi
 

@@ -52,6 +52,16 @@ if [ "$RESTORE" = "restore" ]; then
 
     sync
 
+    # Garantizar que el swapfile esté activo y armado en el kernel antes de hibernar
+    if [ -f /swapfile ]; then
+        swapon /swapfile 2>/dev/null || true
+    fi
+    if [ -x /usr/lib/pulsaros/verify-resume-offset ]; then
+        /usr/lib/pulsaros/verify-resume-offset 2>/dev/null || true
+    elif [ -x /usr/bin/pulsaros-setup-hibernation ]; then
+        /usr/bin/pulsaros-setup-hibernation 2>/dev/null || true
+    fi
+
     # Preparar pantalla, limpiar consola tty1 y registrar sesión gráfica para reanudación
     if [ -x /usr/lib/pulsaros/sleep-progress ]; then
         /usr/lib/pulsaros/sleep-progress start 2>/dev/null || true

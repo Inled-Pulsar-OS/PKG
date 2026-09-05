@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::rc::Rc;
 use std::thread;
@@ -10,9 +10,9 @@ use gio::prelude::*;
 use glib::clone;
 use gtk4::prelude::*;
 use gtk4::{
-    Align, Application, Box as GtkBox, Button, CenterBox, CssProvider, GestureClick,
-    Image, Label, ListBox, ListBoxRow, Orientation, ProgressBar, ScrolledWindow,
-    SelectionMode, Stack, StackTransitionType, TextView, WrapMode,
+    Align, Application, Box as GtkBox, Button, CenterBox, CssProvider, GestureClick, Image,
+    Label, ListBox, ListBoxRow, Orientation, ProgressBar, ScrolledWindow, SelectionMode,
+    Stack, StackTransitionType, TextView, WrapMode,
 };
 use libadwaita::prelude::*;
 use libadwaita::ApplicationWindow;
@@ -31,11 +31,11 @@ window, .root-container, * {
     background-color: #323236 !important;
     border: 1px solid rgba(255, 255, 255, 0.14) !important;
     border-radius: 20px !important;
-    padding: 28px 32px !important;
+    padding: 24px 28px !important;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7) !important;
 }
 .welcome-title {
-    font-size: 24px !important;
+    font-size: 22px !important;
     font-weight: 700 !important;
     color: #ffffff !important;
     margin-top: 4px !important;
@@ -44,7 +44,20 @@ window, .root-container, * {
 .welcome-subtitle {
     font-size: 13px !important;
     color: #c7c7cc !important;
-    margin-bottom: 16px !important;
+    margin-bottom: 12px !important;
+}
+.info-card {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 12px !important;
+    padding: 16px 20px !important;
+    margin-top: 6px !important;
+    margin-bottom: 12px !important;
+}
+.info-card-text {
+    font-size: 13px !important;
+    color: #e5e5ea !important;
+    line-height: 1.5 !important;
 }
 /* Force completely transparent ListBox with individual floating cards */
 list, listview, listbox, .transparent-list, .content, .boxed-list {
@@ -71,7 +84,7 @@ listbox > row, listboxrow, row, .utility-item-row {
     background-color: rgba(255, 255, 255, 0.05) !important;
     border: 1px solid rgba(255, 255, 255, 0.08) !important;
     border-radius: 12px !important;
-    padding: 12px 16px !important;
+    padding: 10px 14px !important;
     transition: all 0.15s ease !important;
 }
 listbox > row:hover .utility-row-card,
@@ -88,12 +101,12 @@ listboxrow:selected .utility-row-card,
     box-shadow: 0 4px 14px rgba(0, 113, 227, 0.35) !important;
 }
 .utility-title-lbl {
-    font-size: 15px !important;
+    font-size: 14px !important;
     font-weight: 600 !important;
     color: #ffffff !important;
 }
 .utility-desc-lbl {
-    font-size: 13px !important;
+    font-size: 12px !important;
     color: #c7c7cc !important;
 }
 listbox > row:selected .utility-title-lbl,
@@ -111,9 +124,9 @@ listboxrow:selected .utility-desc-lbl,
     color: #ffffff !important;
     border-radius: 8px !important;
     font-weight: 600 !important;
-    padding: 9px 24px !important;
+    padding: 8px 20px !important;
     border: none !important;
-    font-size: 14px !important;
+    font-size: 13px !important;
 }
 .suggested-action:hover {
     background-color: #007bf5 !important;
@@ -127,12 +140,23 @@ listboxrow:selected .utility-desc-lbl,
     color: #ffffff !important;
     border-radius: 8px !important;
     font-weight: 600 !important;
-    padding: 9px 24px !important;
+    padding: 7px 16px !important;
     border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    font-size: 14px !important;
+    font-size: 12px !important;
 }
 .secondary-action:hover {
     background-color: #3e3e42 !important;
+}
+.shortcut-btn {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+    border-radius: 6px !important;
+    padding: 4px 10px !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    font-size: 11px !important;
+}
+.shortcut-btn:hover {
+    background-color: rgba(255, 255, 255, 0.15) !important;
 }
 .progress-bar-thin {
     min-height: 8px;
@@ -159,7 +183,7 @@ listboxrow:selected .utility-desc-lbl,
     background-color: #121212;
     border: 1px solid #333333;
     border-radius: 8px;
-    padding: 8px;
+    padding: 6px;
 }
 .live-log-text text {
     background-color: #121212;
@@ -177,8 +201,8 @@ listboxrow:selected .utility-desc-lbl,
     background-color: #2a2a2a;
     border: 1px solid #3c3c3c;
     border-radius: 12px;
-    padding: 16px;
-    min-width: 140px;
+    padding: 14px;
+    min-width: 130px;
     margin: 6px;
     transition: all 0.15s ease;
 }
@@ -216,9 +240,17 @@ struct BtrfsTarget {
 }
 
 #[derive(Clone, Debug)]
+struct DiscoveredImage {
+    file_path: String,
+    filename: String,
+    size_str: String,
+    device_label: String,
+}
+
+#[derive(Clone, Debug)]
 enum RecoveryMode {
     Local,
-    Internet(String),
+    CustomImage(String),
 }
 
 #[derive(Debug)]
@@ -344,7 +376,10 @@ fn is_valid_base_squashfs(path: &str) -> bool {
     if !Path::new(path).exists() {
         return false;
     }
-    // Must be a complete Arch Linux base OS rootfs (>= 1.0 GB), NEVER the ~350MB Debian mini rootfs
+    // Must be a complete base OS rootfs (>= 1.0 GB) and never the mini recovery environment
+    if path.contains("/recovery/") || path.contains("recovery-") {
+        return false;
+    }
     if let Ok(meta) = fs::metadata(path) {
         if meta.len() < 1000 * 1024 * 1024 {
             return false;
@@ -352,7 +387,7 @@ fn is_valid_base_squashfs(path: &str) -> bool {
     } else {
         return false;
     }
-    // Quick superblock verification using unsquashfs -s
+    // Superblock verification using unsquashfs -s
     Command::new("unsquashfs")
         .args(&["-s", path])
         .stdout(Stdio::null())
@@ -360,6 +395,146 @@ fn is_valid_base_squashfs(path: &str) -> bool {
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
+}
+
+fn format_file_size(bytes: u64) -> String {
+    let gb = bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+    if gb >= 1.0 {
+        format!("{:.2} GB", gb)
+    } else {
+        let mb = bytes as f64 / (1024.0 * 1024.0);
+        format!("{:.1} MB", mb)
+    }
+}
+
+fn scan_dir_for_squashfs(dir: &Path, depth: usize, dev_label: &str, out: &mut Vec<DiscoveredImage>) {
+    if depth > 3 {
+        return;
+    }
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let dname = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+                if dname == "recovery" || dname == "proc" || dname == "sys" || dname == "dev" {
+                    continue;
+                }
+                scan_dir_for_squashfs(&path, depth + 1, dev_label, out);
+            } else if path.is_file() {
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
+                if name.ends_with(".squashfs") || name.ends_with(".sfs") {
+                    let full_p = path.to_string_lossy().to_string();
+                    if is_valid_base_squashfs(&full_p) {
+                        let size_str = if let Ok(meta) = fs::metadata(&path) {
+                            format_file_size(meta.len())
+                        } else {
+                            "Unknown size".to_string()
+                        };
+                        out.push(DiscoveredImage {
+                            file_path: full_p,
+                            filename: name,
+                            size_str,
+                            device_label: dev_label.to_string(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn scan_usb_devices() -> Vec<DiscoveredImage> {
+    let mut images: Vec<DiscoveredImage> = Vec::new();
+    let usb_base_mnt = "/tmp/pulsar_usb_mnt";
+    let _ = fs::create_dir_all(usb_base_mnt);
+
+    // 1. Scan removable USB storage devices via lsblk
+    if let Ok(out) = Command::new("sudo").args(&["-n", "lsblk", "-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,TRAN,RM,HOTPLUG,MOUNTPOINTS,TYPE"]).output() {
+        let text = String::from_utf8_lossy(&out.stdout);
+        for line in text.lines() {
+            let get_val = |key: &str| -> String {
+                let re = Regex::new(&format!(r#"{}=\"([^\"]*)\""#, key)).unwrap();
+                re.captures(line).and_then(|c| c.get(1)).map(|m| m.as_str().to_string()).unwrap_or_default()
+            };
+
+            let name = get_val("NAME");
+            let label = get_val("LABEL");
+            let fstype = get_val("FSTYPE");
+            let tran = get_val("TRAN");
+            let rm = get_val("RM");
+            let hotplug = get_val("HOTPLUG");
+            let dev_type = get_val("TYPE");
+            let mountpoints = get_val("MOUNTPOINTS");
+
+            if name.is_empty() || name.starts_with("loop") || name.starts_with("zram") || name.starts_with("sr") {
+                continue;
+            }
+
+            // Exclude current boot ISO/live recovery medium from the external USB list
+            if label == "PULSAR_ISO" || label == "PULSAR_RECOVERY" || label == "archiso" || label == "LIVE" {
+                continue;
+            }
+
+            // Exclude main internal disk partitions unless removable USB
+            let is_removable = tran == "usb" || rm == "1" || hotplug == "1";
+            if !is_removable && !name.starts_with("sd") {
+                continue;
+            }
+
+            if dev_type == "disk" && fstype.is_empty() {
+                continue;
+            }
+
+            let part_dev = format!("/dev/{}", name);
+
+            if !fstype.is_empty() {
+                let dev_title = if !label.is_empty() {
+                    label.clone()
+                } else if is_removable {
+                    format!("USB Drive ({})", name)
+                } else {
+                    format!("Removable Drive ({})", name)
+                };
+
+                // Check if already mounted
+                if !mountpoints.is_empty() {
+                    for mnt in mountpoints.split_whitespace() {
+                        scan_dir_for_squashfs(Path::new(mnt), 0, &dev_title, &mut images);
+                    }
+                } else {
+                    // Mount temporarily in ro mode
+                    let temp_mnt = format!("{}/{}", usb_base_mnt, name);
+                    let _ = fs::create_dir_all(&temp_mnt);
+                    if Command::new("sudo").args(&["-n", "mount", "-o", "ro", &part_dev, &temp_mnt]).status().map(|s| s.success()).unwrap_or(false) {
+                        let prev_len = images.len();
+                        scan_dir_for_squashfs(Path::new(&temp_mnt), 0, &dev_title, &mut images);
+                        // If no images found, cleanly unmount and remove dir
+                        if images.len() == prev_len {
+                            let _ = Command::new("sudo").args(&["-n", "umount", &temp_mnt]).output();
+                            let _ = fs::remove_dir(&temp_mnt);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Scan standard media mounts
+    let media_dirs = ["/media", "/run/media", "/mnt"];
+    for m in &media_dirs {
+        if Path::new(m).exists() {
+            scan_dir_for_squashfs(Path::new(m), 0, "Mounted Storage", &mut images);
+        }
+    }
+
+    // Deduplicate by file_path
+    let mut deduped: Vec<DiscoveredImage> = Vec::new();
+    for img in images {
+        if !deduped.iter().any(|d| d.file_path == img.file_path) {
+            deduped.push(img);
+        }
+    }
+    deduped
 }
 
 fn detect_local_squashfs<L>(log: &L) -> Option<String>
@@ -397,11 +572,9 @@ where
     for root in &search_roots {
         for img in &base_image_names {
             let full_p = format!("{}/{}", root, img);
-            if Path::new(&full_p).exists() {
-                if is_valid_base_squashfs(&full_p) {
-                    log(&format!("Verified clean Arch base system image at: {}", full_p));
-                    return Some(full_p);
-                }
+            if Path::new(&full_p).exists() && is_valid_base_squashfs(&full_p) {
+                log(&format!("Verified clean Arch base system image at: {}", full_p));
+                return Some(full_p);
             }
         }
     }
@@ -425,11 +598,12 @@ where
                     }
                 }
                 let _ = Command::new("sudo").args(&["-n", "umount", &temp_mnt]).output();
+                let _ = fs::remove_dir(&temp_mnt);
             }
         }
     }
 
-    log("⚠️ No valid local base image (>= 1.0 GB) found. Falling back to Internet Recovery.");
+    log("⚠️ No local base image found on built-in recovery partition.");
     None
 }
 
@@ -449,6 +623,10 @@ fn get_lucide_icon_path(name: &str) -> String {
             "restore",
             r##"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>"##,
         ),
+        "usb" | "flash-drive" => ensure_lucide_icon(
+            "usb",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="7" r="1"/><circle cx="4" cy="20" r="1"/><path d="M4.7 19.3 19 5"/><path d="m21 3-3 1 2 2Z"/><path d="M9.26 7.68 5 12l2 5"/><path d="m10 14 5 2 3.5-3.5"/><circle cx="17" cy="17" r="1"/><circle cx="12" cy="12" r="1"/></svg>"##,
+        ),
         "safari" | "globe" | "internet" => ensure_lucide_icon(
             "globe",
             r##"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>"##,
@@ -461,23 +639,39 @@ fn get_lucide_icon_path(name: &str) -> String {
             "terminal",
             r##"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>"##,
         ),
-        "complete" | "check-circle" | "emblem-default" => ensure_lucide_icon(
+        "refresh" | "refresh-cw" => ensure_lucide_icon(
+            "refresh",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>"##,
+        ),
+        "folder" => ensure_lucide_icon(
+            "folder",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>"##,
+        ),
+        "folder-up" => ensure_lucide_icon(
+            "folder-up",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="m12 10 3 3m-3-3-3 3m3-3v6"/></svg>"##,
+        ),
+        "package" | "box" => ensure_lucide_icon(
+            "package",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>"##,
+        ),
+        "complete" | "check-circle" => ensure_lucide_icon(
             "complete",
             r##"<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" stroke="#22c55e" stroke-width="2" fill="#22c55e" fill-opacity="0.15"/><path d="m9 12 2 2 4-4" stroke="#22c55e" stroke-width="2.5"/></svg>"##,
         ),
-        "error" | "alert-circle" | "dialog-error" => ensure_lucide_icon(
+        "error" | "alert-circle" => ensure_lucide_icon(
             "error",
             r##"<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>"##,
         ),
-        "progress" | "download" | "system-software-install" => ensure_lucide_icon(
+        "progress" => ensure_lucide_icon(
             "progress",
             r##"<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>"##,
         ),
-        "restart" | "rotate-cw" | "refresh-cw" => ensure_lucide_icon(
+        "restart" => ensure_lucide_icon(
             "restart",
             r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>"##,
         ),
-        "shutdown" | "power" | "power-off" => ensure_lucide_icon(
+        "shutdown" | "power" => ensure_lucide_icon(
             "power",
             r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>"##,
         ),
@@ -516,7 +710,7 @@ fn build_ui(app: &Application) {
     style_mgr.set_color_scheme(libadwaita::ColorScheme::ForceDark);
 
     let provider = CssProvider::new();
-    provider.load_from_data(APP_CSS);
+    let _ = provider.load_from_string(APP_CSS);
     if let Some(display) = gtk4::gdk::Display::default() {
         gtk4::style_context_add_provider_for_display(
             &display,
@@ -536,13 +730,13 @@ fn build_ui(app: &Application) {
 
     let card_box = GtkBox::new(Orientation::Vertical, 0);
     card_box.add_css_class("apple-box");
-    card_box.set_size_request(620, 530);
+    card_box.set_size_request(680, 580);
     card_box.set_valign(Align::Center);
     card_box.set_halign(Align::Center);
 
     let stack = Stack::new();
     stack.set_transition_type(StackTransitionType::Crossfade);
-    stack.set_transition_duration(300);
+    stack.set_transition_duration(250);
     card_box.append(&stack);
 
     center_box.set_center_widget(Some(&card_box));
@@ -558,7 +752,7 @@ fn build_ui(app: &Application) {
     btn_restart.add_css_class("bottom-power-btn");
     let restart_box = GtkBox::new(Orientation::Horizontal, 8);
     let restart_icon = create_icon_widget("", "restart", 18);
-    let restart_lbl = Label::new(Some("Reiniciar"));
+    let restart_lbl = Label::new(Some("Restart"));
     restart_box.append(&restart_icon);
     restart_box.append(&restart_lbl);
     btn_restart.set_child(Some(&restart_box));
@@ -573,7 +767,7 @@ fn build_ui(app: &Application) {
     btn_shutdown.add_css_class("bottom-power-btn");
     let shutdown_box = GtkBox::new(Orientation::Horizontal, 8);
     let shutdown_icon = create_icon_widget("", "shutdown", 18);
-    let shutdown_lbl = Label::new(Some("Apagar"));
+    let shutdown_lbl = Label::new(Some("Shut Down"));
     shutdown_box.append(&shutdown_icon);
     shutdown_box.append(&shutdown_lbl);
     btn_shutdown.set_child(Some(&shutdown_box));
@@ -593,12 +787,14 @@ fn build_ui(app: &Application) {
     // Shared state
     let selected_action: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
     let selected_target: Rc<RefCell<Option<BtrfsTarget>>> = Rc::new(RefCell::new(None));
+    let selected_image_path: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
     let recovery_mode: Rc<RefCell<RecoveryMode>> = Rc::new(RefCell::new(RecoveryMode::Local));
+    let current_browser_dir: Rc<RefCell<PathBuf>> = Rc::new(RefCell::new(PathBuf::from("/media")));
 
     // ─────────────────────────────────────────────────────────────
     // 1. Utilities Screen (macOS Recovery main view)
     // ─────────────────────────────────────────────────────────────
-    let util_box = GtkBox::new(Orientation::Vertical, 12);
+    let util_box = GtkBox::new(Orientation::Vertical, 10);
     util_box.set_valign(Align::Center);
 
     let header_lbl = Label::new(Some("Pulsar OS Recovery Utilities"));
@@ -619,17 +815,17 @@ fn build_ui(app: &Application) {
         row.set_widget_name(id);
         row.add_css_class("utility-item-row");
 
-        let card = GtkBox::new(Orientation::Horizontal, 18);
+        let card = GtkBox::new(Orientation::Horizontal, 16);
         card.add_css_class("utility-row-card");
-        card.set_margin_top(4);
-        card.set_margin_bottom(4);
+        card.set_margin_top(3);
+        card.set_margin_bottom(3);
         card.set_margin_start(2);
         card.set_margin_end(2);
 
-        let icon = create_icon_widget(icon_file, icon_fallback, 50);
+        let icon = create_icon_widget(icon_file, icon_fallback, 44);
         card.append(&icon);
 
-        let vbox = GtkBox::new(Orientation::Vertical, 3);
+        let vbox = GtkBox::new(Orientation::Vertical, 2);
         vbox.set_valign(Align::Center);
 
         let title_l = Label::new(Some(title));
@@ -650,15 +846,22 @@ fn build_ui(app: &Application) {
 
     add_row(
         "reinstall",
-        "Reinstall Pulsar OS",
-        "Install a fresh copy of Pulsar OS while keeping your home files intact.",
+        "Reinstall Pulsar OS (Local Partition)",
+        "Install a fresh copy of Pulsar OS from built-in recovery while keeping personal files intact.",
         "/usr/share/pulsaros-recovery/reinstall.png",
         "restore",
     );
     add_row(
-        "internet",
+        "usb_restore",
+        "Restore from USB Flash Drive",
+        "Scan connected USB drives to find and restore a downloaded .squashfs system image.",
+        "",
+        "usb",
+    );
+    add_row(
+        "internet_info",
         "Pulsar Internet Recovery",
-        "Download latest recovery image from GitHub Releases and restore core system.",
+        "Instructions to download recovery images from SourceForge and restore via USB.",
         "/usr/share/pulsaros-recovery/safari.png",
         "safari",
     );
@@ -680,7 +883,7 @@ fn build_ui(app: &Application) {
     util_box.append(&listbox);
 
     let util_btn_box = GtkBox::new(Orientation::Horizontal, 0);
-    util_btn_box.set_margin_top(16);
+    util_btn_box.set_margin_top(14);
     let util_spacer = GtkBox::new(Orientation::Horizontal, 0);
     util_spacer.set_hexpand(true);
     util_btn_box.append(&util_spacer);
@@ -693,70 +896,221 @@ fn build_ui(app: &Application) {
     stack.add_named(&util_box, Some("utilities"));
 
     // ─────────────────────────────────────────────────────────────
-    // 2. Select Target & Options Screen
+    // 2. Internet Recovery Notice Screen
     // ─────────────────────────────────────────────────────────────
-    let target_box = GtkBox::new(Orientation::Vertical, 12);
+    let net_info_box = GtkBox::new(Orientation::Vertical, 10);
+    net_info_box.set_valign(Align::Center);
+    net_info_box.set_halign(Align::Center);
+
+    let net_icon = create_icon_widget("/usr/share/pulsaros-recovery/safari.png", "globe", 56);
+    net_info_box.append(&net_icon);
+
+    let net_title = Label::new(Some("Pulsar Internet Recovery"));
+    net_title.add_css_class("welcome-title");
+    net_info_box.append(&net_title);
+
+    let info_card = GtkBox::new(Orientation::Vertical, 8);
+    info_card.add_css_class("info-card");
+    info_card.set_size_request(540, -1);
+
+    let info_card_text = Label::new(Some(
+        "Direct online streaming of multi-gigabyte OS recovery images is currently not hosted directly on our servers due to infrastructure funding limitations.\n\n\
+        To reinstall or update Pulsar OS:\n\
+        1. From another computer, download the official .squashfs recovery image from our SourceForge project repository:\n\
+           https://sourceforge.net/projects/pulsar-os/files/\n\n\
+        2. Copy the .squashfs file directly onto any USB flash drive.\n\n\
+        3. Insert the USB drive into this computer and click 'Restore from USB Flash Drive'."
+    ));
+    info_card_text.add_css_class("info-card-text");
+    info_card_text.set_wrap(true);
+    info_card_text.set_justify(gtk4::Justification::Left);
+    info_card.append(&info_card_text);
+    net_info_box.append(&info_card);
+
+    let net_btn_box = GtkBox::new(Orientation::Horizontal, 14);
+    net_btn_box.set_halign(Align::Center);
+    net_btn_box.set_margin_top(6);
+
+    let btn_net_back = Button::with_label("Back to Utilities");
+    btn_net_back.add_css_class("secondary-action");
+    btn_net_back.connect_clicked(clone!(@weak stack => move |_| {
+        stack.set_visible_child_name("utilities");
+    }));
+    net_btn_box.append(&btn_net_back);
+
+    let btn_net_to_usb = Button::with_label("Restore from USB Flash Drive");
+    btn_net_to_usb.add_css_class("suggested-action");
+    net_btn_box.append(&btn_net_to_usb);
+    net_info_box.append(&net_btn_box);
+
+    stack.add_named(&net_info_box, Some("internet_info"));
+
+    // ─────────────────────────────────────────────────────────────
+    // 3. USB Image Selector Screen (Auto-detected USBs)
+    // ─────────────────────────────────────────────────────────────
+    let usb_box = GtkBox::new(Orientation::Vertical, 10);
+    usb_box.set_valign(Align::Center);
+
+    let usb_header = Label::new(Some("Select Recovery Image from USB"));
+    usb_header.add_css_class("welcome-title");
+    usb_box.append(&usb_header);
+
+    let usb_sub = Label::new(Some("Plug in your USB drive with the .squashfs file, then select it below."));
+    usb_sub.add_css_class("welcome-subtitle");
+    usb_box.append(&usb_sub);
+
+    // USB Actions bar
+    let usb_actions_bar = GtkBox::new(Orientation::Horizontal, 10);
+    usb_actions_bar.set_margin_bottom(6);
+
+    let btn_scan_usb = Button::new();
+    btn_scan_usb.add_css_class("secondary-action");
+    let scan_box = GtkBox::new(Orientation::Horizontal, 6);
+    let scan_icon = create_icon_widget("", "refresh", 16);
+    let scan_lbl = Label::new(Some("Scan / Refresh USBs"));
+    scan_box.append(&scan_icon);
+    scan_box.append(&scan_lbl);
+    btn_scan_usb.set_child(Some(&scan_box));
+    usb_actions_bar.append(&btn_scan_usb);
+
+    let btn_open_browser = Button::new();
+    btn_open_browser.add_css_class("secondary-action");
+    let open_box = GtkBox::new(Orientation::Horizontal, 6);
+    let open_icon = create_icon_widget("", "folder", 16);
+    let open_lbl = Label::new(Some("Browse Files / Drives..."));
+    open_box.append(&open_icon);
+    open_box.append(&open_lbl);
+    btn_open_browser.set_child(Some(&open_box));
+    usb_actions_bar.append(&btn_open_browser);
+
+    usb_box.append(&usb_actions_bar);
+
+    let usb_scrolled = ScrolledWindow::new();
+    usb_scrolled.set_size_request(600, 230);
+    usb_scrolled.add_css_class("live-log-view");
+
+    let usb_listbox = ListBox::new();
+    usb_listbox.add_css_class("transparent-list");
+    usb_listbox.set_selection_mode(SelectionMode::Single);
+    usb_scrolled.set_child(Some(&usb_listbox));
+    usb_box.append(&usb_scrolled);
+
+    let usb_nav_box = GtkBox::new(Orientation::Horizontal, 16);
+    usb_nav_box.set_halign(Align::End);
+    usb_nav_box.set_margin_top(12);
+
+    let btn_usb_back = Button::with_label("Back");
+    btn_usb_back.add_css_class("secondary-action");
+    btn_usb_back.connect_clicked(clone!(@weak stack => move |_| {
+        stack.set_visible_child_name("utilities");
+    }));
+    usb_nav_box.append(&btn_usb_back);
+
+    let btn_usb_continue = Button::with_label("Continue");
+    btn_usb_continue.add_css_class("suggested-action");
+    btn_usb_continue.set_sensitive(false);
+    usb_nav_box.append(&btn_usb_continue);
+    usb_box.append(&usb_nav_box);
+
+    stack.add_named(&usb_box, Some("usb_select"));
+
+    // ─────────────────────────────────────────────────────────────
+    // 4. Built-in File Browser Screen (No XDG portal required!)
+    // ─────────────────────────────────────────────────────────────
+    let browser_box = GtkBox::new(Orientation::Vertical, 8);
+    browser_box.set_valign(Align::Center);
+
+    let browser_header = Label::new(Some("Browse Storage for System Image"));
+    browser_header.add_css_class("welcome-title");
+    browser_box.append(&browser_header);
+
+    // Current Path & Quick Jump buttons
+    let browser_top_bar = GtkBox::new(Orientation::Horizontal, 8);
+    browser_top_bar.set_valign(Align::Center);
+
+    let lbl_current_path = Label::new(Some("Path: /media"));
+    lbl_current_path.add_css_class("progress-text");
+    lbl_current_path.set_hexpand(true);
+    lbl_current_path.set_halign(Align::Start);
+    lbl_current_path.set_ellipsize(gtk4::pango::EllipsizeMode::Middle);
+    browser_top_bar.append(&lbl_current_path);
+
+    let shortcuts = [
+        ("/media", "media"),
+        ("/run/media", "run/media"),
+        ("/mnt", "mnt"),
+        ("/tmp", "tmp"),
+        ("/", "root (/)"),
+    ];
+
+    let shortcuts_bar = GtkBox::new(Orientation::Horizontal, 4);
+    shortcuts_bar.set_halign(Align::End);
+
+    browser_top_bar.append(&shortcuts_bar);
+    browser_box.append(&browser_top_bar);
+
+    let browser_scrolled = ScrolledWindow::new();
+    browser_scrolled.set_size_request(600, 240);
+    browser_scrolled.add_css_class("live-log-view");
+
+    let browser_listbox = ListBox::new();
+    browser_listbox.add_css_class("transparent-list");
+    browser_listbox.set_selection_mode(SelectionMode::Single);
+    browser_scrolled.set_child(Some(&browser_listbox));
+    browser_box.append(&browser_scrolled);
+
+    let browser_nav_box = GtkBox::new(Orientation::Horizontal, 16);
+    browser_nav_box.set_halign(Align::End);
+    browser_nav_box.set_margin_top(10);
+
+    let btn_browser_back = Button::with_label("Back to USB List");
+    btn_browser_back.add_css_class("secondary-action");
+    btn_browser_back.connect_clicked(clone!(@weak stack => move |_| {
+        stack.set_visible_child_name("usb_select");
+    }));
+    browser_nav_box.append(&btn_browser_back);
+
+    let btn_browser_select = Button::with_label("Select Image");
+    btn_browser_select.add_css_class("suggested-action");
+    btn_browser_select.set_sensitive(false);
+    browser_nav_box.append(&btn_browser_select);
+    browser_box.append(&browser_nav_box);
+
+    stack.add_named(&browser_box, Some("file_browser"));
+
+    // ─────────────────────────────────────────────────────────────
+    // 5. Select Target Partition Screen
+    // ─────────────────────────────────────────────────────────────
+    let target_box = GtkBox::new(Orientation::Vertical, 10);
     target_box.set_valign(Align::Center);
     target_box.set_halign(Align::Center);
 
-    let target_icon = create_icon_widget("/usr/share/pulsaros-recovery/diskutility.png", "hard-drive", 64);
+    let target_icon = create_icon_widget("/usr/share/pulsaros-recovery/diskutility.png", "hard-drive", 56);
     target_box.append(&target_icon);
 
     let target_title = Label::new(Some("Select Pulsar OS Partition"));
     target_title.add_css_class("welcome-title");
     target_box.append(&target_title);
 
-    let target_desc = Label::new(Some("The root system (@) will be cleanly restored. Your documents, applications, and settings in /home (@home) will remain completely intact."));
+    let target_desc = Label::new(Some("The root system (@) will be cleanly restored. Your user accounts and documents in /home (@home) will remain completely intact."));
     target_desc.add_css_class("welcome-subtitle");
     target_desc.set_wrap(true);
-    target_desc.set_max_width_chars(45);
+    target_desc.set_max_width_chars(50);
     target_desc.set_justify(gtk4::Justification::Center);
     target_box.append(&target_desc);
 
-    // ── Network check box (shown only for Internet Recovery) ──
-    let network_box = GtkBox::new(Orientation::Vertical, 8);
-    network_box.set_halign(Align::Center);
-    network_box.set_visible(false); // hidden until internet recovery is selected
-
-    let net_icon = create_icon_widget("", "globe", 48);
-    network_box.append(&net_icon);
-
-    let net_status_lbl = Label::new(Some("Internet connection required for recovery"));
-    net_status_lbl.add_css_class("welcome-subtitle");
-    network_box.append(&net_status_lbl);
-
-    let btn_net_config = Button::with_label("Open Network Settings");
-    btn_net_config.add_css_class("suggested-action");
-    btn_net_config.connect_clicked(|_| {
-        let _ = Command::new("nm-connection-editor").spawn();
-    });
-    network_box.append(&btn_net_config);
-
-    // Refresh network status label periodically
-    let net_status_lbl_c = net_status_lbl.clone();
-    glib::timeout_add_local(std::time::Duration::from_secs(3), move || {
-        let online = Command::new("nmcli")
-            .args(["-t", "-f", "STATE", "general"])
-            .output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "connected")
-            .unwrap_or(false);
-        if online {
-            net_status_lbl_c.set_text("✅ Network connected — ready for Internet Recovery");
-        } else {
-            net_status_lbl_c.set_text("⚠️ No network — connect to WiFi or Ethernet first");
-        }
-        glib::ControlFlow::Continue
-    });
-
-    target_box.append(&network_box);
+    let source_img_lbl = Label::new(Some("Source: Built-in Recovery Partition"));
+    source_img_lbl.add_css_class("progress-text");
+    target_box.append(&source_img_lbl);
 
     let targets_flow = GtkBox::new(Orientation::Horizontal, 10);
     targets_flow.set_halign(Align::Center);
+    targets_flow.set_margin_top(8);
     target_box.append(&targets_flow);
 
     let target_nav_box = GtkBox::new(Orientation::Horizontal, 16);
     target_nav_box.set_halign(Align::Center);
-    target_nav_box.set_margin_top(12);
+    target_nav_box.set_margin_top(14);
 
     let btn_target_back = Button::with_label("Back");
     btn_target_back.add_css_class("secondary-action");
@@ -771,13 +1125,13 @@ fn build_ui(app: &Application) {
     stack.add_named(&target_box, Some("target_select"));
 
     // ─────────────────────────────────────────────────────────────
-    // 3. Progress Screen
+    // 6. Progress Screen
     // ─────────────────────────────────────────────────────────────
     let prog_box = GtkBox::new(Orientation::Vertical, 10);
     prog_box.set_valign(Align::Center);
     prog_box.set_halign(Align::Center);
 
-    let prog_icon = create_icon_widget("/usr/share/pulsaros-recovery/reinstall.png", "progress", 64);
+    let prog_icon = create_icon_widget("/usr/share/pulsaros-recovery/reinstall.png", "progress", 60);
     prog_box.append(&prog_icon);
 
     let prog_title = Label::new(Some("Restoring Pulsar OS..."));
@@ -790,11 +1144,11 @@ fn build_ui(app: &Application) {
 
     let pbar = ProgressBar::new();
     pbar.add_css_class("progress-bar-thin");
-    pbar.set_size_request(460, -1);
+    pbar.set_size_request(480, -1);
     prog_box.append(&pbar);
 
     let scrolled_log = ScrolledWindow::new();
-    scrolled_log.set_size_request(480, 160);
+    scrolled_log.set_size_request(520, 160);
     scrolled_log.add_css_class("live-log-view");
 
     let log_view = TextView::new();
@@ -808,7 +1162,7 @@ fn build_ui(app: &Application) {
     stack.add_named(&prog_box, Some("progress"));
 
     // ─────────────────────────────────────────────────────────────
-    // 4. Complete Screen
+    // 7. Complete Screen
     // ─────────────────────────────────────────────────────────────
     let done_box = GtkBox::new(Orientation::Vertical, 14);
     done_box.set_valign(Align::Center);
@@ -837,13 +1191,13 @@ fn build_ui(app: &Application) {
     stack.add_named(&done_box, Some("complete"));
 
     // ─────────────────────────────────────────────────────────────
-    // 5. Error Screen (with Detailed Logs View)
+    // 8. Error Screen
     // ─────────────────────────────────────────────────────────────
     let err_box = GtkBox::new(Orientation::Vertical, 10);
     err_box.set_valign(Align::Center);
     err_box.set_halign(Align::Center);
 
-    let err_icon = create_icon_widget("", "error", 72);
+    let err_icon = create_icon_widget("", "error", 64);
     err_box.append(&err_icon);
 
     let err_title = Label::new(Some("Restoration Failed"));
@@ -858,7 +1212,7 @@ fn build_ui(app: &Application) {
     err_box.append(&err_msg_lbl);
 
     let err_scrolled_log = ScrolledWindow::new();
-    err_scrolled_log.set_size_request(480, 140);
+    err_scrolled_log.set_size_request(520, 140);
     err_scrolled_log.add_css_class("live-log-view");
 
     let err_log_view = TextView::new();
@@ -880,17 +1234,314 @@ fn build_ui(app: &Application) {
     }));
     err_btn_box.append(&btn_err_back);
 
-    let btn_try_internet = Button::with_label("Try Internet Recovery");
-    btn_try_internet.add_css_class("suggested-action");
+    let btn_try_usb = Button::with_label("Try USB Image");
+    btn_try_usb.add_css_class("suggested-action");
     let sel_act_c = selected_action.clone();
-    btn_try_internet.connect_clicked(clone!(@weak stack, @weak btn_util_continue => move |_| {
-        *sel_act_c.borrow_mut() = Some("internet".to_string());
+    btn_try_usb.connect_clicked(clone!(@weak stack, @weak btn_util_continue => move |_| {
+        *sel_act_c.borrow_mut() = Some("usb_restore".to_string());
         btn_util_continue.emit_clicked();
     }));
-    err_btn_box.append(&btn_try_internet);
+    err_btn_box.append(&btn_try_usb);
 
     err_box.append(&err_btn_box);
     stack.add_named(&err_box, Some("error"));
+
+    // ─────────────────────────────────────────────────────────────
+    // Helper: Refresh Target Partitions & Show Target Screen
+    // ─────────────────────────────────────────────────────────────
+    let show_target_screen = {
+        let stack = stack.clone();
+        let targets_flow = targets_flow.clone();
+        let btn_target_restore = btn_target_restore.clone();
+        let selected_target = selected_target.clone();
+        let source_img_lbl = source_img_lbl.clone();
+
+        move |source_desc: &str| {
+            source_img_lbl.set_text(source_desc);
+
+            while let Some(child) = targets_flow.first_child() {
+                targets_flow.remove(&child);
+            }
+            *selected_target.borrow_mut() = None;
+            btn_target_restore.set_sensitive(false);
+
+            let targets = find_btrfs_targets();
+            if targets.is_empty() {
+                let no_target_lbl = Label::new(Some("No Btrfs Pulsar OS partitions detected.\nUse Disk Utility to inspect drives."));
+                no_target_lbl.add_css_class("welcome-subtitle");
+                targets_flow.append(&no_target_lbl);
+            } else {
+                for target in targets {
+                    let card = GtkBox::new(Orientation::Vertical, 6);
+                    card.add_css_class("disk-card");
+                    let disk_icon = create_icon_widget("", "hard-drive", 40);
+                    card.append(&disk_icon);
+
+                    let name_lbl = Label::new(Some(&format!("{} ({})", target.label, target.size)));
+                    name_lbl.add_css_class("utility-title-lbl");
+                    card.append(&name_lbl);
+
+                    let dev_lbl = Label::new(Some(&target.part_path));
+                    dev_lbl.add_css_class("utility-desc-lbl");
+                    card.append(&dev_lbl);
+
+                    let gesture = GestureClick::new();
+                    let t_clone = target.clone();
+                    let targets_flow_c = targets_flow.clone();
+                    let btn_restore_c = btn_target_restore.clone();
+                    let sel_target_c = selected_target.clone();
+                    let card_c = card.clone();
+
+                    gesture.connect_released(move |_, _, _, _| {
+                        let mut next = targets_flow_c.first_child();
+                        while let Some(w) = next {
+                            w.remove_css_class("selected");
+                            next = w.next_sibling();
+                        }
+                        card_c.add_css_class("selected");
+                        *sel_target_c.borrow_mut() = Some(t_clone.clone());
+                        btn_restore_c.set_sensitive(true);
+                    });
+
+                    card.add_controller(gesture);
+                    targets_flow.append(&card);
+                }
+            }
+            stack.set_visible_child_name("target_select");
+        }
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // Helper: Refresh USB Images list
+    // ─────────────────────────────────────────────────────────────
+    let populate_usb_images = {
+        let usb_listbox = usb_listbox.clone();
+        let btn_usb_continue = btn_usb_continue.clone();
+        let selected_image_path = selected_image_path.clone();
+
+        move || {
+            while let Some(child) = usb_listbox.first_child() {
+                usb_listbox.remove(&child);
+            }
+            *selected_image_path.borrow_mut() = None;
+            btn_usb_continue.set_sensitive(false);
+
+            let images = scan_usb_devices();
+            if images.is_empty() {
+                let row = ListBoxRow::new();
+                row.set_selectable(false);
+                let empty_box = GtkBox::new(Orientation::Vertical, 6);
+                empty_box.set_margin_top(16);
+                empty_box.set_margin_bottom(16);
+                let empty_lbl = Label::new(Some("No .squashfs recovery images detected on connected USB drives."));
+                empty_lbl.add_css_class("welcome-subtitle");
+                let hint_lbl = Label::new(Some("Plug in your USB drive and click 'Scan / Refresh USBs' or use 'Browse Files / Drives...'"));
+                hint_lbl.add_css_class("utility-desc-lbl");
+                empty_box.append(&empty_lbl);
+                empty_box.append(&hint_lbl);
+                row.set_child(Some(&empty_box));
+                usb_listbox.append(&row);
+            } else {
+                for img in images {
+                    let row = ListBoxRow::new();
+                    row.set_widget_name(&img.file_path);
+                    row.add_css_class("utility-item-row");
+
+                    let card = GtkBox::new(Orientation::Horizontal, 14);
+                    card.add_css_class("utility-row-card");
+                    card.set_margin_top(3);
+                    card.set_margin_bottom(3);
+
+                    let icon = create_icon_widget("", "usb", 36);
+                    card.append(&icon);
+
+                    let vbox = GtkBox::new(Orientation::Vertical, 2);
+                    let title_l = Label::new(Some(&format!("{} ({})", img.filename, img.size_str)));
+                    title_l.add_css_class("utility-title-lbl");
+                    title_l.set_halign(Align::Start);
+                    vbox.append(&title_l);
+
+                    let desc_l = Label::new(Some(&format!("On {} • {}", img.device_label, img.file_path)));
+                    desc_l.add_css_class("utility-desc-lbl");
+                    desc_l.set_halign(Align::Start);
+                    desc_l.set_wrap(true);
+                    vbox.append(&desc_l);
+
+                    card.append(&vbox);
+                    row.set_child(Some(&card));
+                    usb_listbox.append(&row);
+                }
+            }
+        }
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // Helper: Built-in Directory Browser Populator
+    // ─────────────────────────────────────────────────────────────
+    let populate_file_browser = {
+        let browser_listbox = browser_listbox.clone();
+        let lbl_current_path = lbl_current_path.clone();
+        let btn_browser_select = btn_browser_select.clone();
+        let selected_image_path = selected_image_path.clone();
+        let current_browser_dir = current_browser_dir.clone();
+
+        Rc::new(RefCell::new(move |dir: &Path| {
+            while let Some(child) = browser_listbox.first_child() {
+                browser_listbox.remove(&child);
+            }
+            *selected_image_path.borrow_mut() = None;
+            btn_browser_select.set_sensitive(false);
+
+            let canonical_dir = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+            *current_browser_dir.borrow_mut() = canonical_dir.clone();
+            lbl_current_path.set_text(&format!("Path: {}", canonical_dir.display()));
+
+            // Parent directory row if not root
+            if let Some(parent) = canonical_dir.parent() {
+                let row = ListBoxRow::new();
+                row.set_widget_name(&format!("DIR:{}", parent.display()));
+                row.add_css_class("utility-item-row");
+
+                let card = GtkBox::new(Orientation::Horizontal, 12);
+                card.add_css_class("utility-row-card");
+                card.set_margin_top(2);
+                card.set_margin_bottom(2);
+
+                let icon = create_icon_widget("", "folder-up", 24);
+                card.append(&icon);
+
+                let lbl = Label::new(Some(".. (Go to parent directory)"));
+                lbl.add_css_class("utility-title-lbl");
+                card.append(&lbl);
+
+                row.set_child(Some(&card));
+                browser_listbox.append(&row);
+            }
+
+            // Read entries
+            let mut dirs_list: Vec<PathBuf> = Vec::new();
+            let mut squashfs_list: Vec<PathBuf> = Vec::new();
+
+            if let Ok(entries) = fs::read_dir(&canonical_dir) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    let name = p.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+                    if name.starts_with('.') {
+                        continue;
+                    }
+                    if p.is_dir() {
+                        dirs_list.push(p);
+                    } else if p.is_file() && (name.ends_with(".squashfs") || name.ends_with(".sfs")) {
+                        squashfs_list.push(p);
+                    }
+                }
+            }
+
+            dirs_list.sort();
+            squashfs_list.sort();
+
+            // Append directories
+            for d in dirs_list {
+                let row = ListBoxRow::new();
+                row.set_widget_name(&format!("DIR:{}", d.display()));
+                row.add_css_class("utility-item-row");
+
+                let card = GtkBox::new(Orientation::Horizontal, 12);
+                card.add_css_class("utility-row-card");
+                card.set_margin_top(2);
+                card.set_margin_bottom(2);
+
+                let icon = create_icon_widget("", "folder", 24);
+                card.append(&icon);
+
+                let dname = d.file_name().and_then(|n| n.to_str()).unwrap_or("Directory");
+                let lbl = Label::new(Some(&format!("{}/", dname)));
+                lbl.add_css_class("utility-title-lbl");
+                card.append(&lbl);
+
+                row.set_child(Some(&card));
+                browser_listbox.append(&row);
+            }
+
+            // Append squashfs files
+            for f in squashfs_list {
+                let full_p = f.to_string_lossy().to_string();
+                let row = ListBoxRow::new();
+                row.set_widget_name(&format!("FILE:{}", full_p));
+                row.add_css_class("utility-item-row");
+
+                let card = GtkBox::new(Orientation::Horizontal, 12);
+                card.add_css_class("utility-row-card");
+                card.set_margin_top(2);
+                card.set_margin_bottom(2);
+
+                let icon = create_icon_widget("", "package", 28);
+                card.append(&icon);
+
+                let vbox = GtkBox::new(Orientation::Vertical, 2);
+                let fname = f.file_name().and_then(|n| n.to_str()).unwrap_or("squashfs");
+                let size_str = if let Ok(meta) = fs::metadata(&f) { format_file_size(meta.len()) } else { "".to_string() };
+                let is_valid = is_valid_base_squashfs(&full_p);
+
+                let title_l = Label::new(Some(&format!("{} ({})", fname, size_str)));
+                title_l.add_css_class("utility-title-lbl");
+                title_l.set_halign(Align::Start);
+                vbox.append(&title_l);
+
+                let desc_l = Label::new(Some(if is_valid { "✅ Valid Pulsar OS system image" } else { "⚠️ Image smaller than standard base size" }));
+                desc_l.add_css_class("utility-desc-lbl");
+                desc_l.set_halign(Align::Start);
+                vbox.append(&desc_l);
+
+                card.append(&vbox);
+                row.set_child(Some(&card));
+                browser_listbox.append(&row);
+            }
+        }))
+    };
+
+    // Setup shortcuts buttons in file browser top bar
+    for (path_str, btn_title) in shortcuts {
+        let s_btn = Button::with_label(btn_title);
+        s_btn.add_css_class("shortcut-btn");
+        let pop_c = populate_file_browser.clone();
+        let target_p = PathBuf::from(path_str);
+        s_btn.connect_clicked(move |_| {
+            (pop_c.borrow_mut())(&target_p);
+        });
+        shortcuts_bar.append(&s_btn);
+    }
+
+    // Connect file browser listbox row selection and activation
+    let pop_c2 = populate_file_browser.clone();
+    browser_listbox.connect_row_activated(clone!(
+        @weak btn_browser_select,
+        @strong selected_image_path
+     => move |_, row| {
+        let tag = row.widget_name().to_string();
+        if let Some(dir_path) = tag.strip_prefix("DIR:") {
+            (pop_c2.borrow_mut())(Path::new(dir_path));
+        } else if let Some(file_path) = tag.strip_prefix("FILE:") {
+            *selected_image_path.borrow_mut() = Some(file_path.to_string());
+            btn_browser_select.set_sensitive(true);
+            btn_browser_select.emit_clicked();
+        }
+    }));
+
+    browser_listbox.connect_row_selected(clone!(
+        @weak btn_browser_select,
+        @strong selected_image_path
+     => move |_, row| {
+        if let Some(r) = row {
+            let tag = r.widget_name().to_string();
+            if let Some(file_path) = tag.strip_prefix("FILE:") {
+                *selected_image_path.borrow_mut() = Some(file_path.to_string());
+                btn_browser_select.set_sensitive(true);
+                return;
+            }
+        }
+        btn_browser_select.set_sensitive(false);
+    }));
 
     // ─────────────────────────────────────────────────────────────
     // Callbacks & Connections
@@ -909,18 +1560,92 @@ fn build_ui(app: &Application) {
         btn_util_continue.emit_clicked();
     }));
 
-    btn_target_back.connect_clicked(clone!(@weak stack => move |_| {
-        stack.set_visible_child_name("utilities");
+    btn_scan_usb.connect_clicked(clone!(@strong populate_usb_images => move |_| {
+        populate_usb_images();
+    }));
+
+    let pop_browser_first = populate_file_browser.clone();
+    btn_open_browser.connect_clicked(clone!(@weak stack => move |_| {
+        let initial_dir = if Path::new("/media").exists() {
+            Path::new("/media")
+        } else if Path::new("/run/media").exists() {
+            Path::new("/run/media")
+        } else {
+            Path::new("/")
+        };
+        (pop_browser_first.borrow_mut())(initial_dir);
+        stack.set_visible_child_name("file_browser");
+    }));
+
+    usb_listbox.connect_row_selected(clone!(@weak btn_usb_continue, @strong selected_image_path => move |_, row| {
+        if let Some(r) = row {
+            let path = r.widget_name().to_string();
+            if !path.is_empty() {
+                *selected_image_path.borrow_mut() = Some(path);
+                btn_usb_continue.set_sensitive(true);
+                return;
+            }
+        }
+        btn_usb_continue.set_sensitive(false);
+    }));
+
+    usb_listbox.connect_row_activated(clone!(@weak btn_usb_continue, @strong selected_image_path => move |_, row| {
+        let path = row.widget_name().to_string();
+        if !path.is_empty() {
+            *selected_image_path.borrow_mut() = Some(path);
+            btn_usb_continue.emit_clicked();
+        }
+    }));
+
+    btn_net_to_usb.connect_clicked(clone!(@weak stack, @strong populate_usb_images => move |_| {
+        populate_usb_images();
+        stack.set_visible_child_name("usb_select");
+    }));
+
+    btn_usb_continue.connect_clicked(clone!(
+        @strong selected_image_path,
+        @strong recovery_mode,
+        @strong show_target_screen
+     => move |_| {
+        if let Some(img_path) = selected_image_path.borrow().clone() {
+            *recovery_mode.borrow_mut() = RecoveryMode::CustomImage(img_path.clone());
+            let fname = Path::new(&img_path).file_name().and_then(|n| n.to_str()).unwrap_or(&img_path);
+            let desc = format!("Source: USB Image ({})", fname);
+            show_target_screen(&desc);
+        }
+    }));
+
+    btn_browser_select.connect_clicked(clone!(
+        @strong selected_image_path,
+        @strong recovery_mode,
+        @strong show_target_screen
+     => move |_| {
+        if let Some(img_path) = selected_image_path.borrow().clone() {
+            *recovery_mode.borrow_mut() = RecoveryMode::CustomImage(img_path.clone());
+            let fname = Path::new(&img_path).file_name().and_then(|n| n.to_str()).unwrap_or(&img_path);
+            let desc = format!("Source: Selected Image ({})", fname);
+            show_target_screen(&desc);
+        }
+    }));
+
+    btn_target_back.connect_clicked(clone!(
+        @weak stack,
+        @strong selected_action
+     => move |_| {
+        let action = selected_action.borrow().clone().unwrap_or_default();
+        if action == "usb_restore" {
+            stack.set_visible_child_name("usb_select");
+        } else {
+            stack.set_visible_child_name("utilities");
+        }
     }));
 
     btn_util_continue.connect_clicked(clone!(
         @weak stack,
-        @weak targets_flow,
-        @weak btn_target_restore,
-        @weak network_box,
         @strong selected_action,
-        @strong selected_target,
-        @strong recovery_mode
+        @strong recovery_mode,
+        @strong show_target_screen,
+        @strong populate_usb_images
      => move |_| {
         let action = selected_action.borrow().clone().unwrap_or_default();
         match action.as_str() {
@@ -938,67 +1663,16 @@ fn build_ui(app: &Application) {
                     .arg("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; xhost +local: >/dev/null 2>&1 || xhost + >/dev/null 2>&1; (xterm -title 'Pulsar OS Recovery Terminal' -bg '#18181b' -fg '#ffffff' -fa Monospace -fs 11 -e sudo bash || gnome-terminal -- sudo bash || alacritty -e sudo bash || x-terminal-emulator -e sudo bash || xterm -e sudo bash) &")
                     .spawn();
             }
-            "reinstall" | "internet" => {
-                let is_internet = action == "internet";
-                if is_internet {
-                    *recovery_mode.borrow_mut() = RecoveryMode::Internet(
-                        "https://github.com/Inled-Pulsar-OS/ISO/releases/download/latest/pulsaros-stable-arch-refind.squashfs".to_string()
-                    );
-                } else {
-                    *recovery_mode.borrow_mut() = RecoveryMode::Local;
-                }
-                // Show network panel only for internet recovery
-                network_box.set_visible(is_internet);
-
-                // Refresh targets
-                while let Some(child) = targets_flow.first_child() {
-                    targets_flow.remove(&child);
-                }
-
-                let targets = find_btrfs_targets();
-                if targets.is_empty() {
-                    let no_target_lbl = Label::new(Some("No Btrfs Pulsar OS partitions detected.\nUse Disk Utility to inspect drives."));
-                    no_target_lbl.add_css_class("welcome-subtitle");
-                    targets_flow.append(&no_target_lbl);
-                    btn_target_restore.set_sensitive(false);
-                } else {
-                    for target in targets {
-                        let card = GtkBox::new(Orientation::Vertical, 6);
-                        card.add_css_class("disk-card");
-                        let disk_icon = create_icon_widget("", "hard-drive", 44);
-                        card.append(&disk_icon);
-
-                        let name_lbl = Label::new(Some(&format!("{} ({})", target.label, target.size)));
-                        name_lbl.add_css_class("utility-title-lbl");
-                        card.append(&name_lbl);
-
-                        let dev_lbl = Label::new(Some(&target.part_path));
-                        dev_lbl.add_css_class("utility-desc-lbl");
-                        card.append(&dev_lbl);
-
-                        let gesture = GestureClick::new();
-                        let t_clone = target.clone();
-                        let targets_flow_c = targets_flow.clone();
-                        let btn_restore_c = btn_target_restore.clone();
-                        let sel_target_c = selected_target.clone();
-                        let card_c = card.clone();
-
-                        gesture.connect_released(move |_, _, _, _| {
-                            let mut next = targets_flow_c.first_child();
-                            while let Some(w) = next {
-                                w.remove_css_class("selected");
-                                next = w.next_sibling();
-                            }
-                            card_c.add_css_class("selected");
-                            *sel_target_c.borrow_mut() = Some(t_clone.clone());
-                            btn_restore_c.set_sensitive(true);
-                        });
-
-                        card.add_controller(gesture);
-                        targets_flow.append(&card);
-                    }
-                }
-                stack.set_visible_child_name("target_select");
+            "internet_info" => {
+                stack.set_visible_child_name("internet_info");
+            }
+            "usb_restore" => {
+                populate_usb_images();
+                stack.set_visible_child_name("usb_select");
+            }
+            "reinstall" => {
+                *recovery_mode.borrow_mut() = RecoveryMode::Local;
+                show_target_screen("Source: Built-in Recovery Partition");
             }
             _ => {}
         }
@@ -1210,30 +1884,28 @@ where
     // 3. Resolve and verify SquashFS source BEFORE wiping anything
     let squashfs_path = match mode {
         RecoveryMode::Local => {
-            progress(0.25, "Locating local Arch Linux recovery image...");
+            progress(0.25, "Locating built-in Arch Linux recovery image...");
             match detect_local_squashfs(&log) {
                 Some(p) => p,
                 None => {
-                    log("ERROR: No valid local Arch Linux base recovery image (>= 1.0 GB) found on storage devices.");
+                    log("ERROR: No valid base recovery image found on built-in recovery partition.");
                     return Err(
-                        "No local recovery image found on the recovery partition.\n\n\
-                        Please choose 'Pulsar Internet Recovery' from the main menu to download and restore the official release image.".to_string()
+                        "No recovery image found on built-in recovery partition.\n\n\
+                        Please choose 'Restore from USB Flash Drive' or check 'Pulsar Internet Recovery' to download an image from SourceForge.".to_string()
                     );
                 }
             }
         }
-        RecoveryMode::Internet(url) => {
-            progress(0.25, "Downloading Pulsar OS image from GitHub Releases...");
-            log(&format!("Downloading clean image from: {}", url));
-            let dl_path = "/tmp/pulsaros-remote-recovery.squashfs";
-            exec_cmd_stream(&format!("curl -L -C - --retry 3 -o {} {}", dl_path, url), &log)?;
-            if !is_valid_base_squashfs(dl_path) {
+        RecoveryMode::CustomImage(path) => {
+            progress(0.25, "Verifying selected recovery image...");
+            log(&format!("Verifying image at: {}", path));
+            if !is_valid_base_squashfs(&path) {
                 return Err(format!(
-                    "Downloaded recovery image from {} is corrupt or invalid.\nNo changes were made to your disk.",
-                    url
+                    "Selected recovery image at '{}' is invalid or corrupt.\nNo changes were made to your disk.",
+                    path
                 ));
             }
-            dl_path.to_string()
+            path
         }
     };
 
@@ -1254,15 +1926,7 @@ where
     // 5. Unsquash clean system into @
     progress(0.55, "Unpacking clean Pulsar OS rootfs into @...");
     log(&format!("Unsquashing {} into {}/@...", squashfs_path, btrfs_mnt));
-    if let Err(unsquash_err) = exec_cmd_stream(&format!("unsquashfs -f -d {}/@ {}", btrfs_mnt, squashfs_path), &log) {
-        log(&format!("Local unsquash failed ({}). Attempting Internet Recovery fallback...", unsquash_err));
-        let url = "https://github.com/Inled-Pulsar-OS/ISO/releases/download/latest/pulsaros-stable-arch-refind.squashfs";
-        let dl_path = "/tmp/pulsaros-remote-recovery.squashfs";
-        progress(0.60, "Downloading fresh system image from GitHub Releases...");
-        exec_cmd_stream(&format!("curl -L -C - --retry 3 -o {} {}", dl_path, url), &log)?;
-        log(&format!("Unsquashing downloaded image {} into {}/@...", dl_path, btrfs_mnt));
-        exec_cmd_stream(&format!("unsquashfs -f -d {}/@ {}", btrfs_mnt, dl_path), &log)?;
-    }
+    exec_cmd_stream(&format!("unsquashfs -f -d {}/@ {}", btrfs_mnt, squashfs_path), &log)?;
 
     // 6. Re-inject preserved users and clean out any temporary live user
     progress(0.85, "Re-injecting user credentials and settings...");

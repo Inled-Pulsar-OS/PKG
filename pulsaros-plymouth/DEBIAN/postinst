@@ -41,16 +41,40 @@ chmod -R 755 /usr/share/plymouth/themes/pulsar-plymouth || true
 find /usr/share/plymouth/themes/pulsar-plymouth -type f -exec chmod 644 {} + || true
 
 # English: Reduce start timeout for Plymouth systemd shutdown services to prevent hanging on reboot/shutdown
-# Español: Reducir el tiempo de espera de inicio de los servicios de Plymouth al apagar/reiniciar para evitar cuelgues
-echo "⚙️ Configurando límites de tiempo de espera (TimeoutStartSec=2s) en servicios de Plymouth..."
+# and ensure shutdown/reboot services are enabled in systemd targets
+# Español: Reducir el tiempo de espera de inicio de los servicios de Plymouth y habilitarlos en los targets de systemd
+echo "⚙️ Configurando servicios de apagado/reinicio de Plymouth..."
+mkdir -p /etc/systemd/system/poweroff.target.wants \
+         /etc/systemd/system/reboot.target.wants \
+         /etc/systemd/system/halt.target.wants \
+         /etc/systemd/system/kexec.target.wants 2>/dev/null || true
+
 for service in plymouth-reboot.service plymouth-halt.service plymouth-poweroff.service plymouth-kexec.service; do
     for dir in /usr/lib/systemd/system /lib/systemd/system; do
         if [ -f "$dir/$service" ]; then
             sed -i '/TimeoutStartSec=/d' "$dir/$service"
             sed -i '/\[Service\]/a TimeoutStartSec=2s' "$dir/$service"
+            
+            case "$service" in
+                plymouth-poweroff.service)
+                    ln -sf "$dir/$service" /etc/systemd/system/poweroff.target.wants/ 2>/dev/null || true
+                    ;;
+                plymouth-reboot.service)
+                    ln -sf "$dir/$service" /etc/systemd/system/reboot.target.wants/ 2>/dev/null || true
+                    ;;
+                plymouth-halt.service)
+                    ln -sf "$dir/$service" /etc/systemd/system/halt.target.wants/ 2>/dev/null || true
+                    ;;
+                plymouth-kexec.service)
+                    ln -sf "$dir/$service" /etc/systemd/system/kexec.target.wants/ 2>/dev/null || true
+                    ;;
+            esac
         fi
     done
 done
+
+systemctl daemon-reload 2>/dev/null || true
+systemctl enable plymouth-poweroff.service plymouth-reboot.service plymouth-halt.service plymouth-kexec.service 2>/dev/null || true
 
 # Regenerar initramfs
 if command -v update-initramfs >/dev/null; then

@@ -16,6 +16,7 @@ import shutil
 import json
 import gi
 
+os.environ["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:" + os.environ.get("PATH", "")
 
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
@@ -729,6 +730,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.selected_action = None
         self.selected_disk_card = None
         self.selected_install_mode = None
+        self.selected_bootloader = "refind"
         
         # Build views
         self.build_utilities_screen()
@@ -2123,6 +2125,27 @@ class RecoveryWindow(Adw.ApplicationWindow):
             self.stack.set_visible_child_name("install_disk_select")
 
     def _net_continue_clicked(self, btn):
+        self._show_bootloader_dialog()
+
+    def _show_bootloader_dialog(self):
+        is_efi = os.path.exists("/sys/firmware/efi")
+        refind_available = any(
+            os.path.exists(p)
+            for p in (
+                "/usr/bin/refind-install",
+                "/usr/sbin/refind-install",
+                "/bin/refind-install",
+            )
+        )
+
+        if is_efi and refind_available:
+            self.selected_bootloader = "refind"
+        else:
+            self.selected_bootloader = "grub"
+
+        self._proceed_to_final_confirmation()
+
+    def _proceed_to_final_confirmation(self):
         if self.install_mode == "dualboot":
             self._show_dualboot_confirmation_dialog()
         else:
@@ -2230,10 +2253,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 self._show_network_check_screen()
             else:
                 self.install_extra_packages = False
-                if self.install_mode == "dualboot":
-                    self._show_dualboot_confirmation_dialog()
-                else:
-                    self._show_clean_install_warning_dialog()
+                self._show_bootloader_dialog()
 
         dialog.connect("response", on_response)
         dialog.present()
@@ -3230,7 +3250,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
             def create_target_swapfile():
                 """Create a non-COW /swapfile on the target for hibernation."""
-                if os.path.isfile("/mnt/swapfile"):
+                if os.path.isfile("/mnt/swapfile") and os.path.getsize("/mnt/swapfile") > 0:
                     return
                 swap_gb = compute_swap_size_gb()
                 if swap_gb < 4:
@@ -3238,8 +3258,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     return
                 try:
                     log_msg(f"Creating contiguous non-COW /swapfile ({swap_gb}GB) for hibernation support...")
-                    subprocess.run(["btrfs", "filesystem", "mkswapfile", "--size", f"{swap_gb}g", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    if not os.path.isfile("/mnt/swapfile"):
+                    created = False
+                    for btrfs_cmd in [shutil.which("btrfs"), "/usr/sbin/btrfs", "/sbin/btrfs", "/usr/bin/btrfs", "/bin/btrfs"]:
+                        if btrfs_cmd and os.path.isfile(btrfs_cmd):
+                            try:
+                                res = subprocess.run([btrfs_cmd, "filesystem", "mkswapfile", "--size", f"{swap_gb}g", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                if res.returncode == 0 and os.path.isfile("/mnt/swapfile") and os.path.getsize("/mnt/swapfile") > 0:
+                                    created = True
+                                    break
+                            except Exception:
+                                pass
+                    if not created or not os.path.isfile("/mnt/swapfile") or os.path.getsize("/mnt/swapfile") == 0:
                         subprocess.run(["truncate", "-s", "0", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                         subprocess.run(["chattr", "+C", "/mnt/swapfile"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                         subprocess.run(["dd", "if=/dev/zero", "of=/mnt/swapfile", "bs=1M", "count=" + str(swap_gb * 1024), "status=none"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -3260,10 +3289,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     f"UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1,space_cache=v2     0       0",
                 ]
                 if efi_uuid:
-                    fstab_lines.append(f"UUID={efi_uuid}             /boot/efi       vfat    umask=0077                                      0       2")
+                    fstab_lines.append(f"UUID={efi_uuid}             /boot/efi       vfat    defaults,nofail,x-systemd.device-timeout=5,dmask=0077,fmask=0077 0       2")
                 if rec_uuid:
-                    fstab_lines.append(f"UUID={rec_uuid}            /recovery       ext4    defaults,noatime                                0       2")
-                fstab_lines.append("/swapfile                   none            swap    defaults                                        0       0")
+                    fstab_lines.append(f"UUID={rec_uuid}            /recovery       ext4    defaults,noatime,nofail,x-systemd.device-timeout=5 0       2")
+                fstab_lines.append("/swapfile                   none            swap    defaults,nofail                                 0       0")
                 fstab_content = "\n".join(fstab_lines) + "\n"
                 
                 if "TEST_MODE" not in os.environ:
@@ -3288,8 +3317,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     f"UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1,space_cache=v2     0       0",
                 ]
                 if rec_uuid:
-                    fstab_lines.append(f"UUID={rec_uuid}            /recovery       ext4    defaults,noatime                                0       2")
-                fstab_lines.append("/swapfile                   none            swap    defaults                                        0       0")
+                    fstab_lines.append(f"UUID={rec_uuid}            /recovery       ext4    defaults,noatime,nofail,x-systemd.device-timeout=5 0       2")
+                fstab_lines.append("/swapfile                   none            swap    defaults,nofail                                 0       0")
                 fstab_content = "\n".join(fstab_lines) + "\n"
                 
                 if "TEST_MODE" not in os.environ:
@@ -3419,6 +3448,70 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 except Exception as cp_err:
                     log_msg(f"ERROR deploying recovery kernel: {cp_err}")
 
+            def get_target_swap_offset():
+                if not os.path.isfile("/mnt/swapfile"):
+                    return None
+                # Check btrfs on host
+                for b_bin in [shutil.which("btrfs"), "/usr/sbin/btrfs", "/sbin/btrfs", "/usr/bin/btrfs", "/bin/btrfs"]:
+                    if b_bin and os.path.isfile(b_bin):
+                        try:
+                            out = subprocess.check_output(
+                                [b_bin, "inspect-internal", "map-swapfile", "-r", "/mnt/swapfile"],
+                                stderr=subprocess.DEVNULL, universal_newlines=True
+                            ).strip()
+                            for line in reversed(out.splitlines()):
+                                line = line.strip()
+                                if line.isdigit():
+                                    return line
+                        except Exception:
+                            pass
+                # Check filefrag on host
+                for f_bin in [shutil.which("filefrag"), "/usr/sbin/filefrag", "/sbin/filefrag", "/usr/bin/filefrag", "/bin/filefrag"]:
+                    if f_bin and os.path.isfile(f_bin):
+                        try:
+                            out = subprocess.check_output(
+                                [f_bin, "-v", "/mnt/swapfile"],
+                                stderr=subprocess.DEVNULL, universal_newlines=True
+                            )
+                            for line in out.splitlines():
+                                line = line.strip()
+                                if line.startswith("0:"):
+                                    parts = line.split()
+                                    if len(parts) >= 4:
+                                        raw_offset = parts[3].replace("..", "").strip()
+                                        if raw_offset.isdigit():
+                                            return raw_offset
+                        except Exception:
+                            pass
+                # Check inside chroot
+                try:
+                    out = subprocess.check_output(
+                        ["chroot", "/mnt", "btrfs", "inspect-internal", "map-swapfile", "-r", "/swapfile"],
+                        stderr=subprocess.DEVNULL, universal_newlines=True
+                    ).strip()
+                    for line in reversed(out.splitlines()):
+                        line = line.strip()
+                        if line.isdigit():
+                            return line
+                except Exception:
+                    pass
+                try:
+                    out = subprocess.check_output(
+                        ["chroot", "/mnt", "filefrag", "-v", "/swapfile"],
+                        stderr=subprocess.DEVNULL, universal_newlines=True
+                    )
+                    for line in out.splitlines():
+                        line = line.strip()
+                        if line.startswith("0:"):
+                            parts = line.split()
+                            if len(parts) >= 4:
+                                raw_offset = parts[3].replace("..", "").strip()
+                                if raw_offset.isdigit():
+                                    return raw_offset
+                except Exception:
+                    pass
+                return None
+
             def configure_refind_menus():
                 """Write the deterministic multi-boot menu to EVERY rEFInd
                 configuration location (NVRAM path and fallback)."""
@@ -3428,18 +3521,24 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 MENU_END = "# PULSAR-MENU-END"
 
                 kernel_cands = sorted(glob.glob("/mnt/boot/vmlinuz-*") + glob.glob("/mnt/boot/vmlinuz"))
-                installed_k_file = next((k for k in kernel_cands if os.path.isfile(k) and not k.endswith(".kver")), None)
-                k_name = os.path.basename(installed_k_file) if installed_k_file else "vmlinuz-linux"
+                installed_k_file = next(
+                    (
+                        k for k in kernel_cands
+                        if os.path.isfile(k) and not k.endswith(".kver") and "recovery" not in os.path.basename(k)
+                    ),
+                    None
+                )
+                k_name = os.path.basename(installed_k_file) if installed_k_file else ("vmlinuz-linux" if is_arch else "vmlinuz")
 
                 initrd_cands = sorted(glob.glob("/mnt/boot/initramfs-*.img") + glob.glob("/mnt/boot/initrd.img*") + glob.glob("/mnt/boot/initrd*"))
                 installed_initrd_file = next(
                     (
                         i for i in initrd_cands
-                        if os.path.isfile(i) and "fallback" not in i and "ucode" not in i and not i.endswith(".kver")
+                        if os.path.isfile(i) and "fallback" not in i and "ucode" not in i and "recovery" not in os.path.basename(i) and not i.endswith(".kver")
                     ),
                     None
                 )
-                initrd_name = os.path.basename(installed_initrd_file) if installed_initrd_file else "initramfs-linux.img"
+                initrd_name = os.path.basename(installed_initrd_file) if installed_initrd_file else ("initramfs-linux.img" if is_arch else "initrd.img")
 
                 ucode_lines = "".join(
                     f"    initrd /@/boot/{uc}\n"
@@ -3451,29 +3550,26 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 rec_opts_auto = "boot=live components username=live autologin cow_spacesize=4G live-media-path=live fsck.mode=skip quiet splash"
                 rec_net_opts = "boot=live components username=live autologin cow_spacesize=4G internet_recovery=1 quiet splash"
 
-                refind_main = f"{esp_root}/EFI/refind"
-                boot_fb = f"{esp_root}/EFI/BOOT"
+                refind_dirs = [
+                    f"{esp_root}/EFI/refind",
+                    f"{esp_root}/EFI/BOOT",
+                    f"{esp_root}/EFI/debian",
+                    f"{esp_root}/EFI/PulsarOS",
+                ]
 
-                for rd in (refind_main, boot_fb):
+                for rd in refind_dirs:
+                    os.makedirs(rd, exist_ok=True)
                     conf_path = f"{rd}/refind.conf"
-                    if not os.path.isdir(rd):
-                        log_msg(f"Notice: {rd} absent - menu config skipped there")
-                        continue
                     try:
-                        is_main = (rd == refind_main)
-                        icon_prefix = "/EFI/refind" if is_main else "/EFI/BOOT"
+                        icon_prefix = rd.replace(esp_root, "")
                         icon_os = f"{icon_prefix}/themes/rEFInd-Regular-Dark/icons/os_pulsaros_normal.png"
                         icon_rec = f"{icon_prefix}/themes/rEFInd-Regular-Dark/icons/os_recovery.png"
 
                         # Check for existing resume parameters (hibernation to disk)
                         resume_opts = ""
-                        if not resume_opts and os.path.isfile("/mnt/swapfile") and root_uuid:
-                            try:
-                                swap_out = subprocess.check_output(["btrfs", "inspect-internal", "map-swapfile", "-r", "/mnt/swapfile"], stderr=subprocess.DEVNULL, universal_newlines=True).strip()
-                                if swap_out.isdigit():
-                                    resume_opts = f" resume=UUID={root_uuid} resume_offset={swap_out} zswap.enabled=0"
-                            except Exception:
-                                pass
+                        target_offset = get_target_swap_offset()
+                        if target_offset and root_uuid:
+                            resume_opts = f" resume=UUID={root_uuid} resume_offset={target_offset} zswap.enabled=0"
 
                         if not resume_opts and os.path.isfile("/mnt/boot/refind_linux.conf"):
                             try:
@@ -3498,10 +3594,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             try:
                                 with open("/mnt/boot/refind_linux.conf", "r") as rf:
                                     rl_data = rf.read()
-                                if "resume=" not in rl_data:
-                                    rl_data = re.sub(r'(root=UUID=[^\s"\']*)', r'\1' + resume_opts, rl_data)
-                                    with open("/mnt/boot/refind_linux.conf", "w") as rf:
-                                        rf.write(rl_data)
+                                rl_data = re.sub(r' resume=UUID=[^\s"\']*', '', rl_data)
+                                rl_data = re.sub(r' resume_offset=\d+', '', rl_data)
+                                rl_data = re.sub(r' zswap\.enabled=\d+', '', rl_data)
+                                rl_data = re.sub(r'(root=UUID=[^\s"\']*)', r'\1' + resume_opts, rl_data)
+                                with open("/mnt/boot/refind_linux.conf", "w") as rf:
+                                    rf.write(rl_data)
                             except Exception:
                                 pass
 
@@ -3615,13 +3713,27 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     return
 
                 grub_default = "/mnt/etc/default/grub"
+                rl_resume_opts = ""
+                target_offset = get_target_swap_offset()
+                if target_offset and root_uuid:
+                    rl_resume_opts = f" resume=UUID={root_uuid} resume_offset={target_offset} zswap.enabled=0"
+                if not rl_resume_opts and os.path.isfile("/mnt/boot/refind_linux.conf"):
+                    try:
+                        with open("/mnt/boot/refind_linux.conf", "r") as rf:
+                            m = re.search(r"(resume=UUID=[^\s\"]+\s+resume_offset=\d+(\s+zswap\.enabled=0)?)", rf.read())
+                            if m:
+                                rl_resume_opts = " " + m.group(1)
+                    except Exception:
+                        pass
+
                 grub_params = {
                     "GRUB_DISTRIBUTOR": '"Pulsar OS"',
                     "GRUB_DISABLE_OS_PROBER": "false",
                     "GRUB_TIMEOUT": "5",
                     "GRUB_TIMEOUT_STYLE": "menu",
                     "GRUB_GFXMODE": '"1920x1080,1280x720,1024x768,auto"',
-                    "GRUB_GFXPAYLOAD_LINUX": '"keep"',
+                    "GRUB_CMDLINE_LINUX": '"rootflags=subvol=@"',
+                    "GRUB_CMDLINE_LINUX_DEFAULT": f'"rootflags=subvol=@ rw quiet splash{rl_resume_opts}"',
                 }
 
                 # Check if GRUB theme exists
@@ -3748,7 +3860,9 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
                 )
             )
 
-            if is_efi and efi_part and refind_available:
+            use_refind = (getattr(self, "selected_bootloader", "refind") == "refind" and refind_available)
+
+            if is_efi and efi_part and use_refind:
                 GLib.idle_add(self.update_progress, 0.90, "Installing rEFInd bootloader...")
                 try:
                     live_refind_install = next(
@@ -3817,16 +3931,9 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
                         # auto-detected by rEFInd and tools that rewrite this file
                         # must keep resume= / resume_offset= / zswap.enabled=0.
                         rl_resume_opts = ""
-                        if os.path.isfile("/mnt/swapfile") and root_uuid:
-                            try:
-                                swap_out = subprocess.check_output(
-                                    ["btrfs", "inspect-internal", "map-swapfile", "-r", "/mnt/swapfile"],
-                                    stderr=subprocess.DEVNULL, universal_newlines=True,
-                                ).strip()
-                                if swap_out.isdigit():
-                                    rl_resume_opts = f" resume=UUID={root_uuid} resume_offset={swap_out} zswap.enabled=0"
-                            except Exception:
-                                pass
+                        target_offset = get_target_swap_offset()
+                        if target_offset and root_uuid:
+                            rl_resume_opts = f" resume=UUID={root_uuid} resume_offset={target_offset} zswap.enabled=0"
                         if not rl_resume_opts:
                             try:
                                 with open(refind_linux_conf, "r") as rf:
@@ -3866,22 +3973,18 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
 
                         refind_root = f"{esp_root}/EFI/refind"
                         boot_fb = f"{esp_root}/EFI/BOOT"
+                        debian_fb = f"{esp_root}/EFI/debian"
+                        pulsaros_fb = f"{esp_root}/EFI/PulsarOS"
                         theme_src = "/mnt/usr/share/refind/themes/rEFInd-Regular-Dark"
-                        theme_dest = f"{refind_root}/themes/rEFInd-Regular-Dark"
-                        theme_fb_dest = f"{boot_fb}/themes/rEFInd-Regular-Dark"
 
-                        if os.path.isdir(refind_root) and "TEST_MODE" not in os.environ:
-                            os.makedirs(theme_dest, exist_ok=True)
-                            os.makedirs(theme_fb_dest, exist_ok=True)
-                            if os.path.isdir(theme_src):
-                                subprocess.run(
-                                    ["cp", "-r", f"{theme_src}/.", theme_dest],
-                                    capture_output=True,
-                                )
-                                subprocess.run(
-                                    ["cp", "-r", f"{theme_src}/.", theme_fb_dest],
-                                    capture_output=True,
-                                )
+                        if "TEST_MODE" not in os.environ:
+                            for efidir in (refind_root, boot_fb, debian_fb, pulsaros_fb):
+                                os.makedirs(f"{efidir}/themes/rEFInd-Regular-Dark", exist_ok=True)
+                                if os.path.isdir(theme_src):
+                                    subprocess.run(
+                                        ["cp", "-r", f"{theme_src}/.", f"{efidir}/themes/rEFInd-Regular-Dark"],
+                                        capture_output=True,
+                                    )
 
                             rec_icon_cands = [
                                 "/mnt/usr/share/pulsar-boot-icons/os_recovery.png",
@@ -3894,12 +3997,18 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
                             rec_icon_src = next((p for p in rec_icon_cands if os.path.isfile(p)), None)
                             if rec_icon_src:
                                 for idir in (
-                                    f"{theme_dest}/icons",
-                                    f"{theme_fb_dest}/icons",
+                                    f"{refind_root}/themes/rEFInd-Regular-Dark/icons",
+                                    f"{boot_fb}/themes/rEFInd-Regular-Dark/icons",
+                                    f"{debian_fb}/themes/rEFInd-Regular-Dark/icons",
+                                    f"{pulsaros_fb}/themes/rEFInd-Regular-Dark/icons",
                                     f"{refind_root}/icons",
                                     refind_root,
                                     f"{boot_fb}/icons",
                                     boot_fb,
+                                    f"{debian_fb}/icons",
+                                    debian_fb,
+                                    f"{pulsaros_fb}/icons",
+                                    pulsaros_fb,
                                     f"{esp_root}/EFI/recovery",
                                     "/mnt/recovery",
                                     "/mnt/recovery/boot",
@@ -3920,20 +4029,26 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
                                 "/usr/share/icons/hicolor/128x128/apps/pulsaros-logo.png",
                                 "/mnt/usr/share/pulsar-boot-icons/normal.png",
                                 "/usr/share/pulsar-boot-icons/normal.png",
-                                f"{theme_dest}/icons/os_pulsaros_normal.png",
-                                f"{theme_dest}/icons/os_pulsaros.png",
+                                f"{refind_root}/themes/rEFInd-Regular-Dark/icons/os_pulsaros_normal.png",
+                                f"{refind_root}/themes/rEFInd-Regular-Dark/icons/os_pulsaros.png",
                                 "/mnt/usr/share/pulsaros-recovery/logo.png",
                                 "/usr/share/pulsaros-recovery/logo.png",
                             ]
                             main_icon_src = next((p for p in main_icon_cands if os.path.isfile(p)), None)
                             if main_icon_src:
                                 for idir in (
-                                    f"{theme_dest}/icons",
-                                    f"{theme_fb_dest}/icons",
+                                    f"{refind_root}/themes/rEFInd-Regular-Dark/icons",
+                                    f"{boot_fb}/themes/rEFInd-Regular-Dark/icons",
+                                    f"{debian_fb}/themes/rEFInd-Regular-Dark/icons",
+                                    f"{pulsaros_fb}/themes/rEFInd-Regular-Dark/icons",
                                     f"{refind_root}/icons",
                                     refind_root,
                                     f"{boot_fb}/icons",
                                     boot_fb,
+                                    f"{debian_fb}/icons",
+                                    debian_fb,
+                                    f"{pulsaros_fb}/icons",
+                                    pulsaros_fb,
                                     "/mnt/@/boot",
                                     "/mnt/@",
                                 ):
@@ -3963,6 +4078,10 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
                                         f"{refind_root}/drivers",
                                         f"{boot_fb}/drivers_x64",
                                         f"{boot_fb}/drivers",
+                                        f"{debian_fb}/drivers_x64",
+                                        f"{debian_fb}/drivers",
+                                        f"{pulsaros_fb}/drivers_x64",
+                                        f"{pulsaros_fb}/drivers",
                                         f"{esp_root}/drivers_x64",
                                         f"{esp_root}/drivers",
                                     ):
@@ -4012,7 +4131,7 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
                     # HOOKS line to eliminate any inherited stale state.
                     canonical_hooks = (
                         "HOOKS=(base systemd autodetect microcode modconf kms "
-                        "keyboard sd-vconsole plymouth block filesystems fsck btrfs)"
+                        "keyboard sd-vconsole plymouth block filesystems btrfs)"
                     )
                     mk_content = re.sub(r'^HOOKS=\(.*?\)', canonical_hooks, mk_content, flags=re.MULTILINE)
                     with open(mkinit_path, "w") as f:
@@ -4033,7 +4152,47 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
                 else:
                     configure_grub_menus()
             else:
+                # Debian path
+                # 1. Configure resume in initramfs-tools
+                if root_uuid and "TEST_MODE" not in os.environ:
+                    try:
+                        os.makedirs("/mnt/etc/initramfs-tools/conf.d", exist_ok=True)
+                        with open("/mnt/etc/initramfs-tools/conf.d/resume", "w") as rf:
+                            rf.write(f"RESUME=UUID={root_uuid}\n")
+                        log_msg(f"✅ Configurado /etc/initramfs-tools/conf.d/resume con RESUME=UUID={root_uuid}")
+                    except Exception as deb_res_err:
+                        log_msg(f"Warning: Failed to write Debian resume conf: {deb_res_err}")
+
+                # 2. Ensure sleep.conf.d drop-in
+                if "TEST_MODE" not in os.environ:
+                    try:
+                        os.makedirs("/mnt/etc/systemd/sleep.conf.d", exist_ok=True)
+                        with open("/mnt/etc/systemd/sleep.conf.d/pulsaros-hibernate.conf", "w") as sf:
+                            sf.write("[Sleep]\nAllowHibernation=yes\nAllowHybridSleep=yes\nAllowSuspendThenHibernate=yes\nHibernateMode=shutdown\nHibernateState=disk\n")
+                    except Exception as deb_slp_err:
+                        log_msg(f"Warning: Failed to write sleep drop-in: {deb_slp_err}")
+
+                # 3. Enable Plymouth shutdown services on Debian
+                if "TEST_MODE" not in os.environ:
+                    for srv in ("plymouth-poweroff.service", "plymouth-reboot.service", "plymouth-halt.service"):
+                        try:
+                            tgt = srv.split("-")[1].replace(".service", "") + ".target.wants"
+                            os.makedirs(f"/mnt/etc/systemd/system/{tgt}", exist_ok=True)
+                            for d in ("/lib/systemd/system", "/usr/lib/systemd/system"):
+                                if os.path.isfile(f"/mnt{d}/{srv}"):
+                                    subprocess.run(["ln", "-sf", f"{d}/{srv}", f"/mnt/etc/systemd/system/{tgt}/{srv}"], capture_output=True)
+                        except Exception:
+                            pass
+
                 preserve_live_initramfs_for_recovery()
+
+                # 4. Update initramfs on Debian so resume is included
+                try:
+                    exec_cmd(["chroot", "/mnt", "update-initramfs", "-u"])
+                    log_msg("✅ initramfs actualizado en Debian con soporte de hibernación/resume.")
+                except Exception as deb_init_err:
+                    log_msg(f"Warning: update-initramfs -u failed (non-fatal): {deb_init_err}")
+
                 deploy_kernel_to_recovery()
                 if refind_installed:
                     configure_refind_menus()
@@ -4043,7 +4202,7 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
 
 
 
-            # ── Recompile the system dconf database ───────────────────
+            # ── Recompile the system dconf database & glib schemas ───────────────────
             # The PulsarOS macOS keybindings (XKB Super<->Ctrl swap, spotlight on
             # <Ctrl>space, etc.) live in /etc/dconf/db/local. The rsync copies the
             # compiled DB and its local.d sources; recompiling here guarantees the
@@ -4051,9 +4210,51 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
             # stale. This is best-effort: dconf may be absent in minimal targets.
             try:
                 GLib.idle_add(self.update_progress, 0.90, "Applying system settings...")
+                # 1. Ensure default cursor fallback exists system-wide
+                os.makedirs("/mnt/usr/share/icons/default", exist_ok=True)
+                with open("/mnt/usr/share/icons/default/index.theme", "w") as f:
+                    f.write("[Icon Theme]\nName=Default\nComment=Default Cursor Theme\nInherits=MacTahoe-dark,Adwaita\n")
+                
+                # 2. Link cursors for all MacTahoe variants
+                for icondir in glob.glob("/mnt/usr/share/icons/MacTahoe-*"):
+                    if os.path.isdir(icondir) and not os.path.exists(f"{icondir}/cursors") and os.path.isdir("/mnt/usr/share/icons/MacTahoe-dark/cursors"):
+                        try:
+                            os.symlink("../MacTahoe-dark/cursors", f"{icondir}/cursors")
+                        except Exception:
+                            pass
+
+                # 3. Configure /etc/environment with cursor theme
+                env_path = "/mnt/etc/environment"
+                env_lines = []
+                if os.path.isfile(env_path):
+                    with open(env_path, "r") as ef:
+                        env_lines = ef.read().splitlines()
+                env_lines = [l for l in env_lines if not l.startswith("XCURSOR_THEME=") and not l.startswith("XCURSOR_SIZE=")]
+                env_lines.append("XCURSOR_THEME=MacTahoe-dark")
+                env_lines.append("XCURSOR_SIZE=24")
+                os.makedirs(os.path.dirname(env_path), exist_ok=True)
+                with open(env_path, "w") as ef:
+                    ef.write("\n".join(env_lines) + "\n")
+
+                # 4. Configure user skeleton and existing home directories
+                for target_home in ["/mnt/etc/skel", "/mnt/root"] + glob.glob("/mnt/home/*"):
+                    if os.path.isdir(target_home):
+                        os.makedirs(f"{target_home}/.icons/default", exist_ok=True)
+                        with open(f"{target_home}/.icons/default/index.theme", "w") as f:
+                            f.write("[Icon Theme]\nName=Default\nComment=Default Cursor Theme\nInherits=MacTahoe-dark,Adwaita\n")
+                        xres_path = f"{target_home}/.Xresources"
+                        xres_content = ""
+                        if os.path.isfile(xres_path):
+                            with open(xres_path, "r") as xf:
+                                xres_content = xf.read()
+                        if "Xcursor.theme" not in xres_content:
+                            with open(xres_path, "a") as xf:
+                                xf.write("\nXcursor.theme: MacTahoe-dark\nXcursor.size: 24\n")
+
+                exec_cmd(["chroot", "/mnt", "glib-compile-schemas", "/usr/share/glib-2.0/schemas/"])
                 exec_cmd(["chroot", "/mnt", "dconf", "update"])
             except Exception as dconf_err:
-                print(f"Warning: dconf update failed (non-fatal): {dconf_err}")
+                print(f"Warning: dconf/schema update failed (non-fatal): {dconf_err}")
 
             # ── Driver installation (Best effort, non-fatal for offline installs) ───
             # ── Broadcom Driver installation (Optional, requires Internet) ───
