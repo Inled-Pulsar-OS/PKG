@@ -10,12 +10,14 @@ sleep 6
 DESKTOP_DIR="$HOME/Desktop"
 mkdir -p "$DESKTOP_DIR"
 
-# English: Remove the recovery launcher from desktop as requested, since it causes errors.
-# Español: Eliminar el lanzador de recovery del escritorio como se solicitó, ya que causa errores.
-rm -f "$DESKTOP_DIR/pulsaros-recovery.desktop"
+# Place the Install Pulsar OS shortcut on desktop for live session
+if [ -f "/usr/share/applications/pulsaros-recovery.desktop" ]; then
+    cp -f "/usr/share/applications/pulsaros-recovery.desktop" "$DESKTOP_DIR/pulsaros-recovery.desktop"
+    chmod +x "$DESKTOP_DIR/pulsaros-recovery.desktop"
+    gio set "$DESKTOP_DIR/pulsaros-recovery.desktop" metadata::trusted true 2>/dev/null || true
+fi
 
 # Clean up default Calamares icons if they were generated
-# Limpiar iconos de Calamares por defecto si se generaron
 rm -f "$DESKTOP_DIR/calamares-install-debian.desktop"
 rm -f "$DESKTOP_DIR/calamares.desktop"
 

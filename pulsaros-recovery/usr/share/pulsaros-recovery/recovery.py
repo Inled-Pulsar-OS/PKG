@@ -207,6 +207,55 @@ listrow:selected, listboxrow:selected {
     color: #aeaeb2;
     margin-top: 2px;
 }
+.options-group {
+    background-color: #242426;
+    border: 1px solid #38383a;
+    border-radius: 12px;
+    padding: 6px 14px;
+    margin: 6px 0;
+}
+.option-row {
+    padding: 10px 4px;
+}
+.option-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #ffffff;
+}
+.option-desc {
+    font-size: 11px;
+    color: #aeaeb2;
+}
+.uefi-notice-card {
+    background-color: rgba(0, 113, 227, 0.12);
+    border: 1px solid rgba(0, 113, 227, 0.35);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-top: 8px;
+}
+.uefi-notice-text {
+    font-size: 11px;
+    color: #d1e8ff;
+}
+.summary-box {
+    background-color: #242426;
+    border: 1px solid #38383a;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin: 10px 0;
+    min-width: 380px;
+}
+.summary-line {
+    font-size: 12px;
+    color: #e5e5ea;
+    padding: 4px 0;
+}
+.summary-warning {
+    font-size: 11px;
+    color: #ff9f0a;
+    margin-top: 8px;
+    text-align: center;
+}
 .partition-card {
     background-color: #2a2a2a;
     border: 1px solid #3c3c3c;
@@ -739,6 +788,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.build_install_disk_select_screen()
         self.build_install_mode_select_screen()
         self.build_install_partition_select_screen()
+        self.build_install_options_screen()
+        self.build_install_confirm_screen()
         self.build_install_progress_screen()
         self.build_install_error_screen()
         
@@ -888,16 +939,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.listbox.connect("row-selected", self.on_utility_row_selected)
         screen_box.append(self.listbox)
         
-        self.add_utility_row(self.listbox, "backup", "Restore from Time Machine", 
-                             "If you have backup of your system that you want to restore.", "timemachine")
-        self.add_utility_row(self.listbox, "install", "Reinstall Pulsar OS", 
-                             "Install a new copy of Pulsar OS onto your computer.", "logo")
+        self.add_utility_row(self.listbox, "install", "Install Pulsar OS", 
+                             "Install a fresh copy of Pulsar OS onto your computer.", "logo")
         self.add_utility_row(self.listbox, "safari", "Seafari", 
                              "Browse the web to get help with your computer.", "safari")
         self.add_utility_row(self.listbox, "disk", "Disk Utility", 
-                             "Repair or erase a disk using Disk Utility.", "disk")
+                             "Repair or manage storage drives using Disk Utility.", "disk")
         self.add_utility_row(self.listbox, "packages", "Install Extra Packages",
-                             "Install Docker, drivers, firmware, and apps on the installed system.", "logo")
+                             "Install full drivers, firmware, and multimedia apps on the installed system.", "logo")
                              
         bottom_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         bottom_box.set_margin_top(12)
@@ -993,7 +1042,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             return
             
         if self.selected_action == "backup":
-            subprocess.Popen("pulsaros-timemachine gui || pulsaros-timemachine || timeshift-launcher || pkexec timeshift-gtk || timeshift-gtk || deja-dup --restore || deja-dup", shell=True)
+            subprocess.Popen("pulsaros-timemachine gui || pulsaros-timemachine || python3 /usr/share/pulsaros-timemachine/cli.py gui", shell=True)
         elif self.selected_action == "install":
             self.stack.set_visible_child_name("install_welcome")
         elif self.selected_action == "safari":
@@ -1540,7 +1589,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             
         self.install_mode = self.selected_install_mode
         if self.install_mode == "clean":
-            self._show_broadcom_dialog()
+            self._show_options_screen()
         elif self.install_mode == "dualboot":
             self.refresh_partitions()
             self.stack.set_visible_child_name("install_partition_select")
@@ -1560,7 +1609,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         title.set_markup("<span font_weight='bold' size='17000'>Select Target Partition</span>")
         box.append(title)
 
-        subtitle = Gtk.Label(label="Choose a partition for Pulsar OS (will be formatted as Btrfs).")
+        subtitle = Gtk.Label(label="Choose a partition to install Pulsar OS.")
         subtitle.add_css_class("progress-text")
         box.append(subtitle)
 
@@ -1584,18 +1633,18 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.efi_info_icon = Gtk.Image.new_from_icon_name("emblem-system-symbolic")
         self.efi_info_icon.set_pixel_size(18)
         self.efi_info_box.append(self.efi_info_icon)
-        self.efi_info_lbl = Gtk.Label(label="Detecting EFI System Partition...")
+        self.efi_info_lbl = Gtk.Label(label="Detecting system boot partition...")
         self.efi_info_lbl.add_css_class("efi-info-text")
         self.efi_info_lbl.set_halign(Gtk.Align.START)
         self.efi_info_box.append(self.efi_info_lbl)
         box.append(self.efi_info_box)
 
-        # Extra utility tools row (GParted, Refresh)
+        # Extra utility tools row (Disk Utility, Refresh)
         tools_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         tools_box.set_halign(Gtk.Align.CENTER)
         tools_box.set_margin_top(4)
 
-        btn_gparted = Gtk.Button(label="Open Disk Utility (GParted)...")
+        btn_gparted = Gtk.Button(label="Open Disk Utility...")
         btn_gparted.add_css_class("secondary-action")
         btn_gparted.connect("clicked", lambda x: subprocess.Popen("gparted || pkexec gparted || gnome-disks || gnome-disk-utility", shell=True))
         tools_box.append(btn_gparted)
@@ -1682,7 +1731,250 @@ class RecoveryWindow(Adw.ApplicationWindow):
     def on_partition_continue_clicked(self, btn):
         if not self.target_partition or not self.target_partition_info:
             return
-        self._show_broadcom_dialog()
+        self._show_options_screen()
+
+    def build_install_options_screen(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_valign(Gtk.Align.CENTER)
+        box.set_halign(Gtk.Align.CENTER)
+        box.set_size_request(460, -1)
+
+        if "DEMO_MODE" in os.environ:
+            demo_banner = Gtk.Label(label="⚠ DEMO MODE — No changes will be made to your system")
+            demo_banner.add_css_class("demo-banner")
+            box.append(demo_banner)
+
+        image = self.get_logo_image(72, is_installer=True)
+        box.append(image)
+
+        title = Gtk.Label()
+        title.set_markup("<span font_weight='bold' size='17000'>Installation Options</span>")
+        box.append(title)
+
+        subtitle = Gtk.Label(label="Choose additional software and drivers for your setup.")
+        subtitle.add_css_class("progress-text")
+        box.append(subtitle)
+
+        # Options group container
+        opt_group = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        opt_group.add_css_class("options-group")
+
+        # Row 1: Broadcom / Hardware drivers
+        row_broadcom = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        row_broadcom.add_css_class("option-row")
+        
+        txt_b = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        txt_b.set_hexpand(True)
+        lbl_b_title = Gtk.Label(label="Additional Wi-Fi & Hardware Drivers")
+        lbl_b_title.add_css_class("option-title")
+        lbl_b_title.set_halign(Gtk.Align.START)
+        txt_b.append(lbl_b_title)
+        lbl_b_desc = Gtk.Label(label="Recommended for Broadcom and specialized wireless chips.")
+        lbl_b_desc.add_css_class("option-desc")
+        lbl_b_desc.set_halign(Gtk.Align.START)
+        lbl_b_desc.set_wrap(True)
+        txt_b.append(lbl_b_desc)
+        row_broadcom.append(txt_b)
+
+        self.chk_broadcom = Gtk.CheckButton()
+        self.chk_broadcom.set_valign(Gtk.Align.CENTER)
+        row_broadcom.append(self.chk_broadcom)
+        opt_group.append(row_broadcom)
+
+        # Separator
+        sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        opt_group.append(sep)
+
+        # Row 2: Extra Packages (Multimedia & apps)
+        row_extra = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        row_extra.add_css_class("option-row")
+        
+        txt_e = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        txt_e.set_hexpand(True)
+        lbl_e_title = Gtk.Label(label="Extended Applications & Media Suite")
+        lbl_e_title.add_css_class("option-title")
+        lbl_e_title.set_halign(Gtk.Align.START)
+        txt_e.append(lbl_e_title)
+        lbl_e_desc = Gtk.Label(label="Includes full multimedia tools, office utilities, and drivers.")
+        lbl_e_desc.add_css_class("option-desc")
+        lbl_e_desc.set_halign(Gtk.Align.START)
+        lbl_e_desc.set_wrap(True)
+        txt_e.append(lbl_e_desc)
+        row_extra.append(txt_e)
+
+        self.chk_extra = Gtk.CheckButton()
+        self.chk_extra.set_active(True)
+        self.chk_extra.set_valign(Gtk.Align.CENTER)
+        row_extra.append(self.chk_extra)
+        opt_group.append(row_extra)
+
+        box.append(opt_group)
+
+        # UEFI Compatibility Banner (if running GRUB ISO on UEFI hardware)
+        self.uefi_notice_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        self.uefi_notice_box.add_css_class("uefi-notice-card")
+        icon_info = Gtk.Image.new_from_icon_name("dialog-information-symbolic")
+        icon_info.set_pixel_size(20)
+        icon_info.set_valign(Gtk.Align.CENTER)
+        self.uefi_notice_box.append(icon_info)
+        
+        self.uefi_notice_lbl = Gtk.Label()
+        self.uefi_notice_lbl.set_markup("<b>Compatibility Notice:</b> UEFI system detected. For optimal performance, Pulsar OS rEFInd Edition is recommended.")
+        self.uefi_notice_lbl.add_css_class("uefi-notice-text")
+        self.uefi_notice_lbl.set_wrap(True)
+        self.uefi_notice_lbl.set_max_width_chars(42)
+        self.uefi_notice_box.append(self.uefi_notice_lbl)
+        box.append(self.uefi_notice_box)
+
+        # Navigation row
+        nav_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        nav_box.set_halign(Gtk.Align.CENTER)
+        nav_box.set_margin_top(10)
+
+        btn_back = Gtk.Button(label="Back")
+        btn_back.add_css_class("secondary-action")
+        btn_back.connect("clicked", self._on_options_back_clicked)
+        nav_box.append(btn_back)
+
+        btn_continue = Gtk.Button(label="Continue")
+        btn_continue.add_css_class("suggested-action")
+        btn_continue.connect("clicked", self._on_options_continue_clicked)
+        nav_box.append(btn_continue)
+
+        box.append(nav_box)
+        self.stack.add_named(box, "install_options")
+
+    def _show_options_screen(self):
+        # Auto-detect Broadcom hardware
+        has_broadcom = self._detect_broadcom()
+        self.chk_broadcom.set_active(has_broadcom)
+
+        # Check UEFI on GRUB ISO
+        is_efi = os.path.exists("/sys/firmware/efi")
+        refind_available = any(
+            os.path.exists(p)
+            for p in (
+                "/usr/bin/refind-install",
+                "/usr/sbin/refind-install",
+                "/bin/refind-install",
+            )
+        )
+        self.uefi_notice_box.set_visible(is_efi and not refind_available)
+        self.stack.set_visible_child_name("install_options")
+
+    def _on_options_back_clicked(self, btn):
+        if self.install_mode == "dualboot":
+            self.stack.set_visible_child_name("install_partition_select")
+        else:
+            self.stack.set_visible_child_name("install_mode_select")
+
+    def _on_options_continue_clicked(self, btn):
+        self.install_broadcom = self.chk_broadcom.get_active()
+        self.install_extra_packages = self.chk_extra.get_active()
+
+        is_efi = os.path.exists("/sys/firmware/efi")
+        refind_available = any(
+            os.path.exists(p)
+            for p in (
+                "/usr/bin/refind-install",
+                "/usr/sbin/refind-install",
+                "/bin/refind-install",
+            )
+        )
+        if is_efi and refind_available:
+            self.selected_bootloader = "refind"
+        else:
+            self.selected_bootloader = "grub"
+
+        self._proceed_to_confirm_screen()
+
+    def build_install_confirm_screen(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_valign(Gtk.Align.CENTER)
+        box.set_halign(Gtk.Align.CENTER)
+        box.set_size_request(460, -1)
+
+        if "DEMO_MODE" in os.environ:
+            demo_banner = Gtk.Label(label="⚠ DEMO MODE — No changes will be made to your system")
+            demo_banner.add_css_class("demo-banner")
+            box.append(demo_banner)
+
+        image = self.get_logo_image(80, is_installer=True)
+        box.append(image)
+
+        title = Gtk.Label()
+        title.set_markup("<span font_weight='bold' size='18000'>Ready to Install</span>")
+        box.append(title)
+
+        subtitle = Gtk.Label(label="Click Install to begin setting up Pulsar OS on your computer.")
+        subtitle.add_css_class("progress-text")
+        box.append(subtitle)
+
+        # Summary card
+        self.confirm_summary_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.confirm_summary_box.add_css_class("summary-box")
+
+        self.confirm_target_lbl = Gtk.Label()
+        self.confirm_target_lbl.add_css_class("summary-line")
+        self.confirm_target_lbl.set_halign(Gtk.Align.START)
+        self.confirm_summary_box.append(self.confirm_target_lbl)
+
+        self.confirm_mode_lbl = Gtk.Label()
+        self.confirm_mode_lbl.add_css_class("summary-line")
+        self.confirm_mode_lbl.set_halign(Gtk.Align.START)
+        self.confirm_summary_box.append(self.confirm_mode_lbl)
+
+        self.confirm_options_lbl = Gtk.Label()
+        self.confirm_options_lbl.add_css_class("summary-line")
+        self.confirm_options_lbl.set_halign(Gtk.Align.START)
+        self.confirm_summary_box.append(self.confirm_options_lbl)
+
+        self.confirm_warning_lbl = Gtk.Label()
+        self.confirm_warning_lbl.add_css_class("summary-warning")
+        self.confirm_warning_lbl.set_wrap(True)
+        self.confirm_warning_lbl.set_max_width_chars(42)
+        self.confirm_summary_box.append(self.confirm_warning_lbl)
+
+        box.append(self.confirm_summary_box)
+
+        # Navigation row
+        nav_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        nav_box.set_halign(Gtk.Align.CENTER)
+        nav_box.set_margin_top(10)
+
+        btn_back = Gtk.Button(label="Back")
+        btn_back.add_css_class("secondary-action")
+        btn_back.connect("clicked", lambda x: self.stack.set_visible_child_name("install_options"))
+        nav_box.append(btn_back)
+
+        btn_install = Gtk.Button(label="Install Pulsar OS")
+        btn_install.add_css_class("suggested-action")
+        btn_install.connect("clicked", lambda x: self._start_installation())
+        nav_box.append(btn_install)
+
+        box.append(nav_box)
+        self.stack.add_named(box, "install_confirm")
+
+    def _proceed_to_confirm_screen(self):
+        disk_name = self.pending_disk_name or "Disk"
+        if self.install_mode == "dualboot" and self.target_partition:
+            self.confirm_target_lbl.set_markup(f"<b>Destination:</b> Partition {self.target_partition}")
+            self.confirm_mode_lbl.set_markup("<b>Type:</b> Install Alongside (Dual Boot)")
+            self.confirm_warning_lbl.set_markup("Pulsar OS will be installed on the selected partition without modifying your other drives.")
+        else:
+            self.confirm_target_lbl.set_markup(f"<b>Destination:</b> Drive /dev/{disk_name}")
+            self.confirm_mode_lbl.set_markup("<b>Type:</b> Fresh Installation (Erase Entire Disk)")
+            self.confirm_warning_lbl.set_markup("⚠️ <b>Notice:</b> All existing data on this drive will be replaced with Pulsar OS.")
+
+        features = []
+        if self.install_broadcom:
+            features.append("Hardware Drivers")
+        if self.install_extra_packages:
+            features.append("Full App Suite")
+        feat_str = ", ".join(features) if features else "Minimal Base"
+        self.confirm_options_lbl.set_markup(f"<b>Features:</b> {feat_str}")
+
+        self.stack.set_visible_child_name("install_confirm")
 
 
     def build_install_progress_screen(self):
@@ -2119,74 +2411,16 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.btn_enable_warp.set_sensitive(True)
 
     def _on_network_check_back(self):
-        if self.install_mode == "dualboot":
-            self.stack.set_visible_child_name("install_partition_select")
+        if self.selected_action == "packages":
+            self.stack.set_visible_child_name("utilities")
         else:
-            self.stack.set_visible_child_name("install_disk_select")
+            self.stack.set_visible_child_name("install_options")
 
     def _net_continue_clicked(self, btn):
-        self._show_bootloader_dialog()
-
-    def _show_bootloader_dialog(self):
-        is_efi = os.path.exists("/sys/firmware/efi")
-        refind_available = any(
-            os.path.exists(p)
-            for p in (
-                "/usr/bin/refind-install",
-                "/usr/sbin/refind-install",
-                "/bin/refind-install",
-            )
-        )
-
-        if is_efi and not refind_available:
-            self.selected_bootloader = "grub"
-            dialog = Adw.MessageDialog(
-                transient_for=self,
-                heading="UEFI System Detected (GRUB Edition)",
-                body=(
-                    "⚠️ <b>Compatibility Notice</b>:\n\n"
-                    "Your computer supports modern <b>UEFI</b> firmware, but you are currently running the <b>GRUB Edition</b> of Pulsar OS.\n\n"
-                    "On modern UEFI hardware, the <b>rEFInd Edition</b> of Pulsar OS provides optimal bootloader compatibility, automated kernel discovery, and graphical boot menus. "
-                    "Installing GRUB on UEFI systems may lead to visual or bootloader glitches.\n\n"
-                    "We recommend downloading and using the <b>Pulsar OS rEFInd ISO</b> instead.\n\n"
-                    "Do you want to accept the risk and continue, or cancel and shut down the system?"
-                ),
-            )
-            dialog.set_body_use_markup(True)
-            dialog.add_response("cancel", "Cancel & Shut Down")
-            dialog.add_response("continue", "I Accept the Risk & Continue")
-            dialog.set_response_appearance("cancel", Adw.ResponseAppearance.DESTRUCTIVE)
-            dialog.set_response_appearance("continue", Adw.ResponseAppearance.SUGGESTED)
-            dialog.set_default_response("cancel")
-
-            def on_response(d, resp):
-                d.destroy()
-                if resp == "continue":
-                    self._proceed_to_final_confirmation()
-                else:
-                    if "TEST_MODE" in os.environ:
-                        print("[TEST_MODE] Simulating systemctl poweroff...")
-                        self.close()
-                    else:
-                        subprocess.Popen(["systemctl", "poweroff"])
-                        self.close()
-
-            dialog.connect("response", on_response)
-            dialog.present()
-            return
-
-        if is_efi and refind_available:
-            self.selected_bootloader = "refind"
+        if self.selected_action == "packages":
+            self._start_package_installation()
         else:
-            self.selected_bootloader = "grub"
-
-        self._proceed_to_final_confirmation()
-
-    def _proceed_to_final_confirmation(self):
-        if self.install_mode == "dualboot":
-            self._show_dualboot_confirmation_dialog()
-        else:
-            self._show_clean_install_warning_dialog()
+            self._proceed_to_confirm_screen()
 
     def on_progress_cancel_clicked(self, btn):
         if btn.get_label() == "Restart System":
@@ -2222,139 +2456,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
         except Exception:
             pass
         return False
-
-    def _show_broadcom_dialog(self):
-        auto_detected = self._detect_broadcom()
-        if auto_detected:
-            heading = "Broadcom Hardware Detected"
-            body = (
-                "A Broadcom WiFi or Bluetooth adapter was detected on this computer.\n\n"
-                "Would you like to install the Broadcom wireless driver (<tt>broadcom-wl / broadcom-sta-dkms</tt>)?\n\n"
-                "⚠️ <b>Active Internet connection required</b>:\n"
-                "An active Internet connection (Ethernet cable or USB tethering) is required during installation to download and compile the driver.\n\n"
-                "If you do not have Internet access right now, choose \"No\" (you can install it later with Driver Manager)."
-            )
-        else:
-            heading = "Broadcom Wireless Drivers"
-            body = (
-                "No Broadcom adapter was automatically detected.\n\n"
-                "Do you have a Broadcom WiFi or Bluetooth chip? (Common in older MacBooks and select laptops).\n\n"
-                "⚠️ <b>Active Internet connection required</b>:\n"
-                "An active Internet connection (Ethernet cable or USB tethering) is required to download the driver.\n\n"
-                "If unsure or without Internet, choose \"No\"."
-            )
-
-        dialog = Adw.MessageDialog(
-            transient_for=self,
-            heading=heading,
-            body=body,
-        )
-        dialog.set_body_use_markup(True)
-        dialog.add_response("no",  "No")
-        dialog.add_response("yes", "Yes, install Broadcom drivers")
-        dialog.set_response_appearance("yes", Adw.ResponseAppearance.SUGGESTED)
-        dialog.set_default_response("yes" if auto_detected else "no")
-
-        def on_response(d, resp):
-            d.destroy()
-            if resp == "yes":
-                self.install_broadcom = True
-            self._show_extra_packages_dialog()
-
-        dialog.connect("response", on_response)
-        dialog.present()
-
-    def _show_extra_packages_dialog(self):
-        dialog = Adw.MessageDialog(
-            transient_for=self,
-            heading="Install Extra Packages",
-            body=(
-                "The ISO was built minimal to stay small (~3 GB). "
-                "You can now install the full set of packages that were excluded:\n\n"
-                "• Docker\n• Full firmware (GPU, audio)\n• VM guest tools\n"
-                "• Multimedia apps (VLC, Totem)\n• NVIDIA drivers\n• GNOME apps\n\n"
-                "⚠️ <b>Internet connection required</b> (WiFi or Ethernet).\n"
-                "These packages will be downloaded and installed on disk."
-            ),
-        )
-        dialog.set_body_use_markup(True)
-        dialog.add_response("no",  "No, keep minimal")
-        dialog.add_response("yes", "Yes, install everything")
-        dialog.set_response_appearance("yes", Adw.ResponseAppearance.SUGGESTED)
-        dialog.set_default_response("yes")
-
-        def on_response(d, resp):
-            d.destroy()
-            if resp == "yes":
-                self.install_extra_packages = True
-                self._show_network_check_screen()
-            else:
-                self.install_extra_packages = False
-                self._show_bootloader_dialog()
-
-        dialog.connect("response", on_response)
-        dialog.present()
-
-    def _show_clean_install_warning_dialog(self):
-        disk_name = self.pending_disk_name
-        dialog = Adw.MessageDialog(
-            transient_for=self,
-            heading="Erase Disk & Install Pulsar OS",
-            body=(
-                f"⚠️ <b>Warning: All data on /dev/{disk_name} will be permanently erased!</b>\n\n"
-                "The entire disk will be partitioned for Pulsar OS (EFI, Recovery, and Btrfs root).\n\n"
-                "Are you sure you want to proceed?"
-            )
-        )
-        dialog.set_body_use_markup(True)
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response("erase", "Erase and Install")
-        dialog.set_response_appearance("erase", Adw.ResponseAppearance.DESTRUCTIVE)
-        dialog.set_response_appearance("cancel", Adw.ResponseAppearance.DEFAULT)
-        dialog.set_default_response("cancel")
-
-        def on_response(d, resp):
-            d.destroy()
-            if resp == "erase":
-                self._start_installation()
-
-        dialog.connect("response", on_response)
-        dialog.present()
-
-    def _show_dualboot_confirmation_dialog(self):
-        part = self.target_partition
-        part_info = self.target_partition_info or {}
-        size = part_info.get("size", "")
-        desc = part_info.get("os_desc", "")
-        efi_desc = f"<b>{self.target_efi_partition}</b>" if self.target_efi_partition else "System EFI"
-
-        body = (
-            f"Pulsar OS will be installed on partition <b>{part}</b> ({size}, {desc}).\n\n"
-            f"• <b>Only {part} will be formatted as Btrfs</b> with subvolumes <tt>@</tt> and <tt>@home</tt>.\n"
-            f"• Your EFI bootloader ({efi_desc}) will be preserved and configured with rEFInd dual-boot.\n"
-            f"• All other partitions on your disk (including Windows/Linux) will remain intact.\n\n"
-            f"Do you want to proceed with the installation?"
-        )
-
-        dialog = Adw.MessageDialog(
-            transient_for=self,
-            heading="Confirm Dual Boot Installation",
-            body=body
-        )
-        dialog.set_body_use_markup(True)
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response("install", "Install Pulsar OS")
-        dialog.set_response_appearance("install", Adw.ResponseAppearance.SUGGESTED)
-        dialog.set_response_appearance("cancel", Adw.ResponseAppearance.DEFAULT)
-        dialog.set_default_response("install")
-
-        def on_response(d, resp):
-            d.destroy()
-            if resp == "install":
-                self._start_installation()
-
-        dialog.connect("response", on_response)
-        dialog.present()
 
     def _start_installation(self):
         disk_path = self.pending_disk_path

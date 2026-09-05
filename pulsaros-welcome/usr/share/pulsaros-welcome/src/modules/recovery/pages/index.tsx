@@ -1,4 +1,4 @@
-import { LifeBuoy, ArrowRight } from "lucide-react";
+import { Download, ArrowRight } from "lucide-react";
 import { launchRecovery, closeWindow, writeSentinel } from "@/modules/core/api";
 
 interface RecoveryPageProps {
@@ -12,15 +12,14 @@ export function RecoveryPage({ onBack }: RecoveryPageProps) {
       <div className="screen-enter glass flex h-[88vh] max-h-[740px] w-full max-w-[860px] flex-col overflow-hidden">
         <main className="flex min-h-0 flex-1 flex-col items-center justify-center px-10 py-6">
           <div className="flex h-28 w-28 items-center justify-center rounded-3xl bg-apple-blue/10">
-            <LifeBuoy className="h-16 w-16 text-apple-blue" strokeWidth={1.5} />
+            <Download className="h-16 w-16 text-apple-blue" strokeWidth={1.5} />
           </div>
           <h1 className="mt-6 text-center text-[32px] font-semibold leading-tight text-text-primary">
-            Recovery System
+            Install Pulsar OS
           </h1>
           <p className="mt-3 max-w-120 text-center text-[15px] leading-relaxed text-text-secondary">
-            You are running the Pulsar OS live environment. Repair, reset or
-            roll back the system, restore a backup, or install Pulsar OS from
-            the built-in recovery environment. No USB stick required.
+            Now it's time to install the operating system on your computer.
+            Click the button below to open the installer and begin the setup.
           </p>
           <button
             className="btn-primary mt-8 flex items-center gap-2 px-6 py-3 text-[16px]"
@@ -29,12 +28,11 @@ export function RecoveryPage({ onBack }: RecoveryPageProps) {
               await closeWindow();
             }}
           >
-            <LifeBuoy className="h-5 w-5" strokeWidth={2} />
-            Open Pulsar Recovery
+            <Download className="h-5 w-5" strokeWidth={2} />
+            Open Installer
           </button>
           <p className="mt-4 max-w-90 text-center text-[12px] text-text-tertiary">
-            This will open the Pulsar OS installer and system recovery
-            utilities.
+            This will open the Pulsar OS setup and recovery utilities.
           </p>
         </main>
 

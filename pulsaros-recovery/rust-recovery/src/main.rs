@@ -845,6 +845,13 @@ fn build_ui(app: &Application) {
     };
 
     add_row(
+        "timemachine",
+        "Restore from Time Machine (Btrfs + Restic)",
+        "Restore full system or personal files from a Time Machine backup (USB, Samba/NAS or Cloud Rclone).",
+        "/usr/share/pulsaros-recovery/timemachine.png",
+        "restore",
+    );
+    add_row(
         "reinstall",
         "Reinstall Pulsar OS (Local Partition)",
         "Install a fresh copy of Pulsar OS from built-in recovery while keeping personal files intact.",
@@ -1649,6 +1656,13 @@ fn build_ui(app: &Application) {
      => move |_| {
         let action = selected_action.borrow().clone().unwrap_or_default();
         match action.as_str() {
+            "timemachine" => {
+                log_msg("Launching Pulsar OS Time Machine Recovery Suite...");
+                let _ = Command::new("sh")
+                    .arg("-c")
+                    .arg("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; xhost +local: >/dev/null 2>&1 || xhost + >/dev/null 2>&1; (pulsaros-timemachine gui || python3 /usr/share/pulsaros-timemachine/cli.py gui || python3 /usr/share/pulsaros-timemachine/cli.py restore --help) >/tmp/timemachine-recovery.log 2>&1 &")
+                    .spawn();
+            }
             "disk" => {
                 log_msg("Launching elevated Disk Utility (GParted)...");
                 let _ = Command::new("sh")

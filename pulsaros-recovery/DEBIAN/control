@@ -4,7 +4,7 @@ Section: admin
 Priority: optional
 Architecture: amd64
 Maintainer: Jaime <info@inled.es>
-Depends: python3-gi, python3-dbus, gir1.2-gtk-4.0, gir1.2-adw-1, gir1.2-glib-2.0, python3-xlib, x11-xserver-utils, parted, psmisc, deja-dup, timeshift, gparted, gdisk, rsync, btrfs-progs, squashfs-tools, curl, os-prober
+Depends: python3-gi, python3-dbus, gir1.2-gtk-4.0, gir1.2-adw-1, gir1.2-glib-2.0, python3-xlib, x11-xserver-utils, parted, psmisc, pulsaros-timemachine, restic, rclone, cifs-utils, smbclient, gparted, gdisk, rsync, btrfs-progs, squashfs-tools, curl, os-prober
 Description: Apple-like Recovery and System Installer UI for Pulsar OS.
  Shows macOS-style Recovery Utilities, Welcome screen, Disk and Partition selector,
  clean install and dual boot installation directly with Btrfs, rEFInd and GRUB.
