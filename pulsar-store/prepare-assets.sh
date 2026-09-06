@@ -13,8 +13,8 @@ mkdir -p "$STAGE_DIR/usr/bin" \
          "$STAGE_DIR/usr/share/applications" \
          "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps"
 
-cp -f usr/bin/pulsar-store "$STAGE_DIR/usr/bin/"
-chmod 755 "$STAGE_DIR/usr/bin/pulsar-store"
+cp -rf usr/bin/. "$STAGE_DIR/usr/bin/"
+chmod 755 "$STAGE_DIR"/usr/bin/*
 
 cp -rf usr/share/pulsar-store/. "$STAGE_DIR/usr/share/pulsar-store/"
 chmod -R 755 "$STAGE_DIR/usr/share/pulsar-store"

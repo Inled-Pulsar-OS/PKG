@@ -19,7 +19,8 @@ package() {
     cd "$_src"
 
     mkdir -p "$pkgdir/usr/bin"
-    install -Dm755 usr/bin/pulsar-store "$pkgdir/usr/bin/pulsar-store"
+    cp -r usr/bin/* "$pkgdir/usr/bin/"
+    chmod 755 "$pkgdir"/usr/bin/*
 
     mkdir -p "$pkgdir/usr/share/pulsar-store"
     cp -r usr/share/pulsar-store/* "$pkgdir/usr/share/pulsar-store/"
