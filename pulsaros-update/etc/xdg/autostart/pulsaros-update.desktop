@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Pulsar OS Update Assistant
+Comment=First-boot migration and configuration helper for Pulsar OS
+Exec=pulsaros-update --autostart
+Icon=pulsaros-update
+Terminal=false
+Categories=System;Settings;
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=3

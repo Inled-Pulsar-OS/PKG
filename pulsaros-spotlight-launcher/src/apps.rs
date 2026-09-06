@@ -34,10 +34,39 @@ pub fn get_desktop_dirs() -> Vec<PathBuf> {
 
 fn get_locale_keys() -> Vec<String> {
     let mut keys = Vec::new();
-    let env_lang = std::env::var("LC_ALL")
+    let mut env_lang = std::env::var("LC_ALL")
         .or_else(|_| std::env::var("LC_MESSAGES"))
         .or_else(|_| std::env::var("LANG"))
         .unwrap_or_default();
+
+    // Check user and system locale configuration files as source of truth
+    if let Ok(home) = std::env::var("HOME") {
+        let user_loc = format!("{}/.config/locale.conf", home);
+        if let Ok(content) = std::fs::read_to_string(&user_loc) {
+            for line in content.lines() {
+                if line.starts_with("LANG=") {
+                    let val = line.trim_start_matches("LANG=").trim();
+                    if !val.is_empty() {
+                        env_lang = val.to_string();
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    if env_lang.is_empty() || env_lang == "C" || env_lang == "POSIX" {
+        if let Ok(content) = std::fs::read_to_string("/etc/locale.conf") {
+            for line in content.lines() {
+                if line.starts_with("LANG=") {
+                    let val = line.trim_start_matches("LANG=").trim();
+                    if !val.is_empty() {
+                        env_lang = val.to_string();
+                        break;
+                    }
+                }
+            }
+        }
+    }
 
     if !env_lang.is_empty() {
         let clean = env_lang.split('.').next().unwrap_or("").split('@').next().unwrap_or("");

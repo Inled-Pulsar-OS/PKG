@@ -538,9 +538,30 @@ function _t(key, ...args) {
         let langs = GLib.get_language_names();
         for (let l of langs) {
             let prefix = l.split(/[@._-]/)[0].toLowerCase();
-            if (I18N[prefix]) {
+            if (I18N[prefix] && prefix !== "c" && prefix !== "posix") {
                 lang = prefix;
                 break;
+            }
+        }
+        if (lang === "en") {
+            let userConfig = GLib.build_filenamev([GLib.get_user_config_dir(), 'locale.conf']);
+            let paths = [userConfig, '/etc/locale.conf', '/etc/default/locale'];
+            for (let fpath of paths) {
+                let file = Gio.File.new_for_path(fpath);
+                if (file.query_exists(null)) {
+                    let [ok, bytes] = file.load_contents(null);
+                    if (ok) {
+                        let text = new TextDecoder().decode(bytes);
+                        let match = text.match(/(?:LANG|LANGUAGE)=([a-zA-Z0-9_]+)/);
+                        if (match) {
+                            let cand = match[1].split(/[@._-]/)[0].toLowerCase();
+                            if (I18N[cand]) {
+                                lang = cand;
+                                break;
+                            }
+                        }
+                    }
+                }
             }
         }
     } catch (e) {

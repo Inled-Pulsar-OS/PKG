@@ -1,0 +1,24 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Update Helper Post-installation Script
+# ==============================================================================
+set -e
+
+echo "🚀 Configurando permisos para el Asistente de Actualización de Pulsar OS..."
+
+chmod +x /usr/bin/pulsaros-update 2>/dev/null || true
+chmod +x /usr/share/pulsaros-update/main.py 2>/dev/null || true
+chmod +x /usr/share/pulsaros-update/updater_core.py 2>/dev/null || true
+
+# Update desktop icon cache & desktop database
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database /usr/share/applications 2>/dev/null || true
+fi
+
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+fi
+
+echo "✅ Asistente de Actualización listo."
+
+exit 0

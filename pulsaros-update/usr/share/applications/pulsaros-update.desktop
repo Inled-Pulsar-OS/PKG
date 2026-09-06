@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Pulsar OS Update Assistant
+GenericName=System Update & Migration Assistant
+Comment=Update recovery assistant, language, Sayri AI, and hibernation
+Exec=pulsaros-update
+Icon=pulsaros-update
+Terminal=false
+Categories=System;Settings;GTK;Utility;
+Keywords=update;upgrade;recovery;sayri;hibernate;language;pulsaros;
+StartupNotify=true

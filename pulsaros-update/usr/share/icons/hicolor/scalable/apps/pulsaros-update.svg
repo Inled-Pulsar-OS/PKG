@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00C0FF" />
+      <stop offset="50%" stop-color="#0071E3" />
+      <stop offset="100%" stop-color="#5E5CE6" />
+    </linearGradient>
+    <linearGradient id="arrowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#E1F5FE" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.3" />
+    </filter>
+  </defs>
+  
+  <!-- Outer Rounded Squircle -->
+  <rect x="32" y="32" width="448" height="448" rx="100" ry="100" fill="url(#bgGrad)" filter="url(#shadow)" />
+  
+  <!-- Circular Arrows / Update Ring -->
+  <g fill="none" stroke="url(#arrowGrad)" stroke-width="36" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Top Arc -->
+    <path d="M 160 256 A 96 96 0 0 1 340 190" />
+    <!-- Bottom Arc -->
+    <path d="M 352 256 A 96 96 0 0 1 172 322" />
+  </g>
+
+  <!-- Arrow Heads -->
+  <path d="M 340 150 L 356 200 L 306 205 Z" fill="#FFFFFF" />
+  <path d="M 172 362 L 156 312 L 206 307 Z" fill="#FFFFFF" />
+
+  <!-- Center Core Pulsar Sparkle / Diamond -->
+  <path d="M 256 190 Q 256 256 322 256 Q 256 256 256 322 Q 256 256 190 256 Q 256 256 256 190 Z" fill="#FFFFFF" opacity="0.95" />
+</svg>

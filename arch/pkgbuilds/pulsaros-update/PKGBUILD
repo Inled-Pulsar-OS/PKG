@@ -1,0 +1,40 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsaros-update
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Pulsar OS Update & Migration Assistant (Helper for recovery, localization, Sayri AI, and hibernation)"
+arch=(any)
+url="https://inled.es"
+license=(custom)
+depends=(python python-gobject gtk4 libadwaita polkit xdg-user-dirs)
+optdepends=(
+  'pulsaros-recovery: Native recovery and installer assistant'
+  'sayri: Siri-like AI voice assistant'
+  'pulsaros-hibernate: Hibernation configuration subsystem'
+  'pulsar-pear-sound-theme: Apple macOS sound theme'
+  'pulsaros-bootsound: macOS startup chime service'
+)
+install=pulsaros-update.install
+source=()
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-update && pwd)"
+    
+    mkdir -p "$pkgdir/usr/bin"
+    install -m 755 "$_src/usr/bin/pulsaros-update" "$pkgdir/usr/bin/pulsaros-update"
+    
+    mkdir -p "$pkgdir/usr/share/pulsaros-update"
+    cp -rf "$_src/usr/share/pulsaros-update/." "$pkgdir/usr/share/pulsaros-update/"
+    chmod -R 755 "$pkgdir/usr/share/pulsaros-update"
+    
+    mkdir -p "$pkgdir/usr/share/applications"
+    install -m 644 "$_src/usr/share/applications/pulsaros-update.desktop" "$pkgdir/usr/share/applications/"
+
+    mkdir -p "$pkgdir/etc/xdg/autostart"
+    install -m 644 "$_src/etc/xdg/autostart/pulsaros-update.desktop" "$pkgdir/etc/xdg/autostart/"
+
+    if [ -d "$_src/usr/share/icons" ]; then
+        mkdir -p "$pkgdir/usr/share/icons"
+        cp -rf "$_src/usr/share/icons/." "$pkgdir/usr/share/icons/"
+    fi
+}

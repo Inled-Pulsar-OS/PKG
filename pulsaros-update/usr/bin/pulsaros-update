@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Pulsar OS - Update and Migration Assistant Launcher
+# ==============================================================================
+
+SCRIPT_DIR="/usr/share/pulsaros-update"
+
+if [ -f "$SCRIPT_DIR/main.py" ]; then
+    exec python3 "$SCRIPT_DIR/main.py" "$@"
+elif [ -f "$(dirname "$0")/../share/pulsaros-update/main.py" ]; then
+    exec python3 "$(dirname "$0")/../share/pulsaros-update/main.py" "$@"
+else
+    echo "❌ Error: Could not find Pulsar OS Update Assistant scripts in $SCRIPT_DIR"
+    exit 1
+fi
