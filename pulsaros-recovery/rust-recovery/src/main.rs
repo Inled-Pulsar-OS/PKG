@@ -15,7 +15,7 @@ use glib::clone;
 use gtk4::prelude::*;
 use gtk4::{
     Align, Application, Box as GtkBox, Button, CenterBox, CssProvider, DropDown, GestureClick, Image,
-    Label, ListBox, ListBoxRow, Orientation, ProgressBar, ScrolledWindow, SelectionMode,
+    Label, ListBox, ListBoxRow, Orientation, PasswordEntry, ProgressBar, ScrolledWindow, SelectionMode,
     Stack, StackTransitionType, StringList, TextView, WrapMode,
 };
 use libadwaita::prelude::*;
@@ -88,6 +88,52 @@ window, .root-container, * {
     color: #ff9f0a;
     font-weight: 600;
     font-size: 12px;
+}
+.badge-net-err {
+    color: #ff453a;
+    font-weight: 600;
+    font-size: 12px;
+}
+.wifi-badge-connected {
+    background-color: rgba(48, 209, 88, 0.18);
+    color: #30d158;
+    border: 1px solid rgba(48, 209, 88, 0.4);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: bold;
+}
+.wifi-badge-security {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #c7c7cc;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 500;
+}
+.wifi-card-row {
+    background-color: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 12px;
+    transition: background-color 0.15s ease;
+}
+listbox > row:hover .wifi-card-row,
+listboxrow:hover .wifi-card-row {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+listbox > row:selected .wifi-card-row,
+listboxrow:selected .wifi-card-row {
+    background-color: #0071e3;
+}
+.wifi-ssid-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+}
+.wifi-signal-text {
+    font-size: 12px;
+    color: #a1a1a6;
 }
 .badge-demo {
     background-color: rgba(255, 159, 10, 0.18);
@@ -332,6 +378,222 @@ fn detect_system_bootloader() -> String {
         return "refind".to_string();
     }
     "grub".to_string()
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum NetConnType {
+    Wifi,
+    Ethernet,
+    None,
+}
+
+#[derive(Clone, Debug)]
+pub struct NetworkStatus {
+    pub is_connected: bool,
+    pub conn_type: NetConnType,
+    pub conn_name: String,
+}
+
+pub fn get_network_status() -> NetworkStatus {
+    // 1. Try nmcli to get device and connection info
+    if let Ok(out) = Command::new("nmcli")
+        .args(&["-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "dev"])
+        .output()
+    {
+        if out.status.success() {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            for line in stdout.lines() {
+                let parts: Vec<&str> = line.split(':').collect();
+                if parts.len() >= 4 {
+                    let dev_type = parts[1].trim();
+                    let state = parts[2].trim();
+                    let conn = parts[3].trim();
+                    if state == "connected" {
+                        let c_type = if dev_type == "wifi" {
+                            NetConnType::Wifi
+                        } else if dev_type == "ethernet" {
+                            NetConnType::Ethernet
+                        } else {
+                            NetConnType::Ethernet
+                        };
+                        let name = if !conn.is_empty() && conn != "--" {
+                            conn.to_string()
+                        } else if c_type == NetConnType::Wifi {
+                            "Wi-Fi Network".to_string()
+                        } else {
+                            "Wired (Ethernet)".to_string()
+                        };
+                        return NetworkStatus {
+                            is_connected: true,
+                            conn_type: c_type,
+                            conn_name: name,
+                        };
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Check general connectivity via nmcli
+    if let Ok(out) = Command::new("nmcli")
+        .args(&["-t", "-f", "STATE", "general"])
+        .output()
+    {
+        if out.status.success() {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            if stdout.contains("connected") {
+                return NetworkStatus {
+                    is_connected: true,
+                    conn_type: NetConnType::Ethernet,
+                    conn_name: "Connected".to_string(),
+                };
+            }
+        }
+    }
+
+    // 3. Fallback: check if a default route exists
+    if let Ok(out) = Command::new("ip").args(&["route", "show", "default"]).output() {
+        if out.status.success() && !out.stdout.is_empty() {
+            return NetworkStatus {
+                is_connected: true,
+                conn_type: NetConnType::Ethernet,
+                conn_name: "Connected".to_string(),
+            };
+        }
+    }
+
+    NetworkStatus {
+        is_connected: false,
+        conn_type: NetConnType::None,
+        conn_name: "Offline / Disconnected".to_string(),
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct WifiNetwork {
+    pub in_use: bool,
+    pub ssid: String,
+    pub signal: u8,
+    pub security: String,
+}
+
+pub fn scan_wifi_networks() -> Vec<WifiNetwork> {
+    let output = match Command::new("nmcli")
+        .args(&["-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY", "dev", "wifi", "list", "--rescan", "yes"])
+        .output()
+    {
+        Ok(o) => {
+            if o.status.success() {
+                o
+            } else {
+                match Command::new("nmcli")
+                    .args(&["-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY", "dev", "wifi", "list"])
+                    .output()
+                {
+                    Ok(o2) => o2,
+                    Err(_) => return vec![],
+                }
+            }
+        }
+        Err(_) => return vec![],
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut seen: HashMap<String, WifiNetwork> = HashMap::new();
+
+    for line in stdout.lines() {
+        let parts: Vec<&str> = line.split(':').collect();
+        if parts.len() < 3 {
+            continue;
+        }
+
+        let in_use = parts[0].trim() == "*";
+        let ssid = parts[1].trim().to_string();
+        if ssid.is_empty() || ssid == "--" {
+            continue;
+        }
+
+        let signal: u8 = parts[2].trim().parse().unwrap_or(0);
+        let security = if parts.len() > 3 {
+            let s = parts[3].trim();
+            if s.is_empty() || s == "--" {
+                "Open".to_string()
+            } else {
+                s.to_string()
+            }
+        } else {
+            "Open".to_string()
+        };
+
+        match seen.get_mut(&ssid) {
+            Some(existing) => {
+                if in_use {
+                    existing.in_use = true;
+                }
+                if signal > existing.signal {
+                    existing.signal = signal;
+                    existing.security = security;
+                }
+            }
+            None => {
+                seen.insert(
+                    ssid.clone(),
+                    WifiNetwork {
+                        in_use,
+                        ssid,
+                        signal,
+                        security,
+                    },
+                );
+            }
+        }
+    }
+
+    let mut list: Vec<WifiNetwork> = seen.into_values().collect();
+    list.sort_by(|a, b| {
+        b.in_use
+            .cmp(&a.in_use)
+            .then_with(|| b.signal.cmp(&a.signal))
+            .then_with(|| a.ssid.cmp(&b.ssid))
+    });
+    list
+}
+
+pub fn connect_wifi(ssid: &str, password: Option<&str>) -> Result<(), String> {
+    let mut args = vec!["dev", "wifi", "connect", ssid];
+    if let Some(pw) = password {
+        if !pw.is_empty() {
+            args.push("password");
+            args.push(pw);
+        }
+    }
+
+    let output = Command::new("nmcli")
+        .args(&args)
+        .output()
+        .map_err(|e| format!("Failed to execute nmcli: {}", e))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let err_msg = String::from_utf8_lossy(&output.stderr);
+        let out_msg = String::from_utf8_lossy(&output.stdout);
+        let full = format!("{} {}", err_msg.trim(), out_msg.trim()).trim().to_string();
+        if full.is_empty() {
+            Err("Failed to connect. Please verify password and signal.".to_string())
+        } else {
+            Err(full)
+        }
+    }
+}
+
+pub fn open_external_network_settings() {
+    let _ = Command::new("gnome-control-center")
+        .arg("wifi")
+        .spawn()
+        .or_else(|_| Command::new("nm-connection-editor").spawn())
+        .or_else(|_| Command::new("alacritty").args(&["-e", "nmtui"]).spawn())
+        .or_else(|_| Command::new("xterm").args(&["-e", "nmtui"]).spawn());
 }
 
 fn fetch_release_manifest() -> ManifestData {
@@ -1191,15 +1453,25 @@ fn build_ui(app: &Application) {
     net_row_2.append(&mirror_box);
 
     let net_stat_box = GtkBox::new(Orientation::Vertical, 3);
+    net_stat_box.set_hexpand(true);
     let lbl_net_hdr = Label::new(Some("Network Status"));
     lbl_net_hdr.add_css_class("setting-label");
     lbl_net_hdr.set_halign(Align::Start);
     net_stat_box.append(&lbl_net_hdr);
 
-    let lbl_net_badge = Label::new(Some("● Ready / Connected"));
-    lbl_net_badge.add_css_class("badge-net-ok");
+    let net_badge_row = GtkBox::new(Orientation::Horizontal, 8);
+    let lbl_net_badge = Label::new(Some("Detecting network..."));
+    lbl_net_badge.add_css_class("badge-net-warn");
     lbl_net_badge.set_halign(Align::Start);
-    net_stat_box.append(&lbl_net_badge);
+    lbl_net_badge.set_hexpand(true);
+    lbl_net_badge.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+    net_badge_row.append(&lbl_net_badge);
+
+    let btn_configure_wifi = Button::with_label("📶 Wi-Fi Settings...");
+    btn_configure_wifi.add_css_class("secondary-action");
+    net_badge_row.append(&btn_configure_wifi);
+
+    net_stat_box.append(&net_badge_row);
     net_row_2.append(&net_stat_box);
     net_card.append(&net_row_2);
 
@@ -1237,6 +1509,99 @@ fn build_ui(app: &Application) {
 
     net_info_box.append(&net_btn_box);
     stack.add_named(&net_info_box, Some("internet_info"));
+
+    // ─────────────────────────────────────────────────────────────
+    // 2b. Wi-Fi Configuration Screen (Scan, Select & Connect)
+    // ─────────────────────────────────────────────────────────────
+    let wifi_box = GtkBox::new(Orientation::Vertical, 8);
+    wifi_box.set_valign(Align::Center);
+    wifi_box.set_halign(Align::Center);
+
+    let wifi_icon = create_icon_widget("", "network-wireless", 48);
+    wifi_box.append(&wifi_icon);
+
+    let wifi_title = Label::new(Some("Wi-Fi Networks"));
+    wifi_title.add_css_class("welcome-title");
+    wifi_box.append(&wifi_title);
+
+    let wifi_subtitle = Label::new(Some("Select a wireless network to connect this device to the Internet."));
+    wifi_subtitle.add_css_class("welcome-subtitle");
+    wifi_box.append(&wifi_subtitle);
+
+    // Top action bar
+    let wifi_top_bar = GtkBox::new(Orientation::Horizontal, 10);
+    wifi_top_bar.set_size_request(580, -1);
+    wifi_top_bar.set_margin_bottom(4);
+
+    let btn_wifi_refresh = Button::with_label("🔄 Scan Networks");
+    btn_wifi_refresh.add_css_class("secondary-action");
+    wifi_top_bar.append(&btn_wifi_refresh);
+
+    let wifi_top_spacer = GtkBox::new(Orientation::Horizontal, 0);
+    wifi_top_spacer.set_hexpand(true);
+    wifi_top_bar.append(&wifi_top_spacer);
+
+    let btn_wifi_advanced = Button::with_label("⚙️ Advanced Settings...");
+    btn_wifi_advanced.add_css_class("secondary-action");
+    wifi_top_bar.append(&btn_wifi_advanced);
+    wifi_box.append(&wifi_top_bar);
+
+    // Scrolled network list
+    let wifi_scrolled = ScrolledWindow::new();
+    wifi_scrolled.set_size_request(580, 200);
+    wifi_scrolled.add_css_class("live-log-view");
+
+    let wifi_listbox = ListBox::new();
+    wifi_listbox.add_css_class("transparent-list");
+    wifi_scrolled.set_child(Some(&wifi_listbox));
+    wifi_box.append(&wifi_scrolled);
+
+    // Inline password connection card
+    let wifi_conn_card = GtkBox::new(Orientation::Vertical, 8);
+    wifi_conn_card.add_css_class("info-card");
+    wifi_conn_card.set_size_request(580, -1);
+    wifi_conn_card.set_visible(false);
+
+    let lbl_conn_target = Label::new(Some("Enter Network Password"));
+    lbl_conn_target.add_css_class("setting-label");
+    lbl_conn_target.set_halign(Align::Start);
+    wifi_conn_card.append(&lbl_conn_target);
+
+    let wifi_entry_row = GtkBox::new(Orientation::Horizontal, 10);
+    let entry_wifi_pw = PasswordEntry::new();
+    entry_wifi_pw.set_hexpand(true);
+    entry_wifi_pw.set_placeholder_text(Some("Password..."));
+    entry_wifi_pw.set_show_peek_icon(true);
+    wifi_entry_row.append(&entry_wifi_pw);
+
+    let btn_wifi_do_connect = Button::with_label("Connect");
+    btn_wifi_do_connect.add_css_class("suggested-action");
+    wifi_entry_row.append(&btn_wifi_do_connect);
+
+    let btn_wifi_cancel_connect = Button::with_label("Cancel");
+    btn_wifi_cancel_connect.add_css_class("secondary-action");
+    wifi_entry_row.append(&btn_wifi_cancel_connect);
+    wifi_conn_card.append(&wifi_entry_row);
+
+    let lbl_wifi_status = Label::new(None);
+    lbl_wifi_status.add_css_class("progress-text");
+    lbl_wifi_status.set_halign(Align::Start);
+    lbl_wifi_status.set_wrap(true);
+    wifi_conn_card.append(&lbl_wifi_status);
+
+    wifi_box.append(&wifi_conn_card);
+
+    // Bottom navigation bar
+    let wifi_nav_box = GtkBox::new(Orientation::Horizontal, 14);
+    wifi_nav_box.set_halign(Align::Center);
+    wifi_nav_box.set_margin_top(8);
+
+    let btn_wifi_back = Button::with_label("Back to Internet Recovery");
+    btn_wifi_back.add_css_class("secondary-action");
+    wifi_nav_box.append(&btn_wifi_back);
+    wifi_box.append(&wifi_nav_box);
+
+    stack.add_named(&wifi_box, Some("wifi_select"));
 
     // ─────────────────────────────────────────────────────────────
     // 3. USB Image Selector Screen (Auto-detected USBs)
@@ -1901,6 +2266,251 @@ fn build_ui(app: &Application) {
     }));
 
     let cancel_signal_holder = Rc::new(RefCell::new(None::<Arc<AtomicBool>>));
+
+    // ─────────────────────────────────────────────────────────────
+    // Real Network Status & Wi-Fi Management Callbacks
+    // ─────────────────────────────────────────────────────────────
+    let update_network_badge = {
+        let lbl_badge = lbl_net_badge.clone();
+        let btn_dl = btn_net_download.clone();
+        let lbl_status = lbl_net_status.clone();
+        Rc::new(move || {
+            let st = get_network_status();
+            lbl_badge.remove_css_class("badge-net-ok");
+            lbl_badge.remove_css_class("badge-net-warn");
+            lbl_badge.remove_css_class("badge-net-err");
+
+            if st.is_connected {
+                lbl_badge.add_css_class("badge-net-ok");
+                let icon = match st.conn_type {
+                    NetConnType::Wifi => "📶",
+                    NetConnType::Ethernet => "🔌",
+                    NetConnType::None => "●",
+                };
+                lbl_badge.set_text(&format!("{} {}", icon, st.conn_name));
+                btn_dl.set_sensitive(true);
+            } else {
+                lbl_badge.add_css_class("badge-net-warn");
+                lbl_badge.set_text("○ Offline / Disconnected");
+                if !is_demo_mode() {
+                    btn_dl.set_sensitive(false);
+                    lbl_status.set_text("⚠️ No internet connection detected. Please connect to Wi-Fi or Ethernet.");
+                }
+            }
+        })
+    };
+
+    let selected_wifi_ssid = Rc::new(RefCell::new(String::new()));
+
+    let populate_wifi_list = {
+        let wifi_listbox = wifi_listbox.clone();
+        let wifi_conn_card = wifi_conn_card.clone();
+        let lbl_conn_target = lbl_conn_target.clone();
+        let entry_wifi_pw = entry_wifi_pw.clone();
+        let lbl_wifi_status = lbl_wifi_status.clone();
+        let selected_wifi_ssid = selected_wifi_ssid.clone();
+        let btn_wifi_do_connect = btn_wifi_do_connect.clone();
+
+        Rc::new(move || {
+            while let Some(child) = wifi_listbox.first_child() {
+                wifi_listbox.remove(&child);
+            }
+            wifi_conn_card.set_visible(false);
+
+            let nets = scan_wifi_networks();
+            if nets.is_empty() {
+                let empty_row = ListBoxRow::new();
+                empty_row.set_selectable(false);
+                let lbl_empty = Label::new(Some("No Wi-Fi networks found. Click 'Scan Networks' or configure manually."));
+                lbl_empty.add_css_class("progress-text");
+                lbl_empty.set_margin_top(20);
+                lbl_empty.set_margin_bottom(20);
+                empty_row.set_child(Some(&lbl_empty));
+                wifi_listbox.append(&empty_row);
+                return;
+            }
+
+            for net in nets {
+                let row = ListBoxRow::new();
+                row.set_widget_name(&net.ssid);
+
+                let card = GtkBox::new(Orientation::Horizontal, 12);
+                card.add_css_class("wifi-card-row");
+
+                let lbl_sig = Label::new(Some("📶"));
+                card.append(&lbl_sig);
+
+                let info_box = GtkBox::new(Orientation::Vertical, 2);
+                info_box.set_hexpand(true);
+
+                let lbl_ssid = Label::new(Some(&net.ssid));
+                lbl_ssid.add_css_class("wifi-ssid-text");
+                lbl_ssid.set_halign(Align::Start);
+                info_box.append(&lbl_ssid);
+
+                let sub_box = GtkBox::new(Orientation::Horizontal, 8);
+                let lbl_sig_pct = Label::new(Some(&format!("Signal: {}%", net.signal)));
+                lbl_sig_pct.add_css_class("wifi-signal-text");
+                sub_box.append(&lbl_sig_pct);
+
+                let lbl_sec = Label::new(Some(&net.security));
+                lbl_sec.add_css_class("wifi-badge-security");
+                sub_box.append(&lbl_sec);
+
+                info_box.append(&sub_box);
+                card.append(&info_box);
+
+                if net.in_use {
+                    let lbl_conn = Label::new(Some("● Connected"));
+                    lbl_conn.add_css_class("wifi-badge-connected");
+                    card.append(&lbl_conn);
+                } else {
+                    let btn_row_connect = Button::with_label("Connect");
+                    btn_row_connect.add_css_class("shortcut-btn");
+
+                    let ssid_clone = net.ssid.clone();
+                    let sec_clone = net.security.clone();
+                    let card_c = wifi_conn_card.clone();
+                    let target_lbl_c = lbl_conn_target.clone();
+                    let pw_entry_c = entry_wifi_pw.clone();
+                    let status_lbl_c = lbl_wifi_status.clone();
+                    let sel_ssid_c = selected_wifi_ssid.clone();
+                    let do_btn_c = btn_wifi_do_connect.clone();
+
+                    btn_row_connect.connect_clicked(move |_| {
+                        *sel_ssid_c.borrow_mut() = ssid_clone.clone();
+                        card_c.set_visible(true);
+                        status_lbl_c.set_text("");
+                        if sec_clone.to_lowercase().contains("open") || sec_clone.is_empty() {
+                            target_lbl_c.set_text(&format!("Connect to open network '{}'", ssid_clone));
+                            pw_entry_c.set_visible(false);
+                        } else {
+                            target_lbl_c.set_text(&format!("Enter password for '{}'", ssid_clone));
+                            pw_entry_c.set_visible(true);
+                            pw_entry_c.set_text("");
+                            pw_entry_c.grab_focus();
+                        }
+                        do_btn_c.set_sensitive(true);
+                    });
+
+                    card.append(&btn_row_connect);
+                }
+
+                row.set_child(Some(&card));
+                wifi_listbox.append(&row);
+            }
+        })
+    };
+
+    let do_connect_action = {
+        let selected_wifi_ssid = selected_wifi_ssid.clone();
+        let entry_wifi_pw = entry_wifi_pw.clone();
+        let lbl_wifi_status = lbl_wifi_status.clone();
+        let btn_wifi_do_connect = btn_wifi_do_connect.clone();
+        let btn_wifi_cancel_connect = btn_wifi_cancel_connect.clone();
+        let wifi_conn_card = wifi_conn_card.clone();
+        let populate_wifi_list = populate_wifi_list.clone();
+        let update_network_badge = update_network_badge.clone();
+
+        Rc::new(move || {
+            let ssid = selected_wifi_ssid.borrow().clone();
+            if ssid.is_empty() {
+                return;
+            }
+
+            let pw = entry_wifi_pw.text().to_string();
+            let pw_opt = if pw.is_empty() { None } else { Some(pw) };
+
+            btn_wifi_do_connect.set_sensitive(false);
+            btn_wifi_cancel_connect.set_sensitive(false);
+            lbl_wifi_status.set_text(&format!("Connecting to '{}'...", ssid));
+
+            let (tx, rx) = std::sync::mpsc::channel::<Result<(), String>>();
+
+            let btn_do_c = btn_wifi_do_connect.clone();
+            let btn_cancel_c = btn_wifi_cancel_connect.clone();
+            let lbl_st_c = lbl_wifi_status.clone();
+            let card_c = wifi_conn_card.clone();
+            let pop_c = populate_wifi_list.clone();
+            let badge_c = update_network_badge.clone();
+
+            glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
+                match rx.try_recv() {
+                    Ok(res) => {
+                        btn_do_c.set_sensitive(true);
+                        btn_cancel_c.set_sensitive(true);
+                        match res {
+                            Ok(()) => {
+                                lbl_st_c.set_text("✅ Connected successfully!");
+                                badge_c();
+                                let pop_delay = pop_c.clone();
+                                let card_delay = card_c.clone();
+                                glib::timeout_add_local(std::time::Duration::from_millis(1200), move || {
+                                    pop_delay();
+                                    card_delay.set_visible(false);
+                                    glib::ControlFlow::Break
+                                });
+                            }
+                            Err(e) => {
+                                lbl_st_c.set_text(&format!("❌ {}", e));
+                            }
+                        }
+                        glib::ControlFlow::Break
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        btn_do_c.set_sensitive(true);
+                        btn_cancel_c.set_sensitive(true);
+                        glib::ControlFlow::Break
+                    }
+                }
+            });
+
+            thread::spawn(move || {
+                let res = connect_wifi(&ssid, pw_opt.as_deref());
+                let _ = tx.send(res);
+            });
+        })
+    };
+
+    let do_conn_1 = do_connect_action.clone();
+    btn_wifi_do_connect.connect_clicked(move |_| {
+        do_conn_1();
+    });
+
+    let do_conn_2 = do_connect_action.clone();
+    entry_wifi_pw.connect_activate(move |_| {
+        do_conn_2();
+    });
+
+    btn_wifi_cancel_connect.connect_clicked(clone!(@weak wifi_conn_card => move |_| {
+        wifi_conn_card.set_visible(false);
+    }));
+
+    btn_wifi_refresh.connect_clicked(clone!(@strong populate_wifi_list => move |_| {
+        populate_wifi_list();
+    }));
+
+    btn_wifi_advanced.connect_clicked(move |_| {
+        open_external_network_settings();
+    });
+
+    btn_configure_wifi.connect_clicked(clone!(@weak stack, @strong populate_wifi_list => move |_| {
+        populate_wifi_list();
+        stack.set_visible_child_name("wifi_select");
+    }));
+
+    btn_wifi_back.connect_clicked(clone!(@weak stack, @strong update_network_badge => move |_| {
+        update_network_badge();
+        stack.set_visible_child_name("internet_info");
+    }));
+
+    // Initial check and periodic polling every 3 seconds
+    update_network_badge();
+    glib::timeout_add_local(std::time::Duration::from_millis(3000), clone!(@strong update_network_badge => move || {
+        update_network_badge();
+        glib::ControlFlow::Continue
+    }));
 
     btn_net_back.connect_clicked(clone!(@weak stack => move |_| {
         stack.set_visible_child_name("utilities");
