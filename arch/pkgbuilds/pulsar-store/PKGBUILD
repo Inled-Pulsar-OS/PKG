@@ -1,0 +1,40 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsar-store
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Unified App Store and Ecosystem Center for Pulsar OS"
+arch=(any)
+url="https://inled.es"
+license=(GPL3)
+depends=(python python-gobject gtk4 libadwaita flatpak polkit xdg-utils)
+optdepends=(
+    'gnome-shell: GNOME Shell extensions management'
+    'sayri: Sayri AI ecosystem integration'
+)
+install=pulsar-store.install
+options=(!strip)
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsar-store && pwd)"
+    cd "$_src"
+
+    mkdir -p "$pkgdir/usr/bin"
+    install -Dm755 usr/bin/pulsar-store "$pkgdir/usr/bin/pulsar-store"
+
+    mkdir -p "$pkgdir/usr/share/pulsar-store"
+    cp -r usr/share/pulsar-store/* "$pkgdir/usr/share/pulsar-store/"
+
+    mkdir -p "$pkgdir/usr/share/applications"
+    install -Dm644 usr/share/applications/es.inled.PulsarStore.desktop "$pkgdir/usr/share/applications/es.inled.PulsarStore.desktop"
+    install -Dm644 usr/share/applications/pulsar-store.desktop "$pkgdir/usr/share/applications/pulsar-store.desktop"
+
+    mkdir -p "$pkgdir/usr/share/icons/hicolor/scalable/apps"
+    install -Dm644 usr/share/icons/hicolor/scalable/apps/pulsar-store.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/pulsar-store.svg"
+    install -Dm644 usr/share/icons/hicolor/scalable/apps/es.inled.PulsarStore.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/es.inled.PulsarStore.svg"
+
+    chmod -R a+rX "$pkgdir/usr"
+    find "$pkgdir/usr" -type d -exec chmod 755 {} +
+    find "$pkgdir/usr/share/pulsar-store" -type f -exec chmod 644 {} +
+    find "$pkgdir/usr/share/pulsar-store/backends" -type f -exec chmod 644 {} +
+    chmod 755 "$pkgdir/usr/share/pulsar-store/main.py"
+}

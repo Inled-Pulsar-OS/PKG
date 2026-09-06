@@ -1,0 +1,121 @@
+/* Pulsar Store - Clean Libadwaita Styling */
+
+/* Compact Sidebar */
+.sidebar-compact-row {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: none;
+    outline: none;
+    margin-bottom: 2px;
+}
+
+.sidebar-icon {
+    margin-right: 10px;
+}
+
+.sidebar-label {
+    font-weight: 500;
+    font-size: 0.95rem;
+}
+
+/* App Store Cards (Button itself is the card; no nested box backgrounds on hover) */
+button.store-tile {
+    background-color: alpha(@theme_fg_color, 0.04);
+    border: none;
+    outline: none;
+    box-shadow: none;
+    border-radius: 12px;
+    padding: 12px 16px;
+    min-height: 84px;
+    transition: background-color 150ms ease-out;
+}
+
+button.store-tile:hover {
+    background-color: alpha(@theme_fg_color, 0.08);
+    border: none;
+    outline: none;
+    box-shadow: none;
+}
+
+.app-icon {
+    border-radius: 10px;
+    border: none;
+}
+
+.app-icon-detail {
+    border-radius: 16px;
+    border: none;
+}
+
+/* Subtle Letter Avatar Fallback */
+.letter-avatar {
+    border-radius: 10px;
+    background-color: alpha(@theme_fg_color, 0.08);
+    color: @theme_fg_color;
+    font-weight: 600;
+    font-size: 1.15rem;
+    border: none;
+}
+
+.letter-avatar-detail {
+    border-radius: 16px;
+    background-color: alpha(@theme_fg_color, 0.08);
+    color: @theme_fg_color;
+    font-weight: 600;
+    font-size: 1.8rem;
+    border: none;
+}
+
+.tag-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background-color: alpha(@theme_fg_color, 0.07);
+    color: @theme_fg_color;
+}
+
+.score-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background-color: alpha(#2ec27e, 0.15);
+    color: #26a269;
+}
+
+.pill-action {
+    border-radius: 9999px;
+    font-weight: 600;
+    font-size: 0.82rem;
+    padding: 4px 14px;
+    min-width: 72px;
+}
+
+/* Announcement Banner at bottom of Store */
+.announcement-card {
+    background-color: alpha(@theme_fg_color, 0.035);
+    border: 1px dashed alpha(@theme_fg_color, 0.15);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-top: 14px;
+    margin-bottom: 8px;
+}
+
+/* Success Popup Animation & Badges */
+.success-check-badge {
+    background-color: alpha(#26a269, 0.15);
+    color: #26a269;
+    border-radius: 9999px;
+    padding: 16px;
+    margin-bottom: 8px;
+}
+
+.doc-preview-box {
+    background-color: alpha(@theme_fg_color, 0.035);
+    border: 1px solid alpha(@theme_fg_color, 0.08);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-family: monospace;
+    font-size: 0.88rem;
+}

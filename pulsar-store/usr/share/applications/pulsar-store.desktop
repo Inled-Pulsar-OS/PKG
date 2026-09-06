@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Pulsar Store
+Comment=Discover and install apps, GNOME extensions, and Sayri AI plugins
+Exec=/usr/bin/pulsar-store
+Icon=pulsar-store
+Terminal=false
+Type=Application
+Categories=System;PackageManager;GTK;GNOME;Utility;
+StartupNotify=true
+StartupWMClass=es.inled.PulsarStore
+Keywords=Software;App;Store;Install;Package;Flatpak;Extension;Sayri;
+NoDisplay=true

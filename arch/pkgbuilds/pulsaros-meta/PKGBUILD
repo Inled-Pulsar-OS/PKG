@@ -27,6 +27,7 @@ depends=(
   pulsaros-timemachine
   pulsaros-update
   pulsaros-welcome
+  pulsar-store
   sayri
 )
 optdepends=(
