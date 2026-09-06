@@ -1054,7 +1054,7 @@ where
         }
     }
 
-    log("⚠️ No local base image found on built-in recovery partition.");
+    log("[Notice] No local base image found on built-in recovery partition.");
     None
 }
 
@@ -1089,6 +1089,46 @@ fn get_lucide_icon_path(name: &str) -> String {
         "terminal" => ensure_lucide_icon(
             "terminal",
             r##"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>"##,
+        ),
+        "wifi" | "wifi-full" | "network-wireless" => ensure_lucide_icon(
+            "wifi",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/></svg>"##,
+        ),
+        "wifi-low" => ensure_lucide_icon(
+            "wifi-low",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/></svg>"##,
+        ),
+        "wifi-off" => ensure_lucide_icon(
+            "wifi-off",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" x2="22" y1="2" y2="22"/><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/></svg>"##,
+        ),
+        "ethernet" | "network-wired" | "cable" => ensure_lucide_icon(
+            "ethernet",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="14" x="4" y="4" rx="2"/><rect width="6" height="4" x="9" y="18"/><path d="M9 14v4"/><path d="M15 14v4"/></svg>"##,
+        ),
+        "lock" => ensure_lucide_icon(
+            "lock",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>"##,
+        ),
+        "unlock" => ensure_lucide_icon(
+            "unlock",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>"##,
+        ),
+        "settings" | "sliders" => ensure_lucide_icon(
+            "settings",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>"##,
+        ),
+        "check" => ensure_lucide_icon(
+            "check",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>"##,
+        ),
+        "arrow-left" => ensure_lucide_icon(
+            "arrow-left",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" x2="5" y1="12" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>"##,
+        ),
+        "alert-triangle" => ensure_lucide_icon(
+            "alert-triangle",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>"##,
         ),
         "refresh" | "refresh-cw" => ensure_lucide_icon(
             "refresh",
@@ -1146,6 +1186,22 @@ fn create_icon_widget(file_path: &str, fallback_icon_name: &str, size: i32) -> I
     }
 }
 
+fn create_button_with_icon(label: &str, icon_name: &str, icon_size: i32, css_class: &str) -> Button {
+    let btn = Button::new();
+    if !css_class.is_empty() {
+        btn.add_css_class(css_class);
+    }
+    let h_box = GtkBox::new(Orientation::Horizontal, 6);
+    h_box.set_halign(Align::Center);
+    h_box.set_valign(Align::Center);
+    let icon = create_icon_widget("", icon_name, icon_size);
+    h_box.append(&icon);
+    let lbl = Label::new(Some(label));
+    h_box.append(&lbl);
+    btn.set_child(Some(&h_box));
+    btn
+}
+
 fn build_ui(app: &Application) {
     let window = ApplicationWindow::builder()
         .application(app)
@@ -1200,19 +1256,16 @@ fn build_ui(app: &Application) {
     bottom_bar.set_margin_bottom(24);
 
     if is_demo_mode() {
-        let demo_pill = Label::new(Some("⚠️ MODO DEMO / SIMULACIÓN ACTIVO (No se escribirán datos en disco)"));
+        let demo_pill = GtkBox::new(Orientation::Horizontal, 6);
         demo_pill.add_css_class("badge-demo");
+        let warn_icon = create_icon_widget("", "alert-triangle", 14);
+        let warn_lbl = Label::new(Some("DEMO / SIMULATION MODE (No disk changes)"));
+        demo_pill.append(&warn_icon);
+        demo_pill.append(&warn_lbl);
         bottom_bar.append(&demo_pill);
     }
 
-    let btn_restart = Button::new();
-    btn_restart.add_css_class("bottom-power-btn");
-    let restart_box = GtkBox::new(Orientation::Horizontal, 8);
-    let restart_icon = create_icon_widget("", "restart", 18);
-    let restart_lbl = Label::new(Some("Restart"));
-    restart_box.append(&restart_icon);
-    restart_box.append(&restart_lbl);
-    btn_restart.set_child(Some(&restart_box));
+    let btn_restart = create_button_with_icon("Restart", "restart", 18, "bottom-power-btn");
     btn_restart.connect_clicked(|_| {
         let _ = Command::new("sh")
             .arg("-c")
@@ -1220,14 +1273,7 @@ fn build_ui(app: &Application) {
             .spawn();
     });
 
-    let btn_shutdown = Button::new();
-    btn_shutdown.add_css_class("bottom-power-btn");
-    let shutdown_box = GtkBox::new(Orientation::Horizontal, 8);
-    let shutdown_icon = create_icon_widget("", "shutdown", 18);
-    let shutdown_lbl = Label::new(Some("Shut Down"));
-    shutdown_box.append(&shutdown_icon);
-    shutdown_box.append(&shutdown_lbl);
-    btn_shutdown.set_child(Some(&shutdown_box));
+    let btn_shutdown = create_button_with_icon("Shut Down", "shutdown", 18, "bottom-power-btn");
     btn_shutdown.connect_clicked(|_| {
         let _ = Command::new("sh")
             .arg("-c")
@@ -1460,15 +1506,19 @@ fn build_ui(app: &Application) {
     net_stat_box.append(&lbl_net_hdr);
 
     let net_badge_row = GtkBox::new(Orientation::Horizontal, 8);
+    let net_badge_inner = GtkBox::new(Orientation::Horizontal, 6);
+    net_badge_inner.set_halign(Align::Start);
+    net_badge_inner.set_hexpand(true);
+    let img_net_badge = create_icon_widget("", "wifi-off", 16);
     let lbl_net_badge = Label::new(Some("Detecting network..."));
     lbl_net_badge.add_css_class("badge-net-warn");
     lbl_net_badge.set_halign(Align::Start);
-    lbl_net_badge.set_hexpand(true);
     lbl_net_badge.set_ellipsize(gtk4::pango::EllipsizeMode::End);
-    net_badge_row.append(&lbl_net_badge);
+    net_badge_inner.append(&img_net_badge);
+    net_badge_inner.append(&lbl_net_badge);
+    net_badge_row.append(&net_badge_inner);
 
-    let btn_configure_wifi = Button::with_label("📶 Wi-Fi Settings...");
-    btn_configure_wifi.add_css_class("secondary-action");
+    let btn_configure_wifi = create_button_with_icon("Wi-Fi Settings...", "wifi", 16, "secondary-action");
     net_badge_row.append(&btn_configure_wifi);
 
     net_stat_box.append(&net_badge_row);
@@ -1517,7 +1567,7 @@ fn build_ui(app: &Application) {
     wifi_box.set_valign(Align::Center);
     wifi_box.set_halign(Align::Center);
 
-    let wifi_icon = create_icon_widget("", "network-wireless", 48);
+    let wifi_icon = create_icon_widget("", "wifi", 48);
     wifi_box.append(&wifi_icon);
 
     let wifi_title = Label::new(Some("Wi-Fi Networks"));
@@ -1533,16 +1583,14 @@ fn build_ui(app: &Application) {
     wifi_top_bar.set_size_request(580, -1);
     wifi_top_bar.set_margin_bottom(4);
 
-    let btn_wifi_refresh = Button::with_label("🔄 Scan Networks");
-    btn_wifi_refresh.add_css_class("secondary-action");
+    let btn_wifi_refresh = create_button_with_icon("Scan Networks", "refresh", 16, "secondary-action");
     wifi_top_bar.append(&btn_wifi_refresh);
 
     let wifi_top_spacer = GtkBox::new(Orientation::Horizontal, 0);
     wifi_top_spacer.set_hexpand(true);
     wifi_top_bar.append(&wifi_top_spacer);
 
-    let btn_wifi_advanced = Button::with_label("⚙️ Advanced Settings...");
-    btn_wifi_advanced.add_css_class("secondary-action");
+    let btn_wifi_advanced = create_button_with_icon("Advanced Settings...", "settings", 16, "secondary-action");
     wifi_top_bar.append(&btn_wifi_advanced);
     wifi_box.append(&wifi_top_bar);
 
@@ -1596,8 +1644,7 @@ fn build_ui(app: &Application) {
     wifi_nav_box.set_halign(Align::Center);
     wifi_nav_box.set_margin_top(8);
 
-    let btn_wifi_back = Button::with_label("Back to Internet Recovery");
-    btn_wifi_back.add_css_class("secondary-action");
+    let btn_wifi_back = create_button_with_icon("Back to Internet Recovery", "arrow-left", 16, "secondary-action");
     wifi_nav_box.append(&btn_wifi_back);
     wifi_box.append(&wifi_nav_box);
 
@@ -1621,24 +1668,10 @@ fn build_ui(app: &Application) {
     let usb_actions_bar = GtkBox::new(Orientation::Horizontal, 10);
     usb_actions_bar.set_margin_bottom(6);
 
-    let btn_scan_usb = Button::new();
-    btn_scan_usb.add_css_class("secondary-action");
-    let scan_box = GtkBox::new(Orientation::Horizontal, 6);
-    let scan_icon = create_icon_widget("", "refresh", 16);
-    let scan_lbl = Label::new(Some("Scan / Refresh USBs"));
-    scan_box.append(&scan_icon);
-    scan_box.append(&scan_lbl);
-    btn_scan_usb.set_child(Some(&scan_box));
+    let btn_scan_usb = create_button_with_icon("Scan / Refresh USBs", "refresh", 16, "secondary-action");
     usb_actions_bar.append(&btn_scan_usb);
 
-    let btn_open_browser = Button::new();
-    btn_open_browser.add_css_class("secondary-action");
-    let open_box = GtkBox::new(Orientation::Horizontal, 6);
-    let open_icon = create_icon_widget("", "folder", 16);
-    let open_lbl = Label::new(Some("Browse Files / Drives..."));
-    open_box.append(&open_icon);
-    open_box.append(&open_lbl);
-    btn_open_browser.set_child(Some(&open_box));
+    let btn_open_browser = create_button_with_icon("Browse Files / Drives...", "folder", 16, "secondary-action");
     usb_actions_bar.append(&btn_open_browser);
 
     usb_box.append(&usb_actions_bar);
@@ -2156,7 +2189,7 @@ fn build_ui(app: &Application) {
                 title_l.set_halign(Align::Start);
                 vbox.append(&title_l);
 
-                let desc_l = Label::new(Some(if is_valid { "✅ Valid Pulsar OS system image" } else { "⚠️ Image smaller than standard base size" }));
+                let desc_l = Label::new(Some(if is_valid { "Valid Pulsar OS system image" } else { "Image smaller than standard base size" }));
                 desc_l.add_css_class("utility-desc-lbl");
                 desc_l.set_halign(Align::Start);
                 vbox.append(&desc_l);
@@ -2272,6 +2305,7 @@ fn build_ui(app: &Application) {
     // ─────────────────────────────────────────────────────────────
     let update_network_badge = {
         let lbl_badge = lbl_net_badge.clone();
+        let img_badge = img_net_badge.clone();
         let btn_dl = btn_net_download.clone();
         let lbl_status = lbl_net_status.clone();
         Rc::new(move || {
@@ -2282,19 +2316,23 @@ fn build_ui(app: &Application) {
 
             if st.is_connected {
                 lbl_badge.add_css_class("badge-net-ok");
-                let icon = match st.conn_type {
-                    NetConnType::Wifi => "📶",
-                    NetConnType::Ethernet => "🔌",
-                    NetConnType::None => "●",
+                let icon_name = match st.conn_type {
+                    NetConnType::Wifi => "wifi",
+                    NetConnType::Ethernet => "ethernet",
+                    NetConnType::None => "wifi",
                 };
-                lbl_badge.set_text(&format!("{} {}", icon, st.conn_name));
+                let icon_p = get_lucide_icon_path(icon_name);
+                img_badge.set_from_file(Some(&icon_p));
+                lbl_badge.set_text(&st.conn_name);
                 btn_dl.set_sensitive(true);
             } else {
                 lbl_badge.add_css_class("badge-net-warn");
-                lbl_badge.set_text("○ Offline / Disconnected");
+                let icon_p = get_lucide_icon_path("wifi-off");
+                img_badge.set_from_file(Some(&icon_p));
+                lbl_badge.set_text("Offline / Disconnected");
                 if !is_demo_mode() {
                     btn_dl.set_sensitive(false);
-                    lbl_status.set_text("⚠️ No internet connection detected. Please connect to Wi-Fi or Ethernet.");
+                    lbl_status.set_text("No internet connection detected. Please connect to Wi-Fi or Ethernet.");
                 }
             }
         })
@@ -2337,8 +2375,9 @@ fn build_ui(app: &Application) {
                 let card = GtkBox::new(Orientation::Horizontal, 12);
                 card.add_css_class("wifi-card-row");
 
-                let lbl_sig = Label::new(Some("📶"));
-                card.append(&lbl_sig);
+                let sig_icon_name = if net.signal >= 50 { "wifi" } else { "wifi-low" };
+                let icon_sig = create_icon_widget("", sig_icon_name, 20);
+                card.append(&icon_sig);
 
                 let info_box = GtkBox::new(Orientation::Vertical, 2);
                 info_box.set_hexpand(true);
@@ -2353,17 +2392,27 @@ fn build_ui(app: &Application) {
                 lbl_sig_pct.add_css_class("wifi-signal-text");
                 sub_box.append(&lbl_sig_pct);
 
-                let lbl_sec = Label::new(Some(&net.security));
-                lbl_sec.add_css_class("wifi-badge-security");
-                sub_box.append(&lbl_sec);
+                let sec_box = GtkBox::new(Orientation::Horizontal, 4);
+                sec_box.add_css_class("wifi-badge-security");
+                let is_open = net.security.to_lowercase().contains("open") || net.security.is_empty();
+                let lock_icon_name = if is_open { "unlock" } else { "lock" };
+                let lock_icon = create_icon_widget("", lock_icon_name, 12);
+                sec_box.append(&lock_icon);
+                let lbl_sec = Label::new(Some(if is_open { "Open" } else { &net.security }));
+                sec_box.append(&lbl_sec);
+                sub_box.append(&sec_box);
 
                 info_box.append(&sub_box);
                 card.append(&info_box);
 
                 if net.in_use {
-                    let lbl_conn = Label::new(Some("● Connected"));
-                    lbl_conn.add_css_class("wifi-badge-connected");
-                    card.append(&lbl_conn);
+                    let conn_box = GtkBox::new(Orientation::Horizontal, 6);
+                    conn_box.add_css_class("wifi-badge-connected");
+                    let check_icon = create_icon_widget("", "check", 14);
+                    let lbl_conn = Label::new(Some("Connected"));
+                    conn_box.append(&check_icon);
+                    conn_box.append(&lbl_conn);
+                    card.append(&conn_box);
                 } else {
                     let btn_row_connect = Button::with_label("Connect");
                     btn_row_connect.add_css_class("shortcut-btn");
@@ -2441,7 +2490,7 @@ fn build_ui(app: &Application) {
                         btn_cancel_c.set_sensitive(true);
                         match res {
                             Ok(()) => {
-                                lbl_st_c.set_text("✅ Connected successfully!");
+                                lbl_st_c.set_text("Connected successfully.");
                                 badge_c();
                                 let pop_delay = pop_c.clone();
                                 let card_delay = card_c.clone();
@@ -2452,7 +2501,7 @@ fn build_ui(app: &Application) {
                                 });
                             }
                             Err(e) => {
-                                lbl_st_c.set_text(&format!("❌ {}", e));
+                                lbl_st_c.set_text(&format!("Connection error: {}", e));
                             }
                         }
                         glib::ControlFlow::Break
@@ -2648,7 +2697,7 @@ fn build_ui(app: &Application) {
                     DownloadMsg::Done => {
                         pbar_dl.set_fraction(1.0);
                         if is_demo_mode() {
-                            lbl_status_dl.set_text("✅ [MODO DEMO] ¡Descarga y verificación SHA256 completadas! /tmp/pulsaros-internet-recovery.squashfs listo. Ningún disco ha sido modificado.");
+                            lbl_status_dl.set_text("[DEMO MODE] Download and SHA256 verification completed! /tmp/pulsaros-internet-recovery.squashfs ready. No disk changes made.");
                         } else {
                             lbl_status_dl.set_text("Download complete and verified!");
                         }
@@ -2660,7 +2709,7 @@ fn build_ui(app: &Application) {
                         *sel_img.borrow_mut() = Some("/tmp/pulsaros-internet-recovery.squashfs".to_string());
                         *rec_mode.borrow_mut() = RecoveryMode::CustomImage("/tmp/pulsaros-internet-recovery.squashfs".to_string());
                         let src_str = if is_demo_mode() {
-                            "Source: Internet Recovery [MODO DEMO - Seguro]"
+                            "Source: Internet Recovery [DEMO MODE - Safe]"
                         } else {
                             "Source: Internet Recovery (SourceForge CDN)"
                         };
@@ -2765,15 +2814,15 @@ fn build_ui(app: &Application) {
                                 let trimmed_exp = expected_h.trim();
                                 if !trimmed_exp.is_empty() {
                                     if !calculated_hash.eq_ignore_ascii_case(trimmed_exp) {
-                                        log_msg(&format!("❌ SHA-256 mismatch! Got: '{}', Expected: '{}'", calculated_hash, trimmed_exp));
+                                        log_msg(&format!("Error: SHA-256 mismatch! Got: '{}', Expected: '{}'", calculated_hash, trimmed_exp));
                                         let _ = fs::remove_file(tmp_final);
                                         let _ = tx.send(DownloadMsg::Error(format!(
                                              "SHA256 checksum mismatch!\nCalculated: {}\nExpected: {}",
-                                            calculated_hash, trimmed_exp
+                                             calculated_hash, trimmed_exp
                                         )));
                                         return;
                                     } else {
-                                        log_msg("✅ SHA-256 checksum verified successfully.");
+                                        log_msg("SHA-256 checksum verified successfully.");
                                     }
                                 }
                             }
