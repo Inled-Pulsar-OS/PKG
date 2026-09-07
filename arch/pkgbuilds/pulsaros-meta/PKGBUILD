@@ -32,7 +32,6 @@ depends=(
 )
 optdepends=(
   'droidtux: Android integration and syncing'
-  'macboat: macOS in Docker container'
   'appinstall: Application installer'
   'seafari: Safari-like web browser'
   'winboat-bin: Windows app compatibility runner'

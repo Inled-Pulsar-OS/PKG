@@ -10,12 +10,12 @@ export interface AppEntry {
 
 export const CROSS_PLATFORM_APPS: AppEntry[] = [
   {
-    id: "macboat",
-    name: "MacBoat",
+    id: "install-macos",
+    name: "Install macOS",
     description:
-      "Run macOS in a VM, downloaded from Apple's official servers. OpenCore integration, no hassle.",
-    logo: "./logos/macboat.png",
-    launch: "macboat",
+      "Run and manage macOS virtual machines on KVM with native speed and simple setup.",
+    logo: "./logos/install-macos.png",
+    launch: "install-macos",
   },
   {
     id: "winboat",

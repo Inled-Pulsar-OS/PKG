@@ -1,0 +1,79 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Install macOS (ultimate-macOS-KVM Launcher)
+# ==============================================================================
+
+# If launched from GUI / Tauri with no terminal attached, spawn in a terminal emulator
+if [ ! -t 0 ] || [ ! -t 1 ]; then
+    if command -v gnome-terminal >/dev/null 2>&1; then
+        exec gnome-terminal --title="Install macOS" -- "$0" "$@"
+    elif command -v ptyxis >/dev/null 2>&1; then
+        exec ptyxis --title="Install macOS" -- "$0" "$@"
+    elif command -v kgx >/dev/null 2>&1; then
+        exec kgx -e "$0" "$@"
+    elif command -v x-terminal-emulator >/dev/null 2>&1; then
+        exec x-terminal-emulator -e "$0" "$@"
+    fi
+fi
+
+set -e
+
+APP_DIR="/opt/.ultimate-macOS-KVM"
+
+echo "=================================================="
+echo "🍏 Pulsar OS - Install macOS (KVM Virtualization)"
+echo "=================================================="
+echo ""
+
+# 1. Check and enable libvirtd daemon
+echo "🔍 Checking virtualization service (libvirtd)..."
+if ! systemctl is-active --quiet libvirtd.service 2>/dev/null; then
+    echo "⚙️ Enabling and starting libvirtd..."
+    sudo systemctl enable --now libvirtd.service 2>/dev/null || sudo systemctl start libvirtd.service 2>/dev/null || true
+fi
+
+# Check status
+if systemctl is-active --quiet libvirtd.service 2>/dev/null; then
+    echo "✅ libvirtd daemon is active and running."
+else
+    echo "⚠️ Warning: libvirtd service is not active. Attempting socket activation..."
+    sudo systemctl enable --now libvirtd.socket 2>/dev/null || sudo systemctl start libvirtd.socket 2>/dev/null || true
+    if systemctl is-active --quiet libvirtd.socket 2>/dev/null || systemctl is-active --quiet libvirtd.service 2>/dev/null; then
+        echo "✅ libvirtd socket/service activated."
+    else
+        echo "❌ Could not activate libvirtd. Please check: systemctl status libvirtd"
+    fi
+fi
+
+# 2. Add user to libvirt and kvm groups if needed
+if [ -n "$USER" ] && [ "$USER" != "root" ]; then
+    if ! id -nG "$USER" 2>/dev/null | grep -qw "libvirt"; then
+        sudo usermod -aG libvirt,kvm "$USER" 2>/dev/null || true
+    fi
+fi
+
+# 3. Ensure default NAT network in libvirt is active
+sudo virsh net-start default 2>/dev/null || true
+sudo virsh net-autostart default 2>/dev/null || true
+
+# 4. Ensure ultimate-macOS-KVM repository exists
+if [ ! -d "$APP_DIR" ] || [ ! -f "$APP_DIR/main.py" ]; then
+    echo "📥 Downloading ultimate-macOS-KVM from GitHub..."
+    sudo mkdir -p "$APP_DIR"
+    sudo git clone --depth=1 https://github.com/Coopydood/ultimate-macOS-KVM "$APP_DIR"
+    sudo chmod -R 777 "$APP_DIR"
+fi
+
+cd "$APP_DIR"
+chmod +x main.py 2>/dev/null || true
+
+echo ""
+echo "🚀 Launching ultimate-macOS-KVM..."
+echo "=================================================="
+echo ""
+
+if [ -f "requirements.txt" ]; then
+    pip install -q -r requirements.txt --break-system-packages 2>/dev/null || true
+fi
+
+exec python3 ./main.py "$@"

@@ -1140,6 +1140,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 "dkms", "linux-headers",
                 "appmenu-gtk-module", "python-xlib",
                 "python-setuptools", "python-pip",
+                "qemu-desktop", "libvirt", "virt-manager",
+                "edk2-ovmf", "dnsmasq", "python-requests",
             ]
             # Packages that live only in the AUR (not in official or Inled repos)
             arch_aur_packages = [
@@ -1155,6 +1157,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 "gnome-clocks",
                 "nvidia-driver", "dkms", "linux-headers-amd64",
                 "xdotool", "python3-xlib",
+                "qemu-system-x86", "qemu-utils", "libvirt-daemon-system",
+                "libvirt-clients", "virt-manager", "ovmf", "dnsmasq-base",
+                "bridge-utils", "python3-requests", "dmg2img",
                 # LocalSend is NOT packaged in Debian stable; it is installed
                 # separately from its official .deb below (_install_localsend_debian).
             ]
@@ -3200,10 +3205,15 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 "dkms",
                                 "linux-headers",
                                 # Global menu / Fildem dependencies
-                                "appmenu-gtk-module",
-                                "python-xlib",
                                 "python-setuptools",
                                 "python-pip",
+                                # Virtualization & KVM (macOS KVM & VM Support)
+                                "qemu-desktop",
+                                "libvirt",
+                                "virt-manager",
+                                "edk2-ovmf",
+                                "dnsmasq",
+                                "python-requests",
                             ]
                             # Initialize pacman keyring inside the chroot so
                             # signature verification works (avoids GPGME errors),
@@ -3295,10 +3305,18 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 "gnome-weather",
                                 "gnome-clocks",
                                 "nvidia-driver",
-                                "dkms",
-                                "linux-headers-amd64",
                                 "xdotool",
                                 "python3-xlib",
+                                "qemu-system-x86",
+                                "qemu-utils",
+                                "libvirt-daemon-system",
+                                "libvirt-clients",
+                                "virt-manager",
+                                "ovmf",
+                                "dnsmasq-base",
+                                "bridge-utils",
+                                "python3-requests",
+                                "dmg2img",
                                 # LocalSend is not in Debian stable; installed
                                 # separately from its official .deb below.
                             ]

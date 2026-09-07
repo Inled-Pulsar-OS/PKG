@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Install macOS
+GenericName=macOS KVM Installer
+Comment=Install and manage macOS Virtual Machines on KVM
+Exec=gnome-terminal -- /usr/bin/install-macos
+Icon=install-macos
+Terminal=false
+Type=Application
+Categories=System;Utility;Virtualization;
+Keywords=macos;kvm;qemu;virtual machine;apple;installer;mac;
+StartupNotify=true

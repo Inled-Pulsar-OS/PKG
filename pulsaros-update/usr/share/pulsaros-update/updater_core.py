@@ -307,7 +307,7 @@ class UpdateCore:
             "core_installed": True,
             "details": ""
         }
-        pulsar_keywords = ["pulsar", "sayri", "seafari", "macboat", "winboat", "spotlight", "xremap"]
+        pulsar_keywords = ["pulsar", "sayri", "seafari", "winboat", "spotlight", "xremap"]
         if self.is_arch:
             code, out, _ = self.run_command(["pacman", "-Qu"])
             if code == 0 and out.strip():
@@ -360,7 +360,6 @@ class UpdateCore:
             "pulsaros-welcome",
             "seafari",
             "sayri",
-            "macboat",
             "winboat-bin",
             "gnome-macos-remap-wayland",
             "xremap-gnome-bin"
