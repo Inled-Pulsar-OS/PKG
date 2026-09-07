@@ -3,8 +3,23 @@ use crate::utils::{get_file_icon, open_file};
 use gtk4::gdk;
 use gtk4::prelude::*;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::process::Command;
 use std::rc::Rc;
+use std::sync::Mutex;
+use std::sync::OnceLock;
+
+static ICON_CACHE: OnceLock<Mutex<HashMap<String, Option<String>>>> = OnceLock::new();
+
+fn find_icon_file_cached(name: &str) -> Option<String> {
+    let cache = ICON_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(hit) = cache.lock().unwrap().get(name) {
+        return hit.clone();
+    }
+    let found = find_icon_file(name);
+    cache.lock().unwrap().insert(name.to_string(), found.clone());
+    found
+}
 
 fn find_icon_file(name: &str) -> Option<String> {
     const EXTS: [&str; 3] = ["png", "svg", "xpm"];
@@ -73,7 +88,7 @@ fn app_icon(icon: &str, desktop_file: &str) -> gtk4::Image {
                 }
             }
         }
-        if let Some(p) = find_icon_file(&name) {
+        if let Some(p) = find_icon_file_cached(&name) {
             return gtk4::Image::from_file(p);
         }
     }
@@ -169,7 +184,6 @@ impl ResultView {
     }
 
     pub fn set_results(&self, new_results: Vec<SearchResult>, as_grid: bool) {
-        *self.results.borrow_mut() = new_results.clone();
         *self.selected_index.borrow_mut() = None;
 
         // Clear children
@@ -180,7 +194,12 @@ impl ResultView {
             self.grid.remove(&child);
         }
 
-        for result in new_results.iter().take(200) {
+        let mut new_results = new_results;
+        new_results.truncate(200);
+        let visible = new_results.to_vec();
+        *self.results.borrow_mut() = new_results;
+
+        for result in &visible {
             // Build list row
             let list_row = self.build_list_row(result);
             self.list_box.append(&list_row);

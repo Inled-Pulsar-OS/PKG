@@ -340,7 +340,6 @@ impl SpotlightWindow {
         *self.current_dir.borrow_mut() = None;
         self.search_entry.set_placeholder_text(Some("Search applications, files, or clipboard..."));
         self.search_entry.set_text("");
-        self.backend.reload_apps();
         self.do_search();
 
         self.window.present();
@@ -530,64 +529,42 @@ impl SpotlightWindow {
             let is_grid = self.config.borrow().is_grid_view;
             let seq_c = self.search_seq.clone();
             let seq_val = current_seq;
+            let instant_for_files = instant_results.clone();
 
             self.backend.search_async(&query, &category, DEFAULT_LIMIT, move |file_results| {
-                if *seq_c.borrow() == seq_val {
-                    let mut combined = instant_results.clone();
+                if *seq_c.borrow() == seq_val && !file_results.is_empty() {
+                    let mut combined = instant_for_files.clone();
                     combined.extend(file_results);
+                    result_view_c.set_results(combined, is_grid);
+                }
+            });
+        }
+
+        // 3. Async browser history (web category, or web results within "all")
+        //    Runs SQLite on a worker thread so a locked places.sqlite never
+        //    blocks the UI thread.
+        let wants_history = category == "web" || category == "all";
+        if wants_history {
+            let history_limit = if category == "web" { 6 } else { 3 };
+            let result_view_c = self.result_view.clone();
+            let is_grid = self.config.borrow().is_grid_view;
+            let seq_c = self.search_seq.clone();
+            let seq_val = current_seq;
+
+            let base = instant_results.clone();
+
+            self.backend.search_browser_history_async(&query, history_limit, move |history_results| {
+                if *seq_c.borrow() == seq_val && !history_results.is_empty() {
+                    let mut combined = base.clone();
+                    combined.extend(history_results);
                     result_view_c.set_results(combined, is_grid);
                 }
             });
         }
     }
 
-    fn browse_directory(&self, path_str: &str, filter: &str) -> Vec<SearchResult> {
-        let mut results = Vec::new();
-        let p = Path::new(path_str);
-        if !p.is_dir() {
-            return results;
-        }
-
-        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/jaime"));
-        // Parent navigation
-        if p != home && p.parent().is_some() {
-            results.push(SearchResult {
-                url: format!("file://{}", p.parent().unwrap().display()),
-                title: ".. (Parent directory)".to_string(),
-                mime: "inode/directory".to_string(),
-                snippet: p.parent().unwrap().display().to_string(),
-                app: None,
-            });
-        }
-
-        if let Ok(entries) = std::fs::read_dir(p) {
-            let mut list: Vec<_> = entries.filter_map(Result::ok).collect();
-            list.sort_by_key(|e| (e.file_type().map(|t| !t.is_dir()).unwrap_or(true), e.file_name().to_string_lossy().to_lowercase()));
-
-            for entry in list {
-                let name = entry.file_name().to_string_lossy().into_owned();
-                if name.starts_with('.') {
-                    continue;
-                }
-                if !filter.is_empty() && !name.to_lowercase().contains(&filter.to_lowercase()) {
-                    continue;
-                }
-
-                let is_dir = entry.file_type().map_or(false, |t| t.is_dir());
-                let url = format!("file://{}", entry.path().display());
-                let mime = if is_dir { "inode/directory".to_string() } else { "application/octet-stream".to_string() };
-
-                results.push(SearchResult {
-                    url,
-                    title: name,
-                    mime,
-                    snippet: entry.path().display().to_string(),
-                    app: None,
-                });
-            }
-        }
-
-        results
+fn browse_directory(&self, path_str: &str, filter: &str) -> Vec<SearchResult> {
+        browse_directory_plain(path_str, filter)
     }
 
     fn cycle_category(&self, step: i32) {
@@ -729,4 +706,53 @@ impl SpotlightWindow {
 
         glib::Propagation::Proceed
     }
+}
+
+fn browse_directory_plain(path_str: &str, filter: &str) -> Vec<SearchResult> {
+    let mut results = Vec::new();
+    let p = Path::new(path_str);
+    if !p.is_dir() {
+        return results;
+    }
+
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/jaime"));
+    // Parent navigation
+    if p != home && p.parent().is_some() {
+        results.push(SearchResult {
+            url: format!("file://{}", p.parent().unwrap().display()),
+            title: ".. (Parent directory)".to_string(),
+            mime: "inode/directory".to_string(),
+            snippet: p.parent().unwrap().display().to_string(),
+            app: None,
+        });
+    }
+
+    if let Ok(entries) = std::fs::read_dir(p) {
+        let mut list: Vec<_> = entries.filter_map(Result::ok).collect();
+        list.sort_by_key(|e| (e.file_type().map(|t| !t.is_dir()).unwrap_or(true), e.file_name().to_string_lossy().to_lowercase()));
+
+        for entry in list {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') {
+                continue;
+            }
+            if !filter.is_empty() && !name.to_lowercase().contains(&filter.to_lowercase()) {
+                continue;
+            }
+
+            let is_dir = entry.file_type().map_or(false, |t| t.is_dir());
+            let url = format!("file://{}", entry.path().display());
+            let mime = if is_dir { "inode/directory".to_string() } else { "application/octet-stream".to_string() };
+
+            results.push(SearchResult {
+                url,
+                title: name,
+                mime,
+                snippet: entry.path().display().to_string(),
+                app: None,
+            });
+        }
+    }
+
+    results
 }

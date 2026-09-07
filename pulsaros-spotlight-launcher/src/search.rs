@@ -79,10 +79,6 @@ impl SearchBackend {
         }
     }
 
-    pub fn reload_apps(&self) {
-        *self.apps.borrow_mut() = load_apps();
-    }
-
     pub fn get_indexing_status(&self) -> (bool, String, f64) {
         let targets = &[
             ("org.freedesktop.LocalSearch3.Miner.Files", "/org/freedesktop/LocalSearch3/Miner/Files"),
@@ -182,7 +178,40 @@ impl SearchBackend {
         Vec::new()
     }
 
+    pub fn search_browser_history_async<F>(&self, query: &str, limit: usize, callback: F)
+    where
+        F: Fn(Vec<SearchResult>) + 'static,
+    {
+        let query = query.to_string();
+
+        let (sender, receiver) = std::sync::mpsc::channel::<Vec<SearchResult>>();
+
+        gtk4::glib::idle_add_local(move || {
+            match receiver.try_recv() {
+                Ok(results) => {
+                    callback(results);
+                    gtk4::glib::ControlFlow::Break
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    gtk4::glib::ControlFlow::Continue
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    gtk4::glib::ControlFlow::Break
+                }
+            }
+        });
+
+        thread::spawn(move || {
+            let results = query_browser_history_plain(&query, limit);
+            let _ = sender.send(results);
+        });
+    }
+
     pub fn search_web(&self, query: &str) -> Vec<SearchResult> {
+        // Instant web result (Google new-tab link). Browser-history lookup is
+        // intentionally NOT done here: it opens SQLite on the UI thread and can
+        // block on a locked places.sqlite. It runs asynchronously via
+        // search_browser_history_async() instead.
         let q_strip = query.trim();
         let mut results = Vec::new();
 
@@ -195,8 +224,6 @@ impl SearchBackend {
                 snippet: format!("Open Google search for '{}'", q_strip),
                 app: None,
             });
-
-            results.extend(self.query_browser_history(q_strip, 5));
         } else {
             results.push(SearchResult {
                 url: "https://www.google.com".to_string(),
@@ -226,82 +253,6 @@ impl SearchBackend {
                 snippet: "https://wikipedia.org".to_string(),
                 app: None,
             });
-
-            results.extend(self.query_browser_history("", 6));
-        }
-
-        results
-    }
-
-    fn query_browser_history(&self, query: &str, limit: usize) -> Vec<SearchResult> {
-        let mut results = Vec::new();
-        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/jaime"));
-
-        let mut paths = Vec::new();
-        paths.push(home.join(".mozilla/seafari-profile/places.sqlite"));
-        let ff_dir = home.join(".mozilla/firefox");
-        if ff_dir.is_dir() {
-            if let Ok(entries) = std::fs::read_dir(ff_dir) {
-                for entry in entries.filter_map(Result::ok) {
-                    let db_path = entry.path().join("places.sqlite");
-                    if db_path.is_file() {
-                        paths.push(db_path);
-                    }
-                }
-            }
-        }
-
-        for db_path in paths {
-            if !db_path.exists() {
-                continue;
-            }
-
-            if let Ok(conn) = SqliteConnection::open_with_flags(
-                &db_path,
-                OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI,
-            ) {
-                // The browser holds an exclusive lock while running; never
-                // let the UI block waiting for it
-                let _ = conn.busy_timeout(std::time::Duration::from_millis(100));
-                let sql = if query.is_empty() {
-                    format!("SELECT url, title FROM moz_places WHERE hidden = 0 AND title != '' ORDER BY frecency DESC LIMIT {}", limit)
-                } else {
-                    format!("SELECT url, title FROM moz_places WHERE (title LIKE ?1 OR url LIKE ?2) AND hidden = 0 ORDER BY frecency DESC LIMIT {}", limit)
-                };
-
-                if let Ok(mut stmt) = conn.prepare(&sql) {
-                    let mut rows = Vec::new();
-                    if query.is_empty() {
-                        if let Ok(mapped) = stmt.query_map([], |row| {
-                            let url: String = row.get(0)?;
-                            let title: Option<String> = row.get(1)?;
-                            Ok((url, title))
-                        }) {
-                            rows.extend(mapped.filter_map(Result::ok));
-                        }
-                    } else {
-                        let param = format!("%{}%", query);
-                        if let Ok(mapped) = stmt.query_map([&param, &param], |row| {
-                            let url: String = row.get(0)?;
-                            let title: Option<String> = row.get(1)?;
-                            Ok((url, title))
-                        }) {
-                            rows.extend(mapped.filter_map(Result::ok));
-                        }
-                    }
-
-                    for (url, title) in rows {
-                        let title = title.unwrap_or_else(|| url.clone());
-                        results.push(SearchResult {
-                            title,
-                            snippet: url.clone(),
-                            url,
-                            mime: "text/html".to_string(),
-                            app: None,
-                        });
-                    }
-                }
-            }
         }
 
         results
@@ -309,10 +260,10 @@ impl SearchBackend {
 
     pub fn search_apps(&self, query: &str, limit: usize) -> Vec<SearchResult> {
         let q_lower = query.to_lowercase();
-        let apps = self.apps.borrow().clone();
+        let apps = self.apps.borrow();
         let mut results = Vec::new();
 
-        for app in apps {
+        for app in apps.iter() {
             if q_lower.is_empty()
                 || app.lower_name.contains(&q_lower)
                 || app.lower_comment.contains(&q_lower)
@@ -328,7 +279,7 @@ impl SearchBackend {
                     } else {
                         app.filename.clone()
                     },
-                    app: Some(app),
+                    app: Some(app.clone()),
                 });
 
                 if results.len() >= limit {
@@ -482,4 +433,101 @@ fn execute_sparql_external(sparql: &str) -> Vec<SearchResult> {
 
     results.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
     results
+}
+
+fn query_browser_history_plain(query: &str, limit: usize) -> Vec<SearchResult> {
+    let mut results = Vec::new();
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/jaime"));
+
+    let mut paths = Vec::new();
+    paths.push(home.join(".mozilla/seafari-profile/places.sqlite"));
+    let ff_dir = home.join(".mozilla/firefox");
+    if ff_dir.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(ff_dir) {
+            for entry in entries.filter_map(Result::ok) {
+                let db_path = entry.path().join("places.sqlite");
+                if db_path.is_file() {
+                    paths.push(db_path);
+                }
+            }
+        }
+    }
+
+    for db_path in paths {
+        if !db_path.exists() {
+            continue;
+        }
+
+        if let Ok(conn) = SqliteConnection::open_with_flags(
+            &db_path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI,
+        ) {
+            // The browser holds an exclusive lock while running; never
+            // let the UI block waiting for it
+            let _ = conn.busy_timeout(std::time::Duration::from_millis(100));
+            let sql = if query.is_empty() {
+                format!("SELECT url, title FROM moz_places WHERE hidden = 0 AND title != '' ORDER BY frecency DESC LIMIT {}", limit)
+            } else {
+                format!("SELECT url, title FROM moz_places WHERE (title LIKE ?1 OR url LIKE ?2) AND hidden = 0 ORDER BY frecency DESC LIMIT {}", limit)
+            };
+
+            if let Ok(mut stmt) = conn.prepare(&sql) {
+                let mut rows = Vec::new();
+                if query.is_empty() {
+                    if let Ok(mapped) = stmt.query_map([], |row| {
+                        let url: String = row.get(0)?;
+                        let title: Option<String> = row.get(1)?;
+                        Ok((url, title))
+                    }) {
+                        rows.extend(mapped.filter_map(Result::ok));
+                    }
+                } else {
+                    let param = format!("%{}%", query);
+                    if let Ok(mapped) = stmt.query_map([&param, &param], |row| {
+                        let url: String = row.get(0)?;
+                        let title: Option<String> = row.get(1)?;
+                        Ok((url, title))
+                    }) {
+                        rows.extend(mapped.filter_map(Result::ok));
+                    }
+                }
+
+                for (url, title) in rows {
+                    let title = title.unwrap_or_else(|| url.clone());
+                    results.push(SearchResult {
+                        title,
+                        snippet: url.clone(),
+                        url,
+                        mime: "text/html".to_string(),
+                        app: None,
+                    });
+                }
+            }
+        }
+    }
+
+    results
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn browser_history_plain_returns_empty_when_no_database() {
+        let tmp = std::env::temp_dir().join("pulsar_spotlight_test_no_hist");
+        let _ = std::fs::create_dir_all(&tmp);
+        std::env::set_var("HOME", &tmp);
+        let results = query_browser_history_plain("spotlight-test", 10);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn build_query_contains_home_scope_and_query() {
+        let backend = SearchBackend::new(None);
+        let q = backend.build_query("myfile", "documents", 500);
+        assert!(q.contains("file:///home/"));
+        assert!(q.contains("CONTAINS(LCASE(?url), \"myfile\")"));
+        assert!(q.contains("LIMIT 500"));
+    }
 }
