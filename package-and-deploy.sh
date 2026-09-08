@@ -512,11 +512,11 @@ if [ -n "$UPLOAD_FLAG" ] || [ -n "$ONLY_UPLOAD_FLAG" ]; then
         else
             echo "⏫  MODO SOLO SUBIDA / ONLY-UPLOAD MODE: Subiendo un paquete .deb ya compilado..."
         fi
-        local pkg_lookup="$PACKAGE_NAME"
+        pkg_lookup="$PACKAGE_NAME"
         for ctrl in "$PKG_DIR"/*/DEBIAN/control; do
             if [ -f "$ctrl" ]; then
-                local ctrl_pkg=$(grep -E '^Package:' "$ctrl" | awk '{print $2}')
-                local ctrl_dir=$(basename "$(dirname "$(dirname "$ctrl")")")
+                ctrl_pkg=$(grep -E '^Package:' "$ctrl" | awk '{print $2}')
+                ctrl_dir=$(basename "$(dirname "$(dirname "$ctrl")")")
                 if [ "$ctrl_pkg" = "$PACKAGE_NAME" ] || [ "$ctrl_dir" = "$PACKAGE_NAME" ]; then
                     pkg_lookup="$ctrl_pkg"
                     break
