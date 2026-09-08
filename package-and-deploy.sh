@@ -531,6 +531,24 @@ if [ -n "$UPLOAD_FLAG" ] || [ -n "$ONLY_UPLOAD_FLAG" ]; then
     fi
     echo "⏫  Subiendo / Uploading: $(basename "$UPLOAD_DEB")"
     deploy_packages "$UPLOAD_DEB"
+    
+    # Auto-upload corresponding Arch package if available
+    if [ -f "$PKG_DIR/arch/package-and-deploy.sh" ]; then
+        arch_target="$PACKAGE_NAME"
+        if [ -f "$PACKAGE_NAME" ]; then
+            arch_target=$(basename "$PACKAGE_NAME" | cut -d'_' -f1)
+        fi
+        if [ -d "$PKG_DIR/arch/pkgbuilds/$arch_target" ]; then
+            echo "=============================================================================="
+            echo "🏛️  SUBIENDO PAQUETE ARCH / UPLOADING ARCH PACKAGE: $arch_target"
+            echo "=============================================================================="
+            arch_flag="--upload"
+            [ -n "$ONLY_UPLOAD_FLAG" ] && arch_flag="--onlyupload"
+            (cd "$PKG_DIR/arch" && ./package-and-deploy.sh "$arch_target" $arch_flag --branch "$BRANCH") || {
+                echo "⚠️ Aviso: No se pudo subir el paquete Arch para $arch_target"
+            }
+        fi
+    fi
     exit $?
 fi
 
@@ -574,6 +592,15 @@ if [ -n "$DEPLOY_ONLY_FLAG" ]; then
             ;;
     esac
     deploy_packages "${COMPILED_DEBS[@]}"
+
+    if [ -f "$PKG_DIR/arch/package-and-deploy.sh" ]; then
+        echo "=============================================================================="
+        echo "🏛️  DESPLEGANDO PAQUETES ARCH / DEPLOYING ARCH PACKAGES"
+        echo "=============================================================================="
+        (cd "$PKG_DIR/arch" && ./package-and-deploy.sh "$PACKAGE_NAME" --deploy-only --branch "$BRANCH") || {
+            echo "⚠️ Aviso: Falló el despliegue de paquetes Arch"
+        }
+    fi
     exit $?
 fi
 
@@ -646,7 +673,26 @@ else
     build_single_package "$PACKAGE_NAME"
 fi
 
+# Build Arch packages if makepkg is available and not in deploy-only
+if command -v makepkg >/dev/null 2>&1 && [ -f "$PKG_DIR/arch/package-and-deploy.sh" ]; then
+    echo "=============================================================================="
+    echo "🏛️  COMPILANDO PAQUETES ARCH / BUILDING ARCH PACKAGES: $PACKAGE_NAME"
+    echo "=============================================================================="
+    (cd "$PKG_DIR/arch" && ./package-and-deploy.sh "$PACKAGE_NAME" --branch "$BRANCH") || {
+        echo "⚠️ Aviso: Falló la compilación de paquetes Arch"
+    }
+fi
+
 # 3. Perform bulk deployment if requested / Realizar despliegue en masa si está activado
 if [ "$DEPLOY_FLAG" == "--deploy" ] || [ "$DEPLOY_FLAG" == "-d" ]; then
     deploy_packages "${COMPILED_DEBS[@]}"
+
+    if [ -f "$PKG_DIR/arch/package-and-deploy.sh" ]; then
+        echo "=============================================================================="
+        echo "🏛️  DESPLEGANDO PAQUETES ARCH / DEPLOYING ARCH PACKAGES"
+        echo "=============================================================================="
+        (cd "$PKG_DIR/arch" && ./package-and-deploy.sh "$PACKAGE_NAME" --deploy --branch "$BRANCH") || {
+            echo "⚠️ Aviso: Falló el despliegue de paquetes Arch"
+        }
+    fi
 fi

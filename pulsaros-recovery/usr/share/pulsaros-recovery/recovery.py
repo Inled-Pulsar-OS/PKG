@@ -227,15 +227,15 @@ listrow:selected, listboxrow:selected {
     color: #aeaeb2;
 }
 .uefi-notice-card {
-    background-color: rgba(0, 113, 227, 0.12);
-    border: 1px solid rgba(0, 113, 227, 0.35);
+    background-color: rgba(255, 69, 58, 0.15);
+    border: 1px solid rgba(255, 69, 58, 0.45);
     border-radius: 10px;
     padding: 10px 14px;
     margin-top: 8px;
 }
 .uefi-notice-text {
     font-size: 11px;
-    color: #d1e8ff;
+    color: #ffdad6;
 }
 .summary-box {
     background-color: #242426;
@@ -1475,7 +1475,46 @@ class RecoveryWindow(Adw.ApplicationWindow):
         box.append(nav_box)
         self.stack.add_named(box, "install_welcome")
 
+    def _is_uefi_grub_incompatible(self):
+        """Detect if booted in UEFI mode on the GRUB-only (BIOS/Legacy) ISO edition."""
+        is_efi = os.path.exists("/sys/firmware/efi")
+        refind_available = any(
+            os.path.exists(p)
+            for p in (
+                "/usr/bin/refind-install",
+                "/usr/sbin/refind-install",
+                "/bin/refind-install",
+            )
+        )
+        return is_efi and not refind_available
+
+    def _show_uefi_grub_incompatibility_dialog(self):
+        """Display a blocking alert when attempting to install the GRUB edition on a UEFI system."""
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Incompatible Edition / Edición Incompatible",
+            body=(
+                "⚠️ <b>UEFI System Detected / Sistema UEFI Detectado</b>\n\n"
+                "You are attempting to install the <b>Pulsar OS GRUB Edition</b> on a UEFI computer.\n"
+                "This edition is designed exclusively for Legacy BIOS / MBR systems and will fail to configure the bootloader on UEFI hardware.\n\n"
+                "Please download and boot the <b>Pulsar OS rEFInd Edition (UEFI)</b> to install Pulsar OS on this computer.\n\n"
+                "<i>Estás intentando instalar la edición GRUB en un ordenador UEFI. Debes descargar y usar la edición rEFInd (UEFI); de lo contrario, la instalación del gestor de arranque fallará.</i>"
+            ),
+        )
+        dialog.set_body_use_markup(True)
+        dialog.add_response("ok", "Understood / Entendido")
+        dialog.set_response_appearance("ok", Adw.ResponseAppearance.DESTRUCTIVE)
+
+        def on_response(d, resp):
+            d.destroy()
+
+        dialog.connect("response", on_response)
+        dialog.present()
+
     def on_welcome_continue_clicked(self, btn):
+        if self._is_uefi_grub_incompatible():
+            self._show_uefi_grub_incompatibility_dialog()
+            return
         self.refresh_disk_cards()
         self.stack.set_visible_child_name("install_disk_select")
 
@@ -1900,13 +1939,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
         # UEFI Compatibility Banner (if running GRUB ISO on UEFI hardware)
         self.uefi_notice_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         self.uefi_notice_box.add_css_class("uefi-notice-card")
-        icon_info = Gtk.Image.new_from_icon_name("dialog-information-symbolic")
+        icon_info = Gtk.Image.new_from_icon_name("dialog-warning-symbolic")
         icon_info.set_pixel_size(20)
         icon_info.set_valign(Gtk.Align.CENTER)
         self.uefi_notice_box.append(icon_info)
         
         self.uefi_notice_lbl = Gtk.Label()
-        self.uefi_notice_lbl.set_markup("<b>Compatibility Notice:</b> UEFI system detected. For optimal performance, Pulsar OS rEFInd Edition is recommended.")
+        self.uefi_notice_lbl.set_markup("<b>Incompatible Edition:</b> UEFI system detected. Please download and install the <b>rEFInd Edition (UEFI)</b>.")
         self.uefi_notice_lbl.add_css_class("uefi-notice-text")
         self.uefi_notice_lbl.set_wrap(True)
         self.uefi_notice_lbl.set_max_width_chars(42)
@@ -1937,16 +1976,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.chk_broadcom.set_active(has_broadcom)
 
         # Check UEFI on GRUB ISO
-        is_efi = os.path.exists("/sys/firmware/efi")
-        refind_available = any(
-            os.path.exists(p)
-            for p in (
-                "/usr/bin/refind-install",
-                "/usr/sbin/refind-install",
-                "/bin/refind-install",
-            )
-        )
-        self.uefi_notice_box.set_visible(is_efi and not refind_available)
+        self.uefi_notice_box.set_visible(self._is_uefi_grub_incompatible())
         self.stack.set_visible_child_name("install_options")
 
     def _on_options_back_clicked(self, btn):
@@ -1956,6 +1986,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
             self.stack.set_visible_child_name("install_mode_select")
 
     def _on_options_continue_clicked(self, btn):
+        if self._is_uefi_grub_incompatible():
+            self._show_uefi_grub_incompatibility_dialog()
+            return
+
         self.install_broadcom = self.chk_broadcom.get_active()
         self.install_extra_packages = self.chk_extra.get_active()
         self.install_hibernation = self.chk_hibernation.get_active()
@@ -2551,6 +2585,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
         return False
 
     def _start_installation(self):
+        if self._is_uefi_grub_incompatible():
+            self._show_uefi_grub_incompatibility_dialog()
+            return
+
         disk_path = self.pending_disk_path
         disk_name = self.pending_disk_name
         
