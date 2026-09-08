@@ -82,17 +82,18 @@ if [ "$RESTORE" = "restore" ]; then
         fi
         if ! echo disk > /sys/power/state 2>/dev/null; then
             echo "❌ Hibernación no soportada o fallida; ejecutando apagado/reinicio normal..." >&2
+            notify_sessions "⚠️ No se pudo guardar la sesión en disco. Apagando..."
             if [ "$ACTION" = "restart" ]; then
-                systemctl reboot 2>/dev/null || gnome-session-quit --reboot
+                systemctl reboot 2>/dev/null || loginctl reboot 2>/dev/null || systemctl reboot -i
             else
-                systemctl poweroff 2>/dev/null || gnome-session-quit --power-off
+                systemctl poweroff 2>/dev/null || loginctl poweroff 2>/dev/null || systemctl poweroff -i
             fi
         fi
     fi
 else
     if [ "$ACTION" = "restart" ]; then
-        systemctl reboot 2>/dev/null || gnome-session-quit --reboot
+        systemctl reboot 2>/dev/null || loginctl reboot 2>/dev/null || systemctl reboot -i
     else
-        systemctl poweroff 2>/dev/null || gnome-session-quit --power-off
+        systemctl poweroff 2>/dev/null || loginctl poweroff 2>/dev/null || systemctl poweroff -i
     fi
 fi

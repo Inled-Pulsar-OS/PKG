@@ -3434,9 +3434,15 @@ export default class PulsarosGlobalMenuExtension extends Extension {
     // --- Helper to execute power action (with optional session restore / hibernation) ---
     // --- Utilidad para ejecutar acción de energía (con restauración opcional de sesión / hibernación) ---
     _executePowerAction(actionType, restore) {
-        let mode = restore ? "restore" : "normal";
-        let cmd = `pkexec /usr/bin/pulsaros-power-action ${actionType} ${mode}`;
-        this._runCommand(cmd);
+        if (restore) {
+            let cmd = `pkexec /usr/bin/pulsaros-power-action ${actionType} restore`;
+            this._runCommand(cmd);
+        } else {
+            let flag = (actionType === 'restart') ? '--reboot' : '--power-off';
+            let sysCmd = (actionType === 'restart') ? 'reboot' : 'poweroff';
+            let cmd = `gnome-session-quit ${flag} --no-prompt || systemctl ${sysCmd} || loginctl ${sysCmd}`;
+            this._runCommand(cmd);
+        }
     }
 
     // --- Helper to run command ---

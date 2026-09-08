@@ -776,6 +776,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.target_efi_partition = None
         self.install_broadcom = False
         self.install_extra_packages = False
+        self.install_hibernation = True
         self.selected_action = None
         self.selected_disk_card = None
         self.selected_install_mode = None
@@ -1556,6 +1557,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.pending_disk_name = disk_name
         self.install_broadcom = False
         self.install_extra_packages = False
+        self.install_hibernation = True
         self.install_mode = "clean"
         self.target_partition = None
         self.target_partition_info = None
@@ -1866,6 +1868,33 @@ class RecoveryWindow(Adw.ApplicationWindow):
         row_extra.append(self.chk_extra)
         opt_group.append(row_extra)
 
+        # Separator
+        sep2 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        opt_group.append(sep2)
+
+        # Row 3: Hibernation & Session Restore (RAM-sized swapfile)
+        row_hibernation = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        row_hibernation.add_css_class("option-row")
+        
+        txt_h = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        txt_h.set_hexpand(True)
+        lbl_h_title = Gtk.Label(label="Hibernation & Session Restore (RAM Snapshot)")
+        lbl_h_title.add_css_class("option-title")
+        lbl_h_title.set_halign(Gtk.Align.START)
+        txt_h.append(lbl_h_title)
+        lbl_h_desc = Gtk.Label(label="Creates a dedicated swapfile matched to your RAM size to save and restore open sessions.")
+        lbl_h_desc.add_css_class("option-desc")
+        lbl_h_desc.set_halign(Gtk.Align.START)
+        lbl_h_desc.set_wrap(True)
+        txt_h.append(lbl_h_desc)
+        row_hibernation.append(txt_h)
+
+        self.chk_hibernation = Gtk.CheckButton()
+        self.chk_hibernation.set_active(True)
+        self.chk_hibernation.set_valign(Gtk.Align.CENTER)
+        row_hibernation.append(self.chk_hibernation)
+        opt_group.append(row_hibernation)
+
         box.append(opt_group)
 
         # UEFI Compatibility Banner (if running GRUB ISO on UEFI hardware)
@@ -1929,6 +1958,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
     def _on_options_continue_clicked(self, btn):
         self.install_broadcom = self.chk_broadcom.get_active()
         self.install_extra_packages = self.chk_extra.get_active()
+        self.install_hibernation = self.chk_hibernation.get_active()
 
         is_efi = os.path.exists("/sys/firmware/efi")
         refind_available = any(
@@ -2032,6 +2062,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
             features.append("Hardware Drivers")
         if self.install_extra_packages:
             features.append("Full App Suite")
+        if self.install_hibernation:
+            features.append("Hibernation (RAM Swapfile)")
         feat_str = ", ".join(features) if features else "Minimal Base"
         self.confirm_options_lbl.set_markup(f"<b>Features:</b> {feat_str}")
 
@@ -3443,21 +3475,23 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 return val.strip()
 
             def compute_swap_size_gb():
-                """Size the hibernation swapfile to RAM (clamped 4-32 GB) and to
+                """Size the hibernation swapfile to RAM (clamped 4-64 GB) and to
                 the free space on the target. A swapfile smaller than RAM makes
-                'systemctl hibernate' fail with 'not enough free swap' and the
-                session is silently lost on every shutdown."""
+                'systemctl hibernate' fail with 'not enough free swap'."""
+                if not getattr(self, "install_hibernation", True):
+                    return 0
                 swap_gb = 8
                 try:
                     with open("/proc/meminfo", "r") as mf:
                         for line in mf:
                             if line.startswith("MemTotal:"):
                                 total_kb = int(line.split()[1])
+                                # Exact RAM rounded up to the nearest whole GB
                                 swap_gb = (total_kb + 1048575) // 1048576
                                 break
                 except Exception:
                     pass
-                swap_gb = max(4, min(32, swap_gb))
+                swap_gb = max(4, min(64, swap_gb))
                 try:
                     st = os.statvfs("/mnt")
                     free_gb = (st.f_bavail * st.f_frsize) // (1024 ** 3)
@@ -3470,6 +3504,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
             def create_target_swapfile():
                 """Create a non-COW /swapfile on the target for hibernation."""
+                if not getattr(self, "install_hibernation", True):
+                    log_msg("Notice: Hibernation support disabled by user; skipping swapfile.")
+                    return
                 if os.path.isfile("/mnt/swapfile") and os.path.getsize("/mnt/swapfile") > 0:
                     return
                 swap_gb = compute_swap_size_gb()
@@ -3477,7 +3514,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     log_msg("Notice: not enough free space for a hibernation swapfile (needs 4GB+).")
                     return
                 try:
-                    log_msg(f"Creating contiguous non-COW /swapfile ({swap_gb}GB) for hibernation support...")
+                    log_msg(f"Creating contiguous non-COW /swapfile ({swap_gb}GB) matching RAM for hibernation support...")
                     created = False
                     for btrfs_cmd in [shutil.which("btrfs"), "/usr/sbin/btrfs", "/sbin/btrfs", "/usr/bin/btrfs", "/bin/btrfs"]:
                         if btrfs_cmd and os.path.isfile(btrfs_cmd):
@@ -3499,6 +3536,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
             root_uuid = get_partition_uuid(root_part)
             rec_uuid = get_partition_uuid(recovery_part) if recovery_part else None
+            target_swap_gb = compute_swap_size_gb()
             
             if is_efi:
                 efi_uuid = get_partition_uuid(efi_part) if efi_part else None
@@ -3512,7 +3550,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     fstab_lines.append(f"UUID={efi_uuid}             /boot/efi       vfat    defaults,nofail,x-systemd.device-timeout=5,dmask=0077,fmask=0077 0       2")
                 if rec_uuid:
                     fstab_lines.append(f"UUID={rec_uuid}            /recovery       ext4    defaults,noatime,nofail,x-systemd.device-timeout=5 0       2")
-                fstab_lines.append("/swapfile                   none            swap    defaults,nofail                                 0       0")
+                if getattr(self, "install_hibernation", True) and target_swap_gb >= 4:
+                    fstab_lines.append("/swapfile                   none            swap    defaults,nofail                                 0       0")
                 fstab_content = "\n".join(fstab_lines) + "\n"
                 
                 if "TEST_MODE" not in os.environ:
@@ -3538,7 +3577,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 ]
                 if rec_uuid:
                     fstab_lines.append(f"UUID={rec_uuid}            /recovery       ext4    defaults,noatime,nofail,x-systemd.device-timeout=5 0       2")
-                fstab_lines.append("/swapfile                   none            swap    defaults,nofail                                 0       0")
+                if getattr(self, "install_hibernation", True) and target_swap_gb >= 4:
+                    fstab_lines.append("/swapfile                   none            swap    defaults,nofail                                 0       0")
                 fstab_content = "\n".join(fstab_lines) + "\n"
                 
                 if "TEST_MODE" not in os.environ:
