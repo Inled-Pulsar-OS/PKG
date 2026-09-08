@@ -115,17 +115,25 @@ class StoreCore:
         for item in self.items:
             icon_url = item.get("icon_url")
             item_id = item.get("id")
-            if icon_url and item_id:
-                ext = ".png" if not icon_url.endswith(".svg") else ".svg"
-                icon_file = os.path.join(self.icons_dir, f"{item_id}{ext}")
-                if not os.path.isfile(icon_file):
-                    try:
-                        req = urllib.request.Request(icon_url, headers={"User-Agent": "PulsarStore/1.0"})
-                        with urllib.request.urlopen(req, timeout=10) as resp, open(icon_file, "wb") as f:
-                            shutil.copyfileobj(resp, f)
-                        new_downloads = True
-                    except Exception as e:
-                        self.log(f"Failed to download icon for {item_id}: {e}")
+            if not item_id:
+                continue
+
+            if not icon_url:
+                icon_url = f"https://raw.githubusercontent.com/Inled-Pulsar-OS/store/main/assets/icons/{item_id}.png"
+            elif not (icon_url.startswith("http://") or icon_url.startswith("https://")):
+                clean_path = icon_url.lstrip("/")
+                icon_url = f"https://raw.githubusercontent.com/Inled-Pulsar-OS/store/main/{clean_path}"
+
+            ext = ".svg" if icon_url.endswith(".svg") else ".png"
+            icon_file = os.path.join(self.icons_dir, f"{item_id}{ext}")
+            if not os.path.isfile(icon_file):
+                try:
+                    req = urllib.request.Request(icon_url, headers={"User-Agent": "PulsarStore/1.0"})
+                    with urllib.request.urlopen(req, timeout=10) as resp, open(icon_file, "wb") as f:
+                        shutil.copyfileobj(resp, f)
+                    new_downloads = True
+                except Exception as e:
+                    self.log(f"Failed to download icon for {item_id}: {e}")
         if new_downloads and self.icon_loaded_cb:
             self.icon_loaded_cb()
 
@@ -136,6 +144,12 @@ class StoreCore:
                 p = os.path.join(self.icons_dir, f"{item_id}{ext}")
                 if os.path.isfile(p):
                     return p
+            # Check local bundled icons
+            for base_dir in ["/usr/share/pulsar-store/assets/icons", os.path.join(os.path.dirname(__file__), "../assets/icons")]:
+                for ext in (".png", ".svg"):
+                    local_p = os.path.join(base_dir, f"{item_id}{ext}")
+                    if os.path.isfile(local_p):
+                        return local_p
         return None
 
     def get_announcement(self) -> Optional[Dict[str, Any]]:
@@ -181,8 +195,8 @@ class StoreCore:
         if not iid:
             return False
 
-        if itype == "flatpak":
-            return self.flatpak.is_installed(iid)
+        if itype in ("flatpak", "app", "desktop_app"):
+            return self.flatpak.is_installed(iid, item=item)
         elif itype == "system":
             pkg_name = item.get("package_name", iid)
             return self.system.is_installed(pkg_name)
@@ -201,8 +215,8 @@ class StoreCore:
         if not iid:
             return None
 
-        if itype == "flatpak":
-            return self.flatpak.get_installed_version(iid)
+        if itype in ("flatpak", "app", "desktop_app"):
+            return self.flatpak.get_installed_version(iid, item=item)
         elif itype == "system":
             pkg_name = item.get("package_name", iid)
             return self.system.get_installed_version(pkg_name)
@@ -231,7 +245,7 @@ class StoreCore:
             elif self.system.is_debian and deb_url:
                 return self.system.install_from_url(deb_url)
             elif flatpak_url and self.flatpak.is_available():
-                return self.flatpak.install(flatpak_url)
+                return self.flatpak.install(iid, flatpak_ref=flatpak_url, item=item)
             return False
         elif itype == "system":
             pkg_name = item.get("package_name", iid)
@@ -257,8 +271,8 @@ class StoreCore:
         iid = item.get("id")
         self.log(f"Initiating uninstallation of {item.get('name', iid)} ({itype})...")
 
-        if itype == "flatpak":
-            return self.flatpak.uninstall(iid)
+        if itype in ("flatpak", "app", "desktop_app"):
+            return self.flatpak.uninstall(iid, item=item)
         elif itype == "system":
             pkg_name = item.get("package_name", iid)
             return self.system.uninstall(pkg_name)

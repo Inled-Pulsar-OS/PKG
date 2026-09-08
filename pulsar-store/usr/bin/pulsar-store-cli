@@ -292,6 +292,12 @@ def install_flatpak(pkg):
     if not shutil.which("flatpak"):
         raise RuntimeError("Flatpak is not installed on this system. Please install 'flatpak' package manager.")
 
+    # Ensure flathub remote is configured for user dependencies
+    try:
+        subprocess.run(["flatpak", "remote-add", "--user", "--if-not-exists", "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo"], capture_output=True)
+    except Exception:
+        pass
+
     ref = pkg.get("formats", {}).get("flatpak") or pkg.get("metadata", {}).get("flatpakref_url") or pkg.get("download_url")
     if ref and ref.endswith(".zip"):
         raise RuntimeError(
@@ -300,17 +306,34 @@ def install_flatpak(pkg):
             f"Flatpak packages must be provided as .flatpak binary bundles, .flatpakref files, or Flathub application IDs."
         )
 
-    if ref and (ref.startswith("http") or ref.endswith(".flatpakref")):
-        cmd = ["flatpak", "install", "-y", "--from", ref]
-    else:
-        cmd = ["flatpak", "install", "-y", "flathub", pkg_id]
+    tmp_bundle = None
+    try:
+        if ref and (ref.endswith(".flatpak") or ".flatpak" in ref):
+            if ref.startswith("http://") or ref.startswith("https://"):
+                tmp_bundle = os.path.join(tempfile.gettempdir(), f"{pkg_id}.flatpak")
+                print(f"Downloading Flatpak bundle from {ref}...")
+                urllib.request.urlretrieve(ref, tmp_bundle)
+                bundle_path = tmp_bundle
+            else:
+                bundle_path = ref
+            cmd = ["flatpak", "install", "--user", "-y", "--bundle", bundle_path]
+        elif ref and (ref.startswith("http") or ref.endswith(".flatpakref")):
+            cmd = ["flatpak", "install", "--user", "-y", "--from", ref]
+        else:
+            cmd = ["flatpak", "install", "--user", "-y", "flathub", pkg_id]
 
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    if proc.returncode != 0:
-        err_msg = proc.stderr.strip() or proc.stdout.strip() or f"Exited with code {proc.returncode}"
-        raise RuntimeError(f"Flatpak installation failed (command: {' '.join(cmd)}):\n{err_msg}")
-    print(f"✓ Flatpak App '{name}' ({pkg_id}) installed successfully.")
-    return True
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            err_msg = proc.stderr.strip() or proc.stdout.strip() or f"Exited with code {proc.returncode}"
+            raise RuntimeError(f"Flatpak installation failed (command: {' '.join(cmd)}):\n{err_msg}")
+        print(f"✓ Flatpak App '{name}' ({pkg_id}) installed successfully.")
+        return True
+    finally:
+        if tmp_bundle and os.path.exists(tmp_bundle):
+            try:
+                os.remove(tmp_bundle)
+            except Exception:
+                pass
 
 
 def install_system_package(pkg):
@@ -445,7 +468,7 @@ def run_gui_install(pkg):
             try:
                 GLib.idle_add(lambda: (
                     pbar.set_fraction(0.5),
-                    status_lbl.set_markup("<span size='9000'>Downloading & configuring package files…</span>")
+                    status_lbl.set_markup("<span size='9000'>Downloading &amp; configuring package files…</span>")
                 ))
 
                 install_package_core(pkg)
@@ -568,10 +591,20 @@ def uninstall_package(pkg_id):
 
     # 3. Flatpak
     try:
-        res = subprocess.run(["flatpak", "uninstall", "-y", pkg_id], capture_output=True, text=True)
+        res = subprocess.run(["flatpak", "list", "--app", "--columns=application"], capture_output=True, text=True)
         if res.returncode == 0:
-            print(f"✓ Flatpak application '{pkg_id}' uninstalled.")
-            removed = True
+            target_norm = pkg_id.lower().replace("-", "").replace("_", "").replace(".", "")
+            for line in res.stdout.splitlines():
+                app = line.strip()
+                if not app:
+                    continue
+                app_norm = app.lower().replace("-", "").replace("_", "").replace(".", "")
+                if app == pkg_id or app_norm == target_norm or target_norm in app_norm:
+                    uninst_res = subprocess.run(["flatpak", "uninstall", "--user", "-y", app], capture_output=True, text=True)
+                    if uninst_res.returncode == 0:
+                        print(f"✓ Flatpak application '{app}' uninstalled.")
+                        removed = True
+                    break
     except Exception:
         pass
 
@@ -695,6 +728,8 @@ def main():
 
     inst = sub.add_parser("install", help="Install a package by ID or URL")
     inst.add_argument("id", help="Package ID or pulsar:// URL")
+    inst.add_argument("--cli", "--no-gui", action="store_true", help="Run installation in terminal mode without GUI dialog")
+    inst.add_argument("--refresh", action="store_true", help="Force refresh catalog cache before installing")
 
     rem = sub.add_parser("remove", help="Uninstall a package by ID")
     rem.add_argument("id", help="Package ID to uninstall")
@@ -762,17 +797,18 @@ def main():
     elif args.command in ("install", "handle-url"):
         raw_id = getattr(args, "id", None) or getattr(args, "url", "")
         pkg_id = raw_id.replace("pulsar://install/", "").strip()
-        catalog = get_catalog()
+        force_refresh = getattr(args, "refresh", False)
+        catalog = get_catalog(force_refresh=force_refresh)
         pkg = next((p for p in catalog.get("packages", []) if p["id"] == pkg_id or p.get("name", "").lower() == pkg_id.lower()), None)
-        if not pkg:
+        if not pkg and not force_refresh:
             catalog = get_catalog(force_refresh=True)
             pkg = next((p for p in catalog.get("packages", []) if p["id"] == pkg_id or p.get("name", "").lower() == pkg_id.lower()), None)
 
         if pkg:
-            if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
-                run_gui_install(pkg)
-            else:
+            if getattr(args, "cli", False) or not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
                 run_text_install(pkg)
+            else:
+                run_gui_install(pkg)
             return
 
         print(f"✗ Package '{pkg_id}' not found in Pulsar Store catalog.")
