@@ -220,9 +220,19 @@ class StoreCore:
         iid = item.get("id")
         self.log(f"Initiating installation of {item.get('name', iid)} ({itype})...")
 
-        if itype == "flatpak":
-            ref = item.get("metadata", {}).get("flatpakref_url") or item.get("download_url") or iid
-            return self.flatpak.install(ref)
+        if itype in ("flatpak", "app", "desktop_app"):
+            formats = item.get("formats", {}) or {}
+            arch_url = formats.get("arch") or formats.get("pacman")
+            deb_url = formats.get("deb")
+            flatpak_url = formats.get("flatpak") or item.get("metadata", {}).get("flatpakref_url") or item.get("download_url") or iid
+
+            if self.system.is_arch and arch_url:
+                return self.system.install_from_url(arch_url)
+            elif self.system.is_debian and deb_url:
+                return self.system.install_from_url(deb_url)
+            elif flatpak_url and self.flatpak.is_available():
+                return self.flatpak.install(flatpak_url)
+            return False
         elif itype == "system":
             pkg_name = item.get("package_name", iid)
             deb_url = item.get("deb_url")
