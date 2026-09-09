@@ -3591,7 +3591,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 return val.strip()
 
             def compute_swap_size_gb():
-                """Size the hibernation swapfile to RAM (clamped 4-64 GB) and to
+                """Size the hibernation swapfile to RAM (clamped 2-64 GB) and to
                 the free space on the target. A swapfile smaller than RAM makes
                 'systemctl hibernate' fail with 'not enough free swap'."""
                 if not getattr(self, "install_hibernation", True):
@@ -3607,13 +3607,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 break
                 except Exception:
                     pass
-                swap_gb = max(4, min(64, swap_gb))
+                swap_gb = max(2, min(64, swap_gb))
                 try:
                     st = os.statvfs("/mnt")
                     free_gb = (st.f_bavail * st.f_frsize) // (1024 ** 3)
-                    # Keep 6 GB of headroom for the system itself
-                    if free_gb < (swap_gb + 6):
-                        swap_gb = max(0, free_gb - 6)
+                    # Keep 2 GB of headroom for the system itself
+                    if free_gb < (swap_gb + 2):
+                        swap_gb = max(0, free_gb - 2)
                 except Exception:
                     pass
                 return swap_gb
@@ -3626,8 +3626,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 if os.path.isfile("/mnt/swapfile") and os.path.getsize("/mnt/swapfile") > 0:
                     return
                 swap_gb = compute_swap_size_gb()
-                if swap_gb < 4:
-                    log_msg("Notice: not enough free space for a hibernation swapfile (needs 4GB+).")
+                if swap_gb < 2:
+                    log_msg("Notice: not enough free space for a hibernation swapfile (needs 2GB+).")
                     return
                 try:
                     log_msg(f"Creating contiguous non-COW /swapfile ({swap_gb}GB) matching RAM for hibernation support...")
@@ -3666,7 +3666,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     fstab_lines.append(f"UUID={efi_uuid}             /boot/efi       vfat    defaults,nofail,x-systemd.device-timeout=5,dmask=0077,fmask=0077 0       2")
                 if rec_uuid:
                     fstab_lines.append(f"UUID={rec_uuid}            /recovery       ext4    defaults,noatime,nofail,x-systemd.device-timeout=5 0       2")
-                if getattr(self, "install_hibernation", True) and target_swap_gb >= 4:
+                if getattr(self, "install_hibernation", True) and target_swap_gb >= 2:
                     fstab_lines.append("/swapfile                   none            swap    defaults,nofail                                 0       0")
                 fstab_content = "\n".join(fstab_lines) + "\n"
                 
@@ -3693,7 +3693,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 ]
                 if rec_uuid:
                     fstab_lines.append(f"UUID={rec_uuid}            /recovery       ext4    defaults,noatime,nofail,x-systemd.device-timeout=5 0       2")
-                if getattr(self, "install_hibernation", True) and target_swap_gb >= 4:
+                if getattr(self, "install_hibernation", True) and target_swap_gb >= 2:
                     fstab_lines.append("/swapfile                   none            swap    defaults,nofail                                 0       0")
                 fstab_content = "\n".join(fstab_lines) + "\n"
                 
@@ -3850,6 +3850,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 stderr=subprocess.DEVNULL, universal_newlines=True
                             )
                             for line in out.splitlines():
+                                m = re.search(r'^\s*0:\s+[\d\.]+\s+(\d+)', line)
+                                if m:
+                                    return m.group(1)
                                 line = line.strip()
                                 if line.startswith("0:"):
                                     parts = line.split()
@@ -3877,6 +3880,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         stderr=subprocess.DEVNULL, universal_newlines=True
                     )
                     for line in out.splitlines():
+                        m = re.search(r'^\s*0:\s+[\d\.]+\s+(\d+)', line)
+                        if m:
+                            return m.group(1)
                         line = line.strip()
                         if line.startswith("0:"):
                             parts = line.split()
@@ -4530,8 +4536,7 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
 
                 if refind_installed:
                     configure_refind_menus()
-                else:
-                    configure_grub_menus()
+                configure_grub_menus()
             else:
                 # Debian path
                 # 1. Configure resume in initramfs-tools
@@ -4577,8 +4582,7 @@ menuentry "Pulsar OS Recovery" --class recovery --class os {{
                 deploy_kernel_to_recovery()
                 if refind_installed:
                     configure_refind_menus()
-                else:
-                    configure_grub_menus()
+                configure_grub_menus()
 
 
 

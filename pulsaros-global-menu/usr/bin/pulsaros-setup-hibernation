@@ -99,6 +99,7 @@ if [ -f /swapfile ]; then
     ROOT_UUID=$(findmnt -no UUID -T /swapfile 2>/dev/null || findmnt -no UUID / 2>/dev/null || true)
     if [ -z "$ROOT_UUID" ]; then
         SRC_DEV=$(findmnt -no SOURCE / 2>/dev/null || true)
+        SRC_DEV="${SRC_DEV%%\[*}"
         [ -n "$SRC_DEV" ] && ROOT_UUID=$(blkid -s UUID -o value "$SRC_DEV" 2>/dev/null || true)
     fi
     if [ -z "$ROOT_UUID" ] && [ -r /etc/fstab ]; then
@@ -124,7 +125,16 @@ if [ -f /swapfile ]; then
             echo "$OFFSET" > /sys/power/resume_offset 2>/dev/null || true
         fi
         if [ -w /sys/power/resume ]; then
-            SWAP_MAJMIN=$(findmnt -no MAJ:MIN -T /swapfile 2>/dev/null || findmnt -no MAJ:MIN / 2>/dev/null || true)
+            SWAP_MAJMIN=""
+            SWAP_DEV=$(findmnt -no SOURCE -T /swapfile 2>/dev/null || findmnt -no SOURCE / 2>/dev/null || true)
+            SWAP_DEV="${SWAP_DEV%%\[*}"
+            if [ -b "$SWAP_DEV" ]; then
+                SWAP_MAJMIN=$(lsblk -no MAJ:MIN "$SWAP_DEV" 2>/dev/null | tr -d ' ' | head -n 1)
+            fi
+            if [ -z "$SWAP_MAJMIN" ] && [ -n "$ROOT_UUID" ]; then
+                SWAP_DEV=$(blkid -U "$ROOT_UUID" 2>/dev/null || true)
+                [ -b "$SWAP_DEV" ] && SWAP_MAJMIN=$(lsblk -no MAJ:MIN "$SWAP_DEV" 2>/dev/null | tr -d ' ' | head -n 1)
+            fi
             if [ -n "$SWAP_MAJMIN" ]; then
                 echo "$SWAP_MAJMIN" > /sys/power/resume 2>/dev/null || true
             fi
@@ -147,8 +157,12 @@ if [ -f /swapfile ]; then
             /boot/efi/EFI/PulsarOS/refind.conf
             /efi/EFI/refind/refind.conf
             /efi/EFI/BOOT/refind.conf
+            /efi/EFI/debian/refind.conf
+            /efi/EFI/PulsarOS/refind.conf
             /boot/EFI/refind/refind.conf
             /boot/EFI/BOOT/refind.conf
+            /boot/EFI/debian/refind.conf
+            /boot/EFI/PulsarOS/refind.conf
         )
         for esp in /boot/efi /efi /boot /boot/EFI; do
             if [ -d "$esp/EFI" ]; then
@@ -163,7 +177,11 @@ if [ -f /swapfile ]; then
                 echo "⚙️ Configurando resume y zswap en $rc..."
                 sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' "$rc" 2>/dev/null || true
                 sed -i 's/resume=UUID=[^ "]* //g; s/resume_offset=[^ "]* //g; s/zswap\.enabled=[^ "]* //g' "$rc" 2>/dev/null || true
-                sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${RESUME_PARAMS}|g" "$rc" 2>/dev/null || true
+                if grep -q 'root=UUID=' "$rc" 2>/dev/null; then
+                    sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${RESUME_PARAMS}|g" "$rc" 2>/dev/null || true
+                elif grep -q 'options "' "$rc" 2>/dev/null; then
+                    sed -i "s|options \"|options \"${RESUME_PARAMS} |g" "$rc" 2>/dev/null || true
+                fi
             fi
         done
 
@@ -173,10 +191,11 @@ if [ -f /swapfile ]; then
             # Remove any existing resume and zswap parameters first, then append correct ones
             sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' /etc/default/grub 2>/dev/null || true
             sed -i "s|GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${RESUME_PARAMS}\"|" /etc/default/grub 2>/dev/null || true
-            if command -v grub-mkconfig >/dev/null 2>&1; then
-                grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
-            elif command -v update-grub >/dev/null 2>&1; then
+            if command -v update-grub >/dev/null 2>&1; then
                 update-grub 2>/dev/null || true
+            elif command -v grub-mkconfig >/dev/null 2>&1; then
+                mkdir -p /boot/grub
+                grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
             fi
         fi
     fi

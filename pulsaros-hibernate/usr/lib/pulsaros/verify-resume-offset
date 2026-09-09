@@ -91,6 +91,7 @@ get_root_uuid() {
     if [ -z "$real_root_uuid" ]; then
         local src
         src=$(findmnt -no SOURCE / 2>/dev/null || true)
+        src="${src%%\[*}"
         [ -n "$src" ] && real_root_uuid=$(blkid -s UUID -o value "$src" 2>/dev/null || true)
     fi
     # Fallback 4: /proc/cmdline root=UUID=...
@@ -136,8 +137,12 @@ repair_refind_file() {
     sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' "$target" 2>/dev/null || true
     sed -i 's/resume=UUID=[^ "]* //g; s/resume_offset=[^ "]* //g; s/zswap\.enabled=[^ "]* //g' "$target" 2>/dev/null || true
 
-    # Inject new resume parameters right after root=UUID=...
-    sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${desired}|g" "$target" 2>/dev/null || true
+    # Inject new resume parameters right after root=UUID=... or rootflags=...
+    if grep -q 'root=UUID=' "$target" 2>/dev/null; then
+        sed -i "s|\(root=UUID=[^ \"']*\)|\1 ${desired}|g" "$target" 2>/dev/null || true
+    elif grep -q 'options "' "$target" 2>/dev/null; then
+        sed -i "s|options \"|options \"${desired} |g" "$target" 2>/dev/null || true
+    fi
 
     log "✔ $target: parámetros resume sincronizados (${desired})"
 }
@@ -155,10 +160,16 @@ repair_refind() {
         /boot/refind_linux.conf
         /boot/efi/EFI/refind/refind.conf
         /boot/efi/EFI/BOOT/refind.conf
+        /boot/efi/EFI/debian/refind.conf
+        /boot/efi/EFI/PulsarOS/refind.conf
         /efi/EFI/refind/refind.conf
         /efi/EFI/BOOT/refind.conf
+        /efi/EFI/debian/refind.conf
+        /efi/EFI/PulsarOS/refind.conf
         /boot/EFI/refind/refind.conf
         /boot/EFI/BOOT/refind.conf
+        /boot/EFI/debian/refind.conf
+        /boot/EFI/PulsarOS/refind.conf
     )
 
     for esp in /boot/efi /efi /boot /boot/EFI; do
@@ -210,14 +221,11 @@ repair_grub() {
     sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${desired}\"|" "$GRUB_DEFAULT" 2>/dev/null || true
 
     log "✔ $GRUB_DEFAULT actualizado con ${desired}"
-    if command -v grub-mkconfig >/dev/null 2>&1; then
-        if [ -f /boot/grub/grub.cfg ]; then
-            grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || true
-        elif [ -f /boot/efi/EFI/grub/grub.cfg ]; then
-            grub-mkconfig -o /boot/efi/EFI/grub/grub.cfg >/dev/null 2>&1 || true
-        fi
-    elif command -v update-grub >/dev/null 2>&1; then
+    if command -v update-grub >/dev/null 2>&1; then
         update-grub >/dev/null 2>&1 || true
+    elif command -v grub-mkconfig >/dev/null 2>&1; then
+        mkdir -p /boot/grub
+        grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || true
     fi
 }
 
@@ -256,8 +264,20 @@ arm_sysfs() {
         log "✔ $SYSFS_OFFSET armado con $real"
     fi
     if [ -w "$SYSFS_RESUME" ]; then
-        local maj_min
-        maj_min=$(findmnt -no MAJ:MIN -T "$SWAPFILE" 2>/dev/null || findmnt -no MAJ:MIN / 2>/dev/null || true)
+        local dev maj_min=""
+        dev=$(findmnt -no SOURCE -T "$SWAPFILE" 2>/dev/null || findmnt -no SOURCE / 2>/dev/null || true)
+        dev="${dev%%\[*}"
+        if [ -b "$dev" ]; then
+            maj_min=$(lsblk -no MAJ:MIN "$dev" 2>/dev/null | tr -d ' ' | head -n 1)
+        fi
+        if [ -z "$maj_min" ]; then
+            local ru
+            ru=$(get_root_uuid)
+            if [ -n "$ru" ]; then
+                dev=$(blkid -U "$ru" 2>/dev/null || true)
+                [ -b "$dev" ] && maj_min=$(lsblk -no MAJ:MIN "$dev" 2>/dev/null | tr -d ' ' | head -n 1)
+            fi
+        fi
         if [ -n "$maj_min" ]; then
             echo "$maj_min" > "$SYSFS_RESUME" 2>/dev/null || true
             log "✔ $SYSFS_RESUME armado con $maj_min"
