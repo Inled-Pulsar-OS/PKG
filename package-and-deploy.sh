@@ -51,6 +51,7 @@ is_manual_upload_only() {
 }
 
 INCREMENTAL=false
+BUILD_ARCH=true
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -72,6 +73,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --incremental|-i|--smart)
             INCREMENTAL=true
+            shift
+            ;;
+        --no-arch|--debian-only)
+            BUILD_ARCH=false
             shift
             ;;
         --branch|-b)
@@ -125,15 +130,39 @@ stamp_git_commit() {
 
 is_deb_up_to_date() {
     local name="$1"
-    local existing_deb=$(ls -t "$OUTPUT_DIR/${name}_"*.deb 2>/dev/null | head -n 1)
+    local pkg_src_dir="$PKG_DIR/$name"
+    if [ ! -d "$pkg_src_dir" ]; then
+        for ctrl in "$PKG_DIR"/*/DEBIAN/control; do
+            if [ -f "$ctrl" ] && [ "$(grep -E '^Package:' "$ctrl" | awk '{print $2}')" = "$name" ]; then
+                pkg_src_dir="$(dirname "$(dirname "$ctrl")")"
+                break
+            fi
+        done
+    fi
+    [ ! -d "$pkg_src_dir" ] && return 1
+
+    local deb_pkg_name="$name"
+    if [ -f "$pkg_src_dir/DEBIAN/control" ]; then
+        local ctrl_pkg=$(grep -E '^Package:' "$pkg_src_dir/DEBIAN/control" | awk '{print $2}')
+        [ -n "$ctrl_pkg" ] && deb_pkg_name="$ctrl_pkg"
+    fi
+
+    local existing_deb=$(ls -t "$OUTPUT_DIR/${deb_pkg_name}_"*.deb 2>/dev/null | head -n 1)
     [ -z "$existing_deb" ] && return 1
     [ ! -f "$existing_deb" ] && return 1
 
     local deb_time=$(stat -c %Y "$existing_deb" 2>/dev/null || echo 0)
-    local pkg_src_dir="$PKG_DIR/$name"
-    [ ! -d "$pkg_src_dir" ] && return 1
 
-    local newest_src=$(find "$pkg_src_dir" -type f -not -path "*/target/*" -not -path "*/.git/*" -printf '%T@\n' 2>/dev/null | sort -nr | head -n 1 | cut -d. -f1)
+    local newest_src=$(find "$pkg_src_dir" -type f \
+        -not -path "*/target/*" \
+        -not -path "*/.git/*" \
+        -not -path "*/node_modules/*" \
+        -not -path "*/.expo/*" \
+        -not -path "*/dist/*" \
+        -not -path "*/build/*" \
+        -not -path "*/.cache/*" \
+        -not -name "*.log" \
+        -printf '%T@\n' 2>/dev/null | sort -nr | head -n 1 | cut -d. -f1)
     [ -n "$newest_src" ] && [ "$newest_src" -gt "$deb_time" ] && return 1
 
     # Detect changes inside nested git subrepos (e.g. sayri) by comparing the
@@ -152,6 +181,14 @@ is_deb_up_to_date() {
 
 clean_orphan_packages() {
     [ ! -d "$OUTPUT_DIR" ] && return 0
+    local known_packages=()
+    for ctrl in "$PKG_DIR"/*/DEBIAN/control; do
+        if [ -f "$ctrl" ]; then
+            local p=$(grep -E '^Package:' "$ctrl" | awk '{print $2}')
+            [ -n "$p" ] && known_packages+=("$p")
+        fi
+    done
+
     for f in "$OUTPUT_DIR"/*.deb; do
         [ -f "$f" ] || continue
         local pkg_name
@@ -164,7 +201,15 @@ clean_orphan_packages() {
             continue
         fi
 
-        if [ ! -d "$PKG_DIR/$pkg_name" ] && [ ! -d "$PKG_DIR/${pkg_name#pulsaros-}" ]; then
+        local found=false
+        for kp in "${known_packages[@]}"; do
+            if [ "$pkg_name" = "$kp" ]; then
+                found=true
+                break
+            fi
+        done
+
+        if [ "$found" = false ]; then
             echo "🗑️  Removing orphan deb with no source from cache: $(basename "$f")"
             rm -f "$f"
         fi
@@ -634,7 +679,12 @@ if [ "$PACKAGE_NAME" == "all" ]; then
         fi
 
         if $INCREMENTAL && is_deb_up_to_date "$pkg"; then
-            existing_deb=$(ls -t "$OUTPUT_DIR/${pkg}_"*.deb 2>/dev/null | head -n 1)
+            deb_pkg_name="$pkg"
+            if [ -f "$PKG_DIR/$pkg/DEBIAN/control" ]; then
+                ctrl_pkg=$(grep -E '^Package:' "$PKG_DIR/$pkg/DEBIAN/control" | awk '{print $2}')
+                [ -n "$ctrl_pkg" ] && deb_pkg_name="$ctrl_pkg"
+            fi
+            existing_deb=$(ls -t "$OUTPUT_DIR/${deb_pkg_name}_"*.deb 2>/dev/null | head -n 1)
             echo "⚡ [CACHED] Reutilizando $pkg: $(basename "$existing_deb") (sin cambios)"
             COMPILED_DEBS+=("$existing_deb")
             stamp_git_commit "$pkg"
@@ -674,11 +724,11 @@ else
 fi
 
 # Build Arch packages if makepkg is available and not in deploy-only
-if command -v makepkg >/dev/null 2>&1 && [ -f "$PKG_DIR/arch/package-and-deploy.sh" ]; then
+if $BUILD_ARCH && command -v makepkg >/dev/null 2>&1 && [ -f "$PKG_DIR/arch/package-and-deploy.sh" ]; then
     echo "=============================================================================="
     echo "🏛️  COMPILANDO PAQUETES ARCH / BUILDING ARCH PACKAGES: $PACKAGE_NAME"
     echo "=============================================================================="
-    (cd "$PKG_DIR/arch" && ./package-and-deploy.sh "$PACKAGE_NAME" --branch "$BRANCH") || {
+    (cd "$PKG_DIR/arch" && ./package-and-deploy.sh "$PACKAGE_NAME" --branch "$BRANCH" $([ "$INCREMENTAL" = true ] && echo "--incremental")) || {
         echo "⚠️ Aviso: Falló la compilación de paquetes Arch"
     }
 fi
@@ -687,7 +737,7 @@ fi
 if [ "$DEPLOY_FLAG" == "--deploy" ] || [ "$DEPLOY_FLAG" == "-d" ]; then
     deploy_packages "${COMPILED_DEBS[@]}"
 
-    if [ -f "$PKG_DIR/arch/package-and-deploy.sh" ]; then
+    if $BUILD_ARCH && [ -f "$PKG_DIR/arch/package-and-deploy.sh" ]; then
         echo "=============================================================================="
         echo "🏛️  DESPLEGANDO PAQUETES ARCH / DEPLOYING ARCH PACKAGES"
         echo "=============================================================================="

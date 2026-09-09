@@ -3107,17 +3107,26 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 exec_cmd(["dd", "if=/dev/zero", f"of={disk_path}", "bs=512", "count=2048"])
                 # Recovery partition sized to hold the regenerated base SquashFS
                 # (~3.5-4GB) plus the Debian recovery environment (374MB) and kernel.
-                sfdisk_script = "label: dos\nsize=8192M, type=83\nsize=+, type=83, bootable\n"
-                if "TEST_MODE" in os.environ:
-                    print(f"[TEST_MODE] Simulating sfdisk partitioning script:\n{sfdisk_script}")
+                sfdisk_bin = shutil.which("sfdisk")
+                if sfdisk_bin:
+                    sfdisk_script = "label: dos\nsize=8192M, type=83\nsize=+, type=83, bootable\n"
+                    if "TEST_MODE" in os.environ:
+                        print(f"[TEST_MODE] Simulating sfdisk partitioning script:\n{sfdisk_script}")
+                    else:
+                        res_sf = subprocess.run([sfdisk_bin, disk_path], input=sfdisk_script, capture_output=True, text=True)
+                        if res_sf.returncode != 0:
+                            raise Exception(f"Failed to partition disk {disk_path} with sfdisk:\n{res_sf.stderr}")
+                    exec_cmd(["sync"])
+                    exec_cmd(["udevadm", "settle"])
+                    if "TEST_MODE" not in os.environ:
+                        subprocess.run([sfdisk_bin, "--activate", disk_path, "2"], capture_output=True)
                 else:
-                    res_sf = subprocess.run(["sfdisk", disk_path], input=sfdisk_script, capture_output=True, text=True)
-                    if res_sf.returncode != 0:
-                        raise Exception(f"Failed to partition disk {disk_path} with sfdisk:\n{res_sf.stderr}")
-                exec_cmd(["sync"])
-                exec_cmd(["udevadm", "settle"])
-                if "TEST_MODE" not in os.environ:
-                    subprocess.run(["sfdisk", "--activate", disk_path, "2"], capture_output=True)
+                    exec_cmd(["parted", "-s", disk_path, "mklabel", "msdos"])
+                    exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "ext4", "1MiB", "8193MiB"])
+                    exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "btrfs", "8193MiB", "100%"])
+                    exec_cmd(["parted", "-s", disk_path, "set", "2", "boot", "on"])
+                    exec_cmd(["sync"])
+                    exec_cmd(["udevadm", "settle"])
                 try:
                     exec_cmd(["partprobe", disk_path])
                 except Exception:
