@@ -793,8 +793,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.build_install_confirm_screen()
         self.build_install_progress_screen()
         self.build_install_error_screen()
+        self.build_install_uefi_incompatible_screen()
         
-        self.stack.set_visible_child_name("utilities")
+        initial_screen = os.environ.get("INITIAL_SCREEN", "utilities")
+        self.stack.set_visible_child_name(initial_screen)
 
     def apply_css(self):
         provider = Gtk.CssProvider()
@@ -1045,7 +1047,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
         if self.selected_action == "backup":
             subprocess.Popen("pulsaros-timemachine gui || pulsaros-timemachine || python3 /usr/share/pulsaros-timemachine/cli.py gui", shell=True)
         elif self.selected_action == "install":
-            self.stack.set_visible_child_name("install_welcome")
+            if self._is_uefi_grub_incompatible():
+                self.stack.set_visible_child_name("install_uefi_incompatible")
+            else:
+                self.stack.set_visible_child_name("install_welcome")
         elif self.selected_action == "safari":
             self._popen_as_user("seafari || epiphany || firefox")
         elif self.selected_action == "disk":
@@ -1477,6 +1482,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
     def _is_uefi_grub_incompatible(self):
         """Detect if booted in UEFI mode on the GRUB-only (BIOS/Legacy) ISO edition."""
+        if os.environ.get("FORCE_UEFI_GRUB_INCOMPATIBLE") == "1":
+            return True
         is_efi = os.path.exists("/sys/firmware/efi")
         refind_available = any(
             os.path.exists(p)
@@ -1488,32 +1495,94 @@ class RecoveryWindow(Adw.ApplicationWindow):
         )
         return is_efi and not refind_available
 
-    def _show_uefi_grub_incompatibility_dialog(self):
-        """Display a blocking alert when attempting to install the GRUB edition on a UEFI system."""
-        dialog = Adw.MessageDialog(
-            transient_for=self,
-            heading="Incompatible Edition / Edición Incompatible",
-            body=(
-                "⚠️ <b>UEFI System Detected / Sistema UEFI Detectado</b>\n\n"
-                "You are attempting to install the <b>Pulsar OS GRUB Edition</b> on a UEFI computer.\n"
-                "This edition is designed exclusively for Legacy BIOS / MBR systems and will fail to configure the bootloader on UEFI hardware.\n\n"
-                "Please download and boot the <b>Pulsar OS rEFInd Edition (UEFI)</b> to install Pulsar OS on this computer.\n\n"
-                "<i>Estás intentando instalar la edición GRUB en un ordenador UEFI. Debes descargar y usar la edición rEFInd (UEFI); de lo contrario, la instalación del gestor de arranque fallará.</i>"
-            ),
+    def build_install_uefi_incompatible_screen(self):
+        """Slide shown inside the main central window when UEFI hardware is detected on the GRUB ISO."""
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.set_valign(Gtk.Align.CENTER)
+        box.set_halign(Gtk.Align.CENTER)
+
+        if "DEMO_MODE" in os.environ:
+            demo_banner = Gtk.Label(label="⚠ DEMO MODE — No changes will be made to your system")
+            demo_banner.add_css_class("demo-banner")
+            box.append(demo_banner)
+
+        # Warning Icon
+        icon_img = Gtk.Image.new_from_icon_name("dialog-warning-symbolic")
+        icon_img.set_pixel_size(56)
+        box.append(icon_img)
+
+        # Title
+        title = Gtk.Label()
+        title.set_markup("<span font_weight='bold' size='18000'>UEFI System Detected</span>")
+        box.append(title)
+
+        subtitle = Gtk.Label(label="Incompatible Pulsar OS Edition for this computer")
+        subtitle.add_css_class("welcome-subtitle")
+        subtitle.set_margin_bottom(4)
+        box.append(subtitle)
+
+        # Card Container
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card.add_css_class("summary-box")
+        card.set_size_request(560, -1)
+
+        desc_lbl = Gtk.Label()
+        desc_lbl.set_markup(
+            "This computer booted in <b>UEFI mode</b>, but you are currently running the <b>Pulsar OS GRUB Edition</b>.\n"
+            "The GRUB edition is designed exclusively for Legacy BIOS / MBR systems and cannot configure boot on modern UEFI hardware.\n\n"
+            "Please download and install the <b>Pulsar OS rEFInd Edition (UEFI)</b> instead."
         )
-        dialog.set_body_use_markup(True)
-        dialog.add_response("ok", "Understood / Entendido")
-        dialog.set_response_appearance("ok", Adw.ResponseAppearance.DESTRUCTIVE)
+        desc_lbl.set_wrap(True)
+        desc_lbl.set_max_width_chars(62)
+        desc_lbl.set_xalign(0.0)
+        card.append(desc_lbl)
 
-        def on_response(d, resp):
-            d.destroy()
+        steps_title = Gtk.Label()
+        steps_title.set_markup("<b>💡 How to flash it directly from this live session:</b>")
+        steps_title.set_xalign(0.0)
+        steps_title.set_margin_top(2)
+        card.append(steps_title)
 
-        dialog.connect("response", on_response)
-        dialog.present()
+        steps_lbl = Gtk.Label()
+        steps_lbl.set_markup(
+            "<b>1.</b> Click <b>Download rEFInd Edition</b> to open <b>downloads-os.inled.es</b> in Seafari.\n"
+            "<b>2.</b> Insert a USB flash drive of <b>8 GB</b> (or at least 6 GB).\n"
+            "<b>3.</b> Open <b>Disks</b> (GNOME Disks), select your USB drive, and choose <i>Restore Disk Image...</i> to flash the downloaded ISO.\n"
+            "<b>4.</b> Restart your computer and boot the new USB drive in UEFI mode."
+        )
+        steps_lbl.set_wrap(True)
+        steps_lbl.set_max_width_chars(62)
+        steps_lbl.set_xalign(0.0)
+        card.append(steps_lbl)
+
+        box.append(card)
+
+        # Navigation row
+        nav_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        nav_box.set_halign(Gtk.Align.CENTER)
+        nav_box.set_margin_top(8)
+
+        btn_back = Gtk.Button(label="Back to Utilities")
+        btn_back.add_css_class("secondary-action")
+        btn_back.connect("clicked", lambda x: self.stack.set_visible_child_name("utilities"))
+        nav_box.append(btn_back)
+
+        btn_disks = Gtk.Button(label="Open Disks")
+        btn_disks.add_css_class("secondary-action")
+        btn_disks.connect("clicked", lambda x: subprocess.Popen("gnome-disks || gnome-disk-utility || gparted", shell=True))
+        nav_box.append(btn_disks)
+
+        btn_download = Gtk.Button(label="Download rEFInd Edition")
+        btn_download.add_css_class("suggested-action")
+        btn_download.connect("clicked", lambda x: self._popen_as_user("seafari https://downloads-os.inled.es || epiphany https://downloads-os.inled.es || xdg-open https://downloads-os.inled.es"))
+        nav_box.append(btn_download)
+
+        box.append(nav_box)
+        self.stack.add_named(box, "install_uefi_incompatible")
 
     def on_welcome_continue_clicked(self, btn):
         if self._is_uefi_grub_incompatible():
-            self._show_uefi_grub_incompatibility_dialog()
+            self.stack.set_visible_child_name("install_uefi_incompatible")
             return
         self.refresh_disk_cards()
         self.stack.set_visible_child_name("install_disk_select")
@@ -1987,7 +2056,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
     def _on_options_continue_clicked(self, btn):
         if self._is_uefi_grub_incompatible():
-            self._show_uefi_grub_incompatibility_dialog()
+            self.stack.set_visible_child_name("install_uefi_incompatible")
             return
 
         self.install_broadcom = self.chk_broadcom.get_active()
@@ -2586,7 +2655,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
     def _start_installation(self):
         if self._is_uefi_grub_incompatible():
-            self._show_uefi_grub_incompatibility_dialog()
+            self.stack.set_visible_child_name("install_uefi_incompatible")
             return
 
         disk_path = self.pending_disk_path
