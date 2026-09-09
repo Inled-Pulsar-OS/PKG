@@ -8,6 +8,15 @@ if [ "$1" = "configure" ]; then
     if which gtk-update-icon-cache >/dev/null 2>&1; then
         gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
     fi
+    if which update-mime-database >/dev/null 2>&1; then
+        update-mime-database /usr/share/mime || true
+    fi
+    # Set Pulsar Store as default handler for pulsar:// URLs
+    if which xdg-mime >/dev/null 2>&1; then
+        xdg-mime default es.inled.PulsarStore.desktop x-scheme-handler/pulsar || true
+    fi
+    # Remove legacy CLI binary (replaced by the visual GTK app)
+    rm -f /usr/bin/pulsar-store-cli
 fi
 
 exit 0

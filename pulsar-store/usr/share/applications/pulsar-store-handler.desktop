@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Pulsar Store URL Handler
+Comment=Handles pulsar:// installation URLs
+Exec=/usr/bin/pulsar-store %u
+Terminal=false
+Type=Application
+MimeType=x-scheme-handler/pulsar;
+NoDisplay=true
+Categories=System;PackageManager;

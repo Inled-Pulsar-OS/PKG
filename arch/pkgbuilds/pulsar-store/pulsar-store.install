@@ -1,6 +1,10 @@
 post_install() {
     update-desktop-database -q /usr/share/applications || true
     gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
+    update-mime-database /usr/share/mime &>/dev/null || true
+    xdg-mime default es.inled.PulsarStore.desktop x-scheme-handler/pulsar || true
+    # Remove legacy CLI binary (replaced by the visual GTK app)
+    rm -f /usr/bin/pulsar-store-cli
 }
 
 post_upgrade() {

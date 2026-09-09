@@ -6,8 +6,10 @@ Native Libadwaita / GTK4 Interface.
 """
 
 import os
+import subprocess
 import sys
 import threading
+import time
 import urllib.request
 from typing import Dict, Any, List, Optional
 
@@ -37,6 +39,8 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
         self.current_category = "discover"
         self.current_item = None
         self.active_operations: Dict[str, str] = {}  # item_id -> action
+        self._pending_install_id: Optional[str] = None
+        self._catalog_ready = False
 
         self.load_css()
         self.build_ui()
@@ -189,7 +193,11 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
 
     def _initial_load(self):
         self.core.refresh_catalog()
-        GLib.idle_add(self.render_current_view)
+        def _ready():
+            self._catalog_ready = True
+            self.render_current_view()
+            self._process_pending_install()
+        GLib.idle_add(_ready)
 
     def show_toast(self, message: str):
         toast = Adw.Toast.new(message)
@@ -791,6 +799,11 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
             self.show_toast("Operation already in progress for this item.")
             return
 
+        # Install always shows the package page with a live progress bar and errors
+        if action == "install":
+            self.run_install_with_progress(item)
+            return
+
         self.active_operations[item_id] = action
         item_name = item.get("name", item_id)
         self.show_toast(f"{action.capitalize()}ing {item_name}...")
@@ -803,9 +816,7 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
 
         def _worker():
             success = False
-            if action == "install":
-                success = self.core.install(item)
-            elif action == "uninstall":
+            if action == "uninstall":
                 success = self.core.uninstall(item)
             elif action == "update":
                 success = self.core.update_item(item)
@@ -855,13 +866,225 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
         self.show_toast("All updates applied.")
         self.render_current_view()
 
+    def install_package_by_id(self, package_id: str):
+        """Install a package by its ID (called from URL handler)."""
+        if not package_id:
+            return
+
+        item = next((i for i in self.core.items if i.get("id") == package_id), None)
+        if item:
+            self.run_install_with_progress(item)
+        else:
+            self.show_error_dialog(
+                f"Package '{package_id}' not found",
+                "The requested package is not present in the Pulsar Store catalog.",
+            )
+
+    def queue_install(self, package_id: str):
+        """Queue a pulsar://install request, waiting for the catalog if needed."""
+        if not package_id:
+            return
+        self._pending_install_id = package_id
+        if getattr(self, "_catalog_ready", False):
+            self._process_pending_install()
+        else:
+            self.show_toast("Loading store catalog…")
+            threading.Thread(target=self._wait_catalog_then_install, daemon=True).start()
+
+    def _wait_catalog_then_install(self):
+        deadline = time.time() + 30
+        while time.time() < deadline and not getattr(self, "_catalog_ready", False):
+            time.sleep(0.25)
+        GLib.idle_add(self._process_pending_install)
+
+    def _process_pending_install(self):
+        if not getattr(self, "_pending_install_id", None):
+            return
+        pkg_id = self._pending_install_id
+        self._pending_install_id = None
+        self.install_package_by_id(pkg_id)
+
+    def run_install_with_progress(self, item: Dict[str, Any]):
+        """Install a package showing the detail page, a live progress bar and errors."""
+        item_id = item.get("id", "")
+        item_name = item.get("name", item_id)
+        if item_id in self.active_operations:
+            self.show_toast("Installation already in progress.")
+            return
+        self.active_operations[item_id] = "install"
+
+        # Open the dedicated package page for context
+        self.open_details(item)
+
+        dialog = Adw.MessageDialog(transient_for=self, heading=f"Installing {item_name}")
+        dialog.add_response("close", "Close")
+        dialog.set_close_response("close")
+        dialog.set_default_response("close")
+        dialog.set_modal(True)
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        content.set_margin_top(6)
+        content.set_margin_bottom(6)
+        content.set_margin_start(8)
+        content.set_margin_end(8)
+
+        meta_lbl = Gtk.Label(label=f"{item_id} • {item.get('type', '').replace('_', ' ').upper()}")
+        meta_lbl.set_halign(Gtk.Align.START)
+        meta_lbl.add_css_class("dim-label")
+        content.append(meta_lbl)
+
+        pbar = Gtk.ProgressBar()
+        pbar.set_pulse_step(0.12)
+        content.append(pbar)
+
+        status_lbl = Gtk.Label(label="Connecting to Pulsar Store…")
+        status_lbl.set_halign(Gtk.Align.START)
+        status_lbl.set_wrap(True)
+        content.append(status_lbl)
+
+        err_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        err_box.set_visible(False)
+        content.append(err_box)
+
+        sw = Gtk.ScrolledWindow()
+        sw.set_min_content_height(90)
+        sw.set_max_content_height(180)
+        err_box.append(sw)
+
+        err_view = Gtk.TextView()
+        err_view.set_editable(False)
+        err_view.set_cursor_visible(False)
+        err_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        err_view.set_monospace(True)
+        sw.set_child(err_view)
+
+        btn_copy = Gtk.Button(label="Copy Error")
+        btn_copy.set_halign(Gtk.Align.END)
+        btn_copy.set_visible(False)
+        err_box.append(btn_copy)
+
+        dialog.set_extra_child(content)
+        dialog.present()
+
+        def _pulse():
+            if dialog.is_visible():
+                pbar.pulse()
+                return True
+            return False
+
+        GLib.timeout_add(120, _pulse)
+
+        def _copy(_btn):
+            buf = err_view.get_buffer()
+            text = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False)
+            self._copy_text(text)
+            btn_copy.set_label("Copied!")
+
+        btn_copy.connect("clicked", _copy)
+
+        ctx = {
+            "dialog": dialog,
+            "pbar": pbar,
+            "status_lbl": status_lbl,
+            "err_box": err_box,
+            "err_view": err_view,
+            "btn_copy": btn_copy,
+            "item": item,
+        }
+
+        def _worker():
+            try:
+                GLib.idle_add(lambda st=status_lbl: st.set_label("Downloading & configuring package files…"))
+                success = self.core.install(item)
+                GLib.idle_add(lambda: self._progress_install_done(ctx, success, None))
+            except Exception as exc:
+                GLib.idle_add(lambda: self._progress_install_done(ctx, False, exc))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _progress_install_done(self, ctx: Dict[str, Any], success: bool, exc: Optional[Exception]):
+        item = ctx["item"]
+        item_id = item.get("id", "")
+        item_name = item.get("name", item_id)
+        dialog = ctx["dialog"]
+        pbar = ctx["pbar"]
+        status_lbl = ctx["status_lbl"]
+        self.active_operations.pop(item_id, None)
+
+        if success:
+            pbar.set_fraction(1.0)
+            status_lbl.set_label("Done.")
+            dialog.close()
+            self.open_details(item)
+            self.show_success_dialog(item, "install")
+            return
+
+        err_text = (
+            str(exc) if exc is not None else (
+                f"Pulsar Store could not install '{item_name}'. "
+                "Check that Flatpak, the package manager and dependencies are available."
+            )
+        )
+        pbar.set_fraction(1.0)
+        status_lbl.set_markup("<span foreground='#ef4444'>Installation failed.</span>")
+        ctx["err_box"].set_visible(True)
+        ctx["btn_copy"].set_visible(True)
+        ctx["err_view"].get_buffer().set_text(err_text)
+        self.open_details(item)
+
+    def show_error_dialog(self, title: str, message: str):
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading=title,
+            body=message,
+        )
+        dialog.add_response("ok", "OK")
+        dialog.set_default_response("ok")
+        dialog.present()
+
+    def _copy_text(self, text: str):
+        copied = False
+        try:
+            display = Gdk.Display.get_default()
+            if display:
+                display.get_clipboard().set(text)
+                copied = True
+        except Exception:
+            pass
+        if not copied:
+            for tool in (["wl-copy"], ["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]):
+                try:
+                    subprocess.run(tool, input=text, text=True, check=True)
+                    copied = True
+                    break
+                except Exception:
+                    continue
+
 
 class PulsarStoreApp(Adw.Application):
     def __init__(self):
         super().__init__(
             application_id="es.inled.PulsarStore",
-            flags=Gio.ApplicationFlags.FLAGS_NONE
+            flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE
         )
+        self.connect("command-line", self.on_command_line)
+
+    def on_command_line(self, app, command_line):
+        args = command_line.get_arguments() or []
+
+        win = self.props.active_window
+        if not win:
+            win = PulsarStoreWindow(self)
+        win.present()
+
+        for arg in args:
+            if arg.startswith("pulsar://install/"):
+                package_id = arg.replace("pulsar://install/", "").strip()
+                if package_id:
+                    win.queue_install(package_id)
+                break
+
+        return 0
 
     def do_activate(self):
         win = self.props.active_window
