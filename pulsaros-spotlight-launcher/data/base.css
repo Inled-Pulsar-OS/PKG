@@ -96,9 +96,23 @@
     font-size: 11px;
 }
 
-/* thumbnail for image results */
-.result-icon picture {
+/* thumbnail for image/pdf/video results */
+.result-thumb {
     border-radius: 6px;
+    min-width: 32px;
+    min-height: 32px;
+}
+
+.result-thumb-grid {
+    border-radius: 6px;
+    min-width: 48px;
+    min-height: 48px;
+}
+
+.result-thumb spinner,
+.result-thumb-grid spinner {
+    min-width: 22px;
+    min-height: 22px;
 }
 
 /* context menu popover */

@@ -1,18 +1,118 @@
 use crate::search::SearchResult;
 use crate::utils::{get_file_icon, open_file};
 use gtk4::gdk;
+use gtk4::glib;
 use gtk4::prelude::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::path::Path;
 use std::process::Command;
 use std::rc::Rc;
+use std::sync::mpsc;
 use std::sync::Mutex;
 use std::sync::OnceLock;
+use std::time::Duration;
 
 static ICON_CACHE: OnceLock<Mutex<HashMap<String, Option<String>>>> = OnceLock::new();
+static THUMBNAIL_CACHE: OnceLock<Mutex<HashMap<String, Option<gtk4::gdk::Texture>>>> = OnceLock::new();
+
+struct ThumbPixels {
+    bytes: glib::Bytes,
+    width: i32,
+    height: i32,
+    rowstride: i32,
+    has_alpha: bool,
+    bits_per_sample: i32,
+}
+
+struct ThumbJob {
+    url: String,
+    cache_key: String,
+    size: i32,
+    disk_png: std::path::PathBuf,
+}
+
+fn fnv1a64(s: &str) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in s.as_bytes() {
+        h ^= *b as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h
+}
+
+// Creates the worker pool and returns (job sender, result receiver).
+fn spawn_thumbnail_pool() -> (
+    mpsc::Sender<ThumbJob>,
+    mpsc::Receiver<(String, Option<ThumbPixels>)>,
+) {
+    const WORKERS: usize = 4;
+    let (job_tx, job_rx) = mpsc::channel::<ThumbJob>();
+    let (result_tx, result_rx) = mpsc::channel::<(String, Option<ThumbPixels>)>();
+
+    let worker_txs: Vec<mpsc::Sender<ThumbJob>> = (0..WORKERS)
+        .map(|_| {
+            let (wtx, wrx) = mpsc::channel::<ThumbJob>();
+            let rt = result_tx.clone();
+            std::thread::spawn(move || {
+                while let Ok(job) = wrx.recv() {
+                    let pixels = generate_thumb_pixels(&job);
+                    let _ = rt.send((job.cache_key, pixels));
+                }
+            });
+            wtx
+        })
+        .collect();
+
+    std::thread::spawn(move || {
+        let mut i = 0usize;
+        while let Ok(job) = job_rx.recv() {
+            let _ = worker_txs[i % WORKERS].send(job);
+            i += 1;
+        }
+    });
+
+    (job_tx, result_rx)
+}
+
+fn get_icon_cache() -> &'static Mutex<HashMap<String, Option<String>>> {
+    ICON_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+pub fn warm_icon_cache() {
+    const EXTS: [&str; 3] = ["png", "svg", "xpm"];
+    let cache = get_icon_cache();
+    let mut map = cache.lock().unwrap();
+    if !map.is_empty() {
+        return;
+    }
+
+    for root in ["/usr/share/icons", "/usr/local/share/icons"] {
+        let Ok(themes) = std::fs::read_dir(root) else { continue };
+        for theme in themes.filter_map(Result::ok) {
+            let Ok(sizes) = std::fs::read_dir(theme.path()) else { continue };
+            for size in sizes.filter_map(Result::ok) {
+                let apps_dir = size.path().join("apps");
+                let Ok(entries) = std::fs::read_dir(&apps_dir) else { continue };
+                for entry in entries.filter_map(Result::ok) {
+                    let name_os = entry.file_name();
+                    let name_str = name_os.to_string_lossy();
+                    for ext in EXTS {
+                        if let Some(stem) = name_str.strip_suffix(&format!(".{ext}")) {
+                            if !map.contains_key(stem) {
+                                map.insert(stem.to_string(), Some(entry.path().to_string_lossy().into_owned()));
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 fn find_icon_file_cached(name: &str) -> Option<String> {
-    let cache = ICON_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let cache = get_icon_cache();
     if let Some(hit) = cache.lock().unwrap().get(name) {
         return hit.clone();
     }
@@ -44,6 +144,120 @@ fn find_icon_file(name: &str) -> Option<String> {
         }
     }
     None
+}
+
+fn is_image_file(url: &str) -> bool {
+    let path = url.trim_start_matches("file://");
+    let ext = Path::new(path)
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "bmp" | "avif" | "tiff" | "ico")
+}
+
+fn is_pdf_file(url: &str) -> bool {
+    url.trim_start_matches("file://").ends_with(".pdf")
+}
+
+fn is_video_file(url: &str) -> bool {
+    let ext = Path::new(url.trim_start_matches("file://"))
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    matches!(ext.as_str(), "mp4" | "mkv" | "webm" | "avi" | "mov" | "flv" | "wmv" | "m4v" | "3gp")
+}
+
+fn has_thumbnail_support(url: &str) -> bool {
+    is_image_file(url) || is_pdf_file(url) || is_video_file(url)
+}
+
+// Runs on a worker thread: decodes + scales into a thread-safe Pixbuf.
+fn generate_thumb_pixbuf(url: &str, size: i32) -> Option<gdk_pixbuf::Pixbuf> {
+    let path = url.trim_start_matches("file://");
+
+    if is_pdf_file(url) {
+        let tmp_base = format!("/tmp/pulsar_thumb_{}_{}", std::process::id(), out_counter());
+        let _ = Command::new("pdftoppm")
+            .args(&["-png", "-singlefile", "-r", "72", "-l", "1", path, &tmp_base])
+            .output();
+        let tmp_png = format!("{}.png", tmp_base);
+        let pb = gdk_pixbuf::Pixbuf::from_file_at_scale(&tmp_png, size, size, true).ok();
+        let _ = std::fs::remove_file(&tmp_png);
+        pb
+    } else if is_video_file(url) {
+        let tmp_jpg = format!("/tmp/pulsar_thumb_{}_{}.jpg", std::process::id(), out_counter());
+        let _ = Command::new("ffmpeg")
+            .args(&["-y", "-ss", "00:00:01", "-i", path, "-frames:v", "1", "-q:v", "5", &tmp_jpg])
+            .output();
+        let pb = gdk_pixbuf::Pixbuf::from_file_at_scale(&tmp_jpg, size, size, true).ok();
+        let _ = std::fs::remove_file(&tmp_jpg);
+        pb
+    } else if is_image_file(url) {
+        gdk_pixbuf::Pixbuf::from_file_at_scale(path, size, size, true).ok()
+    } else {
+        None
+    }
+}
+
+fn generate_thumb_pixels(job: &ThumbJob) -> Option<ThumbPixels> {
+    let pb = if job.disk_png.exists() {
+        gdk_pixbuf::Pixbuf::from_file_at_scale(&job.disk_png, job.size, job.size, true).ok()
+    } else {
+        let pb = generate_thumb_pixbuf(&job.url, job.size);
+        if let Some(p) = &pb {
+            if let Some(parent) = job.disk_png.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let _ = p.savev(&job.disk_png, "png", &[]);
+        }
+        pb
+    };
+    pb.map(|p| ThumbPixels {
+        bytes: p.read_pixel_bytes(),
+        width: p.width(),
+        height: p.height(),
+        rowstride: p.rowstride(),
+        has_alpha: p.has_alpha(),
+        bits_per_sample: p.bits_per_sample(),
+    })
+}
+
+fn thumb_cache_dir() -> std::path::PathBuf {
+    let base = std::env::var_os("XDG_CACHE_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(dirs::cache_dir)
+        .or_else(|| dirs::home_dir().map(|h| h.join(".cache")))
+        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+    base.join("pulsaros-spotlight").join("thumbnails")
+}
+
+fn out_counter() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    COUNTER.fetch_add(1, Ordering::Relaxed)
+}
+
+fn select_ctx_button(buttons: &[gtk4::Button], idx: Option<usize>) {
+    let visible: Vec<&gtk4::Button> = buttons.iter().filter(|b| b.is_visible()).collect();
+    if visible.is_empty() {
+        return;
+    }
+    let idx = idx.unwrap_or(0).min(visible.len() - 1);
+    for b in &visible {
+        b.remove_css_class("ctx-menu-btn-selected");
+        b.set_opacity(0.5);
+    }
+    visible[idx].add_css_class("ctx-menu-btn-selected");
+    visible[idx].set_opacity(1.0);
+}
+
+fn select_ctx_button_to(buttons: &[gtk4::Button], target: &gtk4::Button) {
+    let visible: Vec<&gtk4::Button> = buttons.iter().filter(|b| b.is_visible()).collect();
+    if let Some(idx) = visible.iter().position(|b| std::ptr::eq(*b, target)) {
+        select_ctx_button(buttons, Some(idx));
+    }
 }
 
 fn app_icon(icon: &str, desktop_file: &str) -> gtk4::Image {
@@ -109,12 +323,19 @@ pub struct ResultView {
     list_box: gtk4::ListBox,
     grid: gtk4::FlowBox,
     results: Rc<RefCell<Vec<SearchResult>>>,
+    result_urls: Rc<RefCell<Vec<String>>>,
     selected_index: Rc<RefCell<Option<usize>>>,
     on_activate: Rc<dyn Fn(SearchResult)>,
     on_uninstall_start: Rc<dyn Fn(String, String)>,
     on_uninstall_done: Rc<dyn Fn(bool, String, String)>,
     popover: gtk4::Popover,
     context_menu_index: Rc<RefCell<Option<usize>>>,
+    ctx_menu_open: Rc<RefCell<bool>>,
+    ctx_menu_buttons: Vec<gtk4::Button>,
+    ctx_selected: Rc<RefCell<Option<usize>>>,
+    thumb_job_tx: RefCell<Option<mpsc::Sender<ThumbJob>>>,
+    thumb_pictures: RefCell<HashMap<String, Vec<gtk4::Stack>>>,
+    thumb_poll: RefCell<Option<glib::SourceId>>,
 }
 
 impl ResultView {
@@ -146,6 +367,7 @@ impl ResultView {
         stack.add_named(&grid, Some("grid"));
 
         let results = Rc::new(RefCell::new(Vec::new()));
+        let result_urls = Rc::new(RefCell::new(Vec::new()));
         let selected_index = Rc::new(RefCell::new(None));
         let context_menu_index = Rc::new(RefCell::new(None));
 
@@ -156,21 +378,40 @@ impl ResultView {
             .build();
         popover.add_css_class("ctx-menu");
 
-        let view = Self {
+        let ctx_selected = Rc::new(RefCell::new(None));
+        let ctx_menu_open = Rc::new(RefCell::new(false));
+
+        let mut view = Self {
             stack,
             list_box,
             grid,
             results,
+            result_urls,
             selected_index,
             on_activate: Rc::new(on_activate),
             on_uninstall_start: Rc::new(on_uninstall_start),
             on_uninstall_done: Rc::new(on_uninstall_done),
             popover,
             context_menu_index,
+            ctx_menu_open,
+            ctx_menu_buttons: Vec::new(),
+            ctx_selected,
+            thumb_job_tx: RefCell::new(None),
+            thumb_pictures: RefCell::new(HashMap::new()),
+            thumb_poll: RefCell::new(None),
         };
 
         view.setup_events();
         view.setup_context_menu();
+
+        let open_c = view.ctx_menu_open.clone();
+        view.popover.connect_closed(move |_| {
+            *open_c.borrow_mut() = false;
+        });
+
+        let (job_tx, result_rx) = spawn_thumbnail_pool();
+        *view.thumb_job_tx.borrow_mut() = Some(job_tx);
+        view.start_thumbnail_poll(result_rx);
 
         view
     }
@@ -183,7 +424,63 @@ impl ResultView {
         self.popover.set_parent(parent);
     }
 
+    pub fn context_menu_is_open(&self) -> bool {
+        *self.ctx_menu_open.borrow()
+    }
+
+    pub fn context_menu_step(&self, down: bool) {
+        let visible: Vec<&gtk4::Button> = self
+            .ctx_menu_buttons
+            .iter()
+            .filter(|b| b.is_visible())
+            .collect();
+        if visible.is_empty() {
+            return;
+        }
+        let cnt = visible.len();
+        let next = match *self.ctx_selected.borrow() {
+            Some(i) if down => (i + 1) % cnt,
+            Some(i) => (i + cnt - 1) % cnt,
+            None => 0,
+        };
+        select_ctx_button(&self.ctx_menu_buttons, Some(next));
+        *self.ctx_selected.borrow_mut() = Some(next);
+        visible[next].grab_focus();
+    }
+
+    pub fn context_menu_activate(&self) {
+        let visible: Vec<&gtk4::Button> = self
+            .ctx_menu_buttons
+            .iter()
+            .filter(|b| b.is_visible())
+            .collect();
+        if let Some(i) = *self.ctx_selected.borrow() {
+            if i < visible.len() {
+                visible[i].emit_clicked();
+            }
+        }
+    }
+
+    pub fn context_menu_close(&self) {
+        self.popover.popdown();
+    }
+
     pub fn set_results(&self, new_results: Vec<SearchResult>, as_grid: bool) {
+        let mut new_results = new_results;
+        new_results.truncate(200);
+
+        let new_urls: Vec<String> = new_results.iter().map(|r| r.url.clone()).collect();
+        let old_urls = self.result_urls.borrow();
+
+        // Skip rebuild if the result set is identical (common while typing)
+        if *old_urls == new_urls {
+            return;
+        }
+        drop(old_urls);
+
+        // Rebind widgets to a fresh thumbnail map (in-flight loads are dropped)
+        self.thumb_pictures.borrow_mut().clear();
+
         *self.selected_index.borrow_mut() = None;
 
         // Clear children
@@ -194,17 +491,14 @@ impl ResultView {
             self.grid.remove(&child);
         }
 
-        let mut new_results = new_results;
-        new_results.truncate(200);
-        let visible = new_results.to_vec();
+        let visible = new_results.clone();
         *self.results.borrow_mut() = new_results;
+        *self.result_urls.borrow_mut() = new_urls;
 
         for result in &visible {
-            // Build list row
             let list_row = self.build_list_row(result);
             self.list_box.append(&list_row);
 
-            // Build grid child
             let grid_child = self.build_grid_child(result);
             self.grid.insert(&grid_child, -1);
         }
@@ -228,14 +522,120 @@ impl ResultView {
         }
     }
 
+    fn start_thumbnail_poll(&self, result_rx: mpsc::Receiver<(String, Option<ThumbPixels>)>) {
+        let pictures = self.thumb_pictures.clone();
+        let source_id = glib::timeout_add_local(Duration::from_millis(5), move || {
+            match result_rx.try_recv() {
+                Ok((cache_key, pixels)) => {
+                    let cache = THUMBNAIL_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+                    match pixels {
+                        Some(px) => {
+                            let pb = gdk_pixbuf::Pixbuf::from_mut_slice(
+                                px.bytes.to_vec(),
+                                gdk_pixbuf::Colorspace::Rgb,
+                                px.has_alpha,
+                                px.bits_per_sample,
+                                px.width,
+                                px.height,
+                                px.rowstride,
+                            );
+                            let texture = gdk::Texture::for_pixbuf(&pb);
+                            cache.lock().unwrap().insert(cache_key.clone(), Some(texture.clone()));
+                            if let Some(stacks) = pictures.borrow().get(&cache_key) {
+                                for stack in stacks {
+                                    stack.set_visible_child_name("thumb");
+                                    if let Some(widget) = stack.child_by_name("thumb") {
+                                        if let Ok(pic) = widget.downcast::<gtk4::Picture>() {
+                                            pic.set_paintable(Some(&texture));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        None => {
+                            cache.lock().unwrap().insert(cache_key, None);
+                        }
+                    }
+                    glib::ControlFlow::Continue
+                }
+                Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+                Err(mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
+            }
+        });
+        *self.thumb_poll.borrow_mut() = Some(source_id);
+    }
+
+    // Builds a sized cell that shows a spinner until the thumbnail is ready,
+    // then swaps in the decoded texture. Always returns a widget (never blocks).
+    fn thumbnail_icon(&self, url: &str, pixel_size: i32, grid: bool) -> gtk4::Stack {
+        let path = url.trim_start_matches("file://").to_string();
+        let css = if grid { "result-thumb-grid" } else { "result-thumb" };
+
+        let stack = gtk4::Stack::new();
+        stack.set_size_request(pixel_size, pixel_size);
+        stack.set_hexpand(false);
+        stack.set_halign(if grid { gtk4::Align::Center } else { gtk4::Align::Start });
+        stack.set_valign(gtk4::Align::Center);
+        stack.add_css_class(css);
+
+        let spinner = gtk4::Spinner::new();
+        spinner.set_halign(gtk4::Align::Center);
+        spinner.set_valign(gtk4::Align::Center);
+        spinner.set_size_request(24, 24);
+        spinner.start();
+        stack.add_named(&spinner, Some("loading"));
+
+        let pic = gtk4::Picture::new();
+        pic.set_size_request(pixel_size, pixel_size);
+        pic.set_can_shrink(true);
+        pic.add_css_class(css);
+        pic.set_halign(gtk4::Align::Center);
+        pic.set_valign(gtk4::Align::Center);
+        stack.add_named(&pic, Some("thumb"));
+
+        let cache_key = format!("{}@{}", path, pixel_size);
+        let disk_png = thumb_cache_dir().join(format!("{}.png", fnv1a64(&cache_key)));
+
+        // Already decoded this exact size this session: show it straight away
+        let cache = THUMBNAIL_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+        if let Some(Some(texture)) = cache.lock().unwrap().get(&cache_key) {
+            pic.set_paintable(Some(texture));
+            stack.set_visible_child_name("thumb");
+            return stack;
+        }
+
+        stack.set_visible_child_name("loading");
+        self.thumb_pictures
+            .borrow_mut()
+            .entry(cache_key.clone())
+            .or_default()
+            .push(stack.clone());
+
+        if let Some(job_tx) = self.thumb_job_tx.borrow().as_ref() {
+            let _ = job_tx.send(ThumbJob {
+                url: url.to_string(),
+                cache_key,
+                size: pixel_size,
+                disk_png,
+            });
+        }
+        stack
+    }
+
     fn build_list_row(&self, result: &SearchResult) -> gtk4::ListBoxRow {
         let row = gtk4::ListBoxRow::new();
         let box_widget = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
         box_widget.add_css_class("result-item-list");
 
-        let icon = result_icon(result);
-        icon.set_pixel_size(32);
-        icon.add_css_class("result-icon");
+        let is_file = result.app.is_none() && result.url.starts_with("file://");
+        if is_file && has_thumbnail_support(&result.url) {
+            box_widget.append(&self.thumbnail_icon(&result.url, 32, false));
+        } else {
+            let icon = result_icon(result);
+            icon.set_pixel_size(32);
+            icon.add_css_class("result-icon");
+            box_widget.append(&icon);
+        }
 
         let text_box = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
 
@@ -272,7 +672,6 @@ impl ResultView {
             text_box.append(&snippet_label);
         }
 
-        box_widget.append(&icon);
         box_widget.append(&text_box);
         row.set_child(Some(&box_widget));
 
@@ -285,9 +684,15 @@ impl ResultView {
         box_widget.add_css_class("result-item-grid");
         box_widget.set_size_request(90, -1);
 
-        let icon = result_icon(result);
-        icon.set_pixel_size(48);
-        icon.add_css_class("result-icon-grid");
+        let is_file = result.app.is_none() && result.url.starts_with("file://");
+        if is_file && has_thumbnail_support(&result.url) {
+            box_widget.append(&self.thumbnail_icon(&result.url, 48, true));
+        } else {
+            let icon = result_icon(result);
+            icon.set_pixel_size(48);
+            icon.add_css_class("result-icon-grid");
+            box_widget.append(&icon);
+        }
 
         let title_label = gtk4::Label::builder()
             .label(&result.title)
@@ -298,7 +703,6 @@ impl ResultView {
             .build();
         title_label.add_css_class("result-title-grid");
 
-        box_widget.append(&icon);
         box_widget.append(&title_label);
         child.set_child(Some(&box_widget));
 
@@ -395,7 +799,7 @@ impl ResultView {
         self.grid.add_controller(grid_click);
     }
 
-    fn setup_context_menu(&self) {
+    fn setup_context_menu(&mut self) {
         let outer = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         outer.add_css_class("ctx-menu-box");
 
@@ -444,15 +848,88 @@ impl ResultView {
 
         self.popover.set_child(Some(&outer));
 
+        // Arrow key navigation within the context menu
+        let ctx_menu_buttons: Vec<gtk4::Button> = vec![
+            btn_open.clone(),
+            btn_open_dir.clone(),
+            btn_pin.clone(),
+            btn_uninstall.clone(),
+            btn_copy_name.clone(),
+            btn_copy_path.clone(),
+        ];
+        self.ctx_menu_buttons = ctx_menu_buttons.clone();
+        *self.ctx_selected.borrow_mut() = None;
+
+        // Mouse hover also moves the selection highlight
+        for b in &ctx_menu_buttons {
+            let b_c = b.clone();
+            let btns_c = ctx_menu_buttons.clone();
+            let motion = gtk4::EventControllerMotion::new();
+            motion.connect_enter(move |_, _, _| {
+                select_ctx_button_to(&btns_c, &b_c);
+            });
+            b.add_controller(motion);
+        }
+
+        let popover_key = gtk4::EventControllerKey::new();
+        let pop_c = self.popover.clone();
+        let btns_key = ctx_menu_buttons.clone();
+        let sel_key = self.ctx_selected.clone();
+        popover_key.connect_key_pressed(move |_, keyval, _, _| {
+            let visible_btns: Vec<&gtk4::Button> = btns_key
+                .iter()
+                .filter(|b| b.is_visible())
+                .collect();
+            if visible_btns.is_empty() {
+                return gtk4::glib::Propagation::Proceed;
+            }
+
+            match keyval {
+                gdk::Key::Down => {
+                    let cnt = visible_btns.len();
+                    let next = match *sel_key.borrow() {
+                        Some(i) => (i + 1) % cnt,
+                        None => 0,
+                    };
+                    select_ctx_button(&btns_key, Some(next));
+                    *sel_key.borrow_mut() = Some(next);
+                    visible_btns[next].grab_focus();
+                    gtk4::glib::Propagation::Stop
+                }
+                gdk::Key::Up => {
+                    let cnt = visible_btns.len();
+                    let prev = match *sel_key.borrow() {
+                        Some(0) | None => cnt - 1,
+                        Some(i) => i - 1,
+                    };
+                    select_ctx_button(&btns_key, Some(prev));
+                    *sel_key.borrow_mut() = Some(prev);
+                    visible_btns[prev].grab_focus();
+                    gtk4::glib::Propagation::Stop
+                }
+                gdk::Key::Escape => {
+                    pop_c.popdown();
+                    gtk4::glib::Propagation::Stop
+                }
+                _ => gtk4::glib::Propagation::Proceed,
+            }
+        });
+        self.popover.add_controller(popover_key);
+
         // Connect popover opened to toggle buttons visibility
         let results_c = self.results.clone();
         let ctx_menu_idx = self.context_menu_index.clone();
+        let btn_open_c = btn_open.clone();
         let btn_open_dir_c = btn_open_dir.clone();
         let btn_copy_path_c = btn_copy_path.clone();
         let btn_pin_c = btn_pin.clone();
         let btn_uninstall_c = btn_uninstall.clone();
+        let btns_map = ctx_menu_buttons.clone();
+        let sel_map = self.ctx_selected.clone();
+        let map_open = self.ctx_menu_open.clone();
 
         self.popover.connect_map(move |_| {
+            *map_open.borrow_mut() = true;
             if let Some(idx) = *ctx_menu_idx.borrow() {
                 if let Some(res) = results_c.borrow().get(idx) {
                     let is_app = res.app.is_some();
@@ -467,6 +944,10 @@ impl ResultView {
                         let is_pinned = favs.contains(&app.filename);
                         btn_pin_c.set_label(if is_pinned { "Unpin from dock" } else { "Pin to dock" });
                     }
+
+                    select_ctx_button(&btns_map, Some(0));
+                    *sel_map.borrow_mut() = Some(0);
+                    btn_open_c.grab_focus();
                 }
             }
         });
@@ -538,10 +1019,11 @@ impl ResultView {
                         let app_name = app.name.clone();
                         (*on_un_start)(desktop_id.clone(), app_name.clone());
 
-                        let (sender, receiver) = std::sync::mpsc::channel::<(bool, String)>();
                         let on_done = on_un_done.clone();
                         let app_name_c = app_name.clone();
-                        gtk4::glib::idle_add_local(move || {
+
+                        let (sender, receiver) = std::sync::mpsc::channel::<(bool, String)>();
+                        gtk4::glib::timeout_add_local(std::time::Duration::from_millis(1), move || {
                             match receiver.try_recv() {
                                 Ok((success, message)) => {
                                     (*on_done)(success, message, app_name_c.clone());
@@ -705,6 +1187,51 @@ impl ResultView {
         }
     }
 
+    pub fn show_context_menu_for_selected(&self) {
+        let idx = match *self.selected_index.borrow() {
+            Some(i) => i,
+            None => return,
+        };
+        if self.results.borrow().get(idx).is_none() {
+            return;
+        }
+
+        *self.context_menu_index.borrow_mut() = Some(idx);
+        *self.ctx_menu_open.borrow_mut() = true;
+
+        let is_list = self.stack.visible_child_name().as_deref() == Some("list");
+
+        if is_list {
+            if let Some(row) = self.list_box.row_at_index(idx as i32) {
+                if self.popover.parent().as_ref() != Some(row.upcast_ref()) {
+                    self.popover.set_parent(&row);
+                }
+                let alloc = row.allocation();
+                let rect = gdk::Rectangle::new(
+                    alloc.width() / 2,
+                    alloc.height() / 2,
+                    1,
+                    1,
+                );
+                self.popover.set_pointing_to(Some(&rect));
+                self.popover.popup();
+            }
+        } else if let Some(child) = self.grid.child_at_index(idx as i32) {
+            if self.popover.parent().as_ref() != Some(child.upcast_ref()) {
+                self.popover.set_parent(&child);
+            }
+            let alloc = child.allocation();
+            let rect = gdk::Rectangle::new(
+                alloc.width() / 2,
+                alloc.height() / 2,
+                1,
+                1,
+            );
+            self.popover.set_pointing_to(Some(&rect));
+            self.popover.popup();
+        }
+    }
+
     pub fn activate_selected(&self) -> bool {
         // Clone the result and drop the borrows before invoking the
         // callback: activation may re-enter set_results()
@@ -721,37 +1248,101 @@ impl ResultView {
     }
 }
 
-// Favorite apps helpers
+// Favorite apps helpers via D-Bus
 fn get_favorites() -> Vec<String> {
-    if let Ok(output) = Command::new("gsettings")
-        .args(&["get", "org.gnome.shell", "favorite-apps"])
-        .output()
-    {
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        let clean = if stdout.starts_with("@as ") { &stdout[4..] } else { &stdout };
-        // Simple manual parsing of ['a', 'b'] string to Vec
-        let mut list = Vec::new();
-        let mut current = String::new();
-        let mut in_quotes = false;
-        for c in clean.chars() {
-            if c == '\'' || c == '"' {
-                in_quotes = !in_quotes;
-                if !in_quotes && !current.is_empty() {
-                    list.push(current.clone());
-                    current.clear();
-                }
-            } else if in_quotes {
-                current.push(c);
+    let conn = match zbus::blocking::Connection::session() {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+
+    let reply = conn.call_method(
+        Some("ca.desrt.dconf"),
+        "/ca/desrt/dconf/Writer/user",
+        Some("ca.desrt.dconf.Writer"),
+        "Read",
+        &"/org/gnome/shell/favorite-apps",
+    );
+    let Ok(repl) = reply else { return Vec::new() };
+
+    let Ok((variant,)): Result<(zbus::zvariant::OwnedValue,), _> = repl.body().deserialize() else {
+        return Vec::new();
+    };
+
+    let Ok(str_val): Result<&str, _> = variant.downcast_ref() else {
+        return Vec::new();
+    };
+
+    let clean = str_val.trim();
+    let clean = clean.strip_prefix('[').unwrap_or(clean);
+    let clean = clean.strip_suffix(']').unwrap_or(clean);
+
+    let mut list = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    for c in clean.chars() {
+        if c == '\'' || c == '"' {
+            in_quotes = !in_quotes;
+            if !in_quotes && !current.is_empty() {
+                list.push(std::mem::take(&mut current));
             }
+        } else if in_quotes {
+            current.push(c);
         }
-        return list;
     }
-    Vec::new()
+    list
 }
 
 fn set_favorites(favs: &[String]) {
     let formatted = format!("[{}]", favs.iter().map(|s| format!("'{}'", s)).collect::<Vec<_>>().join(", "));
-    let _ = Command::new("gsettings")
-        .args(&["set", "org.gnome.shell", "favorite-apps", &formatted])
-        .status();
+
+    let conn = match zbus::blocking::Connection::session() {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    let _ = conn.call_method(
+        Some("ca.desrt.dconf"),
+        "/ca/desrt/dconf/Writer/user",
+        Some("ca.desrt.dconf.Writer"),
+        "Write",
+        &("/org/gnome/shell/favorite-apps", zbus::zvariant::Value::Str(formatted.into())),
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn thumb_generates_scaled_from_real_image() {
+        let url = "file:///usr/share/backgrounds/pulsar-os-tahoe.png";
+        let pb = generate_thumb_pixbuf(url, 48);
+        assert!(pb.is_some(), "el pixbuf de la imagen debería generarse");
+        let p = pb.unwrap();
+        assert!(p.width() > 0 && p.height() > 0);
+        assert!(p.width() <= 48 && p.height() <= 48, "debe caber en 48px: {}x{}", p.width(), p.height());
+    }
+
+    #[test]
+    fn thumb_generates_from_real_pdf() {
+        let url = "file:///usr/share/doc/glm/manual.pdf";
+        if std::path::Path::new(url.trim_start_matches("file://")).exists() {
+            let pb = generate_thumb_pixbuf(url, 48);
+            assert!(pb.is_some(), "el pixbuf del PDF debería generarse");
+        }
+    }
+
+    #[test]
+    fn thumb_rejects_unsupported_files() {
+        let pb = generate_thumb_pixbuf("file:///etc/hostname", 48);
+        assert!(pb.is_none());
+    }
+
+    #[test]
+    fn thumb_detects_extensions() {
+        assert!(is_image_file("file:///tmp/a.PNG"));
+        assert!(is_pdf_file("file:///tmp/a.pdf"));
+        assert!(is_video_file("file:///tmp/a.Mp4"));
+        assert!(!is_image_file("file:///tmp/a.txt"));
+    }
 }

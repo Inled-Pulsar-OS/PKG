@@ -1061,6 +1061,7 @@ name = "pulsaros-spotlight"
 version = "2.0.0"
 dependencies = [
  "dirs",
+ "gdk-pixbuf",
  "gtk4",
  "lazy_static",
  "libadwaita",

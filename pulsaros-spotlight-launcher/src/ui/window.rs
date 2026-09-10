@@ -23,7 +23,7 @@ const CATEGORIES: &[(&str, &str)] = &[
     ("web", "Web"),
 ];
 
-const DEBOUNCE_MS: u64 = 150;
+const DEBOUNCE_MS: u64 = 80;
 
 pub struct SpotlightWindow {
     window: gtk4::ApplicationWindow,
@@ -36,6 +36,7 @@ pub struct SpotlightWindow {
     current_dir: Rc<RefCell<Option<String>>>,
     debounce_id: Rc<RefCell<Option<glib::SourceId>>>,
     search_seq: Rc<RefCell<u64>>,
+    last_typed: Rc<RefCell<Option<std::time::Instant>>>,
     category_buttons: HashMap<String, gtk4::ToggleButton>,
 
     indexing_revealer: gtk4::Revealer,
@@ -321,6 +322,7 @@ impl SpotlightWindow {
             current_dir,
             debounce_id: Rc::new(RefCell::new(None)),
             search_seq: Rc::new(RefCell::new(0)),
+            last_typed: Rc::new(RefCell::new(None)),
             category_buttons,
             indexing_revealer,
             indexing_label,
@@ -476,6 +478,8 @@ impl SpotlightWindow {
     }
 
     fn on_search_changed(self: &Rc<Self>) {
+        *self.last_typed.borrow_mut() = Some(std::time::Instant::now());
+
         if let Some(id) = self.debounce_id.borrow_mut().take() {
             id.remove();
         }
@@ -584,6 +588,31 @@ fn browse_directory(&self, path_str: &str, filter: &str) -> Vec<SearchResult> {
     }
 
     fn on_key_pressed(&self, keyval: gdk::Key, state: gdk::ModifierType) -> glib::Propagation {
+        // While the context menu is open, route keys to it first. The window
+        // key controller runs in Capture phase, so without this the arrows
+        // would move the result selection behind the popover.
+        if self.result_view.context_menu_is_open() {
+            match keyval {
+                gdk::Key::Up => {
+                    self.result_view.context_menu_step(false);
+                    return glib::Propagation::Stop;
+                }
+                gdk::Key::Down => {
+                    self.result_view.context_menu_step(true);
+                    return glib::Propagation::Stop;
+                }
+                gdk::Key::Return | gdk::Key::KP_Enter => {
+                    self.result_view.context_menu_activate();
+                    return glib::Propagation::Stop;
+                }
+                gdk::Key::Escape => {
+                    self.result_view.context_menu_close();
+                    return glib::Propagation::Stop;
+                }
+                _ => {}
+            }
+        }
+
         if keyval == gdk::Key::Escape {
             if self.current_dir.borrow().is_some() {
                 *self.current_dir.borrow_mut() = None;
@@ -658,6 +687,33 @@ fn browse_directory(&self, path_str: &str, filter: &str) -> Vec<SearchResult> {
             if self.result_view.activate_selected() {
                 return glib::Propagation::Stop;
             }
+        }
+
+        // Space opens context menu only when navigating results (not typing).
+        // When the search entry has focus, Space propagates normally as a character.
+        if keyval == gdk::Key::space {
+            if self.search_entry.has_focus() {
+                return glib::Propagation::Proceed;
+            }
+            // Grace period: right after typing, Space should keep adding to the
+            // query instead of jumping to the context menu (avoids accidental
+            // menus while building a multi-word search).
+            let recently_typed = self
+                .last_typed
+                .borrow()
+                .as_ref()
+                .map(|t| t.elapsed() < Duration::from_millis(2500))
+                .unwrap_or(false);
+            if recently_typed {
+                let mut text = self.search_entry.text().to_string();
+                text.push(' ');
+                self.search_entry.set_text(&text);
+                self.search_entry.set_position(text.chars().count() as i32);
+                self.search_entry.grab_focus();
+                return glib::Propagation::Stop;
+            }
+            self.result_view.show_context_menu_for_selected();
+            return glib::Propagation::Stop;
         }
 
         // Backspace on empty: ascend directory

@@ -183,10 +183,9 @@ impl SearchBackend {
         F: Fn(Vec<SearchResult>) + 'static,
     {
         let query = query.to_string();
-
         let (sender, receiver) = std::sync::mpsc::channel::<Vec<SearchResult>>();
 
-        gtk4::glib::idle_add_local(move || {
+        gtk4::glib::timeout_add_local(std::time::Duration::from_millis(1), move || {
             match receiver.try_recv() {
                 Ok(results) => {
                     callback(results);
@@ -320,8 +319,8 @@ impl SearchBackend {
         let sparql = self.build_query(&query, &category, limit);
 
         let (sender, receiver) = std::sync::mpsc::channel::<Vec<SearchResult>>();
-        
-        gtk4::glib::idle_add_local(move || {
+
+        gtk4::glib::timeout_add_local(std::time::Duration::from_millis(1), move || {
             match receiver.try_recv() {
                 Ok(results) => {
                     callback(results);
@@ -431,7 +430,7 @@ fn execute_sparql_external(sparql: &str) -> Vec<SearchResult> {
         }
     }
 
-    results.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+    results.sort_unstable_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
     results
 }
 

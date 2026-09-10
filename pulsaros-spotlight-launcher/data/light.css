@@ -60,12 +60,26 @@
     color: #1c1c1e;
 }
 
-.spotlight-window.light .ctx-menu-btn:hover {
-    background-color: rgba(0, 122, 255, 0.15);
+.spotlight-window.light .ctx-menu-btn:hover,
+.spotlight-window.light .ctx-menu-btn:focus,
+.spotlight-window.light .ctx-menu-btn.ctx-menu-btn-selected {
+    background-color: rgba(0, 122, 255, 0.22);
+    box-shadow: 0 0 0 1px rgba(0, 122, 255, 0.35),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.6),
+                0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
 .spotlight-window.light .ctx-menu-btn-danger {
     color: #ff3b30;
+}
+
+.spotlight-window.light .ctx-menu-btn-danger:hover,
+.spotlight-window.light .ctx-menu-btn-danger:focus,
+.spotlight-window.light .ctx-menu-btn-danger.ctx-menu-btn-selected {
+    background-color: rgba(255, 59, 48, 0.18);
+    box-shadow: 0 0 0 1px rgba(255, 59, 48, 0.35),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.6),
+                0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
 .spotlight-window.light .uninstall-progress {

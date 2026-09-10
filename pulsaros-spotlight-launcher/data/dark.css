@@ -93,16 +93,26 @@
     color: #ffffff;
 }
 
-.ctx-menu-btn:hover {
-    background-color: rgba(10, 132, 255, 0.20);
+.ctx-menu-btn:hover,
+.ctx-menu-btn:focus,
+.ctx-menu-btn-selected {
+    background-color: rgba(10, 132, 255, 0.28);
+    box-shadow: 0 0 0 1px rgba(10, 132, 255, 0.35),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+                0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 .ctx-menu-btn-danger {
     color: #ff453a;
 }
 
-.ctx-menu-btn-danger:hover {
-    background-color: rgba(255, 69, 58, 0.15);
+.ctx-menu-btn-danger:hover,
+.ctx-menu-btn-danger:focus,
+.ctx-menu-btn-danger.ctx-menu-btn-selected {
+    background-color: rgba(255, 69, 58, 0.20);
+    box-shadow: 0 0 0 1px rgba(255, 69, 58, 0.35),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+                0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 .uninstall-progress {

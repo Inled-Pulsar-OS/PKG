@@ -76,6 +76,11 @@ fn main() -> gtk4::glib::ExitCode {
             // Apply CSS
             load_css();
 
+            // Pre-warm icon cache in background so first search is fast
+            std::thread::spawn(|| {
+                crate::ui::results::warm_icon_cache();
+            });
+
             let config = SpotlightConfig::load();
             let clipboard_mgr = ClipboardManager::new(config.clone());
             let backend = SearchBackend::new(Some(clipboard_mgr.clone()));
