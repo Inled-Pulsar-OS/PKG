@@ -54,6 +54,19 @@ if [ -d "/boot/efi/EFI/refind" ]; then
         sed -i 's/^enable_mouse.*/enable_mouse/' "$REFIND_CONF"
         grep -q "^enable_mouse" "$REFIND_CONF" || echo "enable_mouse" >> "$REFIND_CONF"
 
+        # Enable auto-scan of every visible EFI bootloader (critical for
+        # dual boot). A plain refind-install leaves scanfor commented out
+        # (defaults to internal only) and a previous Pulsar install may have
+        # left scanfor manual / dont_scan* lines that hide other OSes.
+        # Habilitar el auto-escaneo de bootloaders EFI visibles (clave en
+        # dual boot): refind-install deja scanfor comentado (solo interno)
+        # y una instalación previa pudo dejar scanfor manual / dont_scan*.
+        sed -i 's/^#scanfor .*/scanfor internal,external,optical,biosexternal/' "$REFIND_CONF"
+        sed -i 's/^scanfor .*/scanfor internal,external,optical,biosexternal/' "$REFIND_CONF"
+        sed -i '/^dont_scan_dirs /d' "$REFIND_CONF"
+        sed -i '/^dont_scan_files /d' "$REFIND_CONF"
+        grep -q "^scanfor " "$REFIND_CONF" || echo "scanfor internal,external,optical,biosexternal" >> "$REFIND_CONF"
+
         # Include theme / Incluir el tema
     fi
 else

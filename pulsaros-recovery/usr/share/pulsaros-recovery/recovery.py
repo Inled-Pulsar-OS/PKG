@@ -4007,13 +4007,28 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             except Exception:
                                 pass
 
-                        scanfor_mode = "scanfor manual\ndont_scan_dirs EFI,boot,recovery,live,@,@/boot,themes,drivers_x64\ndont_scan_files *"
+                        # In a dual-boot setup rEFInd MUST be able to scan and
+                        # automatically discover the other OS bootloader(s)
+                        # (Windows Boot Manager, another Linux install, other
+                        # ESPs...). Use auto-scan mode so they show up. On a
+                        # single-OS install keep scanfor manual so rEFInd only
+                        # presents the explicit curated Pulsar entries below.
+                        # En dual boot rEFInd debe poder escanear y detectar
+                        # automáticamente los bootloaders de otros sistemas;
+                        # en una instalación individual se mantiene el modo
+                        # manual con solo las entradas curadas de Pulsar.
+                        if has_dual_boot:
+                            scanfor_mode = "scanfor internal,external,optical,biosexternal"
+                        else:
+                            scanfor_mode = "scanfor manual\ndont_scan_dirs EFI,boot,recovery,live,@,@/boot,themes,drivers_x64\ndont_scan_files *"
                         extra_entries_str = ("\n" + "\n".join(other_os_entries)) if other_os_entries else ""
 
                         menu_block = (
                             f"\n{MENU_BEGIN}\n"
-                            "# Only show our explicit curated entries: exactly\n"
-                            "# 'Pulsar OS' and 'Pulsar OS Recovery'.\n"
+                            "# Show the explicit curated entries below. In dual-boot\n"
+                            "# setups rEFInd additionally auto-scans for other OSes.\n"
+                            "# Solo se muestran las entradas curadas; en dual boot rEFInd\n"
+                            "# además auto-escanea en busca de otros sistemas.\n"
                             f"{scanfor_mode}\n"
                             "default_selection 1\n"
                             "\n"

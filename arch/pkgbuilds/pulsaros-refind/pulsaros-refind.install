@@ -7,6 +7,19 @@ post_install() {
     if command -v refind-install >/dev/null 2>&1 && grep -q " /boot/efi " /proc/mounts; then
         refind-install 2>/dev/null || true
     fi
+# Enable auto-scan of every visible EFI bootloader (critical for dual boot).
+    # refind-install leaves scanfor commented out (internal only) and a previous
+    # Pulsar install may have left scanfor manual / dont_scan* hiding other OSes.
+    for rc in /boot/efi/EFI/refind/refind.conf /boot/efi/EFI/BOOT/refind.conf
+    do
+        if [ -f "$rc" ]; then
+            sed -i 's/^#scanfor .*/scanfor internal,external,optical,biosexternal/' "$rc"
+            sed -i 's/^scanfor .*/scanfor internal,external,optical,biosexternal/' "$rc"
+            sed -i '/^dont_scan_dirs /d' "$rc"
+            sed -i '/^dont_scan_files /d' "$rc"
+            grep -q "^scanfor " "$rc" || echo "scanfor internal,external,optical,biosexternal" >> "$rc"
+        fi
+    done
 }
 
 post_upgrade() {

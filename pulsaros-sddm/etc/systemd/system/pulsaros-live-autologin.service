@@ -2,11 +2,22 @@
 Description=Clean SDDM Autologin on Installed System
 DefaultDependencies=no
 After=local-fs.target pulsar-ootb.service
-Before=sddm.service
+Before=display-manager.service sddm.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'if ! grep -q -E "boot=live|rootfstype=9p|archisobasedir|archisolabel|img_dev|live-media" /proc/cmdline && [ ! -d /run/archiso ] && [ ! -d /run/live ] && [ ! -d /lib/live ]; then if [ -f /etc/sddm.conf.d/autologin.conf ] && grep -q "User=live" /etc/sddm.conf.d/autologin.conf && [ ! -f /etc/pulsar-need-setup ]; then rm -f /etc/sddm.conf.d/autologin.conf; fi; else systemctl mask plymouth-quit.service plymouth-quit-wait.service 2>/dev/null || true; fi'
+# On the installed system decide by real state instead of by the sentinel
+# file alone, so the OOTB auto-login no longer depends on sibling-service
+# ordering: while no real (non-live) user exists we KEEP/ensure the live
+# autologin so the first boot lands directly on the OOTB Setup Assistant;
+# once a real user exists we drop any leftover live autologin. On the live
+# session we mask plymouth so the splash lasts the whole boot.
+# En el sistema instalado se decide por el estado real (¿existe ya un usuario
+# real?) en lugar de depender solo del sentinel: mientras no exista un usuario
+# real se mantiene/garantiza el autologin de 'live' para que el primer arranque
+# entre directo al Setup Assistant OOTB; cuando ya existe un usuario real se
+# elimina el autologin de 'live' residual. En el live se enmascara plymouth.
+ExecStart=/bin/bash -c 'if ! grep -q -E "boot=live|rootfstype=9p|archisobasedir|archisolabel|img_dev|live-media" /proc/cmdline && [ ! -d /run/archiso ] && [ ! -d /run/live ] && [ ! -d /lib/live ]; then if ! awk -F: '\''$3 >= 1000 && $3 != 65534 && $1 != "live" {print $1}'\'' /etc/passwd | grep -q .; then mkdir -p /etc/sddm.conf.d && (grep -q "^User=live" /etc/sddm.conf.d/autologin.conf 2>/dev/null || printf "[Autologin]\nUser=live\nSession=gnome\n" > /etc/sddm.conf.d/autologin.conf); else [ -f /etc/sddm.conf.d/autologin.conf ] && grep -q "^User=live" /etc/sddm.conf.d/autologin.conf && rm -f /etc/sddm.conf.d/autologin.conf; fi; else systemctl mask plymouth-quit.service plymouth-quit-wait.service 2>/dev/null || true; fi'
 RemainAfterExit=yes
 
 [Install]
