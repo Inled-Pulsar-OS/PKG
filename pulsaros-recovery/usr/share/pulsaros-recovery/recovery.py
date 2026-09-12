@@ -4010,15 +4010,28 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         # In a dual-boot setup rEFInd MUST be able to scan and
                         # automatically discover the other OS bootloader(s)
                         # (Windows Boot Manager, another Linux install, other
-                        # ESPs...). Use auto-scan mode so they show up. On a
-                        # single-OS install keep scanfor manual so rEFInd only
-                        # presents the explicit curated Pulsar entries below.
-                        # En dual boot rEFInd debe poder escanear y detectar
-                        # automáticamente los bootloaders de otros sistemas;
-                        # en una instalación individual se mantiene el modo
-                        # manual con solo las entradas curadas de Pulsar.
+                        # ESPs...). Use auto-scan mode so they show up, but keep
+                        # OUR Pulsar entries FIXED: we exclude our own root
+                        # volume (PULSAR_OS) and our recovery kernel copies from
+                        # auto-detection, so the curated menu entries below (the
+                        # only ones carrying the resume= parameters) remain the
+                        # only Pulsar entries. scanfor only scans internal and
+                        # external disks (no 'bios'/'biosexternal'/'optical'),
+                        # avoiding the legacy/CSM notice and "Hit any key" pause.
+                        # En dual boot rEFInd debe auto-escaneo de otros sistemas,
+                        # pero con nuestras entradas FIJAS: se excluyen nuestro
+                        # volumen raíz (PULSAR_OS) y las copias del kernel de
+                        # recovery del auto-escaneo, de modo que las entradas
+                        # curadas siguientes (únicas con los parámetros resume=)
+                        # son las únicas de Pulsar. scanfor solo escanea discos
+                        # internos y externos (sin 'bios'/'biosexternal'/'optical'),
+                        # evitando el aviso de legacy/CSM y la pausa "Hit any key".
                         if has_dual_boot:
-                            scanfor_mode = "scanfor internal,external,optical,biosexternal"
+                            scanfor_mode = (
+                                "scanfor internal,external\n"
+                                "dont_scan_volumes PULSAR_OS\n"
+                                "dont_scan_files vmlinuz,vmlinuz.efi,vmlinuz-recovery,vmlinuz-recovery.efi"
+                            )
                         else:
                             scanfor_mode = "scanfor manual\ndont_scan_dirs EFI,boot,recovery,live,@,@/boot,themes,drivers_x64\ndont_scan_files *"
                         extra_entries_str = ("\n" + "\n".join(other_os_entries)) if other_os_entries else ""

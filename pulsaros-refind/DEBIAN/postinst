@@ -58,14 +58,24 @@ if [ -d "/boot/efi/EFI/refind" ]; then
         # dual boot). A plain refind-install leaves scanfor commented out
         # (defaults to internal only) and a previous Pulsar install may have
         # left scanfor manual / dont_scan* lines that hide other OSes.
-        # Habilitar el auto-escaneo de bootloaders EFI visibles (clave en
-        # dual boot): refind-install deja scanfor comentado (solo interno)
-        # y una instalación previa pudo dejar scanfor manual / dont_scan*.
-        sed -i 's/^#scanfor .*/scanfor internal,external,optical,biosexternal/' "$REFIND_CONF"
-        sed -i 's/^scanfor .*/scanfor internal,external,optical,biosexternal/' "$REFIND_CONF"
+        # We keep OUR Pulsar entries fixed: exclude our root volume and the
+        # recovery kernel copies from auto-detection, so the curated rEFInd
+        # menu entries (with the resume= parameters) are the only Pulsar ones.
+        # scanfor only scans internal/external disks (no bios/biosexternal/
+        # optical), avoiding the legacy/CSM notice and "Hit any key" pause.
+        # Habilitar el auto-escaneo de bootloaders EFI visibles (clave en dual
+        # boot): refind-install deja scanfor comentado (solo interno) y una
+        # instalación previa pudo dejar scanfor manual / dont_scan* que ocultan
+        # otros sistemas. Se mantienen FIJAS las entradas de Pulsar excluyendo
+        # del auto-escaneo nuestro volumen raíz y los kernels de recovery; y el
+        # escaneo es solo de discos internos/externos, sin legacy/CSM.
+        sed -i 's/^#scanfor .*/scanfor internal,external/' "$REFIND_CONF"
+        sed -i 's/^scanfor .*/scanfor internal,external/' "$REFIND_CONF"
         sed -i '/^dont_scan_dirs /d' "$REFIND_CONF"
-        sed -i '/^dont_scan_files /d' "$REFIND_CONF"
-        grep -q "^scanfor " "$REFIND_CONF" || echo "scanfor internal,external,optical,biosexternal" >> "$REFIND_CONF"
+        sed -i '/^dont_scan_files \*$/d' "$REFIND_CONF"
+        grep -q "^scanfor " "$REFIND_CONF" || echo "scanfor internal,external" >> "$REFIND_CONF"
+        grep -q "^dont_scan_volumes " "$REFIND_CONF" || echo "dont_scan_volumes PULSAR_OS" >> "$REFIND_CONF"
+        grep -q "^dont_scan_files .*vmlinuz-recovery" "$REFIND_CONF" || echo "dont_scan_files vmlinuz,vmlinuz.efi,vmlinuz-recovery,vmlinuz-recovery.efi" >> "$REFIND_CONF"
 
         # Include theme / Incluir el tema
     fi
