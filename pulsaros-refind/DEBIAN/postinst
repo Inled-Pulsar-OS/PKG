@@ -69,11 +69,11 @@ if [ -d "/boot/efi/EFI/refind" ]; then
         # otros sistemas. Se mantienen FIJAS las entradas de Pulsar excluyendo
         # del auto-escaneo nuestro volumen raíz y los kernels de recovery; y el
         # escaneo es solo de discos internos/externos, sin legacy/CSM.
-        sed -i 's/^#scanfor .*/scanfor internal,external/' "$REFIND_CONF"
-        sed -i 's/^scanfor .*/scanfor internal,external/' "$REFIND_CONF"
+        sed -i 's/^#scanfor .*/scanfor manual,internal,external/' "$REFIND_CONF"
+        sed -i 's/^scanfor .*/scanfor manual,internal,external/' "$REFIND_CONF"
         sed -i '/^dont_scan_dirs /d' "$REFIND_CONF"
         sed -i '/^dont_scan_files \*$/d' "$REFIND_CONF"
-        grep -q "^scanfor " "$REFIND_CONF" || echo "scanfor internal,external" >> "$REFIND_CONF"
+        grep -q "^scanfor " "$REFIND_CONF" || echo "scanfor manual,internal,external" >> "$REFIND_CONF"
         grep -q "^dont_scan_volumes " "$REFIND_CONF" || echo "dont_scan_volumes PULSAR_OS" >> "$REFIND_CONF"
         grep -q "^dont_scan_files .*vmlinuz-recovery" "$REFIND_CONF" || echo "dont_scan_files vmlinuz,vmlinuz.efi,vmlinuz-recovery,vmlinuz-recovery.efi" >> "$REFIND_CONF"
 

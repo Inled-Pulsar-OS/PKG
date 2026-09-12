@@ -17,11 +17,11 @@ post_install() {
     for rc in /boot/efi/EFI/refind/refind.conf /boot/efi/EFI/BOOT/refind.conf
     do
         if [ -f "$rc" ]; then
-            sed -i 's/^#scanfor .*/scanfor internal,external/' "$rc"
-            sed -i 's/^scanfor .*/scanfor internal,external/' "$rc"
+            sed -i 's/^#scanfor .*/scanfor manual,internal,external/' "$rc"
+            sed -i 's/^scanfor .*/scanfor manual,internal,external/' "$rc"
             sed -i '/^dont_scan_dirs /d' "$rc"
             sed -i '/^dont_scan_files \*$/d' "$rc"
-            grep -q "^scanfor " "$rc" || echo "scanfor internal,external" >> "$rc"
+            grep -q "^scanfor " "$rc" || echo "scanfor manual,internal,external" >> "$rc"
             grep -q "^dont_scan_volumes " "$rc" || echo "dont_scan_volumes PULSAR_OS" >> "$rc"
             grep -q "^dont_scan_files .*vmlinuz-recovery" "$rc" || echo "dont_scan_files vmlinuz,vmlinuz.efi,vmlinuz-recovery,vmlinuz-recovery.efi" >> "$rc"
         fi

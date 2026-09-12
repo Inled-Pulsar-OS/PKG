@@ -4028,7 +4028,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         # evitando el aviso de legacy/CSM y la pausa "Hit any key".
                         if has_dual_boot:
                             scanfor_mode = (
-                                "scanfor internal,external\n"
+                                "scanfor manual,internal,external\n"
                                 "dont_scan_volumes PULSAR_OS\n"
                                 "dont_scan_files vmlinuz,vmlinuz.efi,vmlinuz-recovery,vmlinuz-recovery.efi"
                             )
