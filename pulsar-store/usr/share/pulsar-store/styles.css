@@ -1,78 +1,231 @@
-/* Pulsar Store - Clean Libadwaita Styling */
+/* Pulsar Store - Mac App Store style (theme-independent, fixed dark palette) */
 
-/* Compact Sidebar */
-.sidebar-compact-row {
-    padding: 6px 10px;
+/* Fixed MAS palette: the pages must look identical no matter which system
+   theme is installed, so we force background/foreground colors here. */
+.store-root {
+    background-color: #1e1e20;
+    color: #f2f2f7;
+}
+
+.store-root label,
+.store-root .title-2,
+.store-root .heading,
+.store-root .dim-label {
+    color: #f2f2f7;
+}
+
+.store-root .dim-label {
+    color: alpha(#f2f2f7, 0.55);
+}
+
+/* Sidebar (like MAS source list) */
+.store-sidebar {
+    background-color: #26262a;
+}
+
+/* Sidebar: solo el icono en azul, el texto en color normal */
+.store-sidebar row {
     border-radius: 8px;
-    border: none;
-    outline: none;
-    margin-bottom: 2px;
 }
 
-.sidebar-icon {
-    margin-right: 10px;
+.store-sidebar row image {
+    color: #0a84ff;
 }
 
-.sidebar-label {
+.store-sidebar row label {
+    color: #f2f2f7;
     font-weight: 500;
-    font-size: 0.95rem;
 }
 
-/* App Store Cards (Button itself is the card; no nested box backgrounds on hover) */
+.store-sidebar row:selected {
+    background-color: alpha(#0a84ff, 0.22);
+}
+
+.store-sidebar row:selected label {
+    color: #ffffff;
+}
+
+.store-search {
+    border-radius: 10px;
+    background-color: alpha(#f2f2f7, 0.08);
+    color: #f2f2f7;
+}
+
+/* Section titles: bold, larger, like "Top apps gratis" */
+.store-section-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #f2f2f7;
+    margin-top: 10px;
+}
+
+/* Ranked list rows (number + icon + name + GET button) */
+.store-rank-row {
+    background-color: transparent;
+    border-radius: 10px;
+    padding: 20px 12px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+.store-rank-row:hover {
+    background-color: alpha(#f2f2f7, 0.06);
+}
+
+.store-rank-number {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: alpha(#f2f2f7, 0.6);
+    min-width: 22px;
+}
+
+.store-rank-name {
+    font-weight: 600;
+    color: #f2f2f7;
+}
+
+.store-rank-sub {
+    font-size: 0.85rem;
+    color: alpha(#f2f2f7, 0.55);
+}
+
+.store-rank-sep {
+    color: alpha(#f2f2f7, 0.12);
+}
+
+/* GET pill button */
+.pill-action {
+    border-radius: 9999px;
+    font-weight: 700;
+    font-size: 0.82rem;
+    padding: 4px 18px;
+    min-width: 80px;
+}
+
+button.store-get {
+    background-color: #f2f2f7;
+    color: #0a84ff;
+    border: none;
+}
+
+button.store-get:hover {
+    background-color: #ffffff;
+}
+
+button.store-installed {
+    background-color: alpha(#f2f2f7, 0.12);
+    color: #0a84ff;
+    border: none;
+}
+
+/* Compact tile for grids (search results) */
 button.store-tile {
-    background-color: alpha(@theme_fg_color, 0.04);
+    background-color: transparent;
     border: none;
     outline: none;
     box-shadow: none;
     border-radius: 12px;
-    padding: 12px 16px;
-    min-height: 84px;
+    padding: 10px 12px;
+    min-height: 64px;
     transition: background-color 150ms ease-out;
 }
 
 button.store-tile:hover {
-    background-color: alpha(@theme_fg_color, 0.08);
-    border: none;
-    outline: none;
-    box-shadow: none;
+    background-color: alpha(#f2f2f7, 0.06);
 }
 
+/* App icons: rounded like MAS */
 .app-icon {
     border-radius: 10px;
-    border: none;
 }
 
 .app-icon-detail {
-    border-radius: 16px;
-    border: none;
+    border-radius: 18px;
 }
 
-/* Subtle Letter Avatar Fallback */
+/* Letter avatar fallback */
 .letter-avatar {
     border-radius: 10px;
-    background-color: alpha(@theme_fg_color, 0.08);
-    color: @theme_fg_color;
+    background-color: alpha(#f2f2f7, 0.12);
+    color: #f2f2f7;
     font-weight: 600;
     font-size: 1.15rem;
-    border: none;
 }
 
 .letter-avatar-detail {
-    border-radius: 16px;
-    background-color: alpha(@theme_fg_color, 0.08);
-    color: @theme_fg_color;
+    border-radius: 18px;
+    background-color: alpha(#f2f2f7, 0.12);
+    color: #f2f2f7;
     font-weight: 600;
     font-size: 1.8rem;
-    border: none;
 }
 
+/* ===== Detail page ===== */
+
+/* Hero header: icon left, name + tagline + GET button right */
+.detail-hero {
+    margin-bottom: 6px;
+}
+
+.detail-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #f2f2f7;
+}
+
+.detail-subtitle {
+    font-size: 1rem;
+    color: alpha(#f2f2f7, 0.55);
+}
+
+/* Info bar: horizontal metadata columns with small caps labels */
+.detail-infobar {
+    border-top: 1px solid alpha(#f2f2f7, 0.15);
+    border-bottom: 1px solid alpha(#f2f2f7, 0.15);
+    padding: 10px 0;
+    margin: 10px 0;
+}
+
+.detail-info-col {
+    orientation: vertical;
+}
+
+.detail-info-value {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #f2f2f7;
+}
+
+.detail-info-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: alpha(#f2f2f7, 0.45);
+}
+
+/* Sections on detail page */
+.detail-section-title {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #f2f2f7;
+    margin-top: 12px;
+}
+
+.detail-body {
+    color: #f2f2f7;
+}
+
+.detail-link {
+    color: #0a84ff;
+}
+
+/* Badges */
 .tag-badge {
     font-size: 0.68rem;
     font-weight: 700;
     padding: 2px 7px;
     border-radius: 4px;
-    background-color: alpha(@theme_fg_color, 0.07);
-    color: @theme_fg_color;
+    background-color: alpha(#f2f2f7, 0.1);
+    color: #f2f2f7;
 }
 
 .score-badge {
@@ -80,42 +233,35 @@ button.store-tile:hover {
     font-weight: 700;
     padding: 2px 7px;
     border-radius: 4px;
-    background-color: alpha(#2ec27e, 0.15);
-    color: #26a269;
+    background-color: alpha(#30d158, 0.18);
+    color: #30d158;
 }
 
-.pill-action {
-    border-radius: 9999px;
-    font-weight: 600;
-    font-size: 0.82rem;
-    padding: 4px 14px;
-    min-width: 72px;
-}
-
-/* Announcement Banner at bottom of Store */
+/* Announcement banner */
 .announcement-card {
-    background-color: alpha(@theme_fg_color, 0.035);
-    border: 1px dashed alpha(@theme_fg_color, 0.15);
+    background-color: alpha(#f2f2f7, 0.05);
+    border: 1px dashed alpha(#f2f2f7, 0.2);
     border-radius: 14px;
     padding: 18px 22px;
     margin-top: 14px;
     margin-bottom: 8px;
 }
 
-/* Success Popup Animation & Badges */
+/* Success popup */
 .success-check-badge {
-    background-color: alpha(#26a269, 0.15);
-    color: #26a269;
+    background-color: alpha(#30d158, 0.18);
+    color: #30d158;
     border-radius: 9999px;
     padding: 16px;
     margin-bottom: 8px;
 }
 
 .doc-preview-box {
-    background-color: alpha(@theme_fg_color, 0.035);
-    border: 1px solid alpha(@theme_fg_color, 0.08);
+    background-color: alpha(#f2f2f7, 0.05);
+    border: 1px solid alpha(#f2f2f7, 0.1);
     border-radius: 10px;
     padding: 14px 16px;
     font-family: monospace;
     font-size: 0.88rem;
+    color: #f2f2f7;
 }

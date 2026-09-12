@@ -49,10 +49,24 @@ post_install() {
     systemctl enable docker.socket 2>/dev/null || true
     systemctl enable vboxservice.service 2>/dev/null || true
     systemctl enable vmtoolsd.service 2>/dev/null || true
+    systemctl enable pulsar-live-nopasswd.service 2>/dev/null || true
+    mkdir -p /etc/sudoers.d
 
     # Reduce systemd timeouts
     sed -i 's/^#*DefaultTimeoutStopSec=.*/DefaultTimeoutStopSec=10s/' /etc/systemd/system.conf 2>/dev/null || true
     sed -i 's/^#*DefaultTimeoutStopSec=.*/DefaultTimeoutStopSec=10s/' /etc/systemd/user.conf 2>/dev/null || true
+
+    # Install Homebrew (Linuxbrew) out of the box, mirroring macOS.
+    # Non-interactive; never fails the package install if the network is down.
+    echo "Installing Homebrew (Linuxbrew)..."
+    if [ ! -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
+        mkdir -p /home/linuxbrew
+        NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
+            || echo "Warning: Homebrew could not be installed right now; users can install it later."
+    fi
+    if [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
+        chown -R linuxbrew:linuxbrew /home/linuxbrew/.linuxbrew 2>/dev/null || true
+    fi
 
     # Ensure pacman keyring directory permissions are readable for non-root users
     if [ -d /etc/pacman.d/gnupg ]; then

@@ -1,6 +1,6 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsar-store
-pkgver=1.0.12
+pkgver=1.0.15
 pkgrel=1
 pkgdesc="Unified App Store and Ecosystem Center for Pulsar OS"
 arch=(any)

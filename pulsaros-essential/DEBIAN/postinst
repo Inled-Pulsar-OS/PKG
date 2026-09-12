@@ -70,6 +70,27 @@ fi
 # Home directory permissions are dynamically managed by live-config during boot
 # Los permisos del directorio home son gestionados dinámicamente por live-config en el arranque
 
+# ==============================================================================
+# INSTALACIÓN DE HOMEBREW (LINUXBREW) DE SERIE / FACTORY-INSTALLED HOMEBREW
+# ==============================================================================
+# English: Install Homebrew (Linuxbrew) system-wide so Pulsar OS ships with
+# `brew` available out of the box, mirroring the macOS experience.
+# Español: Instalar Homebrew (Linuxbrew) a nivel de sistema para que Pulsar OS
+# incluya `brew` de serie, replicando la experiencia de macOS.
+echo "🍺 Instalando Homebrew (Linuxbrew) de serie..."
+if [ ! -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
+    mkdir -p /home/linuxbrew
+    # Non-interactive install; falls back gracefully if the network or GitHub
+    # is unreachable so the package installation never fails.
+    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
+        || echo "⚠️ Advertencia: No se pudo instalar Homebrew ahora; el usuario podrá hacerlo después."
+fi
+if [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
+    # Update PATH cache and ensure brew owns its prefix
+    chown -R linuxbrew:linuxbrew /home/linuxbrew/.linuxbrew 2>/dev/null || true
+    /home/linuxbrew/.linuxbrew/bin/brew --version || true
+fi
+
 # English: Register Flathub repository globally
 # Español: Registrar el repositorio de Flathub de forma global
 echo "📥 Configurando repositorio de Flathub..."
@@ -105,6 +126,18 @@ if command -v systemctl >/dev/null 2>&1; then
     systemctl enable docker.service || true
     systemctl enable docker.socket || true
 fi
+
+# English: Enable the live passwordless bypass: grants NOPASSWD sudo + a polkit
+# rule for the 'live' user only during LIVE boot and removes them on installed
+# systems, so the live session never prompts for a password (nor for the admin
+# one). Español: Habilitar el bypass sin contraseña del live: otorga sudo NOPASSWD
+# y una regla polkit al usuario 'live' solo durante el arranque LIVE y los
+# retira en el sistema instalado, de modo que el live nunca pide contraseña.
+echo "🔓 Habilitando acceso root sin contraseña en la sesión live..."
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl enable pulsar-live-nopasswd.service || true
+fi
+mkdir -p /etc/sudoers.d
 
 # English: Disable default Calamares desktop icon autostart in the live environment
 # Español: Desactivar el autostart del icono de escritorio por defecto de Calamares en la sesión live

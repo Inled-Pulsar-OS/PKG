@@ -44,6 +44,7 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
 
         self.load_css()
         self.build_ui()
+        self.apply_fixed_theme()
 
         threading.Thread(target=self._initial_load, daemon=True).start()
 
@@ -60,6 +61,54 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
 
     def on_log_message(self, msg: str):
         print(f"[PulsarStore] {msg}")
+
+    def apply_fixed_theme(self):
+        """English: Force a fixed dark 'Mac App Store' look regardless of the
+        installed system theme by overriding the GTK theme colors for this app.
+        Español: Fuerza un aspecto fijo tipo 'Mac App Store' (oscuro) sin importar
+        el tema del sistema, sobrescribiendo los colores GTK de esta app."""
+        css = b"""
+        window.unscaled, dialog.message, window.dialog {
+            background-color: #1e1e20;
+            color: #f2f2f7;
+        }
+        headerbar {
+            background-color: #26262a;
+            color: #f2f2f7;
+        }
+        headerbar button {
+            color: #f2f2f7;
+        }
+        .navigation-sidebar {
+            background-color: #26262a;
+        }
+        .navigation-sidebar > row {
+            color: #f2f2f7;
+        }
+        .navigation-sidebar > row image {
+            color: #0a84ff;
+        }
+        .navigation-sidebar > row:selected {
+            background-color: alpha(#0a84ff, 0.22);
+        }
+        .navigation-sidebar > row:selected label {
+            color: #ffffff;
+        }
+        scrollbar {
+            background: transparent;
+        }
+        """
+        provider = Gtk.CssProvider()
+        try:
+            provider.load_from_data(css)
+        except TypeError:
+            provider.load_from_data(css.decode("utf-8"))
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(),
+            provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1
+        )
+        self.add_css_class("store-root")
 
     def build_ui(self):
         self.toast_overlay = Adw.ToastOverlay()
@@ -83,6 +132,7 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
         self.search_entry = Gtk.SearchEntry(placeholder_text="Search apps, extensions, Sayri AI...")
         self.search_entry.set_hexpand(True)
         self.search_entry.set_max_width_chars(32)
+        self.search_entry.add_css_class("store-search")
         self.search_entry.connect("search-changed", self.on_search_changed)
         self.header_bar.set_title_widget(self.search_entry)
 
@@ -103,6 +153,7 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
         sidebar_box.set_margin_bottom(8)
         sidebar_box.set_margin_start(8)
         sidebar_box.set_margin_end(8)
+        sidebar_box.add_css_class("store-sidebar")
         sidebar_page.set_child(sidebar_box)
 
         self.sidebar_list = Gtk.ListBox()
@@ -338,7 +389,7 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
         title_text = cat_titles.get(self.current_category, self.current_category.capitalize())
 
         header_lbl = Gtk.Label(label=title_text)
-        header_lbl.add_css_class("title-2")
+        header_lbl.add_css_class("store-section-title")
         header_lbl.set_halign(Gtk.Align.START)
         self.browser_box.append(header_lbl)
 
@@ -350,24 +401,25 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
             self.browser_box.append(status)
             return
 
-        grid = Gtk.Grid()
-        grid.set_column_spacing(14)
-        grid.set_row_spacing(14)
-        grid.set_column_homogeneous(True)
-        grid.set_row_homogeneous(False)
-        grid.set_valign(Gtk.Align.START)
-        grid.set_vexpand(False)
-        self.browser_box.append(grid)
+        # Mac App Store home: ranked two-column lists (1..N with GET buttons)
+        columns = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=28)
+        columns.set_homogeneous(True)
+        columns.set_hexpand(True)
+        self.browser_box.append(columns)
 
-        col = 0
-        row_idx = 0
-        for item in items:
-            card = self.create_item_tile(item)
-            grid.attach(card, col, row_idx, 1, 1)
-            col += 1
-            if col >= 2:
-                col = 0
-                row_idx += 1
+        half = (len(items) + 1) // 2
+        for col_idx, chunk in enumerate((items[:half], items[half:])):
+            list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+            list_box.set_hexpand(True)
+            list_box.set_valign(Gtk.Align.START)
+            columns.append(list_box)
+
+            for rank, item in enumerate(chunk, start=(1 if col_idx == 0 else half + 1)):
+                if col_idx == 1 and list_box.get_first_child():
+                    sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+                    sep.add_css_class("store-rank-sep")
+                    list_box.append(sep)
+                list_box.append(self.create_ranked_row(item, rank))
 
         # Announcement / Ad Space at bottom of Main / Discover page
         if self.current_category in ("discover", "apps"):
@@ -410,7 +462,7 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
         self.clear_container(self.browser_box)
 
         header_lbl = Gtk.Label(label=f"Results for '{query}'")
-        header_lbl.add_css_class("title-2")
+        header_lbl.add_css_class("store-section-title")
         header_lbl.set_halign(Gtk.Align.START)
         self.browser_box.append(header_lbl)
 
@@ -423,24 +475,80 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
             self.browser_box.append(status)
             return
 
-        grid = Gtk.Grid()
-        grid.set_column_spacing(14)
-        grid.set_row_spacing(14)
-        grid.set_column_homogeneous(True)
-        grid.set_row_homogeneous(False)
-        grid.set_valign(Gtk.Align.START)
-        grid.set_vexpand(False)
-        self.browser_box.append(grid)
+        list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        list_box.set_valign(Gtk.Align.START)
+        self.browser_box.append(list_box)
 
-        col = 0
-        row_idx = 0
-        for item in results:
-            card = self.create_item_tile(item)
-            grid.attach(card, col, row_idx, 1, 1)
-            col += 1
-            if col >= 2:
-                col = 0
-                row_idx += 1
+        for rank, item in enumerate(results, start=1):
+            if list_box.get_first_child():
+                sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+                sep.add_css_class("store-rank-sep")
+                list_box.append(sep)
+            list_box.append(self.create_ranked_row(item, rank))
+
+    def create_ranked_row(self, item: Dict[str, Any], rank: int) -> Gtk.Widget:
+        """English: A Mac App Store style ranked row: number, icon, name and
+        summary on the left, GET pill button on the right.
+        Español: Una fila numerada estilo Mac App Store: número, icono, nombre y
+        resumen a la izquierda, botón píldora Obtener a la derecha."""
+        item_id = item.get("id", "")
+        row_btn = Gtk.Button()
+        row_btn.add_css_class("store-rank-row")
+        row_btn.set_has_frame(False)
+        row_btn.set_halign(Gtk.Align.FILL)
+
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        row_btn.set_child(hbox)
+
+        rank_lbl = Gtk.Label(label=str(rank))
+        rank_lbl.add_css_class("store-rank-number")
+        rank_lbl.set_valign(Gtk.Align.CENTER)
+        hbox.append(rank_lbl)
+
+        icon_widget = self.get_item_icon_widget(item, size=44)
+        icon_widget.set_valign(Gtk.Align.CENTER)
+        hbox.append(icon_widget)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+        vbox.set_hexpand(True)
+        vbox.set_valign(Gtk.Align.CENTER)
+        hbox.append(vbox)
+
+        name_lbl = Gtk.Label(label=item.get("name", "Unnamed"))
+        name_lbl.add_css_class("store-rank-name")
+        name_lbl.set_halign(Gtk.Align.START)
+        name_lbl.set_ellipsize(3)
+        vbox.append(name_lbl)
+
+        sub_text = item.get("summary") or item.get("description", "")
+        sub_lbl = Gtk.Label(label=sub_text)
+        sub_lbl.add_css_class("store-rank-sub")
+        sub_lbl.set_halign(Gtk.Align.START)
+        sub_lbl.set_ellipsize(3)
+        vbox.append(sub_lbl)
+
+        if item_id in self.active_operations:
+            spinner = Gtk.Spinner(spinning=True)
+            spinner.set_size_request(20, 20)
+            spinner.set_valign(Gtk.Align.CENTER)
+            hbox.append(spinner)
+        else:
+            is_inst = self.core.is_installed(item)
+            action_btn = Gtk.Button()
+            action_btn.add_css_class("pill-action")
+            action_btn.set_valign(Gtk.Align.CENTER)
+            if is_inst:
+                action_btn.set_label("Installed")
+                action_btn.add_css_class("store-installed")
+                action_btn.set_sensitive(False)
+            else:
+                action_btn.set_label("GET")
+                action_btn.add_css_class("store-get")
+                action_btn.connect("clicked", lambda b, it=item: self.perform_action(it, "install"))
+            hbox.append(action_btn)
+
+        row_btn.connect("clicked", lambda b, it=item: self.open_details(it))
+        return row_btn
 
     def create_item_tile(self, item: Dict[str, Any]) -> Gtk.Widget:
         item_id = item.get("id", "")
@@ -531,31 +639,38 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
         self.btn_back.set_visible(True)
         self.content_stack.set_visible_child_name("details")
 
-        # Top Header
+        # ===== Hero header (Mac App Store style): icon, name, tagline, GET =====
         top_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18)
+        top_box.add_css_class("detail-hero")
         self.detail_box.append(top_box)
 
-        icon_widget = self.get_item_icon_widget(item, size=64)
+        icon_widget = self.get_item_icon_widget(item, size=96)
+        icon_widget.set_valign(Gtk.Align.CENTER)
         top_box.append(icon_widget)
 
-        meta_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        meta_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
         meta_box.set_hexpand(True)
         meta_box.set_valign(Gtk.Align.CENTER)
         top_box.append(meta_box)
 
         name_lbl = Gtk.Label(label=item.get("name", "Unnamed"))
-        name_lbl.add_css_class("title-1")
+        name_lbl.add_css_class("detail-title")
         name_lbl.set_halign(Gtk.Align.START)
+        name_lbl.set_wrap(True)
         meta_box.append(name_lbl)
 
-        dev_lbl = Gtk.Label(label=f"By @{item.get('author', 'Community')}  •  v{item.get('version', '1.0')}")
-        dev_lbl.add_css_class("dim-label")
-        dev_lbl.set_halign(Gtk.Align.START)
-        meta_box.append(dev_lbl)
+        sub_text = item.get("summary") or item.get("description", "")
+        sub_lbl = Gtk.Label(label=sub_text)
+        sub_lbl.add_css_class("detail-subtitle")
+        sub_lbl.set_halign(Gtk.Align.START)
+        sub_lbl.set_wrap(True)
+        sub_lbl.set_ellipsize(3)
+        meta_box.append(sub_lbl)
 
-        # Action Buttons / Live Spinner in Details
-        act_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        # Action Buttons / Live Spinner in Details (right-aligned pill)
+        act_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         act_box.set_valign(Gtk.Align.CENTER)
+        act_box.set_halign(Gtk.Align.END)
         top_box.append(act_box)
 
         if item_id in self.active_operations:
@@ -570,39 +685,66 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
         else:
             is_inst = self.core.is_installed(item)
             if not is_inst:
-                btn_install = Gtk.Button(label="Install")
-                btn_install.add_css_class("suggested-action")
+                btn_install = Gtk.Button(label="GET")
+                btn_install.add_css_class("store-get")
                 btn_install.add_css_class("pill-action")
+                btn_install.set_halign(Gtk.Align.END)
                 btn_install.connect("clicked", lambda b: self.perform_action(item, "install"))
                 act_box.append(btn_install)
             else:
                 btn_uninstall = Gtk.Button(label="Uninstall")
                 btn_uninstall.add_css_class("destructive-action")
                 btn_uninstall.add_css_class("pill-action")
+                btn_uninstall.set_halign(Gtk.Align.END)
                 btn_uninstall.connect("clicked", lambda b: self.perform_action(item, "uninstall"))
                 act_box.append(btn_uninstall)
 
                 btn_update = Gtk.Button(label="Reinstall")
                 btn_update.add_css_class("pill-action")
+                btn_update.add_css_class("store-installed")
+                btn_update.set_halign(Gtk.Align.END)
                 btn_update.connect("clicked", lambda b: self.perform_action(item, "update"))
                 act_box.append(btn_update)
 
-        # Overview Group
-        desc_group = Adw.PreferencesGroup()
-        desc_group.set_title("About")
-        self.detail_box.append(desc_group)
+        # ===== Info bar: horizontal metadata columns over a thin rule =====
+        sec = item.get("security_report") or {}
+        infobar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        infobar.add_css_class("detail-infobar")
+        infobar.set_homogeneous(True)
+        self.detail_box.append(infobar)
 
-        desc_row = Adw.ActionRow()
+        def _info_col(value: str, label: str):
+            col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            col.set_halign(Gtk.Align.CENTER)
+            col.set_valign(Gtk.Align.CENTER)
+            v = Gtk.Label(label=value)
+            v.add_css_class("detail-info-value")
+            v.set_ellipsize(3)
+            col.append(v)
+            l = Gtk.Label(label=label.upper())
+            l.add_css_class("detail-info-label")
+            col.append(l)
+            infobar.append(col)
+
+        _info_col(f"v{item.get('version', '1.0')}", "Version")
+        _info_col(str(item.get("type", "-")).replace("_", " ").upper(), "Format")
+        _info_col(str(item.get("author", "Community")), "Developer")
+        if sec.get("score"):
+            _info_col(f"{sec.get('score')}/100", "Security")
+
+        # Overview Section (plain text, MAS style, no card box)
+        desc_title = Gtk.Label(label="About")
+        desc_title.add_css_class("detail-section-title")
+        desc_title.set_halign(Gtk.Align.START)
+        self.detail_box.append(desc_title)
+
         desc_text = item.get("description", item.get("summary", ""))
         desc_lbl = Gtk.Label(label=desc_text)
+        desc_lbl.add_css_class("detail-body")
         desc_lbl.set_wrap(True)
         desc_lbl.set_halign(Gtk.Align.START)
-        desc_lbl.set_margin_top(12)
-        desc_lbl.set_margin_bottom(12)
-        desc_lbl.set_margin_start(12)
-        desc_lbl.set_margin_end(12)
-        desc_row.set_child(desc_lbl)
-        desc_group.add(desc_row)
+        desc_lbl.set_xalign(0)
+        self.detail_box.append(desc_lbl)
 
         # Security Audit Group
         sec = item.get("security_report")
