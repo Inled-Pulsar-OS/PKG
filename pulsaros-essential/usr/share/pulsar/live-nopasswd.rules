@@ -1,0 +1,16 @@
+// Pulsar OS — Live session: passwordless administrator access.
+// Pulsar OS — Sesión live: acceso de administrador sin contraseña.
+//
+// This file is a TEMPLATE. It is only copied into
+// /etc/polkit-1/rules.d/50-pulsar-live-nopasswd.rules during a LIVE boot
+// (by pulsar-live-nopasswd.service) and is removed again on installed
+// systems, so it never grants privileges outside the live session.
+// Este archivo es una PLANTILLA. Solo se copia a
+// /etc/polkit-1/rules.d/50-pulsar-live-nopasswd.rules durante un arranque
+// LIVE (vía pulsar-live-nopasswd.service) y se elimina en el sistema
+// instalado, por lo que nunca otorga privilegios fuera de la sesión live.
+polkit.addRule(function (action, subject) {
+    if (subject.user === "live") {
+        return polkit.Result.YES;
+    }
+});

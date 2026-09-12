@@ -1,0 +1,26 @@
+[Unit]
+Description=Pulsar OS Live - Passwordless root and admin access (sudoers + polkit)
+DefaultDependencies=no
+After=local-fs.target
+Before=display-manager.service sddm.service
+
+[Service]
+Type=oneshot
+# Give the LIVE session a complete passwordless root: the 'live' user gets a
+# NOPASSWD sudoers grant and a polkit rule that answers YES to every admin
+# action (pkexec, udisks2, GNOME settings, apt/pacman...), so NOTHING ever
+# prompts for a password while booted from the ISO. On an installed system
+# (no live kernel args / live mountpoints) the unit instead REMOVES those
+# grants again, so the bypass can never survive onto a real install.
+# La sesión LIVE obtiene root sin contraseña: el usuario 'live' recibe un
+# grant NOPASSWD en sudoers y una regla polkit que responde YES a cualquier
+# acción de administración (pkexec, udisks2, ajustes de GNOME, apt/pacman...),
+# de modo que NADA pide contraseña al arrancar desde la ISO. En un sistema
+# instalado (sin args de live en /proc/cmdline ni puntos de montaje live) la
+# unit RETIRA esos grants, por lo que el bypass jamás sobrevive a una
+# instalación real.
+ExecStart=/bin/bash -c 'if ! grep -q -E "boot=live|rootfstype=9p|archisobasedir|archisolabel|img_dev|live-media" /proc/cmdline && [ ! -d /run/archiso ] && [ ! -d /run/live ] && [ ! -d /lib/live ]; then rm -f /etc/sudoers.d/pulsar-live-nopasswd; rm -f /etc/polkit-1/rules.d/50-pulsar-live-nopasswd.rules; systemctl restart polkit 2>/dev/null || systemctl restart polkitd 2>/dev/null || true; else mkdir -p /etc/sudoers.d /etc/polkit-1/rules.d; echo "live ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/pulsar-live-nopasswd; chown root:root /etc/sudoers.d/pulsar-live-nopasswd 2>/dev/null; chmod 0440 /etc/sudoers.d/pulsar-live-nopasswd; install -m 0644 /usr/share/pulsar/live-nopasswd.rules /etc/polkit-1/rules.d/50-pulsar-live-nopasswd.rules; systemctl restart polkit 2>/dev/null || systemctl restart polkitd 2>/dev/null || true; fi'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

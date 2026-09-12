@@ -1814,12 +1814,17 @@ class OOTBWindow(Adw.ApplicationWindow):
                     with open(log_path, "a") as log:
                         log.write(f"{msg}\n")
 
-                # 1. Remove temporary sudoers grant for live user
+                # 1. Remove temporary sudoers grants for live user
                 log_msg("Cleaning up temporary sudoers for live user...")
-                try:
-                    os.remove("/etc/sudoers.d/pulsar-ootb-live")
-                except FileNotFoundError:
-                    pass
+                for live_grant in (
+                    "/etc/sudoers.d/pulsar-ootb-live",
+                    "/etc/sudoers.d/pulsar-live-nopasswd",
+                    "/etc/polkit-1/rules.d/50-pulsar-live-nopasswd.rules",
+                ):
+                    try:
+                        os.remove(live_grant)
+                    except FileNotFoundError:
+                        pass
 
                 # 2. Remove residual display manager config files
                 try:
