@@ -63,8 +63,8 @@ def _get_effective_system_prompt(cfg) -> str:
     user_f = paths.user_file()
     skills_d = paths.skills_dir()
     return (
-        f"You are Sayri, the intelligent voice assistant and autonomous agent integrated into Pulsar OS (based on {distro}).\n"
-        f"The current system user is '{username}'. Their profile and data are in `{user_f}`.\n"
+        f"You are Sayri, the personal AI assistant and autonomous agent of the user '{username}' (running on {distro}).\n"
+        f"Their profile and data are in `{user_f}`.\n"
         f"Your long-term memory of memories and preferences is in `{mem_file}` (you can read it or add notes with bash).\n"
         f"Your installed ClawHub/OpenClaw skills are in `{skills_d}`. You can list your skills with `ls {skills_d}` and read their guides with `cat {skills_d}/<skill>/SKILL.md`.\n"
         "You can search for or download new skills from ClawHub (https://clawhub.ai) using the `sayri-skills install <skill-name>` or `sayri-skills search <query>` command.\n"
@@ -122,8 +122,8 @@ class SayriApp(Gtk.Application):
         self.active_agent: AgentProfile = AgentCreator.get_agent("default") or AgentProfile(
             id="default",
             name="Main Sayri",
-            description="Operating system assistant for Pulsar OS",
-            system_prompt="You are Sayri, the intelligent assistant of Pulsar OS.",
+            description="Personal AI assistant and autonomous agent",
+            system_prompt="You are Sayri, the personal AI assistant of the user.",
         )
         self.active_session_id = self.storage.create_session(agent_id=self.active_agent.id).id
 
@@ -192,13 +192,18 @@ class SayriApp(Gtk.Application):
             self._build_ui()
 
         # Check if first run or no AI provider configured
+        setup_done = bool(self.cfg.get_bool("ui", "setup_complete"))
         has_api_key = bool(self.cfg.get_string("provider", "api_key").strip())
-        is_first_run = getattr(self.cfg, "_is_first_run", False) or not has_api_key
-        self._setup_needed = is_first_run or not has_api_key
+        is_first_run = getattr(self.cfg, "_is_first_run", False)
+        self._setup_needed = (is_first_run or not has_api_key) and not setup_done
 
-        if is_first_run or not has_api_key:
+        if self._setup_needed:
             self._show_setup_prompt()
             self.overlay.show()
+            # Setup is pending: open the wizard on a genuine first run AND on
+            # every boot where no provider is configured yet (CLI & GUI share
+            # the same host logic in wizard.py / xui.py).
+            GLib.idle_add(self.open_wizard)
         else:
             if not self.is_autostart:
                 self.overlay.show()
@@ -216,6 +221,12 @@ class SayriApp(Gtk.Application):
             gateway_supervisor.auto_start_all()
         except Exception as e:
             print(f"[Sayri] Gateway supervisor auto-start notice: {e}")
+
+        try:
+            from sayri import plugin_service
+            plugin_service.auto_start_services()
+        except Exception as e:
+            print(f"[Sayri] Plugin service auto-start notice: {e}")
 
         # Auto-start cron and automated routines
         try:
@@ -485,12 +496,11 @@ class SayriApp(Gtk.Application):
         """Called when Sayri is shown: clean UI, play activation sound, and start listening."""
         print("[Sayri] Overlay shown: cleaning UI and playing activation sound.")
         if self._setup_needed:
-            # Setup not finished yet: keep the setup message visible and do not
-            # wipe it or start listening until an AI provider is configured.
-            # Re-show the welcome so reopening from the appindicator keeps it.
+            # Setup not finished yet: keep the welcome wizard visible (resuming
+            # it where it left off) instead of wiping it or starting to listen,
+            # until an AI provider is configured / the setup wizard completes.
             self._show_setup_prompt()
-            if self.overlay:
-                self.overlay.cajita.card_overlay.set_visible(True)
+            self._show_wizard_view()
             return
         self._current_query_id += 1
         self.tts.cancel()
@@ -1057,6 +1067,31 @@ class SayriApp(Gtk.Application):
                 self.settings_win = settings_window.SettingsWindow(self)
             self.settings_win.show()
 
+    def open_wizard(self) -> None:
+        """Open the welcome wizard inside the Cajita (native GTK, no HTML window).
+
+        The first-run flow, every boot with no provider configured, and the
+        settings entry point all render the same xui host (wizard.py) through
+        the Cajita's own wizard view — never a separate WebKit window.
+        """
+        if self.overlay is None or not hasattr(self.overlay, "cajita") or not self.overlay.cajita:
+            print("[Sayri] wizard not available: no cajita overlay")
+            self._show_setup_prompt()
+            return
+        self.overlay.show()
+        self._show_wizard_view()
+
+    def _show_wizard_view(self) -> None:
+        """Switch the Cajita to the embedded setup wizard, resuming it if already open."""
+        caj = (self.overlay.cajita if self.overlay and hasattr(self.overlay, "cajita")
+               and self.overlay.cajita else None)
+        if caj is None:
+            return
+        if (caj.card_stack.get_visible_child_name() != "wizard"
+                or getattr(caj, "_wizard_host", None) is None):
+            caj.switch_tab("wizard", trigger_effect=False)
+        caj.card_overlay.set_visible(True)
+
     def refresh_status(self) -> None:
         if self.settings_win is not None:
             self.settings_win.refresh_status()
@@ -1080,6 +1115,12 @@ class SayriApp(Gtk.Application):
         if group == "ui":
             if key == "autostart":
                 self.apply_autostart()
+            elif key == "setup_complete":
+                # Finishing (or skipping) the setup wizard counts as done too.
+                if self.cfg.get_bool("ui", "setup_complete") and self._setup_needed:
+                    self._setup_needed = False
+                    self._set_busy(False)
+                    self._after_reply()
             else:
                 self.apply_ui_config()
         elif group == "stt" and key == "mode":

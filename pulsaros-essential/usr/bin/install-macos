@@ -16,7 +16,12 @@ if [ ! -t 0 ] || [ ! -t 1 ]; then
     fi
 fi
 
-set -e
+# NOTE: no "set -e" here: the menu loop must survive a non-zero exit of main.py.
+# The upstream ultimate-macOS-KVM main.py uses a single if/elif chain where every
+# sub-tool (compatibility checks, extras, updates...) runs and then the script
+# simply ends, so the terminal window would close as if the tool had crashed.
+# This wrapper keeps the app alive and always returns to the menu until the user
+# decides to quit.
 
 APP_DIR="/opt/.ultimate-macOS-KVM"
 
@@ -64,16 +69,52 @@ if [ ! -d "$APP_DIR" ] || [ ! -f "$APP_DIR/main.py" ]; then
     sudo chmod -R 777 "$APP_DIR"
 fi
 
-cd "$APP_DIR"
+cd "$APP_DIR" || exit 1
 chmod +x main.py 2>/dev/null || true
-
-echo ""
-echo "🚀 Launching ultimate-macOS-KVM..."
-echo "=================================================="
-echo ""
 
 if [ -f "requirements.txt" ]; then
     pip install -q -r requirements.txt --break-system-packages 2>/dev/null || true
 fi
 
-exec python3 ./main.py "$@"
+# 5. Neutralize the upstream "relaunch ./main.py to return to the menu" calls.
+# Upstream main.py never loops: tools run once and the script exits, and some
+# menus try to "go back" by spawning a nested ./main.py (stacking processes).
+# This wrapper is the single menu owner, so those nested relaunches become no-ops.
+python3 - <<'PYEOF'
+import pathlib
+import re
+
+pattern = re.compile(r"os\.system\(['\"]\.?/main\.py[^)]*\)")
+patched = []
+for p in pathlib.Path(".").rglob("*.py"):
+    try:
+        source = p.read_text(encoding="utf-8")
+    except OSError:
+        continue
+    if "main.py" in source and pattern.search(source):
+        p.write_text(pattern.sub("None", source), encoding="utf-8")
+        patched.append(str(p))
+if patched:
+    print(f"🧹 Loop fix applied to: {', '.join(sorted(patched))}")
+PYEOF
+
+# 6. Menu loop: run the app and always return to the menu afterwards, so the
+# terminal window never closes after running checks/tools. Quit with 'q'.
+while true; do
+    echo ""
+    echo "🚀 Launching ultimate-macOS-KVM..."
+    echo "=================================================="
+    echo ""
+    python3 ./main.py "$@"
+    rc=$?
+    echo ""
+    echo "──────────────────────────────────────────────"
+    echo "🔄 Install macOS (KVM) returned to the wrapper (exit code $rc)."
+    echo -n "   Press ENTER to return to the menu, or type 'q' to quit: "
+    read -r ans
+    case "${ans,,}" in
+        q|x|quit|exit|salir) break ;;
+    esac
+done
+
+exit 0

@@ -1,0 +1,13 @@
+[Unit]
+Description=Pulsar OS Clipboard & Drop Island daemon
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pulsar-island-daemon
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

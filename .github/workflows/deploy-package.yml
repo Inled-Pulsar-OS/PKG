@@ -12,10 +12,12 @@ on:
       branch:
         description: 'Rama del repositorio destino / Target branch'
         required: true
-        default: 'stable'
+        default: 'unstable'
         type: choice
         options:
+          - unstable
           - stable
+          - all
           - forky
           - rolling
       pulsar_version:
@@ -214,8 +216,8 @@ jobs:
 
               chmod +x /workspace/package-and-deploy.sh
               if [ '$TARGET_BRANCH' = 'all' ]; then
-                for b in stable forky rolling; do
-                  ./package-and-deploy.sh '${{ steps.parse-package.outputs.package_name }}' --branch \"\$b\"
+                for b in stable unstable; do
+                  ./package-and-deploy.sh '${{ steps.parse-package.outputs.package_name }}' --branch "$b"
                 done
               else
                 ./package-and-deploy.sh '${{ steps.parse-package.outputs.package_name }}' --branch '$TARGET_BRANCH'
@@ -251,7 +253,7 @@ jobs:
               # PULSAR_VERSION through with 'sudo -u builder env'. The package
               # and branch are passed as positional args so no value is re-parsed.
               if [ '$TARGET_BRANCH' = 'all' ]; then
-                for b in stable forky rolling; do
+                for b in stable unstable; do
                   sudo -u builder env PULSAR_VERSION=\"\$PULSAR_VERSION\" \
                     bash -c 'cd /workspace/arch && ./package-and-deploy.sh \"\$0\" --branch \"\$1\"' '${{ steps.parse-package.outputs.package_name }}' \"\$b\"
                 done
@@ -274,7 +276,7 @@ jobs:
           TARGET_BRANCH="${{ steps.parse-package.outputs.branch }}"
           DEPLOY_BRANCHES=("$TARGET_BRANCH")
           if [ "$TARGET_BRANCH" = "all" ]; then
-            DEPLOY_BRANCHES=(stable forky rolling)
+            DEPLOY_BRANCHES=(stable unstable)
           fi
           for b in "${DEPLOY_BRANCHES[@]}"; do
             if [ "${{ steps.parse-package.outputs.is_debian }}" = "true" ]; then

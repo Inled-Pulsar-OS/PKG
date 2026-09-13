@@ -39,6 +39,8 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
         self.current_category = "discover"
         self.current_item = None
         self.active_operations: Dict[str, str] = {}  # item_id -> action
+        # item_id -> selected edition key ("arch", "debian", "flatpak")
+        self._selected_edition: Dict[str, str] = {}
         self._pending_install_id: Optional[str] = None
         self._catalog_ready = False
 
@@ -706,6 +708,77 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
                 btn_update.connect("clicked", lambda b: self.perform_action(item, "update"))
                 act_box.append(btn_update)
 
+        # ===== Editions (Debian / Arch / Flatpak) selector =====
+        editions = self.core.get_editions(item)
+        best = self.core.best_edition(item)
+        if editions:
+            best_key = best["key"] if best else editions[0]["key"]
+            if self._selected_edition.get(item_id) not in [e["key"] for e in editions]:
+                self._selected_edition[item_id] = best_key
+
+            editions_group = Adw.PreferencesGroup()
+            editions_group.set_title("Editions")
+            self.detail_box.append(editions_group)
+
+            edition_rows: List[Gtk.CheckButton] = []
+            edition_key_to_widget: Dict[str, Gtk.CheckButton] = {}
+            installed_edition = self.core.get_installed_edition(item) if self.core.is_installed(item) else None
+            active_edition = self._selected_edition.get(item_id) if item_id in self.active_operations else None
+
+            for ed in editions:
+                if ed["key"] == installed_edition:
+                    ver = self.core.get_installed_version(item)
+                    ver_str = f"v{ver}" if ver else ""
+                else:
+                    ver_str = f"v{item.get('version', '1.0')}"
+                parts = [ver_str, ed.get("desc", "")]
+                if ed["key"] == installed_edition:
+                    parts.append("Installed")
+                elif not installed_edition and ed["key"] == best_key:
+                    parts.append("Recommended for your system")
+                row = Adw.ActionRow(title=ed["label"], subtitle=" • ".join(p for p in parts if p))
+
+                if ed["key"] == "flatpak":
+                    prefix_icon = Gtk.Image.new_from_icon_name("application-x-addon-symbolic")
+                elif ed["key"] == "arch":
+                    prefix_icon = Gtk.Image.new_from_icon_name("package-x-generic-symbolic")
+                else:
+                    prefix_icon = Gtk.Image.new_from_icon_name("package-x-generic-symbolic")
+                prefix_icon.set_pixel_size(20)
+                row.add_prefix(prefix_icon)
+
+                check = Gtk.CheckButton()
+                check.set_active(ed["key"] == self._selected_edition.get(item_id, best_key))
+                check.set_valign(Gtk.Align.CENTER)
+                check.set_sensitive(False)
+                edition_rows.append(check)
+                edition_key_to_widget[ed["key"]] = check
+
+                suffix_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+                suffix_box.set_valign(Gtk.Align.CENTER)
+                suffix_box.append(check)
+
+                if ed["key"] == active_edition:
+                    spinner = Gtk.Spinner(spinning=True)
+                    spinner.set_size_request(20, 20)
+                    suffix_box.append(spinner)
+                elif ed["key"] == installed_edition:
+                    inst_btn = Gtk.Button(label="Installed")
+                    inst_btn.add_css_class("store-installed")
+                    inst_btn.add_css_class("pill-action")
+                    inst_btn.set_sensitive(False)
+                    suffix_box.append(inst_btn)
+                else:
+                    inst_btn = Gtk.Button(label="Install")
+                    inst_btn.add_css_class("suggested-action")
+                    inst_btn.add_css_class("pill-action")
+                    inst_btn.connect("clicked", lambda _b, it=item, key=ed["key"]: self._install_edition_by_key(item_id, key, edition_key_to_widget, it))
+                    suffix_box.append(inst_btn)
+
+                row.add_suffix(suffix_box)
+                row.connect("activated", lambda _, e=ed: self._select_edition(item_id, e["key"], edition_key_to_widget))
+                editions_group.add(row)
+
         # ===== Info bar: horizontal metadata columns over a thin rule =====
         sec = item.get("security_report") or {}
         infobar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
@@ -726,7 +799,7 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
             col.append(l)
             infobar.append(col)
 
-        _info_col(f"v{item.get('version', '1.0')}", "Version")
+        _info_col(f"v{self.core.get_installed_version(item) or item.get('version', '1.0')}", "Version")
         _info_col(str(item.get("type", "-")).replace("_", " ").upper(), "Format")
         _info_col(str(item.get("author", "Community")), "Developer")
         if sec.get("score"):
@@ -780,7 +853,7 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
 
         # Package Files & Destination Group
         files_group = Adw.PreferencesGroup()
-        files_group.set_title("Package Files & Destination")
+        files_group.set_title("Package Files &amp; Destination")
         self.detail_box.append(files_group)
 
         pkg_files = self.get_package_files(item)
@@ -854,6 +927,23 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
             row.add_suffix(val_lbl)
             info_group.add(row)
 
+    def _select_edition(self, item_id: str, key: str, edition_key_to_widget: Dict[str, Gtk.CheckButton]):
+        """English: Marks an edition as selected for an item and updates the
+        radio widgets. / Español: Marca una edición como seleccionada y actualiza
+        los widgets de radio."""
+        self._selected_edition[item_id] = key
+        for k, chk in edition_key_to_widget.items():
+            chk.set_active(k == key)
+
+    def _install_edition_by_key(self, item_id: str, key: str, edition_key_to_widget: Dict[str, Gtk.CheckButton], item: Dict[str, Any]):
+        """English: Installs a specific edition of the given item.
+        Español: Instala una edición concreta del ítem."""
+        if item_id in self.active_operations:
+            self.show_toast("Installation already in progress.")
+            return
+        self._select_edition(item_id, key, edition_key_to_widget)
+        self.perform_action(item, "install")
+
     def get_package_files(self, item: Dict[str, Any]) -> List[Dict[str, str]]:
         item_id = item.get("id", "")
         item_type = item.get("type", "")
@@ -878,7 +968,7 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
             ]
         elif item_type == "flatpak":
             return [
-                {"path": f"/var/lib/flatpak/app/{item_id}/", "desc": "Sandboxed OSTree runtime & application binaries", "icon": "package-x-generic-symbolic"},
+                {"path": f"/var/lib/flatpak/app/{item_id}/", "desc": "Sandboxed OSTree runtime &amp; application binaries", "icon": "package-x-generic-symbolic"},
                 {"path": f"/var/lib/flatpak/exports/share/applications/{item_id}.desktop", "desc": "Desktop launch entry", "icon": "preferences-desktop-display-symbolic"},
                 {"path": f"/var/lib/flatpak/exports/share/icons/hicolor/128x128/apps/{item_id}.png", "desc": "High-resolution desktop icon", "icon": "image-x-generic-symbolic"},
             ]
@@ -899,6 +989,7 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
         btn_update_all = Gtk.Button(label="Update All")
         btn_update_all.add_css_class("suggested-action")
         btn_update_all.add_css_class("pill-action")
+        btn_update_all.set_sensitive(False if self.active_operations else True)
         btn_update_all.connect("clicked", self.on_update_all_clicked)
         header_box.append(btn_update_all)
 
@@ -926,12 +1017,23 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
             icon_widget = self.get_item_icon_widget(item, size=24)
             row.add_prefix(icon_widget)
 
-            btn = Gtk.Button(label="Update")
-            btn.add_css_class("suggested-action")
-            btn.add_css_class("pill-action")
-            btn.set_valign(Gtk.Align.CENTER)
-            btn.connect("clicked", lambda b, it=item: self.perform_action(it, "update"))
-            row.add_suffix(btn)
+            if item.get("id", "") in self.active_operations:
+                spin_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+                spinner = Gtk.Spinner(spinning=True)
+                spinner.set_size_request(20, 20)
+                spin_box.append(spinner)
+                op_lbl = Gtk.Label(label="Updating…")
+                op_lbl.add_css_class("dim-label")
+                spin_box.append(op_lbl)
+                spin_box.set_valign(Gtk.Align.CENTER)
+                row.add_suffix(spin_box)
+            else:
+                btn = Gtk.Button(label="Update")
+                btn.add_css_class("suggested-action")
+                btn.add_css_class("pill-action")
+                btn.set_valign(Gtk.Align.CENTER)
+                btn.connect("clicked", lambda b, it=item: self.perform_action(it, "update"))
+                row.add_suffix(btn)
 
             group.add(row)
 
@@ -1055,6 +1157,12 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
             return
         self.active_operations[item_id] = "install"
 
+        chosen = self._selected_edition.get(item_id)
+        if chosen not in ("arch", "debian", "flatpak"):
+            best = self.core.best_edition(item)
+            chosen = best["key"] if best else None
+        self._selected_edition[item_id] = chosen or ""
+
         # Open the dedicated package page for context
         self.open_details(item)
 
@@ -1070,7 +1178,8 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
         content.set_margin_start(8)
         content.set_margin_end(8)
 
-        meta_lbl = Gtk.Label(label=f"{item_id} • {item.get('type', '').replace('_', ' ').upper()}")
+        edition_tag = f" • {chosen.upper()}" if chosen else ""
+        meta_lbl = Gtk.Label(label=f"{item_id}{edition_tag}")
         meta_lbl.set_halign(Gtk.Align.START)
         meta_lbl.add_css_class("dim-label")
         content.append(meta_lbl)
@@ -1132,12 +1241,13 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
             "err_view": err_view,
             "btn_copy": btn_copy,
             "item": item,
+            "edition": chosen,
         }
 
         def _worker():
             try:
                 GLib.idle_add(lambda st=status_lbl: st.set_label("Downloading & configuring package files…"))
-                success = self.core.install(item)
+                success = self.core.install(item, edition=chosen)
                 GLib.idle_add(lambda: self._progress_install_done(ctx, success, None))
             except Exception as exc:
                 GLib.idle_add(lambda: self._progress_install_done(ctx, False, exc))
@@ -1158,15 +1268,20 @@ class PulsarStoreWindow(Adw.ApplicationWindow):
             status_lbl.set_label("Done.")
             dialog.close()
             self.open_details(item)
+            GLib.idle_add(self.render_current_view)
             self.show_success_dialog(item, "install")
             return
 
         err_text = (
             str(exc) if exc is not None else (
+                f"Pulsar Store could not install '{item_name}'."
+                if getattr(self.core, "last_error", None) else
                 f"Pulsar Store could not install '{item_name}'. "
                 "Check that Flatpak, the package manager and dependencies are available."
             )
         )
+        if exc is None and getattr(self.core, "last_error", None):
+            err_text += "\n\n" + self.core.last_error
         pbar.set_fraction(1.0)
         status_lbl.set_markup("<span foreground='#ef4444'>Installation failed.</span>")
         ctx["err_box"].set_visible(True)

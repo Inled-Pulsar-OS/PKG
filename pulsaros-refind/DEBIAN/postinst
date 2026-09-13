@@ -2,27 +2,77 @@
 # ==============================================================================
 # Pulsar OS - rEFInd Bootloader Package Post-installation Script
 # ==============================================================================
-# English: Shell script to install and configure rEFInd with macOS theme.
-# Español: Script Shell para instalar y configurar rEFInd con el tema macOS.
+# English: Ships the macOS rEFInd theme and keeps an installed rEFInd config
+#          sane. It NEVER runs refind-install: that would re-write the NVRAM
+#          boot order / refind_linux.conf, and during an ISO chroot build
+#          (/proc + /dev bind-mounted from the host) it would modify the BUILD
+#          HOST's ESP - the incident that previously corrupted a developer's
+#          boot menu with an rEFInd under scanfor.
+# Español: Distribuye el tema macOS de rEFInd y mantiene saneado el refind.conf.
+#          NUNCA ejecuta refind-install: reescribe el orden de arranque NVRAM y
+#          refind_linux.conf, y dentro de un chroot de build (/proc + /dev
+#          bind-mount del host) alteraría el ESP del HOST - el incidente que
+#          corrompió el menú de arranque con un rEFInd bajo scanfor.
 # ==============================================================================
 set -e
 
 echo "🎨 Configurando rEFInd en Pulsar OS..."
 echo "🎨 Configuring rEFInd in Pulsar OS..."
 
-# Run refind-install only if /boot/efi is a mountpoint or if the EFI directory exists.
-# This prevents running refind-install (and modifying the host) during the Live ISO build phase inside the chroot.
-# Ejecutar refind-install solo si /boot/efi está montado o si el directorio EFI ya existe.
-# Esto evita ejecutar refind-install (y alterar el host) durante la fase de compilación de la ISO Live en el chroot.
-if command -v refind-install >/dev/null 2>&1 && (grep -q " /boot/efi " /proc/mounts || [ -d "/boot/efi/EFI" ]); then
-    echo "⚙️ Ejecutando refind-install..."
-    refind-install --yes || echo "⚠️ Advertencia: refind-install falló o reportó advertencias, pero continuamos..."
-else
-    echo "⚠️ Saltando refind-install (entorno de compilación o sin ESP montado)."
+# Detect ISO/live/chroot build environments and never touch the ESP there.
+# Detecta entornos live/ISO/chroot de construcción y nunca toca el ESP ahí.
+is_chroot() {
+    if command -v systemd-detect-virt >/dev/null 2>&1 && systemd-detect-virt --chroot >/dev/null 2>&1; then
+        return 0
+    fi
+    if [ -d "/run/live/medium" ] || [ -d "/lib/live/mount" ] || [ -d "/run/archiso/bootmnt" ]; then
+        return 0
+    fi
+    if [ -r /proc/1/root ] && [ -r /proc/self/root ]; then
+        local host_root self_root
+        host_root="$(stat -c %d:%i /proc/1/root/. 2>/dev/null || true)"
+        self_root="$(stat -c %d:%i /. 2>/dev/null || true)"
+        if [ -n "$host_root" ] && [ -n "$self_root" ] && [ "$host_root" != "$self_root" ]; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+if is_chroot; then
+    echo "⚠️ Entorno live/chroot de construcción detectado; se omite la configuración de rEFInd."
+    exit 0
 fi
 
-# Copy/install the macOS theme for rEFInd
-# Copiar/instalar el tema macOS para rEFInd
+# Only act when /boot/efi is a real ESP mounted in this running system.
+# Solo se actúa cuando /boot/efi es un ESP real montado en el sistema.
+if ! command -v findmnt >/dev/null 2>&1 || ! findmnt -rn /boot/efi >/dev/null 2>&1; then
+    echo "⚠️ No hay ESP montado en /boot/efi; se omite la configuración de rEFInd."
+    exit 0
+fi
+
+# -----------------------------------------------------------------------------
+# Normalize one refind.conf: remove every existing scanfor/dont_scan* line and
+# re-emit a single coherent set (duplicate scanfor values hide OSes / break the
+# menu). / Normaliza un refind.conf: quita las líneas scanfor/dont_scan* y emite
+# un único conjunto coherente.
+# -----------------------------------------------------------------------------
+sanitize_refind_conf() {
+    local rc="$1" tmp
+    [ -f "$rc" ] || return 0
+    tmp="$(mktemp)"
+    grep -vE '^[[:space:]]*(#)?[[:space:]]*(scanfor|dont_scan_dirs|dont_scan_files|dont_scan_volumes)([[:space:]]|$)' "$rc" > "$tmp" || true
+    {
+        cat "$tmp"
+        printf '\nscanfor manual,internal,external\n'
+        printf 'dont_scan_volumes PULSAR_OS\n'
+        printf 'dont_scan_files vmlinuz,vmlinuz.efi,vmlinuz-recovery,vmlinuz-recovery.efi\n'
+    } > "$rc"
+    rm -f "$tmp"
+}
+
+# Copy/install the macOS theme for rEFInd (only if rEFInd is already installed).
+# Copia/instala el tema macOS de rEFInd (solo si rEFInd ya está instalado).
 THEMES_DIR="/boot/efi/EFI/refind/themes"
 THEME_SRC="/usr/share/refind/themes/rEFInd-Regular-Dark"
 THEME_DEST="$THEMES_DIR/rEFInd-Regular-Dark"
@@ -30,57 +80,24 @@ THEME_DEST="$THEMES_DIR/rEFInd-Regular-Dark"
 if [ -d "/boot/efi/EFI/refind" ]; then
     echo "📥 Instalando tema macOS para rEFInd..."
     mkdir -p "$THEMES_DIR"
-    if [ -d "$THEME_DEST" ]; then
-        echo "🧹 Limpiando tema existente..."
-        rm -rf "$THEME_DEST"
-    fi
+    rm -rf "$THEME_DEST"
     if [ -d "$THEME_SRC" ]; then
         echo "📂 Copiando archivos de tema locales..."
         cp -r "$THEME_SRC" "$THEME_DEST"
     else
-        echo "🌐 Descargando tema desde GitHub (depth=1, HTTP/1.1)..."
-        git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "https://github.com/Inled-Pulsar-OS/refind-mac-theme" "$THEME_DEST" || echo "⚠️ Error al descargar el tema de rEFInd, se continuará sin él."
-        if [ -f "$THEME_DEST/theme.conf" ]; then
-            sed -i '/#MENUENTRIES/q' "$THEME_DEST/theme.conf"
-        fi
+        echo "⚠️ Tema rEFInd no disponible en $THEME_SRC; se continuará sin él."
     fi
 
     # Configure refind.conf / Configurar refind.conf
     REFIND_CONF="/boot/efi/EFI/refind/refind.conf"
     if [ -f "$REFIND_CONF" ]; then
-        echo "⚙️ Configurando refind.conf (enable_mouse y tema)..."
-        # Enable mouse / Habilitar ratón
-        sed -i 's/^#enable_mouse/enable_mouse/' "$REFIND_CONF"
+        echo "⚙️ Saneando refind.conf (scanfor / dont_scan idempotente)..."
         sed -i 's/^enable_mouse.*/enable_mouse/' "$REFIND_CONF"
         grep -q "^enable_mouse" "$REFIND_CONF" || echo "enable_mouse" >> "$REFIND_CONF"
-
-        # Enable auto-scan of every visible EFI bootloader (critical for
-        # dual boot). A plain refind-install leaves scanfor commented out
-        # (defaults to internal only) and a previous Pulsar install may have
-        # left scanfor manual / dont_scan* lines that hide other OSes.
-        # We keep OUR Pulsar entries fixed: exclude our root volume and the
-        # recovery kernel copies from auto-detection, so the curated rEFInd
-        # menu entries (with the resume= parameters) are the only Pulsar ones.
-        # scanfor only scans internal/external disks (no bios/biosexternal/
-        # optical), avoiding the legacy/CSM notice and "Hit any key" pause.
-        # Habilitar el auto-escaneo de bootloaders EFI visibles (clave en dual
-        # boot): refind-install deja scanfor comentado (solo interno) y una
-        # instalación previa pudo dejar scanfor manual / dont_scan* que ocultan
-        # otros sistemas. Se mantienen FIJAS las entradas de Pulsar excluyendo
-        # del auto-escaneo nuestro volumen raíz y los kernels de recovery; y el
-        # escaneo es solo de discos internos/externos, sin legacy/CSM.
-        sed -i 's/^#scanfor .*/scanfor manual,internal,external/' "$REFIND_CONF"
-        sed -i 's/^scanfor .*/scanfor manual,internal,external/' "$REFIND_CONF"
-        sed -i '/^dont_scan_dirs /d' "$REFIND_CONF"
-        sed -i '/^dont_scan_files \*$/d' "$REFIND_CONF"
-        grep -q "^scanfor " "$REFIND_CONF" || echo "scanfor manual,internal,external" >> "$REFIND_CONF"
-        grep -q "^dont_scan_volumes " "$REFIND_CONF" || echo "dont_scan_volumes PULSAR_OS" >> "$REFIND_CONF"
-        grep -q "^dont_scan_files .*vmlinuz-recovery" "$REFIND_CONF" || echo "dont_scan_files vmlinuz,vmlinuz.efi,vmlinuz-recovery,vmlinuz-recovery.efi" >> "$REFIND_CONF"
-
-        # Include theme / Incluir el tema
+        sanitize_refind_conf "$REFIND_CONF"
     fi
 else
-    echo "⚠️ Directorio /boot/efi/EFI/refind no encontrado. Saltando configuración de tema."
+    echo "⚠️ Directorio /boot/efi/EFI/refind no encontrado. No hay rEFInd instalado que configurar."
 fi
 
 exit 0

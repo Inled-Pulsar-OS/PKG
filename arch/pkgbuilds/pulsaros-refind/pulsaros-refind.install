@@ -1,33 +1,91 @@
-post_install() {
-    # Only run refind-install if /boot/efi is a real mountpoint. During the Live
-    # ISO build phase (chroot) /boot/efi is a plain directory and /proc/mounts is
-    # bind-mounted from the build host, so refind-install would detect the HOST's
-    # root partition and write a refind_linux.conf with the wrong root, and try to
-    # touch the host's NVRAM.
-    if command -v refind-install >/dev/null 2>&1 && grep -q " /boot/efi " /proc/mounts; then
-        refind-install 2>/dev/null || true
+# Detect whether this package is being installed/updated inside an ISO build
+# chroot. There /proc and /dev are bind-mounted from the BUILD HOST, so checking
+# "grep /boot/efi /proc/mounts" matches the host's ESP and would run
+# refind-install against the host's disks and NVRAM. NEVER touch the ESP from a
+# chroot.
+# Detecta si estamos dentro de un chroot de compilación (build-iso/sync-rootfs).
+# Ahí /proc y /dev son bind-mount del HOST, así que un simple grep en /proc/mounts
+# detectaría el ESP del host. Nunca se toca el ESP desde un chroot.
+is_chroot() {
+    if command -v systemd-detect-virt >/dev/null 2>&1 && systemd-detect-virt --chroot >/dev/null 2>&1; then
+        return 0
     fi
-# Enable auto-scan of every visible EFI bootloader (critical for dual boot).
-    # refind-install leaves scanfor commented out (internal only) and a previous
-    # Pulsar install may have left scanfor manual / dont_scan* hiding other OSes.
-    # Our Pulsar entries stay FIXED: the root volume and recovery kernel copies
-    # are excluded from auto-detection so the curated entries (with resume=) are
-    # the only Pulsar ones; scanfor scans internal/external disks only, avoiding
-    # the legacy/CSM notice and key-press pause.
-    for rc in /boot/efi/EFI/refind/refind.conf /boot/efi/EFI/BOOT/refind.conf
-    do
+    if [ -r /proc/1/root ] && [ -r /proc/self/root ]; then
+        local host_root self_root
+        host_root="$(stat -c %d:%i /proc/1/root/. 2>/dev/null || true)"
+        self_root="$(stat -c %d:%i /. 2>/dev/null || true)"
+        if [ -n "$host_root" ] && [ -n "$self_root" ] && [ "$host_root" != "$self_root" ]; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Normalize one refind.conf: remove every existing scanfor/dont_scan* line and
+# re-emit a single coherent set. Duplicate/conflicting scanfor lines are what
+# previously hid other OSes and produced the broken boot menus.
+# Normaliza un refind.conf: elimina todas las líneas scanfor/dont_scan* existentes
+# y emite un único conjunto coherente (los scanfor duplicados ocultaban otros OS).
+sanitize_refind_conf() {
+    local rc="$1" tmp
+    [ -f "$rc" ] || return 0
+    tmp="$(mktemp)"
+    grep -vE '^[[:space:]]*(#)?[[:space:]]*(scanfor|dont_scan_dirs|dont_scan_files|dont_scan_volumes)([[:space:]]|$)' "$rc" > "$tmp" || true
+    {
+        cat "$tmp"
+        printf '\nscanfor manual,internal,external\n'
+        printf 'dont_scan_volumes PULSAR_OS\n'
+        printf 'dont_scan_files vmlinuz,vmlinuz.efi,vmlinuz-recovery,vmlinuz-recovery.efi\n'
+    } > "$rc"
+    rm -f "$tmp"
+}
+
+post_install() {
+    # The package only ships the theme and keeps an existing rEFInd config
+    # sane. It never runs refind-install: that rewrites NVRAM boot order and
+    # refind_linux.conf, and inside a build chroot it would touch the host ESP
+    # (the exact incident that previously damaged the development system).
+    # Este paquete solo distribuye el tema y mantiene saneado el refind.conf.
+    # NUNCA ejecuta refind-install: reescribe el orden NVRAM y refind_linux.conf,
+    # y dentro de un chroot de build tocaría el ESP del host.
+    if is_chroot; then
+        echo "pulsaros-refind: entorno chroot detectado; no se toca el ESP."
+        return 0
+    fi
+
+    if ! command -v findmnt >/dev/null 2>&1 || ! findmnt -rn /boot/efi >/dev/null 2>&1; then
+        echo "pulsaros-refind: no hay ESP montado en /boot/efi; no se toca nada."
+        return 0
+    fi
+
+    # Sync the macOS theme into an already-installed rEFInd.
+    # Sincroniza el tema macOS hacia un rEFInd ya instalado.
+    local theme_src="/usr/share/refind/themes/rEFInd-Regular-Dark"
+    local theme_dst="/boot/efi/EFI/refind/themes/rEFInd-Regular-Dark"
+    if [ -d "/boot/efi/EFI/refind" ] && [ -d "$theme_src" ]; then
+        mkdir -p "/boot/efi/EFI/refind/themes"
+        rm -rf "$theme_dst"
+        cp -r "$theme_src" "$theme_dst"
+        echo "pulsaros-refind: tema macOS actualizado en /boot/efi/EFI/refind/themes."
+    fi
+
+    # Keep our fixed Pulsar/dual-boot settings. Auto-scan internal/external
+    # disks so other OSes stay visible, while keeping our curated Pulsar entries
+    # (with resume=) because the root volume and recovery kernel copies are
+    # excluded from auto-detection.
+    # Mantiene las entradas fijas de Pulsar y el auto-escaneo internal/external.
+    for rc in /boot/efi/EFI/refind/refind.conf /boot/efi/EFI/BOOT/refind.conf; do
         if [ -f "$rc" ]; then
-            sed -i 's/^#scanfor .*/scanfor manual,internal,external/' "$rc"
-            sed -i 's/^scanfor .*/scanfor manual,internal,external/' "$rc"
-            sed -i '/^dont_scan_dirs /d' "$rc"
-            sed -i '/^dont_scan_files \*$/d' "$rc"
-            grep -q "^scanfor " "$rc" || echo "scanfor manual,internal,external" >> "$rc"
-            grep -q "^dont_scan_volumes " "$rc" || echo "dont_scan_volumes PULSAR_OS" >> "$rc"
-            grep -q "^dont_scan_files .*vmlinuz-recovery" "$rc" || echo "dont_scan_files vmlinuz,vmlinuz.efi,vmlinuz-recovery,vmlinuz-recovery.efi" >> "$rc"
+            sanitize_refind_conf "$rc"
+            echo "pulsaros-refind: refind.conf saneado ($rc)."
         fi
     done
 }
 
 post_upgrade() {
     post_install
+}
+
+post_remove() {
+    return 0
 }

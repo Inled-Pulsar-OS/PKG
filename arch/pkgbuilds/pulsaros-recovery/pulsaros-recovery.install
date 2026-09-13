@@ -1,3 +1,6 @@
 post_install() {
     chmod +x /usr/share/pulsaros-recovery/recovery.py 2>/dev/null || true
+    if [ -x /usr/lib/pulsaros-recovery/update-recovery-assistant.sh ]; then
+        /usr/lib/pulsaros-recovery/update-recovery-assistant.sh || true
+    fi
 }

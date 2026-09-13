@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.pulsar-island"
+          path="/org/gnome/shell/extensions/pulsar-island/">
+    <key name="enabled" type="b">
+      <default>true</default>
+      <summary>Enable the island</summary>
+      <description>Master switch for the island overlay.</description>
+    </key>
+    <key name="clipboard-enabled" type="b">
+      <default>true</default>
+      <summary>Monitor clipboard</summary>
+      <description>Show the island when text or an image is copied.</description>
+    </key>
+    <key name="clipboard-min-size" type="i">
+      <default>12</default>
+      <summary>Minimum clipboard text length</summary>
+      <description>Texts shorter than this do not trigger the island.</description>
+    </key>
+    <key name="screenshot-enabled" type="b">
+      <default>true</default>
+      <summary>Detect screenshots</summary>
+      <description>Show the island when a new screenshot appears in the Pictures/Screenshots folder.</description>
+    </key>
+    <key name="screen-edge" type="s">
+      <default>'right'</default>
+      <summary>Screen edge</summary>
+      <description>Edge of the screen where the island rests: left, right, top or bottom.</description>
+    </key>
+    <key name="auto-hide-timeout" type="i">
+      <default>12</default>
+      <summary>Auto-hide timeout (seconds)</summary>
+      <description>Seconds the island stays visible before fading out (0 disables).</description>
+    </key>
+    <key name="island-opacity" type="d">
+      <default>0.86</default>
+      <summary>Island opacity</summary>
+      <description>Base opacity of the island surface (0.1 - 1.0).</description>
+    </key>
+  </schema>
+</schemalist>

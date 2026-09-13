@@ -22,6 +22,7 @@ import math
 import os
 import re
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -1198,9 +1199,51 @@ class SayriCajita(Gtk.Box):
         self.subview_box.append(sub_hdr)
 
         self.subview_body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        self.subview_box.append(self.subview_body)
+        self.subview_scroll = Gtk.ScrolledWindow()
+        self.subview_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.subview_scroll.set_propagate_natural_height(True)
+        self.subview_scroll.set_max_content_height(400)
+        self.subview_scroll.set_child(self.subview_body)
+        self.subview_box.append(self.subview_scroll)
 
         self.card_stack.add_named(self.subview_box, "subview")
+
+        # ── View 12: Setup wizard embedded (native GTK, xui screens) ──
+        self.wizard_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        wiz_hdr = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        wiz_hdr.set_valign(Gtk.Align.CENTER)
+
+        self.wizard_back_btn = Gtk.Button()
+        self.wizard_back_btn.set_child(_svg_icon(SVG_BACK))
+        self.wizard_back_btn.set_has_frame(False)
+        self.wizard_back_btn.add_css_class("sayri-icon-btn")
+        self.wizard_back_btn.set_tooltip_text("Back")
+        self.wizard_back_btn.connect("clicked", lambda _b: self._back_from_wizard())
+        wiz_hdr.append(self.wizard_back_btn)
+
+        wiz_title = Gtk.Label()
+        wiz_title.set_markup("<span weight='700' size='10500' foreground='#f8fafc'>SETUP WIZARD</span>")
+        wiz_title.set_halign(Gtk.Align.START)
+        wiz_title.set_hexpand(True)
+        wiz_hdr.append(wiz_title)
+        self.wizard_box.append(wiz_hdr)
+
+        self.wizard_body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.wizard_body.set_size_request(400, -1)
+        wizard_scroll = Gtk.ScrolledWindow()
+        wizard_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        wizard_scroll.set_vexpand(True)
+        wizard_scroll.set_child(self.wizard_body)
+        self.wizard_box.append(wizard_scroll)
+        self._wizard_host: Any = None
+        self._wizard_values: dict = {}
+        self._wizard_entries: dict = {}
+        self._wizard_checks: dict = {}
+        self._wizard_selects: dict = {}
+        self._wizard_polling = False
+        self._wizard_progress_bar: Any = None
+
+        self.card_stack.add_named(self.wizard_box, "wizard")
 
         card_content.append(self.card_stack)
         self.card_overlay.add_overlay(card_content)
@@ -1212,7 +1255,7 @@ class SayriCajita(Gtk.Box):
 
     def switch_tab(self, tab_id: str, trigger_effect: bool = True) -> None:
         """Switch between views inside the response card."""
-        is_subview = tab_id in ("subview", "thread")
+        is_subview = tab_id in ("subview", "thread", "wizard")
         self.tab_bar.set_visible(not is_subview)
         for tid, btn in self._tab_btns.items():
             if tid == tab_id:
@@ -1236,6 +1279,8 @@ class SayriCajita(Gtk.Box):
             self._populate_secrets()
         elif tab_id == "settings":
             self._populate_settings()
+        elif tab_id == "wizard":
+            self.open_wizard_view()
 
         self.card_stack.set_visible_child_name(tab_id)
         if trigger_effect:
@@ -1621,6 +1666,204 @@ class SayriCajita(Gtk.Box):
 
             self.plugins_box.append(card)
 
+    # ── Plugin status & download progress (local gateway plugins) ──
+    def _append_plugin_status(self, box: Gtk.Box, manifest: dict, p_dir: Optional[str]) -> None:
+        """Live status plus in-UI download/start progress for entrypoint=gateway.py plugins."""
+        gate = None
+        if p_dir and manifest:
+            cand = Path(p_dir) / (manifest.get("entrypoint") or "")
+            if cand.is_file():
+                gate = cand
+        if gate is None:
+            return
+
+        head = Gtk.Label()
+        head.set_halign(Gtk.Align.START)
+        head.set_markup("<span weight='700' size='9500' foreground='#1e74fb'>PLUGIN STATUS</span>")
+        box.append(head)
+
+        st_lbl = Gtk.Label()
+        st_lbl.set_halign(Gtk.Align.START)
+        st_lbl.set_xalign(0.0)
+        st_lbl.set_selectable(True)
+        st_lbl.set_wrap(True)
+        st_lbl.add_css_class("sayri-terminal-label")
+        st_lbl.set_markup("<span size='8000' foreground='#94a3b8'>checking…</span>")
+        box.append(st_lbl)
+
+        prog = Gtk.ProgressBar()
+        prog.set_visible(False)
+        box.append(prog)
+
+        run_lbl = Gtk.Label()
+        run_lbl.set_halign(Gtk.Align.START)
+        run_lbl.set_xalign(0.0)
+        run_lbl.set_wrap(True)
+        run_lbl.set_markup("<span size='8000' foreground='#64748b'>·</span>")
+        box.append(run_lbl)
+
+        running = [False]
+        poll_id = [None]
+
+        def _show(text: str, color: str = "#cbd5e1") -> None:
+            st_lbl.set_markup(f"<span size='8000' foreground='{color}'>{GLib.markup_escape_text(text)}</span>")
+
+        def _refresh(_b=None) -> None:
+            def apply_text(text: str) -> None:
+                _show(text)
+
+            def work() -> None:
+                try:
+                    res = subprocess.run([sys.executable, str(gate), "status"],
+                                         capture_output=True, text=True, timeout=20)
+                    text = (res.stdout or "").strip()
+                    if res.returncode != 0 and res.stderr:
+                        text += "\n" + res.stderr.strip()
+                except Exception as exc:  # noqa: BLE001
+                    text = f"error: {exc}"
+                GLib.idle_add(apply_text, text or "(no output)")
+
+            threading.Thread(target=work, daemon=True).start()
+
+        def _run(_b=None) -> None:
+            if running[0]:
+                return
+            running[0] = True
+            cfg = {}
+            if p_dir:
+                try:
+                    cfg = json.loads((Path(p_dir) / "prismml.json").read_text(encoding="utf-8"))
+                except Exception:  # noqa: BLE001
+                    cfg = {}
+            fam = cfg.get("family", "ternary")
+            size = cfg.get("size", "8B")
+            quant = cfg.get("quant") or ""
+            cmd = [sys.executable, str(gate), "run"]
+            if quant:
+                cmd += ["--quant", quant]
+            run_lbl.set_markup(
+                f"<span size='8000' foreground='#94a3b8'>Downloading binary + model and starting "
+                f"{fam}/{size} ({quant or 'auto'})…</span>")
+            prog.set_visible(True)
+            prog.pulse()
+
+            def apply_line(line: str, pct: Optional[int]) -> None:
+                if "llama-server running" in line or "health:" in line:
+                    prog.set_visible(True)
+                    prog.set_fraction(1.0)
+                    run_lbl.set_markup(
+                        f"<span size='8000' foreground='#86efac'>Server running ✓ — {GLib.markup_escape_text(line[-60:])}</span>")
+                else:
+                    prog.set_visible(True)
+                    if pct is not None:
+                        prog.set_fraction(min(1.0, pct / 100.0))
+                        run_lbl.set_markup(
+                            f"<span size='8000' foreground='#a5f3fc'>{GLib.markup_escape_text(line[-90:])}</span>")
+                    elif not line.startswith("health:"):
+                        run_lbl.set_markup(
+                            f"<span size='8000' foreground='#e2e8f0'>{GLib.markup_escape_text(line[-90:])}</span>")
+
+            def _poll_status() -> bool:
+                if not running[0]:
+                    return False
+                _refresh()
+                return True
+
+            poll_id[0] = GLib.timeout_add_seconds(3, _poll_status)
+
+            def work() -> None:
+                proc = None
+                try:
+                    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                            stderr=subprocess.STDOUT, text=True, bufsize=1)
+                    buf: list[str] = []
+                    while True:
+                        ch = proc.stdout.read(1)  # type: ignore[union-attr]
+                        if not ch:
+                            break
+                        if ch in "\r\n":
+                            line = "".join(buf)
+                            buf.clear()
+                            if line.strip():
+                                m = re.findall(r"(\d{1,3})\s*%", line)
+                                pct = int(m[-1]) if m else None
+                                GLib.idle_add(apply_line, line.strip(), pct)
+                        else:
+                            buf.append(ch)
+                    proc.wait()
+                except Exception as exc:  # noqa: BLE001
+                    GLib.idle_add(apply_line, f"error: {exc}", None)
+                finally:
+                    running[0] = False
+                    if poll_id[0] is not None:
+                        GLib.idle_add(lambda: GLib.source_remove(poll_id[0]))
+                    GLib.idle_add(_refresh)
+
+            threading.Thread(target=work, daemon=True).start()
+
+        btnr = Gtk.Button(label="Refresh status")
+        btnr.add_css_class("sayri-action-btn")
+        btnr.connect("clicked", _refresh)
+        box.append(btnr)
+
+        btn_run = Gtk.Button(label="Download & start server (progress below)")
+        btn_run.add_css_class("sayri-action-btn")
+        btn_run.add_css_class("primary")
+        btn_run.connect("clicked", _run)
+        box.append(btn_run)
+
+        # ── Service controls (manifest "service" block): auto-start + start/stop ──
+        svc = None
+        if manifest:
+            try:
+                from sayri import plugin_service as _psvc
+                svc = _psvc.service_block(manifest)
+            except Exception:  # noqa: BLE001
+                svc = None
+        if svc:
+            sw_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            sw_lbl = Gtk.Label()
+            sw_lbl.set_halign(Gtk.Align.START)
+            sw_lbl.set_hexpand(True)
+            sw_lbl.set_wrap(True)
+            sw_lbl.set_markup("<span size='9000' foreground='#cbd5e1'>Auto-start this server when Sayri starts</span>")
+            sw = Gtk.Switch()
+            sw.set_active(_psvc.service_enabled(manifest))
+            sw_row.append(sw_lbl)
+            sw_row.append(sw)
+            box.append(sw_row)
+
+            def _toggle_service(on: bool) -> None:
+                def work() -> None:
+                    try:
+                        if on:
+                            _psvc.start_service(manifest)
+                        else:
+                            _psvc.stop_service(manifest)
+                    except Exception as exc:  # noqa: BLE001
+                        print(f"[sayri] plugin service toggle error: {exc}")
+                    GLib.idle_add(_refresh)
+                threading.Thread(target=work, daemon=True).start()
+
+            def _on_switch(_sw, state):
+                _psvc.set_service_enabled(manifest, bool(state))
+                _toggle_service(bool(state))
+                return True  # handled
+
+            sw.connect("state-set", _on_switch)
+
+            btn_start = Gtk.Button(label="Start server")
+            btn_start.add_css_class("sayri-action-btn")
+            btn_start.connect("clicked", lambda _b: _toggle_service(True))
+            box.append(btn_start)
+
+            btn_stop = Gtk.Button(label="Stop server")
+            btn_stop.add_css_class("sayri-action-btn")
+            btn_stop.connect("clicked", lambda _b: _toggle_service(False))
+            box.append(btn_stop)
+
+        _refresh()
+
     def show_edit_plugin_view(self, plugin_data: dict) -> None:
         def _builder(box: Gtk.Box):
             pid = plugin_data.get("id", "plugin")
@@ -1631,6 +1874,102 @@ class SayriCajita(Gtk.Box):
             desc_lbl.set_halign(Gtk.Align.START)
             desc_lbl.set_wrap(True)
             box.append(desc_lbl)
+
+            # ── Functional plugin settings (declared in ui.settings) ──
+            manifest = {}
+            p_dir = plugin_data.get("path")
+            if p_dir is not None and (Path(p_dir) / "manifest.json").is_file():
+                try:
+                    manifest = json.loads((Path(p_dir) / "manifest.json").read_text(encoding="utf-8"))
+                except Exception:
+                    manifest = {}
+            saved_fields = []
+            if manifest:
+                self._append_plugin_status(box, manifest, p_dir)
+                from sayri import plugin_settings as ps
+
+                editable = ps.editable_fields(ps.settings_schema(manifest))
+                if editable:
+                    st_title = Gtk.Label()
+                    st_title.set_halign(Gtk.Align.START)
+                    st_title.set_markup("<span weight='700' size='9500' foreground='#1e74fb'>PLUGIN SETTINGS</span>")
+                    box.append(st_title)
+
+                    fpath = Gtk.Label()
+                    fpath.set_halign(Gtk.Align.START)
+                    fpath.set_wrap(True)
+                    fpath.set_markup(f"<span size='8300' foreground='#94a3b8'>Config file: {GLib.markup_escape_text(str(ps.settings_file_path(manifest)))}</span>")
+                    box.append(fpath)
+
+                    current = ps.read_values(manifest)
+                    for n in editable:
+                        wid, key, t = n.get("id"), n.get("key"), n.get("t")
+                        cur = current.get(key)
+                        if cur in (None, ""):
+                            cur = n.get("default", "")
+                        lbl = Gtk.Label()
+                        lbl.set_halign(Gtk.Align.START)
+                        lbl.set_markup(f"<span foreground='#94a3b8' size='9000'><b>{GLib.markup_escape_text(n.get('label') or wid)}</b></span>")
+                        if t == "select":
+                            opts = n.get("options", []) or []
+                            model = Gtk.StringList.new([o.get("label") or str(o.get("value")) for o in opts])
+                            drop = Gtk.DropDown.new(model, None)
+                            sel = 0
+                            for i, o in enumerate(opts):
+                                if str(o.get("value")) == str(cur):
+                                    sel = i
+                                    break
+                            drop.set_selected(sel)
+                            wrap = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+                            wrap.append(lbl)
+                            wrap.append(drop)
+                            box.append(wrap)
+                            saved_fields.append((key, drop, opts))
+                        elif t == "check":
+                            chk = Gtk.CheckButton(label=n.get("label") or wid)
+                            chk.set_active(str(cur).lower() in ("1", "true", "yes", "on"))
+                            box.append(chk)
+                            saved_fields.append((key, chk, None))
+                        else:
+                            e = Gtk.Entry()
+                            e.add_css_class("sayri-settings-entry")
+                            e.set_text(str(cur))
+                            box.append(lbl)
+                            box.append(e)
+                            if n.get("hint"):
+                                h = Gtk.Label()
+                                h.set_halign(Gtk.Align.START)
+                                h.set_wrap(True)
+                                h.set_markup(f"<span size='8200' foreground='#64748b'>{GLib.markup_escape_text(n.get('hint'))}</span>")
+                                box.append(h)
+                            saved_fields.append((key, e, None))
+                    if saved_fields:
+                        s_hint = Gtk.Label()
+                        s_hint.set_halign(Gtk.Align.START)
+                        s_hint.set_wrap(True)
+                        s_hint.set_markup("<span size='8200' foreground='#94a3b8'>Changes apply the next time the plugin/server starts.</span>")
+                        box.append(s_hint)
+
+                        def _save_settings(_b):
+                            for key, w, opts in list(saved_fields):
+                                try:
+                                    if opts is not None:
+                                        val = opts[w.get_selected()]["value"]
+                                    elif isinstance(w, Gtk.CheckButton):
+                                        val = str(bool(w.get_active())).lower()
+                                    else:
+                                        val = w.get_text()
+                                    ps.write_setting(manifest, key, str(val))
+                                except Exception:
+                                    pass
+                            self._populate_plugins_tools()
+                            self.switch_tab("plugins")
+
+                        save_ps = Gtk.Button(label="Save plugin settings")
+                        save_ps.add_css_class("sayri-action-btn")
+                        save_ps.add_css_class("primary")
+                        save_ps.connect("clicked", _save_settings)
+                        box.append(save_ps)
 
             lbl_sb = Gtk.Label(label="Minimum Required Sandbox Level:")
             lbl_sb.set_halign(Gtk.Align.START)
@@ -1682,6 +2021,255 @@ class SayriCajita(Gtk.Box):
             box.append(save_btn)
 
         self.open_subview(f"Configure {plugin_data.get('name', 'Plugin')}", _builder, on_back_tab="plugins")
+
+    # ── In-Cajita setup wizard (native GTK, renders the xui screen documents
+    #    with the Cajita's own design — no HTML/WebKit) ──
+    def open_wizard_view(self) -> None:
+        """Render the welcome wizard (provider · Prism ML · voice · STT) inside
+        the Cajita using native GTK widgets fed by the shared WelcomeApp host."""
+        try:
+            from sayri import wizard as wizard_mod
+        except Exception as exc:  # noqa: BLE001
+            self._wizard_log(f"Wizard unavailable: {exc}")
+            return
+        self._free_wizard()
+        host = wizard_mod.WelcomeApp()
+        self._wizard_host = host
+        self._wizard_values: dict = {}
+        self._wizard_entries: dict = {}
+        self._wizard_checks: dict = {}
+        self._wizard_selects: dict = {}
+        self._wizard_polling = False
+        self._wizard_render(host.render())
+
+    def _wizard_render(self, scr: Optional[dict]) -> None:
+        if scr is None:  # wizard finished → back to the plugin area
+            self._free_wizard()
+            self.switch_tab("plugins")
+            return
+        self._wizard_entries = {}
+        self._wizard_checks = {}
+        self._wizard_selects = {}
+        while True:
+            child = self.wizard_body.get_first_child()
+            if not child:
+                break
+            self.wizard_body.remove(child)
+
+        if scr.get("step"):
+            step_lbl = Gtk.Label()
+            step_lbl.set_markup(f"<span size='8000' weight='600' foreground='#94a3b8'>{GLib.markup_escape_text(scr.get('step', ''))}</span>")
+            step_lbl.set_halign(Gtk.Align.START)
+            self.wizard_body.append(step_lbl)
+
+        title_lbl = Gtk.Label()
+        title_lbl.set_markup(f"<span size='11000' weight='700' foreground='#f8fafc'>{GLib.markup_escape_text(scr.get('title', ''))}</span>")
+        title_lbl.set_halign(Gtk.Align.START)
+        title_lbl.set_wrap(True)
+        self.wizard_body.append(title_lbl)
+
+        if scr.get("subtitle"):
+            sub_lbl = Gtk.Label()
+            sub_lbl.set_markup(f"<span size='9000' foreground='#cbd5e1'>{GLib.markup_escape_text(scr.get('subtitle', ''))}</span>")
+            sub_lbl.set_halign(Gtk.Align.START)
+            sub_lbl.set_wrap(True)
+            self.wizard_body.append(sub_lbl)
+
+        for node in scr.get("body", []):
+            self._wizard_append(node)
+        for node in scr.get("footer", []):
+            self._wizard_append(node)
+
+        self.wizard_body.set_visible(True)
+
+        if scr.get("busy"):
+            self._wizard_start_poll()
+
+    def _wizard_append(self, node: dict) -> None:
+        t = node.get("t")
+        if t == "text":
+            lbl = Gtk.Label()
+            if node.get("dim"):
+                markup = f"<span size='9000' foreground='#94a3b8'>{GLib.markup_escape_text(node.get('text', ''))}</span>"
+            elif node.get("accent"):
+                markup = f"<span size='9500' weight='600' foreground='#c4b5fd'>{GLib.markup_escape_text(node.get('text', ''))}</span>"
+            else:
+                markup = f"<span size='9500' foreground='#e2e8f0'>{GLib.markup_escape_text(node.get('text', ''))}</span>"
+            lbl.set_markup(markup)
+            lbl.set_halign(Gtk.Align.START)
+            lbl.set_wrap(True)
+            self.wizard_body.append(lbl)
+        elif t == "sub":
+            lbl = Gtk.Label()
+            lbl.set_markup(f"<span size='10000' weight='700' foreground='#a5b4fc'>{GLib.markup_escape_text(node.get('text', ''))}</span>")
+            lbl.set_halign(Gtk.Align.START)
+            lbl.set_wrap(True)
+            self.wizard_body.append(lbl)
+        elif t == "note":
+            level = node.get("level", "info")
+            colors = {"info": "#38bdf8", "ok": "#34d399", "warn": "#fbbf24", "error": "#f87171"}
+            color = colors.get(level, "#38bdf8")
+            lbl = Gtk.Label()
+            lbl.set_markup(f"<span size='9000' weight='600' foreground='{color}'>{GLib.markup_escape_text(node.get('text', ''))}</span>")
+            lbl.set_halign(Gtk.Align.START)
+            lbl.set_wrap(True)
+            self.wizard_body.append(lbl)
+        elif t == "progress":
+            frac = node.get("pct")
+            bar = Gtk.ProgressBar()
+            bar.set_show_text(True)
+            if frac is not None:
+                bar.set_fraction(max(0.0, min(1.0, float(frac))))
+                bar.set_text(f"{node.get('label', '')} {int(float(frac) * 100)}%")
+            else:
+                bar.set_fraction(0.0)
+                bar.set_text(node.get("label", "") or "Working…")
+            bar.set_halign(Gtk.Align.FILL)
+            self.wizard_body.append(bar)
+            self._wizard_progress_bar = bar
+        elif t == "spacer":
+            box = Gtk.Box()
+            box.set_size_request(-1, 8)
+            self.wizard_body.append(box)
+        elif t == "entry":
+            wid = node.get("id", "")
+            def _entry_change(entry_widget, _u=None, field_id=wid):
+                self._wizard_values[field_id] = entry_widget.get_text()
+            row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            if node.get("label"):
+                cap = Gtk.Label()
+                cap.set_markup(f"<span size='8500' weight='600' foreground='#cbd5e1'>{GLib.markup_escape_text(node.get('label', ''))}</span>")
+                cap.set_halign(Gtk.Align.START)
+                row.append(cap)
+            entry_widget = Gtk.Entry()
+            entry_widget.set_text(node.get("default", ""))
+            if node.get("placeholder"):
+                entry_widget.set_placeholder_text(node.get("placeholder", ""))
+            if node.get("secret"):
+                entry_widget.set_visibility(False)
+            entry_widget.set_halign(Gtk.Align.FILL)
+            entry_widget.set_hexpand(True)
+            entry_widget.connect("changed", _entry_change)
+            self._wizard_values[wid] = node.get("default", "")
+            self._wizard_entries[wid] = entry_widget
+            row.append(entry_widget)
+            if node.get("hint"):
+                hint = Gtk.Label()
+                hint.set_markup(f"<span size='8000' foreground='#64748b'>{GLib.markup_escape_text(node.get('hint', ''))}</span>")
+                hint.set_halign(Gtk.Align.START)
+                hint.set_wrap(True)
+                row.append(hint)
+            self.wizard_body.append(row)
+        elif t == "select":
+            wid = node.get("id", "")
+            options = list(node.get("options", []))
+            cap = Gtk.Label()
+            cap.set_markup(f"<span size='8500' weight='600' foreground='#cbd5e1'>{GLib.markup_escape_text(node.get('label', ''))}</span>")
+            cap.set_halign(Gtk.Align.START)
+            self.wizard_body.append(cap)
+            combo = Gtk.DropDown.new_from_strings(
+                [o.get("label", o.get("value", "")) for o in options]
+            )
+            values = [o.get("value", "") for o in options]
+            default = node.get("default", "")
+            sel = next((values.index(o.get("value")) for o in options if o.get("value") == default), 0)
+            combo.set_selected(sel)
+            combo.set_halign(Gtk.Align.FILL)
+            combo.set_hexpand(True)
+            combo.connect("notify::selected", lambda _d, _p, field_id=wid, v=values:
+                          self._wizard_values.__setitem__(field_id, v[_d.get_selected()]))
+            self._wizard_values[wid] = values[sel]
+            self._wizard_selects[wid] = combo
+            self.wizard_body.append(combo)
+        elif t == "check":
+            wid = node.get("id", "")
+            check_btn = Gtk.CheckButton(label=node.get("label", ""))
+            check_btn.set_active(bool(node.get("default")))
+            check_btn.connect("toggled", lambda cb, field_id=wid:
+                              self._wizard_values.__setitem__(field_id, cb.get_active()))
+            self._wizard_values[wid] = bool(node.get("default"))
+            self._wizard_checks[wid] = check_btn
+            self.wizard_body.append(check_btn)
+        elif t == "button":
+            wid = node.get("id", "")
+            label = "{0} {1}".format(node.get("icon", ""), node.get("label", "")).strip()
+            btn = Gtk.Button(label=label)
+            kind = node.get("kind", "secondary")
+            if kind == "primary":
+                btn.add_css_class("primary")
+            btn.add_css_class("sayri-btn")
+            btn.set_halign(Gtk.Align.START)
+            btn.connect("clicked", lambda _b, wid_=wid: self._wizard_emit_action(wid_))
+            self.wizard_body.append(btn)
+
+    def _wizard_emit_action(self, wid: str) -> None:
+        if wid in ("next", "siguiente"):
+            event = {"type": "submit", "value": dict(self._wizard_values)}
+        else:
+            event = {"type": "action", "widget": wid, "value": dict(self._wizard_values)}
+        self._wizard_emit(event)
+
+    def _wizard_emit(self, event: dict) -> None:
+        host = self._wizard_host
+        if host is None:
+            return
+        try:
+            scr = host.dispatch(event)
+        except Exception as exc:  # noqa: BLE001
+            import traceback
+            traceback.print_exc()
+            scr = {"id": "host_error", "title": "Error", "subtitle": "", "step": "",
+                   "busy": False, "done": True, "body": [{"t": "note", "text": str(exc), "level": "error"}],
+                   "footer": [{"t": "button", "id": "close", "label": "Back", "kind": "secondary"}]}
+        self._wizard_render(scr)
+
+    def _wizard_start_poll(self) -> None:
+        if self._wizard_polling:
+            return
+        self._wizard_polling = True
+
+        def _tick(_u=None) -> bool:
+            if not self._wizard_polling or self._wizard_host is None:
+                return False
+            try:
+                scr = self._wizard_host.dispatch({"type": "poll"})
+            except Exception:  # noqa: BLE001
+                scr = None
+            if scr is None:
+                self._wizard_polling = False
+                return False
+            if not scr.get("busy"):
+                self._wizard_polling = False
+                self._wizard_render(scr)
+                return False
+            # still busy → re-render so new log lines /  progress updates appear
+            self._wizard_render(scr)
+            return True
+
+        GLib.timeout_add(400, _tick)
+
+    def _wizard_log(self, text: str) -> None:
+        lbl = Gtk.Label()
+        lbl.set_markup(f"<span size='9000' foreground='#f87171'>{GLib.markup_escape_text(text)}</span>")
+        lbl.set_wrap(True)
+        lbl.set_halign(Gtk.Align.START)
+        self.wizard_body.append(lbl)
+
+    def _free_wizard(self) -> None:
+        self._wizard_polling = False
+        self._wizard_host = None
+        self._wizard_entries = {}
+        self._wizard_checks = {}
+        self._wizard_selects = {}
+        while True:
+            child = self.wizard_body.get_first_child()
+            if not child:
+                break
+            self.wizard_body.remove(child)
+
+    def _back_from_wizard(self) -> None:
+        self._free_wizard()
+        self.switch_tab("plugins")
 
     # ── Channel Gateways Logic (Multi-Instance Channel Architecture) ──
     def _populate_gateways(self) -> None:
@@ -2183,6 +2771,15 @@ class SayriCajita(Gtk.Box):
         b3, model_entry = _field("Model Name", cur_model)
         b4, strip_entry = _field("Strip / Filter Words or Tags (e.g. <think>.*?</think>)", cur_strip)
         b5, wake_entry = _field("Wakeword Trigger", cur_wakeword)
+
+        # Re-open the setup wizard (provider, Prism ML, voice, STT) from the UI.
+        # It renders inside this Cajita (no separate window).
+        wiz_btn = Gtk.Button(label="✳ Open the setup wizard (provider · Prism ML · voice · STT)")
+        wiz_btn.add_css_class("sayri-action-btn")
+        wiz_btn.add_css_class("primary")
+        wiz_btn.set_halign(Gtk.Align.START)
+        wiz_btn.connect("clicked", lambda _b: self.switch_tab("wizard"))
+        self.settings_box.append(wiz_btn)
 
         self.settings_box.append(b1)
         self.settings_box.append(b2)
@@ -3653,7 +4250,11 @@ class SayriCajita(Gtk.Box):
         self._live_text = text
         self.entry.set_text("")
         _safe_set_markup(self.response_label, text)
-        if self.card_stack.get_visible_child_name() != "chat":
+        # While first-run setup is pending the card must keep showing the
+        # wizard, never be yanked back to chat (that killed the welcome after
+        # the app booted / on every reappindicator reopen).
+        if (self.card_stack.get_visible_child_name() != "chat"
+                and not getattr(self.app, "_setup_needed", False)):
             self.switch_tab("chat", trigger_effect=False)
         self.card_overlay.set_visible(True)
         # Settle pill animation and transfer to card

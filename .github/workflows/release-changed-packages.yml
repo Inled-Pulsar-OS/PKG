@@ -12,9 +12,9 @@ on:
         required: false
         default: 'auto'
       branch:
-        description: 'Rama del repositorio apt (stable, forky o rolling)'
+        description: 'Rama del repositorio apt (stable, unstable, forky o rolling)'
         required: false
-        default: 'stable'
+        default: 'unstable'
 
 permissions:
   contents: write

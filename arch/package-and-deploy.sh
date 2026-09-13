@@ -38,6 +38,10 @@ BRANCH="stable"
 # warns that they must be uploaded by hand with --upload.
 MANUAL_UPLOAD_ONLY=("pulsaros-gnome")
 
+# Packages excluded from the automatic "all" build because they are not ready
+# for release. They can still be built explicitly by name.
+EXCLUDED_PACKAGES=("pulsaros-island")
+
 is_manual_upload_only() {
     local name="$1"
     for p in "${MANUAL_UPLOAD_ONLY[@]}"; do
@@ -106,7 +110,7 @@ done
 
 if [ -z "$PACKAGE_NAME" ]; then
     echo "❌ Error: Specify a package name or 'all'."
-    echo "Usage: $0 <package_name | all> [--deploy] [--branch <stable|forky|rolling>] [--upload|--onlyupload] [--incremental]"
+    echo "Usage: $0 <package_name | all> [--deploy] [--branch <stable|unstable|forky|rolling>] [--upload|--onlyupload] [--incremental]"
     exit 1
 fi
 
@@ -503,10 +507,16 @@ if [ "$PACKAGE_NAME" == "all" ]; then
     SKIPPED_MANUAL=()
     for pkg_dir in "$PKGBUILDS_DIR"/*/; do
         pkg_name=$(basename "$pkg_dir")
-        # Skip Tube OS flavour packages in the general Pulsar OS build
+        # Skip Tube OS flavour packages and excluded packages in the general build
         if [[ "$pkg_name" == tubeos-* ]] || [[ "$pkg_name" == tube-os-* ]] || [[ "$pkg_name" == "dockermigrate" ]]; then
             continue
         fi
+        for ex in "${EXCLUDED_PACKAGES[@]}"; do
+            if [ "$pkg_name" = "$ex" ]; then
+                echo "⏭️  Skipping $pkg_name (excluded from automatic build)..."
+                continue 2
+            fi
+        done
         if [ -f "$pkg_dir/PKGBUILD" ]; then
             if [ -n "$DEPLOY_FLAG" ] || [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
                 if is_manual_upload_only "$pkg_name"; then

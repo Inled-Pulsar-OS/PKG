@@ -1248,31 +1248,34 @@ impl ResultView {
     }
 }
 
-// Favorite apps helpers via D-Bus
+// Favorite apps helpers.
+// English: Reading/writing /org/gnome/shell/favorite-apps through the dconf
+//          D-Bus "ca.desrt.dconf.Writer" interface (Read/Write methods) is used
+//          by Pulsar OS's own distro builds, but newer dconf releases (e.g.
+//          Arch's) dropped those two methods, so pin/unpin silently did nothing.
+//          Shelling out to the `gsettings` CLI works on every GNOME/dconf.
+// Español: Leer/escribir /org/gnome/shell/favorite-apps vía el D-Bus
+//          "ca.desrt.dconf.Writer" (métodos Read/Write) funcionaba en los ISO,
+//          pero las versiones nuevas de dconf (p.ej. la de Arch) eliminaron esos
+//          métodos y el pin/unpin no hacía nada. Usar `gsettings` funciona en
+//          cualquier GNOME/dconf.
 fn get_favorites() -> Vec<String> {
-    let conn = match zbus::blocking::Connection::session() {
-        Ok(c) => c,
+    let out = match std::process::Command::new("gsettings")
+        .args(["get", "org.gnome.shell", "favorite-apps"])
+        .output()
+    {
+        Ok(o) => o,
         Err(_) => return Vec::new(),
     };
-
-    let reply = conn.call_method(
-        Some("ca.desrt.dconf"),
-        "/ca/desrt/dconf/Writer/user",
-        Some("ca.desrt.dconf.Writer"),
-        "Read",
-        &"/org/gnome/shell/favorite-apps",
-    );
-    let Ok(repl) = reply else { return Vec::new() };
-
-    let Ok((variant,)): Result<(zbus::zvariant::OwnedValue,), _> = repl.body().deserialize() else {
+    if !out.status.success() {
+        return Vec::new();
+    }
+    let Ok(text) = String::from_utf8(out.stdout) else {
         return Vec::new();
     };
 
-    let Ok(str_val): Result<&str, _> = variant.downcast_ref() else {
-        return Vec::new();
-    };
-
-    let clean = str_val.trim();
+    let clean = text.trim();
+    let clean = clean.strip_prefix("@as ").unwrap_or(clean);
     let clean = clean.strip_prefix('[').unwrap_or(clean);
     let clean = clean.strip_suffix(']').unwrap_or(clean);
 
@@ -1295,18 +1298,9 @@ fn get_favorites() -> Vec<String> {
 fn set_favorites(favs: &[String]) {
     let formatted = format!("[{}]", favs.iter().map(|s| format!("'{}'", s)).collect::<Vec<_>>().join(", "));
 
-    let conn = match zbus::blocking::Connection::session() {
-        Ok(c) => c,
-        Err(_) => return,
-    };
-
-    let _ = conn.call_method(
-        Some("ca.desrt.dconf"),
-        "/ca/desrt/dconf/Writer/user",
-        Some("ca.desrt.dconf.Writer"),
-        "Write",
-        &("/org/gnome/shell/favorite-apps", zbus::zvariant::Value::Str(formatted.into())),
-    );
+    let _ = std::process::Command::new("gsettings")
+        .args(["set", "org.gnome.shell", "favorite-apps", &formatted])
+        .output();
 }
 
 #[cfg(test)]

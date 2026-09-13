@@ -18,9 +18,14 @@
     color: alpha(#f2f2f7, 0.55);
 }
 
-/* Sidebar (like MAS source list) */
+/* Sidebar (like MAS source list): translucent, no opaque dark slab */
 .store-sidebar {
-    background-color: #26262a;
+    background-color: transparent;
+}
+
+.store-sidebar .navigation-sidebar {
+    background-color: alpha(#26262a, 0.5);
+    border-radius: 10px;
 }
 
 /* Sidebar: solo el icono en azul, el texto en color normal */
@@ -184,10 +189,6 @@ button.store-tile:hover {
     border-bottom: 1px solid alpha(#f2f2f7, 0.15);
     padding: 10px 0;
     margin: 10px 0;
-}
-
-.detail-info-col {
-    orientation: vertical;
 }
 
 .detail-info-value {

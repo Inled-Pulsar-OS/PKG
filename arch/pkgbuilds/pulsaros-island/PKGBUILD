@@ -1,0 +1,39 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsaros-island
+pkgver=1.1.0
+pkgrel=1
+pkgdesc="GNOME Shell extension + GTK4 daemon: macOS-style clipboard & drop island for Pulsar OS"
+arch=(any)
+url="https://inled.es"
+license=(GPL3)
+depends=(gnome-shell python python-gobject gtk4 gtk4-layer-shell)
+optdepends=('xdg-user-dirs: for the default Screenshots folder location')
+options=(!strip)
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-island && pwd)"
+    cd "$_src"
+
+    # Daemon
+    install -Dm755 usr/bin/pulsar-island-daemon "$pkgdir/usr/bin/pulsar-island-daemon"
+    install -Dm644 usr/share/pulsaros-island/pulsar_island_daemon.py \
+        "$pkgdir/usr/share/pulsaros-island/pulsar_island_daemon.py"
+
+    # systemd user unit
+    install -Dm644 usr/lib/systemd/user/pulsar-island.service \
+        "$pkgdir/usr/lib/systemd/user/pulsar-island.service"
+
+    # Shell extension
+    mkdir -p "$pkgdir/usr/share/gnome-shell/extensions"
+    cp -r usr/share/gnome-shell/extensions/pulsar-island@inled.es "$pkgdir/usr/share/gnome-shell/extensions/"
+
+    # Schema to system glib path so nested GNOME Shell sessions can find it
+    install -Dm644 usr/share/gnome-shell/extensions/pulsar-island@inled.es/schemas/org.gnome.shell.extensions.pulsar-island.gschema.xml \
+        "$pkgdir/usr/share/glib-2.0/schemas/org.gnome.shell.extensions.pulsar-island.gschema.xml"
+
+    chmod -R a+rX "$pkgdir/usr"
+    find "$pkgdir/usr" -type d -exec chmod 755 {} +
+    find "$pkgdir/usr/share" -type f -exec chmod 644 {} +
+
+    glib-compile-schemas "$pkgdir/usr/share/gnome-shell/extensions/pulsar-island@inled.es/schemas"
+}

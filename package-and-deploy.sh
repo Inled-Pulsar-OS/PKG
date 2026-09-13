@@ -216,13 +216,15 @@ clean_orphan_packages() {
     done
 }
 
-if [ "$BRANCH" != "stable" ] && [ "$BRANCH" != "forky" ] && [ "$BRANCH" != "rolling" ]; then
-    echo "❌ Error: Rama inválida '$BRANCH'. Debe ser stable, forky o rolling."
+if [ "$BRANCH" != "stable" ] && [ "$BRANCH" != "unstable" ] && [ "$BRANCH" != "forky" ] && [ "$BRANCH" != "rolling" ]; then
+    echo "❌ Error: Rama inválida '$BRANCH'. Debe ser stable, unstable, forky o rolling."
     exit 1
 fi
 
 get_branch_suffix() {
-    if [ "$BRANCH" = "forky" ]; then
+    if [ "$BRANCH" = "unstable" ]; then
+        echo "-unstable"
+    elif [ "$BRANCH" = "forky" ]; then
         echo "-deb14"
     elif [ "$BRANCH" = "rolling" ]; then
         echo "-rolling"
@@ -287,8 +289,8 @@ build_single_package() {
     # Auto-increment package version before building
     local control_file="$source_folder/DEBIAN/control"
     local current_version=$(grep "^Version:" "$control_file" | cut -d' ' -f2)
-    # Strip any existing branch suffix (like +deb13, +deb14, +rolling, or any suffix starting with + or -)
-    local base_version=$(echo "$current_version" | sed -E 's/(\+|-)(deb14|rolling).*$//')
+    # Strip any existing branch suffix (like +deb13, +deb14, +rolling, -unstable, etc.)
+    local base_version=$(echo "$current_version" | sed -E 's/(\+|-)(unstable|deb14|rolling).*$//')
     local new_base=$(increment_version "$base_version")
     local suffix=$(get_branch_suffix)
     local new_version="${new_base}${suffix}"
@@ -626,6 +628,9 @@ if [ -n "$DEPLOY_ONLY_FLAG" ]; then
     # Mantener solo los .deb que pertenecen a la rama destino (la versión lleva
     # el sufijo de rama: -deb14 para forky, -rolling para rolling).
     case "$BRANCH" in
+        unstable)
+            COMPILED_DEBS=($(printf '%s\n' "${COMPILED_DEBS[@]}" | grep -E -- '-unstable|-rolling|-deb14' || true))
+            ;;
         forky)
             COMPILED_DEBS=($(printf '%s\n' "${COMPILED_DEBS[@]}" | grep -- '-deb14' || true))
             ;;
@@ -633,7 +638,7 @@ if [ -n "$DEPLOY_ONLY_FLAG" ]; then
             COMPILED_DEBS=($(printf '%s\n' "${COMPILED_DEBS[@]}" | grep -- '-rolling' || true))
             ;;
         *)
-            COMPILED_DEBS=($(printf '%s\n' "${COMPILED_DEBS[@]}" | grep -v -- '-deb14' | grep -v -- '-rolling' || true))
+            COMPILED_DEBS=($(printf '%s\n' "${COMPILED_DEBS[@]}" | grep -v -- '-deb14' | grep -v -- '-rolling' | grep -v -- '-unstable' || true))
             ;;
     esac
     deploy_packages "${COMPILED_DEBS[@]}"
@@ -656,12 +661,21 @@ if [ "$PACKAGE_NAME" == "all" ]; then
     echo "🏗️  FULL BUILD MODE: Detecting and compiling all packages..."
     
     # Find all subdirectories that contain a DEBIAN/control file
-    # Encontrar todos los subdirectorios que tengan un archivo DEBIAN/control
-    # Exclude build staging directories and Tube OS flavor packages
+    # Encontrar todos los subdirectorios que tengan un DEBIAN/control
+    # Exclude build staging directories, Tube OS flavor packages and
+    # packages not ready for release (excluded from automatic builds).
+    EXCLUDED_PACKAGES=("dockermigrate" "pulsaros-island")
     PACKAGES=()
     while read -r control_path; do
         dir_name=$(basename "$(dirname "$(dirname "$control_path")")")
-        if [[ "$control_path" != *"/pkg-staging/"* ]] && [[ "$dir_name" != tubeos-* ]] && [[ "$dir_name" != tube-os-* ]] && [[ "$dir_name" != "dockermigrate" ]]; then
+        skip=false
+        for ex in "${EXCLUDED_PACKAGES[@]}"; do
+            if [ "$dir_name" = "$ex" ]; then
+                skip=true
+                break
+            fi
+        done
+        if [[ "$control_path" != *"/pkg-staging/"* ]] && [[ "$dir_name" != tubeos-* ]] && [[ "$dir_name" != tube-os-* ]] && ! $skip; then
             PACKAGES+=("$dir_name")
         fi
     done < <(find "$PKG_DIR" -name "control" -path "*/DEBIAN/control")

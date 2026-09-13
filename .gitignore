@@ -27,6 +27,7 @@ __pycache__/
 # Logs y archivos temporales
 *.log
 *.tmp
+*_tmp/
 .DS_Store
 .worktrees/
 .worktrees

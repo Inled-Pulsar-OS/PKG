@@ -1,0 +1,9 @@
+{
+  "uuid": "pulsar-island@inled.es",
+  "name": "Pulsar OS - Clipboard & Drop Island",
+  "description": "A floating island that captures clipboard content (text, images, screenshots) and lets you drag it to any window, or drop dragged files onto it to hold them.",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "url": "https://os.inled.es",
+  "settings-schema": "org.gnome.shell.extensions.pulsar-island",
+  "version": 2
+}

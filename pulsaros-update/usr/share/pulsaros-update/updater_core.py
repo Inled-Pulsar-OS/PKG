@@ -218,7 +218,19 @@ class UpdateCore:
 
         self.run_command(["chmod", "755", rec_bin], use_root=True)
 
-        # Patch recovery partition squashfs
+        # Preferred path: use the helper shipped by pulsaros-recovery (the same
+        # one the package postinst runs). It detects the partition, rebuilds
+        # the recovery SquashFS only when the assistant changed, and is
+        # idempotent. The inline logic below is kept as a fallback for older
+        # systems where the helper is not installed yet.
+        helper = "/usr/lib/pulsaros-recovery/update-recovery-assistant.sh"
+        if os.path.exists(helper):
+            self.log("[Recovery] Using packaged recovery sync script...")
+            self.run_command_stream([helper], use_root=True)
+            self.log("[Recovery] Native Recovery Assistant synchronization complete.")
+            return True
+
+        # Fallback: patch recovery partition squashfs manually
         rec_devs = self.detect_recovery_devices()
         for dev in rec_devs:
             self.log(f"[Recovery] Detected recovery partition: {dev}. Mounting and updating...")

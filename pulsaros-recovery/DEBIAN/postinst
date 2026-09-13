@@ -8,4 +8,16 @@ echo "⚙️ Configurando permisos del lanzador de recuperación..."
 chmod +x /usr/share/applications/pulsaros-recovery.desktop || true
 chmod +x /usr/bin/pulsaros-recovery-desktop-setup || true
 
+# ── Sync del Recovery Assistant dentro de la partición de recuperación ────────
+# Tras instalar/actualizar el paquete, la copia nativa de
+# /usr/bin/pulsar-recovery-assistant queda actualizada. Sincronizala también
+# dentro del entorno Debian de recuperación (live/filesystem.squashfs) de
+# cualquier partición PULSAR_RECOVERY. Es un no-op si no hay partición, se está
+# en un live/ISO/chroot o el assistant ya está al día.
+if [ -x "/usr/lib/pulsaros-recovery/update-recovery-assistant.sh" ]; then
+    if ! /usr/lib/pulsaros-recovery/update-recovery-assistant.sh; then
+        echo "⚠️  Aviso: no se pudo sincronizar el Recovery Assistant en la partición de recuperación."
+    fi
+fi
+
 exit 0

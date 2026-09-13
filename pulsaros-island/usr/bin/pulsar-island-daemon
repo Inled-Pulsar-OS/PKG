@@ -1,0 +1,2 @@
+#!/bin/sh
+exec python3 /usr/share/pulsaros-island/pulsar_island_daemon.py "$@"

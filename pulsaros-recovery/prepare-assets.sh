@@ -29,6 +29,9 @@ fi
 if [ -f "$STAGE_DIR/usr/bin/pulsaros-recovery-desktop-setup" ]; then
     chmod 755 "$STAGE_DIR/usr/bin/pulsaros-recovery-desktop-setup"
 fi
+if [ -f "$STAGE_DIR/usr/lib/pulsaros-recovery/update-recovery-assistant.sh" ]; then
+    chmod 755 "$STAGE_DIR/usr/lib/pulsaros-recovery/update-recovery-assistant.sh"
+fi
 
 # Clean up build artifacts and source code from staging directory so they are not included in the deb
 rm -rf "$STAGE_DIR/rust-recovery" "$STAGE_DIR/.git" "$STAGE_DIR/.gitignore"
