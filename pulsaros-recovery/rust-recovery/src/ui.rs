@@ -299,10 +299,17 @@ pub(crate) fn build_ui(app: &Application) {
 
     let version_box = GtkBox::new(Orientation::Vertical, 3);
     version_box.set_hexpand(true);
+    
+    let ver_header_row = GtkBox::new(Orientation::Horizontal, 8);
     let lbl_version = Label::new(Some("Version"));
     lbl_version.add_css_class("setting-label");
     lbl_version.set_halign(Align::Start);
-    version_box.append(&lbl_version);
+    lbl_version.set_hexpand(true);
+    ver_header_row.append(&lbl_version);
+
+    let btn_refresh_versions = create_button_with_icon("Check Updates", "refresh", 14, "secondary-action");
+    ver_header_row.append(&btn_refresh_versions);
+    version_box.append(&ver_header_row);
 
     let ver_str = manifest_rc.borrow().latest_version.clone();
     let version_entries = [ver_str.as_str()];
@@ -374,35 +381,66 @@ pub(crate) fn build_ui(app: &Application) {
 
     net_info_box.append(&net_card);
 
-    // Refetch the release manifest in background. The UI already shows the
-    // local fallback, so this never blocks; it only refreshes the version and
-    // mirror dropdowns if a remote manifest is found.
-    {
-        let (tx, rx) = std::sync::mpsc::channel::<ManifestData>();
+    // Function to reload/refresh the release manifest in background
+    let reload_manifest = {
         let manifest_rc_c = manifest_rc.clone();
         let combo_version_c = combo_version.clone();
         let combo_mirror_c = combo_mirror.clone();
+        let lbl_status_c = lbl_net_status.clone();
 
-        glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
-            match rx.try_recv() {
-                Ok(manifest) => {
-                    *manifest_rc_c.borrow_mut() = manifest.clone();
-                    let ver = manifest.latest_version.clone();
-                    let mirror_names: Vec<&str> = manifest.mirrors.iter().map(|m| m.name.as_str()).collect();
-                    let version_list = StringList::new(&[ver.as_str()]);
-                    combo_version_c.set_model(Some(&version_list));
-                    let mirror_list = StringList::new(&mirror_names);
-                    combo_mirror_c.set_model(Some(&mirror_list));
-                    glib::ControlFlow::Break
+        Rc::new(move || {
+            lbl_status_c.set_text("Checking downloads-os.inled.es for new releases...");
+            let (tx, rx) = std::sync::mpsc::channel::<ManifestData>();
+            let manifest_rc_inner = manifest_rc_c.clone();
+            let combo_version_inner = combo_version_c.clone();
+            let combo_mirror_inner = combo_mirror_c.clone();
+            let lbl_status_inner = lbl_status_c.clone();
+
+            glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
+                match rx.try_recv() {
+                    Ok(manifest) => {
+                        *manifest_rc_inner.borrow_mut() = manifest.clone();
+                        
+                        // Collect all available versions sorted newest first
+                        let mut versions: Vec<String> = manifest.versions.keys().cloned().collect();
+                        versions.sort();
+                        versions.reverse();
+                        if !versions.contains(&manifest.latest_version) && !manifest.latest_version.is_empty() {
+                            versions.insert(0, manifest.latest_version.clone());
+                        }
+                        
+                        let ver_ptrs: Vec<&str> = versions.iter().map(|s| s.as_str()).collect();
+                        let version_list = StringList::new(&ver_ptrs);
+                        combo_version_inner.set_model(Some(&version_list));
+                        combo_version_inner.set_selected(0);
+
+                        let mirror_names: Vec<&str> = manifest.mirrors.iter().map(|m| m.name.as_str()).collect();
+                        let mirror_list = StringList::new(&mirror_names);
+                        combo_mirror_inner.set_model(Some(&mirror_list));
+
+                        lbl_status_inner.set_text("Ready to download (~3.1 GB). System root (@) will be restored, keeping @home intact.");
+                        glib::ControlFlow::Break
+                    }
+                    Err(_) => glib::ControlFlow::Continue,
                 }
-                Err(_) => glib::ControlFlow::Continue,
-            }
-        });
+            });
 
-        std::thread::spawn(move || {
-            if let Some(m) = fetch_release_manifest() {
-                let _ = tx.send(m);
-            }
+            std::thread::spawn(move || {
+                if let Some(m) = fetch_release_manifest() {
+                    let _ = tx.send(m);
+                }
+            });
+        })
+    };
+
+    // Initial background fetch
+    reload_manifest();
+
+    // Connect refresh button
+    {
+        let reload_fn = reload_manifest.clone();
+        btn_refresh_versions.connect_clicked(move |_| {
+            reload_fn();
         });
     }
 
@@ -1540,7 +1578,11 @@ pub(crate) fn build_ui(app: &Application) {
         };
 
         let m_data = manifest_rc.borrow().clone();
-        let ver = m_data.latest_version.clone();
+        let ver = combo_version
+            .selected_item()
+            .and_then(|item| item.downcast::<gtk4::StringObject>().ok())
+            .map(|s| s.string().to_string())
+            .unwrap_or_else(|| m_data.latest_version.clone());
         let mirror_id = m_data.mirrors.get(combo_mirror.selected() as usize)
             .map(|m| m.id.clone())
             .unwrap_or_else(|| "auto".to_string());

@@ -6,11 +6,12 @@ use std::fs;
 use std::process::Command;
 pub(crate) fn fetch_release_manifest() -> Option<ManifestData> {
     let urls = [
-        "https://pulsaros-releases.pages.dev/releases.json",
+        "https://downloads-os.inled.es/releases.json",
+        "https://downloads-os.inled.es/isos.json",
         "https://releases.pulsaros.inled.es/releases.json",
-        "https://inled.github.io/pulsaros-releases/releases.json",
-        "https://raw.githubusercontent.com/inled/pulsar/main/ISO/configs/releases.json",
+        "https://pulsaros-releases.pages.dev/releases.json",
         "https://apt.inled.es/releases.json",
+        "https://raw.githubusercontent.com/Inled-Pulsar-OS/ISO/main/configs/releases.json",
     ];
 
     for url in urls {
