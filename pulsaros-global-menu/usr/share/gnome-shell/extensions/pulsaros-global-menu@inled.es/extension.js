@@ -2970,12 +2970,15 @@ export default class PulsarosGlobalMenuExtension extends Extension {
                 console.error("[GlobalMenu] Failed to run df:", e);
             }
 
-            // OS Name & Version from /etc/os-release
+            // OS Name & Version from /etc/os-release / /usr/lib/os-release / /etc/pulsar-version
             let osName = "Pulsar OS";
             let osVersion = "";
-            let distroBase = "debian";
+            let distroBase = "arch";
             try {
                 let [ok, content] = GLib.file_get_contents("/etc/os-release");
+                if (!ok) {
+                    [ok, content] = GLib.file_get_contents("/usr/lib/os-release");
+                }
                 if (ok) {
                     let contentStr = new TextDecoder().decode(content);
                     let prettyNameMatch = contentStr.match(/^PRETTY_NAME="?([^"\n]+)"?/m);
@@ -2985,10 +2988,10 @@ export default class PulsarosGlobalMenuExtension extends Extension {
                     let verMatch = contentStr.match(/^VERSION="?([^"\n]+)"?/m);
                     let verIdMatch = contentStr.match(/^VERSION_ID="?([^"\n]+)"?/m);
 
-                    if (prettyNameMatch) {
-                        osName = prettyNameMatch[1];
-                    } else if (nameMatch) {
+                    if (nameMatch) {
                         osName = nameMatch[1];
+                    } else if (prettyNameMatch) {
+                        osName = prettyNameMatch[1];
                     }
 
                     if (/debian/i.test(osName) || (idLikeMatch && /debian/i.test(idLikeMatch[1])) || (idMatch && /debian/i.test(idMatch[1]))) {
@@ -2999,19 +3002,41 @@ export default class PulsarosGlobalMenuExtension extends Extension {
                         distroBase = idLikeMatch[1].split(/\s+/)[0].toLowerCase();
                     }
 
-                    if (verMatch) {
-                        osVersion = verMatch[1];
-                    } else if (verIdMatch) {
-                        osVersion = verIdMatch[1];
+                    if (verIdMatch && verIdMatch[1]) {
+                        osVersion = verIdMatch[1].trim();
+                    } else if (verMatch && verMatch[1]) {
+                        osVersion = verMatch[1].trim();
                     }
                 }
             } catch (e) {
-                console.error("[GlobalMenu] Failed to read /etc/os-release:", e);
+                console.error("[GlobalMenu] Failed to read os-release:", e);
             }
 
-            if (!osVersion) {
-                osVersion = distroBase === "debian" ? "13 (Debian)" : "rolling (Arch)";
+            // Check /etc/pulsar-version if present
+            try {
+                let [okVer, pver] = GLib.file_get_contents("/etc/pulsar-version");
+                if (okVer) {
+                    let pverStr = new TextDecoder().decode(pver).trim();
+                    if (pverStr) {
+                        osVersion = pverStr;
+                    }
+                }
+            } catch (e) {}
+
+            // Clean up osName: display clean "Pulsar OS" branding
+            if (/Pulsar OS/i.test(osName)) {
+                osName = "Pulsar OS";
             }
+
+            // Clean up osVersion: strip verbose prefixes
+            if (osVersion) {
+                osVersion = osVersion.replace(/^Bitten Fruit (?:Arch|Debian)?\s*Based\s*/i, '').trim();
+            }
+
+            if (!osVersion || /rolling/i.test(osVersion)) {
+                osVersion = "1.1-unstable";
+            }
+
             let dialog = new AboutDialog(osName, osVersion, hostName, cpuModel, memTotal, gpuModel, diskInfo);
             dialog.open();
         });

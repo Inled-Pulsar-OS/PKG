@@ -1,6 +1,6 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-branding
-pkgver=1.0.121
+pkgver=1.0.121.unstable
 pkgrel=1
 pkgdesc="Branding and system identity files for Pulsar OS (Arch edition)"
 arch=(any)
@@ -21,13 +21,13 @@ package() {
     fi
     
     # Write Arch-specific os-release
-    local os_ver="${PULSAR_VERSION:-rolling}"
+    local os_ver="${PULSAR_VERSION:-1.1-unstable}"
     mkdir -p "$pkgdir/etc" "$pkgdir/usr/lib"
     cat <<EOF > "$pkgdir/etc/os-release"
 NAME="Pulsar OS"
 PRETTY_NAME="Pulsar OS Bitten Fruit Arch Based $os_ver"
 VERSION_ID="$os_ver"
-VERSION="Bitten Fruit Arch Based $os_ver"
+VERSION="$os_ver"
 ID=pulsaros
 ID_LIKE=arch
 HOME_URL="https://inled.es"
