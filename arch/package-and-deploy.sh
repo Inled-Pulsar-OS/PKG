@@ -254,6 +254,19 @@ build_single_package() {
     rm -f "$OUTPUT_DIR/${name}-"*.pkg.tar.zst
 
     cd "$pkgbuild_dir"
+
+    # Update PKGBUILD pkgver according to target branch
+    local current_pkgver=$(grep -E '^pkgver=' "$pkgbuild_dir/PKGBUILD" | head -1 | cut -d= -f2)
+    local clean_pkgver=$(echo "$current_pkgver" | sed -E 's/[._-]unstable.*$//')
+    if [ "$BRANCH" = "unstable" ]; then
+        local new_pkgver="${clean_pkgver}.unstable"
+        echo "🔄 Setting Arch package version for $name ($BRANCH): $current_pkgver -> $new_pkgver"
+        sed -i "s/^pkgver=.*/pkgver=$new_pkgver/" "$pkgbuild_dir/PKGBUILD"
+    elif [ "$BRANCH" = "stable" ]; then
+        echo "🔄 Setting Arch package version for $name ($BRANCH): $current_pkgver -> $clean_pkgver"
+        sed -i "s/^pkgver=.*/pkgver=$clean_pkgver/" "$pkgbuild_dir/PKGBUILD"
+    fi
+
     # Export PULSAR_VERSION for the makepkg environment
     export PULSAR_VERSION
 

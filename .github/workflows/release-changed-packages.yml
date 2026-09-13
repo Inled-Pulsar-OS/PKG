@@ -114,10 +114,22 @@ jobs:
           DEBIAN_UNIQ=$(printf '%s\n' "${DEBIAN_PKGS[@]:-}" | sort -u | paste -sd, -)
           ARCH_UNIQ=$(printf '%s\n' "${ARCH_PKGS[@]:-}" | sort -u | paste -sd, -)
 
+          if [ "${{ github.event_name }}" = "push" ]; then
+            if [ "${{ github.ref_name }}" = "stable" ]; then
+              DETECTED_BRANCH="stable"
+            else
+              DETECTED_BRANCH="unstable"
+            fi
+          else
+            DETECTED_BRANCH="${{ github.event.inputs.branch || 'unstable' }}"
+          fi
+
+          echo "📦 Rama objetivo: $DETECTED_BRANCH"
           echo "📦 Paquetes Debian detectados: ${DEBIAN_UNIQ:-ninguno}"
           echo "📦 Paquetes Arch detectados: ${ARCH_UNIQ:-ninguno}"
 
           echo "should_build=true" >> "$GITHUB_OUTPUT"
+          echo "branch=$DETECTED_BRANCH" >> "$GITHUB_OUTPUT"
           echo "debian_packages=${DEBIAN_UNIQ:-none}" >> "$GITHUB_OUTPUT"
           echo "arch_packages=${ARCH_UNIQ:-none}" >> "$GITHUB_OUTPUT"
 
@@ -125,7 +137,7 @@ jobs:
       - name: 🔨 Build Debian Packages
         if: steps.detect.outputs.should_build == 'true' && steps.detect.outputs.debian_packages != 'none'
         env:
-          TARGET_BRANCH: ${{ github.event.inputs.branch || 'stable' }}
+          TARGET_BRANCH: ${{ steps.detect.outputs.branch }}
           PKGS: ${{ steps.detect.outputs.debian_packages }}
         run: |
           docker run --rm \
@@ -177,7 +189,7 @@ jobs:
       - name: 🔨 Build Arch Packages
         if: steps.detect.outputs.should_build == 'true' && steps.detect.outputs.arch_packages != 'none'
         env:
-          TARGET_BRANCH: ${{ github.event.inputs.branch || 'stable' }}
+          TARGET_BRANCH: ${{ steps.detect.outputs.branch }}
           PKGS: ${{ steps.detect.outputs.arch_packages }}
         run: |
           docker run --rm \
@@ -203,9 +215,9 @@ jobs:
 
       # 6. Deploy all built packages to the central Inled APT repo
       - name: 🚀 Deploy to Inled APT
-        if: steps.detect.outputs.should_build == 'true' && steps.detect.outputs.debian_packages != 'none' || steps.detect.outputs.should_build == 'true' && steps.detect.outputs.arch_packages != 'none'
+        if: steps.detect.outputs.should_build == 'true' && (steps.detect.outputs.debian_packages != 'none' || steps.detect.outputs.arch_packages != 'none')
         env:
-          TARGET_BRANCH: ${{ github.event.inputs.branch || 'stable' }}
+          TARGET_BRANCH: ${{ steps.detect.outputs.branch }}
           INLED_REPO_PAT: ${{ secrets.INLED_REPO_PAT }}
           GITHUB_ACTIONS: "true"
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
