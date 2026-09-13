@@ -1,6 +1,7 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname='winboat-bin'
 _pkgname="winboat"
+_realver=0.9.0
 pkgver=0.9.0
 pkgrel=1
 pkgdesc='Run Windows apps on Linux with seamless integration'
@@ -13,7 +14,7 @@ install='winboat.install'
 provides=("$_pkgname")
 conflicts=("$_pkgname")
 options=("!strip" "!debug")
-source=("https://github.com/TibixDev/winboat/releases/download/v${pkgver}/winboat-${pkgver}-amd64.deb")
+source=("https://github.com/TibixDev/winboat/releases/download/v${_realver:-$pkgver}/winboat-${_realver:-$pkgver}-amd64.deb")
 sha256sums=('91d4d10d173fb572fba7c30ad49a2397374e4cde1bc5b4f807573890962afe4e')
 
 prepare() {

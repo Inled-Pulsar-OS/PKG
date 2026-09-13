@@ -255,20 +255,21 @@ build_single_package() {
 
     cd "$pkgbuild_dir"
 
-    # Update PKGBUILD pkgrel according to target branch (preserves upstream pkgver for git source tags)
+    # Update PKGBUILD pkgver according to target branch; pkgrel is strictly numeric
     local current_pkgver=$(grep -E '^pkgver=' "$pkgbuild_dir/PKGBUILD" | head -1 | cut -d= -f2)
     local clean_pkgver=$(echo "$current_pkgver" | sed -E 's/[._-]unstable.*$//')
-    sed -i "s/^pkgver=.*/pkgver=$clean_pkgver/" "$pkgbuild_dir/PKGBUILD"
 
     local current_pkgrel=$(grep -E '^pkgrel=' "$pkgbuild_dir/PKGBUILD" | head -1 | cut -d= -f2)
-    local clean_pkgrel=$(echo "$current_pkgrel" | sed -E 's/[._-]unstable.*$//')
+    local clean_pkgrel=$(echo "$current_pkgrel" | sed -E 's/[._-]unstable.*$//' | grep -oE '^[0-9]+' || echo "1")
+    sed -i "s/^pkgrel=.*/pkgrel=$clean_pkgrel/" "$pkgbuild_dir/PKGBUILD"
+
     if [ "$BRANCH" = "unstable" ]; then
-        local new_pkgrel="${clean_pkgrel}.unstable"
-        echo "🔄 Setting Arch package release for $name ($BRANCH): pkgrel=$current_pkgrel -> $new_pkgrel"
-        sed -i "s/^pkgrel=.*/pkgrel=$new_pkgrel/" "$pkgbuild_dir/PKGBUILD"
+        local new_pkgver="${clean_pkgver}.unstable"
+        echo "🔄 Setting Arch package version for $name ($BRANCH): pkgver=$current_pkgver -> $new_pkgver"
+        sed -i "s/^pkgver=.*/pkgver=$new_pkgver/" "$pkgbuild_dir/PKGBUILD"
     elif [ "$BRANCH" = "stable" ]; then
-        echo "🔄 Setting Arch package release for $name ($BRANCH): pkgrel=$current_pkgrel -> $clean_pkgrel"
-        sed -i "s/^pkgrel=.*/pkgrel=$clean_pkgrel/" "$pkgbuild_dir/PKGBUILD"
+        echo "🔄 Setting Arch package version for $name ($BRANCH): pkgver=$current_pkgver -> $clean_pkgver"
+        sed -i "s/^pkgver=.*/pkgver=$clean_pkgver/" "$pkgbuild_dir/PKGBUILD"
     fi
 
     # Export PULSAR_VERSION for the makepkg environment
