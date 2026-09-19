@@ -1,3 +1,0 @@
-#!/bin/sh
-# Openbox autostart for Tube OS TV
-/usr/bin/tubeos-ui &
