@@ -4147,7 +4147,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     "GRUB_TIMEOUT_STYLE": "menu",
                     "GRUB_GFXMODE": '"1920x1080,1280x720,1024x768,auto"',
                     "GRUB_CMDLINE_LINUX": '"rootflags=subvol=@"',
-                    "GRUB_CMDLINE_LINUX_DEFAULT": f'"quiet splash{rl_resume_opts}"',
+                    "GRUB_CMDLINE_LINUX_DEFAULT": f'"rw quiet splash{rl_resume_opts}"',
                 }
 
                 # Check if GRUB theme exists
@@ -4662,7 +4662,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                         except Exception:
                             pass
 
-                # 3. Configure /etc/environment with cursor theme and VM Wayland compatibility
+                # 3. Configure /etc/environment with cursor theme
                 env_path = "/mnt/etc/environment"
                 env_lines = []
                 if os.path.isfile(env_path):
@@ -4671,9 +4671,6 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                 env_lines = [l for l in env_lines if not l.startswith("XCURSOR_THEME=") and not l.startswith("XCURSOR_SIZE=") and not l.startswith("MUTTER_DEBUG_") and not l.startswith("WLR_NO_HARDWARE_CURSORS")]
                 env_lines.append("XCURSOR_THEME=MacTahoe-dark")
                 env_lines.append("XCURSOR_SIZE=24")
-                env_lines.append("MUTTER_DEBUG_ENABLE_ATOMIC_KMS=0")
-                env_lines.append("MUTTER_DEBUG_FORCE_KMS_MODE=fallback")
-                env_lines.append("WLR_NO_HARDWARE_CURSORS=1")
                 os.makedirs(os.path.dirname(env_path), exist_ok=True)
                 with open(env_path, "w") as ef:
                     ef.write("\n".join(env_lines) + "\n")
