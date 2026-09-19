@@ -1,5 +1,5 @@
 Package: tubeos-plymouth
-Version: 0.1.1
+Version: 0.1.2
 Section: graphics
 Priority: optional
 Architecture: all
