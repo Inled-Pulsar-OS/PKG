@@ -1,0 +1,63 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Ensure every real local user has an AccountsService session entry
+# ==============================================================================
+# Users created from the CLI (useradd/adduser) have no
+# /var/lib/AccountsService/users/<user> file, so SDDM cannot know which session
+# to start: sessionModel.lastIndex is -1 and the greeter enters a login loop.
+# This service creates a minimal AccountsService entry pointing to GNOME for
+# every real local user (uid >= 1000, excluding 'live' and 'nobody'), WITHOUT
+# touching users who already chose another session (any existing Session=
+# value is preserved).
+#
+# Paths can be overridden for testing:
+#   PULSAR_AS_USERS_DIR, PULSAR_PASSWD, PULSAR_DEFAULT_SESSION
+# ==============================================================================
+set -u
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
+AS_USERS_DIR="${PULSAR_AS_USERS_DIR:-/var/lib/AccountsService/users}"
+PASSWD_FILE="${PULSAR_PASSWD:-/etc/passwd}"
+SESSION_NAME="${PULSAR_DEFAULT_SESSION:-gnome}"
+DEFAULT_XSESSION="${PULSAR_DEFAULT_XSESSION:-${SESSION_NAME}}"
+
+[ -r "$PASSWD_FILE" ] || exit 0
+mkdir -p "$AS_USERS_DIR" 2>/dev/null || exit 0
+
+awk -F: '$3 >= 1000 && $3 != 65534 && $1 != "live" {print $1}' "$PASSWD_FILE" |
+while IFS= read -r user; do
+    [ -n "$user" ] || continue
+    file="$AS_USERS_DIR/$user"
+
+    if [ ! -f "$file" ]; then
+        cat > "$file" <<EOF
+[User]
+Language=
+Session=${SESSION_NAME}
+XSession=${DEFAULT_XSESSION}
+SystemAccount=false
+EOF
+        chown root:root "$file" 2>/dev/null || true
+        chmod 600 "$file" 2>/dev/null || true
+        echo "pulsar-ensure-user-session: creado $file con Session=${SESSION_NAME}"
+        continue
+    fi
+
+    changed=0
+    if ! grep -q "^Session=" "$file" 2>/dev/null; then
+        printf "Session=%s\n" "$SESSION_NAME" >> "$file" 2>/dev/null || true
+        changed=1
+    fi
+    if ! grep -q "^XSession=" "$file" 2>/dev/null; then
+        printf "XSession=%s\n" "$DEFAULT_XSESSION" >> "$file" 2>/dev/null || true
+        changed=1
+    fi
+    if [ "$changed" = 1 ]; then
+        chown root:root "$file" 2>/dev/null || true
+        chmod 600 "$file" 2>/dev/null || true
+        echo "pulsar-ensure-user-session: actualizado $file (Session=${SESSION_NAME})"
+    fi
+done
+
+exit 0

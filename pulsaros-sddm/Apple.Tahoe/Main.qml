@@ -56,7 +56,11 @@ Rectangle {
     function submitLogin() {
         if (isAuthenticating) return
         isAuthenticating = true
-        sddm.login(users.finalLoginUserName, password.text, session.currentIndex)
+        // A user created via CLI has no saved session (AccountsService / state.conf):
+        // sessionModel.lastIndex is -1 and passing that to sddm.login() makes the
+        // greeter fail and loop. Clamp to a valid index (0) so the first session
+        // (GNOME) is selected.
+        sddm.login(users.finalLoginUserName, password.text, Math.max(0, session.currentIndex))
     }
 
     FontLoader {
@@ -554,7 +558,10 @@ Rectangle {
                 model: sessionModel
                 textRole: "name"
                 displayText: ""
-                currentIndex: sessionModel.lastIndex
+                // Clamp: a user without a saved session reports -1 as lastIndex,
+                // which would otherwise make the greeter enter a login loop (see
+                // submitLogin()). Math.max(0, ...) falls back to the first session.
+                currentIndex: Math.max(0, sessionModel.lastIndex)
                 background: Rectangle {
                     implicitWidth: parent.width
                     implicitHeight: parent.height

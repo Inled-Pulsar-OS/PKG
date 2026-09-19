@@ -36,7 +36,8 @@ PlasmaComponents3.ToolButton {
     font.pointSize: config.fontSize
 
     Component.onCompleted: {
-        currentIndex = sessionModel.lastIndex
+        // Clamp: users without a saved session report -1, which breaks the login.
+        currentIndex = Math.max(0, sessionModel.lastIndex)
     }
 
     menu: QQC.Menu {

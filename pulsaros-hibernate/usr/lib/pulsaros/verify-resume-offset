@@ -133,9 +133,10 @@ repair_refind_file() {
 
     cp -a "$target" "${target}.bak" 2>/dev/null || true
 
-    # Strip existing resume parameters cleanly
-    sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' "$target" 2>/dev/null || true
-    sed -i 's/resume=UUID=[^ "]* //g; s/resume_offset=[^ "]* //g; s/zswap\.enabled=[^ "]* //g' "$target" 2>/dev/null || true
+    # Strip existing resume parameters cleanly (handles params with OR without
+    # a leading space, e.g. right after a quote or after root=UUID=...)
+    sed -i -E 's/(^|[ "])resume=UUID=[^ "]*( |$)/\2/g; s/(^|[ "])resume_offset=[0-9]*( |$)/\2/g; s/(^|[ "])zswap\.enabled=[^ "]*( |$)/\2/g' "$target" 2>/dev/null || true
+    sed -i -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/[[:space:]]{2,}/ /g' "$target" 2>/dev/null || true
 
     # Inject new resume parameters right after root=UUID=... or rootflags=...
     if grep -q 'root=UUID=' "$target" 2>/dev/null; then
@@ -228,13 +229,30 @@ repair_grub() {
 
     cp -a "$GRUB_DEFAULT" "${GRUB_DEFAULT}.bak" 2>/dev/null || true
 
-    # Strip existing resume parameters from GRUB_CMDLINE_LINUX_DEFAULT
-    sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' "$GRUB_DEFAULT" 2>/dev/null || true
-    if grep -q "^#\?GRUB_CMDLINE_LINUX_DEFAULT=" "$GRUB_DEFAULT" 2>/dev/null; then
-        sed -i "s|^#\?GRUB_CMDLINE_LINUX_DEFAULT=[\"']\(.*\)[\"']|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${desired}\"|" "$GRUB_DEFAULT" 2>/dev/null || true
+    # Strip existing resume parameters from the whole file (GRUB_CMDLINE_LINUX_DEFAULT
+    # and friends). Handles params with OR without a leading space: right after the
+    # opening quote, between other params, or trailing before the closing quote.
+    sed -i -E "s/(^|[\"' ])resume=UUID=[^ \"']*(\"|'| |\$)/\1\2/g; s/(^|[\"' ])resume_offset=[0-9]*(\"|'| |\$)/\1\2/g; s/(^|[\"' ])zswap\.enabled=[^ \"']*(\"|'| |\$)/\1\2/g" "$GRUB_DEFAULT" 2>/dev/null || true
+    # Collapse leftover whitespace left by the stripped parameters
+    sed -i -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/[[:space:]]{2,}/ /g' "$GRUB_DEFAULT" 2>/dev/null || true
+
+    if grep -q '^GRUB_CMDLINE_LINUX_DEFAULT="[^"]*"$' "$GRUB_DEFAULT" 2>/dev/null; then
+        # Double-quoted value: append before the closing quote
+        sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"\$|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${desired}\"|" "$GRUB_DEFAULT" 2>/dev/null || true
+    elif grep -q "^GRUB_CMDLINE_LINUX_DEFAULT='[^']*'\$" "$GRUB_DEFAULT" 2>/dev/null; then
+        # Single-quoted value: append before the closing quote
+        sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT='\(.*\)'\$|GRUB_CMDLINE_LINUX_DEFAULT='\1 ${desired}'|" "$GRUB_DEFAULT" 2>/dev/null || true
+    elif grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "$GRUB_DEFAULT" 2>/dev/null; then
+        # Unquoted / partially-quoted value: wrap the whole line value in quotes
+        sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=\(.*\)\$|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${desired}\"|" "$GRUB_DEFAULT" 2>/dev/null || true
     else
+        # Only a commented example (or nothing at all): append an active line
+        # (do NOT uncomment: grub-mkconfig honors the last assignment)
         echo "GRUB_CMDLINE_LINUX_DEFAULT=\"quiet splash ${desired}\"" >> "$GRUB_DEFAULT"
     fi
+
+    # Final cleanup: collapse any runs of spaces left inside the value
+    sed -i -E 's/[[:space:]]{2,}/ /g' "$GRUB_DEFAULT" 2>/dev/null || true
 
     log "✔ $GRUB_DEFAULT actualizado con ${desired}"
     if command -v update-grub >/dev/null 2>&1; then

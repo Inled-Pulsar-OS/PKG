@@ -3980,9 +3980,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             try:
                                 with open("/mnt/boot/refind_linux.conf", "r") as rf:
                                     rl_data = rf.read()
-                                rl_data = re.sub(r' resume=UUID=[^\s"\']*', '', rl_data)
-                                rl_data = re.sub(r' resume_offset=\d+', '', rl_data)
-                                rl_data = re.sub(r' zswap\.enabled=\d+', '', rl_data)
+                                # Strip existing resume parameters cleanly (with OR without a
+                                # leading space; e.g. right after '"' or 'root=UUID=...')
+                                rl_data = re.sub(r'(?:^|[\s"\'])(?:resume=UUID=[^\s"\']+|resume_offset=\d+|zswap\.enabled=\d+)',
+                                                 lambda m: m.group(1).strip() or ' ', rl_data)
+                                rl_data = re.sub(r'\s{2,}', ' ', rl_data)
                                 rl_data = re.sub(r'(root=UUID=[^\s"\']*)', r'\1' + resume_opts, rl_data)
                                 with open("/mnt/boot/refind_linux.conf", "w") as rf:
                                     rf.write(rl_data)
@@ -4194,15 +4196,15 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
     # 1. Check dedicated PULSAR_RECOVERY partition
     if search --no-floppy --label --set=root PULSAR_RECOVERY; then
         if [ -f /boot/vmlinuz-recovery ]; then
-            linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+            linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /boot/initramfs-recovery.img
             set rec_found=1
         elif [ -f /recovery/vmlinuz-recovery ]; then
-            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /recovery/initramfs-recovery.img
             set rec_found=1
         elif [ -f /vmlinuz-recovery ]; then
-            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /initramfs-recovery.img
             set rec_found=1
         fi
@@ -4212,19 +4214,19 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
     if [ "$rec_found" = "0" ]; then
         if search --no-floppy --fs-uuid --set=root {root_uuid}; then
             if [ -f /@/boot/vmlinuz-recovery ]; then
-                linux /@/boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+                linux /@/boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
                 initrd /@/boot/initramfs-recovery.img
                 set rec_found=1
             elif [ -f /@/recovery/vmlinuz-recovery ]; then
-                linux /@/recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+                linux /@/recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
                 initrd /@/recovery/initramfs-recovery.img
                 set rec_found=1
             elif [ -f /boot/vmlinuz-recovery ]; then
-                linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+                linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
                 initrd /boot/initramfs-recovery.img
                 set rec_found=1
             elif [ -f /recovery/vmlinuz-recovery ]; then
-                linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+                linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
                 initrd /recovery/initramfs-recovery.img
                 set rec_found=1
             fi
@@ -4234,17 +4236,94 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
     # 3. Global device search by file
     if [ "$rec_found" = "0" ]; then
         if search --no-floppy --file --set=root /boot/vmlinuz-recovery; then
-            linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+            linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /boot/initramfs-recovery.img
             set rec_found=1
         elif search --no-floppy --file --set=root /recovery/vmlinuz-recovery; then
-            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /recovery/initramfs-recovery.img
             set rec_found=1
         elif search --no-floppy --file --set=root /vmlinuz-recovery; then
-            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /initramfs-recovery.img
             set rec_found=1
+        fi
+    fi
+}}
+
+menuentry "Pulsar OS Recovery (ACPI Compat)" --class recovery --class pulsaros-recovery --class os {{
+    insmod btrfs
+    insmod ext2
+    insmod part_gpt
+    insmod part_msdos
+
+    # Compat ACPI recovery: same discovery as above, but with acpi=noirq,
+    # irqpoll and nomodeset to work around "ACPI BIOS Error (bug)"/"ACPI Error"
+    # hangs under QEMU/OVMF (GNOME Boxes) and buggy real-world firmware.
+    set rec_done=0
+    set rec_base=""
+    if search --no-floppy --label --set=root PULSAR_RECOVERY; then
+        set rec_base=""
+    elif search --no-floppy --fs-uuid --set=root {root_uuid}; then
+        set rec_base="/@"
+    fi
+
+    for rec_path in "/recovery" "/boot" ""; do
+        if [ -f "${{rec_base}}${{rec_path}}/vmlinuz-recovery" ]; then
+            linux "${{rec_base}}${{rec_path}}/vmlinuz-recovery" boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live acpi=noirq irqpoll nomodeset nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd "${{rec_base}}${{rec_path}}/initramfs-recovery.img"
+            set rec_done=1
+            break
+        fi
+    done
+
+    if [ "$rec_done" != "1" ]; then
+        if search --no-floppy --file --set=root /recovery/vmlinuz-recovery; then
+            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live acpi=noirq irqpoll nomodeset nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd /recovery/initramfs-recovery.img
+            set rec_done=1
+        elif search --no-floppy --file --set=root /vmlinuz-recovery; then
+            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live acpi=noirq irqpoll nomodeset nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd /initramfs-recovery.img
+            set rec_done=1
+        fi
+    fi
+}}
+
+menuentry "Pulsar OS Recovery (ACPI Off / Minimal)" --class recovery --class pulsaros-recovery --class os {{
+    insmod btrfs
+    insmod ext2
+    insmod part_gpt
+    insmod part_msdos
+
+    # Last resort: ACPI completely disabled + no APIC. Slow but boots on the
+    # most broken firmware/VM ACPI tables.
+    set rec_done=0
+    set rec_base=""
+    if search --no-floppy --label --set=root PULSAR_RECOVERY; then
+        set rec_base=""
+    elif search --no-floppy --fs-uuid --set=root {root_uuid}; then
+        set rec_base="/@"
+    fi
+
+    for rec_path in "/recovery" "/boot" ""; do
+        if [ -f "${{rec_base}}${{rec_path}}/vmlinuz-recovery" ]; then
+            linux "${{rec_base}}${{rec_path}}/vmlinuz-recovery" boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live acpi=off noapic nolapic irqpoll nomodeset nvme_load=yes fsck.mode=skip loglevel=3 noprompt --
+            initrd "${{rec_base}}${{rec_path}}/initramfs-recovery.img"
+            set rec_done=1
+            break
+        fi
+    done
+
+    if [ "$rec_done" != "1" ]; then
+        if search --no-floppy --file --set=root /recovery/vmlinuz-recovery; then
+            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live acpi=off noapic nolapic irqpoll nomodeset nvme_load=yes fsck.mode=skip loglevel=3 noprompt --
+            initrd /recovery/initramfs-recovery.img
+            set rec_done=1
+        elif search --no-floppy --file --set=root /vmlinuz-recovery; then
+            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live acpi=off noapic nolapic irqpoll nomodeset nvme_load=yes fsck.mode=skip loglevel=3 noprompt --
+            initrd /initramfs-recovery.img
+            set rec_done=1
         fi
     fi
 }}
@@ -4254,7 +4333,21 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                     f.write(rec_script)
                 os.chmod(rec_script_path, 0o755)
 
-                # Run update-grub or grub-mkconfig
+                # Run update-grub or grub-mkconfig. grub-mkconfig/grub-probe need
+                # /proc, /sys and /dev inside the chroot or the generated grub.cfg
+                # can end up partially written (missing resume= parameters,
+                # broken root= probing). Bind them first and always clean up.
+                vfs_mounted = False
+                try:
+                    vfs_pairs = [("/dev", "/mnt/dev"), ("/proc", "/mnt/proc"), ("/sys", "/mnt/sys")]
+                    for src, dst in vfs_pairs:
+                        os.makedirs(dst, exist_ok=True)
+                        if not os.path.ismount(dst):
+                            exec_cmd(["mount", "--bind", src, dst])
+                    vfs_mounted = True
+                except Exception as vfs_err:
+                    log_msg(f"Warning: could not bind /dev,/proc,/sys for grub-mkconfig: {vfs_err}")
+
                 GLib.idle_add(self.update_progress, 0.94, "Generating GRUB multi-boot configuration...")
                 try:
                     if is_arch:
@@ -4267,6 +4360,13 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                     log_msg("GRUB configuration updated with dual-boot (os-prober) and recovery support.")
                 except Exception as g_cfg_err:
                     log_msg(f"Warning: GRUB config generation error: {g_cfg_err}")
+                finally:
+                    if vfs_mounted:
+                        for _, dst in reversed(vfs_pairs):
+                            try:
+                                exec_cmd(["umount", "-l", dst])
+                            except Exception:
+                                pass
 
             GLib.idle_add(self.update_progress, 0.90, "Installing bootloader...")
             exec_cmd(["mount", "--bind", "/dev", "/mnt/dev"])

@@ -1,0 +1,15 @@
+[Unit]
+Description=Ensure local users have an AccountsService session (gnome)
+# Users created via useradd/adduser lack /var/lib/AccountsService/users/<user>,
+# which makes SDDM's sessionModel.lastIndex = -1 and the greeter loop on login.
+DefaultDependencies=no
+After=local-fs.target accounts-daemon.service accountsservice.service
+Before=display-manager.service sddm.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/pulsaros/pulsar-ensure-user-session
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

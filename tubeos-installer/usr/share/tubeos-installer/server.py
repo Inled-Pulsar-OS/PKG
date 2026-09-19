@@ -366,7 +366,15 @@ def execute_installation_backend(config: Dict):
             update_installer_progress(0.12, "Formatting file systems")
             run(f"mkfs.vfat -F32 -n EFI {part_efi}")
             if fs_type == "btrfs":
-                run(f"mkfs.btrfs -f -L TUBEOS_ROOT {part_root}")
+                if not shutil.which("mkfs.btrfs"):
+                    append_installer_log("mkfs.btrfs not found, falling back to ext4...")
+                    fs_type = "ext4"
+            if fs_type == "btrfs":
+                r_mk = run(f"mkfs.btrfs -f -L TUBEOS_ROOT {part_root}")
+                if r_mk.returncode != 0:
+                    append_installer_log(f"mkfs.btrfs warning: {r_mk.stderr}, falling back to ext4")
+                    fs_type = "ext4"
+                    run(f"mkfs.ext4 -F -L TUBEOS_ROOT {part_root}")
             else:
                 run(f"mkfs.ext4 -F -L TUBEOS_ROOT {part_root}")
 
@@ -381,11 +389,20 @@ def execute_installation_backend(config: Dict):
                 run("btrfs subvolume create /mnt/@")
                 run("btrfs subvolume create /mnt/@home")
                 run("umount /mnt")
-                run(f"mount -t btrfs -o subvol=@,compress=zstd:1 {part_root} /mnt")
-                Path("/mnt/home").mkdir(parents=True, exist_ok=True)
-                run(f"mount -t btrfs -o subvol=@home,compress=zstd:1 {part_root} /mnt/home")
+                r_mnt = run(f"mount -t btrfs -o subvol=@,compress=zstd:1 {part_root} /mnt")
+                if r_mnt.returncode != 0:
+                    append_installer_log(f"Failed to mount btrfs subvol @, falling back to direct mount")
+                    run(f"mount -t btrfs {part_root} /mnt")
+                else:
+                    Path("/mnt/home").mkdir(parents=True, exist_ok=True)
+                    run(f"mount -t btrfs -o subvol=@home,compress=zstd:1 {part_root} /mnt/home")
             else:
                 run(f"mount {part_root} /mnt")
+
+            # Verify /mnt is actively mounted to prevent writing to RAM tmpfs
+            r_check = run("mountpoint -q /mnt")
+            if r_check.returncode != 0:
+                raise Exception(f"Failed to mount target root partition {part_root} on /mnt")
 
             Path("/mnt/boot/efi").mkdir(parents=True, exist_ok=True)
             run(f"mount {part_efi} /mnt/boot/efi")
@@ -397,6 +414,9 @@ def execute_installation_backend(config: Dict):
             part_efi = detect_efi_partition(disk) or detect_efi_partition()
             
             append_installer_log(f"Dual boot mode on {part_root}, EFI={part_efi}")
+            if fs_type == "btrfs" and not shutil.which("mkfs.btrfs"):
+                append_installer_log("mkfs.btrfs not found, falling back to ext4...")
+                fs_type = "ext4"
             if fs_type == "btrfs":
                 run(f"mkfs.btrfs -f -L TUBEOS_ROOT {part_root}")
                 cleanup_mounts()
@@ -405,14 +425,21 @@ def execute_installation_backend(config: Dict):
                 run("btrfs subvolume create /mnt/@")
                 run("btrfs subvolume create /mnt/@home")
                 run("umount /mnt")
-                run(f"mount -t btrfs -o subvol=@,compress=zstd:1 {part_root} /mnt")
-                Path("/mnt/home").mkdir(parents=True, exist_ok=True)
-                run(f"mount -t btrfs -o subvol=@home,compress=zstd:1 {part_root} /mnt/home")
+                r_mnt = run(f"mount -t btrfs -o subvol=@,compress=zstd:1 {part_root} /mnt")
+                if r_mnt.returncode != 0:
+                    run(f"mount -t btrfs {part_root} /mnt")
+                else:
+                    Path("/mnt/home").mkdir(parents=True, exist_ok=True)
+                    run(f"mount -t btrfs -o subvol=@home,compress=zstd:1 {part_root} /mnt/home")
             else:
                 run(f"mkfs.ext4 -F -L TUBEOS_ROOT {part_root}")
                 cleanup_mounts()
                 Path("/mnt").mkdir(parents=True, exist_ok=True)
                 run(f"mount {part_root} /mnt")
+
+            r_check = run("mountpoint -q /mnt")
+            if r_check.returncode != 0:
+                raise Exception(f"Failed to mount target root partition {part_root} on /mnt")
 
             if part_efi and is_efi:
                 Path("/mnt/boot/efi").mkdir(parents=True, exist_ok=True)
@@ -424,7 +451,9 @@ def execute_installation_backend(config: Dict):
             "rsync -aAXx --info=progress2 "
             "--exclude='/dev/*' --exclude='/proc/*' --exclude='/sys/*' "
             "--exclude='/tmp/*' --exclude='/run/*' --exclude='/mnt/*' "
-            "--exclude='/media/*' --exclude='/lost+found' "
+            "--exclude='/media/*' --exclude='/live/*' --exclude='/cdrom/*' "
+            "--exclude='/var/cache/apt/archives/*' --exclude='/var/lib/docker/*' "
+            "--exclude='/var/tmp/*' --exclude='/lost+found' "
             "/ /mnt/"
         )
         run(rsync_cmd)
@@ -1046,6 +1075,12 @@ def execute_installation_backend(config: Dict):
         Path("/mnt/var/lib/tubeos").mkdir(parents=True, exist_ok=True)
         Path("/mnt/var/lib/tubeos/need-ootb").touch()
 
+        # Configure systemd timeouts to prevent hangs on reboot/shutdown
+        sysd_conf_dir = Path("/mnt/etc/systemd/system.conf.d")
+        sysd_conf_dir.mkdir(parents=True, exist_ok=True)
+        with open(sysd_conf_dir / "10-fast-shutdown.conf", "w") as scf:
+            scf.write("[Manager]\nDefaultTimeoutStopSec=10s\nDefaultTimeoutStartSec=15s\nDefaultDeviceTimeoutSec=10s\n")
+
         # Copy and enable tubeos-ootb service
         Path("/mnt/usr/lib/systemd/system").mkdir(parents=True, exist_ok=True)
         shutil.copy(Path(__file__).parent / "tubeos-ootb.service", "/mnt/usr/lib/systemd/system/tubeos-ootb.service")
@@ -1237,7 +1272,11 @@ async def api_install_progress():
 
 @app.post("/api/reboot")
 async def api_reboot():
-    run("reboot", check=False)
+    def do_reboot():
+        time.sleep(1)
+        run("sync 2>/dev/null || true")
+        run("systemctl --force reboot || reboot -f || telinit 6", check=False)
+    threading.Thread(target=do_reboot, daemon=True).start()
     return {"status": "rebooting"}
 
 # ─── Main Entrypoint ───────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 # Maintainer: Pulsar OS Team <info@inled.es>
 pkgname=pulsaros-timemachine
-pkgver=1.0.0.unstable
+pkgver=1.0.0
 pkgrel=1
 pkgdesc="Pulsar OS Time Machine - Btrfs + Restic Continuous Backup & Restore"
 arch=('any')
