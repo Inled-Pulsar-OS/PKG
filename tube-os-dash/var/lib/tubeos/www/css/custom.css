@@ -1,1 +1,112 @@
-/*  Add your custom css style here */
+/* ==============================================================================
+   Tube OS Dashboard - Purple Accent & Visual Theme Overrides
+   ============================================================================== */
+
+:root {
+  --primary: #8b5cf6 !important;
+  --primary-rgb: 139, 92, 246 !important;
+  --primary-hover: #7c3aed !important;
+  --primary-active: #6d28d9 !important;
+  --primary-light: #a855f7 !important;
+  --primary-dark: #5b21b6 !important;
+  --accent: #a855f7 !important;
+  --bulma-primary: #8b5cf6 !important;
+  --bulma-primary-h: 258 !important;
+  --bulma-primary-s: 90% !important;
+  --bulma-primary-l: 66% !important;
+  --button-primary: #8b5cf6 !important;
+  --color-primary: #8b5cf6 !important;
+}
+
+/* Background & Wallpaper */
+body, #app, .dashboard, .casa-dashboard {
+  background-image: url(/img/wallpaper/wallpaper01.jpg) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-attachment: fixed !important;
+}
+
+/* Accent Buttons */
+.button.is-primary,
+button.is-primary,
+.is-primary {
+  background-color: #8b5cf6 !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+  transition: background-color 0.2s ease, transform 0.1s ease !important;
+}
+
+.button.is-primary:hover,
+button.is-primary:hover {
+  background-color: #7c3aed !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+}
+
+.button.is-primary:active,
+button.is-primary:active {
+  background-color: #6d28d9 !important;
+}
+
+/* Links & Text Accents */
+a,
+.has-text-primary,
+.text-primary,
+.is-text-primary {
+  color: #a855f7 !important;
+}
+
+a:hover {
+  color: #c084fc !important;
+}
+
+/* Switches and Checkboxes */
+.switch input[type="checkbox"]:checked + .check,
+.b-checkbox input[type="checkbox"]:checked + .check {
+  background-color: #8b5cf6 !important;
+  border-color: #8b5cf6 !important;
+}
+
+.b-radio input[type="radio"]:checked + .check {
+  border-color: #8b5cf6 !important;
+}
+
+.b-radio input[type="radio"]:checked + .check:before {
+  background: #8b5cf6 !important;
+}
+
+/* Focus States & Inputs */
+input:focus,
+select:focus,
+textarea:focus,
+.input:focus,
+.textarea:focus,
+.select select:focus {
+  border-color: #8b5cf6 !important;
+  box-shadow: 0 0 0 0.125em rgba(139, 92, 246, 0.28) !important;
+}
+
+/* Progress & Sliders */
+progress.is-primary::-webkit-progress-value,
+.progress.is-primary::-webkit-progress-value {
+  background-color: #8b5cf6 !important;
+}
+
+progress.is-primary::-moz-progress-bar,
+.progress.is-primary::-moz-progress-bar {
+  background-color: #8b5cf6 !important;
+}
+
+/* App Store and Navigation Highlights */
+.sidebar .router-link-active,
+.sidebar .is-active,
+.tabs li.is-active a {
+  border-bottom-color: #8b5cf6 !important;
+  color: #a855f7 !important;
+}
+
+/* Tags and Badges */
+.tag.is-primary {
+  background-color: #8b5cf6 !important;
+  color: #fff !important;
+}

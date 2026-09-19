@@ -879,10 +879,34 @@ def execute_installation_backend(config: Dict):
         else:
             run_chroot("update-initramfs -u -k all 2>&1 || true")
 
+        # Configure Plymouth theme in target
+        append_installer_log("Configuring Tube OS Plymouth theme...")
+        run_chroot("plymouth-set-default-theme tubeos 2>/dev/null || true")
+        if distro == "debian":
+            run_chroot("update-initramfs -u -k all 2>&1 || true")
+        else:
+            run_chroot("mkinitcpio -P 2>&1 || true")
+
         update_installer_progress(0.92, "Installing and generating bootloader configuration")
 
-        # Write /etc/default/grub BEFORE generating menu entries so that
-        # grub-mkconfig produces a correct, nicely-labeled "Tube OS" menu.
+        # Copy Particle-circle-window GRUB theme to target
+        append_installer_log("Installing Tube OS modern graphical GRUB theme...")
+        theme_copied = False
+        target_theme_dir = Path("/mnt/boot/grub/themes/Particle-circle-window")
+        for theme_cand in [
+            "/boot/grub/themes/Particle-circle-window",
+            "/usr/share/grub/themes/Particle-circle-window",
+            "/run/live/medium/boot/grub/themes/Particle-circle-window",
+        ]:
+            if os.path.isdir(theme_cand) and os.path.isfile(os.path.join(theme_cand, "theme.txt")):
+                target_theme_dir.parent.mkdir(parents=True, exist_ok=True)
+                if target_theme_dir.exists():
+                    shutil.rmtree(target_theme_dir)
+                shutil.copytree(theme_cand, target_theme_dir)
+                theme_copied = True
+                break
+
+        # Write /etc/default/grub BEFORE generating menu entries
         append_installer_log("Writing /etc/default/grub configuration...")
         grub_cmdline = ""
         if fs_type == "btrfs":
@@ -894,6 +918,9 @@ def execute_installation_backend(config: Dict):
                 f"GRUB_DEFAULT=\"0\"\n"
                 f"GRUB_TIMEOUT=\"{os.environ.get('TUBEOS_GRUB_TIMEOUT', '5')}\"\n"
                 f"GRUB_DISTRIBUTOR=\"Tube OS\"\n"
+                f"GRUB_THEME=\"/boot/grub/themes/Particle-circle-window/theme.txt\"\n"
+                f"GRUB_GFXMODE=\"1920x1080,1280x720,auto\"\n"
+                f"GRUB_GFXPAYLOAD_LINUX=\"keep\"\n"
                 f"GRUB_CMDLINE_LINUX=\"\"\n"
                 f"GRUB_CMDLINE_LINUX_DEFAULT=\"quiet splash {grub_cmdline}\"\n"
                 f"GRUB_DISABLE_OS_PROBER=\"false\"\n"

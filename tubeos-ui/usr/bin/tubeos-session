@@ -13,5 +13,14 @@ xset s noblank 2>/dev/null || true
 picom -b --config /dev/null --backend glx 2>/dev/null || picom -b 2>/dev/null || true
 unclutter --idle 3 --root 2>/dev/null &
 
+# Set Tube OS wallpaper
+if [ -f /usr/share/backgrounds/tubeos/wallpaper.jpg ] && command -v feh >/dev/null 2>&1; then
+    feh --bg-fill /usr/share/backgrounds/tubeos/wallpaper.jpg 2>/dev/null || true
+elif [ -f /usr/share/backgrounds/tubeos/wallpaper.png ] && command -v feh >/dev/null 2>&1; then
+    feh --bg-fill /usr/share/backgrounds/tubeos/wallpaper.png 2>/dev/null || true
+elif command -v xsetroot >/dev/null 2>&1; then
+    xsetroot -solid "#1e1b2e" 2>/dev/null || true
+fi
+
 # Openbox with Tube OS autostart
 exec openbox --config-file /etc/xdg/openbox/rc.xml

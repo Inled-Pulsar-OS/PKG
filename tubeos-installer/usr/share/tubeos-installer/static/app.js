@@ -2,11 +2,10 @@
 // Tube OS - Installer & OOTB Controller
 // ==============================================================================
 
-const steps = ['backup', 'network', 'disk', 'edition', 'user', 'confirm', 'progress', 'done'];
+const steps = ['network', 'disk', 'edition', 'user', 'confirm', 'progress', 'done'];
 let currentStepIndex = 0;
 let maxVisitedStepIndex = 0;
 let isOotbMode = false;
-let backupAcknowledged = true;
 
 const wizardData = {
   distro: 'arch',
@@ -232,11 +231,7 @@ function updateStepView() {
     btnBack.style.display = 'inline-flex';
   }
 
-  if (currentStep === 'backup') {
-    btnCont.disabled = !backupAcknowledged;
-  } else {
-    btnCont.disabled = false;
-  }
+  btnCont.disabled = false;
 
   if (currentStep === 'confirm') {
     populateSummary();
@@ -564,9 +559,74 @@ async function pollProgress() {
 }
 
 async function rebootSystem() {
+  const host = window.location.hostname || 'tubeos.local';
+  const targetUrl = `http://${host}/`;
+
+  // Show reboot waiting overlay
+  document.body.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-align:center;background:#09090b;padding:24px;">
+      <div style="width:56px;height:56px;border:3px solid rgba(139,92,246,0.25);border-top-color:#8b5cf6;border-radius:50%;animation:spin 1s cubic-bezier(0.4,0,0.2,1) infinite;margin-bottom:24px;"></div>
+      <h2 style="font-size:22px;font-weight:600;margin-bottom:8px;color:#fff;">Restarting Tube OS...</h2>
+      <p style="color:#a1a1aa;font-size:14px;max-width:420px;line-height:1.5;margin-bottom:24px;" id="reboot-status">
+        Your system is restarting. Waiting for the system and CasaOS services to come online...
+      </p>
+      <div id="manual-redirect-box" style="display:none;margin-top:10px;">
+        <a href="${targetUrl}" class="mac-btn mac-btn-primary" style="text-decoration:none;padding:10px 24px;border-radius:8px;background:#8b5cf6;color:#fff;font-size:13px;font-weight:500;">Open Dashboard</a>
+      </div>
+    </div>
+    <style>
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+  `;
+
   try {
     await fetch('/api/reboot', { method: 'POST' });
   } catch (err) {
-    console.error('Reboot failed:', err);
+    console.log('Reboot triggered:', err);
   }
+
+  // After 25 seconds, display manual redirect button as fallback
+  setTimeout(() => {
+    const btnBox = document.getElementById('manual-redirect-box');
+    if (btnBox) btnBox.style.display = 'block';
+  }, 25000);
+
+  // Poll for CasaOS / system response
+  let pollCount = 0;
+  const pollTimer = setInterval(async () => {
+    pollCount++;
+    try {
+      const res = await fetch(`http://${host}/v1/sys/version`, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: { 'Accept': 'application/json' },
+      });
+
+      if (res.status > 0) {
+        clearInterval(pollTimer);
+        const st = document.getElementById('reboot-status');
+        if (st) st.innerText = 'Tube OS is online! Loading CasaOS...';
+        setTimeout(() => {
+          window.location.href = targetUrl;
+        }, 1200);
+      }
+    } catch (_) {
+      try {
+        const rootRes = await fetch(`http://${host}/`, {
+          method: 'HEAD',
+          cache: 'no-store',
+        });
+        if (rootRes.status > 0) {
+          clearInterval(pollTimer);
+          const st = document.getElementById('reboot-status');
+          if (st) st.innerText = 'Tube OS is online! Loading CasaOS...';
+          setTimeout(() => {
+            window.location.href = targetUrl;
+          }, 1200);
+        }
+      } catch (__) {
+        // Still rebooting
+      }
+    }
+  }, 2000);
 }

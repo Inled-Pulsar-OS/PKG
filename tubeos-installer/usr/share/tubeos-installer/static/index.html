@@ -23,27 +23,23 @@
         </div>
 
         <nav class="sidebar-nav" id="sidebar-nav-links">
-          <div class="nav-item active" id="nav-backup" onclick="onNavClick(0)">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-            <span>Backup</span>
-          </div>
-          <div class="nav-item" id="nav-network" onclick="onNavClick(1)">
+          <div class="nav-item active" id="nav-network" onclick="onNavClick(0)">
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
             <span>Network</span>
           </div>
-          <div class="nav-item" id="nav-disk" onclick="onNavClick(2)">
+          <div class="nav-item" id="nav-disk" onclick="onNavClick(1)">
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
             <span>Destination Disk</span>
           </div>
-          <div class="nav-item" id="nav-edition" onclick="onNavClick(3)">
+          <div class="nav-item" id="nav-edition" onclick="onNavClick(2)">
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="15" rx="2"></rect><polyline points="17 2 12 7 7 2"></polyline></svg>
             <span>Edition</span>
           </div>
-          <div class="nav-item" id="nav-user" onclick="onNavClick(4)">
+          <div class="nav-item" id="nav-user" onclick="onNavClick(3)">
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
             <span>Configuration</span>
           </div>
-          <div class="nav-item" id="nav-confirm" onclick="onNavClick(5)">
+          <div class="nav-item" id="nav-confirm" onclick="onNavClick(4)">
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
             <span>Summary</span>
           </div>
@@ -52,52 +48,9 @@
 
       <!-- Right Content Pages -->
       <main class="panel-content">
-        
-        <!-- STEP 0: Docker & Data Backup (DockerMigrate) -->
-        <section class="step-container active" id="step-backup">
-          <div class="step-headline">
-            <h2>Existing Data & Backup</h2>
-            <p>Back up your Docker containers, volumes, and configurations with DockerMigrate before installing.</p>
-          </div>
 
-          <div class="backup-card">
-            <div class="backup-header">
-              <div class="backup-badge-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-              </div>
-              <div>
-                <h3 style="font-size: 15px; font-weight: 600; color: #fff;">DockerMigrate Backup Tool</h3>
-                <span style="font-size: 12px; color: var(--text-secondary);">Protect your existing setup before formatting storage drives.</span>
-              </div>
-            </div>
-
-            <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 12px 0 16px 0;">
-              If this computer or drive has existing Docker containers, media server stacks, databases, or volume data, you can use <strong>DockerMigrate</strong> to export all containers and configuration before continuing.
-            </p>
-
-            <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px;">
-              <a href="https://github.com/Inled-Pulsar-OS/dockermigrate" target="_blank" class="mac-btn mac-btn-primary" style="text-decoration: none;">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-                <span>Open DockerMigrate Repo & Instructions</span>
-              </a>
-              <button type="button" class="mac-btn mac-btn-secondary" onclick="openDockerMigrate()">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"></rect><rect x="2" y="14" width="20" height="8" rx="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
-                <span>Open Local DockerMigrate (Port 8070)</span>
-              </button>
-            </div>
-
-            <div class="option-row selected" id="backup-ack-row" onclick="toggleBackupAck()">
-              <input type="checkbox" id="backup-ack" checked class="option-radio">
-              <div class="option-text">
-                <strong>I am ready to proceed with installation</strong>
-                <span>I have backed up necessary data with DockerMigrate or this is a fresh setup.</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- STEP 1: Network -->
-        <section class="step-container" id="step-network">
+        <!-- STEP 0: Network -->
+        <section class="step-container active" id="step-network">
           <div class="step-headline">
             <h2>Network Connection</h2>
             <p>Verify network and package mirror connectivity.</p>
