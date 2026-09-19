@@ -562,22 +562,25 @@ async function rebootSystem() {
   const host = window.location.hostname || 'tubeos.local';
   const targetUrl = `http://${host}/`;
 
-  // Show reboot waiting overlay
-  document.body.innerHTML = `
-    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-align:center;background:#09090b;padding:24px;">
-      <div style="width:56px;height:56px;border:3px solid rgba(139,92,246,0.25);border-top-color:#8b5cf6;border-radius:50%;animation:spin 1s cubic-bezier(0.4,0,0.2,1) infinite;margin-bottom:24px;"></div>
-      <h2 style="font-size:22px;font-weight:600;margin-bottom:8px;color:#fff;">Restarting Tube OS...</h2>
-      <p style="color:#a1a1aa;font-size:14px;max-width:420px;line-height:1.5;margin-bottom:24px;" id="reboot-status">
-        Your system is restarting. Waiting for the system and CasaOS services to come online...
-      </p>
-      <div id="manual-redirect-box" style="display:none;margin-top:10px;">
-        <a href="${targetUrl}" class="mac-btn mac-btn-primary" style="text-decoration:none;padding:10px 24px;border-radius:8px;background:#8b5cf6;color:#fff;font-size:13px;font-weight:500;">Open Dashboard</a>
+  // Show reboot waiting inside the installer glass panel without breaking ambient background
+  const panel = document.querySelector('.installer-panel');
+  if (panel) {
+    panel.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;width:100%;padding:48px 32px;text-align:center;">
+        <div style="width:48px;height:48px;border:3px solid rgba(139,92,246,0.2);border-top-color:#8b5cf6;border-radius:50%;animation:spin 1s cubic-bezier(0.4,0,0.2,1) infinite;margin-bottom:20px;"></div>
+        <h2 style="font-size:22px;font-weight:600;margin-bottom:8px;color:#fff;letter-spacing:-0.3px;">Restarting Tube OS...</h2>
+        <p style="color:var(--text-secondary);font-size:13.5px;max-width:440px;line-height:1.5;margin-bottom:22px;" id="reboot-status">
+          Your system is restarting. Waiting for the system and CasaOS services to come online...
+        </p>
+        <div id="manual-redirect-box" style="display:none;">
+          <a href="${targetUrl}" class="mac-btn mac-btn-primary" style="text-decoration:none;padding:9px 24px;">Open Dashboard</a>
+        </div>
       </div>
-    </div>
-    <style>
-      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    </style>
-  `;
+      <style>
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      </style>
+    `;
+  }
 
   try {
     await fetch('/api/reboot', { method: 'POST' });

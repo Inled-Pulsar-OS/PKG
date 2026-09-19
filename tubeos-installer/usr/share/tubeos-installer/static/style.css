@@ -14,13 +14,11 @@
   
   --border-main: rgba(255, 255, 255, 0.09);
   --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-selected: #9b59dd;
-
-  --accent-primary: #9b59dd;
-  --accent-secondary: #d062d2;
-  --accent-btn: linear-gradient(135deg, #9b59dd 0%, #d062d2 100%);
-  --accent-btn-hover: linear-gradient(135deg, #ab6be9 0%, #dc72de 100%);
-  --accent-btn-active: linear-gradient(135deg, #8843ce 0%, #b84ec0 100%);
+  --accent-primary: #8b5cf6;
+  --accent-secondary: #7c3aed;
+  --accent-btn: #8b5cf6;
+  --accent-btn-hover: #7c3aed;
+  --accent-btn-active: #6d28d9;
 
   --text-primary: #ffffff;
   --text-secondary: #a1a1aa;
@@ -618,10 +616,11 @@ select.mac-input option {
   font-family: inherit;
   cursor: pointer;
   transition: all 0.15s ease;
-  border: none;
+  border: 1px solid transparent;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 7px;
   user-select: none;
 }
 
@@ -631,22 +630,24 @@ select.mac-input option {
 }
 
 .mac-btn-primary {
-  background: var(--accent-btn);
+  background: #8b5cf6;
+  border-color: rgba(255, 255, 255, 0.12);
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(155, 89, 221, 0.35);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
 .mac-btn-primary:hover:not(:disabled) {
-  background: var(--accent-btn-hover);
+  background: #7c3aed;
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .mac-btn-primary:active:not(:disabled) {
-  background: var(--accent-btn-active);
+  background: #6d28d9;
 }
 
 .mac-btn-secondary {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   color: #f0f0f5;
 }
 
@@ -654,14 +655,23 @@ select.mac-input option {
   background: rgba(255, 255, 255, 0.12);
 }
 
+.mac-btn-secondary:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+}
+
 .mac-btn-danger {
-  background: linear-gradient(180deg, #e11d48 0%, #be123c 100%);
+  background: #e11d48;
+  border-color: rgba(255, 255, 255, 0.12);
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(225, 29, 72, 0.35);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
 .mac-btn-danger:hover:not(:disabled) {
-  background: linear-gradient(180deg, #f43f5e 0%, #e11d48 100%);
+  background: #be123c;
+}
+
+.mac-btn-danger:active:not(:disabled) {
+  background: #9f1239;
 }
 
 /* Backup Card & Elements */

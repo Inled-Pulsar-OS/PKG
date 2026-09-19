@@ -1,5 +1,6 @@
 /* ==============================================================================
    Tube OS Dashboard - Purple Accent & Visual Theme Overrides
+   Primary: #8b5cf6, Primary Hover: #7c3aed, Light Accent: #a78bfa
    ============================================================================== */
 
 :root {
@@ -7,62 +8,111 @@
   --primary-rgb: 139, 92, 246 !important;
   --primary-hover: #7c3aed !important;
   --primary-active: #6d28d9 !important;
-  --primary-light: #a855f7 !important;
+  --primary-light: #a78bfa !important;
   --primary-dark: #5b21b6 !important;
-  --accent: #a855f7 !important;
+  --accent: #8b5cf6 !important;
+  --accent-color: #8b5cf6 !important;
+  --link: #8b5cf6 !important;
+  --info: #8b5cf6 !important;
   --bulma-primary: #8b5cf6 !important;
   --bulma-primary-h: 258 !important;
   --bulma-primary-s: 90% !important;
   --bulma-primary-l: 66% !important;
+  --bulma-link: #8b5cf6 !important;
+  --bulma-info: #8b5cf6 !important;
   --button-primary: #8b5cf6 !important;
   --color-primary: #8b5cf6 !important;
+  --casa-primary: #8b5cf6 !important;
 }
 
-/* Background & Wallpaper */
-body, #app, .dashboard, .casa-dashboard {
+/* Background & Wallpaper matching Installer Ambient Gradient */
+body, #app, .dashboard, .casa-dashboard, .main-background {
   background-image: url(/img/wallpaper/wallpaper01.jpg) !important;
   background-size: cover !important;
   background-position: center !important;
   background-attachment: fixed !important;
 }
 
-/* Accent Buttons */
+/* Buttons - All Blue / Primary / Link Buttons Override */
 .button.is-primary,
 button.is-primary,
-.is-primary {
+.is-primary,
+.button.is-link,
+button.is-link,
+.is-link,
+.button.is-info,
+button.is-info,
+.is-info,
+.casa-btn-primary,
+.btn-primary {
   background-color: #8b5cf6 !important;
-  border-color: transparent !important;
+  border-color: #8b5cf6 !important;
   color: #ffffff !important;
-  transition: background-color 0.2s ease, transform 0.1s ease !important;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3) !important;
 }
 
 .button.is-primary:hover,
-button.is-primary:hover {
+button.is-primary:hover,
+.button.is-link:hover,
+button.is-link:hover,
+.button.is-info:hover,
+button.is-info:hover,
+.casa-btn-primary:hover,
+.btn-primary:hover {
   background-color: #7c3aed !important;
-  border-color: transparent !important;
+  border-color: #7c3aed !important;
   color: #ffffff !important;
 }
 
 .button.is-primary:active,
-button.is-primary:active {
+button.is-primary:active,
+.button.is-link:active,
+button.is-link:active,
+.casa-btn-primary:active {
   background-color: #6d28d9 !important;
+  border-color: #6d28d9 !important;
 }
 
-/* Links & Text Accents */
+/* Outlined and Light Buttons */
+.button.is-primary.is-outlined,
+.button.is-link.is-outlined {
+  background-color: transparent !important;
+  border-color: #8b5cf6 !important;
+  color: #8b5cf6 !important;
+}
+
+.button.is-primary.is-outlined:hover,
+.button.is-link.is-outlined:hover {
+  background-color: #8b5cf6 !important;
+  color: #ffffff !important;
+}
+
+.button.is-primary.is-light,
+.button.is-link.is-light {
+  background-color: rgba(139, 92, 246, 0.15) !important;
+  color: #c4b5fd !important;
+}
+
+/* Text and Icon Accents */
 a,
 .has-text-primary,
+.has-text-link,
+.has-text-info,
 .text-primary,
 .is-text-primary {
-  color: #a855f7 !important;
+  color: #a78bfa !important;
 }
 
-a:hover {
-  color: #c084fc !important;
+a:hover,
+.has-text-primary:hover,
+.has-text-link:hover {
+  color: #c4b5fd !important;
 }
 
-/* Switches and Checkboxes */
+/* Switches, Checkboxes, and Radios */
 .switch input[type="checkbox"]:checked + .check,
-.b-checkbox input[type="checkbox"]:checked + .check {
+.b-checkbox input[type="checkbox"]:checked + .check,
+.b-switch input[type="checkbox"]:checked + .check {
   background-color: #8b5cf6 !important;
   border-color: #8b5cf6 !important;
 }
@@ -75,38 +125,100 @@ a:hover {
   background: #8b5cf6 !important;
 }
 
-/* Focus States & Inputs */
+/* Inputs, Textareas, Selects on Focus */
 input:focus,
 select:focus,
 textarea:focus,
 .input:focus,
 .textarea:focus,
-.select select:focus {
+.select select:focus,
+.is-focused {
   border-color: #8b5cf6 !important;
-  box-shadow: 0 0 0 0.125em rgba(139, 92, 246, 0.28) !important;
+  box-shadow: 0 0 0 0.125em rgba(139, 92, 246, 0.25) !important;
 }
 
-/* Progress & Sliders */
+/* Progress Bars, Sliders & Rings */
 progress.is-primary::-webkit-progress-value,
-.progress.is-primary::-webkit-progress-value {
+.progress.is-primary::-webkit-progress-value,
+progress.is-link::-webkit-progress-value,
+.progress.is-link::-webkit-progress-value,
+progress.is-info::-webkit-progress-value,
+.progress.is-info::-webkit-progress-value {
   background-color: #8b5cf6 !important;
 }
 
 progress.is-primary::-moz-progress-bar,
-.progress.is-primary::-moz-progress-bar {
+.progress.is-primary::-moz-progress-bar,
+progress.is-link::-moz-progress-bar,
+.progress.is-link::-moz-progress-bar {
   background-color: #8b5cf6 !important;
 }
 
-/* App Store and Navigation Highlights */
+.b-slider .b-slider-track .b-slider-fill {
+  background-color: #8b5cf6 !important;
+}
+
+.b-slider .b-slider-thumb {
+  border-color: #8b5cf6 !important;
+}
+
+/* Navigation, Sidebar & Tabs */
 .sidebar .router-link-active,
 .sidebar .is-active,
-.tabs li.is-active a {
+.tabs li.is-active a,
+.navbar-item.is-active,
+.dropdown-item.is-active {
   border-bottom-color: #8b5cf6 !important;
-  color: #a855f7 !important;
+  color: #a78bfa !important;
 }
 
-/* Tags and Badges */
-.tag.is-primary {
+.tabs.is-boxed li.is-active a,
+.tabs.is-toggle li.is-active a {
   background-color: #8b5cf6 !important;
-  color: #fff !important;
+  border-color: #8b5cf6 !important;
+  color: #ffffff !important;
+}
+
+/* Badges & Tags */
+.tag.is-primary,
+.tag.is-link,
+.tag.is-info,
+.badge.is-primary {
+  background-color: #8b5cf6 !important;
+  color: #ffffff !important;
+}
+
+.tag.is-primary.is-light,
+.tag.is-link.is-light {
+  background-color: rgba(139, 92, 246, 0.18) !important;
+  color: #c4b5fd !important;
+}
+
+/* App Store Highlights & Action Buttons */
+.app-card .button.is-primary,
+.action-btn.is-primary {
+  background: #8b5cf6 !important;
+  border-color: #8b5cf6 !important;
+}
+
+/* Subtle & Elegantly Sized Footer Logo */
+footer img,
+.footer img,
+.casa-footer img,
+.foot-bar img,
+.brand-bar img,
+.casaos-footer img,
+.footer-logo {
+  max-height: 20px !important;
+  max-width: 90px !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important;
+  opacity: 0.75 !important;
+  transition: opacity 0.2s ease !important;
+}
+
+footer img:hover,
+.footer img:hover {
+  opacity: 1 !important;
 }

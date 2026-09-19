@@ -4653,7 +4653,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
             # stale. This is best-effort: dconf may be absent in minimal targets.
             try:
                 GLib.idle_add(self.update_progress, 0.90, "Applying system settings...")
-                # 1. Ensure MacTahoe-dark and MacTahoe-light have proper cursor index.theme
+                # 1. Ensure MacTahoe-dark and MacTahoe-light have proper cursor index.theme & cursor.theme
                 for ctheme, ccomment in [
                     ("MacTahoe-dark", "MacTahoe Dark Cursor Theme"),
                     ("MacTahoe-light", "MacTahoe Light Cursor Theme"),
@@ -4664,11 +4664,21 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                         os.makedirs(tdir, exist_ok=True)
                         with open(f"{tdir}/index.theme", "w") as f:
                             f.write(f"[Icon Theme]\nName={ctheme}\nComment={ccomment}\nInherits=Adwaita\n")
+                        with open(f"{tdir}/cursor.theme", "w") as f:
+                            f.write(f"[Icon Theme]\nName={ctheme}\nInherits=Adwaita\n")
+
+                # Ensure Adwaita has clean cursor.theme
+                adw_dir = "/mnt/usr/share/icons/Adwaita"
+                if os.path.isdir(adw_dir):
+                    with open(f"{adw_dir}/cursor.theme", "w") as f:
+                        f.write("[Icon Theme]\nInherits=Adwaita\n")
 
                 # 2. Ensure default cursor fallback exists system-wide
                 os.makedirs("/mnt/usr/share/icons/default", exist_ok=True)
                 with open("/mnt/usr/share/icons/default/index.theme", "w") as f:
                     f.write("[Icon Theme]\nName=Default\nComment=Default Cursor Theme\nInherits=MacTahoe-dark,Adwaita\n")
+                with open("/mnt/usr/share/icons/default/cursor.theme", "w") as f:
+                    f.write("[Icon Theme]\nInherits=MacTahoe-dark,Adwaita\n")
                 
                 # 3. Link cursors for all MacTahoe variants and ensure base cursor aliases exist
                 dark_cursors = "/mnt/usr/share/icons/MacTahoe-dark/cursors"
