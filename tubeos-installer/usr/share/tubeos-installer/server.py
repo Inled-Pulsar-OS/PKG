@@ -715,13 +715,79 @@ def execute_installation_backend(config: Dict):
             append_installer_log("Configuring Debian packages...")
             run_chroot("apt-get update -y 2>/dev/null || true")
 
-            if "tubeos_ui" in edition:
-                append_installer_log("Configuring Tube TV UI packages...")
-                run_chroot("apt-get install -y --no-install-recommends openbox xorg xinit picom unclutter tubeos-ui 2>/dev/null || true")
+            if "tubeos_ui" in edition or "plasma_bigscreen" in edition:
+                append_installer_log("Configuring Tube TV UI packages & SDDM autologin...")
+                run_chroot("apt-get install -y --no-install-recommends openbox xserver-xorg xinit picom unclutter tubeos-ui sddm 2>/dev/null || true")
                 run_chroot("systemctl set-default graphical.target 2>/dev/null || true")
-                run_chroot("systemctl enable tubeos-ui 2>/dev/null || true")
+                run_chroot("systemctl enable sddm 2>/dev/null || true")
+
+                # Configure SDDM Autologin for installed user
+                Path("/mnt/etc/sddm.conf.d").mkdir(parents=True, exist_ok=True)
+                sddm_cfg_content = (
+                    "[Autologin]\n"
+                    f"User={username}\n"
+                    "Session=openbox\n"
+                    "Relogin=false\n\n"
+                    "[General]\n"
+                    "HaltCommand=/usr/bin/systemctl poweroff\n"
+                    "RebootCommand=/usr/bin/systemctl reboot\n\n"
+                    "[Users]\n"
+                    "MinimumUid=1000\n"
+                    "MaximumUid=60000\n"
+                    "HideUsers=_apt,avahi,backup,bin,colord,daemon,games,geoclue,lp,mail,man,messagebus,news,nobody,polkitd,proxy,root,sddm,sshd,sync,sys,systemd-network,uucp,www-data\n"
+                    "HideShells=/bin/false,/usr/sbin/nologin,/sbin/nologin\n"
+                    "RememberLastUser=true\n"
+                    "RememberLastSession=true\n"
+                )
+                with open("/mnt/etc/sddm.conf", "w") as sddmf:
+                    sddmf.write(sddm_cfg_content)
+                with open("/mnt/etc/sddm.conf.d/autologin.conf", "w") as sddmf:
+                    sddmf.write(sddm_cfg_content)
+
+                # Configure PAM for SDDM on Debian
+                Path("/mnt/etc/pam.d").mkdir(parents=True, exist_ok=True)
+                with open("/mnt/etc/pam.d/sddm-autologin", "w") as pamf:
+                    pamf.write(
+                        "#%PAM-1.0\n"
+                        "auth        required    pam_permit.so\n"
+                        "account     required    pam_permit.so\n"
+                        "password    required    pam_permit.so\n"
+                        "session     required    pam_permit.so\n"
+                        "@include common-session\n"
+                        "session     required    pam_env.so\n"
+                        "session     required    pam_env.so envfile=/etc/default/locale\n"
+                    )
+                with open("/mnt/etc/pam.d/sddm", "w") as pamf:
+                    pamf.write(
+                        "#%PAM-1.0\n"
+                        "auth        requisite   pam_nologin.so\n"
+                        "auth        sufficient  pam_permit.so\n"
+                        "@include common-auth\n"
+                        "@include common-account\n"
+                        "session     required    pam_limits.so\n"
+                        "session     required    pam_loginuid.so\n"
+                        "@include common-session\n"
+                        "@include common-password\n"
+                        "session     required    pam_env.so\n"
+                        "session     required    pam_env.so envfile=/etc/default/locale\n"
+                    )
             else:
                 run_chroot("systemctl set-default multi-user.target 2>/dev/null || true")
+                run_chroot("systemctl disable sddm 2>/dev/null || true")
+                try:
+                    Path("/mnt/etc/sddm.conf").unlink(missing_ok=True)
+                    Path("/mnt/etc/sddm.conf.d/autologin.conf").unlink(missing_ok=True)
+                except Exception:
+                    pass
+                override_dir = Path("/mnt/etc/systemd/system/getty@tty1.service.d")
+                override_dir.mkdir(parents=True, exist_ok=True)
+                with open(override_dir / "override.conf", "w") as ovf:
+                    ovf.write(
+                        "[Service]\n"
+                        "ExecStart=\n"
+                        f"ExecStart=-/sbin/agetty --autologin {username} --noclear %I $TERM\n"
+                        "Type=idle\n"
+                    )
 
             if "casaos" in edition:
                 append_installer_log("Enabling CasaOS dashboard and Docker services on Debian...")

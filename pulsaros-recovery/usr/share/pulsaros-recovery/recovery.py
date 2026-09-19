@@ -4192,18 +4192,18 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
     set rec_found=0
 
     # 1. Check dedicated PULSAR_RECOVERY partition
-    if search --no-floppy --label --set=rec_dev PULSAR_RECOVERY; then
-        if [ -f ($rec_dev)/boot/vmlinuz-recovery ]; then
-            linux ($rec_dev)/boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live quiet splash
-            initrd ($rec_dev)/boot/initramfs-recovery.img
+    if search --no-floppy --label --set=root PULSAR_RECOVERY; then
+        if [ -f /boot/vmlinuz-recovery ]; then
+            linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+            initrd /boot/initramfs-recovery.img
             set rec_found=1
-        elif [ -f ($rec_dev)/recovery/vmlinuz-recovery ]; then
-            linux ($rec_dev)/recovery/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live quiet splash
-            initrd ($rec_dev)/recovery/initramfs-recovery.img
+        elif [ -f /recovery/vmlinuz-recovery ]; then
+            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+            initrd /recovery/initramfs-recovery.img
             set rec_found=1
-        elif [ -f ($rec_dev)/vmlinuz-recovery ]; then
-            linux ($rec_dev)/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live quiet splash
-            initrd ($rec_dev)/initramfs-recovery.img
+        elif [ -f /vmlinuz-recovery ]; then
+            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+            initrd /initramfs-recovery.img
             set rec_found=1
         fi
     fi
@@ -4212,19 +4212,19 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
     if [ "$rec_found" = "0" ]; then
         if search --no-floppy --fs-uuid --set=root {root_uuid}; then
             if [ -f /@/boot/vmlinuz-recovery ]; then
-                linux /@/boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live quiet splash
+                linux /@/boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
                 initrd /@/boot/initramfs-recovery.img
                 set rec_found=1
             elif [ -f /@/recovery/vmlinuz-recovery ]; then
-                linux /@/recovery/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live quiet splash
+                linux /@/recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
                 initrd /@/recovery/initramfs-recovery.img
                 set rec_found=1
             elif [ -f /boot/vmlinuz-recovery ]; then
-                linux /boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live quiet splash
+                linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
                 initrd /boot/initramfs-recovery.img
                 set rec_found=1
             elif [ -f /recovery/vmlinuz-recovery ]; then
-                linux /recovery/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live quiet splash
+                linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
                 initrd /recovery/initramfs-recovery.img
                 set rec_found=1
             fi
@@ -4233,13 +4233,17 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
 
     # 3. Global device search by file
     if [ "$rec_found" = "0" ]; then
-        if search --no-floppy --file --set=found_rec /boot/vmlinuz-recovery; then
-            linux ($found_rec)/boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live quiet splash
-            initrd ($found_rec)/boot/initramfs-recovery.img
+        if search --no-floppy --file --set=root /boot/vmlinuz-recovery; then
+            linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+            initrd /boot/initramfs-recovery.img
             set rec_found=1
-        elif search --no-floppy --file --set=found_rec /vmlinuz-recovery; then
-            linux ($found_rec)/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live quiet splash
-            initrd ($found_rec)/initramfs-recovery.img
+        elif search --no-floppy --file --set=root /recovery/vmlinuz-recovery; then
+            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+            initrd /recovery/initramfs-recovery.img
+            set rec_found=1
+        elif search --no-floppy --file --set=root /vmlinuz-recovery; then
+            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes quiet splash loglevel=3 noprompt --
+            initrd /initramfs-recovery.img
             set rec_found=1
         fi
     fi
@@ -4649,20 +4653,48 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
             # stale. This is best-effort: dconf may be absent in minimal targets.
             try:
                 GLib.idle_add(self.update_progress, 0.90, "Applying system settings...")
-                # 1. Ensure default cursor fallback exists system-wide
+                # 1. Ensure MacTahoe-dark and MacTahoe-light have proper cursor index.theme
+                for ctheme, ccomment in [
+                    ("MacTahoe-dark", "MacTahoe Dark Cursor Theme"),
+                    ("MacTahoe-light", "MacTahoe Light Cursor Theme"),
+                    ("MacTahoe", "MacTahoe Icon Theme"),
+                ]:
+                    tdir = f"/mnt/usr/share/icons/{ctheme}"
+                    if os.path.isdir(tdir):
+                        os.makedirs(tdir, exist_ok=True)
+                        with open(f"{tdir}/index.theme", "w") as f:
+                            f.write(f"[Icon Theme]\nName={ctheme}\nComment={ccomment}\nInherits=Adwaita\n")
+
+                # 2. Ensure default cursor fallback exists system-wide
                 os.makedirs("/mnt/usr/share/icons/default", exist_ok=True)
                 with open("/mnt/usr/share/icons/default/index.theme", "w") as f:
                     f.write("[Icon Theme]\nName=Default\nComment=Default Cursor Theme\nInherits=MacTahoe-dark,Adwaita\n")
                 
-                # 2. Link cursors for all MacTahoe variants
-                for icondir in glob.glob("/mnt/usr/share/icons/MacTahoe-*"):
-                    if os.path.isdir(icondir) and not os.path.exists(f"{icondir}/cursors") and os.path.isdir("/mnt/usr/share/icons/MacTahoe-dark/cursors"):
-                        try:
-                            os.symlink("../MacTahoe-dark/cursors", f"{icondir}/cursors")
-                        except Exception:
-                            pass
+                # 3. Link cursors for all MacTahoe variants and ensure base cursor aliases exist
+                dark_cursors = "/mnt/usr/share/icons/MacTahoe-dark/cursors"
+                if os.path.isdir(dark_cursors):
+                    for alias_src, alias_dst in [("default", "left_ptr"), ("default", "arrow"), ("pointer", "hand2"), ("pointer", "hand1")]:
+                        src_f = f"{dark_cursors}/{alias_src}"
+                        dst_f = f"{dark_cursors}/{alias_dst}"
+                        if os.path.exists(src_f) and not os.path.exists(dst_f):
+                            try:
+                                os.symlink(alias_src, dst_f)
+                            except Exception:
+                                pass
 
-                # 3. Configure /etc/environment with cursor theme
+                for icondir in glob.glob("/mnt/usr/share/icons/MacTahoe-*"):
+                    if os.path.isdir(icondir):
+                        if not os.path.isfile(f"{icondir}/index.theme"):
+                            bname = os.path.basename(icondir)
+                            with open(f"{icondir}/index.theme", "w") as f:
+                                f.write(f"[Icon Theme]\nName={bname}\nComment={bname} Theme\nInherits=MacTahoe-dark,Adwaita\n")
+                        if not os.path.exists(f"{icondir}/cursors") and os.path.isdir(dark_cursors):
+                            try:
+                                os.symlink("../MacTahoe-dark/cursors", f"{icondir}/cursors")
+                            except Exception:
+                                pass
+
+                # 4. Configure /etc/environment with cursor theme
                 env_path = "/mnt/etc/environment"
                 env_lines = []
                 if os.path.isfile(env_path):
@@ -4675,7 +4707,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                 with open(env_path, "w") as ef:
                     ef.write("\n".join(env_lines) + "\n")
 
-                # 4. Configure SDDM cursor theme
+                # 5. Configure SDDM cursor theme
                 sddm_dir = "/mnt/etc/sddm.conf.d"
                 os.makedirs(sddm_dir, exist_ok=True)
                 sddm_theme_conf = f"{sddm_dir}/theme.conf"
@@ -4683,7 +4715,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                 with open(sddm_theme_conf, "w") as sf:
                     sf.write(sddm_body)
 
-                # 5. Configure user skeleton and existing home directories
+                # 6. Configure user skeleton and existing home directories
                 for target_home in ["/mnt/etc/skel", "/mnt/root"] + glob.glob("/mnt/home/*"):
                     if os.path.isdir(target_home):
                         os.makedirs(f"{target_home}/.icons/default", exist_ok=True)
