@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ==============================================================================
 # Tube OS TV UI (Tauri / Native Webview Runner)
 # ==============================================================================
@@ -10,20 +10,30 @@ if [ -x "$TAURI_BIN" ]; then
     exec "$TAURI_BIN" "$@"
 fi
 
-# Pure native WebKitGTK / Gtk fullscreen webview (no browser frame, no address bar)
-if python3 -c "import gi; gi.require_version('Gtk', '3.0'); from gi.repository import Gtk" >/dev/null 2>&1; then
-    exec python3 -c "
+# Set software rendering / virtual environment flags for WebKit
+export WEBKIT_DISABLE_COMPOSITING_MODE=1
+export WEBKIT_DISABLE_DMABUF_RENDERER=1
+
+# Native WebKitGTK / Gtk fullscreen webview
+exec python3 -c "
+import os
 import sys
+
+# Environment variables for WebKitGTK stability in VMs
+os.environ['WEBKIT_DISABLE_COMPOSITING_MODE'] = '1'
+os.environ['WEBKIT_DISABLE_DMABUF_RENDERER'] = '1'
+
 import gi
 gi.require_version('Gtk', '3.0')
 try:
     gi.require_version('WebKit2', '4.1')
-except ValueError:
+except (ValueError, AttributeError):
     try:
         gi.require_version('WebKit2', '4.0')
-    except ValueError:
+    except (ValueError, AttributeError):
         pass
-from gi.repository import Gtk
+
+from gi.repository import Gtk, Gdk
 try:
     from gi.repository import WebKit2 as WebKit
 except ImportError:
@@ -34,29 +44,46 @@ win.set_title('Tube OS TV')
 win.fullscreen()
 win.connect('destroy', Gtk.main_quit)
 
+# Handle Escape / F11
+def on_key_press(widget, event):
+    if event.keyval == Gdk.KEY_F11:
+        if win.is_fullscreen:
+            win.unfullscreen()
+            win.is_fullscreen = False
+        else:
+            win.fullscreen()
+            win.is_fullscreen = True
+        return True
+    return False
+
+win.is_fullscreen = True
+win.connect('key-press-event', on_key_press)
+
 if WebKit:
     settings = WebKit.Settings()
+    if hasattr(WebKit, 'HardwareAccelerationPolicy'):
+        try:
+            settings.set_hardware_acceleration_policy(WebKit.HardwareAccelerationPolicy.NEVER)
+        except Exception:
+            pass
     settings.set_enable_developer_extras(False)
     settings.set_allow_file_access_from_file_urls(True)
     settings.set_allow_universal_access_from_file_urls(True)
+    settings.set_enable_javascript(True)
+    settings.set_enable_webaudio(True)
     settings.set_enable_media_stream(True)
+    
     view = WebKit.WebView.new_with_settings(settings)
     view.load_uri('${STATIC_UI}')
     win.add(view)
 else:
-    label = Gtk.Label(label='Tube OS TV')
-    win.add(label)
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=20)
+    box.set_valign(Gtk.Align.CENTER)
+    box.set_halign(Gtk.Align.CENTER)
+    lbl = Gtk.Label(label='Tube OS TV Interface')
+    box.pack_start(lbl, True, True, 0)
+    win.add(box)
 
 win.show_all()
 Gtk.main()
 "
-elif command -v python3 >/dev/null 2>&1; then
-    exec python3 -c "
-try:
-    import webview
-    webview.create_window('Tube OS TV', '${STATIC_UI}', fullscreen=True)
-    webview.start()
-except Exception as e:
-    print(f'Webview error: {e}')
-"
-fi

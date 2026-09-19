@@ -3,12 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tube OS TV UI (Mock Shell)</title>
+  <title>Tube OS TV</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --accent: #8b5cf6;
+      --accent-glow: rgba(139, 92, 246, 0.4);
+      --bg-dark: #09090b;
+      --card-bg: rgba(24, 24, 27, 0.65);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-hover-border: rgba(139, 92, 246, 0.8);
+      --text-primary: #ffffff;
+      --text-secondary: #a1a1aa;
+    }
+
     body {
-      background: radial-gradient(circle at 20% 20%, #1e1e2f, #0d0e15 90%);
-      color: #fff;
+      background: radial-gradient(circle at 15% 15%, rgba(139, 92, 246, 0.15), transparent 45%),
+                  radial-gradient(circle at 85% 85%, rgba(124, 58, 237, 0.1), transparent 50%),
+                  #09090b;
+      background-size: cover;
+      color: var(--text-primary);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       height: 100vh;
       overflow: hidden;
@@ -16,140 +31,234 @@
       flex-direction: column;
       user-select: none;
     }
+
     header {
-      padding: 30px 60px 10px;
+      padding: 32px 64px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
+
     .brand {
       display: flex;
       align-items: center;
       gap: 16px;
     }
+
     .brand img {
-      height: 48px;
+      height: 44px;
+      width: 44px;
+      object-fit: contain;
+      filter: drop-shadow(0 4px 12px rgba(139, 92, 246, 0.4));
     }
+
     .brand-title {
-      font-size: 28px;
+      font-size: 26px;
       font-weight: 700;
       letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #ffffff 30%, #c4b5fd 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .status-badge {
+      background: rgba(139, 92, 246, 0.15);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      color: #c4b5fd;
+      padding: 5px 14px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+
     .clock-widget {
       font-size: 22px;
-      color: #8e8e93;
+      font-weight: 500;
+      color: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
     }
+
     main {
       flex: 1;
-      padding: 40px 60px;
+      padding: 24px 64px 40px;
       display: flex;
       flex-direction: column;
-      gap: 30px;
+      justify-content: center;
+      gap: 28px;
     }
+
     .section-title {
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 600;
-      color: #a0a0b0;
+      color: var(--text-secondary);
+      letter-spacing: -0.3px;
     }
+
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 24px;
+      max-width: 1400px;
     }
+
     .card {
-      background: rgba(255, 255, 255, 0.05);
-      border: 2px solid transparent;
-      border-radius: 16px;
-      padding: 24px;
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 28px 20px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 14px;
-      transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+      gap: 16px;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
       cursor: pointer;
       text-align: center;
-    }
-    .card:hover, .card.focused {
-      background: rgba(255, 255, 255, 0.12);
-      border-color: #3b82f6;
-      transform: scale(1.06);
-      box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+      position: relative;
       outline: none;
     }
-    .card .icon {
-      font-size: 40px;
+
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 20px;
+      background: radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.15), transparent 70%);
+      opacity: 0;
+      transition: opacity 0.25s ease;
     }
+
+    .card:hover, .card.focused {
+      background: rgba(39, 39, 42, 0.85);
+      border-color: var(--card-hover-border);
+      transform: translateY(-6px) scale(1.04);
+      box-shadow: 0 16px 36px -8px var(--accent-glow);
+    }
+
+    .card:hover::before, .card.focused::before {
+      opacity: 1;
+    }
+
+    .card .icon-box {
+      width: 64px;
+      height: 64px;
+      border-radius: 18px;
+      background: rgba(139, 92, 246, 0.12);
+      border: 1px solid rgba(139, 92, 246, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 30px;
+      transition: transform 0.25s ease;
+    }
+
+    .card:hover .icon-box, .card.focused .icon-box {
+      transform: scale(1.1);
+      background: rgba(139, 92, 246, 0.25);
+      border-color: rgba(139, 92, 246, 0.5);
+    }
+
     .card .title {
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 600;
+      color: #fff;
     }
+
     .card .desc {
-      font-size: 12px;
-      color: #888899;
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      line-height: 1.4;
     }
+
     footer {
-      padding: 15px 60px;
-      background: rgba(0, 0, 0, 0.3);
+      padding: 18px 64px;
+      background: rgba(9, 9, 11, 0.6);
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
       display: flex;
       justify-content: space-between;
-      color: #666677;
+      align-items: center;
+      color: var(--text-secondary);
       font-size: 13px;
     }
-    .badge {
-      background: rgba(59, 130, 246, 0.2);
-      color: #60a5fa;
-      padding: 3px 8px;
-      border-radius: 6px;
-      font-weight: 600;
+
+    .key-badge {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 7px;
+      border-radius: 4px;
       font-size: 11px;
+      font-weight: 600;
+      color: #e4e4e7;
     }
   </style>
 </head>
 <body>
   <header>
     <div class="brand">
-      <img src="/usr/share/tubeos/branding/tube-os-logo.png" onerror="this.src='logo.png'" alt="Tube OS">
+      <img src="logo.png" onerror="this.src='/usr/share/tubeos/branding/tube-os-logo.png'" alt="Tube OS">
       <span class="brand-title">Tube OS TV</span>
-      <span class="badge">Debian UI Mock</span>
     </div>
-    <div class="clock-widget" id="clock">--:--</div>
+    <div class="header-right">
+      <div class="status-badge">
+        <div class="status-dot"></div>
+        <span>Ready</span>
+      </div>
+      <div class="clock-widget" id="clock">--:--</div>
+    </div>
   </header>
 
   <main>
-    <div class="section-title">TV & Media Center</div>
+    <div class="section-title">Home Apps & Media</div>
     <div class="grid" id="grid">
       <div class="card focused" tabindex="0" onclick="openApp('casaos')">
-        <div class="icon">🏠</div>
+        <div class="icon-box">🏠</div>
         <div class="title">CasaOS Dashboard</div>
-        <div class="desc">Personal Cloud & Docker Apps</div>
+        <div class="desc">Apps, Storage & System Status</div>
+      </div>
+      <div class="card" tabindex="0" onclick="openApp('dockermigrate')">
+        <div class="icon-box">📦</div>
+        <div class="title">DockerMigrate</div>
+        <div class="desc">Container Migration & Backups</div>
       </div>
       <div class="card" tabindex="0" onclick="openApp('kodi')">
-        <div class="icon">🍿</div>
+        <div class="icon-box">🍿</div>
         <div class="title">Kodi Media Center</div>
-        <div class="desc">Movies, Series & Live TV</div>
+        <div class="desc">Movies, TV Shows & Music</div>
       </div>
       <div class="card" tabindex="0" onclick="openApp('youtube')">
-        <div class="icon">📺</div>
+        <div class="icon-box">📺</div>
         <div class="title">YouTube TV</div>
-        <div class="desc">Streaming Video</div>
+        <div class="desc">Streaming Video & Channels</div>
       </div>
       <div class="card" tabindex="0" onclick="openApp('files')">
-        <div class="icon">📁</div>
-        <div class="title">Media Browser</div>
-        <div class="desc">Local & Network Storage</div>
-      </div>
-      <div class="card" tabindex="0" onclick="openApp('settings')">
-        <div class="icon">⚙️</div>
-        <div class="title">TV Settings</div>
-        <div class="desc">Network, Audio & Display</div>
+        <div class="icon-box">📁</div>
+        <div class="title">Files & Storage</div>
+        <div class="desc">Local Disks & Network Shares</div>
       </div>
     </div>
   </main>
 
   <footer>
-    <div>Navigate with <strong>[Arrow Keys]</strong> or Gamepad • Select with <strong>[Enter]</strong></div>
-    <div>Tube OS Debian Edition • Tauri TV Shell (Mock Scaffolding)</div>
+    <div>Navigate with <span class="key-badge">←</span> <span class="key-badge">→</span> <span class="key-badge">↑</span> <span class="key-badge">↓</span> • Launch with <span class="key-badge">Enter</span></div>
+    <div>Tube OS Debian Edition • Fullscreen Native Webview</div>
   </footer>
 
   <script>
@@ -161,14 +270,19 @@
     updateClock();
 
     function openApp(id) {
+      const host = window.location.hostname || 'localhost';
       if (id === 'casaos') {
-        window.location.href = 'http://' + window.location.hostname + ':80';
+        window.location.href = 'http://' + host + '/';
+      } else if (id === 'dockermigrate') {
+        window.location.href = 'http://' + host + ':8070/';
+      } else if (id === 'youtube') {
+        window.location.href = 'https://www.youtube.com/tv';
       } else {
-        alert('Launching ' + id + ' (Tauri interface under active development by collaborator)');
+        alert('Opening ' + id + ' (Tauri native module integration)');
       }
     }
 
-    // Keyboard & Remote D-Pad Navigation
+    // Keyboard & Gamepad D-Pad Navigation
     const cards = Array.from(document.querySelectorAll('.card'));
     let currentIndex = 0;
 

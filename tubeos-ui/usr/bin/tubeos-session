@@ -1,26 +1,47 @@
 #!/bin/bash
+# ==============================================================================
 # Tube OS - Openbox TV Session Starter
+# ==============================================================================
+
 export DISPLAY="${DISPLAY:-:0}"
 export XDG_CURRENT_DESKTOP="TubeOS"
 export XDG_SESSION_DESKTOP="TubeOS"
+export WEBKIT_DISABLE_COMPOSITING_MODE=1
+export WEBKIT_DISABLE_DMABUF_RENDERER=1
+export LIBGL_ALWAYS_SOFTWARE=0
 
-# Set TV screen resolutions or disable blanking
+# Disable screen blanking and power savings for TV display
 xset s off 2>/dev/null || true
 xset -dpms 2>/dev/null || true
 xset s noblank 2>/dev/null || true
 
-# Compositor & unclutter
-picom -b --config /dev/null --backend glx 2>/dev/null || picom -b 2>/dev/null || true
-unclutter --idle 3 --root 2>/dev/null &
-
-# Set Tube OS wallpaper
+# Set wallpaper
 if [ -f /usr/share/backgrounds/tubeos/wallpaper.jpg ] && command -v feh >/dev/null 2>&1; then
     feh --bg-fill /usr/share/backgrounds/tubeos/wallpaper.jpg 2>/dev/null || true
 elif [ -f /usr/share/backgrounds/tubeos/wallpaper.png ] && command -v feh >/dev/null 2>&1; then
     feh --bg-fill /usr/share/backgrounds/tubeos/wallpaper.png 2>/dev/null || true
 elif command -v xsetroot >/dev/null 2>&1; then
-    xsetroot -solid "#1e1b2e" 2>/dev/null || true
+    xsetroot -solid "#0e0d17" 2>/dev/null || true
 fi
 
-# Openbox with Tube OS autostart
-exec openbox --config-file /etc/xdg/openbox/rc.xml
+# Compositor & unclutter
+picom -b --config /dev/null 2>/dev/null || true
+unclutter --idle 3 --root 2>/dev/null &
+
+# Start Openbox window manager in background
+openbox --config-file /etc/xdg/openbox/rc.xml 2>/dev/null &
+OPENBOX_PID=$!
+
+# Wait for X11 & WM to settle
+sleep 0.5
+
+# Launch Tube OS TV UI Shell (runs WebKitGTK / Tauri webview in kiosk mode)
+# Continuous loop ensures interface persists
+while true; do
+    if [ -x /usr/bin/tubeos-ui ]; then
+        /usr/bin/tubeos-ui
+    else
+        sleep 2
+    fi
+    sleep 1
+done

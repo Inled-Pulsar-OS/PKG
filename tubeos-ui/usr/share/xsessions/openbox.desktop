@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Tube OS TV
+Comment=Tube OS 10-Foot Smart TV Interface (Openbox + Webview)
+Exec=/usr/bin/tubeos-session
+TryExec=/usr/bin/tubeos-session
+Icon=tubeos
+Type=Application
+DesktopNames=TubeOS
