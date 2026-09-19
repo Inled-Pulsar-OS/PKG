@@ -33,7 +33,7 @@ body, #app, .dashboard, .casa-dashboard, .main-background {
   background-attachment: fixed !important;
 }
 
-/* Buttons - All Blue / Primary / Link Buttons Override */
+/* Universal Buttons - Action, Primary, Link */
 .button.is-primary,
 button.is-primary,
 .is-primary,
@@ -44,11 +44,17 @@ button.is-link,
 button.is-info,
 .is-info,
 .casa-btn-primary,
-.btn-primary {
+.btn-primary,
+.action-btn.is-primary,
+.install-btn {
   background-color: #8b5cf6 !important;
   border-color: #8b5cf6 !important;
   color: #ffffff !important;
-  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3) !important;
+  box-shadow: 0 2px 6px rgba(139, 92, 246, 0.35) !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  transition: background-color 0.15s ease, transform 0.15s ease !important;
 }
 
 .button.is-primary:hover,
@@ -58,10 +64,12 @@ button.is-link:hover,
 .button.is-info:hover,
 button.is-info:hover,
 .casa-btn-primary:hover,
-.btn-primary:hover {
+.btn-primary:hover,
+.action-btn.is-primary:hover {
   background-color: #7c3aed !important;
   border-color: #7c3aed !important;
   color: #ffffff !important;
+  transform: translateY(-1px) !important;
 }
 
 .button.is-primary:active,
@@ -71,6 +79,40 @@ button.is-link:active,
 .casa-btn-primary:active {
   background-color: #6d28d9 !important;
   border-color: #6d28d9 !important;
+  transform: translateY(0) !important;
+}
+
+/* App Store Feed & Store Cards - Highly Clickable & Prominent */
+.app-card,
+.store-card,
+.feed-card,
+.common-card,
+._card {
+  cursor: pointer !important;
+}
+
+.app-card .button,
+.store-card .button,
+.feed-card .button,
+.install,
+.installComposeApp,
+.circle-btn.is-primary {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  background-color: #8b5cf6 !important;
+  border-color: #8b5cf6 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+.app-card .button:hover,
+.store-card .button:hover,
+.install:hover,
+.installComposeApp:hover {
+  background-color: #7c3aed !important;
+  border-color: #7c3aed !important;
+  color: #ffffff !important;
 }
 
 /* Outlined and Light Buttons */
@@ -79,6 +121,7 @@ button.is-link:active,
   background-color: transparent !important;
   border-color: #8b5cf6 !important;
   color: #8b5cf6 !important;
+  cursor: pointer !important;
 }
 
 .button.is-primary.is-outlined:hover,
@@ -89,11 +132,36 @@ button.is-link:active,
 
 .button.is-primary.is-light,
 .button.is-link.is-light {
-  background-color: rgba(139, 92, 246, 0.15) !important;
+  background-color: rgba(139, 92, 246, 0.18) !important;
   color: #c4b5fd !important;
+  cursor: pointer !important;
 }
 
-/* Text and Icon Accents */
+/* File Manager & File Browser Theme Overrides */
+.file-item,
+.folder-item,
+.file-card-item,
+.drop-item {
+  cursor: pointer !important;
+}
+
+.file-item.is-selected,
+.folder-item.is-selected,
+.drop-item.is-selected,
+.file-card-item.is-selected {
+  background-color: rgba(139, 92, 246, 0.18) !important;
+  border-color: #8b5cf6 !important;
+}
+
+/* Replace light blue backgrounds and borders in file manager */
+.has-background-blue-light,
+.has-background-link-light,
+.has-background-info-light,
+.drop-grey-bg {
+  background-color: rgba(139, 92, 246, 0.12) !important;
+}
+
+/* Text and Link Accents */
 a,
 .has-text-primary,
 .has-text-link,
@@ -189,16 +257,10 @@ progress.is-link::-moz-progress-bar,
 }
 
 .tag.is-primary.is-light,
-.tag.is-link.is-light {
+.tag.is-link.is-light,
+.tag.is-info.is-light {
   background-color: rgba(139, 92, 246, 0.18) !important;
   color: #c4b5fd !important;
-}
-
-/* App Store Highlights & Action Buttons */
-.app-card .button.is-primary,
-.action-btn.is-primary {
-  background: #8b5cf6 !important;
-  border-color: #8b5cf6 !important;
 }
 
 /* Subtle & Elegantly Sized Footer Logo */

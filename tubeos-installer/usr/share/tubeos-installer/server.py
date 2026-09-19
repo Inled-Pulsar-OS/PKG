@@ -726,7 +726,7 @@ def execute_installation_backend(config: Dict):
                 sddm_cfg_content = (
                     "[Autologin]\n"
                     f"User={username}\n"
-                    "Session=openbox\n"
+                    "Session=tubeos\n"
                     "Relogin=false\n\n"
                     "[General]\n"
                     "HaltCommand=/usr/bin/systemctl poweroff\n"
@@ -743,6 +743,19 @@ def execute_installation_backend(config: Dict):
                     sddmf.write(sddm_cfg_content)
                 with open("/mnt/etc/sddm.conf.d/autologin.conf", "w") as sddmf:
                     sddmf.write(sddm_cfg_content)
+
+                # Configure Openbox autostart for installed user
+                ob_dirs = [
+                    Path(f"/mnt/home/{username}/.config/openbox"),
+                    Path("/mnt/etc/skel/.config/openbox"),
+                    Path("/mnt/etc/xdg/openbox"),
+                ]
+                for ob_d in ob_dirs:
+                    ob_d.mkdir(parents=True, exist_ok=True)
+                    with open(ob_d / "autostart", "w") as obf:
+                        obf.write("#!/bin/sh\n/usr/bin/tubeos-ui &\n")
+                    run(f"chmod 755 '{ob_d / 'autostart'}'")
+                run_chroot(f"chown -R '{username}:{username}' '/home/{username}/.config' 2>/dev/null || true")
 
                 # Configure PAM for SDDM on Debian
                 Path("/mnt/etc/pam.d").mkdir(parents=True, exist_ok=True)
