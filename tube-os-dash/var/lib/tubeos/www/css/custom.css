@@ -14,12 +14,14 @@
   --accent-color: #8b5cf6 !important;
   --link: #8b5cf6 !important;
   --info: #8b5cf6 !important;
+  --success: #8b5cf6 !important;
   --bulma-primary: #8b5cf6 !important;
   --bulma-primary-h: 258 !important;
   --bulma-primary-s: 90% !important;
   --bulma-primary-l: 66% !important;
   --bulma-link: #8b5cf6 !important;
   --bulma-info: #8b5cf6 !important;
+  --bulma-success: #8b5cf6 !important;
   --button-primary: #8b5cf6 !important;
   --color-primary: #8b5cf6 !important;
   --casa-primary: #8b5cf6 !important;
@@ -33,20 +35,43 @@ body, #app, .dashboard, .casa-dashboard, .main-background {
   background-attachment: fixed !important;
 }
 
-/* Universal Buttons - Action, Primary, Link */
+/* Progress Bars - Ensure Track is Dark/Gray and ONLY Value is Purple */
+progress,
+.progress {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-radius: 9999px !important;
+  border: none !important;
+  overflow: hidden !important;
+}
+
+progress::-webkit-progress-bar,
+.progress::-webkit-progress-bar {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-radius: 9999px !important;
+}
+
+progress::-webkit-progress-value,
+.progress::-webkit-progress-value {
+  background-color: #8b5cf6 !important;
+  border-radius: 9999px !important;
+  transition: width 0.3s ease !important;
+}
+
+progress::-moz-progress-bar,
+.progress::-moz-progress-bar {
+  background-color: #8b5cf6 !important;
+  border-radius: 9999px !important;
+}
+
+/* Universal Action Buttons */
 .button.is-primary,
 button.is-primary,
-.is-primary,
 .button.is-link,
 button.is-link,
-.is-link,
 .button.is-info,
 button.is-info,
-.is-info,
 .casa-btn-primary,
-.btn-primary,
-.action-btn.is-primary,
-.install-btn {
+.btn-primary {
   background-color: #8b5cf6 !important;
   border-color: #8b5cf6 !important;
   color: #ffffff !important;
@@ -64,8 +89,7 @@ button.is-link:hover,
 .button.is-info:hover,
 button.is-info:hover,
 .casa-btn-primary:hover,
-.btn-primary:hover,
-.action-btn.is-primary:hover {
+.btn-primary:hover {
   background-color: #7c3aed !important;
   border-color: #7c3aed !important;
   color: #ffffff !important;
@@ -92,52 +116,42 @@ button.is-link:active,
 }
 
 .app-card .button,
+.app-card .button.is-light,
+.app-card .button.is-primary,
+.app-card .button.is-link,
+.app-card .button.is-rounded,
 .store-card .button,
 .feed-card .button,
 .install,
 .installComposeApp,
+.install-btn,
+.action-btn,
 .circle-btn.is-primary {
   cursor: pointer !important;
   pointer-events: auto !important;
   opacity: 1 !important;
+  visibility: visible !important;
   background-color: #8b5cf6 !important;
   border-color: #8b5cf6 !important;
   color: #ffffff !important;
   font-weight: 600 !important;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4) !important;
 }
 
 .app-card .button:hover,
+.app-card .button.is-light:hover,
 .store-card .button:hover,
+.feed-card .button:hover,
 .install:hover,
-.installComposeApp:hover {
+.installComposeApp:hover,
+.install-btn:hover {
   background-color: #7c3aed !important;
   border-color: #7c3aed !important;
   color: #ffffff !important;
+  transform: translateY(-1px) !important;
 }
 
-/* Outlined and Light Buttons */
-.button.is-primary.is-outlined,
-.button.is-link.is-outlined {
-  background-color: transparent !important;
-  border-color: #8b5cf6 !important;
-  color: #8b5cf6 !important;
-  cursor: pointer !important;
-}
-
-.button.is-primary.is-outlined:hover,
-.button.is-link.is-outlined:hover {
-  background-color: #8b5cf6 !important;
-  color: #ffffff !important;
-}
-
-.button.is-primary.is-light,
-.button.is-link.is-light {
-  background-color: rgba(139, 92, 246, 0.18) !important;
-  color: #c4b5fd !important;
-  cursor: pointer !important;
-}
-
-/* File Manager & File Browser Theme Overrides */
+/* File Manager & Sidebar Theme Overrides */
 .file-item,
 .folder-item,
 .file-card-item,
@@ -153,6 +167,22 @@ button.is-link:active,
   border-color: #8b5cf6 !important;
 }
 
+.files-sidebar .icon,
+.sidebar-item .icon,
+.file-panel .icon,
+.file-browser .icon,
+.nav-bar .icon,
+.nav-item .icon {
+  color: #8b5cf6 !important;
+}
+
+.files-sidebar .is-active,
+.sidebar-item.is-active,
+.menu-list a.is-active {
+  background-color: rgba(139, 92, 246, 0.15) !important;
+  color: #8b5cf6 !important;
+}
+
 /* Replace light blue backgrounds and borders in file manager */
 .has-background-blue-light,
 .has-background-link-light,
@@ -161,7 +191,7 @@ button.is-link:active,
   background-color: rgba(139, 92, 246, 0.12) !important;
 }
 
-/* Text and Link Accents */
+/* Text, Icon and Link Accents */
 a,
 .has-text-primary,
 .has-text-link,
@@ -175,6 +205,20 @@ a:hover,
 .has-text-primary:hover,
 .has-text-link:hover {
   color: #c4b5fd !important;
+}
+
+/* Success Checkmark & Form Validations */
+.icon.is-success,
+.has-text-success,
+.is-success .icon,
+.tag.is-success {
+  color: #8b5cf6 !important;
+}
+
+.input.is-success,
+.textarea.is-success {
+  border-color: #8b5cf6 !important;
+  box-shadow: 0 0 0 0.125em rgba(139, 92, 246, 0.25) !important;
 }
 
 /* Switches, Checkboxes, and Radios */
@@ -203,31 +247,6 @@ textarea:focus,
 .is-focused {
   border-color: #8b5cf6 !important;
   box-shadow: 0 0 0 0.125em rgba(139, 92, 246, 0.25) !important;
-}
-
-/* Progress Bars, Sliders & Rings */
-progress.is-primary::-webkit-progress-value,
-.progress.is-primary::-webkit-progress-value,
-progress.is-link::-webkit-progress-value,
-.progress.is-link::-webkit-progress-value,
-progress.is-info::-webkit-progress-value,
-.progress.is-info::-webkit-progress-value {
-  background-color: #8b5cf6 !important;
-}
-
-progress.is-primary::-moz-progress-bar,
-.progress.is-primary::-moz-progress-bar,
-progress.is-link::-moz-progress-bar,
-.progress.is-link::-moz-progress-bar {
-  background-color: #8b5cf6 !important;
-}
-
-.b-slider .b-slider-track .b-slider-fill {
-  background-color: #8b5cf6 !important;
-}
-
-.b-slider .b-slider-thumb {
-  border-color: #8b5cf6 !important;
 }
 
 /* Navigation, Sidebar & Tabs */

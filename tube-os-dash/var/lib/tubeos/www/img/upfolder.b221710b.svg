@@ -29,8 +29,8 @@
 		</linearGradient>
 		<linearGradient id="paint1_linear_1440_3185" x1="24.4999" y1="6" x2="24.4999" y2="50"
 						gradientUnits="userSpaceOnUse">
-			<stop stop-color="#DEF6FF"/>
-			<stop offset="1" stop-color="#73C0DD"/>
+			<stop stop-color="#f3e8ff"/>
+			<stop offset="1" stop-color="#a78bfa"/>
 		</linearGradient>
 		<linearGradient id="paint2_linear_1440_3185" x1="0.87501" y1="20.1424" x2="18.3963" y2="63.835"
 						gradientUnits="userSpaceOnUse">

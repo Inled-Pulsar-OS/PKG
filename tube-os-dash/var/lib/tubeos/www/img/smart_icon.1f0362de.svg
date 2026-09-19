@@ -40,7 +40,7 @@
 		<linearGradient id="paint0_linear_254_4657" x1="25.3103" y1="6.75075" x2="36.779" y2="57.3139"
 						gradientUnits="userSpaceOnUse">
 			<stop stop-color="#40DFFF"/>
-			<stop offset="1" stop-color="#4053FE"/>
+			<stop offset="1" stop-color="#8b5cf6"/>
 		</linearGradient>
 		<radialGradient id="paint1_radial_254_4657" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
 						gradientTransform="translate(32 34.5) rotate(90) scale(21 14.7)">

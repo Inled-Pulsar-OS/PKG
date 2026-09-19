@@ -22,7 +22,7 @@
 			  fill="url(#paint3_linear_913_2028)"/>
 	</g>
 	<path d="M30 8.1547C31.2376 7.44017 32.7624 7.44017 34 8.1547L51.6506 18.3453C52.8882 19.0598 53.6506 20.3803 53.6506 21.8094V42.1906C53.6506 43.6197 52.8882 44.9402 51.6506 45.6547L34 55.8453C32.7624 56.5598 31.2376 56.5598 30 55.8453L12.3494 45.6547C11.1118 44.9402 10.3494 43.6197 10.3494 42.1906V21.8094C10.3494 20.3803 11.1118 19.0598 12.3494 18.3453L30 8.1547Z"
-		  stroke="#389FFA" stroke-width="1.5"/>
+		  stroke="#8b5cf6" stroke-width="1.5"/>
 	<defs>
 		<filter id="filter0_i_913_2028" x="16" y="22.0521" width="17" height="28.1362" filterUnits="userSpaceOnUse"
 				color-interpolation-filters="sRGB">
@@ -67,17 +67,17 @@
 			<stop offset="1" stop-color="#DADFE6"/>
 		</linearGradient>
 		<linearGradient id="paint1_linear_913_2028" x1="24" y1="27" x2="23" y2="44" gradientUnits="userSpaceOnUse">
-			<stop stop-color="#299BFF"/>
-			<stop offset="1" stop-color="#1A94FF"/>
+			<stop stop-color="#8b5cf6"/>
+			<stop offset="1" stop-color="#7c3aed"/>
 		</linearGradient>
 		<linearGradient id="paint2_linear_913_2028" x1="39" y1="27.5" x2="41" y2="45.5" gradientUnits="userSpaceOnUse">
-			<stop stop-color="#2486F9"/>
-			<stop offset="1" stop-color="#047FF1"/>
+			<stop stop-color="#7c3aed"/>
+			<stop offset="1" stop-color="#8b5cf6"/>
 		</linearGradient>
 		<linearGradient id="paint3_linear_913_2028" x1="32" y1="14" x2="31.4225" y2="31.9814"
 						gradientUnits="userSpaceOnUse">
-			<stop stop-color="#80CAFF"/>
-			<stop offset="1" stop-color="#3DABFF"/>
+			<stop stop-color="#c4b5fd"/>
+			<stop offset="1" stop-color="#a78bfa"/>
 		</linearGradient>
 	</defs>
 </svg>

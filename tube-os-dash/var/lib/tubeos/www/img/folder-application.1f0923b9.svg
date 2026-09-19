@@ -5,28 +5,28 @@
 	<defs>
 		<linearGradient id="linearGradient2121" x1="1.5652" x2="1.5652" y1="25.244" y2="28.82"
 						gradientTransform="translate(7.6401,-13.958)" gradientUnits="userSpaceOnUse">
-			<stop stop-color="#b0e2f9" offset="0"/>
-			<stop stop-color="#daf0f9" offset="1"/>
+			<stop stop-color="#ddd6fe" offset="0"/>
+			<stop stop-color="#ede9fe" offset="1"/>
 		</linearGradient>
 		<linearGradient id="linearGradient2190" x1="-1.1093" x2="1.2942" y1="30.48" y2="29.185"
 						gradientTransform="matrix(1.4311,0,0,1.4311,7.3533,-26.773)" gradientUnits="userSpaceOnUse">
-			<stop stop-color="#c9e9f6" offset="0"/>
-			<stop stop-color="#e3f5ff" offset="1"/>
+			<stop stop-color="#e9d5ff" offset="0"/>
+			<stop stop-color="#f5f3ff" offset="1"/>
 		</linearGradient>
 		<linearGradient id="linearGradient2195" x1="-.92444" x2="1.2942" y1="30.48" y2="29.185"
 						gradientTransform="matrix(-1.4311,0,0,1.4311,11.057,-26.773)" gradientUnits="userSpaceOnUse">
-			<stop stop-color="#a8dbf0" offset="0"/>
-			<stop stop-color="#85bbe8" offset="1"/>
+			<stop stop-color="#d8b4fe" offset="0"/>
+			<stop stop-color="#c4b5fd" offset="1"/>
 		</linearGradient>
 		<linearGradient id="linearGradient1911-3-2" x1="25.085" x2="25.085" y1="24.031" y2="26.412"
 						gradientTransform="translate(-17.898 -21.385)" gradientUnits="userSpaceOnUse">
-			<stop stop-color="#0272cb" offset="0"/>
-			<stop stop-color="#0768ba" offset="1"/>
+			<stop stop-color="#8b5cf6" offset="0"/>
+			<stop stop-color="#7c3aed" offset="1"/>
 		</linearGradient>
 		<linearGradient id="linearGradient1951-6" x1="100" x2="133.19" y1="17.453" y2="51.606"
 						gradientTransform="matrix(.26458 0 0 .26458 -20.108 -.13536)" gradientUnits="userSpaceOnUse">
-			<stop stop-color="#27aee9" offset="0"/>
-			<stop stop-color="#0669bc" offset="1"/>
+			<stop stop-color="#a78bfa" offset="0"/>
+			<stop stop-color="#6d28d9" offset="1"/>
 		</linearGradient>
 		<linearGradient id="linearGradient11110-7" x1=".52917" x2="16.404" y1="5.3815" y2="5.3815"
 						gradientTransform="translate(-2.538e-4,4.18e-5)" gradientUnits="userSpaceOnUse">
@@ -35,8 +35,8 @@
 		</linearGradient>
 		<linearGradient id="linearGradient29077" x1=".52916" x2="16.404" y1="14.179" y2="14.179"
 						gradientTransform="translate(-.0002538 -.015458)" gradientUnits="userSpaceOnUse">
-			<stop stop-color="#0a5ba8" stop-opacity=".99608" offset="0"/>
-			<stop stop-color="#104a8c" stop-opacity=".99608" offset="1"/>
+			<stop stop-color="#5b21b6" stop-opacity=".99608" offset="0"/>
+			<stop stop-color="#4c1d95" stop-opacity=".99608" offset="1"/>
 		</linearGradient>
 	</defs>
 	<path d="m1.1974 2.2489c-0.3653 0-0.66145 0.32575-0.66145 0.72759v2.9636c-0.0026 0.02629-0.0072 0.052-0.0072 0.07906v7.9373c0 0.40184 0.29614 0.72759 0.66144 0.72759h14.552c0.36531 0 0.66144-0.32575 0.66144-0.72759v-9.393c0-0.40184-0.29614-0.72759-0.66144-0.72759v5.16e-4h-8.1993l-0.89864-1.1095s-0.36607-0.478-1.0583-0.478h-1.3229z"
