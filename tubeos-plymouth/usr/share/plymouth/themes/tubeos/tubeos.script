@@ -1,5 +1,29 @@
-image = Image("logo.png");
-sprite = Sprite(image, (Window.GetWidth()/2) - (image.GetWidth()/2), (Window.GetHeight()/2) - (image.GetHeight()/2));
+# Tube OS Plymouth Boot Splash Theme
+Window.SetBackgroundTopColor(0.04, 0.04, 0.05);
+Window.SetBackgroundBottomColor(0.04, 0.04, 0.05);
 
-fun display_normal() { sprite.Show(); }
-fun display_pause() { sprite.Hide(); }
+logo.image = Image("logo.png");
+logo.sprite = Sprite(logo.image);
+
+fun refresh_callback () {
+    screen_width = Window.GetWidth();
+    screen_height = Window.GetHeight();
+    
+    logo.x = (screen_width / 2) - (logo.image.GetWidth() / 2);
+    logo.y = (screen_height / 2) - (logo.image.GetHeight() / 2);
+    
+    logo.sprite.SetPosition(logo.x, logo.y, 100);
+    logo.sprite.SetOpacity(1.0);
+}
+
+Plymouth.SetRefreshFunction(refresh_callback);
+
+fun display_normal_callback () {
+    refresh_callback();
+}
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+
+fun quit_callback () {
+    logo.sprite.SetOpacity(0);
+}
+Plymouth.SetQuitFunction(quit_callback);

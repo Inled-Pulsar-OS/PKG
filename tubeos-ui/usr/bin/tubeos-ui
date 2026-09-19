@@ -1,0 +1,35 @@
+#!/bin/bash
+# Tube OS TV UI (Tauri / Webview Wrapper & Mock)
+# This script will launch the compiled Tauri binary when built,
+# or fallback to a lightweight kiosk webview / browser for the mock UI.
+
+STATIC_UI="/usr/share/tubeos-ui/index.html"
+TAURI_BIN="/usr/bin/tubeos-tv"
+
+if [ -x "$TAURI_BIN" ]; then
+    exec "$TAURI_BIN" "$@"
+fi
+
+# Fallback mock runner (using python webview, chromium kiosk, or epiphany/firefox kiosk)
+if command -v chromium >/dev/null 2>&1; then
+    exec chromium --kiosk --no-first-run --disable-session-crashed-bubble --disable-infobars --autoplay-policy=no-user-gesture-required "file://$STATIC_UI"
+elif command -v google-chrome >/dev/null 2>&1; then
+    exec google-chrome --kiosk --no-first-run --disable-session-crashed-bubble --disable-infobars --autoplay-policy=no-user-gesture-required "file://$STATIC_UI"
+elif command -v epiphany >/dev/null 2>&1; then
+    exec epiphany --application-mode "file://$STATIC_UI"
+elif command -v firefox >/dev/null 2>&1; then
+    exec firefox --kiosk "file://$STATIC_UI"
+elif command -v python3 >/dev/null 2>&1; then
+    python3 -c "
+import sys
+try:
+    import webview
+    webview.create_window('Tube OS TV', 'file://$STATIC_UI', fullscreen=True)
+    webview.start()
+except ImportError:
+    import subprocess
+    subprocess.run(['xdg-open', 'file://$STATIC_UI'])
+"
+else
+    echo "Tube OS UI Mock: No web engine found."
+fi

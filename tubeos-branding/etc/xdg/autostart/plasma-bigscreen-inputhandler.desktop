@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Plasma Bigscreen Input Handler
+Comment=Input handler daemon for KDE Plasma Bigscreen
+Exec=/usr/bin/plasma-bigscreen-inputhandler
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=1
+X-KDE-Autostart-condition=plasma-bigscreen

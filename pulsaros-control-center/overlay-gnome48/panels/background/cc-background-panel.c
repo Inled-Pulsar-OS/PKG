@@ -80,32 +80,58 @@ static void
 load_custom_css (CcBackgroundPanel *self)
 {
   g_autoptr(GtkCssProvider) provider = NULL;
+  const gchar *custom_css =
+    "button.accent-button {\n"
+    "  min-width: 28px;\n"
+    "  min-height: 28px;\n"
+    "  padding: 0;\n"
+    "  margin: 4px;\n"
+    "  border-radius: 9999px;\n"
+    "  border: 2px solid rgba(255, 255, 255, 0.2);\n"
+    "  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);\n"
+    "  transition: transform 150ms ease-in-out, outline 150ms ease-in-out;\n"
+    "}\n"
+    "button.accent-button:hover {\n"
+    "  transform: scale(1.15);\n"
+    "  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.35);\n"
+    "}\n"
+    "button.accent-button:checked {\n"
+    "  border: 2.5px solid #ffffff;\n"
+    "  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6), 0 4px 10px rgba(0, 0, 0, 0.4);\n"
+    "  transform: scale(1.15);\n"
+    "}\n"
+    "button.accent-button.blue { background-image: none; background-color: #3584e4; }\n"
+    "button.accent-button.teal { background-image: none; background-color: #2190a4; }\n"
+    "button.accent-button.green { background-image: none; background-color: #3a944a; }\n"
+    "button.accent-button.yellow { background-image: none; background-color: #e5a50a; }\n"
+    "button.accent-button.orange { background-image: none; background-color: #e66100; }\n"
+    "button.accent-button.red { background-image: none; background-color: #e01b24; }\n"
+    "button.accent-button.pink { background-image: none; background-color: #d56199; }\n"
+    "button.accent-button.purple { background-image: none; background-color: #9141ac; }\n"
+    "button.accent-button.slate { background-image: none; background-color: #6f8396; }\n"
+    "button.accent-button.maia { background-image: none; background-color: #16a085; }\n";
 
   provider = gtk_css_provider_new ();
-  gtk_css_provider_load_from_resource (provider, "/org/gnome/control-center/background/preview.css");
+  gtk_css_provider_load_from_string (provider, custom_css);
   gtk_style_context_add_provider_for_display (gdk_display_get_default (),
                                               GTK_STYLE_PROVIDER (provider),
-                                              GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+                                              GTK_STYLE_PROVIDER_PRIORITY_USER);
 }
 
 static void
 transition_screen (CcBackgroundPanel *self)
 {
-  g_autoptr (GError) error = NULL;
-
   if (!self->proxy)
     return;
 
-  g_dbus_proxy_call_sync (self->proxy,
-                          "ScreenTransition",
-                          NULL,
-                          G_DBUS_CALL_FLAGS_NONE,
-                          -1,
-                          NULL,
-                          &error);
-
-  if (error)
-    g_warning ("Couldn't transition screen: %s", error->message);
+  g_dbus_proxy_call (self->proxy,
+                     "ScreenTransition",
+                     NULL,
+                     G_DBUS_CALL_FLAGS_NONE,
+                     500,
+                     NULL,
+                     NULL,
+                     NULL);
 }
 
 static void
@@ -334,6 +360,7 @@ reload_current_bg (CcBackgroundPanel *self)
   if (uri && *uri == '\0')
     g_clear_pointer (&uri, g_free);
 
+
   configured = cc_background_item_new (uri);
 
   dark_uri = g_settings_get_string (settings, WP_URI_DARK_KEY);
@@ -385,6 +412,14 @@ reset_settings_if_defaults (CcBackgroundPanel *self,
 
       setting_is_default = g_variant_equal (default_value, user_value);
 
+      /* As a courtesy to distros that are a little lackadaisical about making sure
+       * schema defaults match the settings in the background item with the default
+       * picture, we only look at the URI to determine if we shouldn't clean out dconf.
+       *
+       * In otherwords, we still clean out the picture-uri key from dconf when a user
+       * selects the default background in control-center, even if after selecting it
+       * e.g., primary-color still mismatches with schema defaults.
+       */
       if (g_str_equal (keys[i], WP_URI_KEY) && !setting_is_default)
         return;
 
@@ -403,6 +438,7 @@ set_background (CcBackgroundPanel *self,
 {
   GDesktopBackgroundStyle style;
   CcBackgroundItemFlags flags;
+  g_autofree gchar *filename = NULL;
   const char *uri;
 
   if (item == NULL)
@@ -425,6 +461,7 @@ set_background (CcBackgroundPanel *self,
         g_settings_set_string (settings, WP_URI_DARK_KEY, uri);
     }
 
+  /* Also set the placement if we have a URI and the previous value was none */
   if (flags & CC_BACKGROUND_ITEM_HAS_PLACEMENT)
     {
       g_settings_set_enum (settings, WP_OPTIONS_KEY, cc_background_item_get_placement (item));
@@ -442,7 +479,10 @@ set_background (CcBackgroundPanel *self,
   g_settings_set_string (settings, WP_PCOLOR_KEY, cc_background_item_get_pcolor (item));
   g_settings_set_string (settings, WP_SCOLOR_KEY, cc_background_item_get_scolor (item));
 
+  /* Apply all changes */
   g_settings_apply (settings);
+
+  /* Clean out dconf if the user went back to distro defaults */
   reset_settings_if_defaults (self, settings, set_dark);
 }
 
@@ -450,6 +490,45 @@ static void
 on_chooser_background_chosen_cb (CcBackgroundPanel *self,
                                  CcBackgroundItem  *item)
 {
+  const char *uri = NULL;
+
+  if (item)
+    uri = cc_background_item_get_uri (item);
+
+  if (uri)
+    {
+      g_autofree gchar *lower_uri = g_utf8_strdown (uri, -1);
+      gboolean is_video = FALSE;
+
+      if (strstr (lower_uri, ".mp4") || strstr (lower_uri, ".webm") ||
+          strstr (lower_uri, ".mkv") || strstr (lower_uri, ".mov") ||
+          strstr (lower_uri, ".avi") || strstr (lower_uri, ".gif") ||
+          strstr (lower_uri, "live-wallpaper") || strstr (lower_uri, "pulsar-live-wallpaper") ||
+          strstr (lower_uri, "poster-") || strstr (lower_uri, "poster"))
+        {
+          is_video = TRUE;
+        }
+
+      if (is_video)
+        {
+          g_autofree gchar *path = g_filename_from_uri (uri, NULL, NULL);
+          if (path && (strstr (path, ".mp4") || strstr (path, ".webm") || strstr (path, ".mkv") || strstr (path, ".mov") || strstr (path, ".avi") || strstr (path, ".gif")))
+            {
+              g_autofree gchar *cmd = g_strdup_printf ("/usr/bin/pulsaros-live-wallpaper set '%s' &", path);
+              g_spawn_command_line_async (cmd, NULL);
+            }
+          else
+            {
+              g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper restore &'", NULL);
+            }
+        }
+      else
+        {
+          /* Selected a static wallpaper -> stop video engine so the static background is displayed */
+          g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper stop'", NULL);
+        }
+    }
+
   g_signal_handlers_block_by_func (self->settings, on_settings_changed, self);
 
   set_background (self, self->settings, item, TRUE);
@@ -523,6 +602,270 @@ on_apply_cursor_adwaita_clicked_cb (CcBackgroundPanel *self)
   g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.desktop.interface cursor-theme Adwaita'", NULL);
 }
 
+static GSettings *
+safe_settings_new (const gchar *schema_id, GSettingsSchema **out_schema)
+{
+  GSettingsSchemaSource *source = g_settings_schema_source_get_default ();
+  g_autoptr(GSettingsSchema) schema = NULL;
+  if (out_schema)
+    *out_schema = NULL;
+  if (!source)
+    return NULL;
+  schema = g_settings_schema_source_lookup (source, schema_id, TRUE);
+  if (!schema)
+    return NULL;
+  if (out_schema)
+    *out_schema = g_settings_schema_ref (schema);
+  return g_settings_new (schema_id);
+}
+
+static void
+safe_set_int (GSettings *settings, GSettingsSchema *schema, const gchar *key, gint val)
+{
+  if (settings && schema && g_settings_schema_has_key (schema, key))
+    g_settings_set_int (settings, key, val);
+}
+
+static void
+safe_set_double (GSettings *settings, GSettingsSchema *schema, const gchar *key, gdouble val)
+{
+  if (settings && schema && g_settings_schema_has_key (schema, key))
+    g_settings_set_double (settings, key, val);
+}
+
+static void
+safe_set_boolean (GSettings *settings, GSettingsSchema *schema, const gchar *key, gboolean val)
+{
+  if (settings && schema && g_settings_schema_has_key (schema, key))
+    g_settings_set_boolean (settings, key, val);
+}
+
+static void
+safe_set_string (GSettings *settings, GSettingsSchema *schema, const gchar *key, const gchar *val)
+{
+  if (settings && schema && g_settings_schema_has_key (schema, key))
+    g_settings_set_string (settings, key, val);
+}
+
+static void
+safe_set_strv (GSettings *settings, GSettingsSchema *schema, const gchar *key, const gchar * const *val)
+{
+  if (settings && schema && g_settings_schema_has_key (schema, key))
+    g_settings_set_strv (settings, key, val);
+}
+
+static void
+set_extension_enabled (const gchar *uuid, gboolean enable)
+{
+  g_autoptr(GSettingsSchema) schema = NULL;
+  g_autoptr(GSettings) shell_settings = safe_settings_new ("org.gnome.shell", &schema);
+  if (shell_settings && schema && g_settings_schema_has_key (schema, "enabled-extensions"))
+    {
+      g_auto(GStrv) enabled_exts = g_settings_get_strv (shell_settings, "enabled-extensions");
+      g_autoptr(GPtrArray) new_list = g_ptr_array_new_with_free_func (g_free);
+      gboolean found = FALSE;
+
+      if (enabled_exts)
+        {
+          for (guint i = 0; enabled_exts[i] != NULL; i++)
+            {
+              if (g_str_equal (enabled_exts[i], uuid))
+                {
+                  found = TRUE;
+                  if (enable)
+                    g_ptr_array_add (new_list, g_strdup (enabled_exts[i]));
+                }
+              else
+                {
+                  g_ptr_array_add (new_list, g_strdup (enabled_exts[i]));
+                }
+            }
+        }
+
+      if (enable && !found)
+        g_ptr_array_add (new_list, g_strdup (uuid));
+
+      g_ptr_array_add (new_list, NULL);
+      g_settings_set_strv (shell_settings, "enabled-extensions", (const gchar * const *) new_list->pdata);
+    }
+
+  if (enable)
+    {
+      g_autofree gchar *cmd = g_strdup_printf ("/bin/sh -c 'gnome-extensions enable \"%s\" >/dev/null 2>&1 &'", uuid);
+      g_spawn_command_line_async (cmd, NULL);
+    }
+  else
+    {
+      g_autofree gchar *cmd = g_strdup_printf ("/bin/sh -c 'gnome-extensions disable \"%s\" >/dev/null 2>&1 &'", uuid);
+      g_spawn_command_line_async (cmd, NULL);
+    }
+}
+
+static void
+apply_desktop_effects_mode (gboolean use_liquid_glass)
+{
+  if (use_liquid_glass)
+    {
+      /* 1. Toggle extension states: enable liquid glass, disable blur my shell */
+      set_extension_enabled ("blur-my-shell@aunetx", FALSE);
+      set_extension_enabled ("liquid-glass@thinkingcoding1231.gmail.com", TRUE);
+
+      /* 2. Configure Dash to Dock (Pulsar Dock) with 'Use system theme' enabled */
+      g_autoptr(GSettingsSchema) dock_schema = NULL;
+      g_autoptr(GSettings) dock_settings = safe_settings_new ("org.gnome.shell.extensions.dash-to-dock", &dock_schema);
+      if (dock_settings && dock_schema)
+        {
+          safe_set_boolean (dock_settings, dock_schema, "apply-custom-theme", TRUE);
+          safe_set_string (dock_settings, dock_schema, "transparency-mode", "FIXED");
+          safe_set_double (dock_settings, dock_schema, "background-opacity", 0.15);
+          safe_set_boolean (dock_settings, dock_schema, "customize-alphas", FALSE);
+          safe_set_boolean (dock_settings, dock_schema, "custom-theme-shrink", FALSE);
+          safe_set_double (dock_settings, dock_schema, "height-fraction", 0.9);
+        }
+
+      /* 3. Configure Liquid Glass presets safely */
+      g_autoptr(GSettingsSchema) glass_schema = NULL;
+      g_autoptr(GSettings) glass_settings = safe_settings_new ("org.gnome.shell.extensions.liquid-glass", &glass_schema);
+      if (!glass_settings)
+        glass_settings = safe_settings_new ("org.gnome.shell.extensions.liquid-glass@thinkingcoding1231.gmail.com", &glass_schema);
+
+      if (glass_settings && glass_schema)
+        {
+          safe_set_int (glass_settings, glass_schema, "application-blur-radius", 5);
+          safe_set_double (glass_settings, glass_schema, "application-content-opacity", 0.85);
+          safe_set_double (glass_settings, glass_schema, "application-corner-radius", 20.689655172413794);
+          safe_set_boolean (glass_settings, glass_schema, "application-glass-all-windows", TRUE);
+          safe_set_string (glass_settings, glass_schema, "application-tint-color", "#000000");
+          safe_set_double (glass_settings, glass_schema, "application-tint-strength", 0.0);
+          const gchar *empty_list[] = { NULL };
+          safe_set_strv (glass_settings, glass_schema, "application-window-whitelist", empty_list);
+          safe_set_double (glass_settings, glass_schema, "dock-corner-radius", 24.0);
+          safe_set_int (glass_settings, glass_schema, "dock-glass-expand", 3);
+          safe_set_string (glass_settings, glass_schema, "dock-tint-color", "#000000");
+          safe_set_double (glass_settings, glass_schema, "dock-tint-strength", 0.12);
+          safe_set_int (glass_settings, glass_schema, "dock-blur-radius", 5);
+          safe_set_boolean (glass_settings, glass_schema, "enable-dock-glass", TRUE);
+          safe_set_boolean (glass_settings, glass_schema, "enable-application-glass", TRUE);
+          safe_set_boolean (glass_settings, glass_schema, "enable-menu-glass", TRUE);
+          safe_set_boolean (glass_settings, glass_schema, "enable-notification-glass", TRUE);
+          safe_set_boolean (glass_settings, glass_schema, "enable-osd-glass", TRUE);
+          safe_set_boolean (glass_settings, glass_schema, "enable-quick-settings-glass", FALSE);
+          safe_set_double (glass_settings, glass_schema, "glass-chroma-strength", 0.0);
+          safe_set_double (glass_settings, glass_schema, "glass-displacement-scale", 188.37209302325581);
+          safe_set_double (glass_settings, glass_schema, "glass-edge-smoothing", 0.0);
+          safe_set_double (glass_settings, glass_schema, "glass-ior", 2.0175438596491229);
+          safe_set_double (glass_settings, glass_schema, "glass-max-z", 16.981132075471699);
+          safe_set_double (glass_settings, glass_schema, "glass-profile-shape-n", 20.0);
+          safe_set_double (glass_settings, glass_schema, "glass-rim-width", 4.8000000000000007);
+          safe_set_double (glass_settings, glass_schema, "glass-specular-intensity", 0.0);
+          safe_set_double (glass_settings, glass_schema, "menu-corner-radius", 14.0);
+          safe_set_int (glass_settings, glass_schema, "menu-glass-expand", 4);
+          safe_set_string (glass_settings, glass_schema, "menu-tint-color", "#000000");
+          safe_set_double (glass_settings, glass_schema, "notification-corner-radius", 16.0);
+          safe_set_string (glass_settings, glass_schema, "notification-tint-color", "#000000");
+          safe_set_double (glass_settings, glass_schema, "osd-corner-radius", 16.0);
+          safe_set_string (glass_settings, glass_schema, "osd-tint-color", "#000000");
+          safe_set_double (glass_settings, glass_schema, "quick-settings-corner-radius", 18.0);
+          safe_set_boolean (glass_settings, glass_schema, "output-logs", FALSE);
+        }
+
+      /* Execute dconf writes in background as non-blocking safe helper */
+      const gchar *dconf_script =
+        "/bin/sh -c \""
+        "dconf write /org/gnome/shell/extensions/liquid-glass/application-blur-radius '5' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/application-content-opacity '0.85' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/application-corner-radius '20.689655172413794' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/application-glass-all-windows 'true' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/application-tint-color \\\"'#000000'\\\" ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/application-tint-strength '0.0' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/application-window-whitelist '@as []' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/dock-corner-radius '24.0' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/dock-glass-expand '3' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/dock-tint-color \\\"'#000000'\\\" ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-dock-glass 'true' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-application-glass 'true' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-menu-glass 'true' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-notification-glass 'true' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-osd-glass 'true' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-quick-settings-glass 'false' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/menu-corner-radius '14.0' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/menu-glass-expand '4' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/panel-menu-corner-radius '14.0' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/panel-menu-glass-expand '4' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/desktop-menu-corner-radius '14.0' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/notification-corner-radius '16.0' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/osd-corner-radius '16.0' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/quick-settings-corner-radius '18.0' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-chroma-strength '0.0' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-displacement-scale '188.37209302325581' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-edge-smoothing '0.0' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-ior '2.0175438596491229' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-max-z '16.981132075471699' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-profile-shape-n '20.0' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-rim-width '4.8000000000000007' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-specular-intensity '0.0' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/menu-tint-color \\\"'#000000'\\\" ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/notification-tint-color \\\"'#000000'\\\" ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/osd-tint-color \\\"'#000000'\\\" ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/output-logs 'false' ; "
+        "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme true ; "
+        "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' ; "
+        "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 ; "
+        "gsettings set org.gnome.shell.extensions.dash-to-dock customize-alphas false >/dev/null 2>&1 &\"";
+      g_spawn_command_line_async (dconf_script, NULL);
+    }
+  else
+    {
+      /* 1. Toggle extension states: disable liquid glass, enable blur my shell */
+      set_extension_enabled ("liquid-glass@thinkingcoding1231.gmail.com", FALSE);
+      set_extension_enabled ("blur-my-shell@aunetx", TRUE);
+
+      /* 2. Restore Dash to Dock (Pulsar Dock) default Pulsar OS settings */
+      g_autoptr(GSettingsSchema) dock_schema = NULL;
+      g_autoptr(GSettings) dock_settings = safe_settings_new ("org.gnome.shell.extensions.dash-to-dock", &dock_schema);
+      if (dock_settings && dock_schema)
+        {
+          safe_set_boolean (dock_settings, dock_schema, "apply-custom-theme", FALSE);
+          safe_set_string (dock_settings, dock_schema, "transparency-mode", "FIXED");
+          safe_set_double (dock_settings, dock_schema, "background-opacity", 0.15);
+          safe_set_boolean (dock_settings, dock_schema, "customize-alphas", FALSE);
+          safe_set_boolean (dock_settings, dock_schema, "custom-theme-shrink", FALSE);
+          safe_set_double (dock_settings, dock_schema, "height-fraction", 0.9);
+        }
+
+      /* 3. Restore Blur my Shell dock settings */
+      g_autoptr(GSettingsSchema) bms_dock_schema = NULL;
+      g_autoptr(GSettings) bms_dock_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.dash-to-dock", &bms_dock_schema);
+      if (bms_dock_settings && bms_dock_schema)
+        {
+          safe_set_boolean (bms_dock_settings, bms_dock_schema, "blur", TRUE);
+          safe_set_boolean (bms_dock_settings, bms_dock_schema, "override-background", TRUE);
+          safe_set_int (bms_dock_settings, bms_dock_schema, "style-dash-to-dock", 2);
+          safe_set_int (bms_dock_settings, bms_dock_schema, "sigma", 0);
+          safe_set_double (bms_dock_settings, bms_dock_schema, "brightness", 0.64);
+          safe_set_string (bms_dock_settings, bms_dock_schema, "pipeline", "pipeline_default_rounded");
+          safe_set_boolean (bms_dock_settings, bms_dock_schema, "unblur-in-overview", TRUE);
+          safe_set_boolean (bms_dock_settings, bms_dock_schema, "static-blur", TRUE);
+        }
+
+      const gchar *dock_script =
+        "/bin/sh -c \""
+        "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme false ; "
+        "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' ; "
+        "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 ; "
+        "gsettings set org.gnome.shell.extensions.dash-to-dock customize-alphas false ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur true ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock override-background true ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock style-dash-to-dock 2 ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock sigma 0 ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock brightness 0.64 ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock pipeline 'pipeline_default_rounded' ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock unblur-in-overview true ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock static-blur true >/dev/null 2>&1 &\"";
+      g_spawn_command_line_async (dock_script, NULL);
+    }
+}
+
 static void
 on_liquid_glass_active_changed_cb (CcBackgroundPanel *self)
 {
@@ -532,10 +875,7 @@ on_liquid_glass_active_changed_cb (CcBackgroundPanel *self)
     return;
 
   active = adw_switch_row_get_active (self->liquid_glass_switch_row);
-  if (active)
-    g_spawn_command_line_async ("/bin/sh -c 'gnome-extensions enable liquid-glass@thinkingcoding1231.gmail.com'", NULL);
-  else
-    g_spawn_command_line_async ("/bin/sh -c 'gnome-extensions disable liquid-glass@thinkingcoding1231.gmail.com'", NULL);
+  apply_desktop_effects_mode (active);
 }
 
 static void
@@ -601,6 +941,7 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, background_chooser);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, default_preview);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, dark_preview);
+
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, default_toggle);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, dark_toggle);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_remap_switch_row);
@@ -628,19 +969,6 @@ on_settings_changed (CcBackgroundPanel *self)
   update_preview (self);
 }
 
-static GSettings *
-safe_settings_new (const gchar *schema_id)
-{
-  GSettingsSchemaSource *source = g_settings_schema_source_get_default ();
-  g_autoptr(GSettingsSchema) schema = NULL;
-  if (!source)
-    return NULL;
-  schema = g_settings_schema_source_lookup (source, schema_id, TRUE);
-  if (!schema)
-    return NULL;
-  return g_settings_new (schema_id);
-}
-
 static void
 cc_background_panel_init (CcBackgroundPanel *self)
 {
@@ -650,20 +978,17 @@ cc_background_panel_init (CcBackgroundPanel *self)
 
   if (self->macos_remap_switch_row)
     {
-      g_autoptr(GSettings) input_settings = safe_settings_new ("org.gnome.desktop.input-sources");
+      g_autoptr(GSettings) input_settings = g_settings_new ("org.gnome.desktop.input-sources");
+      g_auto(GStrv) options = g_settings_get_strv (input_settings, "xkb-options");
       gboolean has_remap = FALSE;
-      if (input_settings)
+      if (options)
         {
-          g_auto(GStrv) options = g_settings_get_strv (input_settings, "xkb-options");
-          if (options)
+          for (guint i = 0; options[i] != NULL; i++)
             {
-              for (guint i = 0; options[i] != NULL; i++)
+              if (g_str_equal (options[i], "ctrl:swap_lwin_lctl"))
                 {
-                  if (g_str_equal (options[i], "ctrl:swap_lwin_lctl"))
-                    {
-                      has_remap = TRUE;
-                      break;
-                    }
+                  has_remap = TRUE;
+                  break;
                 }
             }
         }
@@ -672,7 +997,7 @@ cc_background_panel_init (CcBackgroundPanel *self)
 
   if (self->macos_fullscreen_switch_row)
     {
-      g_autoptr(GSettings) ext_settings = safe_settings_new ("org.gnome.shell.extensions.pulsaros-global-menu");
+      g_autoptr(GSettings) ext_settings = g_settings_new ("org.gnome.shell.extensions.pulsaros-global-menu");
       if (ext_settings)
         {
           gboolean fs_active = g_settings_get_boolean (ext_settings, "macos-fullscreen-spaces");
@@ -682,11 +1007,12 @@ cc_background_panel_init (CcBackgroundPanel *self)
 
   if (self->liquid_glass_switch_row)
     {
-      g_autoptr(GSettings) shell_settings = safe_settings_new ("org.gnome.shell");
-      if (shell_settings)
+      g_autoptr(GSettingsSchema) schema = NULL;
+      g_autoptr(GSettings) shell_settings = safe_settings_new ("org.gnome.shell", &schema);
+      gboolean lg_active = FALSE;
+      if (shell_settings && schema && g_settings_schema_has_key (schema, "enabled-extensions"))
         {
           g_auto(GStrv) enabled_exts = g_settings_get_strv (shell_settings, "enabled-extensions");
-          gboolean lg_active = FALSE;
           if (enabled_exts)
             {
               for (guint i = 0; enabled_exts[i] != NULL; i++)
@@ -698,8 +1024,10 @@ cc_background_panel_init (CcBackgroundPanel *self)
                     }
                 }
             }
-          adw_switch_row_set_active (self->liquid_glass_switch_row, lg_active);
         }
+      g_signal_handlers_block_by_func (self->liquid_glass_switch_row, on_liquid_glass_active_changed_cb, self);
+      adw_switch_row_set_active (self->liquid_glass_switch_row, lg_active);
+      g_signal_handlers_unblock_by_func (self->liquid_glass_switch_row, on_liquid_glass_active_changed_cb, self);
     }
 
   self->connection = g_application_get_dbus_connection (g_application_get_default ());

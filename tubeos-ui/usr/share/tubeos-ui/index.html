@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tube OS TV UI (Mock Shell)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: radial-gradient(circle at 20% 20%, #1e1e2f, #0d0e15 90%);
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+    header {
+      padding: 30px 60px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .brand img {
+      height: 48px;
+    }
+    .brand-title {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .clock-widget {
+      font-size: 22px;
+      color: #8e8e93;
+    }
+    main {
+      flex: 1;
+      padding: 40px 60px;
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+    }
+    .section-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: #a0a0b0;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 24px;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid transparent;
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+      cursor: pointer;
+      text-align: center;
+    }
+    .card:hover, .card.focused {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: #3b82f6;
+      transform: scale(1.06);
+      box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+      outline: none;
+    }
+    .card .icon {
+      font-size: 40px;
+    }
+    .card .title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .card .desc {
+      font-size: 12px;
+      color: #888899;
+    }
+    footer {
+      padding: 15px 60px;
+      background: rgba(0, 0, 0, 0.3);
+      display: flex;
+      justify-content: space-between;
+      color: #666677;
+      font-size: 13px;
+    }
+    .badge {
+      background: rgba(59, 130, 246, 0.2);
+      color: #60a5fa;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <img src="/usr/share/tubeos/branding/tube-os-logo.png" onerror="this.src='logo.png'" alt="Tube OS">
+      <span class="brand-title">Tube OS TV</span>
+      <span class="badge">Debian UI Mock</span>
+    </div>
+    <div class="clock-widget" id="clock">--:--</div>
+  </header>
+
+  <main>
+    <div class="section-title">TV & Media Center</div>
+    <div class="grid" id="grid">
+      <div class="card focused" tabindex="0" onclick="openApp('casaos')">
+        <div class="icon">🏠</div>
+        <div class="title">CasaOS Dashboard</div>
+        <div class="desc">Personal Cloud & Docker Apps</div>
+      </div>
+      <div class="card" tabindex="0" onclick="openApp('kodi')">
+        <div class="icon">🍿</div>
+        <div class="title">Kodi Media Center</div>
+        <div class="desc">Movies, Series & Live TV</div>
+      </div>
+      <div class="card" tabindex="0" onclick="openApp('youtube')">
+        <div class="icon">📺</div>
+        <div class="title">YouTube TV</div>
+        <div class="desc">Streaming Video</div>
+      </div>
+      <div class="card" tabindex="0" onclick="openApp('files')">
+        <div class="icon">📁</div>
+        <div class="title">Media Browser</div>
+        <div class="desc">Local & Network Storage</div>
+      </div>
+      <div class="card" tabindex="0" onclick="openApp('settings')">
+        <div class="icon">⚙️</div>
+        <div class="title">TV Settings</div>
+        <div class="desc">Network, Audio & Display</div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div>Navigate with <strong>[Arrow Keys]</strong> or Gamepad • Select with <strong>[Enter]</strong></div>
+    <div>Tube OS Debian Edition • Tauri TV Shell (Mock Scaffolding)</div>
+  </footer>
+
+  <script>
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('clock').innerText = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    function openApp(id) {
+      if (id === 'casaos') {
+        window.location.href = 'http://' + window.location.hostname + ':80';
+      } else {
+        alert('Launching ' + id + ' (Tauri interface under active development by collaborator)');
+      }
+    }
+
+    // Keyboard & Remote D-Pad Navigation
+    const cards = Array.from(document.querySelectorAll('.card'));
+    let currentIndex = 0;
+
+    function setFocus(index) {
+      if (index < 0) index = 0;
+      if (index >= cards.length) index = cards.length - 1;
+      cards[currentIndex].classList.remove('focused');
+      currentIndex = index;
+      cards[currentIndex].classList.add('focused');
+      cards[currentIndex].focus();
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') { setFocus(currentIndex + 1); e.preventDefault(); }
+      if (e.key === 'ArrowLeft') { setFocus(currentIndex - 1); e.preventDefault(); }
+      if (e.key === 'Enter') { cards[currentIndex].click(); e.preventDefault(); }
+    });
+  </script>
+</body>
+</html>

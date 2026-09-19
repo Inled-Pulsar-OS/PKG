@@ -119,23 +119,42 @@ idle-delay=uint32 300
 [org/gnome/shell/extensions/liquid-glass]
 # Default settings for Liquid Glass extension extracted from host
 # Configuración por defecto para la extensión Liquid Glass extraída del host
-application-blur-radius=9
+application-blur-radius=5
 application-content-opacity=1.0
-application-corner-radius=17.0
-application-glass-all-windows=false
+application-corner-radius=20.689655172413794
+application-glass-all-windows=true
+application-saturation=2.0
 application-tint-color='#000000'
-application-tint-strength=0.059999999999999921
+application-tint-strength=0.0
 application-window-whitelist=@as []
+blur-method=0
 dock-corner-radius=24.0
 dock-glass-expand=3
 dock-tint-color='#000000'
-enable-application-glass=false
+enable-application-glass=true
 enable-menu-glass=true
 enable-quick-settings-glass=false
+glass-chroma-strength=0.0
+glass-displacement-scale=188.37209302325581
+glass-edge-smoothing=0.0
+glass-ior=2.0175438596491229
+glass-max-z=16.981132075471699
+glass-profile-shape-n=20.0
+glass-rim-width=4.8000000000000007
+menu-corner-radius=14.0
+menu-glass-expand=4
+panel-menu-corner-radius=14.0
+panel-menu-glass-expand=4
+desktop-menu-corner-radius=14.0
 menu-tint-color='#000000'
+notification-corner-radius=16.0
 notification-tint-color='#000000'
+osd-corner-radius=16.0
 osd-tint-color='#000000'
 output-logs=false
+quick-settings-apply-to=1
+quick-settings-corner-radius=18.0
+quick-settings-enable-adaptive-text-color=false
 
 [org/gnome/desktop/input-sources]
 xkb-options=['ctrl:swap_lwin_lctl', 'ctrl:swap_rwin_rctl']

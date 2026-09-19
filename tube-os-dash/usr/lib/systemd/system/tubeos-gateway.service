@@ -1,12 +1,17 @@
 [Unit]
-After=network.target
 Description=Tube OS Gateway
+After=network.target tubeos-ootb.service
+ConditionPathExists=!/var/lib/tubeos/need-ootb
 
 [Service]
-ExecStartPre=/usr/bin/tubeos-gateway -v
-ExecStart=/usr/bin/tubeos-gateway
+RuntimeDirectory=tubeos
+RuntimeDirectoryMode=0755
+LogsDirectory=casaos tubeos
+ExecStartPre=/bin/mkdir -p /var/run/tubeos /run/tubeos /var/log/casaos /var/log/tubeos /var/lib/tubeos/db /var/lib/tubeos/conf /etc/tubeos
+ExecStart=/usr/bin/tubeos-gateway -w /var/lib/tubeos/www
 PIDFile=/var/run/tubeos/gateway.pid
 Restart=always
+RestartSec=3
 Type=notify
 
 [Install]

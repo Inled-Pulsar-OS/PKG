@@ -1,74 +1,116 @@
+diff --git a/.gitmodules b/.gitmodules
+index 5ab4a386d..360abec84 100644
+--- a/.gitmodules
++++ b/.gitmodules
+@@ -1,3 +1,3 @@
+ [submodule "subprojects/gvc"]
+ 	path = subprojects/gvc
+-	url = https://gitlab.gnome.org/GNOME/libgnome-volume-control.git
++	url = /home/jaime/Documentos/pulsar/PKG/arch/pkgbuilds/gnome-control-center/src/libgnome-volume-control
 diff --git a/panels/background/cc-background-panel.blp b/panels/background/cc-background-panel.blp
-index ff2b3fb..1122334 100644
+index ff2b3fb6f..edeb8cbab 100644
 --- a/panels/background/cc-background-panel.blp
 +++ b/panels/background/cc-background-panel.blp
-@@ -26,2 +26,2 @@ template $CcBackgroundPanel: $CcPanel {
--          Adw.PreferencesGroup {
+@@ -23,7 +23,7 @@ template $CcBackgroundPanel: $CcPanel {
+       content: Adw.ToastOverlay toast_overlay {
+         child: Adw.PreferencesPage {
+           Adw.PreferencesGroup {
 -            title: _("Style");
-+          Adw.PreferencesGroup {
 +            title: _("Appearance");
-@@ -34,2 +34,2 @@ template $CcBackgroundPanel: $CcPanel {
+ 
+             Adw.PreferencesRow {
+               accessible-role: group;
+@@ -31,8 +31,8 @@ template $CcBackgroundPanel: $CcPanel {
+               focusable: false;
+ 
+               Adw.Clamp {
 -                maximum-size: 400;
 -                tightening-threshold: 300;
 +                maximum-size: 440;
 +                tightening-threshold: 320;
-@@ -69,2 +69,2 @@ template $CcBackgroundPanel: $CcPanel {
+ 
+                 Grid {
+                   column-homogeneous: true;
+@@ -66,8 +66,7 @@ template $CcBackgroundPanel: $CcPanel {
+                   }
+ 
+                   Label default_label {
 -                    label: _("_Default");
 -                    use-underline: true;
 +                    label: _("Light");
-+                    mnemonic-widget: default_toggle;
-@@ -105,2 +105,2 @@ template $CcBackgroundPanel: $CcPanel {
+                     mnemonic-widget: default_toggle;
+ 
+                     layout {
+@@ -102,8 +101,7 @@ template $CcBackgroundPanel: $CcPanel {
+                   }
+ 
+                   Label dark_label {
 -                    label: _("Da_rk");
 -                    use-underline: true;
 +                    label: _("Dark");
-+                    mnemonic-widget: dark_toggle;
-@@ -120,2 +120,2 @@ template $CcBackgroundPanel: $CcPanel {
--          Adw.PreferencesGroup {
+                     mnemonic-widget: dark_toggle;
+ 
+                     layout {
+@@ -117,24 +115,37 @@ template $CcBackgroundPanel: $CcPanel {
+           }
+ 
+           Adw.PreferencesGroup {
 -            title: _("Accent Color");
-+          Adw.PreferencesGroup {
 +            title: _("Liquid Glass");
 +            description: _("Choose your preferred look for Liquid Glass.");
-+
+ 
+-            Adw.PreferencesRow {
+-              accessible-role: group;
+-              activatable: false;
+-              focusable: false;
 +            Adw.SwitchRow liquid_glass_switch_row {
 +              title: _("Liquid Glass Effect");
-+              subtitle: _("Aplica desenfoques translúcidos y bordes reflectantes a las ventanas activas estilo macOS");
-+              active: true;
++              subtitle: _("Apply translucent blurs and reflective borders to active windows in macOS style");
 +              notify::active => $on_liquid_glass_active_changed_cb(template);
 +            }
 +          }
 +
 +          Adw.PreferencesGroup {
 +            title: _("Theme");
-+
+ 
 +            Adw.ActionRow {
-+              title: _("Color");
-+              subtitle: _("Color de acento del sistema");
++              title: _("Accent Color");
++              subtitle: _("System-wide accent color");
 +
 +              [suffix]
-+              Box accent_box {
+               Box accent_box {
+-                spacing: 12;
+-                margin-top: 12;
+-                margin-bottom: 12;
+-                halign: center;
 +                spacing: 8;
 +                margin-top: 8;
 +                margin-bottom: 8;
 +                halign: end;
 +                valign: center;
-+              }
-+            }
-+          }
-@@ -137,2 +160,2 @@ template $CcBackgroundPanel: $CcPanel {
--          Adw.PreferencesGroup {
+               }
+             }
+           }
+ 
+           Adw.PreferencesGroup {
 -            title: _("Background");
-+          Adw.PreferencesGroup {
-+            title: _("Wallpaper & Live Wallpaper");
-+            description: _("Fondos estáticos o vídeos y animaciones (.mp4, .webm, .gif, .webp) sincronizados con Escritorio, SDDM y Bloqueo");
-@@ -152,0 +175,23 @@ template $CcBackgroundPanel: $CcPanel {
++            title: _("Wallpaper &amp; Live Wallpaper");
++            description: _("Static wallpapers or animated videos (.mp4, .webm, .gif, .webp) synchronized across Desktop, SDDM, and Lockscreen");
+ 
+             header-suffix: Button {
+               Adw.ButtonContent {
+@@ -150,6 +161,31 @@ template $CcBackgroundPanel: $CcPanel {
+               ]
+             };
+ 
 +            Adw.ActionRow {
-+              title: _("Seleccionar Fondo Animado o Vídeo");
-+              subtitle: _("Gestionado con el motor nativo Pulsar OS Live Wallpaper");
++              title: _("Select Animated Wallpaper or Video");
++              subtitle: _("Managed with native Pulsar OS Live Wallpaper engine");
 +
 +              [suffix]
 +              Button {
 +                valign: center;
-+                label: _("Elegir Vídeo…");
++                label: _("Choose Video…");
 +                clicked => $on_pick_live_wallpaper_clicked_cb(template);
 +                styles [
 +                  "suggested-action",
@@ -78,28 +120,34 @@ index ff2b3fb..1122334 100644
 +              [suffix]
 +              Button {
 +                valign: center;
-+                label: _("Desactivar");
++                label: _("Stop");
 +                clicked => $on_stop_live_wallpaper_clicked_cb(template);
 +                styles [
 +                  "destructive-action",
 +                ]
 +              }
 +            }
-@@ -167,0 +212,65 @@ template $CcBackgroundPanel: $CcPanel {
-+          }
++
+             Adw.Bin {
+               styles [
+                 "card",
+@@ -166,6 +202,91 @@ template $CcBackgroundPanel: $CcPanel {
+               }
+             }
+           }
 +
 +          Adw.PreferencesGroup {
-+            title: _("Spotlight & App Launcher");
-+            description: _("Experiencia de búsqueda al presionar Cmd+Espacio");
++            title: _("Spotlight &amp; App Launcher");
++            description: _("Search and launcher experience when pressing Cmd+Space");
 +
 +            Adw.ActionRow {
-+              title: _("Spotlight macOS (Python)");
-+              subtitle: _("Buscador flotante estilo macOS Tahoe");
++              title: _("macOS Spotlight (Python)");
++              subtitle: _("Floating search bar with macOS Tahoe design");
 +
 +              [suffix]
 +              Button {
 +                valign: center;
-+                label: _("Activar");
++                label: _("Enable");
 +                clicked => $on_activate_spotlight_python_clicked_cb(template);
 +                styles [
 +                  "suggested-action",
@@ -108,111 +156,564 @@ index ff2b3fb..1122334 100644
 +            }
 +
 +            Adw.ActionRow {
-+              title: _("Vista de Actividades de GNOME (Overview & Apps Grid)");
-+              subtitle: _("Pantalla general nativa y cuadrícula de aplicaciones");
++              title: _("GNOME Overview &amp; Apps Grid");
++              subtitle: _("Native GNOME activities overview and application grid");
 +
 +              [suffix]
 +              Button {
 +                valign: center;
-+                label: _("Activar");
++                label: _("Enable");
 +                clicked => $on_activate_gnome_overview_clicked_cb(template);
 +              }
 +            }
 +          }
 +
 +          Adw.PreferencesGroup {
-+            title: _("Mouse & Trackpad Cursors");
-+            description: _("Punteros del ratón y estilo visual");
++            title: _("macOS Layout &amp; Keyboard Remap");
++            description: _("Swap physical Control and Command/Super keys for standard macOS shortcuts (Cmd+C, Cmd+V, Cmd+W)");
++
++            Adw.SwitchRow macos_remap_switch_row {
++              title: _("macOS Keyboard Remap (Cmd as Ctrl)");
++              subtitle: _("Allows using the Command/Super key for standard macOS shortcuts (Cmd+C, Cmd+V, Cmd+W) system-wide");
++              active: false;
++              notify::active => $on_macos_remap_active_changed_cb(template);
++            }
++          }
++
++          Adw.PreferencesGroup {
++            title: _("macOS-style Windows & Fullscreen");
++            description: _("Smart workspace and top bar behavior when maximizing windows");
++
++            Adw.SwitchRow macos_fullscreen_switch_row {
++              title: _("macOS Fullscreen Spaces");
++              subtitle: _("Moving maximized apps to dedicated workspaces and auto-hiding the top bar");
++              active: false;
++              notify::active => $on_macos_fullscreen_active_changed_cb(template);
++            }
++          }
++
++          Adw.PreferencesGroup {
++            title: _("Mouse &amp; Trackpad Cursors");
++            description: _("Cursor themes and visual styles");
 +
 +            Adw.ActionRow {
-+              title: _("Punteros macOS Tahoe / Cupertino");
-+              subtitle: _("Estilo oficial de Pulsar OS con sombras dinámicas");
++              title: _("macOS Tahoe / Cupertino Cursors");
++              subtitle: _("Official Pulsar OS style with dynamic drop shadows");
 +
 +              [suffix]
 +              Button {
 +                valign: center;
-+                label: _("Aplicar Tahoe");
++                label: _("Apply Tahoe");
 +                clicked => $on_apply_cursor_tahoe_clicked_cb(template);
 +              }
 +            }
 +
 +            Adw.ActionRow {
-+              title: _("Punteros Adwaita Estándar");
-+              subtitle: _("Cursores clásicos de GNOME");
++              title: _("Standard Adwaita Cursors");
++              subtitle: _("Classic GNOME cursor theme");
 +
 +              [suffix]
 +              Button {
 +                valign: center;
-+                label: _("Aplicar Adwaita");
++                label: _("Apply Adwaita");
 +                clicked => $on_apply_cursor_adwaita_clicked_cb(template);
 +              }
 +            }
++          }
+         };
+       };
+     };
 diff --git a/panels/background/cc-background-panel.c b/panels/background/cc-background-panel.c
-index 201d2ab..6e5c781 100644
+index 201d2ab3b..a76b38189 100644
 --- a/panels/background/cc-background-panel.c
 +++ b/panels/background/cc-background-panel.c
-@@ -506,6 +506,42 @@ cc_background_panel_finalize (GObject *object)
+@@ -67,6 +67,9 @@ struct _CcBackgroundPanel
+   CcBackgroundPreview *dark_preview;
+   GtkToggleButton *default_toggle;
+   GtkToggleButton *dark_toggle;
++  AdwSwitchRow *macos_remap_switch_row;
++  AdwSwitchRow *macos_fullscreen_switch_row;
++  AdwSwitchRow *liquid_glass_switch_row;
+ };
+ 
+ CC_PANEL_REGISTER (CcBackgroundPanel, cc_background_panel)
+@@ -77,32 +80,58 @@ static void
+ load_custom_css (CcBackgroundPanel *self)
+ {
+   g_autoptr(GtkCssProvider) provider = NULL;
++  const gchar *custom_css =
++    "button.accent-button {\n"
++    "  min-width: 28px;\n"
++    "  min-height: 28px;\n"
++    "  padding: 0;\n"
++    "  margin: 4px;\n"
++    "  border-radius: 9999px;\n"
++    "  border: 2px solid rgba(255, 255, 255, 0.2);\n"
++    "  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);\n"
++    "  transition: transform 150ms ease-in-out, outline 150ms ease-in-out;\n"
++    "}\n"
++    "button.accent-button:hover {\n"
++    "  transform: scale(1.15);\n"
++    "  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.35);\n"
++    "}\n"
++    "button.accent-button:checked {\n"
++    "  border: 2.5px solid #ffffff;\n"
++    "  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6), 0 4px 10px rgba(0, 0, 0, 0.4);\n"
++    "  transform: scale(1.15);\n"
++    "}\n"
++    "button.accent-button.blue { background-image: none; background-color: #3584e4; }\n"
++    "button.accent-button.teal { background-image: none; background-color: #2190a4; }\n"
++    "button.accent-button.green { background-image: none; background-color: #3a944a; }\n"
++    "button.accent-button.yellow { background-image: none; background-color: #e5a50a; }\n"
++    "button.accent-button.orange { background-image: none; background-color: #e66100; }\n"
++    "button.accent-button.red { background-image: none; background-color: #e01b24; }\n"
++    "button.accent-button.pink { background-image: none; background-color: #d56199; }\n"
++    "button.accent-button.purple { background-image: none; background-color: #9141ac; }\n"
++    "button.accent-button.slate { background-image: none; background-color: #6f8396; }\n"
++    "button.accent-button.maia { background-image: none; background-color: #16a085; }\n";
+ 
+   provider = gtk_css_provider_new ();
+-  gtk_css_provider_load_from_resource (provider, "/org/gnome/control-center/background/preview.css");
++  gtk_css_provider_load_from_string (provider, custom_css);
+   gtk_style_context_add_provider_for_display (gdk_display_get_default (),
+                                               GTK_STYLE_PROVIDER (provider),
+-                                              GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
++                                              GTK_STYLE_PROVIDER_PRIORITY_USER);
+ }
+ 
+ static void
+ transition_screen (CcBackgroundPanel *self)
+ {
+-  g_autoptr (GError) error = NULL;
+-
+   if (!self->proxy)
+     return;
+ 
+-  g_dbus_proxy_call_sync (self->proxy,
+-                          "ScreenTransition",
+-                          NULL,
+-                          G_DBUS_CALL_FLAGS_NONE,
+-                          -1,
+-                          NULL,
+-                          &error);
+-
+-  if (error)
+-    g_warning ("Couldn't transition screen: %s", error->message);
++  g_dbus_proxy_call (self->proxy,
++                     "ScreenTransition",
++                     NULL,
++                     G_DBUS_CALL_FLAGS_NONE,
++                     500,
++                     NULL,
++                     NULL,
++                     NULL);
+ }
+ 
+ static void
+@@ -461,6 +490,45 @@ static void
+ on_chooser_background_chosen_cb (CcBackgroundPanel *self,
+                                  CcBackgroundItem  *item)
+ {
++  const char *uri = NULL;
++
++  if (item)
++    uri = cc_background_item_get_uri (item);
++
++  if (uri)
++    {
++      g_autofree gchar *lower_uri = g_utf8_strdown (uri, -1);
++      gboolean is_video = FALSE;
++
++      if (strstr (lower_uri, ".mp4") || strstr (lower_uri, ".webm") ||
++          strstr (lower_uri, ".mkv") || strstr (lower_uri, ".mov") ||
++          strstr (lower_uri, ".avi") || strstr (lower_uri, ".gif") ||
++          strstr (lower_uri, "live-wallpaper") || strstr (lower_uri, "pulsar-live-wallpaper") ||
++          strstr (lower_uri, "poster-") || strstr (lower_uri, "poster"))
++        {
++          is_video = TRUE;
++        }
++
++      if (is_video)
++        {
++          g_autofree gchar *path = g_filename_from_uri (uri, NULL, NULL);
++          if (path && (strstr (path, ".mp4") || strstr (path, ".webm") || strstr (path, ".mkv") || strstr (path, ".mov") || strstr (path, ".avi") || strstr (path, ".gif")))
++            {
++              g_autofree gchar *cmd = g_strdup_printf ("/usr/bin/pulsaros-live-wallpaper set '%s' &", path);
++              g_spawn_command_line_async (cmd, NULL);
++            }
++          else
++            {
++              g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper restore &'", NULL);
++            }
++        }
++      else
++        {
++          /* Selected a static wallpaper -> stop video engine so the static background is displayed */
++          g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper stop'", NULL);
++        }
++    }
++
+   g_signal_handlers_block_by_func (self->settings, on_settings_changed, self);
+ 
+   set_background (self, self->settings, item, TRUE);
+@@ -506,6 +574,339 @@ cc_background_panel_finalize (GObject *object)
    G_OBJECT_CLASS (cc_background_panel_parent_class)->finalize (object);
  }
  
 +static void
-+on_pick_live_wallpaper_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
++on_pick_live_wallpaper_clicked_cb (CcBackgroundPanel *self)
 +{
 +  g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper set-dialog'", NULL);
 +}
 +
 +static void
-+on_stop_live_wallpaper_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
++on_stop_live_wallpaper_clicked_cb (CcBackgroundPanel *self)
 +{
 +  g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-live-wallpaper stop'", NULL);
 +}
 +
 +static void
-+on_apply_cursor_tahoe_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
++on_apply_cursor_tahoe_clicked_cb (CcBackgroundPanel *self)
 +{
-+  g_settings_set_string (self->interface_settings, "cursor-theme", "Tahoe");
-+  g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.desktop.interface cursor-theme Tahoe'", NULL);
++  if (self->interface_settings)
++    g_settings_set_string (self->interface_settings, "cursor-theme", "MacTahoe-light");
++  g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.desktop.interface cursor-theme MacTahoe-light'", NULL);
 +}
 +
 +static void
-+on_apply_cursor_adwaita_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
++on_apply_cursor_adwaita_clicked_cb (CcBackgroundPanel *self)
 +{
-+  g_settings_set_string (self->interface_settings, "cursor-theme", "Adwaita");
++  if (self->interface_settings)
++    g_settings_set_string (self->interface_settings, "cursor-theme", "Adwaita");
 +  g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.desktop.interface cursor-theme Adwaita'", NULL);
 +}
 +
-+static void
-+on_liquid_glass_active_changed_cb (GObject *object, GParamSpec *pspec, CcBackgroundPanel *self)
++static GSettings *
++safe_settings_new (const gchar *schema_id, GSettingsSchema **out_schema)
 +{
-+  gboolean active = adw_switch_row_get_active (ADW_SWITCH_ROW (object));
-+  if (active)
-+    g_spawn_command_line_async ("/bin/sh -c 'gnome-extensions enable liquid-glass@thinkingcoding1231.gmail.com'", NULL);
++  GSettingsSchemaSource *source = g_settings_schema_source_get_default ();
++  g_autoptr(GSettingsSchema) schema = NULL;
++  if (out_schema)
++    *out_schema = NULL;
++  if (!source)
++    return NULL;
++  schema = g_settings_schema_source_lookup (source, schema_id, TRUE);
++  if (!schema)
++    return NULL;
++  if (out_schema)
++    *out_schema = g_settings_schema_ref (schema);
++  return g_settings_new (schema_id);
++}
++
++static void
++safe_set_int (GSettings *settings, GSettingsSchema *schema, const gchar *key, gint val)
++{
++  if (settings && schema && g_settings_schema_has_key (schema, key))
++    g_settings_set_int (settings, key, val);
++}
++
++static void
++safe_set_double (GSettings *settings, GSettingsSchema *schema, const gchar *key, gdouble val)
++{
++  if (settings && schema && g_settings_schema_has_key (schema, key))
++    g_settings_set_double (settings, key, val);
++}
++
++static void
++safe_set_boolean (GSettings *settings, GSettingsSchema *schema, const gchar *key, gboolean val)
++{
++  if (settings && schema && g_settings_schema_has_key (schema, key))
++    g_settings_set_boolean (settings, key, val);
++}
++
++static void
++safe_set_string (GSettings *settings, GSettingsSchema *schema, const gchar *key, const gchar *val)
++{
++  if (settings && schema && g_settings_schema_has_key (schema, key))
++    g_settings_set_string (settings, key, val);
++}
++
++static void
++safe_set_strv (GSettings *settings, GSettingsSchema *schema, const gchar *key, const gchar * const *val)
++{
++  if (settings && schema && g_settings_schema_has_key (schema, key))
++    g_settings_set_strv (settings, key, val);
++}
++
++static void
++set_extension_enabled (const gchar *uuid, gboolean enable)
++{
++  g_autoptr(GSettingsSchema) schema = NULL;
++  g_autoptr(GSettings) shell_settings = safe_settings_new ("org.gnome.shell", &schema);
++  if (shell_settings && schema && g_settings_schema_has_key (schema, "enabled-extensions"))
++    {
++      g_auto(GStrv) enabled_exts = g_settings_get_strv (shell_settings, "enabled-extensions");
++      g_autoptr(GPtrArray) new_list = g_ptr_array_new_with_free_func (g_free);
++      gboolean found = FALSE;
++
++      if (enabled_exts)
++        {
++          for (guint i = 0; enabled_exts[i] != NULL; i++)
++            {
++              if (g_str_equal (enabled_exts[i], uuid))
++                {
++                  found = TRUE;
++                  if (enable)
++                    g_ptr_array_add (new_list, g_strdup (enabled_exts[i]));
++                }
++              else
++                {
++                  g_ptr_array_add (new_list, g_strdup (enabled_exts[i]));
++                }
++            }
++        }
++
++      if (enable && !found)
++        g_ptr_array_add (new_list, g_strdup (uuid));
++
++      g_ptr_array_add (new_list, NULL);
++      g_settings_set_strv (shell_settings, "enabled-extensions", (const gchar * const *) new_list->pdata);
++    }
++
++  if (enable)
++    {
++      g_autofree gchar *cmd = g_strdup_printf ("/bin/sh -c 'gnome-extensions enable \"%s\" >/dev/null 2>&1 &'", uuid);
++      g_spawn_command_line_async (cmd, NULL);
++    }
 +  else
-+    g_spawn_command_line_async ("/bin/sh -c 'gnome-extensions disable liquid-glass@thinkingcoding1231.gmail.com'", NULL);
++    {
++      g_autofree gchar *cmd = g_strdup_printf ("/bin/sh -c 'gnome-extensions disable \"%s\" >/dev/null 2>&1 &'", uuid);
++      g_spawn_command_line_async (cmd, NULL);
++    }
 +}
 +
 +static void
-+on_activate_spotlight_python_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
++apply_desktop_effects_mode (gboolean use_liquid_glass)
 +{
-+  g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.mutter overlay-key \"\" && gsettings set org.gnome.shell.extensions.pulsaros-spotlight-launcher launcher-type \"python\"'", NULL);
++  if (use_liquid_glass)
++    {
++      /* 1. Toggle extension states: enable liquid glass, disable blur my shell */
++      set_extension_enabled ("blur-my-shell@aunetx", FALSE);
++      set_extension_enabled ("liquid-glass@thinkingcoding1231.gmail.com", TRUE);
++
++      /* 2. Configure Dash to Dock (Pulsar Dock) with 'Use system theme' enabled */
++      g_autoptr(GSettingsSchema) dock_schema = NULL;
++      g_autoptr(GSettings) dock_settings = safe_settings_new ("org.gnome.shell.extensions.dash-to-dock", &dock_schema);
++      if (dock_settings && dock_schema)
++        {
++          safe_set_boolean (dock_settings, dock_schema, "apply-custom-theme", TRUE);
++          safe_set_string (dock_settings, dock_schema, "transparency-mode", "FIXED");
++          safe_set_double (dock_settings, dock_schema, "background-opacity", 0.15);
++          safe_set_boolean (dock_settings, dock_schema, "customize-alphas", FALSE);
++          safe_set_boolean (dock_settings, dock_schema, "custom-theme-shrink", FALSE);
++          safe_set_double (dock_settings, dock_schema, "height-fraction", 0.9);
++        }
++
++      /* 3. Configure Liquid Glass presets safely */
++      g_autoptr(GSettingsSchema) glass_schema = NULL;
++      g_autoptr(GSettings) glass_settings = safe_settings_new ("org.gnome.shell.extensions.liquid-glass", &glass_schema);
++      if (!glass_settings)
++        glass_settings = safe_settings_new ("org.gnome.shell.extensions.liquid-glass@thinkingcoding1231.gmail.com", &glass_schema);
++
++      if (glass_settings && glass_schema)
++        {
++          safe_set_int (glass_settings, glass_schema, "application-blur-radius", 5);
++          safe_set_double (glass_settings, glass_schema, "application-content-opacity", 0.85);
++          safe_set_double (glass_settings, glass_schema, "application-corner-radius", 20.689655172413794);
++          safe_set_boolean (glass_settings, glass_schema, "application-glass-all-windows", TRUE);
++          safe_set_string (glass_settings, glass_schema, "application-tint-color", "#000000");
++          safe_set_double (glass_settings, glass_schema, "application-tint-strength", 0.0);
++          const gchar *empty_list[] = { NULL };
++          safe_set_strv (glass_settings, glass_schema, "application-window-whitelist", empty_list);
++          safe_set_double (glass_settings, glass_schema, "dock-corner-radius", 24.0);
++          safe_set_int (glass_settings, glass_schema, "dock-glass-expand", 3);
++          safe_set_string (glass_settings, glass_schema, "dock-tint-color", "#000000");
++          safe_set_double (glass_settings, glass_schema, "dock-tint-strength", 0.12);
++          safe_set_int (glass_settings, glass_schema, "dock-blur-radius", 5);
++          safe_set_boolean (glass_settings, glass_schema, "enable-dock-glass", TRUE);
++          safe_set_boolean (glass_settings, glass_schema, "enable-application-glass", TRUE);
++          safe_set_boolean (glass_settings, glass_schema, "enable-menu-glass", TRUE);
++          safe_set_boolean (glass_settings, glass_schema, "enable-notification-glass", TRUE);
++          safe_set_boolean (glass_settings, glass_schema, "enable-osd-glass", TRUE);
++          safe_set_boolean (glass_settings, glass_schema, "enable-quick-settings-glass", FALSE);
++          safe_set_double (glass_settings, glass_schema, "glass-chroma-strength", 0.0);
++          safe_set_double (glass_settings, glass_schema, "glass-displacement-scale", 188.37209302325581);
++          safe_set_double (glass_settings, glass_schema, "glass-edge-smoothing", 0.0);
++          safe_set_double (glass_settings, glass_schema, "glass-ior", 2.0175438596491229);
++          safe_set_double (glass_settings, glass_schema, "glass-max-z", 16.981132075471699);
++          safe_set_double (glass_settings, glass_schema, "glass-profile-shape-n", 20.0);
++          safe_set_double (glass_settings, glass_schema, "glass-rim-width", 4.8000000000000007);
++          safe_set_double (glass_settings, glass_schema, "glass-specular-intensity", 0.0);
++          safe_set_string (glass_settings, glass_schema, "menu-tint-color", "#000000");
++          safe_set_string (glass_settings, glass_schema, "notification-tint-color", "#000000");
++          safe_set_string (glass_settings, glass_schema, "osd-tint-color", "#000000");
++          safe_set_boolean (glass_settings, glass_schema, "output-logs", FALSE);
++        }
++
++      /* Execute dconf writes in background as non-blocking safe helper */
++      const gchar *dconf_script =
++        "/bin/sh -c \""
++        "dconf write /org/gnome/shell/extensions/liquid-glass/application-blur-radius '5' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/application-content-opacity '0.85' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/application-corner-radius '20.689655172413794' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/application-glass-all-windows 'true' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/application-tint-color \\\"'#000000'\\\" ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/application-tint-strength '0.0' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/application-window-whitelist '@as []' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/dock-corner-radius '24.0' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/dock-glass-expand '3' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/dock-tint-color \\\"'#000000'\\\" ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-dock-glass 'true' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-application-glass 'true' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-menu-glass 'true' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-notification-glass 'true' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-osd-glass 'true' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-quick-settings-glass 'false' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/menu-corner-radius '14.0' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/menu-glass-expand '4' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/panel-menu-corner-radius '14.0' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/panel-menu-glass-expand '4' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/desktop-menu-corner-radius '14.0' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/notification-corner-radius '16.0' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/osd-corner-radius '16.0' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/quick-settings-corner-radius '18.0' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-chroma-strength '0.0' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-displacement-scale '188.37209302325581' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-edge-smoothing '0.0' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-ior '2.0175438596491229' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-max-z '16.981132075471699' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-profile-shape-n '20.0' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-rim-width '4.8000000000000007' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-specular-intensity '0.0' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/menu-tint-color \\\"'#000000'\\\" ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/notification-tint-color \\\"'#000000'\\\" ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/osd-tint-color \\\"'#000000'\\\" ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/output-logs 'false' ; "
++        "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme true ; "
++        "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' ; "
++        "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 ; "
++        "gsettings set org.gnome.shell.extensions.dash-to-dock customize-alphas false >/dev/null 2>&1 &\"";
++      g_spawn_command_line_async (dconf_script, NULL);
++    }
++  else
++    {
++      /* 1. Toggle extension states: disable liquid glass, enable blur my shell */
++      set_extension_enabled ("liquid-glass@thinkingcoding1231.gmail.com", FALSE);
++      set_extension_enabled ("blur-my-shell@aunetx", TRUE);
++
++      /* 2. Restore Dash to Dock (Pulsar Dock) default Pulsar OS settings */
++      g_autoptr(GSettingsSchema) dock_schema = NULL;
++      g_autoptr(GSettings) dock_settings = safe_settings_new ("org.gnome.shell.extensions.dash-to-dock", &dock_schema);
++      if (dock_settings && dock_schema)
++        {
++          safe_set_boolean (dock_settings, dock_schema, "apply-custom-theme", FALSE);
++          safe_set_string (dock_settings, dock_schema, "transparency-mode", "FIXED");
++          safe_set_double (dock_settings, dock_schema, "background-opacity", 0.15);
++          safe_set_boolean (dock_settings, dock_schema, "customize-alphas", FALSE);
++          safe_set_boolean (dock_settings, dock_schema, "custom-theme-shrink", FALSE);
++          safe_set_double (dock_settings, dock_schema, "height-fraction", 0.9);
++        }
++
++      /* 3. Restore Blur my Shell dock settings */
++      g_autoptr(GSettingsSchema) bms_dock_schema = NULL;
++      g_autoptr(GSettings) bms_dock_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.dash-to-dock", &bms_dock_schema);
++      if (bms_dock_settings && bms_dock_schema)
++        {
++          safe_set_boolean (bms_dock_settings, bms_dock_schema, "blur", TRUE);
++          safe_set_boolean (bms_dock_settings, bms_dock_schema, "override-background", TRUE);
++          safe_set_int (bms_dock_settings, bms_dock_schema, "style-dash-to-dock", 2);
++          safe_set_int (bms_dock_settings, bms_dock_schema, "sigma", 0);
++          safe_set_double (bms_dock_settings, bms_dock_schema, "brightness", 0.64);
++          safe_set_string (bms_dock_settings, bms_dock_schema, "pipeline", "pipeline_default_rounded");
++          safe_set_boolean (bms_dock_settings, bms_dock_schema, "unblur-in-overview", TRUE);
++          safe_set_boolean (bms_dock_settings, bms_dock_schema, "static-blur", TRUE);
++        }
++
++      const gchar *dock_script =
++        "/bin/sh -c \""
++        "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme false ; "
++        "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' ; "
++        "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 ; "
++        "gsettings set org.gnome.shell.extensions.dash-to-dock customize-alphas false ; "
++        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur true ; "
++        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock override-background true ; "
++        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock style-dash-to-dock 2 ; "
++        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock sigma 0 ; "
++        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock brightness 0.64 ; "
++        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock pipeline 'pipeline_default_rounded' ; "
++        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock unblur-in-overview true ; "
++        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock static-blur true >/dev/null 2>&1 &\"";
++      g_spawn_command_line_async (dock_script, NULL);
++    }
 +}
 +
 +static void
-+on_activate_gnome_overview_clicked_cb (GtkButton *button, CcBackgroundPanel *self)
++on_liquid_glass_active_changed_cb (CcBackgroundPanel *self)
 +{
-+  g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.mutter overlay-key \"Super_L\" && gsettings set org.gnome.shell.extensions.dash-to-dock show-show-apps-button true'", NULL);
++  gboolean active;
++
++  if (!self->liquid_glass_switch_row)
++    return;
++
++  active = adw_switch_row_get_active (self->liquid_glass_switch_row);
++  apply_desktop_effects_mode (active);
++}
++
++static void
++on_activate_spotlight_python_clicked_cb (CcBackgroundPanel *self)
++{
++  g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-toggle-launcher spotlight'", NULL);
++}
++
++static void
++on_activate_gnome_overview_clicked_cb (CcBackgroundPanel *self)
++{
++  g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-toggle-launcher overview'", NULL);
++}
++
++static void
++on_macos_remap_active_changed_cb (CcBackgroundPanel *self)
++{
++  gboolean active;
++
++  if (!self->macos_remap_switch_row)
++    return;
++
++  active = adw_switch_row_get_active (self->macos_remap_switch_row);
++  if (active)
++    g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-toggle-remap macos'", NULL);
++  else
++    g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-toggle-remap gnome'", NULL);
++}
++
++static void
++on_macos_fullscreen_active_changed_cb (CcBackgroundPanel *self)
++{
++  gboolean active;
++
++  if (!self->macos_fullscreen_switch_row)
++    return;
++
++  active = adw_switch_row_get_active (self->macos_fullscreen_switch_row);
++  if (active)
++    g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.shell.extensions.pulsaros-global-menu macos-fullscreen-spaces true'", NULL);
++  else
++    g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.shell.extensions.pulsaros-global-menu macos-fullscreen-spaces false'", NULL);
 +}
 +
  static void
  cc_background_panel_class_init (CcBackgroundPanelClass *klass)
  {
-@@ -527,12 +563,20 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
+@@ -527,12 +928,25 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
    gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, background_chooser);
    gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, default_preview);
    gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, dark_preview);
 +
    gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, default_toggle);
    gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, dark_toggle);
++  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_remap_switch_row);
++  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_fullscreen_switch_row);
++  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, liquid_glass_switch_row);
  
    gtk_widget_class_bind_template_callback (widget_class, on_color_scheme_toggle_active_cb);
    gtk_widget_class_bind_template_callback (widget_class, on_chooser_background_chosen_cb);
@@ -224,69 +725,270 @@ index 201d2ab..6e5c781 100644
 +  gtk_widget_class_bind_template_callback (widget_class, on_liquid_glass_active_changed_cb);
 +  gtk_widget_class_bind_template_callback (widget_class, on_activate_spotlight_python_clicked_cb);
 +  gtk_widget_class_bind_template_callback (widget_class, on_activate_gnome_overview_clicked_cb);
++  gtk_widget_class_bind_template_callback (widget_class, on_macos_remap_active_changed_cb);
++  gtk_widget_class_bind_template_callback (widget_class, on_macos_fullscreen_active_changed_cb);
  }
  
  static void
+@@ -549,6 +963,60 @@ cc_background_panel_init (CcBackgroundPanel *self)
+ 
+   gtk_widget_init_template (GTK_WIDGET (self));
+ 
++  if (self->macos_remap_switch_row)
++    {
++      g_autoptr(GSettings) input_settings = g_settings_new ("org.gnome.desktop.input-sources");
++      g_auto(GStrv) options = g_settings_get_strv (input_settings, "xkb-options");
++      gboolean has_remap = FALSE;
++      if (options)
++        {
++          for (guint i = 0; options[i] != NULL; i++)
++            {
++              if (g_str_equal (options[i], "ctrl:swap_lwin_lctl"))
++                {
++                  has_remap = TRUE;
++                  break;
++                }
++            }
++        }
++      adw_switch_row_set_active (self->macos_remap_switch_row, has_remap);
++    }
++
++  if (self->macos_fullscreen_switch_row)
++    {
++      g_autoptr(GSettings) ext_settings = g_settings_new ("org.gnome.shell.extensions.pulsaros-global-menu");
++      if (ext_settings)
++        {
++          gboolean fs_active = g_settings_get_boolean (ext_settings, "macos-fullscreen-spaces");
++          adw_switch_row_set_active (self->macos_fullscreen_switch_row, fs_active);
++        }
++    }
++
++  if (self->liquid_glass_switch_row)
++    {
++      g_autoptr(GSettingsSchema) schema = NULL;
++      g_autoptr(GSettings) shell_settings = safe_settings_new ("org.gnome.shell", &schema);
++      gboolean lg_active = FALSE;
++      if (shell_settings && schema && g_settings_schema_has_key (schema, "enabled-extensions"))
++        {
++          g_auto(GStrv) enabled_exts = g_settings_get_strv (shell_settings, "enabled-extensions");
++          if (enabled_exts)
++            {
++              for (guint i = 0; enabled_exts[i] != NULL; i++)
++                {
++                  if (g_str_equal (enabled_exts[i], "liquid-glass@thinkingcoding1231.gmail.com"))
++                    {
++                      lg_active = TRUE;
++                      break;
++                    }
++                }
++            }
++        }
++      g_signal_handlers_block_by_func (self->liquid_glass_switch_row, on_liquid_glass_active_changed_cb, self);
++      adw_switch_row_set_active (self->liquid_glass_switch_row, lg_active);
++      g_signal_handlers_unblock_by_func (self->liquid_glass_switch_row, on_liquid_glass_active_changed_cb, self);
++    }
++
+   self->connection = g_application_get_dbus_connection (g_application_get_default ());
+ 
+   self->settings = g_settings_new (WP_PATH_ID);
 diff --git a/panels/keyboard/cc-keyboard-panel.blp b/panels/keyboard/cc-keyboard-panel.blp
-index 3f02e62..90ec2e5 100644
+index 3f02e62c3..1fa1263cb 100644
 --- a/panels/keyboard/cc-keyboard-panel.blp
 +++ b/panels/keyboard/cc-keyboard-panel.blp
-@@ -66,6 +66,17 @@ template $CcKeyboardPanel: $CcPanel {
-           }
-         }
- 
-+        Adw.PreferencesGroup {
-+          title: _("Distribución y Mapeo macOS");
+@@ -79,3 +79,5 @@ template $CcKeyboardPanel: $CcPanel {
+     }
+   }
+ }
 +
-+          Adw.SwitchRow macos_remap_switch_row {
-+            title: _("Remap de Teclado macOS (Cmd como Ctrl)");
-+            subtitle: _("Permite usar la tecla Command/Super para copiar (Cmd+C), pegar (Cmd+V), cerrar pestañas (Cmd+W) y atajos de macOS en todo el sistema");
-+            active: true;
-+            notify::active => $on_macos_remap_active_changed_cb(template);
-+          }
-+        }
 +
-         Adw.PreferencesGroup {
-           title: _("Keyboard Shortcuts");
- 
 diff --git a/panels/keyboard/cc-keyboard-panel.c b/panels/keyboard/cc-keyboard-panel.c
-index 53c1842..cb1f87e 100644
+index 53c1842db..18da2bf4c 100644
 --- a/panels/keyboard/cc-keyboard-panel.c
 +++ b/panels/keyboard/cc-keyboard-panel.c
-@@ -165,6 +165,21 @@ cc_keyboard_panel_finalize (GObject *object)
-   G_OBJECT_CLASS (cc_keyboard_panel_parent_class)->finalize (object);
- }
+@@ -48,7 +48,7 @@ struct _CcKeyboardPanel
+   CcListRow           *alt_chars_row;
+   CcListRow           *compose_row;
  
-+static void
-+on_macos_remap_active_changed_cb (GObject *object, GParamSpec *pspec, CcKeyboardPanel *self)
-+{
-+  gboolean active = adw_switch_row_get_active (ADW_SWITCH_ROW (object));
-+  if (active)
-+    {
-+      g_spawn_command_line_async ("/bin/sh -c 'systemctl --user enable --now gnome-macos-remap-wayland.service'", NULL);
-+    }
-+  else
-+    {
-+      g_spawn_command_line_async ("/bin/sh -c 'systemctl --user disable --now gnome-macos-remap-wayland.service'", NULL);
-+    }
-+}
+-  AdwActionRow        *common_shortcuts_row;
++  CcListRow           *common_shortcuts_row;
+ };
+ 
+ CC_PANEL_REGISTER (CcKeyboardPanel, cc_keyboard_panel)
+@@ -261,3 +261,4 @@ cc_keyboard_panel_init (CcKeyboardPanel *self)
+                                 (gpointer)&COMPOSE_MODIFIER,
+                                 NULL);
+ }
 +
- static void
- cc_keyboard_panel_class_init (CcKeyboardPanelClass *klass)
- {
-@@ -194,6 +209,7 @@ cc_keyboard_panel_class_init (CcKeyboardPanelClass *klass)
-   gtk_widget_class_bind_template_callback (widget_class, alt_chars_row_activated);
-   gtk_widget_class_bind_template_callback (widget_class, compose_row_activated);
-   gtk_widget_class_bind_template_callback (widget_class, keyboard_shortcuts_activated);
-+  gtk_widget_class_bind_template_callback (widget_class, on_macos_remap_active_changed_cb);
- }
+diff --git a/po/es.po b/po/es.po
+index d0dd0c515..d71c2e2c8 100644
+--- a/po/es.po
++++ b/po/es.po
+@@ -1,37 +1,123 @@
+-# translation of gnome-control-center.master.po to Español
+-# Copyright © 1999-2002, 2006, 2007, 2008 Free Software Foundation, Inc.
+-# This file is distributed under the same license as the gnome-control-center package.
+-#
+-# Pablo Saratxaga <srtxg@chanae.alphanet.ch>, 1998-2001.
+-# Carlos Perelló Marín <carlos@gnome-db.org>, 2001.
+-# Héctor García Álvarez <hector@scouts-es.org>, 2001.
+-# Germán Poo Caamaño <gpoo@ubiobio.cl>, 2002 (Revisor).
+-# Lucas Di Pentima <lucas@lunix.com.ar>, 2002.
+-# Pablo Gonzalo del Campo <pablodc@bigfoot.com>, 2002,2003.
+-# Francisco Javier F. Serrador <serrador@cvs.gnome.org>, 2003, 2004, 2005, 2006.
+-# Claudio Saavedra <csaavedra@alumnos.utalca.cl>, 2007.
+-#
+-#
+-# Jorge González <jorgegonz@svn.gnome.org>, 2007, 2008, 2009, 2010, 2011.
+-# leo <daniel.mustieles@gmail.com>, 2022.
+-# Daniel Mustieles <daniel.mustieles@gmail.com>, 2021-2024.
+-# Daniel Mustieles García <daniel.mustieles@gmail.com>, 2024-2026.
+-#
+ msgid ""
+ msgstr ""
+-"Project-Id-Version: gnome-control-center master\n"
+-"Report-Msgid-Bugs-To: https://gitlab.gnome.org/GNOME/gnome-control-center/"
+-"issues\n"
+-"POT-Creation-Date: 2026-02-10 13:00+0000\n"
+-"PO-Revision-Date: 2026-02-12 15:06+0100\n"
+-"Last-Translator: Daniel Mustieles García <daniel.mustieles@gmail.com>\n"
+-"Language-Team: Spanish - Spain <gnome-es-list@gnome.org>\n"
+-"Language: es_ES\n"
++"Project-Id-Version: gnome-control-center\n"
++"Report-Msgid-Bugs-To: \n"
++"POT-Creation-Date: 2026-08-13 18:00+0200\n"
++"PO-Revision-Date: 2026-08-13 18:00+0200\n"
++"Last-Translator: Pulsar OS <info@inled.es>\n"
++"Language-Team: Spanish\n"
++"Language: es\n"
+ "MIME-Version: 1.0\n"
+ "Content-Type: text/plain; charset=UTF-8\n"
+ "Content-Transfer-Encoding: 8bit\n"
+-"Plural-Forms: nplurals=2; plural=(n != 1)\n"
+-"X-Generator: Gtranslator 49.0\n"
++
++msgid "Liquid Glass Effect"
++msgstr "Efecto Liquid Glass"
++
++msgid ""
++"Apply translucent blurs and reflective borders to active windows in macOS "
++"style"
++msgstr ""
++"Aplica desenfoques translúcidos y bordes reflectantes a las ventanas activas "
++"estilo macOS"
++
++msgid "System-wide accent color"
++msgstr "Color de acento del sistema"
++
++msgid "Wallpaper & Live Wallpaper"
++msgstr "Fondo de Pantalla y Fondo Animado"
++
++msgid ""
++"Static wallpapers or animated videos (.mp4, .webm, .gif, .webp) synchronized "
++"across Desktop, SDDM, and Lockscreen"
++msgstr ""
++"Fondos estáticos o vídeos y animaciones (.mp4, .webm, .gif, .webp) "
++"sincronizados con Escritorio, SDDM y Bloqueo"
++
++msgid "Select Animated Wallpaper or Video"
++msgstr "Seleccionar Fondo Animado o Vídeo"
++
++msgid "Managed with native Pulsar OS Live Wallpaper engine"
++msgstr "Gestionado con el motor nativo Pulsar OS Live Wallpaper"
++
++msgid "Choose Video…"
++msgstr "Elegir Vídeo…"
++
++msgid "Spotlight & App Launcher"
++msgstr "Spotlight y Lanzador de Aplicaciones"
++
++msgid "Search and launcher experience when pressing Cmd+Space"
++msgstr "Experiencia de búsqueda y lanzamiento al presionar Cmd+Espacio"
++
++msgid "macOS Spotlight (Python)"
++msgstr "Spotlight de macOS (Python)"
++
++msgid "Floating search bar with macOS Tahoe design"
++msgstr "Buscador flotante estilo macOS Tahoe"
++
++msgid "GNOME Overview & Apps Grid"
++msgstr "Vista de Actividades de GNOME (Overview y Apps)"
++
++msgid "Native GNOME activities overview and application grid"
++msgstr "Pantalla general nativa y cuadrícula de aplicaciones"
++
++msgid "Mouse & Trackpad Cursors"
++msgstr "Punteros de Ratón y Trackpad"
++
++msgid "Cursor themes and visual styles"
++msgstr "Temas de cursores y estilo visual"
++
++msgid "macOS Tahoe / Cupertino Cursors"
++msgstr "Punteros macOS Tahoe / Cupertino"
++
++msgid "Official Pulsar OS style with dynamic drop shadows"
++msgstr "Estilo oficial de Pulsar OS con sombras dinámicas"
++
++msgid "Apply Tahoe"
++msgstr "Aplicar Tahoe"
++
++msgid "Standard Adwaita Cursors"
++msgstr "Punteros Estándar Adwaita"
++
++msgid "Classic GNOME cursor theme"
++msgstr "Tema de cursores clásico de GNOME"
++
++msgid "Apply Adwaita"
++msgstr "Aplicar Adwaita"
++
++msgid "macOS Layout & Keyboard Remap"
++msgstr "Distribución y Mapeo macOS"
++
++msgid "macOS Keyboard Remap (Cmd as Ctrl)"
++msgstr "Remapeo de Teclado macOS (Cmd como Ctrl)"
++
++msgid ""
++"Allows using the Command/Super key for standard macOS shortcuts (Cmd+C, "
++"Cmd+V, Cmd+W) system-wide"
++msgstr ""
++"Permite usar la tecla Command/Super para atajos de macOS (Cmd+C, Cmd+V, "
++"Cmd+W) en todo el sistema"
++
++msgid "Apple ID & Accounts"
++msgstr "Apple ID y Cuentas"
++
++msgid "Pulsar OS ID, iCloud and Media"
++msgstr "ID de Pulsar OS, iCloud y Medios"
++
++msgid "macOS-style Windows & Fullscreen"
++msgstr "Ventanas y Pantalla Completa estilo macOS"
++
++msgid "Smart workspace and top bar behavior when maximizing windows"
++msgstr "Comportamiento inteligente de espacios y barra superior al maximizar"
++
++msgid "macOS Fullscreen Spaces"
++msgstr "Espacios de pantalla completa estilo macOS"
++
++msgid ""
++"Moving maximized apps to dedicated workspaces and auto-hiding the top bar"
++msgstr ""
++"Al maximizar una app, se traslada a un nuevo espacio y oculta la barra "
++"superior"
  
- static gboolean
+ #: global-shortcuts-provider/cc-global-shortcut-dialog.blp:7
+ msgid "Add Keyboard Shortcuts"
 diff --git a/shell/cc-panel-list.c b/shell/cc-panel-list.c
-index 2b59587..aecb0d2 100644
+index 2b59587b1..bde79ca42 100644
 --- a/shell/cc-panel-list.c
 +++ b/shell/cc-panel-list.c
-@@ -263,9 +263,60 @@ row_data_new (CcPanelCategory     category,
+@@ -213,7 +213,6 @@ static const gchar*
+ get_panel_id_from_row (CcPanelList   *self,
+                        GtkListBoxRow *row)
+ {
+-
+   RowData *row_data = g_object_get_data (G_OBJECT (row), "data");
+ 
+   g_assert (row_data != NULL);
+@@ -263,10 +262,71 @@ row_data_new (CcPanelCategory     category,
    gtk_grid_set_column_spacing (GTK_GRID (grid), 12);
  
    /* Icon */
@@ -341,6 +1043,10 @@ index 2b59587..aecb0d2 100644
 +    apple_icon = "/usr/share/icons/hicolor/scalable/apps/computer.svg";
 +  else if (g_strcmp0 (id, "users") == 0)
 +    apple_icon = "/usr/share/icons/hicolor/scalable/apps/system-users.svg";
++  else if (g_strcmp0 (id, "sharing") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-sharing.svg";
++  else if (g_strcmp0 (id, "wellbeing") == 0)
++    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-wellbeing.svg";
 +
 +  if (apple_icon && g_file_test (apple_icon, G_FILE_TEST_EXISTS))
 +    {
@@ -357,11 +1063,369 @@ index 2b59587..aecb0d2 100644
 +    }
  
    gtk_grid_attach (GTK_GRID (grid), image, 0, 0, 1, 1);
+ 
+@@ -369,43 +429,53 @@ filter_func (GtkListBoxRow *row,
+ }
+ 
+ static const gchar * const panel_order[] = {
+-  /* Main page */
++  /* 1. Conectividad y Redes */
+   "wifi",
++  "bluetooth",
+   "network",
+   "wwan",
+   "mobile-broadband",
+-  "bluetooth",
+ 
+   "separator",
+ 
+-  "display",
++  /* 2. Notificaciones y Sonido */
++  "notifications",
+   "sound",
+-  "power",
+   "multitasking",
+-  "background",
++  "power",
+ 
+   "separator",
+ 
+-  "applications",
+-  "notifications",
+-  "search",
+-  "online-accounts",
++  /* 3. General y Sistema */
++  "system",
++  "about",
+   "sharing",
+-  "wellbeing",
+ 
+   "separator",
+ 
+-  "mouse",
+-  "keyboard",
++  /* 4. Apariencia y Pantallas */
++  "background",
++  "display",
+   "color",
+-  "printers",
+-  "wacom",
++  "universal-access",
+ 
+   "separator",
+ 
+-  "universal-access",
++  /* 5. Cuentas y Privacidad */
++  "online-accounts",
+   "privacy",
+-  "system",
++  "users",
++  "applications",
++  "search",
++
++  "separator",
++
++  /* 6. Periféricos y Hardware */
++  "keyboard",
++  "mouse",
++  "printers",
++  "wacom",
++  "wellbeing",
+   "reset-settings",
+ };
+ 
+@@ -437,9 +507,6 @@ sort_function (GtkListBoxRow *a,
+   return get_panel_id_index (a_id) - get_panel_id_index (b_id);
+ }
+ 
+-
+-/* FIXME: This is now different from the "match all words" search.
+-          Maybe add a search score based on number of matches in filter_func()? */
+ static gint
+ search_sort_function (GtkListBoxRow *a,
+                       GtkListBoxRow *b,
+@@ -566,11 +633,6 @@ search_row_activated_cb (GtkWidget     *listbox,
+ 
+       real_row_data = g_object_get_data (G_OBJECT (child), "data");
+ 
+-      /*
+-       * The main listbox has the Details & Devices rows, and neither
+-       * of them contains "data", so we have to ensure we have valid
+-       * data before going on.
+-       */
+       if (!real_row_data)
+         continue;
+ 
+@@ -583,11 +645,7 @@ search_row_activated_cb (GtkWidget     *listbox,
+           gtk_list_box_select_row (GTK_LIST_BOX (self->main_listbox), real_row);
+           gtk_widget_grab_focus (GTK_WIDGET (real_row));
+ 
+-          /* Don't autoselect first panel because we are already
+-           * activating a panel from search result */
+           self->autoselect_panel = FALSE;
+-
+-          /* center Search activated row on panel list */
+           self->center_activated_row = TRUE;
+           g_signal_emit_by_name (real_row, "activate");
+           break;
+@@ -675,11 +733,6 @@ cc_panel_list_class_init (CcPanelListClass *klass)
+   object_class->get_property = cc_panel_list_get_property;
+   object_class->set_property = cc_panel_list_set_property;
+ 
+-  /**
+-   * CcPanelList:show-panel:
+-   *
+-   * Emitted when a panel is selected.
+-   */
+   signals[SHOW_PANEL] = g_signal_new ("show-panel",
+                                       CC_TYPE_PANEL_LIST,
+                                       G_SIGNAL_RUN_LAST,
+@@ -689,33 +742,18 @@ cc_panel_list_class_init (CcPanelListClass *klass)
+                                       G_TYPE_STRING,
+                                       G_TYPE_STRING);
+ 
+-  /**
+-   * CcPanelList:search-mode:
+-   *
+-   * Whether the search is visible or not.
+-   */
+   properties[PROP_SEARCH_MODE] = g_param_spec_boolean ("search-mode",
+                                                        "Search mode",
+                                                        "Whether it's in search mode or not",
+                                                        FALSE,
+                                                        G_PARAM_READWRITE);
+ 
+-  /**
+-   * CcPanelList:search-query:
+-   *
+-   * The search that is being applied to sidelist.
+-   */
+   properties[PROP_SEARCH_QUERY] = g_param_spec_string ("search-query",
+                                                        "Search query",
+                                                        "The current search query",
+                                                        NULL,
+                                                        G_PARAM_READWRITE);
+ 
+-  /**
+-   * CcPanelList:view:
+-   *
+-   * The current view of the sidelist.
+-   */
+   properties[PROP_VIEW] = g_param_spec_int ("view",
+                                             "View",
+                                             "The current view of the sidelist",
+@@ -756,7 +794,6 @@ cc_panel_list_init (CcPanelList *self)
+                                 self,
+                                 NULL);
+ 
+-  /* Search listbox */
+   gtk_list_box_set_sort_func (GTK_LIST_BOX (self->search_listbox),
+                               search_sort_function,
+                               self,
+@@ -774,16 +811,6 @@ cc_panel_list_new (void)
+   return g_object_new (CC_TYPE_PANEL_LIST, NULL);
+ }
+ 
+-void
+-cc_panel_list_center_activated_row (CcPanelList *self,
+-                                    gboolean     val)
+-{
+-  g_return_if_fail (CC_IS_PANEL_LIST (self));
+-
+-  if (self->center_activated_row != val)
+-    self->center_activated_row = val;
+-}
+-
+ gboolean
+ cc_panel_list_activate (CcPanelList *self)
+ {
+@@ -799,13 +826,11 @@ cc_panel_list_activate (CcPanelList *self)
+   if (!GTK_IS_LIST_BOX (listbox))
+     CC_RETURN (FALSE);
+ 
+-  /* Select the first visible row */
+   do
+     row = gtk_list_box_get_row_at_index (GTK_LIST_BOX (listbox), i++);
+   while (row && !(gtk_widget_get_visible (GTK_WIDGET (row)) &&
+          gtk_widget_get_child_visible (GTK_WIDGET (row))));
+ 
+-  /* If the row is valid, activate it */
+   if (row)
+     {
+       gtk_list_box_select_row (GTK_LIST_BOX (listbox), row);
+@@ -840,7 +865,6 @@ cc_panel_list_set_search_query (CcPanelList *self,
+ 
+       self->search_query = g_strdup (search);
+ 
+-      /* Split on spaces */
+       search_query_normalized = cc_util_normalize_casefold_and_unaccent (search);
+       self->search_words = g_strsplit (g_strstrip (search_query_normalized), " ", 0);
+ 
+@@ -861,12 +885,6 @@ cc_panel_list_get_view (CcPanelList *self)
+   return self->view;
+ }
+ 
+-/**
+- * cc_panel_list_get_current_panel:
+- * @self: a #CcPanelList
+- *
+- * Returns: (allow-none): id string of current active panel on @self, or %NULL when there's none yet.
+- */
+ const gchar*
+ cc_panel_list_get_current_panel (CcPanelList *self)
+ {
+@@ -889,13 +907,11 @@ cc_panel_list_add_panel (CcPanelList        *self,
+ 
+   g_return_if_fail (CC_IS_PANEL_LIST (self));
+ 
+-  /* Add the panel to the proper listbox */
+   data = row_data_new (category, id, title, description, keywords, icon, visibility);
+   gtk_widget_set_visible (data->row, visibility == CC_PANEL_VISIBLE);
+ 
+   gtk_list_box_append (GTK_LIST_BOX (self->main_listbox), data->row);
+ 
+-  /* And add to the search listbox too */
+   search_data = row_data_new (category, id, title, description, keywords, icon, visibility);
+   gtk_widget_set_visible (search_data->row, visibility != CC_PANEL_HIDDEN);
+ 
+@@ -905,7 +921,6 @@ cc_panel_list_add_panel (CcPanelList        *self,
+   g_hash_table_insert (self->id_to_search_data, search_data->id, search_data);
+ }
+ 
+-/* Scrolls sibebar so that @row is at middle of the visible part of list */
+ static void
+ cc_panel_list_scroll_to_center_row (CcPanelList *self,
+                                     GtkWidget *row)
+@@ -947,13 +962,6 @@ scroll_to_idle_cb (ScrollData *data)
+   return FALSE;
+ }
+ 
+-/**
+- * cc_panel_list_set_active_panel:
+- * @self: a #CcPanelList
+- * @id: the id of the panel to be activated
+- *
+- * Sets the current active panel.
+- */
+ void
+ cc_panel_list_set_active_panel (CcPanelList *self,
+                                 const gchar *id)
+@@ -975,7 +983,6 @@ cc_panel_list_set_active_panel (CcPanelList *self,
+       self->center_activated_row = FALSE;
+     }
+ 
+-  /* Stop if row is supposed to be always hidden */
+   if (data->visibility == CC_PANEL_HIDDEN)
+     {
+       g_debug ("Panel '%s' is always hidden, stopping.", id);
+@@ -983,17 +990,12 @@ cc_panel_list_set_active_panel (CcPanelList *self,
+       return;
+     }
+ 
+-  /* If the currently selected panel is not always visible, for example when
+-   * the panel is only visible on search and we're temporarily seeing it, make
+-   * sure to hide it after the user moves out.
+-   */
+   if (self->current_panel_id != NULL && g_strcmp0 (self->current_panel_id, id) != 0)
+     {
+       RowData *current_row_data;
+ 
+       current_row_data = g_hash_table_lookup (self->id_to_data, self->current_panel_id);
+ 
+-      /* We cannot be showing a non-existent panel */
+       g_assert (current_row_data != NULL);
+ 
+       gtk_widget_set_visible (current_row_data->row, current_row_data->visibility == CC_PANEL_VISIBLE);
+@@ -1001,29 +1003,20 @@ cc_panel_list_set_active_panel (CcPanelList *self,
+ 
+   listbox = gtk_widget_get_parent (data->row);
+ 
+-  /* The row might be hidden now, so make sure it's visible */
+   gtk_widget_set_visible (data->row, TRUE);
+ 
+   gtk_list_box_select_row (GTK_LIST_BOX (listbox), GTK_LIST_BOX_ROW (data->row));
+   gtk_widget_grab_focus (data->row);
+ 
+-  /* When setting the active panel programatically, prevent from
+-   * autoselecting the first panel of the new view.
+-   */
+   self->autoselect_panel = FALSE;
+ 
+   g_signal_emit_by_name (data->row, "activate");
+ 
+-  /* Store the current panel id */
+   g_clear_pointer (&self->current_panel_id, g_free);
+   self->current_panel_id = g_strdup (id);
+ 
+-  /* This centering is currently set for panels activated from Search
+-   * or from set_active_panel_from_id() CcShell iface */
+   if (scroll_to_center)
+     {
+-      /* Scroll the sidebar to the selected panel row, as that row may be
+-       * out of view when panel is launched from a search or from cli */
+       sdata = g_new (ScrollData, 1);
+       sdata->panel_list = g_object_ref (self);
+       sdata->row = g_object_ref (data->row);
+@@ -1032,15 +1025,6 @@ cc_panel_list_set_active_panel (CcPanelList *self,
+     }
+ }
+ 
+-/**
+- * cc_panel_list_set_panel_visibility:
+- * @self: a #CcPanelList
+- * @id: the id of the panel
+- * @visibility: visibility of panel with @id
+- *
+- * Sets the visibility of panel with @id. @id must be a valid
+- * id with a corresponding panel.
+- */
+ void
+ cc_panel_list_set_panel_visibility (CcPanelList       *self,
+                                     const gchar       *id,
+@@ -1058,8 +1042,6 @@ cc_panel_list_set_panel_visibility (CcPanelList       *self,
+ 
+   data->visibility = visibility;
+ 
+-  /* If this is the currently selected row, and the panel can't be displayed
+-   * (i.e. visibility != VISIBLE), then select the next possible row */
+   if (gtk_list_box_row_is_selected (GTK_LIST_BOX_ROW (data->row)) &&
+       visibility != CC_PANEL_VISIBLE)
+     {
+@@ -1067,7 +1049,7 @@ cc_panel_list_set_panel_visibility (CcPanelList       *self,
+     }
+ 
+   gtk_widget_set_visible (data->row, visibility == CC_PANEL_VISIBLE);
+-  gtk_widget_set_visible (search_data->row, visibility =! CC_PANEL_HIDDEN);
++  gtk_widget_set_visible (search_data->row, visibility != CC_PANEL_HIDDEN);
+ }
+ 
+ void
+@@ -1078,7 +1060,6 @@ cc_panel_list_set_selection_mode (CcPanelList      *self,
+ 
+   gtk_list_box_set_selection_mode (GTK_LIST_BOX (self->main_listbox), selection_mode);
+ 
+-  /* When selection mode changed, selection will be lost.  So reselect */
+   if (selection_mode == GTK_SELECTION_SINGLE && self->current_panel_id)
+     {
+       GtkWidget *listbox;
+@@ -1089,3 +1070,12 @@ cc_panel_list_set_selection_mode (CcPanelList      *self,
+       gtk_list_box_select_row (GTK_LIST_BOX (listbox), GTK_LIST_BOX_ROW (data->row));
+     }
+ }
++
++void
++cc_panel_list_center_activated_row (CcPanelList *self,
++                                    gboolean     center)
++{
++  g_return_if_fail (CC_IS_PANEL_LIST (self));
++
++  self->center_activated_row = center;
++}
 diff --git a/shell/cc-window.blp b/shell/cc-window.blp
-index 017f1a3..1096493 100644
+index 017f1a3ba..1c0f67703 100644
 --- a/shell/cc-window.blp
 +++ b/shell/cc-window.blp
-@@ -38,6 +38,56 @@ template $CcWindow: Adw.ApplicationWindow {
+@@ -38,6 +38,57 @@ template $CcWindow: Adw.ApplicationWindow {
            }
          }
  
@@ -384,7 +1448,7 @@ index 017f1a3..1096493 100644
 +            margin-top: 4;
 +            margin-bottom: 4;
 +
-+            Adw.Avatar {
++            Adw.Avatar user_avatar {
 +              size: 40;
 +              text: "Pulsar OS";
 +              show-initials: true;
@@ -395,16 +1459,17 @@ index 017f1a3..1096493 100644
 +              valign: center;
 +              spacing: 2;
 +
-+              Label {
-+                label: _("Apple ID & Cuentas");
++              Label user_name_label {
++                label: _("Apple ID &amp; Accounts");
++                use-markup: true;
 +                halign: start;
 +                styles [
 +                  "heading",
 +                ]
 +              }
 +
-+              Label {
-+                label: _("ID de Pulsar OS, iCloud y Medios");
++              Label user_email_label {
++                label: _("Pulsar OS ID, iCloud and Media");
 +                halign: start;
 +                styles [
 +                  "caption",
@@ -419,15 +1484,97 @@ index 017f1a3..1096493 100644
          SearchBar search_bar {
            search-mode-enabled: bind search_button.active bidirectional;
 diff --git a/shell/cc-window.c b/shell/cc-window.c
-index e80087c..e3656bd 100644
+index e80087c05..934b93358 100644
 --- a/shell/cc-window.c
 +++ b/shell/cc-window.c
-@@ -755,6 +755,12 @@ search_entry_key_pressed_cb (CcWindow              *self,
+@@ -58,6 +58,10 @@ struct _CcWindow
+   GtkSearchBar      *search_bar;
+   GtkSearchEntry    *search_entry;
+ 
++  AdwAvatar         *user_avatar;
++  GtkLabel          *user_name_label;
++  GtkLabel          *user_email_label;
++
+   GtkWidget  *old_panel;
+   GtkWidget  *current_panel;
+   char       *current_panel_id;
+@@ -755,6 +759,83 @@ search_entry_key_pressed_cb (CcWindow              *self,
    return FALSE;
  }
  
 +static void
-+on_user_account_banner_clicked_cb (GtkButton *button, CcWindow *self)
++setup_user_account_banner (CcWindow *self)
++{
++  const gchar *real_name;
++  const gchar *user_name;
++  g_autofree gchar *email = NULL;
++  g_autofree gchar *face_path = NULL;
++  g_autoptr(GKeyFile) keyfile = NULL;
++
++  if (!self->user_avatar || !self->user_name_label || !self->user_email_label)
++    return;
++
++  user_name = g_get_user_name ();
++  real_name = g_get_real_name ();
++
++  if (!real_name || real_name[0] == '\0' || g_strcmp0 (real_name, "Unknown") == 0)
++    real_name = user_name;
++
++  /* Check GOA online accounts config for email */
++  keyfile = g_key_file_new ();
++  {
++    g_autofree gchar *goa_conf = g_build_filename (g_get_user_config_dir (), "goa-1.0", "accounts.conf", NULL);
++    if (g_key_file_load_from_file (keyfile, goa_conf, G_KEY_FILE_NONE, NULL))
++      {
++        g_auto(GStrv) groups = g_key_file_get_groups (keyfile, NULL);
++        if (groups && groups[0])
++          {
++            email = g_key_file_get_string (keyfile, groups[0], "PresentationIdentity", NULL);
++            if (!email || email[0] == '\0')
++              email = g_key_file_get_string (keyfile, groups[0], "Identity", NULL);
++          }
++      }
++  }
++
++  /* Set Name */
++  if (real_name && real_name[0] != '\0')
++    gtk_label_set_text (self->user_name_label, real_name);
++  else
++    gtk_label_set_text (self->user_name_label, "Apple ID & Cuentas");
++
++  /* Set Email or Apple ID subtitle */
++  if (email && email[0] != '\0')
++    gtk_label_set_text (self->user_email_label, email);
++  else
++    gtk_label_set_text (self->user_email_label, _("ID de Pulsar OS, iCloud y Medios"));
++
++  /* Set Avatar initials */
++  adw_avatar_set_text (self->user_avatar, real_name ? real_name : "Pulsar OS");
++
++  /* Check for user avatar image (.face / .face.icon / AccountsService) */
++  face_path = g_build_filename (g_get_home_dir (), ".face", NULL);
++  if (!g_file_test (face_path, G_FILE_TEST_EXISTS))
++    {
++      g_free (face_path);
++      face_path = g_build_filename (g_get_home_dir (), ".face.icon", NULL);
++    }
++  if (!g_file_test (face_path, G_FILE_TEST_EXISTS))
++    {
++      g_free (face_path);
++      face_path = g_strdup_printf ("/var/lib/AccountsService/icons/%s", user_name);
++    }
++
++  if (g_file_test (face_path, G_FILE_TEST_EXISTS))
++    {
++      g_autoptr(GFile) file = g_file_new_for_path (face_path);
++      g_autoptr(GdkTexture) texture = gdk_texture_new_from_file (file, NULL);
++      if (texture)
++        adw_avatar_set_custom_image (self->user_avatar, GDK_PAINTABLE (texture));
++    }
++}
++
++static void
++on_user_account_banner_clicked_cb (CcWindow *self)
 +{
 +  set_active_panel_from_id (self, "online-accounts", NULL, TRUE, TRUE, NULL);
 +}
@@ -435,7 +1582,16 @@ index e80087c..e3656bd 100644
  static void
  cc_window_class_init (CcWindowClass *klass)
  {
-@@ -802,6 +808,7 @@ cc_window_class_init (CcWindowClass *klass)
+@@ -797,11 +878,16 @@ cc_window_class_init (CcWindowClass *klass)
+   gtk_widget_class_bind_template_child (widget_class, CcWindow, search_bar);
+   gtk_widget_class_bind_template_child (widget_class, CcWindow, search_entry);
+ 
++  gtk_widget_class_bind_template_child (widget_class, CcWindow, user_avatar);
++  gtk_widget_class_bind_template_child (widget_class, CcWindow, user_name_label);
++  gtk_widget_class_bind_template_child (widget_class, CcWindow, user_email_label);
++
+   gtk_widget_class_bind_template_callback (widget_class, on_split_view_collapsed_changed_cb);
+   gtk_widget_class_bind_template_callback (widget_class, on_development_warning_dialog_responded_cb);
    gtk_widget_class_bind_template_callback (widget_class, search_entry_activate_cb);
    gtk_widget_class_bind_template_callback (widget_class, show_panel_cb);
    gtk_widget_class_bind_template_callback (widget_class, search_entry_key_pressed_cb);
@@ -443,3 +1599,13 @@ index e80087c..e3656bd 100644
  
    gtk_widget_class_add_binding (widget_class, GDK_KEY_Left, GDK_ALT_MASK, go_back_shortcut_cb, NULL);
    gtk_widget_class_add_binding (widget_class, GDK_KEY_f, GDK_CONTROL_MASK, search_shortcut_cb, NULL);
+@@ -823,6 +909,9 @@ cc_window_init (CcWindow *self)
+   self->previous_panels = g_queue_new ();
+   self->previous_list_view = cc_panel_list_get_view (self->panel_list);
+ 
++  setup_user_account_banner (self);
++  self->previous_list_view = cc_panel_list_get_view (self->panel_list);
++
+   /* Add a custom CSS class on development builds */
+   if (in_flatpak_sandbox ())
+     gtk_widget_add_css_class (GTK_WIDGET (self), "devel");

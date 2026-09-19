@@ -3,6 +3,9 @@ After=tubeos-message-bus.service
 Description=Tube OS User Service
 
 [Service]
+RuntimeDirectory=tubeos
+RuntimeDirectoryMode=0755
+LogsDirectory=casaos tubeos
 ExecStartPre=/usr/bin/tubeos-user-service -v
 ExecStart=/usr/bin/tubeos-user-service -c /etc/tubeos/user-service.conf
 PIDFile=/var/run/tubeos/user-service.pid

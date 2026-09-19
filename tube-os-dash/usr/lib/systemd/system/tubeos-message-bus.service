@@ -3,6 +3,9 @@ After=tubeos-gateway.service
 Description=Tube OS Message Bus Service
 
 [Service]
+RuntimeDirectory=tubeos
+RuntimeDirectoryMode=0755
+LogsDirectory=casaos tubeos
 ExecStartPre=/usr/bin/tubeos-message-bus -v
 ExecStart=/usr/bin/tubeos-message-bus -c /etc/tubeos/message-bus.conf
 PIDFile=/var/run/tubeos/message-bus.pid

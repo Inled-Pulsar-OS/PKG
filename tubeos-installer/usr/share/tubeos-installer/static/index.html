@@ -1,113 +1,341 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tube OS Installer</title>
-<link rel="stylesheet" href="/static/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tube OS</title>
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<div id="app">
-  <!-- Screen 1: Welcome (install mode) -->
-  <div id="screen-welcome" class="screen active">
-    <div class="logo-container">
-      <img src="/static/logo.svg" alt="Tube OS" class="logo">
+  <!-- Frameless Modern Panel -->
+  <div class="installer-panel">
+
+    <!-- Split Main View -->
+    <div class="panel-main">
+      <!-- Left Sidebar / Stepper -->
+      <aside class="panel-sidebar" id="installer-sidebar">
+        <div class="sidebar-branding">
+          <img src="/static/logo.png" alt="Logo" class="sidebar-logo">
+          <div class="sidebar-brand-text">
+            <h1>Tube OS</h1>
+            <span id="base-badge">Installer</span>
+          </div>
+        </div>
+
+        <nav class="sidebar-nav" id="sidebar-nav-links">
+          <div class="nav-item active" id="nav-backup" onclick="onNavClick(0)">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            <span>Backup</span>
+          </div>
+          <div class="nav-item" id="nav-network" onclick="onNavClick(1)">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+            <span>Network</span>
+          </div>
+          <div class="nav-item" id="nav-disk" onclick="onNavClick(2)">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+            <span>Destination Disk</span>
+          </div>
+          <div class="nav-item" id="nav-edition" onclick="onNavClick(3)">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="15" rx="2"></rect><polyline points="17 2 12 7 7 2"></polyline></svg>
+            <span>Edition</span>
+          </div>
+          <div class="nav-item" id="nav-user" onclick="onNavClick(4)">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            <span>Configuration</span>
+          </div>
+          <div class="nav-item" id="nav-confirm" onclick="onNavClick(5)">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+            <span>Summary</span>
+          </div>
+        </nav>
+      </aside>
+
+      <!-- Right Content Pages -->
+      <main class="panel-content">
+        
+        <!-- STEP 0: Docker & Data Backup (DockerMigrate) -->
+        <section class="step-container active" id="step-backup">
+          <div class="step-headline">
+            <h2>Existing Data & Backup</h2>
+            <p>Back up your Docker containers, volumes, and configurations with DockerMigrate before installing.</p>
+          </div>
+
+          <div class="backup-card">
+            <div class="backup-header">
+              <div class="backup-badge-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+              </div>
+              <div>
+                <h3 style="font-size: 15px; font-weight: 600; color: #fff;">DockerMigrate Backup Tool</h3>
+                <span style="font-size: 12px; color: var(--text-secondary);">Protect your existing setup before formatting storage drives.</span>
+              </div>
+            </div>
+
+            <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 12px 0 16px 0;">
+              If this computer or drive has existing Docker containers, media server stacks, databases, or volume data, you can use <strong>DockerMigrate</strong> to export all containers and configuration before continuing.
+            </p>
+
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px;">
+              <a href="https://github.com/Inled-Pulsar-OS/dockermigrate" target="_blank" class="mac-btn mac-btn-primary" style="text-decoration: none;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                <span>Open DockerMigrate Repo & Instructions</span>
+              </a>
+              <button type="button" class="mac-btn mac-btn-secondary" onclick="openDockerMigrate()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"></rect><rect x="2" y="14" width="20" height="8" rx="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                <span>Open Local DockerMigrate (Port 8070)</span>
+              </button>
+            </div>
+
+            <div class="option-row selected" id="backup-ack-row" onclick="toggleBackupAck()">
+              <input type="checkbox" id="backup-ack" checked class="option-radio">
+              <div class="option-text">
+                <strong>I am ready to proceed with installation</strong>
+                <span>I have backed up necessary data with DockerMigrate or this is a fresh setup.</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- STEP 1: Network -->
+        <section class="step-container" id="step-network">
+          <div class="step-headline">
+            <h2>Network Connection</h2>
+            <p>Verify network and package mirror connectivity.</p>
+          </div>
+
+          <div class="callout-box" id="net-callout">
+            <div class="status-tic-icon" id="net-tic-icon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+            <div class="callout-body" id="net-info-text">Checking network connectivity...</div>
+          </div>
+
+          <div id="wifi-section" style="display: none; margin-top: 10px;">
+            <label style="font-size: 12px; font-weight: 500; color: var(--text-secondary); display: block; margin-bottom: 8px;">Available Wi-Fi Networks</label>
+            <div id="wifi-list" class="options-list" style="max-height: 160px; overflow-y: auto;"></div>
+            <div id="wifi-connect-box" style="display: none; gap: 8px; margin-top: 8px;">
+              <input type="password" id="wifi-password" placeholder="Password" class="mac-input">
+              <button class="mac-btn mac-btn-secondary" onclick="submitWifiConnect()">Join</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- STEP 2: Storage Disk -->
+        <section class="step-container" id="step-disk">
+          <div class="step-headline">
+            <h2>Destination Disk</h2>
+            <p>Select target storage drive and partitioning scheme.</p>
+          </div>
+
+          <div class="selection-grid" id="disks-grid">
+            <div style="color: var(--text-secondary);">Scanning storage drives...</div>
+          </div>
+
+          <div style="margin-top: 10px;">
+            <label style="font-size: 12px; font-weight: 500; color: var(--text-secondary); display: block; margin-bottom: 8px;">Partitioning Method</label>
+            <div class="options-list">
+              <div class="option-row selected" id="mode-clean-card" onclick="setInstallMode('clean')">
+                <input type="radio" name="install_mode" value="clean" class="option-radio" checked>
+                <div class="option-text">
+                  <strong>Erase Disk & Clean Install</strong>
+                  <span>Create GPT layout with automated ESP and Root partitions.</span>
+                </div>
+              </div>
+              <div class="option-row" id="mode-dual-card" onclick="setInstallMode('dualboot')">
+                <input type="radio" name="install_mode" value="dualboot" class="option-radio">
+                <div class="option-text">
+                  <strong>Manual / Existing Partition</strong>
+                  <span>Install onto a specific partition while preserving other operating systems.</span>
+                </div>
+              </div>
+            </div>
+
+            <div id="partition-select-container" style="display: none; margin-bottom: 16px;">
+              <label style="font-size: 12px; font-weight: 500; color: var(--text-secondary); display: block; margin-bottom: 6px;">Target Partition</label>
+              <select id="select-partition" class="mac-input"></select>
+            </div>
+
+            <div>
+              <label style="font-size: 12px; font-weight: 500; color: var(--text-secondary); display: block; margin-bottom: 6px;">Filesystem</label>
+              <div class="segment-container">
+                <button class="segment-btn active" id="fs-btrfs" onclick="setFsType('btrfs')">Btrfs (ZSTD Compression)</button>
+                <button class="segment-btn" id="fs-ext4" onclick="setFsType('ext4')">Ext4 (Standard)</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- STEP 3: Editions -->
+        <section class="step-container" id="step-edition">
+          <div class="step-headline">
+            <h2>Select Edition</h2>
+            <p>Choose the interface and background service configuration profile.</p>
+          </div>
+
+          <div class="selection-grid" id="editions-grid">
+            <div style="color: var(--text-secondary);">Loading editions...</div>
+          </div>
+        </section>
+
+        <!-- STEP 4: Configuration -->
+        <section class="step-container" id="step-user">
+          <div class="step-headline">
+            <h2>User & System Configuration</h2>
+            <p>Configure administrative user account, device name, and locale settings.</p>
+          </div>
+
+          <div class="form-grid-layout">
+            <div class="form-item">
+              <label>Device Name (Hostname)</label>
+              <input type="text" id="cfg-hostname" value="tubeos" class="mac-input">
+            </div>
+            <div class="form-item">
+              <label>Username</label>
+              <input type="text" id="cfg-username" value="tubeos" class="mac-input">
+            </div>
+            <div class="form-item">
+              <label>Password</label>
+              <input type="password" id="cfg-password" value="tubeos" class="mac-input">
+            </div>
+            <div class="form-item">
+              <label>Timezone</label>
+              <select id="cfg-timezone" class="mac-input">
+                <option value="UTC">UTC</option>
+                <option value="Europe/Madrid" selected>Europe/Madrid</option>
+                <option value="America/New_York">America/New_York</option>
+                <option value="America/Los_Angeles">America/Los_Angeles</option>
+                <option value="America/Mexico_City">America/Mexico_City</option>
+                <option value="Europe/London">Europe/London</option>
+                <option value="Europe/Paris">Europe/Paris</option>
+                <option value="Asia/Tokyo">Asia/Tokyo</option>
+              </select>
+            </div>
+            <div class="form-item" style="grid-column: span 2;">
+              <label>Keyboard Layout</label>
+              <select id="cfg-keymap" class="mac-input">
+                <option value="es" selected>Spanish (es)</option>
+                <option value="us">English US (us)</option>
+                <option value="latam">Latin American (latam)</option>
+                <option value="de">German (de)</option>
+                <option value="fr">French (fr)</option>
+                <option value="gb">British (gb)</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- STEP 5: Summary -->
+        <section class="step-container" id="step-confirm">
+          <div class="step-headline">
+            <h2>Installation Summary</h2>
+            <p>Review the configuration before writing to disk.</p>
+          </div>
+
+          <div class="summary-sheet" id="install-summary"></div>
+        </section>
+
+        <!-- STEP 6: Progress -->
+        <section class="step-container" id="step-progress">
+          <div class="step-headline">
+            <h2>Installing Tube OS</h2>
+            <p id="progress-step-lbl">Initializing environment...</p>
+          </div>
+
+          <div class="progress-track">
+            <div class="progress-thumb" id="progress-fill" style="width: 0%;"></div>
+          </div>
+          <div class="progress-header">
+            <span id="progress-subtext">Executing tasks</span>
+            <span id="progress-pct" style="font-weight: 600; color: #fff;">0%</span>
+          </div>
+
+          <div class="mac-terminal">
+            <div class="terminal-topbar">
+              <span>Installation Log</span>
+              <span>Terminal</span>
+            </div>
+            <div class="terminal-content" id="terminal-body"></div>
+          </div>
+        </section>
+
+        <!-- STEP 7: Completed -->
+        <section class="step-container" id="step-done">
+          <div class="success-screen">
+            <div class="success-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+            <h2>Installation Complete</h2>
+            <p style="color: var(--text-secondary); max-width: 440px;">Tube OS has been installed. Upon restarting, your system boots into KDE Plasma Bigscreen on TV and serves the welcome wizard & CasaOS at <strong>http://tubeos.local</strong>.</p>
+            <button class="mac-btn mac-btn-primary" style="margin-top: 12px;" onclick="rebootSystem()">Restart Device</button>
+          </div>
+        </section>
+
+        <!-- OOTB / FIRST-BOOT WELCOME WIZARD (POST-REBOOT) -->
+        <section class="step-container" id="step-ootb">
+          <div class="step-headline" style="text-align: center; margin-bottom: 20px;">
+            <div style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 20px; background: linear-gradient(135deg, rgba(155, 89, 221, 0.25), rgba(208, 98, 210, 0.25)); border: 1px solid rgba(155, 89, 221, 0.4); margin-bottom: 12px;">
+              <img src="/static/logo.png" alt="Tube OS" style="width: 40px; height: 40px; object-fit: contain;">
+            </div>
+            <h2 style="font-size: 24px;">Welcome to Tube OS</h2>
+            <p style="max-width: 520px; margin: 0 auto; color: var(--text-secondary);">Your home server, CasaOS app ecosystem, and Plasma Bigscreen TV interface are ready.</p>
+          </div>
+
+          <!-- DockerMigrate Re-Import Recommendation Card -->
+          <div class="backup-card" style="border-color: rgba(155, 89, 221, 0.4); background: linear-gradient(135deg, rgba(155, 89, 221, 0.08) 0%, rgba(208, 98, 210, 0.05) 100%);">
+            <div class="backup-header">
+              <div class="backup-badge-icon" style="background: rgba(155, 89, 221, 0.2); color: #d062d2; border-color: rgba(155, 89, 221, 0.4);">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+              </div>
+              <div style="flex: 1;">
+                <h3 style="font-size: 15px; font-weight: 600; color: #fff;">Restore Containers & Data with DockerMigrate</h3>
+                <span style="font-size: 12px; color: var(--text-secondary);">Re-import your Docker containers, databases, and compose projects.</span>
+              </div>
+              <span class="card-badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border-color: rgba(16, 185, 129, 0.4);">Ready on :8070</span>
+            </div>
+
+            <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 12px 0 16px 0;">
+              Did you migrate from another machine or create a backup before installing? <strong>DockerMigrate</strong> is running and ready to import your container archives, volume snapshots, and stacks into this Tube OS system.
+            </p>
+
+            <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+              <button type="button" class="mac-btn mac-btn-primary" onclick="openDockerMigrate()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"></rect><rect x="2" y="14" width="20" height="8" rx="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                <span>Open DockerMigrate (Port 8070)</span>
+              </button>
+              <a href="https://github.com/Inled-Pulsar-OS/dockermigrate" target="_blank" class="mac-btn mac-btn-secondary" style="text-decoration: none;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                <span>View Migration Instructions</span>
+              </a>
+            </div>
+          </div>
+
+          <!-- CasaOS Launch Card -->
+          <div class="summary-sheet" style="margin-top: 14px; text-align: center; padding: 24px;">
+            <h3 style="font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 6px;">Ready to explore your dashboard?</h3>
+            <p style="font-size: 13px; color: var(--text-secondary); max-width: 480px; margin: 0 auto 16px auto;">
+              Launch CasaOS to manage applications, explore the App Store, configure network storage, and monitor system resources.
+            </p>
+            <button class="mac-btn mac-btn-primary" style="padding: 10px 32px; font-size: 14px; font-weight: 600;" onclick="completeOotbAndLaunchCasaOS()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              <span>Open CasaOS Dashboard</span>
+            </button>
+          </div>
+        </section>
+
+      </main>
     </div>
-    <h1>Tube OS</h1>
-    <p class="subtitle">NAS Dashboard</p>
-    <div class="qr-box" id="qr-box"></div>
-    <p class="instruction" id="connect-instruction">Conecta tu dispositivo por ethernet y abre esta URL desde otro dispositivo:</p>
-    <p class="url" id="install-url"></p>
-    <div class="spacer"></div>
-    <div id="backup-tip" class="tip" style="display:none">
-      <p><strong>Tip:</strong> Si vienes de otra instalacion Docker, usa <a href="#" onclick="window.open('http://'+location.hostname+':8070');return false">DockerMigrate</a> para hacer backup de tus contenedores antes de instalar.</p>
-    </div>
-    <button class="btn primary" onclick="showScreen('screen-disks')">Instalar Tube OS</button>
-  </div>
 
-  <!-- Screen 2: Select disk -->
-  <div id="screen-disks" class="screen">
-    <h2>Selecciona disco de destino</h2>
-    <div id="disk-list" class="disk-list"></div>
-    <div class="btn-row">
-      <button class="btn secondary" onclick="showScreen('screen-welcome')">Atras</button>
-      <button class="btn primary" id="btn-install" onclick="startInstall()" disabled>Instalar</button>
-    </div>
-  </div>
-
-  <!-- Screen 3: Installing -->
-  <div id="screen-installing" class="screen">
-    <h2>Instalando Tube OS</h2>
-    <div class="progress-container">
-      <div class="progress-bar"><div class="progress-fill" id="install-progress"></div></div>
-      <p class="progress-text" id="install-status">Preparando...</p>
-    </div>
-  </div>
-
-  <!-- Screen 4: Done - Reboot -->
-  <div id="screen-done" class="screen">
-    <div class="logo-container"><img src="/static/logo.svg" alt="Tube OS" class="logo small"></div>
-    <h2>Instalacion completada</h2>
-    <p>Reinicia el equipo para completar la configuracion inicial.</p>
-    <button class="btn primary" onclick="reboot()">Reiniciar</button>
-  </div>
-
-  <!-- Screen 5: OOTB - Welcome back -->
-  <div id="screen-ootb-welcome" class="screen">
-    <div class="logo-container"><img src="/static/logo.svg" alt="Tube OS" class="logo"></div>
-    <h1>Bienvenido a Tube OS</h1>
-    <p class="subtitle">Configuracion inicial</p>
-    <button class="btn primary" onclick="showScreen('screen-timezone')">Comenzar</button>
-  </div>
-
-  <!-- Screen 6: OOTB - Timezone -->
-  <div id="screen-timezone" class="screen">
-    <h2>Zona horaria</h2>
-    <select id="tz-select" class="select-lg"></select>
-    <div class="btn-row">
-      <button class="btn secondary" onclick="showScreen('screen-ootb-welcome')">Atras</button>
-      <button class="btn primary" onclick="setTimezone()">Siguiente</button>
-    </div>
-  </div>
-
-  <!-- Screen 7: OOTB - Keyboard -->
-  <div id="screen-keyboard" class="screen">
-    <h2>Teclado</h2>
-    <select id="kb-select" class="select-lg"></select>
-    <div class="btn-row">
-      <button class="btn secondary" onclick="showScreen('screen-timezone')">Atras</button>
-      <button class="btn primary" onclick="setKeyboard()">Siguiente</button>
-    </div>
-  </div>
-
-  <!-- Screen 8: OOTB - Create user -->
-  <div id="screen-user" class="screen">
-    <h2>Crear usuario</h2>
-    <form id="user-form" onsubmit="createUser(event)">
-      <input type="text" id="inp-fullname" placeholder="Nombre completo" required>
-      <input type="text" id="inp-username" placeholder="Nombre de usuario" required pattern="[a-z0-9._-]+">
-      <input type="password" id="inp-password" placeholder="Contrasena" required minlength="4">
-      <input type="password" id="inp-password2" placeholder="Repetir contrasena" required minlength="4">
-      <p class="error" id="user-error"></p>
-      <div class="btn-row">
-        <button type="button" class="btn secondary" onclick="showScreen('screen-keyboard')">Atras</button>
-        <button type="submit" class="btn primary">Crear usuario</button>
+    <!-- Bottom Action Bar -->
+    <footer class="panel-bottombar" id="window-bottombar">
+      <div style="color: var(--text-tertiary); font-size: 11.5px;" id="footer-ip-url">Web UI: http://tubeos.local</div>
+      <div class="btn-group" id="btn-group-nav">
+        <button class="mac-btn mac-btn-secondary" id="btn-back" onclick="handleBack()" style="display: none;">Back</button>
+        <button class="mac-btn mac-btn-primary" id="btn-continue" onclick="handleContinue()">Continue</button>
       </div>
-    </form>
+    </footer>
+
   </div>
 
-  <!-- Screen 9: OOTB - Complete -->
-  <div id="screen-complete" class="screen">
-    <div class="logo-container"><img src="/static/logo.svg" alt="Tube OS" class="logo small"></div>
-    <h2>Tube OS esta listo</h2>
-    <p>Tu NAS esta configurado y listo para usar.</p>
-    <div class="complete-links">
-      <a id="dashboard-link" href="#" class="btn primary">Abrir Dashboard</a>
-      <a id="dockermigrate-link" href="#" class="btn secondary" target="_blank">Importar contenedores Docker</a>
-    </div>
-  </div>
-</div>
-
-<script src="/static/app.js"></script>
+  <script src="/static/app.js"></script>
 </body>
 </html>

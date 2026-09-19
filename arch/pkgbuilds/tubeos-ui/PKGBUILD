@@ -1,0 +1,22 @@
+# Maintainer: Pulsar OS Team <team@pulsaros.io>
+pkgname=tubeos-ui
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Tube OS TV UI Shell (Openbox + Tauri Mock Session)"
+arch=('any')
+url="https://github.com/Inled-Pulsar-OS"
+license=('Apache-2.0')
+depends=('openbox' 'xorg-server' 'xorg-xinit' 'unclutter' 'picom' 'curl')
+source=()
+sha256sums=()
+
+package() {
+  local _src="$(cd "$startdir"/../../../tubeos-ui && pwd)"
+  if [ -d "$_src/usr" ]; then
+    cp -r "$_src/usr" "$pkgdir/"
+  fi
+  if [ -d "$_src/etc" ]; then
+    cp -r "$_src/etc" "$pkgdir/"
+  fi
+  find "$pkgdir" -name "*.sh" -o -name "tubeos-ui" -o -name "tubeos-session" -exec chmod +x {} +
+}

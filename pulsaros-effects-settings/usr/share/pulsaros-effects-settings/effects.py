@@ -241,6 +241,7 @@ class EffectsSettingsWindow(Gtk.Window):
             "/usr/share/gnome-shell/extensions/pulsar-dock@inled.es/schemas",
             os.path.expanduser("~/.local/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/schemas"),
             "/usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/schemas",
+            "/usr/share/glib-2.0/schemas",
             os.path.join(pkg_dir, "build/pkg-staging/pulsaros-gnome/usr/share/glib-2.0/schemas"),
             os.path.join(pkg_dir, "pulsaros-gnome/usr/share/glib-2.0/schemas")
         ]
@@ -287,16 +288,24 @@ class EffectsSettingsWindow(Gtk.Window):
         """
         if self.radio_blur.get_active():
             self.warning_box.set_visible(False)
-            # Switch to Blur my Shell
-            self.set_extension_state("blur-my-shell@aunetx", True)
-            self.set_extension_state("liquid-glass@thinkingcoding1231.gmail.com", False)
-            self.apply_blur_myshell_dock_settings()
+            self.apply_mode("blur")
         else:
             self.warning_box.set_visible(True)
-            # Switch to Liquid Glass
+            self.apply_mode("glass")
+
+    def apply_mode(self, mode):
+        """
+        Applies either 'glass' or 'blur' preset.
+        Aplica el perfil de efectos 'glass' o 'blur'.
+        """
+        if mode == "glass":
             self.set_extension_state("blur-my-shell@aunetx", False)
             self.set_extension_state("liquid-glass@thinkingcoding1231.gmail.com", True)
             self.apply_liquid_glass_settings()
+        else:
+            self.set_extension_state("liquid-glass@thinkingcoding1231.gmail.com", False)
+            self.set_extension_state("blur-my-shell@aunetx", True)
+            self.apply_blur_myshell_dock_settings()
 
     def apply_blur_myshell_dock_settings(self):
         """
@@ -306,60 +315,132 @@ class EffectsSettingsWindow(Gtk.Window):
         try:
             settings = self.get_safe_settings("org.gnome.shell.extensions.dash-to-dock")
             if settings:
-                settings.set_double("background-opacity", 0.8)
+                settings.set_double("background-opacity", 0.15)
                 settings.set_boolean("custom-theme-shrink", False)
                 settings.set_double("height-fraction", 0.9)
-                settings.set_boolean("apply-custom-theme", True)
+                settings.set_boolean("apply-custom-theme", False)
                 settings.set_string("transparency-mode", "FIXED")
                 settings.set_boolean("customize-alphas", False)
-                print("Effects App: Restored Dash to Dock for Blur my Shell.")
+                print("Effects App: Restored Dash to Dock for Blur my Shell (apply-custom-theme=False).")
         except Exception as e:
             print("Error restoring Dash to Dock settings:", e)
 
     def apply_liquid_glass_settings(self):
         """
-        Sets Dash to Dock to 100% transparent and applies Liquid Glass presets.
-        Establece Dash to Dock a 100% transparente y aplica los preajustes de Liquid Glass.
+        Sets Dash to Dock with system theme enabled and applies Liquid Glass host presets.
+        Establece Dash to Dock con 'usar tema del sistema' activado y aplica los preajustes de Liquid Glass del host.
         """
         try:
-            # 1. Configurar Dash to Dock para opacidad 0 y alphas personalizados a 0
+            # 1. Configurar Dash to Dock (Pulsar Dock) con 'Usar tema del sistema' activado
             settings_dock = self.get_safe_settings("org.gnome.shell.extensions.dash-to-dock")
             if settings_dock:
-                settings_dock.set_double("background-opacity", 0.0)
+                settings_dock.set_double("background-opacity", 0.15)
                 settings_dock.set_boolean("custom-theme-shrink", False)
                 settings_dock.set_double("height-fraction", 0.9)
-                settings_dock.set_boolean("apply-custom-theme", False)
+                settings_dock.set_boolean("apply-custom-theme", True)
                 settings_dock.set_string("transparency-mode", "FIXED")
-                settings_dock.set_boolean("customize-alphas", True)
-                settings_dock.set_double("min-alpha", 0.0)
-                settings_dock.set_double("max-alpha", 0.0)
+                settings_dock.set_boolean("customize-alphas", False)
+                print("Effects App: Configured Dash to Dock for Liquid Glass (apply-custom-theme=True).")
         except Exception as e:
             print("Error configuring Dash to Dock for Liquid Glass:", e)
 
         try:
-            # 2. Configurar Liquid Glass según los ajustes del host (Liquid Glass solo en navegación/dock/paneles)
+            # 2. Configurar Liquid Glass según los ajustes extraídos del host
             settings_glass = self.get_safe_settings("org.gnome.shell.extensions.liquid-glass")
+            if not settings_glass:
+                settings_glass = self.get_safe_settings("org.gnome.shell.extensions.liquid-glass@thinkingcoding1231.gmail.com")
+
             if settings_glass:
-                settings_glass.set_int("application-blur-radius", 9)
-                settings_glass.set_double("application-content-opacity", 1.0)
-                settings_glass.set_double("application-corner-radius", 17.0)
-                settings_glass.set_boolean("application-glass-all-windows", False)
-                settings_glass.set_string("application-tint-color", "#000000")
-                settings_glass.set_double("application-tint-strength", 0.06)
-                settings_glass.set_strv("application-window-whitelist", [])
-                settings_glass.set_double("dock-corner-radius", 24.0)
-                settings_glass.set_int("dock-glass-expand", 3)
-                settings_glass.set_string("dock-tint-color", "#000000")
-                settings_glass.set_boolean("enable-application-glass", False)
-                settings_glass.set_boolean("enable-menu-glass", True)
-                settings_glass.set_boolean("enable-quick-settings-glass", False)
-                settings_glass.set_string("menu-tint-color", "#000000")
-                settings_glass.set_string("notification-tint-color", "#000000")
-                settings_glass.set_string("osd-tint-color", "#000000")
-                settings_glass.set_boolean("output-logs", False)
-                print("Effects App: Applied Liquid Glass GSettings.")
+                def safe_set(setter, key, val):
+                    try:
+                        setter(key, val)
+                    except Exception as err:
+                        print(f"Skipping key {key}: {err}")
+
+                safe_set(settings_glass.set_int, "application-blur-radius", 5)
+                safe_set(settings_glass.set_double, "application-content-opacity", 1.0)
+                safe_set(settings_glass.set_double, "application-corner-radius", 20.689655172413794)
+                safe_set(settings_glass.set_boolean, "application-glass-all-windows", True)
+                safe_set(settings_glass.set_double, "application-saturation", 2.0)
+                safe_set(settings_glass.set_string, "application-tint-color", "#000000")
+                safe_set(settings_glass.set_double, "application-tint-strength", 0.0)
+                safe_set(settings_glass.set_strv, "application-window-whitelist", [])
+                safe_set(settings_glass.set_int, "blur-method", 0)
+                safe_set(settings_glass.set_double, "dock-corner-radius", 24.0)
+                safe_set(settings_glass.set_int, "dock-glass-expand", 3)
+                safe_set(settings_glass.set_string, "dock-tint-color", "#000000")
+                safe_set(settings_glass.set_boolean, "enable-application-glass", True)
+                safe_set(settings_glass.set_boolean, "enable-menu-glass", True)
+                safe_set(settings_glass.set_boolean, "enable-quick-settings-glass", False)
+                safe_set(settings_glass.set_double, "glass-chroma-strength", 0.0)
+                safe_set(settings_glass.set_double, "glass-displacement-scale", 188.37209302325581)
+                safe_set(settings_glass.set_double, "glass-edge-smoothing", 0.0)
+                safe_set(settings_glass.set_double, "glass-ior", 2.0175438596491229)
+                safe_set(settings_glass.set_double, "glass-max-z", 16.981132075471699)
+                safe_set(settings_glass.set_double, "glass-profile-shape-n", 20.0)
+                safe_set(settings_glass.set_double, "glass-rim-width", 4.8000000000000007)
+                safe_set(settings_glass.set_double, "glass-specular-intensity", 0.0)
+                safe_set(settings_glass.set_double, "menu-corner-radius", 14.0)
+                safe_set(settings_glass.set_int, "menu-glass-expand", 4)
+                safe_set(settings_glass.set_double, "panel-menu-corner-radius", 14.0)
+                safe_set(settings_glass.set_int, "panel-menu-glass-expand", 4)
+                safe_set(settings_glass.set_double, "desktop-menu-corner-radius", 14.0)
+                safe_set(settings_glass.set_string, "menu-tint-color", "#000000")
+                safe_set(settings_glass.set_double, "notification-corner-radius", 16.0)
+                safe_set(settings_glass.set_string, "notification-tint-color", "#000000")
+                safe_set(settings_glass.set_double, "osd-corner-radius", 16.0)
+                safe_set(settings_glass.set_string, "osd-tint-color", "#000000")
+                safe_set(settings_glass.set_boolean, "output-logs", False)
+                safe_set(settings_glass.set_int, "quick-settings-apply-to", 1)
+                safe_set(settings_glass.set_double, "quick-settings-corner-radius", 18.0)
+                safe_set(settings_glass.set_boolean, "quick-settings-enable-adaptive-text-color", False)
+                print("Effects App: Applied Liquid Glass GSettings from host profile.")
+            else:
+                # Fallback via dconf command if GSettings schema is not loaded in current glib source
+                dconf_commands = [
+                    ("/org/gnome/shell/extensions/liquid-glass/application-blur-radius", "5"),
+                    ("/org/gnome/shell/extensions/liquid-glass/application-content-opacity", "1.0"),
+                    ("/org/gnome/shell/extensions/liquid-glass/application-corner-radius", "20.689655172413794"),
+                    ("/org/gnome/shell/extensions/liquid-glass/application-glass-all-windows", "true"),
+                    ("/org/gnome/shell/extensions/liquid-glass/application-saturation", "2.0"),
+                    ("/org/gnome/shell/extensions/liquid-glass/application-tint-color", "'#000000'"),
+                    ("/org/gnome/shell/extensions/liquid-glass/application-tint-strength", "0.0"),
+                    ("/org/gnome/shell/extensions/liquid-glass/application-window-whitelist", "@as []"),
+                    ("/org/gnome/shell/extensions/liquid-glass/blur-method", "0"),
+                    ("/org/gnome/shell/extensions/liquid-glass/dock-corner-radius", "24.0"),
+                    ("/org/gnome/shell/extensions/liquid-glass/dock-glass-expand", "3"),
+                    ("/org/gnome/shell/extensions/liquid-glass/dock-tint-color", "'#000000'"),
+                    ("/org/gnome/shell/extensions/liquid-glass/enable-application-glass", "true"),
+                    ("/org/gnome/shell/extensions/liquid-glass/enable-menu-glass", "true"),
+                    ("/org/gnome/shell/extensions/liquid-glass/enable-quick-settings-glass", "false"),
+                    ("/org/gnome/shell/extensions/liquid-glass/glass-chroma-strength", "0.0"),
+                    ("/org/gnome/shell/extensions/liquid-glass/glass-displacement-scale", "188.37209302325581"),
+                    ("/org/gnome/shell/extensions/liquid-glass/glass-edge-smoothing", "0.0"),
+                    ("/org/gnome/shell/extensions/liquid-glass/glass-ior", "2.0175438596491229"),
+                    ("/org/gnome/shell/extensions/liquid-glass/glass-max-z", "16.981132075471699"),
+                    ("/org/gnome/shell/extensions/liquid-glass/glass-profile-shape-n", "20.0"),
+                    ("/org/gnome/shell/extensions/liquid-glass/glass-rim-width", "4.8000000000000007"),
+                    ("/org/gnome/shell/extensions/liquid-glass/glass-specular-intensity", "0.0"),
+                    ("/org/gnome/shell/extensions/liquid-glass/menu-corner-radius", "14.0"),
+                    ("/org/gnome/shell/extensions/liquid-glass/menu-glass-expand", "4"),
+                    ("/org/gnome/shell/extensions/liquid-glass/panel-menu-corner-radius", "14.0"),
+                    ("/org/gnome/shell/extensions/liquid-glass/panel-menu-glass-expand", "4"),
+                    ("/org/gnome/shell/extensions/liquid-glass/desktop-menu-corner-radius", "14.0"),
+                    ("/org/gnome/shell/extensions/liquid-glass/menu-tint-color", "'#000000'"),
+                    ("/org/gnome/shell/extensions/liquid-glass/notification-corner-radius", "16.0"),
+                    ("/org/gnome/shell/extensions/liquid-glass/notification-tint-color", "'#000000'"),
+                    ("/org/gnome/shell/extensions/liquid-glass/osd-corner-radius", "16.0"),
+                    ("/org/gnome/shell/extensions/liquid-glass/osd-tint-color", "'#000000'"),
+                    ("/org/gnome/shell/extensions/liquid-glass/output-logs", "false"),
+                    ("/org/gnome/shell/extensions/liquid-glass/quick-settings-apply-to", "1"),
+                    ("/org/gnome/shell/extensions/liquid-glass/quick-settings-corner-radius", "18.0"),
+                    ("/org/gnome/shell/extensions/liquid-glass/quick-settings-enable-adaptive-text-color", "false"),
+                ]
+                for path, val in dconf_commands:
+                    subprocess.run(["dconf", "write", path, val], capture_output=True)
+                print("Effects App: Applied Liquid Glass settings via dconf fallback.")
         except Exception as e:
-            print("Error applying Liquid Glass GSettings:", e)
+            print("Error applying Liquid Glass settings:", e)
 
     def on_show_apps_toggled(self, switch, gparam):
         """
@@ -392,11 +473,39 @@ class EffectsSettingsWindow(Gtk.Window):
                         enabled.remove(uuid)
                 settings.set_strv("enabled-extensions", enabled)
         except Exception as e:
-            print(f"Error setting extension {uuid} state: {e}")
-            cmd = "enable" if enable else "disable"
-            subprocess.run(["gnome-extensions", cmd, uuid], capture_output=True)
+            print(f"Error setting extension {uuid} state via GSettings: {e}")
+        
+        # Also run gnome-extensions command for immediate Shell reload
+        cmd = "enable" if enable else "disable"
+        subprocess.run(["gnome-extensions", cmd, uuid], capture_output=True)
+
+def apply_headless(mode):
+    """Headless application of effects mode without opening GTK window."""
+    app = EffectsSettingsWindow.__new__(EffectsSettingsWindow)
+    app.schema_source = app.load_custom_schemas()
+    if mode in ["glass", "liquid", "--glass", "-g"]:
+        app.apply_mode("glass")
+        print("✅ Liquid Glass mode enabled with host presets and system theme dock.")
+    elif mode in ["blur", "standard", "--blur", "-b"]:
+        app.apply_mode("blur")
+        print("✅ Standard Blur my Shell mode enabled.")
+    elif mode in ["toggle", "-t"]:
+        is_active = app.get_current_effects_state()
+        new_mode = "blur" if is_active else "glass"
+        app.apply_mode(new_mode)
+        print(f"✅ Toggled effects mode to: {new_mode}")
+    elif mode in ["status", "-s"]:
+        is_active = app.get_current_effects_state()
+        print("glass" if is_active else "blur")
+    else:
+        print(f"Unknown mode: {mode}. Use 'glass', 'blur', 'toggle' or 'status'.")
+        sys.exit(1)
 
 def main():
+    if len(sys.argv) > 1:
+        apply_headless(sys.argv[1].lower())
+        return
+
     app = EffectsSettingsWindow()
     app.connect("destroy", Gtk.main_quit)
     Gtk.main()

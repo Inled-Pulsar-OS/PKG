@@ -203,9 +203,21 @@ repair_grub() {
     [ -n "$ru" ] || return 0
 
     local desired="resume=UUID=${ru} resume_offset=${real} zswap.enabled=0"
-    if grep -q "resume=UUID=${ru}" "$GRUB_DEFAULT" 2>/dev/null && \
-       grep -q "resume_offset=${real}" "$GRUB_DEFAULT" 2>/dev/null && \
-       grep -q "zswap\.enabled=0" "$GRUB_DEFAULT" 2>/dev/null; then
+    local needs_update=0
+
+    if ! grep -q "resume=UUID=${ru}" "$GRUB_DEFAULT" 2>/dev/null || \
+       ! grep -q "resume_offset=${real}" "$GRUB_DEFAULT" 2>/dev/null || \
+       ! grep -q "zswap\.enabled=0" "$GRUB_DEFAULT" 2>/dev/null; then
+        needs_update=1
+    fi
+
+    # Also check if /boot/grub/grub.cfg exists and is missing the active resume_offset
+    local grub_cfg="/boot/grub/grub.cfg"
+    if [ -f "$grub_cfg" ] && ! grep -q "resume_offset=${real}" "$grub_cfg" 2>/dev/null; then
+        needs_update=1
+    fi
+
+    if [ "$needs_update" = 0 ]; then
         return 0
     fi
 
@@ -218,7 +230,11 @@ repair_grub() {
 
     # Strip existing resume parameters from GRUB_CMDLINE_LINUX_DEFAULT
     sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' "$GRUB_DEFAULT" 2>/dev/null || true
-    sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${desired}\"|" "$GRUB_DEFAULT" 2>/dev/null || true
+    if grep -q "^#\?GRUB_CMDLINE_LINUX_DEFAULT=" "$GRUB_DEFAULT" 2>/dev/null; then
+        sed -i "s|^#\?GRUB_CMDLINE_LINUX_DEFAULT=[\"']\(.*\)[\"']|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${desired}\"|" "$GRUB_DEFAULT" 2>/dev/null || true
+    else
+        echo "GRUB_CMDLINE_LINUX_DEFAULT=\"quiet splash ${desired}\"" >> "$GRUB_DEFAULT"
+    fi
 
     log "✔ $GRUB_DEFAULT actualizado con ${desired}"
     if command -v update-grub >/dev/null 2>&1; then

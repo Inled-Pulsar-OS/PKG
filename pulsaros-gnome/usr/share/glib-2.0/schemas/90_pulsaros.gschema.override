@@ -97,6 +97,45 @@ sigma=30
 brightness=0.6
 sigma=30
 
+[org.gnome.shell.extensions.liquid-glass]
+menu-corner-radius=14.0
+menu-glass-expand=4
+panel-menu-corner-radius=14.0
+panel-menu-glass-expand=4
+desktop-menu-corner-radius=14.0
+notification-corner-radius=16.0
+osd-corner-radius=16.0
+quick-settings-corner-radius=18.0
+dock-corner-radius=24.0
+dock-glass-expand=3
+application-blur-radius=5
+application-content-opacity=1.0
+application-corner-radius=20.689655172413794
+application-glass-all-windows=true
+application-saturation=2.0
+application-tint-color='#000000'
+application-tint-strength=0.0
+application-window-whitelist=@as []
+blur-method=0
+dock-tint-color='#000000'
+enable-application-glass=true
+enable-menu-glass=true
+enable-quick-settings-glass=false
+glass-chroma-strength=0.0
+glass-displacement-scale=188.37209302325581
+glass-edge-smoothing=0.0
+glass-ior=2.0175438596491229
+glass-max-z=16.981132075471699
+glass-profile-shape-n=20.0
+glass-rim-width=4.8000000000000007
+glass-specular-intensity=0.0
+menu-tint-color='#000000'
+notification-tint-color='#000000'
+osd-tint-color='#000000'
+output-logs=false
+quick-settings-apply-to=1
+quick-settings-enable-adaptive-text-color=false
+
 [org.gnome.settings-daemon.plugins.power]
 # Pulsar OS: sin auto-suspend S3 por inactividad (rompe el resume del hibernate,
 # ver INFORME-hibernacion-apagado.md). El reposo del OS es hibernate S4 propio.

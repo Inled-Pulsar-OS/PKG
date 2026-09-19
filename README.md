@@ -103,7 +103,7 @@ maintains in its own repositories are noted as such.
 | `pulsaros-control-center` | **GNOME Control Center** (GNOME Project) — recompiled from upstream GNOME source with Pulsar OS patches (same overlay as the Arch edition). |
 | `pulsaros-circle-to-search` | **Shotzy** by *SamkitJain660* (EGO extension #9707) — fork that adds the Sayri AI query box, Google Lens/visual search and screenshot uploader. Keeps Shotzy's GPL-3.0 license. |
 | `pulsaros-gnome` → `pulsar-dock@inled.es` | **Dash-to-Dock** (micheleg/dash-to-dock) — Inled fork maintained at `Inled-Pulsar-OS/dash-to-dock`. |
-| `pulsaros-gnome` → `liquid-glass@…` | **Liquid Glass** GNOME extension by *thinkingcoding1231* — Inled fork maintained at `InledGroup/liquid-glass`. |
+| `pulsaros-gnome` → `liquid-glass@…` | **Liquid Glass** GNOME extension by *thinkingcoding1231* / *ryohsuke1231* — upstream repository at `ryohsuke1231/liquid-glass`. |
 | `pulsaros-gnome` (other extensions) | Bundles selected EGO extensions as-is: **Blur my Shell** (aunetx), **Wiggle** (mechtifs, patched for GNOME 50), **Compiz alike magic lamp effect** (hermes83), **Just Perfection**, **Notification Banner Position** (drugo), **No overview** (fthx), **Desktop Icons NG / ding** (rastersoft), **GSConnect** (andyholmes), **GNOME UI Tune** (itstime.tech), **AppIndicator & KStatusNotifierItem** (rgcjonas) and **User Themes**. |
 | `pulsaros-essential` | **Fildem HUD** (*gonzaarcr/Fildem*, the Unity-HUD-style global menu) — Inled fork at `InledGroup/Fildem`, shipped with Pulsar OS patches. |
 | `gnome-macos-remap-wayland` | **gnome-macos-remap** project config (Inled fork repo) on top of the **xremap** key-remapper (`xremap/xremap`). |

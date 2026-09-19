@@ -105,8 +105,14 @@ EOF
         done
         if [ -f /etc/default/grub ]; then
             sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' /etc/default/grub 2>/dev/null || true
-            sed -i "s|GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${HIBERNATE_PARAMS}\"|" /etc/default/grub 2>/dev/null || true
-            if command -v grub-mkconfig >/dev/null 2>&1; then
+            if grep -q "^#\?GRUB_CMDLINE_LINUX_DEFAULT=" /etc/default/grub 2>/dev/null; then
+                sed -i "s|^#\?GRUB_CMDLINE_LINUX_DEFAULT=[\"']\(.*\)[\"']|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${HIBERNATE_PARAMS}\"|" /etc/default/grub 2>/dev/null || true
+            else
+                echo "GRUB_CMDLINE_LINUX_DEFAULT=\"quiet splash ${HIBERNATE_PARAMS}\"" >> /etc/default/grub
+            fi
+            if command -v update-grub >/dev/null 2>&1; then
+                update-grub 2>/dev/null || true
+            elif command -v grub-mkconfig >/dev/null 2>&1; then
                 grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
             fi
         fi

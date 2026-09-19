@@ -1,0 +1,17 @@
+#!/bin/bash
+# Tube OS - Openbox TV Session Starter
+export DISPLAY="${DISPLAY:-:0}"
+export XDG_CURRENT_DESKTOP="TubeOS"
+export XDG_SESSION_DESKTOP="TubeOS"
+
+# Set TV screen resolutions or disable blanking
+xset s off 2>/dev/null || true
+xset -dpms 2>/dev/null || true
+xset s noblank 2>/dev/null || true
+
+# Compositor & unclutter
+picom -b --config /dev/null --backend glx 2>/dev/null || picom -b 2>/dev/null || true
+unclutter --idle 3 --root 2>/dev/null &
+
+# Openbox with Tube OS autostart
+exec openbox --config-file /etc/xdg/openbox/rc.xml

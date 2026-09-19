@@ -1,5 +1,5 @@
 Package: tube-os-dash
-Version: 0.4.17
+Version: 0.4.20
 Section: admin
 Priority: optional
 Architecture: amd64

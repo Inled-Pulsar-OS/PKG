@@ -1,13 +1,16 @@
 [Unit]
 Description=DockerMigrate Web Service
-After=network.target docker.service
-Wants=docker.service
+After=network.target containerd.service docker.socket docker.service
+Wants=containerd.service docker.socket docker.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/dockermigrate serve --port 8070
+Environment=HOME=/root
+ExecStartPre=-/bin/sh -c 'mkdir -p /var/lib/docker /root/.dockmigrate 2>/dev/null; if grep -q "overlay" /proc/mounts 2>/dev/null && [ ! -d /mnt/etc ]; then mountpoint -q /var/lib/docker || mount -t tmpfs -o size=2G tmpfs /var/lib/docker 2>/dev/null || true; fi'
+ExecStart=/usr/bin/dockermigrate serve --listen 0.0.0.0:8070
 Restart=always
-RestartSec=5
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
+Alias=dockmigrate.service

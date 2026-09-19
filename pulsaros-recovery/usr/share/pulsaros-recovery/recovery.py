@@ -3713,7 +3713,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 
             def preserve_live_initramfs_for_recovery():
                 """Deploy the live/recovery initramfs to PULSAR_OS (@/boot), ESP, and PULSAR_RECOVERY."""
-                if "TEST_MODE" in os.environ or not is_efi:
+                if "TEST_MODE" in os.environ:
                     return
                 try:
                     candidates = [
@@ -3748,15 +3748,16 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     if not src:
                         log_msg("WARNING: dedicated recovery initramfs not found.")
                     else:
-                        esp_root = "/mnt/boot/efi"
                         os.makedirs("/mnt/boot", exist_ok=True)
                         os.makedirs("/mnt/recovery/boot", exist_ok=True)
-                        os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
                         shutil.copy2(src, "/mnt/boot/initramfs-recovery.img")
                         shutil.copy2(src, "/mnt/recovery/boot/initramfs-recovery.img")
                         shutil.copy2(src, "/mnt/recovery/initramfs-recovery.img")
-                        shutil.copy2(src, f"{esp_root}/EFI/recovery/initramfs-recovery.img")
-                        shutil.copy2(src, f"{esp_root}/EFI/recovery/initrd.img")
+                        if is_efi:
+                            esp_root = "/mnt/boot/efi"
+                            os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
+                            shutil.copy2(src, f"{esp_root}/EFI/recovery/initramfs-recovery.img")
+                            shutil.copy2(src, f"{esp_root}/EFI/recovery/initrd.img")
                         subprocess.run(["sync"])
                         log_msg(f"Recovery initramfs deployed to PULSAR_OS, PULSAR_RECOVERY, and ESP from {src}")
                 except Exception as p_err:
@@ -3764,7 +3765,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
             def deploy_kernel_to_recovery():
                 """Deploy the live/recovery kernel to PULSAR_OS (@/boot), ESP, and PULSAR_RECOVERY."""
-                if "TEST_MODE" in os.environ or not is_efi:
+                if "TEST_MODE" in os.environ:
                     return
                 kernel_cand = [
                     # Dedicated Debian recovery kernel
@@ -3782,7 +3783,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             for p in glob.glob(f"{root_dir}/**/vmlinuz-recovery*", recursive=True) + glob.glob(f"{root_dir}/**/vmlinuz-*+deb*", recursive=True):
                                 if os.path.isfile(p) and not p.endswith(".kver") and os.path.getsize(p) > 1024:
                                     kernel_cand.append(p)
-                    found_k = next((k for k in kernel_cand if os.path.isfile(k) and not k.endswith(".kver") and os.path.getsize(k) > 1024), None)
+                            found_k = next((k for k in kernel_cand if os.path.isfile(k) and not k.endswith(".kver") and os.path.getsize(k) > 1024), None)
                 try:
                     if not found_k:
                         # Fallback to installed system's kernel
@@ -3797,18 +3798,19 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     if not found_k:
                         log_msg("WARNING: dedicated recovery kernel not found.")
                         return
-                    esp_root = "/mnt/boot/efi"
                     os.makedirs("/mnt/boot", exist_ok=True)
                     os.makedirs("/mnt/recovery/boot", exist_ok=True)
-                    os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
                     shutil.copy2(found_k, "/mnt/boot/vmlinuz-recovery")
                     shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-recovery")
                     shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-linux")
                     shutil.copy2(found_k, "/mnt/recovery/vmlinuz-recovery")
-                    shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery.efi")
-                    shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery")
-                    shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz.efi")
-                    shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz")
+                    if is_efi:
+                        esp_root = "/mnt/boot/efi"
+                        os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
+                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery.efi")
+                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery")
+                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz.efi")
+                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz")
                     
                     rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash"
                     
@@ -3816,8 +3818,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
                         f.write(f'"Boot Recovery (Debug)"     "{rec_opts.replace("quiet splash", "loglevel=7 live-debug")}"\n')
 
-                    with open(f"{esp_root}/EFI/recovery/refind_linux.conf", "w") as f:
-                        f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts.replace("live-media=/dev/disk/by-label/PULSAR_RECOVERY", "live-media=any")}"\n')
+                    if is_efi:
+                        esp_root = "/mnt/boot/efi"
+                        with open(f"{esp_root}/EFI/recovery/refind_linux.conf", "w") as f:
+                            f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts.replace("live-media=/dev/disk/by-label/PULSAR_RECOVERY", "live-media=any")}"\n')
 
                     subprocess.run(["sync"])
                     log_msg(f"Recovery kernel deployed to PULSAR_OS, PULSAR_RECOVERY, and ESP from {found_k}")
@@ -4143,7 +4147,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     "GRUB_TIMEOUT_STYLE": "menu",
                     "GRUB_GFXMODE": '"1920x1080,1280x720,1024x768,auto"',
                     "GRUB_CMDLINE_LINUX": '"rootflags=subvol=@"',
-                    "GRUB_CMDLINE_LINUX_DEFAULT": f'"rootflags=subvol=@ rw quiet splash{rl_resume_opts}"',
+                    "GRUB_CMDLINE_LINUX_DEFAULT": f'"quiet splash{rl_resume_opts}"',
                 }
 
                 # Check if GRUB theme exists
@@ -4178,43 +4182,65 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 rec_script = f"""#!/bin/sh
 exec tail -n +3 $0
 # Pulsar OS Recovery Mode Menu Entry
-menuentry "Pulsar OS Recovery" --class recovery --class os {{
+menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery --class pulsaros-recovery --class os {{
     insmod btrfs
     insmod ext2
     insmod part_gpt
     insmod part_msdos
+    insmod all_video
+
+    set rec_found=0
+
+    # 1. Check dedicated PULSAR_RECOVERY partition
     if search --no-floppy --label --set=rec_dev PULSAR_RECOVERY; then
         if [ -f ($rec_dev)/boot/vmlinuz-recovery ]; then
-            linux ($rec_dev)/boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash
+            linux ($rec_dev)/boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live quiet splash
             initrd ($rec_dev)/boot/initramfs-recovery.img
+            set rec_found=1
+        elif [ -f ($rec_dev)/recovery/vmlinuz-recovery ]; then
+            linux ($rec_dev)/recovery/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live quiet splash
+            initrd ($rec_dev)/recovery/initramfs-recovery.img
+            set rec_found=1
         elif [ -f ($rec_dev)/vmlinuz-recovery ]; then
-            linux ($rec_dev)/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash
+            linux ($rec_dev)/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live quiet splash
             initrd ($rec_dev)/initramfs-recovery.img
-        else
-            search --no-floppy --fs-uuid --set=root {root_uuid}
-            linux /@/boot/vmlinuz-linux root=UUID={root_uuid} rootflags=subvol=@ rw quiet splash
-            if [ -f /@/boot/initramfs-linux.img ]; then
-                initrd /@/boot/initramfs-linux.img
+            set rec_found=1
+        fi
+    fi
+
+    # 2. Check root system partition (@ subvolume or flat)
+    if [ "$rec_found" = "0" ]; then
+        if search --no-floppy --fs-uuid --set=root {root_uuid}; then
+            if [ -f /@/boot/vmlinuz-recovery ]; then
+                linux /@/boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live quiet splash
+                initrd /@/boot/initramfs-recovery.img
+                set rec_found=1
+            elif [ -f /@/recovery/vmlinuz-recovery ]; then
+                linux /@/recovery/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live quiet splash
+                initrd /@/recovery/initramfs-recovery.img
+                set rec_found=1
+            elif [ -f /boot/vmlinuz-recovery ]; then
+                linux /boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live quiet splash
+                initrd /boot/initramfs-recovery.img
+                set rec_found=1
+            elif [ -f /recovery/vmlinuz-recovery ]; then
+                linux /recovery/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live quiet splash
+                initrd /recovery/initramfs-recovery.img
+                set rec_found=1
             fi
         fi
-    else
-        search --no-floppy --fs-uuid --set=root {root_uuid}
-        if [ -f /@/boot/vmlinuz-recovery ]; then
-            linux /@/boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash
-            initrd /@/boot/initramfs-recovery.img
-        elif [ -f /boot/vmlinuz-recovery ]; then
-            linux /boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash
-            initrd /boot/initramfs-recovery.img
-        elif [ -f /@/boot/vmlinuz-linux ]; then
-            linux /@/boot/vmlinuz-linux root=UUID={root_uuid} rootflags=subvol=@ rw quiet splash
-            if [ -f /@/boot/initramfs-linux.img ]; then
-                initrd /@/boot/initramfs-linux.img
-            fi
-        else
-            linux /boot/vmlinuz-linux root=UUID={root_uuid} rw quiet splash
-            if [ -f /boot/initramfs-linux.img ]; then
-                initrd /boot/initramfs-linux.img
-            fi
+    fi
+
+    # 3. Global device search by file
+    if [ "$rec_found" = "0" ]; then
+        if search --no-floppy --file --set=found_rec /boot/vmlinuz-recovery; then
+            linux ($found_rec)/boot/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live quiet splash
+            initrd ($found_rec)/boot/initramfs-recovery.img
+            set rec_found=1
+        elif search --no-floppy --file --set=found_rec /vmlinuz-recovery; then
+            linux ($found_rec)/vmlinuz-recovery boot=live components username=live autologin cow_spacesize=4G live-media=any live-media-path=live quiet splash
+            initrd ($found_rec)/initramfs-recovery.img
+            set rec_found=1
         fi
     fi
 }}

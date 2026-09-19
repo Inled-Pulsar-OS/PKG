@@ -190,7 +190,11 @@ if [ -f /swapfile ]; then
             echo "⚙️ Configurando resume y zswap en /etc/default/grub..."
             # Remove any existing resume and zswap parameters first, then append correct ones
             sed -i 's/ resume=UUID=[^ "]*//g; s/ resume_offset=[^ "]*//g; s/ zswap\.enabled=[^ "]*//g' /etc/default/grub 2>/dev/null || true
-            sed -i "s|GRUB_CMDLINE_LINUX_DEFAULT=\"\(.*\)\"|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${RESUME_PARAMS}\"|" /etc/default/grub 2>/dev/null || true
+            if grep -q "^#\?GRUB_CMDLINE_LINUX_DEFAULT=" /etc/default/grub 2>/dev/null; then
+                sed -i "s|^#\?GRUB_CMDLINE_LINUX_DEFAULT=[\"']\(.*\)[\"']|GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${RESUME_PARAMS}\"|" /etc/default/grub 2>/dev/null || true
+            else
+                echo "GRUB_CMDLINE_LINUX_DEFAULT=\"quiet splash ${RESUME_PARAMS}\"" >> /etc/default/grub
+            fi
             if command -v update-grub >/dev/null 2>&1; then
                 update-grub 2>/dev/null || true
             elif command -v grub-mkconfig >/dev/null 2>&1; then

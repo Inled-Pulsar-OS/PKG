@@ -4,6 +4,9 @@ After=rclone.service
 Description=Tube OS Main Service
 
 [Service]
+RuntimeDirectory=tubeos
+RuntimeDirectoryMode=0755
+LogsDirectory=casaos tubeos
 ExecStart=/usr/bin/tubeos -c /etc/tubeos/tubeos.conf
 PIDFile=/var/run/tubeos/tubeos.pid
 Restart=always

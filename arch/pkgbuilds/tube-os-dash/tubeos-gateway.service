@@ -1,8 +1,11 @@
 [Unit]
-After=network.target
+After=network.target tubeos-ootb.service
 Description=Tube OS Gateway
 
 [Service]
+RuntimeDirectory=tubeos
+RuntimeDirectoryMode=0755
+LogsDirectory=casaos tubeos
 ExecStartPre=/usr/bin/tubeos-gateway -v
 ExecStart=/usr/bin/tubeos-gateway
 PIDFile=/var/run/tubeos/gateway.pid

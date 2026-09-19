@@ -4,6 +4,9 @@ After=tubeos-message-bus.service
 Description=Tube OS Local Storage Service
 
 [Service]
+RuntimeDirectory=tubeos
+RuntimeDirectoryMode=0755
+LogsDirectory=casaos tubeos
 ExecStartPre=/usr/bin/tubeos-local-storage -v
 ExecStart=/usr/bin/tubeos-local-storage -c /etc/tubeos/local-storage.conf
 PIDFile=/var/run/tubeos/local-storage.pid

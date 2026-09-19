@@ -576,12 +576,37 @@ TEMP_LG="/tmp/pulsaros-liquid-glass"
 rm -rf "$TEMP_LG"
 # We use HTTPS URL to ensure compatibility without SSH keys in builder / chroot environments
 # Usamos la URL HTTPS para asegurar la compatibilidad sin claves SSH en entornos de compilación / chroot
-if git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "https://github.com/InledGroup/liquid-glass.git" "$TEMP_LG"; then
+if git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 clone --depth=1 "https://github.com/ryohsuke1231/liquid-glass.git" "$TEMP_LG"; then
     echo "📦 [ES] Instalando Liquid Glass en el staging..."
     echo "📦 [EN] Installing Liquid Glass to staging..."
     mkdir -p "$STAGE_DIR/usr/share/gnome-shell/extensions"
     cp -r "$TEMP_LG/liquid-glass@thinkingcoding1231.gmail.com" "$STAGE_DIR/usr/share/gnome-shell/extensions/"
     rm -rf "$TEMP_LG"
+
+    # Declarative patches for Liquid Glass:
+    # 1. Set refined default corner radius (14px) and expand (4px) in schema
+    find "$STAGE_DIR/usr/share/gnome-shell/extensions/liquid-glass@thinkingcoding1231.gmail.com" -name "*.gschema.xml" | while read -r schema_file; do
+        python3 -c "
+import sys, re
+f = sys.argv[1]
+with open(f, 'r') as fp: c = fp.read()
+c = re.sub(r'(<key name=\"panel-menu-corner-radius\" type=\"d\">\s*<default>)[^<]+(</default>)', r'\g<1>14.0\g<2>', c)
+c = re.sub(r'(<key name=\"panel-menu-glass-expand\" type=\"i\">\s*<default>)[^<]+(</default>)', r'\g<1>4\g<2>', c)
+c = re.sub(r'(<key name=\"menu-corner-radius\" type=\"d\">\s*<default>)[^<]+(</default>)', r'\g<1>14.0\g<2>', c)
+c = re.sub(r'(<key name=\"menu-glass-expand\" type=\"i\">\s*<default>)[^<]+(</default>)', r'\g<1>4\g<2>', c)
+c = re.sub(r'(<key name=\"desktop-menu-corner-radius\" type=\"d\">\s*<default>)[^<]+(</default>)', r'\g<1>14.0\g<2>', c)
+c = re.sub(r'(<key name=\"notification-corner-radius\" type=\"d\">\s*<default>)[^<]+(</default>)', r'\g<1>16.0\g<2>', c)
+c = re.sub(r'(<key name=\"osd-corner-radius\" type=\"d\">\s*<default>)[^<]+(</default>)', r'\g<1>16.0\g<2>', c)
+c = re.sub(r'(<key name=\"quick-settings-corner-radius\" type=\"d\">\s*<default>)[^<]+(</default>)', r'\g<1>18.0\g<2>', c)
+with open(f, 'w') as fp: fp.write(c)
+" "$schema_file"
+    done
+
+    # 2. Exclude Sayri and Pulsar OS Welcome from Liquid Glass window shader
+    LG_APP_MGR="$STAGE_DIR/usr/share/gnome-shell/extensions/liquid-glass@thinkingcoding1231.gmail.com/dist/applicationManager.js"
+    if [ -f "$LG_APP_MGR" ]; then
+        sed -i 's/_shouldApplyToWindow(windowActor) {/_shouldApplyToWindow(windowActor) {\n        const _mWin = windowActor.get_meta_window();\n        if (_mWin) {\n            const _wm = (_mWin.get_wm_class() || "").toLowerCase();\n            const _tt = (_mWin.get_title() || "").toLowerCase();\n            if (_wm.includes("sayri") || _tt.includes("sayri") || _wm.includes("welcome") || _tt.includes("welcome")) return false;\n        }/g' "$LG_APP_MGR"
+    fi
 else
     echo "❌ [ES] Error al clonar Liquid Glass de GitHub."
     echo "❌ [EN] Error cloning Liquid Glass from GitHub."
