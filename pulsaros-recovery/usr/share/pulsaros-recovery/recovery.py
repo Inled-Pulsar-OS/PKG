@@ -3748,9 +3748,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     if not src:
                         log_msg("WARNING: dedicated recovery initramfs not found.")
                     else:
-                        os.makedirs("/mnt/boot", exist_ok=True)
+                        # NOTE: nunca copiar el initramfs de recovery al /boot del
+                        # sistema instalado (/mnt/boot): grub-mkconfig (10_linux) lo
+                        # elegiría como kernel/inicramfs por defecto y arrancaría el
+                        # kernel Debian de recovery sobre el rootfs Arch (sin entrada
+                        # de teclado/ratón — Bug #1). Solo se despliega en la
+                        # partición/directorio de recovery y en la ESP.
                         os.makedirs("/mnt/recovery/boot", exist_ok=True)
-                        shutil.copy2(src, "/mnt/boot/initramfs-recovery.img")
+                        os.makedirs("/mnt/recovery", exist_ok=True)
                         shutil.copy2(src, "/mnt/recovery/boot/initramfs-recovery.img")
                         shutil.copy2(src, "/mnt/recovery/initramfs-recovery.img")
                         if is_efi:
@@ -3798,9 +3803,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     if not found_k:
                         log_msg("WARNING: dedicated recovery kernel not found.")
                         return
-                    os.makedirs("/mnt/boot", exist_ok=True)
+                    # NOTE: igual que el initramfs — mantener el kernel de recovery
+                    # FUERA del /boot del sistema instalado (/mnt/boot) para que
+                    # grub-mkconfig no lo haga la entrada por defecto (Bug #1).
                     os.makedirs("/mnt/recovery/boot", exist_ok=True)
-                    shutil.copy2(found_k, "/mnt/boot/vmlinuz-recovery")
+                    os.makedirs("/mnt/recovery", exist_ok=True)
                     shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-recovery")
                     shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-linux")
                     shutil.copy2(found_k, "/mnt/recovery/vmlinuz-recovery")
@@ -3821,7 +3828,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     if is_efi:
                         esp_root = "/mnt/boot/efi"
                         with open(f"{esp_root}/EFI/recovery/refind_linux.conf", "w") as f:
-                            f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts.replace("live-media=/dev/disk/by-label/PULSAR_RECOVERY", "live-media=any")}"\n')
+                            # live-media=any rompe find_livefs (ver Bug #2); sin
+                            # live-media, live-boot escanea los dispositivos de bloque.
+                            f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts.replace("live-media=/dev/disk/by-label/PULSAR_RECOVERY ", "")}"\n')
 
                     subprocess.run(["sync"])
                     log_msg(f"Recovery kernel deployed to PULSAR_OS, PULSAR_RECOVERY, and ESP from {found_k}")
@@ -4328,10 +4337,35 @@ menuentry "Pulsar OS Recovery (ACPI Off / Minimal)" --class recovery --class pul
     fi
 }}
 """
+                # live-media=any rompe live-boot: find_livefs aborta antes del
+                # escaneo de bloques (el `continue` de check_dev, fuera de bucle,
+                # termina el subshell) y nunca encuentra el medio — panic
+                # "Unable to find a medium containing a live file system" (Bug #2).
+                # Sin el parámetro live-media, live-boot escanea los dispositivos y
+                # encuentra PULSAR_RECOVERY / PULSAR_ISO / la partición raíz.
+                rec_script = rec_script.replace(" live-media=any live-media-path=live", " live-media-path=live")
                 rec_script_path = f"{grub_d}/15_pulsar_recovery"
                 with open(rec_script_path, "w") as f:
                     f.write(rec_script)
                 os.chmod(rec_script_path, 0o755)
+
+                # Saneado Bug #1: si el /boot del sistema instalado quedó contaminado
+                # con kernel/inicramfs de recovery (instalaciones antiguas), retirarlos
+                # ANTES de regenerar grub.cfg para que 10_linux no arranque por defecto
+                # el kernel Debian de recovery sobre el rootfs Arch (sin input). Solo se
+                # eliminan si existe una copia válida en el directorio/partición de
+                # recovery, para nunca dejar el sistema sin arranque posible.
+                for _stray in ("/mnt/boot/vmlinuz-recovery", "/mnt/boot/initramfs-recovery.img"):
+                    _stray_base = os.path.basename(_stray)
+                    if os.path.isfile(_stray) and (
+                        os.path.isfile(f"/mnt/recovery/boot/{_stray_base}")
+                        or os.path.isfile(f"/mnt/recovery/{_stray_base}")
+                    ):
+                        try:
+                            os.remove(_stray)
+                            log_msg(f"Removed stray recovery file from installed /boot: {_stray}")
+                        except Exception as _rm_err:
+                            log_msg(f"Warning: could not remove {_stray}: {_rm_err}")
 
                 # Run update-grub or grub-mkconfig. grub-mkconfig/grub-probe need
                 # /proc, /sys and /dev inside the chroot or the generated grub.cfg
