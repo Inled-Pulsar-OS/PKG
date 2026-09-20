@@ -18,10 +18,11 @@ post_install() {
     # Create users
     groupadd -f sudo 2>/dev/null || true
     groupadd -f docker 2>/dev/null || true
+    groupadd -f input 2>/dev/null || true
     if ! id -u live &>/dev/null; then
-        useradd -m -s /bin/bash -G sudo,docker live 2>/dev/null || true
+        useradd -m -s /bin/bash -G sudo,docker,input live 2>/dev/null || true
     else
-        usermod -aG docker live 2>/dev/null || true
+        usermod -aG docker,input live 2>/dev/null || true
     fi
     echo "live:live" | chpasswd 2>/dev/null || true
     echo "root:pulsar" | chpasswd 2>/dev/null || true
