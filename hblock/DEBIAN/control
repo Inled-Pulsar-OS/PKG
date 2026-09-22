@@ -1,0 +1,14 @@
+Package: hblock
+Version: 3.5.1-1
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: Jaime <info@inled.es>
+Depends: bash, curl, systemd
+Description: Adblocker that creates a hosts file from multiple sources
+ hblock collects domains from multiple blocklists and generates a hosts
+ file that blocks ads, tracking and malware domains.
+ .
+ Built for Pulsar OS from the upstream hectorm/hblock v3.5.1 source
+ (sha256-verified tarball + script checksum). Ships hblock.service and
+ hblock.timer for daily automatic updates.
