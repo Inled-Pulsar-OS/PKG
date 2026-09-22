@@ -1501,24 +1501,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.stack.add_named(box, "install_welcome")
 
     def _is_uefi_grub_incompatible(self):
-        """Detect if booted in UEFI mode on the GRUB-only (BIOS/Legacy) ISO edition."""
-        # Developer mode (PULSAR_DEV_MODE=1) bypasses the edition/hardware
-        # compatibility gate so the GRUB ISO can be installed/tested on UEFI
-        # hardware (e.g. for development on Macs).
-        if os.environ.get("PULSAR_DEV_MODE") == "1":
-            return False
+        """GRUB install on UEFI is fully supported (tested on HP Tiger Lake UEFI).
+
+        The installer ships the UEFI recovery entries itself (grub-install
+        --target=x86_64-efi + 15_pulsar_recovery), so the old "GRUB edition is
+        BIOS-only" gate is no longer needed: it only harassed users whose boot
+        failures came from other causes. Kept as a function so the call sites
+        stay unchanged; only FORCE_UEFI_GRUB_INCOMPATIBLE can still block.
+        """
         if os.environ.get("FORCE_UEFI_GRUB_INCOMPATIBLE") == "1":
             return True
-        is_efi = os.path.exists("/sys/firmware/efi")
-        refind_available = any(
-            os.path.exists(p)
-            for p in (
-                "/usr/bin/refind-install",
-                "/usr/sbin/refind-install",
-                "/bin/refind-install",
-            )
-        )
-        return is_efi and not refind_available
+        return False
 
     def build_install_uefi_incompatible_screen(self):
         """Slide shown inside the main central window when UEFI hardware is detected on the GRUB ISO."""
@@ -4152,26 +4145,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             "    loader /@/boot/vmlinuz-recovery\n"
                             "    initrd /@/boot/initramfs-recovery.img\n"
                             f'    options "{rec_opts_rec}"\n'
-                            '    submenuentry "Boot Recovery from ESP" {\n'
-                            "        loader /EFI/recovery/vmlinuz-recovery\n"
-                            "        initrd /EFI/recovery/initramfs-recovery.img\n"
-                            f'        options "{rec_opts_rec}"\n'
-                            "    }\n"
-                            '    submenuentry "Boot Recovery (Auto-Detect Drive)" {\n'
-                            "        volume PULSAR_OS\n"
-                            "        loader /@/boot/vmlinuz-recovery\n"
-                            "        initrd /@/boot/initramfs-recovery.img\n"
-                            f'        options "{rec_opts_auto}"\n'
-                            "    }\n"
-                            '    submenuentry "Boot Recovery (Debug Mode)" {\n'
-                            "        volume PULSAR_OS\n"
-                            "        loader /@/boot/vmlinuz-recovery\n"
-                            "        initrd /@/boot/initramfs-recovery.img\n"
-                            f'        options "{rec_opts_rec.replace("quiet splash", "loglevel=7 live-debug")}"\n'
-                            "    }\n"
-                            '    submenuentry "Internet Recovery" {\n'
-                            f'        options "{rec_net_opts}"\n'
-                            "    }\n"
                             "}\n"
                             f"{extra_entries_str}"
                             f"{MENU_END}\n"
@@ -4330,83 +4303,6 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
             linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /initramfs-recovery.img
             set rec_found=1
-        fi
-    fi
-}}
-
-menuentry "Pulsar OS Recovery (ACPI Compat)" --class recovery --class pulsaros-recovery --class os {{
-    insmod btrfs
-    insmod ext2
-    insmod part_gpt
-    insmod part_msdos
-
-    # Compat ACPI recovery: same discovery as above, but with acpi=noirq,
-    # irqpoll and nomodeset to work around "ACPI BIOS Error (bug)"/"ACPI Error"
-    # hangs under QEMU/OVMF (GNOME Boxes) and buggy real-world firmware.
-    set rec_done=0
-    set rec_base=""
-    if search --no-floppy --label --set=root PULSAR_RECOVERY; then
-        set rec_base=""
-    elif search --no-floppy --fs-uuid --set=root {root_uuid}; then
-        set rec_base="/@"
-    fi
-
-    for rec_path in "/recovery" "/boot" ""; do
-        if [ -f "${{rec_base}}${{rec_path}}/vmlinuz-recovery" ]; then
-            linux "${{rec_base}}${{rec_path}}/vmlinuz-recovery" boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live acpi=noirq irqpoll nomodeset nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-            initrd "${{rec_base}}${{rec_path}}/initramfs-recovery.img"
-            set rec_done=1
-            break
-        fi
-    done
-
-    if [ "$rec_done" != "1" ]; then
-        if search --no-floppy --file --set=root /recovery/vmlinuz-recovery; then
-            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live acpi=noirq irqpoll nomodeset nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-            initrd /recovery/initramfs-recovery.img
-            set rec_done=1
-        elif search --no-floppy --file --set=root /vmlinuz-recovery; then
-            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live acpi=noirq irqpoll nomodeset nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-            initrd /initramfs-recovery.img
-            set rec_done=1
-        fi
-    fi
-}}
-
-menuentry "Pulsar OS Recovery (ACPI Off / Minimal)" --class recovery --class pulsaros-recovery --class os {{
-    insmod btrfs
-    insmod ext2
-    insmod part_gpt
-    insmod part_msdos
-
-    # Last resort: ACPI completely disabled + no APIC. Slow but boots on the
-    # most broken firmware/VM ACPI tables.
-    set rec_done=0
-    set rec_base=""
-    if search --no-floppy --label --set=root PULSAR_RECOVERY; then
-        set rec_base=""
-    elif search --no-floppy --fs-uuid --set=root {root_uuid}; then
-        set rec_base="/@"
-    fi
-
-    for rec_path in "/recovery" "/boot" ""; do
-        if [ -f "${{rec_base}}${{rec_path}}/vmlinuz-recovery" ]; then
-            linux "${{rec_base}}${{rec_path}}/vmlinuz-recovery" boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live acpi=off noapic nolapic irqpoll nomodeset nvme_load=yes fsck.mode=skip loglevel=3 noprompt --
-            initrd "${{rec_base}}${{rec_path}}/initramfs-recovery.img"
-            set rec_done=1
-            break
-        fi
-    done
-
-    if [ "$rec_done" != "1" ]; then
-        if search --no-floppy --file --set=root /recovery/vmlinuz-recovery; then
-            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live acpi=off noapic nolapic irqpoll nomodeset nvme_load=yes fsck.mode=skip loglevel=3 noprompt --
-            initrd /recovery/initramfs-recovery.img
-            set rec_done=1
-        elif search --no-floppy --file --set=root /vmlinuz-recovery; then
-            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live acpi=off noapic nolapic irqpoll nomodeset nvme_load=yes fsck.mode=skip loglevel=3 noprompt --
-            initrd /initramfs-recovery.img
-            set rec_done=1
         fi
     fi
 }}

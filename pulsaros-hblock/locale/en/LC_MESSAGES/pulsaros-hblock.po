@@ -1,0 +1,72 @@
+# Pulsar HBlock - English translation
+# Source language: Spanish (msgid = Spanish, msgstr = English)
+msgid ""
+msgstr ""
+"Project-Id-Version: pulsaros-hblock 1.0.1\n"
+"Report-Msgid-Bugs-To: info@inled.es\n"
+"POT-Creation-Date: 2026-09-22 12:00+0000\n"
+"PO-Revision-Date: 2026-09-22 12:00+0000\n"
+"Last-Translator: Jaime <info@inled.es>\n"
+"Language-Team: English\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "HBlock"
+msgstr "HBlock"
+
+msgid "Bloqueo de anuncios y rastreadores"
+msgstr "Ads & trackers blocking"
+
+msgid "Recargar"
+msgstr "Reload"
+
+msgid "Comprobando…"
+msgstr "Checking…"
+
+msgid "Activado"
+msgstr "Enabled"
+
+msgid "Desactivado"
+msgstr "Disabled"
+
+msgid "hblock no está instalado en el sistema. Instala el paquete 'hblock' para usar esta aplicación."
+msgstr "hblock is not installed on this system. Install the 'hblock' package to use this app."
+
+msgid "Estadísticas"
+msgstr "Statistics"
+
+msgid "Dominios bloqueados"
+msgstr "Blocked domains"
+
+msgid "Fuentes activas"
+msgstr "Active sources"
+
+msgid "Última actualización"
+msgstr "Last update"
+
+msgid "Versión de hblock"
+msgstr "hblock version"
+
+msgid "Actualizar ahora"
+msgstr "Update now"
+
+msgid "hblock actualiza /etc/hosts con los dominios de sus fuentes para bloquear anuncios, rastreadores y malware."
+msgstr "hblock updates /etc/hosts with the domains from its sources to block ads, trackers and malware."
+
+msgid "Bloqueo activado"
+msgstr "Blocking enabled"
+
+msgid "Bloqueo desactivado"
+msgstr "Blocking disabled"
+
+msgid "No se pudo cambiar el estado del bloqueo."
+msgstr "Could not change the blocking state."
+
+msgid "Lista actualizada correctamente."
+msgstr "Blocklist updated successfully."
+
+msgid "No se pudo actualizar la lista: {msg}"
+msgstr "Could not update the blocklist: {msg}"

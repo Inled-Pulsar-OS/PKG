@@ -1,0 +1,3 @@
+#!/bin/bash
+# Pulsar HBlock launcher
+exec /usr/bin/env python3 /usr/share/pulsaros-hblock/main.py "$@"

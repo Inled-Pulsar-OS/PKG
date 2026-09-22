@@ -1,0 +1,33 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname='pulsaros-hblock'
+pkgver=1.0.1
+pkgrel=1
+pkgdesc='Visual switch and statistics for the hblock DNS ad-blocker'
+arch=('any')
+url='https://inled.es'
+license=('GPL3')
+depends=('hblock' 'python' 'python-gobject' 'gtk4' 'libadwaita' 'polkit')
+options=('!strip')
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-hblock && pwd)"
+    cd "$_src"
+
+    mkdir -p "$pkgdir/usr/bin"
+    install -Dm755 usr/bin/pulsaros-hblock "$pkgdir/usr/bin/pulsaros-hblock"
+
+    mkdir -p "$pkgdir/usr/lib/pulsaros-hblock"
+    install -Dm755 usr/lib/pulsaros-hblock/hblock-helper.sh "$pkgdir/usr/lib/pulsaros-hblock/hblock-helper.sh"
+
+    mkdir -p "$pkgdir/usr/share/pulsaros-hblock"
+    cp -r usr/share/pulsaros-hblock/. "$pkgdir/usr/share/pulsaros-hblock/"
+
+    mkdir -p "$pkgdir/usr/share/applications"
+    install -Dm644 usr/share/applications/es.inled.PulsarHBlock.desktop "$pkgdir/usr/share/applications/es.inled.PulsarHBlock.desktop"
+
+    mkdir -p "$pkgdir/usr/share/icons/hicolor/scalable/apps"
+    install -Dm644 usr/share/icons/hicolor/scalable/apps/pulsaros-hblock.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/pulsaros-hblock.svg"
+
+    chmod -R a+rX "$pkgdir/usr"
+    find "$pkgdir/usr" -type d -exec chmod 755 {} +
+}

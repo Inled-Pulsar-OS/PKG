@@ -1,0 +1,23 @@
+/* Pulsar HBlock - theme-independent styles */
+
+.hblock-status-card .title-label {
+    font-weight: 700;
+    font-size: 16px;
+}
+
+.hblock-status-card switch {
+    margin-left: 6px;
+}
+
+.hblock-big-number {
+    font-size: 34px;
+    font-weight: 700;
+}
+
+.hblock-status-card .error {
+    color: #e01b24;
+}
+
+.hblock-status-card label.error {
+    color: #e01b24;
+}

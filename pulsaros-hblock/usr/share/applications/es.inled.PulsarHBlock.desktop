@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=Pulsar HBlock
+Name[es]=Pulsar HBlock
+Comment=Enable or disable hblock ad and tracker blocking
+Comment[es]=Activa o desactiva el bloqueo de anuncios y rastreadores de hblock
+Exec=/usr/bin/pulsaros-hblock
+Icon=pulsaros-hblock
+Terminal=false
+Type=Application
+Categories=System;Utility;GTK;GNOME;
+StartupNotify=true
+StartupWMClass=pulsaros-hblock
+Keywords=Block;Blocker;Ads;Tracker;Privacy;Security;Hosts;Hblock;Anuncios;
+X-GNOME-Autostart-enabled=false
