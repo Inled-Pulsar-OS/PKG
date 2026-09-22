@@ -20,6 +20,13 @@ pub fn is_ootb_pending() -> bool {
     core::is_ootb_pending()
 }
 
+/// Wi-Fi configurator slide is disabled by default; re-enable it by launching
+/// the welcome app with PULSAROS_ENABLE_WIFI_SLIDE=1.
+#[tauri::command]
+pub fn wifi_slide_enabled() -> bool {
+    std::env::var("PULSAROS_ENABLE_WIFI_SLIDE").map(|v| v == "1").unwrap_or(false)
+}
+
 #[tauri::command]
 pub fn write_sentinel() -> Result<(), String> {
     core::write_sentinel()

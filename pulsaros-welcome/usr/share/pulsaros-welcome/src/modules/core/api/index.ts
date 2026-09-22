@@ -18,6 +18,7 @@ export {
   launchBluetoothSettings,
   getEffectsState,
   setEffects,
+  wifiSlideEnabled,
   checkAdbDevices,
   runCleanup,
   closeWindow,

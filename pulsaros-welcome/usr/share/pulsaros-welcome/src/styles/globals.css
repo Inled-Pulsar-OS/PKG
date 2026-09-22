@@ -53,9 +53,15 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Fullscreen backdrop — soft dim over desktop */
+/* Fullscreen backdrop — Pulsar default wallpaper with soft dim + blur */
 .screen-backdrop {
-  background: rgba(0, 0, 0, 0.35);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.35)),
+    url("file:///usr/share/backgrounds/pulsar-os-tahoe.png"),
+    url("https://raw.githubusercontent.com/Inled-Pulsar-OS/pulsar-art/refs/heads/main/pulsar-os-tahoe.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
 }

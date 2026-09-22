@@ -46,6 +46,8 @@ post_install() {
     # Enable services
     systemctl enable NetworkManager.service 2>/dev/null || true
     systemctl enable bluetooth.service 2>/dev/null || true
+    # Avahi/mDNS: GSConnect/KDE Connect phone discovery on the LAN
+    systemctl enable avahi-daemon.service avahi-daemon.socket 2>/dev/null || true
     systemctl enable docker.service 2>/dev/null || true
     systemctl enable docker.socket 2>/dev/null || true
     systemctl enable vboxservice.service 2>/dev/null || true

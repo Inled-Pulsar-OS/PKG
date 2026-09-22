@@ -6,13 +6,14 @@ import {
   isOotbPending,
   getResolutions,
   getEffectsState,
+  wifiSlideEnabled,
   setEffects as apiSetEffects,
   launchOotb,
   writeSentinel,
   closeWindow,
 } from "@/modules/core/api";
 
-const BASE_FLOW: WelcomeScreen[] = [
+const ALL_STEPS: WelcomeScreen[] = [
   "hello",
   "features",
   "compatibility",
@@ -21,6 +22,16 @@ const BASE_FLOW: WelcomeScreen[] = [
   "sayri",
 ];
 
+/**
+ * The Wi-Fi configurator slide is DISABLED by default. Re-enable it by
+ * launching the welcome app with PULSAROS_ENABLE_WIFI_SLIDE=1 — the env var is
+ * read by the Python/WebKitGTK backend (welcome.py) and exposed through the
+ * `wifi_slide_enabled` command on the Tauri backend.
+ */
+function buildBaseFlow(wifiEnabled: boolean): WelcomeScreen[] {
+  return wifiEnabled ? ALL_STEPS : ALL_STEPS.filter((s) => s !== "wifi");
+}
+
 export function useWelcome() {
   const [screen, setScreen] = useState<WelcomeScreen>("hello");
   const [{
@@ -28,22 +39,25 @@ export function useWelcome() {
     isArch,
     isLive,
     ootbPending,
-    resolutions
+    resolutions,
+    wifiSlide
   }, setData] = useState<DataState>({
     isLive: false,
     isArch: false,
     ootbPending: false,
     resolutions: [],
     effectsState: false,
+    wifiSlide: false,
   });
 
   const loadSystemInfo = useCallback(async () => {
-    const [live, arch, ootb, res, effects] = await Promise.all([
+    const [live, arch, ootb, res, effects, wifi] = await Promise.all([
       isLiveSystem(),
       isArchSystem(),
       isOotbPending(),
       getResolutions(),
       getEffectsState(),
+      wifiSlideEnabled(),
     ]);
     setData((prev) => ({
       ...prev,
@@ -51,7 +65,8 @@ export function useWelcome() {
       isArch: arch,
       ootbPending: ootb,
       resolutions: res,
-      effectsState: effects
+      effectsState: effects,
+      wifiSlide: wifi,
     }));
   }, []);
 
@@ -66,24 +81,26 @@ export function useWelcome() {
   }, [ootbPending]);
 
   const goNext = useCallback(() => {
+    const flow = buildBaseFlow(wifiSlide);
     setScreen((prev) => {
-      const idx = BASE_FLOW.indexOf(prev);
-      if (idx !== -1 && idx < BASE_FLOW.length - 1) {
-        return BASE_FLOW[idx + 1];
+      const idx = flow.indexOf(prev);
+      if (idx !== -1 && idx < flow.length - 1) {
+        return flow[idx + 1];
       }
       if (prev === "sayri") return isLive ? "recovery" : "done";
       if (prev === "recovery") return "done";
       return "done";
     });
-  }, [isLive]);
+  }, [isLive, wifiSlide]);
 
   const goBack = useCallback(() => {
+    const flow = buildBaseFlow(wifiSlide);
     setScreen((prev) => {
-      const idx = BASE_FLOW.indexOf(prev);
-      if (idx > 0) return BASE_FLOW[idx - 1];
+      const idx = flow.indexOf(prev);
+      if (idx > 0) return flow[idx - 1];
       return prev;
     });
-  }, []);
+  }, [wifiSlide]);
 
   const goTo = useCallback((s: WelcomeScreen) => setScreen(s), []);
 

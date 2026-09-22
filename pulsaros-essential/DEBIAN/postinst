@@ -126,6 +126,8 @@ if command -v systemctl >/dev/null 2>&1; then
     systemctl enable docker-9pfs-mount.service || true
     systemctl enable docker.service || true
     systemctl enable docker.socket || true
+    # Avahi/mDNS: GSConnect/KDE Connect phone discovery on the LAN
+    systemctl enable avahi-daemon.service avahi-daemon.socket || true
 fi
 
 # English: Enable the live passwordless bypass: grants NOPASSWD sudo + a polkit

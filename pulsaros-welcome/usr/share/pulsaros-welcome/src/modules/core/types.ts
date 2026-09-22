@@ -23,4 +23,5 @@ export type DataState = {
   ootbPending: boolean;
   resolutions: Resolution[];
   effectsState: boolean;
+  wifiSlide: boolean;
 };

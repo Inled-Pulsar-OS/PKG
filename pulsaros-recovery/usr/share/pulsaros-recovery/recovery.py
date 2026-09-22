@@ -1148,6 +1148,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 "python-setuptools", "python-pip",
                 "qemu-desktop", "libvirt", "virt-manager",
                 "edk2-ovmf", "dnsmasq", "python-requests",
+                # Print server
+                "cups",
             ]
             # Packages that live only in the AUR (not in official or Inled repos)
             arch_aur_packages = [
@@ -1166,6 +1168,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 "qemu-system-x86", "qemu-utils", "libvirt-daemon-system",
                 "libvirt-clients", "virt-manager", "ovmf", "dnsmasq-base",
                 "bridge-utils", "python3-requests", "dmg2img",
+                # Print server
+                "cups",
                 # LocalSend is NOT packaged in Debian stable; it is installed
                 # separately from its official .deb below (_install_localsend_debian).
             ]
@@ -1325,6 +1329,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     "/tmp/LocalSend-latest-linux-x86-64.deb",
                 )
 
+            # Enable the CUPS print service (installed as part of the extras).
+            GLib.idle_add(self.update_progress, 0.98, "Enabling print service (CUPS)...")
+            try:
+                subprocess.run(
+                    ["pkexec", "systemctl", "enable", "--now", "cups.service"],
+                    capture_output=True, text=True,
+                )
+                log_msg("CUPS print service enabled.")
+            except Exception as cups_err:
+                log_msg(f"WARNING: could not enable CUPS: {cups_err}")
+
             # Install ONLYOFFICE Desktop Editors from Flathub via Flatpak
             self._install_onlyoffice_flatpak(log_msg, chroot_target=None)
 
@@ -1450,6 +1465,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
             demo_banner.add_css_class("demo-banner")
             box.append(demo_banner)
         
+        if os.environ.get("PULSAR_DEV_MODE") == "1":
+            dev_banner = Gtk.Label(label="⚙ DEV MODE — Edition/hardware compatibility checks disabled")
+            dev_banner.add_css_class("demo-banner")
+            box.append(dev_banner)
+        
         # Large Pulsar OS Logo (160px size)
         image = self.get_logo_image(160, is_installer=False)
         box.append(image)
@@ -1482,6 +1502,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
     def _is_uefi_grub_incompatible(self):
         """Detect if booted in UEFI mode on the GRUB-only (BIOS/Legacy) ISO edition."""
+        # Developer mode (PULSAR_DEV_MODE=1) bypasses the edition/hardware
+        # compatibility gate so the GRUB ISO can be installed/tested on UEFI
+        # hardware (e.g. for development on Macs).
+        if os.environ.get("PULSAR_DEV_MODE") == "1":
+            return False
         if os.environ.get("FORCE_UEFI_GRUB_INCOMPATIBLE") == "1":
             return True
         is_efi = os.path.exists("/sys/firmware/efi")
@@ -1911,6 +1936,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
             demo_banner = Gtk.Label(label="⚠ DEMO MODE — No changes will be made to your system")
             demo_banner.add_css_class("demo-banner")
             box.append(demo_banner)
+
+        if os.environ.get("PULSAR_DEV_MODE") == "1":
+            dev_banner = Gtk.Label(label="⚙ DEV MODE — Edition/hardware compatibility checks disabled")
+            dev_banner.add_css_class("demo-banner")
+            box.append(dev_banner)
 
         image = self.get_logo_image(72, is_installer=True)
         box.append(image)
@@ -2637,8 +2667,33 @@ class RecoveryWindow(Adw.ApplicationWindow):
     # Hardware detection helpers
     # ──────────────────────────────────────────────────────────────
 
+    def _is_apple_hardware(self):
+        """True on genuine Apple hardware (MacBook / Mac mini / iMac / Mac Pro).
+
+        On Macs, the open-source `brcmfmac` driver is the one that actually
+        works for Broadcom Wi-Fi. Installing the proprietary Broadcom STA
+        driver blacklists `brcmfmac` and kills Wi-Fi, so the STA path must be
+        skipped there (while it is the fix that enables Wi-Fi on HP laptops).
+        """
+        try:
+            for path in ("/sys/class/dmi/id/sys_vendor", "/sys/class/dmi/id/product_name"):
+                with open(path, "r") as f:
+                    val = f.read().strip().lower()
+                if any(
+                    token in val
+                    for token in ("apple", "macbook", "macmini", "imac", "mac pro", "macpro")
+                ):
+                    return True
+        except Exception:
+            pass
+        return False
+
     def _detect_broadcom(self):
         """Returns True if a Broadcom WiFi/BT chip is detected via lspci/lsusb."""
+        # Never auto-enable the Broadcom STA driver on Apple hardware: it
+        # blacklists brcmfmac, which is the driver Macs actually need for Wi-Fi.
+        if self._is_apple_hardware():
+            return False
         try:
             pci = subprocess.check_output(["lspci", "-nn"], text=True, stderr=subprocess.DEVNULL)
             if "Broadcom" in pci and ("Network" in pci or "Wireless" in pci or "BCM" in pci):
@@ -3362,6 +3417,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 "edk2-ovmf",
                                 "dnsmasq",
                                 "python-requests",
+                                # Print server
+                                "cups",
                             ]
                             # Initialize pacman keyring inside the chroot so
                             # signature verification works (avoids GPGME errors),
@@ -3420,6 +3477,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             log_msg("Post-install: extra packages installed successfully.")
                             extra_packages_installed = True
 
+                            # Enable the CUPS print service on the installed system.
+                            try:
+                                exec_cmd(["chroot", "/mnt", "systemctl", "enable", "cups.service"])
+                                log_msg("CUPS print service enabled on installed system.")
+                            except Exception as cups_err:
+                                log_msg(f"Notice: could not enable CUPS: {cups_err}")
+
                             # Install ONLYOFFICE via Flatpak from Flathub
                             self._install_onlyoffice_flatpak(log_msg, chroot_target="/mnt")
                         except Exception as post_err:
@@ -3465,6 +3529,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 "bridge-utils",
                                 "python3-requests",
                                 "dmg2img",
+                                # Print server
+                                "cups",
                                 # LocalSend is not in Debian stable; installed
                                 # separately from its official .deb below.
                             ]
@@ -3507,6 +3573,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 raise Exception(f"apt-get install failed (code {apt_proc.returncode})")
                             log_msg("Post-install: extra packages installed successfully (apt).")
                             extra_packages_installed = True
+
+                            # Enable the CUPS print service on the installed system.
+                            try:
+                                exec_cmd(["chroot", "/mnt", "systemctl", "enable", "cups.service"])
+                                log_msg("CUPS print service enabled on installed system.")
+                            except Exception as cups_err:
+                                log_msg(f"Notice: could not enable CUPS: {cups_err}")
+
                             # LocalSend is not in Debian stable; install from its .deb
                             # (downloaded to /mnt/tmp so the chroot can see it at /tmp).
                             self._install_localsend_debian(
@@ -4884,7 +4958,12 @@ menuentry "Pulsar OS Recovery (ACPI Off / Minimal)" --class recovery --class pul
 
             # ── Driver installation (Best effort, non-fatal for offline installs) ───
             # ── Broadcom Driver installation (Optional, requires Internet) ───
-            if self.install_broadcom:
+            if self.install_broadcom and self._is_apple_hardware():
+                # On Apple hardware the open-source brcmfmac driver is the one
+                # that works; the Broadcom STA driver + brcmfmac blacklist would
+                # kill Wi-Fi, so the STA install path is skipped entirely.
+                print("Apple hardware detected — skipping Broadcom STA driver to keep brcmfmac Wi-Fi working.")
+            if self.install_broadcom and not self._is_apple_hardware():
                 # Bind network-related paths so package manager can reach the internet if available
                 exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
                 policy_file = "/mnt/usr/sbin/policy-rc.d"

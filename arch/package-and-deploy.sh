@@ -122,6 +122,32 @@ COMPILED_PKGS=()
 GIT_STAMP_DIR="$BUILD_DIR/.git-stamps"
 mkdir -p "$GIT_STAMP_DIR"
 
+# Ensure every submodule listed in .gitmodules is checked out before building.
+# A plain `git clone` (without --recursive) leaves these directories empty, and
+# makepkg then fails inside prepare() with a misleading "no such file" error
+# (e.g. nautilus → sed: no se puede leer .../nautilus-src/meson.build).
+# NOTE: the PKG repo also tracks `appinstall` as a submodule in the git index,
+# but it has NO .gitmodules entry on purpose: its PKGBUILD resolves the source
+# via $startdir/../../../../appinstall (the workspace copy) instead, so it is
+# deliberately not handled here.
+ensure_git_submodules() {
+    [ -d "$PKG_DIR/.git" ] || return 0
+    [ -f "$PKG_DIR/.gitmodules" ] || return 0
+    local submod
+    while IFS= read -r submod; do
+        [ -n "$submod" ] || continue
+        # Uninitialized submodules have an empty directory with no .git file.
+        if [ ! -e "$PKG_DIR/$submod/.git" ] && [ -z "$(ls -A "$PKG_DIR/$submod" 2>/dev/null)" ]; then
+            echo "🔁 Initializing git submodule: $submod"
+            git -C "$PKG_DIR" submodule update --init -- "$submod" 2>/dev/null || {
+                echo "⚠️  Could not initialize submodule '$submod'."
+                echo "   Run manually: git -C '$PKG_DIR' submodule update --init -- '$submod'"
+            }
+        fi
+    done < <(git -C "$PKG_DIR" config --file "$PKG_DIR/.gitmodules" --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}')
+}
+ensure_git_submodules
+
 # Resolve the source dir used to build package $name (mirrors each PKGBUILD's
 # prepare()/package() reference to its source subrepo).
 resolve_src_dir() {

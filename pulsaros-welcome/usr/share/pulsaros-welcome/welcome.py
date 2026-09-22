@@ -128,6 +128,9 @@ class WelcomeApp(Gtk.Window):
         self.is_live = is_live
         self.is_arch = is_arch
         self.needs_ootb = needs_ootb
+        # Wi-Fi configurator slide is disabled by default; launch with
+        # PULSAROS_ENABLE_WIFI_SLIDE=1 to re-enable it.
+        self.wifi_slide = os.environ.get("PULSAROS_ENABLE_WIFI_SLIDE") == "1"
 
         self.set_title("Pulsar OS Welcome")
         self.set_decorated(False)
@@ -155,6 +158,7 @@ class WelcomeApp(Gtk.Window):
                 window.IS_ARCH = {'true' if is_arch else 'false'};
                 window.IS_OOTB = {'true' if needs_ootb else 'false'};
                 window.NEEDS_OOTB = {'true' if needs_ootb else 'false'};
+                window.IS_WIFI_SLIDE = {'true' if self.wifi_slide else 'false'};
             """,
             WebKit2.UserContentInjectedFrames.ALL_FRAMES,
             WebKit2.UserScriptInjectionTime.START,
@@ -223,6 +227,9 @@ class WelcomeApp(Gtk.Window):
 
         elif cmd == "is_ootb_pending":
             self._send_response(req_id, self.needs_ootb)
+
+        elif cmd == "wifi_slide_enabled":
+            self._send_response(req_id, self.wifi_slide)
 
         elif cmd == "check_sentinel":
             self._send_response(req_id, check_sentinel())

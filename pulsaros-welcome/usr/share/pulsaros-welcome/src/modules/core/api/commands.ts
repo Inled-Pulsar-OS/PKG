@@ -15,6 +15,7 @@ declare global {
     IS_LIVE?: boolean;
     IS_ARCH?: boolean;
     IS_OOTB?: boolean;
+    IS_WIFI_SLIDE?: boolean;
   }
 }
 
@@ -55,6 +56,7 @@ export async function invoke<T = any>(cmd: string, args: Record<string, any> = {
   if (cmd === "get_system_mode") return "Normal" as any;
   if (cmd === "get_resolutions") return [] as any;
   if (cmd === "get_effects_state") return false as any;
+  if (cmd === "wifi_slide_enabled") return (window.IS_WIFI_SLIDE ?? false) as any;
   if (cmd === "check_adb_devices") return "" as any;
   if (cmd === "scan_wifi_networks") return [] as any;
   if (cmd === "connect_to_wifi") return false as any;
@@ -134,6 +136,10 @@ export function launchBluetoothSettings(): Promise<void> {
 
 export function getEffectsState(): Promise<boolean> {
   return invoke("get_effects_state");
+}
+
+export function wifiSlideEnabled(): Promise<boolean> {
+  return invoke("wifi_slide_enabled");
 }
 
 export function setEffects(useLiquidGlass: boolean): Promise<void> {

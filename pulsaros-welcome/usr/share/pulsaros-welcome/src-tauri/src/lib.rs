@@ -75,6 +75,7 @@ pub fn run() {
             commands::core::is_arch_system,
             commands::core::check_sentinel,
             commands::core::is_ootb_pending,
+            commands::core::wifi_slide_enabled,
             commands::core::write_sentinel,
             commands::core::close,
             commands::resolution::get_resolutions,
