@@ -311,7 +311,7 @@ pub(crate) fn build_ui(app: &Application) {
     ver_header_row.append(&btn_refresh_versions);
     version_box.append(&ver_header_row);
 
-    let ver_str = manifest_rc.borrow().latest_version.clone();
+    let ver_str = manifest_rc.borrow().latest_version();
     let version_entries = [ver_str.as_str()];
     let version_list = StringList::new(&version_entries);
     let combo_version = DropDown::new(Some(version_list), gtk4::Expression::NONE);
@@ -401,13 +401,8 @@ pub(crate) fn build_ui(app: &Application) {
                     Ok(manifest) => {
                         *manifest_rc_inner.borrow_mut() = manifest.clone();
                         
-                        // Collect all available versions sorted newest first
-                        let mut versions: Vec<String> = manifest.versions.keys().cloned().collect();
-                        versions.sort();
-                        versions.reverse();
-                        if !versions.contains(&manifest.latest_version) && !manifest.latest_version.is_empty() {
-                            versions.insert(0, manifest.latest_version.clone());
-                        }
+                        // Collect all available versions newest first
+                        let versions: Vec<String> = manifest.available_versions();
                         
                         let ver_ptrs: Vec<&str> = versions.iter().map(|s| s.as_str()).collect();
                         let version_list = StringList::new(&ver_ptrs);
@@ -1582,16 +1577,12 @@ pub(crate) fn build_ui(app: &Application) {
             .selected_item()
             .and_then(|item| item.downcast::<gtk4::StringObject>().ok())
             .map(|s| s.string().to_string())
-            .unwrap_or_else(|| m_data.latest_version.clone());
+            .unwrap_or_else(|| m_data.latest_version());
         let mirror_id = m_data.mirrors.get(combo_mirror.selected() as usize)
             .map(|m| m.id.clone())
             .unwrap_or_else(|| "auto".to_string());
 
-        let target_info = m_data.versions
-            .get(&ver)
-            .and_then(|b_map| b_map.get(sel_base))
-            .and_then(|bt_map| bt_map.get(sel_boot))
-            .cloned();
+        let target_info = m_data.image_for(&ver, sel_base, sel_boot);
 
         let mut download_url = target_info.as_ref()
             .map(|t| t.squashfs.clone())

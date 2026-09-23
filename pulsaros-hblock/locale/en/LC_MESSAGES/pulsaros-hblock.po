@@ -5,7 +5,7 @@ msgstr ""
 "Project-Id-Version: pulsaros-hblock 1.0.1\n"
 "Report-Msgid-Bugs-To: info@inled.es\n"
 "POT-Creation-Date: 2026-09-22 12:00+0000\n"
-"PO-Revision-Date: 2026-09-22 12:00+0000\n"
+"PO-Revision-Date: 2026-09-23 12:00+0000\n"
 "Last-Translator: Jaime <info@inled.es>\n"
 "Language-Team: English\n"
 "Language: en\n"
@@ -16,6 +16,9 @@ msgstr ""
 
 msgid "HBlock"
 msgstr "HBlock"
+
+msgid "Ad Block"
+msgstr "Ad Block"
 
 msgid "Bloqueo de anuncios y rastreadores"
 msgstr "Ads & trackers blocking"
@@ -70,3 +73,18 @@ msgstr "Blocklist updated successfully."
 
 msgid "No se pudo actualizar la lista: {msg}"
 msgstr "Could not update the blocklist: {msg}"
+
+msgid "No estás bloqueando"
+msgstr "You are not blocking"
+
+msgid "Estás protegido"
+msgstr "You are protected"
+
+msgid "Toca para protegerte"
+msgstr "Tap to protect yourself"
+
+msgid "Toca para desactivar"
+msgstr "Tap to disable"
+
+msgid "Listo."
+msgstr "Ready."

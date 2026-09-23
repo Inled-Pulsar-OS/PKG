@@ -1,6 +1,6 @@
 [Desktop Entry]
-Name=Pulsar HBlock
-Name[es]=Pulsar HBlock
+Name=Ad Block
+Name[es]=Ad Block
 Comment=Enable or disable hblock ad and tracker blocking
 Comment[es]=Activa o desactiva el bloqueo de anuncios y rastreadores de hblock
 Exec=/usr/bin/pulsaros-hblock
