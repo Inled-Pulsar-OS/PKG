@@ -3012,7 +3012,16 @@ export default class PulsarosGlobalMenuExtension extends Extension {
                 console.error("[GlobalMenu] Failed to read os-release:", e);
             }
 
-            // Check /etc/pulsar-version if present
+            // Distro base detection (Debian vs Arch)
+            let isDebian = (distroBase === "debian") ||
+                           GLib.file_test("/etc/debian_version", GLib.FileTest.EXISTS) ||
+                           GLib.file_test("/usr/bin/dpkg", GLib.FileTest.EXISTS);
+
+            // Display official Pulsar OS Bitten Fruit branding
+            osName = "Pulsar OS Bitten Fruit";
+            osVersion = isDebian ? "1.2-bittenfruit-debian" : "1.2-bittenfruit-arch";
+
+            // Check /etc/pulsar-version if present for explicit override
             try {
                 let [okVer, pver] = GLib.file_get_contents("/etc/pulsar-version");
                 if (okVer) {
@@ -3022,20 +3031,6 @@ export default class PulsarosGlobalMenuExtension extends Extension {
                     }
                 }
             } catch (e) {}
-
-            // Clean up osName: display clean "Pulsar OS" branding
-            if (/Pulsar OS/i.test(osName)) {
-                osName = "Pulsar OS";
-            }
-
-            // Clean up osVersion: strip verbose prefixes
-            if (osVersion) {
-                osVersion = osVersion.replace(/^Bitten Fruit (?:Arch|Debian)?\s*Based\s*/i, '').trim();
-            }
-
-            if (!osVersion || /rolling/i.test(osVersion)) {
-                osVersion = "1.1-unstable";
-            }
 
             let dialog = new AboutDialog(osName, osVersion, hostName, cpuModel, memTotal, gpuModel, diskInfo);
             dialog.open();

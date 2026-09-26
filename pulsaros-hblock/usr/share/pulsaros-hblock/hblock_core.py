@@ -120,7 +120,7 @@ def run_action(action):
             ["pkexec", HELPER, action],
             capture_output=True,
             text=True,
-            timeout=600,
+            timeout=10,
         )
         out = (proc.stdout or "").strip()
         if proc.returncode == 0:

@@ -98,14 +98,10 @@ class SayriIndicator:
         self.toggle_item.connect("activate", self._on_toggle_sayri)
         self.menu.append(self.toggle_item)
 
-        self.settings_item = Gtk.MenuItem(label="Ajustes")
-        self.settings_item.connect("activate", self._on_open_settings)
-        self.menu.append(self.settings_item)
-
         sep = Gtk.SeparatorMenuItem()
         self.menu.append(sep)
 
-        self.quit_item = Gtk.MenuItem(label="Salir")
+        self.quit_item = Gtk.MenuItem(label="Exit")
         self.quit_item.connect("activate", self._on_quit)
         self.menu.append(self.quit_item)
 
@@ -122,6 +118,10 @@ class SayriIndicator:
             self.indicator.set_title("Sayri")
             self.indicator.set_menu(self.menu)
             self.indicator.set_secondary_activate_target(self.toggle_item)
+            try:
+                self.indicator.connect("activate", lambda _i, _x, _y: self._on_toggle_sayri())
+            except Exception:
+                pass
         else:
             self.status_icon = Gtk.StatusIcon.new_from_icon_name("sayri-tray")
             self.status_icon.set_tooltip_text("Sayri Voice Assistant")

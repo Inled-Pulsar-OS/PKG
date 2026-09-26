@@ -1375,6 +1375,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         else:
             prefix = [] if os.geteuid() == 0 else ["pkexec"]
 
+        flatpak_ok = False
         try:
             log_msg("Configuring Flathub repository...")
             GLib.idle_add(self.update_progress, 0.90, "Setting up Flathub for ONLYOFFICE...")
@@ -1392,6 +1393,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 log_msg(f"WARNING: ONLYOFFICE flatpak install returned {res.returncode}: {res.stderr.strip()}")
             else:
                 log_msg("ONLYOFFICE Desktop Editors installed successfully via Flathub.")
+                flatpak_ok = True
         except Exception as e:
             log_msg(f"WARNING: could not install ONLYOFFICE from Flathub: {e}")
         finally:
@@ -1400,6 +1402,69 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     subprocess.run(["umount", "-l", tgt], capture_output=True)
                 except Exception:
                     pass
+
+        # If Flatpak succeeded, we are done
+        if flatpak_ok:
+            return
+
+        # ── Debian native fallback (APT repository & standalone .deb) ──
+        is_debian = False
+        if chroot_target:
+            is_debian = os.path.exists(f"{chroot_target}/etc/debian_version")
+        else:
+            is_debian = os.path.exists("/etc/debian_version")
+
+        if is_debian:
+            log_msg("Debian detected: attempting ONLYOFFICE installation via official APT repository...")
+            GLib.idle_add(self.update_progress, 0.91, "Configuring ONLYOFFICE APT repository...")
+            apt_pref = ["chroot", chroot_target, "apt-get"] if chroot_target else ([] if os.geteuid() == 0 else ["pkexec", "apt-get"])
+            try:
+                repo_dir = f"{chroot_target}/etc/apt/sources.list.d" if chroot_target else "/etc/apt/sources.list.d"
+                os.makedirs(repo_dir, exist_ok=True)
+                repo_file = os.path.join(repo_dir, "onlyoffice.list")
+                with open(repo_file, "w") as rf:
+                    rf.write("deb [trusted=yes] https://download.onlyoffice.com/repo/debian squeeze main\n")
+
+                subprocess.run(apt_pref + ["update"], capture_output=True, timeout=120)
+                GLib.idle_add(self.update_progress, 0.92, "Installing ONLYOFFICE via APT...")
+                res_apt = subprocess.run(
+                    apt_pref + ["install", "-y", "--no-install-recommends", "onlyoffice-desktopeditors"],
+                    capture_output=True, text=True, timeout=900,
+                )
+                if res_apt.returncode == 0:
+                    log_msg("ONLYOFFICE Desktop Editors installed successfully via APT.")
+                    return
+                else:
+                    log_msg(f"Notice: APT onlyoffice-desktopeditors returned {res_apt.returncode}: {res_apt.stderr.strip()[:200]}")
+            except Exception as apt_err:
+                log_msg(f"Notice: APT repo for ONLYOFFICE failed: {apt_err}")
+
+            # Fallback: direct deb download
+            try:
+                import urllib.request
+                log_msg("Attempting ONLYOFFICE installation via standalone .deb...")
+                GLib.idle_add(self.update_progress, 0.91, "Downloading ONLYOFFICE .deb...")
+                deb_host = f"{chroot_target}/tmp/onlyoffice-desktopeditors_amd64.deb" if chroot_target else "/tmp/onlyoffice-desktopeditors_amd64.deb"
+                deb_in_chroot = "/tmp/onlyoffice-desktopeditors_amd64.deb"
+                deb_url = "https://download.onlyoffice.com/install/desktop/editors/linux/onlyoffice-desktopeditors_amd64.deb"
+                urllib.request.urlretrieve(deb_url, deb_host)
+                if os.path.isfile(deb_host) and os.path.getsize(deb_host) > 1000000:
+                    GLib.idle_add(self.update_progress, 0.92, "Installing ONLYOFFICE .deb...")
+                    res_deb = subprocess.run(
+                        apt_pref + ["install", "-y", "./" + deb_in_chroot],
+                        capture_output=True, text=True, timeout=900,
+                    )
+                    if res_deb.returncode == 0:
+                        log_msg("ONLYOFFICE Desktop Editors installed successfully from .deb.")
+                        try:
+                            os.remove(deb_host)
+                        except Exception:
+                            pass
+                        return
+                    else:
+                        log_msg(f"WARNING: ONLYOFFICE standalone deb install returned {res_deb.returncode}: {res_deb.stderr.strip()[:200]}")
+            except Exception as deb_err:
+                log_msg(f"WARNING: could not install ONLYOFFICE standalone deb: {deb_err}")
 
     def _install_localsend_debian(self, log_msg, apt_prefix, deb_install_path, deb_host_path=None):
         """Install LocalSend from its official x86-64 .deb (best-effort).
@@ -1942,13 +2007,18 @@ class RecoveryWindow(Adw.ApplicationWindow):
         title.set_markup("<span font_weight='bold' size='17000'>Installation Options</span>")
         box.append(title)
 
-        subtitle = Gtk.Label(label="Choose additional software and drivers for your setup.")
+        subtitle = Gtk.Label()
+        subtitle.set_markup("<span foreground='#3584e4' font_weight='bold'>Highly recommended:</span> Select all options to enjoy the complete Pulsar OS experience.")
         subtitle.add_css_class("progress-text")
+        subtitle.set_wrap(True)
+        subtitle.set_max_width_chars(45)
+        subtitle.set_justify(Gtk.Justification.CENTER)
         box.append(subtitle)
 
         # Options group container
         opt_group = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         opt_group.add_css_class("options-group")
+        opt_group.set_size_request(440, -1)
 
         # Row 1: Broadcom / Hardware drivers
         row_broadcom = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
@@ -1956,18 +2026,23 @@ class RecoveryWindow(Adw.ApplicationWindow):
         
         txt_b = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         txt_b.set_hexpand(True)
-        lbl_b_title = Gtk.Label(label="Additional Wi-Fi & Hardware Drivers")
+        lbl_b_title = Gtk.Label()
+        lbl_b_title.set_markup("<b>Additional Wi-Fi &amp; Hardware Drivers</b> <span foreground='#2ec27e' size='smaller'>● Highly Recommended</span>")
         lbl_b_title.add_css_class("option-title")
         lbl_b_title.set_halign(Gtk.Align.START)
+        lbl_b_title.set_wrap(True)
+        lbl_b_title.set_max_width_chars(42)
         txt_b.append(lbl_b_title)
-        lbl_b_desc = Gtk.Label(label="Recommended for Broadcom and specialized wireless chips.")
+        lbl_b_desc = Gtk.Label(label="Ensures maximum hardware compatibility, including Broadcom Wi-Fi and specialized wireless chipsets.")
         lbl_b_desc.add_css_class("option-desc")
         lbl_b_desc.set_halign(Gtk.Align.START)
         lbl_b_desc.set_wrap(True)
+        lbl_b_desc.set_max_width_chars(42)
         txt_b.append(lbl_b_desc)
         row_broadcom.append(txt_b)
 
         self.chk_broadcom = Gtk.CheckButton()
+        self.chk_broadcom.set_active(True)
         self.chk_broadcom.set_valign(Gtk.Align.CENTER)
         row_broadcom.append(self.chk_broadcom)
         opt_group.append(row_broadcom)
@@ -1982,14 +2057,18 @@ class RecoveryWindow(Adw.ApplicationWindow):
         
         txt_e = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         txt_e.set_hexpand(True)
-        lbl_e_title = Gtk.Label(label="Extended Applications & Media Suite")
+        lbl_e_title = Gtk.Label()
+        lbl_e_title.set_markup("<b>Extended Applications &amp; Media Suite</b> <span foreground='#2ec27e' size='smaller'>● Highly Recommended</span>")
         lbl_e_title.add_css_class("option-title")
         lbl_e_title.set_halign(Gtk.Align.START)
+        lbl_e_title.set_wrap(True)
+        lbl_e_title.set_max_width_chars(42)
         txt_e.append(lbl_e_title)
-        lbl_e_desc = Gtk.Label(label="Includes full multimedia tools, office utilities, and drivers.")
+        lbl_e_desc = Gtk.Label(label="Installs ONLYOFFICE Desktop Editors, LocalSend, multimedia codecs, tools, and drivers for the full out-of-the-box experience.")
         lbl_e_desc.add_css_class("option-desc")
         lbl_e_desc.set_halign(Gtk.Align.START)
         lbl_e_desc.set_wrap(True)
+        lbl_e_desc.set_max_width_chars(42)
         txt_e.append(lbl_e_desc)
         row_extra.append(txt_e)
 
@@ -2009,14 +2088,18 @@ class RecoveryWindow(Adw.ApplicationWindow):
         
         txt_h = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         txt_h.set_hexpand(True)
-        lbl_h_title = Gtk.Label(label="Hibernation & Session Restore (RAM Snapshot)")
+        lbl_h_title = Gtk.Label()
+        lbl_h_title.set_markup("<b>Hibernation &amp; Session Restore (RAM Snapshot)</b> <span foreground='#2ec27e' size='smaller'>● Highly Recommended</span>")
         lbl_h_title.add_css_class("option-title")
         lbl_h_title.set_halign(Gtk.Align.START)
+        lbl_h_title.set_wrap(True)
+        lbl_h_title.set_max_width_chars(42)
         txt_h.append(lbl_h_title)
-        lbl_h_desc = Gtk.Label(label="Creates a dedicated swapfile matched to your RAM size to save and restore open sessions.")
+        lbl_h_desc = Gtk.Label(label="Creates a dedicated swapfile matched to your RAM size to save and instantly resume all open windows and apps.")
         lbl_h_desc.add_css_class("option-desc")
         lbl_h_desc.set_halign(Gtk.Align.START)
         lbl_h_desc.set_wrap(True)
+        lbl_h_desc.set_max_width_chars(42)
         txt_h.append(lbl_h_desc)
         row_hibernation.append(txt_h)
 
@@ -2063,9 +2146,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.stack.add_named(box, "install_options")
 
     def _show_options_screen(self):
-        # Auto-detect Broadcom hardware
-        has_broadcom = self._detect_broadcom()
-        self.chk_broadcom.set_active(has_broadcom)
+        # Auto-detect Broadcom hardware (pre-selected by default as recommended)
+        self.chk_broadcom.set_active(True)
 
         # Check UEFI on GRUB ISO
         self.uefi_notice_box.set_visible(self._is_uefi_grub_incompatible())
@@ -3015,6 +3097,27 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     except Exception:
                         pass
                 
+            def mount_vfs():
+                if "TEST_MODE" not in os.environ:
+                    for p in ("/mnt/dev", "/mnt/dev/pts", "/mnt/proc", "/mnt/sys", "/mnt/run", "/mnt/etc"):
+                        os.makedirs(p, exist_ok=True)
+                    if not os.path.ismount("/mnt/dev"):
+                        exec_cmd(["mount", "--bind", "/dev", "/mnt/dev"])
+                    if not os.path.ismount("/mnt/dev/pts"):
+                        exec_cmd(["mount", "-t", "devpts", "devpts", "/mnt/dev/pts"])
+                    if not os.path.ismount("/mnt/proc"):
+                        exec_cmd(["mount", "--bind", "/proc", "/mnt/proc"])
+                    if not os.path.ismount("/mnt/sys"):
+                        exec_cmd(["mount", "--rbind", "/sys", "/mnt/sys"])
+                        exec_cmd(["mount", "--make-rslave", "/mnt/sys"])
+                    if os.path.exists("/sys/firmware/efi/efivars") and not os.path.ismount("/mnt/sys/firmware/efi/efivars"):
+                        os.makedirs("/mnt/sys/firmware/efi/efivars", exist_ok=True)
+                        subprocess.run(["mount", "-t", "efivarfs", "efivarfs", "/mnt/sys/firmware/efi/efivars"], capture_output=True)
+                    if not os.path.ismount("/mnt/run"):
+                        exec_cmd(["mount", "-t", "tmpfs", "tmpfs", "/mnt/run"])
+                    if not os.path.ismount("/mnt/etc/resolv.conf"):
+                        exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
+
             is_efi = os.path.exists("/sys/firmware/efi")
             is_arch = os.path.exists("/etc/pacman.conf")
             esp_root = "/mnt/boot/efi"
@@ -3256,7 +3359,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     "--exclude=/live/*",
                     "/", "/mnt"
                 ]
-                proc = subprocess.Popen(rsync_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
+                proc = subprocess.Popen(rsync_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
                 buffer = ""
                 while True:
                     char = proc.stdout.read(1)
@@ -3281,8 +3384,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 proc.wait()
                 # Exit code 24 = vanished source files during transfer (normal for running live system)
                 if proc.returncode not in (0, 24):
-                    err_output = proc.stderr.read()
-                    raise Exception(f"System replication failed (code {proc.returncode})\n{err_output}")
+                    raise Exception(f"System replication failed (code {proc.returncode})")
 
                 # ── Remove live-only systemd state copied by the rsync ──────────
                 # The live session masks plymouth-quit(.wait) via
@@ -3335,6 +3437,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             # trimmed one shipped on the ISO).
             extra_packages_installed = False
             if "TEST_MODE" not in os.environ:
+                mount_vfs()
                 # Detect whether this came from a minimal build by checking for a marker
                 minimal_marker = "/mnt/etc/pulsaros-minimal-build"
                 is_minimal = os.path.exists(minimal_marker)
@@ -3350,7 +3453,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         GLib.idle_add(self.update_progress, 0.80, "Installing extra packages (Docker, firmware, drivers, apps)...")
                         log_msg("Post-install: installing extra packages and ONLYOFFICE...")
                         try:
-                            exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
                             # Every package removed from base-arch.list when building
                             # base-arch-minimal.list, grouped for readability.
                             extra_packages = [
@@ -3481,8 +3583,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             self._install_onlyoffice_flatpak(log_msg, chroot_target="/mnt")
                         except Exception as post_err:
                             log_msg(f"Post-install package installation: {post_err}")
-                        finally:
-                            subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"], capture_output=True)
 
                 else:
                     # ── Debian: install via apt from Debian + Inled repositories ──
@@ -3490,7 +3590,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         GLib.idle_add(self.update_progress, 0.80, "Installing extra packages (Docker, firmware, drivers, apps)...")
                         log_msg("Post-install: installing packages removed from minimal ISO via apt...")
                         try:
-                            exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
                             extra_packages = [
                                 "docker.io",
                                 "firmware-linux",
@@ -3587,8 +3686,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             self._install_onlyoffice_flatpak(log_msg, chroot_target="/mnt")
                         except Exception as post_err:
                             log_msg(f"Post-install apt installation: {post_err}")
-                        finally:
-                            subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"], capture_output=True)
 
                 # Remove the marker so extra packages are not re-installed on reboot.
                 try:
@@ -4201,6 +4298,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 grub_params = {
                     "GRUB_DISTRIBUTOR": '"Pulsar OS"',
                     "GRUB_DISABLE_OS_PROBER": "false",
+                    "GRUB_DISABLE_RECOVERY": "true",
                     "GRUB_TIMEOUT": "5",
                     "GRUB_TIMEOUT_STYLE": "menu",
                     "GRUB_GFXMODE": '"1920x1080,1280x720,1024x768,auto"',
@@ -4245,6 +4343,11 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
     insmod ext2
     insmod part_gpt
     insmod part_msdos
+    insmod search
+    insmod search_label
+    insmod search_fs_uuid
+    insmod search_fs_file
+    insmod test
     insmod all_video
 
     set rec_found=0
@@ -4373,17 +4476,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                                 pass
 
             GLib.idle_add(self.update_progress, 0.90, "Installing bootloader...")
-            exec_cmd(["mount", "--bind", "/dev", "/mnt/dev"])
-            if "TEST_MODE" not in os.environ:
-                os.makedirs("/mnt/dev/pts", exist_ok=True)
-            exec_cmd(["mount", "-t", "devpts", "devpts", "/mnt/dev/pts"])
-            exec_cmd(["mount", "--bind", "/proc", "/mnt/proc"])
-            exec_cmd(["mount", "--rbind", "/sys", "/mnt/sys"])
-            exec_cmd(["mount", "--make-rslave", "/mnt/sys"])
-            if os.path.exists("/sys/firmware/efi/efivars"):
-                os.makedirs("/mnt/sys/firmware/efi/efivars", exist_ok=True)
-                subprocess.run(["mount", "-t", "efivarfs", "efivarfs", "/mnt/sys/firmware/efi/efivars"], capture_output=True)
-            exec_cmd(["mount", "-t", "tmpfs", "tmpfs", "/mnt/run"])
+            mount_vfs()
 
             if is_efi:
                 os.makedirs("/mnt/boot/efi", exist_ok=True)
@@ -4458,7 +4551,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                             "amd-ucode.img",
                             "refind_linux.conf",
                         )
-                        if "TEST_MODE" not in os.environ:
+                        if "TEST_MODE" not in os.environ and self.install_mode == "erase":
                             for rel in stale_dirs:
                                 subprocess.run(
                                     ["rm", "-rf", f"{esp_root}/{rel}"],
@@ -4510,10 +4603,11 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                         if refind_share:
                             if "TEST_MODE" not in os.environ:
                                 os.makedirs(f"{esp_root}/EFI/BOOT", exist_ok=True)
-                                subprocess.run(
-                                    ["cp", refind_share, f"{esp_root}/EFI/BOOT/BOOTX64.EFI"],
-                                    capture_output=True,
-                                )
+                                if self.install_mode == "erase" or not os.path.exists(f"{esp_root}/EFI/BOOT/BOOTX64.EFI"):
+                                    subprocess.run(
+                                        ["cp", refind_share, f"{esp_root}/EFI/BOOT/BOOTX64.EFI"],
+                                        capture_output=True,
+                                    )
 
                         refind_root = f"{esp_root}/EFI/refind"
                         boot_fb = f"{esp_root}/EFI/BOOT"
@@ -4860,8 +4954,6 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                 # kill Wi-Fi, so the STA install path is skipped entirely.
                 print("Apple hardware detected — skipping Broadcom STA driver to keep brcmfmac Wi-Fi working.")
             if self.install_broadcom and not self._is_apple_hardware():
-                # Bind network-related paths so package manager can reach the internet if available
-                exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
                 policy_file = "/mnt/usr/sbin/policy-rc.d"
                 try:
                     # Check network connectivity
@@ -4960,8 +5052,6 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                                     pass
                 except Exception as drv_err:
                     print(f"Notice: Driver configuration step completed: {drv_err}")
-                finally:
-                    subprocess.run(["umount", "-l", "/mnt/etc/resolv.conf"])
 
             # ──────────────────────────────────────────────────────────
             

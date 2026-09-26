@@ -21,11 +21,12 @@ export function SliceCard({ slide, idx, index, prev, next }: SliceCardProps) {
       <h2 className="text-center text-[30px] font-semibold leading-tight text-text-primary sm:text-[36px]">
         {slide.title}
       </h2>
-      <p className="mt-3 max-w-2xl text-center text-[15px] leading-relaxed text-text-secondary sm:text-[17px]">
+      <p className="mt-2 max-w-2xl text-center text-[15px] leading-relaxed text-text-secondary sm:text-[17px]">
         {slide.subtitle}
       </p>
 
       <div className="relative mt-8 w-full max-w-3xl">
+        {slide.id === "adblock" && <AdblockSlice />}
         {slide.providers && <PictureSlice slide={slide} />}
         {slide.video && <AnimatedSlice src={slide.video} />}
         <button
@@ -80,6 +81,19 @@ function PictureSlice({ slide }: { slide: FeatureSlide }) {
           </span>
         </div>
       ))}
+    </div>
+  );
+}
+
+function AdblockSlice() {
+  return (
+    <div className="flex w-full min-h-[220px] items-center justify-center py-6">
+      <img
+        src="./logos/pulsaros-hblock.svg"
+        alt="Pulsar Adblock"
+        className="h-32 w-32 object-contain drop-shadow-xl animate-pulse"
+        draggable={false}
+      />
     </div>
   );
 }

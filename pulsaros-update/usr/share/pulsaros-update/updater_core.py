@@ -362,7 +362,6 @@ class UpdateCore:
             "pulsaros-control-center-button",
             "pulsaros-circle-to-search",
             "pulsaros-live-wallpaper",
-            "pulsaros-effects-settings",
             "pulsaros-recovery",
             "pulsaros-hibernate",
             "pulsaros-bootsound",

@@ -41,6 +41,11 @@ const CAROUSEL_DATA = [
     title: "Session Restore & Live Wallpaper",
     subtitle: "Pick up right where you left off with intelligent workspace restoration and dynamic interactive backgrounds.",
     video: "../public/videos/remap-live-wallpaper.mp4",
+  },
+  {
+    title: "System-wide Adblocker",
+    subtitle: "Native DNS-level protection against ads, trackers, and malicious domains across all apps and browsers. Can be enabled or disabled at any time from System Settings.",
+    adblock: true
   }
 ];
 
@@ -144,6 +149,14 @@ function renderCarouselSlide() {
     body.innerHTML = `
       <div class="slide-video-box">
         <video src="${data.video}" autoplay muted loop playsinline></video>
+        <button class="carousel-nav-btn carousel-nav-prev" onclick="prevCarouselSlide()">&#10094;</button>
+        <button class="carousel-nav-btn carousel-nav-next" onclick="nextCarouselSlide()">&#10095;</button>
+      </div>
+    `;
+  } else if (data.adblock) {
+    body.innerHTML = `
+      <div style="position: relative; width: 100%; max-width: 620px; min-height: 240px; display: flex; align-items: center; justify-content: center;">
+        <img src="../public/logos/pulsaros-hblock.svg" style="height: 120px; width: 120px; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.15));" alt="HBlock" class="pulse-anim">
         <button class="carousel-nav-btn carousel-nav-prev" onclick="prevCarouselSlide()">&#10094;</button>
         <button class="carousel-nav-btn carousel-nav-next" onclick="nextCarouselSlide()">&#10095;</button>
       </div>

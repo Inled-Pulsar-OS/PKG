@@ -28,8 +28,14 @@ const ALL_STEPS: WelcomeScreen[] = [
  * read by the Python/WebKitGTK backend (welcome.py) and exposed through the
  * `wifi_slide_enabled` command on the Tauri backend.
  */
-function buildBaseFlow(wifiEnabled: boolean): WelcomeScreen[] {
-  return wifiEnabled ? ALL_STEPS : ALL_STEPS.filter((s) => s !== "wifi");
+function buildFlow(wifiEnabled: boolean, isLive: boolean): WelcomeScreen[] {
+  const steps = wifiEnabled ? ALL_STEPS : ALL_STEPS.filter((s) => s !== "wifi");
+  const flow = [...steps];
+  if (isLive) {
+    flow.push("recovery");
+  }
+  flow.push("done");
+  return flow;
 }
 
 export function useWelcome() {
@@ -81,26 +87,26 @@ export function useWelcome() {
   }, [ootbPending]);
 
   const goNext = useCallback(() => {
-    const flow = buildBaseFlow(wifiSlide);
     setScreen((prev) => {
+      const flow = buildFlow(wifiSlide, isLive);
       const idx = flow.indexOf(prev);
       if (idx !== -1 && idx < flow.length - 1) {
         return flow[idx + 1];
       }
-      if (prev === "sayri") return isLive ? "recovery" : "done";
-      if (prev === "recovery") return "done";
       return "done";
     });
   }, [isLive, wifiSlide]);
 
   const goBack = useCallback(() => {
-    const flow = buildBaseFlow(wifiSlide);
     setScreen((prev) => {
+      const flow = buildFlow(wifiSlide, isLive);
       const idx = flow.indexOf(prev);
-      if (idx > 0) return flow[idx - 1];
+      if (idx > 0) {
+        return flow[idx - 1];
+      }
       return prev;
     });
-  }, [wifiSlide]);
+  }, [isLive, wifiSlide]);
 
   const goTo = useCallback((s: WelcomeScreen) => setScreen(s), []);
 

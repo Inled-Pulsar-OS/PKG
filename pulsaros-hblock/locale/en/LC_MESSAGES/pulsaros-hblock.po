@@ -77,6 +77,12 @@ msgstr "Could not update the blocklist: {msg}"
 msgid "No estás bloqueando"
 msgstr "You are not blocking"
 
+msgid "NO ESTÁS PROTEGIDO"
+msgstr "NOT PROTECTED"
+
+msgid "PROTEGIDO"
+msgstr "PROTECTED"
+
 msgid "Estás protegido"
 msgstr "You are protected"
 

@@ -345,6 +345,11 @@ build_single_package() {
         find "$STAGING_DIR/$name/etc/polkit-1" -type f -exec chmod 0644 {} \;
     fi
     
+    # Asegurar que DEBIAN/control termina con salto de línea (requerido por dpkg-deb)
+    if [ -f "$STAGING_DIR/$name/DEBIAN/control" ]; then
+        sed -i -e '$a\' "$STAGING_DIR/$name/DEBIAN/control" 2>/dev/null || true
+    fi
+
     # Ejecutar dpkg-deb
     local deb_file=""
     echo "🔨 Ejecutando dpkg-deb..."

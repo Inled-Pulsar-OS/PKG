@@ -1,5 +1,5 @@
 Package: pulsaros-sddm
-Version: 1.0.118-unstable
+Version: 1.0.119
 Section: x11
 Priority: optional
 Architecture: all

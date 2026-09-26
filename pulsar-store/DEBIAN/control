@@ -1,5 +1,5 @@
 Package: pulsar-store
-Version: 1.0.17
+Version: 1.0.18
 Section: utils
 Priority: optional
 Architecture: all

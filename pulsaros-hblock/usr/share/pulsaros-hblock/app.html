@@ -5,220 +5,30 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ad Block</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-
-:root {
-  --bg: #0f0f14;
-  --surface: #16161e;
-  --surface-2: #1b1b24;
-  --red: #e0242e;
-  --red-glow: rgba(224,36,46,0.25);
-  --green: #1e9d4a;
-  --green-glow: rgba(30,157,74,0.25);
-  --text: #f3f3f6;
-  --text-dim: #8e8e99;
-  --border: rgba(255,255,255,0.06);
-}
-
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: 'Inter', system-ui, sans-serif;
-  background: linear-gradient(160deg, #0f0f14 60%, #12121a 100%);
-  color: var(--text);
-  min-height: 100vh;
-  display: flex; align-items: center; justify-content: center;
-  padding: 24px;
-  -webkit-user-select: none; user-select: none;
-}
-
-.container { max-width: 520px; width: 100%; text-align: center; }
-
-/* Big central button */
-.toggle-btn {
-  width: 240px; height: 240px; border-radius: 50%;
-  border: 0; outline: none; cursor: pointer;
-  position: relative; margin: 0 auto 28px;
-  display: flex; align-items: center; justify-content: center;
-  flex-direction: column; gap: 4px;
-  box-shadow: 0 0 0 8px rgba(255,255,255,0.06), 0 20px 60px rgba(0,0,0,0.6);
-  transition: transform .18s ease, box-shadow .35s ease, background .35s ease;
-}
-.toggle-btn:hover { transform: scale(1.03); }
-.toggle-btn:active { transform: scale(0.98); }
-
-.toggle-btn.red {
-  background: radial-gradient(circle at 35% 30%, #ff3a3a 0%, #e0242e 70%, #a01518 100%);
-  box-shadow: 0 0 0 8px rgba(255,255,255,0.06), 0 0 60px var(--red-glow);
-}
-.toggle-btn.green {
-  background: radial-gradient(circle at 35% 30%, #22e273 0%, #1e9d4a 70%, #147a35 100%);
-  box-shadow: 0 0 0 8px rgba(255,255,255,0.06), 0 0 60px var(--green-glow);
-}
-
-.toggle-btn .icon-ring {
-  width: 80px; height: 80px; border-radius: 50%;
-  background: rgba(255,255,255,0.12); backdrop-filter: blur(6px);
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: inset 0 2px 6px rgba(255,255,255,0.15), 0 4px 14px rgba(0,0,0,0.45);
-}
-.toggle-btn .icon-ring svg { width: 36px; height: 36px; fill: none; stroke: #fff; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
-
-.toggle-btn .label-main { font-size: 1.05rem; font-weight: 900; letter-spacing: .01em; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
-.toggle-btn .label-sub { font-size: .78rem; font-weight: 600; color: rgba(255,255,255,.85); }
-
-/* Status subtitle */
-.subtitle { color: var(--text-dim); font-size: .9rem; margin-top: -8px; margin-bottom: 12px; }
-.subtitle strong { color: var(--text); }
-
-/* Stats cards */
-.stats-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-  margin-bottom: 14px;
-}
-.stat-card {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: 16px; padding: 14px 10px; text-align: center;
-}
-.stat-card .num {
-  font-size: 1.35rem; font-weight: 900; color: var(--text);
-  letter-spacing: -.02em; line-height: 1;
-}
-.stat-card .label {
-  font-size: .72rem; color: var(--text-dim); font-weight: 600; margin-top: 6px; letter-spacing: .02em; text-transform: uppercase;
-}
-
-.details-row {
-  display: flex; justify-content: space-between; align-items: center;
-  background: var(--surface-2); border: 1px solid var(--border);
-  border-radius: 12px; padding: 10px 14px; margin-bottom: 6px; font-size: .82rem;
-}
-.details-row span:first-child { color: var(--text-dim); font-weight: 600; }
-.details-row span:last-child { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
-
-/* Action row */
-.actions { display: flex; gap: 10px; justify-content: center; }
-.actions button {
-  padding: 10px 18px; border-radius: 28px; border: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
-  color: var(--text); font-weight: 700; font-size: .8rem; cursor: pointer;
-  border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 2px 12px rgba(0,0,0,.35);
-  transition: background .2s, transform .15s;
-}
-.actions button:hover { background: linear-gradient(135deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)); transform: translateY(-1px); }
-.actions button:active { transform: translateY(0); }
-.actions button.green { background: linear-gradient(135deg, #22e273, #1e9d4a); border-color: rgba(30,157,74,.4); color: #fff; }
-.actions button.green:hover { background: linear-gradient(135deg, #2af07f, #22c95e); }
-
-/* Footer hint */
-.hint {
-  margin-top: 18px; font-size: .72rem; color: var(--text-dim); line-height: 1.45;
-}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;font-family:system-ui,sans-serif;height:100vh;display:flex;align-items:center;justify-content:center}
+#b{width:280px;height:280px;border-radius:50%;border:none;color:#fff;font-weight:900;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.1;transition:background .35s ease,transform .15s ease;font-size:1.6rem;letter-spacing:-.02em;box-shadow:0 10px 30px rgba(0,0,0,.12)}
+#b.red{background:#ff0000}
+#b.green{background:#00cc00}
+#b:active{transform:scale(.96)}
+#n{font-size:0.85rem;font-weight:700;opacity:.9;margin-top:4px}
 </style>
 </head>
 <body>
-<div class="container">
-  <div id="busyOverlay" style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:10;">
-    <div style="width:40px;height:40px;border:4px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
-  </div>
-  <h1 style="font-size:1.7rem;font-weight:900;letter-spacing:-.03em;margin-bottom:6px;">Ad Block</h1>
-  <p class="subtitle" id="subtitle">Cargando estado…</p>
-
-  <button class="toggle-btn red" id="toggleBtn" onclick="onToggle()" aria-label="Activar bloqueo" title="Haz clic para activar/desactivar">
-    <div class="icon-ring" id="iconRing">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A4 4 0 0 1 12 18Z" stroke-width="2.5" fill="none"/><line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="12" x2="14" y2="12"/></svg>
-    </div>
-    <span class="label-main" id="btnMain">No estás bloqueando</span>
-    <span class="label-sub" id="btnSub">Toca para protegerte</span>
-  </button>
-
-  <div class="stats-grid" id="statsGrid" aria-label="Estadísticas de bloqueo">
-    <div class="stat-card">
-      <div class="num" id="statBlocked">—</div>
-      <div class="label" id="lblBlocked">Dominios bloqueados</div>
-    </div>
-    <div class="stat-card">
-      <div class="num" id="statSources">—</div>
-      <div class="label" id="lblSources">Fuentes activas</div>
-    </div>
-  </div>
-
-  <div class="details-row"><span id="lblUpdated">Última actualización</span> <span id="valUpdated">—</span></div>
-  <div class="details-row"><span id="lblVersion">Versión de hblock</span> <span id="valVersion">—</span></div>
-
-  <div class="actions" style="margin-top:14px;">
-    <button onclick="onUpdate()" id="btnUpdate" class="green">Actualizar ahora</button>
-    <button onclick="onRefresh()">Recargar</button>
-  </div>
-
-  <div class="hint" id="hintText">hblock actualiza /etc/hosts con los dominios de sus fuentes para bloquear anuncios, rastreadores y malware.</div>
-</div>
-
+<button id="b" class="red" onclick="toggle()" aria-label="Activar bloqueo">
+  <div>NO ESTÁS PROTEGIDO</div>
+  <div id="n">—</div>
+</button>
 <script>
-/* I18N injected by Python before page load */
-const I18N = window.I18N || {
-  title: 'Ad Block',
-  subtitleEnabled: 'Protegido', subtitleDisabled: 'No estás bloqueando',
-  btnMainOff: 'No estás bloqueando', btnMainOn: 'Estás protegido',
-  btnSubOff: 'Toca para protegerte', btnSubOn: 'Toca para desactivar',
-  blocked: 'Dominios bloqueados', sources: 'Fuentes activas',
-  updated: 'Última actualización', version: 'Versión de hblock',
-  hint: 'hblock actualiza /etc/hosts con los dominios de sus fuentes.',
-  installed: 'hblock instalado', notInstalled: 'hblock no está instalado'
-};
-
-function setLabels() {
-  document.getElementById('subtitle').textContent = I18N.subtitleDisabled;
-  document.getElementById('btnMain').textContent = I18N.btnMainOff;
-  document.getElementById('btnSub').textContent = I18N.btnSubOff;
-  document.getElementById('lblBlocked').textContent = I18N.blocked;
-  document.getElementById('lblSources').textContent = I18N.sources;
-  document.getElementById('lblUpdated').textContent = I18N.updated;
-  document.getElementById('lblVersion').textContent = I18N.version;
-  document.getElementById('hintText').textContent = I18N.hint;
+function setUI(d){
+  const on=d&&d.enabled===true;
+  const b=document.getElementById('b');
+  b.className=on?'green':'red';
+  b.querySelector('div').textContent=on?'PROTEGIDO':'NO ESTÁS PROTEGIDO';
+  document.getElementById('n').textContent=(d&&d.blocked)?d.blocked.toLocaleString()+' DOMINIOS BLOQUEADOS':'—';
 }
-
-function updateUI(data) {
-  const enabled = data.enabled === true;
-  const btn = document.getElementById('toggleBtn');
-  btn.classList.toggle('red', !enabled);
-  btn.classList.toggle('green', enabled);
-  document.getElementById('subtitle').textContent = enabled ? I18N.subtitleEnabled : I18N.subtitleDisabled;
-  document.getElementById('btnMain').textContent = enabled ? I18N.btnMainOn : I18N.btnMainOff;
-  document.getElementById('btnSub').textContent = enabled ? I18N.btnSubOn : I18N.btnSubOff;
-  document.getElementById('statBlocked').textContent = (data.blocked || 0).toLocaleString();
-  document.getElementById('statSources').textContent = (data.sources || 0).toLocaleString();
-  document.getElementById('valUpdated').textContent = data.last_update || '—';
-  document.getElementById('valVersion').textContent = data.version || '—';
-}
-
-function call(action) {
-  if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.pulsarAction) {
-    window.webkit.messageHandlers.pulsarAction.postMessage(JSON.stringify({action: action}));
-  }
-}
-
-function setBusy(on) {
-  const btn = document.getElementById('toggleBtn');
-  const overlay = document.getElementById('busyOverlay');
-  btn.disabled = on;
-  if (on) {
-    btn.style.opacity = '0.5';
-    if (overlay) overlay.style.display = 'flex';
-  } else {
-    btn.style.opacity = '1';
-    if (overlay) overlay.style.display = 'none';
-  }
-}
-
-function onToggle() { call('toggle'); }
-function onUpdate() { call('update'); }
-function onRefresh() { call('status'); }
-
-/* Auto-refresh status via message handler callback from Python is handled by Python calling eval_js.
-   We also poll every 5s by posting status. */
-setInterval(() => call('status'), 5000);
-setLabels();
-call('status');
+function toggle(){if(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.pulsarAction)window.webkit.messageHandlers.pulsarAction.postMessage(JSON.stringify({action:'toggle'}));}
+window.addEventListener('load',function(){setTimeout(function(){if(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.pulsarAction)window.webkit.messageHandlers.pulsarAction.postMessage(JSON.stringify({action:'status'}));},300);});
 </script>
 </body>
 </html>

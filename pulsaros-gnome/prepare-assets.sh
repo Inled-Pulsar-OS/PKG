@@ -613,6 +613,7 @@ else
     exit 1
 fi
 
+
 # Copy all extensions' .gschema.xml files to the global schemas directory so gsettings and dconf can manage them
 # Copiar todos los archivos .gschema.xml de las extensiones al directorio global de esquemas para que gsettings y dconf puedan gestionarlos
 echo "⚙️ [ES] Copiando esquemas xml de extensiones al directorio global..."

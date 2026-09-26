@@ -1,231 +1,131 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Ad Block - simple HTML interface for the hblock DNS ad-blocker.
+import os, sys, threading, locale, gettext
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-The page is a local WebKitGTK app. JavaScript talks to Python through the
-WebKit script-message handler named ``pulsarAction``; Python runs the
-root-free status reads and the privileged helper through pkexec.
-"""
+try:
+    locale.setlocale(locale.LC_ALL, "")
+except Exception:
+    pass
 
-import json
-import os
-import sys
-import threading
-import urllib.parse
+_LANG = (os.environ.get("LANG") or "").split(".")[0].split(":")[0] or "es"
+_LOCALE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "locale")
+try:
+    _t = gettext.translation("pulsaros-hblock", localedir=_LOCALE_DIR, languages=[_LANG] if _LANG.startswith("es") else [_LANG, "en"], fallback=True)
+    _ = _t.gettext
+except Exception:
+    _ = lambda x: x
 
 import gi
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Gtk, Adw, GLib, Gdk
+from hblock_core import get_status, run_action
 
-gi.require_version("WebKit", "6.0")
-from gi.repository import WebKit, GLib  # noqa: E402
+class Win(Adw.ApplicationWindow):
+    def __init__(self, app):
+        super().__init__(application=app, title=_("Ad Block"))
+        self.set_default_size(420, 420)
+        self.set_size_request(360, 360)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
+        box.set_margin_top(36); box.set_margin_bottom(36); box.set_margin_start(24); box.set_margin_end(24)
+        box.set_hexpand(True); box.set_vexpand(True); box.set_valign(Gtk.Align.CENTER)
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-if SCRIPT_DIR not in sys.path:
-    sys.path.insert(0, SCRIPT_DIR)
+        self.label = Gtk.Label()
+        self.label.set_markup("<b>" + _("Ad Block") + "</b>")
+        self.label.set_halign(Gtk.Align.CENTER)
+        self.label.add_css_class("title-1")
 
-# ---------------------------------------------------------------------------
-# Localization: Spanish source strings; only an English catalog ships.
-# ---------------------------------------------------------------------------
-import gettext  # noqa: E402
-import locale  # noqa: E402
+        self.count = Gtk.Label()
+        self.count.set_halign(Gtk.Align.CENTER)
+        self.count.add_css_class("heading")
 
+        self.btn = Gtk.Button()
+        self.btn.set_size_request(260, 72)
+        self.btn.add_css_class("pill")
+        self.btn.connect("clicked", self.on_click)
+        self.btn.set_halign(Gtk.Align.CENTER)
+        self.btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self.btn_box.set_halign(Gtk.Align.CENTER)
+        self.btn_box.set_valign(Gtk.Align.CENTER)
+        self.btn_text = Gtk.Label()
+        self.btn_text.set_text(_("NO ESTÁS PROTEGIDO"))
+        self.btn_text.set_halign(Gtk.Align.CENTER)
+        self.btn_spinner = Gtk.Spinner()
+        self.btn_spinner.set_size_request(28, 28)
+        self.btn_spinner.set_visible(False)
+        self.btn_box.append(self.btn_text)
+        self.btn_box.append(self.btn_spinner)
+        self.btn.set_child(self.btn_box)
 
-def _setup_lang():
-    try:
-        locale.setlocale(locale.LC_ALL, "")
-    except Exception:
-        pass
-    env = (
-        os.environ.get("LANGUAGE")
-        or os.environ.get("LC_ALL")
-        or os.environ.get("LC_MESSAGES")
-        or os.environ.get("LANG")
-        or ""
-    )
-    lang = env.split(".")[0].split(":")[0].strip()
-    if lang.lower() in ("c", "posix", ""):
-        lang = "en"
-    return lang
+        css = b"""
+        .pill { border-radius: 36px; border: 0; color: #fff; font-weight: 800; font-size: 1.15rem; box-shadow: 0 8px 24px rgba(0,0,0,.15); }
+        .red { background: #ff0000; }
+        .green { background: #00cc00; }
+        .activando { background: #ff8c00; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: .7; } 100% { opacity: 1; } }
+        """
+        provider = Gtk.CssProvider(); provider.load_from_data(css)
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
+        box.append(self.label)
+        box.append(self.count)
+        box.append(self.btn)
+        self.set_content(box)
+        self.action_active = False
+        self.refresh()
 
-lang = _setup_lang()
-_LOCALE_DIR = os.path.join(SCRIPT_DIR, "locale")
+    def refresh(self):
+        if self.action_active:
+            return True
+        s = get_status()
+        on = s.get("enabled", False)
+        blocked = s.get("blocked") or 0
+        self.count.set_text(f"{blocked:,} {_('Dominios bloqueados')}" if blocked else "—")
+        self.btn_text.set_text(_("PROTEGIDO") if on else _("NO ESTÁS PROTEGIDO"))
+        self.btn.remove_css_class("red"); self.btn.remove_css_class("green"); self.btn.remove_css_class("activando")
+        self.btn.add_css_class("green" if on else "red")
+        return True
 
+    def on_click(self, btn):
+        if self.action_active:
+            return
+        s = get_status()
+        target = "enable" if not s.get("enabled") else "disable"
+        self.action_active = True
+        self.btn_text.set_visible(False)
+        self.btn_spinner.set_visible(True)
+        self.btn_spinner.start()
+        self.btn.remove_css_class("red"); self.btn.remove_css_class("green"); self.btn.remove_css_class("activando")
+        self.btn.add_css_class("activando")
+        threading.Thread(target=self.run, args=(target,), daemon=True).start()
 
-def _make_gettext():
-    if lang.lower().startswith("es"):
+    def run(self, act):
         try:
-            return gettext.translation(
-                "pulsaros-hblock", localedir=_LOCALE_DIR, languages=["es"], fallback=True
-            ).gettext
-        except Exception:
-            return gettext.gettext
-
-    candidates = []
-    if lang:
-        candidates.append(lang)
-        short = lang.split("_")[0]
-        if short not in candidates:
-            candidates.append(short)
-    if "en" not in candidates:
-        candidates.append("en")
-    try:
-        return gettext.translation(
-            "pulsaros-hblock", localedir=_LOCALE_DIR, languages=candidates, fallback=False
-        ).gettext
-    except Exception:
-        return gettext.gettext
-
-
-_ = _make_gettext()
-
-from hblock_core import get_status, run_action  # noqa: E402
-
-I18N = {
-    "title": "Ad Block",
-    "subtitleEnabled": _("Estás protegido"),
-    "subtitleDisabled": _("No estás bloqueando"),
-    "btnMainOff": _("No estás bloqueando"),
-    "btnMainOn": _("Estás protegido"),
-    "btnSubOff": _("Toca para protegerte"),
-    "btnSubOn": _("Toca para desactivar"),
-    "blocked": _("Dominios bloqueados"),
-    "sources": _("Fuentes activas"),
-    "updated": _("Última actualización"),
-    "version": _("Versión de hblock"),
-    "hint": _("hblock actualiza /etc/hosts con los dominios de sus fuentes para bloquear anuncios, rastreadores y malware."),
-    "installed": _("hblock instalado"),
-    "notInstalled": _("hblock no está instalado en el sistema. Instala el paquete 'hblock' para usar esta aplicación."),
-    "checking": _("Comprobando…"),
-    "updating": _("Actualizando…"),
-    "enabled": _("Bloqueo activado"),
-    "disabled": _("Bloqueo desactivado"),
-    "ok": _("Listo."),
-    "error": _("No se pudo cambiar el estado del bloqueo."),
-    "updateOk": _("Lista actualizada correctamente."),
-    "updateError": _("No se pudo actualizar la lista: {msg}"),
-}
-
-
-def _json_for_js(value):
-    """Return a JSON string suitable for direct use in JavaScript."""
-    return json.dumps(value, ensure_ascii=False)
-
-
-class AdBlockWindow:
-    def __init__(self):
-        self.webview = WebKit.WebView()
-        self.manager = self.webview.get_user_content_manager()
-        self.manager.register_script_message_handler("pulsarAction")
-        self.manager.connect("script-message-received::pulsarAction", self._on_script_message)
-
-        # Inject translations before the local page executes (at START).
-        js_i18n = "window.I18N = %s;" % _json_for_js(I18N)
-        script = WebKit.UserScript.new(
-            js_i18n,
-            WebKit.UserContentInjectedFrames.TOP_FRAME,
-            WebKit.UserScriptInjectionTime.START,
-        )
-        self.manager.add_script(script)
-
-        # Load the local HTML file.
-        page_uri = "file://" + urllib.parse.quote(SCRIPT_DIR + "/app.html")
-        self.webview.load_uri(page_uri)
-
-        # Connect to load-changed to refresh status after load.
-        self.webview.connect("load-changed", self._on_load_changed)
-
-        # Initial status.
-        self.status = get_status()
-
-    def _on_load_changed(self, webview, load_event):
-        """When the page finishes loading, push the current status."""
-        if load_event == WebKit.LoadEvent.FINISHED:
-            self._push_status()
-
-    def _push_status(self):
-        """Push the current status to the HTML page."""
-        js = "updateUI(%s);" % _json_for_js(self.status)
-        try:
-            self.webview.evaluate_javascript(js, len(js), cancellable=None)
+            ok, msg = run_action(act)
         except Exception as exc:
-            print("Ad Block: could not push status to page: %s" % exc, file=sys.stderr)
+            ok, msg = False, str(exc)
+        def done():
+            self.spinner_stop()
+            self.refresh()
+            return False
+        GLib.idle_add(done)
 
-    def _on_script_message(self, _manager, message):
-        """Handle a ``pulsar://``-like action sent by JavaScript."""
-        try:
-            payload = json.loads(message.get_string())
-        except Exception:
-            return
+    def spinner_stop(self):
+        self.action_active = False
+        self.btn_spinner.stop()
+        self.btn_spinner.set_visible(False)
+        self.btn_text.set_visible(True)
+        self.btn.remove_css_class("activando")
+        self.refresh()
 
-        action = payload.get("action")
-        if action == "status":
-            GLib.idle_add(self._apply_status, get_status())
-            return
-
-        if action == "toggle":
-            self._apply_status(get_status(), busy=True)
-            threading.Thread(target=self._toggle_action, daemon=True).start()
-            return
-
-        if action == "enable":
-            threading.Thread(target=lambda: self._apply_status(run_action("enable")), daemon=True).start()
-            return
-
-        if action == "disable":
-            threading.Thread(target=lambda: self._apply_status(run_action("disable")), daemon=True).start()
-            return
-
-        if action == "update":
-            threading.Thread(target=self._update_action, daemon=True).start()
-            return
-
-    def _apply_status(self, result, busy=False):
-        """Apply a status/action result to the page."""
-        if busy:
-            try:
-                self.webview.evaluate_javascript("setBusy(true);", len("setBusy(true);"), cancellable=None)
-            except Exception:
-                pass
-            return
-
-        if isinstance(result, tuple):
-            ok, message = result
-            status = get_status()
-            status["message"] = message
-            status["ok"] = ok
-        else:
-            status = result
-            status.setdefault("ok", True)
-
-        self.status = status
-        self._push_status()
-
-    def _toggle_action(self):
-        desired = not self.status.get("enabled", False)
-        ok, message = run_action("enable" if desired else "disable")
-        status = get_status()
-        status["message"] = message
-        status["ok"] = ok
-        GLib.idle_add(self._apply_status, status)
-
-    def _update_action(self):
-        try:
-            self.webview.evaluate_javascript("setBusy(true);", len("setBusy(true);"), cancellable=None)
-        except Exception:
-            pass
-        ok, message = run_action("update")
-        status = get_status()
-        status["message"] = message
-        status["ok"] = ok
-        GLib.idle_add(self._apply_status, status)
-
-
-def main():
-    window = AdBlockWindow()
-    # Keep the GTK/WebKit event loop alive.
-    GLib.MainLoop().run()
-
+class App(Adw.Application):
+    def __init__(self):
+        super().__init__(application_id="es.inled.PulsarHBlock")
+    def do_activate(self):
+        self.win = Win(self)
+        self.win.present()
 
 if __name__ == "__main__":
-    main()
+    app = App()
+    app.run(sys.argv)

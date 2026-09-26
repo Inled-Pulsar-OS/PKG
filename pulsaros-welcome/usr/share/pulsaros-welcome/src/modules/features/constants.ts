@@ -62,4 +62,10 @@ export const FEATURE_SLIDES: FeatureSlide[] = [
       "Switch between Mac or Linux shortcuts in one click, and enjoy animated wallpapers on the Desktop and SDDM.",
     video: "./videos/remap-live-wallpaper.webp",
   },
+  {
+    id: "adblock",
+    title: "System-wide Adblocker",
+    subtitle:
+      "Native DNS-level protection against ads, trackers, and malicious domains across all apps and browsers. Can be enabled or disabled at any time from System Settings.",
+  },
 ];
