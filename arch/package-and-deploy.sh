@@ -39,8 +39,9 @@ BRANCH="stable"
 MANUAL_UPLOAD_ONLY=("pulsaros-gnome")
 
 # Packages excluded from the automatic "all" build because they are not ready
-# for release. They can still be built explicitly by name.
-EXCLUDED_PACKAGES=("pulsaros-island")
+# for release or managed in their own standalone repository (appinstall).
+# They can still be built explicitly by name.
+EXCLUDED_PACKAGES=("pulsaros-island" "appinstall")
 
 is_manual_upload_only() {
     local name="$1"

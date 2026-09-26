@@ -11,6 +11,12 @@ options=(!strip)
 
 build() {
     _src="$(cd "$startdir"/../../../../appinstall 2>/dev/null || cd "$startdir"/../../../appinstall 2>/dev/null && pwd)"
+    if [ -z "$_src" ] || [ ! -d "$_src" ]; then
+        if [ ! -d "$srcdir/appinstall-repo" ]; then
+            git clone --depth 1 https://github.com/InledGroup/appinstall.git "$srcdir/appinstall-repo"
+        fi
+        _src="$srcdir/appinstall-repo"
+    fi
     cd "$_src"
     if [ -f compile_locales.py ]; then
         python3 compile_locales.py
@@ -19,6 +25,9 @@ build() {
 
 package() {
     _src="$(cd "$startdir"/../../../../appinstall 2>/dev/null || cd "$startdir"/../../../appinstall 2>/dev/null && pwd)"
+    if [ -z "$_src" ] || [ ! -d "$_src" ]; then
+        _src="$srcdir/appinstall-repo"
+    fi
     cd "$_src"
 
     mkdir -p "$pkgdir/usr"
