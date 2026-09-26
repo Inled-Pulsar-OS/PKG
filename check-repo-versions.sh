@@ -262,16 +262,24 @@ if [ "$MODE_ARCH" = true ]; then
                 estado="${MAGENTA}🟠 SOLO UNSTABLE${RESET}"
                 ok_arch=$((ok_arch + 1))
             else
-                cmp_res=0
+                cmp_stb=0
+                cmp_uns=0
                 if command -v vercmp >/dev/null 2>&1; then
-                    cmp_res=$(vercmp "$cmp_remote_stable" "$local_clean_ver")
+                    cmp_stb=$(vercmp "$cmp_remote_stable" "$local_clean_ver")
+                    cmp_uns=$(vercmp "$cmp_remote_unstable" "$local_unstable_ver")
                 fi
-                if [ "$cmp_res" -lt 0 ]; then
-                    estado="${YELLOW}🟡 OBSOLETO (Local > Stable)${RESET}"
-                    outdated_arch=$((outdated_arch + 1))
-                else
+                if [ "$cmp_uns" -ge 0 ] && [ "$cmp_stb" -ge 0 ]; then
                     estado="${GREEN}🟢 AL DÍA (Ambas ramas)${RESET}"
                     ok_arch=$((ok_arch + 1))
+                elif [ "$cmp_uns" -ge 0 ]; then
+                    estado="${GREEN}🟢 AL DÍA (En Unstable)${RESET}"
+                    ok_arch=$((ok_arch + 1))
+                elif [ "$cmp_stb" -ge 0 ]; then
+                    estado="${CYAN}🔵 AL DÍA (En Stable)${RESET}"
+                    ok_arch=$((ok_arch + 1))
+                else
+                    estado="${YELLOW}🟡 OBSOLETO (Local > Repo)${RESET}"
+                    outdated_arch=$((outdated_arch + 1))
                 fi
             fi
             printf "%-32s %-16s %-18s %-22s %-10s %-26b\n" "$pkg_name" "$local_clean_ver" "$display_stable" "$display_unstable" "$in_prod_label" "$estado"
@@ -447,20 +455,29 @@ if [ "$MODE_DEB" = true ]; then
                 estado="${MAGENTA}🟠 SOLO UNSTABLE${RESET}"
                 ok_deb=$((ok_deb + 1))
             else
-                cmp_res=0
+                cmp_stb=0
+                cmp_uns=0
+                clean_unstable=$(echo "$highest_unstable" | sed -E 's/[~._-]unstable.*$//')
                 if command -v dpkg >/dev/null 2>&1; then
-                    if dpkg --compare-versions "$local_clean_ver" gt "$highest_stable" 2>/dev/null; then
-                        cmp_res=-1
-                    else
-                        cmp_res=0
+                    if dpkg --compare-versions "$highest_stable" ge "$local_clean_ver" 2>/dev/null; then
+                        cmp_stb=1
+                    fi
+                    if dpkg --compare-versions "$clean_unstable" ge "$local_clean_ver" 2>/dev/null; then
+                        cmp_uns=1
                     fi
                 fi
-                if [ "$cmp_res" -lt 0 ]; then
-                    estado="${YELLOW}🟡 OBSOLETO (Local > Stable)${RESET}"
-                    outdated_deb=$((outdated_deb + 1))
-                else
+                if [ "$cmp_uns" -eq 1 ] && [ "$cmp_stb" -eq 1 ]; then
                     estado="${GREEN}🟢 AL DÍA (Ambas ramas)${RESET}"
                     ok_deb=$((ok_deb + 1))
+                elif [ "$cmp_uns" -eq 1 ]; then
+                    estado="${GREEN}🟢 AL DÍA (En Unstable)${RESET}"
+                    ok_deb=$((ok_deb + 1))
+                elif [ "$cmp_stb" -eq 1 ]; then
+                    estado="${CYAN}🔵 AL DÍA (En Stable)${RESET}"
+                    ok_deb=$((ok_deb + 1))
+                else
+                    estado="${YELLOW}🟡 OBSOLETO (Local > Repo)${RESET}"
+                    outdated_deb=$((outdated_deb + 1))
                 fi
             fi
             printf "%-32s %-16s %-18s %-22s %-10s %-26b\n" "$pkg_name" "$local_clean_ver" "$display_stable" "$display_unstable" "$in_prod_label" "$estado"
