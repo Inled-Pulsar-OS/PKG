@@ -540,6 +540,73 @@ def detect_efi_partition(disk_path=None):
     return None
 
 
+def resolve_recovery_boot_paths(esp_root="/mnt/boot/efi", target="/mnt",
+                                rec_label="PULSAR_RECOVERY",
+                                os_label="PULSAR_OS"):
+    """Localiza el kernel/initramfs de recovery realmente desplegado y devuelve
+    (volume, loader, initrd, found) para escribir la entrada de recovery en
+    refind.conf. `found` es False si no se encontró ningún kernel desplegado
+    (entonces la entrada será inválida y el instalador lo avisa en el log).
+
+    POR QUÉ: el instalador copia el kernel de recovery a la partición
+    PULSAR_RECOVERY y a ESP/EFI/recovery, y deliberadamente NO a /boot del
+    rootfs instalado (deploy_kernel_to_recovery, para que grub-mkconfig/10_linux
+    no lo tome como kernel por defecto — Bug #1). Por tanto una entrada rEFInd
+    hardcodeada a /@/boot/vmlinuz-recovery apunta a un archivo inexistente y
+    rEFInd aborta con "Invalid loader file! / Not Found while loading
+    vmlinuz-recovery" (la ISO live sí funciona porque allí el kernel SÍ está en
+    EFI/BOOT/).
+
+    Orden de preferencia (el primero que exista en el host gana):
+      1. ESP: /EFI/recovery/vmlinuz-recovery — MISMO volumen que refind.conf,
+         por lo que no depende de resolver otro volumen (rEFInd con
+         "scanfor manual" no registra de forma fiable la partición ext4
+         PULSAR_RECOVERY y "volume PULSAR_RECOVERY" acaba buscando el archivo
+         en la ESP → "Not Found while loading vmlinuz-recovery") ni de que
+         cargue el driver ext4_x64.efi. Es además el mismo criterio que usa la
+         ISO en /EFI/BOOT/vmlinuz-recovery.
+      2. partición PULSAR_RECOVERY: /boot/vmlinuz-recovery (mismo criterio que
+         la entrada GRUB de emergencia /etc/grub.d/15_pulsar_recovery)
+      3. partición PULSAR_RECOVERY: /vmlinuz-recovery (raíz de la partición)
+      4. rootfs instalado: /@/boot/vmlinuz-recovery (instalaciones antiguas)
+
+    Nota: la ruta de refind.conf y la ruta real en el host no son iguales
+    ("/@/boot/..." es la raíz del volumen en rEFInd, no un subdirectorio), por
+    eso cada candidato lleva sus propias rutas de verificación en el host.
+    """
+    # (volume, loader en refind.conf, initrd en refind.conf, kernel en host, initrd en host)
+    candidates = [
+        # volume None = mismo volumen que el refind.conf que se está escribiendo
+        # (la ESP), igual que hace la ISO con /EFI/BOOT/vmlinuz-recovery.
+        (None, "/EFI/recovery/vmlinuz-recovery", "/EFI/recovery/initramfs-recovery.img",
+         os.path.join(esp_root, "EFI", "recovery", "vmlinuz-recovery"),
+         os.path.join(esp_root, "EFI", "recovery", "initramfs-recovery.img")),
+        (rec_label, "/boot/vmlinuz-recovery", "/boot/initramfs-recovery.img",
+         os.path.join(target, "recovery", "boot", "vmlinuz-recovery"),
+         os.path.join(target, "recovery", "boot", "initramfs-recovery.img")),
+        (rec_label, "/vmlinuz-recovery", "/initramfs-recovery.img",
+         os.path.join(target, "recovery", "vmlinuz-recovery"),
+         os.path.join(target, "recovery", "initramfs-recovery.img")),
+        (os_label, "/@/boot/vmlinuz-recovery", "/@/boot/initramfs-recovery.img",
+         os.path.join(target, "boot", "vmlinuz-recovery"),
+         os.path.join(target, "boot", "initramfs-recovery.img")),
+    ]
+    for volume, loader, initrd, host_k, host_i in candidates:
+        try:
+            k_ok = os.path.isfile(host_k)
+            i_ok = os.path.isfile(host_i)
+        except Exception:
+            k_ok = i_ok = False
+        if k_ok and i_ok:
+            return volume, loader, initrd, True
+
+    # Nada desplegado: se mantiene la ruta histórica para no cambiar el
+    # comportamiento, pero el fallo queda registrado en el log del instalador.
+    print("WARNING: recovery kernel/initramfs not found for rEFInd entry; "
+          "falling back to /@/boot/vmlinuz-recovery")
+    return os_label, "/@/boot/vmlinuz-recovery", "/@/boot/initramfs-recovery.img", False
+
+
 def format_partition_display(part):
     name = part.get("name", "")
     path = part.get("path") or f"/dev/{name}"
@@ -4215,6 +4282,29 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             scanfor_mode = "scanfor manual\ndont_scan_dirs EFI,boot,recovery,live,@,@/boot,themes,drivers_x64\ndont_scan_files *"
                         extra_entries_str = ("\n" + "\n".join(other_os_entries)) if other_os_entries else ""
 
+                        # El kernel de recovery NO vive en /boot del rootfs
+                        # instalado (a propósito, ver deploy_kernel_to_recovery),
+                        # así que la entrada debe apuntar a donde realmente se
+                        # desplegó: partición PULSAR_RECOVERY o ESP/EFI/recovery.
+                        # Si se deja /@/boot/vmlinuz-recovery, rEFInd falla con
+                        # "Invalid loader file! / Not Found while loading
+                        # vmlinuz-recovery" y el recovery desaparece del sistema
+                        # instalado (aunque funcione desde la ISO live).
+                        rec_volume, rec_loader, rec_initrd, rec_found = resolve_recovery_boot_paths(esp_root)
+                        rec_volume_line = f"    volume {rec_volume}\n" if rec_volume else ""
+                        if rec_found:
+                            log_msg(f"rEFInd recovery entry -> volume={rec_volume or '(ESP)'} "
+                                    f"loader={rec_loader} initrd={rec_initrd}")
+                        else:
+                            # Aviso explícito: sin kernel desplegado la entrada de
+                            # recovery será inválida y rEFInd mostrará
+                            # "Invalid loader file! / Not Found while loading
+                            # vmlinuz-recovery". Antes esto pasaba silenciosamente.
+                            log_msg("ERROR: no se encontró el kernel de recovery desplegado "
+                                    f"(ESP/EFI/recovery, PULSAR_RECOVERY/boot o /@/boot); "
+                                    f"la entrada de recovery quedará rota: loader={rec_loader} "
+                                    "— revisa que la ISO incluya /recovery/vmlinuz-recovery")
+
                         menu_block = (
                             f"\n{MENU_BEGIN}\n"
                             "# Show the explicit curated entries below. In dual-boot\n"
@@ -4238,9 +4328,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             "\n"
                             'menuentry "Pulsar OS Recovery" {\n'
                             f"    icon {icon_rec}\n"
-                            "    volume PULSAR_OS\n"
-                            "    loader /@/boot/vmlinuz-recovery\n"
-                            "    initrd /@/boot/initramfs-recovery.img\n"
+                            f"{rec_volume_line}"
+                            f"    loader {rec_loader}\n"
+                            f"    initrd {rec_initrd}\n"
                             f'    options "{rec_opts_rec}"\n'
                             "}\n"
                             f"{extra_entries_str}"
@@ -4263,8 +4353,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             flags=re.DOTALL,
                         )
                         if "/EFI/recovery/vmlinuz.efi" in content:
+                            # La versión anterior (published 1.0.163) generaba la
+                            # entrada de recovery con un submenuentry anidado; el
+                            # patrón anterior (no-greedy) cortaba en el cierre del
+                            # submenú y dejaba un "}" huérfano que rompía el
+                            # refind.conf al reinstalar. Se admite un nivel de
+                            # anidamiento.
                             content = re.sub(
-                                r'\nmenuentry "Pulsar OS Recovery" \{.*?\n\}\n',
+                                r'\nmenuentry "Pulsar OS Recovery" \{(?:[^{}]|\{[^{}]*\})*\}\n',
                                 "\n",
                                 content,
                                 flags=re.DOTALL,
