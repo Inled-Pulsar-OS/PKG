@@ -30,4 +30,7 @@ package() {
     if [ -d "$srcdir/staging" ]; then
         cp -r "$srcdir/staging"/* "$pkgdir/"
     fi
+    find "$pkgdir" -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+    find "$pkgdir" -name '*.pyc' -delete 2>/dev/null || true
+    find "$pkgdir/usr/share/sayri/plugins" -type f \( -name "*.py" -o -name "*.sh" \) -exec chmod 0755 {} + 2>/dev/null || true
 }
