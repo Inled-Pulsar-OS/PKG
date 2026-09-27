@@ -2971,9 +2971,12 @@ export default class PulsarosGlobalMenuExtension extends Extension {
             }
 
             // OS Name & Version from /etc/os-release / /usr/lib/os-release / /etc/pulsar-version
-            let osName = "Pulsar OS";
+            let osName = "Pulsar OS Bitten Fruit";
             let osVersion = "";
             let distroBase = "arch";
+            let rawPretty = "";
+            let rawVersion = "";
+
             try {
                 let [ok, content] = GLib.file_get_contents("/etc/os-release");
                 if (!ok) {
@@ -2987,39 +2990,37 @@ export default class PulsarosGlobalMenuExtension extends Extension {
                     let idMatch = contentStr.match(/^ID="?([^"\n]+)"?/m);
                     let verMatch = contentStr.match(/^VERSION="?([^"\n]+)"?/m);
                     let verIdMatch = contentStr.match(/^VERSION_ID="?([^"\n]+)"?/m);
+                    let imageVerMatch = contentStr.match(/^IMAGE_VERSION="?([^"\n]+)"?/m);
 
+                    if (prettyNameMatch) {
+                        rawPretty = prettyNameMatch[1];
+                    }
                     if (nameMatch) {
                         osName = nameMatch[1];
-                    } else if (prettyNameMatch) {
-                        osName = prettyNameMatch[1];
                     }
 
-                    if (/debian/i.test(osName) || (idLikeMatch && /debian/i.test(idLikeMatch[1])) || (idMatch && /debian/i.test(idMatch[1]))) {
-                        distroBase = "debian";
-                    } else if (/arch/i.test(osName) || (idLikeMatch && /arch/i.test(idLikeMatch[1])) || (idMatch && /arch/i.test(idMatch[1]))) {
+                    let idLikeStr = idLikeMatch ? idLikeMatch[1].toLowerCase() : "";
+                    let idStr = idMatch ? idMatch[1].toLowerCase() : "";
+                    let nameStr = osName.toLowerCase();
+                    let prettyStr = rawPretty.toLowerCase();
+
+                    if (idLikeStr.includes("arch") || idStr.includes("arch") || nameStr.includes("arch") || prettyStr.includes("arch") || GLib.file_test("/etc/pacman.conf", GLib.FileTest.EXISTS)) {
                         distroBase = "arch";
-                    } else if (idLikeMatch) {
-                        distroBase = idLikeMatch[1].split(/\s+/)[0].toLowerCase();
+                    } else if (idLikeStr.includes("debian") || idStr.includes("debian") || nameStr.includes("debian") || prettyStr.includes("debian") || GLib.file_test("/etc/debian_version", GLib.FileTest.EXISTS)) {
+                        distroBase = "debian";
                     }
 
                     if (verIdMatch && verIdMatch[1]) {
-                        osVersion = verIdMatch[1].trim();
+                        rawVersion = verIdMatch[1].trim();
                     } else if (verMatch && verMatch[1]) {
-                        osVersion = verMatch[1].trim();
+                        rawVersion = verMatch[1].trim();
+                    } else if (imageVerMatch && imageVerMatch[1]) {
+                        rawVersion = imageVerMatch[1].trim();
                     }
                 }
             } catch (e) {
                 console.error("[GlobalMenu] Failed to read os-release:", e);
             }
-
-            // Distro base detection (Debian vs Arch)
-            let isDebian = (distroBase === "debian") ||
-                           GLib.file_test("/etc/debian_version", GLib.FileTest.EXISTS) ||
-                           GLib.file_test("/usr/bin/dpkg", GLib.FileTest.EXISTS);
-
-            // Display official Pulsar OS Bitten Fruit branding
-            osName = "Pulsar OS Bitten Fruit";
-            osVersion = isDebian ? "1.2-bittenfruit-debian" : "1.2-bittenfruit-arch";
 
             // Check /etc/pulsar-version if present for explicit override
             try {
@@ -3027,10 +3028,14 @@ export default class PulsarosGlobalMenuExtension extends Extension {
                 if (okVer) {
                     let pverStr = new TextDecoder().decode(pver).trim();
                     if (pverStr) {
-                        osVersion = pverStr;
+                        rawVersion = pverStr;
                     }
                 }
             } catch (e) {}
+
+            let baseLabel = (distroBase === "debian") ? "Debian Based" : "Arch Based";
+            osName = "Pulsar OS Bitten Fruit";
+            osVersion = rawVersion ? `${rawVersion} (${baseLabel})` : baseLabel;
 
             let dialog = new AboutDialog(osName, osVersion, hostName, cpuModel, memTotal, gpuModel, diskInfo);
             dialog.open();
