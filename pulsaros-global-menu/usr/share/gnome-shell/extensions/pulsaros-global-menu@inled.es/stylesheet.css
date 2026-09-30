@@ -1,8 +1,6 @@
-/* stylesheet.css - Pulsar OS Global Menu styling */
-/* stylesheet.css - Estilos del Menú Global de Pulsar OS */
+/* stylesheet.css - Pulsar OS Global Menu styling with Apple Liquid Glass HIG */
 
 /* System logo icon on the far left panel button */
-/* Icono del logo del sistema en el botón de panel del extremo izquierdo */
 .global-menu-logo-icon {
     width: 16px;
     height: 16px;
@@ -10,41 +8,69 @@
 }
 
 /* The active app label is bold, mimicking macOS top bar app menu */
-/* La etiqueta de la app activa es negrita, imitando el menú de macOS en la barra superior */
 .global-menu-app-label {
     font-weight: bold;
-    color: #ffffff;
     padding: 0 4px;
     font-size: 13px;
     transition: color 0.15s ease;
 }
 
-/* Regular menus (File, Edit, Go...) are normal weight and slightly translucent */
-/* Los menús comunes (Archivo, Edición, Ir...) tienen peso normal y son un poco translúcidos */
+/* Regular menus (File, Edit, Go...) */
 .global-menu-label {
     font-weight: normal;
-    color: #dfdfdf;
     padding: 0 4px;
     font-size: 13px;
     transition: color 0.15s ease;
 }
 
 /* Subtly light up menu items when hovered */
-/* Iluminar sutilmente las etiquetas al pasar el cursor */
-.global-menu-label:hover {
-    color: #ffffff;
-}
-
+.global-menu-label:hover,
 .global-menu-app-label:hover {
     color: #ffffff;
 }
 
-/* --- Pulsar OS Tahoe Lockscreen Styles --- */
-/* --- Estilos de la Pantalla de Bloqueo Tahoe de Pulsar OS --- */
+/* Liquid Glass Popup Menus & Item Hover */
+.global-menu-no-arrow .popup-menu-arrow {
+    width: 0;
+    height: 0;
+}
 
+.popup-menu-boxpointer {
+    -arrow-rise: 0;
+    -arrow-border-radius: 12px;
+}
+
+.popup-menu-content {
+    padding: 6px !important;
+}
+
+.popup-menu-item {
+    border-radius: 6px !important;
+    margin: 1px 2px !important;
+    padding: 4px 10px !important;
+    font-size: 13px !important;
+    transition: all 120ms ease-out !important;
+}
+
+.popup-menu-item:hover,
+.popup-menu-item:focus,
+.popup-menu-item:active,
+.popup-menu-item.selected {
+    background-color: #0071e3 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 6px rgba(0, 113, 227, 0.4) !important;
+}
+
+.popup-separator-menu-item {
+    margin: 4px 6px !important;
+    height: 1px !important;
+    background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* --- Pulsar OS Tahoe Lockscreen Styles --- */
 .pulsaros-lockscreen-root {
     color: #ffffff;
-    background-color: #1a1a1a; /* Dark solid fallback background / Fondo oscuro de seguridad */
+    background-color: #1a1a1a;
 }
 
 .pulsaros-lockscreen-main-layout {
@@ -58,16 +84,19 @@
 }
 
 .pulsaros-lockscreen-power-button {
-    background-color: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background-color: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.25);
     border-radius: 20px;
     padding: 8px;
     color: #ffffff;
+    box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.15), 0 4px 12px rgba(0, 0, 0, 0.25);
+    transition: all 150ms ease;
 }
 
 .pulsaros-lockscreen-power-button:hover {
-    background-color: rgba(255, 255, 255, 0.4);
-    border-color: rgba(255, 255, 255, 0.6);
+    background-color: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.6), 0 6px 16px rgba(0, 0, 0, 0.35);
 }
 
 .pulsaros-lockscreen-power-button StIcon {
@@ -76,7 +105,7 @@
 }
 
 .pulsaros-lockscreen-spacer {
-    height: 60px; /* Fixed height for top spacing / Altura fija para el espaciado superior */
+    height: 60px;
 }
 
 .pulsaros-lockscreen-clock-box {
@@ -102,7 +131,7 @@
 }
 
 .pulsaros-lockscreen-middle-spacer {
-    min-height: 20px; /* Responsive spring spacer / Espaciador responsivo dinámico */
+    min-height: 20px;
 }
 
 .pulsaros-lockscreen-user-card {
@@ -115,7 +144,7 @@
     height: 110px;
     border: 2px solid rgba(255, 255, 255, 0.9);
     background-color: rgba(255, 255, 255, 0.15);
-    text-shadow: 0px 2px 8px rgba(0, 0, 0, 0.2);
+    box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.5), 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 .pulsaros-lockscreen-avatar-default {
@@ -134,54 +163,58 @@
 
 .pulsaros-lockscreen-entry {
     width: 250px;
-    height: 34px;
-    border-radius: 17px;
-    background-color: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    height: 36px;
+    border-radius: 18px;
+    background-color: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.25);
     color: #ffffff;
     font-size: 14px;
     text-align: center;
     font-family: "SF Pro Text", "Cantarell", sans-serif;
-    padding: 0px 10px;
+    padding: 0px 12px;
+    box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.35), 0 4px 12px rgba(0, 0, 0, 0.25);
+    transition: all 150ms ease;
 }
 
 .pulsaros-lockscreen-entry:focus {
-    background-color: rgba(255, 255, 255, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    background-color: rgba(255, 255, 255, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.5), 0 0 0 2px rgba(255, 255, 255, 0.4), 0 6px 16px rgba(0, 0, 0, 0.35);
 }
 
 .pulsaros-lockscreen-entry-authenticating {
     width: 250px;
-    height: 34px;
-    border-radius: 17px;
+    height: 36px;
+    border-radius: 18px;
     background-color: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.3);
     color: rgba(255, 255, 255, 0.6);
     font-size: 14px;
     text-align: center;
-    padding: 0px 10px;
+    padding: 0px 12px;
 }
 
 .pulsaros-lockscreen-entry-failed {
     width: 250px;
-    height: 34px;
-    border-radius: 17px;
+    height: 36px;
+    border-radius: 18px;
     background-color: rgba(255, 60, 60, 0.25);
     border: 1px solid rgba(255, 60, 60, 0.6);
     color: #ffffff;
     font-size: 14px;
     text-align: center;
-    padding: 0px 10px;
+    padding: 0px 12px;
+    box-shadow: 0 0 0 2px rgba(255, 60, 60, 0.4), 0 4px 12px rgba(255, 60, 60, 0.3);
 }
 
-/* --- About Pulsar OS Dialog Styles --- */
+/* --- About Pulsar OS Dialog Styles (Apple Liquid Glass HIG) --- */
 .pulsaros-about-dialog {
-    background-color: rgba(28, 28, 30, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    border-radius: 12px;
+    background-color: rgba(30, 30, 34, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 18px;
     padding: 24px;
     width: 480px;
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.25), 0 10px 30px rgba(0, 0, 0, 0.5);
+    box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.15), 0 20px 50px rgba(0, 0, 0, 0.7);
 }
 
 .pulsaros-about-mainbox {
@@ -190,10 +223,6 @@
 
 .pulsaros-about-logobox {
     margin-bottom: 8px;
-}
-
-.pulsaros-about-logo {
-    /* No margin auto */
 }
 
 .pulsaros-about-title {
@@ -211,10 +240,12 @@
 }
 
 .pulsaros-about-details {
-    background-color: rgba(0, 0, 0, 0.2);
-    border-radius: 8px;
+    background-color: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
     padding: 16px;
     spacing: 8px;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
 }
 
 .pulsaros-about-row {
@@ -237,18 +268,21 @@
 }
 
 .pulsaros-about-dialog .modal-dialog-button {
-    background-color: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 6px;
-    padding: 6px 16px;
+    background-color: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 9999px;
+    padding: 6px 18px;
     color: #ffffff;
     font-size: 10pt;
     font-weight: 500;
-    min-height: 24px;
+    min-height: 28px;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.3), 0 2px 6px rgba(0, 0, 0, 0.2);
+    transition: all 120ms ease;
 }
 
 .pulsaros-about-dialog .modal-dialog-button:hover {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.22);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.45), 0 4px 10px rgba(0, 0, 0, 0.3);
 }
 
 .pulsaros-about-dialog .modal-dialog-button:active {
@@ -256,17 +290,18 @@
 }
 
 .pulsaros-about-dialog .modal-dialog-button:focus {
-    border: 1px solid #3498db;
+    border: 1px solid #0071e3;
+    box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.5);
 }
 
-/* --- Pulsar OS Power Confirmation Dialog Styles (macOS Tahoe Dark Style) --- */
+/* --- Pulsar OS Power Confirmation Dialog Styles (Liquid Glass HIG) --- */
 .pulsaros-power-dialog {
-    background-color: #242426;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 20px;
+    background-color: rgba(36, 36, 40, 0.90);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 22px;
     padding: 24px 28px;
     width: 460px;
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.25), 0 16px 48px rgba(0, 0, 0, 0.8);
+    box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 24px 60px rgba(0, 0, 0, 0.85);
 }
 
 .pulsaros-power-mainbox {
@@ -283,7 +318,9 @@
     min-width: 64px;
     min-height: 64px;
     border-radius: 32px;
-    background-color: #555558;
+    background-color: rgba(85, 85, 90, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .pulsaros-power-circle-icon {
@@ -301,7 +338,7 @@
 
 .pulsaros-power-subtitle {
     font-size: 10.5pt;
-    color: #98989d;
+    color: #a1a1a6;
     text-align: left;
     margin-bottom: 6px;
     line-height: 1.4;
@@ -347,32 +384,33 @@
     min-width: 120px;
     font-size: 11pt;
     font-weight: 500;
-    min-height: 34px;
+    min-height: 36px;
 }
 
 .pulsaros-power-dialog .modal-dialog-button.pulsaros-power-cancel-btn {
-    background-color: #38383a;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: rgba(56, 56, 60, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     color: #ffffff;
-    border-radius: 9999px !important;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.25), 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .pulsaros-power-dialog .modal-dialog-button.pulsaros-power-cancel-btn:hover {
-    background-color: #48484a;
+    background-color: rgba(72, 72, 76, 0.95);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.4), 0 4px 10px rgba(0, 0, 0, 0.3);
 }
 
 .pulsaros-power-dialog .modal-dialog-button.pulsaros-power-confirm-btn {
     background-color: #0071e3;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.3);
     color: #ffffff;
     font-weight: 600;
-    border-radius: 9999px !important;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.45), 0 4px 14px rgba(0, 113, 227, 0.45);
 }
 
 .pulsaros-power-dialog .modal-dialog-button.pulsaros-power-confirm-btn:hover {
     background-color: #007bf5;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.6), 0 6px 18px rgba(0, 113, 227, 0.6);
 }
-
 
 /* Progress bar and status in power dialog */
 .pulsaros-power-progress-container {
@@ -389,7 +427,7 @@
 }
 
 .pulsaros-power-progress-fill {
-    background-color: #0a84ff;
+    background-color: #0071e3;
     border-radius: 4px;
     height: 8px;
     width: 20px;

@@ -1,20 +1,8 @@
 // Styling for the menu bar and its popups: translucency, rounding, button
-// spacing, font size, and optional blur behind the popups.
-//
-// Every MenuBarButton registers itself here from menuBarButton.js, so the
-// three menu sources get styled without knowing that this module exists.
-// Nothing here touches shared shell UI: styling is applied as inline styles
-// and global-menu-* CSS classes on our own actors. The one exception is the
-// workspace indicator, which we hide on request and restore on disable.
-//
-// Blur goes through Blur My Shell, which publishes itself as
-// global.blur_my_shell for exactly this. We take one of its native dynamic
-// gaussian blur effects per popup (a BACKGROUND-mode Shell.BlurEffect,
-// re-blurred every frame) from its EffectsManager. Without Blur My Shell
-// there is no blur and everything else still works.
+// spacing, font size, Liquid Glass specular refraction, and blur behind popups.
 
 import Clutter from 'gi://Clutter';
-
+import Gio from 'gi://Gio';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 const BMS_UUID = 'blur-my-shell@aunetx';
@@ -32,42 +20,20 @@ const APPEARANCE_KEYS = [
 	'hide-workspace-indicator',
 ];
 
-// Buttons register even while no manager exists, so a manager created later
-// can still style them.
 const buttons = new Set();
 let manager = null;
 
-/** Called by MenuBarButton._init. Unregisters itself when the actor dies. */
 export function registerButton(btn) {
 	buttons.add(btn);
 	btn.connect('destroy', () => buttons.delete(btn));
 	manager?.applyToButton(btn);
 }
 
-/**
- * Called by MenuBarButton when its menu opens. The popup's theme background
- * color can only be read once the actor is on stage, so translucency is
- * reapplied here. The blur effect is created here too rather than at button
- * creation: buttons are rebuilt on every menu-tree change, and taking an
- * effect out of Blur My Shell's pool for each short-lived button leaks
- * handler connections inside it.
- */
 export function onMenuOpened(btn) {
 	manager?.applyPopupBackground(btn);
 	manager?.applyBlur(btn);
 }
 
-/**
- * GNOME's Activities button doubles as the workspace pill at the far left of
- * the panel.
- *
- * Hiding it is not a one-off. Panel._updatePanel() re-adds every indicator
- * and shows its container again, and it runs after extensions are enabled at
- * login, so a lone hide() in enable() is undone before the panel is ever
- * painted. That is why the pill used to reappear until the extension was
- * toggled by hand. Tracking the container's visibility, and the session mode
- * that rebuilds the panel, makes the hide stick from the first enable.
- */
 class WorkspaceIndicator {
 	constructor(settings) {
 		this._settings = settings;
@@ -100,9 +66,6 @@ class WorkspaceIndicator {
 
 		const container = this._indicator?.container;
 		const restore = this._hiddenByUs;
-		// Disconnect before showing. show() emits notify::visible, and the
-		// handler below would read a setting that is still true and hide the
-		// pill straight back again.
 		this._untrack();
 		if (restore)
 			container?.show();
@@ -120,8 +83,6 @@ class WorkspaceIndicator {
 			return;
 
 		const container = indicator.container;
-		// A panel rebuild shows the container again without any signal of
-		// its own to hang off, so re-hide whenever it comes back.
 		this._visibleId = container.connect('notify::visible', () => {
 			if (container.visible && this._settings.get_boolean('hide-workspace-indicator'))
 				container.hide();
@@ -146,11 +107,15 @@ class WorkspaceIndicator {
 export class AppearanceManager {
 	constructor(settings) {
 		this._settings = settings;
+		this._ifaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
+		
 		this._settingsIds = APPEARANCE_KEYS.map(key =>
 			settings.connect(`changed::${key}`, () => this.applyAll()));
 
-		// Blur My Shell does not detach effects it made for foreign actors,
-		// so follow its enabled state and detach them ourselves.
+		this._colorSchemeId = this._ifaceSettings.connect('changed::color-scheme', () => {
+			this.applyAll();
+		});
+
 		this._extStateId = Main.extensionManager.connect(
 			'extension-state-changed', (_mgr, extension) => {
 				if (extension.uuid === BMS_UUID)
@@ -169,18 +134,20 @@ export class AppearanceManager {
 
 	applyToButton(btn) {
 		const s = this._settings;
+		const colorScheme = this._ifaceSettings.get_string('color-scheme');
+		const isDark = (colorScheme === 'prefer-dark');
 
-		// panelMenu reads -natural/-minimum-hpadding off the button's theme
-		// node and the label inherits the font, so both are set inline here.
-		// The shell theme bolds every panel button, which would drown the
-		// app name it is meant to distinguish, so weight is forced to normal
-		// and only the app-name button gets bold back.
 		const spacing = s.get_int('button-spacing');
 		const fontSize = s.get_int('menu-font-size');
 		const bold = btn._globalMenuAppName && s.get_boolean('bold-app-name');
+		
+		let textColor = isDark ? '#ffffff' : '#1d1d1f';
+		let labelColor = isDark ? '#dfdfdf' : '#333336';
+
 		let style = `-natural-hpadding: ${spacing}px; ` +
 			`-minimum-hpadding: ${Math.min(spacing, 6)}px; ` +
-			`font-weight: ${bold ? 'bold' : 'normal'};`;
+			`font-weight: ${bold ? 'bold' : 'normal'}; ` +
+			`color: ${bold ? textColor : labelColor};`;
 		if (fontSize > 0)
 			style += ` font-size: ${fontSize}pt;`;
 		btn.set_style(style);
@@ -199,15 +166,26 @@ export class AppearanceManager {
 		const radius = s.get_int('popup-corner-radius');
 		const opacity = s.get_int('popup-opacity');
 		const fontSize = s.get_int('menu-font-size');
+		const colorScheme = this._ifaceSettings.get_string('color-scheme');
+		const isDark = (colorScheme === 'prefer-dark');
 
+		const alpha = (opacity / 100).toFixed(2);
 		let style = `border-radius: ${radius}px;`;
 		if (fontSize > 0)
 			style += ` font-size: ${fontSize}pt;`;
-		const base = this._popupBaseColor(btn);
-		if (base !== null) {
-			const alpha = (opacity / 100).toFixed(2);
-			style += ` background-color: rgba(${base.red}, ${base.green}, ${base.blue}, ${alpha});`;
+
+		if (isDark) {
+			style += ` background-color: rgba(30, 30, 34, ${alpha});` +
+				` border: 1px solid rgba(255, 255, 255, 0.18);` +
+				` box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 16px 48px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.3);` +
+				` color: #ffffff;`;
+		} else {
+			style += ` background-color: rgba(255, 255, 255, ${alpha});` +
+				` border: 1px solid rgba(0, 0, 0, 0.12);` +
+				` box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.95), inset 0 0 0 1px rgba(255, 255, 255, 0.55), 0 12px 36px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08);` +
+				` color: #1d1d1f;`;
 		}
+
 		btn.menu.box.set_style(style);
 	}
 
@@ -233,7 +211,6 @@ export class AppearanceManager {
 			return;
 		}
 
-		// Deferred to the first open, see onMenuOpened
 		if (!btn.menu.isOpen)
 			return;
 
@@ -244,11 +221,6 @@ export class AppearanceManager {
 		});
 		btn.menu.box.add_effect(btn._globalMenuBlur);
 
-		// BoxPointer always forces offscreen redirect, which makes a
-		// BACKGROUND blur sample the popup's own empty offscreen buffer
-		// instead of the screen: translucent, never blurred. Relaxing it to
-		// the stock actor default only flattens the popup during its
-		// open/close fade, where the blur cannot be seen anyway.
 		btn.menu.actor.set_offscreen_redirect(Clutter.OffscreenRedirect.AUTOMATIC_FOR_OPACITY);
 	}
 
@@ -256,6 +228,11 @@ export class AppearanceManager {
 		for (const id of this._settingsIds)
 			this._settings.disconnect(id);
 		this._settingsIds = [];
+		if (this._colorSchemeId && this._ifaceSettings) {
+			this._ifaceSettings.disconnect(this._colorSchemeId);
+			this._colorSchemeId = 0;
+		}
+		this._ifaceSettings = null;
 		Main.extensionManager.disconnect(this._extStateId);
 		this._extStateId = 0;
 		this._workspaceIndicator.destroy();
@@ -268,23 +245,6 @@ export class AppearanceManager {
 
 	_bmsEffects() {
 		return global.blur_my_shell?._effects_manager ?? null;
-	}
-
-	// The popup's theme background color, captured once per button before our
-	// translucent inline style overrides it. An off-stage theme node yields a
-	// bogus color, so return null and let the next menu open retry.
-	_popupBaseColor(btn) {
-		if (btn._globalMenuBaseBg !== undefined)
-			return btn._globalMenuBaseBg;
-		if (!btn.menu.box.get_stage())
-			return null;
-		try {
-			const color = btn.menu.box.get_theme_node().get_background_color();
-			btn._globalMenuBaseBg = {red: color.red, green: color.green, blue: color.blue};
-		} catch (_e) {
-			return null;
-		}
-		return btn._globalMenuBaseBg;
 	}
 
 	_removeBlur(btn) {

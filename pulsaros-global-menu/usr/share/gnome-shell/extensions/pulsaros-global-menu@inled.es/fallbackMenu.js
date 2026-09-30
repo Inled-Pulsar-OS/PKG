@@ -265,20 +265,6 @@ const MENU_DATA = [
 		label: 'Window',
 		windowActions: true,
 	},
-	{
-		label: 'System',
-		items: [
-			{label: 'Show Applications', action: 'show-applications'},
-			{label: 'Show Notifications', action: 'show-notifications'},
-			{separator: true},
-			{label: 'Lock Screen', action: 'lock-screen'},
-			{label: 'Suspend', action: 'suspend'},
-			{label: 'Hibernate', action: 'hibernate'},
-			{separator: true},
-			{label: 'Log Out', action: 'log-out'},
-			{label: 'Power Off / Restart', action: 'power-off'},
-		],
-	},
 ];
 
 /**

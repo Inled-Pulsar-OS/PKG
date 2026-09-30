@@ -172,13 +172,57 @@ button.accent-button.purple { background-color: #9141ac; background-image: none;
 button.accent-button.slate { background-color: #6f8396; background-image: none; }
 
 /* ==============================================================================
- * Apple Liquid Glass HIG - Specular Rim Highlight & Adaptive Focus Contrast
+ * Apple Liquid Glass HIG - Specular Rim Highlight, Translucent Glass & Adaptive Focus
  * ============================================================================== */
+window,
+window.background,
+window.background.csd,
+.nautilus-window,
+adw-window,
+adw-preferences-window,
+dialog,
+messagedialog {
+  background-color: @window_bg_color;
+  box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 16px 48px rgba(0, 0, 0, 0.35);
+}
+
+headerbar,
+.nautilus-window headerbar,
+adw-header-bar {
+  background-color: @headerbar_bg_color;
+  background-image: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.35);
+}
+
+.navigation-sidebar,
+list.navigation-sidebar,
+sidebar,
+.sidebar-pane {
+  background-color: @sidebar_bg_color;
+  background-image: none;
+}
+
+card,
+.card,
+.boxed-list {
+  background-color: @card_bg_color;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.35), 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
 .nautilus-window headerbar .linked,
 .nautilus-pathbar,
-headerbar box.linked {
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.18), 0 2px 8px rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+headerbar box.linked,
+.linked:not(vertical),
+box.linked:not(vertical),
+stackswitcher,
+viewswitcher {
+  border-radius: 9999px;
+  background-color: alpha(currentColor, 0.08);
+  border: 1px solid alpha(currentColor, 0.1);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.25), 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 headerbar .linked > button:focus,
