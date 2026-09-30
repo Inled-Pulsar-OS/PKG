@@ -1,5 +1,5 @@
 //! Detección del sistema, ejecución privilegiada y escaneo de medios.
-use crate::models::{BtrfsTarget, DiscoveredImage};
+use crate::models::{BtrfsTarget, DiscoveredImage, EncryptedTarget};
 use regex::Regex;
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
@@ -110,7 +110,7 @@ pub(crate) fn exec_cmd(cmd: &str) -> Result<String, String> {
 
 pub(crate) fn find_btrfs_targets() -> Vec<BtrfsTarget> {
     let mut targets = Vec::new();
-    if let Ok(out) = Command::new("sudo").args(&["-n", "lsblk", "-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,PKNAME"]).output() {
+    if let Ok(out) = Command::new("sudo").args(&["-n", "lsblk", "-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,PKNAME,TYPE"]).output() {
         let text = String::from_utf8_lossy(&out.stdout);
         for line in text.lines() {
             if line.contains("FSTYPE=\"btrfs\"") || line.contains("PULSAR_OS") || line.contains("PulsarOS") {
@@ -124,7 +124,14 @@ pub(crate) fn find_btrfs_targets() -> Vec<BtrfsTarget> {
                 let size = get_val("SIZE");
                 let pkname = get_val("PKNAME");
 
-                let part_path = format!("/dev/{}", name);
+                let part_path = if Path::new(&format!("/dev/mapper/{}", name)).exists() {
+                    format!("/dev/mapper/{}", name)
+                } else if name.starts_with('/') {
+                    name
+                } else {
+                    format!("/dev/{}", name)
+                };
+
                 let disk_path = if !pkname.is_empty() { format!("/dev/{}", pkname) } else { part_path.clone() };
 
                 targets.push(BtrfsTarget {
@@ -138,6 +145,102 @@ pub(crate) fn find_btrfs_targets() -> Vec<BtrfsTarget> {
         }
     }
     targets
+}
+
+pub(crate) fn find_encrypted_targets() -> Vec<EncryptedTarget> {
+    let mut targets = Vec::new();
+    if let Ok(out) = Command::new("sudo").args(&["-n", "lsblk", "-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,PKNAME,TYPE"]).output() {
+        let text = String::from_utf8_lossy(&out.stdout);
+        for line in text.lines() {
+            if line.contains("FSTYPE=\"crypto_LUKS\"") {
+                let get_val = |key: &str| -> String {
+                    let re = Regex::new(&format!(r#"{}=\"([^\"]*)\""#, key)).unwrap();
+                    re.captures(line).and_then(|c| c.get(1)).map(|m| m.as_str().to_string()).unwrap_or_default()
+                };
+                let name = get_val("NAME");
+                let label = get_val("LABEL");
+                let uuid = get_val("UUID");
+                let size = get_val("SIZE");
+                let pkname = get_val("PKNAME");
+
+                let part_path = format!("/dev/{}", name);
+                let disk_path = if !pkname.is_empty() { format!("/dev/{}", pkname) } else { part_path.clone() };
+
+                // Check if already mapped/unlocked in /sys/class/block/{name}/holders
+                let mut is_unlocked = false;
+                let mut mapper_name = "pulsar_cryptroot".to_string();
+                if let Ok(holders) = fs::read_dir(format!("/sys/class/block/{}/holders", name)) {
+                    for h in holders.flatten() {
+                        let hname = h.file_name().to_string_lossy().to_string();
+                        if !hname.is_empty() {
+                            is_unlocked = true;
+                            mapper_name = hname;
+                            break;
+                        }
+                    }
+                }
+
+                targets.push(EncryptedTarget {
+                    disk_path,
+                    part_path,
+                    label: if label.is_empty() { "Encrypted Pulsar OS".to_string() } else { label },
+                    uuid,
+                    size,
+                    is_unlocked,
+                    mapper_name,
+                });
+            }
+        }
+    }
+    targets
+}
+
+pub(crate) fn unlock_luks_partition(part_path: &str, passphrase: &str, mapper_name: &str) -> Result<String, String> {
+    log_msg(&format!("Attempting to unlock LUKS partition: {} -> /dev/mapper/{}", part_path, mapper_name));
+    
+    if crate::demo::is_demo_mode() {
+        log_msg(&format!("[DEMO] Simulating LUKS unlock for: {} -> /dev/mapper/{}", part_path, mapper_name));
+        if passphrase.is_empty() {
+            return Err("Passphrase cannot be empty.".to_string());
+        }
+        return Ok(format!("/dev/mapper/{}", mapper_name));
+    }
+
+    let mut child = Command::new("sudo")
+        .args(&["-n", "cryptsetup", "open", part_path, mapper_name, "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to launch cryptsetup: {}", e))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(passphrase.as_bytes());
+        let _ = stdin.flush();
+    }
+
+    let out = child.wait_with_output().map_err(|e| format!("Failed waiting on cryptsetup: {}", e))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let err_msg = if stderr.contains("No key available") || stderr.contains("passphrase") || stderr.contains("key") {
+            "Incorrect encryption password. Please try again.".to_string()
+        } else {
+            format!("Could not unlock {}: {}", part_path, stderr.trim())
+        };
+        log_msg(&format!("ERROR unlocking LUKS: {}", err_msg));
+        return Err(err_msg);
+    }
+
+    let _ = Command::new("sudo").args(&["-n", "udevadm", "settle"]).status();
+    let mapper_dev = format!("/dev/mapper/{}", mapper_name);
+    log_msg(&format!("Successfully unlocked LUKS volume: {}", mapper_dev));
+    Ok(mapper_dev)
+}
+
+pub(crate) fn lock_luks_partition(mapper_name: &str) -> Result<(), String> {
+    log_msg(&format!("Closing LUKS mapped volume: {}", mapper_name));
+    let _ = Command::new("sudo").args(&["-n", "cryptsetup", "close", mapper_name]).status();
+    Ok(())
 }
 
 pub(crate) fn is_valid_base_squashfs(path: &str) -> bool {
@@ -373,4 +476,41 @@ where
 
     log("[Notice] No local base image found on built-in recovery partition.");
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encrypted_target_structure() {
+        let enc = EncryptedTarget {
+            disk_path: "/dev/nvme0n1".to_string(),
+            part_path: "/dev/nvme0n1p2".to_string(),
+            label: "Encrypted Pulsar OS".to_string(),
+            uuid: "test-luks-uuid-1234".to_string(),
+            size: "500G".to_string(),
+            is_unlocked: false,
+            mapper_name: "pulsar_cryptroot".to_string(),
+        };
+
+        assert_eq!(enc.part_path, "/dev/nvme0n1p2");
+        assert_eq!(enc.mapper_name, "pulsar_cryptroot");
+        assert!(!enc.is_unlocked);
+    }
+
+    #[test]
+    fn test_demo_mode_luks_unlock() {
+        crate::demo::set_demo_mode(true);
+
+        // In demo mode, empty password should return Err and non-empty Ok
+        let res_err = unlock_luks_partition("/dev/demo1", "", "pulsar_cryptroot");
+        assert!(res_err.is_err());
+
+        let res_ok = unlock_luks_partition("/dev/demo1", "ValidPassphrase123", "pulsar_cryptroot");
+        assert!(res_ok.is_ok());
+        assert_eq!(res_ok.unwrap(), "/dev/mapper/pulsar_cryptroot");
+
+        crate::demo::set_demo_mode(false);
+    }
 }

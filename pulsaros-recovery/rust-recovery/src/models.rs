@@ -157,6 +157,17 @@ pub struct BtrfsTarget {
 }
 
 #[derive(Clone, Debug)]
+pub struct EncryptedTarget {
+    pub disk_path: String,
+    pub part_path: String,
+    pub label: String,
+    pub uuid: String,
+    pub size: String,
+    pub is_unlocked: bool,
+    pub mapper_name: String,
+}
+
+#[derive(Clone, Debug)]
 pub struct DiscoveredImage {
     pub file_path: String,
     pub filename: String,

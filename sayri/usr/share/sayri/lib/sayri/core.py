@@ -20,7 +20,7 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import __version__, config, llm, paths, sound, stt as stt_mod, texts, tts as tts_mod
+from . import __version__, config, llm, paths, sound, stt as stt_mod, sysinfo, texts, tts as tts_mod
 from sayri.domain.models import AgentProfile, SandboxLevel
 from sayri.domain.agent_engine import AgentEngine
 from sayri.domain.agent_creator import AgentCreator
@@ -215,6 +215,11 @@ class SayriCore:
     def interrupt(self) -> None:
         """Halt any active speech / generation / listening."""
         self._current_query_id += 1
+        # A question still on screen has to be answered by the interruption
+        # itself. The agent's thread is parked waiting for it, so leaving it
+        # there would hold the turn open and the next question would queue
+        # behind a prompt nobody is going to look at any more.
+        self.engine.broker.cancel_session(self.active_session_id)
         self.tts.cancel()
         sound.stop_all()
         self._set_busy(False)
@@ -421,6 +426,9 @@ class SayriCore:
         if self.cfg.get_bool("tts", "enabled") and spoken and self.tts.ready:
             self._stop_session()
             self.set_state("speaking")
+            # UIs need the real start of the voice, not just "speaking" as a
+            # state, to know when the companion begins talking.
+            self.ui.on_speaking(True)
             self.tts.speak_async(
                 spoken,
                 on_level=lambda lvl: self._on_level(lvl),
@@ -579,6 +587,12 @@ class SayriCore:
                 on_tool_start=_on_tool_start,
                 on_tool_finish=_on_tool_finish,
                 on_error=_on_error,
+                # This turn came in over a gateway, so there is no panel to show
+                # a question on and no way to answer one. Anything needing
+                # approval is refused outright rather than parked behind a prompt
+                # the sender will never see, which would also outlive the 45
+                # seconds waited on below.
+                approvable=False,
             )
             done_event.wait(timeout=45.0)
 
@@ -702,4 +716,13 @@ class SayriCore:
         self.tts.cancel()
         sound.stop_all()
         self._stop_session()
+        # Detached UI plugins (companions, custom UIs) are not children of this
+        # process, so they must be told to leave explicitly or they keep
+        # floating on the desktop after "Exit" in the appindicator.
+        try:
+            stopped = sysinfo.stop_ui_plugins()
+            if stopped:
+                print(f"[Sayri] Stopped UI plugins: {', '.join(stopped)}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[Sayri] UI plugin shutdown notice: {exc}")
         self.ui.on_shutdown()

@@ -472,8 +472,21 @@ impl ResultView {
         let new_urls: Vec<String> = new_results.iter().map(|r| r.url.clone()).collect();
         let old_urls = self.result_urls.borrow();
 
-        // Skip rebuild if the result set is identical (common while typing)
+        // If the result set is identical (e.g. view mode toggled or duplicate search),
+        // update the active stack view and selection immediately without rebuilding widgets
         if *old_urls == new_urls {
+            self.stack.set_visible_child_name(if as_grid { "grid" } else { "list" });
+            if !as_grid {
+                if let Some(first_row) = self.list_box.row_at_index(0) {
+                    self.list_box.select_row(Some(&first_row));
+                    *self.selected_index.borrow_mut() = Some(0);
+                }
+            } else {
+                if let Some(first_child) = self.grid.child_at_index(0) {
+                    self.grid.select_child(&first_child);
+                    *self.selected_index.borrow_mut() = Some(0);
+                }
+            }
             return;
         }
         drop(old_urls);

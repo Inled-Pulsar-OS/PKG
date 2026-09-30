@@ -174,12 +174,10 @@ listrow:selected, listboxrow:selected {
     font-weight: bold;
     color: #ffffff;
     margin-top: 6px;
-    text-align: center;
 }
 .disk-info {
     font-size: 10px;
     color: #8e8e93;
-    text-align: center;
 }
 .mode-card {
     background-color: #2a2a2a;
@@ -226,6 +224,19 @@ listrow:selected, listboxrow:selected {
     font-size: 11px;
     color: #aeaeb2;
 }
+.encryption-box {
+    background-color: #1e1e20;
+    border: 1px solid #3c3c3e;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-top: 6px;
+    margin-bottom: 4px;
+}
+.validation-error {
+    font-size: 11px;
+    color: #ff453a;
+    font-weight: 600;
+}
 .uefi-notice-card {
     background-color: rgba(255, 69, 58, 0.15);
     border: 1px solid rgba(255, 69, 58, 0.45);
@@ -254,7 +265,6 @@ listrow:selected, listboxrow:selected {
     font-size: 11px;
     color: #ff9f0a;
     margin-top: 8px;
-    text-align: center;
 }
 .partition-card {
     background-color: #2a2a2a;
@@ -341,7 +351,6 @@ textview.error-log-text text {
     font-size: 12px;
     font-weight: 600;
     color: #e5e5ea;
-    text-align: center;
 }
 .terminal-btn {
     background-color: transparent;
@@ -382,7 +391,6 @@ textview.live-log-text text {
     padding: 8px 16px;
     font-size: 13px;
     font-weight: bold;
-    text-align: center;
     margin-bottom: 4px;
 }
 .live-log-view-flat {
@@ -844,6 +852,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.install_broadcom = False
         self.install_extra_packages = False
         self.install_hibernation = True
+        self.install_encryption = False
+        self.encryption_passphrase = ""
         self.selected_action = None
         self.selected_disk_card = None
         self.selected_install_mode = None
@@ -2176,6 +2186,83 @@ class RecoveryWindow(Adw.ApplicationWindow):
         row_hibernation.append(self.chk_hibernation)
         opt_group.append(row_hibernation)
 
+        # Separator
+        sep3 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        opt_group.append(sep3)
+
+        # Row 4: Full Disk Encryption (LUKS)
+        row_encryption = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        row_encryption.add_css_class("option-row")
+
+        row_enc_hdr = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        txt_enc = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        txt_enc.set_hexpand(True)
+        lbl_enc_title = Gtk.Label()
+        lbl_enc_title.set_markup("<b>Disk Encryption (LUKS)</b> <span foreground='#f59e0b' size='smaller'>● Optional</span>")
+        lbl_enc_title.add_css_class("option-title")
+        lbl_enc_title.set_halign(Gtk.Align.START)
+        lbl_enc_title.set_wrap(True)
+        lbl_enc_title.set_max_width_chars(42)
+        txt_enc.append(lbl_enc_title)
+        lbl_enc_desc = Gtk.Label(label="Protects your system, files, and partitions with high-security LUKS encryption. You will be prompted visually for your password on startup.")
+        lbl_enc_desc.add_css_class("option-desc")
+        lbl_enc_desc.set_halign(Gtk.Align.START)
+        lbl_enc_desc.set_wrap(True)
+        lbl_enc_desc.set_max_width_chars(42)
+        txt_enc.append(lbl_enc_desc)
+        row_enc_hdr.append(txt_enc)
+
+        self.chk_encryption = Gtk.CheckButton()
+        self.chk_encryption.set_active(False)
+        self.chk_encryption.set_valign(Gtk.Align.CENTER)
+        row_enc_hdr.append(self.chk_encryption)
+        row_encryption.append(row_enc_hdr)
+
+        # Password input fields container
+        self.enc_inputs_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.enc_inputs_box.add_css_class("encryption-box")
+        self.enc_inputs_box.set_visible(False)
+
+        lbl_pass_hint = Gtk.Label(label="Set a secure disk encryption password (minimum 6 characters):")
+        lbl_pass_hint.add_css_class("option-desc")
+        lbl_pass_hint.set_halign(Gtk.Align.START)
+        self.enc_inputs_box.append(lbl_pass_hint)
+
+        lbl_p1 = Gtk.Label(label="Passphrase:")
+        lbl_p1.add_css_class("option-desc")
+        lbl_p1.set_halign(Gtk.Align.START)
+        self.enc_inputs_box.append(lbl_p1)
+
+        self.entry_enc_pass = Gtk.PasswordEntry()
+        self.entry_enc_pass.set_show_peek_icon(True)
+        self.enc_inputs_box.append(self.entry_enc_pass)
+
+        lbl_p2 = Gtk.Label(label="Confirm Passphrase:")
+        lbl_p2.add_css_class("option-desc")
+        lbl_p2.set_halign(Gtk.Align.START)
+        self.enc_inputs_box.append(lbl_p2)
+
+        self.entry_enc_confirm = Gtk.PasswordEntry()
+        self.entry_enc_confirm.set_show_peek_icon(True)
+        self.enc_inputs_box.append(self.entry_enc_confirm)
+
+        self.lbl_enc_error = Gtk.Label()
+        self.lbl_enc_error.add_css_class("validation-error")
+        self.lbl_enc_error.set_halign(Gtk.Align.START)
+        self.lbl_enc_error.set_visible(False)
+        self.enc_inputs_box.append(self.lbl_enc_error)
+
+        row_encryption.append(self.enc_inputs_box)
+
+        def on_enc_toggled(chk):
+            is_active = chk.get_active()
+            self.enc_inputs_box.set_visible(is_active)
+            if not is_active:
+                self.lbl_enc_error.set_visible(False)
+
+        self.chk_encryption.connect("toggled", on_enc_toggled)
+        opt_group.append(row_encryption)
+
         box.append(opt_group)
 
         # UEFI Compatibility Banner (if running GRUB ISO on UEFI hardware)
@@ -2230,6 +2317,28 @@ class RecoveryWindow(Adw.ApplicationWindow):
         if self._is_uefi_grub_incompatible():
             self.stack.set_visible_child_name("install_uefi_incompatible")
             return
+
+        if self.chk_encryption.get_active():
+            pass1 = self.entry_enc_pass.get_text().strip()
+            pass2 = self.entry_enc_confirm.get_text().strip()
+            if not pass1:
+                self.lbl_enc_error.set_text("Please enter an encryption password.")
+                self.lbl_enc_error.set_visible(True)
+                return
+            if len(pass1) < 6:
+                self.lbl_enc_error.set_text("Password must be at least 6 characters long.")
+                self.lbl_enc_error.set_visible(True)
+                return
+            if pass1 != pass2:
+                self.lbl_enc_error.set_text("Passwords do not match. Please re-enter.")
+                self.lbl_enc_error.set_visible(True)
+                return
+            self.lbl_enc_error.set_visible(False)
+            self.install_encryption = True
+            self.encryption_passphrase = pass1
+        else:
+            self.install_encryption = False
+            self.encryption_passphrase = ""
 
         self.install_broadcom = self.chk_broadcom.get_active()
         self.install_extra_packages = self.chk_extra.get_active()
@@ -2339,6 +2448,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
             features.append("Full App Suite")
         if self.install_hibernation:
             features.append("Hibernation (RAM Swapfile)")
+        if self.install_encryption:
+            features.append("LUKS Encryption")
         feat_str = ", ".join(features) if features else "Minimal Base"
         self.confirm_options_lbl.set_markup(f"<b>Features:</b> {feat_str}")
 
@@ -2926,7 +3037,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
         if self.install_mode == "dualboot":
             log_msg(f"Target partition: {self.target_partition} (NOT TOUCHED)")
             log_msg(f"Preserving EFI partition: {self.target_efi_partition}")
-            GLib.idle_add(self.update_progress, 0.05, f"[DEMO] Formatting target partition {self.target_partition} as Btrfs...")
+            if self.install_encryption:
+                GLib.idle_add(self.update_progress, 0.05, f"[DEMO] Setting up LUKS encryption on {self.target_partition}...")
+                log_msg(f"[DEMO] cryptsetup luksFormat --type luks2 --pbkdf argon2id {self.target_partition}")
+                log_msg(f"[DEMO] cryptsetup open {self.target_partition} pulsar_cryptroot")
+                log_msg("[DEMO] mkfs.btrfs -f -L PULSAR_OS /dev/mapper/pulsar_cryptroot")
+            else:
+                GLib.idle_add(self.update_progress, 0.05, f"[DEMO] Formatting target partition {self.target_partition} as Btrfs...")
             demo_sleep()
             GLib.idle_add(self.update_progress, 0.15, "[DEMO] Creating Btrfs subvolumes (@ and @home)...")
             log_msg("[DEMO] btrfs subvolume create /mnt/@")
@@ -2945,9 +3062,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 log_msg(f"[DEMO] Creating partition: {part}")
                 demo_sleep()
             GLib.idle_add(self.update_progress, 0.10, "[DEMO] Formatting partitions...")
-            for fs in ["mkfs.vfat EFI", "mkfs.ext4 PULSAR_RECOVERY", "mkfs.btrfs PULSAR_OS"]:
-                log_msg(f"[DEMO] {fs}")
-                demo_sleep()
+            if self.install_encryption:
+                for fs in ["mkfs.vfat EFI", "mkfs.ext4 PULSAR_RECOVERY", "cryptsetup luksFormat PulsarOS", "mkfs.btrfs /dev/mapper/pulsar_cryptroot"]:
+                    log_msg(f"[DEMO] {fs}")
+                    demo_sleep()
+            else:
+                for fs in ["mkfs.vfat EFI", "mkfs.ext4 PULSAR_RECOVERY", "mkfs.btrfs PULSAR_OS"]:
+                    log_msg(f"[DEMO] {fs}")
+                    demo_sleep()
             GLib.idle_add(self.update_progress, 0.15, "[DEMO] Creating Btrfs subvolumes...")
             log_msg("[DEMO] btrfs subvolume create /mnt/@")
             log_msg("[DEMO] btrfs subvolume create /mnt/@home")
@@ -3163,6 +3285,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                     subprocess.run(["umount", "-l", parts[1]], capture_output=True)
                     except Exception:
                         pass
+
+                    # 5. Close LUKS encryption container if mapped
+                    subprocess.run(["cryptsetup", "close", "pulsar_cryptroot"], capture_output=True)
                 
             def mount_vfs():
                 if "TEST_MODE" not in os.environ:
@@ -3188,7 +3313,67 @@ class RecoveryWindow(Adw.ApplicationWindow):
             is_efi = os.path.exists("/sys/firmware/efi")
             is_arch = os.path.exists("/etc/pacman.conf")
             esp_root = "/mnt/boot/efi"
+            root_part_dev = None
+            luks_raw_part = None
             
+            def setup_and_mount_root(raw_part):
+                nonlocal root_part_dev, luks_raw_part
+                luks_raw_part = raw_part
+                if self.install_encryption:
+                    GLib.idle_add(self.update_progress, 0.08, f"Setting up LUKS2 encryption on {raw_part}...")
+                    log_msg(f"Setting up LUKS2 encryption on {raw_part}...")
+                    if "TEST_MODE" in os.environ:
+                        log_msg(f"[TEST_MODE] Simulating: cryptsetup luksFormat {raw_part}")
+                        log_msg(f"[TEST_MODE] Simulating: cryptsetup open {raw_part} pulsar_cryptroot")
+                        root_part_dev = "/dev/mapper/pulsar_cryptroot"
+                    else:
+                        subprocess.run(["cryptsetup", "close", "pulsar_cryptroot"], capture_output=True)
+                        res_fmt = subprocess.run(
+                            ["cryptsetup", "luksFormat", "-q", "--type", "luks2", "--pbkdf", "argon2id", raw_part, "-"],
+                            input=self.encryption_passphrase.encode("utf-8"),
+                            capture_output=True
+                        )
+                        if res_fmt.returncode != 0:
+                            raise Exception(f"cryptsetup luksFormat failed on {raw_part}:\n{res_fmt.stderr.decode('utf-8', errors='ignore')}")
+                        
+                        res_open = subprocess.run(
+                            ["cryptsetup", "open", raw_part, "pulsar_cryptroot", "-"],
+                            input=self.encryption_passphrase.encode("utf-8"),
+                            capture_output=True
+                        )
+                        if res_open.returncode != 0:
+                            raise Exception(f"cryptsetup open failed on {raw_part}:\n{res_open.stderr.decode('utf-8', errors='ignore')}")
+                        
+                        root_part_dev = "/dev/mapper/pulsar_cryptroot"
+                        exec_cmd(["udevadm", "settle"])
+                        time.sleep(1)
+                else:
+                    root_part_dev = raw_part
+
+                GLib.idle_add(self.update_progress, 0.10, f"Formatting {root_part_dev} as Btrfs...")
+                exec_cmd(["wipefs", "-a", "-f", root_part_dev] if not self.install_encryption else ["true"])
+                exec_cmd(["mkfs.btrfs", "-f", "-L", "PULSAR_OS", root_part_dev])
+                exec_cmd(["sync"])
+                exec_cmd(["udevadm", "settle"])
+                time.sleep(1)
+
+                subprocess.run(["modprobe", "btrfs"], capture_output=True)
+
+                GLib.idle_add(self.update_progress, 0.15, "Creating Btrfs subvolumes (@ and @home)...")
+                if "TEST_MODE" not in os.environ:
+                    subprocess.run(["umount", "-l", "/mnt"])
+                os.makedirs("/mnt", exist_ok=True)
+                exec_cmd(["mount", "-t", "btrfs", root_part_dev, "/mnt"])
+                exec_cmd(["btrfs", "subvolume", "create", "/mnt/@"])
+                exec_cmd(["btrfs", "subvolume", "create", "/mnt/@home"])
+                exec_cmd(["umount", "/mnt"])
+
+                GLib.idle_add(self.update_progress, 0.18, "Mounting Btrfs subvolumes...")
+                exec_cmd(["mount", "-t", "btrfs", "-o", "subvol=@,compress=zstd:1", root_part_dev, "/mnt"])
+                exec_cmd(["mount", "--make-rprivate", "/mnt"])
+                os.makedirs("/mnt/home", exist_ok=True)
+                exec_cmd(["mount", "-t", "btrfs", "-o", "subvol=@home,compress=zstd:1", root_part_dev, "/mnt/home"])
+
             # Unmount any active mounts on the selected disk first to prevent device busy errors
             if "TEST_MODE" not in os.environ:
                 try:
@@ -3215,33 +3400,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 except Exception:
                     pass
 
-                GLib.idle_add(self.update_progress, 0.05, f"Formatting target partition {root_part} as Btrfs...")
                 exec_cmd(["wipefs", "-a", "-f", root_part])
-                exec_cmd(["mkfs.btrfs", "-f", "-L", "PULSAR_OS", root_part])
-                exec_cmd(["sync"])
-                exec_cmd(["udevadm", "settle"])
-                time.sleep(1)
+                setup_and_mount_root(root_part)
 
-                subprocess.run(["modprobe", "btrfs"], capture_output=True)
                 if is_efi:
                     subprocess.run(["modprobe", "vfat"], capture_output=True)
                 if recovery_part:
                     subprocess.run(["modprobe", "ext4"], capture_output=True)
 
-                GLib.idle_add(self.update_progress, 0.15, "Creating Btrfs subvolumes (@ and @home)...")
-                if "TEST_MODE" not in os.environ:
-                    subprocess.run(["umount", "-l", "/mnt"])
-                os.makedirs("/mnt", exist_ok=True)
-                exec_cmd(["mount", "-t", "btrfs", root_part, "/mnt"])
-                exec_cmd(["btrfs", "subvolume", "create", "/mnt/@"])
-                exec_cmd(["btrfs", "subvolume", "create", "/mnt/@home"])
-                exec_cmd(["umount", "/mnt"])
-
-                GLib.idle_add(self.update_progress, 0.18, "Mounting Btrfs subvolumes and EFI...")
-                exec_cmd(["mount", "-t", "btrfs", "-o", "subvol=@,compress=zstd:1", root_part, "/mnt"])
-                exec_cmd(["mount", "--make-rprivate", "/mnt"])
-                os.makedirs("/mnt/home", exist_ok=True)
-                exec_cmd(["mount", "-t", "btrfs", "-o", "subvol=@home,compress=zstd:1", root_part, "/mnt/home"])
                 if is_efi:
                     if not efi_part:
                         efi_part = detect_efi_partition(disk_path) or detect_efi_partition(None)
@@ -3292,29 +3458,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 GLib.idle_add(self.update_progress, 0.10, "Formatting partitions (EFI, Recovery, Btrfs)...")
                 exec_cmd(["mkfs.vfat", "-F32", "-n", "EFI", efi_part])
                 exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PULSAR_RECOVERY", recovery_part])
-                exec_cmd(["mkfs.btrfs", "-f", "-L", "PULSAR_OS", root_part])
-                exec_cmd(["sync"])
-                exec_cmd(["udevadm", "settle"])
-                time.sleep(1)
                 
-                subprocess.run(["modprobe", "btrfs"], capture_output=True)
+                setup_and_mount_root(root_part)
+                
                 subprocess.run(["modprobe", "ext4"], capture_output=True)
                 subprocess.run(["modprobe", "vfat"], capture_output=True)
                 
-                GLib.idle_add(self.update_progress, 0.15, "Creating Btrfs subvolumes (@ and @home)...")
-                if "TEST_MODE" not in os.environ:
-                    subprocess.run(["umount", "-l", "/mnt"])
-                os.makedirs("/mnt", exist_ok=True)
-                exec_cmd(["mount", "-t", "btrfs", root_part, "/mnt"])
-                exec_cmd(["btrfs", "subvolume", "create", "/mnt/@"])
-                exec_cmd(["btrfs", "subvolume", "create", "/mnt/@home"])
-                exec_cmd(["umount", "/mnt"])
-                
-                GLib.idle_add(self.update_progress, 0.18, "Mounting Btrfs subvolumes...")
-                exec_cmd(["mount", "-t", "btrfs", "-o", "subvol=@,compress=zstd:1", root_part, "/mnt"])
-                exec_cmd(["mount", "--make-rprivate", "/mnt"])
-                os.makedirs("/mnt/home", exist_ok=True)
-                exec_cmd(["mount", "-t", "btrfs", "-o", "subvol=@home,compress=zstd:1", root_part, "/mnt/home"])
                 os.makedirs("/mnt/boot/efi", exist_ok=True)
                 exec_cmd(["mount", "-t", "vfat", efi_part, "/mnt/boot/efi"])
                 os.makedirs("/mnt/recovery", exist_ok=True)
@@ -3366,28 +3515,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 exec_cmd(["wipefs", "-a", "-f", root_part])
                 GLib.idle_add(self.update_progress, 0.10, "Formatting Recovery and Btrfs partitions...")
                 exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PULSAR_RECOVERY", recovery_part])
-                exec_cmd(["mkfs.btrfs", "-f", "-L", "PULSAR_OS", root_part])
-                exec_cmd(["sync"])
-                exec_cmd(["udevadm", "settle"])
-                time.sleep(1)
                 
-                subprocess.run(["modprobe", "btrfs"], capture_output=True)
+                setup_and_mount_root(root_part)
+                
                 subprocess.run(["modprobe", "ext4"], capture_output=True)
-                
-                GLib.idle_add(self.update_progress, 0.15, "Creating Btrfs subvolumes (@ and @home)...")
-                if "TEST_MODE" not in os.environ:
-                    subprocess.run(["umount", "-l", "/mnt"])
-                os.makedirs("/mnt", exist_ok=True)
-                exec_cmd(["mount", "-t", "btrfs", root_part, "/mnt"])
-                exec_cmd(["btrfs", "subvolume", "create", "/mnt/@"])
-                exec_cmd(["btrfs", "subvolume", "create", "/mnt/@home"])
-                exec_cmd(["umount", "/mnt"])
-                
-                GLib.idle_add(self.update_progress, 0.18, "Mounting Btrfs subvolumes...")
-                exec_cmd(["mount", "-t", "btrfs", "-o", "subvol=@,compress=zstd:1", root_part, "/mnt"])
-                exec_cmd(["mount", "--make-rprivate", "/mnt"])
-                os.makedirs("/mnt/home", exist_ok=True)
-                exec_cmd(["mount", "-t", "btrfs", "-o", "subvol=@home,compress=zstd:1", root_part, "/mnt/home"])
                 os.makedirs("/mnt/recovery", exist_ok=True)
                 exec_cmd(["mount", "-t", "ext4", recovery_part, "/mnt/recovery"])
             
@@ -3881,7 +4012,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 except Exception as sw_err:
                     log_msg(f"Notice: swapfile creation error: {sw_err}")
 
-            root_uuid = get_partition_uuid(root_part)
+            root_uuid = get_partition_uuid(root_part_dev if root_part_dev else root_part)
+            luks_uuid = get_partition_uuid(luks_raw_part) if self.install_encryption and luks_raw_part else None
             rec_uuid = get_partition_uuid(recovery_part) if recovery_part else None
             target_swap_gb = compute_swap_size_gb()
             
@@ -3910,6 +4042,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     os.makedirs("/mnt/etc/udev/rules.d", exist_ok=True)
                     with open("/mnt/etc/fstab", "w") as f:
                         f.write(fstab_content)
+                    if self.install_encryption and luks_uuid:
+                        with open("/mnt/etc/crypttab", "w") as cf:
+                            cf.write(f"pulsar_cryptroot UUID={luks_uuid} none luks,discard\n")
+                        log_msg(f"✅ Configured /etc/crypttab: pulsar_cryptroot UUID={luks_uuid}")
                     with open("/mnt/etc/udev/rules.d/99-pulsaros-hide-recovery.rules", "w") as f:
                         f.write('# Hide PULSAR_RECOVERY partition from file managers and desktop\nENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n')
                     
@@ -3937,6 +4073,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     os.makedirs("/mnt/etc/udev/rules.d", exist_ok=True)
                     with open("/mnt/etc/fstab", "w") as f:
                         f.write(fstab_content)
+                    if self.install_encryption and luks_uuid:
+                        with open("/mnt/etc/crypttab", "w") as cf:
+                            cf.write(f"pulsar_cryptroot UUID={luks_uuid} none luks,discard\n")
+                        log_msg(f"✅ Configured /etc/crypttab: pulsar_cryptroot UUID={luks_uuid}")
                     with open("/mnt/etc/udev/rules.d/99-pulsaros-hide-recovery.rules", "w") as f:
                         f.write('# Hide PULSAR_RECOVERY partition from file managers and desktop\nENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n')
 
@@ -4304,6 +4444,49 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                     f"(ESP/EFI/recovery, PULSAR_RECOVERY/boot o /@/boot); "
                                     f"la entrada de recovery quedará rota: loader={rec_loader} "
                                     "— revisa que la ISO incluya /recovery/vmlinuz-recovery")
+                        if self.install_encryption and is_efi and esp_root:
+                            # Deploy kernel and initramfs to ESP EFI/PulsarOS so rEFInd loads them unencrypted
+                            os.makedirs(f"{esp_root}/EFI/PulsarOS", exist_ok=True)
+                            if installed_k_file and os.path.isfile(installed_k_file):
+                                shutil.copy2(installed_k_file, f"{esp_root}/EFI/PulsarOS/{k_name}")
+                            if installed_initrd_file and os.path.isfile(installed_initrd_file):
+                                shutil.copy2(installed_initrd_file, f"{esp_root}/EFI/PulsarOS/{initrd_name}")
+                            for uc in ("amd-ucode.img", "intel-ucode.img"):
+                                if os.path.exists(f"/mnt/boot/{uc}"):
+                                    shutil.copy2(f"/mnt/boot/{uc}", f"{esp_root}/EFI/PulsarOS/{uc}")
+
+                            esp_ucode_lines = "".join(
+                                f"    initrd /EFI/PulsarOS/{uc}\n"
+                                for uc in ("amd-ucode.img", "intel-ucode.img")
+                                if os.path.exists(f"{esp_root}/EFI/PulsarOS/{uc}")
+                            )
+                            enc_boot_opts = f"rd.luks.name={luks_uuid}=pulsar_cryptroot cryptdevice=UUID={luks_uuid}:pulsar_cryptroot root=/dev/mapper/pulsar_cryptroot rootflags=subvol=@ rw quiet splash{resume_opts}"
+                            pulsar_entry = (
+                                'menuentry "Pulsar OS" {\n'
+                                f"    icon {icon_os}\n"
+                                f"    loader /EFI/PulsarOS/{k_name}\n"
+                                f"{esp_ucode_lines}"
+                                f"    initrd /EFI/PulsarOS/{initrd_name}\n"
+                                f'    options "{enc_boot_opts}"\n'
+                                '    submenuentry "Boot to single-user mode" {\n'
+                                f'        options "{enc_boot_opts.replace("quiet splash", "single")}"\n'
+                                "    }\n"
+                                "}\n"
+                            )
+                        else:
+                            pulsar_entry = (
+                                'menuentry "Pulsar OS" {\n'
+                                f"    icon {icon_os}\n"
+                                "    volume PULSAR_OS\n"
+                                f"    loader /@/boot/{k_name}\n"
+                                f"{ucode_lines}"
+                                f"    initrd /@/boot/{initrd_name}\n"
+                                f'    options "root=UUID={root_uuid} rootflags=subvol=@ rw quiet splash{resume_opts}"\n'
+                                '    submenuentry "Boot to single-user mode" {\n'
+                                f'        options "root=UUID={root_uuid} rootflags=subvol=@ rw single{resume_opts}"\n'
+                                "    }\n"
+                                "}\n"
+                            )
 
                         menu_block = (
                             f"\n{MENU_BEGIN}\n"
@@ -4314,17 +4497,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             f"{scanfor_mode}\n"
                             "default_selection 1\n"
                             "\n"
-                            'menuentry "Pulsar OS" {\n'
-                            f"    icon {icon_os}\n"
-                            "    volume PULSAR_OS\n"
-                            f"    loader /@/boot/{k_name}\n"
-                            f"{ucode_lines}"
-                            f"    initrd /@/boot/{initrd_name}\n"
-                            f'    options "root=UUID={root_uuid} rootflags=subvol=@ rw quiet splash{resume_opts}"\n'
-                            '    submenuentry "Boot to single-user mode" {\n'
-                            f'        options "root=UUID={root_uuid} rootflags=subvol=@ rw single{resume_opts}"\n'
-                            "    }\n"
-                            "}\n"
+                            f"{pulsar_entry}"
                             "\n"
                             'menuentry "Pulsar OS Recovery" {\n'
                             f"    icon {icon_rec}\n"
@@ -4391,6 +4564,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     except Exception:
                         pass
 
+                grub_cmdline = '"rootflags=subvol=@"'
+                if self.install_encryption and luks_uuid:
+                    grub_cmdline = f'"rootflags=subvol=@ rd.luks.name={luks_uuid}=pulsar_cryptroot cryptdevice=UUID={luks_uuid}:pulsar_cryptroot"'
+
                 grub_params = {
                     "GRUB_DISTRIBUTOR": '"Pulsar OS"',
                     "GRUB_DISABLE_OS_PROBER": "false",
@@ -4398,9 +4575,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     "GRUB_TIMEOUT": "5",
                     "GRUB_TIMEOUT_STYLE": "menu",
                     "GRUB_GFXMODE": '"1920x1080,1280x720,1024x768,auto"',
-                    "GRUB_CMDLINE_LINUX": '"rootflags=subvol=@"',
+                    "GRUB_CMDLINE_LINUX": grub_cmdline,
                     "GRUB_CMDLINE_LINUX_DEFAULT": f'"rw quiet splash{rl_resume_opts}"',
                 }
+                if self.install_encryption:
+                    grub_params["GRUB_ENABLE_CRYPTODISK"] = "y"
 
                 # Check if GRUB theme exists
                 theme_candidates = [
@@ -4863,10 +5042,16 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                     # MUST NOT coexist with 'systemd' or the kernel will hang after
                     # Plymouth splash on every resume attempt. Hard-write the canonical
                     # HOOKS line to eliminate any inherited stale state.
-                    canonical_hooks = (
-                        "HOOKS=(base systemd autodetect microcode modconf kms "
-                        "keyboard sd-vconsole plymouth block filesystems btrfs)"
-                    )
+                    if self.install_encryption:
+                        canonical_hooks = (
+                            "HOOKS=(base systemd autodetect microcode modconf kms "
+                            "keyboard sd-vconsole plymouth sd-encrypt block filesystems btrfs)"
+                        )
+                    else:
+                        canonical_hooks = (
+                            "HOOKS=(base systemd autodetect microcode modconf kms "
+                            "keyboard sd-vconsole plymouth block filesystems btrfs)"
+                        )
                     canonical_modules = (
                         "MODULES=(i915 amdgpu radeon nouveau virtio_gpu bochs vboxvideo vmwgfx "
                         "9p 9pnet 9pnet_virtio virtio_pci virtio_blk)"
@@ -4900,6 +5085,15 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                         log_msg(f"✅ Configurado /etc/initramfs-tools/conf.d/resume con RESUME=UUID={root_uuid}")
                     except Exception as deb_res_err:
                         log_msg(f"Warning: Failed to write Debian resume conf: {deb_res_err}")
+
+                if self.install_encryption and "TEST_MODE" not in os.environ:
+                    try:
+                        os.makedirs("/mnt/etc/cryptsetup-initramfs", exist_ok=True)
+                        with open("/mnt/etc/cryptsetup-initramfs/conf-hook", "w") as cfh:
+                            cfh.write("CRYPTSETUP=y\n")
+                        log_msg("✅ Enabled CRYPTSETUP=y for Debian initramfs.")
+                    except Exception as deb_crypt_err:
+                        log_msg(f"Warning: Failed to write cryptsetup-initramfs conf-hook: {deb_crypt_err}")
 
                 # 2. Ensure sleep.conf.d drop-in
                 if "TEST_MODE" not in os.environ:

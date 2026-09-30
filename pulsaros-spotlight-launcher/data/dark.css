@@ -2,9 +2,9 @@
 
 .spotlight-window.dark,
 .spotlight-window {
-    background-color: rgba(30, 30, 35, 0.78);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.28), 0 16px 40px rgba(0, 0, 0, 0.42);
+    background-color: rgba(28, 28, 34, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.35), 0 24px 60px rgba(0, 0, 0, 0.50);
     color: #ffffff;
 }
 
@@ -16,7 +16,7 @@
 
 .spotlight-window.dark .search-icon,
 .search-icon {
-    opacity: 0.65;
+    opacity: 0.75;
 }
 
 .spotlight-window.dark .search-input,
@@ -26,31 +26,33 @@
 }
 
 .view-toggle {
-    opacity: 0.7;
+    opacity: 0.75;
 }
 
 .view-toggle:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.12);
     opacity: 1.0;
 }
 
 .spotlight-window.dark .category-bar,
 .category-bar {
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    background-color: rgba(0, 0, 0, 0.15);
+    background-color: rgba(0, 0, 0, 0.12);
 }
 
 .spotlight-window.dark .category-btn,
 .category-btn {
-    color: rgba(255, 255, 255, 0.8);
+    color: rgba(255, 255, 255, 0.85);
 }
 
 .category-btn:hover {
-    background-color: rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.10);
 }
 
 .category-btn:checked {
-    background-color: #0A84FF;
+    background-color: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.25);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     color: #ffffff;
     font-weight: 600;
 }

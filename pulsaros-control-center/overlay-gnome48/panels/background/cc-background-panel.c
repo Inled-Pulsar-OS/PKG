@@ -283,11 +283,17 @@ reload_color_scheme (CcBackgroundPanel *self)
     }
 }
 
+#define INTERFACE_GTK_THEME_KEY "gtk-theme"
+#define SHELL_USER_THEME_SCHEMA "org.gnome.shell.extensions.user-theme"
+#define SHELL_USER_THEME_KEY "name"
+
 static void
 set_color_scheme (CcBackgroundPanel   *self,
                   GDesktopColorScheme  color_scheme)
 {
   GDesktopColorScheme scheme;
+  const gchar *theme_name;
+  GSettingsSchemaSource *source;
 
   scheme = g_settings_get_enum (self->interface_settings,
                                 INTERFACE_COLOR_SCHEME_KEY);
@@ -302,6 +308,27 @@ set_color_scheme (CcBackgroundPanel   *self,
   g_settings_set_enum (self->interface_settings,
                        INTERFACE_COLOR_SCHEME_KEY,
                        color_scheme);
+
+  theme_name = (color_scheme == G_DESKTOP_COLOR_SCHEME_PREFER_DARK) ? "MacTahoe-Dark" : "MacTahoe";
+
+  /* Update GTK application theme */
+  if (g_settings_schema_has_key (g_settings_get_user_value (self->interface_settings) ? g_settings_get_settings_schema (self->interface_settings) : NULL, INTERFACE_GTK_THEME_KEY) ||
+      g_settings_get_settings_schema (self->interface_settings) != NULL)
+    {
+      g_settings_set_string (self->interface_settings, INTERFACE_GTK_THEME_KEY, theme_name);
+    }
+
+  /* Update GNOME Shell user-theme extension if present */
+  source = g_settings_schema_source_get_default ();
+  if (source != NULL)
+    {
+      g_autoptr(GSettingsSchema) user_theme_schema = g_settings_schema_source_lookup (source, SHELL_USER_THEME_SCHEMA, TRUE);
+      if (user_theme_schema != NULL)
+        {
+          g_autoptr(GSettings) shell_settings = g_settings_new (SHELL_USER_THEME_SCHEMA);
+          g_settings_set_string (shell_settings, SHELL_USER_THEME_KEY, theme_name);
+        }
+    }
 }
 
 /* Color schemes */

@@ -52,8 +52,8 @@ fi
 mkdir -p "$STAGE_DIR/usr/share/themes"
 mkdir -p "$STAGE_DIR/usr/share/icons"
 
-# Ejecutar instalador apuntando al staging
-./install.sh -b -c dark -d "$STAGE_DIR/usr/share/themes" --silent-mode
+# Ejecutar instalador apuntando al staging (tanto variante clara como oscura)
+./install.sh -b -c light -c dark -d "$STAGE_DIR/usr/share/themes" --silent-mode
 
 # Copiar configuración de GTK4 para Skel y Root (Libadwaita Fix)
 mkdir -p "$STAGE_DIR/etc/skel/.config/gtk-4.0"
@@ -492,6 +492,12 @@ DOCK_HOVER_FIX
 
 find "$STAGE_DIR" -path "*/gnome-shell/gnome-shell.css" -exec sh -c 'cat /tmp/dock_hover_fix.css >> "$1"' _ {} \; 2>/dev/null || true
 rm -f /tmp/dock_hover_fix.css
+
+# Symlink MacTahoe to MacTahoe-Light for backward compatibility
+if [ -d "$STAGE_DIR/usr/share/themes/MacTahoe-Light" ] && [ ! -d "$STAGE_DIR/usr/share/themes/MacTahoe" ]; then
+    ln -sf MacTahoe-Light "$STAGE_DIR/usr/share/themes/MacTahoe"
+fi
+
 
 
 

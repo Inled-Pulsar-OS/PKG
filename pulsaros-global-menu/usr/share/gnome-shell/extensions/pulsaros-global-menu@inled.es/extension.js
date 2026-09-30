@@ -2368,9 +2368,16 @@ class MacOSFullscreenManager {
                         // Hide actor so GNOME Shell skips unmaximize/maximize animations
                         if (actor) actor.hide();
                         try {
-                            win.unmaximize(Meta.MaximizeFlags.BOTH);
-                            // At this point Mutter work area = (0,0,w,h) since struts=0
-                            win.maximize(Meta.MaximizeFlags.BOTH);
+                            if (typeof Meta.MaximizeFlags !== 'undefined' && win.unmaximize.length > 0) {
+                                win.unmaximize(Meta.MaximizeFlags.BOTH);
+                            } else {
+                                win.unmaximize();
+                            }
+                            if (typeof Meta.MaximizeFlags !== 'undefined' && win.maximize.length > 0) {
+                                win.maximize(Meta.MaximizeFlags.BOTH);
+                            } else {
+                                win.maximize();
+                            }
                         } finally {
                             if (actor) actor.show();
                             // Release lock right away – notify:: signals fire synchronously
@@ -2771,9 +2778,47 @@ export default class PulsarosGlobalMenuExtension extends Extension {
         } catch (e) {
             console.error("[GlobalMenu] Failed to connect to active-changed signal:", e);
         }
+
+        // Auto-sync MacTahoe Light / Dark theme when user toggles color scheme in GNOME Settings
+        try {
+            this._ifaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
+            let userThemeSource = Gio.SettingsSchemaSource.get_default();
+            this._userThemeSettings = (userThemeSource && userThemeSource.lookup('org.gnome.shell.extensions.user-theme', true))
+                ? new Gio.Settings({ schema_id: 'org.gnome.shell.extensions.user-theme' })
+                : null;
+
+            this._syncThemes = () => {
+                let colorScheme = this._ifaceSettings.get_string('color-scheme');
+                let targetTheme = (colorScheme === 'prefer-dark') ? 'MacTahoe-Dark' : 'MacTahoe';
+                
+                let currentGtk = this._ifaceSettings.get_string('gtk-theme');
+                if (currentGtk !== targetTheme) {
+                    this._ifaceSettings.set_string('gtk-theme', targetTheme);
+                }
+
+                if (this._userThemeSettings) {
+                    let currentShell = this._userThemeSettings.get_string('name');
+                    if (currentShell !== targetTheme) {
+                        this._userThemeSettings.set_string('name', targetTheme);
+                    }
+                }
+            };
+
+            this._colorSchemeChangeId = this._ifaceSettings.connect('changed::color-scheme', () => {
+                this._syncThemes();
+            });
+            // Initial sync
+            this._syncThemes();
+        } catch (e) {
+            console.error("[GlobalMenu] Theme sync error:", e);
+        }
     }
     
     disable() {
+        if (this._ifaceSettings && this._colorSchemeChangeId) {
+            this._ifaceSettings.disconnect(this._colorSchemeChangeId);
+            this._colorSchemeChangeId = 0;
+        }
         // Disconnect display focus notification signal
         // Desconectar la señal de notificación de foco de la pantalla
         if (this._focusNotifyId) {
@@ -3463,9 +3508,8 @@ export default class PulsarosGlobalMenuExtension extends Extension {
             let cmd = `pkexec /usr/bin/pulsaros-power-action ${actionType} restore`;
             this._runCommand(cmd);
         } else {
-            let flag = (actionType === 'restart') ? '--reboot' : '--power-off';
             let sysCmd = (actionType === 'restart') ? 'reboot' : 'poweroff';
-            let cmd = `gnome-session-quit ${flag} --no-prompt || systemctl ${sysCmd} || loginctl ${sysCmd}`;
+            let cmd = `systemctl ${sysCmd} || loginctl ${sysCmd}`;
             this._runCommand(cmd);
         }
     }

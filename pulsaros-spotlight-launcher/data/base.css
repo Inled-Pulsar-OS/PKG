@@ -1,28 +1,29 @@
 /* PulsarOS Spotlight — Base Layout & Structural Styles */
 
 .spotlight-window {
-    border-radius: 16px;
-    transition: background-color 200ms ease, border-color 200ms ease;
+    border-radius: 24px;
+    transition: background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
 }
 
 .spotlight-main {
     background-color: transparent;
+    border-radius: 24px;
 }
 
 .search-header {
-    padding: 14px 18px;
-    border-radius: 16px 16px 0 0;
+    padding: 14px 20px;
+    border-radius: 24px 24px 0 0;
 }
 
 .search-icon {
-    -gtk-icon-size: 22px;
+    -gtk-icon-size: 24px;
 }
 
 .search-input {
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 500;
-    padding: 4px 8px;
-    border-radius: 8px;
+    padding: 6px 10px;
+    border-radius: 10px;
     border: none;
     outline: none;
     background: none;
@@ -35,24 +36,26 @@
 }
 
 .view-toggle {
-    padding: 5px;
-    border-radius: 8px;
-    min-width: 30px;
-    min-height: 30px;
+    padding: 6px;
+    border-radius: 9999px;
+    min-width: 32px;
+    min-height: 32px;
 }
 
 .category-bar {
-    padding: 6px 14px;
+    padding: 8px 18px;
+    border-radius: 0;
 }
 
 .category-btn {
-    padding: 4px 12px;
-    border-radius: 12px;
-    font-size: 12px;
+    padding: 5px 16px;
+    border-radius: 9999px;
+    font-size: 13px;
     font-weight: 500;
-    min-height: 24px;
-    border: none;
+    min-height: 28px;
+    border: 1px solid transparent;
     background: transparent;
+    transition: all 150ms ease;
 }
 
 .results-area {
@@ -83,17 +86,20 @@
 
 /* grid view */
 .result-item-grid {
-    padding: 12px 8px;
-    border-radius: 10px;
-    margin: 2px;
+    padding: 14px 10px;
+    border-radius: 16px;
+    margin: 4px;
+    transition: all 120ms ease;
 }
 
 .result-icon-grid {
-    -gtk-icon-size: 36px;
+    -gtk-icon-size: 52px;
 }
 
 .result-title-grid {
-    font-size: 11px;
+    font-size: 12px;
+    font-weight: 500;
+    margin-top: 6px;
 }
 
 /* thumbnail for image/pdf/video results */

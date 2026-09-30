@@ -78,7 +78,7 @@
                             </child>
                             <child>
                               <object class="GtkLabel" id="user_email_label">
-                                <property name="label" translatable="yes">Pulsar OS ID, iCloud and Media</property>
+                                <property name="label" translatable="yes">Local Account</property>
                                 <property name="halign">start</property>
                                 <style>
                                   <class name="caption"/>

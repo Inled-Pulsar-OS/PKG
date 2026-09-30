@@ -803,7 +803,7 @@ setup_user_account_banner (CcWindow *self)
   if (email && email[0] != '\0')
     gtk_label_set_text (self->user_email_label, email);
   else
-    gtk_label_set_text (self->user_email_label, _("ID de Pulsar OS, iCloud y Medios"));
+    gtk_label_set_text (self->user_email_label, _("Local Account"));
 
   /* Set Avatar initials */
   adw_avatar_set_text (self->user_avatar, real_name ? real_name : "Pulsar OS");

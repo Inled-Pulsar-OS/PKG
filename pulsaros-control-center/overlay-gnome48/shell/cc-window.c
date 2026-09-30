@@ -743,7 +743,7 @@ setup_user_account_banner (CcWindow *self)
     gtk_label_set_text (self->user_name_label, "Apple ID & Cuentas");
 
   if (self->user_email_label)
-    gtk_label_set_text (self->user_email_label, _("ID de Pulsar OS, iCloud y Medios"));
+    gtk_label_set_text (self->user_email_label, _("Local Account"));
 
   adw_avatar_set_text (self->user_avatar, (real_name && real_name[0] != '\0') ? real_name : (user_name ? user_name : "Pulsar OS"));
 

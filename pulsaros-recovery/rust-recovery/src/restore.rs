@@ -137,6 +137,18 @@ where
         }
     }
 
+    // Also check for existing /etc/crypttab to preserve LUKS configuration
+    let mut preserved_crypttab: Option<String> = None;
+    let old_crypttab = format!("{}/etc/crypttab", old_root);
+    if Path::new(&old_crypttab).exists() {
+        if let Ok(c) = fs::read_to_string(&old_crypttab) {
+            if !c.trim().is_empty() {
+                log("Preserved existing /etc/crypttab disk encryption configuration.");
+                preserved_crypttab = Some(c);
+            }
+        }
+    }
+
     // Also inspect @home in case /@/etc/passwd was already corrupted or missing
     let home_dir = format!("{}/@home", btrfs_mnt);
     if let Ok(entries) = fs::read_dir(&home_dir) {
@@ -331,6 +343,28 @@ where
 
     let _ = fs::write("/tmp/pulsar_new_fstab", &fstab_content);
     let _ = exec_cmd(&format!("cp -f /tmp/pulsar_new_fstab {}/etc/fstab", new_root));
+
+    // Restore or generate /etc/crypttab if LUKS encrypted
+    if let Some(ref crypttab) = preserved_crypttab {
+        let crypttab_path = format!("{}/etc/crypttab", new_root);
+        let _ = fs::write(&crypttab_path, crypttab);
+        log("Restored /etc/crypttab disk encryption configuration.");
+    } else if target.part_path.starts_with("/dev/mapper/") {
+        let mapper_name = target.part_path.strip_prefix("/dev/mapper/").unwrap_or("pulsar_cryptroot");
+        if let Ok(out) = exec_cmd(&format!("cryptsetup status {} 2>/dev/null | grep device: || true", mapper_name)) {
+            let backing_dev = out.split_whitespace().nth(1).unwrap_or("");
+            if !backing_dev.is_empty() {
+                if let Ok(luks_uuid) = exec_cmd(&format!("blkid -s UUID -o value {} 2>/dev/null || true", backing_dev)) {
+                    let uuid_trimmed = luks_uuid.trim();
+                    if !uuid_trimmed.is_empty() {
+                        let crypttab_content = format!("{} UUID={} none luks,discard\n", mapper_name, uuid_trimmed);
+                        let _ = fs::write(format!("{}/etc/crypttab", new_root), crypttab_content);
+                        log(&format!("Generated /etc/crypttab for mapper {} (LUKS UUID: {})", mapper_name, uuid_trimmed));
+                    }
+                }
+            }
+        }
+    }
 
     // Deploy udev rule to hide recovery partition from file managers
     let udev_dir = format!("{}/etc/udev/rules.d", new_root);

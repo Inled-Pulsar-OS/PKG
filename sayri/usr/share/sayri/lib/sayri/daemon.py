@@ -19,12 +19,15 @@ import os
 import socket
 import threading
 import time
+from dataclasses import replace
 from typing import Any, Optional
 
 from . import __version__, config, paths
 from .core import CoreUI, SayriCore
 from .domain.agent_creator import AgentCreator
-from .domain.cron_scheduler import cron_scheduler
+from .domain.cron_scheduler import Routine, cron_scheduler
+from .domain.models import AgentProfile, SandboxLevel
+from .domain.secrets_manager import secrets_manager
 from .gateway_supervisor import gateway_supervisor
 from .ipc import SayriServer, SOCK_NAME, socket_path
 from . import skills
@@ -109,11 +112,63 @@ def _agent_to_dict(a: Any) -> dict:
             "level": getattr(sandbox.level, "value", str(getattr(sandbox, "level", ""))),
             "timeout_seconds": getattr(sandbox, "timeout_seconds", None),
             "allow_network": getattr(sandbox, "allow_network", None),
+            # The asking switch, so a front-end can show the stored value
+            # instead of an unchecked box that is really "on". The rules
+            # themselves are deliberately not here: they are the user's own
+            # configuration and this listing is read by every UI on the box.
+            "ask_before_run": bool(getattr(sandbox, "ask_before_run", False)),
         },
         "allowed_skills": list(getattr(a, "allowed_skills", []) or []),
         "allowed_tools": list(getattr(a, "allowed_tools", []) or []),
         "custom_instructions": getattr(a, "custom_instructions", ""),
+        # How hard this agent works before answering. A front-end has to be able
+        # to show and change these, so they have to be in the listing too, not
+        # just in the stored file.
+        "investigation_loop": bool(getattr(a, "investigation_loop", False)),
+        "reinforcement_learning": bool(getattr(a, "reinforcement_learning", False)),
     }
+
+
+_SECRET_KEY_HINTS = ("api_key", "apikey", "token", "secret", "password", "passwd", "credential")
+
+
+def _is_secret_key(key: str) -> bool:
+    """True when a config key looks like it holds a credential."""
+    lowered = str(key).lower()
+    return any(hint in lowered for hint in _SECRET_KEY_HINTS)
+
+
+def _mask_secret_value(key: str, value: Any) -> Any:
+    """Hide the middle of a credential, leaving just enough to recognise it."""
+    if not _is_secret_key(key) or not isinstance(value, str) or not value:
+        return value
+    if len(value) <= 8:
+        return "***"
+    return f"{value[:3]}...{value[-3:]}"
+
+
+def _find_manifest(plugin_id: str) -> Optional[dict]:
+    """Locate an installed plugin's manifest.json by id, user scope first."""
+    from . import paths as _paths
+    from pathlib import Path
+
+    for root in (_paths.plugins_dir(), _paths.shared_plugins_dir()):
+        candidate = Path(root) / plugin_id / "manifest.json"
+        if not candidate.is_file():
+            continue
+        try:
+            data = json.loads(candidate.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if data.get("id", plugin_id) == plugin_id:
+            return data
+    return None
+
+
+def _declared_type(dotted_key: str) -> str:
+    """The type config.py declares for ``group.key`` ("int", "bool", ...)."""
+    group, _, name = dotted_key.partition(".")
+    return config._TYPES.get(group, {}).get(name, "string")
 
 
 class SayriDaemon:
@@ -124,9 +179,19 @@ class SayriDaemon:
             on_disconnect=self._on_disconnect,
         )
         self.core = SayriCore(ui=BridgeUI(self.server))
+        # A question is raised deep in the agent's thread, so nothing is there
+        # to ask the panel for it. These hooks are how it gets there, and they
+        # are set here because the broadcast is this process's job.
+        broker = self.core.engine.broker
+        broker.on_request = self._on_permission_request
+        broker.on_resolved = self._on_permission_resolved
         self._gateways_started = False
         self._legacy_sock: Optional[socket.socket] = None
         self._legacy_running = False
+        # In-flight asset downloads, keyed by a token so a repeated request for
+        # the same file joins the running one instead of racing it.
+        self._downloads: dict[str, bool] = {}
+        self._download_lock = threading.Lock()
         self._register_handlers()
 
     # ----------------------------------------------------------- plumbing
@@ -148,6 +213,9 @@ class SayriDaemon:
         s.register("stop_listening", lambda p, c: self._cmd_stop(p))
         s.register("toggle_listening", lambda p, c: self._cmd_toggle(p))
         s.register("interrupt", lambda p, c: self._cmd_interrupt(p))
+        s.register("permission_list", lambda p, c: self._cmd_permission_list())
+        s.register("permission_answer", lambda p, c: self._cmd_permission_answer(p))
+        s.register("permission_forget", lambda p, c: self._cmd_permission_forget(p))
         s.register("new_conversation", lambda p, c: self._cmd_new_conversation(p))
         s.register("switch_session", lambda p, c: self._cmd_switch_session(p))
         s.register("config_get", lambda p, c: self._cmd_config_get(p))
@@ -158,6 +226,7 @@ class SayriDaemon:
         s.register("skills_uninstall", lambda p, c: skills.uninstall_skill(str(p.get("slug", ""))))
         s.register("skills_search", lambda p, c: skills.search_skills(str(p.get("query", ""))))
         s.register("plugins_list", lambda p, c: self._cmd_plugins_list())
+        s.register("plugin_set_enabled", lambda p, c: self._cmd_plugin_set_enabled(p))
         s.register("gateway_list", lambda p, c: gateway_supervisor.list_instances())
         s.register("gateway_start", lambda p, c: self._cmd_gateway_start(p))
         s.register("gateway_stop", lambda p, c: self._cmd_gateway_stop(p))
@@ -167,7 +236,28 @@ class SayriDaemon:
         s.register("agent_switch", lambda p, c: self._cmd_agent_switch(p))
         s.register("routines_run", lambda p, c: self._cmd_routines_run(p))
         s.register("sessions_list", lambda p, c: self._cmd_sessions_list(p))
+        s.register("session_get", lambda p, c: self._cmd_session_get(p))
+        s.register("session_rename", lambda p, c: self._cmd_session_rename(p))
+        s.register("session_delete", lambda p, c: self._cmd_session_delete(p))
         s.register("routines_list", lambda p, c: [r.to_dict() for r in cron_scheduler.list_routines()])
+        s.register("routine_save", lambda p, c: self._cmd_routine_save(p))
+        s.register("routine_delete", lambda p, c: self._cmd_routine_delete(p))
+        s.register("routine_set_enabled", lambda p, c: self._cmd_routine_set_enabled(p))
+        s.register("vault_list", lambda p, c: secrets_manager.list_secrets())
+        s.register("vault_set", lambda p, c: self._cmd_vault_set(p))
+        s.register("vault_delete", lambda p, c: self._cmd_vault_delete(p))
+        s.register("agent_save", lambda p, c: self._cmd_agent_save(p))
+        s.register("agent_delete", lambda p, c: self._cmd_agent_delete(p))
+        s.register("ui_list", lambda p, c: self._cmd_ui_list())
+        s.register("ui_start", lambda p, c: self._cmd_ui_start(p))
+        s.register("ui_stop", lambda p, c: self._cmd_ui_stop(p))
+        s.register("ui_status", lambda p, c: self._cmd_ui_status(p))
+        s.register("killall", lambda p, c: self._cmd_killall(p))
+        s.register("clipboard_copy", lambda p, c: self._cmd_clipboard_copy(p))
+        s.register("settings_schema", lambda p, c: self._cmd_settings_schema())
+        s.register("settings_save", lambda p, c: self._cmd_settings_save(p))
+        s.register("plugin_settings_set", lambda p, c: self._cmd_plugin_settings_set(p))
+        s.register("asset_download", lambda p, c: self._cmd_asset_download(p))
         s.register("quit", lambda p, c: self._cmd_quit(p))
 
     # ------------------------------------------------------------ helpers
@@ -203,6 +293,55 @@ class SayriDaemon:
         self.core.interrupt()
         return {"interrupted": True}
 
+    def _on_permission_request(self, request: dict) -> None:
+        self.server.broadcast("permission_request", request=request)
+
+    def _on_permission_resolved(self, request_id: str) -> None:
+        # Sent whatever the outcome was, including a timeout, because the card
+        # has to leave the screen in every case. A panel that only removes the
+        # card on an answer would keep a dead question on screen for ever.
+        self.server.broadcast("permission_resolved", request_id=request_id)
+
+    # ------------------------------------------------------- permissions
+    #
+    # The agent's thread is parked on a question somewhere in this process. A
+    # front-end has to be able to see what is waiting and answer it, so these
+    # are the two halves of one round trip: "what is open" and "here is the
+    # answer". Saved approvals get a third command because they outlive the
+    # question and the user has to be able to take one back.
+
+    def _cmd_permission_list(self) -> dict:
+        broker = self.core.engine.broker
+        return {
+            "pending": broker.pending(),
+            "approvals": {
+                action: list(entries)
+                for action, entries in broker.saved_approvals().items()
+            },
+        }
+
+    def _cmd_permission_answer(self, params: dict) -> dict:
+        request_id = str(params.get("request_id", "")).strip()
+        if not request_id:
+            raise ValueError("missing 'request_id'")
+        allow = bool(params.get("allow", False))
+        remember = bool(params.get("remember", False))
+        delivered = self.core.engine.broker.answer(
+            request_id, allow, remember=remember)
+        # Not an error: the question can expire between the panel rendering it
+        # and the click landing. Reporting "delivered: false" lets the panel
+        # drop the card quietly instead of showing a failure for something that
+        # is already settled.
+        return {"delivered": delivered, "request_id": request_id, "allow": allow}
+
+    def _cmd_permission_forget(self, params: dict) -> dict:
+        action = params.get("action")
+        if action is not None:
+            action = str(action).strip() or None
+        removed = self.core.engine.broker.forget(
+            action, str(params.get("agent_id", "")))
+        return {"removed": removed}
+
     def _cmd_new_conversation(self, params: dict) -> dict:
         self.core.new_conversation()
         return {"session_id": self.core.active_session_id}
@@ -223,7 +362,14 @@ class SayriDaemon:
             key = path
         if group not in config.DEFAULTS or key not in config.DEFAULTS[group]:
             raise ValueError(f"unknown setting: {group}.{key}")
-        return {"group": group, "key": key, "value": config.config.get(group, key)}
+        # Credentials never leave the daemon in the clear, not even when the
+        # caller asks for that exact key. A front-end that needs to change one
+        # writes through config_set, which takes a new value.
+        return {
+            "group": group,
+            "key": key,
+            "value": _mask_secret_value(key, config.config.get(group, key)),
+        }
 
     def _cmd_config_set(self, params: dict) -> dict:
         path = str(params.get("key", "")).strip()
@@ -257,11 +403,46 @@ class SayriDaemon:
         return {"group": group, "key": key, "value": config.config.get(group, key)}
 
     def _cmd_config_list(self) -> list:
+        # Credentials live in the same config file as everything else, so a
+        # plain dump hands the provider API key to any connected client (and
+        # straight into a desktop UI's settings list). Mask the obvious secret
+        # fields; a UI that genuinely needs one value can still ask for that
+        # single key with config_get.
         return [
-            {"group": g, "key": k, "value": config.config.get(g, k)}
+            {
+                "group": g,
+                "key": k,
+                "value": _mask_secret_value(k, config.config.get(g, k)),
+                "is_secret": _is_secret_key(k),
+            }
             for g in config.DEFAULTS
             for k in config.DEFAULTS[g]
         ]
+
+    def _cmd_plugin_set_enabled(self, params: dict) -> dict:
+        """Turn a plugin's background service on or off.
+
+        ``enabled`` persists the choice (so it survives a reboot) and starts or
+        stops the running process to match.
+        """
+        from . import plugin_service
+
+        plugin_id = str(params.get("plugin_id", "")).strip()
+        if not plugin_id:
+            raise ValueError("missing 'plugin_id'")
+        manifest = _find_manifest(plugin_id)
+        if manifest is None:
+            raise ValueError(f"plugin not found: {plugin_id}")
+        if plugin_service.service_block(manifest) is None:
+            raise ValueError(f"{plugin_id} has no background service")
+
+        enabled = bool(params.get("enabled", True))
+        plugin_service.set_service_enabled(manifest, enabled)
+        if enabled:
+            ok, msg = plugin_service.start_service(manifest)
+        else:
+            ok, msg = plugin_service.stop_service(manifest)
+        return {"plugin_id": plugin_id, "enabled": enabled, "ok": bool(ok), "message": msg}
 
     def _cmd_gateway_start(self, params: dict) -> dict:
         inst_id = str(params.get("instance_id", "")).strip()
@@ -289,8 +470,12 @@ class SayriDaemon:
         return {"saved": True, "instance_id": inst_id}
 
     def _cmd_plugins_list(self) -> list:
+        from . import plugin_service
+
         rows = []
         for p in gateway_supervisor.list_installed_plugins():
+            manifest = _find_manifest(str(p.get("id") or ""))
+            has_service = bool(manifest and plugin_service.service_block(manifest))
             rows.append({
                 "id": p.get("id"),
                 "name": p.get("name"),
@@ -299,6 +484,12 @@ class SayriDaemon:
                 "auth_mode": p.get("auth_mode"),
                 "required_secrets": p.get("required_secrets", []),
                 "path": str(p["path"]) if p.get("path") else "",
+                # A plugin can be an autostart service, a gateway, a UI, or a
+                # plain bundle of skills. The UI only offers the switch when
+                # there is genuinely a service to start.
+                "has_service": has_service,
+                "service_enabled": plugin_service.service_enabled(manifest) if has_service else None,
+                "service_running": plugin_service.service_running(manifest) if has_service else None,
             })
         return rows
 
@@ -319,6 +510,581 @@ class SayriDaemon:
         """Stop shortly after replying so the IPC response is flushed first."""
         threading.Timer(0.3, self.stop).start()
         return {"ok": True}
+
+    # ------------------------------------------------------------ sessions
+    def _cmd_session_get(self, params: dict) -> dict:
+        """Full transcript of one session, so a UI can re-render its history."""
+        sid = str(params.get("session_id", "")).strip()
+        if not sid:
+            raise ValueError("missing 'session_id'")
+        session = self.core.storage.get_session(sid)
+        if session is None:
+            raise ValueError(f"session not found: {sid}")
+        return {
+            "id": session.id,
+            "title": session.title,
+            "agent_id": session.agent_id,
+            "created_at": session.created_at,
+            "updated_at": session.updated_at,
+            "messages": [
+                {
+                    "role": getattr(m, "role", ""),
+                    "content": getattr(m, "content", ""),
+                    "timestamp": getattr(m, "timestamp", 0.0),
+                }
+                for m in (session.messages or [])
+            ],
+        }
+
+    def _cmd_session_rename(self, params: dict) -> dict:
+        sid = str(params.get("session_id", "")).strip()
+        title = str(params.get("title", "")).strip()
+        if not sid:
+            raise ValueError("missing 'session_id'")
+        if not title:
+            raise ValueError("missing 'title'")
+        self.core.storage.update_session_title(sid, title)
+        return {"session_id": sid, "title": title}
+
+    def _cmd_session_delete(self, params: dict) -> dict:
+        sid = str(params.get("session_id", "")).strip()
+        if not sid:
+            raise ValueError("missing 'session_id'")
+        self.core.storage.delete_session(sid)
+        return {"session_id": sid, "deleted": True}
+
+    # ------------------------------------------------------------ routines
+    def _cmd_routine_save(self, params: dict) -> dict:
+        """Create or update a routine. Only ``id`` decides which."""
+        rid = str(params.get("id", "")).strip()
+        trigger = str(params.get("trigger", "daily_at")).strip()
+        if trigger not in ("on_login", "daily_at", "hourly", "cron"):
+            raise ValueError(f"unknown trigger: {trigger}")
+        existing = next((r for r in cron_scheduler.list_routines() if r.id == rid), None)
+        routine = Routine(
+            id=existing.id if existing else (rid or f"r{int(time.time() * 1000)}"),
+            name=str(params.get("name", "")).strip() or "Untitled routine",
+            description=str(params.get("description", "")).strip(),
+            trigger=trigger,
+            time_spec=str(params.get("time_spec", "09:00")).strip() or "09:00",
+            prompt=str(params.get("prompt", "")),
+            agent_id=str(params.get("agent_id", "default")).strip() or "default",
+            speak_tts=bool(params.get("speak_tts", True)),
+            notify_desktop=bool(params.get("notify_desktop", True)),
+            enabled=bool(params.get("enabled", True)),
+            last_run=existing.last_run if existing else 0.0,
+            created_at=existing.created_at if existing else time.time(),
+        )
+        cron_scheduler.save_routine(routine)
+        return routine.to_dict()
+
+    def _cmd_routine_delete(self, params: dict) -> dict:
+        rid = str(params.get("routine_id", "")).strip()
+        if not rid:
+            raise ValueError("missing 'routine_id'")
+        cron_scheduler.delete_routine(rid)
+        return {"routine_id": rid, "deleted": True}
+
+    def _cmd_routine_set_enabled(self, params: dict) -> dict:
+        rid = str(params.get("routine_id", "")).strip()
+        if not rid:
+            raise ValueError("missing 'routine_id'")
+        cron_scheduler.toggle_routine(rid, bool(params.get("enabled", True)))
+        return {"routine_id": rid, "enabled": bool(params.get("enabled", True))}
+
+    # --------------------------------------------------------------- vault
+    def _cmd_vault_set(self, params: dict) -> dict:
+        key = str(params.get("key", "")).strip()
+        if not key:
+            raise ValueError("missing 'key'")
+        secrets_manager.set_secret(
+            key,
+            str(params.get("value", "")),
+            str(params.get("description", "")),
+        )
+        return {"key": key, "saved": True}
+
+    def _cmd_vault_delete(self, params: dict) -> dict:
+        key = str(params.get("key", "")).strip()
+        if not key:
+            raise ValueError("missing 'key'")
+        return {"key": key, "deleted": bool(secrets_manager.delete_secret(key))}
+
+    # -------------------------------------------------------------- agents
+    def _cmd_agent_save(self, params: dict) -> dict:
+        """Create or update an agent profile from a flat parameter dict."""
+        agent_id = str(params.get("id", "")).strip()
+        existing = AgentCreator.get_agent(agent_id) if agent_id else None
+        if existing is not None and existing.is_builtin and agent_id != str(params.get("id", "")):
+            raise ValueError("built-in agents cannot be replaced")
+
+        def _str_list(value: Any) -> list:
+            if isinstance(value, list):
+                return [str(v) for v in value if str(v).strip()]
+            if value is None:
+                return []
+            return [part.strip() for part in str(value).split(",") if part.strip()]
+
+        # An empty allow-list means "no restriction", not "no tools". The panel
+        # leaves these blank to say "use whatever you need", and silently
+        # substituting a short default list would take that choice away.
+        sandbox_level = str(params.get("sandbox_level", "")).strip()
+        level = existing.sandbox.level if existing is not None else None
+        if sandbox_level:
+            try:
+                level = SandboxLevel(sandbox_level)
+            except ValueError:
+                raise ValueError(f"unknown isolation level: {sandbox_level}")
+
+        # Read as a bool the way the panel's checkboxes arrive, which is a real
+        # JSON boolean from the web panel and a "0"/"1" string from the CLI.
+        # Left as None when the caller did not mention it, so editing an agent's
+        # name cannot quietly switch its permission asking off.
+        ask_before_run = params.get("ask_before_run")
+        if ask_before_run is not None:
+            if isinstance(ask_before_run, str):
+                ask_before_run = ask_before_run.strip().lower() in ("1", "true", "yes", "on")
+            else:
+                ask_before_run = bool(ask_before_run)
+
+        profile = AgentProfile(
+            id=agent_id or str(params.get("name", "")).strip().lower().replace(" ", "-"),
+            name=str(params.get("name", "")).strip() or "New agent",
+            description=str(params.get("description", "")).strip(),
+            system_prompt=str(params.get("system_prompt", "")).strip(),
+            custom_instructions=str(params.get("custom_instructions", "")),
+            allowed_skills=_str_list(params.get("allowed_skills")),
+            allowed_plugins=_str_list(params.get("allowed_plugins")),
+            allowed_tools=_str_list(params.get("allowed_tools")),
+            investigation_loop=bool(params.get("investigation_loop", False)),
+            reinforcement_learning=bool(params.get("reinforcement_learning", False)),
+        )
+        if level is not None:
+            profile.sandbox = replace(profile.sandbox, level=level)
+        if existing is not None:
+            profile.id = existing.id
+            profile.created_at = existing.created_at
+            profile.is_builtin = existing.is_builtin
+            profile.model = existing.model
+            # The rest of the sandbox (timeout, network, binary lists, the
+            # permission rules) belongs to the stored agent; the level and the
+            # asking switch are the panel's to change.
+            profile.sandbox = replace(existing.sandbox, level=level) if level is not None \
+                else existing.sandbox
+        if ask_before_run is not None:
+            profile.sandbox = replace(profile.sandbox, ask_before_run=ask_before_run)
+        # `save_agent` returns the file it wrote, but every other agent command
+        # (`agent_delete`, `agent_switch`) takes the slug id, so the reply has to
+        # carry the id and not the path.
+        AgentCreator.save_agent(profile)
+        return {"id": profile.id, "name": profile.name}
+
+    def _cmd_agent_delete(self, params: dict) -> dict:
+        agent_id = str(params.get("agent_id", "")).strip()
+        if not agent_id:
+            raise ValueError("missing 'agent_id'")
+        agent = AgentCreator.get_agent(agent_id)
+        if agent is not None and agent.is_builtin:
+            raise ValueError("built-in agents cannot be deleted")
+        return {"agent_id": agent_id, "deleted": AgentCreator.delete_agent(agent_id)}
+
+    # ------------------------------------------------------------------ ui
+    def _cmd_ui_list(self) -> list:
+        """Installed UI plugins with their live status, for the Plugins tab.
+
+        Delegates to the CLI scanner so there is exactly one definition of
+        "installed UI plugin" between the terminal and the desktop UIs.
+        """
+        from .cli import _list_ui_plugins
+
+        rows = []
+        for pl in _list_ui_plugins():
+            rows.append({
+                "id": pl.get("id", ""),
+                "name": pl.get("name", ""),
+                "version": pl.get("version", ""),
+                "description": pl.get("description", ""),
+                "kind": pl.get("kind", ""),
+                "running": bool(pl.get("running")),
+                "pid": pl.get("pid"),
+                "is_default": bool(pl.get("is_default")),
+            })
+        return rows
+
+    @staticmethod
+    def _ui_running(ui_id: str) -> bool:
+        from . import sysinfo
+
+        pid_file = os.path.join(paths.state_dir(), f"{ui_id}.pid")
+        try:
+            pid = int(open(pid_file, encoding="utf-8").read().strip())
+        except (OSError, ValueError):
+            return False
+        return sysinfo.is_pid_alive(pid)
+
+    def _cmd_ui_start(self, params: dict) -> dict:
+        from . import sysinfo
+
+        ui_id = str(params.get("ui_id", "")).strip()
+        if not ui_id:
+            raise ValueError("missing 'ui_id'")
+        if self._ui_running(ui_id):
+            return {"ui_id": ui_id, "running": True, "already_running": True}
+        # Reuse the CLI so plugin launching stays in one place: the orb's
+        # gtk4-layer-shell preload has to be stripped or GTK3 UIs die on start.
+        from .cli import cmd_ui
+        import io
+        import contextlib
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = cmd_ui({"ui": ui_id}, [])
+        return {"ui_id": ui_id, "running": code == 0, "output": buf.getvalue().strip()}
+
+    def _cmd_ui_stop(self, params: dict) -> dict:
+        from . import sysinfo
+
+        ui_id = str(params.get("ui_id", "")).strip()
+        if not ui_id:
+            raise ValueError("missing 'ui_id'")
+        return {"ui_id": ui_id, "stopped": ui_id in sysinfo.stop_ui_plugins({ui_id})}
+
+    def _cmd_killall(self, params: dict) -> dict:
+        """Stop every Sayri process except the daemon itself.
+
+        This is what the companion's tray menu and its "Terminate all" button
+        send. The daemon has to be the one to answer, because the process
+        asking is a Sayri process that this very command is about to kill, and
+        a front-end that calls the CLI directly would be killed mid-request.
+
+        The daemon's own command line is "python3 -c ... from sayri.daemon ...",
+        which none of the patterns below match, so the daemon survives and can
+        still answer the next request. Callers that want Sayri gone entirely
+        pass include_daemon.
+        """
+        from . import sysinfo
+
+        include_daemon = bool(params.get("include_daemon", False))
+        # `ui_id` names the one companion to stop, leaving the others alone.
+        # stop_ui_plugins takes the ids to KEEP, so the meaning is inverted here.
+        only = str(params.get("ui_id", "")).strip()
+        skip = {only} if only else None
+
+        stopped = sysinfo.stop_ui_plugins(skip)
+        # kill_process_tree returns nothing, so the report is built from the
+        # requests made rather than from a result that does not exist.
+        requested = ["gateway.py", "sayri.indicator", "python3 -m sayri"]
+        for pattern in requested:
+            try:
+                sysinfo.kill_process_tree(pattern=pattern)
+            except Exception:
+                # One stubborn process must not stop the rest of the cleanup.
+                continue
+        if include_daemon:
+            # The daemon's own command line contains "sayri.daemon", and
+            # kill_process_tree skips the calling process, so this stops the
+            # daemon without it killing itself mid-answer.
+            try:
+                sysinfo.kill_process_tree(pattern="sayri.daemon")
+            except Exception:
+                pass
+        return {
+            "stopped_ui": list(stopped),
+            "signalled": requested + (["sayri.daemon"] if include_daemon else []),
+            "daemon_stopped": include_daemon,
+        }
+
+    def _cmd_ui_status(self, params: dict) -> dict:
+        ui_id = str(params.get("ui_id", "")).strip()
+        if not ui_id:
+            raise ValueError("missing 'ui_id'")
+        return {"ui_id": ui_id, "running": self._ui_running(ui_id)}
+
+    def _cmd_clipboard_copy(self, params: dict) -> dict:
+        """Hand text to the desktop clipboard.
+
+        UIs without a clipboard of their own (the WebKit companion balloon)
+        route this through the daemon so GTK stays the only clipboard owner.
+        """
+        text = str(params.get("text", ""))
+        try:
+            import shutil
+            import subprocess
+
+            for cmd in (["wl-copy"], ["xclip", "-selection", "clipboard"], ["xsel", "-b"]):
+                if not shutil.which(cmd[0]):
+                    continue
+                proc = subprocess.run(cmd, input=text.encode("utf-8"), timeout=5, check=False)
+                if proc.returncode == 0:
+                    return {"copied": True, "via": cmd[0]}
+            return {"copied": False, "reason": "no clipboard tool available (install wl-clipboard or xclip)"}
+        except Exception as exc:  # noqa: BLE001
+            return {"copied": False, "reason": str(exc)}
+
+    # -------------------------------------------------------------- settings
+    def _cmd_settings_schema(self) -> dict:
+        """Curated settings description: core sections plus per-plugin sections.
+
+        A UI that hardcodes its own settings form drifts from the config within
+        one release, and the same key ends up labelled three different ways.
+        Returning the description from the daemon keeps one wording everywhere.
+        """
+        from . import plugin_settings as _ps
+        from . import settings_schema as _ss
+
+        sections = _ss.schema()
+        plugins = []
+        for p in gateway_supervisor.list_installed_plugins():
+            plugin_id = str(p.get("id") or "")
+            manifest = _find_manifest(plugin_id)
+            if not manifest or not _ps.settings_schema(manifest):
+                continue
+            plugins.append({
+                "id": plugin_id,
+                "name": p.get("name") or plugin_id,
+                "description": p.get("description", ""),
+                "type": manifest.get("type", ""),
+                "manifest": manifest,
+            })
+        return {
+            "sections": sections,
+            "plugin_sections": _ss.plugin_sections(plugins),
+        }
+
+    @staticmethod
+    def _settings_fields() -> dict:
+        """Flat ``{field_key: field}`` index over the core settings schema."""
+        from . import settings_schema as _ss
+
+        index: dict[str, dict] = {}
+        for section in _ss.schema():
+            for field in section["fields"]:
+                index[field["key"]] = field
+        return index
+
+    @staticmethod
+    def _coerce_setting(field: dict, value: Any) -> list[tuple[str, str, Any]]:
+        """Turn one submitted value into the ``(group, key, value)`` writes it means.
+
+        Fields are allowed to be virtual: ``tts.voice_pick`` is really three
+        config keys glued into one friendly choice, and a saved value has to be
+        split back apart. Anything unrecognised is passed through as a single
+        key so a hand-written client still works.
+        """
+        kind = field.get("kind", "text")
+        writes = field.get("writes") or [field["key"]]
+
+        if kind == "choice":
+            allowed = [o.get("value") for o in field.get("options") or []]
+            coerced = value if isinstance(value, str) else str(value)
+            if allowed and coerced not in allowed:
+                raise ValueError(
+                    f"{field['key']}: {coerced!r} is not one of the offered options")
+        elif kind == "toggle":
+            if isinstance(value, bool):
+                coerced: Any = value
+            else:
+                coerced = str(value).strip().lower() in ("1", "true", "yes", "on")
+        elif kind == "number":
+            try:
+                coerced = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{field['key']}: {value!r} is not a number") from exc
+            for bound, tighter in (("min", max), ("max", min)):
+                limit = field.get(bound)
+                if isinstance(limit, (int, float)):
+                    coerced = tighter(coerced, limit)
+            # An integer setting must stay integral, or config.json slowly fills
+            # with "140.0" and the read side has to cope.
+            if _declared_type(field["key"]) == "int":
+                coerced = int(coerced)
+        else:
+            coerced = "" if value is None else str(value)
+
+        if len(writes) == 1:
+            return [(writes[0].partition(".")[0], writes[0].partition(".")[2], coerced)]
+
+        parts = str(value).split("|")
+        if len(parts) != len(writes):
+            raise ValueError(f"{field['key']}: expected {'|'.join(writes)}")
+        return [
+            (w.partition(".")[0], w.partition(".")[2], p)
+            for w, p in zip(writes, parts)
+        ]
+
+    def _cmd_settings_save(self, params: dict) -> dict:
+        """Apply a batch of settings values.
+
+        Typed values arrive together with the section's Save button, so one call
+        persists a whole section (and writes the file once) instead of one call
+        per field. Failures are reported per key rather than aborting the batch,
+        so a bad number in one box does not lose the other edits in the section.
+        """
+        values = params.get("values")
+        if not isinstance(values, dict) or not values:
+            raise ValueError("missing 'values'")
+
+        index = self._settings_fields()
+        saved: list[str] = []
+        errors: dict[str, str] = {}
+        applied: dict[str, Any] = {}
+        touched_ui_startup = False
+
+        for key, value in values.items():
+            field = index.get(str(key))
+            try:
+                if field is None:
+                    raise ValueError("unknown setting")
+                if field.get("secret") and str(value).strip() == "":
+                    # An empty password box means "keep what is stored", not
+                    # "erase the key" -- otherwise a careless click locks the
+                    # user out of their provider.
+                    continue
+                writes = self._coerce_setting(field, value)
+            except ValueError as exc:
+                errors[str(key)] = str(exc)
+                continue
+            for group, name, coerced in writes:
+                try:
+                    config.config.set(group, name, coerced)
+                except Exception as exc:  # noqa: BLE001
+                    errors[f"{group}.{name}"] = str(exc)
+                    continue
+                applied[f"{group}.{name}"] = config.config.get(group, name)
+                if group == "ui" and name in ("autostart", "autostart_mode"):
+                    touched_ui_startup = True
+            saved.append(str(key))
+
+        if touched_ui_startup:
+            try:
+                from .autostart import apply_autostart
+                apply_autostart(config.config)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[sayri-daemon] autostart update error: {exc}")
+
+        if saved:
+            # Other UIs (orb, standalone settings window) keep their own copy of
+            # these values, so tell them what moved.
+            self.server.broadcast("settings_changed", keys=saved, values=applied)
+
+        return {
+            "ok": not errors,
+            "saved": saved,
+            # The coerced values, so the caller can resync its inputs instead of
+            # trusting what it sent (a clamped orb size, a "true" that became
+            # True, a voice split back into its three keys).
+            "values": applied,
+            "errors": errors,
+            "restart_required": [
+                k for k in saved if index.get(k, {}).get("restart")
+            ],
+        }
+
+    def _cmd_plugin_settings_set(self, params: dict) -> dict:
+        """Write one plugin setting into the plugin's own config file.
+
+        Plugins already own their settings (declared in ``manifest.json`` and
+        stored next to it), so this writes that same file the plugin host reads
+        -- the panel never invents a second source of truth. The change is
+        broadcast so a live UI can react without a restart.
+        """
+        from . import plugin_settings as _ps
+
+        plugin_id = str(params.get("plugin_id", "")).strip()
+        key = str(params.get("key", "")).strip()
+        if not plugin_id or not key:
+            raise ValueError("missing 'plugin_id' or 'key'")
+        manifest = _find_manifest(plugin_id)
+        if manifest is None:
+            raise ValueError(f"plugin not found: {plugin_id}")
+        if not _ps.settings_schema(manifest):
+            raise ValueError(f"{plugin_id} declares no settings")
+
+        value = params.get("value")
+        field = next(
+            (f for f in _ps.editable_fields(manifest.get("ui") or {}) if f.get("key") == key),
+            None,
+        )
+        if field is not None:
+            if field.get("t") == "check":
+                value = bool(value) if isinstance(value, bool) else \
+                    str(value).strip().lower() in ("1", "true", "yes", "on")
+            elif field.get("t") == "select":
+                options = [o.get("value") for o in field.get("options") or []]
+                if options and str(value) not in options:
+                    raise ValueError(f"{key}: {value!r} is not one of the offered options")
+            else:
+                value = str(value)
+
+        if not _ps.write_setting(manifest, key, value):
+            raise RuntimeError(f"could not write {plugin_id} setting {key}")
+        self.server.broadcast("plugin_settings_changed", plugin_id=plugin_id, key=key, value=value)
+        return {"ok": True, "plugin_id": plugin_id, "key": key, "value": value}
+
+    def _cmd_asset_download(self, params: dict) -> dict:
+        """Fetch a Whisper model or Piper voice in the background.
+
+        These files are hundreds of megabytes, so the request returns
+        immediately and progress arrives as ``asset_progress`` broadcasts. A
+        second request for the same file is refused rather than started twice.
+        """
+        kind = str(params.get("kind", "")).strip()
+        asset_params = params.get("params")
+        if not isinstance(asset_params, dict):
+            raise ValueError("missing 'params'")
+        from . import downloads
+
+        if kind == "whisper_model":
+            size = str(asset_params.get("model_size", ""))
+            language = str(asset_params.get("language") or "en")
+            if size not in downloads.WHISPER_MODELS:
+                raise ValueError(f"unknown whisper model: {size}")
+            token = f"whisper_model:{size}:{language}"
+            runner = lambda report: downloads.download_whisper_model(size, language, progress=report)
+        elif kind == "piper_voice":
+            language = str(asset_params.get("language", ""))
+            voice = str(asset_params.get("voice", ""))
+            quality = str(asset_params.get("quality") or "medium")
+            if language not in downloads.PIPER_VOICES:
+                raise ValueError(f"unknown voice language: {language}")
+            token = f"piper_voice:{language}:{voice}:{quality}"
+            runner = lambda report: downloads.download_piper_voice(
+                language, voice, quality, progress=report)
+        else:
+            raise ValueError(f"unknown asset kind: {kind}")
+
+        with self._download_lock:
+            if token in self._downloads:
+                return {"started": False, "already_running": True, "token": token}
+            self._downloads[token] = True
+
+        last = {"percent": -1}
+
+        def progress(fraction: float) -> None:
+            # The downloader reports on every chunk, which for a large model is
+            # hundreds of messages on a socket every client is reading. Whole
+            # percent is plenty for a progress bar.
+            percent = int(float(fraction) * 100)
+            if percent == last["percent"]:
+                return
+            last["percent"] = percent
+            self.server.broadcast("asset_progress", token=token, kind=kind, percent=percent)
+
+        def worker() -> None:
+            try:
+                path = runner(progress)
+                last["percent"] = 100
+                self.server.broadcast("asset_progress", token=token, kind=kind,
+                                      percent=100, done=True, path=str(path))
+            except Exception as exc:  # noqa: BLE001
+                self.server.broadcast("asset_progress", token=token, kind=kind,
+                                      done=False, error=str(exc))
+            finally:
+                with self._download_lock:
+                    self._downloads.pop(token, None)
+
+        threading.Thread(target=worker, name="sayri-asset-download", daemon=True).start()
+        return {"started": True, "token": token}
 
     def _cmd_agent_switch(self, params: dict) -> dict:
         from sayri.domain.agent_creator import AgentCreator

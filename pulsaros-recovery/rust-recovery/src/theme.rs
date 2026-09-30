@@ -268,6 +268,29 @@ listboxrow:selected .utility-desc-lbl,
     background-color: #323236;
     border: 2px solid #0071e3;
 }
+.disk-card.encrypted {
+    border: 1px dashed #f59e0b;
+}
+.disk-card.encrypted:hover {
+    border: 1px solid #f59e0b;
+    background-color: rgba(245, 158, 11, 0.08);
+}
+.badge-encrypted {
+    background-color: rgba(245, 158, 11, 0.18);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: bold;
+}
+.unlock-box {
+    background-color: #242426;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 14px;
+    padding: 18px 24px;
+    min-width: 380px;
+}
 .bottom-power-btn {
     background-color: rgba(255, 255, 255, 0.08);
     color: #ffffff;

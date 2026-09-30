@@ -1,0 +1,60 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Theme & Color Scheme Synchronization Daemon
+# ==============================================================================
+# Sincroniza dinámicamente el tema GTK, GNOME Shell, Libadwaita y Flatpak
+# (MacTahoe-Light / MacTahoe-Dark) en tiempo real al cambiar Modo Claro / Oscuro.
+# ==============================================================================
+
+# Configurar permisos de sistema de archivos para Flatpak
+if command -v flatpak >/dev/null 2>&1; then
+    flatpak override --user --filesystem=xdg-config/gtk-4.0:ro --filesystem=xdg-config/gtk-3.0:ro --filesystem=/usr/share/themes:ro --filesystem=/usr/share/icons:ro --filesystem=~/.themes:ro --filesystem=~/.icons:ro 2>/dev/null || true
+fi
+
+sync_theme() {
+    local scheme
+    scheme=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")
+    if [ "$scheme" = "prefer-dark" ]; then
+        gsettings set org.gnome.desktop.interface gtk-theme "MacTahoe-Dark" 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface icon-theme "MacTahoe-blue-dark" 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.user-theme name "MacTahoe-Dark" 2>/dev/null || true
+        
+        # Libadwaita / GTK4 user overrides
+        mkdir -p "$HOME/.config/gtk-4.0" "$HOME/.config/gtk-3.0"
+        if [ -d "/usr/share/themes/MacTahoe-Dark/gtk-4.0" ]; then
+            cp -rf /usr/share/themes/MacTahoe-Dark/gtk-4.0/* "$HOME/.config/gtk-4.0/" 2>/dev/null || true
+        fi
+        if [ -d "/usr/share/themes/MacTahoe-Dark/gtk-3.0" ]; then
+            cp -rf /usr/share/themes/MacTahoe-Dark/gtk-3.0/gtk-dark.css "$HOME/.config/gtk-3.0/gtk.css" 2>/dev/null || true
+        fi
+
+        if command -v flatpak >/dev/null 2>&1; then
+            flatpak override --user --env=GTK_THEME=MacTahoe-Dark --env=ICON_THEME=MacTahoe-blue-dark 2>/dev/null || true
+        fi
+    else
+        gsettings set org.gnome.desktop.interface gtk-theme "MacTahoe-Light" 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface icon-theme "MacTahoe-blue-light" 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.user-theme name "MacTahoe-Light" 2>/dev/null || true
+        
+        # Libadwaita / GTK4 user overrides
+        mkdir -p "$HOME/.config/gtk-4.0" "$HOME/.config/gtk-3.0"
+        if [ -d "/usr/share/themes/MacTahoe-Light/gtk-4.0" ]; then
+            cp -rf /usr/share/themes/MacTahoe-Light/gtk-4.0/* "$HOME/.config/gtk-4.0/" 2>/dev/null || true
+        fi
+        if [ -d "/usr/share/themes/MacTahoe-Light/gtk-3.0" ]; then
+            cp -rf /usr/share/themes/MacTahoe-Light/gtk-3.0/gtk.css "$HOME/.config/gtk-3.0/gtk.css" 2>/dev/null || true
+        fi
+
+        if command -v flatpak >/dev/null 2>&1; then
+            flatpak override --user --env=GTK_THEME=MacTahoe-Light --env=ICON_THEME=MacTahoe-blue-light 2>/dev/null || true
+        fi
+    fi
+}
+
+# Ejecución inicial
+sync_theme
+
+# Monitor en tiempo real de cambios en org.gnome.desktop.interface color-scheme
+gsettings monitor org.gnome.desktop.interface color-scheme 2>/dev/null | while read -r _; do
+    sync_theme
+done

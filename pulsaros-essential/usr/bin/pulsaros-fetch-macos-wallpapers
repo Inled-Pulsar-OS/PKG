@@ -1,0 +1,57 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - 5K/6K macOS Wallpapers Downloader & Sync
+# ==============================================================================
+# Descarga los fondos de la colección histórica de macOS (512pixels.net)
+# Respetando derechos de autor (© Apple Inc. / 512pixels.net)
+# ==============================================================================
+
+set -e
+
+DEST_DIR="/usr/share/backgrounds/macos"
+sudo mkdir -p "$DEST_DIR"
+
+echo "🖼️ [Pulsar OS] Sincronizando fondos de pantalla macOS (512pixels.net)..."
+
+BASE_URL="https://media.512pixels.net/downloads/macos-wallpapers-6k"
+
+declare -A WALLPAPERS=(
+  ["sequoia.jpg"]="$BASE_URL/15-Sequoia-Light-6K.jpg"
+  ["sequoia-dark.jpg"]="$BASE_URL/15-Sequoia-Dark-6K.jpg"
+  ["sonoma.jpg"]="$BASE_URL/14-Sonoma-Light.jpg"
+  ["sonoma-dark.jpg"]="$BASE_URL/14-Sonoma-Dark.jpg"
+  ["ventura.jpg"]="$BASE_URL/13-Ventura-Light.jpg"
+  ["ventura-dark.jpg"]="$BASE_URL/13-Ventura-Dark.jpg"
+  ["monterey.jpg"]="$BASE_URL/12-Monterey-Light.jpg"
+  ["monterey-dark.jpg"]="$BASE_URL/12-Monterey-Dark.jpg"
+  ["big-sur.jpg"]="$BASE_URL/11-Big-Sur-Color-Day-6k.jpg"
+  ["big-sur-dark.jpg"]="$BASE_URL/11-Big-Sur-Color-Night-6k.jpg"
+  ["catalina.jpg"]="$BASE_URL/10-15-Day-6k.jpg"
+  ["catalina-dark.jpg"]="$BASE_URL/10-15-Night-6k.jpg"
+  ["mojave.jpg"]="$BASE_URL/10-14-Day-6k.jpg"
+  ["mojave-dark.jpg"]="$BASE_URL/10-14-Night-6k.jpg"
+  ["high-sierra.jpg"]="$BASE_URL/10-13-6k.jpg"
+  ["sierra.jpg"]="$BASE_URL/10-12-6k.jpg"
+  ["el-capitan.jpg"]="$BASE_URL/10-11-6k.jpg"
+  ["yosemite.jpg"]="$BASE_URL/10-10-6k.jpg"
+  ["mavericks.jpg"]="$BASE_URL/10-9-6k.jpg"
+  ["mountain-lion.jpg"]="$BASE_URL/10-8-6k.jpg"
+  ["lion.jpg"]="$BASE_URL/10-7-6k.jpg"
+  ["snow-leopard.jpg"]="$BASE_URL/10-6-6k.jpg"
+  ["leopard.jpg"]="$BASE_URL/10-5-6k.jpg"
+  ["tiger.jpg"]="$BASE_URL/10-4-6k.jpg"
+  ["panther.jpg"]="$BASE_URL/10-3-6k.jpg"
+  ["jaguar.jpg"]="$BASE_URL/10-2-6k.jpg"
+  ["cheetah.jpg"]="$BASE_URL/10-0_10-1-6k.jpg"
+)
+
+for file in "${!WALLPAPERS[@]}"; do
+  url="${WALLPAPERS[$file]}"
+  target="$DEST_DIR/$file"
+  if [ ! -f "$target" ]; then
+    echo "  -> Descargando $file..."
+    sudo curl -fsSL "$url" -o "$target" || echo "     ⚠️ No se pudo descargar $file desde $url"
+  fi
+done
+
+echo "✅ Fondos de pantalla macOS sincronizados en $DEST_DIR."

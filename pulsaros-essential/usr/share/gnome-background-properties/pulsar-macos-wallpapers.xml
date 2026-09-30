@@ -1,0 +1,175 @@
+<?xml version="1.0"?>
+<!DOCTYPE wallpapers SYSTEM "gnome-wp-list.dtd">
+<wallpapers>
+  <!-- =========================================================================
+       Pulsar OS - macOS Default Wallpapers Collection (5K)
+       Source: 512pixels.net / Stephen Hackett & @forgottentowel
+       Attribution: © Apple Inc. / Curated & upscaled by 512pixels.net
+       ========================================================================= -->
+  <wallpaper deleted="false">
+    <name>macOS Sequoia (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/sequoia.jpg</filename>
+    <filename-dark>/usr/share/backgrounds/macos/sequoia-dark.jpg</filename-dark>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Sonoma (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/sonoma.jpg</filename>
+    <filename-dark>/usr/share/backgrounds/macos/sonoma-dark.jpg</filename-dark>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Ventura (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/ventura.jpg</filename>
+    <filename-dark>/usr/share/backgrounds/macos/ventura-dark.jpg</filename-dark>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Monterey (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/monterey.jpg</filename>
+    <filename-dark>/usr/share/backgrounds/macos/monterey-dark.jpg</filename-dark>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Big Sur (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/big-sur.jpg</filename>
+    <filename-dark>/usr/share/backgrounds/macos/big-sur-dark.jpg</filename-dark>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Catalina (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/catalina.jpg</filename>
+    <filename-dark>/usr/share/backgrounds/macos/catalina-dark.jpg</filename-dark>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Mojave (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/mojave.jpg</filename>
+    <filename-dark>/usr/share/backgrounds/macos/mojave-dark.jpg</filename-dark>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS High Sierra (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/high-sierra.jpg</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Sierra (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/sierra.jpg</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS El Capitan (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/el-capitan.jpg</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Yosemite (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/yosemite.jpg</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Mavericks (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/mavericks.jpg</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Mountain Lion (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/mountain-lion.jpg</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Lion (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/lion.jpg</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Snow Leopard (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/snow-leopard.jpg</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Leopard (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/leopard.jpg</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Tiger (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/tiger.jpg</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Panther (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/panther.jpg</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Jaguar (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/jaguar.jpg</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Cheetah and Puma (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/cheetah.jpg</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+</wallpapers>

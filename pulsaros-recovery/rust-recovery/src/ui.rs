@@ -3,16 +3,16 @@ use crate::demo::is_demo_mode;
 use crate::icons::{create_button_with_icon, create_icon_widget, get_lucide_icon_path};
 use crate::manifest::{fetch_release_manifest, local_manifest_fallback};
 use crate::models::{
-    BtrfsTarget, DownloadMsg, ManifestData, NetConnType, RecoveryMode, RecoveryUpdate,
-    WifiNetwork,
+    BtrfsTarget, DownloadMsg, EncryptedTarget, ManifestData, NetConnType, RecoveryMode,
+    RecoveryUpdate, WifiNetwork,
 };
 use crate::network::{
     connect_wifi, get_network_status, open_external_network_settings, scan_wifi_networks,
 };
 use crate::restore::run_restoration;
 use crate::system::{
-    detect_system_base, detect_system_bootloader, find_btrfs_targets, format_file_size,
-    is_valid_base_squashfs, log_msg, scan_usb_devices,
+    detect_system_base, detect_system_bootloader, find_btrfs_targets, find_encrypted_targets,
+    format_file_size, is_valid_base_squashfs, log_msg, scan_usb_devices, unlock_luks_partition,
 };
 use crate::theme::APP_CSS;
 use glib::clone;
@@ -20,7 +20,7 @@ use gtk4::prelude::*;
 use gtk4::{
     Align, Application, Box as GtkBox, Button, CenterBox, CssProvider, DropDown, GestureClick,
     Label, ListBox, ListBoxRow, Orientation, PasswordEntry, ProgressBar, ScrolledWindow,
-    SelectionMode, Stack, StackTransitionType, StringList, TextView, WrapMode,
+    SelectionMode, Spinner, Stack, StackTransitionType, StringList, TextView, WrapMode,
 };
 use libadwaita::prelude::*;
 use libadwaita::ApplicationWindow;
@@ -121,6 +121,8 @@ pub(crate) fn build_ui(app: &Application) {
     // Shared state
     let selected_action: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
     let selected_target: Rc<RefCell<Option<BtrfsTarget>>> = Rc::new(RefCell::new(None));
+    let selected_encrypted_target: Rc<RefCell<Option<EncryptedTarget>>> = Rc::new(RefCell::new(None));
+    let current_source_desc: Rc<RefCell<String>> = Rc::new(RefCell::new("Source: Built-in Recovery Partition".to_string()));
     let selected_image_path: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
     let recovery_mode: Rc<RefCell<RecoveryMode>> = Rc::new(RefCell::new(RecoveryMode::Local));
     let current_browser_dir: Rc<RefCell<PathBuf>> = Rc::new(RefCell::new(PathBuf::from("/media")));
@@ -715,6 +717,75 @@ pub(crate) fn build_ui(app: &Application) {
     stack.add_named(&target_box, Some("target_select"));
 
     // ─────────────────────────────────────────────────────────────
+    // 5b. Unlock LUKS Encrypted Partition Screen
+    // ─────────────────────────────────────────────────────────────
+    let unlock_box = GtkBox::new(Orientation::Vertical, 10);
+    unlock_box.set_valign(Align::Center);
+    unlock_box.set_halign(Align::Center);
+
+    let unlock_icon = create_icon_widget("", "lock", 56);
+    unlock_box.append(&unlock_icon);
+
+    let unlock_title = Label::new(Some("Unlock Encrypted Disk"));
+    unlock_title.add_css_class("welcome-title");
+    unlock_box.append(&unlock_title);
+
+    let unlock_desc = Label::new(Some("This disk partition is encrypted with LUKS.\nEnter your passphrase to unlock and access the system for recovery."));
+    unlock_desc.add_css_class("welcome-subtitle");
+    unlock_desc.set_wrap(true);
+    unlock_desc.set_max_width_chars(50);
+    unlock_desc.set_justify(gtk4::Justification::Center);
+    unlock_box.append(&unlock_desc);
+
+    let lbl_unlock_part_info = Label::new(Some("Partition: /dev/..."));
+    lbl_unlock_part_info.add_css_class("progress-text");
+    unlock_box.append(&lbl_unlock_part_info);
+
+    let unlock_card = GtkBox::new(Orientation::Vertical, 10);
+    unlock_card.add_css_class("info-card");
+    unlock_card.set_size_request(440, -1);
+
+    let entry_luks_pw = PasswordEntry::new();
+    entry_luks_pw.set_show_peek_icon(true);
+    entry_luks_pw.set_placeholder_text(Some("Disk encryption passphrase"));
+    entry_luks_pw.set_hexpand(true);
+    unlock_card.append(&entry_luks_pw);
+
+    let unlock_spinner_box = GtkBox::new(Orientation::Horizontal, 8);
+    unlock_spinner_box.set_halign(Align::Center);
+    let spinner_unlock = Spinner::new();
+    spinner_unlock.set_spinning(false);
+    spinner_unlock.set_visible(false);
+    let lbl_unlock_status = Label::new(None);
+    lbl_unlock_status.add_css_class("progress-text");
+    unlock_spinner_box.append(&spinner_unlock);
+    unlock_spinner_box.append(&lbl_unlock_status);
+    unlock_card.append(&unlock_spinner_box);
+
+    let lbl_unlock_err = Label::new(None);
+    lbl_unlock_err.add_css_class("badge-net-err");
+    lbl_unlock_err.set_wrap(true);
+    lbl_unlock_err.set_max_width_chars(45);
+    lbl_unlock_err.set_visible(false);
+    unlock_card.append(&lbl_unlock_err);
+
+    let unlock_nav_box = GtkBox::new(Orientation::Horizontal, 14);
+    unlock_nav_box.set_halign(Align::Center);
+    unlock_nav_box.set_margin_top(8);
+
+    let btn_unlock_back = Button::with_label("Back");
+    btn_unlock_back.add_css_class("secondary-action");
+    unlock_nav_box.append(&btn_unlock_back);
+
+    let btn_unlock_do = Button::with_label("Unlock Disk");
+    btn_unlock_do.add_css_class("suggested-action");
+    unlock_nav_box.append(&btn_unlock_do);
+    unlock_card.append(&unlock_nav_box);
+
+    unlock_box.append(&unlock_card);
+    stack.add_named(&unlock_box, Some("unlock_luks"));
+
+    // ─────────────────────────────────────────────────────────────
     // 6. Progress Screen
     // ─────────────────────────────────────────────────────────────
     let prog_box = GtkBox::new(Orientation::Vertical, 10);
@@ -844,9 +915,18 @@ pub(crate) fn build_ui(app: &Application) {
         let targets_flow = targets_flow.clone();
         let btn_target_restore = btn_target_restore.clone();
         let selected_target = selected_target.clone();
+        let selected_encrypted_target = selected_encrypted_target.clone();
+        let current_source_desc = current_source_desc.clone();
         let source_img_lbl = source_img_lbl.clone();
+        let lbl_unlock_part_info = lbl_unlock_part_info.clone();
+        let entry_luks_pw = entry_luks_pw.clone();
+        let lbl_unlock_err = lbl_unlock_err.clone();
+        let lbl_unlock_status = lbl_unlock_status.clone();
+        let spinner_unlock = spinner_unlock.clone();
+        let btn_unlock_do = btn_unlock_do.clone();
 
-        move |source_desc: &str| {
+        Rc::new(move |source_desc: &str| {
+            *current_source_desc.borrow_mut() = source_desc.to_string();
             source_img_lbl.set_text(source_desc);
 
             while let Some(child) = targets_flow.first_child() {
@@ -856,7 +936,9 @@ pub(crate) fn build_ui(app: &Application) {
             btn_target_restore.set_sensitive(false);
 
             let mut targets = find_btrfs_targets();
-            if targets.is_empty() && is_demo_mode() {
+            let mut enc_targets = find_encrypted_targets();
+
+            if targets.is_empty() && enc_targets.is_empty() && is_demo_mode() {
                 targets.push(BtrfsTarget {
                     _disk_path: "/dev/demo-nvme0n1".to_string(),
                     part_path: "/dev/demo-nvme0n1p2 (Simulado)".to_string(),
@@ -864,13 +946,25 @@ pub(crate) fn build_ui(app: &Application) {
                     uuid: "demo-btrfs-uuid-0000".to_string(),
                     size: "500.0G".to_string(),
                 });
+                enc_targets.push(EncryptedTarget {
+                    disk_path: "/dev/demo-nvme0n1".to_string(),
+                    part_path: "/dev/demo-nvme0n1p3 (Simulado Encrypted)".to_string(),
+                    label: "Pulsar OS Demo Encrypted".to_string(),
+                    uuid: "demo-luks-uuid-1111".to_string(),
+                    size: "250.0G".to_string(),
+                    is_unlocked: false,
+                    mapper_name: "pulsar_cryptroot".to_string(),
+                });
             }
 
-            if targets.is_empty() {
-                let no_target_lbl = Label::new(Some("No Btrfs Pulsar OS partitions detected.\nUse Disk Utility to inspect drives."));
+            let locked_enc_targets: Vec<EncryptedTarget> = enc_targets.into_iter().filter(|e| !e.is_unlocked).collect();
+
+            if targets.is_empty() && locked_enc_targets.is_empty() {
+                let no_target_lbl = Label::new(Some("No Btrfs or LUKS encrypted Pulsar OS partitions detected.\nUse Disk Utility to inspect drives."));
                 no_target_lbl.add_css_class("welcome-subtitle");
                 targets_flow.append(&no_target_lbl);
             } else {
+                // Render unencrypted or unlocked Btrfs partitions
                 for target in targets {
                     let card = GtkBox::new(Orientation::Vertical, 6);
                     card.add_css_class("disk-card");
@@ -906,9 +1000,59 @@ pub(crate) fn build_ui(app: &Application) {
                     card.add_controller(gesture);
                     targets_flow.append(&card);
                 }
+
+                // Render locked LUKS encrypted partitions
+                for enc in locked_enc_targets {
+                    let card = GtkBox::new(Orientation::Vertical, 6);
+                    card.add_css_class("disk-card");
+                    card.add_css_class("encrypted");
+
+                    let lock_icon = create_icon_widget("", "lock", 40);
+                    card.append(&lock_icon);
+
+                    let name_lbl = Label::new(Some(&format!("Encrypted Disk ({})", enc.size)));
+                    name_lbl.add_css_class("utility-title-lbl");
+                    card.append(&name_lbl);
+
+                    let dev_lbl = Label::new(Some(&enc.part_path));
+                    dev_lbl.add_css_class("utility-desc-lbl");
+                    card.append(&dev_lbl);
+
+                    let badge = Label::new(Some("Locked (Click to Unlock)"));
+                    badge.add_css_class("badge-encrypted");
+                    card.append(&badge);
+
+                    let gesture = GestureClick::new();
+                    let enc_clone = enc.clone();
+                    let sel_enc_c = selected_encrypted_target.clone();
+                    let stack_c = stack.clone();
+                    let info_lbl_c = lbl_unlock_part_info.clone();
+                    let pw_entry_c = entry_luks_pw.clone();
+                    let err_lbl_c = lbl_unlock_err.clone();
+                    let status_lbl_c = lbl_unlock_status.clone();
+                    let spin_c = spinner_unlock.clone();
+                    let btn_do_c = btn_unlock_do.clone();
+
+                    gesture.connect_released(move |_, _, _, _| {
+                        *sel_enc_c.borrow_mut() = Some(enc_clone.clone());
+                        info_lbl_c.set_text(&format!("Partition: {}  |  Size: {}", enc_clone.part_path, enc_clone.size));
+                        pw_entry_c.set_text("");
+                        err_lbl_c.set_text("");
+                        err_lbl_c.set_visible(false);
+                        status_lbl_c.set_text("");
+                        spin_c.set_spinning(false);
+                        spin_c.set_visible(false);
+                        btn_do_c.set_sensitive(true);
+                        stack_c.set_visible_child_name("unlock_luks");
+                        pw_entry_c.grab_focus();
+                    });
+
+                    card.add_controller(gesture);
+                    targets_flow.append(&card);
+                }
             }
             stack.set_visible_child_name("target_select");
-        }
+        })
     };
 
     // ─────────────────────────────────────────────────────────────
@@ -1980,6 +2124,103 @@ pub(crate) fn build_ui(app: &Application) {
             let res = run_restoration(&target, mode, update_ui, append_log);
             let _ = sender.send(RecoveryUpdate::Finished(res));
         });
+    }));
+
+    // ─────────────────────────────────────────────────────────────
+    // Unlock LUKS Encrypted Disk Callbacks
+    // ─────────────────────────────────────────────────────────────
+    let do_unlock_action = {
+        let selected_encrypted_target = selected_encrypted_target.clone();
+        let entry_luks_pw = entry_luks_pw.clone();
+        let lbl_unlock_err = lbl_unlock_err.clone();
+        let lbl_unlock_status = lbl_unlock_status.clone();
+        let spinner_unlock = spinner_unlock.clone();
+        let btn_unlock_do = btn_unlock_do.clone();
+        let btn_unlock_back = btn_unlock_back.clone();
+        let show_target_screen = show_target_screen.clone();
+        let current_source_desc = current_source_desc.clone();
+
+        Rc::new(move || {
+            let enc_opt = selected_encrypted_target.borrow().clone();
+            let enc = match enc_opt {
+                Some(e) => e,
+                None => return,
+            };
+            let pw = entry_luks_pw.text().to_string();
+            if pw.is_empty() {
+                lbl_unlock_err.set_text("Please enter your encryption passphrase.");
+                lbl_unlock_err.set_visible(true);
+                return;
+            }
+
+            lbl_unlock_err.set_visible(false);
+            lbl_unlock_err.set_text("");
+            lbl_unlock_status.set_text("Unlocking encrypted container...");
+            spinner_unlock.set_visible(true);
+            spinner_unlock.set_spinning(true);
+            btn_unlock_do.set_sensitive(false);
+            btn_unlock_back.set_sensitive(false);
+
+            let (tx, rx) = std::sync::mpsc::channel::<Result<String, String>>();
+            let part_path = enc.part_path.clone();
+            let mapper_name = enc.mapper_name.clone();
+            let pw_clone = pw.clone();
+
+            thread::spawn(move || {
+                let res = unlock_luks_partition(&part_path, &pw_clone, &mapper_name);
+                let _ = tx.send(res);
+            });
+
+            let spinner_c = spinner_unlock.clone();
+            let status_c = lbl_unlock_status.clone();
+            let err_c = lbl_unlock_err.clone();
+            let btn_do_c = btn_unlock_do.clone();
+            let btn_back_c = btn_unlock_back.clone();
+            let show_tgt_c = show_target_screen.clone();
+            let cur_src_c = current_source_desc.clone();
+            let pw_entry_c = entry_luks_pw.clone();
+
+            glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
+                match rx.try_recv() {
+                    Ok(res) => {
+                        spinner_c.set_spinning(false);
+                        spinner_c.set_visible(false);
+                        status_c.set_text("");
+                        btn_do_c.set_sensitive(true);
+                        btn_back_c.set_sensitive(true);
+
+                        match res {
+                            Ok(mapper_dev) => {
+                                log_msg(&format!("Unlocked {}, refreshing target screen...", mapper_dev));
+                                let src = cur_src_c.borrow().clone();
+                                show_tgt_c(&src);
+                            }
+                            Err(e) => {
+                                err_c.set_text(&e);
+                                err_c.set_visible(true);
+                                pw_entry_c.grab_focus();
+                            }
+                        }
+                        glib::ControlFlow::Break
+                    }
+                    Err(_) => glib::ControlFlow::Continue,
+                }
+            });
+        })
+    };
+
+    let do_unlock_c1 = do_unlock_action.clone();
+    btn_unlock_do.connect_clicked(move |_| {
+        do_unlock_c1();
+    });
+
+    let do_unlock_c2 = do_unlock_action.clone();
+    entry_luks_pw.connect_activate(move |_| {
+        do_unlock_c2();
+    });
+
+    btn_unlock_back.connect_clicked(clone!(@weak stack => move |_| {
+        stack.set_visible_child_name("target_select");
     }));
 
     stack.set_visible_child_name("utilities");

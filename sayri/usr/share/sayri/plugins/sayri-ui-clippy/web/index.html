@@ -11,6 +11,11 @@
       user-select: none;
       -webkit-user-select: none;
     }
+    input, textarea, button, select {
+      user-select: auto !important;
+      -webkit-user-select: auto !important;
+      pointer-events: auto !important;
+    }
     html, body {
       width: 100vw;
       height: 100vh;
@@ -40,11 +45,11 @@
       top: 10px;
       right: 12px;
       max-width: 360px;
-      min-width: 220px;
+      min-width: 240px;
       background-color: #ffffdd;
       border: 1.5px solid #000000;
       border-radius: 8px;
-      box-shadow: 3px 4px 10px rgba(0,0,0,0.3);
+      box-shadow: 3px 4px 12px rgba(0,0,0,0.35);
       padding: 10px 12px;
       color: #111111;
       font-size: 13px;
@@ -90,6 +95,64 @@
     .balloon-text {
       white-space: pre-wrap;
       word-break: break-word;
+      max-height: 140px;
+      overflow-y: auto;
+    }
+    /* Rendered markdown. The plain rule above keeps the newlines the model
+       actually wrote; these undo that, because once a reply is turned into
+       paragraphs the blank lines it typed would double up with the spacing
+       the tags bring. */
+    .balloon-text.md { white-space: normal; }
+    .balloon-text.md > *:first-child { margin-top: 0; }
+    .balloon-text.md > *:last-child { margin-bottom: 0; }
+    .balloon-text.md p { margin: 0 0 5px; }
+    .balloon-text.md h1, .balloon-text.md h2, .balloon-text.md h3,
+    .balloon-text.md h4, .balloon-text.md h5, .balloon-text.md h6 {
+      margin: 6px 0 3px; font-size: 13px; line-height: 1.25;
+    }
+    .balloon-text.md h1 { font-size: 15px; }
+    .balloon-text.md h2 { font-size: 14px; }
+    .balloon-text.md ul, .balloon-text.md ol { margin: 0 0 5px; padding-left: 17px; }
+    .balloon-text.md li { margin: 1px 0; }
+    .balloon-text.md a { color: #1c5fb4; }
+    .balloon-text.md blockquote {
+      margin: 4px 0; padding: 2px 0 2px 7px;
+      border-left: 2px solid #b8c4cf; color: #55606b;
+    }
+    .balloon-text.md hr { border: 0; border-top: 1px solid #c8d2da; margin: 6px 0; }
+    .balloon-text.md code {
+      font-family: monospace; font-size: 11.5px;
+      background: #eceff1; border-radius: 2px; padding: 0 3px;
+    }
+    .balloon-text.md pre.md-code {
+      margin: 4px 0; padding: 5px 6px; overflow-x: auto;
+      background: #eceff1; border-radius: 3px;
+    }
+    .balloon-text.md pre.md-code code { background: none; padding: 0; }
+    /* The commands Sayri ran, above what it said about them. In the panel this
+       is a whole transcript; in the bubble it has to fit in 140px, so the
+       command is one line and the output is behind a toggle. */
+    .balloon-tools {
+      display: flex; flex-direction: column; gap: 3px;
+      margin: 0 0 6px; padding-bottom: 6px;
+      border-bottom: 1px solid #dfe4e8;
+    }
+    .balloon-tool { display: flex; align-items: flex-start; gap: 5px; font-size: 11.5px; }
+    .balloon-tool .mark { flex: none; }
+    .balloon-tool .bt-cmd {
+      font-family: monospace; font-size: 11px; color: #2b3138;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto;
+    }
+    .balloon-tool.failed .mark { color: #c01c28; }
+    .balloon-tool.running .mark { color: #b8860b; }
+    .balloon-tool-out {
+      margin: 2px 0 0 16px; padding: 4px 5px; max-height: 90px; overflow: auto;
+      background: #f4f6f7; border-radius: 3px;
+      font-family: monospace; font-size: 10.5px; white-space: pre-wrap; color: #3c444c;
+    }
+    .balloon-tool-toggle {
+      flex: none; font-size: 10.5px; padding: 0 4px; cursor: pointer;
+      background: #e7eaed; border: 1px solid #c3ccd4; border-radius: 2px; color: #333;
     }
     /* XUI declarative skeleton nodes */
     .xui-container {
@@ -147,23 +210,595 @@
       display: flex;
       gap: 4px;
       margin-top: 4px;
+      align-items: center;
     }
     .input-row input {
       flex: 1;
-      border: 1px solid #7f9db9;
-      padding: 4px 6px;
+      border: 1.5px solid #7f9db9;
+      padding: 5px 8px;
       font-size: 12px;
-      border-radius: 2px;
+      border-radius: 4px;
       outline: none;
-      background: #fff;
+      background: #ffffff;
+      color: #000000;
+    }
+    .input-row input:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 1px #2563eb;
     }
     .input-row button {
       background: #ece9d8;
       border: 1px solid #7f9db9;
-      padding: 4px 8px;
+      padding: 5px 8px;
       font-size: 12px;
       cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .input-row button:hover {
+      background: #f5f4ea;
+    }
+    .input-row button:active {
+      transform: translateY(1px);
+    }
+    .input-row button.listening {
+      background: #ef4444 !important;
+      color: #ffffff !important;
+      border-color: #b91c1c !important;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+      70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+
+    /* ── Cajita panel ──────────────────────────────────────────────────
+       The full assistant card lives inside the companion balloon, keeping the
+       retro Windows chrome so it still belongs to Clippy. It shares the
+       balloon slot, so only one of the two is ever visible. */
+    #cajita {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 440px;
+      height: 100%;
+      background-color: #ffffdd;
+      border-left: 1.5px solid #000000;
+      box-shadow: -3px 0 12px rgba(0, 0, 0, 0.35);
+      color: #111111;
+      font-size: 12px;
+      display: none;
+      flex-direction: column;
+      z-index: 21000;
+      pointer-events: auto;
+      overflow: hidden;
+    }
+    .cajita-titlebar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 6px;
+      background: linear-gradient(90deg, #000080, #1084d0);
+      color: #ffffff;
+      font-weight: bold;
+      font-size: 11px;
+      letter-spacing: 0.3px;
+      flex: 0 0 auto;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .cajita-titlebar .spacer {
+      flex: 1;
+    }
+    .cajita-titlebar button {
+      background: #c0c0c0;
+      border: 1px solid #000;
+      color: #000;
+      font-size: 10px;
+      font-weight: bold;
+      line-height: 1;
+      padding: 2px 5px;
+      cursor: pointer;
+      box-shadow: 1px 1px 0 #fff inset, -1px -1px 0 #808080 inset;
+    }
+    .cajita-titlebar button:active {
+      box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.4) inset;
+    }
+    .cajita-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1px;
+      padding: 4px 4px 0 4px;
+      background: #c0c0c0;
+      border-bottom: 1px solid #808080;
+      flex: 0 0 auto;
+    }
+    .cajita-tab {
+      background: #c0c0c0;
+      border: 1px solid #808080;
+      border-bottom: none;
+      padding: 3px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      color: #000;
+      box-shadow: 1px 1px 0 #fff inset;
+    }
+    .cajita-tab.active {
+      background: #ffffdd;
+      font-weight: bold;
+      position: relative;
+      top: 1px;
+      padding-bottom: 4px;
+    }
+    .cajita-body {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 8px;
+      background: #ffffdd;
+    }
+    .cajita-hint {
+      color: #555555;
+      font-style: italic;
+      padding: 6px 2px;
+    }
+    .cajita-error {
+      background: #ffe0e0;
+      border: 1px solid #cc0000;
+      color: #990000;
+      padding: 5px 7px;
+      margin-bottom: 6px;
+      font-size: 11px;
+      word-break: break-word;
+    }
+    .cajita-ok {
+      background: #e6ffe6;
+      border: 1px solid #2e7d32;
+      color: #1b5e20;
+      padding: 5px 7px;
+      margin-bottom: 6px;
+      font-size: 11px;
+    }
+    .cajita-item {
+      border: 1px solid #b0a97f;
+      background: #fffef0;
+      padding: 6px 8px;
+      margin-bottom: 6px;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .cajita-item.active {
+      border-color: #000080;
+      background: #e8f0fb;
+      box-shadow: 1px 1px 0 #b8c8e8 inset;
+    }
+    .cajita-item .grow {
+      flex: 1;
+      min-width: 0;
+    }
+    .cajita-item .title {
+      font-weight: bold;
+      font-size: 12px;
+      word-break: break-word;
+    }
+    .cajita-item .sub {
+      color: #555555;
+      font-size: 11px;
+      margin-top: 2px;
+      word-break: break-word;
+    }
+    .cajita-item .actions {
+      display: flex;
+      gap: 3px;
+      flex: 0 0 auto;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .cajita-btn {
+      background: #ece9d8;
+      border: 1px solid #7f9db9;
       border-radius: 2px;
+      padding: 2px 7px;
+      font-size: 11px;
+      cursor: pointer;
+      color: #000;
+      box-shadow: 1px 1px 0 #fff inset, 1px 1px 2px rgba(0, 0, 0, 0.15);
+    }
+    .cajita-btn:hover {
+      background: #f5f4ea;
+    }
+    .cajita-btn:active {
+      box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3) inset;
+    }
+    .cajita-btn.primary {
+      background: #d4e4f7;
+      border-color: #3b82f6;
+      font-weight: bold;
+    }
+    .cajita-btn.danger {
+      background: #ffe0e0;
+      border-color: #cc0000;
+      color: #990000;
+    }
+    /* The destructive button after the first click: it says what the second
+       click does, so the two-step confirm is readable rather than a surprise. */
+    .cajita-btn.armed {
+      background: #cc0000;
+      border-color: #7a0000;
+      color: #ffffff;
+      font-weight: bold;
+    }
+    .cajita-note {
+      margin: 3px 0 6px;
+      font-size: 10.5px;
+      color: #55555f;
+    }
+    /* A section with typed-but-unsaved edits marks its Save button, so an API
+       key that was never stored does not look like it worked. */
+    .cajita-btn.dirty {
+      background: #fff3cd;
+      border-color: #b8860b;
+    }
+    .cajita-btn.dirty::after {
+      content: " *";
+    }
+    .cajita-btn[disabled] {
+      opacity: 0.5;
+      cursor: default;
+    }
+    .saved-tick {
+      color: #1b6b1b;
+      font-weight: bold;
+    }
+    .cajita-field {
+      margin-bottom: 7px;
+    }
+    .cajita-field > label {
+      display: block;
+      font-weight: bold;
+      font-size: 11px;
+      margin-bottom: 2px;
+    }
+    .cajita-field input[type="text"],
+    .cajita-field input[type="password"],
+    .cajita-field input[type="number"],
+    .cajita-field select,
+    .cajita-field textarea {
+      width: 100%;
+      border: 1px solid #7f9db9;
+      padding: 3px 5px;
+      font-size: 11px;
+      border-radius: 2px;
+      outline: none;
+      background: #ffffff;
+      color: #000000;
+      font-family: inherit;
+    }
+    .cajita-field textarea {
+      min-height: 52px;
+      resize: vertical;
+    }
+    .cajita-field input:focus,
+    .cajita-field select:focus,
+    .cajita-field textarea:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 1px #2563eb;
+    }
+    .cajita-field .note {
+      color: #666666;
+      font-size: 10px;
+      margin-top: 2px;
+    }
+    .cajita-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .cajita-row input[type="checkbox"] {
+      margin: 0;
+    }
+    .cajita-form {
+      border: 1px solid #b0a97f;
+      background: #fdf6cc;
+      padding: 8px;
+      margin-bottom: 8px;
+    }
+    .cajita-form h4 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: #775500;
+      margin-bottom: 6px;
+    }
+    .cajita-msg {
+      margin-bottom: 6px;
+      padding: 5px 7px;
+      font-size: 11px;
+      word-break: break-word;
+      white-space: pre-wrap;
+      border: 1px solid transparent;
+    }
+    .cajita-msg.user {
+      background: #e8f0fb;
+      border-color: #b8c8e8;
+    }
+    .cajita-msg.assistant {
+      background: #f2fbe8;
+      border-color: #c3e0a0;
+    }
+    /* Markdown lives in its own box so it can use normal flow: the message keeps
+       pre-wrap for what the user literally typed, while rendered markdown gets
+       real block spacing instead of a blank line per tag. */
+    .cajita-body { white-space: normal; }
+    .cajita-msg.user .cajita-body { white-space: pre-wrap; }
+    .cajita-body > *:first-child { margin-top: 0; }
+    .cajita-body > *:last-child { margin-bottom: 0; }
+    .cajita-body p { margin: 0 0 5px; }
+    .cajita-body h1, .cajita-body h2, .cajita-body h3,
+    .cajita-body h4, .cajita-body h5, .cajita-body h6 {
+      margin: 7px 0 4px;
+      font-size: 12px;
+      line-height: 1.3;
+    }
+    .cajita-body ul, .cajita-body ol { margin: 0 0 5px; padding-left: 17px; }
+    .cajita-body li { margin: 1px 0; }
+    .cajita-body a { color: #1c5fb4; }
+    .cajita-body blockquote {
+      margin: 0 0 5px;
+      padding: 1px 0 1px 7px;
+      border-left: 2px solid #c3c3cd;
+      color: #55555f;
+    }
+    .cajita-body hr {
+      margin: 6px 0;
+      border: 0;
+      border-top: 1px solid #d5d5dd;
+    }
+    .cajita-body code {
+      padding: 1px 3px;
+      background: #e6e6ec;
+      border-radius: 2px;
+      font-family: monospace;
+      font-size: 10.5px;
+    }
+    .cajita-body pre.md-code {
+      margin: 0 0 5px;
+      padding: 5px 6px;
+      background: #ffffff;
+      border: 1px solid #d5d5dd;
+      border-radius: 3px;
+      overflow: auto;
+      max-height: 260px;
+    }
+    .cajita-body pre.md-code code {
+      padding: 0;
+      background: none;
+      font-size: 10.5px;
+      line-height: 1.45;
+      white-space: pre;
+    }
+    /* A command Sayri ran: machine output, so it reads as its own kind of
+       thing rather than as something that was said. */
+    .cajita-tool {
+      margin-bottom: 6px;
+      padding: 5px 7px;
+      font-size: 11px;
+      background: #f4f4f6;
+      border: 1px solid #d5d5dd;
+      border-left: 3px solid #9a9aa5;
+    }
+    .cajita-tool.running { border-left-color: #c98a1b; }
+    .cajita-tool.failed {
+      background: #fdf0f0;
+      border-color: #f0c4c4;
+      border-left-color: #c0392b;
+    }
+    .cajita-tool .tool-head {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-bottom: 3px;
+    }
+    .cajita-tool .tool-label {
+      font-weight: bold;
+      font-size: 10px;
+      text-transform: uppercase;
+      color: #666666;
+    }
+    .cajita-tool .tool-step {
+      font-size: 9.5px;
+      color: #8a8a95;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .cajita-tool .tool-out-toggle {
+      margin-top: 4px;
+      padding: 2px 7px;
+      font-size: 10px;
+      background: #ffffff;
+      border: 1px solid #d2d2da;
+      border-radius: 3px;
+      color: #55555f;
+      cursor: pointer;
+    }
+    .cajita-tool .tool-out-toggle:hover { background: #f0f0f4; }
+    .cajita-tool .tool-out {
+      margin: 4px 0 0;
+      padding: 4px 6px;
+      max-height: 190px;
+      overflow: auto;
+      background: #ffffff;
+      border: 1px solid #e2e2e8;
+      font-family: monospace;
+      font-size: 10.5px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #24242c;
+    }
+    .cajita-tool .tool-cmd {
+      display: block;
+      font-family: monospace;
+      font-size: 10.5px;
+      background: #ffffff;
+      border: 1px solid #e2e2e8;
+      padding: 3px 5px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #24242c;
+    }
+    .cajita-msg .who {
+      font-weight: bold;
+      font-size: 10px;
+      text-transform: uppercase;
+      color: #666666;
+      display: block;
+      margin-bottom: 2px;
+    }
+    .cajita-status {
+      padding: 4px 8px;
+      background: #ece9d8;
+      border-top: 1px solid #b0a97f;
+      font-size: 10px;
+      color: #444444;
+      flex: 0 0 auto;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .cajita-status .grow {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .cajita-badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: bold;
+      padding: 1px 4px;
+      border: 1px solid #808080;
+      background: #ece9d8;
+      border-radius: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .cajita-badge.on {
+      background: #d7f0d7;
+      border-color: #2e7d32;
+      color: #1b5e20;
+    }
+    .cajita-badge.off {
+      background: #f0f0f0;
+      border-color: #999999;
+      color: #666666;
+    }
+    .cajita-search {
+      width: 100%;
+      border: 1px solid #7f9db9;
+      padding: 3px 5px;
+      font-size: 11px;
+      margin-bottom: 6px;
+      outline: none;
+    }
+    /* The approval cards. Deliberately the loudest thing in the panel: they
+       are the only elements that disappear on their own, so they have to read
+       as urgent rather than as another list row. */
+    .sayri-approvals {
+      margin: 0 0 8px 0;
+      padding: 6px;
+      background: #fff4d6;
+      border: 2px solid #b8860b;
+    }
+    .sayri-approvals h3 {
+      margin: 0 0 6px 0;
+      font-size: 11px;
+      color: #7a5c00;
+    }
+    .cajita-approval {
+      background: #ffffff;
+      border: 1px solid #b8860b;
+      padding: 6px;
+      margin-bottom: 6px;
+    }
+    .cajita-approval:last-child {
+      margin-bottom: 0;
+    }
+    .cajita-approval.granted {
+      border-color: #2e7d32;
+      background: #f2f9f2;
+    }
+    .cajita-approval.refused {
+      border-color: #8a3b3b;
+      background: #fbf2f2;
+    }
+    .cajita-approval.stale {
+      border-color: #999999;
+      background: #f4f4f4;
+    }
+    .cajita-approval-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .cajita-approval-who {
+      font-size: 10px;
+      font-weight: bold;
+      text-transform: uppercase;
+      color: #7a5c00;
+    }
+    .cajita-approval-timer {
+      font-size: 10px;
+      color: #8a6d1f;
+      white-space: nowrap;
+    }
+    /* The command being approved, verbatim and unbroken. A wrapped or
+       summarised command is not a command anybody can say yes or no to. */
+    .cajita-approval-cmd {
+      margin: 0 0 4px 0;
+      padding: 4px 6px;
+      background: #1e1e1e;
+      color: #e8e8e8;
+      font-family: "DejaVu Sans Mono", "Liberation Mono", monospace;
+      font-size: 11px;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+    .cajita-approval-why {
+      font-size: 10px;
+      color: #555555;
+      margin-bottom: 6px;
+    }
+    .cajita-approval-btns {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    .cajita-approval-wait {
+      font-size: 11px;
+      font-weight: bold;
+      color: #444444;
+    }
+    ::-webkit-scrollbar {
+      width: 12px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #e0e0e0;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #c0c0c0;
+      border: 1px solid #808080;
     }
   </style>
 </head>
@@ -176,13 +811,30 @@
       <div id="balloon-text" class="balloon-text"></div>
       <div id="xui-area" class="xui-container"></div>
       <div class="input-row">
-        <button id="settings-btn" title="Ajustes de Sayri y selección de personaje">⚙️</button>
-        <button id="mic-btn" title="Escuchar por voz (Push to talk)">🎙️</button>
-        <input type="text" id="user-input" placeholder="Pregúntame algo a Sayri..." autocomplete="off">
-        <button id="send-btn" title="Enviar consulta">➤</button>
+        <button id="settings-btn" title="Open Sayri Settings">⚙️</button>
+        <button id="mic-btn" title="Listen by voice (push to talk)">🎙️</button>
+        <input type="text" id="user-input" placeholder="Ask Sayri something..." autocomplete="off">
+        <button id="send-btn" title="Send message">➤</button>
       </div>
     </div>
     <div id="agent-anchor"></div>
+
+    <!-- Settings: the full assistant card, docked where the balloon lives -->
+    <div id="cajita">
+      <div class="cajita-titlebar">
+        <span id="cajita-title">⚙️ Settings</span>
+        <span class="spacer"></span>
+        <button id="cajita-refresh" title="Reload this tab">↻</button>
+        <button id="cajita-close" title="Close Settings">✕</button>
+      </div>
+      <div class="cajita-tabs" id="cajita-tabs"></div>
+      <div class="cajita-body" id="cajita-body"></div>
+      <div class="cajita-status">
+        <span class="cajita-badge" id="cajita-state">idle</span>
+        <span id="cajita-agent" class="grow">Sayri</span>
+        <span id="cajita-version"></span>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -203,17 +855,54 @@
     window.onDaemonEvent = function(event) {
       if (window._doOnDaemonEvent) {
         window._doOnDaemonEvent(event);
+      } else {
+        // The page is not ready yet: hold on to it so nothing is lost.
+        var q = window.__sayriEarly = window.__sayriEarly || [];
+        q.push(event);
+        if (q.length > 200) q.splice(0, q.length - 200);
       }
+    };
+    // Bridge for the Cajita panel: Python answers with onCallResult().
+    // Declared here (not in the module script) so it exists before the module
+    // finishes loading, otherwise the first reply could arrive too early.
+    window.__cajitaPending = Object.create(null);
+    window.onCallResult = function(payload) {
+      if (!payload || !payload.req_id) return;
+      const resolver = window.__cajitaPending[payload.req_id];
+      if (!resolver) return;
+      delete window.__cajitaPending[payload.req_id];
+      if (payload.ok) resolver.resolve(payload.data);
+      else resolver.reject(new Error(payload.error || "request failed"));
+    };
+    window.cajitaCall = function(req_id, cmd, params) {
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.sayriCall) {
+        window.webkit.messageHandlers.sayriCall.postMessage(JSON.stringify({
+          req_id: req_id, cmd: cmd, params: params || {}
+        }));
+        return true;
+      }
+      return false;
+    };
+    window.postAction = function(action_id) {
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.sayriAction) {
+        window.webkit.messageHandlers.sayriAction.postMessage(action_id);
+        return true;
+      }
+      return false;
     };
   </script>
 
   <script type="module">
     import { initAgent } from "./dist/index.mjs";
     import * as allAgents from "./dist/agents/index.mjs";
+    import * as cajita from "./cajita.js";
 
     let currentAgentInstance = null;
+    let agentLoadToken = 0;
     let currentAgentName = "Clippy";
+    let isListening = false;
     let hideBalloonTimeout = null;
+    let soundEffects = true;
 
     const balloon = document.getElementById("balloon");
     const headerTitle = document.getElementById("header-title");
@@ -221,26 +910,291 @@
     const xuiArea = document.getElementById("xui-area");
     const userInput = document.getElementById("user-input");
     const sendBtn = document.getElementById("send-btn");
+    const micBtn = document.getElementById("mic-btn");
+    const settingsBtn = document.getElementById("settings-btn");
 
-    window._doShowBalloon = function(text, header = "💡 Sayri Assistant") {
+    // ── balloon plumbing ────────────────────────────────────────────────
+    // `kind` marks how sticky a message is. Right after a reply or a provider
+    // error the daemon streams `state: listening` again, and that notice must
+    // not wipe out the reply / the error the user actually asked for.
+    const STICKY_MS = { reply: 8000, error: 25000 };
+    let lastKind = "info";
+    let lastAt = 0;
+    let stickyTimer = null;
+    let streamBuf = "";
+    let transcript = [];
+    // Counts the commands in the current turn, so the panel can label them
+    // "1 of 4" instead of leaving four identical-looking rows.
+    let toolStep = 0;
+
+    // The commands Sayri ran during the turn in progress, kept above the text
+    // so that what it did and what it said arrive as one message. The old
+    // bubble flashed "Running: …" as a line of text that was gone by the time
+    // the reply landed, which left an answer you could not account for.
+    let balloonToolRows = [];
+    // The text currently on the bubble, so a command finishing can repaint the
+    // row it settled without re-showing the balloon and losing what was said.
+    let lastBalloonText = "";
+
+    function balloonToolRow(row) {
+      const wrap = document.createElement("div");
+      wrap.className = "balloon-tool " + (row.state || "running");
+
+      const mark = document.createElement("span");
+      mark.className = "mark";
+      mark.textContent = row.state === "running" ? "⏳"
+        : (row.state === "failed" ? "✗" : "✓");
+      wrap.appendChild(mark);
+
+      // The command, verbatim and in a monospace face: never summarised.
+      const cmd = document.createElement("code");
+      cmd.className = "bt-cmd";
+      cmd.textContent = row.command;
+      cmd.title = row.command;
+      wrap.appendChild(cmd);
+
+      if (row.output) {
+        const out = document.createElement("pre");
+        out.className = "balloon-tool-out";
+        out.textContent = row.output;
+        out.style.display = "none";
+
+        const toggle = document.createElement("button");
+        toggle.className = "balloon-tool-toggle";
+        toggle.textContent = "Output";
+        toggle.title = "Show what this command printed";
+        toggle.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const shown = out.style.display !== "none";
+          out.style.display = shown ? "none" : "block";
+          toggle.textContent = shown ? "Output" : "Hide";
+        });
+        wrap.appendChild(toggle);
+
+        const holder = document.createElement("div");
+        holder.appendChild(out);
+        // The output is a sibling of the row, not a child: the row is a flex
+        // line and the output needs the full width under it.
+        const outer = document.createElement("div");
+        outer.appendChild(wrap);
+        outer.appendChild(holder);
+        return outer;
+      }
+      return wrap;
+    }
+
+    function paintBalloonBody(text, kind) {
+      // Remove the previous turn's rows so the list is rebuilt, not appended to.
+      for (const old of Array.from(balloon.querySelectorAll(".balloon-tools"))) {
+        old.remove();
+      }
+      if (balloonToolRows.length) {
+        const box = document.createElement("div");
+        box.className = "balloon-tools";
+        for (const row of balloonToolRows) box.appendChild(balloonToolRow(row));
+        balloon.insertBefore(box, balloonText);
+      }
+      // Only what Sayri said is markdown. A question, an error or a status line
+      // is not written in markdown, and running those through the renderer buys
+      // nothing while making the asterisks in a path come out looking bold.
+      const asMarkdown = (kind === "reply");
+      balloonText.classList.toggle("md", asMarkdown);
+      if (asMarkdown) balloonText.innerHTML = cajita.mdToHtml(text);
+      else balloonText.textContent = text;
+    }
+
+    window._doShowBalloon = function(text, header = "💡 Sayri Assistant", kind = "info") {
+      lastKind = kind || "info";
+      lastAt = Date.now();
       headerTitle.textContent = header;
-      balloonText.textContent = text;
+      // A new question starts a new account of how the answer was arrived at,
+      // so the commands from the last one go. Showing them again would put
+      // last turn's commands above this turn's answer and read as if they had
+      // produced it.
+      if (lastKind === "user") balloonToolRows = [];
+      lastBalloonText = text == null ? "" : String(text);
+      paintBalloonBody(lastBalloonText, lastKind);
       balloon.style.display = "flex";
       if (hideBalloonTimeout) clearTimeout(hideBalloonTimeout);
+      if (stickyTimer) { clearTimeout(stickyTimer); stickyTimer = null; }
+      const sticky = STICKY_MS[lastKind];
+      if (sticky) {
+        // Once the sticky window expires, tell the user the mic is hot again
+        // (but only if it really is), instead of silently going quiet.
+        stickyTimer = setTimeout(() => {
+          stickyTimer = null;
+          if (isListening && !hasFreshPayload()) {
+            window._doShowBalloon("Listening to you... Speak now.", "🎙️ Microphone", "mic");
+          }
+        }, sticky + 50);
+      }
     };
 
-    async function loadAgent(agentName) {
-      if (currentAgentInstance) {
+    function hasFreshPayload() {
+      const sticky = STICKY_MS[lastKind];
+      return !!sticky && (Date.now() - lastAt) < sticky;
+    }
+
+    // The compact chat box: the companion plus its text field, which is what
+    // the gear is opened from and what closing Settings hands back. Unlike a
+    // balloon message this stays up until it is dismissed, because it is the
+    // view you talk to Sayri in, not a notification.
+    window.showChatBox = function () {
+      if (hideBalloonTimeout) clearTimeout(hideBalloonTimeout);
+      if (!balloonText.textContent.trim()) {
+        balloonText.textContent = "Ask me anything...";
+      }
+      headerTitle.textContent = currentAgentName || "Sayri";
+      balloon.style.display = "flex";
+      if (userInput) userInput.focus();
+    };
+
+    window.hideChatBox = function () {
+      balloon.style.display = "none";
+    };
+
+    window.toggleChatBox = function () {
+      if (balloon.style.display === "none") window.showChatBox();
+      else window.hideChatBox();
+    };
+
+    // ── companion animation ──────────────────────────────────────────────
+    // Every companion ships its own animation set, so no single name works
+    // everywhere. Each entry below is an ordered list of fallbacks: the first
+    // one this companion actually has wins. RestPose and GetAttention exist in
+    // all nine; the thinking and speaking sets differ between the MS and the
+    // Mac collections, hence the longer lists.
+    const ANIM = {
+      idle:      ["RestPose", "Blink"],
+      listening: ["GetAttention", "LookUp"],
+      thinking:  ["Thinking", "Process", "GetAttention"],
+      speaking:  ["Explain", "Writing", "Write", "Wave"],
+      confused:  ["Alert", "LookDown", "RestPose"],
+    };
+    let animState = "";
+    let animTimer = null;
+
+    // Play the first animation this companion knows. `play` returns false for a
+    // name it does not have, which is what makes the fallback lists work.
+    function playAnim(names) {
+      if (!currentAgentInstance) return false;
+      for (const n of names) {
         try {
-          currentAgentInstance.dispose();
+          if (currentAgentInstance.play(n)) return true;
         } catch (e) {}
+      }
+      return false;
+    }
+
+    // Companion animations carry their own sound frame by frame, so switching
+    // sound effects off means muting the companion's audio, not skipping the
+    // animation: gating the animation would freeze the character whenever the
+    // user turned the sounds off.
+    function applySoundEnabled(on) {
+      soundEffects = !!on;
+      const animator = currentAgentInstance && currentAgentInstance._animator;
+      const sounds = animator && animator._sounds;
+      if (!sounds) return;
+      for (const key in sounds) {
+        const audio = sounds[key];
+        if (!audio) continue;
+        if (soundEffects) {
+          audio.muted = false;
+        } else {
+          audio.muted = true;
+          try { audio.pause(); } catch (e) {}
+        }
+      }
+    }
+
+    // WebKit refuses to start audio until the user has interacted with the
+    // page, and the companion silently swallows that rejection, so the sounds
+    // are simply inaudible until then. Nudging each clip once, muted, on the
+    // first gesture is what unlocks playback for the rest of the session.
+    let soundsUnlocked = false;
+    function unlockSounds() {
+      const animator = currentAgentInstance && currentAgentInstance._animator;
+      const sounds = animator && animator._sounds;
+      if (!sounds) return;
+      for (const key in sounds) {
+        const audio = sounds[key];
+        if (!audio) continue;
+        const wasMuted = audio.muted;
+        audio.muted = true;
+        let started = null;
+        try { started = audio.play(); } catch (e) { started = null; }
+        const settle = () => {
+          try { audio.pause(); audio.currentTime = 0; } catch (e) {}
+          audio.muted = wasMuted;
+        };
+        if (started && typeof started.then === "function") started.then(settle, settle);
+        else settle();
+      }
+    }
+
+    // Called once, on the first interaction of any kind.
+    function armSoundUnlock() {
+      if (soundsUnlocked) return;
+      soundsUnlocked = true;
+      unlockSounds();
+      window.removeEventListener("pointerdown", armSoundUnlock, true);
+      window.removeEventListener("keydown", armSoundUnlock, true);
+    }
+
+    // Animate for a state until something else takes over. Companion
+    // animations are short one-shots that time out on their own, so a state
+    // that lasts (thinking, speaking) has to be topped up; the name is only
+    // re-resolved when the state changes, so streaming a reply does not
+    // restart the animation on every word.
+    function setAnimState(next) {
+      const state = ANIM[next] ? next : "idle";
+      if (state === animState) return;
+      animState = state;
+      if (animTimer) { clearInterval(animTimer); animTimer = null; }
+      // `play` queues, and a queued animation still runs after the state moved
+      // on. Without this the companion keeps working through a backlog of
+      // thinking animations long after the reply is finished, which reads as
+      // "still busy" when it is actually idle.
+      if (currentAgentInstance) {
+        try { currentAgentInstance.stop(); } catch (e) {}
+      }
+      const step = () => playAnim(ANIM[state]);
+      step();
+      if (state === "thinking" || state === "speaking" || state === "listening") {
+        animTimer = setInterval(step, 3000);
+      }
+    }
+
+    async function loadAgent(agentName) {
+      // Loading a companion is async, and it is started from more than one
+      // place (this page picks a default, the host injects the saved
+      // character, the user switches character). Two overlapping calls would
+      // both pass the dispose below against the same stale instance, so the
+      // loser of the race would stay in the DOM and you would see two copies
+      // of the character stacked on each other. A token decides which load
+      // wins; the others throw their instance away.
+      const token = ++agentLoadToken;
+      const previous = currentAgentInstance;
+      currentAgentInstance = null;
+      if (previous) {
+        try { previous.dispose(); } catch (e) {}
       }
       currentAgentName = agentName;
       const agentKey = Object.keys(allAgents).find(k => k.toLowerCase() === agentName.toLowerCase()) || "Clippy";
       const agentDef = allAgents[agentKey] || allAgents.Clippy;
 
-      currentAgentInstance = await initAgent(agentDef);
+      const instance = await initAgent(agentDef);
+      if (token !== agentLoadToken) {
+        // A newer request already won; this one must not stay on screen.
+        try { instance.dispose(); } catch (e) {}
+        return;
+      }
+      currentAgentInstance = instance;
       currentAgentInstance.show(true);
+      // A fresh companion loads its own audio, so the sound setting has to be
+      // pushed onto it again rather than only being applied once at startup.
+      applySoundEnabled(soundEffects);
+      unlockSounds();
 
       // Explicitly position the agent inside the visible canvas
       const agEl = currentAgentInstance._el;
@@ -250,6 +1204,12 @@
         agEl.style.top = Math.max(20, (window.innerHeight - 130)) + "px";
         agEl.style.display = "block";
         agEl.style.zIndex = "10005";
+        agEl.title = "Click to open the chat box";
+        // Clicking the companion brings up the chat box, clicking again puts
+        // it away. This element is also the drag handle, but a `click` only
+        // fires when the pointer did not really move, so it does not fight
+        // dragging the companion around.
+        agEl.addEventListener("click", () => window.toggleChatBox());
       }
 
       // Hide clippyjs internal basic balloon if present
@@ -262,7 +1222,7 @@
         if (currentAgentInstance) currentAgentInstance.play("Wave");
       }, 500);
 
-      window._doShowBalloon(`¡Hola! Soy tu asistente Sayri (${agentName}). ¿En qué puedo ayudarte?`);
+      window._doShowBalloon(`Hi! I'm your Sayri assistant (${agentName}). How can I help?`);
     }
 
     window._doSwitchAgent = function(name) {
@@ -340,69 +1300,356 @@
       balloon.style.display = "flex";
     };
 
-    window._doOnDaemonEvent = function(event) {
-      const ev = event.event;
-      if (ev === "state") {
-        const st = event.state;
-        if (st === "listening") {
-          if (currentAgentInstance) currentAgentInstance.play("Hearing_1") || currentAgentInstance.play("Listening") || currentAgentInstance.play("LookDown");
-          window._doShowBalloon("Escuchando tu voz...", "🎙️ Micrófono");
-        } else if (st === "thinking") {
-          if (currentAgentInstance) currentAgentInstance.play("Thinking") || currentAgentInstance.play("Searching");
-          window._doShowBalloon("Pensando la respuesta...", "🤔 Sayri");
-        } else if (st === "speaking") {
-          if (currentAgentInstance) currentAgentInstance.play("Explain") || currentAgentInstance.play("Wave");
+    function updateMicUI(listening) {
+      isListening = listening;
+      if (micBtn) {
+        if (listening) {
+          micBtn.classList.add("listening");
+          micBtn.textContent = "🔴";
+          micBtn.title = "Microphone active (click to stop)";
+        } else {
+          micBtn.classList.remove("listening");
+          micBtn.textContent = "🎙️";
+          micBtn.title = "Listen by voice (push to talk)";
         }
-      } else if (ev === "utterance") {
-        window._doShowBalloon(event.text || "", "🎙️ Transcripción");
-      } else if (ev === "assistant_delta" || ev === "assistant_done") {
-        window._doShowBalloon(event.text || "", "💬 Sayri");
-        if (currentAgentInstance) currentAgentInstance.play("Explain");
-      } else if (ev === "render_xui") {
-        renderXuiSkeleton(event.screen);
+      }
+    }
+
+    // Event names actually broadcast by sayri.daemon.BridgeUI:
+    //   ready, state, audio_level, mic, busy, partial, user,
+    //   assistant_delta, assistant_done, tool_start, tool_finish,
+    //   hint, error, speaking, show, hide, conversation_started, shutdown
+    window._doOnDaemonEvent = function(event) {
+      if (!event || !event.event) return;
+      const ev = event.event;
+
+      switch (ev) {
+        case "state": {
+          const st = event.state;
+          if (st === "listening" || st === "activated") {
+            updateMicUI(true);
+            setAnimState("listening");
+            if (!hasFreshPayload()) {
+              window._doShowBalloon("Listening to you... Speak now.", "🎙️ Microphone", "mic");
+            }
+          } else if (st === "thinking") {
+            updateMicUI(false);
+            setAnimState("thinking");
+            if (!hasFreshPayload()) {
+              window._doShowBalloon("Thinking about the answer...", "🤔 Sayri", "status");
+            }
+          } else if (st === "speaking") {
+            updateMicUI(false);
+            setAnimState("speaking");
+          } else if (st === "idle") {
+            updateMicUI(false);
+            setAnimState("idle");
+          }
+          break;
+        }
+
+        // `speaking` is the real voice activity, driven by the speech
+        // synthesiser rather than by the reply text, so it is what decides
+        // "the companion is talking", even for a reply that is not narrated.
+        case "speaking":
+          setAnimState(event.active ? "speaking" : "idle");
+          break;
+
+        case "mic":
+          updateMicUI(!!event.active);
+          break;
+
+        case "audio_level":
+        case "busy":
+        case "ready":
+        case "show":
+        case "hide":
+          break;
+
+        case "partial":
+        case "utterance":   // "utterance" kept as a legacy alias
+          if (event.text) {
+            window._doShowBalloon(event.text, "🎙️ Transcription", "partial");
+          }
+          break;
+
+        case "user":
+          streamBuf = "";
+          toolStep = 0;
+          // The moment the request is out, the wait starts: the companion
+          // thinks until the voice kicks in (the `speaking` event).
+          setAnimState("thinking");
+          if (event.text) {
+            window._doShowBalloon(event.text, "💬 You", "user");
+            pushTranscript("user", event.text);
+          }
+          break;
+
+        case "assistant_delta": {
+          const piece = event.delta != null ? event.delta : (event.text || "");
+          if (!piece) break;
+          streamBuf += piece;
+          window._doShowBalloon(streamBuf, "💬 Sayri", "reply");
+          pushTranscript("assistant", streamBuf);
+          // Deliberately no animation here: deltas arrive per token, and the
+          // talking animation belongs to the `speaking` event instead.
+          break;
+        }
+
+        case "assistant_done": {
+          const text = event.text || streamBuf;
+          streamBuf = "";
+          if (text) {
+            window._doShowBalloon(text, "💬 Sayri", "reply");
+            pushTranscript("assistant", text);
+            closeTranscriptTurn();
+          }
+          // The pose is left to the voice: `speaking` arrives next, and the
+          // settled state comes from `speaking: false` or `state: idle`. Going
+          // idle here would flicker between the reply and the first syllable.
+          break;
+        }
+
+        case "error": {
+          const msg = event.error || event.text || "Unknown error";
+          streamBuf = "";
+          updateMicUI(false);
+          window._doShowBalloon(msg, "❌ Sayri Error", "error");
+          setAnimState("confused");
+          break;
+        }
+
+        case "tool_start":
+          streamBuf = "";
+          // Running a command is work in progress, so the companion says so.
+          setAnimState("thinking");
+          // Commands run in a sequence, so the step number makes the flow
+          // readable: "2 of 5" says far more than five identical-looking rows.
+          pushTranscript("tool", String(event.command || "").trim(),
+            { state: "running", step: ++toolStep });
+          // Recorded as a row rather than a line of text, so the reply that
+          // comes next lands under the command that produced it instead of
+          // wiping it off the screen.
+          balloonToolRows.push({
+            command: String(event.command || "").trim(),
+            state: "running",
+          });
+          window._doShowBalloon("", "⚙️ Sayri", "status");
+          break;
+
+        case "tool_finish": {
+          // Close the command that is still open rather than starting a new
+          // turn, so one command reads as one entry with one result.
+          const code = event.exit_code;
+          const output = typeof event.output === "string" ? event.output.slice(0, 4000) : "";
+          for (let i = transcript.length - 1; i >= 0; i--) {
+            const t = transcript[i];
+            if (t.role === "tool" && t.tool && t.tool.state === "running") {
+              t.tool.state = (!code) ? "ok" : "failed";
+              t.tool.exit_code = code;
+              // The daemon already sends what the command printed. Keeping it
+              // next to the command is what turns a bare list of commands into
+              // a readable account of how the answer was arrived at.
+              t.tool.output = output;
+              break;
+            }
+          }
+          // The bubble keeps its own copy, matched the same way: the last row
+          // still marked running is the one that just finished.
+          for (let i = balloonToolRows.length - 1; i >= 0; i--) {
+            if (balloonToolRows[i].state === "running") {
+              balloonToolRows[i].state = (!code) ? "ok" : "failed";
+              balloonToolRows[i].output = output;
+              break;
+            }
+          }
+          notifyTranscript();
+          if (code && !hasFreshPayload()) {
+            window._doShowBalloon("Command finished (code " + code + ")", "⚙️ Sayri", "status");
+          } else {
+            // Repainted in place. Going back through _doShowBalloon would
+            // restart the hide timer, so a burst of commands would hold the
+            // bubble up for as long as they ran and then drop it the moment
+            // they stopped.
+            paintBalloonBody(lastBalloonText, lastKind);
+          }
+          break;
+        }
+
+        case "hint":
+          if (event.text && !hasFreshPayload()) {
+            window._doShowBalloon(event.text, "💡 Sayri", "status");
+          }
+          break;
+
+        case "conversation_started":
+          streamBuf = "";
+          transcript = [];
+          toolStep = 0;
+          balloonToolRows = [];
+          window._doShowBalloon("New conversation started.", "💡 Sayri", "status");
+          break;
+
+        case "shutdown":
+          window._doShowBalloon("Sayri has closed.", "💡 Sayri", "status");
+          break;
+
+        case "render_xui":
+          renderXuiSkeleton(event.screen);
+          break;
       }
     };
-    window.onDaemonEvent = window._doOnDaemonEvent;
+    window.onDaemonEvent = function (event) {
+      window._doOnDaemonEvent(event);
+      // Re-broadcast as a DOM event so the Cajita panel can subscribe to what
+      // it cares about (download progress, settings changed elsewhere) without
+      // this file having to know the full event vocabulary.
+      if (event && typeof event === "object") {
+        window.dispatchEvent(new CustomEvent("sayri-daemon-event", { detail: event }));
+      }
+    };
+
+    // Drain whatever arrived before this page was ready. The queue is drained
+    // through the real handler so those events get the same re-broadcast as
+    // everything else (the Cajita panel listens for it).
+    (function () {
+      var queued = window.__sayriEarly;
+      if (!queued || !queued.length) { window.__sayriEarly = null; return; }
+      window.__sayriEarly = null;
+      for (var i = 0; i < queued.length; i++) window.onDaemonEvent(queued[i]);
+    })();
 
     function sendPrompt() {
       const txt = userInput.value.trim();
       if (!txt) return;
       userInput.value = "";
-      window._doShowBalloon(txt, "💬 Tú");
-      if (currentAgentInstance) currentAgentInstance.play("Thinking");
+      streamBuf = "";
+      window._doShowBalloon(txt, "💬 You", "user");
+      pushTranscript("user", txt);
+      setAnimState("thinking");
       if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.sayriPrompt) {
         window.webkit.messageHandlers.sayriPrompt.postMessage(txt);
       }
     }
 
-    const settingsBtn = document.getElementById("settings-btn");
-    const micBtn = document.getElementById("mic-btn");
-
     if (settingsBtn) {
-      settingsBtn.onclick = () => {
-        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.sayriAction) {
-          window.webkit.messageHandlers.sayriAction.postMessage("open_settings");
-        }
+      settingsBtn.onclick = (e) => {
+        e.stopPropagation();
+        // The Settings panel carries the whole settings surface now, so the
+        // gear opens it instead of spawning a separate app window.
+        window.toggleCajita();
       };
+      settingsBtn.title = "Open Sayri Settings";
     }
     if (micBtn) {
-      micBtn.onclick = () => {
+      micBtn.onclick = (e) => {
+        e.stopPropagation();
         if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.sayriAction) {
           window.webkit.messageHandlers.sayriAction.postMessage("toggle_mic");
         }
       };
     }
 
-    sendBtn.onclick = sendPrompt;
+    if (sendBtn) {
+      sendBtn.onclick = (e) => {
+        e.stopPropagation();
+        sendPrompt();
+      };
+    }
+
     userInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") sendPrompt();
+      if (e.key === "Enter") {
+        e.preventDefault();
+        sendPrompt();
+      }
     });
+
+    // ── Cajita panel ────────────────────────────────────────────────────
+    // The full assistant card lives in its own module; this is only the small
+    // amount of shared state it needs from the balloon.
+    const transcriptListeners = [];
+    window.sayriBalloon = {
+      get transcript() { return transcript; },
+      setTranscript(turns) { transcript = turns || []; notifyTranscript(); },
+      resetTranscript() { transcript = []; notifyTranscript(); },
+      // The panel has to repaint as the conversation happens. Without this it
+      // only redraws when its tab is rebuilt, so a reply streaming in behind an
+      // open Chat tab looked frozen, and the tool calls never appeared at all.
+      onChange(fn) { if (typeof fn === "function") transcriptListeners.push(fn); },
+      show(text, header, kind) { window._doShowBalloon(text, header, kind); },
+      hide() { balloon.style.display = "none"; },
+      // The panel uses this when it hands the window back to the companion, so
+      // closing Settings does not leave a bare avatar with nothing to click.
+      showChatBox() { window.showChatBox(); },
+    };
+    // The plugin host injects the companion's own settings once the page has
+    // loaded: the sound toggle drives playback here, the rest feed the panel.
+    window.applyPluginInfo = (info) => {
+      if (info && typeof info.sound_effects === "boolean") {
+        applySoundEnabled(info.sound_effects);
+      }
+      if (info && info.character) currentAgentName = info.character;
+      cajita.applyInfo(info);
+    };
+    window.toggleCajita = () => cajita.setOpen(!cajita.isOpen());
+    cajita.init();
+
+    // ── the live conversation, mirrored into the Cajita Chat tab ────────
+    // Streaming arrives one token at a time, so the panel is told at most a few
+    // times a second rather than per token: repainting the whole transcript for
+    // every word is what would otherwise make a long answer crawl.
+    let notifyQueued = false;
+    function notifyTranscript() {
+      if (notifyQueued) return;
+      notifyQueued = true;
+      setTimeout(() => {
+        notifyQueued = false;
+        for (const fn of transcriptListeners.slice()) {
+          try { fn(); } catch (e) {}
+        }
+      }, 200);
+    }
+
+    function pushTranscript(role, text, meta) {
+      if (role === "tool") {
+        // A command is a turn of its own so the chat can show what Sayri ran
+        // and how it ended, instead of only a balloon that scrolls away.
+        transcript.push({ role: "tool", text: text || "", tool: meta || {} });
+        notifyTranscript();
+        return;
+      }
+      if (!text) return;
+      if (role === "user") {
+        transcript.push({ role: "user", text: text });
+        notifyTranscript();
+        return;
+      }
+      // Streaming deltas arrive as fragments: keep rewriting the last
+      // assistant turn instead of appending one row per token.
+      const last = transcript[transcript.length - 1];
+      if (last && last.role === "assistant" && last.streaming) {
+        last.text = text;
+      } else {
+        transcript.push({ role: "assistant", text: text, streaming: true });
+      }
+      notifyTranscript();
+    }
+
+    function closeTranscriptTurn() {
+      const last = transcript[transcript.length - 1];
+      if (last && last.role === "assistant") last.streaming = false;
+      notifyTranscript();
+    }
 
     if (window.pendingAgent) {
       loadAgent(window.pendingAgent);
     } else {
       loadAgent("Clippy");
     }
+
+    // The first click or keypress anywhere unlocks the companion's audio.
+    window.addEventListener("pointerdown", armSoundUnlock, true);
+    window.addEventListener("keydown", armSoundUnlock, true);
   </script>
 </body>
 </html>
