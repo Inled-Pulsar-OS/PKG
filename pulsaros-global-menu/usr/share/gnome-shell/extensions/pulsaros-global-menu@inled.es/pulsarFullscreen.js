@@ -1,9 +1,17 @@
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { getPointerWatcher } from 'resource:///org/gnome/shell/ui/pointerWatcher.js';
+
+const IGNORED_APPS = [
+    'Plank', 'Conky', 'gjs', 'Gjs', 'gjs-console',
+    'ding', 'DING', 'org.gnome.Shell.Extensions.DING',
+    'sayri', 'Sayri', 'es.inled.sayri', 'sayri-overlay', 'sayri-indicator',
+    'pulsaros-spotlight', 'es.inled.PulsarStore'
+];
 
 export class MacOSFullscreenManager {
     constructor(extension) {

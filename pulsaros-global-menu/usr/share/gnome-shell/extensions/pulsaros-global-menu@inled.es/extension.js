@@ -466,6 +466,13 @@ export default class PulsarosGlobalMenuExtension extends Extension {
 		} catch (e) {
 			console.error("[GlobalMenu] Theme sync error:", e);
 		}
+
+		// 8. macOS Fullscreen Spaces & Top Bar Auto-hide
+		try {
+			this._macOSFullscreenManager = new MacOSFullscreenManager(this);
+		} catch (e) {
+			console.error("[GlobalMenu] FullscreenManager error:", e);
+		}
 	}
 
 	disable() {

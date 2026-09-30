@@ -201,6 +201,19 @@ template $CcBackgroundPanel: $CcPanel {
                 background-chosen => $on_chooser_background_chosen_cb(template);
               }
             }
+
+            Adw.ActionRow {
+              title: _("Legal Notice &amp; Attribution");
+              subtitle: _("macOS wallpapers are property of Apple Inc. and were obtained from dynamicwallpaper.club.");
+              activatable: false;
+              selectable: false;
+
+              [prefix]
+              Image {
+                icon-name: "dialog-information-symbolic";
+                valign: center;
+              }
+            }
           }
 
           Adw.PreferencesGroup {

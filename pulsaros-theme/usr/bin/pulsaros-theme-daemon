@@ -13,6 +13,7 @@ if command -v flatpak >/dev/null 2>&1; then
 fi
 
 sync_theme() {
+    local show_prompt="${1:-false}"
     local scheme
     scheme=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")
     mkdir -p "$HOME/.config/gtk-4.0" "$HOME/.config/gtk-3.0"
@@ -76,12 +77,25 @@ gtk-application-prefer-dark-theme=0
 EOF
 
     fi
+
+    if [ "$show_prompt" = "true" ]; then
+        if command -v pulsaros-theme-logout-prompt >/dev/null 2>&1; then
+            pulsaros-theme-logout-prompt &
+        elif [ -x "/usr/bin/pulsaros-theme-logout-prompt" ]; then
+            /usr/bin/pulsaros-theme-logout-prompt &
+        fi
+    fi
 }
 
-# Ejecución inicial
-sync_theme
+# Ejecución inicial silenciosa
+LAST_SCHEME=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")
+sync_theme false
 
 # Monitor en tiempo real de cambios en org.gnome.desktop.interface color-scheme
 gsettings monitor org.gnome.desktop.interface color-scheme 2>/dev/null | while read -r _; do
-    sync_theme
+    CURRENT_SCHEME=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")
+    if [ "$CURRENT_SCHEME" != "$LAST_SCHEME" ]; then
+        LAST_SCHEME="$CURRENT_SCHEME"
+        sync_theme true
+    fi
 done
