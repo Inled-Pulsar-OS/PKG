@@ -1,0 +1,122 @@
+{
+  "format": 1,
+  "app": "iotas",
+  "name": "Iotas",
+  "identifiers": [
+    "org.gnome.World.Iotas.desktop",
+    "org.gnome.World.Iotas",
+    "iotas",
+    "Iotas"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Note", "shortcut": "<Ctrl>N"},
+        {"label": "Open Previous Note", "shortcut": "<Ctrl>L"},
+        {"separator": true},
+        {"label": "Export", "shortcut": "<Ctrl><Shift>S"},
+        {"separator": true},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"separator": true},
+        {"label": "Insert Emoji", "shortcut": "<Ctrl>period"},
+        {"separator": true},
+        {"label": "Find", "shortcut": "<Ctrl>F"},
+        {"label": "Replace", "shortcut": "<Ctrl>H"},
+        {"label": "Next Match", "shortcut": "<Ctrl>G"},
+        {"label": "Previous Match", "shortcut": "<Ctrl><Shift>G"},
+        {"separator": true},
+        {"label": "Preferences", "shortcut": "<Ctrl>comma"}
+      ]
+    },
+    {
+      "label": "Note",
+      "items": [
+        {"label": "Edit Title", "shortcut": "F2"},
+        {"label": "Change Category", "shortcut": "<Ctrl>E"},
+        {"label": "Jump to Section", "shortcut": "<Ctrl>J"},
+        {"separator": true},
+        {"label": "Toggle Markdown Render", "shortcut": "<Ctrl>D"},
+        {"separator": true},
+        {"label": "Back to Note List", "shortcut": "Escape"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Bold", "shortcut": "<Ctrl>B"},
+        {"label": "Italic", "shortcut": "<Ctrl>I"},
+        {"label": "Strikethrough", "shortcut": "<Ctrl><Shift>X"},
+        {"label": "Code", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Link", "shortcut": "<Ctrl>K"},
+        {"separator": true},
+        {
+          "label": "Heading",
+          "items": [
+            {"label": "Heading 1", "shortcut": "<Ctrl>1"},
+            {"label": "Heading 2", "shortcut": "<Ctrl>2"},
+            {"label": "Heading 3", "shortcut": "<Ctrl>3"},
+            {"label": "Heading 4", "shortcut": "<Ctrl>4"},
+            {"label": "Heading 5", "shortcut": "<Ctrl>5"},
+            {"label": "Heading 6", "shortcut": "<Ctrl>6"},
+            {"separator": true},
+            {"label": "Remove Heading", "shortcut": "<Ctrl>7"}
+          ]
+        },
+        {"separator": true},
+        {"label": "Unordered List", "shortcut": "<Ctrl>U"},
+        {"label": "Ordered List", "shortcut": "<Ctrl>O"},
+        {"label": "Checkbox", "shortcut": "<Alt>C"},
+        {"label": "Toggle Checkbox", "shortcut": "<Ctrl>T"},
+        {"separator": true},
+        {"label": "Quote", "shortcut": "<Ctrl><Shift>Q"},
+        {"label": "Table", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Horizontal Rule", "shortcut": "<Ctrl><Shift>R"}
+      ]
+    },
+    {
+      "label": "Notes",
+      "items": [
+        {"label": "Search Notes", "shortcut": "<Ctrl>F"},
+        {"label": "Open First Search Result", "shortcut": "<Alt>Return"},
+        {"label": "Reset Filter", "shortcut": "<Ctrl><Shift>Delete"},
+        {"separator": true},
+        {"label": "Start Selection", "shortcut": "<Ctrl>S"},
+        {"label": "Change Category", "shortcut": "<Ctrl>E"},
+        {"label": "Toggle Favorite", "shortcut": "<Ctrl>G"},
+        {"label": "Export", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Delete", "shortcut": "<Shift>Delete"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Show Sidebar", "shortcut": "F9"},
+        {"label": "Focus Mode", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Fullscreen", "shortcut": "F11"},
+        {"separator": true},
+        {"label": "Increase Font Size", "shortcut": "<Ctrl>plus"},
+        {"label": "Decrease Font Size", "shortcut": "<Ctrl>minus"},
+        {"label": "Increase Line Length", "shortcut": "<Ctrl>Up"},
+        {"label": "Decrease Line Length", "shortcut": "<Ctrl>Down"},
+        {"separator": true},
+        {"label": "Focus Text", "shortcut": "<Alt>E"},
+        {"label": "Focus Header Bar", "shortcut": "<Alt>H"},
+        {"label": "Focus Formatting Bar", "shortcut": "<Alt>F"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

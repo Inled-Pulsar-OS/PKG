@@ -1,0 +1,95 @@
+{
+  "format": 1,
+  "app": "vscodium",
+  "name": "VSCodium",
+  "identifiers": [
+    "codium.desktop",
+    "com.vscodium.codium.desktop",
+    "vscodium",
+    "codium",
+    "VSCodium"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Create New File", "shortcut": "<Ctrl>N"},
+        {"label": "Open File", "shortcut": "<Ctrl>O"},
+        {"label": "Open Folder", "shortcut": "<Ctrl>k <Ctrl>o"},
+        {"label": "Save File", "shortcut": "<Ctrl>S"},
+        {"label": "Save File As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Save All Files", "shortcut": "<Ctrl>k s"},
+        {"label": "Close Active Editor Tab", "shortcut": "<Ctrl>W"},
+        {"label": "Close Window", "shortcut": "<Ctrl><Shift>W"},
+        {"label": "Reopen Closed Editor", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Quit VSCodium", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Find in Buffer", "shortcut": "<Ctrl>F"},
+        {"label": "Replace in Buffer", "shortcut": "<Ctrl>H"},
+        {"label": "Find in Files (Global Search)", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Replace in Files", "shortcut": "<Ctrl><Shift>H"},
+        {"label": "Format Document", "shortcut": "<Ctrl><Shift>I"},
+        {"label": "Toggle Line Comment", "shortcut": "<Ctrl>/"},
+        {"label": "Toggle Block Comment", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Open Settings", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "Selection",
+      "items": [
+        {"label": "Select All", "shortcut": "<Ctrl>A"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Show Command Palette", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "Toggle Primary Sidebar", "shortcut": "<Ctrl>B"},
+        {"label": "Toggle Secondary Sidebar", "shortcut": "<Ctrl><Alt>B"},
+        {"label": "Toggle Full Screen", "shortcut": "F11"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>="},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>KP_0"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Quick Open / Go to File", "shortcut": "<Ctrl>P"},
+        {"label": "Next Editor Tab", "shortcut": "<Ctrl>Page_Down"},
+        {"label": "Previous Editor Tab", "shortcut": "<Ctrl>Page_Up"},
+        {"label": "Go to Line", "shortcut": "<Ctrl>G"},
+        {"label": "Go to Symbol in File", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Go to Definition", "shortcut": "F12"},
+        {"label": "Rename Symbol", "shortcut": "F2"}
+      ]
+    },
+    {
+      "label": "Terminal",
+      "items": [
+        {"label": "Toggle Integrated Terminal", "shortcut": "<Ctrl>`"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Split Editor Right", "shortcut": "<Ctrl>\\"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Keyboard Shortcuts", "shortcut": "<Ctrl>k <Ctrl>s"}
+      ]
+    }
+  ]
+}

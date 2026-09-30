@@ -1,0 +1,42 @@
+{
+  "format": 1,
+  "app": "weather",
+  "name": "Weather",
+  "identifiers": [
+    "org.gnome.Weather.desktop",
+    "gnome-weather",
+    "weather",
+    "Weather"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Exit Selection Mode", "shortcut": "Escape"},
+        {"label": "Open Menu", "shortcut": "F10"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Find / Search Location", "shortcut": "<Ctrl>F"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Refresh / Reload Weather Data", "shortcut": "<Ctrl>R"},
+        {"label": "Alternative Refresh", "shortcut": "F5"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show About / Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

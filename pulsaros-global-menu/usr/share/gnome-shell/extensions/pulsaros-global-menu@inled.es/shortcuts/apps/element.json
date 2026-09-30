@@ -1,0 +1,101 @@
+{
+  "format": 1,
+  "app": "element",
+  "name": "Element",
+  "identifiers": [
+    "element-desktop.desktop",
+    "im.riot.Riot.desktop",
+    "element",
+    "Element"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Upload / Attach File", "shortcut": "<Ctrl><Shift>U"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Open User Settings", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Toggle Bold", "shortcut": "<Ctrl>B"},
+        {"label": "Toggle Code Block", "shortcut": "<Ctrl>E"},
+        {"label": "Toggle Quote", "shortcut": "<Ctrl><Shift>>"},
+        {"label": "Insert Link", "shortcut": "<Ctrl><Shift>L"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Go to Home View", "shortcut": "<Ctrl><Alt>H"},
+        {"label": "Cancel Edit or Reply", "shortcut": "Escape"},
+        {"label": "Show Sticker Picker", "shortcut": "<Ctrl>;"},
+        {"label": "Move Cursor to Start", "shortcut": "<Ctrl>Home"},
+        {"label": "Move Cursor to End", "shortcut": "<Ctrl>End"},
+        {"label": "Toggle Italics", "shortcut": "<Ctrl>I"},
+        {"label": "Toggle Left Spaces Panel", "shortcut": "<Ctrl><Shift>D"},
+        {"label": "Toggle Right Room Side Panel", "shortcut": "<Ctrl>."},
+        {"label": "Toggle Hidden Event Visibility", "shortcut": "<Ctrl><Shift>H"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Toggle Top-Left User Menu", "shortcut": "<Ctrl>`"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Jump to Room Search (Quick Switcher)", "shortcut": "<Ctrl>K"},
+        {"label": "Next Room in List", "shortcut": "<Alt>Down"},
+        {"label": "Previous Room in List", "shortcut": "<Alt>Up"},
+        {"label": "Next Unread Room", "shortcut": "<Alt><Shift>Down"},
+        {"label": "Previous Unread Room", "shortcut": "<Alt><Shift>Up"},
+        {"separator": true},
+        {"label": "Switch to Space 1", "shortcut": "<Ctrl>1"},
+        {"label": "Switch to Space 2", "shortcut": "<Ctrl>2"},
+        {"label": "Switch to Space 3", "shortcut": "<Ctrl>3"},
+        {"label": "Switch to Space 4", "shortcut": "<Ctrl>4"},
+        {"label": "Switch to Space 5", "shortcut": "<Ctrl>5"},
+        {"label": "Switch to Space 6", "shortcut": "<Ctrl>6"},
+        {"label": "Switch to Space 7", "shortcut": "<Ctrl>7"},
+        {"label": "Switch to Space 8", "shortcut": "<Ctrl>8"},
+        {"label": "Switch to Space 9", "shortcut": "<Ctrl>9"},
+        {"separator": true},
+        {"label": "Previous Visited Room (History Back)", "shortcut": "<Alt>Left"},
+        {"label": "Next Visited Room (History Forward)", "shortcut": "<Alt>Right"},
+        {"label": "Next Landmark Section", "shortcut": "F6"},
+        {"label": "Previous Landmark Section", "shortcut": "<Shift>F6"},
+        {"label": "Edit Previous Message", "shortcut": "Up"},
+        {"label": "Edit Next Message", "shortcut": "Down"},
+        {"label": "Previous Message in History", "shortcut": "<Alt>Up"},
+        {"label": "Next Message in History", "shortcut": "<Alt>Down"},
+        {"label": "Scroll Up Timeline", "shortcut": "Page_Up"},
+        {"label": "Scroll Down Timeline", "shortcut": "Page_Down"},
+        {"label": "Jump to Oldest Unread Message", "shortcut": "<Shift>Page_Up"},
+        {"label": "Jump to First Message", "shortcut": "Home"},
+        {"label": "Jump to Latest Message", "shortcut": "End"},
+        {"label": "Dismiss Read Marker and Jump to Bottom", "shortcut": "Escape"}
+      ]
+    },
+    {
+      "label": "Call",
+      "items": [
+        {"label": "Toggle Microphone Mute", "shortcut": "<Ctrl>D"},
+        {"label": "Toggle Webcam / Video Mute", "shortcut": "<Ctrl>E"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts Tab", "shortcut": "<Ctrl>/"}
+      ]
+    }
+  ]
+}

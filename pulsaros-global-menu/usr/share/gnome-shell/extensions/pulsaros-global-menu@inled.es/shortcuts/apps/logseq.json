@@ -1,0 +1,69 @@
+{
+  "format": 1,
+  "app": "logseq",
+  "name": "Logseq",
+  "identifiers": [
+    "logseq.desktop",
+    "com.logseq.Logseq.desktop",
+    "logseq",
+    "Logseq"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Full Text Search / Quick Open", "shortcut": "<Ctrl>K"},
+        {"label": "Create New Page", "shortcut": "<Ctrl>N"},
+        {"label": "Exit Edit Mode to Block Mode", "shortcut": "Escape"},
+        {"label": "Quit Logseq", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Command Palette", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "Open Settings", "shortcut": "<Ctrl>,"},
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"},
+        {"label": "Unindent Block", "shortcut": "<Shift>Tab"},
+        {"label": "Move Block Up", "shortcut": "<Alt><Shift>Up"},
+        {"label": "Move Block Down", "shortcut": "<Alt><Shift>Down"},
+        {"label": "Collapse Block", "shortcut": "<Ctrl>Up"},
+        {"label": "Expand Block", "shortcut": "<Ctrl>Down"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Indent Block", "shortcut": "Tab"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Go to Graph View", "shortcut": "g g"},
+        {"label": "Toggle Left Sidebar", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Toggle Right Sidebar", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Toggle Document / Wide Mode", "shortcut": "t d"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>="},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Go to Journals (Today)", "shortcut": "g j"},
+        {"label": "Go to Home", "shortcut": "g h"},
+        {"label": "Go to All Pages", "shortcut": "g a"},
+        {"label": "Go to Flashcards", "shortcut": "g c"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Keyboard Shortcuts Help", "shortcut": "?"}
+      ]
+    }
+  ]
+}

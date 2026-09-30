@@ -1,0 +1,85 @@
+{
+  "format": 1,
+  "app": "shotwell",
+  "name": "Shotwell",
+  "identifiers": [
+    "org.gnome.Shotwell.desktop",
+    "shotwell",
+    "Shotwell"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Import Photos from Folder", "shortcut": "<Ctrl>I"},
+        {"label": "Print", "shortcut": "<Ctrl>P"},
+        {"label": "Export", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "New Saved Search", "shortcut": "<Ctrl>S"},
+        {"label": "Open with External Editor", "shortcut": "<Ctrl>Return"},
+        {"label": "Quit Shotwell", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Move to Trash", "shortcut": "Delete"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Search / Find", "shortcut": "<Ctrl>F"},
+        {"label": "Copy Color Adjustments", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Paste Color Adjustments", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Preferences", "shortcut": "<Ctrl><Shift>P"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Start Slideshow", "shortcut": "F5"},
+        {"label": "Fullscreen", "shortcut": "F11"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Fit to Page", "shortcut": "<Ctrl>0"},
+        {"label": "Zoom 100%", "shortcut": "<Ctrl>1"},
+        {"label": "Zoom 200%", "shortcut": "<Ctrl>2"},
+        {"label": "Show in File Manager", "shortcut": "<Ctrl><Shift>M"}
+      ]
+    },
+    {
+      "label": "Image",
+      "items": [
+        {"label": "Crop Photo", "shortcut": "<Ctrl>O"},
+        {"label": "Adjust Colors and Exposure", "shortcut": "<Ctrl>D"},
+        {"label": "Rotate Right", "shortcut": "<Ctrl>R"},
+        {"label": "Rotate Left", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Toggle Flag", "shortcut": "<Ctrl>G"},
+        {"label": "Adjust Date and Time", "shortcut": "F4"},
+        {"label": "Rate Rejected", "shortcut": "9"},
+        {"label": "Rate 0 Stars", "shortcut": "0"},
+        {"label": "Rate 1 Stars", "shortcut": "1"},
+        {"label": "Rate 2 Stars", "shortcut": "2"},
+        {"label": "Rate 3 Stars", "shortcut": "3"},
+        {"label": "Rate 4 Stars", "shortcut": "4"},
+        {"label": "Rate 5 Stars", "shortcut": "5"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Enhance Photo", "shortcut": "<Ctrl>E"},
+        {"label": "Straighten Photo", "shortcut": "<Ctrl>A"},
+        {"label": "Red-eye Reduction", "shortcut": "<Ctrl>Y"},
+        {"label": "Add Tags", "shortcut": "<Ctrl>T"},
+        {"label": "Modify Tags", "shortcut": "<Ctrl>M"},
+        {"label": "Edit Title", "shortcut": "F2"},
+        {"label": "Edit Comment", "shortcut": "F3"},
+        {"label": "Increase Rating", "shortcut": ">"},
+        {"label": "Decrease Rating", "shortcut": "<"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help / Keyboard Shortcuts", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

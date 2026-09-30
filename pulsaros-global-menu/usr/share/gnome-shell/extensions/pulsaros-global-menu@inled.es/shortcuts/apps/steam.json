@@ -1,0 +1,52 @@
+{
+  "format": 1,
+  "app": "steam",
+  "name": "Steam",
+  "identifiers": [
+    "steam.desktop",
+    "com.valvesoftware.Steam.desktop",
+    "steam",
+    "Steam"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open In-Game Overlay", "shortcut": "<Shift>Tab"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Exit Steam", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Find in Page", "shortcut": "<Ctrl>F"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Big Picture Mode", "shortcut": "<Alt>Return"},
+        {"label": "Refresh Page", "shortcut": "F5"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Navigate Back", "shortcut": "<Alt>Left"},
+        {"label": "Navigate Forward", "shortcut": "<Alt>Right"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Take In-Game Screenshot", "shortcut": "F12"},
+        {"label": "Big Picture Main Menu", "shortcut": "<Ctrl>1"},
+        {"label": "Big Picture Quick Access Menu", "shortcut": "<Ctrl>2"}
+      ]
+    }
+  ]
+}

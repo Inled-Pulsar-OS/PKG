@@ -1,0 +1,74 @@
+{
+  "format": 1,
+  "app": "zed",
+  "name": "Zed",
+  "identifiers": [
+    "dev.zed.Zed.desktop",
+    "zed",
+    "Zed"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Command Palette", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "Open File Finder (Quick Open)", "shortcut": "<Ctrl>P"},
+        {"label": "Create New Buffer / File", "shortcut": "<Ctrl>N"},
+        {"label": "Open File", "shortcut": "<Ctrl>O"},
+        {"label": "Save File", "shortcut": "<Ctrl>S"},
+        {"label": "Save File As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Save All Files", "shortcut": "<Ctrl>k s"},
+        {"label": "Close Active Editor Tab", "shortcut": "<Ctrl>W"},
+        {"label": "Close Window", "shortcut": "<Ctrl><Shift>W"},
+        {"label": "Open Keymap Configuration", "shortcut": "<Ctrl>k <Ctrl>s"},
+        {"label": "Quit Zed", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search in Project (Global Search)", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Find in Buffer", "shortcut": "<Ctrl>F"},
+        {"label": "Replace in Buffer", "shortcut": "<Ctrl>H"},
+        {"label": "Toggle Line Comment", "shortcut": "<Ctrl>/"},
+        {"label": "Open Settings", "shortcut": "<Ctrl>,"},
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Project Panel (Sidebar)", "shortcut": "<Ctrl>B"},
+        {"label": "Toggle Assistant / AI Panel", "shortcut": "<Ctrl><Alt>B"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>="},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Next Editor Tab", "shortcut": "<Ctrl>Page_Down"},
+        {"label": "Previous Editor Tab", "shortcut": "<Ctrl>Page_Up"},
+        {"label": "Go to Line", "shortcut": "<Ctrl>G"},
+        {"label": "Go to Symbol", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Go to Definition", "shortcut": "F12"},
+        {"label": "Rename Symbol", "shortcut": "F2"}
+      ]
+    },
+    {
+      "label": "Terminal",
+      "items": [
+        {"label": "Toggle Integrated Terminal", "shortcut": "<Ctrl>`"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Split Editor Right", "shortcut": "<Ctrl>\\"},
+        {"label": "Split Editor Down", "shortcut": "<Ctrl>k Down"}
+      ]
+    }
+  ]
+}

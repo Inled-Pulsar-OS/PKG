@@ -1,0 +1,74 @@
+{
+  "format": 1,
+  "app": "scrcpy",
+  "name": "scrcpy (Phone Mirror)",
+  "identifiers": [
+    "scrcpy.desktop",
+    "smart-scrcpy.desktop",
+    "scrcpy",
+    "Phone"
+  ],
+  "menus": [
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Toggle Fullscreen", "shortcut": "<Alt>F"},
+        {"label": "Rotate Window Left", "shortcut": "<Alt>Left"},
+        {"label": "Rotate Window Right", "shortcut": "<Alt>Right"},
+        {"label": "Flip Display Horizontally", "shortcut": "<Alt><Shift>Left"},
+        {"label": "Flip Display Vertically", "shortcut": "<Alt><Shift>Up"},
+        {"separator": true},
+        {"label": "Resize to 1:1 Pixel-Perfect", "shortcut": "<Alt>G"},
+        {"label": "Remove Black Borders", "shortcut": "<Alt>W"},
+        {"separator": true},
+        {"label": "Pause Display", "shortcut": "<Alt>Z"},
+        {"label": "Unpause Display", "shortcut": "<Alt><Shift>Z"},
+        {"separator": true},
+        {"label": "Quit Scrcpy", "shortcut": "<Alt>Q"}
+      ]
+    },
+    {
+      "label": "Navigation",
+      "items": [
+        {"label": "Home", "shortcut": "<Alt>H"},
+        {"label": "Back", "shortcut": "<Alt>B"},
+        {"label": "App Switcher (Recents)", "shortcut": "<Alt>S"},
+        {"label": "Menu (Unlock Screen)", "shortcut": "<Alt>M"},
+        {"separator": true},
+        {"label": "Volume Up", "shortcut": "<Alt>Up"},
+        {"label": "Volume Down", "shortcut": "<Alt>Down"},
+        {"separator": true},
+        {"label": "Power Button", "shortcut": "<Alt>P"},
+        {"label": "Turn Physical Screen Off (Keep Mirroring)", "shortcut": "<Alt>O"},
+        {"label": "Turn Physical Screen On", "shortcut": "<Alt><Shift>O"},
+        {"label": "Rotate Device Screen Physical Orientation", "shortcut": "<Alt>R"}
+      ]
+    },
+    {
+      "label": "Panels",
+      "items": [
+        {"label": "Expand Notification Panel", "shortcut": "<Alt>N"},
+        {"label": "Expand Settings Panel"},
+        {"label": "Collapse Panels", "shortcut": "<Alt><Shift>N"}
+      ]
+    },
+    {
+      "label": "Clipboard",
+      "items": [
+        {"label": "Copy Device Clipboard to Linux", "shortcut": "<Alt>C"},
+        {"label": "Cut Device Text", "shortcut": "<Alt>X"},
+        {"label": "Paste Linux Clipboard to Device", "shortcut": "<Alt>V"},
+        {"label": "Inject Clipboard as Keystrokes", "shortcut": "<Alt><Shift>V"}
+      ]
+    },
+    {
+      "label": "Camera",
+      "items": [
+        {"label": "Turn Camera Torch On", "shortcut": "<Alt>T"},
+        {"label": "Turn Camera Torch Off", "shortcut": "<Alt><Shift>T"},
+        {"label": "Zoom Camera In", "shortcut": "<Alt>Up"},
+        {"label": "Zoom Camera Out", "shortcut": "<Alt>Down"}
+      ]
+    }
+  ]
+}

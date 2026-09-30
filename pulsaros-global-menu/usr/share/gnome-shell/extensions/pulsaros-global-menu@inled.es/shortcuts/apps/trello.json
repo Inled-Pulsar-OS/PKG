@@ -1,0 +1,56 @@
+{
+  "format": 1,
+  "app": "trello",
+  "name": "Trello",
+  "identifiers": [
+    "trello.desktop",
+    "trello",
+    "Trello"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Boards Menu", "shortcut": "B"},
+        {"label": "Open Selected Card", "shortcut": "Return"},
+        {"label": "Close Card / Modal", "shortcut": "Escape"},
+        {"label": "Open Filter Menu", "shortcut": "F"},
+        {"label": "Quit Trello", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Quick Add Card", "shortcut": "N"},
+        {"label": "Quick Edit Mode", "shortcut": "E"},
+        {"label": "Archive Selected Card", "shortcut": "C"},
+        {"label": "Assign / Unassign Self", "shortcut": "space"},
+        {"label": "Add / Remove Members", "shortcut": "M"},
+        {"label": "Edit Labels", "shortcut": "L"},
+        {"label": "Change Due Date", "shortcut": "D"},
+        {"label": "Focus Search Bar", "shortcut": "/"},
+        {"label": "Copy Hovered Card", "shortcut": "<Ctrl>C"},
+        {"label": "Paste Card", "shortcut": "<Ctrl>V"},
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle \"My Cards\" Filter", "shortcut": "Q"},
+        {"label": "Toggle Board Menu (Sidebar)", "shortcut": "W"},
+        {"label": "Reload Board", "shortcut": "<Ctrl>R"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>="},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Keyboard Shortcuts Help", "shortcut": "?"}
+      ]
+    }
+  ]
+}

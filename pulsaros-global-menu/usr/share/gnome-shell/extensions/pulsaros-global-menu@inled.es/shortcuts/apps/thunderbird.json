@@ -1,0 +1,96 @@
+{
+  "format": 1,
+  "app": "thunderbird",
+  "name": "Thunderbird",
+  "identifiers": [
+    "thunderbird.desktop",
+    "org.mozilla.Thunderbird.desktop",
+    "net.thunderbird.Thunderbird.desktop",
+    "thunderbird",
+    "Thunderbird"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Write New Message", "shortcut": "<Ctrl>N"},
+        {"label": "Get New Messages (All Accounts)", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Get New Messages (Current Account)", "shortcut": "F5"},
+        {"label": "Open Message in New Tab", "shortcut": "Return"},
+        {"label": "Open Message in New Window", "shortcut": "<Ctrl>O"},
+        {"label": "New Tab", "shortcut": "<Ctrl>T"},
+        {"label": "Close Tab", "shortcut": "<Ctrl>W"},
+        {"label": "Print", "shortcut": "<Ctrl>P"},
+        {"label": "Save Message As File", "shortcut": "<Ctrl>S"},
+        {"label": "Quit Thunderbird", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"},
+        {"label": "Global Search (All Messages)", "shortcut": "<Ctrl>K"},
+        {"label": "Search Messages in Folder", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Find in Current Message", "shortcut": "<Ctrl>F"},
+        {"label": "Find Next", "shortcut": "F3"},
+        {"label": "Find Previous", "shortcut": "<Shift>F3"},
+        {"label": "Settings"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Address Book", "shortcut": "<Ctrl><Shift>B"},
+        {"label": "Calendar Tab", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Tasks Tab", "shortcut": "<Ctrl><Shift>D"},
+        {"label": "Chat Tab", "shortcut": "<Ctrl><Shift>I"},
+        {"label": "Toggle Message Pane", "shortcut": "F8"},
+        {"label": "Toggle Folder Pane", "shortcut": "F9"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Next Tab", "shortcut": "<Ctrl>Tab"},
+        {"label": "Previous Tab", "shortcut": "<Ctrl><Shift>Tab"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Next Unread Message", "shortcut": "N"},
+        {"label": "Previous Unread Message", "shortcut": "P"},
+        {"label": "Next Unread Thread", "shortcut": "T"}
+      ]
+    },
+    {
+      "label": "Message",
+      "items": [
+        {"label": "Send Message", "shortcut": "<Ctrl>Return"},
+        {"label": "Send Message Later", "shortcut": "<Ctrl><Shift>Return"},
+        {"label": "Reply to Sender", "shortcut": "<Ctrl>R"},
+        {"label": "Reply to All", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Reply to List", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Forward Message", "shortcut": "<Ctrl>L"},
+        {"label": "Forward Inline", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Archive Message", "shortcut": "A"},
+        {"label": "Mark Message as Read", "shortcut": "M"},
+        {"label": "Mark Thread as Read", "shortcut": "R"},
+        {"label": "Mark All Read in Folder", "shortcut": "<Shift>C"},
+        {"label": "Mark as Starred / Flagged", "shortcut": "S"},
+        {"label": "Mark as Junk", "shortcut": "J"},
+        {"label": "Mark as Not Junk", "shortcut": "<Shift>J"},
+        {"label": "Delete Message", "shortcut": "Delete"},
+        {"label": "Delete Bypassing Trash", "shortcut": "<Shift>Delete"},
+        {"label": "Quick Filter Bar", "shortcut": "<Ctrl><Shift>K"},
+        {"label": "Message Source", "shortcut": "<Ctrl>U"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

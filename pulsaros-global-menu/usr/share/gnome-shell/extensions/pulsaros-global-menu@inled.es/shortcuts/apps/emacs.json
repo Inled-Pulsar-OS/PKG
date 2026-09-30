@@ -1,0 +1,80 @@
+{
+  "format": 1,
+  "app": "emacs",
+  "name": "Emacs",
+  "identifiers": [
+    "emacs.desktop",
+    "org.gnu.emacs.desktop",
+    "emacs",
+    "Emacs"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Save Buffer", "shortcut": "<Ctrl>x <Ctrl>s"},
+        {"label": "Save Buffer As (Write File)", "shortcut": "<Ctrl>x <Ctrl>w"},
+        {"label": "Save All Buffers", "shortcut": "<Ctrl>x s"},
+        {"label": "Kill / Close Buffer", "shortcut": "<Ctrl>x k"},
+        {"label": "Quit Emacs", "shortcut": "<Ctrl>x <Ctrl>c"},
+        {"label": "Switch Buffer", "shortcut": "<Ctrl>x b"},
+        {"label": "List All Buffers", "shortcut": "<Ctrl>x <Ctrl>b"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Find / Open File", "shortcut": "<Ctrl>x <Ctrl>f"},
+        {"label": "Undo", "shortcut": "<Ctrl>/"},
+        {"label": "Cut Region (Kill)", "shortcut": "<Ctrl>W"},
+        {"label": "Copy Region (Kill Ring Save)", "shortcut": "<Alt>W"},
+        {"label": "Paste (Yank)", "shortcut": "<Ctrl>Y"},
+        {"label": "Incremental Search Backward", "shortcut": "<Ctrl>R"},
+        {"label": "Query Replace", "shortcut": "<Alt>%"}
+      ]
+    },
+    {
+      "label": "Selection",
+      "items": [
+        {"label": "Select All (Mark Whole Buffer)", "shortcut": "<Ctrl>x h"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Execute Extended Command (Command Palette / M-x)", "shortcut": "<Alt>X"},
+        {"label": "Abort Current Operation / Prompt", "shortcut": "<Ctrl>G"},
+        {"label": "Increase Text Scale (Zoom In)", "shortcut": "<Ctrl>x <Ctrl>+"},
+        {"label": "Decrease Text Scale (Zoom Out)", "shortcut": "<Ctrl>x <Ctrl>-"},
+        {"label": "Reset Text Scale (Reset Zoom)", "shortcut": "<Ctrl>x <Ctrl>0"},
+        {"label": "Toggle Menu Bar", "shortcut": "<Alt>x m e n u - b a r - m o d e Return"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Incremental Search Forward", "shortcut": "<Ctrl>S"},
+        {"label": "Go to Line", "shortcut": "<Alt>g <Alt>g"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Split Window Horizontally (Below)", "shortcut": "<Ctrl>x 2"},
+        {"label": "Split Window Vertically (Right)", "shortcut": "<Ctrl>x 3"},
+        {"label": "Maximize Current Window (Delete Others)", "shortcut": "<Ctrl>x 1"},
+        {"label": "Delete Current Window Split", "shortcut": "<Ctrl>x 0"},
+        {"label": "Switch Focus to Other Window", "shortcut": "<Ctrl>x o"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help Summary", "shortcut": "<Ctrl>h ?"},
+        {"label": "Describe Key", "shortcut": "<Ctrl>h k"},
+        {"label": "Describe Function", "shortcut": "<Ctrl>h f"},
+        {"label": "Describe Major Mode and Keybindings", "shortcut": "<Ctrl>h m"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "format": 1,
+  "app": "xournalpp",
+  "name": "Xournal++",
+  "identifiers": [
+    "com.github.xournalpp.xournalpp.desktop",
+    "xournalpp",
+    "Xournal++"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Document", "shortcut": "<Ctrl>N"},
+        {"label": "Open", "shortcut": "<Ctrl>O"},
+        {"label": "Save", "shortcut": "<Ctrl>S"},
+        {"label": "Save As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Export as PDF", "shortcut": "<Ctrl>E"},
+        {"label": "Print", "shortcut": "<Ctrl>P"},
+        {"label": "Close", "shortcut": "<Ctrl>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"},
+        {"label": "New Page After", "shortcut": "<Ctrl>Return"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Search / Find", "shortcut": "<Ctrl>F"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Delete", "shortcut": "Delete"},
+        {"label": "Text Tool", "shortcut": "T"},
+        {"label": "Select Rectangle", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Select Lasso", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Ruler", "shortcut": "<Shift>F4"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Zoom 100%", "shortcut": "<Ctrl>1"},
+        {"label": "Fullscreen", "shortcut": "F11"},
+        {"label": "Presentation Mode", "shortcut": "F5"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Fit to Page", "shortcut": "<Ctrl><Shift>9"},
+        {"label": "Navigate Back", "shortcut": "<Alt>Left"},
+        {"label": "Navigate Forward", "shortcut": "<Alt>Right"},
+        {"label": "Next Page", "shortcut": "<Ctrl>Page_Down"},
+        {"label": "Previous Page", "shortcut": "<Ctrl>Page_Up"},
+        {"label": "First Page", "shortcut": "<Ctrl>Home"},
+        {"label": "Last Page", "shortcut": "<Ctrl>End"},
+        {"label": "Delete Page", "shortcut": "<Ctrl><Shift>Delete"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Pen Tool", "shortcut": "P"},
+        {"label": "Highlighter Tool", "shortcut": "H"},
+        {"label": "Eraser Tool", "shortcut": "E"}
+      ]
+    }
+  ]
+}

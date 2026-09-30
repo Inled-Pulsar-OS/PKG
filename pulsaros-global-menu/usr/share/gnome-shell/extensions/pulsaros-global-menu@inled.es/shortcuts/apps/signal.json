@@ -1,0 +1,92 @@
+{
+  "format": 1,
+  "app": "signal",
+  "name": "Signal",
+  "identifiers": [
+    "signal-desktop.desktop",
+    "org.signal.Signal.desktop",
+    "signal",
+    "Signal"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Start New Chat", "shortcut": "<Ctrl>N"},
+        {"label": "Attach File / Media", "shortcut": "<Ctrl>U"},
+        {"label": "Close Current Conversation", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit Signal", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search", "shortcut": "<Ctrl>F"},
+        {"label": "Preferences / Settings", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Format Bold", "shortcut": "<Ctrl>B"},
+        {"label": "Format Italic", "shortcut": "<Ctrl>I"},
+        {"label": "Format Strikethrough", "shortcut": "<Ctrl><Shift>X"},
+        {"label": "Format Monospace", "shortcut": "<Ctrl><Shift>K"},
+        {"label": "Format Spoiler", "shortcut": "<Ctrl><Shift>P"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Mark as Read", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Show Menu Bar", "shortcut": "<Alt>F"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Edit Previous Message", "shortcut": "Up"},
+        {"label": "Open Conversation Details / Menu", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Archive Conversation", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Unarchive Conversation", "shortcut": "<Ctrl><Shift>U"},
+        {"label": "Next Conversation", "shortcut": "<Alt>Down"},
+        {"label": "Previous Conversation", "shortcut": "<Alt>Up"},
+        {"label": "Next Unread Conversation", "shortcut": "<Alt><Shift>Down"},
+        {"label": "Previous Unread Conversation", "shortcut": "<Alt><Shift>Up"},
+        {"separator": true},
+        {"label": "Navigate to Conversation 1", "shortcut": "<Ctrl>1"},
+        {"label": "Navigate to Conversation 2", "shortcut": "<Ctrl>2"},
+        {"label": "Navigate to Conversation 3", "shortcut": "<Ctrl>3"},
+        {"label": "Navigate to Conversation 4", "shortcut": "<Ctrl>4"},
+        {"label": "Navigate to Conversation 5", "shortcut": "<Ctrl>5"},
+        {"label": "Navigate to Conversation 6", "shortcut": "<Ctrl>6"},
+        {"label": "Navigate to Conversation 7", "shortcut": "<Ctrl>7"},
+        {"label": "Navigate to Conversation 8", "shortcut": "<Ctrl>8"},
+        {"label": "Navigate to Conversation 9", "shortcut": "<Ctrl>9"}
+      ]
+    },
+    {
+      "label": "Call",
+      "items": [
+        {"label": "Record Voice Note", "shortcut": "<Ctrl><Shift>V"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Minimize", "shortcut": "<Ctrl>M"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Keyboard Shortcuts", "shortcut": "<Ctrl>/"}
+      ]
+    }
+  ]
+}

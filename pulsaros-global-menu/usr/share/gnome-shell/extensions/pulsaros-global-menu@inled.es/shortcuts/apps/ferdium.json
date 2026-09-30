@@ -1,0 +1,87 @@
+{
+  "format": 1,
+  "app": "ferdium",
+  "name": "Ferdium",
+  "identifiers": [
+    "ferdium.desktop",
+    "org.ferdium.Ferdium.desktop",
+    "ferdium",
+    "Ferdium"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Quick Switch", "shortcut": "<Ctrl>S"},
+        {"label": "Open Downloads", "shortcut": "<Ctrl>J"},
+        {"label": "Open Process Manager", "shortcut": "<Shift>Escape"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit Ferdium", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Find in Page", "shortcut": "<Ctrl>F"},
+        {"label": "Open Settings (Preferences)", "shortcut": "<Ctrl>P"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Workspaces Drawer", "shortcut": "<Ctrl>D"},
+        {"label": "Toggle Split Mode", "shortcut": "<Ctrl><Alt>S"},
+        {"label": "Toggle Dark Mode", "shortcut": "<Ctrl><Shift>D"},
+        {"label": "Toggle Navigation Bar", "shortcut": "<Ctrl>B"},
+        {"label": "Toggle Todos", "shortcut": "<Ctrl>T"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Lock Ferdium", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Reload Ferdium", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Reload Todos", "shortcut": "<Ctrl><Alt><Shift>R"},
+        {"label": "Toggle Application DevTools", "shortcut": "<Ctrl><Alt>I"},
+        {"label": "Toggle Todos DevTools", "shortcut": "<Ctrl><Alt><Shift>O"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Add New Service", "shortcut": "<Ctrl>N"},
+        {"label": "Activate Next Service", "shortcut": "<Ctrl>Tab"},
+        {"label": "Activate Previous Service", "shortcut": "<Ctrl><Shift>Tab"},
+        {"separator": true},
+        {"label": "Activate Service 1", "shortcut": "<Ctrl>1"},
+        {"label": "Activate Service 2", "shortcut": "<Ctrl>2"},
+        {"label": "Activate Service 3", "shortcut": "<Ctrl>3"},
+        {"label": "Activate Service 4", "shortcut": "<Ctrl>4"},
+        {"label": "Activate Service 5", "shortcut": "<Ctrl>5"},
+        {"label": "Activate Service 6", "shortcut": "<Ctrl>6"},
+        {"label": "Activate Service 7", "shortcut": "<Ctrl>7"},
+        {"label": "Activate Service 8", "shortcut": "<Ctrl>8"},
+        {"label": "Activate Service 9", "shortcut": "<Ctrl>9"},
+        {"separator": true},
+        {"label": "Service Go Home", "shortcut": "<Ctrl><Shift>H"},
+        {"label": "Reload Active Service", "shortcut": "<Ctrl>R"},
+        {"label": "Toggle Service DevTools", "shortcut": "<Ctrl><Alt><Shift>I"},
+        {"label": "Add New Workspace", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Switch to Default Workspace", "shortcut": "<Ctrl><Alt>0"},
+        {"label": "Navigate Back", "shortcut": "<Alt>Left"},
+        {"label": "Navigate Forward", "shortcut": "<Alt>Right"}
+      ]
+    },
+    {
+      "label": "Call",
+      "items": [
+        {"label": "Mute Ferdium", "shortcut": "<Ctrl><Shift>M"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Minimize", "shortcut": "<Ctrl>M"}
+      ]
+    }
+  ]
+}

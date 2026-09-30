@@ -1,0 +1,65 @@
+{
+  "format": 1,
+  "app": "zoom",
+  "name": "Zoom",
+  "identifiers": [
+    "Zoom.desktop",
+    "us.zoom.Zoom.desktop",
+    "zoom",
+    "Zoom"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit Zoom", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Open Settings (Preferences)", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Format Bold", "shortcut": "<Ctrl>B"},
+        {"label": "Format Italic", "shortcut": "<Ctrl>I"},
+        {"label": "Format Strikethrough", "shortcut": "<Ctrl><Shift>X"},
+        {"label": "Format Bulleted List", "shortcut": "<Ctrl><Shift>8"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Participants Panel", "shortcut": "<Alt>U"},
+        {"label": "Toggle In-Meeting Chat Panel", "shortcut": "<Alt>H"},
+        {"label": "Toggle Fullscreen", "shortcut": "<Alt>F"},
+        {"label": "Switch to Active Speaker View", "shortcut": "<Alt>F1"},
+        {"label": "Switch to Gallery Video View", "shortcut": "<Alt>F2"},
+        {"label": "Increase Chat Font Size", "shortcut": "<Ctrl>+"},
+        {"label": "Decrease Chat Font Size", "shortcut": "<Ctrl>-"}
+      ]
+    },
+    {
+      "label": "Call",
+      "items": [
+        {"label": "Toggle Audio Mute/Unmute", "shortcut": "<Alt>A"},
+        {"label": "Push to Talk (Hold to Speak)", "shortcut": "space"},
+        {"label": "Toggle Video On/Off", "shortcut": "<Alt>V"},
+        {"label": "Start/Stop Screen Share", "shortcut": "<Alt>S"},
+        {"label": "Pause/Resume Screen Share", "shortcut": "<Alt>T"},
+        {"label": "Switch Camera", "shortcut": "<Alt>N"},
+        {"label": "Raise/Lower Hand", "shortcut": "<Alt>Y"},
+        {"label": "Gain Remote Control", "shortcut": "<Alt><Shift>G"},
+        {"label": "Give Up Remote Control", "shortcut": "<Alt><Shift>D"},
+        {"label": "Invite Participants", "shortcut": "<Alt>I"},
+        {"label": "Start/Stop Local Recording", "shortcut": "<Alt>R"},
+        {"label": "Pause/Resume Recording", "shortcut": "<Alt>P"},
+        {"label": "End/Leave Meeting", "shortcut": "<Alt>Q"}
+      ]
+    }
+  ]
+}

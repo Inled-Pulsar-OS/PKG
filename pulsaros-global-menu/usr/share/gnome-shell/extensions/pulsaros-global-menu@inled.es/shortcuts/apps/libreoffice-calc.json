@@ -1,0 +1,88 @@
+{
+  "format": 1,
+  "app": "libreoffice-calc",
+  "name": "LibreOffice Calc",
+  "identifiers": [
+    "libreoffice-calc.desktop",
+    "libreoffice calc",
+    "libreoffice-calc",
+    "LibreOffice Calc"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Spreadsheet", "shortcut": "<Ctrl>N"},
+        {"label": "Open Spreadsheet", "shortcut": "<Ctrl>O"},
+        {"label": "Save Spreadsheet", "shortcut": "<Ctrl>S"},
+        {"label": "Save As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Print Spreadsheet", "shortcut": "<Ctrl>P"},
+        {"label": "Print Preview", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Close Document", "shortcut": "<Ctrl>W"},
+        {"label": "Exit LibreOffice", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Paste Special", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Paste Unformatted Text", "shortcut": "<Ctrl><Alt><Shift>V"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Find", "shortcut": "<Ctrl>F"},
+        {"label": "Find and Replace", "shortcut": "<Ctrl>H"},
+        {"label": "Delete Cells / Rows / Columns", "shortcut": "<Ctrl>-"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Navigator", "shortcut": "F5"},
+        {"label": "Toggle Sidebar", "shortcut": "<Ctrl>F5"},
+        {"label": "Toggle Fullscreen", "shortcut": "<Ctrl><Shift>J"},
+        {"label": "Toggle Formula Display", "shortcut": "<Ctrl>`"}
+      ]
+    },
+    {
+      "label": "Insert",
+      "items": [
+        {"label": "Select Column", "shortcut": "<Ctrl>space"},
+        {"label": "Select Row", "shortcut": "<Shift>space"},
+        {"label": "Select Entire Sheet", "shortcut": "<Ctrl><Shift>space"},
+        {"label": "Insert Cells / Rows / Columns", "shortcut": "<Ctrl>+"},
+        {"label": "Insert Current Date", "shortcut": "<Ctrl>;"},
+        {"label": "Insert Current Time", "shortcut": "<Ctrl><Shift>;"},
+        {"label": "Insert Comment", "shortcut": "<Ctrl><Alt>C"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Format as Number (Standard)", "shortcut": "<Ctrl><Shift>6"},
+        {"label": "Format as Currency", "shortcut": "<Ctrl><Shift>4"},
+        {"label": "Format as Percentage", "shortcut": "<Ctrl><Shift>5"},
+        {"label": "Format as Date", "shortcut": "<Ctrl><Shift>3"},
+        {"label": "Format Cells Dialog", "shortcut": "<Ctrl>1"},
+        {"label": "Manage Styles", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Function Wizard", "shortcut": "<Ctrl>F2"},
+        {"label": "Recalculate", "shortcut": "F9"},
+        {"label": "Hard Recalculate", "shortcut": "<Ctrl><Shift>F9"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

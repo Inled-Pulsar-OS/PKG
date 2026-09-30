@@ -1,0 +1,87 @@
+{
+  "format": 1,
+  "app": "godot",
+  "name": "Godot Engine",
+  "identifiers": [
+    "org.godotengine.Godot.desktop",
+    "godot",
+    "Godot Engine"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Scene", "shortcut": "<Ctrl>N"},
+        {"label": "Open Scene", "shortcut": "<Ctrl>O"},
+        {"label": "Quick Open Scene", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Quick Open Script", "shortcut": "<Ctrl><Alt>O"},
+        {"label": "Save Scene", "shortcut": "<Ctrl>S"},
+        {"label": "Save Scene As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Save All Scenes", "shortcut": "<Ctrl><Alt>S"},
+        {"label": "Close Scene", "shortcut": "<Ctrl>W"},
+        {"label": "Close All Scenes", "shortcut": "<Ctrl><Shift>W"},
+        {"label": "Quit Godot", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search in Files / Find in Files", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Find in Script", "shortcut": "<Ctrl>F"},
+        {"label": "Find and Replace in Script", "shortcut": "<Ctrl>R"},
+        {"label": "Duplicate Lines / Node", "shortcut": "<Ctrl>D"},
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"label": "Project Settings"},
+        {"label": "Editor Settings"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle 2D Workspace", "shortcut": "<Ctrl>F1"},
+        {"label": "Toggle 3D Workspace", "shortcut": "<Ctrl>F2"},
+        {"label": "Toggle Script Workspace", "shortcut": "<Ctrl>F3"},
+        {"label": "Toggle AssetLib Workspace", "shortcut": "<Ctrl>F4"},
+        {"label": "Toggle Distraction-Free Mode", "shortcut": "<Ctrl><Shift>F11"},
+        {"label": "Toggle Bottom Panel", "shortcut": "<Ctrl>F12"}
+      ]
+    },
+    {
+      "label": "Navigate",
+      "items": [
+        {"label": "Go to Line", "shortcut": "<Ctrl>L"},
+        {"label": "Find Next", "shortcut": "F3"},
+        {"label": "Find Previous", "shortcut": "<Shift>F3"},
+        {"label": "Next Script", "shortcut": "<Alt>Right"},
+        {"label": "Previous Script", "shortcut": "<Alt>Left"}
+      ]
+    },
+    {
+      "label": "Code",
+      "items": [
+        {"label": "Pause Running Scene", "shortcut": "F7"},
+        {"label": "Command Palette", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "Toggle Comment", "shortcut": "<Ctrl>K"},
+        {"label": "Focus / Frame Selection", "shortcut": "F"},
+        {"label": "Select Mode (2D/3D)", "shortcut": "Q"},
+        {"label": "Move Mode", "shortcut": "W"},
+        {"label": "Rotate Mode", "shortcut": "E"},
+        {"label": "Scale Mode", "shortcut": "R"},
+        {"label": "Pan Mode", "shortcut": "G"},
+        {"label": "Ruler Mode", "shortcut": "Y"},
+        {"label": "Move Lines Up", "shortcut": "<Alt>Up"},
+        {"label": "Move Lines Down", "shortcut": "<Alt>Down"}
+      ]
+    },
+    {
+      "label": "Run",
+      "items": [
+        {"label": "Run Main Scene (Play Project)", "shortcut": "F5"},
+        {"label": "Run Current Scene", "shortcut": "F6"},
+        {"label": "Stop Running Project", "shortcut": "F8"},
+        {"label": "Run Specific Scene", "shortcut": "<Ctrl><Shift>F5"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "format": 1,
+  "app": "slack",
+  "name": "Slack",
+  "identifiers": [
+    "slack.desktop",
+    "com.slack.Slack.desktop",
+    "slack",
+    "Slack"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Compose New Message", "shortcut": "<Ctrl>N"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit Slack", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search Workspace", "shortcut": "<Ctrl>F"},
+        {"label": "Open Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Format Bold", "shortcut": "<Ctrl>B"},
+        {"label": "Format Italic", "shortcut": "<Ctrl>I"},
+        {"label": "Format Hyperlink", "shortcut": "<Ctrl><Shift>U"},
+        {"label": "Format Blockquote", "shortcut": "<Ctrl><Shift>9"},
+        {"label": "Format Code Block", "shortcut": "<Ctrl><Alt><Shift>C"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Move Focus Between Sections", "shortcut": "F6"},
+        {"label": "Add Reaction", "shortcut": "<Ctrl><Shift>\\"},
+        {"label": "Mark All Messages as Read", "shortcut": "<Shift>Escape"},
+        {"label": "Toggle Left Sidebar", "shortcut": "<Ctrl><Shift>D"},
+        {"label": "Toggle Right Sidebar", "shortcut": "<Ctrl>."},
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Quick Switcher (Jump to Conversation)", "shortcut": "<Ctrl>K"},
+        {"label": "Next Channel or DM", "shortcut": "<Alt>Down"},
+        {"label": "Previous Channel or DM", "shortcut": "<Alt>Up"},
+        {"label": "Next Unread Channel or DM", "shortcut": "<Alt><Shift>Down"},
+        {"label": "Previous Unread Channel or DM", "shortcut": "<Alt><Shift>Up"},
+        {"label": "Next Workspace", "shortcut": "<Ctrl>Tab"},
+        {"label": "Previous Workspace", "shortcut": "<Ctrl><Shift>Tab"},
+        {"label": "Back in History", "shortcut": "<Alt>Left"},
+        {"label": "Forward in History", "shortcut": "<Alt>Right"},
+        {"label": "Edit Last Message", "shortcut": "Up"},
+        {"label": "Mark Channel as Read", "shortcut": "Escape"}
+      ]
+    },
+    {
+      "label": "Call",
+      "items": [
+        {"label": "Toggle Mute (Huddle)", "shortcut": "<Ctrl><Shift>space"},
+        {"label": "Toggle Video (Huddle)", "shortcut": "<Ctrl><Shift>V"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Keyboard Shortcuts", "shortcut": "<Ctrl>/"}
+      ]
+    }
+  ]
+}

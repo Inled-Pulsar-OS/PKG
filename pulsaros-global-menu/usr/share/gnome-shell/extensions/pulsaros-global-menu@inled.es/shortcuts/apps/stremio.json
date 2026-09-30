@@ -1,0 +1,82 @@
+{
+  "format": 1,
+  "app": "stremio",
+  "name": "Stremio",
+  "identifiers": [
+    "com.stremio.Stremio.desktop",
+    "com.stremio.Stremio",
+    "stremio",
+    "Stremio"
+  ],
+  "menus": [
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Board", "shortcut": "1"},
+        {"label": "Discover", "shortcut": "2"},
+        {"label": "Library", "shortcut": "3"},
+        {"label": "Calendar", "shortcut": "4"},
+        {"label": "Add-ons", "shortcut": "5"},
+        {"label": "Settings", "shortcut": "6"},
+        {"separator": true},
+        {"label": "Search", "shortcut": "0"},
+        {"separator": true},
+        {"label": "Back", "shortcut": "backspace"},
+        {"label": "Forward", "shortcut": "<Ctrl>backspace"}
+      ]
+    },
+    {
+      "label": "Playback",
+      "items": [
+        {"label": "Play / Pause", "shortcut": "space"},
+        {"separator": true},
+        {"label": "Seek Backward", "shortcut": "Left"},
+        {"label": "Seek Forward", "shortcut": "Right"},
+        {"label": "Seek Backward (Long)", "shortcut": "<Shift>Left"},
+        {"label": "Seek Forward (Long)", "shortcut": "<Shift>Right"},
+        {"separator": true},
+        {"label": "Play Next Video", "shortcut": "<Shift>N"},
+        {"separator": true},
+        {"label": "Volume Up", "shortcut": "Up"},
+        {"label": "Volume Down", "shortcut": "Down"},
+        {"label": "Toggle Mute", "shortcut": "M"},
+        {"separator": true},
+        {"label": "Decrease Playback Speed", "shortcut": "["},
+        {"label": "Increase Playback Speed", "shortcut": "]"}
+      ]
+    },
+    {
+      "label": "Subtitles",
+      "items": [
+        {"label": "Toggle Subtitles", "shortcut": "C"},
+        {"label": "Subtitles Menu", "shortcut": "S"},
+        {"label": "Audio Menu", "shortcut": "A"},
+        {"separator": true},
+        {"label": "Decrease Subtitle Size", "shortcut": "minus"},
+        {"label": "Increase Subtitle Size", "shortcut": "="},
+        {"separator": true},
+        {"label": "Subtitle Delay Down", "shortcut": "G"},
+        {"label": "Subtitle Delay Up", "shortcut": "H"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Fullscreen", "shortcut": "F"},
+        {"separator": true},
+        {"label": "Info / Episodes Menu", "shortcut": "I"},
+        {"label": "Playback Speed Menu", "shortcut": "R"},
+        {"label": "Statistics Menu", "shortcut": "D"},
+        {"separator": true},
+        {"label": "Exit Player", "shortcut": "escape"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>slash"},
+        {"label": "Gamepad Guide", "shortcut": "<Ctrl>G"}
+      ]
+    }
+  ]
+}

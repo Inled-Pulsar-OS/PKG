@@ -1,0 +1,74 @@
+{
+  "format": 1,
+  "app": "insomnia",
+  "name": "Insomnia",
+  "identifiers": [
+    "insomnia.desktop",
+    "rest.insomnia.Insomnia.desktop",
+    "insomnia",
+    "Insomnia"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Request in New Tab", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Close Tab", "shortcut": "<Ctrl>W"},
+        {"label": "Reopen Closed Tab", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Open Create Dropdown", "shortcut": "<Ctrl>N"},
+        {"label": "Create HTTP Request", "shortcut": "<Ctrl><Alt>N"},
+        {"label": "Create Folder", "shortcut": "<Ctrl><Shift>N"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Quick Search / Switcher", "shortcut": "<Ctrl>P"},
+        {"label": "App Preferences", "shortcut": "<Ctrl>,"},
+        {"label": "Workspace / Collection Settings", "shortcut": "<Ctrl><Shift>,"},
+        {"label": "Request Settings", "shortcut": "<Ctrl><Alt><Shift>,"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Show Environment Editor", "shortcut": "<Ctrl>E"},
+        {"label": "Show Cookies Editor", "shortcut": "<Ctrl>K"},
+        {"label": "Show Autocomplete", "shortcut": "<Ctrl>space"},
+        {"label": "Toggle Sidebar", "shortcut": "<Ctrl>\\"},
+        {"label": "Filter Sidebar", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Reload Plugins", "shortcut": "<Ctrl><Shift>R"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Next Tab", "shortcut": "<Ctrl>Tab"},
+        {"label": "Previous Tab", "shortcut": "<Ctrl><Shift>Tab"},
+        {"label": "Change HTTP Method", "shortcut": "<Ctrl><Shift>L"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Send Request", "shortcut": "<Ctrl>Return"},
+        {"label": "Send Request (Options)", "shortcut": "<Ctrl><Shift>Return"},
+        {"label": "Focus URL Bar", "shortcut": "<Ctrl>L"},
+        {"label": "Switch Environments Menu", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "Duplicate Request", "shortcut": "<Ctrl>D"},
+        {"label": "Delete Request", "shortcut": "<Ctrl><Shift>BackSpace"},
+        {"label": "Pin/Unpin Request", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "Show Request History", "shortcut": "<Ctrl><Shift>H"},
+        {"label": "Generate Code", "shortcut": "<Ctrl><Shift>G"},
+        {"label": "Focus Response", "shortcut": "<Ctrl>'"},
+        {"label": "Beautify Active Code Editors", "shortcut": "<Ctrl><Shift>F"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Keyboard Shortcuts", "shortcut": "<Ctrl><Shift>/"}
+      ]
+    }
+  ]
+}

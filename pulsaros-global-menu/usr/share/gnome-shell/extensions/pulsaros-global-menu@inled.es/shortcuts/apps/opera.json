@@ -1,0 +1,92 @@
+{
+  "format": 1,
+  "app": "opera",
+  "name": "Opera",
+  "identifiers": [
+    "opera.desktop",
+    "com.opera.Opera.desktop",
+    "opera",
+    "Opera"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Tab", "shortcut": "<Ctrl>T"},
+        {"label": "New Window", "shortcut": "<Ctrl>N"},
+        {"label": "New Private Window", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Open File", "shortcut": "<Ctrl>O"},
+        {"label": "Reopen Closed Tab", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Close Current Tab", "shortcut": "<Ctrl>W"},
+        {"label": "Close Current Window", "shortcut": "<Ctrl><Shift>W"},
+        {"label": "Save Page As", "shortcut": "<Ctrl>S"},
+        {"label": "Print Page", "shortcut": "<Ctrl>P"},
+        {"label": "Open Downloads", "shortcut": "<Ctrl>J"},
+        {"label": "Open Extensions", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "Quit Opera", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Find in Page", "shortcut": "<Ctrl>F"},
+        {"label": "Find Next Match", "shortcut": "F3"},
+        {"label": "Find Previous Match", "shortcut": "<Shift>F3"},
+        {"label": "Open Settings / Preferences", "shortcut": "<Alt>P"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "History",
+      "items": [
+        {"label": "Reload Page", "shortcut": "<Ctrl>R"},
+        {"label": "Force Reload (Bypass Cache)", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Stop Loading", "shortcut": "Escape"},
+        {"label": "Navigate Back", "shortcut": "<Alt>Left"},
+        {"label": "Navigate Forward", "shortcut": "<Alt>Right"},
+        {"label": "Open History", "shortcut": "<Ctrl>H"}
+      ]
+    },
+    {
+      "label": "Bookmarks",
+      "items": [
+        {"label": "Open Bookmarks", "shortcut": "<Ctrl><Shift>B"},
+        {"label": "Bookmark Current Page", "shortcut": "<Ctrl>D"}
+      ]
+    },
+    {
+      "label": "Tabs",
+      "items": [
+        {"label": "Next Tab", "shortcut": "<Ctrl>Tab"},
+        {"label": "Previous Tab", "shortcut": "<Ctrl><Shift>Tab"},
+        {"label": "Switch to Last Tab", "shortcut": "<Ctrl>9"},
+        {"separator": true},
+        {"label": "Switch to Tab 1", "shortcut": "<Ctrl>1"},
+        {"label": "Switch to Tab 2", "shortcut": "<Ctrl>2"},
+        {"label": "Switch to Tab 3", "shortcut": "<Ctrl>3"},
+        {"label": "Switch to Tab 4", "shortcut": "<Ctrl>4"},
+        {"label": "Switch to Tab 5", "shortcut": "<Ctrl>5"},
+        {"label": "Switch to Tab 6", "shortcut": "<Ctrl>6"},
+        {"label": "Switch to Tab 7", "shortcut": "<Ctrl>7"},
+        {"label": "Switch to Tab 8", "shortcut": "<Ctrl>8"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Focus Address Bar", "shortcut": "<Ctrl>L"},
+        {"label": "Open Developer Tools", "shortcut": "<Ctrl><Shift>I"},
+        {"label": "View Page Source", "shortcut": "<Ctrl>U"},
+        {"label": "Capture Snapshot", "shortcut": "<Ctrl><Shift>5"}
+      ]
+    }
+  ]
+}

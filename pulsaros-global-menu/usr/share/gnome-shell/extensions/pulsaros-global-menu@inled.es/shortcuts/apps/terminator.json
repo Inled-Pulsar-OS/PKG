@@ -1,0 +1,106 @@
+{
+  "format": 1,
+  "app": "terminator",
+  "name": "Terminator",
+  "identifiers": [
+    "terminator.desktop",
+    "com.gexperts.Terminator.desktop",
+    "Terminator",
+    "terminator"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Tab", "shortcut": "<Ctrl><Shift>t"},
+        {"label": "New Window", "shortcut": "<Ctrl><Shift>i"},
+        {"label": "New Terminator Process", "shortcut": "<Super>i"},
+        {"separator": true},
+        {"label": "Split Horizontally", "shortcut": "<Ctrl><Shift>o"},
+        {"label": "Split Vertically", "shortcut": "<Ctrl><Shift>e"},
+        {"label": "Split Automatically", "shortcut": "<Ctrl><Shift>a"},
+        {"separator": true},
+        {"label": "Close Terminal", "shortcut": "<Ctrl><Shift>w"},
+        {"label": "Close Window", "shortcut": "<Ctrl><Shift>q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Copy", "shortcut": "<Ctrl><Shift>c"},
+        {"label": "Paste", "shortcut": "<Ctrl><Shift>v"},
+        {"separator": true},
+        {"label": "Find", "shortcut": "<Ctrl><Shift>f"},
+        {"separator": true},
+        {"label": "Edit Window Title", "shortcut": "<Ctrl><Alt>w"},
+        {"label": "Edit Tab Title", "shortcut": "<Ctrl><Alt>a"},
+        {"label": "Edit Terminal Title", "shortcut": "<Ctrl><Alt>x"},
+        {"separator": true},
+        {"label": "Reset", "shortcut": "<Ctrl><Shift>r"},
+        {"label": "Reset and Clear", "shortcut": "<Ctrl><Shift>g"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "<Ctrl>plus"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>minus"},
+        {"label": "Normal Size", "shortcut": "<Ctrl>0"},
+        {"separator": true},
+        {"label": "Fullscreen", "shortcut": "F11"},
+        {"label": "Toggle Scrollbar", "shortcut": "<Ctrl><Shift>s"},
+        {"label": "Hide Window", "shortcut": "<Ctrl><Shift><Alt>a"},
+        {"separator": true},
+        {"label": "Zoom Terminal", "shortcut": "<Ctrl><Shift>x"},
+        {"label": "Maximize Terminal", "shortcut": "<Ctrl><Shift>z"}
+      ]
+    },
+    {
+      "label": "Terminal",
+      "items": [
+        {"label": "Focus Up", "shortcut": "<Alt>Up"},
+        {"label": "Focus Down", "shortcut": "<Alt>Down"},
+        {"label": "Focus Left", "shortcut": "<Alt>Left"},
+        {"label": "Focus Right", "shortcut": "<Alt>Right"},
+        {"separator": true},
+        {"label": "Next Terminal", "shortcut": "<Ctrl><Shift>n"},
+        {"label": "Previous Terminal", "shortcut": "<Ctrl><Shift>p"},
+        {"separator": true},
+        {"label": "Resize Up", "shortcut": "<Ctrl><Shift>Up"},
+        {"label": "Resize Down", "shortcut": "<Ctrl><Shift>Down"},
+        {"label": "Resize Left", "shortcut": "<Ctrl><Shift>Left"},
+        {"label": "Resize Right", "shortcut": "<Ctrl><Shift>Right"},
+        {"separator": true},
+        {"label": "Rotate Clockwise", "shortcut": "<Super>r"},
+        {"label": "Rotate Counterclockwise", "shortcut": "<Super><Shift>r"}
+      ]
+    },
+    {
+      "label": "Tabs",
+      "items": [
+        {"label": "Next Tab", "shortcut": "<Ctrl>Page_Down"},
+        {"label": "Previous Tab", "shortcut": "<Ctrl>Page_Up"},
+        {"label": "Cycle Next", "shortcut": "<Ctrl>Tab"},
+        {"label": "Cycle Previous", "shortcut": "<Ctrl><Shift>Tab"},
+        {"separator": true},
+        {"label": "Move Tab Right", "shortcut": "<Ctrl><Shift>Page_Down"},
+        {"label": "Move Tab Left", "shortcut": "<Ctrl><Shift>Page_Up"}
+      ]
+    },
+    {
+      "label": "Grouping",
+      "items": [
+        {"label": "Group All Terminals", "shortcut": "<Super>g"},
+        {"label": "Ungroup All Terminals", "shortcut": "<Super><Shift>g"},
+        {"label": "Group Tab", "shortcut": "<Super>t"},
+        {"label": "Ungroup Tab", "shortcut": "<Super><Shift>t"},
+        {"label": "Ungroup Window", "shortcut": "<Super><Shift>w"},
+        {"separator": true},
+        {"label": "Insert Terminal Number", "shortcut": "<Super>1"},
+        {"label": "Insert Padded Terminal Number", "shortcut": "<Super>0"},
+        {"separator": true},
+        {"label": "Layout Launcher", "shortcut": "<Alt>l"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "format": 1,
+  "app": "rawtherapee",
+  "name": "RawTherapee",
+  "identifiers": [
+    "rawtherapee.desktop",
+    "com.rawtherapee.RawTherapee.desktop",
+    "rawtherapee",
+    "RawTherapee"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Save Current Image", "shortcut": "<Ctrl>S"},
+        {"label": "Force Save Processing Profile", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Close Image Tab", "shortcut": "<Ctrl>W"},
+        {"label": "Quit RawTherapee", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"label": "Copy Processing Profile", "shortcut": "<Ctrl>C"},
+        {"label": "Paste Processing Profile", "shortcut": "<Ctrl>V"},
+        {"label": "Partial Paste Processing Profile", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Rename File", "shortcut": "F2"},
+        {"label": "Find / Search", "shortcut": "<Ctrl>F"},
+        {"label": "Clear All Active Filters", "shortcut": "D"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Zoom In", "shortcut": "+"},
+        {"label": "Zoom Out", "shortcut": "-"},
+        {"label": "Zoom to 100%", "shortcut": "Z"},
+        {"label": "Zoom to Fit Whole Image", "shortcut": "<Alt>F"},
+        {"label": "Toggle Before/After View", "shortcut": "<Shift>B"},
+        {"label": "Toggle Focus Mask", "shortcut": "<Shift>F"},
+        {"label": "Toggle Clipped Shadows Indicator", "shortcut": "<"},
+        {"label": "Toggle Clipped Highlights Indicator", "shortcut": ">"},
+        {"label": "Toggle Left Panel", "shortcut": "L"},
+        {"label": "Toggle Right Panel", "shortcut": "<Alt>L"},
+        {"label": "Toggle Filmstrip", "shortcut": "<Shift>L"},
+        {"label": "Toggle Both Left and Right Panels", "shortcut": "<Ctrl><Alt>L"},
+        {"label": "Next Image", "shortcut": "F4"},
+        {"label": "Previous Image", "shortcut": "F3"}
+      ]
+    },
+    {
+      "label": "Image",
+      "items": [
+        {"label": "Zoom to Crop", "shortcut": "F"},
+        {"label": "Crop Tool", "shortcut": "C"},
+        {"label": "Rotate Tool", "shortcut": "S"},
+        {"label": "Rotate Image Left", "shortcut": "["},
+        {"label": "Rotate Image Right", "shortcut": "]"},
+        {"label": "Spot White Balance Pipette", "shortcut": "W"},
+        {"label": "Rate Selected Thumbnail 0 Stars", "shortcut": "<Shift>0"},
+        {"label": "Rate Selected Thumbnail 1 Stars", "shortcut": "<Shift>1"},
+        {"label": "Rate Selected Thumbnail 2 Stars", "shortcut": "<Shift>2"},
+        {"label": "Rate Selected Thumbnail 3 Stars", "shortcut": "<Shift>3"},
+        {"label": "Rate Selected Thumbnail 4 Stars", "shortcut": "<Shift>4"},
+        {"label": "Rate Selected Thumbnail 5 Stars", "shortcut": "<Shift>5"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Edit in External Editor", "shortcut": "<Ctrl>E"},
+        {"label": "Switch to File Browser Tab", "shortcut": "<Ctrl>F2"},
+        {"label": "Switch to Queue Tab", "shortcut": "<Ctrl>F3"},
+        {"label": "Switch to Editor Tab", "shortcut": "<Ctrl>F4"},
+        {"label": "Hand / Pan Tool", "shortcut": "H"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "format": 1,
+  "app": "nextcloud",
+  "name": "Nextcloud",
+  "identifiers": [
+    "com.nextcloud.desktopclient.nextcloud.desktop",
+    "nextcloud",
+    "Nextcloud"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Nextcloud Local Folder", "shortcut": "<Ctrl>O"},
+        {"label": "Open Nextcloud in Browser", "shortcut": "<Ctrl>W"},
+        {"label": "Open Log Output Window", "shortcut": "F12"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit Nextcloud Client", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Open Settings / Preferences", "shortcut": "<Ctrl>,"},
+        {"label": "Next Account / Settings Tab", "shortcut": "<Ctrl>Tab"},
+        {"label": "Previous Account / Settings Tab", "shortcut": "<Ctrl><Shift>Tab"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Force Sync Now / Refresh", "shortcut": "F5"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Navigate UI Controls", "shortcut": "Tab"},
+        {"label": "Reverse Navigate UI Controls", "shortcut": "<Shift>Tab"},
+        {"label": "Activate Selected Item", "shortcut": "Return"},
+        {"label": "Dismiss Dialog", "shortcut": "Escape"}
+      ]
+    }
+  ]
+}

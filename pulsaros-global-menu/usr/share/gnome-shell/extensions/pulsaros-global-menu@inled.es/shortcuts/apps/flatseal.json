@@ -1,0 +1,43 @@
+{
+  "format": 1,
+  "app": "flatseal",
+  "name": "Flatseal",
+  "identifiers": [
+    "com.github.tchx84.Flatseal.desktop",
+    "com.github.tchx84.Flatseal",
+    "flatseal",
+    "Flatseal"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Find Application", "shortcut": "<Ctrl>F"},
+        {"separator": true},
+        {"label": "Find Next", "shortcut": "<Ctrl>G"},
+        {"label": "Find Previous", "shortcut": "<Ctrl><Shift>G"},
+        {"separator": true},
+        {"label": "Toggle Permission", "shortcut": "space"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Open Menu", "shortcut": "F10"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Documentation", "shortcut": "F1"},
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

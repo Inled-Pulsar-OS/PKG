@@ -1,0 +1,71 @@
+{
+  "format": 1,
+  "app": "dbeaver",
+  "name": "DBeaver",
+  "identifiers": [
+    "dbeaver.desktop",
+    "dbeaver-ce.desktop",
+    "io.dbeaver.DBeaverCommunity.desktop",
+    "dbeaver",
+    "DBeaver"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New SQL Script", "shortcut": "<Ctrl>]"},
+        {"label": "Open Existing SQL Script", "shortcut": "F3"},
+        {"label": "Open Meta-Object", "shortcut": "<Ctrl><Shift>D"},
+        {"label": "Save All", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Close Active Editor", "shortcut": "<Ctrl>F4"},
+        {"label": "Close All Editors", "shortcut": "<Ctrl><Shift>F4"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Find / Replace", "shortcut": "<Ctrl>F"},
+        {"label": "Quick Access / Find Actions", "shortcut": "<Ctrl>3"},
+        {"label": "Rename", "shortcut": "F2"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Results Grid/Record View", "shortcut": "Tab"},
+        {"label": "Show Key Assist", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Maximize / Restore View", "shortcut": "<Ctrl>M"},
+        {"label": "Refresh", "shortcut": "F5"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Switch to Next Editor", "shortcut": "<Ctrl>F6"},
+        {"label": "Switch to Previous Editor", "shortcut": "<Ctrl><Shift>F6"},
+        {"label": "Go to Line", "shortcut": "<Ctrl>L"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Execute SQL Statement", "shortcut": "<Ctrl>Return"},
+        {"label": "Execute SQL Script", "shortcut": "<Alt>X"},
+        {"label": "Execute Statement in Separate Tabs", "shortcut": "<Ctrl><Alt><Shift>X"},
+        {"label": "Open New SQL Console", "shortcut": "<Ctrl><Alt>Return"},
+        {"label": "Connect to Database", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Commit Changes", "shortcut": "<Ctrl><Alt><Shift>K"},
+        {"label": "Rollback Changes", "shortcut": "<Ctrl><Alt><Shift>R"},
+        {"label": "Select Active Schema", "shortcut": "<Ctrl>0"},
+        {"label": "Select Connection", "shortcut": "<Ctrl>9"},
+        {"label": "Fetch Next Page of Results", "shortcut": "<Ctrl><Alt>N"},
+        {"label": "Fetch All Rows", "shortcut": "<Ctrl><Shift>="},
+        {"label": "Apply Data Changes", "shortcut": "<Ctrl>S"},
+        {"label": "Reject Data Changes", "shortcut": "<Ctrl>R"},
+        {"label": "Format SQL", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Visual Query Builder", "shortcut": "<Ctrl>B"},
+        {"label": "Show/Hide Generated SQL Query", "shortcut": "<Ctrl><Shift>B"}
+      ]
+    }
+  ]
+}

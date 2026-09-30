@@ -1,0 +1,91 @@
+{
+  "format": 1,
+  "app": "nemo",
+  "name": "Nemo",
+  "identifiers": [
+    "nemo.desktop",
+    "nemo",
+    "Nemo"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open New Window", "shortcut": "<Ctrl>N"},
+        {"label": "Open New Tab", "shortcut": "<Ctrl>T"},
+        {"label": "Create New Folder", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Open Selected Item", "shortcut": "<Ctrl>O"},
+        {"label": "Open in Navigation Window", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Open in New Tab", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Open Containing Folder", "shortcut": "<Ctrl><Alt>O"},
+        {"label": "File Properties", "shortcut": "<Alt>Return"},
+        {"label": "Close Tab", "shortcut": "<Ctrl>W"},
+        {"label": "Close All Navigation Windows / Quit", "shortcut": "<Ctrl>Q"},
+        {"label": "Open Parent Folder", "shortcut": "<Alt>Up"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Invert Selection", "shortcut": "<Ctrl><Shift>I"},
+        {"label": "Rename", "shortcut": "F2"},
+        {"label": "Move to Trash", "shortcut": "Delete"},
+        {"label": "Delete Permanently", "shortcut": "<Shift>Delete"},
+        {"label": "Search for Files", "shortcut": "<Ctrl>F"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Select Items Matching", "shortcut": "<Ctrl>S"},
+        {"label": "Make Link (Symlink)", "shortcut": "<Ctrl>M"},
+        {"label": "Pin / Unpin File", "shortcut": "<Ctrl><Shift>D"},
+        {"label": "Quick File Preview", "shortcut": "space"},
+        {"label": "Reload / Refresh", "shortcut": "<Ctrl>R"},
+        {"label": "Show Hidden Files", "shortcut": "<Ctrl>H"},
+        {"label": "Toggle Sidebar", "shortcut": "F9"},
+        {"label": "Toggle Extra Pane (Split View)", "shortcut": "F3"},
+        {"label": "Switch Focus Between Panes", "shortcut": "F6"},
+        {"label": "Toggle Location Entry / Breadcrumbs", "shortcut": "<Ctrl>L"},
+        {"label": "Icon View", "shortcut": "<Ctrl>1"},
+        {"label": "List View", "shortcut": "<Ctrl>2"},
+        {"label": "Compact View", "shortcut": "<Ctrl>3"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Normal Size (Reset Zoom)", "shortcut": "<Ctrl>0"},
+        {"label": "Edit Bookmarks", "shortcut": "<Ctrl>B"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Go to Previous Location", "shortcut": "<Alt>Left"},
+        {"label": "Go to Next Location", "shortcut": "<Alt>Right"},
+        {"label": "Go to Home Folder", "shortcut": "<Alt>Home"},
+        {"label": "Previous Tab", "shortcut": "<Ctrl>Page_Up"},
+        {"label": "Next Tab", "shortcut": "<Ctrl>Page_Down"},
+        {"label": "Add Bookmark", "shortcut": "<Ctrl>D"}
+      ]
+    },
+    {
+      "label": "Tabs",
+      "items": [
+        {"label": "Move Tab Left", "shortcut": "<Ctrl><Shift>Page_Up"},
+        {"label": "Move Tab Right", "shortcut": "<Ctrl><Shift>Page_Down"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help Handbook", "shortcut": "F1"},
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>F1"}
+      ]
+    }
+  ]
+}

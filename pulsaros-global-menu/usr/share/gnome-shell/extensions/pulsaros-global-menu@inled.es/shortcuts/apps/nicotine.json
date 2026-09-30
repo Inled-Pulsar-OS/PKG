@@ -1,0 +1,86 @@
+{
+  "format": 1,
+  "app": "nicotine",
+  "name": "Nicotine+",
+  "identifiers": [
+    "org.nicotine_plus.Nicotine.desktop",
+    "org.nicotine_plus.Nicotine",
+    "nicotine",
+    "Nicotine+"
+  ],
+  "menus": [
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Insert Emoji", "shortcut": "<Ctrl>."},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"separator": true},
+        {"label": "Find", "shortcut": "<Ctrl>F"},
+        {"label": "Find Next Match", "shortcut": "<Ctrl>G"},
+        {"label": "Find Previous Match", "shortcut": "<Ctrl><Shift>G"}
+      ]
+    },
+    {
+      "label": "Transfers",
+      "items": [
+        {"label": "Resume / Retry Transfer", "shortcut": "R"},
+        {"label": "Pause / Abort Transfer", "shortcut": "T"},
+        {"label": "File Properties", "shortcut": "<Alt>Return"},
+        {"label": "Remove Selected Row", "shortcut": "Delete"},
+        {"label": "Download / Upload To", "shortcut": "<Ctrl>Return"},
+        {"label": "Save List to Disk", "shortcut": "<Ctrl>S"},
+        {"label": "Refresh", "shortcut": "<Ctrl>R"},
+        {"label": "Copy Selected Cell", "shortcut": "<Ctrl>C"}
+      ]
+    },
+    {
+      "label": "Network",
+      "items": [
+        {"label": "Connect", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Disconnect", "shortcut": "<Ctrl><Shift>D"},
+        {"label": "Away", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Rescan Shares", "shortcut": "<Ctrl><Shift>R"}
+      ]
+    },
+    {
+      "label": "Search",
+      "items": [
+        {"label": "Result Filters", "shortcut": "<Ctrl>F"},
+        {"label": "Wishlist", "shortcut": "<Ctrl><Shift>W"}
+      ]
+    },
+    {
+      "label": "Tabs",
+      "items": [
+        {"label": "Change to Tab 1", "shortcut": "<Alt>1"},
+        {"label": "Change to Tab 2", "shortcut": "<Alt>2"},
+        {"label": "Change to Tab 3", "shortcut": "<Alt>3"},
+        {"separator": true},
+        {"label": "Previous Secondary Tab", "shortcut": "<Ctrl><Shift>Tab"},
+        {"label": "Next Secondary Tab", "shortcut": "<Ctrl>Tab"},
+        {"label": "Reopen Closed Secondary Tab", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Close Secondary Tab", "shortcut": "<Ctrl>F4"},
+        {"separator": true},
+        {"label": "Expand / Collapse All", "shortcut": "<Ctrl>\\"},
+        {"label": "Back to Parent Folder", "shortcut": "BackSpace"}
+      ]
+    },
+    {
+      "label": "Application",
+      "items": [
+        {"label": "Show Log Pane", "shortcut": "<Ctrl>L"},
+        {"label": "Open Main Menu", "shortcut": "F10"},
+        {"label": "Open Context Menu", "shortcut": "<Shift>F10"},
+        {"label": "Preferences", "shortcut": "<Ctrl>,"},
+        {"separator": true},
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>question"},
+        {"separator": true},
+        {"label": "Confirm Quit", "shortcut": "<Ctrl>Q"},
+        {"label": "Quit", "shortcut": "<Ctrl><Alt>Q"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "format": 1,
+  "app": "konsole",
+  "name": "Konsole",
+  "identifiers": [
+    "org.kde.konsole.desktop",
+    "konsole",
+    "Konsole"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Tab", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "New Window", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Close Tab", "shortcut": "<Ctrl><Shift>W"},
+        {"label": "Close Window", "shortcut": "<Ctrl><Shift>Q"},
+        {"label": "Save History As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Print", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "Close Active Split View", "shortcut": "<Ctrl><Shift>X"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Copy", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Paste", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Paste Selection", "shortcut": "<Ctrl><Shift>Insert"},
+        {"label": "Clear Scrollback and Reset", "shortcut": "<Ctrl><Shift>K"},
+        {"label": "Find", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Find Next", "shortcut": "F3"},
+        {"label": "Find Previous", "shortcut": "<Shift>F3"},
+        {"label": "Configure or Rename Tab", "shortcut": "<Ctrl><Alt>S"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Select Mode", "shortcut": "<Ctrl><Shift>D"},
+        {"label": "Enlarge Font Size", "shortcut": "<Ctrl>+"},
+        {"label": "Shrink Font Size", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Font Size", "shortcut": "<Ctrl><Alt>0"},
+        {"label": "Monitor for Activity", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Monitor for Silence", "shortcut": "<Ctrl><Shift>I"},
+        {"label": "Read-Only Mode", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Toggle Menubar", "shortcut": "<Ctrl><Shift>M"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Tabs",
+      "items": [
+        {"label": "Clone Tab", "shortcut": "<Ctrl><Shift>U"},
+        {"label": "Next Tab", "shortcut": "<Shift>Right"},
+        {"label": "Previous Tab", "shortcut": "<Shift>Left"},
+        {"label": "Last Used Tabs", "shortcut": "<Ctrl>Tab"},
+        {"label": "Last Used Tabs (Reverse)", "shortcut": "<Ctrl><Shift>Tab"},
+        {"label": "Move Tab Left", "shortcut": "<Ctrl><Alt>Left"},
+        {"label": "Move Tab Right", "shortcut": "<Ctrl><Alt>Right"},
+        {"separator": true},
+        {"label": "Switch to Tab 10", "shortcut": "<Alt>0"},
+        {"label": "Switch to Tab 1", "shortcut": "<Alt>1"},
+        {"label": "Switch to Tab 2", "shortcut": "<Alt>2"},
+        {"label": "Switch to Tab 3", "shortcut": "<Alt>3"},
+        {"label": "Switch to Tab 4", "shortcut": "<Alt>4"},
+        {"label": "Switch to Tab 5", "shortcut": "<Alt>5"},
+        {"label": "Switch to Tab 6", "shortcut": "<Alt>6"},
+        {"label": "Switch to Tab 7", "shortcut": "<Alt>7"},
+        {"label": "Switch to Tab 8", "shortcut": "<Alt>8"},
+        {"label": "Switch to Tab 9", "shortcut": "<Alt>9"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Split View Vertically", "shortcut": "<Ctrl>("},
+        {"label": "Split View Horizontally", "shortcut": "<Ctrl>)"},
+        {"label": "Focus Pane Up", "shortcut": "<Ctrl><Shift>Up"},
+        {"label": "Focus Pane Down", "shortcut": "<Ctrl><Shift>Down"},
+        {"label": "Focus Pane Left", "shortcut": "<Ctrl><Shift>Left"},
+        {"label": "Focus Pane Right", "shortcut": "<Ctrl><Shift>Right"}
+      ]
+    }
+  ]
+}

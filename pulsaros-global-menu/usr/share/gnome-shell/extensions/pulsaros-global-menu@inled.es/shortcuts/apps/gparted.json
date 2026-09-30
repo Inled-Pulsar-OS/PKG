@@ -1,0 +1,65 @@
+{
+  "format": 1,
+  "app": "gparted",
+  "name": "GParted",
+  "identifiers": [
+    "gparted.desktop",
+    "gparted",
+    "GParted"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Partition", "shortcut": "Insert"},
+        {"label": "Quit GParted", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo Last Operation", "shortcut": "<Ctrl>Z"},
+        {"label": "Clear All Operations", "shortcut": "<Alt>E"},
+        {"label": "Delete Partition", "shortcut": "Delete"},
+        {"label": "Copy Partition", "shortcut": "<Ctrl>C"},
+        {"label": "Paste Partition", "shortcut": "<Ctrl>V"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Refresh Devices", "shortcut": "<Ctrl>R"},
+        {"label": "Toggle Device Information Panel", "shortcut": "<Alt>V"},
+        {"label": "Toggle Pending Operations Panel", "shortcut": "<Alt>V"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Select Next Device", "shortcut": "<Alt>D"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Apply All Operations", "shortcut": "<Ctrl>Return"},
+        {"label": "View File System Support", "shortcut": "<Alt>V"},
+        {"label": "Resize/Move Partition", "shortcut": "<Ctrl>R"},
+        {"label": "Partition Information", "shortcut": "<Ctrl>I"},
+        {"label": "Format Partition Menu", "shortcut": "<Alt>P"},
+        {"label": "Manage Partition Flags", "shortcut": "<Alt>P"},
+        {"label": "Check and Repair File System", "shortcut": "<Alt>P"},
+        {"label": "Mount / Unmount Partition", "shortcut": "<Alt>P"},
+        {"label": "Change Partition UUID", "shortcut": "<Alt>P"},
+        {"label": "Partition Label", "shortcut": "<Alt>P"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help Contents", "shortcut": "F1"},
+        {"label": "About Dialog", "shortcut": "<Alt>H"}
+      ]
+    }
+  ]
+}

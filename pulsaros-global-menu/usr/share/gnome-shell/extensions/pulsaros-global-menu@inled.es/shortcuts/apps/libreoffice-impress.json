@@ -1,0 +1,81 @@
+{
+  "format": 1,
+  "app": "libreoffice-impress",
+  "name": "LibreOffice Impress",
+  "identifiers": [
+    "libreoffice-impress.desktop",
+    "libreoffice impress",
+    "libreoffice-impress",
+    "LibreOffice Impress"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Presentation", "shortcut": "<Ctrl>N"},
+        {"label": "Open Presentation", "shortcut": "<Ctrl>O"},
+        {"label": "Save Presentation", "shortcut": "<Ctrl>S"},
+        {"label": "Save As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Print Presentation", "shortcut": "<Ctrl>P"},
+        {"label": "Close Document", "shortcut": "<Ctrl>W"},
+        {"label": "Exit LibreOffice", "shortcut": "<Ctrl>Q"},
+        {"label": "Exit Group", "shortcut": "<Ctrl>F3"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Paste Special", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Find", "shortcut": "<Ctrl>F"},
+        {"label": "Find and Replace", "shortcut": "<Ctrl>H"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Fit to Window", "shortcut": "<Ctrl><Shift>0"},
+        {"label": "Toggle Sidebar", "shortcut": "<Ctrl>F5"},
+        {"label": "Toggle Navigator", "shortcut": "<Ctrl><Shift>F5"},
+        {"label": "Toggle Fullscreen", "shortcut": "<Ctrl><Shift>J"}
+      ]
+    },
+    {
+      "label": "Insert",
+      "items": [
+        {"label": "Insert New Slide", "shortcut": "<Ctrl>M"},
+        {"label": "Duplicate Slide", "shortcut": "<Ctrl>D"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Group Objects", "shortcut": "<Ctrl><Shift>G"},
+        {"label": "Ungroup Objects", "shortcut": "<Ctrl><Alt><Shift>G"},
+        {"label": "Enter Group", "shortcut": "F3"},
+        {"label": "Manage Styles", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Slide Show",
+      "items": [
+        {"label": "Start Slide Show (from First Slide)", "shortcut": "F5"},
+        {"label": "Start Slide Show (from Current Slide)", "shortcut": "<Shift>F5"},
+        {"label": "End Slide Show", "shortcut": "Escape"},
+        {"label": "Next Slide / Animation", "shortcut": "Page_Down"},
+        {"label": "Previous Slide / Animation", "shortcut": "Page_Up"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

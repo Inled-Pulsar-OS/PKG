@@ -3,6 +3,18 @@
 # play-bootsound.sh - Smart Bootsound Player for Pulsar OS
 # ==============================================================================
 
+# Check if startup sound has been disabled from GNOME Settings Sound panel
+for u in /home/* /root; do
+    if [ -f "$u/.config/pulsar/bootsound.disabled" ]; then
+        echo "🔇 Startup sound disabled by user preference."
+        exit 0
+    fi
+done
+if [ -f "/etc/pulsar/bootsound.disabled" ]; then
+    echo "🔇 Startup sound disabled by system configuration."
+    exit 0
+fi
+
 SOUND_FILE="/usr/share/extras/boot-sound.wav"
 
 if [ ! -f "$SOUND_FILE" ]; then

@@ -1,0 +1,70 @@
+{
+  "format": 1,
+  "app": "neovide",
+  "name": "Neovide",
+  "identifiers": [
+    "neovide.desktop",
+    "dev.neovide.neovide.desktop",
+    "neovide",
+    "Neovide"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Write / Save Buffer", "shortcut": ": w Return"},
+        {"label": "Write All and Quit", "shortcut": ": w q Return"},
+        {"label": "Quit Active Window", "shortcut": ": q Return"},
+        {"label": "Force Quit All (No Save)", "shortcut": ": q a ! Return"},
+        {"label": "Close Focused Window Split", "shortcut": "<Ctrl>w c"},
+        {"label": "Create New Tab", "shortcut": ": t a b n e w Return"},
+        {"label": "Close Current Tab", "shortcut": ": t a b c l o s e Return"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "U"},
+        {"label": "Redo", "shortcut": "<Ctrl>R"},
+        {"label": "Copy (Yank) Selection to System Clipboard", "shortcut": "Y"},
+        {"label": "Paste from System Clipboard", "shortcut": "P"},
+        {"label": "Search Backward", "shortcut": "?"},
+        {"label": "Global Search and Replace in Buffer"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Increase GUI Scale Factor", "shortcut": "<Ctrl>+"},
+        {"label": "Decrease GUI Scale Factor", "shortcut": "<Ctrl>-"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Switch Focus to Next Window", "shortcut": "<Ctrl>w w"},
+        {"label": "Next Tab", "shortcut": "g t"},
+        {"label": "Previous Tab", "shortcut": "g <Shift>t"},
+        {"label": "Search Forward", "shortcut": "/"},
+        {"label": "Next Search Match", "shortcut": "N"},
+        {"label": "Previous Search Match", "shortcut": "<Shift>N"},
+        {"label": "Go to Line / End of File", "shortcut": "<Shift>G"},
+        {"label": "Go to Top of File", "shortcut": "g g"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Split Window Horizontally", "shortcut": "<Ctrl>w s"},
+        {"label": "Split Window Vertically", "shortcut": "<Ctrl>w v"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Help Documentation", "shortcut": ": h e l p Return"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+{
+  "format": 1,
+  "app": "drawing",
+  "name": "Drawing",
+  "identifiers": [
+    "com.github.maoschanz.drawing.desktop",
+    "drawing",
+    "Drawing"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Window", "shortcut": "<Ctrl>N"},
+        {"label": "Quit All Windows", "shortcut": "<Ctrl>Q"},
+        {"label": "New Blank Image (Tab)", "shortcut": "<Ctrl>T"},
+        {"label": "New Image from Clipboard", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Open Picture", "shortcut": "<Ctrl>O"},
+        {"label": "Save", "shortcut": "<Ctrl>S"},
+        {"label": "Save Picture As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Close Active Image", "shortcut": "<Ctrl>W"},
+        {"label": "Print Image", "shortcut": "<Ctrl>P"},
+        {"label": "Import File as Selection", "shortcut": "<Ctrl>I"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Preferences", "shortcut": "<Ctrl>,"},
+        {"label": "Copy Image to Clipboard", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"label": "Cut Selection", "shortcut": "<Ctrl>X"},
+        {"label": "Copy Selection", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Deselect / Unselect", "shortcut": "<Ctrl><Shift>A"}
+      ]
+    },
+    {
+      "label": "Select",
+      "items": [
+        {"label": "New Image from Selection", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Delete Selection", "shortcut": "Delete"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Original Zoom (100%)", "shortcut": "<Ctrl>1"},
+        {"label": "Optimal Zoom (Fit)", "shortcut": "<Ctrl>0"},
+        {"label": "Maximum Zoom", "shortcut": "<Ctrl><Shift>+"},
+        {"label": "Toggle Preview", "shortcut": "<Ctrl>M"},
+        {"label": "Toggle Fullscreen Mode", "shortcut": "F11"},
+        {"label": "Toggle Toolbars / Hide Controls", "shortcut": "F8"},
+        {"label": "Toggle Menubar", "shortcut": "<Ctrl>F2"},
+        {"label": "Tab to the Right", "shortcut": "<Ctrl>Tab"},
+        {"label": "Tab to the Left", "shortcut": "<Ctrl><Shift>Tab"},
+        {"label": "Pan Left", "shortcut": "<Ctrl>Left"},
+        {"label": "Pan Right", "shortcut": "<Ctrl>Right"},
+        {"label": "Pan Up", "shortcut": "<Ctrl>Up"},
+        {"label": "Pan Down", "shortcut": "<Ctrl>Down"},
+        {"label": "Pan to Left End", "shortcut": "<Ctrl>Home"},
+        {"label": "Pan to Right End", "shortcut": "<Ctrl>End"},
+        {"label": "Pan to Top", "shortcut": "<Ctrl>Page_Up"},
+        {"label": "Pan to Bottom", "shortcut": "<Ctrl>Page_Down"}
+      ]
+    },
+    {
+      "label": "Image",
+      "items": [
+        {"label": "Reload Image from Disk", "shortcut": "<Ctrl>R"},
+        {"label": "Reset Canvas", "shortcut": "<Ctrl>BackSpace"}
+      ]
+    },
+    {
+      "label": "Colors",
+      "items": [
+        {"label": "Edit Primary Color", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Edit Secondary Color", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Exchange Colors", "shortcut": "<Ctrl>E"},
+        {"label": "Color Picker (Get Values)", "shortcut": "<Ctrl>G"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Apply Transformation", "shortcut": "<Ctrl>Return"},
+        {"label": "Main Menu", "shortcut": "F10"},
+        {"label": "Tool Options Menu", "shortcut": "<Shift>F10"},
+        {"label": "Back to Previous Tool", "shortcut": "<Ctrl>B"},
+        {"label": "Increase Tool Width / Size", "shortcut": "<Ctrl><Shift>Up"},
+        {"label": "Decrease Tool Width / Size", "shortcut": "<Ctrl><Shift>Down"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help Contents", "shortcut": "F1"},
+        {"label": "About Drawing", "shortcut": "<Shift>F1"},
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>?"}
+      ]
+    }
+  ]
+}

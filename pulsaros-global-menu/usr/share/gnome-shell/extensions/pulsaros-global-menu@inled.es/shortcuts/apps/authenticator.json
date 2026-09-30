@@ -1,0 +1,46 @@
+{
+  "format": 1,
+  "app": "authenticator",
+  "name": "Authenticator",
+  "identifiers": [
+    "com.belmoussaoui.Authenticator.desktop",
+    "authenticator",
+    "Authenticator"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Account", "shortcut": "<Ctrl>N"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search Accounts", "shortcut": "<Ctrl>F"},
+        {"label": "Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Go Back", "shortcut": "Escape"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Lock Application", "shortcut": "<Ctrl>L"},
+        {"label": "Providers", "shortcut": "<Ctrl>P"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>?"}
+      ]
+    }
+  ]
+}

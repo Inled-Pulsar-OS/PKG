@@ -1,0 +1,54 @@
+{
+  "format": 1,
+  "app": "seahorse",
+  "name": "Passwords and Keys",
+  "identifiers": [
+    "org.gnome.seahorse.Application.desktop",
+    "seahorse",
+    "passwords and keys",
+    "Passwords and Keys"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Create New Item / Key", "shortcut": "<Ctrl>N"},
+        {"label": "Import Key from File", "shortcut": "<Ctrl>I"},
+        {"label": "Item Properties", "shortcut": "<Alt>Return"},
+        {"label": "Open Menu", "shortcut": "F10"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Find / Search", "shortcut": "<Ctrl>F"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Delete Selected Item", "shortcut": "Delete"},
+        {"label": "Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Show Sidebar (Responsive)", "shortcut": "<Alt>Left"},
+        {"label": "Show Keyring Contents (Responsive)", "shortcut": "<Alt>Right"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Select Previous Keyring", "shortcut": "<Alt>Up"},
+        {"label": "Select Next Keyring", "shortcut": "<Alt>Down"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Help", "shortcut": "F1"},
+        {"label": "Show Keyboard Shortcuts", "shortcut": "<Ctrl>?"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "format": 1,
+  "app": "simple-scan",
+  "name": "Document Scanner",
+  "identifiers": [
+    "org.gnome.SimpleScan.desktop",
+    "simple-scan.desktop",
+    "simple-scan",
+    "document scanner",
+    "Document Scanner"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Start New Document", "shortcut": "<Ctrl>N"},
+        {"label": "Save Scanned Document", "shortcut": "<Ctrl>S"},
+        {"label": "Print Scanned Document", "shortcut": "<Ctrl>P"},
+        {"label": "Open Menu", "shortcut": "F10"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Copy Current Page to Clipboard", "shortcut": "<Ctrl>C"},
+        {"label": "Delete Selected Page", "shortcut": "Delete"},
+        {"label": "Show Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Scan Single Page", "shortcut": "<Ctrl>1"},
+        {"label": "Scan from Document Feeder (ADF)", "shortcut": "<Ctrl>F"},
+        {"label": "Scan Continuously from Flatbed (Batch)", "shortcut": "<Ctrl>M"},
+        {"label": "Stop Scan in Progress", "shortcut": "Escape"},
+        {"label": "Rotate Page Left (Anti-Clockwise)", "shortcut": "["},
+        {"label": "Rotate Page Right (Clockwise)", "shortcut": "]"},
+        {"label": "Move Page Left", "shortcut": "<"},
+        {"label": "Move Page Right", "shortcut": ">"},
+        {"label": "Email Scanned Document", "shortcut": "<Ctrl>E"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Help", "shortcut": "F1"},
+        {"label": "Show Keyboard Shortcuts", "shortcut": "<Ctrl>?"}
+      ]
+    }
+  ]
+}

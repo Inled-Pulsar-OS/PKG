@@ -1,0 +1,133 @@
+{
+  "format": 1,
+  "app": "qutebrowser",
+  "name": "qutebrowser",
+  "identifiers": [
+    "org.qutebrowser.qutebrowser.desktop",
+    "qutebrowser.desktop",
+    "qutebrowser",
+    "org.qutebrowser.qutebrowser"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open", "shortcut": "o"},
+        {"label": "Open in New Tab", "shortcut": "<Shift>o"},
+        {"label": "New Tab", "shortcut": "<Ctrl>t"},
+        {"label": "New Window", "shortcut": "<Ctrl>n"},
+        {"label": "New Private Window", "shortcut": "<Ctrl><Shift>n"},
+        {"separator": true},
+        {"label": "Save Page", "shortcut": "s f"},
+        {"label": "Print", "shortcut": "<Ctrl><Alt>p"},
+        {"separator": true},
+        {"label": "Close Tab", "shortcut": "d"},
+        {"label": "Close Other Tabs", "shortcut": "c o"},
+        {"label": "Close Window", "shortcut": "<Ctrl><Shift>w"},
+        {"label": "Quit", "shortcut": "<Ctrl>q"},
+        {"label": "Save Session and Quit", "shortcut": "<Shift>z <Shift>z"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo Close Tab", "shortcut": "u"},
+        {"label": "Undo Close Window", "shortcut": "<Shift>u"},
+        {"separator": true},
+        {"label": "Yank URL", "shortcut": "y y"},
+        {"label": "Yank Title", "shortcut": "y t"},
+        {"label": "Yank Domain", "shortcut": "y d"},
+        {"label": "Yank as Markdown Link", "shortcut": "y m"},
+        {"separator": true},
+        {"label": "Open Clipboard", "shortcut": "p p"},
+        {"label": "Open Clipboard in New Tab", "shortcut": "<Shift>p p"},
+        {"separator": true},
+        {"label": "Enter Insert Mode", "shortcut": "i"},
+        {"label": "Enter Caret Mode", "shortcut": "v"},
+        {"label": "Enter Passthrough Mode", "shortcut": "<Ctrl>v"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Reload", "shortcut": "r"},
+        {"label": "Reload Ignoring Cache", "shortcut": "<Shift>r"},
+        {"label": "Stop Loading", "shortcut": "<Ctrl>s"},
+        {"separator": true},
+        {"label": "Zoom In", "shortcut": "plus"},
+        {"label": "Zoom Out", "shortcut": "minus"},
+        {"label": "Reset Zoom", "shortcut": "equal"},
+        {"separator": true},
+        {"label": "Fullscreen", "shortcut": "F11"},
+        {"label": "View Source", "shortcut": "g f"},
+        {"label": "Developer Tools", "shortcut": "w i"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Back", "shortcut": "<Shift>h"},
+        {"label": "Forward", "shortcut": "<Shift>l"},
+        {"label": "Home", "shortcut": "<Ctrl>h"},
+        {"separator": true},
+        {"label": "Scroll to Top", "shortcut": "g g"},
+        {"label": "Scroll to Bottom", "shortcut": "<Shift>g"},
+        {"label": "Page Down", "shortcut": "<Ctrl>f"},
+        {"label": "Page Up", "shortcut": "<Ctrl>b"},
+        {"separator": true},
+        {"label": "Up One Directory", "shortcut": "g u"},
+        {"label": "Next Page", "shortcut": "bracketright bracketright"},
+        {"label": "Previous Page", "shortcut": "bracketleft bracketleft"}
+      ]
+    },
+    {
+      "label": "Tabs",
+      "items": [
+        {"label": "Next Tab", "shortcut": "<Shift>j"},
+        {"label": "Previous Tab", "shortcut": "<Shift>k"},
+        {"label": "Last Used Tab", "shortcut": "<Ctrl>Tab"},
+        {"separator": true},
+        {"label": "Move Tab Right", "shortcut": "g <Shift>j"},
+        {"label": "Move Tab Left", "shortcut": "g <Shift>k"},
+        {"label": "Clone Tab", "shortcut": "g <Shift>c"},
+        {"label": "Pin Tab", "shortcut": "<Ctrl>p"},
+        {"label": "Mute Tab", "shortcut": "<Alt>m"},
+        {"separator": true},
+        {"label": "Select Tab", "shortcut": "g t"},
+        {"label": "First Tab", "shortcut": "g 0"},
+        {"label": "Last Tab", "shortcut": "g $"}
+      ]
+    },
+    {
+      "label": "Search",
+      "items": [
+        {"label": "Search Forward", "shortcut": "slash"},
+        {"label": "Search Backward", "shortcut": "question"},
+        {"label": "Next Match", "shortcut": "n"},
+        {"label": "Previous Match", "shortcut": "<Shift>n"},
+        {"separator": true},
+        {"label": "Follow Hint", "shortcut": "f"},
+        {"label": "Follow Hint in New Tab", "shortcut": "<Shift>f"},
+        {"label": "Hint Inputs", "shortcut": "g i"},
+        {"label": "Yank Hinted Link", "shortcut": "; y"}
+      ]
+    },
+    {
+      "label": "Bookmarks",
+      "items": [
+        {"label": "Save Quickmark", "shortcut": "m"},
+        {"label": "Load Quickmark", "shortcut": "b"},
+        {"label": "Load Quickmark in New Tab", "shortcut": "<Shift>b"},
+        {"separator": true},
+        {"label": "Add Bookmark", "shortcut": "<Shift>m"},
+        {"label": "Load Bookmark", "shortcut": "g b"},
+        {"label": "List Bookmarks", "shortcut": "<Shift>s q"},
+        {"separator": true},
+        {"label": "History", "shortcut": "<Shift>s h"},
+        {"label": "Downloads", "shortcut": "g d"},
+        {"label": "Clear Downloads", "shortcut": "c d"},
+        {"label": "Settings", "shortcut": "<Shift>s s"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "format": 1,
+  "app": "tilix",
+  "name": "Tilix",
+  "identifiers": [
+    "com.gexperts.Tilix.desktop",
+    "tilix",
+    "Tilix"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Window", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "New Session (Tab)", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Close Session", "shortcut": "<Ctrl><Shift>Q"},
+        {"label": "Open Saved Session", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Save Current Session", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Close Active Terminal", "shortcut": "<Ctrl><Shift>W"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Copy", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Paste", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Paste Primary Selection", "shortcut": "<Shift>Insert"},
+        {"label": "Select All", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Find", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Find Next", "shortcut": "<Ctrl><Shift>G"},
+        {"label": "Find Previous", "shortcut": "<Ctrl><Shift>H"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Select Bookmark", "shortcut": "<Ctrl><Shift>B"},
+        {"label": "Switch to Next Terminal", "shortcut": "<Ctrl>Tab"},
+        {"label": "Switch to Previous Terminal", "shortcut": "<Ctrl><Shift>Tab"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Normal Size", "shortcut": "<Ctrl>0"},
+        {"label": "Scroll Up", "shortcut": "<Ctrl><Shift>Up"},
+        {"label": "Scroll Down", "shortcut": "<Ctrl><Shift>Down"},
+        {"label": "Page Up", "shortcut": "<Shift>Page_Up"},
+        {"label": "Page Down", "shortcut": "<Shift>Page_Down"},
+        {"label": "Toggle Margin", "shortcut": "<Ctrl><Alt>M"}
+      ]
+    },
+    {
+      "label": "Tabs",
+      "items": [
+        {"label": "Next Session", "shortcut": "<Ctrl>Page_Down"},
+        {"label": "Previous Session", "shortcut": "<Ctrl>Page_Up"},
+        {"label": "Reorder Session Left", "shortcut": "<Ctrl><Shift>Page_Up"},
+        {"label": "Reorder Session Right", "shortcut": "<Ctrl><Shift>Page_Down"},
+        {"label": "Switch to Session 10", "shortcut": "<Ctrl><Alt>0"},
+        {"label": "View Session Sidebar", "shortcut": "F12"},
+        {"separator": true},
+        {"label": "Switch to Session 1", "shortcut": "<Ctrl><Alt>1"},
+        {"label": "Switch to Session 2", "shortcut": "<Ctrl><Alt>2"},
+        {"label": "Switch to Session 3", "shortcut": "<Ctrl><Alt>3"},
+        {"label": "Switch to Session 4", "shortcut": "<Ctrl><Alt>4"},
+        {"label": "Switch to Session 5", "shortcut": "<Ctrl><Alt>5"},
+        {"label": "Switch to Session 6", "shortcut": "<Ctrl><Alt>6"},
+        {"label": "Switch to Session 7", "shortcut": "<Ctrl><Alt>7"},
+        {"label": "Switch to Session 8", "shortcut": "<Ctrl><Alt>8"},
+        {"label": "Switch to Session 9", "shortcut": "<Ctrl><Alt>9"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Split Terminal Right", "shortcut": "<Ctrl><Alt>R"},
+        {"label": "Split Terminal Down", "shortcut": "<Ctrl><Alt>D"},
+        {"label": "Split Terminal Automatically", "shortcut": "<Ctrl><Alt>A"},
+        {"label": "Maximize / Restore Terminal", "shortcut": "<Ctrl><Shift>X"},
+        {"label": "Switch to Terminal Above", "shortcut": "<Alt>Up"},
+        {"label": "Switch to Terminal Below", "shortcut": "<Alt>Down"},
+        {"label": "Switch to Terminal Left", "shortcut": "<Alt>Left"},
+        {"label": "Switch to Terminal Right", "shortcut": "<Alt>Right"},
+        {"label": "Switch to Terminal 10", "shortcut": "<Alt>0"},
+        {"label": "Resize Terminal Up", "shortcut": "<Alt><Shift>Up"},
+        {"label": "Resize Terminal Down", "shortcut": "<Alt><Shift>Down"},
+        {"label": "Resize Terminal Left", "shortcut": "<Alt><Shift>Left"},
+        {"label": "Resize Terminal Right", "shortcut": "<Alt><Shift>Right"},
+        {"separator": true},
+        {"label": "Switch to Terminal 1", "shortcut": "<Alt>1"},
+        {"label": "Switch to Terminal 2", "shortcut": "<Alt>2"},
+        {"label": "Switch to Terminal 3", "shortcut": "<Alt>3"},
+        {"label": "Switch to Terminal 4", "shortcut": "<Alt>4"},
+        {"label": "Switch to Terminal 5", "shortcut": "<Alt>5"},
+        {"label": "Switch to Terminal 6", "shortcut": "<Alt>6"},
+        {"label": "Switch to Terminal 7", "shortcut": "<Alt>7"},
+        {"label": "Switch to Terminal 8", "shortcut": "<Alt>8"},
+        {"label": "Switch to Terminal 9", "shortcut": "<Alt>9"}
+      ]
+    }
+  ]
+}

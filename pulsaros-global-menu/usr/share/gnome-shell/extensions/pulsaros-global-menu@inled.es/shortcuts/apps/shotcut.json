@@ -1,0 +1,80 @@
+{
+  "format": 1,
+  "app": "shotcut",
+  "name": "Shotcut",
+  "identifiers": [
+    "org.shotcut.Shotcut.desktop",
+    "shotcut",
+    "Shotcut"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open File", "shortcut": "<Ctrl>O"},
+        {"label": "Open Other", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Save", "shortcut": "<Ctrl>S"},
+        {"label": "Save As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Export Video", "shortcut": "<Ctrl>E"},
+        {"label": "Close", "shortcut": "<Ctrl>W"},
+        {"label": "Exit Shotcut", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Full Screen", "shortcut": "F11"},
+        {"label": "Toggle Playlist Panel", "shortcut": "<Ctrl>1"},
+        {"label": "Toggle Timeline Panel", "shortcut": "<Ctrl>2"},
+        {"label": "Toggle Filters Panel", "shortcut": "<Ctrl>3"},
+        {"label": "Toggle Keyframes Panel", "shortcut": "<Ctrl>4"},
+        {"label": "Toggle Properties Panel", "shortcut": "<Ctrl>5"},
+        {"label": "Toggle Export Panel", "shortcut": "<Ctrl>9"}
+      ]
+    },
+    {
+      "label": "Timeline",
+      "items": [
+        {"label": "Split at Playhead", "shortcut": "S"},
+        {"label": "Ripple Delete", "shortcut": "X"},
+        {"label": "Lift / Delete", "shortcut": "Z"},
+        {"label": "Append to Current Track", "shortcut": "A"},
+        {"label": "Insert into Current Track", "shortcut": "V"},
+        {"label": "Overwrite on Current Track", "shortcut": "B"},
+        {"label": "Set In Point", "shortcut": "I"},
+        {"label": "Set Out Point", "shortcut": "O"},
+        {"label": "Zoom In Timeline", "shortcut": "="},
+        {"label": "Zoom Out Timeline", "shortcut": "-"},
+        {"label": "Zoom to Fit Timeline", "shortcut": "0"}
+      ]
+    },
+    {
+      "label": "Player",
+      "items": [
+        {"label": "Play / Pause", "shortcut": "space"},
+        {"label": "Fast Forward", "shortcut": "L"},
+        {"label": "Rewind", "shortcut": "J"},
+        {"label": "Pause / Stop", "shortcut": "K"},
+        {"label": "Seek Previous Frame", "shortcut": "Left"},
+        {"label": "Seek Next Frame", "shortcut": "Right"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Actions and Shortcuts Reference", "shortcut": "?"},
+        {"label": "Help / Application Log", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

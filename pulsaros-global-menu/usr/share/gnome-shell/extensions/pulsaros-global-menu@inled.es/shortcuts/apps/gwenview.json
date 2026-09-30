@@ -1,0 +1,90 @@
+{
+  "format": 1,
+  "app": "gwenview",
+  "name": "Gwenview",
+  "identifiers": [
+    "org.kde.gwenview.desktop",
+    "gwenview",
+    "Gwenview"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open File / Folder", "shortcut": "<Ctrl>O"},
+        {"label": "Save", "shortcut": "<Ctrl>S"},
+        {"label": "Save As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Print", "shortcut": "<Ctrl>P"},
+        {"label": "Print Preview", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "File Properties", "shortcut": "<Alt>Return"},
+        {"label": "Quit Gwenview", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Replace Location (Path Bar)", "shortcut": "<Ctrl>L"},
+        {"label": "Rename File", "shortcut": "F2"},
+        {"label": "Copy File To", "shortcut": "F7"},
+        {"label": "Move to Trash", "shortcut": "Delete"},
+        {"label": "Delete Permanently", "shortcut": "<Shift>Delete"},
+        {"label": "Configure Gwenview (Preferences)", "shortcut": "<Ctrl><Shift>,"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Reload / Refresh", "shortcut": "F5"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Toggle Slideshow", "shortcut": "space"},
+        {"label": "Actual Size (100% Zoom)", "shortcut": "<Ctrl>0"},
+        {"label": "Zoom to Fit", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Zoom In", "shortcut": "+"},
+        {"label": "Zoom Out", "shortcut": "-"},
+        {"label": "Bird's Eye View", "shortcut": "<Ctrl>I"},
+        {"label": "Toggle Sidebar", "shortcut": "F4"},
+        {"label": "Toggle Thumbnail Bar", "shortcut": "<Ctrl>B"},
+        {"label": "Next Image", "shortcut": "Right"},
+        {"label": "Previous Image", "shortcut": "Left"},
+        {"label": "Go to First Image", "shortcut": "Home"},
+        {"label": "Go to Last Image", "shortcut": "End"}
+      ]
+    },
+    {
+      "label": "Image",
+      "items": [
+        {"label": "Rotate Right", "shortcut": "<Ctrl>R"},
+        {"label": "Rotate Left", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Resize Image", "shortcut": "<Shift>R"},
+        {"label": "Crop Image", "shortcut": "<Shift>C"},
+        {"label": "Adjust Colors (Brightness/Contrast/Gamma)", "shortcut": "<Shift>B"},
+        {"label": "Reduce Red Eye", "shortcut": "<Shift>E"},
+        {"label": "Rate 0 Stars", "shortcut": "0"},
+        {"label": "Rate 1 Stars", "shortcut": "1"},
+        {"label": "Rate 2 Stars", "shortcut": "2"},
+        {"label": "Rate 3 Stars", "shortcut": "3"},
+        {"label": "Rate 4 Stars", "shortcut": "4"},
+        {"label": "Rate 5 Stars", "shortcut": "5"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Browse Mode", "shortcut": "Escape"},
+        {"label": "View Mode", "shortcut": "Return"},
+        {"label": "Synchronize Views", "shortcut": "<Ctrl>Y"},
+        {"label": "Go Up (Parent Folder)", "shortcut": "<Alt>Up"},
+        {"label": "Annotate", "shortcut": "<Shift>A"},
+        {"label": "Move File To", "shortcut": "F8"},
+        {"label": "Link File To", "shortcut": "F9"},
+        {"label": "Edit Tags", "shortcut": "<Ctrl>T"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help / Handbook", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

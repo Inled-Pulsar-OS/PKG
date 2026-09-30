@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "app": "settings",
+  "name": "Settings",
+  "identifiers": [
+    "org.gnome.Settings.desktop",
+    "org.gnome.Settings",
+    "gnome-control-center",
+    "Settings"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search", "shortcut": "<Ctrl>F"},
+        {"label": "Cancel Search", "shortcut": "Escape"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Go Back to Previous Panel", "shortcut": "<Alt>Left"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Help", "shortcut": "F1"},
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

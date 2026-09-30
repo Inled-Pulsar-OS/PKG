@@ -1,0 +1,83 @@
+{
+  "format": 1,
+  "app": "pycharm",
+  "name": "PyCharm",
+  "identifiers": [
+    "pycharm-professional.desktop",
+    "pycharm-community.desktop",
+    "jetbrains-pycharm",
+    "jetbrains-pycharm-ce",
+    "pycharm",
+    "PyCharm"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Recent Files", "shortcut": "<Ctrl>E"},
+        {"label": "Open Recent Locations", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "Save All", "shortcut": "<Ctrl>S"},
+        {"label": "Close Active Tab", "shortcut": "<Ctrl>F4"},
+        {"label": "Reopen Closed Tab", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Exit / Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Find Action", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Find in Current File", "shortcut": "<Ctrl>F"},
+        {"label": "Replace in Current File", "shortcut": "<Ctrl>R"},
+        {"label": "Find in Files (Global Search)", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Replace in Files (Global Replace)", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Open Settings / Preferences", "shortcut": "<Ctrl><Alt>S"},
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Python Console", "shortcut": "<Alt>4"},
+        {"label": "Hide All Tool Windows / Maximize Editor", "shortcut": "<Ctrl><Shift>F12"},
+        {"label": "Toggle Full Screen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Navigate",
+      "items": [
+        {"label": "Search Everywhere"},
+        {"label": "Go to File", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Go to Class / Symbol", "shortcut": "<Ctrl>N"},
+        {"label": "Go to Line", "shortcut": "<Ctrl>G"},
+        {"label": "Next Tab", "shortcut": "<Alt>Right"},
+        {"label": "Previous Tab", "shortcut": "<Alt>Left"}
+      ]
+    },
+    {
+      "label": "Code",
+      "items": [
+        {"label": "Reformat Code", "shortcut": "<Ctrl><Alt>L"},
+        {"label": "Optimize Imports", "shortcut": "<Ctrl><Alt>O"},
+        {"label": "Toggle Line Comment", "shortcut": "<Ctrl>/"},
+        {"label": "Toggle Block Comment", "shortcut": "<Ctrl><Shift>/"}
+      ]
+    },
+    {
+      "label": "Run",
+      "items": [
+        {"label": "Run Script", "shortcut": "<Shift>F10"},
+        {"label": "Debug Script", "shortcut": "<Shift>F9"},
+        {"label": "Step Over", "shortcut": "F8"},
+        {"label": "Step Into", "shortcut": "F7"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Toggle Project Tool Window", "shortcut": "<Alt>1"},
+        {"label": "Toggle Terminal Tool Window", "shortcut": "<Alt>F12"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "format": 1,
+  "app": "easyeffects",
+  "name": "Easy Effects",
+  "identifiers": [
+    "com.github.wwmm.easyeffects.desktop",
+    "easyeffects",
+    "easy effects",
+    "Easy Effects"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Terminate Service / Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Global Bypass", "shortcut": "<Ctrl>B"},
+        {"label": "Toggle Process All Inputs", "shortcut": "<Ctrl><Shift>I"},
+        {"label": "Toggle Process All Outputs", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Global Shortcut - Toggle Global Bypass", "shortcut": "<Ctrl><Super>E"},
+        {"label": "Global Shortcut - Toggle Microphone Monitoring", "shortcut": "<Ctrl><Super>I"},
+        {"label": "Global Shortcut - Toggle Audio Sharing", "shortcut": "<Ctrl><Super>O"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Value Step Up (on numeric controls)", "shortcut": "Page_Up"},
+        {"label": "Value Step Down (on numeric controls)", "shortcut": "Page_Down"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "app": "virtualbox",
+  "name": "VirtualBox",
+  "identifiers": [
+    "virtualbox.desktop",
+    "org.virtualbox.VirtualBox.desktop",
+    "virtualbox",
+    "VirtualBox"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Close VM (Power Off / Save State)", "shortcut": "Q"},
+        {"label": "New Virtual Machine (Manager)", "shortcut": "<Ctrl>N"},
+        {"label": "Import Appliance (Manager)", "shortcut": "<Ctrl>I"},
+        {"label": "Export Appliance (Manager)", "shortcut": "<Ctrl>E"},
+        {"label": "Exit VirtualBox Manager", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "VirtualBox Preferences (Manager)", "shortcut": "<Ctrl>G"},
+        {"label": "VM Settings (Manager)", "shortcut": "<Ctrl>S"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Full-Screen Mode", "shortcut": "F"},
+        {"label": "Toggle Seamless Mode", "shortcut": "L"},
+        {"label": "Toggle Scaled Mode", "shortcut": "C"},
+        {"label": "Toggle Mouse Integration", "shortcut": "M"},
+        {"label": "Show VM Logs (Manager)", "shortcut": "<Ctrl>L"},
+        {"label": "Refresh (Manager)", "shortcut": "F5"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Adjust Window Size", "shortcut": "A"},
+        {"label": "Auto-resize Guest Display", "shortcut": "G"},
+        {"label": "Take Screenshot", "shortcut": "E"},
+        {"label": "Take Snapshot", "shortcut": "T"},
+        {"label": "Pause VM", "shortcut": "P"},
+        {"label": "Reset VM", "shortcut": "R"},
+        {"label": "ACPI Shutdown", "shortcut": "H"},
+        {"label": "Send Ctrl+Alt+Del", "shortcut": "Delete"},
+        {"label": "Send Ctrl+Alt+Backspace", "shortcut": "BackSpace"},
+        {"label": "Pop Up Host Menu", "shortcut": "Home"},
+        {"label": "Session Information", "shortcut": "N"},
+        {"label": "Add Virtual Machine (Manager)", "shortcut": "<Ctrl>A"},
+        {"label": "Virtual Media Manager", "shortcut": "<Ctrl>K"},
+        {"label": "Host Network Manager", "shortcut": "<Ctrl>H"},
+        {"label": "Extension Pack Manager", "shortcut": "<Ctrl>T"}
+      ]
+    }
+  ]
+}

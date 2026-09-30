@@ -1,0 +1,71 @@
+{
+  "format": 1,
+  "app": "keepassxc",
+  "name": "KeePassXC",
+  "identifiers": [
+    "org.keepassxc.KeePassXC.desktop",
+    "keepassxc",
+    "KeePassXC"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Database", "shortcut": "<Ctrl>O"},
+        {"label": "Save Database", "shortcut": "<Ctrl>S"},
+        {"label": "Save Database As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "New Database", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Close Database", "shortcut": "<Ctrl>W"},
+        {"label": "New Entry", "shortcut": "<Ctrl>N"},
+        {"label": "Open URL", "shortcut": "<Ctrl><Shift>U"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Delete Entry", "shortcut": "Delete"},
+        {"label": "Copy Username", "shortcut": "<Ctrl>B"},
+        {"label": "Copy Password", "shortcut": "<Ctrl>C"},
+        {"label": "Copy URL", "shortcut": "<Ctrl>U"},
+        {"label": "Copy Title", "shortcut": "<Ctrl>I"},
+        {"label": "Copy TOTP", "shortcut": "<Ctrl>T"},
+        {"label": "Copy Password and TOTP", "shortcut": "<Ctrl>Y"},
+        {"label": "Application Settings", "shortcut": "<Ctrl>,"},
+        {"label": "Database Settings", "shortcut": "<Ctrl><Shift>,"},
+        {"label": "Remove Key from SSH Agent", "shortcut": "<Ctrl><Shift>H"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Show TOTP", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Always on Top", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Hide Usernames", "shortcut": "<Ctrl><Shift>B"},
+        {"label": "Hide Passwords", "shortcut": "<Ctrl><Shift>C"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Edit Entry", "shortcut": "<Ctrl>E"},
+        {"label": "Clone Entry", "shortcut": "<Ctrl>D"},
+        {"label": "Move Entry Up", "shortcut": "<Alt>Up"},
+        {"label": "Move Entry Down", "shortcut": "<Alt>Down"},
+        {"label": "Perform Auto-Type", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Lock Database", "shortcut": "<Ctrl>L"},
+        {"label": "Lock All Databases", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Database Reports", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Download Favicon", "shortcut": "<Ctrl><Shift>D"},
+        {"label": "Add Key to SSH Agent", "shortcut": "<Ctrl>H"},
+        {"label": "Restore Entry", "shortcut": "<Ctrl>R"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>/"}
+      ]
+    }
+  ]
+}

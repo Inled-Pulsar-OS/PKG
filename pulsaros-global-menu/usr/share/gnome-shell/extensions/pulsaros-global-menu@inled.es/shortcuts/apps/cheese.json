@@ -1,0 +1,56 @@
+{
+  "format": 1,
+  "app": "cheese",
+  "name": "Cheese",
+  "identifiers": [
+    "org.gnome.Cheese.desktop",
+    "cheese",
+    "Cheese"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Selected Item", "shortcut": "<Ctrl>O"},
+        {"label": "Save Photo/Video As", "shortcut": "<Ctrl>S"},
+        {"label": "Quit Cheese", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Move to Trash", "shortcut": "Delete"},
+        {"label": "Delete Permanently", "shortcut": "<Shift>Delete"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Leave Fullscreen", "shortcut": "Escape"},
+        {"label": "Toggle Wide Mode", "shortcut": "<Alt>W"},
+        {"label": "Toggle Effects Mode", "shortcut": "<Alt>E"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Next Effects Page", "shortcut": "Page_Down"},
+        {"label": "Previous Effects Page", "shortcut": "Page_Up"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Take Photo / Start Recording", "shortcut": "space"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>?"},
+        {"label": "Help Contents", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

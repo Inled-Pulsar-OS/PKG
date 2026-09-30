@@ -1,0 +1,85 @@
+{
+  "format": 1,
+  "app": "pcmanfm",
+  "name": "PCManFM",
+  "identifiers": [
+    "pcmanfm.desktop",
+    "pcmanfm-qt.desktop",
+    "pcmanfm",
+    "PCManFM"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open New Window", "shortcut": "<Ctrl>N"},
+        {"label": "Open New Tab", "shortcut": "<Ctrl>T"},
+        {"label": "Create New Folder", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Create Empty File", "shortcut": "<Ctrl><Alt>N"},
+        {"label": "Close Tab", "shortcut": "<Ctrl>W"},
+        {"label": "Close Window", "shortcut": "<Ctrl>Q"},
+        {"label": "File Properties", "shortcut": "<Alt>Return"},
+        {"label": "Open Current Folder in Terminal", "shortcut": "F4"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Invert Selection", "shortcut": "<Ctrl>I"},
+        {"label": "Duplicate", "shortcut": "<Ctrl>U"},
+        {"label": "Rename", "shortcut": "F2"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Move to Trash", "shortcut": "Delete"},
+        {"label": "Delete Permanently", "shortcut": "<Shift>Delete"},
+        {"label": "Find Files (Search)", "shortcut": "<Ctrl><Shift>F"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Reload Folder", "shortcut": "<Ctrl>R"},
+        {"label": "Dual Pane Mode", "shortcut": "F3"},
+        {"label": "Show Side Pane", "shortcut": "F9"},
+        {"label": "Show Status Bar", "shortcut": "<Ctrl>B"},
+        {"label": "Show Hidden", "shortcut": "<Ctrl>H"},
+        {"label": "Fullscreen Mode", "shortcut": "F11"},
+        {"label": "Icon View", "shortcut": "<Ctrl>1"},
+        {"label": "Compact View", "shortcut": "<Ctrl>2"},
+        {"label": "Thumbnail View", "shortcut": "<Ctrl>3"},
+        {"label": "Detailed List View", "shortcut": "<Ctrl>4"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Default Zoom Size", "shortcut": "<Ctrl>0"},
+        {"label": "Filter", "shortcut": "<Ctrl>E"},
+        {"label": "Sort by Name", "shortcut": "<Ctrl><Alt>1"},
+        {"label": "Sort by Modification Time", "shortcut": "<Ctrl><Alt>2"},
+        {"label": "Sort by Size", "shortcut": "<Ctrl><Alt>3"},
+        {"label": "Sort by File Type", "shortcut": "<Ctrl><Alt>4"},
+        {"label": "Sort by Extension", "shortcut": "<Ctrl><Alt>5"},
+        {"label": "Switch Focus Side Pane / Folder View", "shortcut": "F6"},
+        {"label": "Focus Divider", "shortcut": "F8"},
+        {"label": "Add to Bookmarks", "shortcut": "<Ctrl>D"},
+        {"label": "Activate Main Menu", "shortcut": "F10"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Previous Folder (Back)", "shortcut": "<Alt>Left"},
+        {"label": "Next Folder (Forward)", "shortcut": "<Alt>Right"},
+        {"label": "Parent Folder (Up)", "shortcut": "<Alt>Up"},
+        {"label": "Home Folder", "shortcut": "<Alt>Home"},
+        {"label": "Go to Location", "shortcut": "<Ctrl>L"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "About / Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

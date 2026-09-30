@@ -1,0 +1,59 @@
+{
+  "format": 1,
+  "app": "file-roller",
+  "name": "Archive Manager",
+  "identifiers": [
+    "org.gnome.FileRoller.desktop",
+    "file-roller",
+    "archive manager",
+    "Archive Manager"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Create New Archive", "shortcut": "<Ctrl>N"},
+        {"label": "Open Archive", "shortcut": "<Ctrl>O"},
+        {"label": "View Archive Properties", "shortcut": "<Alt>Return"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Rename File or Folder", "shortcut": "F2"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Deselect All", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Find", "shortcut": "<Ctrl>F"},
+        {"label": "Delete from Archive", "shortcut": "Delete"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Refresh / Reload", "shortcut": "<Ctrl>R"}
+      ]
+    },
+    {
+      "label": "Archive",
+      "items": [
+        {"label": "Extract Archive", "shortcut": "<Ctrl>E"},
+        {"label": "Side Pane (Folder Tree)", "shortcut": "F9"},
+        {"label": "View as List", "shortcut": "<Ctrl>1"},
+        {"label": "View as Folders", "shortcut": "<Ctrl>2"},
+        {"label": "Stop Operation", "shortcut": "Escape"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "View Help", "shortcut": "F1"},
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>?"}
+      ]
+    }
+  ]
+}

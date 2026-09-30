@@ -1,0 +1,66 @@
+{
+  "format": 1,
+  "app": "digikam",
+  "name": "digiKam",
+  "identifiers": [
+    "org.kde.digikam.desktop",
+    "digikam",
+    "digiKam"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open File", "shortcut": "<Ctrl>O"},
+        {"label": "Save File", "shortcut": "<Ctrl>S"},
+        {"label": "Save File As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Print Image", "shortcut": "<Ctrl>P"},
+        {"label": "Quit digiKam", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Deselect All", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Invert Selection", "shortcut": "<Ctrl>I"},
+        {"label": "Rename Item", "shortcut": "F2"},
+        {"label": "Rename Album", "shortcut": "F5"},
+        {"label": "Move to Trash", "shortcut": "Delete"},
+        {"label": "Delete Permanently", "shortcut": "<Shift>Delete"},
+        {"label": "Search / Find", "shortcut": "<Ctrl>F"},
+        {"label": "Configure Shortcuts", "shortcut": "<Ctrl><Alt>,"},
+        {"label": "Configure digiKam (Preferences)", "shortcut": "<Ctrl><Shift>,"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Full Screen Mode", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Show/Hide Menubar", "shortcut": "<Ctrl>M"},
+        {"label": "Show/Hide Thumbbar", "shortcut": "<Ctrl>T"},
+        {"label": "Impromptu Slideshow (Play All)", "shortcut": "F9"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Zoom to 100%", "shortcut": "<Ctrl>."},
+        {"label": "Fit to Window", "shortcut": "<Ctrl>*"},
+        {"label": "Next Item", "shortcut": "Right"},
+        {"label": "Previous Item", "shortcut": "Left"},
+        {"label": "First Item", "shortcut": "Home"},
+        {"label": "Last Item", "shortcut": "End"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help Handbook", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

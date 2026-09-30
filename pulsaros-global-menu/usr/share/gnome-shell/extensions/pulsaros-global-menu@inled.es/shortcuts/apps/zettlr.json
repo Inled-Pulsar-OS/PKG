@@ -1,0 +1,88 @@
+{
+  "format": 1,
+  "app": "zettlr",
+  "name": "Zettlr",
+  "identifiers": [
+    "zettlr.desktop",
+    "com.zettlr.Zettlr.desktop",
+    "zettlr",
+    "Zettlr"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New File", "shortcut": "<Ctrl>N"},
+        {"label": "Open File", "shortcut": "<Ctrl>O"},
+        {"label": "Open Workspace", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Save", "shortcut": "<Ctrl>S"},
+        {"label": "Export", "shortcut": "<Ctrl>E"},
+        {"label": "Print", "shortcut": "<Ctrl>P"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"},
+        {"label": "Generate New ID", "shortcut": "<Ctrl>L"},
+        {"label": "Close Window", "shortcut": "<Ctrl><Shift>W"},
+        {"label": "Close Tab", "shortcut": "<Ctrl>W"},
+        {"label": "New Window", "shortcut": "<Ctrl><Shift>N"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Preferences", "shortcut": "<Ctrl>,"},
+        {"label": "Assets Manager", "shortcut": "<Ctrl><Alt>,"},
+        {"label": "Rename File", "shortcut": "<Ctrl>R"},
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Copy as HTML", "shortcut": "<Ctrl><Alt>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Paste Plain Text", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Find in Current File", "shortcut": "<Ctrl>F"},
+        {"label": "Search All Files", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Filter Files", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Copy ID", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Comment", "shortcut": "<Ctrl><Shift>C"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Bold", "shortcut": "<Ctrl>B"},
+        {"label": "Italic", "shortcut": "<Ctrl>I"},
+        {"label": "Task List", "shortcut": "<Ctrl>T"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Dark Mode", "shortcut": "<Ctrl><Alt>L"},
+        {"label": "Distraction-Free Mode", "shortcut": "<Ctrl>J"},
+        {"label": "Typewriter Mode", "shortcut": "<Ctrl><Alt>T"},
+        {"label": "Toggle File Manager", "shortcut": "<Ctrl>!"},
+        {"label": "Toggle Sidebar", "shortcut": "<Ctrl><Shift>0"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Minimize", "shortcut": "<Ctrl>M"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Previous File", "shortcut": "<Ctrl>["},
+        {"label": "Next File", "shortcut": "<Ctrl>]"},
+        {"label": "Previous Tab", "shortcut": "<Ctrl><Shift>Tab"},
+        {"label": "Next Tab", "shortcut": "<Ctrl>Tab"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open User Manual", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

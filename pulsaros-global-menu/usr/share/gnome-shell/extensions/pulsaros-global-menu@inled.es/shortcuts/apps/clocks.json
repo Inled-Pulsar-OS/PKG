@@ -1,0 +1,50 @@
+{
+  "format": 1,
+  "app": "clocks",
+  "name": "Clocks",
+  "identifiers": [
+    "org.gnome.clocks.desktop",
+    "org.gnome.clocks",
+    "gnome-clocks",
+    "Clocks"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Add a World Clock", "shortcut": "<Ctrl>N"},
+        {"label": "Add an Alarm", "shortcut": "<Ctrl>N"},
+        {"label": "New Timer", "shortcut": "<Ctrl>N"},
+        {"separator": true},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Go to the World Section", "shortcut": "<Alt>1"},
+        {"label": "Go to the Alarms Section", "shortcut": "<Alt>2"},
+        {"label": "Go to the Stopwatch Section", "shortcut": "<Alt>3"},
+        {"label": "Go to the Timer Section", "shortcut": "<Alt>4"},
+        {"separator": true},
+        {"label": "Go to the Next Section", "shortcut": "<Ctrl><Alt>Page_Down"},
+        {"label": "Go to the Previous Section", "shortcut": "<Ctrl><Alt>Page_Up"}
+      ]
+    },
+    {
+      "label": "Stopwatch",
+      "items": [
+        {"label": "Pause All", "shortcut": "Escape"},
+        {"label": "Reset", "shortcut": "Escape"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Help", "shortcut": "F1"},
+        {"label": "Open Menu", "shortcut": "F10"},
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

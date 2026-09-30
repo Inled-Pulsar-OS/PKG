@@ -1,0 +1,95 @@
+{
+  "format": 1,
+  "app": "obsidian",
+  "name": "Obsidian",
+  "identifiers": [
+    "md.obsidian.Obsidian.desktop",
+    "md.obsidian.Obsidian",
+    "md.Obsidian",
+    "obsidian",
+    "Obsidian"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Note", "shortcut": "<Ctrl>N"},
+        {"label": "New Note to the Right", "shortcut": "<Ctrl><Shift>N"},
+        {"separator": true},
+        {"label": "Open Quick Switcher", "shortcut": "<Ctrl>O"},
+        {"label": "Open Command Palette", "shortcut": "<Ctrl>P"},
+        {"separator": true},
+        {"label": "Rename File", "shortcut": "F2"},
+        {"label": "Save Current File", "shortcut": "<Ctrl>S"},
+        {"separator": true},
+        {"label": "New Tab", "shortcut": "<Ctrl>T"},
+        {"label": "Reopen Closed Tab", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Close Current Tab", "shortcut": "<Ctrl>W"},
+        {"label": "Close Window", "shortcut": "<Ctrl><Shift>W"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Toggle Bold", "shortcut": "<Ctrl>B"},
+        {"label": "Toggle Italics", "shortcut": "<Ctrl>I"},
+        {"label": "Insert Markdown Link", "shortcut": "<Ctrl>K"},
+        {"label": "Toggle Comment", "shortcut": "<Ctrl>slash"},
+        {"label": "Toggle Checklist Status", "shortcut": "<Ctrl>L"},
+        {"label": "Add Metadata Property", "shortcut": "<Ctrl>;"},
+        {"separator": true},
+        {"label": "Delete Paragraph", "shortcut": "<Ctrl>D"},
+        {"separator": true},
+        {"label": "Search Current File", "shortcut": "<Ctrl>F"},
+        {"label": "Search and Replace", "shortcut": "<Ctrl>H"},
+        {"label": "Search in All Files", "shortcut": "<Ctrl><Shift>F"},
+        {"separator": true},
+        {"label": "Open Settings", "shortcut": "<Ctrl>comma"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Reading View", "shortcut": "<Ctrl>E"},
+        {"label": "Open Graph View", "shortcut": "<Ctrl>G"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Navigate Back", "shortcut": "<Ctrl><Alt>Left"},
+        {"label": "Navigate Forward", "shortcut": "<Ctrl><Alt>Right"},
+        {"separator": true},
+        {"label": "Follow Link Under Cursor", "shortcut": "<Alt>Return"},
+        {"label": "Open Link in New Tab", "shortcut": "<Ctrl>Return"},
+        {"label": "Open Link in New Split", "shortcut": "<Ctrl><Alt>Return"},
+        {"label": "Open Link in New Window", "shortcut": "<Ctrl><Alt><Shift>Return"}
+      ]
+    },
+    {
+      "label": "Tabs",
+      "items": [
+        {"label": "Next Tab", "shortcut": "<Ctrl>Tab"},
+        {"label": "Previous Tab", "shortcut": "<Ctrl><Shift>Tab"},
+        {"label": "Next Tab (Alternative)", "shortcut": "<Ctrl>Page_Down"},
+        {"label": "Previous Tab (Alternative)", "shortcut": "<Ctrl>Page_Up"},
+        {"separator": true},
+        {"label": "Tab 1", "shortcut": "<Ctrl>1"},
+        {"label": "Tab 2", "shortcut": "<Ctrl>2"},
+        {"label": "Tab 3", "shortcut": "<Ctrl>3"},
+        {"label": "Tab 4", "shortcut": "<Ctrl>4"},
+        {"label": "Tab 5", "shortcut": "<Ctrl>5"},
+        {"label": "Tab 6", "shortcut": "<Ctrl>6"},
+        {"label": "Tab 7", "shortcut": "<Ctrl>7"},
+        {"label": "Tab 8", "shortcut": "<Ctrl>8"},
+        {"label": "Last Tab", "shortcut": "<Ctrl>9"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

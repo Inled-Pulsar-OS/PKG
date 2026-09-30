@@ -1,0 +1,90 @@
+{
+  "format": 1,
+  "app": "calculator",
+  "name": "Calculator",
+  "identifiers": [
+    "org.gnome.Calculator.desktop",
+    "org.gnome.Calculator",
+    "gnome-calculator",
+    "Calculator"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open a New Window", "shortcut": "<Ctrl>N"},
+        {"separator": true},
+        {"label": "Close Current Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit the Application", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"separator": true},
+        {"label": "Clear Display", "shortcut": "Escape"},
+        {"label": "Clear History", "shortcut": "<Ctrl>Escape"},
+        {"separator": true},
+        {"label": "Show Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "Mode",
+      "items": [
+        {"label": "Switch to Basic Mode", "shortcut": "<Ctrl><Alt>B"},
+        {"label": "Switch to Advanced Mode", "shortcut": "<Ctrl><Alt>A"},
+        {"label": "Switch to Financial Mode", "shortcut": "<Ctrl><Alt>F"},
+        {"label": "Switch to Programming Mode", "shortcut": "<Ctrl><Alt>P"},
+        {"label": "Switch to Keyboard Mode", "shortcut": "<Ctrl><Alt>K"},
+        {"label": "Switch to Keyboard Mode (Alt.)", "shortcut": "<Ctrl><Alt>T"},
+        {"label": "Switch to Conversion Mode", "shortcut": "<Ctrl><Alt>C"}
+      ]
+    },
+    {
+      "label": "Number Base",
+      "items": [
+        {"label": "Switch to Binary", "shortcut": "<Ctrl>B"},
+        {"label": "Switch to Octal", "shortcut": "<Ctrl>O"},
+        {"label": "Switch to Decimal", "shortcut": "<Ctrl>D"},
+        {"label": "Switch to Hexadecimal", "shortcut": "<Ctrl>H"}
+      ]
+    },
+    {
+      "label": "Functions",
+      "items": [
+        {"label": "Multiply", "shortcut": "*"},
+        {"label": "Divide", "shortcut": "/"},
+        {"label": "Square", "shortcut": "<Ctrl>2"},
+        {"label": "Square Root", "shortcut": "<Ctrl>R"},
+        {"label": "Inverse", "shortcut": "<Ctrl>I"},
+        {"label": "Pi", "shortcut": "<Ctrl>P"},
+        {"label": "Tau", "shortcut": "<Ctrl>T"},
+        {"label": "Degree", "shortcut": "<Ctrl>'"},
+        {"separator": true},
+        {"label": "Enter Numbers in Scientific Format", "shortcut": "<Ctrl>E"},
+        {"label": "Enter Superscript Minus Sign", "shortcut": "<Ctrl>-"},
+        {"separator": true},
+        {"label": "Factorize", "shortcut": "<Ctrl>F"}
+      ]
+    },
+    {
+      "label": "Equation",
+      "items": [
+        {"label": "Previous Equation", "shortcut": "<Alt>Left"},
+        {"label": "Next Equation", "shortcut": "<Alt>Right"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Help", "shortcut": "F1"},
+        {"label": "Open Menu", "shortcut": "F10"},
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

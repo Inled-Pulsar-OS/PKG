@@ -6,21 +6,23 @@
 # (MacTahoe-Light / MacTahoe-Dark) en tiempo real al cambiar Modo Claro / Oscuro.
 # ==============================================================================
 
-# Configurar permisos de sistema de archivos para Flatpak
+# Configurar permisos de sistema de archivos limpios para Flatpak sin ensuciar env vars
 if command -v flatpak >/dev/null 2>&1; then
     flatpak override --user --filesystem=xdg-config/gtk-4.0:ro --filesystem=xdg-config/gtk-3.0:ro --filesystem=/usr/share/themes:ro --filesystem=/usr/share/icons:ro --filesystem=~/.themes:ro --filesystem=~/.icons:ro 2>/dev/null || true
+    flatpak override --user --unset-env=GTK_THEME --unset-env=ICON_THEME 2>/dev/null || true
 fi
 
 sync_theme() {
     local scheme
     scheme=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")
+    mkdir -p "$HOME/.config/gtk-4.0" "$HOME/.config/gtk-3.0"
+
     if [ "$scheme" = "prefer-dark" ]; then
         gsettings set org.gnome.desktop.interface gtk-theme "MacTahoe-Dark" 2>/dev/null || true
         gsettings set org.gnome.desktop.interface icon-theme "MacTahoe-blue-dark" 2>/dev/null || true
         gsettings set org.gnome.shell.extensions.user-theme name "MacTahoe-Dark" 2>/dev/null || true
         
-        # Libadwaita / GTK4 user overrides
-        mkdir -p "$HOME/.config/gtk-4.0" "$HOME/.config/gtk-3.0"
+        # Libadwaita / GTK4 user overrides (Dark)
         if [ -d "/usr/share/themes/MacTahoe-Dark/gtk-4.0" ]; then
             cp -rf /usr/share/themes/MacTahoe-Dark/gtk-4.0/* "$HOME/.config/gtk-4.0/" 2>/dev/null || true
         fi
@@ -28,26 +30,51 @@ sync_theme() {
             cp -rf /usr/share/themes/MacTahoe-Dark/gtk-3.0/gtk-dark.css "$HOME/.config/gtk-3.0/gtk.css" 2>/dev/null || true
         fi
 
-        if command -v flatpak >/dev/null 2>&1; then
-            flatpak override --user --env=GTK_THEME=MacTahoe-Dark --env=ICON_THEME=MacTahoe-blue-dark 2>/dev/null || true
-        fi
+        cat <<'EOF' > "$HOME/.config/gtk-3.0/settings.ini"
+[Settings]
+gtk-theme-name=MacTahoe-Dark
+gtk-icon-theme-name=MacTahoe-blue-dark
+gtk-application-prefer-dark-theme=1
+EOF
+
+        cat <<'EOF' > "$HOME/.config/gtk-4.0/settings.ini"
+[Settings]
+gtk-theme-name=MacTahoe-Dark
+gtk-icon-theme-name=MacTahoe-blue-dark
+gtk-application-prefer-dark-theme=1
+EOF
+
     else
         gsettings set org.gnome.desktop.interface gtk-theme "MacTahoe-Light" 2>/dev/null || true
         gsettings set org.gnome.desktop.interface icon-theme "MacTahoe-blue-light" 2>/dev/null || true
         gsettings set org.gnome.shell.extensions.user-theme name "MacTahoe-Light" 2>/dev/null || true
         
-        # Libadwaita / GTK4 user overrides
-        mkdir -p "$HOME/.config/gtk-4.0" "$HOME/.config/gtk-3.0"
+        # Libadwaita / GTK4 user overrides (Light)
         if [ -d "/usr/share/themes/MacTahoe-Light/gtk-4.0" ]; then
             cp -rf /usr/share/themes/MacTahoe-Light/gtk-4.0/* "$HOME/.config/gtk-4.0/" 2>/dev/null || true
+            # Asegurar que gtk-dark.css no fuerce modo oscuro en apps Libadwaita durante modo claro
+            if [ -f "$HOME/.config/gtk-4.0/gtk.css" ]; then
+                cp -f "$HOME/.config/gtk-4.0/gtk.css" "$HOME/.config/gtk-4.0/gtk-dark.css" 2>/dev/null || true
+            fi
         fi
         if [ -d "/usr/share/themes/MacTahoe-Light/gtk-3.0" ]; then
             cp -rf /usr/share/themes/MacTahoe-Light/gtk-3.0/gtk.css "$HOME/.config/gtk-3.0/gtk.css" 2>/dev/null || true
         fi
 
-        if command -v flatpak >/dev/null 2>&1; then
-            flatpak override --user --env=GTK_THEME=MacTahoe-Light --env=ICON_THEME=MacTahoe-blue-light 2>/dev/null || true
-        fi
+        cat <<'EOF' > "$HOME/.config/gtk-3.0/settings.ini"
+[Settings]
+gtk-theme-name=MacTahoe-Light
+gtk-icon-theme-name=MacTahoe-blue-light
+gtk-application-prefer-dark-theme=0
+EOF
+
+        cat <<'EOF' > "$HOME/.config/gtk-4.0/settings.ini"
+[Settings]
+gtk-theme-name=MacTahoe-Light
+gtk-icon-theme-name=MacTahoe-blue-light
+gtk-application-prefer-dark-theme=0
+EOF
+
     fi
 }
 

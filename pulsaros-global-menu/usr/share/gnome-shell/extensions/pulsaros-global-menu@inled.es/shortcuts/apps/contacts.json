@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "app": "contacts",
+  "name": "Contacts",
+  "identifiers": [
+    "org.gnome.Contacts.desktop",
+    "org.gnome.Contacts",
+    "gnome-contacts",
+    "Contacts"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Create a New Contact", "shortcut": "<Ctrl>N"},
+        {"separator": true},
+        {"label": "Save Changes to Contact", "shortcut": "<Ctrl>Return"},
+        {"label": "Cancel Changes for Contact", "shortcut": "Escape"},
+        {"separator": true},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search Contacts", "shortcut": "<Ctrl>F"},
+        {"label": "Show Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help", "shortcut": "F1"},
+        {"label": "Open Menu", "shortcut": "F10"},
+        {"label": "Shortcut List", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

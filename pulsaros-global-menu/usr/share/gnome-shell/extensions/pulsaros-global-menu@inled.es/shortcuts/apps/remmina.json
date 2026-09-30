@@ -1,0 +1,57 @@
+{
+  "format": 1,
+  "app": "remmina",
+  "name": "Remmina",
+  "identifiers": [
+    "org.remmina.Remmina.desktop",
+    "remmina",
+    "Remmina"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Connection Profile", "shortcut": "<Ctrl>N"},
+        {"label": "Open Clipboard", "shortcut": "B"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Application Preferences", "shortcut": "<Ctrl>P"},
+        {"label": "Search / Filter", "shortcut": "<Ctrl>F"},
+        {"label": "Delete Selected Profile", "shortcut": "Delete"},
+        {"label": "Terminal Copy", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Terminal Paste", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Terminal Select All", "shortcut": "A"},
+        {"label": "Terminal Search Text", "shortcut": "G"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Host Key (Keyboard/Mouse Grab Toggle)"},
+        {"label": "Toggle Fullscreen", "shortcut": "F"},
+        {"label": "Toggle Scaled Mode", "shortcut": "S"},
+        {"label": "Switch to Next Tab", "shortcut": "Right"},
+        {"label": "Switch to Previous Tab", "shortcut": "Left"},
+        {"label": "Toggle View-only Mode", "shortcut": "M"},
+        {"label": "Multi-monitor Toggle"},
+        {"label": "Toggle Toolbar", "shortcut": "T"},
+        {"label": "Minimize Window", "shortcut": "F9"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Connect to Selected Profile", "shortcut": "Return"},
+        {"label": "Auto-fit Window (Scale 1:1)", "shortcut": "1"},
+        {"label": "Take Screenshot", "shortcut": "F12"},
+        {"label": "Disconnect", "shortcut": "F4"},
+        {"label": "Terminal Increase Font Size"},
+        {"label": "Terminal Decrease Font Size"}
+      ]
+    }
+  ]
+}

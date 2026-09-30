@@ -1,0 +1,98 @@
+{
+  "format": 1,
+  "app": "celluloid",
+  "name": "Celluloid",
+  "identifiers": [
+    "io.github.celluloid_player.Celluloid.desktop",
+    "celluloid",
+    "Celluloid"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open File", "shortcut": "<Ctrl>O"},
+        {"label": "Open Location (URL)", "shortcut": "<Ctrl>L"},
+        {"label": "Save Playlist", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Exit Search", "shortcut": "Escape"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"},
+        {"label": "Save Playback Position and Quit", "shortcut": "<Shift>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Show Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "Playback",
+      "items": [
+        {"label": "Jump to Next Match", "shortcut": "<Ctrl>G"},
+        {"label": "Jump to Previous Match", "shortcut": "<Ctrl><Shift>G"},
+        {"label": "Play / Pause", "shortcut": "space"},
+        {"label": "Seek Backward 5s", "shortcut": "Left"},
+        {"label": "Seek Forward 5s", "shortcut": "Right"},
+        {"label": "Seek Backward 1 min", "shortcut": "Down"},
+        {"label": "Seek Forward 1 min", "shortcut": "Up"},
+        {"label": "Exact Seek Backward 1s", "shortcut": "<Shift>Left"},
+        {"label": "Exact Seek Forward 1s", "shortcut": "<Shift>Right"},
+        {"label": "Step Backward Single Frame", "shortcut": ","},
+        {"label": "Step Forward Single Frame", "shortcut": "."},
+        {"label": "Next Chapter", "shortcut": "Page_Up"},
+        {"label": "Previous Chapter", "shortcut": "Page_Down"},
+        {"label": "Next in Playlist", "shortcut": ">"},
+        {"label": "Previous in Playlist", "shortcut": "<"}
+      ]
+    },
+    {
+      "label": "Audio",
+      "items": [
+        {"label": "Volume Up", "shortcut": "0"},
+        {"label": "Volume Down", "shortcut": "9"},
+        {"label": "Mute / Unmute", "shortcut": "M"},
+        {"label": "Cycle Audio Tracks", "shortcut": "#"},
+        {"label": "Increase Audio Delay", "shortcut": "<Ctrl>+"},
+        {"label": "Decrease Audio Delay", "shortcut": "<Ctrl>-"}
+      ]
+    },
+    {
+      "label": "Video",
+      "items": [
+        {"label": "Take Screenshot", "shortcut": "S"},
+        {"label": "Take Screenshot (Window)", "shortcut": "<Ctrl>S"}
+      ]
+    },
+    {
+      "label": "Subtitles",
+      "items": [
+        {"label": "Toggle Subtitles", "shortcut": "V"},
+        {"label": "Cycle Subtitle Track", "shortcut": "J"},
+        {"label": "Cycle Subtitle Track Backwards", "shortcut": "<Shift>J"},
+        {"label": "Take Screenshot (Without Subtitles)", "shortcut": "<Shift>S"},
+        {"label": "Increase Subtitle Delay", "shortcut": "Z"},
+        {"label": "Decrease Subtitle Delay", "shortcut": "<Shift>Z"},
+        {"label": "Move Subtitles Up", "shortcut": "R"},
+        {"label": "Move Subtitles Down", "shortcut": "<Shift>R"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Add File to Playlist", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Add Location to Playlist", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Toggle Playlist", "shortcut": "F9"},
+        {"label": "Search Playlist", "shortcut": "<Ctrl>F"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Leave Fullscreen", "shortcut": "Escape"},
+        {"label": "Half Size", "shortcut": "<Alt>0"},
+        {"label": "Original Size", "shortcut": "<Alt>1"},
+        {"label": "Double Size", "shortcut": "<Alt>2"},
+        {"label": "Reset Pan / Zoom", "shortcut": "<Alt>BackSpace"},
+        {"label": "Show Main Menu", "shortcut": "F10"},
+        {"label": "Zoom In", "shortcut": "<Alt>+"},
+        {"label": "Zoom Out", "shortcut": "<Alt>-"}
+      ]
+    }
+  ]
+}

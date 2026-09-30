@@ -1,0 +1,50 @@
+{
+  "format": 1,
+  "app": "timeshift",
+  "name": "Timeshift",
+  "identifiers": [
+    "timeshift-gtk.desktop",
+    "timeshift",
+    "Timeshift"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Extra Menu / App Menu", "shortcut": "F10"},
+        {"label": "Open Selected / View Log", "shortcut": "Return"},
+        {"label": "Close Window / Quit", "shortcut": "<Ctrl>Q"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Delete Selected Snapshot", "shortcut": "Delete"},
+        {"label": "Open Settings", "shortcut": "<Alt>S"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Jump to First Snapshot", "shortcut": "Home"},
+        {"label": "Jump to Last Snapshot", "shortcut": "End"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Create Snapshot", "shortcut": "<Alt>C"},
+        {"label": "Restore Selected Snapshot", "shortcut": "<Alt>R"},
+        {"label": "Browse Selected Snapshot", "shortcut": "<Alt>B"},
+        {"label": "Setup Wizard", "shortcut": "<Alt>W"},
+        {"label": "Move Snapshot Selection Down", "shortcut": "Down"},
+        {"label": "Move Snapshot Selection Up", "shortcut": "Up"},
+        {"label": "Switch UI Focus", "shortcut": "Tab"},
+        {"label": "Reverse Focus", "shortcut": "<Shift>Tab"},
+        {"label": "Confirm Dialog / Accept", "shortcut": "Return"},
+        {"label": "Dismiss Dialog / Cancel", "shortcut": "Escape"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "format": 1,
+  "app": "qgis",
+  "name": "QGIS",
+  "identifiers": [
+    "org.qgis.qgis.desktop",
+    "qgis.desktop",
+    "qgis",
+    "QGIS"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Project", "shortcut": "<Ctrl>N"},
+        {"label": "Open Project", "shortcut": "<Ctrl>O"},
+        {"label": "Save Project", "shortcut": "<Ctrl>S"},
+        {"label": "Save Project As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "New Print Layout", "shortcut": "<Ctrl>P"},
+        {"label": "Project Properties", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "Exit QGIS", "shortcut": "<Ctrl>Q"},
+        {"label": "Open Attribute Table", "shortcut": "F6"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"label": "Cut Features", "shortcut": "<Ctrl>X"},
+        {"label": "Copy Features", "shortcut": "<Ctrl>C"},
+        {"label": "Paste Features", "shortcut": "<Ctrl>V"},
+        {"label": "Select All Features", "shortcut": "<Ctrl>A"},
+        {"label": "Invert Feature Selection", "shortcut": "<Ctrl>R"},
+        {"label": "Deselect Features", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Delete Selected Features", "shortcut": "Delete"},
+        {"label": "Undo/Redo Panel Dock", "shortcut": "<Ctrl>5"},
+        {"label": "Locator Search Bar", "shortcut": "<Ctrl>K"},
+        {"label": "Options / Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Layout Manager", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Zoom In Map", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out Map", "shortcut": "<Ctrl>-"},
+        {"label": "Zoom Full (Fit All Layers)", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Zoom to Selection", "shortcut": "<Ctrl><Shift>J"},
+        {"label": "Refresh Map Canvas", "shortcut": "F5"},
+        {"label": "Toggle Full Screen Mode", "shortcut": "F11"},
+        {"label": "Toggle Developer Tools Dock", "shortcut": "F12"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Pan Map", "shortcut": "<Ctrl><Alt>P"},
+        {"label": "Zoom to Layer", "shortcut": "<Ctrl>J"},
+        {"label": "Toggle Layer Styling Dock", "shortcut": "F7"},
+        {"label": "Python Console", "shortcut": "<Ctrl><Alt>P"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Layers Panel Dock", "shortcut": "<Ctrl>1"},
+        {"label": "Browser Panel Dock", "shortcut": "<Ctrl>2"},
+        {"label": "Layer Styling Panel Dock", "shortcut": "<Ctrl>3"},
+        {"label": "Advanced Digitizing Panel Dock", "shortcut": "<Ctrl>4"},
+        {"label": "Statistics Panel Dock", "shortcut": "<Ctrl>6"},
+        {"label": "Spatial Bookmarks Panel Dock", "shortcut": "<Ctrl>7"},
+        {"label": "Overview Panel Dock", "shortcut": "<Ctrl>8"},
+        {"label": "Layer Order Panel Dock", "shortcut": "<Ctrl>9"},
+        {"label": "GPS Information Panel Dock", "shortcut": "<Ctrl>0"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help Contents", "shortcut": "<Ctrl>?"}
+      ]
+    }
+  ]
+}

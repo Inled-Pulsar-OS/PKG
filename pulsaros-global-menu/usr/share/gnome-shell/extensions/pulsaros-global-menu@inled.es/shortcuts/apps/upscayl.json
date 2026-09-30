@@ -1,0 +1,50 @@
+{
+  "format": 1,
+  "app": "upscayl",
+  "name": "Upscayl",
+  "identifiers": [
+    "org.upscayl.Upscayl.desktop",
+    "org.upscayl.Upscayl",
+    "upscayl",
+    "Upscayl"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"separator": true},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"separator": true},
+        {"label": "Select All", "shortcut": "<Ctrl>A"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "<Ctrl>plus"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>minus"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"},
+        {"separator": true},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Reload", "shortcut": "<Ctrl>R"},
+        {"separator": true},
+        {"label": "Toggle Developer Tools", "shortcut": "<Ctrl><Shift>I"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "About Upscayl"}
+      ]
+    }
+  ]
+}

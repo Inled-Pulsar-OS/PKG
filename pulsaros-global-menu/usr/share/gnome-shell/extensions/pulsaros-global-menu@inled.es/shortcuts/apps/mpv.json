@@ -1,0 +1,106 @@
+{
+  "format": 1,
+  "app": "mpv",
+  "name": "MPV",
+  "identifiers": [
+    "mpv.desktop",
+    "io.mpv.Mpv.desktop",
+    "mpv",
+    "MPV"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Quit", "shortcut": "Q"},
+        {"label": "Quit and Remember Playback Position", "shortcut": "<Shift>Q"},
+        {"label": "Open Command Console", "shortcut": "`"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo Previous Seek", "shortcut": "<Shift>BackSpace"}
+      ]
+    },
+    {
+      "label": "Playback",
+      "items": [
+        {"label": "Play / Pause", "shortcut": "space"},
+        {"label": "Seek Backward 5s", "shortcut": "Left"},
+        {"label": "Seek Forward 5s", "shortcut": "Right"},
+        {"label": "Seek Backward 1 min", "shortcut": "Down"},
+        {"label": "Seek Forward 1 min", "shortcut": "Up"},
+        {"label": "Exact Seek Backward 1s", "shortcut": "<Shift>Left"},
+        {"label": "Exact Seek Forward 1s", "shortcut": "<Shift>Right"},
+        {"label": "Seek to Beginning", "shortcut": "Home"},
+        {"label": "Next Chapter", "shortcut": "Page_Up"},
+        {"label": "Previous Chapter", "shortcut": "Page_Down"},
+        {"label": "Next File in Playlist", "shortcut": ">"},
+        {"label": "Previous File in Playlist", "shortcut": "<"},
+        {"label": "Step Forward Single Frame", "shortcut": "."},
+        {"label": "Step Backward Single Frame", "shortcut": ","},
+        {"label": "Increase Speed by 10%", "shortcut": "]"},
+        {"label": "Decrease Speed by 10%", "shortcut": "["},
+        {"label": "Double Playback Speed", "shortcut": "}"},
+        {"label": "Halve Playback Speed", "shortcut": "{"},
+        {"label": "Reset Speed to Normal", "shortcut": "BackSpace"}
+      ]
+    },
+    {
+      "label": "Audio",
+      "items": [
+        {"label": "Volume Up", "shortcut": "0"},
+        {"label": "Volume Down", "shortcut": "9"},
+        {"label": "Toggle Mute", "shortcut": "M"},
+        {"label": "Cycle Audio Tracks", "shortcut": "#"},
+        {"label": "Increase Audio Delay", "shortcut": "<Ctrl>+"},
+        {"label": "Decrease Audio Delay", "shortcut": "<Ctrl>-"}
+      ]
+    },
+    {
+      "label": "Video",
+      "items": [
+        {"label": "Take Screenshot", "shortcut": "S"},
+        {"label": "Take Screenshot (Window with OSD)", "shortcut": "<Ctrl>S"},
+        {"label": "Cycle Video Tracks", "shortcut": "_"},
+        {"label": "Cycle Video Aspect Ratio", "shortcut": "<Shift>A"},
+        {"label": "Pan Video Left", "shortcut": "<Alt>Left"},
+        {"label": "Pan Video Right", "shortcut": "<Alt>Right"},
+        {"label": "Pan Video Up", "shortcut": "<Alt>Up"},
+        {"label": "Pan Video Down", "shortcut": "<Alt>Down"}
+      ]
+    },
+    {
+      "label": "Subtitles",
+      "items": [
+        {"label": "Toggle Subtitles", "shortcut": "V"},
+        {"label": "Cycle Subtitle Track", "shortcut": "J"},
+        {"label": "Cycle Subtitle Track Backwards", "shortcut": "<Shift>J"},
+        {"label": "Take Screenshot (Without Subtitles)", "shortcut": "<Shift>S"},
+        {"label": "Increase Subtitle Delay", "shortcut": "Z"},
+        {"label": "Decrease Subtitle Delay", "shortcut": "X"},
+        {"label": "Move Subtitles Up", "shortcut": "R"},
+        {"label": "Move Subtitles Down", "shortcut": "<Shift>R"},
+        {"label": "Increase Subtitle Font Size", "shortcut": "<Shift>G"},
+        {"label": "Decrease Subtitle Font Size", "shortcut": "<Shift>F"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Fullscreen", "shortcut": "F"},
+        {"label": "Leave Fullscreen", "shortcut": "Escape"},
+        {"label": "Toggle Always on Top", "shortcut": "<Shift>T"},
+        {"label": "Reset Zoom and Pan", "shortcut": "<Alt>BackSpace"},
+        {"label": "Half Window Size", "shortcut": "<Alt>0"},
+        {"label": "Original Window Size", "shortcut": "<Alt>1"},
+        {"label": "Double Window Size", "shortcut": "<Alt>2"},
+        {"label": "Show Progress / OSD", "shortcut": "O"},
+        {"label": "Show Stats", "shortcut": "I"},
+        {"label": "Zoom In", "shortcut": "<Alt>+"},
+        {"label": "Zoom Out", "shortcut": "<Alt>-"}
+      ]
+    }
+  ]
+}

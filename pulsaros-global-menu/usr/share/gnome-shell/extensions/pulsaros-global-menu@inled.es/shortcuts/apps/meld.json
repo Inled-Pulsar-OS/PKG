@@ -1,0 +1,77 @@
+{
+  "format": 1,
+  "app": "meld",
+  "name": "Meld",
+  "identifiers": [
+    "org.gnome.meld.desktop",
+    "meld",
+    "Meld"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Comparison (Tab)", "shortcut": "<Ctrl>N"},
+        {"label": "Save", "shortcut": "<Ctrl>S"},
+        {"label": "Save As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Save All", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Open External", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Close Tab", "shortcut": "<Ctrl>W"},
+        {"label": "Quit Meld", "shortcut": "<Ctrl>Q"},
+        {"label": "Open Gear Menu", "shortcut": "F10"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"label": "Find", "shortcut": "<Ctrl>F"},
+        {"label": "Find and Replace", "shortcut": "<Ctrl>H"},
+        {"label": "Delete Selected", "shortcut": "<Alt>Delete"},
+        {"label": "Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Refresh Comparison", "shortcut": "<Ctrl>R"},
+        {"label": "Toggle Overview Map", "shortcut": "F9"},
+        {"label": "Toggle View Filter", "shortcut": "F8"},
+        {"label": "Fullscreen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Find Next", "shortcut": "<Ctrl>G"},
+        {"label": "Find Previous", "shortcut": "<Ctrl><Shift>G"},
+        {"label": "Go to Line", "shortcut": "<Ctrl>I"},
+        {"label": "Next Change", "shortcut": "<Alt>Down"},
+        {"label": "Previous Change", "shortcut": "<Alt>Up"},
+        {"label": "Next Pane", "shortcut": "<Alt>Page_Down"},
+        {"label": "Previous Pane", "shortcut": "<Alt>Page_Up"},
+        {"label": "Next Conflict", "shortcut": "<Ctrl>K"},
+        {"label": "Previous Conflict", "shortcut": "<Ctrl>J"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Push Change Left", "shortcut": "<Alt>Left"},
+        {"label": "Push Change Right", "shortcut": "<Alt>Right"},
+        {"label": "Pull Change Left", "shortcut": "<Alt><Shift>Right"},
+        {"label": "Pull Change Right", "shortcut": "<Alt><Shift>Left"},
+        {"label": "Swap Panes", "shortcut": "<Alt>\\"},
+        {"label": "Stop Action", "shortcut": "Escape"},
+        {"label": "Version Control Commit", "shortcut": "<Ctrl>M"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

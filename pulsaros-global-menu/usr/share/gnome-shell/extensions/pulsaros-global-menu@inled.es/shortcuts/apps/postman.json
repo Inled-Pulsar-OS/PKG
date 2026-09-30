@@ -1,0 +1,68 @@
+{
+  "format": 1,
+  "app": "postman",
+  "name": "Postman",
+  "identifiers": [
+    "postman.desktop",
+    "com.getpostman.Postman.desktop",
+    "postman",
+    "Postman"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Create New Tab / Request", "shortcut": "<Ctrl>T"},
+        {"label": "Open Create New Modal", "shortcut": "<Ctrl>N"},
+        {"label": "Save Request", "shortcut": "<Ctrl>S"},
+        {"label": "Save Request As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Close Current Tab", "shortcut": "<Ctrl>W"},
+        {"label": "Force Close Tab", "shortcut": "<Ctrl><Alt>W"},
+        {"label": "Reopen Closed Tab", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Open Import Modal", "shortcut": "<Ctrl>O"},
+        {"label": "Quit Postman", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Find in Page", "shortcut": "<Ctrl>F"},
+        {"label": "Open Settings", "shortcut": "<Ctrl>,"},
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Sidebar", "shortcut": "<Ctrl>\\"},
+        {"label": "Toggle Two-Pane View", "shortcut": "<Ctrl><Alt>V"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>="},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Next Tab", "shortcut": "<Ctrl>Tab"},
+        {"label": "Previous Tab", "shortcut": "<Ctrl><Shift>Tab"},
+        {"label": "Quick Search / Jump to", "shortcut": "<Ctrl>K"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Send API Request", "shortcut": "<Ctrl>Return"},
+        {"label": "Open Postman Console", "shortcut": "<Ctrl><Alt>C"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Keyboard Shortcuts Modal", "shortcut": "<Ctrl>/"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "format": 1,
+  "app": "logs",
+  "name": "Logs",
+  "identifiers": [
+    "org.gnome.Logs.desktop",
+    "org.gnome.Logs",
+    "gnome-logs",
+    "Logs"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open a New Window", "shortcut": "<Ctrl>N"},
+        {"label": "Export Logs to a File", "shortcut": "<Ctrl>E"},
+        {"separator": true},
+        {"label": "Close a Window", "shortcut": "<Ctrl>W"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Find", "shortcut": "<Ctrl>F"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Help", "shortcut": "F1"},
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

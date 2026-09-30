@@ -1,0 +1,70 @@
+{
+  "format": 1,
+  "app": "filezilla",
+  "name": "FileZilla",
+  "identifiers": [
+    "filezilla.desktop",
+    "org.filezillaproject.Filezilla.desktop",
+    "filezilla",
+    "FileZilla"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Site Manager", "shortcut": "<Ctrl>S"},
+        {"label": "New Tab", "shortcut": "<Ctrl>T"},
+        {"label": "Close Tab", "shortcut": "<Ctrl>W"},
+        {"label": "Create New Directory", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Exit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Rename File", "shortcut": "F2"},
+        {"label": "Search Remote Files", "shortcut": "F3"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Refresh Views", "shortcut": "F5"},
+        {"label": "Show Files Currently Being Edited", "shortcut": "<Ctrl>E"},
+        {"label": "Switch to Next View", "shortcut": "Tab"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Next Tab", "shortcut": "<Ctrl>Page_Down"},
+        {"label": "Previous Tab", "shortcut": "<Ctrl>Page_Up"},
+        {"label": "Navigate to Parent Folder", "shortcut": "<Alt>Up"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Disconnect from Server", "shortcut": "<Ctrl>D"},
+        {"label": "Reconnect to Server", "shortcut": "<Ctrl>R"},
+        {"label": "Stop Current Operation", "shortcut": "<Ctrl>C"},
+        {"label": "Process Queue", "shortcut": "<Ctrl>P"},
+        {"label": "Transfer Selected Item", "shortcut": "Return"},
+        {"label": "Transfer Item to Other Pane", "shortcut": "<Alt>Down"},
+        {"label": "Add Bookmark", "shortcut": "<Ctrl>B"},
+        {"label": "Manage Bookmarks", "shortcut": "<Ctrl><Shift>B"},
+        {"label": "Directory Listing Filters", "shortcut": "<Ctrl>I"},
+        {"label": "Directory Comparison", "shortcut": "<Ctrl>O"},
+        {"label": "Synchronized Browsing", "shortcut": "<Ctrl>Y"},
+        {"label": "Preserve Timestamps", "shortcut": "<Ctrl>U"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Manual Transfer", "shortcut": "<Ctrl>M"},
+        {"label": "Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

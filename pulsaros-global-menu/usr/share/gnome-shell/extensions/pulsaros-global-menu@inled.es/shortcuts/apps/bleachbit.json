@@ -1,0 +1,66 @@
+{
+  "format": 1,
+  "app": "bleachbit",
+  "name": "BleachBit",
+  "identifiers": [
+    "bleachbit.desktop",
+    "org.bleachbit.BleachBit.desktop",
+    "bleachbit",
+    "BleachBit"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Quit BleachBit", "shortcut": "<Ctrl>Q"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Clean Operations (Delete Files)", "shortcut": "<Ctrl>Return"},
+        {"label": "Shred Settings and Quit", "shortcut": "<Alt>F"},
+        {"label": "Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Preview Clean Operations", "shortcut": "<Ctrl>O"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Toggle Cleaner Checkbox", "shortcut": "space"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Next Cleaner Item", "shortcut": "Down"},
+        {"label": "Previous Cleaner Item", "shortcut": "Up"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Shred Paths from Clipboard", "shortcut": "<Ctrl>V"},
+        {"label": "Shred Files", "shortcut": "<Alt>F"},
+        {"label": "Shred Folders", "shortcut": "<Alt>F"},
+        {"label": "Wipe Empty Space", "shortcut": "<Alt>F"},
+        {"label": "Make Chaff (Decoy Files)", "shortcut": "<Alt>F"},
+        {"label": "Increase Interface Font Size", "shortcut": "<Ctrl>+"},
+        {"label": "Decrease Interface Font Size", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Interface Font Size", "shortcut": "<Ctrl>0"},
+        {"label": "System Information", "shortcut": "<Alt>H"},
+        {"label": "Expand Cleaner Category", "shortcut": "Right"},
+        {"label": "Collapse Cleaner Category", "shortcut": "Left"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Online Help", "shortcut": "F1"},
+        {"label": "About BleachBit", "shortcut": "<Alt>H"}
+      ]
+    }
+  ]
+}

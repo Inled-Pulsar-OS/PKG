@@ -1,0 +1,79 @@
+{
+  "format": 1,
+  "app": "anki",
+  "name": "Anki",
+  "identifiers": [
+    "anki.desktop",
+    "net.ankiweb.Anki.desktop",
+    "anki",
+    "Anki"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Decks View", "shortcut": "D"},
+        {"label": "Add New Cards", "shortcut": "A"},
+        {"label": "Open Card Browser", "shortcut": "B"},
+        {"label": "Import", "shortcut": "<Ctrl>I"},
+        {"label": "Export", "shortcut": "<Ctrl>E"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit Anki", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo Review / Edit", "shortcut": "<Ctrl>Z"},
+        {"label": "Delete Note", "shortcut": "<Ctrl>Delete"},
+        {"label": "Clear Flag", "shortcut": "<Ctrl>0"},
+        {"label": "Clear Formatting (Editor)", "shortcut": "<Ctrl>R"},
+        {"label": "Preferences", "shortcut": "<Ctrl>P"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Show Answer (Reviewer)", "shortcut": "space"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Rate Card Again (Button 1)", "shortcut": "1"},
+        {"label": "Rate Card Hard (Button 2)", "shortcut": "2"},
+        {"label": "Rate Card Good (Button 3)", "shortcut": "3"},
+        {"label": "Rate Card Easy (Button 4)", "shortcut": "4"},
+        {"label": "Edit Current Card", "shortcut": "E"},
+        {"label": "Bury Card", "shortcut": "-"},
+        {"label": "Bury Note", "shortcut": "="},
+        {"label": "Suspend Card", "shortcut": "@"},
+        {"label": "Suspend Note", "shortcut": "!"},
+        {"label": "Mark / Star Note", "shortcut": "*"},
+        {"label": "Replay Audio", "shortcut": "R"},
+        {"label": "Pause Audio", "shortcut": "5"},
+        {"label": "Record Voice", "shortcut": "<Shift>V"},
+        {"label": "Replay Voice", "shortcut": "<Shift>R"},
+        {"label": "View Statistics", "shortcut": "<Shift>V"},
+        {"label": "Sync with AnkiWeb", "shortcut": "Y"},
+        {"label": "Add Note (in Add Dialog)", "shortcut": "<Ctrl>Return"},
+        {"label": "Cloze Deletion (Editor)", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Cloze Deletion Increment Number", "shortcut": "<Ctrl><Alt><Shift>C"},
+        {"label": "Edit HTML (Editor)", "shortcut": "<Ctrl><Shift>X"},
+        {"label": "Bold (Editor)", "shortcut": "<Ctrl>B"},
+        {"label": "Italic (Editor)", "shortcut": "<Ctrl>I"},
+        {"label": "Underline (Editor)", "shortcut": "<Ctrl>U"},
+        {"label": "Change Note Type", "shortcut": "<Ctrl>N"},
+        {"label": "Choose Deck", "shortcut": "<Ctrl>D"},
+        {"separator": true},
+        {"label": "Flag Card 1", "shortcut": "<Ctrl>1"},
+        {"label": "Flag Card 2", "shortcut": "<Ctrl>2"},
+        {"label": "Flag Card 3", "shortcut": "<Ctrl>3"},
+        {"label": "Flag Card 4", "shortcut": "<Ctrl>4"},
+        {"label": "Flag Card 5", "shortcut": "<Ctrl>5"},
+        {"label": "Flag Card 6", "shortcut": "<Ctrl>6"},
+        {"label": "Flag Card 7", "shortcut": "<Ctrl>7"}
+      ]
+    }
+  ]
+}

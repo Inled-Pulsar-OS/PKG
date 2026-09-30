@@ -1,0 +1,60 @@
+{
+  "format": 1,
+  "app": "ark",
+  "name": "Ark",
+  "identifiers": [
+    "org.kde.ark.desktop",
+    "ark",
+    "Ark"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Archive", "shortcut": "<Ctrl>N"},
+        {"label": "Open Archive", "shortcut": "<Ctrl>O"},
+        {"label": "Save As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"},
+        {"label": "Archive Properties", "shortcut": "<Alt>Return"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Rename File", "shortcut": "F2"},
+        {"label": "Delete Files", "shortcut": "Delete"},
+        {"label": "Cut Files", "shortcut": "<Ctrl>X"},
+        {"label": "Copy Files", "shortcut": "<Ctrl>C"},
+        {"label": "Paste Files", "shortcut": "<Ctrl>V"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Find / Search", "shortcut": "<Ctrl>F"},
+        {"label": "Configure Ark / Preferences", "shortcut": "<Ctrl><Shift>,"},
+        {"label": "Configure Shortcuts", "shortcut": "<Ctrl><Alt>,"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Preview File", "shortcut": "<Ctrl>P"},
+        {"label": "Toggle Menubar", "shortcut": "<Ctrl>M"}
+      ]
+    },
+    {
+      "label": "Archive",
+      "items": [
+        {"label": "Extract Selected", "shortcut": "<Ctrl>E"},
+        {"label": "Extract All", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "Add Files", "shortcut": "<Alt>A"},
+        {"label": "Edit Comment", "shortcut": "<Alt>C"},
+        {"label": "Test Archive", "shortcut": "<Alt>T"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help Handbook", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

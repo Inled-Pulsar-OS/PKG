@@ -1,0 +1,83 @@
+{
+  "format": 1,
+  "app": "wezterm",
+  "name": "WezTerm",
+  "identifiers": [
+    "org.wezfurlong.wezterm.desktop",
+    "wezterm",
+    "WezTerm"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Close Current Tab", "shortcut": "<Ctrl><Shift>W"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Copy to Clipboard", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Paste from Clipboard", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Copy to Primary Selection", "shortcut": "<Ctrl>Insert"},
+        {"label": "Paste from Primary Selection", "shortcut": "<Shift>Insert"},
+        {"label": "Activate Copy Mode", "shortcut": "<Ctrl><Shift>X"},
+        {"label": "Search Buffer", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Clear Scrollback", "shortcut": "<Ctrl><Shift>K"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Fullscreen", "shortcut": "<Alt>Return"},
+        {"label": "Toggle Pane Zoom", "shortcut": "<Ctrl><Shift>Z"},
+        {"label": "Quick Select", "shortcut": "<Ctrl><Shift>space"},
+        {"label": "Character Select", "shortcut": "<Ctrl><Shift>U"},
+        {"label": "Activate Command Palette", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "Show Debug Overlay", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Reload Configuration", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Scroll Page Up", "shortcut": "<Shift>Page_Up"},
+        {"label": "Scroll Page Down", "shortcut": "<Shift>Page_Down"},
+        {"label": "Increase Font Size", "shortcut": "<Ctrl>+"},
+        {"label": "Decrease Font Size", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Font Size", "shortcut": "<Ctrl>0"}
+      ]
+    },
+    {
+      "label": "Tabs",
+      "items": [
+        {"label": "Spawn Tab", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Activate Last Tab", "shortcut": "<Ctrl><Shift>9"},
+        {"label": "Next Tab", "shortcut": "<Ctrl>Tab"},
+        {"label": "Previous Tab", "shortcut": "<Ctrl><Shift>Tab"},
+        {"label": "Move Tab Left", "shortcut": "<Ctrl><Shift>Page_Up"},
+        {"label": "Move Tab Right", "shortcut": "<Ctrl><Shift>Page_Down"},
+        {"separator": true},
+        {"label": "Activate Tab 1", "shortcut": "<Ctrl><Shift>1"},
+        {"label": "Activate Tab 2", "shortcut": "<Ctrl><Shift>2"},
+        {"label": "Activate Tab 3", "shortcut": "<Ctrl><Shift>3"},
+        {"label": "Activate Tab 4", "shortcut": "<Ctrl><Shift>4"},
+        {"label": "Activate Tab 5", "shortcut": "<Ctrl><Shift>5"},
+        {"label": "Activate Tab 6", "shortcut": "<Ctrl><Shift>6"},
+        {"label": "Activate Tab 7", "shortcut": "<Ctrl><Shift>7"},
+        {"label": "Activate Tab 8", "shortcut": "<Ctrl><Shift>8"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Spawn Window", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Split Pane Vertically", "shortcut": "<Ctrl><Alt><Shift>\""},
+        {"label": "Split Pane Horizontally", "shortcut": "<Ctrl><Alt><Shift>%"},
+        {"label": "Navigate Pane Left", "shortcut": "<Ctrl><Shift>Left"},
+        {"label": "Navigate Pane Right", "shortcut": "<Ctrl><Shift>Right"},
+        {"label": "Navigate Pane Up", "shortcut": "<Ctrl><Shift>Up"},
+        {"label": "Navigate Pane Down", "shortcut": "<Ctrl><Shift>Down"},
+        {"label": "Adjust Pane Size Left", "shortcut": "<Ctrl><Alt><Shift>Left"},
+        {"label": "Adjust Pane Size Right", "shortcut": "<Ctrl><Alt><Shift>Right"},
+        {"label": "Adjust Pane Size Up", "shortcut": "<Ctrl><Alt><Shift>Up"},
+        {"label": "Adjust Pane Size Down", "shortcut": "<Ctrl><Alt><Shift>Down"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,151 @@
+{
+  "format": 1,
+  "app": "ardour",
+  "name": "Ardour",
+  "identifiers": [
+    "ardour8.desktop",
+    "ardour7.desktop",
+    "ardour.desktop",
+    "org.ardour.Ardour.desktop",
+    "Ardour",
+    "ardour"
+  ],
+  "menus": [
+    {
+      "label": "Session",
+      "items": [
+        {"label": "New Session", "shortcut": "<Ctrl>n"},
+        {"label": "Open Session", "shortcut": "<Ctrl>o"},
+        {"label": "Open Recent Session", "shortcut": "<Ctrl><Shift>o"},
+        {"label": "Save Session", "shortcut": "<Ctrl>s"},
+        {"label": "Snapshot Session", "shortcut": "<Ctrl><Shift>s"},
+        {"separator": true},
+        {"label": "Add Track or Bus", "shortcut": "<Ctrl><Shift>n"},
+        {"label": "Import Audio Files", "shortcut": "<Ctrl>i"},
+        {"separator": true},
+        {"label": "Quick Export", "shortcut": "<Ctrl>e"},
+        {"label": "Export Session", "shortcut": "<Alt>e"},
+        {"label": "Stem Export Selected Tracks", "shortcut": "<Alt><Shift>e"},
+        {"separator": true},
+        {"label": "Quit", "shortcut": "<Ctrl>q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>z"},
+        {"label": "Redo", "shortcut": "<Ctrl>r"},
+        {"label": "Redo (Alternate)", "shortcut": "<Ctrl>y"},
+        {"separator": true},
+        {"label": "Select All Objects", "shortcut": "<Ctrl>a"},
+        {"label": "Select All Visible Lanes", "shortcut": "<Ctrl>t"},
+        {"label": "Invert Selection", "shortcut": "<Ctrl><Shift>i"},
+        {"label": "Select All After Edit Point", "shortcut": "<Ctrl><Shift>e"},
+        {"label": "Select Regions Enclosed by Range", "shortcut": "<Ctrl>u"},
+        {"label": "Select Regions Touched by Range", "shortcut": "u"},
+        {"separator": true},
+        {"label": "Set Loop Range from Edit Range", "shortcut": "bracketright"},
+        {"label": "Set Punch Range from Edit Range", "shortcut": "bracketleft"},
+        {"label": "Fade Range Selection", "shortcut": "slash"}
+      ]
+    },
+    {
+      "label": "Transport",
+      "items": [
+        {"label": "Toggle Roll", "shortcut": "space"},
+        {"label": "Play Edit Range", "shortcut": "<Alt>space"},
+        {"label": "Play from Edit Point and Return", "shortcut": "<Ctrl><Shift>space"},
+        {"label": "Stop and Keep Loop or Range Play", "shortcut": "<Ctrl><Alt>space"},
+        {"label": "Stop and Destroy", "shortcut": "<Ctrl>space"},
+        {"separator": true},
+        {"label": "Start Recording", "shortcut": "<Shift>space"},
+        {"label": "Engage Record", "shortcut": "<Shift>r"},
+        {"separator": true},
+        {"label": "Loop Play the Loop Range", "shortcut": "l"},
+        {"label": "Solo Selection", "shortcut": "a"},
+        {"separator": true},
+        {"label": "Transition to Roll", "shortcut": "<Shift>Up"},
+        {"label": "Transition to Reverse", "shortcut": "<Shift>Down"}
+      ]
+    },
+    {
+      "label": "Navigate",
+      "items": [
+        {"label": "To Start Marker", "shortcut": "Return"},
+        {"label": "To Previous Grid Point", "shortcut": "Left"},
+        {"separator": true},
+        {"label": "Add Marker", "shortcut": "Tab"},
+        {"label": "Remove Marker", "shortcut": "<Ctrl>Tab"},
+        {"label": "To Previous Mark", "shortcut": "q"},
+        {"label": "To Next Mark", "shortcut": "w"},
+        {"separator": true},
+        {"label": "Set Playhead Position", "shortcut": "p"},
+        {"label": "Edit Point to Previous Region Sync", "shortcut": "apostrophe"},
+        {"label": "Edit Point to Next Region Sync", "shortcut": "semicolon"}
+      ]
+    },
+    {
+      "label": "Region",
+      "items": [
+        {"label": "Mute or Unmute", "shortcut": "<Alt>1"},
+        {"label": "Move to Original Position", "shortcut": "<Alt>2"},
+        {"label": "Normalize", "shortcut": "<Alt>3"},
+        {"label": "Reverse", "shortcut": "<Alt>4"},
+        {"label": "Quantize MIDI Notes", "shortcut": "<Alt>5"},
+        {"label": "Increase Region Gain", "shortcut": "<Alt>6"},
+        {"label": "Reduce Region Gain", "shortcut": "<Alt>7"},
+        {"label": "Transpose", "shortcut": "<Alt>8"},
+        {"label": "Rename", "shortcut": "<Alt>9"},
+        {"label": "Toggle Region Opacity", "shortcut": "<Alt>0"},
+        {"separator": true},
+        {"label": "Set Fade In Length", "shortcut": "<Ctrl>slash"},
+        {"label": "Set Fade Out Length", "shortcut": "<Ctrl>backslash"},
+        {"label": "Trim to End of Previous Region", "shortcut": "<Ctrl>j"},
+        {"label": "Trim to Start of Next Region", "shortcut": "<Ctrl>k"},
+        {"separator": true},
+        {"label": "Insert from Region List", "shortcut": "i"},
+        {"label": "Export Selected Regions", "shortcut": "<Ctrl><Alt>e"}
+      ]
+    },
+    {
+      "label": "Mouse Mode",
+      "items": [
+        {"label": "Content Mode", "shortcut": "e"},
+        {"label": "Range Mode", "shortcut": "r"},
+        {"label": "Timefx Mode", "shortcut": "t"},
+        {"label": "Grid Mode", "shortcut": "y"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "equal"},
+        {"label": "Zoom Out", "shortcut": "minus"},
+        {"label": "Zoom to Session", "shortcut": "<Ctrl><Shift>underscore"},
+        {"label": "Expand Track Height", "shortcut": "<Alt>equal"},
+        {"label": "Shrink Track Height", "shortcut": "<Alt>minus"},
+        {"separator": true},
+        {"label": "Maximise Editor Space", "shortcut": "<Ctrl><Alt>f"},
+        {"label": "Maximise Mixer Space", "shortcut": "<Ctrl><Shift>f"},
+        {"label": "Toggle Editor Mixer", "shortcut": "<Shift>e"},
+        {"label": "Toggle Editor Properties", "shortcut": "<Shift>p"},
+        {"separator": true},
+        {"label": "Show Mixer", "shortcut": "<Alt>m"},
+        {"label": "Show Recorder Page", "shortcut": "<Alt>r"},
+        {"label": "Show Cues Page", "shortcut": "<Alt>c"},
+        {"label": "Show Meter Bridge", "shortcut": "<Alt>b"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Preferences", "shortcut": "<Alt>o"},
+        {"label": "Locations", "shortcut": "<Alt>l"},
+        {"label": "Audio Patchbay", "shortcut": "<Alt><Shift>a"},
+        {"label": "MIDI Patchbay", "shortcut": "<Alt><Shift>m"},
+        {"label": "Virtual MIDI Keyboard", "shortcut": "<Alt>k"},
+        {"label": "Realtime Analyzer", "shortcut": "<Alt><Shift>s"}
+      ]
+    }
+  ]
+}

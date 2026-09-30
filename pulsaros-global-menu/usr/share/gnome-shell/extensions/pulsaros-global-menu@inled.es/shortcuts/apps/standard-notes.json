@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "app": "standard-notes",
+  "name": "Standard Notes",
+  "identifiers": [
+    "standard-notes.desktop",
+    "org.standardnotes.standardnotes.desktop",
+    "standard notes",
+    "Standard Notes"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Create New Note", "shortcut": "<Alt><Shift>N"},
+        {"label": "Save Note", "shortcut": "<Ctrl>S"},
+        {"label": "Create New Tag", "shortcut": "<Ctrl><Alt>N"},
+        {"label": "Open Note History", "shortcut": "<Ctrl><Shift>H"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search Notes", "shortcut": "<Alt><Shift>F"},
+        {"label": "Cancel Search", "shortcut": "Escape"},
+        {"label": "Change Editor", "shortcut": "<Ctrl><Shift>?"},
+        {"label": "Focus Tags Input", "shortcut": "<Ctrl><Alt>T"},
+        {"label": "Star Note", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Pin Note", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "Find in Note", "shortcut": "<Ctrl>F"},
+        {"label": "Replace in Note", "shortcut": "<Ctrl>H"},
+        {"label": "Toggle Case Sensitive Search", "shortcut": "<Alt>C"},
+        {"label": "Next Search Result", "shortcut": "F3"},
+        {"label": "Previous Search Result", "shortcut": "<Shift>F3"},
+        {"label": "Preferences", "shortcut": "<Ctrl>,"},
+        {"label": "Change Editor Width", "shortcut": "<Ctrl><Shift>J"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Navigation Pane (Sidebar)", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "Toggle Notes List Pane", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Toggle Focus Mode", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Toggle Dark Mode", "shortcut": "<Ctrl><Shift>D"},
+        {"label": "Toggle Editor Toolbar", "shortcut": "<Ctrl><Shift>K"},
+        {"label": "Show Markdown Preview", "shortcut": "<Ctrl><Shift>M"},
+        {"label": "Toggle Command Palette", "shortcut": "<Ctrl><Shift>;"},
+        {"label": "Hide Menu Bar", "shortcut": "<Alt>M"},
+        {"label": "Minimize", "shortcut": "<Ctrl>M"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Toggle Keyboard Shortcuts Help", "shortcut": "<Ctrl>/"}
+      ]
+    }
+  ]
+}

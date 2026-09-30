@@ -1,0 +1,53 @@
+{
+  "format": 1,
+  "app": "disks",
+  "name": "Disks",
+  "identifiers": [
+    "org.gnome.DiskUtility.desktop",
+    "org.gnome.DiskUtility",
+    "gnome-disks",
+    "Disks"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Create a New Empty Disk Image", "shortcut": "<Ctrl>N"},
+        {"label": "Attach an Existing Disk Image", "shortcut": "<Ctrl>A"},
+        {"separator": true},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Drive",
+      "items": [
+        {"label": "Open the Drive Menu", "shortcut": "F10"},
+        {"label": "Format the Drive", "shortcut": "<Ctrl>D"},
+        {"label": "Restore an Image to the Disk", "shortcut": "<Ctrl>R"},
+        {"label": "SMART Data", "shortcut": "<Ctrl>S"},
+        {"label": "Drive Settings", "shortcut": "<Ctrl>E"}
+      ]
+    },
+    {
+      "label": "Volume",
+      "items": [
+        {"label": "Open the Volume Menu", "shortcut": "<Shift>F10"},
+        {"label": "Format the Selected Volume", "shortcut": "<Ctrl>P"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Unselect Current Disk", "shortcut": "Escape"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open the Application Menu", "shortcut": "F9"},
+        {"label": "Help", "shortcut": "F1"},
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

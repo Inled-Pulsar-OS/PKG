@@ -1,0 +1,81 @@
+{
+  "format": 1,
+  "app": "thunar",
+  "name": "Thunar",
+  "identifiers": [
+    "thunar.desktop",
+    "xfce-thunar.desktop",
+    "thunar",
+    "Thunar"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Tab", "shortcut": "<Ctrl>T"},
+        {"label": "New Window", "shortcut": "<Ctrl>N"},
+        {"label": "Close Tab", "shortcut": "<Ctrl>W"},
+        {"label": "Close Window", "shortcut": "<Ctrl>Q"},
+        {"label": "Close All Windows", "shortcut": "<Ctrl><Shift>W"},
+        {"label": "Properties", "shortcut": "<Alt>Return"},
+        {"label": "Open Parent", "shortcut": "<Alt>Up"},
+        {"label": "Open Home", "shortcut": "<Alt>Home"},
+        {"label": "Open Location", "shortcut": "<Ctrl>L"},
+        {"label": "Open Main Menu", "shortcut": "F10"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Select All Files", "shortcut": "<Ctrl>A"},
+        {"label": "Invert Selection", "shortcut": "<Ctrl><Shift>I"},
+        {"label": "Rename", "shortcut": "F2"},
+        {"label": "Move to Trash", "shortcut": "Delete"},
+        {"label": "Delete Permanently", "shortcut": "<Shift>Delete"},
+        {"label": "Search for Files", "shortcut": "<Ctrl>F"},
+        {"label": "Stop Search", "shortcut": "Escape"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Select by Pattern", "shortcut": "<Ctrl>S"},
+        {"label": "Unselect All Files", "shortcut": "Escape"},
+        {"label": "Reload", "shortcut": "<Ctrl>R"},
+        {"label": "Split View", "shortcut": "F3"},
+        {"label": "Toggle Side Pane", "shortcut": "F9"},
+        {"label": "View Shortcuts Side Pane", "shortcut": "<Ctrl>B"},
+        {"label": "View Tree Side Pane", "shortcut": "<Ctrl>E"},
+        {"label": "Toggle Menubar", "shortcut": "<Ctrl>M"},
+        {"label": "Toggle Embedded Terminal", "shortcut": "F4"},
+        {"label": "Show Hidden Files", "shortcut": "<Ctrl>H"},
+        {"label": "Icon View", "shortcut": "<Ctrl>1"},
+        {"label": "Detailed List View", "shortcut": "<Ctrl>2"},
+        {"label": "Compact View", "shortcut": "<Ctrl>3"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Normal Size (Reset Zoom)", "shortcut": "<Ctrl>0"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Go Back", "shortcut": "<Alt>Left"},
+        {"label": "Go Forward", "shortcut": "<Alt>Right"},
+        {"label": "Switch to Previous Tab", "shortcut": "<Ctrl>Page_Up"},
+        {"label": "Switch to Next Tab", "shortcut": "<Ctrl>Page_Down"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Contents (Help Manual)", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

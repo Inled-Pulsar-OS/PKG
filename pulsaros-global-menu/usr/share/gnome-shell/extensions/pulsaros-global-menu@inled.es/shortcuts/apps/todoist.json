@@ -1,0 +1,66 @@
+{
+  "format": 1,
+  "app": "todoist",
+  "name": "Todoist",
+  "identifiers": [
+    "todoist.desktop",
+    "com.todoist.Todoist.desktop",
+    "todoist",
+    "Todoist"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Command Menu", "shortcut": "<Ctrl>K"},
+        {"label": "Close Modal / Clear Selection", "shortcut": "Escape"},
+        {"label": "Quit Todoist", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Quick Add Task", "shortcut": "Q"},
+        {"label": "Focus Search", "shortcut": "/"},
+        {"label": "Open Settings", "shortcut": "<Ctrl>,"},
+        {"label": "Complete Selected Task", "shortcut": "E"},
+        {"label": "Edit Selected Task", "shortcut": "Return"},
+        {"label": "Change Due Date", "shortcut": "D"},
+        {"label": "Set Priority", "shortcut": "P"},
+        {"label": "Move Task to Project", "shortcut": "V"},
+        {"label": "Undo Last Action", "shortcut": "U"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Add Task at Bottom of List", "shortcut": "A"},
+        {"label": "Add Task at Top of List", "shortcut": "<Shift>A"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Navigation Sidebar", "shortcut": "M"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>="},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Go to Inbox", "shortcut": "g i"},
+        {"label": "Go to Today", "shortcut": "g t"},
+        {"label": "Go to Upcoming", "shortcut": "g u"},
+        {"label": "Go to Filters & Labels", "shortcut": "g f"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Keyboard Shortcuts Cheat Sheet", "shortcut": "?"}
+      ]
+    }
+  ]
+}

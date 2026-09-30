@@ -1,0 +1,106 @@
+{
+  "format": 1,
+  "app": "mailspring",
+  "name": "Mailspring",
+  "identifiers": [
+    "Mailspring.desktop",
+    "mailspring",
+    "Mailspring"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Print Thread", "shortcut": "<Ctrl>P"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit Mailspring", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Copy Mailbox Link", "shortcut": "<Ctrl>L"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"},
+        {"label": "Find in Mailbox (Focus Search)", "shortcut": "<Ctrl>F"},
+        {"label": "Open Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Format Bold", "shortcut": "<Ctrl>B"},
+        {"label": "Format Italic", "shortcut": "<Ctrl>I"},
+        {"label": "Format Underline", "shortcut": "<Ctrl>U"},
+        {"label": "Insert Link", "shortcut": "<Ctrl>K"},
+        {"label": "Numbered List", "shortcut": "<Ctrl><Shift>7"},
+        {"label": "Bulleted List", "shortcut": "<Ctrl><Shift>8"},
+        {"label": "Blockquote", "shortcut": "<Ctrl><Shift>9"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Full Screen", "shortcut": "F11"},
+        {"label": "Reload Window", "shortcut": "<Ctrl><Alt>L"},
+        {"label": "Toggle Developer Tools", "shortcut": "<Ctrl><Alt>I"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Snooze Thread", "shortcut": "Z"},
+        {"label": "Go to Inbox"},
+        {"label": "Go to Starred"},
+        {"label": "Go to Sent Mail"},
+        {"label": "Go to Drafts"},
+        {"label": "Go to All Mail"},
+        {"label": "Next Message", "shortcut": "Down"},
+        {"label": "Previous Message", "shortcut": "Up"}
+      ]
+    },
+    {
+      "label": "Message",
+      "items": [
+        {"label": "Compose New Message", "shortcut": "<Ctrl>N"},
+        {"label": "Add Attachment", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Indent", "shortcut": "<Ctrl>]"},
+        {"label": "Outdent", "shortcut": "<Ctrl>["},
+        {"label": "Reply", "shortcut": "<Ctrl>R"},
+        {"label": "Reply All", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Forward", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Archive Thread", "shortcut": "E"},
+        {"label": "Move to Trash / Delete", "shortcut": "Delete"},
+        {"label": "Star Item", "shortcut": "S"},
+        {"label": "Mark as Read", "shortcut": "<Shift>I"},
+        {"label": "Mark as Unread", "shortcut": "<Shift>U"},
+        {"label": "Mark as Spam", "shortcut": "!"},
+        {"separator": true},
+        {"label": "Select Account 1", "shortcut": "<Ctrl>1"},
+        {"label": "Select Account 2", "shortcut": "<Ctrl>2"},
+        {"label": "Select Account 3", "shortcut": "<Ctrl>3"},
+        {"label": "Select Account 4", "shortcut": "<Ctrl>4"},
+        {"label": "Select Account 5", "shortcut": "<Ctrl>5"},
+        {"label": "Select Account 6", "shortcut": "<Ctrl>6"},
+        {"label": "Select Account 7", "shortcut": "<Ctrl>7"},
+        {"label": "Select Account 8", "shortcut": "<Ctrl>8"},
+        {"label": "Select Account 9", "shortcut": "<Ctrl>9"},
+        {"separator": true},
+        {"label": "Sync Mail Now (Check Mail)", "shortcut": "F5"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Message Viewer (Main Window)", "shortcut": "<Ctrl>0"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts Cheatsheet", "shortcut": "?"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "format": 1,
+  "app": "audacity",
+  "name": "Audacity",
+  "identifiers": [
+    "audacity.desktop",
+    "org.audacityteam.Audacity.desktop",
+    "audacity",
+    "Audacity"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Project", "shortcut": "<Ctrl>N"},
+        {"label": "Open Project", "shortcut": "<Ctrl>O"},
+        {"label": "Save Project", "shortcut": "<Ctrl>S"},
+        {"label": "Save Project As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Export Audio", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "Import Audio", "shortcut": "<Ctrl><Shift>I"},
+        {"label": "Close Project", "shortcut": "<Ctrl>W"},
+        {"label": "Exit Audacity", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Delete", "shortcut": "Delete"},
+        {"label": "Preferences", "shortcut": "<Ctrl>P"}
+      ]
+    },
+    {
+      "label": "Select",
+      "items": [
+        {"label": "Duplicate Selection", "shortcut": "<Ctrl>D"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Select None", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Zoom to Selection", "shortcut": "<Ctrl>E"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "<Ctrl>1"},
+        {"label": "Zoom Normal (Default)", "shortcut": "<Ctrl>2"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>3"},
+        {"label": "Fit Project in Window", "shortcut": "<Ctrl>F"},
+        {"label": "Fit Tracks Vertically", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Toggle Full Screen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Transport",
+      "items": [
+        {"label": "Play / Stop", "shortcut": "space"},
+        {"label": "Play / Stop and Set Cursor", "shortcut": "<Shift>space"},
+        {"label": "Pause", "shortcut": "P"},
+        {"label": "Record", "shortcut": "R"},
+        {"label": "Append Record", "shortcut": "<Shift>R"}
+      ]
+    },
+    {
+      "label": "Tracks",
+      "items": [
+        {"label": "Silence Audio", "shortcut": "<Ctrl>L"},
+        {"label": "Split Audio at Playhead", "shortcut": "<Ctrl>I"},
+        {"label": "Split New Track", "shortcut": "<Ctrl><Alt>I"},
+        {"label": "Join Audio", "shortcut": "<Ctrl>J"},
+        {"label": "Add New Mono Track", "shortcut": "<Ctrl><Shift>N"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Quick Help / Reference", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

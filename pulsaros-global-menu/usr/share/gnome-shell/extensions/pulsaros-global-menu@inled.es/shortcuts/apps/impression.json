@@ -1,0 +1,27 @@
+{
+  "format": 1,
+  "app": "impression",
+  "name": "Impression",
+  "identifiers": [
+    "io.gitlab.adhami3310.Impression.desktop",
+    "io.gitlab.adhami3310.Impression",
+    "impression",
+    "Impression"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open File", "shortcut": "<Ctrl>O"},
+        {"separator": true},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

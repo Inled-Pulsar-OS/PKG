@@ -1,0 +1,83 @@
+{
+  "format": 1,
+  "app": "loupe",
+  "name": "Image Viewer (Loupe)",
+  "identifiers": [
+    "org.gnome.Loupe.desktop",
+    "org.gnome.Loupe",
+    "loupe",
+    "Image Viewer"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Window", "shortcut": "<Ctrl>N"},
+        {"label": "Open Image with Other App", "shortcut": "<Ctrl><Shift>O"},
+        {"separator": true},
+        {"label": "Replace Original", "shortcut": "<Ctrl>S"},
+        {"label": "Save As", "shortcut": "<Ctrl><Shift>S"},
+        {"separator": true},
+        {"label": "Set as Background", "shortcut": "<Ctrl>F8"},
+        {"separator": true},
+        {"label": "Move Image to Trash", "shortcut": "Delete"},
+        {"label": "Permanently Delete Image", "shortcut": "<Shift>Delete"},
+        {"separator": true},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"separator": true},
+        {"label": "Open Editing View", "shortcut": "E"},
+        {"label": "Rotate Clockwise", "shortcut": "<Ctrl>R"},
+        {"label": "Rotate Counterclockwise", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Mirror Horizontally", "shortcut": "H"},
+        {"label": "Mirror Vertically", "shortcut": "V"},
+        {"label": "Apply Crop", "shortcut": "<Ctrl>Return"},
+        {"separator": true},
+        {"label": "Cancel", "shortcut": "Escape"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "<Ctrl>plus"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>minus"},
+        {"label": "Best Fit", "shortcut": "<Ctrl>0"},
+        {"label": "Original Scale", "shortcut": "<Ctrl>1"},
+        {"label": "200% Scale", "shortcut": "<Ctrl>2"},
+        {"separator": true},
+        {"label": "Pan Left", "shortcut": "<Ctrl>Left"},
+        {"label": "Pan Right", "shortcut": "<Ctrl>Right"},
+        {"label": "Pan Up", "shortcut": "<Ctrl>Up"},
+        {"label": "Pan Down", "shortcut": "<Ctrl>Down"},
+        {"separator": true},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Leave Fullscreen", "shortcut": "Escape"},
+        {"separator": true},
+        {"label": "Toggle Image Properties", "shortcut": "<Alt>Return"},
+        {"label": "Show Main Menu", "shortcut": "F10"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Next Image", "shortcut": "Right"},
+        {"label": "Previous Image", "shortcut": "Left"},
+        {"label": "First Image", "shortcut": "Home"},
+        {"label": "Last Image", "shortcut": "End"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Help", "shortcut": "F1"},
+        {"label": "Show Keyboard Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

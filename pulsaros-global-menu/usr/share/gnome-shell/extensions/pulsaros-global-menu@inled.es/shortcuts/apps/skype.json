@@ -1,0 +1,65 @@
+{
+  "format": 1,
+  "app": "skype",
+  "name": "Skype",
+  "identifiers": [
+    "skypeforlinux.desktop",
+    "com.skype.Client.desktop",
+    "skype",
+    "Skype"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Group Chat", "shortcut": "<Ctrl>G"},
+        {"label": "Open Notification Panel", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Open Themes", "shortcut": "<Ctrl>T"},
+        {"label": "Send File / Attachment", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit Skype", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search People and Messages", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Open Settings (Preferences)", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Light/Dark Theme", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Focus Message Composer", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "Take Snapshot", "shortcut": "<Ctrl>S"},
+        {"label": "Zoom In", "shortcut": "<Ctrl><Shift>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Actual Size (Reset Zoom)", "shortcut": "<Ctrl>0"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Start New Conversation", "shortcut": "<Ctrl>N"},
+        {"label": "Open Contacts List", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Navigate to Recent Chats", "shortcut": "<Alt>1"},
+        {"label": "Open Contacts Tab", "shortcut": "<Alt>3"},
+        {"label": "Edit Last Message", "shortcut": "Up"}
+      ]
+    },
+    {
+      "label": "Call",
+      "items": [
+        {"label": "Open Dialpad", "shortcut": "<Alt>2"},
+        {"label": "Start/Answer Audio Call", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Start Video Call / Toggle Video", "shortcut": "<Ctrl><Shift>K"},
+        {"label": "Toggle Microphone Mute", "shortcut": "<Ctrl><Shift>M"},
+        {"label": "Hang Up / End Call", "shortcut": "<Ctrl><Shift>H"},
+        {"label": "Announce Microphone Status", "shortcut": "<Ctrl><Alt>M"},
+        {"label": "Announce Video Status", "shortcut": "<Ctrl><Alt>K"}
+      ]
+    }
+  ]
+}

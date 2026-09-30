@@ -1,0 +1,82 @@
+{
+  "format": 1,
+  "app": "gradia",
+  "name": "Gradia",
+  "identifiers": [
+    "be.alexandervanhee.gradia.desktop",
+    "gradia",
+    "Gradia"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Image", "shortcut": "<Ctrl>O"},
+        {"label": "Create from Source Code", "shortcut": "<Ctrl>P"},
+        {"label": "Save to File", "shortcut": "<Ctrl>S"},
+        {"label": "Close Window / Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Paste from Clipboard", "shortcut": "<Ctrl>V"},
+        {"label": "Copy to Clipboard", "shortcut": "<Ctrl>C"},
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"label": "Delete Screenshots", "shortcut": "<Ctrl><Shift>D"},
+        {"label": "Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "Select",
+      "items": [
+        {"label": "Delete Selected Annotation", "shortcut": "Delete"},
+        {"label": "Reset Crop Selection", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Select Mode", "shortcut": "0"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Sidebar", "shortcut": "F9"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"},
+        {"label": "Pan Left", "shortcut": "<Ctrl>Left"},
+        {"label": "Pan Right", "shortcut": "<Ctrl>Right"},
+        {"label": "Pan Up", "shortcut": "<Ctrl>Up"},
+        {"label": "Pan Down", "shortcut": "<Ctrl>Down"}
+      ]
+    },
+    {
+      "label": "Image",
+      "items": [
+        {"label": "Toggle Crop", "shortcut": "<Ctrl>R"},
+        {"label": "Cancel Crop", "shortcut": "Escape"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Take Screenshot", "shortcut": "<Ctrl>A"},
+        {"label": "Run Custom Command", "shortcut": "<Ctrl>M"},
+        {"label": "Pen Tool", "shortcut": "1"},
+        {"label": "Text Tool", "shortcut": "2"},
+        {"label": "Line Tool", "shortcut": "3"},
+        {"label": "Arrow Tool", "shortcut": "4"},
+        {"label": "Rectangle Tool", "shortcut": "5"},
+        {"label": "Circle Tool", "shortcut": "6"},
+        {"label": "Highlighter Tool", "shortcut": "7"},
+        {"label": "Censor Tool", "shortcut": "8"},
+        {"label": "Number Stamp Tool", "shortcut": "9"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Keyboard Shortcuts", "shortcut": "<Ctrl>?"}
+      ]
+    }
+  ]
+}

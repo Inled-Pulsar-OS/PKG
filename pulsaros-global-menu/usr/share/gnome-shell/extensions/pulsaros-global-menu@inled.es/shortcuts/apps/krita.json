@@ -1,0 +1,95 @@
+{
+  "format": 1,
+  "app": "krita",
+  "name": "Krita",
+  "identifiers": [
+    "org.kde.krita.desktop",
+    "krita",
+    "Krita"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Document", "shortcut": "<Ctrl>N"},
+        {"label": "Open Document", "shortcut": "<Ctrl>O"},
+        {"label": "Save Document", "shortcut": "<Ctrl>S"},
+        {"label": "Save Document As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Export", "shortcut": "<Ctrl><Alt>S"},
+        {"label": "Print", "shortcut": "<Ctrl>P"},
+        {"label": "Close", "shortcut": "<Ctrl>W"},
+        {"label": "Close All", "shortcut": "<Ctrl><Shift>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Paste into Active Layer", "shortcut": "<Ctrl><Alt>V"},
+        {"label": "Deselect", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Invert Selection", "shortcut": "<Ctrl><Shift>I"},
+        {"label": "Configure Krita (Preferences)", "shortcut": "<Ctrl><Shift>,"}
+      ]
+    },
+    {
+      "label": "Select",
+      "items": [
+        {"label": "Select All", "shortcut": "<Ctrl>A"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "+"},
+        {"label": "Zoom Out", "shortcut": "-"},
+        {"label": "Actual Pixels (100% Zoom)", "shortcut": "1"},
+        {"label": "Fit to View", "shortcut": "<Ctrl>0"},
+        {"label": "Mirror Canvas View", "shortcut": "M"},
+        {"label": "Toggle Fullscreen", "shortcut": "<Ctrl><Shift>F"}
+      ]
+    },
+    {
+      "label": "Image",
+      "items": [
+        {"label": "Flatten Image", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "Reset Canvas Rotation", "shortcut": "5"},
+        {"label": "Canvas Only Mode", "shortcut": "Tab"}
+      ]
+    },
+    {
+      "label": "Colors",
+      "items": [
+        {"label": "Adjust Color Balance", "shortcut": "<Ctrl>B"},
+        {"label": "Adjust Levels", "shortcut": "<Ctrl>L"},
+        {"label": "Adjust Hue / Saturation / Value", "shortcut": "<Ctrl>U"},
+        {"label": "Desaturate", "shortcut": "<Ctrl><Shift>U"},
+        {"label": "Invert Colors", "shortcut": "<Ctrl>I"}
+      ]
+    },
+    {
+      "label": "Layer",
+      "items": [
+        {"label": "New Layer", "shortcut": "Insert"},
+        {"label": "Duplicate Layer", "shortcut": "<Ctrl>J"},
+        {"label": "Merge with Layer Below", "shortcut": "<Ctrl>E"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Reselect", "shortcut": "<Ctrl><Shift>D"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Krita Handbook / Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

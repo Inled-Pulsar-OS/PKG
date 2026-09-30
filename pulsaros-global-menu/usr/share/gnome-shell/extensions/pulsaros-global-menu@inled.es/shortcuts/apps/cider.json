@@ -1,0 +1,60 @@
+{
+  "format": 1,
+  "app": "cider",
+  "name": "Cider",
+  "identifiers": [
+    "Cider.desktop",
+    "sh.cider.electron",
+    "cider",
+    "Cider"
+  ],
+  "menus": [
+    {
+      "label": "Playback",
+      "items": [
+        {"label": "Play / Pause", "shortcut": "space"},
+        {"separator": true},
+        {"label": "Previous Track", "shortcut": "<Ctrl>Left"},
+        {"label": "Next Track", "shortcut": "<Ctrl>Right"},
+        {"separator": true},
+        {"label": "Favorite Current Song", "shortcut": "<Ctrl><Shift>L"}
+      ]
+    },
+    {
+      "label": "Library",
+      "items": [
+        {"label": "Home", "shortcut": "<Ctrl>H"},
+        {"label": "Listen Now", "shortcut": "<Ctrl>L"},
+        {"label": "Browse", "shortcut": "<Ctrl>N"},
+        {"separator": true},
+        {"label": "Recently Added", "shortcut": "<Ctrl>1"},
+        {"label": "Songs", "shortcut": "<Ctrl>2"},
+        {"label": "Albums", "shortcut": "<Ctrl>3"},
+        {"label": "Artists", "shortcut": "<Ctrl>4"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Immersive Mode", "shortcut": "<Ctrl>P"},
+        {"label": "Mini Player", "shortcut": "<Ctrl>K"},
+        {"label": "Command Center", "shortcut": "<Shift>space"},
+        {"separator": true},
+        {"label": "Toggle Fullscreen", "shortcut": "<Alt>Return"},
+        {"label": "Toggle Fullscreen (Alternative)", "shortcut": "F11"},
+        {"separator": true},
+        {"label": "Reload UI", "shortcut": "<Ctrl>R"},
+        {"label": "Developer Tools", "shortcut": "<Ctrl><Shift>I"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search", "shortcut": "<Ctrl>F"},
+        {"label": "Search (Alternative)", "shortcut": "slash"},
+        {"separator": true},
+        {"label": "Settings", "shortcut": "<Ctrl>comma"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "format": 1,
+  "app": "sober",
+  "name": "Sober",
+  "identifiers": [
+    "org.vinegarhq.Sober.desktop",
+    "sober",
+    "Sober"
+  ],
+  "menus": [
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Toggle In-Game Menu / Settings", "shortcut": "Escape"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Toggle Chat", "shortcut": "/"},
+        {"label": "Toggle Player List / Leaderboard", "shortcut": "Tab"},
+        {"label": "Toggle Performance Stats (FPS / Ping)", "shortcut": "<Shift>F5"},
+        {"label": "Toggle Developer Console / Log", "shortcut": "F9"},
+        {"label": "Toggle MicroProfiler", "shortcut": "<Ctrl>F6"},
+        {"label": "Toggle Shift Lock"},
+        {"label": "Toggle Video Recording", "shortcut": "F12"},
+        {"label": "Toggle Microphone Mute", "shortcut": "<Ctrl><Shift>B"},
+        {"label": "Zoom Camera In", "shortcut": "I"},
+        {"label": "Zoom Camera Out", "shortcut": "O"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Pause MicroProfiler", "shortcut": "<Ctrl>P"},
+        {"label": "Take Screenshot", "shortcut": "Print"},
+        {"label": "Rotate Camera Left", "shortcut": ","},
+        {"label": "Rotate Camera Right", "shortcut": "."}
+      ]
+    }
+  ]
+}

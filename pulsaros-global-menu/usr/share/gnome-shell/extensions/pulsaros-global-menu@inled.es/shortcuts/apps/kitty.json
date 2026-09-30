@@ -1,0 +1,92 @@
+{
+  "format": 1,
+  "app": "kitty",
+  "name": "Kitty",
+  "identifiers": [
+    "kitty.desktop",
+    "kitty",
+    "Kitty"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Window", "shortcut": "<Ctrl><Shift>Return"},
+        {"label": "New OS Window", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Close Window", "shortcut": "<Ctrl><Shift>W"},
+        {"label": "New Tab", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Close Tab", "shortcut": "<Ctrl><Shift>Q"},
+        {"label": "Open URL (Hints Mode)", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "Open Kitty Shell", "shortcut": "<Ctrl><Shift>Escape"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Copy to Clipboard", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Paste from Clipboard", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Paste from Selection", "shortcut": "<Ctrl><Shift>S"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Next Layout", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Scroll Line Up", "shortcut": "<Ctrl><Shift>Up"},
+        {"label": "Scroll Line Down", "shortcut": "<Ctrl><Shift>Down"},
+        {"label": "Scroll Page Up", "shortcut": "<Ctrl><Shift>Page_Up"},
+        {"label": "Scroll Page Down", "shortcut": "<Ctrl><Shift>Page_Down"},
+        {"label": "Scroll to Top", "shortcut": "<Ctrl><Shift>Home"},
+        {"label": "Scroll to Bottom", "shortcut": "<Ctrl><Shift>End"},
+        {"label": "Increase Font Size", "shortcut": "<Ctrl><Shift>+"},
+        {"label": "Decrease Font Size", "shortcut": "<Ctrl><Shift>-"},
+        {"label": "Reset Font Size", "shortcut": "<Ctrl><Shift>BackSpace"},
+        {"label": "Command Palette", "shortcut": "<Ctrl><Shift>F3"},
+        {"label": "Toggle Fullscreen", "shortcut": "<Ctrl><Shift>F11"},
+        {"label": "Toggle Maximized", "shortcut": "<Ctrl><Shift>F10"},
+        {"label": "Edit Config File", "shortcut": "<Ctrl><Shift>F2"},
+        {"label": "Reload Config File", "shortcut": "<Ctrl><Shift>F5"},
+        {"label": "Debug Config", "shortcut": "<Ctrl><Shift>F6"},
+        {"label": "Reset Terminal", "shortcut": "<Ctrl><Shift>Delete"},
+        {"label": "Unicode Character Input", "shortcut": "<Ctrl><Shift>U"}
+      ]
+    },
+    {
+      "label": "Tabs",
+      "items": [
+        {"label": "Next Tab", "shortcut": "<Ctrl><Shift>Right"},
+        {"label": "Previous Tab", "shortcut": "<Ctrl><Shift>Left"},
+        {"label": "Move Tab Forward", "shortcut": "<Ctrl><Shift>."},
+        {"label": "Move Tab Backward", "shortcut": "<Ctrl><Shift>,"},
+        {"label": "Set Tab Title", "shortcut": "<Ctrl><Alt><Shift>T"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Next Window", "shortcut": "<Ctrl><Shift>]"},
+        {"label": "Previous Window", "shortcut": "<Ctrl><Shift>["},
+        {"label": "Move Window Forward", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Move Window Backward", "shortcut": "<Ctrl><Shift>B"},
+        {"label": "Start Resizing Window", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Move Window to Top", "shortcut": "<Ctrl><Shift>`"},
+        {"separator": true},
+        {"label": "Focus Window 1", "shortcut": "<Ctrl><Shift>1"},
+        {"label": "Focus Window 2", "shortcut": "<Ctrl><Shift>2"},
+        {"label": "Focus Window 3", "shortcut": "<Ctrl><Shift>3"},
+        {"label": "Focus Window 4", "shortcut": "<Ctrl><Shift>4"},
+        {"label": "Focus Window 5", "shortcut": "<Ctrl><Shift>5"},
+        {"label": "Focus Window 6", "shortcut": "<Ctrl><Shift>6"},
+        {"label": "Focus Window 7", "shortcut": "<Ctrl><Shift>7"},
+        {"label": "Focus Window 8", "shortcut": "<Ctrl><Shift>8"},
+        {"label": "Focus Window 9", "shortcut": "<Ctrl><Shift>9"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Documentation", "shortcut": "<Ctrl><Shift>F1"}
+      ]
+    }
+  ]
+}

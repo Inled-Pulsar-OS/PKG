@@ -1,0 +1,44 @@
+{
+  "format": 1,
+  "app": "software",
+  "name": "Software",
+  "identifiers": [
+    "org.gnome.Software.desktop",
+    "org.gnome.Software",
+    "gnome-software",
+    "Software"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Close Main Window", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Navigate to Explore Page", "shortcut": "<Alt>1"},
+        {"label": "Navigate to Installed Page", "shortcut": "<Alt>2"},
+        {"label": "Navigate to Updates Page", "shortcut": "<Alt>3"},
+        {"separator": true},
+        {"label": "Check for Updates", "shortcut": "<Ctrl>R"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Open Search Bar", "shortcut": "<Ctrl>F"},
+        {"label": "Open Preferences", "shortcut": "<Ctrl>,"},
+        {"label": "Open Software Repositories", "shortcut": "<Ctrl>."}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Main Menu", "shortcut": "F10"},
+        {"label": "Open Keyboard Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "format": 1,
+  "app": "darktable",
+  "name": "Darktable",
+  "identifiers": [
+    "darktable.desktop",
+    "darktable",
+    "Darktable"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Quit Darktable", "shortcut": "<Ctrl>Q"},
+        {"label": "Export Selected Images", "shortcut": "<Ctrl>E"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Open Preferences", "shortcut": "<Ctrl>,"},
+        {"label": "Select All Images", "shortcut": "<Ctrl>A"},
+        {"label": "Deselect All Images", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Invert Image Selection", "shortcut": "<Ctrl>!"},
+        {"label": "Duplicate Image", "shortcut": "<Ctrl>D"},
+        {"label": "Move Image to Trash", "shortcut": "Delete"},
+        {"label": "Delete Image Permanently", "shortcut": "<Shift>Delete"},
+        {"label": "Darkroom Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Darkroom Redo", "shortcut": "<Ctrl><Shift>Z"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Switch to Lighttable View", "shortcut": "L"},
+        {"label": "Switch to Darkroom View", "shortcut": "D"},
+        {"label": "Switch to Map View", "shortcut": "M"},
+        {"label": "Switch to Slideshow View", "shortcut": "S"},
+        {"label": "Switch to Print View", "shortcut": "P"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Toggle All Side Panels", "shortcut": "Tab"},
+        {"label": "Toggle Left Panel", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Toggle Right Panel", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Toggle Top Panel", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Toggle Bottom Panel (Filmstrip)", "shortcut": "<Ctrl><Shift>B"},
+        {"label": "Zoom to Fit Image", "shortcut": "<Ctrl>0"},
+        {"label": "Zoom to 100%", "shortcut": "<Ctrl>1"},
+        {"label": "Zoom to 200%", "shortcut": "<Ctrl>2"},
+        {"label": "Toggle Focus Mask (Focus Peaking)", "shortcut": "<Ctrl><Shift>F"}
+      ]
+    },
+    {
+      "label": "Image",
+      "items": [
+        {"label": "Rate Image 0 Stars", "shortcut": "0"},
+        {"label": "Rate Image 1 Star", "shortcut": "1"},
+        {"label": "Rate Image 2 Stars", "shortcut": "2"},
+        {"label": "Rate Image 3 Stars", "shortcut": "3"},
+        {"label": "Rate Image 4 Stars", "shortcut": "4"},
+        {"label": "Rate Image 5 Stars", "shortcut": "5"},
+        {"label": "Toggle Over/Under Exposure Warning", "shortcut": "<Ctrl>O"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Reject Image", "shortcut": "R"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts Help Overlay", "shortcut": "H"}
+      ]
+    }
+  ]
+}

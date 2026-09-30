@@ -1,0 +1,94 @@
+{
+  "format": 1,
+  "app": "libreoffice-writer",
+  "name": "LibreOffice Writer",
+  "identifiers": [
+    "libreoffice-writer.desktop",
+    "libreoffice writer",
+    "libreoffice-writer",
+    "LibreOffice Writer"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Document", "shortcut": "<Ctrl>N"},
+        {"label": "Open Document", "shortcut": "<Ctrl>O"},
+        {"label": "Save Document", "shortcut": "<Ctrl>S"},
+        {"label": "Save As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Print Document", "shortcut": "<Ctrl>P"},
+        {"label": "Print Preview", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Close Document", "shortcut": "<Ctrl>W"},
+        {"label": "Exit LibreOffice", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Paste Special", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Paste Unformatted Text", "shortcut": "<Ctrl><Alt><Shift>V"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Find", "shortcut": "<Ctrl>F"},
+        {"label": "Find and Replace", "shortcut": "<Ctrl>H"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Sidebar", "shortcut": "<Ctrl>F5"},
+        {"label": "Toggle Navigator", "shortcut": "F5"},
+        {"label": "Toggle Fullscreen", "shortcut": "<Ctrl><Shift>J"}
+      ]
+    },
+    {
+      "label": "Insert",
+      "items": [
+        {"label": "Insert Page Break", "shortcut": "<Ctrl>Return"},
+        {"label": "Insert Line Break", "shortcut": "<Shift>Return"},
+        {"label": "Insert Comment", "shortcut": "<Ctrl><Alt>C"},
+        {"label": "Insert Table", "shortcut": "<Ctrl>F12"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Bold", "shortcut": "<Ctrl>B"},
+        {"label": "Italic", "shortcut": "<Ctrl>I"},
+        {"label": "Underline", "shortcut": "<Ctrl>U"},
+        {"label": "Double Underline", "shortcut": "<Ctrl>D"},
+        {"label": "Superscript", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "Subscript", "shortcut": "<Ctrl><Shift>B"},
+        {"label": "Align Left", "shortcut": "<Ctrl>L"},
+        {"label": "Align Right", "shortcut": "<Ctrl>R"},
+        {"label": "Align Center", "shortcut": "<Ctrl>E"},
+        {"label": "Justify", "shortcut": "<Ctrl>J"},
+        {"label": "Default Paragraph Style", "shortcut": "<Ctrl>0"},
+        {"separator": true},
+        {"label": "Apply Heading 1", "shortcut": "<Ctrl>1"},
+        {"label": "Apply Heading 2", "shortcut": "<Ctrl>2"},
+        {"label": "Apply Heading 3", "shortcut": "<Ctrl>3"},
+        {"separator": true},
+        {"label": "Manage Styles", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Go to Page", "shortcut": "<Ctrl>G"},
+        {"label": "Spelling / Grammar Check", "shortcut": "F7"},
+        {"label": "Thesaurus", "shortcut": "<Ctrl>F7"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

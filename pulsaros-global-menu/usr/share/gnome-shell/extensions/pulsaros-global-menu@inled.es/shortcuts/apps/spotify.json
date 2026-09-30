@@ -1,0 +1,86 @@
+{
+  "format": 1,
+  "app": "spotify",
+  "name": "Spotify",
+  "identifiers": [
+    "spotify.desktop",
+    "com.spotify.Client",
+    "spotify",
+    "Spotify"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Create New Playlist", "shortcut": "<Ctrl>N"},
+        {"separator": true},
+        {"label": "Preferences", "shortcut": "<Ctrl>comma"},
+        {"label": "Log Out", "shortcut": "<Alt><Shift>F6"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Filter", "shortcut": "<Ctrl>F"},
+        {"separator": true},
+        {"label": "Open Quick Search", "shortcut": "<Ctrl>K"},
+        {"label": "Focus Search Field", "shortcut": "<Ctrl>L"},
+        {"separator": true},
+        {"label": "Open Context Menu", "shortcut": "<Alt>J"}
+      ]
+    },
+    {
+      "label": "Playback",
+      "items": [
+        {"label": "Play / Pause", "shortcut": "space"},
+        {"separator": true},
+        {"label": "Previous Track", "shortcut": "<Ctrl>Left"},
+        {"label": "Next Track", "shortcut": "<Ctrl>Right"},
+        {"label": "Seek Backward", "shortcut": "<Shift>Left"},
+        {"label": "Seek Forward", "shortcut": "<Shift>Right"},
+        {"separator": true},
+        {"label": "Toggle Shuffle", "shortcut": "<Ctrl>S"},
+        {"label": "Toggle Repeat", "shortcut": "<Ctrl>R"},
+        {"label": "Like / Unlike Song", "shortcut": "<Alt><Shift>B"},
+        {"separator": true},
+        {"label": "Volume Up", "shortcut": "<Ctrl>Up"},
+        {"label": "Volume Down", "shortcut": "<Ctrl>Down"},
+        {"label": "Mute", "shortcut": "<Ctrl><Shift>Down"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Home", "shortcut": "<Alt><Shift>H"},
+        {"label": "Now Playing", "shortcut": "<Alt><Shift>J"},
+        {"label": "Queue", "shortcut": "<Alt><Shift>Q"},
+        {"separator": true},
+        {"label": "Your Library", "shortcut": "<Alt><Shift>0"},
+        {"label": "Playlists", "shortcut": "<Alt><Shift>1"},
+        {"label": "Podcasts", "shortcut": "<Alt><Shift>2"},
+        {"label": "Artists", "shortcut": "<Alt><Shift>3"},
+        {"label": "Albums", "shortcut": "<Alt><Shift>4"},
+        {"label": "Audiobooks", "shortcut": "<Alt><Shift>5"},
+        {"separator": true},
+        {"label": "Liked Songs", "shortcut": "<Alt><Shift>S"},
+        {"label": "Made For You", "shortcut": "<Alt><Shift>M"},
+        {"label": "New Releases", "shortcut": "<Alt><Shift>N"},
+        {"label": "Charts", "shortcut": "<Alt><Shift>C"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Your Library Sidebar", "shortcut": "<Alt><Shift>L"},
+        {"label": "Toggle Now Playing Sidebar", "shortcut": "<Alt><Shift>R"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

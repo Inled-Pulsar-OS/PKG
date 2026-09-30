@@ -1,0 +1,32 @@
+{
+  "format": 1,
+  "app": "characters",
+  "name": "Characters",
+  "identifiers": [
+    "org.gnome.Characters.desktop",
+    "org.gnome.Characters",
+    "gnome-characters",
+    "Characters"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search", "shortcut": "<Ctrl>F"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Main Menu", "shortcut": "F10"},
+        {"label": "Show Keyboard Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+{
+  "format": 1,
+  "app": "nautilus",
+  "name": "Files (Nautilus)",
+  "identifiers": [
+    "org.gnome.Nautilus.desktop",
+    "org.gnome.Nautilus",
+    "nautilus",
+    "Files"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Window", "shortcut": "<Ctrl>N"},
+        {"label": "New Tab", "shortcut": "<Ctrl>T"},
+        {"label": "New Folder", "shortcut": "<Ctrl><Shift>N"},
+        {"separator": true},
+        {"label": "Open", "shortcut": "<Ctrl>O"},
+        {"label": "Open in New Tab", "shortcut": "<Ctrl>Return"},
+        {"label": "Open in New Window", "shortcut": "<Shift>Return"},
+        {"label": "Open Item Location", "shortcut": "<Ctrl><Alt>O"},
+        {"separator": true},
+        {"label": "Properties", "shortcut": "<Alt>Return"},
+        {"separator": true},
+        {"label": "Close Window or Tab", "shortcut": "<Ctrl>W"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"separator": true},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"separator": true},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Select Items Matching", "shortcut": "<Ctrl>S"},
+        {"label": "Invert Selection", "shortcut": "<Ctrl><Shift>I"},
+        {"separator": true},
+        {"label": "Rename", "shortcut": "F2"},
+        {"label": "Move to Trash", "shortcut": "Delete"},
+        {"label": "Delete Permanently", "shortcut": "<Shift>Delete"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "<Ctrl>plus"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>minus"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"},
+        {"separator": true},
+        {"label": "Reload", "shortcut": "<Ctrl>R"},
+        {"separator": true},
+        {"label": "Show Hidden Files", "shortcut": "<Ctrl>H"},
+        {"label": "Show Sidebar", "shortcut": "F9"},
+        {"separator": true},
+        {"label": "List View", "shortcut": "<Ctrl>1"},
+        {"label": "Grid View", "shortcut": "<Ctrl>2"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Back", "shortcut": "<Alt>Left"},
+        {"label": "Forward", "shortcut": "<Alt>Right"},
+        {"label": "Parent Folder", "shortcut": "<Alt>Up"},
+        {"label": "Home", "shortcut": "<Alt>Home"},
+        {"separator": true},
+        {"label": "Enter Location", "shortcut": "<Ctrl>L"},
+        {"label": "Search", "shortcut": "<Ctrl>F"},
+        {"separator": true},
+        {"label": "Bookmark This Location", "shortcut": "<Ctrl>D"}
+      ]
+    },
+    {
+      "label": "Tabs",
+      "items": [
+        {"label": "Restore Closed Tab", "shortcut": "<Ctrl><Shift>T"},
+        {"separator": true},
+        {"label": "Previous Tab", "shortcut": "<Ctrl>Page_Up"},
+        {"label": "Next Tab", "shortcut": "<Ctrl>Page_Down"},
+        {"separator": true},
+        {"label": "Move Tab Left", "shortcut": "<Ctrl><Shift>Page_Up"},
+        {"label": "Move Tab Right", "shortcut": "<Ctrl><Shift>Page_Down"},
+        {"separator": true},
+        {"label": "Tab 1", "shortcut": "<Alt>1"},
+        {"label": "Tab 2", "shortcut": "<Alt>2"},
+        {"label": "Tab 3", "shortcut": "<Alt>3"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>question"},
+        {"label": "Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

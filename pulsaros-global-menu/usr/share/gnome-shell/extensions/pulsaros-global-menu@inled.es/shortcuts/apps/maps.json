@@ -1,0 +1,59 @@
+{
+  "format": 1,
+  "app": "maps",
+  "name": "Maps",
+  "identifiers": [
+    "org.gnome.Maps.desktop",
+    "org.gnome.Maps",
+    "gnome-maps",
+    "Maps"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Shape Layer", "shortcut": "<Ctrl>O"},
+        {"separator": true},
+        {"label": "Print Route", "shortcut": "<Ctrl>P"},
+        {"separator": true},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Search",
+      "items": [
+        {"label": "Search", "shortcut": "<Ctrl>F"},
+        {"label": "Explore Points of Interest", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Show Last Search Results", "shortcut": "<Ctrl>R"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "<Ctrl>plus"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>minus"},
+        {"separator": true},
+        {"label": "Rotate Clockwise", "shortcut": "<Alt>Right"},
+        {"label": "Rotate Counter-Clockwise", "shortcut": "<Alt>Left"},
+        {"label": "Reset Rotation", "shortcut": "<Alt>Up"},
+        {"separator": true},
+        {"label": "Toggle Scale", "shortcut": "<Ctrl>S"},
+        {"label": "Toggle Location Marker", "shortcut": "<Ctrl><Shift>L"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Show Route Planner", "shortcut": "<Ctrl>D"},
+        {"label": "Go to Current Location", "shortcut": "<Ctrl>L"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Main Menu", "shortcut": "F10"},
+        {"label": "Show Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

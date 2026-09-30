@@ -1,0 +1,57 @@
+{
+  "format": 1,
+  "app": "calendar",
+  "name": "Calendar",
+  "identifiers": [
+    "org.gnome.Calendar.desktop",
+    "org.gnome.Calendar",
+    "gnome-calendar",
+    "Calendar"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Event", "shortcut": "<Ctrl>N"},
+        {"label": "Manage Calendars", "shortcut": "F8"},
+        {"label": "Synchronize Calendars", "shortcut": "F5"},
+        {"separator": true},
+        {"label": "Close Window", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search", "shortcut": "<Ctrl>F"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Sidebar", "shortcut": "F9"},
+        {"separator": true},
+        {"label": "Month View", "shortcut": "<Alt>1"},
+        {"label": "Week View", "shortcut": "<Alt>2"},
+        {"separator": true},
+        {"label": "Show Today", "shortcut": "<Alt>Down"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Go Back", "shortcut": "<Alt>Left"},
+        {"label": "Go Forward", "shortcut": "<Alt>Right"},
+        {"label": "Next View", "shortcut": "<Ctrl>Page_Down"},
+        {"label": "Previous View", "shortcut": "<Ctrl>Page_Up"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Main Menu", "shortcut": "F10"},
+        {"label": "Show Help", "shortcut": "F1"},
+        {"label": "Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

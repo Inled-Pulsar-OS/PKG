@@ -1,0 +1,63 @@
+{
+  "format": 1,
+  "app": "komikku",
+  "name": "Komikku",
+  "identifiers": [
+    "info.febvre.Komikku.desktop",
+    "info.febvre.Komikku",
+    "komikku",
+    "Komikku"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Add Manga", "shortcut": "<Ctrl>plus"},
+        {"label": "Update", "shortcut": "<Ctrl>R"},
+        {"separator": true},
+        {"label": "Save Page", "shortcut": "<Ctrl>S"},
+        {"separator": true},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Select All Chapters", "shortcut": "<Ctrl>A"},
+        {"label": "Select All Downloads", "shortcut": "<Ctrl>A"},
+        {"separator": true},
+        {"label": "Search", "shortcut": "<Ctrl>F"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Fullscreen Mode", "shortcut": "F11"},
+        {"label": "Toggle Categories Pane", "shortcut": "F9"},
+        {"separator": true},
+        {"label": "Zoom In", "shortcut": "+"},
+        {"label": "Zoom Out", "shortcut": "-"},
+        {"label": "Zoom Reset", "shortcut": "0"},
+        {"separator": true},
+        {"label": "Open Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "Reader",
+      "items": [
+        {"label": "Go to Next Page", "shortcut": "space"},
+        {"label": "Go to Right Page", "shortcut": "Right"},
+        {"label": "Go to Left Page", "shortcut": "Left"},
+        {"label": "Scroll Down", "shortcut": "Down"},
+        {"label": "Scroll Up", "shortcut": "Up"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Keyboard Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

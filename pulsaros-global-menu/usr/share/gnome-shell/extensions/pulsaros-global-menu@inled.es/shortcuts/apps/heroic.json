@@ -1,0 +1,43 @@
+{
+  "format": 1,
+  "app": "heroic",
+  "name": "Heroic",
+  "identifiers": [
+    "com.heroicgameslauncher.hgl.desktop",
+    "heroic",
+    "heroic games launcher",
+    "Heroic"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Download Manager", "shortcut": "<Ctrl>J"},
+        {"label": "Open Library", "shortcut": "<Ctrl>L"},
+        {"label": "Quit Heroic", "shortcut": "<Ctrl>Q"},
+        {"label": "Open Developer Tools", "shortcut": "<Ctrl><Shift>I"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Focus Search Bar", "shortcut": "<Ctrl>F"},
+        {"label": "Open Settings", "shortcut": "<Ctrl>K"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Reload App", "shortcut": "<Ctrl>R"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Go Back", "shortcut": "Escape"},
+        {"label": "Focus Next Element", "shortcut": "Tab"},
+        {"label": "Focus Previous Element", "shortcut": "<Shift>Tab"}
+      ]
+    }
+  ]
+}

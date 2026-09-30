@@ -1,0 +1,72 @@
+{
+  "format": 1,
+  "app": "calibre",
+  "name": "Calibre",
+  "identifiers": [
+    "calibre-gui.desktop",
+    "com.calibre_ebook.calibre.desktop",
+    "calibre",
+    "Calibre"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Save to Disk", "shortcut": "S"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Remove Books", "shortcut": "Delete"},
+        {"label": "Preferences", "shortcut": "<Ctrl>P"},
+        {"label": "Quick Search / Focus Search", "shortcut": "<Alt>S"},
+        {"label": "E-book Viewer Find", "shortcut": "<Ctrl>F"},
+        {"label": "E-book Viewer Preferences", "shortcut": "<Ctrl>P"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Tag Browser", "shortcut": "<Alt><Shift>T"},
+        {"label": "Toggle Cover Browser", "shortcut": "<Alt><Shift>B"},
+        {"label": "Toggle Book Details", "shortcut": "<Alt><Shift>D"},
+        {"label": "E-book Viewer Bookmarks", "shortcut": "<Ctrl>B"},
+        {"label": "E-book Viewer Fullscreen", "shortcut": "F11"},
+        {"label": "E-book Viewer Increase Font Size", "shortcut": "<Ctrl>+"},
+        {"label": "E-book Viewer Decrease Font Size", "shortcut": "<Ctrl>-"},
+        {"label": "E-book Viewer Autoscroll", "shortcut": "<Ctrl><Shift>R"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Find Next Search Result", "shortcut": "F3"},
+        {"label": "Find Previous Search Result", "shortcut": "<Shift>F3"},
+        {"label": "E-book Viewer Next Page", "shortcut": "space"},
+        {"label": "E-book Viewer Previous Page", "shortcut": "Page_Up"},
+        {"label": "E-book Viewer Table of Contents", "shortcut": "<Ctrl>T"}
+      ]
+    },
+    {
+      "label": "Bookmarks",
+      "items": [
+        {"label": "E-book Viewer Add Bookmark", "shortcut": "<Ctrl><Alt>B"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Add Books", "shortcut": "A"},
+        {"label": "Edit Metadata", "shortcut": "E"},
+        {"label": "View Selected Book", "shortcut": "V"},
+        {"label": "Edit Book", "shortcut": "T"},
+        {"label": "Convert Books", "shortcut": "C"},
+        {"label": "Send to Device", "shortcut": "D"},
+        {"label": "Fetch News", "shortcut": "G"},
+        {"label": "Restart Calibre", "shortcut": "<Ctrl>R"}
+      ]
+    }
+  ]
+}

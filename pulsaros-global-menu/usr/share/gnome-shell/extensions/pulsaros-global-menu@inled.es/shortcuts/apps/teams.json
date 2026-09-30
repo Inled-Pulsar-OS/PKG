@@ -1,0 +1,68 @@
+{
+  "format": 1,
+  "app": "teams",
+  "name": "Microsoft Teams",
+  "identifiers": [
+    "teams.desktop",
+    "teams-for-linux.desktop",
+    "microsoft teams",
+    "Microsoft Teams"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Start New Chat", "shortcut": "<Ctrl>N"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Focus Search Bar", "shortcut": "<Ctrl>E"},
+        {"label": "Open Settings", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Screen Sharing", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "Filter Chats and Channels", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Expand Compose Box", "shortcut": "<Ctrl><Shift>X"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>="},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Go to Activity", "shortcut": "<Ctrl>1"},
+        {"label": "Go to Chat", "shortcut": "<Ctrl>2"},
+        {"label": "Go to Teams", "shortcut": "<Ctrl>3"},
+        {"label": "Go to Calendar", "shortcut": "<Ctrl>4"},
+        {"label": "Go to Calls", "shortcut": "<Ctrl>5"},
+        {"label": "Go to Files", "shortcut": "<Ctrl>6"},
+        {"label": "Reply to Current Thread", "shortcut": "<Alt><Shift>R"},
+        {"label": "Move to Previous Section / Channel", "shortcut": "<Alt>Up"},
+        {"label": "Move to Next Section / Channel", "shortcut": "<Alt>Down"}
+      ]
+    },
+    {
+      "label": "Call",
+      "items": [
+        {"label": "Toggle Mute (Microphone)", "shortcut": "<Ctrl><Shift>M"},
+        {"label": "Toggle Camera (Video)", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Raise / Lower Hand", "shortcut": "<Ctrl><Shift>K"},
+        {"label": "Accept Video Call", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Accept Audio Call", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Decline Call", "shortcut": "<Ctrl><Shift>D"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Keyboard Shortcuts", "shortcut": "<Ctrl>."}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "format": 1,
+  "app": "lutris",
+  "name": "Lutris",
+  "identifiers": [
+    "net.lutris.Lutris.desktop",
+    "lutris",
+    "Lutris"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Remove Selected Game", "shortcut": "Delete"},
+        {"label": "Search / Filter Games", "shortcut": "<Ctrl>F"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Side Panel (Sidebar)", "shortcut": "F9"},
+        {"label": "Show Installed Only", "shortcut": "<Ctrl>I"},
+        {"label": "Show Hidden Games", "shortcut": "<Ctrl>H"},
+        {"label": "Toggle Badges", "shortcut": "<Ctrl>P"},
+        {"label": "Reload / Sync Library", "shortcut": "<Ctrl>R"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Stop Running Game"},
+        {"label": "Launch Selected Game", "shortcut": "Return"},
+        {"label": "Add Game", "shortcut": "<Ctrl>N"}
+      ]
+    }
+  ]
+}

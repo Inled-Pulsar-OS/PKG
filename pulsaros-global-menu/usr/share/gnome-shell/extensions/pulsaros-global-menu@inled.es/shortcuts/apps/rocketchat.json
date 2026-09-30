@@ -1,0 +1,76 @@
+{
+  "format": 1,
+  "app": "rocketchat",
+  "name": "Rocket.Chat",
+  "identifiers": [
+    "rocketchat-desktop.desktop",
+    "chat.rocket.RocketChat.desktop",
+    "rocket.chat",
+    "rocketchat",
+    "Rocket.Chat"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit Rocket.Chat", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search Channels and Users (Quick Switcher)", "shortcut": "<Ctrl>K"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Bold Text", "shortcut": "<Ctrl>B"},
+        {"label": "Italic Text", "shortcut": "<Ctrl>I"},
+        {"label": "Strikethrough Text", "shortcut": "<Ctrl><Shift>X"},
+        {"label": "Inline Code", "shortcut": "<Ctrl><Shift>C"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Reply to Message", "shortcut": "<Shift>Up"},
+        {"label": "Mark All Channels Read", "shortcut": "<Ctrl><Shift>Escape"},
+        {"label": "Reload", "shortcut": "<Ctrl>R"},
+        {"label": "Force Reload", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Toggle Developer Tools", "shortcut": "<Ctrl><Shift>I"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>="},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Next Channel", "shortcut": "<Alt>Down"},
+        {"label": "Previous Channel", "shortcut": "<Alt>Up"},
+        {"label": "Edit Last Sent Message", "shortcut": "Up"},
+        {"label": "Mark Current Channel Read", "shortcut": "<Shift>Escape"},
+        {"label": "Toggle Server Sidebar", "shortcut": "<Ctrl><Shift>S"},
+        {"separator": true},
+        {"label": "Switch to Server 1", "shortcut": "<Ctrl>1"},
+        {"label": "Switch to Server 2", "shortcut": "<Ctrl>2"},
+        {"label": "Switch to Server 3", "shortcut": "<Ctrl>3"},
+        {"label": "Switch to Server 4", "shortcut": "<Ctrl>4"},
+        {"label": "Switch to Server 5", "shortcut": "<Ctrl>5"},
+        {"label": "Switch to Server 6", "shortcut": "<Ctrl>6"},
+        {"label": "Switch to Server 7", "shortcut": "<Ctrl>7"},
+        {"label": "Switch to Server 8", "shortcut": "<Ctrl>8"},
+        {"label": "Switch to Server 9", "shortcut": "<Ctrl>9"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Keyboard Shortcuts Cheat Sheet", "shortcut": "<Shift>?"}
+      ]
+    }
+  ]
+}

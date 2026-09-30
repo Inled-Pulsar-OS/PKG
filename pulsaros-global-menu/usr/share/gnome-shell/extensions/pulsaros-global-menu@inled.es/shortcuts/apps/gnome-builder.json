@@ -1,0 +1,93 @@
+{
+  "format": 1,
+  "app": "gnome-builder",
+  "name": "Builder",
+  "identifiers": [
+    "org.gnome.Builder.desktop",
+    "gnome-builder",
+    "builder",
+    "Builder"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open File", "shortcut": "<Ctrl>O"},
+        {"label": "New Document", "shortcut": "<Ctrl>N"},
+        {"label": "Save", "shortcut": "<Ctrl>S"},
+        {"label": "Save As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Close Page / Frame", "shortcut": "<Ctrl>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"},
+        {"label": "New Terminal in Host", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "New Terminal in Runtime", "shortcut": "<Ctrl><Alt>T"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Global Search", "shortcut": "<Ctrl>Return"},
+        {"label": "Preferences", "shortcut": "<Ctrl>,"},
+        {"label": "Find", "shortcut": "<Ctrl>F"},
+        {"label": "Find and Replace", "shortcut": "<Ctrl>H"},
+        {"label": "Global Grep / Find in Files", "shortcut": "<Ctrl><Alt><Shift>F"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Left Panel", "shortcut": "F9"},
+        {"label": "Toggle Bottom Panel", "shortcut": "<Ctrl>F9"}
+      ]
+    },
+    {
+      "label": "Navigate",
+      "items": [
+        {"label": "Find Next", "shortcut": "<Ctrl>G"},
+        {"label": "Find Previous", "shortcut": "<Ctrl><Shift>G"},
+        {"label": "Go to Line", "shortcut": "<Ctrl>I"},
+        {"separator": true},
+        {"label": "Switch to Page 1", "shortcut": "<Alt>1"},
+        {"label": "Switch to Page 2", "shortcut": "<Alt>2"},
+        {"label": "Switch to Page 3", "shortcut": "<Alt>3"},
+        {"label": "Switch to Page 4", "shortcut": "<Alt>4"},
+        {"label": "Switch to Page 5", "shortcut": "<Alt>5"},
+        {"label": "Switch to Page 6", "shortcut": "<Alt>6"},
+        {"label": "Switch to Page 7", "shortcut": "<Alt>7"},
+        {"label": "Switch to Page 8", "shortcut": "<Alt>8"},
+        {"label": "Switch to Page 9", "shortcut": "<Alt>9"}
+      ]
+    },
+    {
+      "label": "Code",
+      "items": [
+        {"label": "Project Configuration", "shortcut": "<Alt>,"},
+        {"label": "Focus Last Page", "shortcut": "<Ctrl>0"},
+        {"label": "Format Document", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Format Selection", "shortcut": "<Alt><Shift>F"},
+        {"label": "Debugger Continue", "shortcut": "F5"}
+      ]
+    },
+    {
+      "label": "Run",
+      "items": [
+        {"label": "Build Project", "shortcut": "<Ctrl><Alt><Shift>B"},
+        {"label": "Cancel Build", "shortcut": "<Ctrl><Alt><Shift>C"},
+        {"label": "Run Project", "shortcut": "<Ctrl><Shift>space"},
+        {"label": "Stop Project", "shortcut": "<Shift>F5"},
+        {"label": "Show Build Log", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Debug Project", "shortcut": "<Ctrl><Alt><Shift>D"},
+        {"label": "Debugger Step Over", "shortcut": "F7"},
+        {"label": "Debugger Step In", "shortcut": "F8"},
+        {"label": "Debugger Step Out", "shortcut": "<Shift>F8"},
+        {"label": "Toggle Breakpoint", "shortcut": "<Ctrl><Alt><Shift>J"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help / Documentation", "shortcut": "F1"},
+        {"label": "Keyboard Shortcuts Help", "shortcut": "<Ctrl>?"}
+      ]
+    }
+  ]
+}

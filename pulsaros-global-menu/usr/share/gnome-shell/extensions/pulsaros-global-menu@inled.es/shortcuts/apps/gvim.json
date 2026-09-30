@@ -1,0 +1,77 @@
+{
+  "format": 1,
+  "app": "gvim",
+  "name": "GVim",
+  "identifiers": [
+    "gvim.desktop",
+    "org.vim.Vim.desktop",
+    "gvim",
+    "GVim"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open File Browser", "shortcut": ": b r o w s e space c o n f i r m space e Return"},
+        {"label": "Save File", "shortcut": ": w Return"},
+        {"label": "Save File As", "shortcut": ": b r o w s e space c o n f i r m space w Return"},
+        {"label": "Save All and Quit", "shortcut": ": c o n f i r m space w q a Return"},
+        {"label": "Close Active Window", "shortcut": ": c l o s e Return"},
+        {"label": "Exit / Quit GVim", "shortcut": ": c o n f i r m space q a Return"},
+        {"label": "Close Focused Window Split", "shortcut": "<Ctrl>w c"},
+        {"label": "Create New Tab", "shortcut": ": t a b n e w Return"},
+        {"label": "Open Find and Replace Dialog", "shortcut": ": p r o m p t r e p l Return"},
+        {"label": "Print Buffer", "shortcut": ": h a r d c o p y Return"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "U"},
+        {"label": "Redo", "shortcut": "<Ctrl>R"},
+        {"label": "Cut Selection to System Clipboard", "shortcut": "X"},
+        {"label": "Copy Selection to System Clipboard", "shortcut": "Y"},
+        {"label": "Paste from System Clipboard", "shortcut": "\" + g <Shift>p"},
+        {"label": "Search Backward", "shortcut": "?"}
+      ]
+    },
+    {
+      "label": "Selection",
+      "items": [
+        {"label": "Select Entire Buffer", "shortcut": "g g <Shift>v <Shift>g"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Line Numbers", "shortcut": ": s e t space n u ! Return"},
+        {"label": "Toggle Spell Checking", "shortcut": ": s e t l o c a l space s p e l l ! Return"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Switch Focus to Next Window", "shortcut": "<Ctrl>w w"},
+        {"label": "Next Tab", "shortcut": "g t"},
+        {"label": "Previous Tab", "shortcut": "g <Shift>t"},
+        {"label": "Search Forward", "shortcut": "/"},
+        {"label": "Next Search Match", "shortcut": "N"},
+        {"label": "Previous Search Match", "shortcut": "<Shift>N"},
+        {"label": "Go to Specific Line"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Split Window Horizontally", "shortcut": "<Ctrl>w s"},
+        {"label": "Split Window Vertically", "shortcut": "<Ctrl>w v"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Help Documentation", "shortcut": ": h e l p Return"}
+      ]
+    }
+  ]
+}

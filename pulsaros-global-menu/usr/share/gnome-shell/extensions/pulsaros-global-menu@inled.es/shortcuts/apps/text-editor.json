@@ -1,0 +1,105 @@
+{
+  "format": 1,
+  "app": "text-editor",
+  "name": "Text Editor",
+  "identifiers": [
+    "org.gnome.TextEditor.desktop",
+    "org.gnome.TextEditor",
+    "gnome-text-editor",
+    "Text Editor"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Document", "shortcut": "<Ctrl>T"},
+        {"label": "Open Document", "shortcut": "<Ctrl>O"},
+        {"label": "Find Document by Name", "shortcut": "<Ctrl>K"},
+        {"separator": true},
+        {"label": "Save", "shortcut": "<Ctrl>S"},
+        {"label": "Save As", "shortcut": "<Ctrl><Shift>S"},
+        {"separator": true},
+        {"label": "Document Properties", "shortcut": "F9"},
+        {"separator": true},
+        {"label": "Close Document", "shortcut": "<Ctrl>W"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"separator": true},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Copy All", "shortcut": "<Ctrl><Shift>C"},
+        {"separator": true},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Unselect All", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Select Current Line", "shortcut": "<Ctrl>L"},
+        {"separator": true},
+        {"label": "Copy Line Down", "shortcut": "<Ctrl><Alt>D"},
+        {"label": "Delete Line", "shortcut": "<Ctrl>D"},
+        {"separator": true},
+        {"label": "Insert Emoji", "shortcut": "<Ctrl>period"},
+        {"separator": true},
+        {"label": "Preferences", "shortcut": "<Ctrl>comma"}
+      ]
+    },
+    {
+      "label": "Search",
+      "items": [
+        {"label": "Find", "shortcut": "<Ctrl>F"},
+        {"label": "Find and Replace", "shortcut": "<Ctrl>H"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "<Ctrl>plus"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>minus"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"},
+        {"separator": true},
+        {"label": "Toggle Text Wrapping", "shortcut": "<Alt>W"},
+        {"label": "Toggle Insertion Caret", "shortcut": "F7"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Go to Line", "shortcut": "<Ctrl>I"},
+        {"separator": true},
+        {"label": "Beginning of Document", "shortcut": "<Ctrl>Home"},
+        {"label": "End of Document", "shortcut": "<Ctrl>End"},
+        {"separator": true},
+        {"label": "Previous Paragraph", "shortcut": "<Ctrl>Up"},
+        {"label": "Next Paragraph", "shortcut": "<Ctrl>Down"},
+        {"separator": true},
+        {"label": "Move Line Up", "shortcut": "<Alt>Up"},
+        {"label": "Move Line Down", "shortcut": "<Alt>Down"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "New Window", "shortcut": "<Ctrl>N"},
+        {"label": "Move Document to New Window", "shortcut": "<Ctrl><Shift>N"},
+        {"separator": true},
+        {"label": "Next Tab", "shortcut": "<Ctrl>Page_Down"},
+        {"label": "Previous Tab", "shortcut": "<Ctrl>Page_Up"},
+        {"label": "Reorder After Next Tab", "shortcut": "<Ctrl><Shift>Page_Down"},
+        {"label": "Reorder Before Previous Tab", "shortcut": "<Ctrl><Shift>Page_Up"},
+        {"separator": true},
+        {"label": "Restore Closed Tab", "shortcut": "<Ctrl><Shift>T"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>question"},
+        {"label": "Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

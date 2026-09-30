@@ -1,0 +1,57 @@
+{
+  "format": 1,
+  "app": "virt-manager",
+  "name": "Virtual Machine Manager",
+  "identifiers": [
+    "virt-manager.desktop",
+    "virt-manager",
+    "virtual machine manager",
+    "Virtual Machine Manager"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Virtual Machine"},
+        {"label": "Close Manager Window", "shortcut": "<Ctrl>W"},
+        {"label": "Close VM Window", "shortcut": "<Ctrl><Shift>W"},
+        {"label": "Quit Virt-Manager", "shortcut": "<Ctrl>Q"},
+        {"label": "Quit from VM Window", "shortcut": "<Ctrl><Shift>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Preferences"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Fullscreen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Add Connection"},
+        {"label": "View VM Details"},
+        {"label": "View VM Console"},
+        {"label": "View VM Snapshots"},
+        {"label": "Ungrab Cursor and Keyboard"},
+        {"label": "Take Screenshot"},
+        {"label": "Pause / Resume VM"},
+        {"label": "Shut Down VM"},
+        {"label": "Force Reset VM"},
+        {"label": "Send Key Combination (Ctrl+Alt+Del)", "shortcut": "<Ctrl><Alt>Delete"},
+        {"label": "Send Key Combination (Ctrl+Alt+Backspace)", "shortcut": "<Ctrl><Alt>BackSpace"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help Contents", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

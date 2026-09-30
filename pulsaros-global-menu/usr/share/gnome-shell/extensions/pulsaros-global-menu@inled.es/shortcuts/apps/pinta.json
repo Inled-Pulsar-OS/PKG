@@ -1,0 +1,124 @@
+{
+  "format": 1,
+  "app": "pinta",
+  "name": "Pinta",
+  "identifiers": [
+    "pinta.desktop",
+    "com.github.PintaProject.Pinta.desktop",
+    "pinta",
+    "Pinta"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Image", "shortcut": "<Ctrl>N"},
+        {"label": "Open Image", "shortcut": "<Ctrl>O"},
+        {"label": "Save Image", "shortcut": "<Ctrl>S"},
+        {"label": "Save Image As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Save All Images", "shortcut": "<Ctrl><Alt>S"},
+        {"label": "Print", "shortcut": "<Ctrl>P"},
+        {"label": "Close Image", "shortcut": "<Ctrl>W"},
+        {"label": "Close All Images", "shortcut": "<Ctrl><Shift>W"},
+        {"label": "Exit Pinta", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Copy Merged", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Paste into New Layer", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Paste into New Image", "shortcut": "<Ctrl><Alt>V"},
+        {"label": "Deselect", "shortcut": "<Ctrl>D"},
+        {"label": "Invert Selection", "shortcut": "<Ctrl>I"}
+      ]
+    },
+    {
+      "label": "Select",
+      "items": [
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Erase Selection", "shortcut": "Delete"},
+        {"label": "Fill Selection", "shortcut": "BackSpace"},
+        {"label": "Crop to Selection", "shortcut": "<Ctrl><Shift>X"},
+        {"label": "Rectangle Select Tool", "shortcut": "S"},
+        {"label": "Move Selected Pixels", "shortcut": "M"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Actual Size (100%)", "shortcut": "<Ctrl>0"},
+        {"label": "Zoom to Window (Best Fit)", "shortcut": "<Ctrl>B"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Toggle Rulers", "shortcut": "<Ctrl>R"},
+        {"label": "Toggle Grid", "shortcut": "<Ctrl>G"},
+        {"label": "Next Image Tab", "shortcut": "<Ctrl>Page_Down"},
+        {"label": "Previous Image Tab", "shortcut": "<Ctrl>Page_Up"}
+      ]
+    },
+    {
+      "label": "Image",
+      "items": [
+        {"label": "Auto Crop", "shortcut": "<Ctrl><Alt>A"},
+        {"label": "Resize Image", "shortcut": "<Ctrl>R"},
+        {"label": "Canvas Size", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Flip Horizontal", "shortcut": "<Ctrl><Alt>H"},
+        {"label": "Flip Vertical", "shortcut": "<Ctrl><Alt>V"},
+        {"label": "Rotate 90\u00b0 Clockwise", "shortcut": "<Ctrl>H"},
+        {"label": "Rotate 90\u00b0 Counter-Clockwise", "shortcut": "<Ctrl>G"},
+        {"label": "Rotate 180\u00b0", "shortcut": "<Ctrl>J"},
+        {"label": "Flatten Image", "shortcut": "<Ctrl><Shift>F"}
+      ]
+    },
+    {
+      "label": "Colors",
+      "items": [
+        {"label": "Auto-Level", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Black and White", "shortcut": "<Ctrl><Shift>B"},
+        {"label": "Brightness/Contrast", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Curves", "shortcut": "<Ctrl><Shift>M"},
+        {"label": "Hue/Saturation", "shortcut": "<Ctrl><Shift>U"},
+        {"label": "Invert Colors", "shortcut": "<Ctrl><Shift>I"},
+        {"label": "Levels", "shortcut": "<Ctrl>L"},
+        {"label": "Sepia", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "Color Picker Tool", "shortcut": "K"}
+      ]
+    },
+    {
+      "label": "Layer",
+      "items": [
+        {"label": "Add New Layer", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Delete Layer", "shortcut": "<Ctrl><Shift>Delete"},
+        {"label": "Duplicate Layer", "shortcut": "<Ctrl><Shift>D"},
+        {"label": "Merge Layer Down", "shortcut": "<Ctrl>M"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Paintbrush Tool", "shortcut": "B"},
+        {"label": "Eraser Tool", "shortcut": "E"},
+        {"label": "Pencil Tool", "shortcut": "P"},
+        {"label": "Paint Bucket Tool", "shortcut": "F"},
+        {"label": "Line/Curve Tool", "shortcut": "V"},
+        {"label": "Text Tool", "shortcut": "T"},
+        {"label": "Increase Brush Size", "shortcut": "]"},
+        {"label": "Decrease Brush Size", "shortcut": "["}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts Cheatsheet", "shortcut": "<Ctrl>/"},
+        {"label": "Help Contents", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

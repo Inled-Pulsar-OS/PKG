@@ -1,0 +1,87 @@
+{
+  "format": 1,
+  "app": "onlyoffice",
+  "name": "ONLYOFFICE",
+  "identifiers": [
+    "onlyoffice-desktopeditors.desktop",
+    "org.onlyoffice.desktopeditors.desktop",
+    "onlyoffice desktop editors",
+    "desktopeditors",
+    "ONLYOFFICE"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Document", "shortcut": "<Ctrl>N"},
+        {"label": "Open File", "shortcut": "<Ctrl>O"},
+        {"label": "Save", "shortcut": "<Ctrl>S"},
+        {"label": "Save As", "shortcut": "F12"},
+        {"label": "Print", "shortcut": "<Ctrl>P"},
+        {"label": "Close Document", "shortcut": "<Ctrl>W"},
+        {"label": "Exit / Quit", "shortcut": "<Alt>F4"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Paste Without Formatting", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Copy Style", "shortcut": "<Ctrl><Alt>C"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Find", "shortcut": "<Ctrl>F"},
+        {"label": "Replace", "shortcut": "<Ctrl>H"},
+        {"label": "Clear Formatting", "shortcut": "<Ctrl>space"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Full Screen", "shortcut": "F11"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"}
+      ]
+    },
+    {
+      "label": "Insert",
+      "items": [
+        {"label": "Insert Page Break", "shortcut": "<Ctrl>Return"},
+        {"label": "Insert Column Break", "shortcut": "<Ctrl><Shift>Return"},
+        {"label": "Insert Hyperlink", "shortcut": "<Ctrl>K"},
+        {"label": "Insert Equation", "shortcut": "<Alt>="}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Apply Style", "shortcut": "<Ctrl><Alt>V"},
+        {"label": "Bold", "shortcut": "<Ctrl>B"},
+        {"label": "Italic", "shortcut": "<Ctrl>I"},
+        {"label": "Underline", "shortcut": "<Ctrl>U"},
+        {"label": "Strikeout", "shortcut": "<Ctrl>5"},
+        {"label": "Subscript", "shortcut": "<Ctrl>."},
+        {"label": "Superscript", "shortcut": "<Ctrl>,"},
+        {"label": "Heading 1 Style", "shortcut": "<Alt>1"},
+        {"label": "Heading 2 Style", "shortcut": "<Alt>2"},
+        {"label": "Heading 3 Style", "shortcut": "<Alt>3"},
+        {"label": "Bulleted List", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Increase Font Size", "shortcut": "<Ctrl>]"},
+        {"label": "Decrease Font Size", "shortcut": "<Ctrl>["},
+        {"label": "Align Left", "shortcut": "<Ctrl>L"},
+        {"label": "Align Center", "shortcut": "<Ctrl>E"},
+        {"label": "Align Right", "shortcut": "<Ctrl>R"},
+        {"label": "Align Justified", "shortcut": "<Ctrl>J"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Spellcheck", "shortcut": "F7"}
+      ]
+    }
+  ]
+}

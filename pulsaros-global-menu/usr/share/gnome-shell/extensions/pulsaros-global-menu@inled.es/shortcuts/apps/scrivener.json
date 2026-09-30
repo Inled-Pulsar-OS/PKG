@@ -1,0 +1,60 @@
+{
+  "format": 1,
+  "app": "scrivener",
+  "name": "Scrivener",
+  "identifiers": [
+    "scrivener.desktop",
+    "scrivener",
+    "Scrivener"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Project", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Open Project", "shortcut": "<Ctrl>O"},
+        {"label": "Save Project", "shortcut": "<Ctrl>S"},
+        {"label": "Save Project As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Close Project", "shortcut": "<Ctrl>W"},
+        {"label": "Add New Text Document", "shortcut": "<Ctrl>N"},
+        {"label": "Add New Folder", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Print Current Document", "shortcut": "<Ctrl>P"},
+        {"label": "Quit Scrivener", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Compile Project", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "Split Document at Selection", "shortcut": "<Ctrl>K"},
+        {"label": "Split Document with Title", "shortcut": "<Ctrl><Shift>K"},
+        {"label": "View as Scrivenings", "shortcut": "<Ctrl>1"},
+        {"label": "View as Corkboard", "shortcut": "<Ctrl>2"},
+        {"label": "View as Outliner", "shortcut": "<Ctrl>3"},
+        {"label": "Find in Text", "shortcut": "<Ctrl>F"},
+        {"label": "Find Next", "shortcut": "F3"},
+        {"label": "Project Search", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Quick Search", "shortcut": "<Ctrl>G"},
+        {"label": "Open Preferences / Options", "shortcut": "F12"},
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Bold Text", "shortcut": "<Ctrl>B"},
+        {"label": "Italic Text", "shortcut": "<Ctrl>I"},
+        {"label": "Underline Text", "shortcut": "<Ctrl>U"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Binder Sidebar", "shortcut": "<Alt><Shift>B"},
+        {"label": "Toggle Inspector Panel", "shortcut": "<Alt><Shift>I"},
+        {"label": "Toggle Full Screen / Composition Mode", "shortcut": "F11"}
+      ]
+    }
+  ]
+}

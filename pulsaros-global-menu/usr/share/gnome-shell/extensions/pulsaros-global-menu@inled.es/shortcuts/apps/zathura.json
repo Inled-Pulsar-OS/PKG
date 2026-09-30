@@ -1,0 +1,70 @@
+{
+  "format": 1,
+  "app": "zathura",
+  "name": "Zathura",
+  "identifiers": [
+    "org.pwmt.zathura.desktop",
+    "zathura",
+    "Zathura"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open File Chooser", "shortcut": "<Alt>O"},
+        {"label": "Print", "shortcut": "<Ctrl>P"},
+        {"label": "Quit", "shortcut": "Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search Backward", "shortcut": "?"},
+        {"label": "Copy File Path", "shortcut": "<Shift>Y"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Recolor / Dark Mode", "shortcut": "<Ctrl>R"},
+        {"label": "Reload Document", "shortcut": "<Shift>R"},
+        {"label": "Rotate Clockwise", "shortcut": "R"},
+        {"label": "Abort / Close / Unfocus", "shortcut": "Escape"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Toggle Presentation Mode", "shortcut": "F5"},
+        {"label": "Toggle Single Page Mode", "shortcut": "W"},
+        {"label": "Toggle Dual Page Mode", "shortcut": "D"},
+        {"label": "Zoom In", "shortcut": "+"},
+        {"label": "Zoom Out", "shortcut": "-"},
+        {"label": "Zoom 100%", "shortcut": "z 0"},
+        {"label": "Zoom Fit", "shortcut": "z z"},
+        {"label": "Toggle Statusbar", "shortcut": "<Ctrl>N"},
+        {"label": "Toggle Inputbar", "shortcut": "<Ctrl>M"},
+        {"label": "Follow Link", "shortcut": "F"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Toggle Index (Table of Contents)", "shortcut": "Tab"},
+        {"label": "Scroll Down", "shortcut": "J"},
+        {"label": "Scroll Up", "shortcut": "K"},
+        {"label": "Scroll Left", "shortcut": "H"},
+        {"label": "Scroll Right", "shortcut": "L"},
+        {"label": "Scroll Half Page Down", "shortcut": "<Ctrl>D"},
+        {"label": "Scroll Half Page Up", "shortcut": "<Ctrl>U"},
+        {"label": "Scroll Full Page Down", "shortcut": "<Ctrl>F"},
+        {"label": "Scroll Full Page Up", "shortcut": "<Ctrl>B"},
+        {"label": "Next Page", "shortcut": "<Shift>J"},
+        {"label": "Previous Page", "shortcut": "<Shift>K"},
+        {"label": "Jump to First Page", "shortcut": "g g"},
+        {"label": "Jump to Last Page", "shortcut": "<Shift>G"},
+        {"label": "Search Forward", "shortcut": "/"},
+        {"label": "Next Search Match", "shortcut": "N"},
+        {"label": "Previous Search Match", "shortcut": "<Shift>N"},
+        {"label": "Jump Backwards", "shortcut": "<Ctrl>O"},
+        {"label": "Jump Forwards", "shortcut": "<Ctrl>I"}
+      ]
+    }
+  ]
+}

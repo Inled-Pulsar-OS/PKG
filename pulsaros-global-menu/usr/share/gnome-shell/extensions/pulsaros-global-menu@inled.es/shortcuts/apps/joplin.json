@@ -1,0 +1,87 @@
+{
+  "format": 1,
+  "app": "joplin",
+  "name": "Joplin",
+  "identifiers": [
+    "joplin.desktop",
+    "net.cozic.joplin_desktop.desktop",
+    "joplin",
+    "Joplin"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Note", "shortcut": "<Ctrl>N"},
+        {"label": "New To-Do", "shortcut": "<Ctrl>T"},
+        {"label": "Synchronize", "shortcut": "<Ctrl>S"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"},
+        {"label": "Open Note in New Window", "shortcut": "<Ctrl><Alt>N"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Paste as Plain Text", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Paste as Markdown", "shortcut": "<Ctrl><Alt><Shift>V"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Focus Search", "shortcut": "F6"},
+        {"label": "Find in Note", "shortcut": "<Ctrl>F"},
+        {"label": "Focus Note Title", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Focus Note Body", "shortcut": "<Ctrl><Shift>B"},
+        {"label": "Set Tags", "shortcut": "<Ctrl><Alt>T"},
+        {"label": "Options / Preferences", "shortcut": "<Ctrl>,"},
+        {"label": "Goto Anything", "shortcut": "<Ctrl>P"},
+        {"label": "Command Palette", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "Delete Line", "shortcut": "<Ctrl>D"},
+        {"label": "Duplicate Line", "shortcut": "<Ctrl><Shift>D"},
+        {"label": "Swap Line Up", "shortcut": "<Alt>Up"},
+        {"label": "Swap Line Down", "shortcut": "<Alt>Down"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Bold", "shortcut": "<Ctrl>B"},
+        {"label": "Italic", "shortcut": "<Ctrl>I"},
+        {"label": "Insert Link", "shortcut": "<Ctrl>K"},
+        {"label": "Bulleted List", "shortcut": "<Ctrl><Alt>-"},
+        {"label": "Insert Date and Time", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Focus Note List", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Toggle Note List", "shortcut": "F11"},
+        {"label": "Indent Less", "shortcut": "<Ctrl>["},
+        {"label": "Indent More", "shortcut": "<Ctrl>]"},
+        {"label": "Link to Note", "shortcut": "<Alt><Shift>L"},
+        {"label": "Inline Code", "shortcut": "<Ctrl>`"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Focus Sidebar", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Focus Toolbar", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Toggle Sidebar", "shortcut": "F10"},
+        {"label": "Toggle Menu Bar", "shortcut": "<Ctrl><Shift>M"},
+        {"label": "Toggle Visible Panes", "shortcut": "<Ctrl>L"},
+        {"label": "Toggle Editors", "shortcut": "<Ctrl><Alt>E"},
+        {"label": "Zoom Actual Size", "shortcut": "<Ctrl>0"},
+        {"label": "Toggle External Editing", "shortcut": "<Ctrl>E"},
+        {"label": "Toggle Comment", "shortcut": "<Ctrl>/"},
+        {"label": "Sort Selected Lines", "shortcut": "<Ctrl><Alt>S"},
+        {"label": "Toggle Tab Moves Focus", "shortcut": "<Ctrl>M"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

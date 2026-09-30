@@ -1,0 +1,71 @@
+{
+  "format": 1,
+  "app": "qbittorrent",
+  "name": "qBittorrent",
+  "identifiers": [
+    "org.qbittorrent.qBittorrent.desktop",
+    "qbittorrent",
+    "qBittorrent"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Create Torrent", "shortcut": "<Ctrl>N"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Exit / Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Focus Search / Filter Line", "shortcut": "<Ctrl>F"},
+        {"label": "Paste Torrent URL or File", "shortcut": "<Ctrl>V"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Options / Preferences", "shortcut": "<Alt>O"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Switch to Transfers Tab", "shortcut": "<Alt>1"},
+        {"label": "Switch to Search Tab", "shortcut": "<Alt>2"},
+        {"label": "Switch to RSS Tab", "shortcut": "<Alt>3"},
+        {"label": "Switch to Execution Log Tab", "shortcut": "<Alt>4"},
+        {"label": "View General Info", "shortcut": "<Alt>G"},
+        {"label": "View Trackers", "shortcut": "<Alt>C"},
+        {"label": "View Peers", "shortcut": "<Alt>R"},
+        {"label": "View HTTP Sources / Seeds", "shortcut": "<Alt>B"},
+        {"label": "View Content / Files", "shortcut": "<Alt>Z"},
+        {"label": "View Speed Graph", "shortcut": "<Alt>D"},
+        {"label": "Minimize Window", "shortcut": "<Ctrl>M"}
+      ]
+    },
+    {
+      "label": "Torrent",
+      "items": [
+        {"label": "Add Torrent File", "shortcut": "<Ctrl>O"},
+        {"label": "Download from URL / Add Torrent Link", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Start / Resume Torrent", "shortcut": "<Ctrl>S"},
+        {"label": "Pause / Stop Torrent", "shortcut": "<Ctrl>P"},
+        {"label": "Resume All Torrents", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Pause All Torrents", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "Increase Queue Position (Move Up)", "shortcut": "<Ctrl>+"},
+        {"label": "Decrease Queue Position (Move Down)", "shortcut": "<Ctrl>-"},
+        {"label": "Top Queue Position", "shortcut": "<Ctrl><Shift>+"},
+        {"label": "Bottom Queue Position", "shortcut": "<Ctrl><Shift>-"},
+        {"label": "Delete Torrent", "shortcut": "Delete"},
+        {"label": "Permanently Delete Torrent (with data)", "shortcut": "<Shift>Delete"},
+        {"label": "Alternative Focus Filter", "shortcut": "<Ctrl>E"},
+        {"label": "Lock qBittorrent", "shortcut": "<Ctrl>L"},
+        {"label": "Statistics", "shortcut": "<Ctrl>I"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Documentation / Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

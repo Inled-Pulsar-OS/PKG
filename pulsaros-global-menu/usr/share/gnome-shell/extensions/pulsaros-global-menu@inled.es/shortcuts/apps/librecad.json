@@ -1,0 +1,83 @@
+{
+  "format": 1,
+  "app": "librecad",
+  "name": "LibreCAD",
+  "identifiers": [
+    "librecad.desktop",
+    "org.librecad.librecad.desktop",
+    "librecad",
+    "LibreCAD"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New File", "shortcut": "<Ctrl>N"},
+        {"label": "Open File", "shortcut": "<Ctrl>O"},
+        {"label": "Save File", "shortcut": "<Ctrl>S"},
+        {"label": "Save File As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Close File", "shortcut": "<Ctrl>W"},
+        {"label": "Close All Files", "shortcut": "<Ctrl><Shift>W"},
+        {"label": "Print", "shortcut": "<Ctrl>P"},
+        {"label": "Export as CAM / Plain SVG", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "Quit LibreCAD", "shortcut": "<Ctrl>Q"},
+        {"label": "Revert Direction Modify", "shortcut": "<Ctrl><Shift>R"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Cut Quick", "shortcut": "<Ctrl><Shift>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Copy Quick", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Paste Transform", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Delete Selection", "shortcut": "Delete"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Deselect All", "shortcut": "<Ctrl>K"},
+        {"label": "Drawing Preferences", "shortcut": "<Ctrl>,"},
+        {"label": "Duplicate Modify", "shortcut": "<Ctrl><Shift>D"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Zoom Auto (Fit All)", "shortcut": "<Ctrl>F"},
+        {"label": "Zoom Redraw / Refresh", "shortcut": "F5"},
+        {"label": "Toggle Draft Mode", "shortcut": "<Ctrl>D"},
+        {"label": "Toggle Statusbar", "shortcut": "<Ctrl>I"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Draw",
+      "items": [
+        {"label": "Focus Command Line", "shortcut": "<Ctrl>M"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Toggle Grid", "shortcut": "<Ctrl>G"},
+        {"label": "Restrict Orthogonal", "shortcut": "F8"},
+        {"label": "Exclusive Snap Mode", "shortcut": "<Alt>X"},
+        {"label": "Move to Top (Order)", "shortcut": "Home"},
+        {"label": "Move to Bottom (Order)", "shortcut": "End"},
+        {"label": "Raise (Order)", "shortcut": "Page_Up"},
+        {"label": "Lower (Order)", "shortcut": "Page_Down"},
+        {"label": "Main Menu", "shortcut": "F10"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help Manual", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

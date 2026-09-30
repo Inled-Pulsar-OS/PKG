@@ -1,0 +1,60 @@
+{
+  "format": 1,
+  "app": "system-monitor",
+  "name": "System Monitor",
+  "identifiers": [
+    "org.gnome.SystemMonitor.desktop",
+    "org.gnome.SystemMonitor",
+    "gnome-system-monitor",
+    "System Monitor"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Process",
+      "items": [
+        {"label": "Properties", "shortcut": "<Alt>Return"},
+        {"label": "Memory Maps", "shortcut": "<Ctrl>M"},
+        {"label": "Open Files", "shortcut": "<Ctrl>O"},
+        {"label": "Dependencies", "shortcut": "<Ctrl>D"},
+        {"label": "Set Affinity", "shortcut": "<Alt>S"},
+        {"separator": true},
+        {"label": "Send Stop Signal", "shortcut": "<Ctrl>S"},
+        {"label": "Send Continue Signal", "shortcut": "<Ctrl>C"},
+        {"label": "Send Terminate Signal", "shortcut": "<Ctrl>T"},
+        {"label": "Send Kill Signal", "shortcut": "<Ctrl>K"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Switch to Resources", "shortcut": "<Alt>1"},
+        {"label": "Switch to Processes", "shortcut": "<Alt>2"},
+        {"label": "Switch to File Systems", "shortcut": "<Alt>3"},
+        {"separator": true},
+        {"label": "Search", "shortcut": "<Ctrl>F"},
+        {"label": "Refresh", "shortcut": "<Ctrl>R"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Menu", "shortcut": "F10"},
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>question"},
+        {"label": "Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

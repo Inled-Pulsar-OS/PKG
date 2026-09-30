@@ -1,0 +1,54 @@
+{
+  "format": 1,
+  "app": "handbrake",
+  "name": "HandBrake",
+  "identifiers": [
+    "fr.handbrake.ghb.desktop",
+    "handbrake",
+    "ghb",
+    "HandBrake"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Source (File)", "shortcut": "<Ctrl>O"},
+        {"label": "Open Source (Directory)", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Save / Destination", "shortcut": "<Ctrl>S"},
+        {"label": "Save Preset As (New Preset)", "shortcut": "<Ctrl>N"},
+        {"label": "Quit HandBrake", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Presets Sidebar", "shortcut": "<Alt>E"},
+        {"label": "Toggle Queue Panel", "shortcut": "<Alt>U"},
+        {"label": "Toggle Preview Window", "shortcut": "<Alt>R"},
+        {"label": "Toggle Activity Log", "shortcut": "<Alt>W"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Add Current to Queue", "shortcut": "<Alt>A"},
+        {"label": "Add Multiple to Queue", "shortcut": "<Alt>M"},
+        {"label": "Add All to Queue", "shortcut": "<Alt><Shift>A"},
+        {"label": "Start Queue / Encode", "shortcut": "<Ctrl>E"},
+        {"label": "Pause Queue", "shortcut": "<Ctrl>P"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "User Guide / Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

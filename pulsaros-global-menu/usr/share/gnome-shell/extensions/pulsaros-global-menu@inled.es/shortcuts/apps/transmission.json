@@ -1,0 +1,71 @@
+{
+  "format": 1,
+  "app": "transmission",
+  "name": "Transmission",
+  "identifiers": [
+    "transmission-gtk.desktop",
+    "transmission-qt.desktop",
+    "transmission",
+    "Transmission"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Torrent File", "shortcut": "<Ctrl>O"},
+        {"label": "Open Torrent from URL / Magnet", "shortcut": "<Ctrl>U"},
+        {"label": "New Torrent (Create)", "shortcut": "<Ctrl>N"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit Transmission", "shortcut": "<Ctrl>Q"},
+        {"label": "Open Torrent Folder", "shortcut": "<Ctrl>E"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Deselect All", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Preferences", "shortcut": "<Ctrl>P"},
+        {"label": "Copy Magnet Link", "shortcut": "<Ctrl>M"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Compact View", "shortcut": "<Ctrl>C"},
+        {"label": "Toggle Filterbar", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Toggle Statusbar", "shortcut": "<Ctrl>B"},
+        {"label": "Toggle Main Toolbar", "shortcut": "<Ctrl>T"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Torrent",
+      "items": [
+        {"label": "Start / Resume Torrent", "shortcut": "<Ctrl>S"},
+        {"label": "Start Torrent Now", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Pause / Stop Torrent", "shortcut": "<Ctrl>P"},
+        {"label": "Start All Torrents", "shortcut": "<Ctrl><Alt>S"},
+        {"label": "Pause All Torrents", "shortcut": "<Ctrl><Alt>P"},
+        {"label": "Remove Torrent from List", "shortcut": "Delete"},
+        {"label": "Trash Torrent and Data", "shortcut": "<Shift>Delete"},
+        {"label": "Verify Local Data", "shortcut": "V"},
+        {"label": "Reannounce (Ask Tracker for More Peers)", "shortcut": "<Ctrl>R"},
+        {"label": "Torrent Properties / Details", "shortcut": "<Alt>Return"},
+        {"label": "Move to Top of Queue", "shortcut": "<Ctrl>Home"},
+        {"label": "Move Up in Queue", "shortcut": "<Ctrl>Up"},
+        {"label": "Move Down in Queue", "shortcut": "<Ctrl>Down"},
+        {"label": "Move to Bottom of Queue", "shortcut": "<Ctrl>End"},
+        {"label": "Statistics", "shortcut": "<Ctrl><Shift>U"},
+        {"label": "Message Log", "shortcut": "<Ctrl>L"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Online Help / Contents", "shortcut": "F1"},
+        {"label": "About Transmission", "shortcut": "<Alt>H"}
+      ]
+    }
+  ]
+}

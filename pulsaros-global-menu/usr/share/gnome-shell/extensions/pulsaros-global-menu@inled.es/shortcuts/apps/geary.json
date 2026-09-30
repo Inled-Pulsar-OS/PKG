@@ -1,0 +1,102 @@
+{
+  "format": 1,
+  "app": "geary",
+  "name": "Geary",
+  "identifiers": [
+    "org.gnome.Geary.desktop",
+    "geary",
+    "Geary"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Conversation (Compose)", "shortcut": "<Ctrl>N"},
+        {"label": "Close Composer Window", "shortcut": "<Ctrl>W"},
+        {"label": "Open New Window", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Close Current Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit Geary", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search Conversations", "shortcut": "<Ctrl>S"},
+        {"label": "Find in Current Conversation", "shortcut": "<Ctrl>F"},
+        {"label": "Find Next in Conversation", "shortcut": "<Ctrl>G"},
+        {"label": "Find Previous in Conversation", "shortcut": "<Ctrl><Shift>G"},
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Paste Without Formatting", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Remove Formatting", "shortcut": "<Ctrl>space"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Bold", "shortcut": "<Ctrl>B"},
+        {"label": "Italic", "shortcut": "<Ctrl>I"},
+        {"label": "Underline", "shortcut": "<Ctrl>U"},
+        {"label": "Strikethrough", "shortcut": "<Ctrl>K"},
+        {"label": "Insert Link", "shortcut": "<Ctrl>L"},
+        {"label": "Insert Image", "shortcut": "<Ctrl>I"},
+        {"label": "Quote Text", "shortcut": "<Ctrl>["}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Select Inbox", "shortcut": "<Alt>1"},
+        {"label": "Go to Next Pane", "shortcut": "<Alt>Right"},
+        {"label": "Go to Previous Pane", "shortcut": "<Alt>Left"},
+        {"label": "Select Next Conversation", "shortcut": "<Ctrl>."},
+        {"label": "Select Previous Conversation", "shortcut": "<Ctrl>,"},
+        {"label": "Focus Next Message", "shortcut": "space"},
+        {"label": "Focus Previous Message", "shortcut": "<Shift>space"}
+      ]
+    },
+    {
+      "label": "Message",
+      "items": [
+        {"label": "Send Message", "shortcut": "<Ctrl>Return"},
+        {"label": "Add Attachment", "shortcut": "<Ctrl>T"},
+        {"label": "Reply to Sender", "shortcut": "<Ctrl>R"},
+        {"label": "Reply to All", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Forward", "shortcut": "<Ctrl>L"},
+        {"label": "Mark / Unmark Read", "shortcut": "<Ctrl>U"},
+        {"label": "Mark / Unmark Starred", "shortcut": "<Ctrl>D"},
+        {"label": "Archive Conversation", "shortcut": "<Ctrl>K"},
+        {"label": "Move Conversation", "shortcut": "<Ctrl>M"},
+        {"label": "Label Conversation", "shortcut": "<Ctrl>B"},
+        {"label": "Trash Conversation", "shortcut": "Delete"},
+        {"label": "Mark as Junk", "shortcut": "<Ctrl>J"},
+        {"label": "Delete Conversation Permanently", "shortcut": "<Shift>Delete"},
+        {"label": "Unquote Text", "shortcut": "<Ctrl>]"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Detach Composer Window", "shortcut": "<Ctrl>D"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>?"},
+        {"label": "Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

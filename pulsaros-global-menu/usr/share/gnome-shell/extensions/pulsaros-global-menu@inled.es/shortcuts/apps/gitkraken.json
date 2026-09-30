@@ -1,0 +1,64 @@
+{
+  "format": 1,
+  "app": "gitkraken",
+  "name": "GitKraken",
+  "identifiers": [
+    "gitkraken.desktop",
+    "com.axosoft.GitKraken.desktop",
+    "gitkraken",
+    "GitKraken"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Command Palette / Fuzzy Finder", "shortcut": "<Ctrl>P"},
+        {"label": "Open Repository Management", "shortcut": "<Ctrl>O"},
+        {"label": "Create New Tab", "shortcut": "<Ctrl>T"},
+        {"label": "Close Current Tab", "shortcut": "<Ctrl>W"},
+        {"label": "Reopen Closed Tab", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Quit GitKraken", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search Commits / Graph", "shortcut": "<Ctrl>F"},
+        {"label": "Undo Action", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo Action", "shortcut": "<Ctrl>Y"},
+        {"label": "Open Preferences / Settings", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Left Sidebar / Panel", "shortcut": "<Ctrl><Shift>H"},
+        {"label": "Toggle Terminal Panel", "shortcut": "<Alt>T"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>="},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Reload Application", "shortcut": "<Ctrl>R"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Next Tab", "shortcut": "<Ctrl>Tab"},
+        {"label": "Previous Tab", "shortcut": "<Ctrl><Shift>Tab"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Fetch All Remotes", "shortcut": "<Ctrl>L"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Keyboard Shortcuts Cheat Sheet", "shortcut": "<Ctrl>/"}
+      ]
+    }
+  ]
+}

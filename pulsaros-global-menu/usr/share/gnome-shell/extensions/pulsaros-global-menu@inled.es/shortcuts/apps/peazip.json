@@ -1,0 +1,77 @@
+{
+  "format": 1,
+  "app": "peazip",
+  "name": "PeaZip",
+  "identifiers": [
+    "peazip.desktop",
+    "io.github.peazip.PeaZip.desktop",
+    "peazip",
+    "PeaZip"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Show Recent Archives", "shortcut": "<Ctrl><Alt>5"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Rename File(s)", "shortcut": "F2"},
+        {"label": "Copy Selected To", "shortcut": "<Ctrl>F2"},
+        {"label": "Search", "shortcut": "F3"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Delete", "shortcut": "Delete"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Refresh", "shortcut": "F5"},
+        {"label": "Toggle Status Bar", "shortcut": "<Ctrl><Alt>1"},
+        {"label": "Hide Status Bar", "shortcut": "<Ctrl><Alt>0"},
+        {"label": "Show Bookmarks", "shortcut": "<Ctrl><Alt>3"},
+        {"label": "Show History", "shortcut": "<Ctrl><Alt>4"},
+        {"label": "Show Clipboard", "shortcut": "<Ctrl><Alt>6"}
+      ]
+    },
+    {
+      "label": "Archive",
+      "items": [
+        {"label": "Extract All To...", "shortcut": "<Ctrl>E"},
+        {"label": "Extract All Here", "shortcut": "<Ctrl><Alt>E"},
+        {"label": "Extract All to Desktop", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "Extract All to Documents", "shortcut": "<Ctrl><Alt><Shift>E"},
+        {"label": "Extract to Previous Path", "shortcut": "<Ctrl>0"},
+        {"label": "Extract Selected To", "shortcut": "<Alt>E"},
+        {"label": "Functions Picker", "shortcut": "F12"},
+        {"label": "Run", "shortcut": "<Ctrl>F12"},
+        {"label": "Add to Archive / Compress", "shortcut": "<Ctrl>D"},
+        {"label": "Test Archive", "shortcut": "<Alt>T"},
+        {"label": "Move Selected To", "shortcut": "<Shift>F2"},
+        {"label": "Password / Keyfile", "shortcut": "F9"},
+        {"label": "Advanced Filters", "shortcut": "<Ctrl><Shift>F9"},
+        {"separator": true},
+        {"label": "Extract to Bookmarked Path 1", "shortcut": "<Ctrl>1"},
+        {"label": "Extract to Bookmarked Path 2", "shortcut": "<Ctrl>2"},
+        {"label": "Extract to Bookmarked Path 3", "shortcut": "<Ctrl>3"},
+        {"label": "Extract to Bookmarked Path 4", "shortcut": "<Ctrl>4"},
+        {"label": "Extract to Bookmarked Path 5", "shortcut": "<Ctrl>5"},
+        {"label": "Extract to Bookmarked Path 6", "shortcut": "<Ctrl>6"},
+        {"label": "Extract to Bookmarked Path 7", "shortcut": "<Ctrl>7"},
+        {"label": "Extract to Bookmarked Path 8", "shortcut": "<Ctrl>8"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help (Brief)", "shortcut": "F1"},
+        {"label": "Help File (PDF)", "shortcut": "<Alt>F1"}
+      ]
+    }
+  ]
+}

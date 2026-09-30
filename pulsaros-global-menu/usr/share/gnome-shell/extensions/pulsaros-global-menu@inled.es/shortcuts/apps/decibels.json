@@ -1,0 +1,40 @@
+{
+  "format": 1,
+  "app": "decibels",
+  "name": "Audio Player (Decibels)",
+  "identifiers": [
+    "org.gnome.Decibels.desktop",
+    "org.gnome.Decibels",
+    "decibels",
+    "Audio Player"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Window", "shortcut": "<Ctrl>N"},
+        {"label": "Open File", "shortcut": "<Ctrl>O"},
+        {"separator": true},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Playback",
+      "items": [
+        {"label": "Pause/Play", "shortcut": "space"},
+        {"label": "Go Back 10 Seconds", "shortcut": "Left"},
+        {"label": "Go Forward 10 Seconds", "shortcut": "Right"},
+        {"separator": true},
+        {"label": "Increase Playback Rate", "shortcut": "<Ctrl>plus"},
+        {"label": "Decrease Playback Rate", "shortcut": "<Ctrl>minus"},
+        {"label": "Reset Playback Rate", "shortcut": "<Ctrl>0"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

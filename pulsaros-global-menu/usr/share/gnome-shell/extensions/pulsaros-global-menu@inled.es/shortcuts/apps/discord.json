@@ -1,0 +1,86 @@
+{
+  "format": 1,
+  "app": "discord",
+  "name": "Discord",
+  "identifiers": [
+    "com.discordapp.Discord.desktop",
+    "com.discordapp.Discord",
+    "discord",
+    "Discord"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Create or Join a Server", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Create a Group DM", "shortcut": "<Ctrl><Shift>T"},
+        {"separator": true},
+        {"label": "Upload a File", "shortcut": "<Ctrl><Shift>U"},
+        {"separator": true},
+        {"label": "User Settings", "shortcut": "<Ctrl>comma"}
+      ]
+    },
+    {
+      "label": "Insert",
+      "items": [
+        {"label": "Emoji Picker", "shortcut": "<Ctrl>E"},
+        {"label": "GIF Picker", "shortcut": "<Ctrl>G"},
+        {"label": "Sticker Picker", "shortcut": "<Ctrl>S"},
+        {"separator": true},
+        {"label": "Soundboard", "shortcut": "<Ctrl><Shift>B"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Channel Member List", "shortcut": "<Ctrl>U"},
+        {"label": "Toggle Pins Popout", "shortcut": "<Ctrl>P"},
+        {"label": "Toggle Mentions Popout", "shortcut": "<Ctrl>I"},
+        {"separator": true},
+        {"label": "Search Current Channel", "shortcut": "<Ctrl>F"},
+        {"label": "Search All Channels", "shortcut": "<Ctrl><Shift>F"},
+        {"separator": true},
+        {"label": "Scroll Chat Up", "shortcut": "Page_Up"},
+        {"label": "Scroll Chat Down", "shortcut": "Page_Down"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Quick Switcher", "shortcut": "<Ctrl>K"},
+        {"separator": true},
+        {"label": "Previous Channel", "shortcut": "<Alt>Up"},
+        {"label": "Next Channel", "shortcut": "<Alt>Down"},
+        {"label": "Previous Unread Channel", "shortcut": "<Alt><Shift>Up"},
+        {"label": "Next Unread Channel", "shortcut": "<Alt><Shift>Down"},
+        {"separator": true},
+        {"label": "Previous Server", "shortcut": "<Ctrl><Alt>Up"},
+        {"label": "Next Server", "shortcut": "<Ctrl><Alt>Down"},
+        {"separator": true},
+        {"label": "Navigate Back", "shortcut": "<Alt>Left"},
+        {"label": "Return to Previous Text Channel", "shortcut": "<Ctrl>B"},
+        {"label": "Return to Active Voice Channel", "shortcut": "<Ctrl><Alt>A"},
+        {"separator": true},
+        {"label": "Jump to Oldest Unread Message", "shortcut": "<Shift>Page_Up"},
+        {"label": "Mark Channel as Read", "shortcut": "escape"},
+        {"label": "Mark Server as Read", "shortcut": "<Shift>escape"}
+      ]
+    },
+    {
+      "label": "Voice",
+      "items": [
+        {"label": "Toggle Mute", "shortcut": "<Ctrl><Shift>M"},
+        {"label": "Toggle Deafen", "shortcut": "<Ctrl><Shift>D"},
+        {"separator": true},
+        {"label": "Answer Incoming Call", "shortcut": "<Ctrl>Return"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>slash"},
+        {"label": "Get Help", "shortcut": "<Ctrl><Shift>H"}
+      ]
+    }
+  ]
+}

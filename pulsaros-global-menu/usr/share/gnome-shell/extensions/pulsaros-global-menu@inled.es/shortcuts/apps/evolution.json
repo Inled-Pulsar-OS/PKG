@@ -1,0 +1,98 @@
+{
+  "format": 1,
+  "app": "evolution",
+  "name": "Evolution",
+  "identifiers": [
+    "org.gnome.Evolution.desktop",
+    "evolution",
+    "Evolution"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Create New Message", "shortcut": "<Ctrl><Shift>M"},
+        {"label": "Open Message in New Window", "shortcut": "<Ctrl>O"},
+        {"label": "Save Message As", "shortcut": "<Ctrl>S"},
+        {"label": "Print", "shortcut": "<Ctrl>P"},
+        {"label": "Print Preview", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "Create New Appointment", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "Create New Meeting", "shortcut": "<Ctrl><Shift>M"},
+        {"label": "Create New Task", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Create New Memo", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Create New Contact", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Create New Contact List", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit Evolution", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search / Find in Message", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Clear Search Bar", "shortcut": "<Ctrl><Shift>Q"},
+        {"label": "Copy Mail to Folder", "shortcut": "<Ctrl><Shift>Y"},
+        {"label": "Preferences", "shortcut": "<Ctrl><Shift>S"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Switch to Mail View", "shortcut": "<Ctrl>1"},
+        {"label": "Switch to Contacts View", "shortcut": "<Ctrl>2"},
+        {"label": "Switch to Calendars View", "shortcut": "<Ctrl>3"},
+        {"label": "Switch to Tasks View", "shortcut": "<Ctrl>4"},
+        {"label": "Switch to Memos View", "shortcut": "<Ctrl>5"},
+        {"label": "Day View", "shortcut": "<Ctrl><Alt>1"},
+        {"label": "Work Week View", "shortcut": "<Ctrl><Alt>2"},
+        {"label": "Week View", "shortcut": "<Ctrl><Alt>3"},
+        {"label": "Month View", "shortcut": "<Ctrl><Alt>4"},
+        {"label": "Year View", "shortcut": "<Ctrl><Alt>5"},
+        {"label": "List View", "shortcut": "<Ctrl><Alt>6"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Go to Containing Folder", "shortcut": "<Ctrl><Alt>O"},
+        {"label": "Next Message", "shortcut": "<Ctrl>Page_Down"},
+        {"label": "Previous Message", "shortcut": "<Ctrl>Page_Up"},
+        {"label": "Next Unread Message", "shortcut": "<Ctrl>]"},
+        {"label": "Previous Unread Message", "shortcut": "<Ctrl>["},
+        {"label": "Go to Today (Calendar)", "shortcut": "<Ctrl>T"},
+        {"label": "Go to Date (Calendar)", "shortcut": "<Ctrl>G"}
+      ]
+    },
+    {
+      "label": "Message",
+      "items": [
+        {"label": "Send and Receive Messages", "shortcut": "F9"},
+        {"label": "Send Message (Composer)", "shortcut": "<Ctrl>Return"},
+        {"label": "Reply to Sender", "shortcut": "<Ctrl>R"},
+        {"label": "Reply to All", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Reply to List", "shortcut": "<Ctrl>L"},
+        {"label": "Alternative Reply", "shortcut": "<Ctrl><Alt>R"},
+        {"label": "Forward Message", "shortcut": "<Ctrl><Alt>F"},
+        {"label": "Delete Message", "shortcut": "<Ctrl>D"},
+        {"label": "Undelete Message", "shortcut": "<Ctrl><Shift>D"},
+        {"label": "Mark Message as Read", "shortcut": "<Ctrl>K"},
+        {"label": "Mark Message as Unread", "shortcut": "<Ctrl><Shift>K"},
+        {"label": "Mark as Junk", "shortcut": "<Ctrl>J"},
+        {"label": "Mark as Not Junk", "shortcut": "<Ctrl><Shift>J"},
+        {"label": "Check for Junk", "shortcut": "<Ctrl><Alt>J"},
+        {"label": "Flag for Follow-up", "shortcut": "<Ctrl><Shift>G"},
+        {"label": "Clear Flag", "shortcut": "<Ctrl><Shift>K"},
+        {"label": "Archive Message", "shortcut": "<Ctrl><Alt>A"},
+        {"label": "Apply Filter Rules", "shortcut": "<Ctrl>Y"},
+        {"label": "Move Mail to Folder", "shortcut": "<Ctrl><Shift>V"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>?"},
+        {"label": "Help Contents", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

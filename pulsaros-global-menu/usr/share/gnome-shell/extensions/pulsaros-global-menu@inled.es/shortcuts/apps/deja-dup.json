@@ -1,0 +1,46 @@
+{
+  "format": 1,
+  "app": "deja-dup",
+  "name": "Backups",
+  "identifiers": [
+    "org.gnome.DejaDup.desktop",
+    "deja-dup",
+    "backups",
+    "Backups"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search in Backups", "shortcut": "<Ctrl>F"},
+        {"label": "Select All Files", "shortcut": "<Ctrl>A"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Go to Parent Folder", "shortcut": "<Alt>Up"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Cancel Operation", "shortcut": "Escape"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>?"},
+        {"label": "Help / User Guide", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

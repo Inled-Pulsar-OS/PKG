@@ -1,0 +1,46 @@
+{
+  "format": 1,
+  "app": "video-trimmer",
+  "name": "Video Trimmer",
+  "identifiers": [
+    "org.gnome.gitlab.YaLTeR.VideoTrimmer.desktop",
+    "org.gnome.gitlab.YaLTeR.VideoTrimmer",
+    "video-trimmer",
+    "Video Trimmer"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Window", "shortcut": "<Ctrl>N"},
+        {"separator": true},
+        {"label": "Trim", "shortcut": "<Ctrl>S"},
+        {"separator": true},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Set Start at Current Position", "shortcut": "I"},
+        {"label": "Set End at Current Position", "shortcut": "O"}
+      ]
+    },
+    {
+      "label": "Playback",
+      "items": [
+        {"label": "Play / Pause", "shortcut": "space"},
+        {"separator": true},
+        {"label": "Step Forward", "shortcut": "period"},
+        {"label": "Step Back", "shortcut": "comma"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

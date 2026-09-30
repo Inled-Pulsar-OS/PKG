@@ -1,0 +1,63 @@
+{
+  "format": 1,
+  "app": "evernote",
+  "name": "Evernote",
+  "identifiers": [
+    "evernote.desktop",
+    "evernote",
+    "Evernote"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Create New Note", "shortcut": "<Ctrl>N"},
+        {"label": "Create New Task", "shortcut": "<Alt>T"},
+        {"label": "Print Note", "shortcut": "<Ctrl>P"},
+        {"label": "Quit Evernote", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search in Evernote", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Find within Current Note", "shortcut": "<Ctrl>F"},
+        {"label": "Find and Replace", "shortcut": "<Ctrl>H"},
+        {"label": "Switch to Note / Notebook (Quick Switcher)", "shortcut": "<Ctrl>Q"},
+        {"label": "Open Settings / Preferences", "shortcut": "<Ctrl>,"},
+        {"label": "Sync Account Data", "shortcut": "F9"},
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Insert Hyperlink", "shortcut": "<Ctrl>K"},
+        {"label": "Bold Formatting", "shortcut": "<Ctrl>B"},
+        {"label": "Italic Formatting", "shortcut": "<Ctrl>I"},
+        {"label": "Underline Formatting", "shortcut": "<Ctrl>U"},
+        {"label": "Strikethrough Formatting", "shortcut": "<Ctrl><Shift>X"},
+        {"label": "Bulleted List", "shortcut": "<Ctrl><Shift>B"},
+        {"label": "Numbered List", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Checklist / Checkbox", "shortcut": "<Ctrl><Shift>C"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Sidebar / Left Panel", "shortcut": "F10"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>="},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Keyboard Shortcuts Drawer", "shortcut": "<Ctrl>/"}
+      ]
+    }
+  ]
+}

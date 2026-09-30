@@ -1,0 +1,90 @@
+{
+  "format": 1,
+  "app": "telegram",
+  "name": "Telegram",
+  "identifiers": [
+    "org.telegram.desktop.desktop",
+    "org.telegram.desktop",
+    "TelegramDesktop",
+    "telegram",
+    "Telegram"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Send File", "shortcut": "<Ctrl>O"},
+        {"label": "Lock Telegram", "shortcut": "<Ctrl>L"},
+        {"separator": true},
+        {"label": "Minimize", "shortcut": "<Ctrl>M"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"separator": true},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"separator": true},
+        {"label": "Search", "shortcut": "<Ctrl>F"},
+        {"label": "Clear Search", "shortcut": "Escape"},
+        {"separator": true},
+        {"label": "Edit Last Message", "shortcut": "Up"},
+        {"label": "Reply to Message", "shortcut": "<Ctrl>Up"},
+        {"label": "Delete Message", "shortcut": "Delete"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Bold", "shortcut": "<Ctrl>B"},
+        {"label": "Italic", "shortcut": "<Ctrl>I"},
+        {"label": "Underline", "shortcut": "<Ctrl>U"},
+        {"label": "Strikethrough", "shortcut": "<Ctrl><Shift>X"},
+        {"label": "Monospace", "shortcut": "<Ctrl><Shift>M"},
+        {"label": "Spoiler", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "Quote", "shortcut": "<Ctrl><Shift>period"},
+        {"separator": true},
+        {"label": "Create Link", "shortcut": "<Ctrl>K"},
+        {"separator": true},
+        {"label": "Clear Formatting", "shortcut": "<Ctrl><Shift>N"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "<Ctrl>plus"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>minus"},
+        {"separator": true},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Navigation",
+      "items": [
+        {"label": "Next Chat", "shortcut": "<Alt>Down"},
+        {"label": "Previous Chat", "shortcut": "<Alt>Up"},
+        {"label": "Next Chat (Tab)", "shortcut": "<Ctrl>Tab"},
+        {"label": "Previous Chat (Tab)", "shortcut": "<Ctrl><Shift>Tab"},
+        {"separator": true},
+        {"label": "Saved Messages", "shortcut": "<Ctrl>0"},
+        {"label": "Folder 1", "shortcut": "<Ctrl>1"},
+        {"label": "Folder 2", "shortcut": "<Ctrl>2"},
+        {"label": "Folder 3", "shortcut": "<Ctrl>3"},
+        {"label": "Folder 4", "shortcut": "<Ctrl>4"},
+        {"label": "Folder 5", "shortcut": "<Ctrl>5"},
+        {"label": "Folder 6", "shortcut": "<Ctrl>6"},
+        {"label": "Next Folder", "shortcut": "<Ctrl><Shift>Down"},
+        {"label": "Previous Folder", "shortcut": "<Ctrl><Shift>Up"},
+        {"separator": true},
+        {"label": "Contacts", "shortcut": "<Ctrl>J"}
+      ]
+    }
+  ]
+}

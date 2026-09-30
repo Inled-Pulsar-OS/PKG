@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "app": "alacritty",
+  "name": "Alacritty",
+  "identifiers": [
+    "Alacritty.desktop",
+    "org.alacritty.Alacritty.desktop",
+    "alacritty",
+    "Alacritty"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Vi Mode - Open URL under Cursor", "shortcut": "Return"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Copy", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Paste", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Paste Selection", "shortcut": "<Shift>Insert"},
+        {"label": "Search Forward", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Search Backward", "shortcut": "<Ctrl><Shift>B"},
+        {"label": "Clear Log Notice", "shortcut": "<Ctrl>L"},
+        {"label": "Vi Mode - Copy Selection", "shortcut": "Y"},
+        {"label": "Vi Mode - Search Next", "shortcut": "N"},
+        {"label": "Vi Mode - Search Previous", "shortcut": "<Shift>N"},
+        {"label": "Search Mode - Next Match", "shortcut": "Return"},
+        {"label": "Search Mode - Previous Match", "shortcut": "<Shift>Return"},
+        {"label": "Search Mode - History Next", "shortcut": "<Ctrl>N"},
+        {"label": "Search Mode - History Previous", "shortcut": "<Ctrl>P"},
+        {"label": "Search Mode - Delete Word", "shortcut": "<Ctrl>W"},
+        {"label": "Search Mode - Clear Search", "shortcut": "<Ctrl>U"},
+        {"label": "Search Mode - Cancel Search", "shortcut": "Escape"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Increase Font Size", "shortcut": "<Ctrl>+"},
+        {"label": "Decrease Font Size", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Font Size", "shortcut": "<Ctrl>0"},
+        {"label": "Scroll Page Up", "shortcut": "<Shift>Page_Up"},
+        {"label": "Scroll Page Down", "shortcut": "<Shift>Page_Down"},
+        {"label": "Scroll to Top", "shortcut": "<Shift>Home"},
+        {"label": "Scroll to Bottom", "shortcut": "<Shift>End"},
+        {"label": "Toggle Vi Mode", "shortcut": "<Ctrl><Shift>space"},
+        {"label": "Vi Mode - Toggle Normal Selection", "shortcut": "V"},
+        {"label": "Vi Mode - Toggle Line Selection", "shortcut": "<Shift>V"},
+        {"label": "Vi Mode - Toggle Block Selection", "shortcut": "<Ctrl>V"},
+        {"label": "Vi Mode - Toggle Semantic Selection", "shortcut": "<Alt>V"},
+        {"label": "Vi Mode - Scroll Line Up", "shortcut": "<Ctrl>Y"},
+        {"label": "Vi Mode - Scroll Line Down", "shortcut": "<Ctrl>E"},
+        {"label": "Vi Mode - Scroll Half Page Up", "shortcut": "<Ctrl>U"},
+        {"label": "Vi Mode - Scroll Half Page Down", "shortcut": "<Ctrl>D"}
+      ]
+    }
+  ]
+}

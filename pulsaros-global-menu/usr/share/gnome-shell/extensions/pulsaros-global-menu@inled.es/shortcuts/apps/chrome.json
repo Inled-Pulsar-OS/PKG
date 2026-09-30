@@ -1,0 +1,161 @@
+{
+  "format": 1,
+  "app": "chrome",
+  "name": "Google Chrome",
+  "identifiers": [
+    "com.google.Chrome.desktop",
+    "com.google.Chrome",
+    "google-chrome.desktop",
+    "google-chrome",
+    "google-chrome-stable",
+    "Google Chrome"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Tab", "shortcut": "<Ctrl>T"},
+        {"label": "New Window", "shortcut": "<Ctrl>N"},
+        {"label": "New Incognito Window", "shortcut": "<Ctrl><Shift>N"},
+        {"separator": true},
+        {"label": "Reopen Closed Tab", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Open File", "shortcut": "<Ctrl>O"},
+        {"label": "Open Location", "shortcut": "<Ctrl>L"},
+        {"label": "Open Location (Alternative)", "shortcut": "<Alt>D"},
+        {"separator": true},
+        {"label": "Save Page As", "shortcut": "<Ctrl>S"},
+        {"label": "Print Page", "shortcut": "<Ctrl>P"},
+        {"label": "Print With System Dialog", "shortcut": "<Ctrl><Shift>P"},
+        {"separator": true},
+        {"label": "Close Tab", "shortcut": "<Ctrl>W"},
+        {"label": "Close Window", "shortcut": "<Ctrl><Shift>W"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"},
+        {"label": "Redo (Alternative)", "shortcut": "<Ctrl><Shift>Z"},
+        {"separator": true},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Paste Plain Text", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"separator": true},
+        {"label": "Find in Page", "shortcut": "<Ctrl>F"},
+        {"label": "Find in Page (Alternative)", "shortcut": "F3"},
+        {"label": "Find Next", "shortcut": "<Ctrl>G"},
+        {"label": "Find Previous", "shortcut": "<Ctrl><Shift>G"},
+        {"label": "Search the Web", "shortcut": "<Ctrl>K"},
+        {"label": "Search the Web (Alternative)", "shortcut": "<Ctrl>E"},
+        {"separator": true},
+        {"label": "Clear Browsing Data", "shortcut": "<Ctrl><Shift>Delete"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Reload Page", "shortcut": "<Ctrl>R"},
+        {"label": "Reload Page (Alternative)", "shortcut": "F5"},
+        {"label": "Reload Page (Skip Cache)", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Stop Loading", "shortcut": "Escape"},
+        {"separator": true},
+        {"label": "Zoom In", "shortcut": "<Ctrl>plus"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>minus"},
+        {"label": "Reset Zoom Level", "shortcut": "<Ctrl>0"},
+        {"separator": true},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Toggle Caret Browsing", "shortcut": "F7"},
+        {"label": "Reading Mode", "shortcut": "<Alt><Shift>R"},
+        {"separator": true},
+        {"label": "View Page Source", "shortcut": "<Ctrl>U"},
+        {"label": "Developer Tools", "shortcut": "<Ctrl><Shift>I"},
+        {"label": "Developer Tools (Alternative)", "shortcut": "F12"},
+        {"label": "JavaScript Console", "shortcut": "<Ctrl><Shift>J"},
+        {"label": "Inspect Element", "shortcut": "<Ctrl><Shift>C"}
+      ]
+    },
+    {
+      "label": "Navigate",
+      "items": [
+        {"label": "Go Back", "shortcut": "<Alt>Left"},
+        {"label": "Go Forward", "shortcut": "<Alt>Right"},
+        {"label": "Go Home", "shortcut": "<Alt>Home"},
+        {"separator": true},
+        {"label": "Open History", "shortcut": "<Ctrl>H"},
+        {"label": "Open Downloads", "shortcut": "<Ctrl>J"}
+      ]
+    },
+    {
+      "label": "Bookmarks",
+      "items": [
+        {"label": "Bookmark This Tab", "shortcut": "<Ctrl>D"},
+        {"label": "Bookmark All Tabs", "shortcut": "<Ctrl><Shift>D"},
+        {"separator": true},
+        {"label": "Toggle Bookmarks Bar", "shortcut": "<Ctrl><Shift>B"},
+        {"label": "Open Bookmark Manager", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Focus Bookmarks Bar", "shortcut": "<Alt><Shift>B"}
+      ]
+    },
+    {
+      "label": "Tabs",
+      "items": [
+        {"label": "Switch to Next Tab", "shortcut": "<Ctrl>Tab"},
+        {"label": "Switch to Next Tab (Alternative)", "shortcut": "<Ctrl>Page_Down"},
+        {"label": "Switch to Previous Tab", "shortcut": "<Ctrl><Shift>Tab"},
+        {"label": "Switch to Previous Tab (Alternative)", "shortcut": "<Ctrl>Page_Up"},
+        {"label": "Search Tabs", "shortcut": "<Ctrl><Shift>A"},
+        {"separator": true},
+        {"label": "New Split View", "shortcut": "<Alt><Shift>N"},
+        {"label": "Move Tab Right", "shortcut": "<Ctrl><Shift>Page_Down"},
+        {"label": "Move Tab Left", "shortcut": "<Ctrl><Shift>Page_Up"},
+        {"label": "Collapse or Expand Vertical Tabs", "shortcut": "<Ctrl><Shift>L"},
+        {"separator": true},
+        {"label": "Select Tab 1", "shortcut": "<Ctrl>1"},
+        {"label": "Select Tab 2", "shortcut": "<Ctrl>2"},
+        {"label": "Select Tab 3", "shortcut": "<Ctrl>3"},
+        {"label": "Select Tab 4", "shortcut": "<Ctrl>4"},
+        {"label": "Select Tab 5", "shortcut": "<Ctrl>5"},
+        {"label": "Select Tab 6", "shortcut": "<Ctrl>6"},
+        {"label": "Select Tab 7", "shortcut": "<Ctrl>7"},
+        {"label": "Select Tab 8", "shortcut": "<Ctrl>8"},
+        {"label": "Select Last Tab", "shortcut": "<Ctrl>9"}
+      ]
+    },
+    {
+      "label": "Tab Groups",
+      "items": [
+        {"label": "Create New Tab Group", "shortcut": "<Alt><Shift>P"},
+        {"label": "Add New Tab to Group", "shortcut": "<Alt><Shift>C"},
+        {"label": "Close Tab Group", "shortcut": "<Alt><Shift>W"},
+        {"separator": true},
+        {"label": "Focus Next Tab Group", "shortcut": "<Alt><Shift>X"},
+        {"label": "Focus Previous Tab Group", "shortcut": "<Alt><Shift>Z"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Open Chrome Menu", "shortcut": "<Alt>E"},
+        {"label": "Switch Profile", "shortcut": "<Ctrl><Shift>M"},
+        {"label": "Task Manager", "shortcut": "<Shift>Escape"},
+        {"separator": true},
+        {"label": "Focus Next Pane", "shortcut": "F6"},
+        {"label": "Focus Previous Pane", "shortcut": "<Shift>F6"},
+        {"label": "Focus Web Contents", "shortcut": "<Ctrl>F6"},
+        {"label": "Focus Toolbar", "shortcut": "<Alt><Shift>T"},
+        {"label": "Focus Rightmost Toolbar Item", "shortcut": "F10"},
+        {"label": "Focus Inactive Dialog", "shortcut": "<Alt><Shift>A"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Chrome Help Center", "shortcut": "F1"},
+        {"label": "Send Feedback", "shortcut": "<Alt><Shift>I"}
+      ]
+    }
+  ]
+}

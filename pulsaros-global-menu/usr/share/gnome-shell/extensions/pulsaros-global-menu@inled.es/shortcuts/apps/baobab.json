@@ -1,0 +1,58 @@
+{
+  "format": 1,
+  "app": "baobab",
+  "name": "Disk Usage Analyzer",
+  "identifiers": [
+    "org.gnome.baobab.desktop",
+    "baobab",
+    "disk usage analyzer",
+    "Disk Usage Analyzer"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open in File Manager", "shortcut": "Return"},
+        {"label": "Open Main Menu", "shortcut": "F10"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Copy Path to Clipboard", "shortcut": "<Ctrl>C"},
+        {"label": "Move to Trash", "shortcut": "Delete"},
+        {"label": "Show Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Rescan / Reload Current Location", "shortcut": "<Ctrl>R"},
+        {"label": "Zoom In (Chart)", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out (Chart)", "shortcut": "<Ctrl>-"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Go Back", "shortcut": "<Alt>Left"},
+        {"label": "Move Up to Parent Folder", "shortcut": "<Alt>Up"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Scan Folder", "shortcut": "<Ctrl>O"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Help", "shortcut": "F1"},
+        {"label": "Show Keyboard Shortcuts", "shortcut": "<Ctrl>?"}
+      ]
+    }
+  ]
+}

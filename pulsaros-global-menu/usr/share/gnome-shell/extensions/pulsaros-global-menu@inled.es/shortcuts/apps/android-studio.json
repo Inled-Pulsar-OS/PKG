@@ -1,0 +1,94 @@
+{
+  "format": 1,
+  "app": "android-studio",
+  "name": "Android Studio",
+  "identifiers": [
+    "android-studio.desktop",
+    "jetbrains-studio",
+    "android studio",
+    "Android Studio"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open File", "shortcut": "<Ctrl>O"},
+        {"label": "Save All", "shortcut": "<Ctrl>S"},
+        {"label": "Close Active Editor", "shortcut": "<Ctrl>F4"},
+        {"label": "Recent Changes", "shortcut": "<Alt><Shift>C"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Find Action", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Settings / Preferences", "shortcut": "<Ctrl><Alt>S"},
+        {"label": "Find in File", "shortcut": "<Ctrl>F"},
+        {"label": "Replace in File", "shortcut": "<Ctrl>R"},
+        {"label": "Find in Files (Global Search)", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Replace in Files", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Delete Line", "shortcut": "<Ctrl>Y"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Show Quick Fixes / Intention Actions", "shortcut": "<Alt>Return"}
+      ]
+    },
+    {
+      "label": "Navigate",
+      "items": [
+        {"label": "Search Everywhere"},
+        {"label": "Navigate to Class", "shortcut": "<Ctrl>N"},
+        {"label": "Navigate to File", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Navigate to Symbol", "shortcut": "<Ctrl><Alt><Shift>N"},
+        {"label": "Recent Files", "shortcut": "<Ctrl>E"},
+        {"label": "Go to Line", "shortcut": "<Ctrl>G"},
+        {"label": "Back", "shortcut": "<Ctrl><Alt>Left"},
+        {"label": "Forward", "shortcut": "<Ctrl><Alt>Right"}
+      ]
+    },
+    {
+      "label": "Code",
+      "items": [
+        {"label": "Project Structure", "shortcut": "<Ctrl><Alt><Shift>S"},
+        {"label": "Basic Code Completion", "shortcut": "<Ctrl>space"},
+        {"label": "Smart Code Completion", "shortcut": "<Ctrl><Shift>space"},
+        {"label": "Complete Statement", "shortcut": "<Ctrl><Shift>Return"},
+        {"label": "Reformat Code", "shortcut": "<Ctrl><Alt>L"},
+        {"label": "Optimize Imports", "shortcut": "<Ctrl><Alt>O"},
+        {"label": "Duplicate Line", "shortcut": "<Ctrl>D"},
+        {"label": "Toggle Line Comment", "shortcut": "<Ctrl>/"},
+        {"label": "Toggle Block Comment", "shortcut": "<Ctrl><Shift>/"},
+        {"label": "Collapse Code Block", "shortcut": "<Ctrl>-"},
+        {"label": "Expand Code Block", "shortcut": "<Ctrl>+"},
+        {"label": "Move Line Up", "shortcut": "<Alt><Shift>Up"},
+        {"label": "Move Line Down", "shortcut": "<Alt><Shift>Down"}
+      ]
+    },
+    {
+      "label": "Run",
+      "items": [
+        {"label": "Build / Make Project", "shortcut": "<Ctrl>F9"},
+        {"label": "Run", "shortcut": "<Shift>F10"},
+        {"label": "Debug", "shortcut": "<Shift>F9"},
+        {"label": "Step Over", "shortcut": "F8"},
+        {"label": "Step Into", "shortcut": "F7"},
+        {"label": "Step Out", "shortcut": "<Shift>F8"},
+        {"label": "Toggle Breakpoint", "shortcut": "<Ctrl>F8"},
+        {"label": "Tool Window Run", "shortcut": "<Alt>4"},
+        {"label": "Tool Window Debug", "shortcut": "<Alt>5"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Tool Window Project", "shortcut": "<Alt>1"},
+        {"label": "Tool Window Logcat", "shortcut": "<Alt>6"},
+        {"label": "Tool Window Terminal", "shortcut": "<Alt>F12"},
+        {"label": "Tool Window Git / Version Control", "shortcut": "<Alt>9"}
+      ]
+    }
+  ]
+}

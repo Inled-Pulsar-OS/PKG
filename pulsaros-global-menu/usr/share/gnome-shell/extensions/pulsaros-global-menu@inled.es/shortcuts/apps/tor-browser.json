@@ -1,0 +1,93 @@
+{
+  "format": 1,
+  "app": "tor-browser",
+  "name": "Tor Browser",
+  "identifiers": [
+    "torbrowser.desktop",
+    "org.torproject.torbrowser-launcher.desktop",
+    "tor browser",
+    "Tor Browser"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Tab", "shortcut": "<Ctrl>T"},
+        {"label": "New Window", "shortcut": "<Ctrl>N"},
+        {"label": "New Private Window", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "New Tor Circuit for this Site", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Open File", "shortcut": "<Ctrl>O"},
+        {"label": "Reopen Closed Tab", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Close Current Tab", "shortcut": "<Ctrl>W"},
+        {"label": "Close Current Window", "shortcut": "<Ctrl><Shift>W"},
+        {"label": "Save Page As", "shortcut": "<Ctrl>S"},
+        {"label": "Print Page", "shortcut": "<Ctrl>P"},
+        {"label": "Open Downloads", "shortcut": "<Ctrl><Shift>Y"},
+        {"label": "Quit Tor Browser", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Find in Page", "shortcut": "<Ctrl>F"},
+        {"label": "Find Next Match", "shortcut": "<Ctrl>G"},
+        {"label": "Find Previous Match", "shortcut": "<Ctrl><Shift>G"},
+        {"label": "Quick Find", "shortcut": "/"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Reader View", "shortcut": "<Ctrl><Alt>R"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "History",
+      "items": [
+        {"label": "Reload Page", "shortcut": "<Ctrl>R"},
+        {"label": "Force Reload (Bypass Cache)", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Stop Loading", "shortcut": "Escape"},
+        {"label": "Toggle History Sidebar", "shortcut": "<Ctrl>H"},
+        {"label": "Navigate Back", "shortcut": "<Alt>Left"},
+        {"label": "Navigate Forward", "shortcut": "<Alt>Right"}
+      ]
+    },
+    {
+      "label": "Bookmarks",
+      "items": [
+        {"label": "Toggle Bookmarks Sidebar", "shortcut": "<Ctrl>B"},
+        {"label": "Bookmark Current Page", "shortcut": "<Ctrl>D"},
+        {"label": "Open Bookmarks Library", "shortcut": "<Ctrl><Shift>O"}
+      ]
+    },
+    {
+      "label": "Tabs",
+      "items": [
+        {"label": "Next Tab", "shortcut": "<Ctrl>Tab"},
+        {"label": "Previous Tab", "shortcut": "<Ctrl><Shift>Tab"},
+        {"label": "Switch to Last Tab", "shortcut": "<Ctrl>9"},
+        {"separator": true},
+        {"label": "Switch to Tab 1", "shortcut": "<Ctrl>1"},
+        {"label": "Switch to Tab 2", "shortcut": "<Ctrl>2"},
+        {"label": "Switch to Tab 3", "shortcut": "<Ctrl>3"},
+        {"label": "Switch to Tab 4", "shortcut": "<Ctrl>4"},
+        {"label": "Switch to Tab 5", "shortcut": "<Ctrl>5"},
+        {"label": "Switch to Tab 6", "shortcut": "<Ctrl>6"},
+        {"label": "Switch to Tab 7", "shortcut": "<Ctrl>7"},
+        {"label": "Switch to Tab 8", "shortcut": "<Ctrl>8"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Focus Address Bar", "shortcut": "<Ctrl>L"},
+        {"label": "Open Web Developer Tools", "shortcut": "<Ctrl><Shift>I"},
+        {"label": "View Page Source", "shortcut": "<Ctrl>U"}
+      ]
+    }
+  ]
+}

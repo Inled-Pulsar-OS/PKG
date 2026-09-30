@@ -1,0 +1,46 @@
+{
+  "format": 1,
+  "app": "font-viewer",
+  "name": "Fonts",
+  "identifiers": [
+    "org.gnome.font-viewer.desktop",
+    "gnome-font-viewer",
+    "fonts",
+    "Fonts"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Menu", "shortcut": "F10"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search Fonts", "shortcut": "<Ctrl>F"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Go Back", "shortcut": "<Alt>Left"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Install Font", "shortcut": "<Alt>I"},
+        {"label": "View Font Details / Info", "shortcut": "<Alt>N"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show About", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

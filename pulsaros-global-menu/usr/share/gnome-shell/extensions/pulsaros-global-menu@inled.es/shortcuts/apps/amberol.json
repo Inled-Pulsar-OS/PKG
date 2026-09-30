@@ -1,0 +1,56 @@
+{
+  "format": 1,
+  "app": "amberol",
+  "name": "Amberol",
+  "identifiers": [
+    "io.bassi.Amberol.desktop",
+    "io.bassi.Amberol",
+    "amberol",
+    "Amberol"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Add a Song to the Playlist", "shortcut": "<Ctrl>S"},
+        {"label": "Add a Folder to the Playlist", "shortcut": "<Ctrl>A"},
+        {"separator": true},
+        {"label": "Clear the Playlist", "shortcut": "<Ctrl>L"},
+        {"separator": true},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Playback",
+      "items": [
+        {"label": "Toggle Play/Pause", "shortcut": "<Ctrl>P"},
+        {"label": "Previous Song", "shortcut": "<Ctrl>B"},
+        {"label": "Next Song", "shortcut": "<Ctrl>N"},
+        {"label": "Seek Backwards", "shortcut": "<Ctrl>Left"},
+        {"label": "Seek Forward", "shortcut": "<Ctrl>Right"},
+        {"separator": true},
+        {"label": "Toggle Shuffling Songs", "shortcut": "<Ctrl>R"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Copy Song Details to Clipboard", "shortcut": "<Ctrl>C"},
+        {"label": "Search the Playlist", "shortcut": "<Ctrl>F"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Playlist Pane", "shortcut": "F9"},
+        {"label": "Toggle Primary Menu", "shortcut": "F10"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

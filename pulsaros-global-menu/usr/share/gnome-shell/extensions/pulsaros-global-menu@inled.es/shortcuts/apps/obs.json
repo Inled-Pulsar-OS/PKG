@@ -1,0 +1,56 @@
+{
+  "format": 1,
+  "app": "obs",
+  "name": "OBS Studio",
+  "identifiers": [
+    "com.obsproject.Studio.desktop",
+    "obs",
+    "obs studio",
+    "OBS Studio"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Exit OBS", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Open Settings", "shortcut": "<Ctrl>,"},
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl>Y"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste (Reference)", "shortcut": "<Ctrl>V"},
+        {"label": "Paste (Duplicate)", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Copy Filters", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Paste Filters", "shortcut": "<Ctrl><Shift>V"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Lock Preview", "shortcut": "<Ctrl>L"},
+        {"label": "Toggle Fullscreen Interface", "shortcut": "F11"},
+        {"label": "Show Stats Window", "shortcut": "<Ctrl><Shift>T"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Fit to Screen", "shortcut": "<Ctrl>F"},
+        {"label": "Stretch to Screen", "shortcut": "<Ctrl>S"},
+        {"label": "Center to Screen", "shortcut": "<Ctrl>D"},
+        {"label": "Edit Transform", "shortcut": "<Ctrl>E"},
+        {"label": "Reset Transform", "shortcut": "<Ctrl>R"},
+        {"label": "Interact with Source", "shortcut": "<Ctrl>I"},
+        {"label": "Order Move Up", "shortcut": "<Ctrl>Up"},
+        {"label": "Order Move Down", "shortcut": "<Ctrl>Down"},
+        {"label": "Order Move to Top", "shortcut": "<Ctrl>Home"},
+        {"label": "Order Move to Bottom", "shortcut": "<Ctrl>End"}
+      ]
+    }
+  ]
+}

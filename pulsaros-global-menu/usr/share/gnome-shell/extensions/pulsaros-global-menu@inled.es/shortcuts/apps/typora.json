@@ -1,0 +1,103 @@
+{
+  "format": 1,
+  "app": "typora",
+  "name": "Typora",
+  "identifiers": [
+    "typora.desktop",
+    "io.typora.Typora.desktop",
+    "typora",
+    "Typora"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New", "shortcut": "<Ctrl>N"},
+        {"label": "New Window", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "Open", "shortcut": "<Ctrl>O"},
+        {"label": "Open Quickly", "shortcut": "<Ctrl>P"},
+        {"label": "Reopen Closed File", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Save", "shortcut": "<Ctrl>S"},
+        {"label": "Save As", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Close", "shortcut": "<Ctrl>W"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Preferences", "shortcut": "<Ctrl>,"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Copy As Markdown", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Paste As Plain Text", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Select Line/Sentence", "shortcut": "<Ctrl>L"},
+        {"label": "Select Word", "shortcut": "<Ctrl>D"},
+        {"label": "Delete Word", "shortcut": "<Ctrl><Shift>D"},
+        {"label": "Find", "shortcut": "<Ctrl>F"},
+        {"label": "Find Next", "shortcut": "F3"},
+        {"label": "Find Previous", "shortcut": "<Shift>F3"},
+        {"label": "Replace", "shortcut": "<Ctrl>H"},
+        {"label": "Strong", "shortcut": "<Ctrl>B"},
+        {"label": "Emphasis", "shortcut": "<Ctrl>I"},
+        {"label": "Clear Format", "shortcut": "<Ctrl>\\"},
+        {"label": "Articles", "shortcut": "<Ctrl><Shift>2"},
+        {"label": "Switch Between Opened Documents", "shortcut": "<Ctrl>Tab"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Paragraph", "shortcut": "<Ctrl>0"},
+        {"label": "Increase Heading Level", "shortcut": "<Ctrl>="},
+        {"label": "Decrease Heading Level", "shortcut": "<Ctrl>-"},
+        {"label": "Insert Table", "shortcut": "<Ctrl>T"},
+        {"label": "Code Fences", "shortcut": "<Ctrl><Shift>K"},
+        {"label": "Math Block", "shortcut": "<Ctrl><Shift>M"},
+        {"label": "Quote", "shortcut": "<Ctrl><Shift>Q"},
+        {"label": "Ordered List", "shortcut": "<Ctrl><Shift>["},
+        {"label": "Unordered List", "shortcut": "<Ctrl><Shift>]"},
+        {"label": "Indent", "shortcut": "<Ctrl>["},
+        {"label": "Outdent", "shortcut": "<Ctrl>]"},
+        {"label": "Underline", "shortcut": "<Ctrl>U"},
+        {"label": "Strikethrough", "shortcut": "<Alt><Shift>5"},
+        {"label": "Hyperlink", "shortcut": "<Ctrl>K"},
+        {"label": "Insert Image", "shortcut": "<Ctrl><Shift>I"},
+        {"label": "Source Code Mode", "shortcut": "<Ctrl>/"},
+        {"separator": true},
+        {"label": "Heading 1", "shortcut": "<Ctrl>1"},
+        {"label": "Heading 2", "shortcut": "<Ctrl>2"},
+        {"label": "Heading 3", "shortcut": "<Ctrl>3"},
+        {"label": "Heading 4", "shortcut": "<Ctrl>4"},
+        {"label": "Heading 5", "shortcut": "<Ctrl>5"},
+        {"label": "Heading 6", "shortcut": "<Ctrl>6"},
+        {"separator": true},
+        {"label": "Inline Code", "shortcut": "<Ctrl><Shift>`"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Sidebar", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Outline", "shortcut": "<Ctrl><Shift>1"},
+        {"label": "File Tree", "shortcut": "<Ctrl><Shift>3"},
+        {"label": "Focus Mode", "shortcut": "F8"},
+        {"label": "Typewriter Mode", "shortcut": "F9"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Actual Size", "shortcut": "<Ctrl><Shift>0"},
+        {"label": "Zoom In", "shortcut": "<Ctrl><Shift>="},
+        {"label": "Zoom Out", "shortcut": "<Ctrl><Shift>-"},
+        {"label": "Toggle DevTools", "shortcut": "<Shift>F12"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Jump to Top", "shortcut": "<Ctrl>Home"},
+        {"label": "Jump to Selection", "shortcut": "<Ctrl>J"},
+        {"label": "Jump to Bottom", "shortcut": "<Ctrl>End"}
+      ]
+    }
+  ]
+}

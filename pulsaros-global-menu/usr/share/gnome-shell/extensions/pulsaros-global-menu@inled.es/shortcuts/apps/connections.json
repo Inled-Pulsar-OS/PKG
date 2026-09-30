@@ -1,0 +1,38 @@
+{
+  "format": 1,
+  "app": "connections",
+  "name": "Connections",
+  "identifiers": [
+    "org.gnome.Connections.desktop",
+    "org.gnome.Connections",
+    "gnome-connections",
+    "Connections"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search", "shortcut": "<Ctrl>F"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Fullscreen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help", "shortcut": "F1"},
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

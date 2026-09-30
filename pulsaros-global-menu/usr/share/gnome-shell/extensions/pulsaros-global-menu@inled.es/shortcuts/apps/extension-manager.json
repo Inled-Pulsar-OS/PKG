@@ -1,0 +1,48 @@
+{
+  "format": 1,
+  "app": "extension-manager",
+  "name": "Extension Manager",
+  "identifiers": [
+    "com.mattjakeman.ExtensionManager.desktop",
+    "extension manager",
+    "Extension Manager"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Main Menu", "shortcut": "F10"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Toggle Search", "shortcut": "<Ctrl>F"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Switch to Installed View", "shortcut": "<Alt>1"},
+        {"label": "Switch to Browse View", "shortcut": "<Alt>2"},
+        {"label": "Zoom In (Screenshot View)", "shortcut": "<Ctrl>+"},
+        {"label": "Zoom Out (Screenshot View)", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom (Screenshot View)", "shortcut": "<Ctrl>0"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Go Back", "shortcut": "<Alt>Left"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Keyboard Shortcuts", "shortcut": "<Ctrl>?"}
+      ]
+    }
+  ]
+}

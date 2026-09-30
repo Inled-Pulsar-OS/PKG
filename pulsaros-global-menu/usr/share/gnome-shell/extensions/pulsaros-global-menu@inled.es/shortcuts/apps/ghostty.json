@@ -1,0 +1,87 @@
+{
+  "format": 1,
+  "app": "ghostty",
+  "name": "Ghostty",
+  "identifiers": [
+    "com.mitchellh.ghostty.desktop",
+    "ghostty",
+    "Ghostty"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Window", "shortcut": "<Ctrl><Shift>N"},
+        {"label": "New Tab", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Close Tab", "shortcut": "<Ctrl><Shift>W"},
+        {"label": "Close Window", "shortcut": "<Alt>F4"},
+        {"label": "Quit Ghostty", "shortcut": "<Ctrl><Shift>Q"},
+        {"label": "Open Config", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Copy to Clipboard", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Paste from Clipboard", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Paste from Selection", "shortcut": "<Shift>Insert"},
+        {"label": "Select All", "shortcut": "<Ctrl><Shift>A"},
+        {"label": "Start Search", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "End Search", "shortcut": "Escape"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Jump to Previous Prompt", "shortcut": "<Ctrl><Shift>Page_Up"},
+        {"label": "Jump to Next Prompt", "shortcut": "<Ctrl><Shift>Page_Down"},
+        {"label": "Scroll Page Up", "shortcut": "<Shift>Page_Up"},
+        {"label": "Scroll Page Down", "shortcut": "<Shift>Page_Down"},
+        {"label": "Scroll to Top", "shortcut": "<Shift>Home"},
+        {"label": "Scroll to Bottom", "shortcut": "<Shift>End"},
+        {"label": "Increase Font Size", "shortcut": "<Ctrl>+"},
+        {"label": "Decrease Font Size", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Font Size", "shortcut": "<Ctrl>0"},
+        {"label": "Toggle Fullscreen", "shortcut": "<Ctrl>Return"},
+        {"label": "Toggle Command Palette", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "Toggle Terminal Inspector", "shortcut": "<Ctrl><Shift>I"},
+        {"label": "Reload Config", "shortcut": "<Ctrl><Shift>,"}
+      ]
+    },
+    {
+      "label": "Tabs",
+      "items": [
+        {"label": "Switch to Last Tab", "shortcut": "<Alt>9"},
+        {"label": "Next Tab", "shortcut": "<Ctrl>Tab"},
+        {"label": "Previous Tab", "shortcut": "<Ctrl><Shift>Tab"},
+        {"separator": true},
+        {"label": "Switch to Tab 1", "shortcut": "<Alt>1"},
+        {"label": "Switch to Tab 2", "shortcut": "<Alt>2"},
+        {"label": "Switch to Tab 3", "shortcut": "<Alt>3"},
+        {"label": "Switch to Tab 4", "shortcut": "<Alt>4"},
+        {"label": "Switch to Tab 5", "shortcut": "<Alt>5"},
+        {"label": "Switch to Tab 6", "shortcut": "<Alt>6"},
+        {"label": "Switch to Tab 7", "shortcut": "<Alt>7"},
+        {"label": "Switch to Tab 8", "shortcut": "<Alt>8"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Split Vertically (Right)", "shortcut": "<Ctrl><Shift>O"},
+        {"label": "Split Horizontally (Down)", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "Toggle Split Zoom", "shortcut": "<Ctrl><Shift>Return"},
+        {"label": "Previous Split", "shortcut": "<Ctrl><Super>["},
+        {"label": "Next Split", "shortcut": "<Ctrl><Super>]"},
+        {"label": "Go to Split Up", "shortcut": "<Ctrl><Alt>Up"},
+        {"label": "Go to Split Down", "shortcut": "<Ctrl><Alt>Down"},
+        {"label": "Go to Split Left", "shortcut": "<Ctrl><Alt>Left"},
+        {"label": "Go to Split Right", "shortcut": "<Ctrl><Alt>Right"},
+        {"label": "Resize Split Up", "shortcut": "<Ctrl><Shift><Super>Up"},
+        {"label": "Resize Split Down", "shortcut": "<Ctrl><Shift><Super>Down"},
+        {"label": "Resize Split Left", "shortcut": "<Ctrl><Shift><Super>Left"},
+        {"label": "Resize Split Right", "shortcut": "<Ctrl><Shift><Super>Right"}
+      ]
+    }
+  ]
+}

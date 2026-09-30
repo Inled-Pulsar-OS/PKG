@@ -1,0 +1,51 @@
+{
+  "format": 1,
+  "app": "showtime",
+  "name": "Video Player (Showtime)",
+  "identifiers": [
+    "org.gnome.Showtime.desktop",
+    "org.gnome.Showtime",
+    "showtime",
+    "Video Player"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Video", "shortcut": "<Ctrl>O"},
+        {"label": "New Window", "shortcut": "<Ctrl>N"},
+        {"separator": true},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Playback",
+      "items": [
+        {"label": "Play/Pause", "shortcut": "space"},
+        {"label": "Go Back 10 Seconds", "shortcut": "Left"},
+        {"label": "Go Forward 10 Seconds", "shortcut": "Right"},
+        {"separator": true},
+        {"label": "Increase Volume", "shortcut": "Up"},
+        {"label": "Decrease Volume", "shortcut": "Down"},
+        {"label": "Mute/Unmute", "shortcut": "M"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Video Options", "shortcut": "<Shift>F10"},
+        {"label": "Take Screenshot", "shortcut": "<Ctrl><Alt>S"},
+        {"separator": true},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"label": "Exit Fullscreen", "shortcut": "Escape"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

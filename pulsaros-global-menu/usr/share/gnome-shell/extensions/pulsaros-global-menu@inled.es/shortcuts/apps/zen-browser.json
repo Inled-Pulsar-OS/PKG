@@ -1,0 +1,162 @@
+{
+  "format": 1,
+  "app": "zen-browser",
+  "name": "Zen Browser",
+  "identifiers": [
+    "app.zen_browser.zen.desktop",
+    "app.zen_browser.zen",
+    "zen",
+    "Zen Browser"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New Window", "shortcut": "<Ctrl>N"},
+        {"label": "New Tab", "shortcut": "<Ctrl>T"},
+        {"label": "Open File", "shortcut": "<Ctrl>O"},
+        {"separator": true},
+        {"label": "Save Page", "shortcut": "<Ctrl>S"},
+        {"label": "Print Page", "shortcut": "<Ctrl>P"},
+        {"separator": true},
+        {"label": "Close Tab", "shortcut": "<Ctrl>W"},
+        {"label": "Close Window", "shortcut": "<Ctrl><Shift>W"},
+        {"label": "Quit Application", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Focus Search", "shortcut": "<Ctrl>K"},
+        {"label": "Focus Search (Alternative)", "shortcut": "<Ctrl>J"},
+        {"label": "Find on Page", "shortcut": "<Ctrl>F"},
+        {"label": "Find Again", "shortcut": "<Ctrl>G"},
+        {"label": "Find Previous", "shortcut": "<Ctrl><Shift>G"},
+        {"separator": true},
+        {"label": "Copy Current URL", "shortcut": "<Ctrl><Shift>C"},
+        {"label": "Copy Current URL as Markdown", "shortcut": "<Alt><Ctrl><Shift>C"},
+        {"label": "Delete", "shortcut": "Delete"},
+        {"separator": true},
+        {"label": "Clear Browsing Data", "shortcut": "<Ctrl><Shift>Delete"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "<Ctrl>plus"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>minus"},
+        {"label": "Reset Zoom Level", "shortcut": "<Ctrl>0"},
+        {"separator": true},
+        {"label": "Toggle Reader Mode", "shortcut": "<Alt><Ctrl>R"},
+        {"label": "Toggle Picture-in-Picture", "shortcut": "<Ctrl><Shift>]"},
+        {"label": "Toggle Mute", "shortcut": "<Ctrl>M"},
+        {"label": "Switch Text Direction", "shortcut": "<Ctrl><Shift>X"},
+        {"label": "Take Screenshot", "shortcut": "<Ctrl><Shift>S"},
+        {"separator": true},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"},
+        {"separator": true},
+        {"label": "View Page Source", "shortcut": "<Ctrl>U"},
+        {"label": "View Page Info", "shortcut": "<Ctrl>I"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Go Back", "shortcut": "<Alt>Left"},
+        {"label": "Go Forward", "shortcut": "<Alt>Right"},
+        {"label": "Navigate Back (Alternative)", "shortcut": "<Ctrl>["},
+        {"label": "Navigate Forward (Alternative)", "shortcut": "<Ctrl>]"},
+        {"label": "Go Home", "shortcut": "<Alt>Home"},
+        {"separator": true},
+        {"label": "Reload Page", "shortcut": "<Ctrl>R"},
+        {"label": "Reload Page (Skip Cache)", "shortcut": "<Ctrl><Shift>R"},
+        {"label": "Stop Loading", "shortcut": "Escape"},
+        {"separator": true},
+        {"label": "Open Location", "shortcut": "<Ctrl>L"},
+        {"label": "Open Location (Alternative)", "shortcut": "<Alt>D"},
+        {"separator": true},
+        {"label": "Open History Sidebar", "shortcut": "<Ctrl>H"},
+        {"label": "Open Private Browsing Window", "shortcut": "<Ctrl><Shift>P"}
+      ]
+    },
+    {
+      "label": "Tabs",
+      "items": [
+        {"label": "Switch to Next Tab", "shortcut": "<Ctrl>Tab"},
+        {"label": "Switch to Previous Tab", "shortcut": "<Ctrl><Shift>Tab"},
+        {"label": "Show All Tabs", "shortcut": "<Ctrl><Shift>Tab"},
+        {"separator": true},
+        {"label": "Restore Last Closed Tab", "shortcut": "<Ctrl><Shift>T"},
+        {"label": "Undo Close Window", "shortcut": "<Ctrl><Shift>N"},
+        {"separator": true},
+        {"label": "Tab 1", "shortcut": "<Alt>1"},
+        {"label": "Tab 2", "shortcut": "<Alt>2"},
+        {"label": "Tab 3", "shortcut": "<Alt>3"},
+        {"label": "Tab 4", "shortcut": "<Alt>4"},
+        {"label": "Tab 5", "shortcut": "<Alt>5"},
+        {"label": "Tab 6", "shortcut": "<Alt>6"},
+        {"label": "Tab 7", "shortcut": "<Alt>7"},
+        {"label": "Tab 8", "shortcut": "<Alt>8"},
+        {"label": "Select Last Tab", "shortcut": "<Alt>9"}
+      ]
+    },
+    {
+      "label": "Bookmarks",
+      "items": [
+        {"label": "Bookmark This Page", "shortcut": "<Ctrl>D"},
+        {"label": "Bookmark This Page (Alternative)", "shortcut": "<Ctrl><Shift>D"},
+        {"label": "Show Bookmarks Sidebar", "shortcut": "<Ctrl>B"},
+        {"label": "Show Bookmarks Toolbar", "shortcut": "<Ctrl><Shift>B"},
+        {"label": "Show Bookmarks Library", "shortcut": "<Ctrl><Shift>O"},
+        {"separator": true},
+        {"label": "Show All History", "shortcut": "<Ctrl><Shift>H"},
+        {"separator": true},
+        {"label": "Open Downloads", "shortcut": "<Ctrl><Shift>Y"},
+        {"label": "Open Add-ons", "shortcut": "<Ctrl><Shift>A"}
+      ]
+    },
+    {
+      "label": "Zen",
+      "items": [
+        {"label": "Toggle Floating Toolbar", "shortcut": "<Alt><Ctrl>T"},
+        {"label": "Toggle Floating Sidebar", "shortcut": "<Alt><Ctrl>S"},
+        {"label": "Toggle Compact Mode", "shortcut": "<Alt><Ctrl>C"},
+        {"separator": true},
+        {"label": "Backward Workspace", "shortcut": "<Alt><Ctrl>Q"},
+        {"label": "Forward Workspace", "shortcut": "<Alt><Ctrl>E"},
+        {"separator": true},
+        {"label": "Close Split View (Unsplit All)", "shortcut": "<Alt><Ctrl>U"},
+        {"label": "Toggle Split View Horizontal", "shortcut": "<Alt><Ctrl>H"},
+        {"label": "Toggle Split View Vertical", "shortcut": "<Alt><Ctrl>V"},
+        {"label": "Toggle Split View Grid", "shortcut": "<Alt><Ctrl>G"},
+        {"separator": true},
+        {"label": "Toggle Sidebar Width", "shortcut": "<Alt>B"},
+        {"label": "Toggle AI Chatbot Sidebar", "shortcut": "<Alt><Ctrl>X"},
+        {"label": "Toggle Firefox Sidebar", "shortcut": "<Alt><Ctrl>Z"}
+      ]
+    },
+    {
+      "label": "Developer",
+      "items": [
+        {"label": "Toggle DevTools", "shortcut": "<Ctrl><Shift>I"},
+        {"label": "Toggle Browser Toolbox", "shortcut": "<Alt><Ctrl><Shift>I"},
+        {"label": "Toggle Browser Console", "shortcut": "<Ctrl><Shift>J"},
+        {"label": "Toggle Web Console", "shortcut": "<Ctrl><Shift>K"},
+        {"label": "Toggle Inspector", "shortcut": "<Ctrl><Shift>L"},
+        {"label": "Toggle JavaScript Debugger", "shortcut": "<Ctrl><Shift>Z"},
+        {"label": "Toggle Network Monitor", "shortcut": "<Ctrl><Shift>E"},
+        {"label": "Toggle Style Editor", "shortcut": "<Shift>F7"},
+        {"label": "Toggle Performance", "shortcut": "<Shift>F5"},
+        {"label": "Toggle Storage", "shortcut": "<Shift>F9"},
+        {"label": "Toggle DOM", "shortcut": "<Ctrl><Shift>W"},
+        {"label": "Toggle Accessibility", "shortcut": "<Shift>F12"},
+        {"label": "Toggle Responsive Design Mode", "shortcut": "<Ctrl><Shift>M"},
+        {"separator": true},
+        {"label": "WR Capture Command", "shortcut": "<Ctrl>#"},
+        {"label": "Toggle WR Capture Sequence", "shortcut": "<Ctrl>^"},
+        {"separator": true},
+        {"label": "About Processes", "shortcut": "<Shift>Escape"}
+      ]
+    }
+  ]
+}

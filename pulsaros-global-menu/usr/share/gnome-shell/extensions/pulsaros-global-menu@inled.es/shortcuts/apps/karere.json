@@ -1,0 +1,65 @@
+{
+  "format": 1,
+  "app": "karere",
+  "name": "Karere (WhatsApp)",
+  "identifiers": [
+    "io.github.tobagin.karere.desktop",
+    "io.github.tobagin.karere",
+    "karere",
+    "Karere"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Minimize Window", "shortcut": "<Ctrl>M"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"separator": true},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Find in Page", "shortcut": "<Ctrl>F"},
+        {"separator": true},
+        {"label": "Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Zoom In", "shortcut": "<Ctrl>plus"},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>minus"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"},
+        {"label": "Toggle Header Bar Zoom Controls", "shortcut": "<Ctrl>B"},
+        {"separator": true},
+        {"label": "Fullscreen", "shortcut": "F11"},
+        {"separator": true},
+        {"label": "Reload WhatsApp Web", "shortcut": "<Ctrl>R"},
+        {"label": "Force Reload", "shortcut": "<Ctrl><Shift>R"}
+      ]
+    },
+    {
+      "label": "Account",
+      "items": [
+        {"label": "Next Account", "shortcut": "<Ctrl>Tab"},
+        {"label": "Previous Account", "shortcut": "<Ctrl><Shift>Tab"},
+        {"label": "Switch to Account 1", "shortcut": "<Alt>1"}
+      ]
+    },
+    {
+      "label": "Developer",
+      "items": [
+        {"label": "Developer Tools", "shortcut": "F12"},
+        {"label": "Inspect Element", "shortcut": "<Ctrl><Shift>C"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>question"}
+      ]
+    }
+  ]
+}

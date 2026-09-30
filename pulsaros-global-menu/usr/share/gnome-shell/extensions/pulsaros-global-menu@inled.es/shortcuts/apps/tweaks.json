@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "app": "tweaks",
+  "name": "Tweaks",
+  "identifiers": [
+    "org.gnome.tweaks.desktop",
+    "gnome-tweaks",
+    "tweaks",
+    "Tweaks"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Menu", "shortcut": "F10"},
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search Tweaks", "shortcut": "<Ctrl>F"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Go Back", "shortcut": "<Alt>Left"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Show About", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

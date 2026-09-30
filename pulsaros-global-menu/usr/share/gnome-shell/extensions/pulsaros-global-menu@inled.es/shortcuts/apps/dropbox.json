@@ -1,0 +1,47 @@
+{
+  "format": 1,
+  "app": "dropbox",
+  "name": "Dropbox",
+  "identifiers": [
+    "dropbox.desktop",
+    "dropbox",
+    "Dropbox"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Local Dropbox Folder", "shortcut": "<Alt>F"},
+        {"label": "Open Dropbox Website", "shortcut": "<Alt>W"},
+        {"label": "Close Window / Dialog", "shortcut": "<Ctrl>W"},
+        {"label": "Quit Dropbox", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Open Preferences", "shortcut": "<Ctrl>,"},
+        {"label": "Next Tab in Preferences", "shortcut": "<Ctrl>Tab"},
+        {"label": "Previous Tab in Preferences", "shortcut": "<Ctrl><Shift>Tab"},
+        {"label": "Search", "shortcut": "<Ctrl>F"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Navigate Controls", "shortcut": "Tab"},
+        {"label": "Reverse Navigate Controls", "shortcut": "<Shift>Tab"},
+        {"label": "Dismiss Dialog", "shortcut": "Escape"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Help / Web Shortcuts", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

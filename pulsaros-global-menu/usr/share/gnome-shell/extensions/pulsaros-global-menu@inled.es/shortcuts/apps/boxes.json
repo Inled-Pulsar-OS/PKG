@@ -1,0 +1,54 @@
+{
+  "format": 1,
+  "app": "boxes",
+  "name": "Boxes",
+  "identifiers": [
+    "org.gnome.Boxes.desktop",
+    "gnome-boxes",
+    "boxes",
+    "Boxes"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Create New Virtual Machine", "shortcut": "<Ctrl>N"},
+        {"label": "Open Main Menu", "shortcut": "F10"},
+        {"label": "Close Window / Quit Boxes", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Search Virtual Machines", "shortcut": "<Ctrl>F"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Fullscreen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Back to Overview", "shortcut": "<Alt>Left"},
+        {"label": "Switch to Next Wizard Page", "shortcut": "<Alt>Right"},
+        {"label": "Switch to Previous Wizard Page", "shortcut": "<Alt>Left"}
+      ]
+    },
+    {
+      "label": "Tools",
+      "items": [
+        {"label": "Grab / Ungrab Keyboard and Mouse"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Keyboard Shortcuts", "shortcut": "<Ctrl>?"},
+        {"label": "Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

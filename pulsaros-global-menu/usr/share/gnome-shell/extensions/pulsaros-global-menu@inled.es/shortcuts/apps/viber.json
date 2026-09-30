@@ -1,0 +1,64 @@
+{
+  "format": 1,
+  "app": "viber",
+  "name": "Viber",
+  "identifiers": [
+    "viber.desktop",
+    "viber",
+    "Viber"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Close Window", "shortcut": "<Ctrl>W"},
+        {"label": "Quit Viber", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Focus Search", "shortcut": "<Ctrl>F"},
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Bold Text Formatting", "shortcut": "<Ctrl>B"},
+        {"label": "Italic Text Formatting", "shortcut": "<Ctrl>I"},
+        {"label": "Underline Text Formatting", "shortcut": "<Ctrl>U"},
+        {"label": "Strikethrough Text Formatting", "shortcut": "<Ctrl><Shift>X"},
+        {"label": "Monospace Text Formatting", "shortcut": "<Ctrl><Shift>M"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Show Dialer", "shortcut": "<Ctrl>D"},
+        {"label": "Show/Hide Stickers", "shortcut": "<Ctrl>S"},
+        {"label": "Lock Application", "shortcut": "<Ctrl>L"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Compose New Conversation", "shortcut": "<Ctrl>N"},
+        {"label": "Next Conversation", "shortcut": "<Ctrl>Tab"},
+        {"label": "Previous Conversation", "shortcut": "<Ctrl><Shift>Tab"}
+      ]
+    },
+    {
+      "label": "Call",
+      "items": [
+        {"label": "Mute / Unmute Microphone", "shortcut": "<Ctrl>M"},
+        {"label": "Toggle Camera / Self-Video", "shortcut": "<Ctrl><Shift>V"},
+        {"label": "Toggle Fullscreen Video", "shortcut": "<Ctrl><Shift>F"}
+      ]
+    }
+  ]
+}

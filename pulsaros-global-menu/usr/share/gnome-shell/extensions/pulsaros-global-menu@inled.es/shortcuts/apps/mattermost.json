@@ -1,0 +1,62 @@
+{
+  "format": 1,
+  "app": "mattermost",
+  "name": "Mattermost",
+  "identifiers": [
+    "Mattermost.desktop",
+    "com.mattermost.Desktop.desktop",
+    "mattermost",
+    "Mattermost"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "Open Quick Channel Switcher", "shortcut": "<Ctrl>K"},
+        {"label": "Open Direct Messages Dialog", "shortcut": "<Ctrl><Shift>K"},
+        {"label": "Open Recent Mentions", "shortcut": "<Ctrl><Shift>M"},
+        {"label": "Open Saved Posts", "shortcut": "<Ctrl><Shift>S"},
+        {"label": "Upload File", "shortcut": "<Ctrl>U"},
+        {"label": "Quit Mattermost", "shortcut": "<Ctrl>Q"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Global Search", "shortcut": "<Ctrl><Shift>F"},
+        {"label": "Open Settings / Preferences", "shortcut": "<Ctrl>,"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Right-Hand Sidebar", "shortcut": "<Ctrl>."},
+        {"label": "Focus Message Box", "shortcut": "<Shift>Escape"},
+        {"label": "Zoom In", "shortcut": "<Ctrl>="},
+        {"label": "Zoom Out", "shortcut": "<Ctrl>-"},
+        {"label": "Reset Zoom", "shortcut": "<Ctrl>0"},
+        {"label": "Toggle Fullscreen", "shortcut": "F11"}
+      ]
+    },
+    {
+      "label": "Go",
+      "items": [
+        {"label": "Search in Channel / Team", "shortcut": "<Ctrl>F"},
+        {"label": "Next Channel", "shortcut": "<Alt>Down"},
+        {"label": "Previous Channel", "shortcut": "<Alt>Up"},
+        {"label": "Next Unread Channel", "shortcut": "<Alt><Shift>Down"},
+        {"label": "Previous Unread Channel", "shortcut": "<Alt><Shift>Up"},
+        {"label": "Next Team", "shortcut": "<Ctrl><Alt>Down"},
+        {"label": "Previous Team", "shortcut": "<Ctrl><Alt>Up"},
+        {"label": "Edit Last Message", "shortcut": "Up"},
+        {"label": "Reply to Last Message", "shortcut": "<Shift>Up"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "Open Keyboard Shortcuts Modal", "shortcut": "<Ctrl>/"}
+      ]
+    }
+  ]
+}
