@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Pulsar OS Theme Daemon
+Comment=Synchronizes GTK, Libadwaita, and Flatpak themes with GNOME Color Scheme
+Exec=/usr/bin/pulsaros-theme-daemon
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+StartupNotify=false
+Terminal=false

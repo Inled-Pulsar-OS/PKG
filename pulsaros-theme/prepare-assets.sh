@@ -174,22 +174,159 @@ button.accent-button.slate { background-color: #6f8396; background-image: none; 
 /* ==============================================================================
  * Apple Liquid Glass HIG - Specular Rim Highlight, Translucent Glass & Adaptive Focus
  * ============================================================================== */
+ACCENT_BTN_FIX
+
+find "$STAGE_DIR" -path "*/gtk-4.0/*.css" -exec sh -c 'cat /tmp/accent_btn_fix.css >> "$1"' _ {} \; 2>/dev/null || true
+find "$STAGE_DIR" -path "*/gtk-3.0/*.css" -exec sh -c 'cat /tmp/accent_btn_fix.css >> "$1"' _ {} \; 2>/dev/null || true
+rm -f /tmp/accent_btn_fix.css
+
+cat <<'LIGHT_HIG_FIX' > /tmp/light_hig_fix.css
+
+/* ==============================================================================
+ * Pulsar OS - Apple Liquid Glass HIG (Light Mode)
+ * ============================================================================== */
+@define-color window_bg_color rgba(255, 255, 255, 0.94);
+@define-color window_fg_color #1d1d1f;
+@define-color view_bg_color #ffffff;
+@define-color view_fg_color #1d1d1f;
+@define-color headerbar_bg_color rgba(246, 246, 248, 0.92);
+@define-color headerbar_fg_color #2c2c2e;
+@define-color sidebar_bg_color rgba(242, 242, 246, 0.90);
+@define-color sidebar_fg_color #1d1d1f;
+@define-color secondary_sidebar_bg_color #ffffff;
+@define-color secondary_sidebar_fg_color #1d1d1f;
+@define-color card_bg_color #ffffff;
+@define-color card_fg_color #1d1d1f;
+@define-color dialog_bg_color #ffffff;
+@define-color dialog_fg_color #1d1d1f;
+@define-color popover_bg_color #ffffff;
+@define-color popover_fg_color #1d1d1f;
+
 window,
 window.background,
 window.background.csd,
 .nautilus-window,
 adw-window,
 adw-preferences-window,
+adw-toolbar-view,
+adw-navigation-view,
+adw-navigation-page,
+adw-preferences-page,
+adw-preferences-group,
+adw-view-stack,
+adw-bin,
 dialog,
 messagedialog {
   background-color: @window_bg_color;
-  box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 16px 48px rgba(0, 0, 0, 0.35);
+  color: @window_fg_color;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.9), inset 0 0 0 1px rgba(0, 0, 0, 0.08), 0 12px 36px rgba(0, 0, 0, 0.12);
 }
 
 headerbar,
 .nautilus-window headerbar,
 adw-header-bar {
   background-color: @headerbar_bg_color;
+  color: @headerbar_fg_color;
+  background-image: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.8);
+}
+
+.navigation-sidebar,
+list.navigation-sidebar,
+sidebar,
+.sidebar-pane,
+navigation-split-view > .sidebar,
+adw-navigation-split-view > .sidebar {
+  background-color: @sidebar_bg_color;
+  color: @sidebar_fg_color;
+  background-image: none;
+}
+
+view,
+.view,
+textview,
+textview text,
+scrolledwindow.view,
+scrolledwindow > viewport.view {
+  background-color: @view_bg_color;
+  color: @view_fg_color;
+}
+
+card,
+.card,
+.boxed-list,
+preferencesgroup > box {
+  background-color: @card_bg_color;
+  color: @card_fg_color;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.8), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.linked:not(vertical),
+box.linked:not(vertical),
+stackswitcher,
+viewswitcher {
+  border-radius: 9999px;
+  background-color: alpha(currentColor, 0.06);
+  border: 1px solid alpha(currentColor, 0.08);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.6), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+headerbar .linked > button:focus,
+headerbar .linked > button:focus-within {
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.6), 0 0 0 2px @accent_bg_color;
+}
+LIGHT_HIG_FIX
+
+cat <<'DARK_HIG_FIX' > /tmp/dark_hig_fix.css
+
+/* ==============================================================================
+ * Pulsar OS - Apple Liquid Glass HIG (Dark Mode)
+ * ============================================================================== */
+@define-color window_bg_color rgba(30, 32, 40, 0.88);
+@define-color window_fg_color #f6f6f6;
+@define-color view_bg_color rgba(24, 26, 32, 0.90);
+@define-color view_fg_color #f6f6f6;
+@define-color headerbar_bg_color rgba(28, 30, 38, 0.88);
+@define-color headerbar_fg_color #f6f6f6;
+@define-color sidebar_bg_color rgba(24, 26, 32, 0.85);
+@define-color sidebar_fg_color #f6f6f6;
+@define-color secondary_sidebar_bg_color rgba(24, 26, 32, 0.90);
+@define-color secondary_sidebar_fg_color #f6f6f6;
+@define-color card_bg_color rgba(42, 44, 56, 0.88);
+@define-color card_fg_color #f6f6f6;
+@define-color dialog_bg_color rgba(36, 38, 48, 0.92);
+@define-color dialog_fg_color #f6f6f6;
+@define-color popover_bg_color rgba(36, 38, 48, 0.95);
+@define-color popover_fg_color #f6f6f6;
+
+window,
+window.background,
+window.background.csd,
+.nautilus-window,
+adw-window,
+adw-preferences-window,
+adw-toolbar-view,
+adw-navigation-view,
+adw-navigation-page,
+adw-preferences-page,
+adw-preferences-group,
+adw-view-stack,
+adw-bin,
+dialog,
+messagedialog {
+  background-color: @window_bg_color;
+  color: @window_fg_color;
+  box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 16px 48px rgba(0, 0, 0, 0.45);
+}
+
+headerbar,
+.nautilus-window headerbar,
+adw-header-bar {
+  background-color: @headerbar_bg_color;
+  color: @headerbar_fg_color;
   background-image: none;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.35);
@@ -198,23 +335,35 @@ adw-header-bar {
 .navigation-sidebar,
 list.navigation-sidebar,
 sidebar,
-.sidebar-pane {
+.sidebar-pane,
+navigation-split-view > .sidebar,
+adw-navigation-split-view > .sidebar {
   background-color: @sidebar_bg_color;
+  color: @sidebar_fg_color;
   background-image: none;
+}
+
+view,
+.view,
+textview,
+textview text,
+scrolledwindow.view,
+scrolledwindow > viewport.view {
+  background-color: @view_bg_color;
+  color: @view_fg_color;
 }
 
 card,
 .card,
-.boxed-list {
+.boxed-list,
+preferencesgroup > box {
   background-color: @card_bg_color;
+  color: @card_fg_color;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.35), 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.35), 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-.nautilus-window headerbar .linked,
-.nautilus-pathbar,
-headerbar box.linked,
 .linked:not(vertical),
 box.linked:not(vertical),
 stackswitcher,
@@ -229,13 +378,13 @@ headerbar .linked > button:focus,
 headerbar .linked > button:focus-within {
   box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.3), 0 0 0 2px @accent_bg_color;
 }
-ACCENT_BTN_FIX
+DARK_HIG_FIX
 
-find "$STAGE_DIR" -path "*/gtk-4.0/gtk.css" -exec sh -c 'cat /tmp/accent_btn_fix.css >> "$1"' _ {} \; 2>/dev/null || true
-find "$STAGE_DIR" -path "*/gtk-3.0/gtk.css" -exec sh -c 'cat /tmp/accent_btn_fix.css >> "$1"' _ {} \; 2>/dev/null || true
-find "$STAGE_DIR" -path "*/gtk-4.0/gtk-dark.css" -exec sh -c 'cat /tmp/accent_btn_fix.css >> "$1"' _ {} \; 2>/dev/null || true
-find "$STAGE_DIR" -path "*/gtk-3.0/gtk-dark.css" -exec sh -c 'cat /tmp/accent_btn_fix.css >> "$1"' _ {} \; 2>/dev/null || true
-rm -f /tmp/accent_btn_fix.css
+find "$STAGE_DIR" -path "*/MacTahoe-Light*/*.css" -exec sh -c 'cat /tmp/light_hig_fix.css >> "$1"' _ {} \; 2>/dev/null || true
+find "$STAGE_DIR" -path "*/MacTahoe-Dark*/*.css" -exec sh -c 'cat /tmp/dark_hig_fix.css >> "$1"' _ {} \; 2>/dev/null || true
+find "$STAGE_DIR/etc/skel" -name "*.css" -exec sh -c 'cat /tmp/dark_hig_fix.css >> "$1"' _ {} \; 2>/dev/null || true
+find "$STAGE_DIR/root" -name "*.css" -exec sh -c 'cat /tmp/dark_hig_fix.css >> "$1"' _ {} \; 2>/dev/null || true
+rm -f /tmp/light_hig_fix.css /tmp/dark_hig_fix.css
 
 # Copiar también configuración básica de GTK3 a Skel y Root
 mkdir -p "$STAGE_DIR/etc/skel/.config/gtk-3.0"

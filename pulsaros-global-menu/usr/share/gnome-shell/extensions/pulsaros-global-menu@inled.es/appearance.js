@@ -141,13 +141,15 @@ export class AppearanceManager {
 		const fontSize = s.get_int('menu-font-size');
 		const bold = btn._globalMenuAppName && s.get_boolean('bold-app-name');
 		
-		let textColor = isDark ? '#ffffff' : '#1d1d1f';
-		let labelColor = isDark ? '#dfdfdf' : '#333336';
+		// The top bar panel always requires high-contrast white/light text against the desktop panel
+		let textColor = '#ffffff';
+		let labelColor = 'rgba(255, 255, 255, 0.90)';
 
 		let style = `-natural-hpadding: ${spacing}px; ` +
 			`-minimum-hpadding: ${Math.min(spacing, 6)}px; ` +
 			`font-weight: ${bold ? 'bold' : 'normal'}; ` +
-			`color: ${bold ? textColor : labelColor};`;
+			`color: ${bold ? textColor : labelColor}; ` +
+			`text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);`;
 		if (fontSize > 0)
 			style += ` font-size: ${fontSize}pt;`;
 		btn.set_style(style);

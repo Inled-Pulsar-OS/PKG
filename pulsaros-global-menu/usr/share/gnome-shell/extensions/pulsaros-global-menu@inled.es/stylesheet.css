@@ -47,8 +47,9 @@
 .popup-menu-item {
     border-radius: 6px !important;
     margin: 1px 2px !important;
-    padding: 4px 10px !important;
+    padding: 3px 8px !important;
     font-size: 13px !important;
+    min-height: 22px !important;
     transition: all 120ms ease-out !important;
 }
 
@@ -62,9 +63,18 @@
 }
 
 .popup-separator-menu-item {
-    margin: 4px 6px !important;
+    margin: 2px 4px !important;
+    padding: 0 !important;
     height: 1px !important;
-    background-color: rgba(255, 255, 255, 0.12) !important;
+    min-height: 1px !important;
+}
+
+.popup-separator-menu-item .popup-separator-menu-item-separator {
+    height: 1px !important;
+    min-height: 1px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background-color: rgba(255, 255, 255, 0.15) !important;
 }
 
 /* --- Pulsar OS Tahoe Lockscreen Styles --- */
