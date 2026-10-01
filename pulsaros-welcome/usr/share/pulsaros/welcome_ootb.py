@@ -1424,6 +1424,15 @@ class OOTBWindow(Adw.ApplicationWindow):
                 self.show_error("Account name must be 3-16 characters and alphanumeric.")
                 return
 
+            self.saved_fullname = fullname
+            self.saved_username = username
+            self.saved_password = password
+
+            self.btn_next.set_sensitive(True)
+            self.btn_next.set_label("Continue")
+            self.stack.set_visible_child_name("theme_select")
+
+        elif current_page == "theme_select":
             # Disable navigation buttons to prevent double click/concurrency
             self.btn_next.set_sensitive(False)
             self.btn_back.set_sensitive(False)
@@ -1436,7 +1445,7 @@ class OOTBWindow(Adw.ApplicationWindow):
             # Start configuration in a background thread
             threading.Thread(
                 target=self.run_setup_backend,
-                args=(fullname, username, password),
+                args=(getattr(self, 'saved_fullname', ''), getattr(self, 'saved_username', ''), getattr(self, 'saved_password', '')),
                 daemon=True
             ).start()
 
@@ -1776,6 +1785,24 @@ class OOTBWindow(Adw.ApplicationWindow):
                         "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
                         "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:" + spotlight_path_super,
                         key, value
+                    ], check=False)
+
+                # ── Apply chosen appearance theme for user ───────
+                theme_scheme = "'prefer-dark'" if getattr(self, 'selected_theme', 'light') == 'dark' else "'default'"
+                gtk_theme_name = "'MacTahoe-Dark'" if getattr(self, 'selected_theme', 'light') == 'dark' else "'MacTahoe-Light'"
+                icon_theme_name = "'MacTahoe-blue-dark'" if getattr(self, 'selected_theme', 'light') == 'dark' else "'MacTahoe-blue-light'"
+                shell_theme_name = "'MacTahoe-Dark'" if getattr(self, 'selected_theme', 'light') == 'dark' else "'MacTahoe-Light'"
+
+                theme_settings = [
+                    ("org.gnome.desktop.interface", "color-scheme", theme_scheme),
+                    ("org.gnome.desktop.interface", "gtk-theme", gtk_theme_name),
+                    ("org.gnome.desktop.interface", "icon-theme", icon_theme_name),
+                    ("org.gnome.shell.extensions.user-theme", "name", shell_theme_name),
+                ]
+                for schema, key, value in theme_settings:
+                    run_cmd([
+                        "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
+                        schema, key, value
                     ], check=False)
 
             GLib.idle_add(self.on_setup_completed)

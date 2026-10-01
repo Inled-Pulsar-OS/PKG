@@ -57,9 +57,9 @@
 .popup-menu-item:focus,
 .popup-menu-item:active,
 .popup-menu-item.selected {
-    background-color: #0071e3 !important;
-    color: #ffffff !important;
-    box-shadow: 0 2px 6px rgba(0, 113, 227, 0.4) !important;
+    background-color: rgba(255, 255, 255, 0.16) !important;
+    color: inherit !important;
+    box-shadow: none !important;
 }
 
 .popup-separator-menu-item {
@@ -99,14 +99,14 @@
     border-radius: 20px;
     padding: 8px;
     color: #ffffff;
-    box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.15), 0 4px 12px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
     transition: all 150ms ease;
 }
 
 .pulsaros-lockscreen-power-button:hover {
     background-color: rgba(255, 255, 255, 0.3);
     border-color: rgba(255, 255, 255, 0.5);
-    box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.6), 0 6px 16px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
 }
 
 .pulsaros-lockscreen-power-button StIcon {
@@ -154,7 +154,7 @@
     height: 110px;
     border: 2px solid rgba(255, 255, 255, 0.9);
     background-color: rgba(255, 255, 255, 0.15);
-    box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.5), 0 8px 24px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 .pulsaros-lockscreen-avatar-default {
@@ -182,14 +182,14 @@
     text-align: center;
     font-family: "SF Pro Text", "Cantarell", sans-serif;
     padding: 0px 12px;
-    box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.35), 0 4px 12px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
     transition: all 150ms ease;
 }
 
 .pulsaros-lockscreen-entry:focus {
     background-color: rgba(255, 255, 255, 0.28);
     border: 1px solid rgba(255, 255, 255, 0.6);
-    box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.5), 0 0 0 2px rgba(255, 255, 255, 0.4), 0 6px 16px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.4), 0 6px 16px rgba(0, 0, 0, 0.35);
 }
 
 .pulsaros-lockscreen-entry-authenticating {
@@ -217,14 +217,32 @@
     box-shadow: 0 0 0 2px rgba(255, 60, 60, 0.4), 0 4px 12px rgba(255, 60, 60, 0.3);
 }
 
+.pulsaros-lockscreen-switch-btn {
+    background-color: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 18px;
+    padding: 6px 16px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 500;
+    margin-top: 8px;
+    transition: all 150ms ease;
+}
+
+.pulsaros-lockscreen-switch-btn:hover {
+    background-color: rgba(255, 255, 255, 0.28);
+    border-color: rgba(255, 255, 255, 0.45);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
 /* --- About Pulsar OS Dialog Styles (Apple Liquid Glass HIG) --- */
 .pulsaros-about-dialog {
-    background-color: rgba(30, 30, 34, 0.88);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background-color: rgba(30, 30, 34, 0.90);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 18px;
     padding: 24px;
     width: 480px;
-    box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.15), 0 20px 50px rgba(0, 0, 0, 0.7);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
 }
 
 .pulsaros-about-mainbox {
@@ -306,12 +324,12 @@
 
 /* --- Pulsar OS Power Confirmation Dialog Styles (Liquid Glass HIG) --- */
 .pulsaros-power-dialog {
-    background-color: rgba(36, 36, 40, 0.90);
-    border: 1px solid rgba(255, 255, 255, 0.22);
+    background-color: rgba(36, 36, 40, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 22px;
     padding: 24px 28px;
     width: 460px;
-    box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 24px 60px rgba(0, 0, 0, 0.85);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
 }
 
 .pulsaros-power-mainbox {

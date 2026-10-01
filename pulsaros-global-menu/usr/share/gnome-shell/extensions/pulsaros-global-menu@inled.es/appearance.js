@@ -178,13 +178,13 @@ export class AppearanceManager {
 
 		if (isDark) {
 			style += ` background-color: rgba(30, 30, 34, ${alpha});` +
-				` border: 1px solid rgba(255, 255, 255, 0.18);` +
-				` box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 16px 48px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.3);` +
+				` border: 1px solid rgba(255, 255, 255, 0.15);` +
+				` box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.25);` +
 				` color: #ffffff;`;
 		} else {
 			style += ` background-color: rgba(255, 255, 255, ${alpha});` +
-				` border: 1px solid rgba(0, 0, 0, 0.12);` +
-				` box-shadow: inset 0 1.5px 0.5px 0 rgba(255, 255, 255, 0.95), inset 0 0 0 1px rgba(255, 255, 255, 0.55), 0 12px 36px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08);` +
+				` border: 1px solid rgba(0, 0, 0, 0.10);` +
+				` box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);` +
 				` color: #1d1d1f;`;
 		}
 

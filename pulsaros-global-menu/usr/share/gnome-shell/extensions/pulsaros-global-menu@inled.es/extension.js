@@ -19,7 +19,7 @@ import {ShortcutStore} from './shortcutStore.js';
 import {WindowActions, cancelPendingActions} from './windowActions.js';
 import * as KeySynth from './keySynth.js';
 
-import {PulsarLogoButton} from './pulsarAppleMenu.js';
+import {PulsarLogoButton, ThemeLogoutPromptDialog} from './pulsarAppleMenu.js';
 import {LockScreen} from './pulsarLockScreen.js';
 import {DesktopLiveWallpaperManager} from './pulsarWallpaper.js';
 import {MacOSFullscreenManager} from './pulsarFullscreen.js';
@@ -434,7 +434,7 @@ export default class PulsarosGlobalMenuExtension extends Extension {
 			KeySynth.setDebug(this._settings.get_boolean('debug-shortcut-menus'));
 		});
 
-		// 7. Auto-sync MacTahoe Light / Dark theme
+		// 7. Auto-sync MacTahoe Light / Dark theme & show logout countdown prompt
 		try {
 			this._ifaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
 			let userThemeSource = Gio.SettingsSchemaSource.get_default();
@@ -442,13 +442,21 @@ export default class PulsarosGlobalMenuExtension extends Extension {
 				? new Gio.Settings({ schema_id: 'org.gnome.shell.extensions.user-theme' })
 				: null;
 
-			this._syncThemes = () => {
+			this._activeThemePrompt = null;
+			let lastScheme = this._ifaceSettings.get_string('color-scheme');
+
+			this._syncThemes = (interactive = false) => {
 				let colorScheme = this._ifaceSettings.get_string('color-scheme');
 				let targetTheme = (colorScheme === 'prefer-dark') ? 'MacTahoe-Dark' : 'MacTahoe-Light';
+				let targetIcons = (colorScheme === 'prefer-dark') ? 'MacTahoe-blue-dark' : 'MacTahoe-blue-light';
 				
 				let currentGtk = this._ifaceSettings.get_string('gtk-theme');
 				if (currentGtk !== targetTheme) {
 					this._ifaceSettings.set_string('gtk-theme', targetTheme);
+				}
+				let currentIcons = this._ifaceSettings.get_string('icon-theme');
+				if (currentIcons !== targetIcons) {
+					this._ifaceSettings.set_string('icon-theme', targetIcons);
 				}
 
 				if (this._userThemeSettings) {
@@ -457,12 +465,28 @@ export default class PulsarosGlobalMenuExtension extends Extension {
 						this._userThemeSettings.set_string('name', targetTheme);
 					}
 				}
+
+				if (interactive) {
+					if (this._activeThemePrompt) {
+						try {
+							this._activeThemePrompt._cleanup();
+							this._activeThemePrompt.close();
+						} catch (e) {}
+						this._activeThemePrompt = null;
+					}
+					this._activeThemePrompt = new ThemeLogoutPromptDialog();
+					this._activeThemePrompt.open();
+				}
 			};
 
 			this._colorSchemeChangeId = this._ifaceSettings.connect('changed::color-scheme', () => {
-				this._syncThemes();
+				let current = this._ifaceSettings.get_string('color-scheme');
+				if (current !== lastScheme) {
+					lastScheme = current;
+					this._syncThemes(true);
+				}
 			});
-			this._syncThemes();
+			this._syncThemes(false);
 		} catch (e) {
 			console.error("[GlobalMenu] Theme sync error:", e);
 		}
@@ -476,6 +500,14 @@ export default class PulsarosGlobalMenuExtension extends Extension {
 	}
 
 	disable() {
+		if (this._activeThemePrompt) {
+			try {
+				this._activeThemePrompt._cleanup();
+				this._activeThemePrompt.close();
+			} catch (e) {}
+			this._activeThemePrompt = null;
+		}
+
 		if (this._ifaceSettings && this._colorSchemeChangeId) {
 			this._ifaceSettings.disconnect(this._colorSchemeChangeId);
 			this._colorSchemeChangeId = 0;

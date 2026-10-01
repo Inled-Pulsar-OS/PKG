@@ -426,6 +426,20 @@ export const LockScreen = GObject.registerClass({
             });
             topBar.add_child(shutdownBtn);
 
+            let switchUserTopBtn = new St.Button({
+                style_class: 'pulsaros-lockscreen-power-button',
+                reactive: true,
+                can_focus: true,
+                child: new St.Icon({
+                    icon_name: 'system-users-symbolic',
+                    icon_size: 20
+                })
+            });
+            switchUserTopBtn.connect('clicked', () => {
+                this._switchUser();
+            });
+            topBar.add_child(switchUserTopBtn);
+
             let spacer = new St.Widget({
                 style_class: 'pulsaros-lockscreen-spacer',
                 height: 60
@@ -563,6 +577,18 @@ export const LockScreen = GObject.registerClass({
             }
             userCard.add_child(this._passwordEntry);
 
+            let switchUserBtn = new St.Button({
+                style_class: 'pulsaros-lockscreen-switch-btn',
+                label: 'Cambiar de usuario',
+                reactive: true,
+                can_focus: true,
+                x_align: Clutter.ActorAlign.CENTER
+            });
+            switchUserBtn.connect('clicked', () => {
+                this._switchUser();
+            });
+            userCard.add_child(switchUserBtn);
+
             let bottomSpacer = new St.Widget({
                 style_class: 'pulsaros-lockscreen-bottom-spacer',
                 height: 40
@@ -659,6 +685,58 @@ export const LockScreen = GObject.registerClass({
         } catch (e) {
             console.error("[LockScreen] Failed to trigger lockscreen idle suspend:", e);
             GLib.spawn_command_line_async("systemctl suspend");
+        }
+    }
+
+    _switchUser() {
+        try {
+            let bus = Gio.DBus.system;
+            bus.call(
+                'org.freedesktop.DisplayManager',
+                '/org/freedesktop/DisplayManager',
+                'org.freedesktop.DisplayManager',
+                'SwitchToGreeter',
+                null,
+                null,
+                Gio.DBusCallFlags.NONE,
+                -1,
+                null,
+                (connection, res) => {
+                    try {
+                        connection.call_finish(res);
+                    } catch (e) {
+                        this._switchUserFallback();
+                    }
+                }
+            );
+        } catch (e) {
+            this._switchUserFallback();
+        }
+    }
+
+    _switchUserFallback() {
+        try {
+            let bus = Gio.DBus.system;
+            bus.call(
+                'org.gnome.DisplayManager',
+                '/org/gnome/DisplayManager/LocalDisplayFactory',
+                'org.gnome.DisplayManager.LocalDisplayFactory',
+                'CreateTransientDisplay',
+                null,
+                null,
+                Gio.DBusCallFlags.NONE,
+                -1,
+                null,
+                (connection, res) => {
+                    try {
+                        connection.call_finish(res);
+                    } catch (e) {
+                        GLib.spawn_command_line_async("gdmflexiserver || dm-tool switch-to-greeter || loginctl lock-session");
+                    }
+                }
+            );
+        } catch (e) {
+            GLib.spawn_command_line_async("gdmflexiserver || dm-tool switch-to-greeter || loginctl lock-session");
         }
     }
     

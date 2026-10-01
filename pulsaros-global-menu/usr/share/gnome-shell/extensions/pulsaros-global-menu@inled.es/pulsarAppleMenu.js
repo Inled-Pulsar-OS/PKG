@@ -59,6 +59,9 @@ const I18N = {
         storage: "Storage:",
         copyInfo: "Copy Info",
         version: "Version",
+        themeLogoutTitle: "Appearance Changed",
+        themeLogoutDesc: "Logging out in %d seconds to apply the new appearance completely.",
+        logoutNowBtn: "Log Out Now",
     },
     es: {
         aboutPulsar: "Acerca de Pulsar OS",
@@ -109,6 +112,9 @@ const I18N = {
         storage: "Almacenamiento:",
         copyInfo: "Copiar información",
         version: "Versión",
+        themeLogoutTitle: "Cambio de aspecto aplicado",
+        themeLogoutDesc: "Se cerrará la sesión en %d segundos para aplicar el nuevo tema por completo.",
+        logoutNowBtn: "Cerrar sesión ahora",
     },
     fr: {
         aboutPulsar: "À propos de Pulsar OS",
@@ -946,6 +952,120 @@ const PowerConfirmDialog = GObject.registerClass({
 
             return GLib.SOURCE_CONTINUE;
         });
+    }
+
+    destroy() {
+        this._cleanup();
+        super.destroy();
+    }
+});
+
+export const ThemeLogoutPromptDialog = GObject.registerClass({
+    GTypeName: 'PulsarosThemeLogoutPromptDialog'
+}, class ThemeLogoutPromptDialog extends ModalDialog.ModalDialog {
+    _init() {
+        super._init({ styleClass: 'pulsaros-power-dialog' });
+
+        this._countdown = 6;
+        this._timerId = 0;
+
+        let mainBox = new St.BoxLayout({
+            vertical: true,
+            style_class: 'pulsaros-power-mainbox'
+        });
+        this.contentLayout.add_child(mainBox);
+
+        // Icon Header
+        let iconContainer = new St.BoxLayout({
+            style_class: 'pulsaros-power-icon-container',
+            x_align: Clutter.ActorAlign.START
+        });
+        let circleBadge = new St.BoxLayout({
+            style_class: 'pulsaros-power-circle-badge',
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER
+        });
+        let icon = new St.Icon({
+            icon_name: 'preferences-desktop-theme-symbolic',
+            style_class: 'pulsaros-power-circle-icon'
+        });
+        circleBadge.add_child(icon);
+        iconContainer.add_child(circleBadge);
+        mainBox.add_child(iconContainer);
+
+        // Title
+        let titleLabel = new St.Label({
+            text: _t('themeLogoutTitle') || "Cambio de aspecto aplicado",
+            style_class: 'pulsaros-power-title'
+        });
+        mainBox.add_child(titleLabel);
+
+        // Description
+        let getDescText = (sec) => {
+            let t = _t('themeLogoutDesc', sec);
+            return t || `Se cerrará la sesión en ${sec} segundos para aplicar el nuevo tema por completo.`;
+        };
+
+        this._descLabel = new St.Label({
+            text: getDescText(this._countdown),
+            style_class: 'pulsaros-power-subtitle'
+        });
+        mainBox.add_child(this._descLabel);
+
+        // Cancel Button
+        this._cancelBtn = this.addButton({
+            label: _t('cancel') || "Cancelar",
+            action: () => {
+                this._cleanup();
+                this.close();
+            },
+            key: Clutter.KEY_Escape
+        });
+        if (this._cancelBtn && this._cancelBtn.add_style_class_name) {
+            this._cancelBtn.add_style_class_name('pulsaros-power-cancel-btn');
+        }
+
+        // Action Button
+        this._actionBtn = this.addButton({
+            label: _t('logoutNowBtn') || "Cerrar sesión ahora",
+            action: () => {
+                this._cleanup();
+                this.close();
+                this._executeLogout();
+            },
+            default: true
+        });
+        if (this._actionBtn && this._actionBtn.add_style_class_name) {
+            this._actionBtn.add_style_class_name('pulsaros-power-confirm-btn');
+        }
+
+        this._timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
+            this._countdown--;
+            if (this._countdown <= 0) {
+                this._timerId = 0;
+                this._cleanup();
+                this.close();
+                this._executeLogout();
+                return GLib.SOURCE_REMOVE;
+            }
+            this._descLabel.text = getDescText(this._countdown);
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    _executeLogout() {
+        try {
+            GLib.spawn_command_line_async("gnome-session-quit --logout --no-prompt");
+        } catch (e) {
+            console.error("[GlobalMenu] Logout error:", e);
+        }
+    }
+
+    _cleanup() {
+        if (this._timerId > 0) {
+            GLib.source_remove(this._timerId);
+            this._timerId = 0;
+        }
     }
 
     destroy() {
