@@ -189,10 +189,21 @@ find "$STAGE_DIR" -path "*/gtk-3.0/gtk-dark.css" -exec sh -c 'cat /tmp/accent_bt
 rm -f /tmp/accent_btn_fix.css
 
 # Copiar también configuración básica de GTK3 a Skel y Root
-mkdir -p "$STAGE_DIR/etc/skel/.config/gtk-3.0"
-mkdir -p "$STAGE_DIR/root/.config/gtk-3.0"
+mkdir -p "$STAGE_DIR/etc/skel/.config/gtk-3.0" "$STAGE_DIR/etc/skel/.config/gtk-4.0"
+mkdir -p "$STAGE_DIR/root/.config/gtk-3.0" "$STAGE_DIR/root/.config/gtk-4.0"
 cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-3.0/gtk-dark.css" "$STAGE_DIR/etc/skel/.config/gtk-3.0/gtk.css" 2>/dev/null || true
 cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-3.0/gtk-dark.css" "$STAGE_DIR/root/.config/gtk-3.0/gtk.css" 2>/dev/null || true
+
+cat <<'SETTINGS_EOF' > "$STAGE_DIR/etc/skel/.config/gtk-3.0/settings.ini"
+[Settings]
+gtk-theme-name=MacTahoe-Dark
+gtk-icon-theme-name=MacTahoe-blue-dark
+gtk-application-prefer-dark-theme=1
+gtk-decoration-layout=close,minimize,maximize:
+SETTINGS_EOF
+cp -f "$STAGE_DIR/etc/skel/.config/gtk-3.0/settings.ini" "$STAGE_DIR/etc/skel/.config/gtk-4.0/settings.ini"
+cp -f "$STAGE_DIR/etc/skel/.config/gtk-3.0/settings.ini" "$STAGE_DIR/root/.config/gtk-3.0/settings.ini"
+cp -f "$STAGE_DIR/etc/skel/.config/gtk-3.0/settings.ini" "$STAGE_DIR/root/.config/gtk-4.0/settings.ini"
 
 # 2.2 Aplicar fix para Nautilus moderno (Libadwaita en GNOME 46+)
 echo "Aplicando fix de Libadwaita moderno para Nautilus..."

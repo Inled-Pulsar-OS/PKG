@@ -35,6 +35,10 @@ export const LockScreen = GObject.registerClass({
         this._lockIdleTimerId = 0;
         this._lockIdleTimeoutSeconds = 60;
         this._stageEventId = 0;
+        this._selectedUsername = GLib.get_user_name();
+        this._userPickerBox = null;
+        this._avatarWidget = null;
+        this._nameLabel = null;
 
         this._bgSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.background' });
         this._ifaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
@@ -370,6 +374,163 @@ export const LockScreen = GObject.registerClass({
         }
     }
 
+    _getSystemUsers() {
+        let users = [];
+        try {
+            let [ok, contents] = GLib.file_get_contents('/etc/passwd');
+            if (ok) {
+                let text = new TextDecoder().decode(contents);
+                let lines = text.split('\n');
+                for (let line of lines) {
+                    let parts = line.split(':');
+                    if (parts.length >= 7) {
+                        let username = parts[0];
+                        let uid = parseInt(parts[2], 10);
+                        let gecos = parts[4] || '';
+                        let home = parts[5];
+                        let shell = parts[6];
+                        if (uid >= 1000 && uid < 65000 && !shell.includes('nologin') && !shell.endsWith('/false')) {
+                            let realName = gecos.split(',')[0] || username;
+                            if (realName.trim() === '') realName = username;
+                            realName = realName.charAt(0).toUpperCase() + realName.slice(1);
+                            
+                            let avatarUri = null;
+                            let iconPath = `/var/lib/AccountsService/icons/${username}`;
+                            if (GLib.file_test(iconPath, GLib.FileTest.EXISTS)) {
+                                avatarUri = `file://${iconPath}`;
+                            } else {
+                                let facePath = `${home}/.face`;
+                                if (GLib.file_test(facePath, GLib.FileTest.EXISTS)) {
+                                    avatarUri = `file://${facePath}`;
+                                }
+                            }
+                            
+                            users.push({ username, realName, avatarUri, home });
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("[LockScreen] Error reading /etc/passwd:", e);
+        }
+        
+        let currentUsername = GLib.get_user_name();
+        let foundCurrent = users.find(u => u.username === currentUsername);
+        if (!foundCurrent) {
+            let gn = GLib.get_real_name() || currentUsername;
+            if (gn === 'Unknown' || gn.trim() === '') gn = currentUsername;
+            gn = gn.charAt(0).toUpperCase() + gn.slice(1);
+            let iconPath = `/var/lib/AccountsService/icons/${currentUsername}`;
+            let avatarUri = GLib.file_test(iconPath, GLib.FileTest.EXISTS) ? `file://${iconPath}` : null;
+            users.unshift({ username: currentUsername, realName: gn, avatarUri, home: GLib.get_home_dir() });
+        }
+        
+        return users;
+    }
+
+    _applyUserAvatar(widget, user) {
+        if (!widget) return;
+        widget.destroy_all_children();
+        if (user && user.avatarUri) {
+            widget.style = `background-image: url("${user.avatarUri}"); background-size: cover; border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9);`;
+        } else {
+            widget.style = `border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9); background-color: rgba(255, 255, 255, 0.15);`;
+            let defaultIcon = new St.Icon({
+                icon_name: 'avatar-default-symbolic',
+                icon_size: 64,
+                style_class: 'pulsaros-lockscreen-avatar-default',
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER
+            });
+            widget.add_child(defaultIcon);
+        }
+    }
+
+    _toggleUserPicker() {
+        if (!this._userPickerBox) return;
+        let isOpening = !this._userPickerBox.visible;
+        if (isOpening) {
+            this._populateUserPicker();
+            this._userPickerBox.visible = true;
+        } else {
+            this._userPickerBox.visible = false;
+        }
+    }
+
+    _populateUserPicker() {
+        if (!this._userPickerBox) return;
+        this._userPickerBox.destroy_all_children();
+        
+        let users = this._getSystemUsers();
+        for (let user of users) {
+            let isCurrent = (user.username === this._selectedUsername);
+            let itemBtn = new St.Button({
+                style_class: isCurrent ? 'pulsaros-lockscreen-user-item selected' : 'pulsaros-lockscreen-user-item',
+                reactive: true,
+                can_focus: true,
+                x_align: Clutter.ActorAlign.CENTER
+            });
+            
+            let itemLayout = new St.BoxLayout({
+                orientation: Clutter.Orientation.HORIZONTAL,
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER
+            });
+            itemBtn.set_child(itemLayout);
+            
+            let smallAvatar = new St.Widget({
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER
+            });
+            if (user.avatarUri) {
+                smallAvatar.style = `background-image: url("${user.avatarUri}"); background-size: cover; border-radius: 16px; width: 32px; height: 32px; border: 1.5px solid rgba(255, 255, 255, 0.8);`;
+            } else {
+                smallAvatar.style = `border-radius: 16px; width: 32px; height: 32px; border: 1.5px solid rgba(255, 255, 255, 0.8); background-color: rgba(255, 255, 255, 0.15);`;
+                let icon = new St.Icon({
+                    icon_name: 'avatar-default-symbolic',
+                    icon_size: 20,
+                    x_align: Clutter.ActorAlign.CENTER,
+                    y_align: Clutter.ActorAlign.CENTER
+                });
+                smallAvatar.add_child(icon);
+            }
+            itemLayout.add_child(smallAvatar);
+            
+            let uLabel = new St.Label({
+                style_class: 'pulsaros-lockscreen-user-item-name',
+                text: user.realName,
+                y_align: Clutter.ActorAlign.CENTER
+            });
+            itemLayout.add_child(uLabel);
+            
+            itemBtn.connect('clicked', () => {
+                this._selectUser(user);
+            });
+            
+            this._userPickerBox.add_child(itemBtn);
+        }
+    }
+
+    _selectUser(user) {
+        this._selectedUsername = user.username;
+        if (this._avatarWidget) {
+            this._applyUserAvatar(this._avatarWidget, user);
+        }
+        if (this._nameLabel) {
+            this._nameLabel.set_text(user.realName);
+        }
+        if (this._userPickerBox) {
+            this._userPickerBox.visible = false;
+        }
+        if (this._passwordEntry) {
+            this._passwordEntry.set_text('');
+            this._passwordEntry.style_class = 'pulsaros-lockscreen-entry';
+            this._passwordEntry.set_hint_text('Enter Password');
+            let clutterText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText || this._passwordEntry;
+            if (clutterText && clutterText.grab_key_focus) clutterText.grab_key_focus();
+        }
+    }
+
     _buildMonitorUI(container, monitor, isPrimary) {
         let contentLayout = new St.BoxLayout({
             orientation: Clutter.Orientation.VERTICAL,
@@ -426,20 +587,6 @@ export const LockScreen = GObject.registerClass({
             });
             topBar.add_child(shutdownBtn);
 
-            let switchUserTopBtn = new St.Button({
-                style_class: 'pulsaros-lockscreen-power-button',
-                reactive: true,
-                can_focus: true,
-                child: new St.Icon({
-                    icon_name: 'system-users-symbolic',
-                    icon_size: 20
-                })
-            });
-            switchUserTopBtn.connect('clicked', () => {
-                this._switchUser();
-            });
-            topBar.add_child(switchUserTopBtn);
-
             let spacer = new St.Widget({
                 style_class: 'pulsaros-lockscreen-spacer',
                 height: 60
@@ -484,62 +631,42 @@ export const LockScreen = GObject.registerClass({
             });
             contentLayout.add_child(userCard);
 
-            let username = GLib.get_user_name();
-            let avatarWidget = new St.Widget({
+            let users = this._getSystemUsers();
+            let currentUser = users.find(u => u.username === this._selectedUsername) || users[0];
+            this._selectedUsername = currentUser.username;
+
+            let avatarBtn = new St.Button({
+                style_class: 'pulsaros-lockscreen-avatar-btn',
+                reactive: true,
+                can_focus: true,
+                x_align: Clutter.ActorAlign.CENTER
+            });
+            avatarBtn.connect('clicked', () => {
+                this._toggleUserPicker();
+            });
+
+            this._avatarWidget = new St.Widget({
                 style_class: 'pulsaros-lockscreen-avatar',
                 x_align: Clutter.ActorAlign.CENTER
             });
+            this._applyUserAvatar(this._avatarWidget, currentUser);
+            avatarBtn.set_child(this._avatarWidget);
+            userCard.add_child(avatarBtn);
 
-            try {
-                let avatarPath = `/var/lib/AccountsService/icons/${username}`;
-                let avatarFile = Gio.File.new_for_path(avatarPath);
-                if (avatarFile.query_exists(null)) {
-                    avatarWidget.style = `background-image: url("file://${avatarPath}"); background-size: cover; border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9);`;
-                } else {
-                    let faceFile = Gio.File.new_for_path(GLib.get_home_dir() + '/.face');
-                    if (faceFile.query_exists(null)) {
-                        avatarWidget.style = `background-image: url("file://${GLib.get_home_dir()}/.face"); background-size: cover; border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9);`;
-                    } else {
-                        avatarWidget.style = `border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9); background-color: rgba(255, 255, 255, 0.15);`;
-                        let defaultIcon = new St.Icon({
-                            icon_name: 'avatar-default-symbolic',
-                            icon_size: 64,
-                            style_class: 'pulsaros-lockscreen-avatar-default',
-                            x_align: Clutter.ActorAlign.CENTER,
-                            y_align: Clutter.ActorAlign.CENTER
-                        });
-                        avatarWidget.add_child(defaultIcon);
-                    }
-                }
-            } catch (e) {
-                console.error("[LockScreen] Failed to load avatar:", e);
-                avatarWidget.style = `border-radius: 55px; width: 110px; height: 110px; border: 2px solid rgba(255, 255, 255, 0.9); background-color: rgba(255, 255, 255, 0.15);`;
-                let defaultIcon = new St.Icon({
-                    icon_name: 'avatar-default-symbolic',
-                    icon_size: 64,
-                    style_class: 'pulsaros-lockscreen-avatar-default',
-                    x_align: Clutter.ActorAlign.CENTER,
-                    y_align: Clutter.ActorAlign.CENTER
-                });
-                avatarWidget.add_child(defaultIcon);
-            }
-            userCard.add_child(avatarWidget);
-
-            let realName = username;
-            try {
-                let gn = GLib.get_real_name();
-                if (gn && gn !== 'Unknown' && gn.trim() !== '') {
-                    realName = gn;
-                }
-            } catch (e) {}
-            realName = realName.charAt(0).toUpperCase() + realName.slice(1);
-
-            let nameLabel = new St.Label({
+            this._nameLabel = new St.Label({
                 style_class: 'pulsaros-lockscreen-name-label',
                 x_align: Clutter.ActorAlign.CENTER,
-                text: realName
+                text: currentUser.realName
             });
-            userCard.add_child(nameLabel);
+            userCard.add_child(this._nameLabel);
+
+            this._userPickerBox = new St.BoxLayout({
+                orientation: Clutter.Orientation.VERTICAL,
+                x_align: Clutter.ActorAlign.CENTER,
+                style_class: 'pulsaros-lockscreen-user-picker',
+                visible: false
+            });
+            userCard.add_child(this._userPickerBox);
 
             this._passwordEntry = new St.Entry({
                 style_class: 'pulsaros-lockscreen-entry',
@@ -569,6 +696,10 @@ export const LockScreen = GObject.registerClass({
                 clutterText.connect('key-press-event', (actor, event) => {
                     let symbol = event.get_key_symbol();
                     if (symbol === Clutter.KEY_Escape) {
+                        if (this._userPickerBox && this._userPickerBox.visible) {
+                            this._userPickerBox.visible = false;
+                            return Clutter.EVENT_STOP;
+                        }
                         this._passwordEntry.set_text('');
                         return Clutter.EVENT_STOP;
                     }
@@ -576,18 +707,6 @@ export const LockScreen = GObject.registerClass({
                 });
             }
             userCard.add_child(this._passwordEntry);
-
-            let switchUserBtn = new St.Button({
-                style_class: 'pulsaros-lockscreen-switch-btn',
-                label: 'Cambiar de usuario',
-                reactive: true,
-                can_focus: true,
-                x_align: Clutter.ActorAlign.CENTER
-            });
-            switchUserBtn.connect('clicked', () => {
-                this._switchUser();
-            });
-            userCard.add_child(switchUserBtn);
 
             let bottomSpacer = new St.Widget({
                 style_class: 'pulsaros-lockscreen-bottom-spacer',
@@ -878,14 +997,14 @@ export const LockScreen = GObject.registerClass({
             this._passwordEntry.style_class = 'pulsaros-lockscreen-entry-authenticating';
         }
         
-        let username = GLib.get_user_name();
+        let username = this._selectedUsername || GLib.get_user_name();
         
         // Check if the PAM service file is present. If not, fallback to developer passwords for local testing on host
         let pamFile = Gio.File.new_for_path('/etc/pam.d/pulsaros-lock');
         if (!pamFile.query_exists(null)) {
             console.warn("[LockScreen] PAM service '/etc/pam.d/pulsaros-lock' is missing. Falling back to developer passwords.");
             if (password === 'pulsar' || password === 'live' || password === 'jaime') {
-                this._onAuthSuccess();
+                this._onAuthSuccess(username);
             } else {
                 this._onAuthFailure();
             }
@@ -907,7 +1026,7 @@ export const LockScreen = GObject.registerClass({
                         console.warn(`[LockScreen] pamtester auth failed for user '${username}': exit=${obj.get_exit_status()} stderr=${(stderrText || '').trim()}`);
                     }
                     if (success) {
-                        this._onAuthSuccess();
+                        this._onAuthSuccess(username);
                     } else {
                         this._onAuthFailure();
                     }
@@ -922,9 +1041,14 @@ export const LockScreen = GObject.registerClass({
         }
     }
     
-    _onAuthSuccess() {
+    _onAuthSuccess(username) {
         this._authenticating = false;
-        this.unlock();
+        let sessionUser = GLib.get_user_name();
+        if (username && username !== sessionUser) {
+            this._switchUser();
+        } else {
+            this.unlock();
+        }
     }
     
     _onAuthFailure() {
