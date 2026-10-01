@@ -978,25 +978,29 @@ export const ThemeLogoutPromptDialog = GObject.registerClass({
         // Icon Header
         let iconContainer = new St.BoxLayout({
             style_class: 'pulsaros-power-icon-container',
-            x_align: Clutter.ActorAlign.START
+            x_align: Clutter.ActorAlign.CENTER
         });
-        let circleBadge = new St.BoxLayout({
+        let circleBadge = new St.Bin({
             style_class: 'pulsaros-power-circle-badge',
             x_align: Clutter.ActorAlign.CENTER,
-            y_align: Clutter.ActorAlign.CENTER
+            y_align: Clutter.ActorAlign.CENTER,
+            x_expand: false,
+            y_expand: false
         });
         let icon = new St.Icon({
             icon_name: 'preferences-desktop-theme-symbolic',
+            icon_size: 32,
             style_class: 'pulsaros-power-circle-icon'
         });
-        circleBadge.add_child(icon);
+        circleBadge.set_child(icon);
         iconContainer.add_child(circleBadge);
         mainBox.add_child(iconContainer);
 
         // Title
         let titleLabel = new St.Label({
             text: _t('themeLogoutTitle') || "Cambio de aspecto aplicado",
-            style_class: 'pulsaros-power-title'
+            style_class: 'pulsaros-theme-prompt-title',
+            x_align: Clutter.ActorAlign.CENTER
         });
         mainBox.add_child(titleLabel);
 
@@ -1008,7 +1012,8 @@ export const ThemeLogoutPromptDialog = GObject.registerClass({
 
         this._descLabel = new St.Label({
             text: getDescText(this._countdown),
-            style_class: 'pulsaros-power-subtitle'
+            style_class: 'pulsaros-theme-prompt-subtitle',
+            x_align: Clutter.ActorAlign.CENTER
         });
         mainBox.add_child(this._descLabel);
 
