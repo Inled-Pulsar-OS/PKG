@@ -1474,10 +1474,19 @@ class OOTBWindow(Adw.ApplicationWindow):
                 return res
 
             def write_temp_and_move(content, dest):
+                if "TEST_MODE" in os.environ:
+                    log_msg(f"[TEST_MODE] Bypassed file write to {dest}")
+                    return
                 tmp = dest + ".tmp"
                 with open(tmp, "w") as f:
                     f.write(content)
                 os.replace(tmp, dest)
+
+            if "TEST_MODE" in os.environ:
+                log_msg("[TEST_MODE] Running in simulated mode. No system changes will be made.")
+                time.sleep(2.5)
+                GLib.idle_add(self.on_setup_completed)
+                return
 
             # ── Locale ─────────────────────────────────────────────
             # selected_language is like "es_ES"; the generated locale name
