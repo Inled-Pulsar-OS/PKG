@@ -31,17 +31,47 @@
 
 /* Liquid Glass Popup Menus & Item Hover */
 .global-menu-no-arrow .popup-menu-arrow {
-    width: 0;
-    height: 0;
+    width: 0 !important;
+    height: 0 !important;
 }
 
 .popup-menu-boxpointer {
-    -arrow-rise: 0;
-    -arrow-border-radius: 12px;
+    -arrow-rise: 0px !important;
+    -arrow-border-radius: 14px !important;
+    -arrow-background-color: transparent !important;
+    -arrow-border-color: transparent !important;
+    -arrow-border-width: 0px !important;
+    -arrow-box-shadow: none !important;
+    margin: 0px !important;
+    padding: 0px !important;
 }
 
-.popup-menu-content {
+.global-menu-popup .popup-menu-content,
+.popup-menu-boxpointer .popup-menu-content {
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0px !important;
     padding: 6px !important;
+}
+
+/* Panel Buttons Glass Capsule */
+#panel .panel-button {
+    box-shadow: none !important;
+}
+
+#panel .panel-button:hover {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    box-shadow: none !important;
+    border-radius: 9999px !important;
+}
+
+#panel .panel-button:active,
+#panel .panel-button:focus,
+#panel .panel-button:checked,
+#panel .panel-button:overview {
+    background-color: rgba(255, 255, 255, 0.25) !important;
+    box-shadow: none !important;
+    border-radius: 9999px !important;
 }
 
 .popup-menu-item {
