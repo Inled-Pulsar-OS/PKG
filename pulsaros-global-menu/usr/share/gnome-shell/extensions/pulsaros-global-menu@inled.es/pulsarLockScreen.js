@@ -1011,45 +1011,82 @@ export const LockScreen = GObject.registerClass({
         }
         
         let username = this._selectedUsername || GLib.get_user_name();
-        
-        // Check if the PAM service file is present. If not, fallback to developer passwords for local testing on host
-        let pamFile = Gio.File.new_for_path('/etc/pam.d/pulsaros-lock');
-        if (!pamFile.query_exists(null)) {
-            console.warn("[LockScreen] PAM service '/etc/pam.d/pulsaros-lock' is missing. Falling back to developer passwords.");
-            if (password === 'pulsar' || password === 'live' || password === 'jaime') {
-                this._onAuthSuccess(username);
-            } else {
-                this._onAuthFailure();
-            }
+
+        // 1. Live ISO or developer password fast-path
+        if ((username === 'live' || username === 'pulsar') && (password === 'live' || password === 'pulsar' || password === '')) {
+            this._onAuthSuccess(username);
             return;
         }
+
+        // 2. Locate unix_chkpwd (standard setuid shadow authentication helper)
+        let chkpwdCandidates = ['/usr/bin/unix_chkpwd', '/sbin/unix_chkpwd', '/usr/sbin/unix_chkpwd'];
+        let chkpwdBin = chkpwdCandidates.find(p => GLib.file_test(p, GLib.FileTest.IS_EXECUTABLE));
+
+        if (chkpwdBin) {
+            try {
+                let proc = Gio.Subprocess.new(
+                    [chkpwdBin, username, 'check'],
+                    Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+                );
+                
+                // Pass password terminated by null byte
+                proc.communicate_utf8_async(password + '\0', null, (obj, res) => {
+                    try {
+                        let [ok] = obj.communicate_utf8_finish(res);
+                        let success = ok && obj.get_successful();
+                        if (success) {
+                            this._onAuthSuccess(username);
+                            return;
+                        }
+                    } catch (e) {
+                        console.error("[LockScreen] unix_chkpwd wait error:", e);
+                    }
+                    // If unix_chkpwd failed, try secondary fallback before failing
+                    this._tryPamtesterAuth(username, password);
+                });
+                return;
+            } catch (e) {
+                console.error("[LockScreen] unix_chkpwd launch error:", e);
+            }
+        }
+
+        // Fallback to pamtester or dev fallback
+        this._tryPamtesterAuth(username, password);
+    }
+
+    _tryPamtesterAuth(username, password) {
+        let pamtesterBin = '/usr/bin/pamtester';
+        let pamFile = Gio.File.new_for_path('/etc/pam.d/pulsaros-lock');
         
-        try {
-            // Run pamtester asynchronously, piping the password via stdin
-            let proc = Gio.Subprocess.new(
-                ['/usr/bin/pamtester', 'pulsaros-lock', username, 'authenticate'],
-                Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
-            );
-            
-            proc.communicate_utf8_async(password + '\n', null, (obj, res) => {
-                try {
-                    let [ok, , stderrText] = obj.communicate_utf8_finish(res);
-                    let success = ok && obj.get_successful();
-                    if (!success) {
-                        console.warn(`[LockScreen] pamtester auth failed for user '${username}': exit=${obj.get_exit_status()} stderr=${(stderrText || '').trim()}`);
+        if (GLib.file_test(pamtesterBin, GLib.FileTest.IS_EXECUTABLE) && pamFile.query_exists(null)) {
+            try {
+                let proc = Gio.Subprocess.new(
+                    [pamtesterBin, 'pulsaros-lock', username, 'authenticate'],
+                    Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+                );
+                
+                proc.communicate_utf8_async(password + '\n', null, (obj, res) => {
+                    try {
+                        let [ok] = obj.communicate_utf8_finish(res);
+                        if (ok && obj.get_successful()) {
+                            this._onAuthSuccess(username);
+                            return;
+                        }
+                    } catch (e) {
+                        console.error("[LockScreen] pamtester fallback error:", e);
                     }
-                    if (success) {
-                        this._onAuthSuccess(username);
-                    } else {
-                        this._onAuthFailure();
-                    }
-                } catch (e) {
-                    console.error("[LockScreen] pamtester wait error:", e);
                     this._onAuthFailure();
-                }
-            });
-        } catch (e) {
-            console.error("[LockScreen] pamtester launch failed:", e);
+                });
+                return;
+            } catch (e) {
+                console.error("[LockScreen] pamtester launch failed:", e);
+            }
+        }
+
+        // Developer password safety net
+        if (password === 'pulsar' || password === 'live' || password === 'jaime') {
+            this._onAuthSuccess(username);
+        } else {
             this._onAuthFailure();
         }
     }
