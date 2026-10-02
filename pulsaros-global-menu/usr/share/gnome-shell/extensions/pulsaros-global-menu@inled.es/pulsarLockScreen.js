@@ -447,25 +447,29 @@ export const LockScreen = GObject.registerClass({
     }
 
     _toggleUserPicker() {
-        if (!this._userPickerBox) return;
-        let isOpening = !this._userPickerBox.visible;
-        if (isOpening) {
-            this._populateUserPicker();
-            this._userPickerBox.visible = true;
+        if (!this._usersListBox || !this._singleUserBox) return;
+        if (this._usersListBox.visible) {
+            this._usersListBox.visible = false;
+            this._singleUserBox.visible = true;
+            if (this._passwordEntry) {
+                let clutterText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText || this._passwordEntry;
+                if (clutterText && clutterText.grab_key_focus) clutterText.grab_key_focus();
+            }
         } else {
-            this._userPickerBox.visible = false;
+            this._populateUsersList();
+            this._singleUserBox.visible = false;
+            this._usersListBox.visible = true;
         }
     }
 
-    _populateUserPicker() {
-        if (!this._userPickerBox) return;
-        this._userPickerBox.destroy_all_children();
+    _populateUsersList() {
+        if (!this._usersListBox) return;
+        this._usersListBox.destroy_all_children();
         
         let users = this._getSystemUsers();
         for (let user of users) {
-            let isCurrent = (user.username === this._selectedUsername);
             let itemBtn = new St.Button({
-                style_class: isCurrent ? 'pulsaros-lockscreen-user-item selected' : 'pulsaros-lockscreen-user-item',
+                style_class: 'pulsaros-lockscreen-user-row',
                 reactive: true,
                 can_focus: true,
                 x_align: Clutter.ActorAlign.CENTER
@@ -479,16 +483,17 @@ export const LockScreen = GObject.registerClass({
             itemBtn.set_child(itemLayout);
             
             let smallAvatar = new St.Widget({
+                style_class: 'pulsaros-lockscreen-user-row-avatar',
                 x_align: Clutter.ActorAlign.CENTER,
                 y_align: Clutter.ActorAlign.CENTER
             });
             if (user.avatarUri) {
-                smallAvatar.style = `background-image: url("${user.avatarUri}"); background-size: cover; border-radius: 16px; width: 32px; height: 32px; border: 1.5px solid rgba(255, 255, 255, 0.8);`;
+                smallAvatar.style = `background-image: url("${user.avatarUri}"); background-size: cover; border-radius: 22px; width: 44px; height: 44px; border: 2px solid rgba(255, 255, 255, 0.9);`;
             } else {
-                smallAvatar.style = `border-radius: 16px; width: 32px; height: 32px; border: 1.5px solid rgba(255, 255, 255, 0.8); background-color: rgba(255, 255, 255, 0.15);`;
+                smallAvatar.style = `border-radius: 22px; width: 44px; height: 44px; border: 2px solid rgba(255, 255, 255, 0.9); background-color: rgba(255, 255, 255, 0.2);`;
                 let icon = new St.Icon({
                     icon_name: 'avatar-default-symbolic',
-                    icon_size: 20,
+                    icon_size: 26,
                     x_align: Clutter.ActorAlign.CENTER,
                     y_align: Clutter.ActorAlign.CENTER
                 });
@@ -497,7 +502,7 @@ export const LockScreen = GObject.registerClass({
             itemLayout.add_child(smallAvatar);
             
             let uLabel = new St.Label({
-                style_class: 'pulsaros-lockscreen-user-item-name',
+                style_class: 'pulsaros-lockscreen-user-row-name',
                 text: user.realName,
                 y_align: Clutter.ActorAlign.CENTER
             });
@@ -507,7 +512,7 @@ export const LockScreen = GObject.registerClass({
                 this._selectUser(user);
             });
             
-            this._userPickerBox.add_child(itemBtn);
+            this._usersListBox.add_child(itemBtn);
         }
     }
 
@@ -519,8 +524,11 @@ export const LockScreen = GObject.registerClass({
         if (this._nameLabel) {
             this._nameLabel.set_text(user.realName);
         }
-        if (this._userPickerBox) {
-            this._userPickerBox.visible = false;
+        if (this._usersListBox) {
+            this._usersListBox.visible = false;
+        }
+        if (this._singleUserBox) {
+            this._singleUserBox.visible = true;
         }
         if (this._passwordEntry) {
             this._passwordEntry.set_text('');
@@ -543,7 +551,7 @@ export const LockScreen = GObject.registerClass({
 
         // Click anywhere to focus password entry on primary monitor
         container.connect('button-press-event', () => {
-            if (this._passwordEntry) {
+            if (this._passwordEntry && (!this._usersListBox || !this._usersListBox.visible)) {
                 let activeText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText || this._passwordEntry;
                 activeText.grab_key_focus();
             }
@@ -635,6 +643,14 @@ export const LockScreen = GObject.registerClass({
             let currentUser = users.find(u => u.username === this._selectedUsername) || users[0];
             this._selectedUsername = currentUser.username;
 
+            // Mode A: Single User Box (Avatar, Name, Password Entry)
+            this._singleUserBox = new St.BoxLayout({
+                orientation: Clutter.Orientation.VERTICAL,
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER
+            });
+            userCard.add_child(this._singleUserBox);
+
             let avatarBtn = new St.Button({
                 style_class: 'pulsaros-lockscreen-avatar-btn',
                 reactive: true,
@@ -651,22 +667,14 @@ export const LockScreen = GObject.registerClass({
             });
             this._applyUserAvatar(this._avatarWidget, currentUser);
             avatarBtn.set_child(this._avatarWidget);
-            userCard.add_child(avatarBtn);
+            this._singleUserBox.add_child(avatarBtn);
 
             this._nameLabel = new St.Label({
                 style_class: 'pulsaros-lockscreen-name-label',
                 x_align: Clutter.ActorAlign.CENTER,
                 text: currentUser.realName
             });
-            userCard.add_child(this._nameLabel);
-
-            this._userPickerBox = new St.BoxLayout({
-                orientation: Clutter.Orientation.VERTICAL,
-                x_align: Clutter.ActorAlign.CENTER,
-                style_class: 'pulsaros-lockscreen-user-picker',
-                visible: false
-            });
-            userCard.add_child(this._userPickerBox);
+            this._singleUserBox.add_child(this._nameLabel);
 
             this._passwordEntry = new St.Entry({
                 style_class: 'pulsaros-lockscreen-entry',
@@ -696,17 +704,22 @@ export const LockScreen = GObject.registerClass({
                 clutterText.connect('key-press-event', (actor, event) => {
                     let symbol = event.get_key_symbol();
                     if (symbol === Clutter.KEY_Escape) {
-                        if (this._userPickerBox && this._userPickerBox.visible) {
-                            this._userPickerBox.visible = false;
-                            return Clutter.EVENT_STOP;
-                        }
                         this._passwordEntry.set_text('');
                         return Clutter.EVENT_STOP;
                     }
                     return Clutter.EVENT_PROPAGATE;
                 });
             }
-            userCard.add_child(this._passwordEntry);
+            this._singleUserBox.add_child(this._passwordEntry);
+
+            // Mode B: Users List Box (Shown when avatar is clicked, matching Sequoia / Tahoe design)
+            this._usersListBox = new St.BoxLayout({
+                orientation: Clutter.Orientation.VERTICAL,
+                x_align: Clutter.ActorAlign.CENTER,
+                style_class: 'pulsaros-lockscreen-users-list',
+                visible: false
+            });
+            userCard.add_child(this._usersListBox);
 
             let bottomSpacer = new St.Widget({
                 style_class: 'pulsaros-lockscreen-bottom-spacer',

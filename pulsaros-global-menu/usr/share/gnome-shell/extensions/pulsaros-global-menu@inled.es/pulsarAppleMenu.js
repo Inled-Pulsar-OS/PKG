@@ -8,6 +8,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
+import * as Appearance from './appearance.js';
 
 const I18N = {
     en: {
@@ -1095,7 +1096,17 @@ export const PulsarLogoButton = GObject.registerClass({
         });
         this.add_child(this.icon);
 
+        this._globalMenuButton = true;
+        this.menu.actor.add_style_class_name('global-menu-popup');
+
         this._buildMenu();
+
+        this.menu.connect('open-state-changed', (menu, open) => {
+            if (open) {
+                Appearance.onMenuOpened(this);
+            }
+        });
+        Appearance.registerButton(this);
     }
 
     _openUri(uri) {

@@ -62,26 +62,92 @@ UseFirmwareBackground=false
 UseSimpledrm=false
 EOF
 
-# 3. Generar la marca de agua transparente (sin texto ni marcas de base)
-# 3. Generate transparent watermark (no text, clean look for all distros)
+# 3. Generar recursos de autenticación y descifrado LUKS (bullet, entry, lock, capslock)
+echo "🎨 Generando interfaz de descifrado de disco (bullet dots, inputbox line, lock)..."
+python3 - <<PYEOF
+import cairo, math
+
+dest = "$THEME_DEST"
+
+def create_bullet(path, size=12):
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, size)
+    ctx = cairo.Context(surface)
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95)
+    ctx.arc(size / 2.0, size / 2.0, (size / 2.0) - 1.5, 0, 2 * math.pi)
+    ctx.fill()
+    surface.write_to_png(path)
+
+def create_entry(path, width=320, height=36, radius=18):
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
+    ctx = cairo.Context(surface)
+    x, y, w, h, r = 1.0, 1.0, width - 2.0, height - 2.0, radius - 1.0
+    ctx.new_sub_path()
+    ctx.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
+    ctx.arc(x + w - r, y + r, r, 3 * math.pi / 2, 2 * math.pi)
+    ctx.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
+    ctx.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
+    ctx.close_path()
+    ctx.set_source_rgba(0.12, 0.12, 0.15, 0.85)
+    ctx.fill_preserve()
+    ctx.set_line_width(1.0)
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.35)
+    ctx.stroke()
+    surface.write_to_png(path)
+
+def create_lock(path, size=24):
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, size)
+    ctx = cairo.Context(surface)
+    ctx.set_line_width(2.0)
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.85)
+    ctx.arc(12, 9, 5, math.pi, 2 * math.pi)
+    ctx.stroke()
+    ctx.rectangle(6, 9, 12, 11)
+    ctx.fill()
+    ctx.set_source_rgba(0.1, 0.1, 0.1, 0.9)
+    ctx.arc(12, 13.5, 1.5, 0, 2 * math.pi)
+    ctx.fill()
+    ctx.rectangle(11.2, 13.5, 1.6, 3.5)
+    ctx.fill()
+    surface.write_to_png(path)
+
+def create_capslock(path, size=24):
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, size)
+    ctx = cairo.Context(surface)
+    ctx.set_source_rgba(1.0, 0.8, 0.2, 0.9)
+    ctx.move_to(12, 5)
+    ctx.line_to(6, 12)
+    ctx.line_to(9.5, 12)
+    ctx.line_to(9.5, 15)
+    ctx.line_to(14.5, 15)
+    ctx.line_to(14.5, 12)
+    ctx.line_to(18, 12)
+    ctx.close_path()
+    ctx.fill()
+    ctx.rectangle(9.5, 17, 5, 2)
+    ctx.fill()
+    surface.write_to_png(path)
+
+create_bullet(f'{dest}/bullet.png')
+create_entry(f'{dest}/entry.png')
+create_lock(f'{dest}/lock.png')
+create_capslock(f'{dest}/capslock.png')
+PYEOF
+
+# 4. Generar la marca de agua transparente (sin texto ni marcas de base)
 echo "🎨 Generando marca de agua transparente para Plymouth..."
 echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > "$THEME_DEST/watermark.png"
 
-# 4. Reemplazar los logos y marcas de agua de Debian del sistema por transparencia
-# 4. Replace system Debian logos and watermarks with transparency to avoid double branding
+# 5. Reemplazar los logos y marcas de agua de Debian del sistema por transparencia
 echo "Generando reemplazo de logo transparente del sistema..."
 mkdir -p "$STAGE_DIR/usr/share/plymouth/themes"
 mkdir -p "$STAGE_DIR/usr/share/pixmaps"
 
-# Crear logo transparente de 1x1 usando base64 (nativo en Linux coreutils)
 echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > "$STAGE_DIR/usr/share/plymouth/debian-logo.png"
 
-# Copiar a las rutas estándar
 cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/plymouth/themes/debian-logo.png"
 cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/plymouth/logo.png"
 cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/pixmaps/debian-logo.png"
 
-# Sobrescribir las marcas de agua de los temas estándar de Debian (que Plymouth a menudo carga)
 mkdir -p "$STAGE_DIR/usr/share/plymouth/themes/spinner"
 mkdir -p "$STAGE_DIR/usr/share/plymouth/themes/debian-spinner"
 mkdir -p "$STAGE_DIR/usr/share/plymouth/themes/bgrt"
@@ -90,28 +156,77 @@ cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/plymout
 cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/plymouth/themes/debian-spinner/watermark.png"
 cp "$STAGE_DIR/usr/share/plymouth/debian-logo.png" "$STAGE_DIR/usr/share/plymouth/themes/bgrt/watermark.png"
 
-# English: Force watermark alignment to be centered and at the bottom in the configuration file
-# Español: Forzar la alineación del watermark para que esté centrado y abajo en el archivo de configuración
-conf_file="$THEME_DEST/pulsar-plymouth.plymouth"
-if [ -f "$conf_file" ]; then
-    echo "🎨 Forzando alineación del logo watermark en el archivo de configuración del tema..."
-    sed -i 's/^Watermark=.*/Watermark=watermark/' "$conf_file"
-    # Ensure alignment keys exist or append them / Asegurar que existan las claves de alineación o agregarlas
-    if ! grep -q "^WatermarkHorizontalAlignment" "$conf_file"; then
-        echo "WatermarkHorizontalAlignment=.5" >> "$conf_file"
-    fi
-    if ! grep -q "^WatermarkVerticalAlignment" "$conf_file"; then
-        echo "WatermarkVerticalAlignment=.96" >> "$conf_file"
-    fi
-fi
+# Configurar el archivo de tema .plymouth
+cat <<'THEME_EOF' > "$THEME_DEST/pulsar-plymouth.plymouth"
+[Plymouth Theme]
+Name=Pulsar OS
+Description=Pulsar OS Boot Splash
+ModuleName=two-step
 
-# Ensure the two-step theme renders the last boot message below the animation.
-# Plymouth only shows messages when this key is enabled, and the splash log line
-# feature (initramfs -> 'plymouth message') depends on it.
-# Asegurar que el tema two-step muestre la última línea de log bajo la animación.
-if [ -f "$conf_file" ] && ! grep -q "^MessageBelowAnimation=true" "$conf_file"; then
-    echo "MessageBelowAnimation=true" >> "$conf_file"
-fi
+[two-step]
+Font=Cantarell 11
+TitleFont=Cantarell Light 20
+ImageDir=/usr/share/plymouth/themes/pulsar-plymouth
+DialogHorizontalAlignment=.5
+DialogVerticalAlignment=.58
+TitleHorizontalAlignment=.5
+TitleVerticalAlignment=.75
+HorizontalAlignment=.5
+VerticalAlignment=.38
+Logo=header-image
+Watermark=watermark
+WatermarkHorizontalAlignment=.5
+WatermarkVerticalAlignment=.96
+Transition=none
+TransitionDuration=0.0
+BackgroundStartColor=0x000000
+BackgroundEndColor=0x000000
+ProgressBarHorizontalAlignment=.5
+ProgressBarVerticalAlignment=.58
+ProgressBarWidth=320
+ProgressBarHeight=4
+ProgressBarBackgroundColor=0x262628
+ProgressBarForegroundColor=0xffffff
+DialogClearsFirmwareBackground=true
+MessageBelowAnimation=true
+
+[boot-up]
+UseEndAnimation=true
+UseFirmwareBackground=false
+SuppressMessages=false
+
+[shutdown]
+UseEndAnimation=true
+UseFirmwareBackground=false
+
+[reboot]
+UseEndAnimation=true
+UseFirmwareBackground=false
+
+[updates]
+UseFirmwareBackground=false
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Install Updates...
+SubTitle=Please do not turn off your computer.
+
+[system-upgrade]
+UseFirmwareBackground=false
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Install Upgrades...
+SubTitle=Please do not turn off your computer.
+
+[firmware-upgrade]
+UseFirmwareBackground=false
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Install Firmware-Updates...
+SubTitle=Please do not turn off your computer.
+THEME_EOF
 
 # Clean up temporary build directory if it was created
 # Limpiar el directorio temporal de compilación si fue creado

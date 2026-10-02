@@ -3,6 +3,7 @@
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
+import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 const BMS_UUID = 'blur-my-shell@aunetx';
@@ -124,12 +125,47 @@ export class AppearanceManager {
 
 		this._workspaceIndicator = new WorkspaceIndicator(settings);
 		this.applyAll();
+		this._hookGenericPanelMenus();
+	}
+
+	_hookGenericPanelMenus() {
+		if (!Main.panel?.statusArea) return;
+		for (let key in Main.panel.statusArea) {
+			let item = Main.panel.statusArea[key];
+			if (item?.menu && !item._pulsarMenuBlurHooked) {
+				item._pulsarMenuBlurHooked = true;
+				item.menu.connect('open-state-changed', (menu, open) => {
+					if (open) {
+						this._applyGenericBlur(menu);
+					}
+				});
+			}
+		}
+	}
+
+	_applyGenericBlur(menu) {
+		if (!this._settings || !this._settings.get_boolean('blur-popups')) return;
+		let box = menu.box || menu.actor;
+		if (!box) return;
+		if (!box._pulsarBlurEffect && Shell.BlurEffect) {
+			try {
+				let sigma = this._settings.get_int('popup-blur-sigma') || 28;
+				let brightness = this._settings.get_double('popup-blur-brightness') || 0.85;
+				box._pulsarBlurEffect = new Shell.BlurEffect({
+					mode: Shell.BlurMode.BACKGROUND,
+					sigma: sigma,
+					brightness: brightness,
+				});
+				box.add_effect(box._pulsarBlurEffect);
+			} catch (e) {}
+		}
 	}
 
 	applyAll() {
 		for (const btn of buttons)
 			this.applyToButton(btn);
 		this._workspaceIndicator?.sync();
+		this._hookGenericPanelMenus();
 	}
 
 	applyToButton(btn) {
@@ -165,8 +201,8 @@ export class AppearanceManager {
 
 	applyPopupBackground(btn) {
 		const s = this._settings;
-		const radius = s.get_int('popup-corner-radius');
-		const opacity = s.get_int('popup-opacity');
+		const radius = s.get_int('popup-corner-radius') || 14;
+		const opacity = s.get_int('popup-opacity') || 78;
 		const fontSize = s.get_int('menu-font-size');
 		const colorScheme = this._ifaceSettings.get_string('color-scheme');
 		const isDark = (colorScheme === 'prefer-dark');
@@ -178,13 +214,13 @@ export class AppearanceManager {
 
 		if (isDark) {
 			style += ` background-color: rgba(30, 30, 34, ${alpha});` +
-				` border: 1px solid rgba(255, 255, 255, 0.15);` +
-				` box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.25);` +
+				` border: 1px solid rgba(255, 255, 255, 0.18);` +
+				` box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.22), 0 16px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.25);` +
 				` color: #ffffff;`;
 		} else {
 			style += ` background-color: rgba(255, 255, 255, ${alpha});` +
-				` border: 1px solid rgba(0, 0, 0, 0.10);` +
-				` box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);` +
+				` border: 1px solid rgba(0, 0, 0, 0.12);` +
+				` box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.60), 0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);` +
 				` color: #1d1d1f;`;
 		}
 
@@ -193,35 +229,37 @@ export class AppearanceManager {
 
 	applyBlur(btn) {
 		const s = this._settings;
-		const effects = this._bmsEffects();
-		const wanted = s.get_boolean('blur-popups') && effects !== null;
+		const wanted = s.get_boolean('blur-popups');
 
 		if (!wanted) {
 			this._removeBlur(btn);
 			return;
 		}
 
-		const radius = 2 * s.get_int('popup-blur-sigma');
-		const brightness = s.get_double('popup-blur-brightness');
-		const cornerRadius = s.get_int('popup-corner-radius');
+		const sigma = s.get_int('popup-blur-sigma') || 28;
+		const brightness = s.get_double('popup-blur-brightness') || 0.85;
 
 		if (btn._globalMenuBlur) {
-			btn._globalMenuBlur.unscaled_radius = radius;
+			btn._globalMenuBlur.sigma = sigma;
 			btn._globalMenuBlur.brightness = brightness;
-			if (btn._globalMenuBlur.corner_radius !== undefined)
-				btn._globalMenuBlur.corner_radius = cornerRadius;
 			return;
 		}
 
 		if (!btn.menu.isOpen)
 			return;
 
-		btn._globalMenuBlur = effects.new_native_dynamic_gaussian_blur_effect({
-			unscaled_radius: radius,
-			brightness,
-			corner_radius: cornerRadius,
-		});
-		btn.menu.box.add_effect(btn._globalMenuBlur);
+		try {
+			if (Shell.BlurEffect) {
+				btn._globalMenuBlur = new Shell.BlurEffect({
+					mode: Shell.BlurMode.BACKGROUND,
+					sigma: sigma,
+					brightness: brightness,
+				});
+				btn.menu.box.add_effect(btn._globalMenuBlur);
+			}
+		} catch (e) {
+			console.error("[GlobalMenu] BlurEffect failed:", e);
+		}
 
 		btn.menu.actor.set_offscreen_redirect(Clutter.OffscreenRedirect.AUTOMATIC_FOR_OPACITY);
 	}
@@ -254,11 +292,9 @@ export class AppearanceManager {
 			btn.menu.actor.set_offscreen_redirect(Clutter.OffscreenRedirect.ALWAYS);
 		if (!btn._globalMenuBlur)
 			return;
-		const effects = this._bmsEffects();
-		if (effects)
-			effects.remove(btn._globalMenuBlur);
-		else
+		try {
 			btn.menu.box.remove_effect(btn._globalMenuBlur);
+		} catch (e) {}
 		btn._globalMenuBlur = null;
 	}
 
@@ -274,3 +310,4 @@ export function createManager(settings) {
 	manager = new AppearanceManager(settings);
 	return manager;
 }
+

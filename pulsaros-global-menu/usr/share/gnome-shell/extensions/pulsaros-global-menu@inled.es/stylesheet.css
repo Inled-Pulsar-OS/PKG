@@ -556,38 +556,46 @@
     transform: scale(0.97);
 }
 
-.pulsaros-lockscreen-user-picker {
-    background-color: rgba(30, 30, 32, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 16px;
-    padding: 8px;
-    margin-top: 10px;
-    margin-bottom: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    spacing: 6px;
+/* Lockscreen user switcher list (macOS Sequoia / Tahoe style) */
+.pulsaros-lockscreen-users-list {
+    spacing: 12px;
+    margin-bottom: 24px;
 }
 
-.pulsaros-lockscreen-user-item {
-    padding: 6px 14px;
-    border-radius: 10px;
+.pulsaros-lockscreen-user-row {
+    padding: 6px 18px;
+    border-radius: 9999px;
     background-color: transparent;
-    border: 1px solid transparent;
-    transition: background-color 150ms ease;
+    border: none;
+    box-shadow: none;
+    transition: all 150ms ease;
 }
 
-.pulsaros-lockscreen-user-item:hover {
-    background-color: rgba(255, 255, 255, 0.15);
+.pulsaros-lockscreen-user-row:hover,
+.pulsaros-lockscreen-user-row:focus {
+    background-color: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
-.pulsaros-lockscreen-user-item.selected {
-    background-color: rgba(255, 255, 255, 0.22);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+.pulsaros-lockscreen-user-row:active {
+    background-color: rgba(255, 255, 255, 0.28);
 }
 
-.pulsaros-lockscreen-user-item-name {
-    color: #ffffff;
-    font-size: 11pt;
+.pulsaros-lockscreen-user-row-avatar {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 22px;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+}
+
+.pulsaros-lockscreen-user-row-name {
+    font-size: 13.5pt;
     font-weight: 500;
-    margin-left: 10px;
+    color: #ffffff;
+    margin-left: 14px;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
+
 
