@@ -97,6 +97,7 @@ style-dash-to-dock=2
 unblur-in-overview=true
 
 [org.gnome.shell.extensions.blur-my-shell.panel]
+blur=false
 brightness=0.6
 corner-radius=0
 force-light-text=false

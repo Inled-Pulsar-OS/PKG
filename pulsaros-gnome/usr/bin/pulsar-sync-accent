@@ -33,7 +33,30 @@ sync_accent() {
 
     local gtk3_css="$gtk3_dir/gtk.css"
 
-    # Write ~/.config/gtk-3.0/gtk.css
+    # Ensure windows-assets symlink exists for GTK3
+    if [ ! -e "$gtk3_dir/windows-assets" ] && [ -d "/usr/share/themes/MacTahoe-Dark/gtk-3.0/windows-assets" ]; then
+        ln -sf "/usr/share/themes/MacTahoe-Dark/gtk-3.0/windows-assets" "$gtk3_dir/windows-assets"
+    fi
+    if [ ! -e "$gtk4_dir/windows-assets" ] && [ -d "/usr/share/themes/MacTahoe-Dark/gtk-4.0/windows-assets" ]; then
+        ln -sf "/usr/share/themes/MacTahoe-Dark/gtk-4.0/windows-assets" "$gtk4_dir/windows-assets"
+    fi
+
+    # Ensure settings.ini has decoration-layout in both GTK 3 and GTK 4
+    for ini in "$gtk3_dir/settings.ini" "$gtk4_dir/settings.ini"; do
+        if [ ! -f "$ini" ]; then
+            cat <<INI_EOF > "$ini"
+[Settings]
+gtk-theme-name=MacTahoe-Dark
+gtk-icon-theme-name=MacTahoe-blue-dark
+gtk-application-prefer-dark-theme=1
+gtk-decoration-layout=close,minimize,maximize:
+INI_EOF
+        elif ! grep -q "gtk-decoration-layout" "$ini" 2>/dev/null; then
+            echo "gtk-decoration-layout=close,minimize,maximize:" >> "$ini"
+        fi
+    done
+
+    # Write ~/.config/gtk-3.0/gtk.css with full theme import and dynamic accent
     cat <<CSS_EOF > "$gtk3_css"
 /* ==============================================================================
  * Pulsar OS - GTK3 Dynamic Accent Color & Selection Highlight
@@ -46,6 +69,8 @@ sync_accent() {
 @define-color theme_selected_fg_color #ffffff;
 @define-color selected_bg_color ${hex};
 @define-color selected_fg_color #ffffff;
+
+@import url("/usr/share/themes/MacTahoe-Dark/gtk-3.0/gtk.css");
 
 /* Universal Solid Text Selection */
 selection {
@@ -99,6 +124,16 @@ popover.menu modelbutton:selected label,
 popover.menu modelbutton:hover arrow,
 popover.menu modelbutton:selected arrow {
   color: @accent_fg_color;
+}
+
+/* Universal Window Control Buttons (GTK3 fallback and CSD) */
+headerbar button.titlebutton,
+headerbar windowcontrols button,
+windowcontrols button {
+  min-width: 14px;
+  min-height: 14px;
+  margin: 0 3px;
+  padding: 0;
 }
 CSS_EOF
 
