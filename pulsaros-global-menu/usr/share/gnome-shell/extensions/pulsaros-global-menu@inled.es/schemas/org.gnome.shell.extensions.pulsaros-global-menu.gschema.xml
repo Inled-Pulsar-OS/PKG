@@ -42,7 +42,7 @@
     </key>
     <key type="i" name="popup-opacity">
       <range min="20" max="100"/>
-      <default>78</default>
+      <default>97</default>
       <summary>Popup menu background opacity in percent (translucency needed for blur to show)</summary>
     </key>
     <key type="i" name="popup-corner-radius">
