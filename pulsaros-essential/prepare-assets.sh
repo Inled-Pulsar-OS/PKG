@@ -44,39 +44,33 @@ iface eth0 inet dhcp
 EOF
 
 # ==============================================================================
-# FONDO DE PANTALLA OFICIAL Y OPCIONES ADICIONALES
+# FONDO DE PANTALLA OFICIAL Y COLECCIÓN COMPLETA DE FONDOS APPLE MACOS
 # ==============================================================================
-echo "📥 Descargando fondo de pantalla oficial y opciones adicionales..."
-mkdir -p "$STAGE_DIR/usr/share/backgrounds"
-wget -q --timeout=15 --tries=3 -O "$STAGE_DIR/usr/share/backgrounds/pulsar-os-tahoe.png" "$WALLPAPER_URL"
-wget -q --timeout=15 --tries=3 -O "$STAGE_DIR/usr/share/backgrounds/pulsaros-golden-gate-background.png" "https://hosted.inled.es/pulsaros-golden-gate-background.png"
-wget -q --timeout=15 --tries=3 -O "$STAGE_DIR/usr/share/backgrounds/pulsaros-golden-gate-bg-oscuro.png" "https://hosted.inled.es/pulsaros-golden-gate-bg-oscuro.png"
+echo "📥 Preparando fondos de pantalla oficiales y colección macOS..."
+mkdir -p "$STAGE_DIR/usr/share/backgrounds/macos" "$STAGE_DIR/usr/share/gnome-background-properties"
 
-# Crear el archivo XML de propiedades para registrar los fondos en GNOME Settings
-mkdir -p "$STAGE_DIR/usr/share/gnome-background-properties"
-cat <<EOF > "$STAGE_DIR/usr/share/gnome-background-properties/pulsar-backgrounds.xml"
-<?xml version="1.0"?>
-<!DOCTYPE wallpapers SYSTEM "gnome-wp-list.dtd">
-<wallpapers>
-  <wallpaper deleted="false">
-    <name>Pulsar OS Tahoe</name>
-    <filename>/usr/share/backgrounds/pulsar-os-tahoe.png</filename>
-    <options>zoom</options>
-    <shade_type>solid</shade_type>
-    <pcolor>#000000</pcolor>
-    <scolor>#000000</scolor>
-  </wallpaper>
-  <wallpaper deleted="false">
-    <name>Pulsar OS Golden Gate</name>
-    <filename>/usr/share/backgrounds/pulsaros-golden-gate-background.png</filename>
-    <filename-dark>/usr/share/backgrounds/pulsaros-golden-gate-bg-oscuro.png</filename-dark>
-    <options>zoom</options>
-    <shade_type>solid</shade_type>
-    <pcolor>#000000</pcolor>
-    <scolor>#000000</scolor>
-  </wallpaper>
-</wallpapers>
-EOF
+# Copiar desde el sistema anfitrión si están disponibles, o descargar si faltan
+if [ -d "/usr/share/backgrounds/macos" ]; then
+    cp -rf /usr/share/backgrounds/macos/* "$STAGE_DIR/usr/share/backgrounds/macos/" 2>/dev/null || true
+fi
+
+for bg in pulsar-os-tahoe.png pulsaros-golden-gate-background.png pulsaros-golden-gate-bg-oscuro.png; do
+    if [ -f "/usr/share/backgrounds/$bg" ]; then
+        cp -f "/usr/share/backgrounds/$bg" "$STAGE_DIR/usr/share/backgrounds/"
+    fi
+done
+
+[ ! -f "$STAGE_DIR/usr/share/backgrounds/pulsar-os-tahoe.png" ] && wget -q --timeout=15 --tries=3 -O "$STAGE_DIR/usr/share/backgrounds/pulsar-os-tahoe.png" "$WALLPAPER_URL" || true
+[ ! -f "$STAGE_DIR/usr/share/backgrounds/pulsaros-golden-gate-background.png" ] && wget -q --timeout=15 --tries=3 -O "$STAGE_DIR/usr/share/backgrounds/pulsaros-golden-gate-background.png" "https://hosted.inled.es/pulsaros-golden-gate-background.png" || true
+[ ! -f "$STAGE_DIR/usr/share/backgrounds/pulsaros-golden-gate-bg-oscuro.png" ] && wget -q --timeout=15 --tries=3 -O "$STAGE_DIR/usr/share/backgrounds/pulsaros-golden-gate-bg-oscuro.png" "https://hosted.inled.es/pulsaros-golden-gate-bg-oscuro.png" || true
+
+# Copiar archivos de definición de fondos para GNOME Control Center (Ajustes)
+if [ -f "/usr/share/gnome-background-properties/pulsar-macos-wallpapers.xml" ]; then
+    cp -f "/usr/share/gnome-background-properties/pulsar-macos-wallpapers.xml" "$STAGE_DIR/usr/share/gnome-background-properties/"
+fi
+if [ -f "/usr/share/gnome-background-properties/pulsar-backgrounds.xml" ]; then
+    cp -f "/usr/share/gnome-background-properties/pulsar-backgrounds.xml" "$STAGE_DIR/usr/share/gnome-background-properties/"
+fi
 
 # ==============================================================================
 # SERVICIO DE COMPATIBILIDAD CON DOCKER Y CONTAINERD EN 9PFS (QEMU TEST)

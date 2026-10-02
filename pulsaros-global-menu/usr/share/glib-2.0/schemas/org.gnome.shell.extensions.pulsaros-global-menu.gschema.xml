@@ -6,5 +6,71 @@
       <summary>macOS Fullscreen Spaces and Top Bar Auto-Hide</summary>
       <description>Move maximized windows to dedicated workspaces and auto-hide top bar in fullscreen like macOS</description>
     </key>
+    <key type="b" name="enable-fallback-menu">
+      <default>true</default>
+      <summary>Show a generic fallback menu for apps without a native menu</summary>
+    </key>
+    <key type="b" name="shortcut-menus-enabled">
+      <default>true</default>
+      <summary>Show curated shortcut-based menus for supported apps without a native menu</summary>
+    </key>
+    <key type="as" name="shortcut-disabled-apps">
+      <default>[]</default>
+      <summary>Shortcut-mapping app ids disabled individually</summary>
+    </key>
+    <key type="i" name="shortcuts-revision">
+      <default>0</default>
+      <summary>Bumped by the preferences after saving a mapping file, so the extension reloads its store</summary>
+    </key>
+    <key type="b" name="debug-shortcut-menus">
+      <default>false</default>
+      <summary>Verbose logging of shortcut-menu resolution and key synthesis</summary>
+    </key>
+    <key type="b" name="blur-popups">
+      <default>true</default>
+      <summary>Blur behind popup menus via native Shell.BlurEffect</summary>
+    </key>
+    <key type="i" name="popup-blur-sigma">
+      <range min="0" max="100"/>
+      <default>28</default>
+      <summary>Popup blur intensity (sigma)</summary>
+    </key>
+    <key type="d" name="popup-blur-brightness">
+      <range min="0.1" max="1.0"/>
+      <default>0.85</default>
+      <summary>Brightness of the blurred area behind popups (1.0 = no dimming)</summary>
+    </key>
+    <key type="i" name="popup-opacity">
+      <range min="20" max="100"/>
+      <default>78</default>
+      <summary>Popup menu background opacity in percent (translucency needed for blur to show)</summary>
+    </key>
+    <key type="i" name="popup-corner-radius">
+      <range min="0" max="24"/>
+      <default>12</default>
+      <summary>Popup menu corner radius in pixels</summary>
+    </key>
+    <key type="b" name="hide-popup-arrow">
+      <default>false</default>
+      <summary>Hide the popup pointer arrow so menus drop straight down from the bar</summary>
+    </key>
+    <key type="i" name="button-spacing">
+      <range min="0" max="16"/>
+      <default>8</default>
+      <summary>Horizontal padding of the menu-bar buttons in pixels (GNOME default is 12)</summary>
+    </key>
+    <key type="i" name="menu-font-size">
+      <range min="0" max="16"/>
+      <default>10</default>
+      <summary>Font size of the menu bar and popups in points (0 = theme default)</summary>
+    </key>
+    <key type="b" name="bold-app-name">
+      <default>true</default>
+      <summary>Show the app-name button in bold</summary>
+    </key>
+    <key type="b" name="hide-workspace-indicator">
+      <default>true</default>
+      <summary>Hide GNOME's Activities and workspace pill indicator at the left of the panel</summary>
+    </key>
   </schema>
 </schemalist>
