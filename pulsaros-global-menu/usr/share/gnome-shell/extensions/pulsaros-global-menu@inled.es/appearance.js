@@ -145,19 +145,22 @@ export class AppearanceManager {
 
 	_applyGenericBlur(menu) {
 		if (!this._settings || !this._settings.get_boolean('blur-popups')) return;
-		let box = menu.box || menu.actor;
-		if (!box) return;
-		if (!box._pulsarBlurEffect && Shell.BlurEffect) {
+		let actor = menu.actor || menu._boxPointer;
+		if (!actor) return;
+		if (!actor._pulsarBlurEffect && Shell.BlurEffect) {
 			try {
 				let sigma = this._settings.get_int('popup-blur-sigma') || 28;
 				let brightness = this._settings.get_double('popup-blur-brightness') || 0.85;
-				box._pulsarBlurEffect = new Shell.BlurEffect({
+				actor._pulsarBlurEffect = new Shell.BlurEffect({
 					mode: Shell.BlurMode.BACKGROUND,
 					sigma: sigma,
 					brightness: brightness,
 				});
-				box.add_effect(box._pulsarBlurEffect);
-			} catch (e) {}
+				actor.add_effect(actor._pulsarBlurEffect);
+				actor.set_offscreen_redirect(Clutter.OffscreenRedirect.AUTOMATIC_FOR_OPACITY);
+			} catch (e) {
+				console.error("[GlobalMenu] Generic BlurEffect failed:", e);
+			}
 		}
 	}
 
@@ -255,13 +258,13 @@ export class AppearanceManager {
 					sigma: sigma,
 					brightness: brightness,
 				});
-				btn.menu.box.add_effect(btn._globalMenuBlur);
+				let targetActor = btn.menu.actor || btn.menu.box;
+				targetActor.add_effect(btn._globalMenuBlur);
+				targetActor.set_offscreen_redirect(Clutter.OffscreenRedirect.AUTOMATIC_FOR_OPACITY);
 			}
 		} catch (e) {
 			console.error("[GlobalMenu] BlurEffect failed:", e);
 		}
-
-		btn.menu.actor.set_offscreen_redirect(Clutter.OffscreenRedirect.AUTOMATIC_FOR_OPACITY);
 	}
 
 	destroy() {
@@ -288,12 +291,11 @@ export class AppearanceManager {
 	}
 
 	_removeBlur(btn) {
-		if (btn.menu?.actor)
-			btn.menu.actor.set_offscreen_redirect(Clutter.OffscreenRedirect.ALWAYS);
 		if (!btn._globalMenuBlur)
 			return;
 		try {
-			btn.menu.box.remove_effect(btn._globalMenuBlur);
+			let targetActor = btn.menu.actor || btn.menu.box;
+			targetActor.remove_effect(btn._globalMenuBlur);
 		} catch (e) {}
 		btn._globalMenuBlur = null;
 	}
