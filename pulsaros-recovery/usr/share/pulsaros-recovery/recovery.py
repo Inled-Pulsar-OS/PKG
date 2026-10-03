@@ -80,37 +80,43 @@ entry:focus, password-entry:focus {
     padding: 24px;
     box-shadow: 0 10px 40px rgba(0,0,0,0.6);
 }
-.suggested-action {
+.suggested-action, button.suggested-action {
     background-color: #0071e3; /* Apple Blue */
     color: #ffffff;
-    border-radius: 8px;
-    font-weight: bold;
-    padding: 10px 24px;
+    border-radius: 9999px;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 5px 20px;
+    min-height: 28px;
     border: none;
+    box-shadow: none;
 }
-.suggested-action:hover {
+.suggested-action:hover, button.suggested-action:hover {
     background-color: #007bf5;
 }
-.suggested-action:active {
+.suggested-action:active, button.suggested-action:active {
     background-color: #0063c6;
 }
-.suggested-action:disabled {
+.suggested-action:disabled, button.suggested-action:disabled {
     background-color: #3a3a3c;
     color: #8e8e93;
 }
-.secondary-action {
-    background-color: #323236;
+.secondary-action, button.secondary-action {
+    background-color: rgba(255, 255, 255, 0.1);
     color: #ffffff;
-    border-radius: 8px;
-    font-weight: bold;
-    padding: 10px 24px;
-    border: 1px solid #48484a;
+    border-radius: 9999px;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 5px 20px;
+    min-height: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: none;
 }
-.secondary-action:hover {
-    background-color: #3e3e42;
+.secondary-action:hover, button.secondary-action:hover {
+    background-color: rgba(255, 255, 255, 0.18);
 }
-.secondary-action:active {
-    background-color: #2c2c2e;
+.secondary-action:active, button.secondary-action:active {
+    background-color: rgba(255, 255, 255, 0.06);
 }
 .progress-bar-thin {
     min-height: 6px;
@@ -3942,9 +3948,32 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 os.makedirs("/mnt/recovery/boot", exist_ok=True)
                 os.makedirs("/mnt/recovery/recovery", exist_ok=True)
 
-                # SquashFS search sources (covers Arch archiso, Debian live-boot, and installed staging)
-                squash_sources = [
+                # 1. Recovery Boot Environment sources (lightweight Openbox + assistant environment)
+                rec_sources = [
                     "/recovery/filesystem.squashfs",
+                    "/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
+                    "/mnt/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
+                    "/run/archiso/bootmnt/recovery/filesystem.squashfs",
+                ]
+                found_rec_squash = next((p for p in rec_sources if os.path.isfile(p) and os.path.getsize(p) > 50 * 1024 * 1024), None)
+                if found_rec_squash and "TEST_MODE" not in os.environ:
+                    primary_rec_dst = "/mnt/recovery/live/filesystem.squashfs"
+                    if not os.path.isfile(primary_rec_dst) or os.path.getsize(primary_rec_dst) == 0:
+                        shutil.copy2(found_rec_squash, primary_rec_dst)
+                        log_msg(f"Recovery Environment SquashFS deployed from {found_rec_squash} -> {primary_rec_dst}")
+
+                    for alias in ["/mnt/recovery/filesystem.squashfs", "/mnt/recovery/recovery/filesystem.squashfs"]:
+                        try:
+                            if not os.path.isfile(alias):
+                                os.link(primary_rec_dst, alias)
+                        except Exception:
+                            try:
+                                shutil.copy2(primary_rec_dst, alias)
+                            except Exception:
+                                pass
+
+                # 2. Pulsar OS Full Desktop Image sources (for system restoration / reinstall)
+                base_os_sources = [
                     "/run/live/medium/images/pulsaros-base.squashfs",
                     "/run/live/medium/live/filesystem.squashfs",
                     "/lib/live/mount/medium/images/pulsaros-base.squashfs",
@@ -3952,39 +3981,26 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     "/run/archiso/bootmnt/images/pulsaros-base.squashfs",
                     "/run/archiso/bootmnt/arch/x86_64/airootfs.sfs",
                     "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
-                    "/run/archiso/bootmnt/recovery/filesystem.squashfs",
-                    "/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
-                    "/mnt/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
+                    "/images/pulsaros-base.squashfs",
                     "/recovery/images/pulsaros-base.squashfs",
                     "/live/filesystem.squashfs",
                 ]
-                found_squash = next((p for p in squash_sources if os.path.isfile(p) and os.path.getsize(p) > 100 * 1024 * 1024), None)
-                if found_squash and "TEST_MODE" not in os.environ:
-                    primary_dst = "/mnt/recovery/live/filesystem.squashfs"
-                    if not os.path.isfile(primary_dst) or os.path.getsize(primary_dst) == 0:
-                        shutil.copy2(found_squash, primary_dst)
-                        log_msg(f"Recovery SquashFS deployed from {found_squash} -> {primary_dst}")
+                found_base_squash = next((p for p in base_os_sources if os.path.isfile(p) and os.path.getsize(p) > 200 * 1024 * 1024), None)
+                if found_base_squash and "TEST_MODE" not in os.environ:
+                    base_dst = "/mnt/recovery/images/pulsaros-base.squashfs"
+                    if not os.path.isfile(base_dst) or os.path.getsize(base_dst) == 0:
+                        shutil.copy2(found_base_squash, base_dst)
+                        log_msg(f"Pulsar OS Base Image deployed from {found_base_squash} -> {base_dst}")
 
-                    # Create hardlinks for all standard recovery & live paths on the recovery partition
-                    alias_paths = [
-                        "/mnt/recovery/filesystem.squashfs",
-                        "/mnt/recovery/recovery/filesystem.squashfs",
-                        "/mnt/recovery/images/pulsaros-base.squashfs",
-                        "/mnt/recovery/images/x86_64/airootfs.sfs",
-                    ]
-                    for alias in alias_paths:
+                    alias_arch = "/mnt/recovery/images/x86_64/airootfs.sfs"
+                    try:
+                        if not os.path.isfile(alias_arch):
+                            os.link(base_dst, alias_arch)
+                    except Exception:
                         try:
-                            if not os.path.isfile(alias):
-                                os.link(primary_dst, alias)
+                            shutil.copy2(base_dst, alias_arch)
                         except Exception:
-                            try:
-                                shutil.copy2(primary_dst, alias)
-                            except Exception:
-                                pass
-
-                    log_msg(f"Recovery SquashFS verified ({os.path.getsize(primary_dst)} bytes)")
-                elif not found_squash:
-                    log_msg("WARNING: No recovery squashfs found in any search path")
+                            pass
             except Exception as rec_copy_err:
                 print(f"Notice: Recovery squashfs setup: {rec_copy_err}")
 

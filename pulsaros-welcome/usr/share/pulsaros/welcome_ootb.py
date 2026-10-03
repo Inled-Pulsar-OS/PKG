@@ -84,9 +84,11 @@ window button.pulsar-continue-btn {
     background-color: #0071e3;
     background-image: none;
     background: #0071e3;
-    border-radius: 8px;
-    font-weight: bold;
-    padding: 8px 22px;
+    border-radius: 9999px;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 5px 20px;
+    min-height: 28px;
     border: none;
     box-shadow: none;
 }
@@ -127,10 +129,13 @@ window button.pulsar-continue-btn:disabled * {
 window button.secondary-action {
     background-color: var(--bg-color);
     color: var(--text-color);
-    border-radius: 8px;
-    font-weight: bold;
-    padding: 8px 22px;
+    border-radius: 9999px;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 5px 20px;
+    min-height: 28px;
     border: 1px solid var(--card-border);
+    box-shadow: none;
 }
 window button.secondary-action:hover  { background-color: var(--list-hover); }
 window button.secondary-action:active { background-color: var(--card-border); }

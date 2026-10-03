@@ -338,6 +338,11 @@ build_single_package() {
     if [ -d "$STAGING_DIR/$name/DEBIAN" ]; then
         find "$STAGING_DIR/$name/DEBIAN" -type f -exec chmod 755 {} \;
     fi
+    for bindir in "$STAGING_DIR/$name/usr/bin" "$STAGING_DIR/$name/usr/sbin" "$STAGING_DIR/$name/usr/lib" "$STAGING_DIR/$name/bin" "$STAGING_DIR/$name/sbin"; do
+        if [ -d "$bindir" ]; then
+            find "$bindir" -type f -exec chmod 755 {} \; 2>/dev/null || true
+        fi
+    done
     if [ -d "$STAGING_DIR/$name/etc/sudoers.d" ]; then
         find "$STAGING_DIR/$name/etc/sudoers.d" -type f -exec chmod 0440 {} \;
     fi

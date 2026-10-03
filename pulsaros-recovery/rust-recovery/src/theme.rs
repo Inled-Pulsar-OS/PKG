@@ -161,45 +161,51 @@ listboxrow:selected .utility-desc-lbl,
 .utility-item-row:selected .utility-desc-lbl {
     color: rgba(255, 255, 255, 0.92);
 }
-.suggested-action {
+.suggested-action, button.suggested-action {
     background-color: #0071e3;
     color: #ffffff;
-    border-radius: 10px;
-    font-weight: 600;
-    padding: 6px 24px;
+    border-radius: 9999px;
+    font-weight: 500;
+    padding: 5px 20px;
+    min-height: 28px;
     border: none;
     font-size: 13px;
+    box-shadow: none;
 }
-.suggested-action:hover {
+.suggested-action:hover, button.suggested-action:hover {
     background-color: #007bf5;
 }
-.suggested-action:disabled {
+.suggested-action:disabled, button.suggested-action:disabled {
     background-color: #38383a;
     color: #636366;
 }
-.secondary-action {
-    background-color: rgba(255, 255, 255, 0.08);
+.secondary-action, button.secondary-action {
+    background-color: rgba(255, 255, 255, 0.1);
     color: #ffffff;
-    border-radius: 10px;
-    font-weight: 600;
-    padding: 6px 20px;
+    border-radius: 9999px;
+    font-weight: 500;
+    padding: 5px 20px;
+    min-height: 28px;
     border: 1px solid rgba(255, 255, 255, 0.15);
     font-size: 13px;
+    box-shadow: none;
 }
-.secondary-action:hover {
-    background-color: rgba(255, 255, 255, 0.14);
+.secondary-action:hover, button.secondary-action:hover {
+    background-color: rgba(255, 255, 255, 0.18);
     border-color: rgba(255, 255, 255, 0.25);
 }
-.destructive-action {
+.destructive-action, button.destructive-action {
     background-color: rgba(255, 69, 58, 0.15);
     color: #ff453a;
-    border-radius: 10px;
-    font-weight: 600;
-    padding: 10px 20px;
+    border-radius: 9999px;
+    font-weight: 500;
+    padding: 5px 20px;
+    min-height: 28px;
     border: 1px solid rgba(255, 69, 58, 0.3);
     font-size: 13px;
+    box-shadow: none;
 }
-.destructive-action:hover {
+.destructive-action:hover, button.destructive-action:hover {
     background-color: rgba(255, 69, 58, 0.25);
 }
 .shortcut-btn {

@@ -248,14 +248,27 @@ pub(crate) fn is_valid_base_squashfs(path: &str) -> bool {
     if !p.exists() {
         return false;
     }
+
+    // Explicitly REJECT the dedicated recovery OS environment (never restore recovery OS over @ root)
+    let p_lower = path.to_lowercase();
+    if p_lower.contains("recovery/filesystem.squashfs")
+        || p_lower.contains("recovery/live/filesystem.squashfs")
+        || p_lower.contains("recovery-filesystem.squashfs")
+        || p_lower.contains("recovery.squashfs")
+        || p_lower.contains("pulsar_recovery/filesystem.squashfs")
+        || p_lower.contains("pulsar_recovery/live/filesystem.squashfs")
+    {
+        return false;
+    }
+
     // Must not be a kernel or initramfs file
     let fname = p.file_name().and_then(|n| n.to_str()).unwrap_or_default();
     if fname.starts_with("initramfs") || fname.starts_with("vmlinuz") {
         return false;
     }
     if let Ok(meta) = fs::metadata(path) {
-        // Base rootfs squashfs must be at least 300 MB
-        if meta.len() < 300 * 1024 * 1024 {
+        // Base desktop rootfs squashfs must be at least 400 MB
+        if meta.len() < 400 * 1024 * 1024 {
             return false;
         }
     } else {
@@ -425,36 +438,31 @@ where
     let _ = Command::new("sudo").args(&["-n", "mount", "-L", "PULSAR_RECOVERY", rec_mnt]).output();
 
     let base_image_names = [
-        "live/filesystem.squashfs",
-        "filesystem.squashfs",
-        "live/rootfs.squashfs",
-        "rootfs.squashfs",
-        "live/filesystem.sfs",
         "images/pulsaros-base.squashfs",
+        "pulsaros-base.squashfs",
+        "recovery/images/pulsaros-base.squashfs",
+        "live/x86_64/airootfs.sfs",
+        "arch/x86_64/airootfs.sfs",
         "images/x86_64/airootfs.sfs",
         "images/airootfs.sfs",
-        "arch/x86_64/airootfs.sfs",
-        "pulsaros-base.squashfs",
         "airootfs.sfs",
-        "@recovery/live/filesystem.squashfs",
-        "@recovery/filesystem.squashfs",
-        "@/live/filesystem.squashfs",
-        "@/filesystem.squashfs",
+        "live/filesystem.squashfs",
+        "live/rootfs.squashfs",
+        "rootfs.squashfs",
     ];
 
     let search_roots = [
         "/tmp/pulsar_recovery",
+        "/tmp/pulsar_recovery/images",
+        "/recovery/images",
+        "/mnt/recovery/images",
+        "/run/live/medium/images",
         "/run/live/medium",
-        "/run/live/medium/live",
+        "/lib/live/mount/medium/images",
         "/lib/live/mount/medium",
-        "/lib/live/mount/medium/live",
-        "/run/archiso/bootmnt",
+        "/run/archiso/bootmnt/images",
         "/run/archiso/bootmnt/arch/x86_64",
-        "/run/archiso",
-        "/recovery",
-        "/recovery/live",
-        "/mnt/recovery",
-        "/mnt/recovery/live",
+        "/run/archiso/bootmnt",
         "/var/lib/pulsar/images",
     ];
 
