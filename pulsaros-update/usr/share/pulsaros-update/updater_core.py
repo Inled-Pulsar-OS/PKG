@@ -366,9 +366,13 @@ class UpdateCore:
             "pulsaros-hibernate",
             "pulsaros-bootsound",
             "pulsar-pear-sound-theme",
+            "pulsaros-boot-icons",
+            "pulsaros-emoji-fonts",
             "pulsaros-theme",
             "pulsaros-branding",
             "pulsaros-welcome",
+            "pulsaros-update",
+            "appinstall",
             "seafari",
             "sayri",
             "winboat-bin",
@@ -385,11 +389,27 @@ class UpdateCore:
             self.run_command_stream(["pacman", "-Sy"], use_root=True)
             ok = self.run_command_stream(["pacman", "-S", "--needed", "--noconfirm"] + pulsar_core_packages, use_root=True)
 
+        # Legacy migration: safely clean up obsolete standalone pulsar-store package
+        try:
+            if self.is_arch:
+                code, out, _ = self.run_command(["pacman", "-Q", "pulsar-store"])
+                if code == 0:
+                    self.log("[Migration] Cleaning up legacy pulsar-store (now unified in appinstall)...")
+                    self.run_command(["pacman", "-R", "--noconfirm", "pulsar-store"], use_root=True)
+            elif self.is_debian:
+                code, out, _ = self.run_command(["dpkg", "-s", "pulsar-store"])
+                if code == 0:
+                    self.log("[Migration] Cleaning up legacy pulsar-store (now unified in appinstall)...")
+                    self.run_command(["apt-get", "remove", "-y", "pulsar-store"], use_root=True)
+        except Exception as e:
+            self.log(f"[Migration] Note: {e}")
+
         if ok:
             self.log("[Packages] All Pulsar OS core packages are successfully updated.")
         else:
             self.log("[Packages] Notice: Package manager finished sync and update check.")
         return ok
+
 
     # =========================================================================
     # 3. LANGUAGE, UI AND APP NAMES LOCALIZATION
