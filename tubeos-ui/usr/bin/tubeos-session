@@ -28,9 +28,21 @@ fi
 picom -b --config /dev/null 2>/dev/null || true
 unclutter --idle 3 --root 2>/dev/null &
 
-# Start Openbox window manager in background
-openbox --config-file /etc/xdg/openbox/rc.xml 2>/dev/null &
+# Start Openbox window manager in background with Tube OS configuration
+if [ -f /etc/xdg/openbox/rc.xml ]; then
+    openbox --config-file /etc/xdg/openbox/rc.xml 2>/dev/null &
+else
+    openbox 2>/dev/null &
+fi
 OPENBOX_PID=$!
+
+# Start HDMI CEC TV remote and Gamepad Home daemons
+if [ -x /usr/bin/tubeos-cec-daemon ]; then
+    /usr/bin/tubeos-cec-daemon 2>/dev/null &
+fi
+if [ -x /usr/bin/tubeos-gamepad-daemon ]; then
+    /usr/bin/tubeos-gamepad-daemon 2>/dev/null &
+fi
 
 # Wait for X11 & WM to settle
 sleep 0.5

@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""
+==============================================================================
+Tube OS - HDMI CEC Remote Control Daemon
+Listens to TV Remote control presses over HDMI CEC and converts them to X11 key events.
+==============================================================================
+"""
+
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+
+CEC_KEY_MAP = {
+    "select": "Return",
+    "up": "Up",
+    "down": "Down",
+    "left": "Left",
+    "right": "Right",
+    "exit": "Escape",
+    "back": "BackSpace",
+    "clear": "BackSpace",
+    "root menu": "HOME",
+    "contents menu": "HOME",
+    "top menu": "HOME",
+    "setup menu": "s",
+    "play": "XF86AudioPlay",
+    "pause": "XF86AudioPause",
+    "stop": "XF86AudioStop",
+    "rewind": "XF86AudioPrev",
+    "fast forward": "XF86AudioNext",
+    "volume up": "XF86AudioRaiseVolume",
+    "volume down": "XF86AudioLowerVolume",
+    "mute": "XF86AudioMute",
+    "0": "0",
+    "1": "1",
+    "2": "2",
+    "3": "3",
+    "4": "4",
+    "5": "5",
+    "6": "6",
+    "7": "7",
+    "8": "8",
+    "9": "9",
+    "red": "F1",
+    "green": "F2",
+    "yellow": "F3",
+    "blue": "F4",
+}
+
+def send_key(key_name: str):
+    if key_name == "HOME":
+        subprocess.run(["/usr/bin/tubeos-home"], check=False)
+        return
+    subprocess.run(["xdotool", "key", key_name], check=False)
+
+def run_cec_client():
+    if not shutil.which("cec-client"):
+        print("[tubeos-cec] cec-client not found, exiting.")
+        return
+
+    cmd = ["cec-client", "-d", "8", "-t", "p", "-o", "TubeOS"]
+    while True:
+        try:
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
+            for line in p.stdout:
+                line_lower = line.strip().lower()
+                # Pattern: 'key pressed: <key> (duration ...)'
+                m = re.search(r"key pressed:\s*([a-z0-9 _-]+)", line_lower)
+                if m:
+                    key = m.group(1).strip()
+                    if key in CEC_KEY_MAP:
+                        send_key(CEC_KEY_MAP[key])
+                # Pattern: 'user control pressed: <key>'
+                m2 = re.search(r"user control pressed.*?code:\s*([0-9a-fx]+)", line_lower)
+                if m2:
+                    code = m2.group(1)
+                    if code == "0x00" or code == "0":
+                        send_key("Return")
+                    elif code == "0x01":
+                        send_key("Up")
+                    elif code == "0x02":
+                        send_key("Down")
+                    elif code == "0x03":
+                        send_key("Left")
+                    elif code == "0x04":
+                        send_key("Right")
+                    elif code == "0x09":
+                        send_key("HOME")
+                    elif code == "0x0d":
+                        send_key("Escape")
+            p.wait()
+        except Exception as e:
+            time.sleep(2)
+        time.sleep(2)
+
+def main():
+    os.environ["DISPLAY"] = os.environ.get("DISPLAY", ":0")
+    run_cec_client()
+
+if __name__ == "__main__":
+    main()

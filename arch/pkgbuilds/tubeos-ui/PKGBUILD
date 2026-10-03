@@ -6,7 +6,7 @@ pkgdesc="Tube OS TV UI Shell (Openbox + Tauri Mock Session)"
 arch=('any')
 url="https://github.com/Inled-Pulsar-OS"
 license=('Apache-2.0')
-depends=('openbox' 'xorg-server' 'xorg-xinit' 'unclutter' 'picom' 'curl')
+depends=('openbox' 'xorg-server' 'xorg-xinit' 'unclutter' 'picom' 'curl' 'xdotool')
 source=()
 sha256sums=()
 
@@ -18,5 +18,8 @@ package() {
   if [ -d "$_src/etc" ]; then
     cp -r "$_src/etc" "$pkgdir/"
   fi
-  find "$pkgdir" -name "*.sh" -o -name "tubeos-ui" -o -name "tubeos-session" -exec chmod +x {} +
+  if [ -d "$pkgdir/usr/bin" ]; then
+    chmod +x "$pkgdir/usr/bin"/* 2>/dev/null || true
+  fi
 }
+

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <!-- Official Pulsar OS Signature Gradient -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3584e4"/>
+      <stop offset="50%" stop-color="#9141ac"/>
+      <stop offset="100%" stop-color="#e01b24"/>
+    </linearGradient>
+
+    <!-- Drop Shadow for Icon Glyph -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Official Squircle Base -->
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#bg)"/>
+
+  <!-- Inner subtle specular highlight border -->
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.25"/>
+
+  <!-- Lucide Rocket Icon in Solid White with Fill -->
+  <g filter="url(#shadow)" transform="translate(64, 64) scale(3.2) translate(-12, -12)">
+    <!-- Rocket Thruster Trail -->
+    <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" 
+          fill="#ffffff" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Rocket Main Fuselage -->
+    <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" 
+          fill="#ffffff" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Left Fin -->
+    <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" 
+          fill="#ffffff" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Right Fin -->
+    <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" 
+          fill="#ffffff" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Cockpit Porthole Cutout -->
+    <circle cx="15" cy="9" r="1.75" fill="#9141ac"/>
+  </g>
+</svg>

@@ -312,16 +312,16 @@ set_color_scheme (CcBackgroundPanel   *self,
   theme_name = (color_scheme == G_DESKTOP_COLOR_SCHEME_PREFER_DARK) ? "MacTahoe-Dark" : "MacTahoe";
 
   /* Update GTK application theme */
-  if (g_settings_schema_has_key (g_settings_get_user_value (self->interface_settings) ? g_settings_get_settings_schema (self->interface_settings) : NULL, INTERFACE_GTK_THEME_KEY) ||
-      g_settings_get_settings_schema (self->interface_settings) != NULL)
-    {
-      g_settings_set_string (self->interface_settings, INTERFACE_GTK_THEME_KEY, theme_name);
-    }
-
-  /* Update GNOME Shell user-theme extension if present */
   source = g_settings_schema_source_get_default ();
   if (source != NULL)
     {
+      g_autoptr(GSettingsSchema) iface_schema = g_settings_schema_source_lookup (source, "org.gnome.desktop.interface", TRUE);
+      if (iface_schema != NULL && g_settings_schema_has_key (iface_schema, INTERFACE_GTK_THEME_KEY))
+        {
+          g_settings_set_string (self->interface_settings, INTERFACE_GTK_THEME_KEY, theme_name);
+        }
+
+      /* Update GNOME Shell user-theme extension if present */
       g_autoptr(GSettingsSchema) user_theme_schema = g_settings_schema_source_lookup (source, SHELL_USER_THEME_SCHEMA, TRUE);
       if (user_theme_schema != NULL)
         {

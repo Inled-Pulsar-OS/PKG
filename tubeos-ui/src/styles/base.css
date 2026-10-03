@@ -74,6 +74,7 @@ img {
     radial-gradient(120% 90% at 22% 8%, var(--wash-a, #1b2a4a) 0%, transparent 62%),
     radial-gradient(120% 100% at 88% 96%, var(--wash-b, #2a1636) 0%, transparent 58%);
   opacity: 0.9;
+  filter: blur(var(--backdrop-blur));
   transition: background 900ms var(--tv-ease);
 }
 
@@ -113,25 +114,34 @@ img {
 
 .tv-wordmark {
   display: flex;
-  align-items: baseline;
-  gap: 7px;
-  font-size: 25px;
+  align-items: center;
+  gap: 10px;
+  font-size: 21px;
   font-weight: 700;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.4px;
   color: var(--label-primary);
 }
 
-.tv-wordmark .tv-mark {
-  font-size: 27px;
-  font-weight: 800;
-  letter-spacing: -2.5px;
+.tv-wordmark .tv-logo-img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 6px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+}
+
+.tv-wordmark .tv-title-text {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
 }
 
 .tv-wordmark .tv-sub {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.5px;
   color: var(--label-tertiary);
+  margin-left: 4px;
 }
 
 .topbar-spacer {

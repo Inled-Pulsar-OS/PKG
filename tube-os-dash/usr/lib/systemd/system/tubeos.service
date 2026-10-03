@@ -10,7 +10,7 @@ LogsDirectory=casaos tubeos
 ExecStart=/usr/bin/tubeos -c /etc/tubeos/tubeos.conf
 PIDFile=/var/run/tubeos/tubeos.pid
 Restart=always
-Type=notify
+Type=simple
 
 [Install]
 WantedBy=multi-user.target

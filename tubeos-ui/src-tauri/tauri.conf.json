@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Apple TV",
+  "productName": "Tube OS",
   "version": "1.0.0",
-  "identifier": "org.mango.appletv-launcher",
+  "identifier": "org.tubeos.ui",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://127.0.0.1:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Apple TV",
+        "title": "Tube OS",
         "label": "main",
         "width": 1280,
         "height": 720,
@@ -29,7 +29,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' appicon: poster: data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost",
+      "csp": "default-src 'self' 'unsafe-inline' data: blob: http: https:; img-src 'self' appicon: poster: data: blob: http: https:; style-src 'self' 'unsafe-inline' http: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' http: https:; font-src 'self' data: http: https:; connect-src 'self' ipc: http://ipc.localhost data: blob: http: https: ws: wss:;",
       "assetProtocol": {
         "enable": false
       }

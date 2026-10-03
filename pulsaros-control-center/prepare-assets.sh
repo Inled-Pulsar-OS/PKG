@@ -97,6 +97,7 @@ echo "🏷️ [EN] Build tag: $FULL_TAG"
 if [ "$(id -u)" -eq 0 ]; then
     echo "📦 [ES] Instalando dependencias de compilación..."
     echo "📦 [EN] Installing build dependencies..."
+    apt-get update -y 2>/dev/null || true
     # Mirrors Debian trixie's official gnome-control-center 48 Build-Depends
     # (sources.debian.org, gnome-control-center 1:48.4-1~deb13u1) plus build
     # tooling (build-essential, meson, ninja, git, gettext, blueprint-compiler).

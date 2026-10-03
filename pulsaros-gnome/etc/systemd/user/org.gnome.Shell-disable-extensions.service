@@ -1,0 +1,8 @@
+# Pulsar OS - Prevent GNOME Shell from disabling extensions on transient VM/driver timeouts
+[Unit]
+Description=Disable GNOME Shell extensions after failure (Neutralized by Pulsar OS)
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+ExecStart=/bin/true

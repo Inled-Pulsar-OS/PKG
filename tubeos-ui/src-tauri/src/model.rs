@@ -160,7 +160,7 @@ impl Default for Settings {
         Self {
             schema: 1,
             confirm_launch: false,
-            hide_on_launch: true,
+            hide_on_launch: false,
             autostart: false,
             sound_effects: true,
             animations: true,

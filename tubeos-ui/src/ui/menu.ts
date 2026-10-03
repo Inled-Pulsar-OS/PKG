@@ -6,93 +6,152 @@ export interface MenuOption {
   icon: string;
   label: string;
   action: () => void;
+  primary?: boolean;
   danger?: boolean;
 }
 
-let openMenu: { node: HTMLElement; close: () => void } | null = null;
+export interface ActionSheetMeta {
+  title: string;
+  subtitle?: string;
+  iconSrc?: string | null;
+  iconName?: string;
+}
 
-/** Close the popover menu, if one is open. */
+let activeSheet: { node: HTMLElement; close: () => void } | null = null;
+
+export function isMenuOpen(): boolean {
+  return activeSheet !== null;
+}
+
+/** Close any open bottom action sheet */
 export function closeMenu(): boolean {
-  if (!openMenu) return false;
-  openMenu.close();
+  if (!activeSheet) return false;
+  activeSheet.close();
   return true;
 }
 
 /**
- * A positioned popover menu, used for tvOS style long-press actions on tiles.
- * Lives in its own focus layer so the engine treats it like a modal sheet.
+ * TV Remote-friendly Bottom Action Sheet (Footer Drawer).
+ * Displays a bottom dock with horizontal action pills.
+ * Navigable with Left/Right arrows, Enter to execute, Down or Esc to dismiss.
  */
-export function showActionMenu(
-  anchor: HTMLElement,
+export function showActionSheet(
+  meta: ActionSheetMeta,
   options: MenuOption[],
   returnKey?: string,
 ): void {
   closeMenu();
 
-  const menu = el("div", "context-menu");
-  const rect = anchor.getBoundingClientRect();
-  const layer = "menu";
+  const layer = "action-sheet";
+  const backdrop = el("div", "sheet-backdrop");
+  const sheet = el("div", "sheet-footer");
+
   let closed = false;
 
   const close = (): void => {
     if (closed) return;
     closed = true;
-    menu.classList.remove("is-open");
+    sheet.classList.remove("is-open");
+    backdrop.classList.remove("is-open");
     focusEngine.popLayer(layer);
+    focusEngine.unregisterZone("sheet-actions");
+    activeSheet = null;
+
+    if (returnKey) {
+      focusEngine.focusKey(returnKey);
+    } else {
+      focusEngine.rebuild();
+    }
+
     window.setTimeout(() => {
-      menu.remove();
-      focusEngine.rebuild(returnKey);
-      if (openMenu?.node === menu) openMenu = null;
-    }, 170);
+      backdrop.remove();
+      sheet.remove();
+    }, 150);
   };
 
-  options.forEach((option, index) => {
-    const row = el("div", `context-item${option.danger ? " context-item--danger" : ""}`);
-    row.appendChild(icon(option.icon, 16));
-    row.appendChild(el("span", undefined, option.label));
+  // Header / Info section (Left)
+  const header = el("div", "sheet-header");
+  if (meta.iconSrc) {
+    const art = el("div", "sheet-art");
+    const img = el("img");
+    img.src = meta.iconSrc;
+    img.alt = meta.title;
+    art.appendChild(img);
+    header.appendChild(art);
+  } else if (meta.iconName) {
+    const art = el("div", "sheet-art");
+    art.appendChild(icon(meta.iconName, 26));
+    header.appendChild(art);
+  }
+
+  const metaText = el("div", "sheet-meta");
+  metaText.appendChild(el("h2", "sheet-title", meta.title));
+  if (meta.subtitle) {
+    metaText.appendChild(el("p", "sheet-sub", meta.subtitle));
+  }
+  header.appendChild(metaText);
+  sheet.appendChild(header);
+
+  // Actions row (Horizontal pills)
+  const actionsRow = el("div", "sheet-actions");
+  options.forEach((opt, idx) => {
+    const btn = el(
+      "button",
+      `btn${opt.primary ? " btn--primary" : ""}${opt.danger ? " btn--danger" : ""}`,
+    );
+    btn.appendChild(icon(opt.icon, 16));
+    btn.appendChild(el("span", undefined, opt.label));
+
     makeFocusable(
-      row,
+      btn,
       {
         onFocus: () => sound.focus(),
         onActivate: () => {
           sound.select();
           close();
-          option.action();
+          opt.action();
+        },
+        onMove: (dir) => {
+          if (dir === "down") {
+            sound.back();
+            close();
+            return true;
+          }
+          return false;
         },
       },
-      `menu-${index}`,
+      `sheet-opt-${idx}`,
     );
-    menu.appendChild(row);
+    actionsRow.appendChild(btn);
   });
+  sheet.appendChild(actionsRow);
 
   const container = document.getElementById("overlays") ?? document.body;
-  container.appendChild(menu);
-
-  const width = 268;
-  const height = menu.offsetHeight || options.length * 46 + 18;
-  const left = Math.min(
-    Math.max(16, rect.left + rect.width / 2 - width / 2),
-    window.innerWidth - width - 16,
-  );
-  const top = Math.min(rect.bottom + 10, window.innerHeight - height - 16);
-  menu.style.left = `${left}px`;
-  menu.style.top = `${Math.max(16, top)}px`;
+  container.appendChild(backdrop);
+  container.appendChild(sheet);
 
   focusEngine.pushLayer(layer);
-  focusEngine.registerZone("menu-zone", menu, 1, layer);
+  focusEngine.registerZone("sheet-actions", actionsRow, 1, layer);
+
+  backdrop.addEventListener("pointerdown", () => close());
+
   requestAnimationFrame(() => {
-    menu.classList.add("is-open");
-    focusEngine.rebuild("menu-0");
-    focusEngine.focusKey("menu-0").valueOf();
+    backdrop.classList.add("is-open");
+    sheet.classList.add("is-open");
+    focusEngine.focusKey("sheet-opt-0");
   });
 
-  const onPointerDown = (event: PointerEvent): void => {
-    if (!menu.contains(event.target as Node)) {
-      document.removeEventListener("pointerdown", onPointerDown);
-      close();
-    }
-  };
-  window.setTimeout(() => document.addEventListener("pointerdown", onPointerDown), 0);
+  activeSheet = { node: sheet, close };
+}
 
-  openMenu = { node: menu, close };
+/** Legacy alias for backwards compatibility */
+export function showActionMenu(
+  anchor: HTMLElement,
+  options: MenuOption[],
+  returnKey?: string,
+): void {
+  const title = anchor.querySelector(".tile-label")?.textContent || "Opciones";
+  const sub = anchor.querySelector(".tile-sub")?.textContent;
+  const img = anchor.querySelector<HTMLImageElement>("img")?.src;
+  showActionSheet({ title, subtitle: sub, iconSrc: img }, options, returnKey);
 }

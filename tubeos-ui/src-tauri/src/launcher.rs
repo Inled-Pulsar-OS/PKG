@@ -191,3 +191,11 @@ pub fn open_target(target: &str) -> Result<(), String> {
     detach(cmd).map_err(|e| format!("Failed to open {target}: {e}"))?;
     Ok(())
 }
+
+/// Execute a shell command in the background.
+pub fn run_shell_command(script: &str) -> Result<(), String> {
+    let mut cmd = Command::new("sh");
+    cmd.arg("-c").arg(script);
+    detach(cmd).map_err(|e| format!("Failed to execute command: {e}"))?;
+    Ok(())
+}

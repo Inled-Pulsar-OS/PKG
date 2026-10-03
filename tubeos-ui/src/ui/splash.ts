@@ -9,10 +9,10 @@
  * can fire before any user gesture without needing the context, ImageData, or
  * an unlocked AudioContext.
  */
-const SPLASH_MS = 10_000;
-const FADE_MS = 700;
+const SPLASH_MS = 150;
+const FADE_MS = 300;
 
-/** Play the startup chime and resolve once the splash time has elapsed. */
+/** Play the startup chime and resolve instantly without artificial lag. */
 export function startSplash(): Promise<void> {
   playChime();
 

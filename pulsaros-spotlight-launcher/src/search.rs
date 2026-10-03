@@ -79,43 +79,9 @@ impl SearchBackend {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_indexing_status(&self) -> (bool, String, f64) {
-        let targets = &[
-            ("org.freedesktop.LocalSearch3.Miner.Files", "/org/freedesktop/LocalSearch3/Miner/Files"),
-            ("org.freedesktop.Tracker3.Miner.Files", "/org/freedesktop/Tracker3/Miner/Files"),
-        ];
-
-        if let Ok(conn) = ZbusConnection::session() {
-            for &(bus_name, obj_path) in targets {
-                if let Ok(status_reply) = conn.call_method(
-                    Some(bus_name),
-                    obj_path,
-                    Some("org.freedesktop.Tracker3.Miner"),
-                    "GetStatus",
-                    &(),
-                ) {
-                    if let Ok((status,)) = status_reply.body().deserialize::<(String,)>() {
-                        let status_lower = status.to_lowercase();
-                        if !status_lower.contains("idle") && !status_lower.contains("inactivo") && !status_lower.contains("paused") {
-                            if let Ok(progress_reply) = conn.call_method(
-                                Some(bus_name),
-                                obj_path,
-                                Some("org.freedesktop.Tracker3.Miner"),
-                                "GetProgress",
-                                &(),
-                            ) {
-                                if let Ok((progress,)) = progress_reply.body().deserialize::<(f64,)>() {
-                                    return (true, status, progress);
-                                }
-                            }
-                            return (true, status, 0.0);
-                        }
-                    }
-                }
-            }
-        }
-
-        (false, "Idle".to_string(), 1.0)
+        get_indexing_status_plain()
     }
 
     pub fn search_instant(&self, query: &str, category: &str, limit: usize) -> Vec<SearchResult> {
@@ -389,16 +355,22 @@ impl SearchBackend {
 fn execute_sparql_external(sparql: &str) -> Vec<SearchResult> {
     let mut results = Vec::new();
 
-    if let Ok(output) = Command::new("tinysparql")
+    let output = Command::new("tinysparql")
         .args(&["query", "-b", "org.freedesktop.LocalSearch3", "-q", sparql])
         .output()
-    {
+        .or_else(|_| {
+            Command::new("tracker3")
+                .args(&["sparql", "-q", sparql])
+                .output()
+        });
+
+    if let Ok(output) = output {
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let mut seen = std::collections::HashSet::new();
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         for line in stdout.lines() {
             let trimmed = line.trim();
-            if trimmed.is_empty() || trimmed.starts_with("Resultados:") {
+            if trimmed.is_empty() || trimmed.starts_with("Resultados:") || trimmed.starts_with("Results:") {
                 continue;
             }
 
@@ -408,10 +380,11 @@ fn execute_sparql_external(sparql: &str) -> Vec<SearchResult> {
                     continue;
                 }
                 seen.insert(url.clone());
-
-                let title = match urlencoding::decode(url.split('/').last().unwrap_or(&url)) {
-                    Ok(decoded) => decoded.into_owned(),
-                    Err(_) => url.clone(),
+                let clean_url = url.trim_end_matches('/');
+                let filename_part = clean_url.split('/').last().unwrap_or(clean_url);
+                let title = match urlencoding::decode(filename_part) {
+                    Ok(decoded) if !decoded.trim().is_empty() => decoded.into_owned(),
+                    _ => filename_part.to_string(),
                 };
 
                 let mime = mime_guess::from_path(&title)
@@ -432,6 +405,45 @@ fn execute_sparql_external(sparql: &str) -> Vec<SearchResult> {
 
     results.sort_unstable_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
     results
+}
+
+pub fn get_indexing_status_plain() -> (bool, String, f64) {
+    let targets = &[
+        ("org.freedesktop.LocalSearch3.Miner.Files", "/org/freedesktop/LocalSearch3/Miner/Files"),
+        ("org.freedesktop.Tracker3.Miner.Files", "/org/freedesktop/Tracker3/Miner/Files"),
+    ];
+
+    if let Ok(conn) = ZbusConnection::session() {
+        for &(bus_name, obj_path) in targets {
+            if let Ok(status_reply) = conn.call_method(
+                Some(bus_name),
+                obj_path,
+                Some("org.freedesktop.Tracker3.Miner"),
+                "GetStatus",
+                &(),
+            ) {
+                if let Ok((status,)) = status_reply.body().deserialize::<(String,)>() {
+                    let status_lower = status.to_lowercase();
+                    if !status_lower.contains("idle") && !status_lower.contains("inactivo") && !status_lower.contains("paused") {
+                        if let Ok(progress_reply) = conn.call_method(
+                            Some(bus_name),
+                            obj_path,
+                            Some("org.freedesktop.Tracker3.Miner"),
+                            "GetProgress",
+                            &(),
+                        ) {
+                            if let Ok((progress,)) = progress_reply.body().deserialize::<(f64,)>() {
+                                return (true, status, progress);
+                            }
+                        }
+                        return (true, status, 0.0);
+                    }
+                }
+            }
+        }
+    }
+
+    (false, "Idle".to_string(), 1.0)
 }
 
 fn query_browser_history_plain(query: &str, limit: usize) -> Vec<SearchResult> {

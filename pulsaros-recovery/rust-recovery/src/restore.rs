@@ -357,7 +357,7 @@ where
                 if let Ok(luks_uuid) = exec_cmd(&format!("blkid -s UUID -o value {} 2>/dev/null || true", backing_dev)) {
                     let uuid_trimmed = luks_uuid.trim();
                     if !uuid_trimmed.is_empty() {
-                        let crypttab_content = format!("{} UUID={} none luks,discard\n", mapper_name, uuid_trimmed);
+                        let crypttab_content = format!("{} UUID={} none luks,discard,initramfs\n", mapper_name, uuid_trimmed);
                         let _ = fs::write(format!("{}/etc/crypttab", new_root), crypttab_content);
                         log(&format!("Generated /etc/crypttab for mapper {} (LUKS UUID: {})", mapper_name, uuid_trimmed));
                     }

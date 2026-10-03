@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://openbox.org/3.4/rc file:///usr/share/openbox/rc.xsd">
+  <resistance>
+    <strength>10</strength>
+    <screen_edge_strength>20</screen_edge_strength>
+  </resistance>
+  <focus>
+    <focusNew>yes</focusNew>
+    <followMouse>no</followMouse>
+    <focusLast>yes</focusLast>
+    <underMouse>no</underMouse>
+    <focusDelay>200</focusDelay>
+    <raiseOnFocus>yes</raiseOnFocus>
+  </focus>
+  <placement>
+    <policy>Smart</policy>
+    <center>yes</center>
+    <monitor>Primary</monitor>
+    <primaryMonitor>1</primaryMonitor>
+  </placement>
+  <theme>
+    <name>Clearlooks</name>
+    <titleLayout></titleLayout>
+    <keepBorder>no</keepBorder>
+    <animateIconify>no</animateIconify>
+  </theme>
+  <keyboard>
+    <chainQuitKey>C-g</chainQuitKey>
+
+    <!-- Super (Windows) Key & Home Key: Close active app and return to Tube OS TV UI -->
+    <keybind key="Super_L">
+      <action name="Execute">
+        <command>/usr/bin/tubeos-home</command>
+      </action>
+    </keybind>
+    <keybind key="Super_R">
+      <action name="Execute">
+        <command>/usr/bin/tubeos-home</command>
+      </action>
+    </keybind>
+    <keybind key="Home">
+      <action name="Execute">
+        <command>/usr/bin/tubeos-home</command>
+      </action>
+    </keybind>
+    <keybind key="W-Home">
+      <action name="Execute">
+        <command>/usr/bin/tubeos-home</command>
+      </action>
+    </keybind>
+    <keybind key="XF86HomePage">
+      <action name="Execute">
+        <command>/usr/bin/tubeos-home</command>
+      </action>
+    </keybind>
+    <keybind key="XF86AudioMedia">
+      <action name="Execute">
+        <command>/usr/bin/tubeos-home</command>
+      </action>
+    </keybind>
+    <keybind key="W-F1">
+      <action name="Execute">
+        <command>/usr/bin/tubeos-home</command>
+      </action>
+    </keybind>
+    <keybind key="W-h">
+      <action name="Execute">
+        <command>/usr/bin/tubeos-home</command>
+      </action>
+    </keybind>
+    <keybind key="W-Escape">
+      <action name="Execute">
+        <command>/usr/bin/tubeos-home</command>
+      </action>
+    </keybind>
+
+    <!-- Close Active Window -->
+    <keybind key="A-F4">
+      <action name="Close"/>
+    </keybind>
+    <keybind key="W-q">
+      <action name="Close"/>
+    </keybind>
+
+    <!-- Virtual Keyboard Toggle -->
+    <keybind key="W-k">
+      <action name="Execute">
+        <command>/usr/bin/tubeos-keyboard --toggle</command>
+      </action>
+    </keybind>
+    <keybind key="F12">
+      <action name="Execute">
+        <command>/usr/bin/tubeos-keyboard --toggle</command>
+      </action>
+    </keybind>
+
+    <!-- Fullscreen toggle -->
+    <keybind key="F11">
+      <action name="ToggleFullscreen"/>
+    </keybind>
+  </keyboard>
+  <mouse>
+    <dragThreshold>8</dragThreshold>
+    <doubleClickTime>400</doubleClickTime>
+    <screenEdgeWarpTime>0</screenEdgeWarpTime>
+    <context name="Frame">
+      <mousebind button="Left" action="Press">
+        <action name="Focus"/>
+        <action name="Raise"/>
+      </mousebind>
+    </context>
+  </mouse>
+  <applications>
+    <!-- By default, ALL applications open in borderless FULLSCREEN for 10-foot TV experience -->
+    <application class="*">
+      <decor>no</decor>
+      <fullscreen>yes</fullscreen>
+      <maximized>true</maximized>
+    </application>
+
+    <!-- Tube OS TV UI Shell -->
+    <application name="tubeos-tv" class="Tubeos-tv">
+      <decor>no</decor>
+      <fullscreen>yes</fullscreen>
+      <maximized>true</maximized>
+      <layer>normal</layer>
+    </application>
+    <application name="Apple TV" class="Apple TV">
+      <decor>no</decor>
+      <fullscreen>yes</fullscreen>
+      <maximized>true</maximized>
+      <layer>normal</layer>
+    </application>
+
+    <!-- Tube OS On-Screen Keyboard -->
+    <application name="tubeos-keyboard" class="Tubeos-keyboard">
+      <decor>no</decor>
+      <fullscreen>no</fullscreen>
+      <maximized>no</maximized>
+      <layer>above</layer>
+      <focus>no</focus>
+    </application>
+  </applications>
+</openbox_config>

@@ -1,9 +1,9 @@
 Package: tubeos-ui
-Version: 0.1.4
+Version: 0.2.0
 Section: x11
 Priority: optional
 Architecture: all
-Depends: openbox, xserver-xorg, xinit, unclutter, picom, curl, feh, python3-gi, gir1.2-gtk-3.0, gir1.2-webkit2-4.1
+Depends: openbox, xserver-xorg, xinit, unclutter, picom, curl, feh, python3-gi, gir1.2-gtk-3.0, gir1.2-webkit2-4.1, xdotool
 Maintainer: Inled Pulsar OS Team <team@inled.es>
 Description: Tube OS TV UI Shell (Openbox + Tauri Mock)
  Lightweight Smart TV user interface shell and session for Tube OS.

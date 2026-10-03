@@ -1,6 +1,12 @@
 # PAM configuration for Pulsar OS Lock Screen
-# Autentica al usuario actual desde la pantalla de bloqueo.
-# Arch Linux: system-auth | Debian: common-auth
+# Compatible with Debian (common-auth) and Arch Linux (system-auth)
 
-auth     include      system-auth
-account  include      system-auth
+auth     sufficient   pam_unix.so nullok
+-auth    include      common-auth
+-auth    include      system-auth
+
+account  sufficient   pam_unix.so
+-account include      common-account
+-account include      system-account
+-account include      system-auth
+

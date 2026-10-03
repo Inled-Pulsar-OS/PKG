@@ -5,30 +5,36 @@ import { sound } from "./sound";
 import { actions, selectTab, store, type TabId } from "./state";
 import type { AppInfo, MediaItem } from "./types";
 import "./styles/index.css";
+import "./styles/volume-osd.css";
+import "./styles/iptv.css";
 import { el } from "./ui/icons";
 import { showDialog } from "./ui/dialog";
 import { renderHero, setHeroForElement, startHeroRotation } from "./ui/hero";
 import { initGamepad } from "./gamepad";
 import { renderHints } from "./ui/hints";
-import { closeTopOverlay, hasOverlay } from "./ui/overlay";
+import { closeAllOverlays, closeTopOverlay, hasOverlay, toast } from "./ui/overlay";
 import { openSearch, isSearchOpen, handleSearchKey } from "./ui/search";
 import { openControlCentre } from "./ui/control-centre";
 import { openSettings } from "./ui/settings";
 import { startSplash, hideSplash } from "./ui/splash";
 import { renderShelves } from "./ui/shelves";
-import { launchApp, openMedia, playOnPicker } from "./ui/tiles";
+import { launchApp, mediaFeedback, openMedia, playOnPicker } from "./ui/tiles";
 import { renderTopbar, startClock } from "./ui/topbar";
 import { initAod, refreshAod } from "./ui/aod";
+import { initVolumeOsd } from "./ui/volume-osd";
+import { loadIptvChannels, toggleIptvFavorite } from "./ui/iptv";
 
 /** Repaint every chrome region after settings or data changed. */
-function refreshChrome(): void {
+function refreshChrome(rebuildFocus = true): void {
   applyTheme();
   renderTopbar();
   renderHero();
   renderShelves();
   renderHints();
   refreshAod();
-  focusEngine.rebuild("topbar");
+  if (rebuildFocus) {
+    focusEngine.rebuild();
+  }
 }
 
 /** Details sheet for an app tile (I key). */
@@ -89,9 +95,62 @@ async function toggleMute(): Promise<void> {
   }
 }
 
+/** Toggle favorite for whatever tile is currently focused */
+function toggleFavoriteForFocused(): void {
+  const focused = focusEngine.focused;
+  if (!focused) return;
+  const appId = focused.dataset.appId;
+  if (appId) {
+    const app = store.state.apps.find((a) => a.id === appId);
+    if (app) {
+      const isFav = store.state.settings.favorites.includes(app.id);
+      const favorites = isFav
+        ? store.state.settings.favorites.filter((id) => id !== app.id)
+        : [...store.state.settings.favorites, app.id];
+      actions.patchSettings({ favorites });
+      toast(isFav ? `${app.name} removed from favorites` : `${app.name} added to favorites ⭐`, "ok");
+      renderShelves();
+      renderHero();
+      return;
+    }
+  }
+  const channelId = focused.dataset.channelId;
+  if (channelId) {
+    toggleIptvFavorite(channelId);
+    renderShelves();
+    renderHero();
+    return;
+  }
+  const mediaId = focused.dataset.mediaId;
+  if (mediaId) {
+    const item = [...store.state.recommendations, ...store.state.catalog].find((m) => m.id === mediaId);
+    if (item) {
+      const liked = store.state.profile.liked.includes(item.id);
+      mediaFeedback(item, liked ? "hide" : "like", liked ? "Removed from favorites" : "Added to favorites ⭐");
+      renderShelves();
+      renderHero();
+      return;
+    }
+  }
+}
+
+let enterKeyTimer: number | null = null;
+let enterKeyLongTriggered = false;
+
 function onKeydown(event: KeyboardEvent): void {
-  if (event.metaKey || event.ctrlKey || event.altKey) return;
   const key = event.key;
+
+  // Home key / Super key returns to home screen and closes overlays
+  if (key === "Home" || key === "Meta" || key === "Super") {
+    closeAllOverlays();
+    selectTab("home");
+    refreshChrome();
+    focusEngine.focusFirst("topbar");
+    event.preventDefault();
+    return;
+  }
+
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
 
   // While search is open, printable keys and Backspace type into the field
   // instead of doing anything else.
@@ -104,6 +163,12 @@ function onKeydown(event: KeyboardEvent): void {
   if (key === "Escape" || key === "Backspace") {
     if (hasOverlay()) closeTopOverlay();
     else sound.back();
+    event.preventDefault();
+    return;
+  }
+
+  // Ignore key repeat for activation keys to prevent multiple triggers
+  if (event.repeat && (key === "Enter" || key === "f" || key === "F" || key === "x" || key === "X")) {
     event.preventDefault();
     return;
   }
@@ -145,9 +210,36 @@ function onKeydown(event: KeyboardEvent): void {
     case "ArrowRight":
       if (focusEngine.move("right")) sound.focus();
       break;
-    case "Enter":
-      if (focusEngine.activate()) sound.select();
+    case "Enter": {
+      const focused = focusEngine.focused;
+      const isTile = focused && (focused.dataset.appId || focused.dataset.channelId || focused.dataset.mediaId);
+      if (isTile) {
+        enterKeyLongTriggered = false;
+        if (enterKeyTimer) window.clearTimeout(enterKeyTimer);
+        enterKeyTimer = window.setTimeout(() => {
+          enterKeyLongTriggered = true;
+          const handler = focused ? focusEngine.handlersFor(focused) : undefined;
+          if (handler?.onContext) {
+            handler.onContext();
+          }
+        }, 340);
+      } else {
+        if (focusEngine.activate()) sound.select();
+      }
       break;
+    }
+    case "f":
+    case "F":
+      toggleFavoriteForFocused();
+      break;
+    case "x":
+    case "X":
+    case "ContextMenu": {
+      const focused = focusEngine.focused;
+      const handler = focused ? focusEngine.handlersFor(focused) : undefined;
+      if (handler?.onContext) handler.onContext();
+      break;
+    }
     case "i":
     case "I":
       infoForFocused();
@@ -170,11 +262,42 @@ function onKeydown(event: KeyboardEvent): void {
   event.preventDefault();
 }
 
+function onKeyup(event: KeyboardEvent): void {
+  if (event.key === "Enter") {
+    if (enterKeyTimer) {
+      window.clearTimeout(enterKeyTimer);
+      enterKeyTimer = null;
+    }
+    if (!enterKeyLongTriggered && !hasOverlay()) {
+      const focused = focusEngine.focused;
+      const isTile = focused && (focused.dataset.appId || focused.dataset.channelId || focused.dataset.mediaId);
+      if (isTile) {
+        if (focusEngine.activate()) sound.select();
+      }
+    }
+    enterKeyLongTriggered = false;
+  }
+}
+
 function wireEvents(): void {
   document.addEventListener("keydown", onKeydown);
+  document.addEventListener("keyup", onKeyup);
+
+  // Reactively apply settings and theme whenever store changes
+  store.subscribe(() => {
+    applyTheme();
+    renderHints();
+  });
 
   // The Top Shelf mirrors whatever tile has focus (hero.ts owns the content).
   focusEngine.onchange((element) => setHeroForElement(element));
+
+  document.addEventListener("launcher:home", () => {
+    closeAllOverlays();
+    selectTab("home");
+    refreshChrome();
+    focusEngine.focusFirst("topbar");
+  });
 
   document.addEventListener("launcher:tab", (event) => {
     const id = (event as CustomEvent<TabId>).detail;
@@ -191,6 +314,14 @@ function wireEvents(): void {
     focusEngine.focusFirst("topbar");
   });
 
+  document.addEventListener("launcher:tab-preview", (event) => {
+    const id = (event as CustomEvent<TabId>).detail;
+    selectTab(id);
+    // Refresh content below without shifting focus away from the active tab button
+    renderShelves();
+    renderHero();
+  });
+
   // The brand hero offers a "Open Settings" pill.
   document.addEventListener("launcher:open-settings", () => openSettings());
 }
@@ -202,6 +333,15 @@ async function boot(): Promise<void> {
   await Promise.all([actions.bootstrap(), splash]);
   hideSplash();
   wireEvents();
+  initVolumeOsd();
+  
+  // Background fetch country IPTV channels
+  void loadIptvChannels()
+    .then(() => {
+      renderShelves();
+    })
+    .catch(() => undefined);
+
   refreshChrome();
   focusEngine.focusFirst("topbar");
   startClock();

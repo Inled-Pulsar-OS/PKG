@@ -7,14 +7,16 @@ import type { AppInfo, MediaItem } from "../types";
 import { el, icon } from "./icons";
 import { launchApp, mediaFeedback, openAppMenu, openMedia } from "./tiles";
 import { toast } from "./overlay";
+import { isIptvFavorite, openTvPlayer, toggleIptvFavorite, type IptvChannel } from "./iptv";
 
 interface HeroState {
-  mode: "featured" | "app" | "media";
+  mode: "featured" | "app" | "media" | "iptv";
   app?: AppInfo;
   item?: MediaItem;
+  channel?: IptvChannel;
   index: number;
-  /** True while focus lives inside the hero, so the content stays put. */
   pinned: boolean;
+  returnFocusKey?: string;
 }
 
 const state: HeroState = { mode: "featured", index: 0, pinned: false };
@@ -79,6 +81,15 @@ function pill(
         sound.select();
         action();
       },
+      onMove: (dir) => {
+        if (dir === "down") {
+          // Return focus directly back to the shelf tile below
+          if (state.returnFocusKey && focusEngine.focusKey(state.returnFocusKey)) {
+            return true;
+          }
+        }
+        return false;
+      },
     },
     key,
   );
@@ -130,21 +141,21 @@ function renderAppHero(container: HTMLElement, app: AppInfo): void {
 
   const favorite = store.state.settings.favorites.includes(app.id);
   const actionsRow = el("div", "hero-actions");
-  actionsRow.appendChild(pill("Open", "play", "primary", "hero-open", () => launchApp(app)));
   actionsRow.appendChild(
-    pill(favorite ? "Favorited" : "Add to Favorites", "star", "normal", "hero-favorite", () => {
+    pill(favorite ? "Quitar Favorito" : "Añadir a Favoritos", "star", "primary", "hero-favorite", () => {
       const favorites = favorite
         ? store.state.settings.favorites.filter((id) => id !== app.id)
         : [...store.state.settings.favorites, app.id];
       actions.patchSettings({ favorites });
       toast(
-        favorite ? `${app.name} removed from Favorites` : `${app.name} added to Favorites`,
+        favorite ? `${app.name} quitado de favoritos` : `${app.name} añadido a favoritos ⭐`,
         "ok",
       );
       renderHero();
     }),
   );
-  actionsRow.appendChild(pill("More", "info", "ghost", "hero-more", () => openAppMenu(app, actionsRow)));
+  actionsRow.appendChild(pill("Abrir", "play", "normal", "hero-open", () => launchApp(app)));
+  actionsRow.appendChild(pill("Opciones", "info", "ghost", "hero-more", () => openAppMenu(app, actionsRow)));
   info.appendChild(actionsRow);
   hero.appendChild(info);
   container.appendChild(hero);
@@ -153,7 +164,57 @@ function renderAppHero(container: HTMLElement, app: AppInfo): void {
   document.body.style.setProperty("--wash-a", wash.a);
   document.body.style.setProperty("--wash-b", wash.b);
   backdrop(src);
-  focusEngine.registerZone("topshelf", actionsRow, 1);
+  focusEngine.registerZone("topshelf", actionsRow, 0.5);
+}
+
+function renderIptvHero(container: HTMLElement, channel: IptvChannel): void {
+  const hero = el("div", "hero");
+  const art = el("div", "hero-art iptv-hero-art");
+  if (channel.logo) {
+    const img = el("img");
+    img.src = channel.logo;
+    img.alt = channel.name;
+    img.onerror = () => {
+      img.remove();
+      art.appendChild(el("div", "iptv-fallback", channel.name));
+    };
+    art.appendChild(img);
+  } else {
+    art.appendChild(el("div", "iptv-fallback", channel.name));
+  }
+  hero.appendChild(art);
+
+  const info = el("div", "hero-info");
+  info.appendChild(el("div", "hero-eyebrow", `${channel.group} · Live TV`));
+  info.appendChild(el("h1", "hero-title", channel.name));
+
+  const meta = el("div", "hero-meta");
+  meta.appendChild(el("span", "hero-badge", "En Directo"));
+  if (isIptvFavorite(channel.id)) {
+    meta.appendChild(el("span", "hero-badge", "★ Favorito"));
+  }
+  info.appendChild(meta);
+  info.appendChild(el("p", "hero-blurb", "Emisión en directo a través de IPTV. Pulsa Abrir para ver a pantalla completa."));
+
+  const isFav = isIptvFavorite(channel.id);
+  const actionsRow = el("div", "hero-actions");
+  actionsRow.appendChild(
+    pill(isFav ? "Quitar Favorito" : "Añadir a Favoritos", "star", "primary", "hero-favorite", () => {
+      toggleIptvFavorite(channel.id);
+      renderHero();
+    }),
+  );
+  actionsRow.appendChild(
+    pill("Ver Canal", "play", "normal", "hero-open", () => {
+      openTvPlayer([channel], 0);
+    }),
+  );
+  info.appendChild(actionsRow);
+  hero.appendChild(info);
+  container.appendChild(hero);
+
+  backdrop(null);
+  focusEngine.registerZone("topshelf", actionsRow, 0.5);
 }
 
 function renderFeatured(container: HTMLElement, items: MediaItem[], index: number): void {
@@ -180,7 +241,7 @@ function renderFeatured(container: HTMLElement, items: MediaItem[], index: numbe
   hero.appendChild(art);
 
   const info = el("div", "hero-info");
-  info.appendChild(el("div", "hero-eyebrow", "Top Shelf · Recommended for you"));
+  info.appendChild(el("div", "hero-eyebrow", "Destacado · Recomendado"));
   info.appendChild(el("h1", "hero-title", item.title));
   info.appendChild(metaLine(item));
   const taste = topGenreLabel();
@@ -188,46 +249,28 @@ function renderFeatured(container: HTMLElement, items: MediaItem[], index: numbe
     el(
       "p",
       "hero-blurb",
-      `Cover art and metadata come straight from IMDb. ${
-        taste === "your taste profile" ? "" : `Your taste profile is ${taste}. `
-      }Press ↓ to browse the shelves, or search for any title.`,
+      `Metadatos y carátulas de IMDb. ${
+        taste === "your taste profile" ? "" : `Tu perfil prefiere ${taste}. `
+      }Pulsa ↓ para explorar las filas.`,
     ),
   );
 
   const actionsRow = el("div", "hero-actions");
-  actionsRow.appendChild(pill("View on IMDb", "external", "primary", "hero-open", () => openMedia(item)));
+  actionsRow.appendChild(pill("Ver en IMDb", "external", "primary", "hero-open", () => openMedia(item)));
   actionsRow.appendChild(
-    pill("More Like This", "heart", "normal", "hero-like", () =>
-      mediaFeedback(item, "like", "You'll see more like this"),
-    ),
-  );
-  actionsRow.appendChild(
-    pill("Shuffle", "shuffle", "ghost", "hero-shuffle", () => {
-      void actions.reshuffle().then(() => toast("Recommendations shuffled", "ok"));
-    }),
-  );
-  actionsRow.appendChild(
-    pill("Not Interested", "ban", "ghost", "hero-hide", () =>
-      mediaFeedback(item, "hide", "You'll see less of this"),
+    pill("Recomendar similares", "heart", "normal", "hero-like", () =>
+      mediaFeedback(item, "like", "Verás más contenido similar"),
     ),
   );
   info.appendChild(actionsRow);
   hero.appendChild(info);
   container.appendChild(hero);
 
-  if (items.length > 1) {
-    const dots = el("div", "hero-dots");
-    items.forEach((_, dotIndex) => {
-      dots.appendChild(el("span", `hero-dot${dotIndex === index % items.length ? " is-active" : ""}`));
-    });
-    container.appendChild(dots);
-  }
-
   const wash = washFor(item.genre || item.title);
   document.body.style.setProperty("--wash-a", wash.a);
   document.body.style.setProperty("--wash-b", wash.b);
   backdrop(src);
-  focusEngine.registerZone("topshelf", actionsRow, 1);
+  focusEngine.registerZone("topshelf", actionsRow, 0.5);
 }
 
 function renderMediaHero(container: HTMLElement, item: MediaItem): void {
@@ -250,53 +293,33 @@ function renderMediaHero(container: HTMLElement, item: MediaItem): void {
 
   const profile = store.state.profile;
   const liked = profile.liked.includes(item.id);
-  const disliked = profile.disliked.includes(item.id);
-  const watched = profile.watched.includes(item.id);
 
   const info = el("div", "hero-info");
-  info.appendChild(el("div", "hero-eyebrow", item.genre ? `${item.genre} · IMDb Pick` : "IMDb Pick"));
+  info.appendChild(el("div", "hero-eyebrow", item.genre ? `${item.genre} · IMDb` : "IMDb"));
   info.appendChild(el("h1", "hero-title", item.title));
   const meta = metaLine(item);
-  if (watched) meta.appendChild(el("span", "hero-badge", "Watched"));
-  if (liked) meta.appendChild(el("span", "hero-badge", "Liked"));
+  if (liked) meta.appendChild(el("span", "hero-badge", "★ Favorito"));
   info.appendChild(meta);
   info.appendChild(
     el(
       "p",
       "hero-blurb",
-      `Cover art from IMDb, ranked by the launcher's taste engine: popularity plus what you keep coming back to (${topGenreLabel()}).`,
+      `Carátula y sinopsis de IMDb clasificada por el motor de recomendaciones.`,
     ),
   );
 
   const actionsRow = el("div", "hero-actions");
-  actionsRow.appendChild(pill("View on IMDb", "external", "primary", "hero-open", () => openMedia(item)));
   actionsRow.appendChild(
-    pill(liked ? "Unlike" : "More Like This", "heart", "normal", "hero-like", () => {
+    pill(liked ? "Quitar Favorito" : "Añadir a Favoritos", "heart", "primary", "hero-favorite", () => {
       mediaFeedback(
         item,
         liked ? "hide" : "like",
-        liked ? "Removed from Top Picks" : "You'll see more like this",
+        liked ? "Eliminado de favoritos" : "Añadido a favoritos ⭐",
       );
       renderHero();
     }),
   );
-  actionsRow.appendChild(
-    pill(watched ? "Unwatched" : "Mark Watched", "check", "ghost", "hero-watched", () => {
-      mediaFeedback(item, "watched", watched ? "Marked as unwatched" : "Marked as watched");
-      renderHero();
-    }),
-  );
-  actionsRow.appendChild(
-    pill(disliked ? "Unblock" : "Not Interested", "ban", "ghost", "hero-hide", () => {
-      mediaFeedback(item, "hide", disliked ? "Title unblocked" : "You'll see less of this");
-      renderHero();
-    }),
-  );
-  actionsRow.appendChild(
-    pill("Shuffle", "shuffle", "ghost", "hero-shuffle", () => {
-      void actions.reshuffle().then(() => toast("Recommendations shuffled", "ok"));
-    }),
-  );
+  actionsRow.appendChild(pill("Abrir en IMDb", "external", "normal", "hero-open", () => openMedia(item)));
   info.appendChild(actionsRow);
   hero.appendChild(info);
   container.appendChild(hero);
@@ -305,7 +328,7 @@ function renderMediaHero(container: HTMLElement, item: MediaItem): void {
   document.body.style.setProperty("--wash-a", wash.a);
   document.body.style.setProperty("--wash-b", wash.b);
   backdrop(src);
-  focusEngine.registerZone("topshelf", actionsRow, 1);
+  focusEngine.registerZone("topshelf", actionsRow, 0.5);
 }
 
 function renderBrandHero(container: HTMLElement): void {
@@ -315,39 +338,30 @@ function renderBrandHero(container: HTMLElement): void {
   hero.appendChild(art);
 
   const info = el("div", "hero-info");
-  info.appendChild(el("div", "hero-eyebrow", "Welcome"));
-  info.appendChild(el("h1", "hero-title", "Your apps, on the big screen"));
+  info.appendChild(el("div", "hero-eyebrow", "Bienvenido"));
+  info.appendChild(el("h1", "hero-title", "Tube OS"));
   const meta = el("div", "hero-meta");
-  meta.appendChild(el("span", "hero-badge", `${store.state.apps.length} apps found`));
-  meta.appendChild(el("span", "hero-badge", store.state.systemInfo?.desktop ?? "Desktop"));
+  meta.appendChild(el("span", "hero-badge", `${store.state.apps.length} apps`));
   info.appendChild(meta);
   info.appendChild(
     el(
       "p",
       "hero-blurb",
-      "Every installed application is discovered from your desktop entries and launched for real. Sync IMDb to fill the shelves with cover art, or open Settings to tune the look.",
+      "Interfaz rápida para tu TV y portátil. Navega con las flechas o mando.",
     ),
   );
 
   const actionsRow = el("div", "hero-actions");
   actionsRow.appendChild(
-    pill("Open Settings", "gear", "primary", "hero-settings", () => {
+    pill("Ajustes", "gear", "primary", "hero-settings", () => {
       document.dispatchEvent(new CustomEvent("launcher:open-settings"));
-    }),
-  );
-  actionsRow.appendChild(
-    pill("Sync IMDb Art", "refresh", "normal", "hero-sync", () => {
-      void actions
-        .syncCatalog()
-        .then(() => toast("Cover art library synced", "ok"))
-        .catch((error: unknown) => toast(String(error), "error"));
     }),
   );
   info.appendChild(actionsRow);
   hero.appendChild(info);
   container.appendChild(hero);
   backdrop(null);
-  focusEngine.registerZone("topshelf", actionsRow, 1);
+  focusEngine.registerZone("topshelf", actionsRow, 0.5);
 }
 
 /** Full re-render of the Top Shelf for the current state. */
@@ -358,9 +372,15 @@ export function renderHero(): void {
     container.replaceChildren();
     return;
   }
+  const prevFocusedKey = focusEngine.focused?.closest("#top-shelf")
+    ? (focusEngine.focused as HTMLElement).dataset.focusKey
+    : undefined;
+
   const next = el("div", "topshelf-inner");
   if (state.mode === "app" && state.app) {
     renderAppHero(next, state.app);
+  } else if (state.mode === "iptv" && state.channel) {
+    renderIptvHero(next, state.channel);
   } else if (state.mode === "media" && state.item) {
     renderMediaHero(next, state.item);
   } else {
@@ -369,6 +389,26 @@ export function renderHero(): void {
     else renderBrandHero(next);
   }
   container.replaceChildren(...next.childNodes);
+
+  if (prevFocusedKey) {
+    requestAnimationFrame(() => {
+      focusEngine.focusKey(prevFocusedKey);
+    });
+  }
+}
+
+/** Long-press trigger: focus the upper hero actions directly */
+export function focusHeroActions(fromElement: HTMLElement): void {
+  state.pinned = true;
+  setHeroForElement(fromElement);
+  state.returnFocusKey = fromElement.dataset.focusKey || fromElement.id;
+  renderHero();
+  sound.select();
+  requestAnimationFrame(() => {
+    if (!focusEngine.focusKey("hero-favorite")) {
+      focusEngine.focusFirst("topshelf");
+    }
+  });
 }
 
 /** Keep the Top Shelf in sync with whatever tile is focused. */
@@ -385,10 +425,27 @@ export function setHeroForElement(element: HTMLElement | null): void {
       state.mode = "app";
       state.app = app;
       state.item = undefined;
+      state.channel = undefined;
       renderHero();
       return;
     }
   }
+
+  const channelId = element?.dataset.channelId;
+  if (channelId) {
+    import("./iptv").then(({ getCachedChannels }) => {
+      const found = getCachedChannels().find((c) => c.id === channelId);
+      if (found) {
+        state.mode = "iptv";
+        state.channel = found;
+        state.app = undefined;
+        state.item = undefined;
+        renderHero();
+      }
+    });
+    return;
+  }
+
   const mediaId = element?.dataset.mediaId;
   if (mediaId) {
     const item = [...store.state.recommendations, ...store.state.catalog].find(
@@ -399,6 +456,7 @@ export function setHeroForElement(element: HTMLElement | null): void {
       state.mode = "media";
       state.item = item;
       state.app = undefined;
+      state.channel = undefined;
       renderHero();
     }
   }

@@ -161,4 +161,9 @@ if [ -f "/etc/systemd/user.conf" ]; then
     sed -i 's/#*DefaultTimeoutStopSec=.*/DefaultTimeoutStopSec=10s/' /etc/systemd/user.conf
 fi
 
+echo "🚀 Habilitando servicio de optimización dinámica Pulsar OS Optimizer..."
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl enable pulsaros-optimizer.service 2>/dev/null || true
+fi
+
 exit 0

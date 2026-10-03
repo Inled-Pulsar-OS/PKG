@@ -82,32 +82,56 @@ fn get_icon_cache() -> &'static Mutex<HashMap<String, Option<String>>> {
 pub fn warm_icon_cache() {
     const EXTS: [&str; 3] = ["png", "svg", "xpm"];
     let cache = get_icon_cache();
-    let mut map = cache.lock().unwrap();
-    if !map.is_empty() {
-        return;
+    {
+        let map = cache.lock().unwrap();
+        if !map.is_empty() {
+            return;
+        }
     }
 
-    for root in ["/usr/share/icons", "/usr/local/share/icons"] {
-        let Ok(themes) = std::fs::read_dir(root) else { continue };
-        for theme in themes.filter_map(Result::ok) {
-            let Ok(sizes) = std::fs::read_dir(theme.path()) else { continue };
-            for size in sizes.filter_map(Result::ok) {
-                let apps_dir = size.path().join("apps");
-                let Ok(entries) = std::fs::read_dir(&apps_dir) else { continue };
-                for entry in entries.filter_map(Result::ok) {
-                    let name_os = entry.file_name();
-                    let name_str = name_os.to_string_lossy();
-                    for ext in EXTS {
-                        if let Some(stem) = name_str.strip_suffix(&format!(".{ext}")) {
-                            if !map.contains_key(stem) {
-                                map.insert(stem.to_string(), Some(entry.path().to_string_lossy().into_owned()));
+    // Build map locally on the background thread without holding the Mutex lock
+    let mut local_map = HashMap::new();
+
+    for root in ["/usr/share/icons", "/usr/local/share/icons", "/usr/share/pixmaps", "/usr/local/share/pixmaps"] {
+        let Ok(entries) = std::fs::read_dir(root) else { continue };
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            if path.is_dir() {
+                let Ok(subdirs) = std::fs::read_dir(&path) else { continue };
+                for subdir in subdirs.filter_map(Result::ok) {
+                    let subpath = subdir.path();
+                    if subpath.is_dir() {
+                        let apps_dir = subpath.join("apps");
+                        if let Ok(app_entries) = std::fs::read_dir(&apps_dir) {
+                            for app_entry in app_entries.filter_map(Result::ok) {
+                                let name_os = app_entry.file_name();
+                                let name_str = name_os.to_string_lossy();
+                                for ext in EXTS {
+                                    if let Some(stem) = name_str.strip_suffix(&format!(".{ext}")) {
+                                        local_map.entry(stem.to_string()).or_insert_with(|| Some(app_entry.path().to_string_lossy().into_owned()));
+                                        break;
+                                    }
+                                }
                             }
-                            break;
                         }
+                    }
+                }
+            } else if path.is_file() {
+                let name_os = entry.file_name();
+                let name_str = name_os.to_string_lossy();
+                for ext in EXTS {
+                    if let Some(stem) = name_str.strip_suffix(&format!(".{ext}")) {
+                        local_map.entry(stem.to_string()).or_insert_with(|| Some(path.to_string_lossy().into_owned()));
+                        break;
                     }
                 }
             }
         }
+    }
+
+    let mut global_map = cache.lock().unwrap();
+    for (k, v) in local_map {
+        global_map.entry(k).or_insert(v);
     }
 }
 
@@ -116,33 +140,7 @@ fn find_icon_file_cached(name: &str) -> Option<String> {
     if let Some(hit) = cache.lock().unwrap().get(name) {
         return hit.clone();
     }
-    let found = find_icon_file(name);
-    cache.lock().unwrap().insert(name.to_string(), found.clone());
-    found
-}
-
-fn find_icon_file(name: &str) -> Option<String> {
-    const EXTS: [&str; 3] = ["png", "svg", "xpm"];
-    for root in ["/usr/share/icons", "/usr/local/share/icons"] {
-        let themes = match std::fs::read_dir(root) {
-            Ok(rd) => rd,
-            Err(_) => continue,
-        };
-        for theme in themes.filter_map(Result::ok) {
-            let sizes = match std::fs::read_dir(theme.path()) {
-                Ok(rd) => rd,
-                Err(_) => continue,
-            };
-            for size in sizes.filter_map(Result::ok) {
-                for ext in EXTS {
-                    let candidate = size.path().join("apps").join(format!("{name}.{ext}"));
-                    if candidate.is_file() {
-                        return Some(candidate.to_string_lossy().into_owned());
-                    }
-                }
-            }
-        }
-    }
+    // Never do synchronous directory crawling on the main GTK UI thread
     None
 }
 
@@ -359,7 +357,11 @@ impl ResultView {
 
         let grid = gtk4::FlowBox::builder()
             .valign(gtk4::Align::Start)
-            .max_children_per_line(6)
+            .min_children_per_line(5)
+            .max_children_per_line(5)
+            .column_spacing(16)
+            .row_spacing(16)
+            .homogeneous(true)
             .selection_mode(gtk4::SelectionMode::Single)
             .build();
 
@@ -651,12 +653,14 @@ impl ResultView {
         }
 
         let text_box = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
+        text_box.set_hexpand(true);
 
         let title_label = gtk4::Label::builder()
             .label(&result.title)
             .xalign(0.0)
+            .hexpand(true)
             .ellipsize(gtk4::pango::EllipsizeMode::End)
-            .max_width_chars(60)
+            .max_width_chars(45)
             .build();
         title_label.add_css_class("result-title");
         text_box.append(&title_label);
@@ -674,12 +678,13 @@ impl ResultView {
             let snippet_label = gtk4::Label::builder()
                 .label(&sub_text)
                 .xalign(0.0)
+                .hexpand(true)
                 .ellipsize(if result.url.starts_with("file://") {
                     gtk4::pango::EllipsizeMode::Middle
                 } else {
                     gtk4::pango::EllipsizeMode::End
                 })
-                .max_width_chars(60)
+                .max_width_chars(50)
                 .build();
             snippet_label.add_css_class("result-snippet");
             text_box.append(&snippet_label);
@@ -695,23 +700,34 @@ impl ResultView {
         let child = gtk4::FlowBoxChild::new();
         let box_widget = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
         box_widget.add_css_class("result-item-grid");
-        box_widget.set_size_request(90, -1);
+        box_widget.set_size_request(108, -1);
 
         let is_file = result.app.is_none() && result.url.starts_with("file://");
         if is_file && has_thumbnail_support(&result.url) {
-            box_widget.append(&self.thumbnail_icon(&result.url, 48, true));
+            box_widget.append(&self.thumbnail_icon(&result.url, 64, true));
         } else {
             let icon = result_icon(result);
-            icon.set_pixel_size(48);
+            icon.set_pixel_size(64);
             icon.add_css_class("result-icon-grid");
             box_widget.append(&icon);
         }
 
+        let clean_raw = result.title.trim_start_matches("file://");
+        let clean_raw = clean_raw.trim_end_matches('/');
+        let last_seg = clean_raw.split('/').last().unwrap_or(clean_raw);
+        let decoded_title = match urlencoding::decode(last_seg) {
+            Ok(d) if !d.trim().is_empty() => d.into_owned(),
+            _ => last_seg.to_string(),
+        };
+
         let title_label = gtk4::Label::builder()
-            .label(&result.title)
+            .label(&decoded_title)
             .wrap(true)
+            .wrap_mode(gtk4::pango::WrapMode::WordChar)
+            .lines(2)
+            .ellipsize(gtk4::pango::EllipsizeMode::End)
             .justify(gtk4::Justification::Center)
-            .max_width_chars(12)
+            .max_width_chars(13)
             .halign(gtk4::Align::Center)
             .build();
         title_label.add_css_class("result-title-grid");
@@ -1140,8 +1156,8 @@ impl ResultView {
                 }
             }
         } else if let Some(idx) = current {
-            if idx >= 6 {
-                if let Some(child) = self.grid.child_at_index((idx - 6) as i32) {
+            if idx >= 5 {
+                if let Some(child) = self.grid.child_at_index((idx - 5) as i32) {
                     self.grid.select_child(&child);
                     self.ensure_visible(&child);
                 }
@@ -1161,7 +1177,7 @@ impl ResultView {
                 }
             }
         } else if let Some(idx) = current {
-            let next_idx = idx + 6;
+            let next_idx = idx + 5;
             if next_idx < max_len {
                 if let Some(child) = self.grid.child_at_index(next_idx as i32) {
                     self.grid.select_child(&child);

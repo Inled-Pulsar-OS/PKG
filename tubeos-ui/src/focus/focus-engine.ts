@@ -15,22 +15,16 @@ interface Handlers {
 }
 
 interface ZoneInfo {
+  id: string;
   layer: string;
   order: number;
   element: HTMLElement;
 }
 
-const VECTORS: Record<Direction, [number, number]> = {
-  up: [0, -1],
-  down: [0, 1],
-  left: [-1, 0],
-  right: [1, 0],
-};
-
 /**
- * A geometric focus engine that reproduces how an Apple TV remote feels:
- * arrows always land on the nearest sensible neighbour, re-entering an area
- * restores the previous item, and everything stays keyboard driven.
+ * Deterministic, ultra-fast 2D spatial focus engine for TV interfaces.
+ * Provides instant row-to-row navigation, prevents focus jitter/loops,
+ * and maintains horizontal alignment across shelves.
  */
 export class FocusEngine {
   private zones = new Map<string, ZoneInfo>();
@@ -74,7 +68,7 @@ export class FocusEngine {
   }
 
   registerZone(id: string, element: HTMLElement, order: number, layer = this.layer): void {
-    this.zones.set(id, { layer, order, element });
+    this.zones.set(id, { id, layer, order, element });
   }
 
   unregisterZone(id: string): void {
@@ -99,7 +93,6 @@ export class FocusEngine {
     return this.layer;
   }
 
-  /** Focusables of the active layer, in zone-then-DOM order. */
   private collect(): { el: HTMLElement; zone: ZoneInfo }[] {
     const active = this.layer;
     const zones = [...this.zones.values()]
@@ -121,12 +114,11 @@ export class FocusEngine {
   }
 
   private isRendered(el: HTMLElement): boolean {
-    if (el.offsetParent === null && getComputedStyle(el).position !== "fixed") return false;
+    if (!el.isConnected) return false;
     const rect = el.getBoundingClientRect();
     return rect.width > 0 && rect.height > 0;
   }
 
-  /** Called after every render; keeps or restores focus sensibly. */
   rebuild(preferKey?: string): void {
     const items = this.collect();
     if (!items.length) {
@@ -229,7 +221,7 @@ export class FocusEngine {
     return true;
   }
 
-  /** Move focus one step in a direction, tvOS style. */
+  /** Move focus deterministically across shelves and rows */
   move(direction: Direction): boolean {
     if (!this.current) {
       this.focusFirst();
@@ -238,96 +230,191 @@ export class FocusEngine {
     const handler = this.handlers.get(this.current);
     if (handler?.onMove?.(direction)) return true;
 
-    const items = this.collect();
-    const source = this.current.getBoundingClientRect();
-    const origin = { x: source.left + source.width / 2, y: source.top + source.height / 2 };
-    const [dx, dy] = VECTORS[direction];
-    const sourceZone = this.zoneOf(this.current)?.id;
+    // ── 1. Topbar Navigation ────────────────────────────────────────────────
+    const currentZone = this.zoneOf(this.current);
+    const inTopbar = currentZone?.id === "topbar";
 
-    let best: { el: HTMLElement; score: number } | null = null;
-    for (const item of items) {
-      if (item.el === this.current) continue;
-      const rect = item.el.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) continue;
-      const center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-      const deltaX = center.x - origin.x;
-      const deltaY = center.y - origin.y;
+    const allZones = [...this.zones.values()]
+      .filter((z) => z.layer === this.layer && z.element.isConnected)
+      .sort((a, b) => a.order - b.order);
 
-      // The candidate has to lie in the requested direction.
-      const primary = dx !== 0 ? deltaX * dx : deltaY * dy;
-      if (primary < 6) continue;
+    const shelfZones = allZones.filter((z) => z.id.startsWith("shelf-"));
 
-      // Cross-axis distance measured edge to edge, plus overlap detection.
-      let cross: number;
-      let overlap: boolean;
-      if (dx !== 0) {
-        cross = Math.max(0, Math.max(rect.top - source.bottom, source.top - rect.bottom));
-        overlap = rect.bottom > source.top + 2 && rect.top < source.bottom - 2;
-      } else {
-        cross = Math.max(0, Math.max(rect.left - source.right, source.left - rect.right));
-        overlap = rect.right > source.left + 2 && rect.left < source.right - 2;
+    if (inTopbar) {
+      if (direction === "left" || direction === "right") {
+        return this.moveWithinZone(currentZone.info, direction === "right" ? 1 : -1);
+      }
+      if (direction === "down") {
+        // Jump from Topbar directly into the first shelf
+        if (shelfZones.length > 0) {
+          const firstShelf = shelfZones[0];
+          return this.focusBestInZone(firstShelf, this.current);
+        }
+        return false;
+      }
+      return false; // Up on topbar does nothing
+    }
+
+    // ── 1.5. Topshelf / Hero Actions Navigation ──────────────────────────────
+    if (currentZone && currentZone.id === "topshelf") {
+      if (direction === "left" || direction === "right") {
+        return this.moveWithinZone(currentZone.info, direction === "right" ? 1 : -1);
+      }
+      if (direction === "up") {
+        const topbarZone = allZones.find((z) => z.id === "topbar");
+        if (topbarZone) {
+          const activeTab =
+            topbarZone.element.querySelector<HTMLElement>(".topbar-item.is-active") ||
+            topbarZone.element.querySelector<HTMLElement>(".focusable");
+          if (activeTab) {
+            this.setCurrent(activeTab);
+            return true;
+          }
+        }
+        return false;
+      }
+      if (direction === "down") {
+        if (shelfZones.length > 0) {
+          const firstShelf = shelfZones[0];
+          return this.focusBestInZone(firstShelf, this.current);
+        }
+        return false;
+      }
+    }
+
+    // ── 2. Shelf / Row Navigation in Home / Stage ───────────────────────────
+    if (currentZone && currentZone.id.startsWith("shelf-")) {
+      const shelfIndex = shelfZones.findIndex((z) => z.id === currentZone.id);
+
+      if (direction === "left" || direction === "right") {
+        return this.moveWithinZone(currentZone.info, direction === "right" ? 1 : -1);
       }
 
-      let score = primary + cross * (overlap ? 1.9 : 3.4);
-      if (!overlap) score += 26;
-      // Vertical travel prefers rows that are actually on screen.
-      if (dy !== 0 && !this.isOnScreen(rect)) score += 180;
-      // Slight bonus for staying inside the same zone.
-      const sameZone = this.zoneOf(item.el)?.id === sourceZone;
-      if (sameZone) score -= 14;
-      if (overlap && sameZone) score -= 10;
+      if (direction === "down") {
+        if (shelfIndex >= 0 && shelfIndex < shelfZones.length - 1) {
+          const nextShelf = shelfZones[shelfIndex + 1];
+          return this.focusBestInZone(nextShelf, this.current);
+        }
+        return false; // At bottom shelf: do not bounce back!
+      }
 
-      if (!best || score < best.score) best = { el: item.el, score };
+      if (direction === "up") {
+        if (shelfIndex > 0) {
+          const prevShelf = shelfZones[shelfIndex - 1];
+          return this.focusBestInZone(prevShelf, this.current);
+        }
+        // If at top shelf 0, jump directly to active tab in Topbar
+        const topbarZone = allZones.find((z) => z.id === "topbar");
+        if (topbarZone) {
+          const activeTab = topbarZone.element.querySelector<HTMLElement>(".topbar-item.is-active") ||
+                            topbarZone.element.querySelector<HTMLElement>(".focusable");
+          if (activeTab) {
+            this.setCurrent(activeTab);
+            return true;
+          }
+        }
+        return false;
+      }
     }
 
-    if (best) {
-      this.setCurrent(best.el);
-      return true;
-    }
-
-    // Nothing in that direction: wrap horizontally, then vertically.
-    return this.wrap(direction);
+    // ── 3. Overlays / Modals / Generic 2D Spatial Fallback ───────────────────
+    return this.moveGeometric(direction);
   }
 
-  /** tvOS wraps around the ends of a row and between rows. */
-  private wrap(direction: Direction): boolean {
-    if (!this.current) return false;
-    const zone = this.zoneOf(this.current);
-    if (!zone) return false;
-    const all = this.collect();
-    const inZone = all.filter((item) => this.zoneOf(item.el)?.id === zone.id);
-    const index = inZone.findIndex((item) => item.el === this.current);
-    if (index < 0) return false;
+  private moveWithinZone(zone: ZoneInfo, step: 1 | -1): boolean {
+    const focusables = [...zone.element.querySelectorAll<HTMLElement>(".focusable")].filter(
+      (el) => this.isRendered(el) && !this.handlers.get(el)?.disabled?.(),
+    );
+    if (focusables.length <= 1) return false;
+    const currentIndex = focusables.findIndex((el) => el === this.current);
+    if (currentIndex < 0) return false;
 
-    if (direction === "left" || direction === "right") {
-      const step = direction === "right" ? 1 : -1;
-      const next = inZone[(index + step + inZone.length) % inZone.length];
-      if (next && next.el !== this.current) {
-        this.setCurrent(next.el);
-        return true;
-      }
-      return false;
-    }
-
-    // Up / down at the edge of a list: jump to the previous / next zone.
-    const zones = [...this.zones.values()]
-      .filter((info) => info.layer === this.layer)
-      .sort((a, b) => a.order - b.order);
-    const zoneIndex = zones.findIndex((info) => info.element.contains(this.current as Node));
-    if (zoneIndex < 0) return false;
-    const step = direction === "down" ? 1 : -1;
-    const target = zones[zoneIndex + step];
-    if (!target) return false;
-    const first = target.element.querySelector<HTMLElement>(".focusable");
-    if (first) {
-      this.setCurrent(first);
+    const nextIndex = currentIndex + step;
+    if (nextIndex >= 0 && nextIndex < focusables.length) {
+      this.setCurrent(focusables[nextIndex]);
       return true;
     }
     return false;
   }
 
-  private isOnScreen(rect: DOMRect): boolean {
-    return rect.top >= -6 && rect.bottom <= window.innerHeight + 6;
+  private focusBestInZone(targetZone: ZoneInfo, fromEl: HTMLElement): boolean {
+    const focusables = [...targetZone.element.querySelectorAll<HTMLElement>(".focusable")].filter(
+      (el) => this.isRendered(el) && !this.handlers.get(el)?.disabled?.(),
+    );
+    if (!focusables.length) return false;
+
+    const fromRect = fromEl.getBoundingClientRect();
+    const fromCenterX = fromRect.left + fromRect.width / 2;
+
+    let bestEl: HTMLElement = focusables[0];
+    let minDiff = Infinity;
+
+    for (const node of focusables) {
+      const rect = node.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const diff = Math.abs(cx - fromCenterX);
+      if (diff < minDiff) {
+        minDiff = diff;
+        bestEl = node;
+      }
+    }
+
+    this.setCurrent(bestEl);
+    return true;
+  }
+
+  private moveGeometric(direction: Direction): boolean {
+    const items = this.collect();
+    if (items.length <= 1 || !this.current) return false;
+
+    const source = this.current.getBoundingClientRect();
+    const origin = { x: source.left + source.width / 2, y: source.top + source.height / 2 };
+
+    const isVert = direction === "up" || direction === "down";
+    const isDown = direction === "down";
+    const isRight = direction === "right";
+
+    const candidates = items.filter((item) => {
+      if (item.el === this.current) return false;
+      const rect = item.el.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return false;
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      if (isVert) {
+        return isDown ? cy > origin.y + 4 : cy < origin.y - 4;
+      } else {
+        return isRight ? cx > origin.x + 4 : cx < origin.x - 4;
+      }
+    });
+
+    if (!candidates.length) return false;
+
+    let bestEl: HTMLElement | null = null;
+    let bestScore = Infinity;
+
+    for (const item of candidates) {
+      const rect = item.el.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const deltaX = Math.abs(cx - origin.x);
+      const deltaY = Math.abs(cy - origin.y);
+
+      const primary = isVert ? deltaY : deltaX;
+      const secondary = isVert ? deltaX : deltaY;
+      const score = primary * 1.0 + secondary * 0.4;
+
+      if (score < bestScore) {
+        bestScore = score;
+        bestEl = item.el;
+      }
+    }
+
+    if (bestEl) {
+      this.setCurrent(bestEl);
+      return true;
+    }
+    return false;
   }
 
   /** Scroll so the focused tile is centred in its shelf and its row in view. */
@@ -348,24 +435,35 @@ export class FocusEngine {
       const rowBottom = rowTop + row.offsetHeight;
       const viewTop = stage.scrollTop;
       const viewBottom = viewTop + stage.clientHeight;
-      const fullyVisible = rowTop >= viewTop - 4 && rowBottom <= viewBottom + 4;
+      const fullyVisible = rowTop >= viewTop - 10 && rowBottom <= viewBottom + 10;
       if (!fullyVisible) {
-        const centered = rowTop - Math.max(0, (stage.clientHeight - row.offsetHeight) / 3);
-        stage.scrollTo({ top: Math.max(0, centered), behavior: "smooth" });
+        const targetScroll = Math.max(0, rowTop - 120);
+        stage.scrollTo({ top: targetScroll, behavior: "auto" });
       }
-      return;
     }
-    if (!this.isOnScreen(el.getBoundingClientRect())) {
-      el.scrollIntoView({ block: "center", behavior: "smooth" });
+
+    // Scroll any scrollable container (e.g. .settings-content, dialogs, overlays)
+    let parent = el.parentElement;
+    while (parent && parent !== document.body && parent !== document.documentElement) {
+      const style = window.getComputedStyle(parent);
+      if (style.overflowY === "auto" || style.overflowY === "scroll") {
+        const elRect = el.getBoundingClientRect();
+        const pRect = parent.getBoundingClientRect();
+        if (elRect.bottom > pRect.bottom - 24) {
+          parent.scrollBy({ top: elRect.bottom - pRect.bottom + 50, behavior: "smooth" });
+        } else if (elRect.top < pRect.top + 24) {
+          parent.scrollBy({ top: elRect.top - pRect.top - 50, behavior: "smooth" });
+        }
+        break;
+      }
+      parent = parent.parentElement;
     }
   }
 
-  /** Total number of focusable elements in the active layer (for tests/debug). */
   get count(): number {
     return this.collect().length;
   }
 
-  /** Snapshot of the current layer (used by the debug bar in dev builds). */
   get items(): FocusTarget[] {
     return this.collect().map((item) => ({
       el: item.el,
@@ -377,7 +475,6 @@ export class FocusEngine {
 
 export const focusEngine = new FocusEngine();
 
-/** Attach behaviour + a stable focus key to an element. */
 export function makeFocusable(
   el: HTMLElement,
   handlers: Handlers,
@@ -386,4 +483,43 @@ export function makeFocusable(
   if (focusKey) el.dataset.focusKey = focusKey;
   focusEngine.attach(el, { ...handlers, key: focusKey ?? handlers.key });
   return el;
+}
+
+/** Helper to detect long press / hold on any element and trigger action */
+export function attachLongPress(element: HTMLElement, callback: () => void, delayMs = 400): void {
+  let timer: number | null = null;
+  let didLongPress = false;
+
+  const start = () => {
+    didLongPress = false;
+    if (timer) window.clearTimeout(timer);
+    timer = window.setTimeout(() => {
+      didLongPress = true;
+      callback();
+    }, delayMs);
+  };
+
+  const clear = () => {
+    if (timer) {
+      window.clearTimeout(timer);
+      timer = null;
+    }
+  };
+
+  element.addEventListener("pointerdown", start);
+  element.addEventListener("pointerup", clear);
+  element.addEventListener("pointerleave", clear);
+  element.addEventListener("pointercancel", clear);
+
+  element.addEventListener(
+    "click",
+    (e) => {
+      if (didLongPress) {
+        e.preventDefault();
+        e.stopPropagation();
+        didLongPress = false;
+      }
+    },
+    { capture: true },
+  );
 }

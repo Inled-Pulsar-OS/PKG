@@ -42,8 +42,11 @@ export function renderTopbar(): void {
   const { settings, tab } = store.state;
 
   const wordmark = el("div", "tv-wordmark");
-  wordmark.appendChild(el("span", "tv-mark", "T"));
-  wordmark.appendChild(el("span", undefined, "ube OS"));
+  const logo = el("img", "tv-logo-img") as HTMLImageElement;
+  logo.src = "/logo.png";
+  logo.alt = "Tube OS";
+  wordmark.appendChild(logo);
+  wordmark.appendChild(el("span", "tv-title-text", "Tube OS"));
   if (store.state.systemInfo) {
     wordmark.appendChild(el("span", "tv-sub", store.state.systemInfo.hostname));
   }
@@ -57,7 +60,13 @@ export function renderTopbar(): void {
     makeFocusable(
       item,
       {
-        onFocus: () => sound.focus(),
+        onFocus: () => {
+          sound.focus();
+          // Instant switch on hover / focus for content tabs without requiring Enter key
+          if (def.id !== "search" && def.id !== "settings" && store.state.tab !== def.id) {
+            document.dispatchEvent(new CustomEvent<TabId>("launcher:tab-preview", { detail: def.id }));
+          }
+        },
         onActivate: () => {
           sound.select();
           document.dispatchEvent(new CustomEvent<TabId>("launcher:tab", { detail: def.id }));

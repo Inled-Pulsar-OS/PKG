@@ -350,6 +350,9 @@ build_single_package() {
         sed -i -e '$a\' "$STAGING_DIR/$name/DEBIAN/control" 2>/dev/null || true
     fi
 
+    # Limpiar cualquier resto de compiladores (target de rust, caches, git) para evitar paquetes gigantescos
+    rm -rf "$STAGING_DIR/$name/target" "$STAGING_DIR/$name/.cargo" "$STAGING_DIR/$name/.git" "$STAGING_DIR/$name/.github" "$STAGING_DIR/$name/.idea" 2>/dev/null || true
+
     # Ejecutar dpkg-deb
     local deb_file=""
     echo "🔨 Ejecutando dpkg-deb..."

@@ -1,0 +1,607 @@
+#!/usr/bin/env python3
+"""
+Pulsar OS Optimizer - Real-Time System Monitor & Process Priority Manager
+Displays exact kernel metrics, allows live process scheduling adjustments, and service on/off toggle.
+"""
+
+import os
+import sys
+import subprocess
+import gi
+
+gi.require_version('Gtk', '4.0')
+gi.require_version('Adw', '1')
+from gi.repository import Gtk, Adw, GLib, Gio
+
+def run_privileged(cmd_list):
+    """Execute a privileged system command safely handling sudo/pkexec without crashes."""
+    # 1. Direct execution if already root
+    if os.geteuid() == 0:
+        try:
+            res = subprocess.run(cmd_list, capture_output=True, text=True)
+            return res.returncode == 0
+        except Exception:
+            return False
+
+    # 2. Non-interactive sudo (instant for live user / nopasswd)
+    try:
+        res = subprocess.run(["sudo", "-n"] + cmd_list, capture_output=True, text=True)
+        if res.returncode == 0:
+            return True
+    except Exception:
+        pass
+
+    # 3. Standard sudo
+    try:
+        res = subprocess.run(["sudo"] + cmd_list, capture_output=True, text=True)
+        if res.returncode == 0:
+            return True
+    except Exception:
+        pass
+
+    # 4. Polkit pkexec fallback
+    try:
+        res = subprocess.run(["pkexec"] + cmd_list, capture_output=True, text=True)
+        return res.returncode == 0
+    except Exception:
+        pass
+
+    return False
+
+def is_service_active():
+    """Check if pulsaros-optimizer.service is active."""
+    try:
+        res = subprocess.run(["systemctl", "is-active", "pulsaros-optimizer.service"], capture_output=True, text=True)
+        return res.stdout.strip() == "active"
+    except Exception:
+        return False
+
+def read_meminfo():
+    info = {}
+    try:
+        with open("/proc/meminfo", "r") as f:
+            for line in f:
+                parts = line.split(":")
+                if len(parts) == 2:
+                    key = parts[0].strip()
+                    val = parts[1].strip().split()[0]
+                    info[key] = int(val)
+    except Exception:
+        pass
+    return info
+
+def get_zram_stats():
+    """Retrieve exact real metrics from the Linux kernel zRAM sysfs interface."""
+    stats = {
+        "active": False,
+        "orig_data_mb": 0.0,
+        "compr_data_mb": 0.0,
+        "ratio_str": "1.00:1",
+        "saved_mb": 0.0,
+        "disksize_mb": 0.0,
+        "algorithm": "ZSTD"
+    }
+    try:
+        with open("/proc/swaps", "r") as f:
+            if "zram" in f.read():
+                stats["active"] = True
+
+        if os.path.exists("/sys/block/zram0/disksize"):
+            with open("/sys/block/zram0/disksize", "r") as f:
+                stats["disksize_mb"] = int(f.read().strip()) / (1024 * 1024)
+
+        if os.path.exists("/sys/block/zram0/mm_stat"):
+            with open("/sys/block/zram0/mm_stat", "r") as f:
+                parts = f.read().split()
+                if len(parts) >= 3:
+                    orig_bytes = int(parts[0])
+                    compr_bytes = int(parts[1])
+                    orig_mb = orig_bytes / (1024 * 1024)
+                    compr_mb = compr_bytes / (1024 * 1024)
+                    saved_mb = max(0.0, orig_mb - compr_mb)
+                    ratio = (orig_bytes / compr_bytes) if compr_bytes > 0 else 1.0
+                    
+                    stats["orig_data_mb"] = orig_mb
+                    stats["compr_data_mb"] = compr_mb
+                    stats["saved_mb"] = saved_mb
+                    stats["ratio_str"] = f"{ratio:.2f}:1"
+
+        if os.path.exists("/sys/block/zram0/comp_algorithm"):
+            with open("/sys/block/zram0/comp_algorithm", "r") as f:
+                for part in f.read().split():
+                    if part.startswith("[") and part.endswith("]"):
+                        stats["algorithm"] = part[1:-1].upper()
+                        break
+    except Exception:
+        pass
+    return stats
+
+def get_kernel_sysctls():
+    """Read live kernel virtual memory configuration."""
+    sysctls = {"swappiness": "100", "vfs_cache_pressure": "50", "page_cluster": "0"}
+    try:
+        if os.path.exists("/proc/sys/vm/swappiness"):
+            with open("/proc/sys/vm/swappiness", "r") as f:
+                sysctls["swappiness"] = f.read().strip()
+        if os.path.exists("/proc/sys/vm/vfs_cache_pressure"):
+            with open("/proc/sys/vm/vfs_cache_pressure", "r") as f:
+                sysctls["vfs_cache_pressure"] = f.read().strip()
+        if os.path.exists("/proc/sys/vm/page-cluster"):
+            with open("/proc/sys/vm/page-cluster", "r") as f:
+                sysctls["page_cluster"] = f.read().strip()
+    except Exception:
+        pass
+    return sysctls
+
+def get_process_list():
+    """Retrieve running user and system processes with genuine nice and RSS memory values."""
+    processes = []
+    try:
+        pids = [p for p in os.listdir("/proc") if p.isdigit()]
+        for pid_str in pids:
+            try:
+                pid = int(pid_str)
+                with open(f"/proc/{pid_str}/comm", "r") as f:
+                    comm = f.read().strip()
+                
+                # Exclude kernel threads (empty cmdline)
+                try:
+                    with open(f"/proc/{pid_str}/cmdline", "rb") as f:
+                        if not f.read():
+                            continue
+                except Exception:
+                    continue
+
+                with open(f"/proc/{pid_str}/stat", "r") as f:
+                    stat_parts = f.read().split()
+                    nice = int(stat_parts[18])
+                    rss_pages = int(stat_parts[23])
+                    rss_mb = (rss_pages * 4096) / (1024 * 1024)
+
+                # Determine priority dropdown index:
+                # 0 = Turbo (-10)
+                # 1 = High (-5)
+                # 2 = Normal (0)
+                # 3 = Low (+19)
+                if nice <= -8:
+                    prio_idx = 0
+                elif nice < 0:
+                    prio_idx = 1
+                elif nice > 10:
+                    prio_idx = 3
+                else:
+                    prio_idx = 2
+
+                processes.append({
+                    "pid": pid,
+                    "name": comm,
+                    "nice": nice,
+                    "rss_mb": rss_mb,
+                    "prio_idx": prio_idx
+                })
+            except Exception:
+                continue
+    except Exception:
+        pass
+    
+    # Sort: non-normal priorities first, then by memory consumption
+    processes.sort(key=lambda x: (0 if x["prio_idx"] != 2 else 1, x["nice"], -x["rss_mb"]))
+    return processes
+
+class ProcessRow(Adw.ActionRow):
+    def __init__(self, proc_data, on_priority_change):
+        super().__init__()
+        self.proc_data = proc_data
+        self.pid = proc_data["pid"]
+        self.on_priority_change = on_priority_change
+        self.is_updating = True
+
+        self.set_title(proc_data["name"])
+        self.set_subtitle(f"PID {self.pid}  •  {proc_data['rss_mb']:.1f} MB RAM  •  Nice {proc_data['nice']}")
+
+        options = ["Turbo (-10)", "High (-5)", "Normal (0)", "Low (+19)"]
+        model = Gtk.StringList.new(options)
+        self.dropdown = Gtk.DropDown.new(model, None)
+        self.dropdown.set_selected(proc_data["prio_idx"])
+        self.dropdown.set_valign(Gtk.Align.CENTER)
+        self.dropdown.add_css_class("flat")
+        
+        self.dropdown.connect("notify::selected", self._on_selected)
+        self.add_suffix(self.dropdown)
+        self.is_updating = False
+
+    def update_data(self, proc_data):
+        self.proc_data = proc_data
+        self.set_subtitle(f"PID {self.pid}  •  {proc_data['rss_mb']:.1f} MB RAM  •  Nice {proc_data['nice']}")
+        
+        if self.dropdown.get_selected() != proc_data["prio_idx"]:
+            self.is_updating = True
+            self.dropdown.set_selected(proc_data["prio_idx"])
+            self.is_updating = False
+
+    def _on_selected(self, dropdown, param):
+        if self.is_updating:
+            return
+        selected_idx = dropdown.get_selected()
+        self.on_priority_change(self.proc_data, selected_idx)
+
+class OptimizerWindow(Adw.ApplicationWindow):
+    def __init__(self, app):
+        super().__init__(application=app, title="Pulsar Optimizer")
+        self.set_default_size(700, 820)
+        self.set_icon_name("pulsaros-optimizer")
+        
+        # Track persistent row widgets: {pid: ProcessRow}
+        self.rows_by_pid = {}
+        self.service_updating = False
+
+        # Toast Overlay
+        self.toast_overlay = Adw.ToastOverlay()
+        self.set_content(self.toast_overlay)
+
+        # Main Layout
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.toast_overlay.set_child(main_box)
+
+        # Header Bar
+        header = Adw.HeaderBar()
+        header.set_title_widget(Adw.WindowTitle(
+            title="Pulsar Optimizer",
+            subtitle="System Resources & Process Manager"
+        ))
+        
+        refresh_btn = Gtk.Button(icon_name="view-refresh-symbolic")
+        refresh_btn.set_tooltip_text("Refresh metrics")
+        refresh_btn.connect("clicked", lambda w: self.refresh_all())
+        header.pack_end(refresh_btn)
+        main_box.append(header)
+
+        # Scrolled container
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_vexpand(True)
+        scrolled.set_hexpand(True)
+        main_box.append(scrolled)
+
+        clamp = Adw.Clamp(maximum_size=660, tightening_threshold=480)
+        scrolled.set_child(clamp)
+
+        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        content_box.set_margin_top(18)
+        content_box.set_margin_bottom(24)
+        content_box.set_margin_start(16)
+        content_box.set_margin_end(16)
+        clamp.set_child(content_box)
+
+        # -------------------------------------------------------------
+        # 1. OPTIMIZER SERVICE TOGGLE SWITCH
+        # -------------------------------------------------------------
+        service_group = Adw.PreferencesGroup()
+        content_box.append(service_group)
+
+        self.service_row = Adw.ActionRow(
+            title="Optimizer Background Service",
+            subtitle="Dynamic zRAM, low-latency scheduling and background throttler"
+        )
+        
+        self.service_switch = Gtk.Switch()
+        self.service_switch.set_valign(Gtk.Align.CENTER)
+        self.service_switch.set_active(is_service_active())
+        self.service_switch.connect("state-set", self.on_service_toggle)
+        self.service_row.add_suffix(self.service_switch)
+
+        service_group.add(self.service_row)
+
+        # -------------------------------------------------------------
+        # 2. REAL-TIME METRICS & GAUGES
+        # -------------------------------------------------------------
+        metrics_group = Adw.PreferencesGroup(title="System Resources")
+        content_box.append(metrics_group)
+
+        grid_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        grid_card.add_css_class("card")
+        grid_card.set_margin_top(2)
+        grid_card.set_margin_bottom(2)
+        grid_card.set_margin_start(2)
+        grid_card.set_margin_end(2)
+
+        # --- Gauge 1: RAM Usage Volume ---
+        ram_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        ram_box.set_margin_start(16)
+        ram_box.set_margin_end(16)
+        ram_box.set_margin_top(14)
+
+        ram_header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        ram_title = Gtk.Label(label="Physical Memory Usage", xalign=0.0)
+        ram_title.add_css_class("heading")
+        ram_title.set_hexpand(True)
+        ram_header_box.append(ram_title)
+
+        self.ram_val_label = Gtk.Label(label="0.0 / 0.0 GB", xalign=1.0)
+        self.ram_val_label.add_css_class("heading")
+        ram_header_box.append(self.ram_val_label)
+        ram_box.append(ram_header_box)
+
+        # LevelBar for RAM
+        self.ram_levelbar = Gtk.LevelBar()
+        self.ram_levelbar.set_min_value(0.0)
+        self.ram_levelbar.set_max_value(1.0)
+        self.ram_levelbar.set_size_request(-1, 8)
+        ram_box.append(self.ram_levelbar)
+
+        self.ram_sub_label = Gtk.Label(label="Reading /proc/meminfo...", xalign=0.0)
+        self.ram_sub_label.add_css_class("caption")
+        self.ram_sub_label.add_css_class("dim-label")
+        ram_box.append(self.ram_sub_label)
+
+        grid_card.append(ram_box)
+        grid_card.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+
+        # --- Gauge 2: zRAM Compressed Memory ---
+        zram_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        zram_box.set_margin_start(16)
+        zram_box.set_margin_end(16)
+
+        zram_header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        zram_title = Gtk.Label(label="zRAM Compressed In-Memory Swap", xalign=0.0)
+        zram_title.add_css_class("heading")
+        zram_title.set_hexpand(True)
+        zram_header_box.append(zram_title)
+
+        self.zram_ratio_label = Gtk.Label(label="1.00:1 Ratio", xalign=1.0)
+        self.zram_ratio_label.add_css_class("heading")
+        zram_header_box.append(self.zram_ratio_label)
+        zram_box.append(ram_header_box := zram_header_box)
+        zram_box.append(zram_header_box)
+
+        # LevelBar for zRAM
+        self.zram_levelbar = Gtk.LevelBar()
+        self.zram_levelbar.set_min_value(0.0)
+        self.zram_levelbar.set_max_value(1.0)
+        self.zram_levelbar.set_size_request(-1, 8)
+        zram_box.append(self.zram_levelbar)
+
+        self.zram_sub_label = Gtk.Label(label="Reading /sys/block/zram0...", xalign=0.0)
+        self.zram_sub_label.add_css_class("caption")
+        self.zram_sub_label.add_css_class("dim-label")
+        zram_box.append(self.zram_sub_label)
+
+        grid_card.append(zram_box)
+        grid_card.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+
+        # --- Gauge 3: Kernel VM Tunings ---
+        kernel_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        kernel_box.set_margin_start(16)
+        kernel_box.set_margin_end(16)
+        kernel_box.set_margin_bottom(14)
+        kernel_box.set_homogeneous(True)
+
+        # Swappiness
+        col1 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        self.c1_val = Gtk.Label(label="100", xalign=0.5)
+        self.c1_val.add_css_class("title-3")
+        c1_sub = Gtk.Label(label="vm.swappiness", xalign=0.5)
+        c1_sub.add_css_class("caption")
+        c1_sub.add_css_class("dim-label")
+        col1.append(self.c1_val)
+        col1.append(c1_sub)
+        kernel_box.append(col1)
+
+        # VFS Cache Pressure
+        col2 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        self.c2_val = Gtk.Label(label="50", xalign=0.5)
+        self.c2_val.add_css_class("title-3")
+        c2_sub = Gtk.Label(label="vm.vfs_cache_pressure", xalign=0.5)
+        c2_sub.add_css_class("caption")
+        c2_sub.add_css_class("dim-label")
+        col2.append(self.c2_val)
+        col2.append(c2_sub)
+        kernel_box.append(col2)
+
+        # Page Cluster
+        col3 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        self.c3_val = Gtk.Label(label="0", xalign=0.5)
+        self.c3_val.add_css_class("title-3")
+        c3_sub = Gtk.Label(label="vm.page-cluster", xalign=0.5)
+        c3_sub.add_css_class("caption")
+        c3_sub.add_css_class("dim-label")
+        col3.append(self.c3_val)
+        col3.append(c3_sub)
+        kernel_box.append(col3)
+
+        grid_card.append(kernel_box)
+        metrics_group.add(grid_card)
+
+        # -------------------------------------------------------------
+        # 3. ACTIONS
+        # -------------------------------------------------------------
+        flush_btn = Gtk.Button(label="Flush Page Cache and Compact Memory")
+        flush_btn.add_css_class("pill")
+        flush_btn.set_size_request(-1, 40)
+        flush_btn.connect("clicked", self.on_compact_memory_clicked)
+        content_box.append(flush_btn)
+
+        # -------------------------------------------------------------
+        # 4. PROCESS SCHEDULER & PRIORITY MANAGER
+        # -------------------------------------------------------------
+        proc_group = Adw.PreferencesGroup(
+            title="Process Priority Control",
+            description="Adjust CPU nice and I/O scheduling priorities for running processes."
+        )
+        content_box.append(proc_group)
+
+        # Search Bar
+        search_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self.search_entry = Gtk.SearchEntry()
+        self.search_entry.set_placeholder_text("Filter by process name or PID...")
+        self.search_entry.set_hexpand(True)
+        self.search_entry.connect("search-changed", lambda w: self.refresh_process_list())
+        search_box.append(self.search_entry)
+        proc_group.add(search_box)
+
+        # Container for process rows
+        self.process_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        proc_group.add(self.process_container)
+
+        self.empty_label = Gtk.Label(label="No matching processes found.")
+        self.empty_label.add_css_class("dim-label")
+        self.empty_label.set_margin_top(12)
+        self.empty_label.set_margin_bottom(12)
+        self.empty_label.set_visible(False)
+        self.process_container.append(self.empty_label)
+
+        # Initial Refresh & Periodic Loop
+        self.refresh_all()
+        GLib.timeout_add_seconds(2, self.refresh_all)
+
+    def on_service_toggle(self, switch, state):
+        if self.service_updating:
+            return False
+
+        action = "start" if state else "stop"
+        success = run_privileged(["systemctl", action, "pulsaros-optimizer.service"])
+        
+        if success:
+            msg = "Optimizer service active." if state else "Optimizer service stopped."
+            toast = Adw.Toast.new(msg)
+            self.toast_overlay.add_toast(toast)
+        else:
+            # Revert switch if failed
+            self.service_updating = True
+            switch.set_active(not state)
+            self.service_updating = False
+            toast = Adw.Toast.new("Authentication required to change service state.")
+            self.toast_overlay.add_toast(toast)
+        return False
+
+    def refresh_all(self):
+        self.update_metrics()
+        self.refresh_process_list()
+        return True
+
+    def update_metrics(self):
+        try:
+            # Update service switch state if changed externally
+            active = is_service_active()
+            if self.service_switch.get_active() != active:
+                self.service_updating = True
+                self.service_switch.set_active(active)
+                self.service_updating = False
+
+            mem = read_meminfo()
+            total_kb = mem.get("MemTotal", 1)
+            avail_kb = mem.get("MemAvailable", 0)
+            used_kb = total_kb - avail_kb
+
+            total_gb = total_kb / (1024 * 1024)
+            used_gb = used_kb / (1024 * 1024)
+            avail_gb = avail_kb / (1024 * 1024)
+            fraction = min(max(used_kb / total_kb, 0.0), 1.0)
+
+            self.ram_val_label.set_text(f"{used_gb:.1f} / {total_gb:.1f} GB ({int(fraction * 100)}%)")
+            self.ram_levelbar.set_value(fraction)
+            self.ram_sub_label.set_text(f"{avail_gb:.1f} GB available  •  {used_gb:.1f} GB active")
+
+            # zRAM metrics
+            zstats = get_zram_stats()
+            if zstats["active"]:
+                self.zram_ratio_label.set_text(f"{zstats['ratio_str']}")
+                zram_used_frac = (zstats["orig_data_mb"] / zstats["disksize_mb"]) if zstats["disksize_mb"] > 0 else 0.0
+                self.zram_levelbar.set_value(min(max(zram_used_frac, 0.0), 1.0))
+                self.zram_sub_label.set_text(
+                    f"{zstats['orig_data_mb']:.1f} MB compressed to {zstats['compr_data_mb']:.1f} MB ({zstats['algorithm']})  •  {zstats['saved_mb']:.1f} MB RAM saved"
+                )
+            else:
+                self.zram_ratio_label.set_text("Inactive")
+                self.zram_levelbar.set_value(0.0)
+                self.zram_sub_label.set_text("zRAM device not initialized")
+
+            # Kernel sysctls
+            sysctls = get_kernel_sysctls()
+            self.c1_val.set_text(sysctls["swappiness"])
+            self.c2_val.set_text(sysctls["vfs_cache_pressure"])
+            self.c3_val.set_text(sysctls["page_cluster"])
+        except Exception:
+            pass
+
+    def refresh_process_list(self):
+        query = self.search_entry.get_text().strip().lower()
+        all_procs = get_process_list()
+
+        if query:
+            filtered = [p for p in all_procs if query in p["name"].lower() or query == str(p["pid"])]
+        else:
+            boosted = [p for p in all_procs if p["prio_idx"] != 2]
+            top_ram = sorted([p for p in all_procs if p["prio_idx"] == 2], key=lambda x: -x["rss_mb"])[:12]
+            filtered = boosted + top_ram
+
+        current_pids = {p["pid"] for p in filtered}
+
+        # Remove dead rows
+        for pid in list(self.rows_by_pid.keys()):
+            if pid not in current_pids:
+                row = self.rows_by_pid.pop(pid)
+                self.process_container.remove(row)
+
+        if not filtered:
+            self.empty_label.set_visible(True)
+            return
+        else:
+            self.empty_label.set_visible(False)
+
+        # Update existing rows or add new ones without clearing children
+        for proc in filtered:
+            pid = proc["pid"]
+            if pid in self.rows_by_pid:
+                self.rows_by_pid[pid].update_data(proc)
+            else:
+                row = ProcessRow(proc, on_priority_change=self.on_change_process_priority)
+                self.rows_by_pid[pid] = row
+                self.process_container.append(row)
+
+    def on_change_process_priority(self, proc, selected_idx):
+        pid = proc["pid"]
+        name = proc["name"]
+        
+        # 0=Turbo(-10), 1=High(-5), 2=Normal(0), 3=Low(19)
+        nice_map = [(-10, 2, 0, "Turbo (-10)"),
+                    (-5,  2, 1, "High (-5)"),
+                    (0,   2, 4, "Normal (0)"),
+                    (19,  3, 0, "Low (+19)")]
+        
+        target_nice, io_class, io_prio, label = nice_map[selected_idx]
+        
+        run_privileged(["renice", "-n", str(target_nice), "-p", str(pid)])
+        if io_class == 3:
+            run_privileged(["ionice", "-c", "3", "-p", str(pid)])
+        else:
+            run_privileged(["ionice", "-c", str(io_class), "-n", str(io_prio), "-p", str(pid)])
+        
+        toast = Adw.Toast.new(f"{name} (PID {pid}) set to {label}")
+        self.toast_overlay.add_toast(toast)
+        self.refresh_all()
+
+    def on_compact_memory_clicked(self, widget):
+        success = run_privileged(["sh", "-c", "echo 1 > /proc/sys/vm/drop_caches && (echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true)"])
+        self.update_metrics()
+        if success:
+            toast = Adw.Toast.new("Memory caches flushed and compacted.")
+        else:
+            toast = Adw.Toast.new("Notice: Authentication needed to flush system cache.")
+        self.toast_overlay.add_toast(toast)
+
+class OptimizerApp(Adw.Application):
+    def __init__(self):
+        super().__init__(application_id="es.inled.PulsarOSOptimizer", flags=Gio.ApplicationFlags.FLAGS_NONE)
+
+    def do_activate(self):
+        win = self.props.active_window
+        if not win:
+            win = OptimizerWindow(self)
+        win.present()
+
+def main():
+    app = OptimizerApp()
+    return app.run(sys.argv)
+
+if __name__ == "__main__":
+    sys.exit(main())

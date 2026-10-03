@@ -20,10 +20,12 @@ const wizardData = {
   username: 'tubeos',
   password: 'tubeos',
   timezone: 'Europe/Madrid',
+  locale: 'es_ES.UTF-8',
   keymap: 'es',
 };
 
 let progressInterval = null;
+let localizationData = { timezones: [], locales: [], keymaps: [] };
 
 // Clean vector icons
 function getVectorIcon(name) {
@@ -48,6 +50,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await checkNetwork();
     await loadDisks();
     await loadEditions();
+    await loadLocalization();
     updateStepView();
   }
 });
@@ -444,7 +447,6 @@ async function loadEditions() {
       card.innerHTML = `
         <div class="card-top">
           ${getVectorIcon(ed.icon)}
-          <span class="card-badge">${ed.badge}</span>
         </div>
         <div class="card-title">${ed.title}</div>
         <div class="card-detail">${ed.desc}</div>
@@ -466,14 +468,98 @@ function selectEdition(ed) {
   wizardData.editionTitle = ed.title;
 }
 
+// ─── Localization & Timezones ──────────────────────────────────────────────
+
+async function loadLocalization() {
+  try {
+    const res = await fetch('/api/localization');
+    const data = await res.json();
+    localizationData = data;
+
+    // 1. Populate Locales
+    const localeSel = document.getElementById('cfg-locale');
+    if (localeSel) {
+      localeSel.innerHTML = '';
+      (data.locales || []).forEach(loc => {
+        const opt = document.createElement('option');
+        opt.value = loc.code;
+        opt.innerText = loc.name;
+        if (loc.code === 'es_ES.UTF-8') opt.selected = true;
+        localeSel.appendChild(opt);
+      });
+      wizardData.locale = localeSel.value || 'es_ES.UTF-8';
+    }
+
+    // 2. Populate Timezones (grouped / sorted)
+    const tzSel = document.getElementById('cfg-timezone');
+    if (tzSel) {
+      tzSel.innerHTML = '';
+      const regions = {};
+      (data.timezones || []).forEach(tz => {
+        const parts = tz.split('/');
+        const region = parts.length > 1 ? parts[0] : 'Global / UTC';
+        if (!regions[region]) regions[region] = [];
+        regions[region].push(tz);
+      });
+
+      for (const [region, list] of Object.entries(regions)) {
+        const group = document.createElement('optgroup');
+        group.label = region;
+        list.forEach(tz => {
+          const opt = document.createElement('option');
+          opt.value = tz;
+          opt.innerText = tz.replace(/_/g, ' ');
+          if (tz === 'Europe/Madrid') opt.selected = true;
+          group.appendChild(opt);
+        });
+        tzSel.appendChild(group);
+      }
+      wizardData.timezone = tzSel.value || 'Europe/Madrid';
+    }
+
+    // 3. Populate Keymaps
+    const keymapSel = document.getElementById('cfg-keymap');
+    if (keymapSel) {
+      keymapSel.innerHTML = '';
+      (data.keymaps || []).forEach(km => {
+        const opt = document.createElement('option');
+        opt.value = km.code;
+        opt.innerText = km.name;
+        if (km.code === 'es') opt.selected = true;
+        keymapSel.appendChild(opt);
+      });
+      wizardData.keymap = keymapSel.value || 'es';
+    }
+  } catch (err) {
+    console.error('Localization load error:', err);
+  }
+}
+
+function onLocaleChanged() {
+  const localeSel = document.getElementById('cfg-locale');
+  const keymapSel = document.getElementById('cfg-keymap');
+  if (!localeSel || !keymapSel) return;
+
+  const chosenCode = localeSel.value;
+  const match = (localizationData.locales || []).find(l => l.code === chosenCode);
+  if (match && match.keymap) {
+    keymapSel.value = match.keymap;
+    wizardData.keymap = match.keymap;
+  }
+}
+
 // ─── Summary & Execution ────────────────────────────────────────────────────
 
 function populateSummary() {
   wizardData.hostname = document.getElementById('cfg-hostname').value || 'tubeos';
   wizardData.username = document.getElementById('cfg-username').value || 'tubeos';
   wizardData.password = document.getElementById('cfg-password').value || 'tubeos';
-  wizardData.timezone = document.getElementById('cfg-timezone').value;
-  wizardData.keymap = document.getElementById('cfg-keymap').value;
+  wizardData.locale = document.getElementById('cfg-locale') ? document.getElementById('cfg-locale').value : 'es_ES.UTF-8';
+  wizardData.timezone = document.getElementById('cfg-timezone') ? document.getElementById('cfg-timezone').value : 'Europe/Madrid';
+  wizardData.keymap = document.getElementById('cfg-keymap') ? document.getElementById('cfg-keymap').value : 'es';
+
+  const localeObj = (localizationData.locales || []).find(l => l.code === wizardData.locale);
+  const localeLabel = localeObj ? localeObj.name : wizardData.locale;
 
   const summary = document.getElementById('install-summary');
   summary.innerHTML = `
@@ -496,6 +582,10 @@ function populateSummary() {
     <div class="summary-item">
       <span class="summary-key">Admin User</span>
       <span class="summary-val">${wizardData.username}</span>
+    </div>
+    <div class="summary-item">
+      <span class="summary-key">Language & Region</span>
+      <span class="summary-val">${localeLabel}</span>
     </div>
     <div class="summary-item">
       <span class="summary-key">Timezone & Layout</span>

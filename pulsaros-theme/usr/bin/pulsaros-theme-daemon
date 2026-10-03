@@ -78,6 +78,10 @@ EOF
 
     fi
 
+    if command -v /usr/bin/pulsar-sync-accent >/dev/null 2>&1; then
+        /usr/bin/pulsar-sync-accent --once >/dev/null 2>&1 || true
+    fi
+
     if [ "$show_prompt" = "true" ]; then
         if command -v pulsaros-theme-logout-prompt >/dev/null 2>&1; then
             pulsaros-theme-logout-prompt &

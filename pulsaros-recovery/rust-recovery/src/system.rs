@@ -244,15 +244,18 @@ pub(crate) fn lock_luks_partition(mapper_name: &str) -> Result<(), String> {
 }
 
 pub(crate) fn is_valid_base_squashfs(path: &str) -> bool {
-    if !Path::new(path).exists() {
+    let p = Path::new(path);
+    if !p.exists() {
         return false;
     }
-    // Must be a complete base OS rootfs (>= 1.0 GB) and never the mini recovery environment
-    if path.contains("/recovery/") || path.contains("recovery-") {
+    // Must not be a kernel or initramfs file
+    let fname = p.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+    if fname.starts_with("initramfs") || fname.starts_with("vmlinuz") {
         return false;
     }
     if let Ok(meta) = fs::metadata(path) {
-        if meta.len() < 1000 * 1024 * 1024 {
+        // Base rootfs squashfs must be at least 300 MB
+        if meta.len() < 300 * 1024 * 1024 {
             return false;
         }
     } else {
@@ -279,7 +282,7 @@ pub(crate) fn format_file_size(bytes: u64) -> String {
 }
 
 pub(crate) fn scan_dir_for_squashfs(dir: &Path, depth: usize, dev_label: &str, out: &mut Vec<DiscoveredImage>) {
-    if depth > 3 {
+    if depth > 4 {
         return;
     }
     if let Ok(entries) = fs::read_dir(dir) {
@@ -287,7 +290,7 @@ pub(crate) fn scan_dir_for_squashfs(dir: &Path, depth: usize, dev_label: &str, o
             let path = entry.path();
             if path.is_dir() {
                 let dname = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-                if dname == "recovery" || dname == "proc" || dname == "sys" || dname == "dev" {
+                if dname == "proc" || dname == "sys" || dname == "dev" || dname == "run" {
                     continue;
                 }
                 scan_dir_for_squashfs(&path, depth + 1, dev_label, out);
@@ -391,7 +394,7 @@ pub(crate) fn scan_usb_devices() -> Vec<DiscoveredImage> {
     }
 
     // 2. Scan standard media mounts
-    let media_dirs = ["/media", "/run/media", "/mnt"];
+    let media_dirs = ["/media", "/run/media", "/mnt", "/recovery"];
     for m in &media_dirs {
         if Path::new(m).exists() {
             scan_dir_for_squashfs(Path::new(m), 0, "Mounted Storage", &mut images);
@@ -412,7 +415,7 @@ pub(crate) fn detect_local_squashfs<L>(log: &L) -> Option<String>
 where
     L: Fn(&str) + Send + Sync + 'static,
 {
-    log("Scanning storage devices for clean Arch Linux Pulsar OS base image...");
+    log("Scanning storage devices for clean Pulsar OS base recovery image...");
 
     let rec_mnt = "/tmp/pulsar_recovery";
     let _ = fs::create_dir_all(rec_mnt);
@@ -422,55 +425,98 @@ where
     let _ = Command::new("sudo").args(&["-n", "mount", "-L", "PULSAR_RECOVERY", rec_mnt]).output();
 
     let base_image_names = [
+        "live/filesystem.squashfs",
+        "filesystem.squashfs",
+        "live/rootfs.squashfs",
+        "rootfs.squashfs",
+        "live/filesystem.sfs",
         "images/pulsaros-base.squashfs",
         "images/x86_64/airootfs.sfs",
         "images/airootfs.sfs",
         "arch/x86_64/airootfs.sfs",
         "pulsaros-base.squashfs",
         "airootfs.sfs",
+        "@recovery/live/filesystem.squashfs",
+        "@recovery/filesystem.squashfs",
+        "@/live/filesystem.squashfs",
+        "@/filesystem.squashfs",
     ];
 
     let search_roots = [
         "/tmp/pulsar_recovery",
         "/run/live/medium",
+        "/run/live/medium/live",
         "/lib/live/mount/medium",
+        "/lib/live/mount/medium/live",
         "/run/archiso/bootmnt",
+        "/run/archiso/bootmnt/arch/x86_64",
         "/run/archiso",
         "/recovery",
+        "/recovery/live",
         "/mnt/recovery",
+        "/mnt/recovery/live",
+        "/var/lib/pulsar/images",
     ];
 
     for root in &search_roots {
         for img in &base_image_names {
             let full_p = format!("{}/{}", root, img);
             if Path::new(&full_p).exists() && is_valid_base_squashfs(&full_p) {
-                log(&format!("Verified clean Arch base system image at: {}", full_p));
+                log(&format!("Verified clean base system image at: {}", full_p));
                 return Some(full_p);
             }
         }
     }
 
-    // 2. Scan all block devices
+    // 2. Scan block devices and mapper targets
+    let mut dev_list = Vec::new();
     if let Ok(out) = Command::new("sudo").args(&["-n", "blkid", "-o", "device"]).output() {
         let devs = String::from_utf8_lossy(&out.stdout);
         for dev in devs.lines() {
             let dev = dev.trim();
-            if dev.is_empty() || dev.contains("loop") || dev.contains("zram") {
-                continue;
+            if !dev.is_empty() && !dev.contains("loop") && !dev.contains("zram") {
+                dev_list.push(dev.to_string());
             }
-            let temp_mnt = format!("/tmp/mnt_{}", dev.replace('/', "_"));
-            let _ = fs::create_dir_all(&temp_mnt);
-            if Command::new("sudo").args(&["-n", "mount", "-o", "ro", dev, &temp_mnt]).status().map(|s| s.success()).unwrap_or(false) {
-                for img in &base_image_names {
-                    let p = format!("{}/{}", temp_mnt, img);
-                    if Path::new(&p).exists() && is_valid_base_squashfs(&p) {
-                        log(&format!("Verified clean base system image on {} at: {}", dev, p));
-                        return Some(p);
-                    }
+        }
+    }
+
+    // Also include /dev/mapper devices (e.g. unlocked LUKS containers)
+    if let Ok(entries) = fs::read_dir("/dev/mapper") {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+            if fname != "control" && !dev_list.iter().any(|d| d == &path.to_string_lossy()) {
+                dev_list.push(path.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    for dev in &dev_list {
+        let temp_mnt = format!("/tmp/mnt_{}", dev.replace('/', "_"));
+        let _ = fs::create_dir_all(&temp_mnt);
+        
+        // Try regular ro mount or btrfs top-level mount
+        let mounted = Command::new("sudo")
+            .args(&["-n", "mount", "-o", "ro", dev, &temp_mnt])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+            || Command::new("sudo")
+            .args(&["-n", "mount", "-o", "ro,subvolid=5", dev, &temp_mnt])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+
+        if mounted {
+            for img in &base_image_names {
+                let p = format!("{}/{}", temp_mnt, img);
+                if Path::new(&p).exists() && is_valid_base_squashfs(&p) {
+                    log(&format!("Verified clean base system image on {} at: {}", dev, p));
+                    return Some(p);
                 }
-                let _ = Command::new("sudo").args(&["-n", "umount", &temp_mnt]).output();
-                let _ = fs::remove_dir(&temp_mnt);
             }
+            let _ = Command::new("sudo").args(&["-n", "umount", &temp_mnt]).output();
+            let _ = fs::remove_dir(&temp_mnt);
         }
     }
 

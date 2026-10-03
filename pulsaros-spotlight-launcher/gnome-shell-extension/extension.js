@@ -211,7 +211,8 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
         const title = win.get_title ? win.get_title() : '';
         const wmClass = win.get_wm_class ? win.get_wm_class() : '';
 
-        return appId === 'com.inled.spotlight' || 
+        return appId === 'es.inled.pulsaros-spotlight' ||
+               appId === 'com.inled.spotlight' || 
                appId === 'org.pulsaros.Spotlight' || 
                title === 'Spotlight' || 
                wmClass === 'pulsaros-spotlight' ||

@@ -22,9 +22,9 @@ import { focusEngine } from "./focus/focus-engine";
 import { store, type TabId } from "./state";
 import { isAodActive } from "./ui/aod";
 
-const DEADZONE = 0.5;
-const REPEAT_DELAY = 420;
-const REPEAT_RATE = 140;
+const DEADZONE = 0.25;
+const REPEAT_DELAY = 180;
+const REPEAT_RATE = 85;
 /** Keep the AOD from arming while a stick or trigger is held. */
 const MOTION_RATE = 4000;
 
@@ -45,6 +45,7 @@ const BTN = {
   DPAD_DOWN: 13,
   DPAD_LEFT: 14,
   DPAD_RIGHT: 15,
+  GUIDE: 16,
 } as const;
 
 /** Trigger / dpad indexes handled as analog or directional input. */
@@ -102,6 +103,14 @@ function dpadDir(gp: Gamepad): Dir | null {
   if (isPressed(gp, BTN.DPAD_DOWN)) return "down";
   if (isPressed(gp, BTN.DPAD_LEFT)) return "left";
   if (isPressed(gp, BTN.DPAD_RIGHT)) return "right";
+
+  // Check hat / secondary dpad axes (Linux drivers often map D-pad to axes 6 and 7 or 4 and 5)
+  if (gp.axes.length >= 8) {
+    const hatX = gp.axes[6] ?? 0;
+    const hatY = gp.axes[7] ?? 0;
+    if (Math.abs(hatX) >= 0.5) return hatX < 0 ? "left" : "right";
+    if (Math.abs(hatY) >= 0.5) return hatY < 0 ? "up" : "down";
+  }
   return null;
 }
 
@@ -173,6 +182,9 @@ function handleNewButton(index: number, pending: Action[]): void {
       break;
     case BTN.RB:
       pending.push(() => cycleTab(1));
+      break;
+    case BTN.GUIDE:
+      pending.push(() => document.dispatchEvent(new CustomEvent("launcher:home", { bubbles: true })));
       break;
     default:
       break;

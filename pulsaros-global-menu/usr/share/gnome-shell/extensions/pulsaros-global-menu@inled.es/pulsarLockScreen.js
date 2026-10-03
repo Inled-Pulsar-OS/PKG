@@ -39,6 +39,7 @@ export const LockScreen = GObject.registerClass({
         this._userPickerBox = null;
         this._avatarWidget = null;
         this._nameLabel = null;
+        this._cachedWallpaperUrl = null;
 
         this._bgSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.background' });
         this._ifaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
@@ -52,6 +53,7 @@ export const LockScreen = GObject.registerClass({
         this._sizeChangedId2 = global.stage.connect('notify::height', () => this._onSizeChanged());
         this._monitorsChangedId = Main.layoutManager.connect('monitors-changed', () => this._onSizeChanged());
         
+        this._cachedWallpaperUrl = this._getWallpaperUrl();
         this._onSizeChanged();
     }
     
@@ -264,10 +266,11 @@ export const LockScreen = GObject.registerClass({
     }
 
     _updateWallpapers() {
+        this._cachedWallpaperUrl = this._getWallpaperUrl();
         if (!this._monitorContainers || this._monitorContainers.length === 0) {
             return;
         }
-        let bgUrl = this._getWallpaperUrl();
+        let bgUrl = this._cachedWallpaperUrl;
         if (this._isVideoFile(bgUrl)) {
             if (this._isLocked) {
                 this._startVideoWallpaper(bgUrl);
@@ -281,17 +284,6 @@ export const LockScreen = GObject.registerClass({
     }
     
     _onSizeChanged() {
-        if (!this._isLocked) {
-            this.set_position(0, 0);
-            this.set_size(0, 0);
-            this.visible = false;
-            this.opacity = 0;
-            this.reactive = false;
-            return;
-        }
-        this.set_position(0, 0);
-        this.set_size(global.stage.width, global.stage.height);
-        
         this._rebuildMonitors();
     }
 
@@ -306,13 +298,12 @@ export const LockScreen = GObject.registerClass({
         this._clocks = [];
         this._passwordEntry = null;
 
-        this.visible = this._isLocked;
-        this.opacity = this._isLocked ? 255 : 0;
-        this.reactive = this._isLocked;
-
-        let monitors = Main.layoutManager.monitors;
-        let primaryMonitor = Main.layoutManager.primaryMonitor;
-        let bgUrl = this._getWallpaperUrl();
+        let monitors = Main.layoutManager.monitors || [];
+        let primaryMonitor = Main.layoutManager.primaryMonitor || monitors[0];
+        if (!this._cachedWallpaperUrl) {
+            this._cachedWallpaperUrl = this._getWallpaperUrl();
+        }
+        let bgUrl = this._cachedWallpaperUrl;
         let isVideo = this._isVideoFile(bgUrl);
 
         for (let i = 0; i < monitors.length; i++) {
@@ -336,14 +327,10 @@ export const LockScreen = GObject.registerClass({
             container.add_child(videoActor);
             container._videoActor = videoActor;
 
-            if (this._isLocked) {
-                if (isVideo) {
-                    container.style = `background-image: url("${this._getPosterUrl(bgUrl)}"); background-size: cover; background-position: center;`;
-                } else {
-                    container.style = `background-image: url("${bgUrl}"); background-size: cover; background-position: center;`;
-                }
+            if (isVideo) {
+                container.style = `background-image: url("${this._getPosterUrl(bgUrl)}"); background-size: cover; background-position: center;`;
             } else {
-                container.style = 'background-image: none; background-color: transparent;';
+                container.style = `background-image: url("${bgUrl}"); background-size: cover; background-position: center;`;
             }
             container.set_position(monitor.x, monitor.y);
             container.set_size(monitor.width, monitor.height);
@@ -354,23 +341,22 @@ export const LockScreen = GObject.registerClass({
             this._buildMonitorUI(container, monitor, isPrimary);
         }
 
-        if (this._isLocked && isVideo) {
-            this._startVideoWallpaper(bgUrl);
-        }
-
-        // Live clock updates
         if (this._isLocked) {
+            this.visible = true;
+            this.opacity = 255;
+            this.reactive = true;
+            this.set_position(0, 0);
+            this.set_size(global.stage.width, global.stage.height);
             this._updateClock();
-        }
-
-        if (this._isLocked) {
-            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-                if (this._passwordEntry) {
-                    let activeText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText || this._passwordEntry;
-                    activeText.grab_key_focus();
-                }
-                return GLib.SOURCE_REMOVE;
-            });
+            if (isVideo) {
+                this._startVideoWallpaper(bgUrl);
+            }
+        } else {
+            this.visible = false;
+            this.opacity = 0;
+            this.reactive = false;
+            this.set_position(0, 0);
+            this.set_size(0, 0);
         }
     }
 
@@ -518,6 +504,11 @@ export const LockScreen = GObject.registerClass({
 
     _selectUser(user) {
         this._selectedUsername = user.username;
+        this._authenticating = false;
+        if (this._authTimeoutId) {
+            GLib.source_remove(this._authTimeoutId);
+            this._authTimeoutId = 0;
+        }
         if (this._avatarWidget) {
             this._applyUserAvatar(this._avatarWidget, user);
         }
@@ -531,6 +522,7 @@ export const LockScreen = GObject.registerClass({
             this._singleUserBox.visible = true;
         }
         if (this._passwordEntry) {
+            this._passwordEntry.set_reactive(true);
             this._passwordEntry.set_text('');
             this._passwordEntry.style_class = 'pulsaros-lockscreen-entry';
             this._passwordEntry.set_hint_text('Enter Password');
@@ -692,10 +684,8 @@ export const LockScreen = GObject.registerClass({
             if (clutterText) {
                 clutterText.set_password_char('●');
                 clutterText.connect('activate', () => {
-                    let password = this._passwordEntry.get_text();
-                    if (password && password.length > 0) {
-                        this._authenticate(password);
-                    }
+                    let password = this._passwordEntry.get_text() || '';
+                    this._authenticate(password);
                 });
                 clutterText.connect('text-changed', () => {
                     this._passwordEntry.style_class = 'pulsaros-lockscreen-entry';
@@ -889,20 +879,33 @@ export const LockScreen = GObject.registerClass({
             return;
         }
         this._isLocked = true;
+        this.set_position(0, 0);
+        this.set_size(global.stage.width, global.stage.height);
         this.visible = true;
         this.opacity = 255;
         this.reactive = true;
-        this.set_position(0, 0);
-        this.set_size(global.stage.width, global.stage.height);
         
-        this._rebuildMonitors();
-        this._updateWallpapers();
+        if (!this._monitorContainers || this._monitorContainers.length === 0) {
+            this._rebuildMonitors();
+        }
+
+        if (!this._cachedWallpaperUrl) {
+            this._cachedWallpaperUrl = this._getWallpaperUrl();
+        }
+        let bgUrl = this._cachedWallpaperUrl;
+        if (this._isVideoFile(bgUrl)) {
+            this._startVideoWallpaper(bgUrl);
+        }
         
         if (this._passwordEntry) {
-            this._passwordEntry.text = '';
+            this._passwordEntry.set_text('');
             this._passwordEntry.style_class = 'pulsaros-lockscreen-entry';
+            this._passwordEntry.set_hint_text('Enter Password');
         }
         this._authenticating = false;
+        
+        if (this._singleUserBox) this._singleUserBox.visible = true;
+        if (this._usersListBox) this._usersListBox.visible = false;
         
         // Put lockscreen overlay on the absolute top of the uiGroup stack
         try {
@@ -911,12 +914,9 @@ export const LockScreen = GObject.registerClass({
                 parent.set_child_at_index(this, -1);
             }
         } catch (e) {
-            console.error("[LockScreen] Failed to raise lockscreen overlay via set_child_at_index:", e);
             try {
                 Main.uiGroup.set_child_above_sibling(this, null);
-            } catch (e2) {
-                console.error("[LockScreen] Fallback set_child_above_sibling failed too:", e2);
-            }
+            } catch (e2) {}
         }
         
         // Defer input grab and key focus to the next main loop cycle to guarantee the actor is mapped
@@ -926,7 +926,6 @@ export const LockScreen = GObject.registerClass({
             if (Main.pushModal(this)) {
                 this._hasGrab = true;
             } else {
-                console.error("[LockScreen] Failed to acquire input grab");
                 this._hasGrab = false;
             }
             
@@ -968,16 +967,6 @@ export const LockScreen = GObject.registerClass({
         
         this._stopVideoWallpaper();
         
-        // Destroy monitor containers when unlocked
-        if (this._monitorContainers) {
-            for (let container of this._monitorContainers) {
-                container.destroy();
-            }
-        }
-        this._monitorContainers = [];
-        this._clocks = [];
-        this._passwordEntry = null;
-        
         // Release modal input grab
         if (this._hasGrab) {
             Main.popModal(this);
@@ -1009,6 +998,20 @@ export const LockScreen = GObject.registerClass({
             this._passwordEntry.set_reactive(false);
             this._passwordEntry.style_class = 'pulsaros-lockscreen-entry-authenticating';
         }
+
+        // Safety watchdog timer in case auth helper or child process hangs
+        if (this._authTimeoutId) {
+            GLib.source_remove(this._authTimeoutId);
+            this._authTimeoutId = 0;
+        }
+        this._authTimeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 4, () => {
+            this._authTimeoutId = 0;
+            if (this._authenticating) {
+                console.warn("[LockScreen] Auth process timed out, resetting lockscreen auth state.");
+                this._onAuthFailure();
+            }
+            return GLib.SOURCE_REMOVE;
+        });
         
         let username = this._selectedUsername || GLib.get_user_name();
 
@@ -1092,6 +1095,10 @@ export const LockScreen = GObject.registerClass({
     }
     
     _onAuthSuccess(username) {
+        if (this._authTimeoutId) {
+            GLib.source_remove(this._authTimeoutId);
+            this._authTimeoutId = 0;
+        }
         this._authenticating = false;
         let sessionUser = GLib.get_user_name();
         if (username && username !== sessionUser) {
@@ -1102,6 +1109,10 @@ export const LockScreen = GObject.registerClass({
     }
     
     _onAuthFailure() {
+        if (this._authTimeoutId) {
+            GLib.source_remove(this._authTimeoutId);
+            this._authTimeoutId = 0;
+        }
         this._authenticating = false;
         if (this._passwordEntry) {
             this._passwordEntry.set_reactive(true);

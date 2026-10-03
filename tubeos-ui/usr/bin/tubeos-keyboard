@@ -1,0 +1,347 @@
+#!/usr/bin/env python3
+"""
+==============================================================================
+Tube OS - Gboard Style On-Screen Keyboard for Openbox & 10-Foot UI
+==============================================================================
+Provides a beautiful, dark, fast Gboard virtual keyboard for TV & remote/gamepad.
+Navigable via D-pad, arrows, and HDMI CEC.
+Closing mechanisms:
+  1. Pressing Back / Escape
+  2. Navigating UP past the top suggestion / action bar
+  3. Clicking / selecting Hide button or Enter
+"""
+
+import os
+import subprocess
+import sys
+import threading
+import time
+
+try:
+    import gi
+    gi.require_version('Gtk', '3.0')
+    gi.require_version('Gdk', '3.0')
+    from gi.repository import Gtk, Gdk, GLib
+except ImportError:
+    print("[tubeos-keyboard] PyGObject / GTK3 not found", file=sys.stderr)
+    sys.exit(1)
+
+LAYOUTS = {
+    "es": {
+        "name": "ES · Español",
+        "rows": [
+            ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+            ["a", "s", "d", "f", "g", "h", "j", "k", "l", "ñ"],
+            ["⇧", "z", "x", "c", "v", "b", "n", "m", "⌫"],
+            ["?123", "🌐", "Espacio", ",", ".", "⏎"]
+        ]
+    },
+    "en": {
+        "name": "EN · English",
+        "rows": [
+            ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+            ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+            ["⇧", "z", "x", "c", "v", "b", "n", "m", "⌫"],
+            ["?123", "🌐", "Space", ",", ".", "⏎"]
+        ]
+    },
+    "symbols": {
+        "name": "123 · Símbolos",
+        "rows": [
+            ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+            ["@", "#", "$", "%", "&", "*", "-", "+", "(", ")"],
+            ["ABC", "/", "!", "?", "\"", "'", ":", ";", "⌫"],
+            ["🌐", "Espacio", ",", ".", "⏎"]
+        ]
+    }
+}
+
+GBOARD_CSS = b"""
+window.tubeos-keyboard {
+    background-color: rgba(20, 20, 26, 0.95);
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px 20px 0 0;
+}
+
+.top-bar {
+    padding: 6px 16px 4px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.action-btn {
+    background: rgba(255, 255, 255, 0.08);
+    color: #e2e8f0;
+    border-radius: 999px;
+    padding: 4px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.action-btn:focus, .action-btn:hover {
+    background: #8b5cf6;
+    color: #ffffff;
+    border-color: #a78bfa;
+}
+
+.key-btn {
+    background: rgba(255, 255, 255, 0.09);
+    color: #f8fafc;
+    border-radius: 8px;
+    font-size: 19px;
+    font-weight: 500;
+    min-width: 48px;
+    min-height: 48px;
+    margin: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.key-btn.special {
+    background: rgba(255, 255, 255, 0.14);
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.key-btn.enter {
+    background: #8b5cf6;
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.key-btn:focus, .key-btn:hover {
+    background: #ffffff;
+    color: #0f172a;
+    border-color: #ffffff;
+    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.35);
+}
+"""
+
+class TubeOSKeyboardWindow(Gtk.Window):
+    def __init__(self):
+        super().__init__(type=Gtk.WindowType.TOPLEVEL)
+        self.set_title("tubeos-keyboard")
+        self.set_wmclass("tubeos-keyboard", "Tubeos-keyboard")
+        self.set_decorated(False)
+        self.set_keep_above(True)
+        self.set_skip_taskbar_hint(True)
+        self.set_skip_pager_hint(True)
+        self.set_accept_focus(True)
+        self.set_type_hint(Gdk.WindowTypeHint.DOCK)
+        self.get_style_context().add_class("tubeos-keyboard")
+
+        # Detect default layout from LANG / LC_ALL
+        lang_env = os.environ.get("LANG", "es_ES").lower()
+        self.current_lang = "es" if "es" in lang_env else "en"
+        self.is_symbols = False
+        self.shift_active = False
+
+        self.buttons_grid = [] # 2D array [row][col] of buttons
+        self.cur_row = 0
+        self.cur_col = 0
+
+        self.main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.add(self.main_box)
+
+        # Apply CSS
+        provider = Gtk.CssProvider()
+        provider.load_from_data(GBOARD_CSS)
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(),
+            provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+        self.connect("key-press-event", self.on_key_press)
+        self.build_ui()
+        self.position_at_bottom()
+
+    def position_at_bottom(self):
+        screen = Gdk.Screen.get_default()
+        width = screen.get_width() if screen else 1280
+        height = screen.get_height() if screen else 720
+        kb_height = int(height * 0.42)
+        kb_width = min(int(width * 0.78), 1000)
+        x = (width - kb_width) // 2
+        y = height - kb_height - 12
+        self.set_size_request(kb_width, kb_height)
+        self.move(x, y)
+
+    def build_ui(self):
+        # Clear existing children
+        for child in self.main_box.get_children():
+            self.main_box.remove(child)
+
+        self.buttons_grid = []
+
+        # 1. Top Action & Suggestion Bar (Row 0)
+        top_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        top_bar.get_style_context().add_class("top-bar")
+
+        layout_key = "symbols" if self.is_symbols else self.current_lang
+        layout_info = LAYOUTS.get(layout_key, LAYOUTS["es"])
+
+        lang_label = Gtk.Label(label=layout_info["name"])
+        lang_label.set_halign(Gtk.Align.START)
+        top_bar.pack_start(lang_label, False, False, 6)
+
+        spacer = Gtk.Box()
+        top_bar.pack_start(spacer, True, True, 0)
+
+        btn_hide = Gtk.Button(label="✕ Ocultar Teclado")
+        btn_hide.get_style_context().add_class("action-btn")
+        btn_hide.connect("clicked", lambda w: self.hide_keyboard())
+        top_bar.pack_end(btn_hide, False, False, 0)
+
+        self.main_box.pack_start(top_bar, False, False, 0)
+        self.buttons_grid.append([btn_hide])
+
+        # 2. Key rows
+        rows_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        rows_box.set_margin_bottom(10)
+        rows_box.set_margin_start(16)
+        rows_box.set_margin_end(16)
+
+        for r_idx, row_chars in enumerate(layout_info["rows"]):
+            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+            row_box.set_halign(Gtk.Align.CENTER)
+            row_btns = []
+
+            for char in row_chars:
+                display_char = char.upper() if self.shift_active and len(char) == 1 else char
+                btn = Gtk.Button(label=display_char)
+                btn.get_style_context().add_class("key-btn")
+
+                if char in ("⇧", "⌫", "?123", "ABC", "🌐", "Espacio", "Space"):
+                    btn.get_style_context().add_class("special")
+                elif char == "⏎":
+                    btn.get_style_context().add_class("enter")
+
+                if char in ("Espacio", "Space"):
+                    btn.set_size_request(260, 48)
+                elif char in ("⇧", "⌫", "?123", "ABC", "⏎"):
+                    btn.set_size_request(80, 48)
+                else:
+                    btn.set_size_request(56, 48)
+
+                btn.connect("clicked", self.on_key_clicked, char)
+                row_box.pack_start(btn, False, False, 0)
+                row_btns.append(btn)
+
+            rows_box.pack_start(row_box, False, False, 0)
+            self.buttons_grid.append(row_btns)
+
+        self.main_box.pack_start(rows_box, True, True, 4)
+        self.show_all()
+
+        # Focus initial key (Middle row or top)
+        if len(self.buttons_grid) > 1 and len(self.buttons_grid[1]) > 0:
+            self.cur_row = 1
+            self.cur_col = min(4, len(self.buttons_grid[1]) - 1)
+            self.buttons_grid[self.cur_row][self.cur_col].grab_focus()
+
+    def on_key_clicked(self, widget, char):
+        if char == "⇧":
+            self.shift_active = not self.shift_active
+            self.build_ui()
+            return
+        elif char == "?123":
+            self.is_symbols = True
+            self.build_ui()
+            return
+        elif char == "ABC":
+            self.is_symbols = False
+            self.build_ui()
+            return
+        elif char == "🌐":
+            self.current_lang = "en" if self.current_lang == "es" else "es"
+            self.is_symbols = False
+            self.build_ui()
+            return
+        elif char in ("Espacio", "Space"):
+            subprocess.run(["xdotool", "key", "space"], check=False)
+        elif char == "⌫":
+            subprocess.run(["xdotool", "key", "BackSpace"], check=False)
+        elif char == "⏎":
+            subprocess.run(["xdotool", "key", "Return"], check=False)
+            self.hide_keyboard()
+            return
+        else:
+            typed = char.upper() if self.shift_active else char.lower()
+            subprocess.run(["xdotool", "type", "--clearmodifiers", typed], check=False)
+            if self.shift_active:
+                self.shift_active = False
+                self.build_ui()
+
+    def hide_keyboard(self):
+        self.hide()
+
+    def show_keyboard(self):
+        self.position_at_bottom()
+        self.show_all()
+        if len(self.buttons_grid) > 1:
+            self.cur_row = 1
+            self.cur_col = min(4, len(self.buttons_grid[1]) - 1)
+            self.buttons_grid[self.cur_row][self.cur_col].grab_focus()
+
+    def on_key_press(self, widget, event):
+        keyval = event.keyval
+
+        # Escape -> Close Keyboard
+        if keyval == Gdk.KEY_Escape:
+            self.hide_keyboard()
+            return True
+
+        # Arrow Navigation
+        if keyval == Gdk.KEY_Up:
+            if self.cur_row == 0:
+                # USER REQUIREMENT: "subir hacia arriba de todo hasta la ultima fila de arriba y ya saldrá hacia arriba"
+                self.hide_keyboard()
+                return True
+            else:
+                self.cur_row -= 1
+                row_len = len(self.buttons_grid[self.cur_row])
+                self.cur_col = min(self.cur_col, row_len - 1)
+                self.buttons_grid[self.cur_row][self.cur_col].grab_focus()
+                return True
+
+        elif keyval == Gdk.KEY_Down:
+            if self.cur_row < len(self.buttons_grid) - 1:
+                self.cur_row += 1
+                row_len = len(self.buttons_grid[self.cur_row])
+                self.cur_col = min(self.cur_col, row_len - 1)
+                self.buttons_grid[self.cur_row][self.cur_col].grab_focus()
+                return True
+
+        elif keyval == Gdk.KEY_Left:
+            if self.cur_col > 0:
+                self.cur_col -= 1
+                self.buttons_grid[self.cur_row][self.cur_col].grab_focus()
+                return True
+
+        elif keyval == Gdk.KEY_Right:
+            if self.cur_col < len(self.buttons_grid[self.cur_row]) - 1:
+                self.cur_col += 1
+                self.buttons_grid[self.cur_row][self.cur_col].grab_focus()
+                return True
+
+        return False
+
+def main():
+    if "--toggle" in sys.argv:
+        # Check if running and toggle
+        res = subprocess.run(["xdotool", "search", "--name", "tubeos-keyboard"], capture_output=True, text=True)
+        if res.stdout.strip():
+            w_id = res.stdout.strip().split()[-1]
+            subprocess.run(["xdotool", "windowactivate", w_id], check=False)
+            sys.exit(0)
+
+    win = TubeOSKeyboardWindow()
+    if "--daemon" in sys.argv:
+        win.hide()
+    else:
+        win.show_keyboard()
+    Gtk.main()
+
+if __name__ == "__main__":
+    main()

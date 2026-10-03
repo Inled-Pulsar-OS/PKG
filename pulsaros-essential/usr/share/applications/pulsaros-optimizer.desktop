@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Pulsar Optimizer
+Comment=Dynamic Performance, Memory and Process Priority Manager
+Exec=pulsaros-optimizer-gui
+Icon=pulsaros-optimizer
+Terminal=false
+Type=Application
+Categories=System;Settings;Utility;
+Keywords=Optimizer;RAM;Memory;zRAM;Performance;Speed;Rocket;
+StartupNotify=true

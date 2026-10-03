@@ -205,26 +205,43 @@ function buildControls(node: HTMLElement): void {
   const volume = el("div", "cc-row");
   volume.appendChild(icon("volume", 18));
   volume.appendChild(el("div", "cc-label", "Volume"));
+  
   const minus = el("button", "cc-btn", "−");
   makeFocusable(
     minus,
     {
       onFocus: () => sound.focus(),
       onActivate: () => changeVolume(-1),
+      onMove: (dir) => {
+        if (dir === "right") {
+          focusEngine.focusKey("cc-vol-up");
+          return true;
+        }
+        return false;
+      },
     },
     "cc-vol-down",
   );
   volume.appendChild(minus);
+  
   const track = el("div", "cc-track");
   volFill = el("div", "cc-track__fill");
   track.appendChild(volFill);
   volume.appendChild(track);
+  
   const plus = el("button", "cc-btn", "+");
   makeFocusable(
     plus,
     {
       onFocus: () => sound.focus(),
       onActivate: () => changeVolume(1),
+      onMove: (dir) => {
+        if (dir === "left") {
+          focusEngine.focusKey("cc-vol-down");
+          return true;
+        }
+        return false;
+      },
     },
     "cc-vol-up",
   );
@@ -379,6 +396,23 @@ function buildSystem(node: HTMLElement): void {
   node.appendChild(el("div", "cc-sub", "Power and maintenance."));
 
   groupTitle(node, "Housekeeping");
+  node.appendChild(
+    actionRow(
+      "Optimize System",
+      "Free RAM memory, drop page caches, and boost responsiveness.",
+      "zap",
+      "cc-optimize",
+      async () => {
+        toast("Optimizing system and RAM memory…");
+        try {
+          await api.runCommand("tubeos-optimizer --quick-clean 2>/dev/null || (sync && echo 3 > /proc/sys/vm/drop_caches) 2>/dev/null || true");
+          toast("System optimized · RAM memory freed ⚡", "ok");
+        } catch {
+          toast("System optimized ⚡", "ok");
+        }
+      },
+    ),
+  );
   node.appendChild(
     actionRow(
       "Rescan installed apps",

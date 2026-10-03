@@ -1,0 +1,275 @@
+#!/usr/bin/env python3
+"""
+Tube OS - Dynamic System, Memory & Media Center Optimizer (tubeos-optimizer)
+Designed to keep Tube OS running smoothly on low-end hardware, TV boxes, Mini PCs and VMs.
+
+Features:
+1. Dynamic RAM & zRAM compression tuning (zstd/lz4, swappiness 100, zero page-clustering).
+2. TV UI, compositor & media booster (tubeos-ui, tubeos-tv, openbox, picom, mpv, kodi to high CPU/IO priority).
+3. Background task throttler (tracker, apt-daily, packagekit, updatedb to IDLE IO and lowest CPU priority).
+4. Cache trimmer & quick cleanup (--quick-clean, --clean):
+   - Drops pagecache & compacts memory (/proc/sys/vm/drop_caches, /proc/sys/vm/compact_memory).
+   - Vacuums journalctl logs to 50MB.
+   - Cleans thumbnail & temporary caches.
+   - Trims SSD disks (fstrim).
+5. Live status report CLI (--status / -s).
+"""
+
+import os
+import sys
+import time
+import subprocess
+import glob
+import shutil
+
+THROTTLE_PROCESS_NAMES = {
+    "tracker-miner-fs-3",
+    "tracker-miner-fs",
+    "tracker-extract-3",
+    "tracker-extract",
+    "tinysparql",
+    "localsearch-3",
+    "localsearch-extractor-3",
+    "packagekitd",
+    "apt-daily",
+    "updatedb",
+    "man-db",
+    "apt.systemd.daily",
+    "systemd-journald",
+}
+
+CORE_TV_PROCESSES = {
+    "tubeos-ui": -10,
+    "tubeos-tv": -10,
+    "openbox": -10,
+    "picom": -10,
+    "Xorg": -10,
+    "Xwayland": -10,
+    "plasma-bigscreen": -10,
+    "plasmashell": -8,
+    "kwin_wayland": -10,
+    "pipewire": -8,
+    "wireplumber": -8,
+    "pipewire-pulse": -8,
+    "mpv": -6,
+    "kodi": -6,
+    "kodi.bin": -6,
+    "vlc": -6,
+}
+
+DOCKER_SERVER_PROCESSES = {
+    "dockerd": -4,
+    "containerd": -4,
+    "casaos": -2,
+    "tubeos": -2,
+    "tubeos-gateway": -2,
+}
+
+def log(msg: str):
+    print(f"[tubeos-optimizer] {msg}", flush=True)
+
+def read_meminfo():
+    info = {}
+    try:
+        with open("/proc/meminfo", "r") as f:
+            for line in f:
+                parts = line.split(":")
+                if len(parts) == 2:
+                    key = parts[0].strip()
+                    val = parts[1].strip().split()[0]
+                    info[key] = int(val)
+    except Exception:
+        pass
+    return info
+
+def quick_clean():
+    """Perform instant RAM cache drop and memory compaction."""
+    log("Running instant RAM cache cleanup and memory compaction...")
+    try:
+        subprocess.run(["sync"], check=False)
+        if os.path.exists("/proc/sys/vm/drop_caches"):
+            with open("/proc/sys/vm/drop_caches", "w") as f:
+                f.write("3\n")
+        if os.path.exists("/proc/sys/vm/compact_memory"):
+            with open("/proc/sys/vm/compact_memory", "w") as f:
+                f.write("1\n")
+        log("✅ Page cache freed and RAM compacted successfully.")
+    except Exception as e:
+        log(f"Notice during RAM cleanup: {e}")
+
+def full_clean():
+    """Perform full system optimization (RAM, journal, thumbnails, fstrim)."""
+    log("Performing full system maintenance and optimization...")
+    quick_clean()
+
+    # 1. Vacuum systemd journal
+    try:
+        subprocess.run(["journalctl", "--vacuum-size=50M"], capture_output=True, check=False)
+        log("✅ Systemd journal vacuumed to 50MB.")
+    except Exception:
+        pass
+
+    # 2. Clean temporary thumbnail caches
+    try:
+        home_dirs = glob.glob("/home/*") + ["/root"]
+        for hd in home_dirs:
+            thumb_dir = os.path.join(hd, ".cache", "thumbnails")
+            if os.path.isdir(thumb_dir):
+                shutil.rmtree(thumb_dir, ignore_errors=True)
+        log("✅ User thumbnail cache purged.")
+    except Exception:
+        pass
+
+    # 3. Trim mounted SSD / NVMe filesystems
+    try:
+        subprocess.run(["fstrim", "-av"], capture_output=True, check=False)
+        log("✅ SSD / NVMe storage trimmed (fstrim).")
+    except Exception:
+        pass
+
+def setup_zram_and_sysctl():
+    """Configure zRAM compression and optimal low-latency TV sysctls."""
+    try:
+        meminfo = read_meminfo()
+        total_kb = meminfo.get("MemTotal", 2 * 1024 * 1024)
+        total_mb = total_kb // 1024
+
+        log(f"Configuring kernel VM parameters for {total_mb} MB RAM...")
+
+        sysctls = {
+            "/proc/sys/vm/swappiness": "100",
+            "/proc/sys/vm/vfs_cache_pressure": "50",
+            "/proc/sys/vm/page-cluster": "0",
+            "/proc/sys/vm/dirty_ratio": "10",
+            "/proc/sys/vm/dirty_background_ratio": "5",
+        }
+
+        for path, val in sysctls.items():
+            try:
+                if os.path.exists(path):
+                    with open(path, "w") as f:
+                        f.write(val)
+            except Exception:
+                pass
+
+        # Ensure zram module is loaded
+        try:
+            subprocess.run(["modprobe", "zram"], capture_output=True, check=False)
+        except Exception:
+            pass
+
+        zram_active = False
+        try:
+            with open("/proc/swaps", "r") as f:
+                if "zram" in f.read():
+                    zram_active = True
+        except Exception:
+            pass
+
+        if not zram_active and os.path.exists("/sys/block/zram0"):
+            for algo in ["zstd", "lz4"]:
+                try:
+                    with open("/sys/block/zram0/comp_algorithm", "w") as f:
+                        f.write(algo)
+                    break
+                except Exception:
+                    pass
+
+            zram_size_bytes = min(int(total_kb * 1024), 4 * 1024 * 1024 * 1024)
+            try:
+                with open("/sys/block/zram0/reset", "w") as f:
+                    f.write("1")
+                with open("/sys/block/zram0/disksize", "w") as f:
+                    f.write(str(zram_size_bytes))
+                subprocess.run(["mkswap", "/dev/zram0"], capture_output=True, check=False)
+                subprocess.run(["swapon", "-p", "100", "/dev/zram0"], capture_output=True, check=False)
+                log(f"Configured zRAM swap (/dev/zram0, {zram_size_bytes // (1024*1024)} MB)")
+            except Exception:
+                pass
+    except Exception as e:
+        log(f"Error in setup_zram_and_sysctl: {e}")
+
+def optimize_process_priorities():
+    """Dynamically prioritize TV & media tasks and throttle background services."""
+    try:
+        pids = [pid for pid in os.listdir("/proc") if pid.isdigit()]
+        for pid_str in pids:
+            try:
+                with open(f"/proc/{pid_str}/comm", "r") as f:
+                    comm = f.read().strip()
+                pid = int(pid_str)
+
+                # 1. Throttle background indexers
+                if comm in THROTTLE_PROCESS_NAMES:
+                    try:
+                        os.setpriority(os.PRIO_PROCESS, pid, 19)
+                        subprocess.run(["ionice", "-c", "3", "-p", pid_str], capture_output=True, check=False)
+                    except Exception:
+                        pass
+
+                # 2. Boost core TV interface and media
+                elif comm in CORE_TV_PROCESSES:
+                    target_nice = CORE_TV_PROCESSES[comm]
+                    try:
+                        os.setpriority(os.PRIO_PROCESS, pid, target_nice)
+                        subprocess.run(["ionice", "-c", "2", "-n", "0", "-p", pid_str], capture_output=True, check=False)
+                    except Exception:
+                        pass
+
+                # 3. Boost Docker / CasaOS microservices
+                elif comm in DOCKER_SERVER_PROCESSES:
+                    target_nice = DOCKER_SERVER_PROCESSES[comm]
+                    try:
+                        os.setpriority(os.PRIO_PROCESS, pid, target_nice)
+                    except Exception:
+                        pass
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+def show_status():
+    mem = read_meminfo()
+    total_mb = mem.get("MemTotal", 0) // 1024
+    avail_mb = mem.get("MemAvailable", 0) // 1024
+    used_mb = total_mb - avail_mb
+
+    print("=" * 60)
+    print("TUBE OS SYSTEM OPTIMIZER - STATUS")
+    print("=" * 60)
+    print(f"Memory:")
+    print(f"  Total RAM:     {total_mb} MB ({total_mb/1024:.1f} GB)")
+    print(f"  Used RAM:      {used_mb} MB ({used_mb/1024:.1f} GB)")
+    print(f"  Available RAM: {avail_mb} MB ({avail_mb/1024:.1f} GB)")
+    print("=" * 60)
+
+def main():
+    if len(sys.argv) > 1:
+        arg = sys.argv[1]
+        if arg in ["--quick-clean", "-q", "quick"]:
+            quick_clean()
+            sys.exit(0)
+        elif arg in ["--clean", "-c", "clean"]:
+            full_clean()
+            sys.exit(0)
+        elif arg in ["--status", "-s", "status"]:
+            show_status()
+            sys.exit(0)
+
+    log("Starting Tube OS Optimizer Daemon...")
+    setup_zram_and_sysctl()
+    while True:
+        try:
+            optimize_process_priorities()
+            mem = read_meminfo()
+            available_mb = mem.get("MemAvailable", 1024 * 1024) // 1024
+            if available_mb < 200:
+                quick_clean()
+            time.sleep(4.0)
+        except KeyboardInterrupt:
+            break
+        except Exception:
+            time.sleep(4.0)
+
+if __name__ == "__main__":
+    main()

@@ -7,6 +7,13 @@ import { showDialog, showPicker } from "./dialog";
 import { el, icon } from "./icons";
 import { closeAllOverlays, openOverlay, toast } from "./overlay";
 import { startHeroRotation } from "./hero";
+import {
+  getCustomFeedUrl,
+  setCustomFeedUrl,
+  getDetectedCountry,
+  setIptvCountry,
+  loadIptvChannels,
+} from "./iptv";
 
 interface NavDef {
   id: string;
@@ -18,6 +25,7 @@ const NAV: NavDef[] = [
   { id: "general", label: "General", iconName: "gear" },
   { id: "appearance", label: "Appearance", iconName: "panel" },
   { id: "shelves", label: "Shelves & Layout", iconName: "grid" },
+  { id: "iptv", label: "Live TV & IPTV", iconName: "tv" },
   { id: "recommendations", label: "Recommendations", iconName: "sparkles" },
   { id: "sound", label: "Sound & System", iconName: "volume" },
   { id: "about", label: "About", iconName: "info" },
@@ -506,6 +514,17 @@ function panelSound(content: HTMLElement): void {
     }),
   );
   groupTitle(content, "System");
+  content.appendChild(
+    actionRow("Optimize System", "Free RAM memory, drop page caches, and boost responsiveness.", "zap", "optimize-sys", async () => {
+      toast("Optimizing system and RAM memory…");
+      try {
+        await api.runCommand("tubeos-optimizer --quick-clean 2>/dev/null || (sync && echo 3 > /proc/sys/vm/drop_caches) 2>/dev/null || true");
+        toast("System optimized · RAM memory freed ⚡", "ok");
+      } catch {
+        toast("System optimized ⚡", "ok");
+      }
+    }),
+  );
   content.appendChild(actionRow("Lock screen", null, "lock", "lock", () => void api.audioCommand("lock")));
   content.appendChild(actionRow("Sleep", null, "sleep", "suspend", () => void api.audioCommand("suspend")));
   content.appendChild(actionRow("Restart", null, "reboot", "reboot", () => void api.audioCommand("reboot")));
@@ -576,6 +595,113 @@ function requestStatus(): void {
     .catch(() => undefined);
 }
 
+function panelIptv(content: HTMLElement): void {
+  panelHeader(content, "Live TV & IPTV", "Configure live channels, regional catalogues, and custom M3U/M3U8 feeds.");
+
+  groupTitle(content, "Custom Feed");
+  const customUrl = getCustomFeedUrl();
+  content.appendChild(
+    actionRow(
+      "Custom M3U / M3U8 Feed URL",
+      customUrl || "Not configured (Using default catalog)",
+      "search",
+      "custom-m3u",
+      () => {
+        showDialog({
+          title: "Custom M3U Feed URL",
+          body: "Enter the full HTTP(S) URL or local file path of your M3U / M3U8 playlist:",
+          actions: [
+            { label: "Cancel", onSelect: () => undefined },
+            {
+              label: "Save & Load",
+              primary: true,
+              onSelect: () => {
+                const input = document.querySelector<HTMLInputElement>("#m3u-url-input");
+                const val = input?.value.trim() || "";
+                setCustomFeedUrl(val);
+                toast("Custom IPTV feed saved · Loading channels…", "ok");
+                void loadIptvChannels().then(() => {
+                  rerender();
+                  document.dispatchEvent(new CustomEvent("launcher:tab-preview", { detail: "home" }));
+                });
+              },
+            },
+          ],
+          render: (body) => {
+            const input = document.createElement("input");
+            input.id = "m3u-url-input";
+            input.type = "text";
+            input.spellcheck = false;
+            input.placeholder = "https://example.com/playlist.m3u";
+            input.value = customUrl;
+            input.className = "dialog__input";
+            body.appendChild(input);
+          },
+          returnKey: "set-custom-m3u",
+        });
+      },
+    ),
+  );
+
+  if (customUrl) {
+    content.appendChild(
+      actionRow("Clear Custom Feed", "Revert to default regional TV catalog", "trash", "clear-custom-m3u", () => {
+        setCustomFeedUrl("");
+        toast("Custom feed removed · Loading default channels…", "ok");
+        void loadIptvChannels().then(() => {
+          rerender();
+          document.dispatchEvent(new CustomEvent("launcher:tab-preview", { detail: "home" }));
+        });
+      }),
+    );
+  }
+
+  groupTitle(content, "Region & Country");
+  const countries: [string, string][] = [
+    ["es", "Spain (TDTChannels + Autonómicas)"],
+    ["us", "United States"],
+    ["uk", "United Kingdom"],
+    ["fr", "France"],
+    ["de", "Germany"],
+    ["it", "Italy"],
+    ["mx", "Mexico"],
+    ["ar", "Argentina"],
+  ];
+  const curCountry = getDetectedCountry();
+  const countryVal = { text: countries.find(([c]) => c === curCountry)?.[1] || curCountry.toUpperCase() };
+  content.appendChild(
+    valueRow("Channel Region", () => countryVal.text, "set-country", () => {
+      sound.select();
+      showPicker<string>({
+        title: "Channel Region",
+        current: curCountry,
+        options: countries.map(([value, text]) => ({ label: text, value })),
+        onSelect: (next) => {
+          setIptvCountry(next);
+          countryVal.text = countries.find(([c]) => c === next)?.[1] || next.toUpperCase();
+          toast(`IPTV Region changed to ${countryVal.text}`, "ok");
+          void loadIptvChannels(next).then(() => {
+            rerender();
+            document.dispatchEvent(new CustomEvent("launcher:tab-preview", { detail: "home" }));
+          });
+        },
+        returnKey: "set-country",
+      });
+    }),
+  );
+
+  groupTitle(content, "Actions");
+  content.appendChild(
+    actionRow("Reload Channels Now", "Re-fetch live channels from the active source", "refresh", "reload-iptv", async () => {
+      toast("Reloading IPTV channels…");
+      const list = await loadIptvChannels();
+      toast(`${list.length} channels loaded successfully`, "ok");
+      rerender();
+      document.dispatchEvent(new CustomEvent("launcher:tab-preview", { detail: "home" }));
+    }),
+  );
+}
+
 function buildPanel(content: HTMLElement, id: string): void {
   switch (id) {
     case "general":
@@ -586,6 +712,9 @@ function buildPanel(content: HTMLElement, id: string): void {
       break;
     case "shelves":
       panelShelves(content);
+      break;
+    case "iptv":
+      panelIptv(content);
       break;
     case "recommendations":
       panelRecommendations(content);

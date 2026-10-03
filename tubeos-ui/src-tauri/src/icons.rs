@@ -265,9 +265,36 @@ fn insert_candidate(
     theme_score: u32,
 ) {
     let score = score_candidate(path, theme_score);
-    let entry = index.entry(stem).or_insert((0, String::new()));
+    let path_str = path.to_string_lossy().to_string();
+
+    // 1. Exact stem
+    let entry = index.entry(stem.clone()).or_insert((0, String::new()));
     if score > entry.0 {
-        *entry = (score, path.to_string_lossy().to_string());
+        *entry = (score, path_str.clone());
+    }
+
+    // 2. Lowercase stem
+    let lower = stem.to_lowercase();
+    if lower != stem {
+        let entry_lower = index.entry(lower).or_insert((0, String::new()));
+        if score > entry_lower.0 {
+            *entry_lower = (score, path_str.clone());
+        }
+    }
+
+    // 3. Trailing name segment if reverse-domain (e.g., org.gnome.Terminal -> Terminal / terminal)
+    if let Some(last_part) = stem.rsplit('.').next() {
+        if last_part != stem && !last_part.is_empty() {
+            let entry_part = index.entry(last_part.to_string()).or_insert((0, String::new()));
+            if score.saturating_sub(50) > entry_part.0 {
+                *entry_part = (score.saturating_sub(50), path_str.clone());
+            }
+            let lower_part = last_part.to_lowercase();
+            let entry_part_l = index.entry(lower_part).or_insert((0, String::new()));
+            if score.saturating_sub(50) > entry_part_l.0 {
+                *entry_part_l = (score.saturating_sub(50), path_str);
+            }
+        }
     }
 }
 
@@ -305,8 +332,27 @@ pub fn resolve(name: &str) -> Option<String> {
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| name.to_string());
 
-    if let Some(path) = with_index(|idx| idx.get(&stem).map(|(_, p)| p.clone())) {
+    if let Some(path) = with_index(|idx| {
+        idx.get(&stem)
+            .or_else(|| idx.get(&stem.to_lowercase()))
+            .or_else(|| idx.get(name))
+            .map(|(_, p)| p.clone())
+    }) {
         return Some(path);
+    }
+
+    // Direct check in standard pixmaps or hicolor paths
+    for base in ["/usr/share/pixmaps", "/usr/share/icons/hicolor/scalable/apps", "/usr/share/icons/hicolor/48x48/apps", "/usr/share/icons/hicolor/128x128/apps"] {
+        for (ext, _) in EXTS {
+            let candidate = PathBuf::from(format!("{base}/{name}.{ext}"));
+            if candidate.is_file() {
+                return Some(candidate.to_string_lossy().to_string());
+            }
+            let candidate_stem = PathBuf::from(format!("{base}/{stem}.{ext}"));
+            if candidate_stem.is_file() {
+                return Some(candidate_stem.to_string_lossy().to_string());
+            }
+        }
     }
 
     // Last resort: a generic "executable" icon from the active theme.

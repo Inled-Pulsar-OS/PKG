@@ -58,8 +58,14 @@ mkdir -p "$STAGE_DIR/usr/share/icons"
 # Copiar configuración de GTK4 para Skel y Root (Libadwaita Fix)
 mkdir -p "$STAGE_DIR/etc/skel/.config/gtk-4.0"
 mkdir -p "$STAGE_DIR/root/.config/gtk-4.0"
-cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-4.0/"* "$STAGE_DIR/etc/skel/.config/gtk-4.0/" 2>/dev/null || true
-cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-4.0/"* "$STAGE_DIR/root/.config/gtk-4.0/" 2>/dev/null || true
+cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Light/gtk-4.0/"* "$STAGE_DIR/etc/skel/.config/gtk-4.0/" 2>/dev/null || true
+cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Light/gtk-4.0/"* "$STAGE_DIR/root/.config/gtk-4.0/" 2>/dev/null || true
+if [ -f "$STAGE_DIR/etc/skel/.config/gtk-4.0/gtk.css" ]; then
+    cp -f "$STAGE_DIR/etc/skel/.config/gtk-4.0/gtk.css" "$STAGE_DIR/etc/skel/.config/gtk-4.0/gtk-dark.css" 2>/dev/null || true
+fi
+if [ -f "$STAGE_DIR/root/.config/gtk-4.0/gtk.css" ]; then
+    cp -f "$STAGE_DIR/root/.config/gtk-4.0/gtk.css" "$STAGE_DIR/root/.config/gtk-4.0/gtk-dark.css" 2>/dev/null || true
+fi
 
 # Permitir que el sistema nativo de colores de acento de GNOME / Libadwaita controle los botones y temas
 echo "Habilitando colores de acento dinámicos en temas MacTahoe..."
@@ -191,14 +197,14 @@ rm -f /tmp/accent_btn_fix.css
 # Copiar también configuración básica de GTK3 a Skel y Root
 mkdir -p "$STAGE_DIR/etc/skel/.config/gtk-3.0" "$STAGE_DIR/etc/skel/.config/gtk-4.0"
 mkdir -p "$STAGE_DIR/root/.config/gtk-3.0" "$STAGE_DIR/root/.config/gtk-4.0"
-cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-3.0/gtk-dark.css" "$STAGE_DIR/etc/skel/.config/gtk-3.0/gtk.css" 2>/dev/null || true
-cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Dark/gtk-3.0/gtk-dark.css" "$STAGE_DIR/root/.config/gtk-3.0/gtk.css" 2>/dev/null || true
+cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Light/gtk-3.0/gtk.css" "$STAGE_DIR/etc/skel/.config/gtk-3.0/gtk.css" 2>/dev/null || true
+cp -rf "$STAGE_DIR/usr/share/themes/MacTahoe-Light/gtk-3.0/gtk.css" "$STAGE_DIR/root/.config/gtk-3.0/gtk.css" 2>/dev/null || true
 
 cat <<'SETTINGS_EOF' > "$STAGE_DIR/etc/skel/.config/gtk-3.0/settings.ini"
 [Settings]
-gtk-theme-name=MacTahoe-Dark
-gtk-icon-theme-name=MacTahoe-blue-dark
-gtk-application-prefer-dark-theme=1
+gtk-theme-name=MacTahoe-Light
+gtk-icon-theme-name=MacTahoe-blue-light
+gtk-application-prefer-dark-theme=0
 gtk-decoration-layout=close,minimize,maximize:
 SETTINGS_EOF
 cp -f "$STAGE_DIR/etc/skel/.config/gtk-3.0/settings.ini" "$STAGE_DIR/etc/skel/.config/gtk-4.0/settings.ini"

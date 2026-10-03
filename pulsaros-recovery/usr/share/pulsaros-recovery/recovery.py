@@ -26,11 +26,40 @@ from gi.repository import Gtk, Gdk, GLib, Adw, Gio, GdkPixbuf
 
 # Custom CSS for Apple macOS Recovery and Installer Look-and-Feel
 CSS_DATA = """
+@define-color window_bg_color #1e1e1e;
+@define-color window_fg_color #ffffff;
+@define-color view_bg_color #2a2a2a;
+@define-color view_fg_color #ffffff;
+@define-color headerbar_bg_color #2a2a2a;
+@define-color headerbar_fg_color #ffffff;
+@define-color card_bg_color #2a2a2a;
+@define-color card_fg_color #ffffff;
+@define-color popover_bg_color #2a2a2a;
+@define-color popover_fg_color #ffffff;
+@define-color dialog_bg_color #2a2a2a;
+@define-color dialog_fg_color #ffffff;
+@define-color accent_color #0071e3;
+@define-color accent_bg_color #0071e3;
+@define-color accent_fg_color #ffffff;
+
 window, .root-container {
     background-color: #1e1e1e; /* dark theme base */
+    color: #ffffff;
 }
 window, .root-container, * {
     font-family: 'Inter', 'SF Pro Display', -apple-system, sans-serif;
+}
+label {
+    color: #ffffff;
+}
+entry, password-entry {
+    background-color: #2c2c2e;
+    color: #ffffff;
+    border: 1px solid #3c3c3e;
+    border-radius: 8px;
+}
+entry:focus, password-entry:focus {
+    border-color: #0071e3;
 }
 .welcome-title {
     font-size: 26px;
@@ -124,20 +153,23 @@ progressbar.progress-bar-thin progress,
     font-size: 12px;
     color: #aeaeb2;
 }
-list, listbox {
+list, listbox, listview {
     background-color: transparent;
     border: none;
+    color: #ffffff;
 }
-listrow, listboxrow {
+listrow, listboxrow, row {
     background-color: #2a2a2a;
+    color: #ffffff;
     border: none;
     transition: background-color 0.15s ease;
 }
-listrow:hover, listboxrow:hover {
+listrow:hover, listboxrow:hover, row:hover {
     background-color: #323236;
 }
-listrow:selected, listboxrow:selected {
+listrow:selected, listboxrow:selected, row:selected {
     background-color: #323236;
+    color: #ffffff;
 }
 .utility-row-box {
     padding: 12px;
@@ -417,7 +449,12 @@ def get_system_disks():
                 model = " ".join(parts[2:-1]) if len(parts) > 3 else "Generic Disk"
                 dev_type = parts[-1]
                 
-                if dev_type == "disk" and not name.startswith("loop") and not name.startswith("sr"):
+                if (dev_type == "disk" 
+                    and not name.startswith("loop") 
+                    and not name.startswith("sr") 
+                    and not name.startswith("zram")
+                    and not name.startswith("ram")
+                    and not name.startswith("dm-")):
                     disks.append({
                         "path": f"/dev/{name}",
                         "name": f"/dev/{name} - {model} ({size})"
@@ -430,7 +467,7 @@ def get_system_disks():
                     parts = line.split()
                     if len(parts) == 4:
                         name = parts[3]
-                        if re.match(r"^(sd[a-z]|nvme[0-9]n[0-9]|vd[a-z])$", name):
+                        if re.match(r"^(sd[a-z]|nvme[0-9]n[0-9]|vd[a-z]|mmcblk[0-9])$", name):
                             disks.append({
                                 "path": f"/dev/{name}",
                                 "name": f"/dev/{name} (Unknown)"
@@ -813,6 +850,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.set_default_size(720, 560)
         self.set_resizable(True)
         
+        # Enforce macOS dark mode look regardless of host/live theme
+        try:
+            Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_DARK)
+        except Exception:
+            pass
+        
         self.apply_css()
         
         # Always fullscreen (except in test mode)
@@ -881,7 +924,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         Gtk.StyleContext.add_provider_for_display(
             Gdk.Display.get_default(),
             provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            Gtk.STYLE_PROVIDER_PRIORITY_USER
         )
 
     def create_row_icon(self, icon_name):
@@ -4044,7 +4087,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         f.write(fstab_content)
                     if self.install_encryption and luks_uuid:
                         with open("/mnt/etc/crypttab", "w") as cf:
-                            cf.write(f"pulsar_cryptroot UUID={luks_uuid} none luks,discard\n")
+                            cf.write(f"pulsar_cryptroot UUID={luks_uuid} none luks,discard,initramfs\n")
                         log_msg(f"✅ Configured /etc/crypttab: pulsar_cryptroot UUID={luks_uuid}")
                     with open("/mnt/etc/udev/rules.d/99-pulsaros-hide-recovery.rules", "w") as f:
                         f.write('# Hide PULSAR_RECOVERY partition from file managers and desktop\nENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n')
@@ -4075,7 +4118,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         f.write(fstab_content)
                     if self.install_encryption and luks_uuid:
                         with open("/mnt/etc/crypttab", "w") as cf:
-                            cf.write(f"pulsar_cryptroot UUID={luks_uuid} none luks,discard\n")
+                            cf.write(f"pulsar_cryptroot UUID={luks_uuid} none luks,discard,initramfs\n")
                         log_msg(f"✅ Configured /etc/crypttab: pulsar_cryptroot UUID={luks_uuid}")
                     with open("/mnt/etc/udev/rules.d/99-pulsaros-hide-recovery.rules", "w") as f:
                         f.write('# Hide PULSAR_RECOVERY partition from file managers and desktop\nENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n')
@@ -5090,7 +5133,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                     try:
                         os.makedirs("/mnt/etc/cryptsetup-initramfs", exist_ok=True)
                         with open("/mnt/etc/cryptsetup-initramfs/conf-hook", "w") as cfh:
-                            cfh.write("CRYPTSETUP=y\n")
+                            cfh.write("CRYPTSETUP=y\nexport CRYPTSETUP=y\n")
                         log_msg("✅ Enabled CRYPTSETUP=y for Debian initramfs.")
                     except Exception as deb_crypt_err:
                         log_msg(f"Warning: Failed to write cryptsetup-initramfs conf-hook: {deb_crypt_err}")
@@ -5118,12 +5161,12 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
 
                 preserve_live_initramfs_for_recovery()
 
-                # 4. Update initramfs on Debian so resume is included
+                # 4. Update initramfs on Debian so resume and cryptsetup are included
                 try:
-                    exec_cmd(["chroot", "/mnt", "update-initramfs", "-u"])
-                    log_msg("✅ initramfs actualizado en Debian con soporte de hibernación/resume.")
+                    exec_cmd(["chroot", "/mnt", "update-initramfs", "-u", "-k", "all"])
+                    log_msg("✅ initramfs actualizado en Debian con soporte de hibernación/resume y cryptsetup.")
                 except Exception as deb_init_err:
-                    log_msg(f"Warning: update-initramfs -u failed (non-fatal): {deb_init_err}")
+                    log_msg(f"Warning: update-initramfs -u -k all failed (non-fatal): {deb_init_err}")
 
                 deploy_kernel_to_recovery()
                 if refind_installed:
@@ -5414,6 +5457,10 @@ class RecoveryApp(Adw.Application):
         )
 
     def do_activate(self):
+        try:
+            Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_DARK)
+        except Exception:
+            pass
         win = RecoveryWindow(self)
         win.present()
 

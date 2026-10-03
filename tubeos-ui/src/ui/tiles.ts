@@ -7,7 +7,7 @@ import { actions, store } from "../state";
 import type { AppInfo, MediaItem } from "../types";
 import { el, icon } from "./icons";
 import { showDialog, showPicker } from "./dialog";
-import { showActionMenu } from "./menu";
+import { showActionSheet } from "./menu";
 import { openOverlay, toast } from "./overlay";
 
 /** Parallax the artwork slightly while the pointer travels over a tile. */
@@ -29,7 +29,6 @@ function addParallax(art: HTMLElement): void {
 /** Build the rounded artwork square: image on top of a gradient fallback. */
 function artWithImage(src: string | null, fallback: HTMLElement | null, alt: string): HTMLElement {
   const art = el("div", "tile-art");
-  if (fallback) art.appendChild(fallback);
   if (src) {
     const img = el("img");
     img.src = src;
@@ -38,15 +37,53 @@ function artWithImage(src: string | null, fallback: HTMLElement | null, alt: str
     img.decoding = "async";
     img.addEventListener("error", () => {
       img.remove();
-      if (!fallback) art.appendChild(el("div", "tile-art__fallback", initialsOf(alt)));
-    });
-    img.addEventListener("load", () => {
-      if (fallback && fallback.classList.contains("poster-fallback")) fallback.remove();
+      art.appendChild(fallback || el("div", "tile-art__fallback", initialsOf(alt)));
     });
     art.appendChild(img);
+  } else {
+    art.appendChild(fallback || el("div", "tile-art__fallback", initialsOf(alt)));
   }
   addParallax(art);
   return art;
+}
+
+/** Helper to detect long press / hold on any element and trigger action */
+export function attachLongPress(element: HTMLElement, callback: () => void, delayMs = 400): void {
+  let timer: number | null = null;
+  let didLongPress = false;
+
+  const start = () => {
+    didLongPress = false;
+    if (timer) window.clearTimeout(timer);
+    timer = window.setTimeout(() => {
+      didLongPress = true;
+      callback();
+    }, delayMs);
+  };
+
+  const clear = () => {
+    if (timer) {
+      window.clearTimeout(timer);
+      timer = null;
+    }
+  };
+
+  element.addEventListener("pointerdown", start);
+  element.addEventListener("pointerup", clear);
+  element.addEventListener("pointerleave", clear);
+  element.addEventListener("pointercancel", clear);
+
+  element.addEventListener(
+    "click",
+    (e) => {
+      if (didLongPress) {
+        e.preventDefault();
+        e.stopPropagation();
+        didLongPress = false;
+      }
+    },
+    { capture: true },
+  );
 }
 
 function initialsOf(name: string): string {
@@ -131,6 +168,10 @@ export function appTile(app: AppInfo, focusKey: string): HTMLElement {
   }
   if (isHidden) tile.classList.add("is-hidden-app");
 
+  attachLongPress(tile, () => {
+    openAppMenu(app, tile);
+  });
+
   makeFocusable(
     tile,
     {
@@ -179,6 +220,10 @@ export function mediaTile(item: MediaItem, focusKey: string): HTMLElement {
     tile.appendChild(el("div", "tile-sub", mediaMeta(item)));
   }
 
+  attachLongPress(tile, () => {
+    openMediaMenu(item, tile);
+  });
+
   makeFocusable(
     tile,
     {
@@ -216,6 +261,18 @@ export interface StreamingService {
 /** "Play on…" targets shown for every IMDb title. */
 export const STREAMING_SERVICES: StreamingService[] = [
   {
+    id: "justwatch",
+    name: "JustWatch (Where to Watch)",
+    icon: "search",
+    url: (title) => {
+      const lang = (navigator.language || "es").toLowerCase();
+      if (lang.startsWith("es")) {
+        return `https://www.justwatch.com/es/buscar?q=${encodeURIComponent(title)}`;
+      }
+      return `https://www.justwatch.com/us/search?q=${encodeURIComponent(title)}`;
+    },
+  },
+  {
     id: "netflix",
     name: "Netflix",
     icon: "play",
@@ -225,13 +282,19 @@ export const STREAMING_SERVICES: StreamingService[] = [
     id: "prime",
     name: "Amazon Prime Video",
     icon: "film",
-    url: (title) => `https://www.amazon.com/s?k=${encodeURIComponent(title)}&i=instant-video`,
+    url: (title) => `https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${encodeURIComponent(title)}`,
   },
   {
     id: "disney",
     name: "Disney+",
     icon: "star",
     url: (title) => `https://www.disneyplus.com/search/${encodeURIComponent(title)}`,
+  },
+  {
+    id: "max",
+    name: "Max (HBO)",
+    icon: "tv",
+    url: (title) => `https://play.max.com/search?q=${encodeURIComponent(title)}`,
   },
   {
     id: "apple",
@@ -251,6 +314,7 @@ export const STREAMING_SERVICES: StreamingService[] = [
 export function openStreaming(item: MediaItem, service: StreamingService): void {
   const url = service.url(item.title);
   sound.select();
+  toast(`Opening on ${service.name}…`, "info");
   void api.openTarget(url).catch((error: unknown) => {
     sound.error();
     toast(`Could not open ${service.name}: ${String(error)}`, "error");
@@ -260,7 +324,7 @@ export function openStreaming(item: MediaItem, service: StreamingService): void 
 /** The tvOS style picker listing the streaming services for a title. */
 export function playOnPicker(item: MediaItem, returnKey?: string): void {
   showPicker({
-    title: "Play on…",
+    title: "Watch on…",
     subtitle: item.title,
     options: STREAMING_SERVICES.map((service) => ({
       label: service.name,
@@ -276,52 +340,52 @@ export function playOnPicker(item: MediaItem, returnKey?: string): void {
 }
 
 /** tvOS long-press menu for an app tile. */
-export function openAppMenu(app: AppInfo, anchor: HTMLElement): void {
+export function openAppMenu(app: AppInfo, _anchor?: HTMLElement): void {
   const settings = store.state.settings;
   const favorite = settings.favorites.includes(app.id);
   const hidden = settings.hiddenApps.includes(app.id);
-  showActionMenu(
-    anchor,
+  const src = iconUrl(app.iconName, app.iconPath);
+
+  showActionSheet(
+    {
+      title: app.name,
+      subtitle: app.genericName || app.group || "Application",
+      iconSrc: src,
+      iconName: "apps",
+    },
     [
-      { icon: "play", label: "Open", action: () => launchApp(app) },
       {
         icon: "star",
-        label: favorite ? "Remove from Favorites" : "Add to Favorites",
+        label: favorite ? "Remove Favorite" : "Add to Favorites",
+        primary: true,
         action: () => {
           const favorites = favorite
             ? settings.favorites.filter((id) => id !== app.id)
             : [...settings.favorites, app.id];
           actions.patchSettings({ favorites });
-          toast(favorite ? `${app.name} removed from Favorites` : `${app.name} added to Favorites`, "ok");
+          toast(favorite ? `${app.name} removed from favorites` : `${app.name} added to favorites ⭐`, "ok");
+          document.dispatchEvent(new CustomEvent("launcher:tab-preview", { detail: "home" }));
         },
       },
-      {
-        icon: "arrowUp",
-        label: "Move to Front",
-        action: () => {
-          const favorites = [app.id, ...settings.favorites.filter((id) => id !== app.id)];
-          actions.patchSettings({ favorites });
-          toast(`${app.name} pinned first`, "ok");
-        },
-      },
+      { icon: "play", label: "Open", action: () => launchApp(app) },
+      { icon: "info", label: "Details", action: () => showAppInfo(app) },
       {
         icon: hidden ? "eye" : "eyeSlash",
-        label: hidden ? "Unhide App" : "Hide from Home",
+        label: hidden ? "Show on Home" : "Hide",
         action: () => {
           const hiddenApps = hidden
             ? settings.hiddenApps.filter((id) => id !== app.id)
             : [...settings.hiddenApps, app.id];
           actions.patchSettings({ hiddenApps, showHidden: hidden ? settings.showHidden : true });
-          toast(hidden ? `${app.name} is visible again` : `${app.name} hidden from Home`, "ok");
+          toast(hidden ? `${app.name} is visible again` : `${app.name} hidden`, "ok");
         },
       },
-      { icon: "info", label: "App Info", action: () => showAppInfo(app) },
       {
         icon: "folder",
-        label: "Open .desktop Folder",
+        label: "Open Folder",
         action: () => {
           const dir = app.desktopFile.replace(/\/[^/]+$/, "");
-          void api.openTarget(dir).catch(() => toast("Could not open the folder", "error"));
+          void api.openTarget(dir).catch(() => toast("Could not open folder", "error"));
         },
       },
     ],
@@ -329,47 +393,67 @@ export function openAppMenu(app: AppInfo, anchor: HTMLElement): void {
   );
 }
 
-/** tvOS long-press menu for a poster. */
-export function openMediaMenu(item: MediaItem, anchor: HTMLElement): void {
+/** tvOS action sheet for a movie / show poster with JustWatch & streaming links. */
+export function openMediaMenu(item: MediaItem, _anchor?: HTMLElement): void {
   const profile = store.state.profile;
   const liked = profile.liked.includes(item.id);
-  const disliked = profile.disliked.includes(item.id);
-  const watched = profile.watched.includes(item.id);
-  showActionMenu(
-    anchor,
+  const src = posterUrl(item);
+
+  showActionSheet(
+    {
+      title: item.title,
+      subtitle: [item.genre, item.year, item.stars].filter(Boolean).join(" · ") || "Movie",
+      iconSrc: src,
+      iconName: "film",
+    },
     [
-      { icon: "external", label: "Open on IMDb", action: () => openMedia(item) },
+      {
+        icon: "search",
+        label: "Where to Watch (JustWatch)",
+        primary: true,
+        action: () => {
+          const jw = STREAMING_SERVICES.find((s) => s.id === "justwatch");
+          if (jw) openStreaming(item, jw);
+        },
+      },
       {
         icon: "play",
-        label: "Play on…",
+        label: "Watch on Netflix",
+        action: () => {
+          const netflix = STREAMING_SERVICES.find((s) => s.id === "netflix");
+          if (netflix) openStreaming(item, netflix);
+        },
+      },
+      {
+        icon: "film",
+        label: "Watch on Prime Video",
+        action: () => {
+          const prime = STREAMING_SERVICES.find((s) => s.id === "prime");
+          if (prime) openStreaming(item, prime);
+        },
+      },
+      {
+        icon: "star",
+        label: "More Streaming Apps…",
         action: () => playOnPicker(item, `media-${item.id}`),
       },
       {
         icon: "heart",
-        label: liked ? "Remove Like" : "More Like This",
-        action: () =>
+        label: liked ? "Remove Favorite" : "Favorite / Liked",
+        action: () => {
           mediaFeedback(
             item,
             liked ? "hide" : "like",
-            liked ? "Removed from Top Picks" : "You'll see more like this",
-          ),
+            liked ? "Removed from favorites" : "Added to favorites ⭐",
+          );
+        },
       },
-      {
-        icon: "check",
-        label: watched ? "Mark as Unwatched" : "Mark as Watched",
-        action: () => mediaFeedback(item, "watched", watched ? "Marked as unwatched" : "Marked as watched"),
-      },
+      { icon: "external", label: "IMDb Info", action: () => openMedia(item) },
       {
         icon: "ban",
-        label: disliked ? "Unblock Title" : "Not Interested",
-        action: () => mediaFeedback(item, "hide", disliked ? "Title unblocked" : "You'll see less of this"),
-      },
-      {
-        icon: "shuffle",
-        label: "Shuffle Recommendations",
-        action: () => {
-          void actions.reshuffle().then(() => toast("Recommendations shuffled", "ok"));
-        },
+        label: "Not Interested",
+        danger: true,
+        action: () => mediaFeedback(item, "hide", "Less content like this will be recommended"),
       },
     ],
     `media-${item.id}`,

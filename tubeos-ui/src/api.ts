@@ -31,6 +31,7 @@ export const api = {
   iconUri: (icon: string) => invoke<string>("icon_uri", { icon }),
 
   openTarget: (target: string) => invoke<void>("open_target", { target }),
+  runCommand: (command: string) => invoke<void>("run_command", { command }),
   listDirectory: (path: string, showHidden = false) =>
     invoke<DirListing>("list_directory", { path, showHidden }),
   homeDirectory: () => invoke<string>("home_directory"),
@@ -40,6 +41,12 @@ export const api = {
     invoke<string>("audio_command", { action, value: value ?? null }),
 
   quit: () => invoke<void>("quit_launcher"),
+  fetchText: (url: string) =>
+    invoke<string>("fetch_text", { url }).catch(async () => {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.text();
+    }),
 
   onLaunchResult: (handler: (result: LaunchResult) => void): Promise<UnlistenFn> =>
     listen<LaunchResult>("launch-result", (event) => handler(event.payload)),

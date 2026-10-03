@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""
+==============================================================================
+Tube OS - Global Gamepad Home Button Listener
+Detects the Xbox Guide / PlayStation Home / Controller Guide button press
+globally across all applications to return to Tube OS TV UI.
+==============================================================================
+"""
+
+import glob
+import os
+import select
+import struct
+import subprocess
+import sys
+import threading
+import time
+
+# JS event struct: unsigned int time, short value, unsigned char type, unsigned char number
+JS_EVENT_FORMAT = "IhBB"
+JS_EVENT_SIZE = struct.calcsize(JS_EVENT_FORMAT)
+JS_EVENT_BUTTON = 0x01
+JS_EVENT_INIT = 0x80
+
+def handle_gamepad(device_path: str):
+    try:
+        with open(device_path, "rb") as js:
+            while True:
+                data = js.read(JS_EVENT_SIZE)
+                if not data:
+                    break
+                _, value, event_type, number = struct.unpack(JS_EVENT_FORMAT, data)
+                event_type &= ~JS_EVENT_INIT
+                
+                # Check button press event (value == 1)
+                if event_type == JS_EVENT_BUTTON and value == 1:
+                    # Common Home/Guide button numbers across drivers: 8 (Select/Back), 10, 12, 16 (Guide)
+                    # Button 16 on standard Linux xpad / hid-generic / dualshock is Mode / Guide / PS / Xbox button
+                    if number in (16, 12, 10, 8):
+                        if number == 16 or number == 12 or number == 10:
+                            subprocess.run(["/usr/bin/tubeos-home"], check=False)
+    except Exception:
+        pass
+
+def monitor_gamepads():
+    active_threads = {}
+    while True:
+        devices = glob.glob("/dev/input/js*")
+        for dev in devices:
+            if dev not in active_threads or not active_threads[dev].is_alive():
+                t = threading.Thread(target=handle_gamepad, args=(dev,), daemon=True)
+                t.start()
+                active_threads[dev] = t
+        time.sleep(2)
+
+def main():
+    os.environ["DISPLAY"] = os.environ.get("DISPLAY", ":0")
+    monitor_gamepads()
+
+if __name__ == "__main__":
+    main()

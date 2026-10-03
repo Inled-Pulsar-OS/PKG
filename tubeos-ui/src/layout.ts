@@ -60,7 +60,6 @@ function mediaShelf(id: string, title: string, badge: string, items: MediaItem[]
 }
 
 const MOVIE_KINDS = ["Movie", "TV Movie"];
-const SHOW_KINDS = ["TV Series", "TV Mini-Series"];
 
 function matchesKind(item: MediaItem, kinds: string[]): boolean {
   return kinds.some((kind) => item.kind === kind);
@@ -132,7 +131,52 @@ function mediaShelves(tab: TabId, kindFilter: string[] | null): Shelf[] {
   return shelves;
 }
 
-function appShelves(limitCategories: number): Shelf[] {
+import { getCachedChannels, getIptvFavorites, type IptvChannel } from "./ui/iptv";
+
+function iptvShelf(id: string, title: string, badge: string, channels: IptvChannel[]): Shelf {
+  return { id, title, badge, kind: "iptv", apps: [], items: [], channels };
+}
+
+function tvShelves(isHome = false): Shelf[] {
+  const allChannels = getCachedChannels();
+  if (!allChannels.length) return [];
+
+  const favIds = new Set(getIptvFavorites());
+  const favoriteChannels = allChannels.filter((ch) => favIds.has(ch.id));
+
+  if (isHome) {
+    const homeShelves: Shelf[] = [];
+    if (favoriteChannels.length > 0) {
+      homeShelves.push(iptvShelf("home-tv-favs", "Favorite TV Channels", "★ Favorites", favoriteChannels));
+    }
+    homeShelves.push(iptvShelf("home-tv", "Live TV Channels", "IPTV", allChannels.slice(0, 16)));
+    return homeShelves;
+  }
+
+  const shelves: Shelf[] = [];
+  if (favoriteChannels.length > 0) {
+    shelves.push(iptvShelf("tv-favs", "Favorite TV Channels", "★ Favorites", favoriteChannels));
+  }
+
+  shelves.push(iptvShelf("tv-all", "All TV Channels", "IPTV", allChannels.slice(0, 36)));
+
+  const groups = new Map<string, IptvChannel[]>();
+  for (const ch of allChannels) {
+    const key = ch.group || "General";
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(ch);
+    else groups.set(key, [ch]);
+  }
+
+  for (const [groupName, chList] of groups) {
+    if (chList.length >= 2) {
+      shelves.push(iptvShelf(`tv-grp-${groupName.toLowerCase().replace(/\s+/g, "-")}`, groupName, "IPTV", chList.slice(0, 24)));
+    }
+  }
+  return shelves;
+}
+
+function appShelves(mode: "home" | "apps"): Shelf[] {
   const { settings, apps, usage } = store.state;
   const list = visibleApps(apps, settings);
   const shelves: Shelf[] = [];
@@ -140,35 +184,31 @@ function appShelves(limitCategories: number): Shelf[] {
   const favorites = settings.favorites
     .map((id) => list.find((app) => app.id === id))
     .filter((app): app is AppInfo => Boolean(app));
+
   if (favorites.length) {
-    shelves.push(appShelf("favorites", "Favorites", "Pinned", favorites));
+    shelves.push(appShelf("favorites", "Favorite Apps", "Pinned", favorites));
+  } else if (mode === "home") {
+    // If no favorites pinned yet, show top featured apps
+    shelves.push(appShelf("favorites", "Featured Apps", "Apps", list.slice(0, 8)));
   }
 
-  const recent = byUsage(list, "recent").filter((app) => (usage.apps[app.id]?.lastUsed ?? 0) > 0);
-  if (recent.length) {
-    shelves.push(appShelf("recent", "Recently Used", "Up Next", recent.slice(0, settings.maxRecent)));
-  }
-
-  const mostUsed = byUsage(list, "count").filter((app) => (usage.apps[app.id]?.count ?? 0) > 1);
-  if (mostUsed.length >= 3) {
-    shelves.push(appShelf("most-used", "Most Used", "Smart", mostUsed.slice(0, settings.maxRecent)));
-  }
-
-  if (!settings.groupByCategory) {
-    shelves.push(appShelf("all", "All Apps", "Library", sortByName(list)));
+  if (mode === "home") {
     return shelves;
   }
 
-  for (const row of settings.rows.filter((entry) => entry.source === "manual")) {
-    const custom = row.appIds
-      .map((id) => list.find((app) => app.id === id))
-      .filter((app): app is AppInfo => Boolean(app));
-    if (custom.length) shelves.push(appShelf(`custom-${row.id}`, row.title, "Custom", custom));
+  // ── Apps View ─────────────────────────────────────────────────────────────
+  // "All Applications" full list first
+  shelves.push(appShelf("all-apps", "All Applications", `${list.length} Apps`, sortByName(list)));
+
+  const recent = byUsage(list, "recent").filter((app) => (usage.apps[app.id]?.lastUsed ?? 0) > 0);
+  if (recent.length) {
+    shelves.push(appShelf("recent", "Recently Used", "Recent", recent.slice(0, settings.maxRecent)));
   }
 
+  // Followed by categorized sections
   const groups = new Map<string, AppInfo[]>();
   for (const app of list) {
-    const key = app.group || "Other";
+    const key = app.group || "Utilities";
     const bucket = groups.get(key);
     if (bucket) bucket.push(app);
     else groups.set(key, [app]);
@@ -177,11 +217,9 @@ function appShelves(limitCategories: number): Shelf[] {
     const rank = categoryRank(a[0]) - categoryRank(b[0]);
     return rank !== 0 ? rank : b[1].length - a[1].length;
   });
-  let shown = 0;
+
   for (const [category, categoryApps] of ordered) {
-    if (limitCategories > 0 && shown >= limitCategories) break;
     shelves.push(appShelf(`cat-${category}`, category, `${categoryApps.length}`, sortByName(categoryApps)));
-    shown += 1;
   }
   return shelves;
 }
@@ -190,13 +228,13 @@ function appShelves(limitCategories: number): Shelf[] {
 export function shelvesFor(tab: TabId): Shelf[] {
   switch (tab) {
     case "home":
-      return [...mediaShelves("home", null), ...appShelves(4)];
+      return [...appShelves("home"), ...tvShelves(true), ...mediaShelves("home", null)];
     case "movies":
       return mediaShelves("movies", MOVIE_KINDS);
     case "shows":
-      return mediaShelves("shows", SHOW_KINDS);
+      return tvShelves(false);
     case "apps":
-      return appShelves(0);
+      return appShelves("apps");
     default:
       return [];
   }

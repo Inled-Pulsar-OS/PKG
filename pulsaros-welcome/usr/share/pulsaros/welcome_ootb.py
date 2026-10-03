@@ -1797,10 +1797,11 @@ class OOTBWindow(Adw.ApplicationWindow):
                     ], check=False)
 
                 # ── Apply chosen appearance theme for user ───────
-                theme_scheme = "'prefer-dark'" if getattr(self, 'selected_theme', 'light') == 'dark' else "'default'"
-                gtk_theme_name = "'MacTahoe-Dark'" if getattr(self, 'selected_theme', 'light') == 'dark' else "'MacTahoe-Light'"
-                icon_theme_name = "'MacTahoe-blue-dark'" if getattr(self, 'selected_theme', 'light') == 'dark' else "'MacTahoe-blue-light'"
-                shell_theme_name = "'MacTahoe-Dark'" if getattr(self, 'selected_theme', 'light') == 'dark' else "'MacTahoe-Light'"
+                is_dark = (getattr(self, 'selected_theme', 'light') == 'dark')
+                theme_scheme = "'prefer-dark'" if is_dark else "'prefer-light'"
+                gtk_theme_name = "'MacTahoe-Dark'" if is_dark else "'MacTahoe-Light'"
+                icon_theme_name = "'MacTahoe-blue-dark'" if is_dark else "'MacTahoe-blue-light'"
+                shell_theme_name = "'MacTahoe-Dark'" if is_dark else "'MacTahoe-Light'"
 
                 theme_settings = [
                     ("org.gnome.desktop.interface", "color-scheme", theme_scheme),
@@ -1813,6 +1814,42 @@ class OOTBWindow(Adw.ApplicationWindow):
                         "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
                         schema, key, value
                     ], check=False)
+
+                # Physically copy correct theme files to the newly created user's .config
+                user_home = f"/home/{username}"
+                user_gtk4 = f"{user_home}/.config/gtk-4.0"
+                user_gtk3 = f"{user_home}/.config/gtk-3.0"
+                os.makedirs(user_gtk4, exist_ok=True)
+                os.makedirs(user_gtk3, exist_ok=True)
+
+                raw_theme = "MacTahoe-Dark" if is_dark else "MacTahoe-Light"
+                raw_icon = "MacTahoe-blue-dark" if is_dark else "MacTahoe-blue-light"
+
+                # 1. GTK4 / Libadwaita
+                if os.path.isdir(f"/usr/share/themes/{raw_theme}/gtk-4.0"):
+                    run_cmd(["cp", "-rf", f"/usr/share/themes/{raw_theme}/gtk-4.0/.", user_gtk4], check=False)
+                    if not is_dark and os.path.isfile(f"{user_gtk4}/gtk.css"):
+                        run_cmd(["cp", "-f", f"{user_gtk4}/gtk.css", f"{user_gtk4}/gtk-dark.css"], check=False)
+
+                # 2. GTK3
+                if os.path.isdir(f"/usr/share/themes/{raw_theme}/gtk-3.0"):
+                    if is_dark and os.path.isfile(f"/usr/share/themes/{raw_theme}/gtk-3.0/gtk-dark.css"):
+                        run_cmd(["cp", "-rf", f"/usr/share/themes/{raw_theme}/gtk-3.0/gtk-dark.css", f"{user_gtk3}/gtk.css"], check=False)
+                    else:
+                        run_cmd(["cp", "-rf", f"/usr/share/themes/{raw_theme}/gtk-3.0/gtk.css", f"{user_gtk3}/gtk.css"], check=False)
+                    if os.path.isdir(f"/usr/share/themes/{raw_theme}/gtk-3.0/windows-assets"):
+                        run_cmd(["ln", "-sfn", f"/usr/share/themes/{raw_theme}/gtk-3.0/windows-assets", f"{user_gtk3}/windows-assets"], check=False)
+
+                # 3. settings.ini
+                settings_data = f"[Settings]\ngtk-theme-name={raw_theme}\ngtk-icon-theme-name={raw_icon}\ngtk-application-prefer-dark-theme={1 if is_dark else 0}\ngtk-decoration-layout=close,minimize,maximize:\n"
+                for ini_f in [f"{user_gtk3}/settings.ini", f"{user_gtk4}/settings.ini"]:
+                    try:
+                        with open(ini_f, "w") as f_ini:
+                            f_ini.write(settings_data)
+                    except Exception:
+                        pass
+
+                run_cmd(["chown", "-R", f"{username}:{username}", f"{user_home}/.config"], check=False)
 
             GLib.idle_add(self.on_setup_completed)
 

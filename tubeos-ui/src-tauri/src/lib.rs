@@ -243,6 +243,11 @@ fn open_target(target: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn run_command(command: String) -> Result<(), String> {
+    launcher::run_shell_command(&command)
+}
+
+#[tauri::command]
 fn list_directory(path: String, show_hidden: bool) -> Result<DirListing, String> {
     system::list_dir(&path, show_hidden)
 }
@@ -286,6 +291,12 @@ fn audio_command(
 #[tauri::command]
 fn quit_launcher(app: tauri::AppHandle) {
     app.exit(0);
+}
+
+#[tauri::command]
+fn fetch_text(url: String) -> Result<String, String> {
+    let bytes = media::http_get(&url, 15)?;
+    String::from_utf8(bytes).map_err(|e| format!("UTF-8 decode error: {e}"))
 }
 
 // ── Recommendation engine (IMDb) ──────────────────────────────────────────
@@ -526,11 +537,13 @@ pub fn run() {
             get_usage,
             get_system_info,
             open_target,
+            run_command,
             list_directory,
             home_directory,
             get_audio,
             audio_command,
             quit_launcher,
+            fetch_text,
             media_catalog,
             media_recommendations,
             media_search,

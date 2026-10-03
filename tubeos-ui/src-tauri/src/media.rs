@@ -276,15 +276,201 @@ pub fn search_imdb(query: &str, genre: &str) -> Result<Vec<MediaItem>, String> {
     if query.trim().is_empty() {
         return Ok(Vec::new());
     }
-    let bytes = http_get(&search_url(query), 12)?;
+    let bytes = http_get(&search_url(query), 3)?;
     Ok(parse_suggestions(&bytes, genre))
+}
+
+pub fn initial_seed_catalog() -> Vec<MediaItem> {
+    vec![
+        MediaItem {
+            id: "tt1375666".into(),
+            title: "Inception".into(),
+            year: Some("2010".into()),
+            kind: "Movie".into(),
+            stars: Some("Leonardo DiCaprio, Joseph Gordon-Levitt, Elliot Page".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BMjAxMzY3NjcxNF5BMl5BanBnXkFtZTcwNTI5OTM0Mw@@._V1_.jpg".into()),
+            genre: "Sci-Fi".into(),
+            rank: 1.0,
+        },
+        MediaItem {
+            id: "tt0816692".into(),
+            title: "Interstellar".into(),
+            year: Some("2014".into()),
+            kind: "Movie".into(),
+            stars: Some("Matthew McConaughey, Anne Hathaway, Jessica Chastain".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BYzdjMDAxZGItMjSubC00MWRhLTlkNjYtZWFhNmM2NDJmNDg4XkEyXkFqcGc@._V1_.jpg".into()),
+            genre: "Sci-Fi".into(),
+            rank: 2.0,
+        },
+        MediaItem {
+            id: "tt0468569".into(),
+            title: "The Dark Knight".into(),
+            year: Some("2008".into()),
+            kind: "Movie".into(),
+            stars: Some("Christian Bale, Heath Ledger, Aaron Eckhart".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BMTMxNTMwODM0NF5BMl5BanBnXkFtZTcwODAyMTk2Mw@@._V1_.jpg".into()),
+            genre: "Action".into(),
+            rank: 3.0,
+        },
+        MediaItem {
+            id: "tt15239678".into(),
+            title: "Dune: Part Two".into(),
+            year: Some("2024".into()),
+            kind: "Movie".into(),
+            stars: Some("Timothée Chalamet, Zendaya, Rebecca Ferguson".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BN2QyZGUgkNjMtODgxYi00YzExLTg2YTgtYTY0YTQ0OGMzMmY1XkEyXkFqcGc@._V1_.jpg".into()),
+            genre: "Sci-Fi".into(),
+            rank: 4.0,
+        },
+        MediaItem {
+            id: "tt15398776".into(),
+            title: "Oppenheimer".into(),
+            year: Some("2023".into()),
+            kind: "Movie".into(),
+            stars: Some("Cillian Murphy, Emily Blunt, Matt Damon".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BN2JkMDc5MGQtZjg3YS00OTFiLTllYjQtNDFhYTM2OTQ2NGU1XkEyXkFqcGc@._V1_.jpg".into()),
+            genre: "Drama".into(),
+            rank: 5.0,
+        },
+        MediaItem {
+            id: "tt0133093".into(),
+            title: "The Matrix".into(),
+            year: Some("1999".into()),
+            kind: "Movie".into(),
+            stars: Some("Keanu Reeves, Laurence Fishburne, Carrie-Anne Moss".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BN2NmN2VhMTQtMDNiOS00NDlhLTliMjgtODE2ZTY0ODQyNDRhXkEyXkFqcGc@._V1_.jpg".into()),
+            genre: "Action".into(),
+            rank: 6.0,
+        },
+        MediaItem {
+            id: "tt6751668".into(),
+            title: "Parasite".into(),
+            year: Some("2019".into()),
+            kind: "Movie".into(),
+            stars: Some("Song Kang-ho, Lee Sun-kyun, Cho Yeo-jeong".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BYWZjMjk3ZTItODQ2ZC00MzA5LWEwYmMtODFkNzg5Y2UxNWU4XkEyXkFqcGc@._V1_.jpg".into()),
+            genre: "Drama".into(),
+            rank: 7.0,
+        },
+        MediaItem {
+            id: "tt4574334".into(),
+            title: "Stranger Things".into(),
+            year: Some("2016".into()),
+            kind: "TV Series".into(),
+            stars: Some("Millie Bobby Brown, Finn Wolfhard, Winona Ryder".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BMDZkODY2ZGItYTY5Yy00NmI5LWFhMTAtOTY3ZGY3NzPmM2IxXkEyXkFqcGc@._V1_.jpg".into()),
+            genre: "Sci-Fi".into(),
+            rank: 8.0,
+        },
+        MediaItem {
+            id: "tt0903747".into(),
+            title: "Breaking Bad".into(),
+            year: Some("2008".into()),
+            kind: "TV Series".into(),
+            stars: Some("Bryan Cranston, Aaron Paul, Anna Gunn".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BMzU5ZGYzNmQtMTdhYy00OGRiLTg0NmQtYjVjNzliZTg1ZGE4XkEyXkFqcGc@._V1_.jpg".into()),
+            genre: "Crime".into(),
+            rank: 9.0,
+        },
+        MediaItem {
+            id: "tt3581920".into(),
+            title: "The Last of Us".into(),
+            year: Some("2023".into()),
+            kind: "TV Series".into(),
+            stars: Some("Pedro Pascal, Bella Ramsey, Gabriel Luna".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BYzA2Nzk5M2EtNWY4Yi00ZDY4LThkZTgtYjhhNzc4YzliMzUyXkEyXkFqcGc@._V1_.jpg".into()),
+            genre: "Drama".into(),
+            rank: 10.0,
+        },
+        MediaItem {
+            id: "tt11280740".into(),
+            title: "Severance".into(),
+            year: Some("2022".into()),
+            kind: "TV Series".into(),
+            stars: Some("Adam Scott, Zach Cherry, Britt Lower".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BMjA5OTc3M2EtZTk2MC00YTgxLWJkOGQtNTg5ZTQ5MzM3M2ExXkEyXkFqcGc@._V1_.jpg".into()),
+            genre: "Sci-Fi".into(),
+            rank: 11.0,
+        },
+        MediaItem {
+            id: "tt11126994".into(),
+            title: "Arcane".into(),
+            year: Some("2021".into()),
+            kind: "TV Series".into(),
+            stars: Some("Hailee Steinfeld, Ella Purnell, Kevin Alejandro".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BMzU4MTNiNmEtYTkxMC00MzkzLTk2OWEtMWFlZDE4Yzk4NGQ5XkEyXkFqcGc@._V1_.jpg".into()),
+            genre: "Animation".into(),
+            rank: 12.0,
+        },
+        MediaItem {
+            id: "tt0110912".into(),
+            title: "Pulp Fiction".into(),
+            year: Some("1994".into()),
+            kind: "Movie".into(),
+            stars: Some("John Travolta, Uma Thurman, Samuel L. Jackson".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BYTViYTE3ZGQtNDBlMC00ZTAyLTkyODMtZGRiZDg0MjA2YThkXkEyXkFqcGc@._V1_.jpg".into()),
+            genre: "Crime".into(),
+            rank: 13.0,
+        },
+        MediaItem {
+            id: "tt0172495".into(),
+            title: "Gladiator".into(),
+            year: Some("2000".into()),
+            kind: "Movie".into(),
+            stars: Some("Russell Crowe, Joaquin Phoenix, Connie Nielsen".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BYWQ4YmNjYjEtOWE1Zi00Y2U4LWI4NTAtMTU0MjkxNWQ1ZmJiXkEyXkFqcGc@._V1_.jpg".into()),
+            genre: "Action".into(),
+            rank: 14.0,
+        },
+        MediaItem {
+            id: "tt0167260".into(),
+            title: "The Lord of the Rings: The Return of the King".into(),
+            year: Some("2003".into()),
+            kind: "Movie".into(),
+            stars: Some("Elijah Wood, Viggo Mortensen, Ian McKellen".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BNDgwY2YyNjctZTMxZC00ZTRlLThhN2QtMTAwYjUyODhmZTE3XkEyXkFqcGc@._V1_.jpg".into()),
+            genre: "Fantasy".into(),
+            rank: 15.0,
+        },
+        MediaItem {
+            id: "tt1877830".into(),
+            title: "The Batman".into(),
+            year: Some("2022".into()),
+            kind: "Movie".into(),
+            stars: Some("Robert Pattinson, Zoë Kravitz, Jeffrey Wright".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BMmU5NGJlMzAtMGNmOC00YjJjLTgyMzUtNjAyYmE5Njg5NmY2XkEyXkFqcGc@._V1_.jpg".into()),
+            genre: "Action".into(),
+            rank: 16.0,
+        },
+        MediaItem {
+            id: "tt1745960".into(),
+            title: "Top Gun: Maverick".into(),
+            year: Some("2022".into()),
+            kind: "Movie".into(),
+            stars: Some("Tom Cruise, Miles Teller, Jennifer Connelly".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BMmIwZDMyYWUtNTU0ZS00ODJhLTg2ZmEtMTk5ZmYzODcxODYxXkEyXkFqcGc@._V1_.jpg".into()),
+            genre: "Action".into(),
+            rank: 17.0,
+        },
+        MediaItem {
+            id: "tt2267998".into(),
+            title: "Gone Girl".into(),
+            year: Some("2014".into()),
+            kind: "Movie".into(),
+            stars: Some("Ben Affleck, Rosamund Pike, Neil Patrick Harris".into()),
+            poster: Some("https://m.media-amazon.com/images/M/MV5BMTk0MDQ3OTAzOV5BMl5BanBnXkFtZTgwNzU1NzE3MjE@._V1_.jpg".into()),
+            genre: "Thriller".into(),
+            rank: 18.0,
+        },
+    ]
 }
 
 pub fn load_catalog() -> Vec<MediaItem> {
     fs::read_to_string(catalog_path())
         .ok()
         .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_default()
+        .filter(|list: &Vec<MediaItem>| !list.is_empty())
+        .unwrap_or_else(initial_seed_catalog)
 }
 
 pub fn save_catalog(items: &[MediaItem]) {
@@ -373,7 +559,7 @@ pub fn recommendations(
         .filter(|item| !profile.disliked.iter().any(|id| id == &item.id))
         .map(|item| {
             let affinity = profile.genres.get(&item.genre).copied().unwrap_or(0.0);
-            let mut score = 0.55 * popularity(item.rank) + 0.45 * (affinity / 3.0).tanh();
+            let mut score = 0.35 * popularity(item.rank) + 0.35 * (affinity / 3.0).tanh();
             if profile.liked.iter().any(|id| id == &item.id) {
                 score += 0.40;
             }
@@ -382,7 +568,8 @@ pub fn recommendations(
             }
             let clicks = profile.clicks.get(&item.id).copied().unwrap_or(0) as f64;
             score += (clicks * 0.04).min(0.25);
-            score += hash_unit(&item.id, salt) * 0.14;
+            // Dynamic jitter weighting so reshuffling produces varied, fresh recommendations
+            score += hash_unit(&item.id, salt) * 0.55;
             (score, item)
         })
         .collect();

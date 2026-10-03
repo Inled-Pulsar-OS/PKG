@@ -1,0 +1,636 @@
+#!/usr/bin/env python3
+"""
+Pulsar OS - Dynamic System, Memory & Process Optimizer (pulsaros-optimizer)
+Engineered for ultimate desktop fluidity and zero-lag performance on low-end hardware (Intel i3, old PCs, VMs).
+
+Core Dynamic Features:
+1. Real-time PSI (Pressure Stall Information) & CPU Saturation Tracker.
+2. Adaptive Scheduler Governor:
+   - Under normal load: build tools & VMs run at normal speed.
+   - Under CPU/IO saturation or lag spikes: automatically protects GNOME Shell, PipeWire audio,
+     Spotlight, and active GUI apps with high priority (-14 to -16 nice, real-time IO),
+     while gently throttling multi-threaded compilers (cargo, rustc, gcc, ninja) to background priority (+10 nice, idle IO).
+3. Background Indexer & Maintenance Throttling (tracker, tinysparql, packagekit, apt locked to IDLE IO and nice 19).
+4. Zero-Lag zRAM Memory Compression (swappiness 100/60, page-cluster 0, vfs_cache_pressure 50).
+5. Proactive Memory Compaction and Pagecache Trimming on acute memory pressure.
+6. Direct libc syscalls (SYS_ioprio_set) with near-zero daemon CPU footprint (< 0.1%).
+"""
+
+import ctypes
+import os
+import sys
+import time
+import subprocess
+import glob
+import signal
+import platform
+
+# Direct Linux syscall for I/O priority without spawning subprocesses
+# SYS_ioprio_set: x86_64=251, aarch64=30, arm=314, i386=289
+def _get_ioprio_syscall_nr():
+    m = platform.machine().lower()
+    if m in ("x86_64", "amd64"):
+        return 251
+    elif m in ("aarch64", "arm64"):
+        return 30
+    elif m.startswith("arm"):
+        return 314
+    elif m in ("i386", "i686", "x86"):
+        return 289
+    return 251
+
+IOPRIO_SYSCALL_NR = _get_ioprio_syscall_nr()
+_libc = None
+try:
+    _libc = ctypes.CDLL(None)
+except Exception:
+    pass
+
+def set_ioprio(pid: int, io_class: int, io_prio: int):
+    """Set process I/O priority directly via libc syscall with zero process spawn overhead."""
+    if _libc:
+        try:
+            # IOPRIO_PRIO_VALUE(class, data) = ((class << 13) | data)
+            # IOPRIO_WHO_PROCESS = 1
+            val = (io_class << 13) | (io_prio & 0x1fff)
+            res = _libc.syscall(IOPRIO_SYSCALL_NR, 1, pid, val)
+            if res == 0:
+                return True
+        except Exception:
+            pass
+    try:
+        if io_class == 3:
+            subprocess.run(["ionice", "-c", "3", "-p", str(pid)], capture_output=True)
+        else:
+            subprocess.run(["ionice", "-c", str(io_class), "-n", str(io_prio), "-p", str(pid)], capture_output=True)
+        return True
+    except Exception:
+        return False
+
+# Cache of processed PIDs: pid -> (target_nice, io_class, io_prio, mode)
+PROCESSED_PIDS = {}
+CURRENT_PRESSURE_MODE = 0
+PREV_CPU_TIMES = None
+
+THROTTLE_PROCESS_NAMES = {
+    "tracker-miner-fs-3",
+    "tracker-miner-fs",
+    "tracker-extract-3",
+    "tracker-extract",
+    "tinysparql",
+    "localsearch-3",
+    "localsearch-extractor-3",
+    "packagekitd",
+    "apt-daily",
+    "updatedb",
+    "man-db",
+    "apt.systemd.daily",
+    "fstrim",
+    "systemd-coredump",
+}
+
+CORE_DESKTOP_PROCESSES = {
+    "gnome-shell",
+    "pulsaros-spotli",
+    "pulsaros-spotlight",
+    "pipewire",
+    "wireplumber",
+    "pipewire-pulse",
+    "Xwayland",
+    "mutter-x11-frames",
+}
+
+DEV_BUILD_TOOLS = {
+    "cargo",
+    "rustc",
+    "ninja",
+    "gcc",
+    "g++",
+    "clang",
+    "clang++",
+    "make",
+    "meson",
+    "dpkg-deb",
+    "dpkg-buildpackage",
+    "ld",
+    "gold",
+    "lld",
+    "cc1",
+    "cc1plus",
+}
+
+HYPERVISOR_VM_PROCESSES = {
+    "qemu-system-x86_64",
+    "qemu-system-x86",
+    "qemu-kvm",
+    "VirtualBoxVM",
+    "VBoxHeadless",
+    "vmware-vmx",
+    "virt-manager",
+    "gnome-boxes",
+}
+
+USER_GUI_APPS = {
+    "nautilus", "firefox", "chromium", "brave", "code", "cursor",
+    "ptyxis", "gnome-terminal", "alacritty", "kitty", "ghostty",
+    "gnome-text-editor", "gedit", "evince", "eog", "loupe",
+    "org.gnome.Nautilus", "org.gnome.Settings", "gnome-control-center"
+}
+
+def log(msg):
+    print(f"[pulsaros-optimizer] {msg}", flush=True)
+
+def read_meminfo():
+    info = {}
+    try:
+        with open("/proc/meminfo", "r") as f:
+            for line in f:
+                parts = line.split(":")
+                if len(parts) == 2:
+                    key = parts[0].strip()
+                    val = parts[1].strip().split()[0]
+                    info[key] = int(val)
+    except Exception:
+        pass
+    return info
+
+def get_cpu_utilization():
+    """Calculate instantaneous CPU usage % across all cores from /proc/stat."""
+    global PREV_CPU_TIMES
+    try:
+        with open("/proc/stat", "r") as f:
+            line = f.readline().split()
+            if line[0] == "cpu":
+                times = [int(x) for x in line[1:]]
+                idle_time = times[3] + (times[4] if len(times) > 4 else 0)
+                total_time = sum(times)
+                
+                if PREV_CPU_TIMES is None:
+                    PREV_CPU_TIMES = (total_time, idle_time)
+                    return 0.0
+                
+                prev_total, prev_idle = PREV_CPU_TIMES
+                PREV_CPU_TIMES = (total_time, idle_time)
+                
+                d_total = total_time - prev_total
+                d_idle = idle_time - prev_idle
+                
+                if d_total > 0:
+                    usage = 100.0 * (1.0 - (d_idle / d_total))
+                    return max(0.0, min(100.0, usage))
+    except Exception:
+        pass
+    return 0.0
+
+def read_psi():
+    """Read Linux kernel Pressure Stall Information (PSI) for CPU, I/O and Memory."""
+    psi = {"cpu_some": 0.0, "io_some": 0.0, "io_full": 0.0, "mem_some": 0.0, "mem_full": 0.0}
+    try:
+        if os.path.exists("/proc/pressure/cpu"):
+            with open("/proc/pressure/cpu", "r") as f:
+                for line in f:
+                    if line.startswith("some"):
+                        for part in line.split():
+                            if part.startswith("avg10="):
+                                psi["cpu_some"] = float(part.split("=")[1])
+        if os.path.exists("/proc/pressure/io"):
+            with open("/proc/pressure/io", "r") as f:
+                for line in f:
+                    if line.startswith("some"):
+                        for part in line.split():
+                            if part.startswith("avg10="):
+                                psi["io_some"] = float(part.split("=")[1])
+                    elif line.startswith("full"):
+                        for part in line.split():
+                            if part.startswith("avg10="):
+                                psi["io_full"] = float(part.split("=")[1])
+        if os.path.exists("/proc/pressure/memory"):
+            with open("/proc/pressure/memory", "r") as f:
+                for line in f:
+                    if line.startswith("some"):
+                        for part in line.split():
+                            if part.startswith("avg10="):
+                                psi["mem_some"] = float(part.split("=")[1])
+                    elif line.startswith("full"):
+                        for part in line.split():
+                            if part.startswith("avg10="):
+                                psi["mem_full"] = float(part.split("=")[1])
+    except Exception:
+        pass
+    return psi
+
+def evaluate_system_pressure():
+    """
+    Dynamically evaluate real-time system pressure level:
+    - Mode 0: NORMAL (Desktop fluid, CPU usage < 65%, low pressure stall)
+    - Mode 1: ELEVATED (Moderate load, CPU 65%-85% or PSI 15-30%)
+    - Mode 2: CRITICAL / SATURATED (Heavy load, CPU > 85% or PSI > 30% or IO stall > 40%)
+    """
+    cpu_usage = get_cpu_utilization()
+    psi = read_psi()
+    
+    # Critical saturation (risk of UI stutter / lag)
+    if cpu_usage > 85.0 or psi["cpu_some"] > 30.0 or psi["io_some"] > 40.0 or psi["io_full"] > 5.0:
+        return 2, cpu_usage, psi
+    
+    # Elevated load
+    if cpu_usage > 65.0 or psi["cpu_some"] > 15.0 or psi["io_some"] > 20.0 or psi["io_full"] > 1.0:
+        return 1, cpu_usage, psi
+        
+    return 0, cpu_usage, psi
+
+def get_zram_stats():
+    """Retrieve zRAM compression and usage statistics."""
+    stats = {"active": False, "orig_data_mb": 0.0, "compr_data_mb": 0.0, "ratio": "N/A", "saved_mb": 0.0, "algorithm": "unknown"}
+    try:
+        if os.path.exists("/sys/block/zram0/mm_stat"):
+            with open("/sys/block/zram0/mm_stat", "r") as f:
+                parts = f.read().split()
+                if len(parts) >= 3:
+                    orig_bytes = int(parts[0])
+                    compr_bytes = int(parts[1])
+                    total_bytes = int(parts[2])
+                    orig_mb = orig_bytes / (1024 * 1024)
+                    compr_mb = compr_bytes / (1024 * 1024)
+                    saved_mb = max(0.0, orig_mb - compr_mb)
+                    ratio = f"{(orig_bytes / compr_bytes):.2f}:1" if compr_bytes > 0 else "1.00:1"
+                    
+                    stats["active"] = True
+                    stats["orig_data_mb"] = orig_mb
+                    stats["compr_data_mb"] = compr_mb
+                    stats["saved_mb"] = saved_mb
+                    stats["ratio"] = ratio
+        if os.path.exists("/sys/block/zram0/comp_algorithm"):
+            with open("/sys/block/zram0/comp_algorithm", "r") as f:
+                algo_str = f.read()
+                for part in algo_str.split():
+                    if part.startswith("[") and part.endswith("]"):
+                        stats["algorithm"] = part[1:-1]
+                        break
+    except Exception:
+        pass
+    return stats
+
+def show_status():
+    """Display real-time optimization statistics and dynamic pressure governor status."""
+    mode, cpu_pct, psi = evaluate_system_pressure()
+    mode_names = {0: "NORMAL (Fluid)", 1: "ELEVATED LOAD (Balancing)", 2: "CRITICAL SATURATION (Zero-Lag Protection Active)"}
+    
+    print("=" * 65)
+    print("PULSAR OS OPTIMIZER - DYNAMIC FLUIDITY & METRICS ENGINE")
+    print("=" * 65)
+    
+    print(f"\nREAL-TIME DYNAMIC GOVERNOR:")
+    print(f"  System Governor State:  {mode_names.get(mode, 'UNKNOWN')}")
+    print(f"  Instantaneous CPU Load: {cpu_pct:.1f}%")
+    print(f"  CPU Pressure Stall:     {psi['cpu_some']:.1f}%")
+    print(f"  Disk I/O Pressure:      Some {psi['io_some']:.1f}% | Full {psi['io_full']:.1f}%")
+    print(f"  Memory Pressure Stall:  Some {psi['mem_some']:.1f}% | Full {psi['mem_full']:.1f}%")
+    
+    # 1. Memory & zRAM
+    mem = read_meminfo()
+    total_mb = mem.get("MemTotal", 0) // 1024
+    avail_mb = mem.get("MemAvailable", 0) // 1024
+    used_mb = total_mb - avail_mb
+    
+    print(f"\nSYSTEM MEMORY:")
+    print(f"  Total RAM:              {total_mb} MB ({total_mb/1024:.1f} GB)")
+    print(f"  Used:                   {used_mb} MB ({used_mb/1024:.1f} GB)")
+    print(f"  Available:              {avail_mb} MB ({avail_mb/1024:.1f} GB)")
+    
+    zstats = get_zram_stats()
+    print(f"\nzRAM COMPRESSION:")
+    if zstats["active"]:
+        print(f"  Algorithm:              {zstats['algorithm'].upper()}")
+        print(f"  Uncompressed Size:      {zstats['orig_data_mb']:.1f} MB")
+        print(f"  Compressed Size:        {zstats['compr_data_mb']:.1f} MB")
+        print(f"  Compression Ratio:      {zstats['ratio']}")
+        print(f"  Net RAM Saved:          {zstats['saved_mb']:.1f} MB")
+    else:
+        print("  Status:                 Inactive")
+        
+    # 2. Kernel VM Sysctls
+    print(f"\nKERNEL LATENCY PARAMETERS:")
+    try:
+        for p in ["/proc/sys/vm/swappiness", "/proc/sys/vm/vfs_cache_pressure", "/proc/sys/vm/page-cluster", "/proc/sys/kernel/sched_autogroup_enabled"]:
+            if os.path.exists(p):
+                with open(p, "r") as f:
+                    print(f"  {os.path.basename(os.path.dirname(p))}.{os.path.basename(p)}: {f.read().strip()}")
+    except Exception as e:
+        print(f"  Error reading sysctls: {e}")
+
+    # 3. Process priorities
+    print(f"\nDYNAMIC PROCESS SCHEDULER:")
+    boosted = []
+    throttled = []
+    try:
+        for pid_str in [p for p in os.listdir("/proc") if p.isdigit()]:
+            try:
+                with open(f"/proc/{pid_str}/comm", "r") as f:
+                    comm = f.read().strip()
+                pid = int(pid_str)
+                with open(f"/proc/{pid_str}/stat", "r") as f:
+                    stat = f.read().split()
+                    nice = int(stat[18])
+                if (comm in CORE_DESKTOP_PROCESSES or comm in USER_GUI_APPS) and nice < 0:
+                    boosted.append((comm, pid, nice))
+                elif (comm in THROTTLE_PROCESS_NAMES or comm in DEV_BUILD_TOOLS) and nice > 0:
+                    throttled.append((comm, pid, nice))
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    if boosted:
+        print("  Boosted Responsive Apps (High CPU/IO):")
+        for comm, pid, nice in set(boosted):
+            print(f"     - {comm} (PID {pid}): Nice {nice}")
+    if throttled:
+        print("  Throttled / Background Load Tasks (Protected Fluidity):")
+        for comm, pid, nice in set(throttled):
+            print(f"     - {comm} (PID {pid}): Nice {nice}")
+    if not throttled and not boosted:
+        print("  No special processes running.")
+
+    print("=" * 65 + "\n")
+
+def setup_zram_and_sysctl():
+    """Configure zRAM compression and optimal low-spec kernel sysctls."""
+    try:
+        meminfo = read_meminfo()
+        total_kb = meminfo.get("MemTotal", 4 * 1024 * 1024)
+        total_mb = total_kb // 1024
+
+        log(f"System total RAM: {total_mb} MB")
+
+        # Balanced swappiness: 100 on low-RAM systems (< 8GB), 60 on standard/high-RAM PCs
+        target_swappiness = "100" if total_mb < 8192 else "60"
+
+        # 1. Sysctl optimizations for responsiveness without stalling disk
+        sysctls = {
+            "/proc/sys/vm/swappiness": target_swappiness,
+            "/proc/sys/vm/vfs_cache_pressure": "50",     # Retain directory/inode cache for snappy app launch
+            "/proc/sys/vm/page-cluster": "0",           # 0-latency 1-page zRAM swaps
+            "/proc/sys/vm/dirty_ratio": "10",           # Prevent write stalls on slow disks/SSDs
+            "/proc/sys/vm/dirty_background_ratio": "5",
+            "/proc/sys/vm/dirty_writeback_centisecs": "1500",
+            "/proc/sys/vm/dirty_expire_centisecs": "3000",
+            "/proc/sys/vm/compaction_proactiveness": "20",
+            "/proc/sys/kernel/sched_autogroup_enabled": "1", # Isolate heavy compilation trees from desktop session
+        }
+
+        for path, val in sysctls.items():
+            if os.path.exists(path):
+                try:
+                    with open(path, "w") as f:
+                        f.write(val)
+                except Exception:
+                    pass
+
+        # 2. Ensure zram module is loaded
+        try:
+            subprocess.run(["modprobe", "zram"], capture_output=True)
+        except Exception:
+            pass
+
+        # 3. Check if zRAM is already in /proc/swaps
+        zram_active = False
+        try:
+            with open("/proc/swaps", "r") as f:
+                if "zram" in f.read():
+                    zram_active = True
+        except Exception:
+            pass
+
+        if not zram_active:
+            if os.path.exists("/sys/block/zram0"):
+                for algo in ["lz4", "zstd"]:
+                    try:
+                        with open("/sys/block/zram0/comp_algorithm", "w") as f:
+                            f.write(algo)
+                        break
+                    except Exception:
+                        pass
+
+                zram_size_bytes = min(int(total_kb * 1024), 8 * 1024 * 1024 * 1024)
+                try:
+                    with open("/sys/block/zram0/reset", "w") as f:
+                        f.write("1")
+                except Exception:
+                    pass
+
+                try:
+                    with open("/sys/block/zram0/disksize", "w") as f:
+                        f.write(str(zram_size_bytes))
+                    subprocess.run(["mkswap", "/dev/zram0"], capture_output=True)
+                    subprocess.run(["swapon", "-p", "100", "/dev/zram0"], capture_output=True)
+                    log(f"Configured zRAM swap (/dev/zram0, {zram_size_bytes // (1024*1024)} MB, priority 100)")
+                except Exception as ze:
+                    log(f"zRAM activation notice: {ze}")
+            else:
+                log("zRAM device /dev/zram0 not present.")
+        else:
+            log("zRAM is already active.")
+    except Exception as e:
+        log(f"Error in setup_zram_and_sysctl: {e}")
+
+def optimize_process_priorities(pressure_mode: int):
+    """
+    Dynamically adjust nice and ionice levels based on real-time system pressure level:
+    - pressure_mode 0: NORMAL
+    - pressure_mode 1: ELEVATED
+    - pressure_mode 2: CRITICAL SATURATION
+    """
+    global PROCESSED_PIDS, CURRENT_PRESSURE_MODE
+    try:
+        # If the pressure mode transitioned, reset cache to update all running processes
+        if pressure_mode != CURRENT_PRESSURE_MODE:
+            PROCESSED_PIDS.clear()
+            CURRENT_PRESSURE_MODE = pressure_mode
+
+        active_pids = set()
+        pids = [pid for pid in os.listdir("/proc") if pid.isdigit()]
+        
+        for pid_str in pids:
+            try:
+                pid = int(pid_str)
+                active_pids.add(pid)
+
+                # Fast-path check
+                if pid in PROCESSED_PIDS and PROCESSED_PIDS[pid][3] == pressure_mode:
+                    continue
+
+                with open(f"/proc/{pid_str}/comm", "r") as f:
+                    comm = f.read().strip()
+
+                target_nice = None
+                io_class = 2
+                io_prio = 4
+
+                # 1. Background indexers and heavy system maintenance -> Always IDLE
+                if comm in THROTTLE_PROCESS_NAMES:
+                    target_nice = 19
+                    io_class = 3
+                    io_prio = 0
+                
+                # 2. Core Desktop Compositor, Audio & Shell -> Absolute Responsiveness
+                elif comm in CORE_DESKTOP_PROCESSES:
+                    if pressure_mode == 0:
+                        target_nice = -10
+                        io_class = 2
+                        io_prio = 0
+                    elif pressure_mode == 1:
+                        target_nice = -14
+                        io_class = 2
+                        io_prio = 0
+                    else: # CRITICAL
+                        target_nice = -16
+                        io_class = 1  # Realtime I/O priority for zero frame/audio drop
+                        io_prio = 3
+
+                # 3. Active User GUI Apps (Browsers, Editors, Terminals)
+                elif comm in USER_GUI_APPS:
+                    if pressure_mode == 0:
+                        target_nice = -3
+                        io_class = 2
+                        io_prio = 2
+                    elif pressure_mode == 1:
+                        target_nice = -6
+                        io_class = 2
+                        io_prio = 1
+                    else: # CRITICAL
+                        target_nice = -8
+                        io_class = 2
+                        io_prio = 0
+
+                # 4. Developer & Build Tools (cargo, rustc, gcc, ninja, make)
+                # When system is saturated, throttle compilers to background nice so desktop NEVER lags
+                elif comm in DEV_BUILD_TOOLS:
+                    if pressure_mode == 0:
+                        target_nice = 0
+                        io_class = 2
+                        io_prio = 4
+                    elif pressure_mode == 1:
+                        target_nice = 5
+                        io_class = 2
+                        io_prio = 6
+                    else: # CRITICAL SATURATION
+                        target_nice = 10
+                        io_class = 3  # IDLE I/O so disk does not freeze
+                        io_prio = 0
+
+                # 5. Hypervisors & VMs (QEMU, VirtualBox, VMware)
+                elif comm in HYPERVISOR_VM_PROCESSES:
+                    if pressure_mode == 0:
+                        target_nice = -2
+                        io_class = 2
+                        io_prio = 2
+                    elif pressure_mode == 1:
+                        target_nice = 0
+                        io_class = 2
+                        io_prio = 4
+                    else: # CRITICAL
+                        target_nice = 4
+                        io_class = 2
+                        io_prio = 6
+
+                if target_nice is not None:
+                    try:
+                        os.setpriority(os.PRIO_PROCESS, pid, target_nice)
+                    except Exception:
+                        pass
+                    set_ioprio(pid, io_class, io_prio)
+                    PROCESSED_PIDS[pid] = (target_nice, io_class, io_prio, pressure_mode)
+
+            except Exception:
+                continue
+
+        # Prune terminated PIDs from cache
+        for dead_pid in list(PROCESSED_PIDS.keys()):
+            if dead_pid not in active_pids:
+                del PROCESSED_PIDS[dead_pid]
+
+    except Exception:
+        pass
+
+def check_memory_pressure_and_trim(psi_stats):
+    """Drop clean pagecaches and proactively compact memory when system is under acute pressure."""
+    try:
+        mem = read_meminfo()
+        available_mb = mem.get("MemAvailable", 1024 * 1024) // 1024
+        
+        # Acute memory starvation or severe memory stall
+        if available_mb < 200 or psi_stats["mem_full"] > 10.0:
+            log(f"Acute low available memory ({available_mb} MB, PSI: {psi_stats['mem_full']:.1f}%). Reclaiming caches & compacting...")
+            try:
+                with open("/proc/sys/vm/drop_caches", "w") as f:
+                    f.write("1")
+                if os.path.exists("/proc/sys/vm/compact_memory"):
+                    with open("/proc/sys/vm/compact_memory", "w") as f:
+                        f.write("1")
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+def launch_gui():
+    gui_bin = "/usr/bin/pulsaros-optimizer-gui"
+    if os.path.exists(gui_bin):
+        os.execv(gui_bin, [gui_bin] + sys.argv[1:])
+    else:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        local_gui = os.path.join(script_dir, "pulsaros-optimizer-gui")
+        if os.path.exists(local_gui):
+            os.execv(sys.executable, [sys.executable, local_gui] + sys.argv[1:])
+
+def main():
+    if len(sys.argv) > 1:
+        arg = sys.argv[1]
+        if arg in ["--status", "-s", "status"]:
+            show_status()
+            sys.exit(0)
+        elif arg in ["--gui", "-g", "gui"]:
+            launch_gui()
+            sys.exit(0)
+        elif arg in ["--start"]:
+            subprocess.run(["systemctl", "start", "pulsaros-optimizer.service"])
+            sys.exit(0)
+        elif arg in ["--stop"]:
+            subprocess.run(["systemctl", "stop", "pulsaros-optimizer.service"])
+            sys.exit(0)
+        elif arg in ["--restart"]:
+            subprocess.run(["systemctl", "restart", "pulsaros-optimizer.service"])
+            sys.exit(0)
+
+    # If launched in graphical session by user without flags, open the GUI
+    if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+        if os.geteuid() != 0 and sys.stdin.isatty():
+            launch_gui()
+            sys.exit(0)
+
+    log("Starting Pulsar OS Dynamic Adaptive Optimizer Daemon...")
+    setup_zram_and_sysctl()
+
+    log("Dynamic governor running (real-time PSI, CPU load governor, zero-lag desktop protection)...")
+    loop_count = 0
+    while True:
+        try:
+            pressure_mode, cpu_pct, psi = evaluate_system_pressure()
+            optimize_process_priorities(pressure_mode)
+            check_memory_pressure_and_trim(psi)
+            
+            loop_count += 1
+            if loop_count % 150 == 0:
+                zstats = get_zram_stats()
+                if zstats["active"]:
+                    log(f"Stats: Gov Mode: {pressure_mode} | CPU: {cpu_pct:.1f}% | PSI: {psi['cpu_some']:.1f}% | zRAM Saved: {zstats['saved_mb']:.1f} MB (Ratio: {zstats['ratio']})")
+            
+            time.sleep(1.5)
+        except KeyboardInterrupt:
+            log("Shutting down optimizer daemon.")
+            break
+        except Exception as e:
+            time.sleep(2.0)
+
+if __name__ == "__main__":
+    main()

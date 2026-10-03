@@ -11,7 +11,7 @@ ExecStartPre=/usr/bin/tubeos-app-management -v
 ExecStart=/usr/bin/tubeos-app-management -c /etc/tubeos/app-management.conf
 PIDFile=/var/run/tubeos/app-management.pid
 Restart=always
-Type=notify
+Type=simple
 
 [Install]
 WantedBy=multi-user.target

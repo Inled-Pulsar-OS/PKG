@@ -13,7 +13,8 @@
     "app:build": "tauri build"
   },
   "dependencies": {
-    "@tauri-apps/api": "2.11.1"
+    "@tauri-apps/api": "2.11.1",
+    "hls.js": "^1.7.3"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.11.4",

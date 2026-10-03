@@ -1,0 +1,16 @@
+[Unit]
+Description=Pulsar OS Dynamic Memory, Process & Performance Optimizer
+After=multi-user.target
+Before=graphical.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pulsaros-optimizer
+Restart=always
+RestartSec=5
+Nice=-10
+IOSchedulingClass=realtime
+IOSchedulingPriority=0
+
+[Install]
+WantedBy=multi-user.target

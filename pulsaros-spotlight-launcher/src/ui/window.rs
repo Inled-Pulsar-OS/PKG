@@ -70,6 +70,7 @@ impl SpotlightWindow {
             .decorated(false)
             .build();
 
+        window.set_size_request(680, 520);
         window.add_css_class("spotlight-window");
 
         let style_manager = adw::StyleManager::default();
@@ -93,6 +94,7 @@ impl SpotlightWindow {
         }
 
         let main_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+        main_box.set_size_request(680, 520);
         main_box.add_css_class("spotlight-main");
         window.set_child(Some(&main_box));
 
@@ -114,8 +116,9 @@ impl SpotlightWindow {
         search_icon.add_css_class("search-icon");
 
         let search_entry = gtk4::Entry::builder()
-            .placeholder_text("Search applications, files, or clipboard...")
+            .placeholder_text("Spotlight Search")
             .hexpand(true)
+            .has_frame(false)
             .build();
         search_entry.add_css_class("search-input");
 
@@ -144,7 +147,17 @@ impl SpotlightWindow {
             category_bar.append(&btn);
             category_buttons.insert(cat_id.to_string(), btn);
         }
-        main_box.append(&category_bar);
+
+        let category_scroll = gtk4::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk4::PolicyType::Automatic)
+            .vscrollbar_policy(gtk4::PolicyType::Never)
+            .propagate_natural_width(false)
+            .propagate_natural_height(false)
+            .hexpand(true)
+            .build();
+        category_scroll.add_css_class("category-scroll");
+        category_scroll.set_child(Some(&category_bar));
+        main_box.append(&category_scroll);
 
         // -- Uninstall Progress Bar --
         let progress_revealer = gtk4::Revealer::builder()
@@ -298,6 +311,8 @@ impl SpotlightWindow {
         let scroll = gtk4::ScrolledWindow::builder()
             .hscrollbar_policy(gtk4::PolicyType::Never)
             .vscrollbar_policy(gtk4::PolicyType::Automatic)
+            .propagate_natural_width(false)
+            .propagate_natural_height(false)
             .vexpand(true)
             .min_content_height(300)
             .max_content_height(480)
@@ -373,20 +388,39 @@ impl SpotlightWindow {
     }
 
     fn check_indexing_status(&self) {
-        let (is_indexing, _status, progress) = self.backend.get_indexing_status();
-        if is_indexing {
-            let percent = (progress * 100.0) as i32;
-            let label_text = if percent > 0 {
-                format!("Indexing files in background... ({}%)", percent)
-            } else {
-                "Indexing files in background...".to_string()
-            };
-            self.indexing_label.set_text(&label_text);
-            self.indexing_pbar.set_fraction(progress.max(0.0).min(1.0));
-            self.indexing_revealer.set_reveal_child(true);
-        } else {
-            self.indexing_revealer.set_reveal_child(false);
-        }
+        let (sender, receiver) = std::sync::mpsc::channel::<(bool, String, f64)>();
+
+        let ind_revealer = self.indexing_revealer.clone();
+        let ind_label = self.indexing_label.clone();
+        let ind_pbar = self.indexing_pbar.clone();
+
+        gtk4::glib::timeout_add_local(Duration::from_millis(5), move || {
+            match receiver.try_recv() {
+                Ok((is_indexing, _status, progress)) => {
+                    if is_indexing {
+                        let percent = (progress * 100.0) as i32;
+                        let label_text = if percent > 0 {
+                            format!("Indexing files in background... ({}%)", percent)
+                        } else {
+                            "Indexing files in background...".to_string()
+                        };
+                        ind_label.set_text(&label_text);
+                        ind_pbar.set_fraction(progress.max(0.0).min(1.0));
+                        ind_revealer.set_reveal_child(true);
+                    } else {
+                        ind_revealer.set_reveal_child(false);
+                    }
+                    gtk4::glib::ControlFlow::Break
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => gtk4::glib::ControlFlow::Continue,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => gtk4::glib::ControlFlow::Break,
+            }
+        });
+
+        std::thread::spawn(move || {
+            let res = crate::search::get_indexing_status_plain();
+            let _ = sender.send(res);
+        });
     }
 
     fn setup_ui_interactions(self: &Rc<Self>) {

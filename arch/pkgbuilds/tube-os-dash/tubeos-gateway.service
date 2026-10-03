@@ -10,7 +10,7 @@ ExecStartPre=/usr/bin/tubeos-gateway -v
 ExecStart=/usr/bin/tubeos-gateway
 PIDFile=/var/run/tubeos/gateway.pid
 Restart=always
-Type=notify
+Type=simple
 
 [Install]
 WantedBy=multi-user.target

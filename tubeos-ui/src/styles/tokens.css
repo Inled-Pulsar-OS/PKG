@@ -9,25 +9,25 @@
   /* live */
   --corner-radius: 14px;
   --row-gap: 34px;
-  --focus-scale: 1.1;
+  --focus-scale: 1.08;
   --backdrop-blur: 28px;
   --backdrop-dim: 0.55;
-  --accent: #0a84ff;
+  --accent: #ffffff;
 
   --tv-ease: cubic-bezier(0.32, 0.72, 0, 1);
   --tv-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --tv-dur: 260ms;
-  --tv-dur-fast: 140ms;
+  --tv-dur: 240ms;
+  --tv-dur-fast: 130ms;
 
   --label-primary: rgba(255, 255, 255, 0.96);
-  --label-secondary: rgba(255, 255, 255, 0.62);
-  --label-tertiary: rgba(255, 255, 255, 0.38);
+  --label-secondary: rgba(255, 255, 255, 0.65);
+  --label-tertiary: rgba(255, 255, 255, 0.4);
 
-  --surface: rgba(28, 28, 30, 0.72);
-  --surface-strong: rgba(20, 20, 22, 0.94);
-  --surface-raised: rgba(44, 44, 48, 0.86);
-  --hairline: rgba(255, 255, 255, 0.14);
-  --hairline-strong: rgba(255, 255, 255, 0.32);
+  --surface: rgba(24, 24, 28, 0.72);
+  --surface-strong: rgba(16, 16, 19, 0.96);
+  --surface-raised: rgba(36, 36, 42, 0.88);
+  --hairline: rgba(255, 255, 255, 0.1);
+  --hairline-strong: rgba(255, 255, 255, 0.25);
 
   --shadow-tile: 0 18px 46px rgba(0, 0, 0, 0.62);
   --shadow-panel: 0 40px 120px rgba(0, 0, 0, 0.7);

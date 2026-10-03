@@ -205,25 +205,25 @@ export class AppearanceManager {
 	applyPopupBackground(btn) {
 		const s = this._settings;
 		const radius = s.get_int('popup-corner-radius') || 14;
-		const opacity = s.get_int('popup-opacity') || 97;
+		const opacity = s.get_int('popup-opacity') || 78;
 		const fontSize = s.get_int('menu-font-size');
 		const colorScheme = this._ifaceSettings.get_string('color-scheme');
 		const isDark = (colorScheme === 'prefer-dark');
 
-		const alpha = (opacity / 100).toFixed(2);
+		const alpha = (Math.min(opacity, 82) / 100).toFixed(2);
 		let style = `border-radius: ${radius}px;`;
 		if (fontSize > 0)
 			style += ` font-size: ${fontSize}pt;`;
 
 		if (isDark) {
-			style += ` background-color: rgba(30, 30, 34, ${alpha});` +
+			style += ` background-color: rgba(28, 32, 44, ${alpha});` +
 				` border: 1px solid rgba(255, 255, 255, 0.18);` +
-				` box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.22), 0 16px 40px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.35);` +
+				` box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.28), 0 16px 44px rgba(0, 0, 0, 0.60), 0 2px 8px rgba(0, 0, 0, 0.35);` +
 				` color: #ffffff;`;
 		} else {
-			style += ` background-color: rgba(246, 246, 248, ${alpha});` +
-				` border: 1px solid rgba(0, 0, 0, 0.12);` +
-				` box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.60), 0 12px 32px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08);` +
+			style += ` background-color: rgba(235, 242, 252, ${alpha});` +
+				` border: 1px solid rgba(255, 255, 255, 0.65);` +
+				` box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.90), 0 16px 36px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08);` +
 				` color: #1d1d1f;`;
 		}
 

@@ -15,9 +15,10 @@ export interface Shelf {
   title: string;
   /** Small badge shown next to the title, e.g. the genre or an engine name. */
   badge?: string;
-  kind: "apps" | "media";
+  kind: "apps" | "media" | "iptv";
   apps: AppInfo[];
   items: MediaItem[];
+  channels?: any[];
 }
 
 export interface StoreState {
@@ -41,7 +42,7 @@ export interface StoreState {
 const EMPTY_SETTINGS: Settings = {
   schema: 1,
   confirmLaunch: false,
-  hideOnLaunch: true,
+  hideOnLaunch: false,
   autostart: false,
   soundEffects: true,
   animations: true,
@@ -208,14 +209,14 @@ export const actions = {
     }
   },
 
-  /** Re-rank with a new jitter salt (the "Shuffle" button). */
+  /** Re-rank with a new jitter salt (the "Shuffle" button and dynamic feed). */
   async reshuffle(): Promise<void> {
-    const { settings, salt } = store.state;
+    const { settings } = store.state;
     if (!settings.mediaEnabled) {
       store.set({ recommendations: [] });
       return;
     }
-    const nextSalt = salt + 1;
+    const nextSalt = Math.floor(Math.random() * 100000) + 1;
     const recommendations = await api
       .mediaRecommendations(settings.mediaShelfSize * 3, nextSalt)
       .catch(() => store.state.recommendations);

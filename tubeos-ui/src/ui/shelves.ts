@@ -1,4 +1,5 @@
 import { appTile, mediaTile } from "./tiles";
+import { iptvChannelTile } from "./iptv";
 import { el } from "./icons";
 import { focusEngine } from "../focus/focus-engine";
 import { genreTint } from "../palette";
@@ -18,27 +19,29 @@ export function renderShelves(): void {
     const section = el("section", "shelf-section");
     section.dataset.row = shelf.id;
 
+    const itemCount =
+      shelf.kind === "apps"
+        ? shelf.apps.length
+        : shelf.kind === "iptv"
+          ? (shelf.channels?.length ?? 0)
+          : shelf.items.length;
+
     if (store.state.settings.showRowTitles) {
       const title = el("div", "row-title");
       title.appendChild(el("span", undefined, shelf.title));
       const badge = el("span", "row-source", shelf.badge ?? "");
       if (shelf.kind === "media" && shelf.badge) {
         badge.style.color = genreTint(shelf.badge === "IMDb" ? "Drama" : shelf.badge);
+      } else if (shelf.kind === "iptv") {
+        badge.style.color = "#38bdf8";
       }
       title.appendChild(badge);
-      title.appendChild(
-        el("span", "row-count", String(shelf.kind === "apps" ? shelf.apps.length : shelf.items.length)),
-      );
+      title.appendChild(el("span", "row-count", String(itemCount)));
       section.appendChild(title);
     }
 
-    if (shelf.kind === "apps" && shelf.apps.length === 0) {
-      section.appendChild(el("div", "row-empty", "Nothing here yet."));
-      fragment.appendChild(section);
-      continue;
-    }
-    if (shelf.kind === "media" && shelf.items.length === 0) {
-      section.appendChild(el("div", "row-empty", "Nothing here yet."));
+    if (itemCount === 0) {
+      section.appendChild(el("div", "row-empty", "Loading content…"));
       fragment.appendChild(section);
       continue;
     }
@@ -48,6 +51,11 @@ export function renderShelves(): void {
       for (const app of shelf.apps) {
         strip.appendChild(appTile(app, `tile-${shelf.id}-${app.id}`));
       }
+    } else if (shelf.kind === "iptv" && shelf.channels) {
+      const channels = shelf.channels;
+      channels.forEach((ch, idx) => {
+        strip.appendChild(iptvChannelTile(ch, `tile-${shelf.id}-${ch.id}-${idx}`, channels, idx));
+      });
     } else {
       for (const item of shelf.items) {
         strip.appendChild(mediaTile(item, `tile-${shelf.id}-${item.id}`));

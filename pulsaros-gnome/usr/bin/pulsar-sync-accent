@@ -27,124 +27,70 @@ sync_accent() {
     [ -z "$raw_accent" ] && raw_accent="blue"
     local hex=$(get_accent_hex "$raw_accent")
 
+    local raw_scheme=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'\"")
+    local raw_gtk=$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d "'\"")
+    local is_dark=1
+    local theme_name="MacTahoe-Dark"
+    local icon_name="MacTahoe-blue-dark"
+
+    if [ "$raw_scheme" = "prefer-light" ] || [ "$raw_scheme" = "default" ] || [ "$raw_gtk" = "MacTahoe-Light" ]; then
+        if [ "$raw_scheme" != "prefer-dark" ]; then
+            is_dark=0
+            theme_name="MacTahoe-Light"
+            icon_name="MacTahoe-blue-light"
+        fi
+    fi
+
     local gtk3_dir="$HOME/.config/gtk-3.0"
     local gtk4_dir="$HOME/.config/gtk-4.0"
     mkdir -p "$gtk3_dir" "$gtk4_dir"
 
-    local gtk3_css="$gtk3_dir/gtk.css"
-
-    # Ensure windows-assets symlink exists for GTK3
-    if [ ! -e "$gtk3_dir/windows-assets" ] && [ -d "/usr/share/themes/MacTahoe-Dark/gtk-3.0/windows-assets" ]; then
-        ln -sf "/usr/share/themes/MacTahoe-Dark/gtk-3.0/windows-assets" "$gtk3_dir/windows-assets"
+    # 1. Sync Libadwaita / GTK4 full stylesheets
+    if [ -d "/usr/share/themes/$theme_name/gtk-4.0" ]; then
+        cp -rf "/usr/share/themes/$theme_name/gtk-4.0/"* "$gtk4_dir/" 2>/dev/null || true
+        # If light mode, ensure gtk-dark.css reflects light styles so apps requesting dark variant don't stay black
+        if [ "$is_dark" -eq 0 ] && [ -f "$gtk4_dir/gtk.css" ]; then
+            cp -f "$gtk4_dir/gtk.css" "$gtk4_dir/gtk-dark.css" 2>/dev/null || true
+        fi
     fi
-    if [ ! -e "$gtk4_dir/windows-assets" ] && [ -d "/usr/share/themes/MacTahoe-Dark/gtk-4.0/windows-assets" ]; then
-        ln -sf "/usr/share/themes/MacTahoe-Dark/gtk-4.0/windows-assets" "$gtk4_dir/windows-assets"
+
+    # 2. Sync GTK3 full stylesheets
+    if [ -d "/usr/share/themes/$theme_name/gtk-3.0" ]; then
+        if [ "$is_dark" -eq 1 ] && [ -f "/usr/share/themes/$theme_name/gtk-3.0/gtk-dark.css" ]; then
+            cp -rf "/usr/share/themes/$theme_name/gtk-3.0/gtk-dark.css" "$gtk3_dir/gtk.css" 2>/dev/null || true
+        else
+            cp -rf "/usr/share/themes/$theme_name/gtk-3.0/gtk.css" "$gtk3_dir/gtk.css" 2>/dev/null || true
+        fi
     fi
 
-    # Ensure settings.ini has decoration-layout in both GTK 3 and GTK 4
+    # 3. Ensure windows-assets symlink exists for GTK3 and GTK4
+    if [ -d "/usr/share/themes/$theme_name/gtk-3.0/windows-assets" ]; then
+        ln -sfn "/usr/share/themes/$theme_name/gtk-3.0/windows-assets" "$gtk3_dir/windows-assets"
+    fi
+    if [ -d "/usr/share/themes/$theme_name/gtk-4.0/windows-assets" ]; then
+        ln -sfn "/usr/share/themes/$theme_name/gtk-4.0/windows-assets" "$gtk4_dir/windows-assets"
+    fi
+
+    # 4. Ensure settings.ini matches current light/dark theme in both GTK 3 and GTK 4
     for ini in "$gtk3_dir/settings.ini" "$gtk4_dir/settings.ini"; do
-        if [ ! -f "$ini" ]; then
-            cat <<INI_EOF > "$ini"
+        cat <<INI_EOF > "$ini"
 [Settings]
-gtk-theme-name=MacTahoe-Dark
-gtk-icon-theme-name=MacTahoe-blue-dark
-gtk-application-prefer-dark-theme=1
+gtk-theme-name=${theme_name}
+gtk-icon-theme-name=${icon_name}
+gtk-application-prefer-dark-theme=${is_dark}
 gtk-decoration-layout=close,minimize,maximize:
 INI_EOF
-        elif ! grep -q "gtk-decoration-layout" "$ini" 2>/dev/null; then
-            echo "gtk-decoration-layout=close,minimize,maximize:" >> "$ini"
-        fi
     done
 
-    # Write ~/.config/gtk-3.0/gtk.css with full theme import and dynamic accent
-    cat <<CSS_EOF > "$gtk3_css"
-/* ==============================================================================
- * Pulsar OS - GTK3 Dynamic Accent Color & Selection Highlight
- * Generated dynamically for accent color: ${raw_accent} (${hex})
- * ============================================================================== */
-@define-color accent_color ${hex};
-@define-color accent_bg_color ${hex};
-@define-color accent_fg_color #ffffff;
-@define-color theme_selected_bg_color ${hex};
-@define-color theme_selected_fg_color #ffffff;
-@define-color selected_bg_color ${hex};
-@define-color selected_fg_color #ffffff;
-
-@import url("/usr/share/themes/MacTahoe-Dark/gtk-3.0/gtk.css");
-
-/* Universal Solid Text Selection */
-selection {
-  background-color: @accent_bg_color;
-  color: @accent_fg_color;
-}
-
-entry selection,
-entry:focus selection,
-textview text selection,
-textview selection,
-label:selected,
-.view:selected,
-.view:selected:focus,
-*:selected {
-  background-color: @accent_bg_color;
-  color: @accent_fg_color;
-}
-
-/* Context Menu / Popup Menu Hover & Highlight */
-menu > menuitem:hover,
-menu > menuitem:selected,
-menuitem.button.flat:hover,
-menuitem.button.flat:selected,
-modelbutton.flat:hover,
-modelbutton.flat:selected {
-  background-color: @accent_bg_color;
-  color: @accent_fg_color;
-}
-
-menu > menuitem:hover label,
-menu > menuitem:selected label,
-menu > menuitem:hover arrow,
-menu > menuitem:selected arrow,
-menuitem.button.flat:hover label,
-menuitem.button.flat:selected label,
-modelbutton.flat:hover label,
-modelbutton.flat:selected label {
-  color: @accent_fg_color;
-}
-
-popover.menu modelbutton:hover,
-popover.menu modelbutton:selected,
-popover.menu modelbutton:focus:hover {
-  background-color: @accent_bg_color;
-  color: @accent_fg_color;
-}
-
-popover.menu modelbutton:hover label,
-popover.menu modelbutton:selected label,
-popover.menu modelbutton:hover arrow,
-popover.menu modelbutton:selected arrow {
-  color: @accent_fg_color;
-}
-
-/* Universal Window Control Buttons (GTK3 fallback and CSD) */
-headerbar button.titlebutton,
-headerbar windowcontrols button,
-windowcontrols button {
-  min-width: 14px;
-  min-height: 14px;
-  margin: 0 3px;
-  padding: 0;
-}
-CSS_EOF
-
-    # In ~/.config/gtk-4.0/gtk.css (if present, update accent variables at top)
-    local gtk4_css="$gtk4_dir/gtk.css"
-    if [ -f "$gtk4_css" ]; then
-        sed -i '/@define-color accent_/d' "$gtk4_css"
-        sed -i '/@define-color theme_selected_/d' "$gtk4_css"
-        sed -i '/@define-color selected_/d' "$gtk4_css"
-        sed -i "1s|^|@define-color accent_color ${hex};\n@define-color accent_bg_color ${hex};\n@define-color accent_fg_color #ffffff;\n@define-color theme_selected_bg_color ${hex};\n@define-color theme_selected_fg_color #ffffff;\n@define-color selected_bg_color ${hex};\n@define-color selected_fg_color #ffffff;\n|" "$gtk4_css"
-    fi
+    # 5. Inject dynamic accent color variables into all user stylesheets
+    for css_f in "$gtk3_dir/gtk.css" "$gtk4_dir/gtk.css" "$gtk4_dir/gtk-dark.css"; do
+        if [ -f "$css_f" ]; then
+            sed -i '/@define-color accent_/d' "$css_f" 2>/dev/null || true
+            sed -i '/@define-color theme_selected_/d' "$css_f" 2>/dev/null || true
+            sed -i '/@define-color selected_/d' "$css_f" 2>/dev/null || true
+            sed -i "1s|^|@define-color accent_color ${hex};\n@define-color accent_bg_color ${hex};\n@define-color accent_fg_color #ffffff;\n@define-color theme_selected_bg_color ${hex};\n@define-color theme_selected_fg_color #ffffff;\n@define-color selected_bg_color ${hex};\n@define-color selected_fg_color #ffffff;\n|" "$css_f"
+        fi
+    done
 
     # Sync Seafari profile if exists
     local seafari_profile="${SEAFARI_PROFILE:-$HOME/.mozilla/seafari-profile}"
@@ -198,7 +144,9 @@ if ! flock -n 9; then
     exit 0
 fi
 
-# Monitor for live accent color changes in GNOME settings
-gsettings monitor org.gnome.desktop.interface accent-color 2>/dev/null | while read -r _; do
-    sync_accent
+# Monitor for live accent color, color-scheme, and theme changes in GNOME settings
+gsettings monitor org.gnome.desktop.interface 2>/dev/null | while read -r line; do
+    if echo "$line" | grep -q -E "accent-color|color-scheme|gtk-theme"; then
+        sync_accent
+    fi
 done

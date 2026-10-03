@@ -1,0 +1,51 @@
+#!/bin/bash
+# ==============================================================================
+# Tube OS - Home / App Closer Handler
+# Closes the active foreground application and returns seamlessly to Tube OS UI.
+# ==============================================================================
+
+export DISPLAY="${DISPLAY:-:0}"
+
+# Get active window ID
+ACTIVE_WIN=$(xdotool getactivewindow 2>/dev/null || true)
+
+if [ -n "$ACTIVE_WIN" ]; then
+    WIN_NAME=$(xdotool getwindowname "$ACTIVE_WIN" 2>/dev/null || true)
+    WIN_CLASS=$(xprop -id "$ACTIVE_WIN" WM_CLASS 2>/dev/null | awk -F'"' '{print $4}' || true)
+    
+    # Check if active window is the TV UI
+    if echo "$WIN_NAME $WIN_CLASS" | grep -Eqi "(Tube OS|Apple TV|tubeos-tv|tubeos-ui|appletv-launcher)"; then
+        # Already in launcher: send Home key to return to top / main view
+        xdotool key --window "$ACTIVE_WIN" Home 2>/dev/null || true
+    else
+        # Close running application
+        xdotool windowclose "$ACTIVE_WIN" 2>/dev/null || wmctrl -ic "$ACTIVE_WIN" 2>/dev/null || true
+        sleep 0.1
+    fi
+fi
+
+# Find Tube OS TV UI window across all known class and title names
+LAUNCHER_WIN=""
+for query in "class tubeos-ui" "class tubeos" "class appletv-launcher" "name Tube OS" "name Apple TV"; do
+    win_id=$(xdotool search --${query} 2>/dev/null | tail -n 1 || true)
+    if [ -n "$win_id" ]; then
+        LAUNCHER_WIN="$win_id"
+        break
+    fi
+done
+
+if [ -n "$LAUNCHER_WIN" ]; then
+    xdotool windowmap "$LAUNCHER_WIN" 2>/dev/null || true
+    xdotool windowactivate "$LAUNCHER_WIN" 2>/dev/null || wmctrl -ia "$LAUNCHER_WIN" 2>/dev/null || true
+    xdotool windowfocus "$LAUNCHER_WIN" 2>/dev/null || true
+    xdotool windowraise "$LAUNCHER_WIN" 2>/dev/null || true
+    xdotool key --window "$LAUNCHER_WIN" Home 2>/dev/null || true
+else
+    if command -v /usr/bin/tubeos-ui >/dev/null 2>&1; then
+        nohup /usr/bin/tubeos-ui >/dev/null 2>&1 &
+    elif command -v /usr/bin/tubeos-tv >/dev/null 2>&1; then
+        nohup /usr/bin/tubeos-tv >/dev/null 2>&1 &
+    elif command -v appletv-launcher >/dev/null 2>&1; then
+        nohup appletv-launcher >/dev/null 2>&1 &
+    fi
+fi

@@ -329,8 +329,9 @@ def execute_installation_backend(config: Dict):
     hostname = config.get("hostname", "tubeos")
     username = config.get("username", "tubeos")
     password = config.get("password", "tubeos")
-    timezone = config.get("timezone", "UTC")
-    keymap = config.get("keymap", "us")
+    timezone = config.get("timezone", "Europe/Madrid")
+    locale = config.get("locale", "es_ES.UTF-8")
+    keymap = config.get("keymap", "es")
 
     distro = get_base_distro()
     is_efi = Path("/sys/firmware/efi").exists()
@@ -445,18 +446,52 @@ def execute_installation_backend(config: Dict):
                 Path("/mnt/boot/efi").mkdir(parents=True, exist_ok=True)
                 run(f"mount {part_efi} /mnt/boot/efi")
 
-        # 5. System Replication (rsync)
-        update_installer_progress(0.25, "Replicating base system image")
-        rsync_cmd = (
-            "rsync -aAXx --info=progress2 "
-            "--exclude='/dev/*' --exclude='/proc/*' --exclude='/sys/*' "
-            "--exclude='/tmp/*' --exclude='/run/*' --exclude='/mnt/*' "
-            "--exclude='/media/*' --exclude='/live/*' --exclude='/cdrom/*' "
-            "--exclude='/var/cache/apt/archives/*' --exclude='/var/lib/docker/*' "
-            "--exclude='/var/tmp/*' --exclude='/lost+found' "
-            "/ /mnt/"
+        # 5. System Replication (rsync with real-time progress)
+        update_installer_progress(0.25, "Copying base system files to disk...")
+        rsync_cmd = [
+            "rsync", "-aAXx", "--info=progress2",
+            "--exclude=/dev/*", "--exclude=/proc/*", "--exclude=/sys/*",
+            "--exclude=/tmp/*", "--exclude=/run/*", "--exclude=/mnt/*",
+            "--exclude=/media/*", "--exclude=/live/*", "--exclude=/cdrom/*",
+            "--exclude=/var/cache/apt/archives/*", "--exclude=/var/lib/docker/*",
+            "--exclude=/var/tmp/*", "--exclude=/lost+found",
+            "/", "/mnt/"
+        ]
+        append_installer_log("Starting rsync transfer to /mnt...")
+        
+        proc = subprocess.Popen(
+            rsync_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
         )
-        run(rsync_cmd)
+        
+        progress_re = re.compile(r"(\d+)%\s+([\d.]+[KMG]?B/s)")
+        
+        if proc.stdout:
+            for line in proc.stdout:
+                m = progress_re.search(line)
+                if m:
+                    try:
+                        pct = int(m.group(1))
+                        speed = m.group(2)
+                        overall_progress = 0.25 + (pct / 100.0) * 0.30
+                        install_state["speed"] = speed
+                        install_state["rsync_pct"] = pct
+                        update_installer_progress(
+                            overall_progress,
+                            f"Copying system files to disk ({pct}% · {speed})"
+                        )
+                    except Exception:
+                        pass
+                elif "to-chk=" in line or "xfr#" in line:
+                    append_installer_log(line.strip())
+        
+        proc.wait()
+        if proc.returncode != 0 and proc.returncode != 24:
+            raise Exception(f"Rsync failed with return code {proc.returncode}")
         append_installer_log("Base system files synchronized successfully")
 
         # 6. Bind mount pseudo-filesystems for chroot operations
@@ -900,7 +935,49 @@ def execute_installation_backend(config: Dict):
                 "</service-group>\n"
             )
 
+        # Configure Locale
+        append_installer_log(f"Configuring system locale ({locale}), timezone ({timezone}) and keymap ({keymap})...")
+        
+        # /etc/locale.gen
+        locale_gen_path = Path("/mnt/etc/locale.gen")
+        clean_locale = locale.split(".")[0] if "." in locale else locale
+        locale_entry = f"{clean_locale}.UTF-8 UTF-8"
+        if locale_gen_path.exists():
+            content = locale_gen_path.read_text(errors="ignore")
+            # Uncomment or append entry
+            if f"#{locale_entry}" in content:
+                content = content.replace(f"#{locale_entry}", locale_entry)
+            elif locale_entry not in content:
+                content += f"\n{locale_entry}\nen_US.UTF-8 UTF-8\n"
+            locale_gen_path.write_text(content)
+        else:
+            locale_gen_path.parent.mkdir(parents=True, exist_ok=True)
+            locale_gen_path.write_text(f"{locale_entry}\nen_US.UTF-8 UTF-8\n")
+        
+        run_chroot("locale-gen 2>/dev/null || true")
+        
+        # /etc/locale.conf
+        with open("/mnt/etc/locale.conf", "w") as lcf:
+            lcf.write(f"LANG={locale}\nLC_ALL={locale}\n")
+            
+        # Debian /etc/default/locale
+        if distro == "debian" or Path("/mnt/etc/default").exists():
+            Path("/mnt/etc/default").mkdir(parents=True, exist_ok=True)
+            with open("/mnt/etc/default/locale", "w") as dlf:
+                dlf.write(f"LANG={locale}\nLC_ALL={locale}\n")
+            run_chroot(f"update-locale LANG={locale} LC_ALL={locale} 2>/dev/null || true")
+
+        # Timezone
         run_chroot(f"ln -sf /usr/share/zoneinfo/{timezone} /etc/localtime 2>/dev/null || true")
+        with open("/mnt/etc/timezone", "w") as tzf:
+            tzf.write(f"{timezone}\n")
+
+        # Keymap
+        with open("/mnt/etc/vconsole.conf", "w") as vcf:
+            vcf.write(f"KEYMAP={keymap}\n")
+        if distro == "debian" or Path("/mnt/etc/default").exists():
+            with open("/mnt/etc/default/keyboard", "w") as kbf:
+                kbf.write(f'XKBMODEL="pc105"\nXKBLAYOUT="{keymap}"\nXKBVARIANT=""\nXKBOPTIONS=""\n')
         run_chroot(f"localectl set-keymap {keymap} 2>/dev/null || true")
 
         # 10. Kernel initramfs & Bootloader Installation
@@ -1055,14 +1132,16 @@ def execute_installation_backend(config: Dict):
             with open("/mnt/etc/fstab", "w") as ff:
                 ff.write("\n".join(fstab_lines) + "\n")
 
-        # Remove live installer service from installed system, but enable first-boot OOTB Welcome Wizard
-        append_installer_log("Configuring first-boot welcome wizard and services...")
+        # Remove live installer service from installed system
+        append_installer_log("Configuring target services and cleaning installer state...")
         for p in [
             "/mnt/etc/systemd/system/tubeos-installer.service",
             "/mnt/etc/systemd/system/multi-user.target.wants/tubeos-installer.service",
             "/mnt/etc/systemd/system/multi-user.target.wants/install-runner.service",
+            "/mnt/etc/systemd/system/multi-user.target.wants/tubeos-ootb.service",
             "/mnt/usr/lib/systemd/system/tubeos-installer.service",
             "/mnt/usr/lib/systemd/system/install-runner.service",
+            "/mnt/usr/lib/systemd/system/tubeos-ootb.service",
         ]:
             if Path(p).exists():
                 try:
@@ -1071,9 +1150,17 @@ def execute_installation_backend(config: Dict):
                 except Exception:
                     pass
 
-        # Ensure need-ootb marker exists so first boot shows Welcome Wizard
-        Path("/mnt/var/lib/tubeos").mkdir(parents=True, exist_ok=True)
-        Path("/mnt/var/lib/tubeos/need-ootb").touch()
+        # Since user account, hostname and locale are already configured during install,
+        # remove any need-ootb marker so CasaOS gateway can start cleanly on port 80 without blocking.
+        Path("/mnt/var/lib/tubeos/need-ootb").unlink(missing_ok=True)
+        Path("/mnt/var/lib/casaos/need-ootb").unlink(missing_ok=True)
+
+        # Ensure CasaOS compatibility paths and symlinks exist
+        run_chroot("mkdir -p /var/log/casaos /var/log/tubeos /var/lib/tubeos/conf /var/lib/tubeos/db /var/lib/tubeos/apps /var/lib/tubeos/appstore /run/tubeos /var/run/tubeos /var/run/rclone /usr/share/tubeos/shell /etc/tubeos 2>/dev/null || true")
+        run_chroot("ln -sf /etc/tubeos /etc/casaos 2>/dev/null || true")
+        run_chroot("ln -sf /var/lib/tubeos /var/lib/casaos 2>/dev/null || true")
+        run_chroot("ln -sf /var/log/tubeos /var/log/casaos 2>/dev/null || true")
+        run_chroot("ln -sf /var/run/tubeos /var/run/casaos 2>/dev/null || true")
 
         # Configure systemd timeouts to prevent hangs on reboot/shutdown
         sysd_conf_dir = Path("/mnt/etc/systemd/system.conf.d")
@@ -1081,11 +1168,8 @@ def execute_installation_backend(config: Dict):
         with open(sysd_conf_dir / "10-fast-shutdown.conf", "w") as scf:
             scf.write("[Manager]\nDefaultTimeoutStopSec=10s\nDefaultTimeoutStartSec=15s\nDefaultDeviceTimeoutSec=10s\n")
 
-        # Copy and enable tubeos-ootb service
-        Path("/mnt/usr/lib/systemd/system").mkdir(parents=True, exist_ok=True)
-        shutil.copy(Path(__file__).parent / "tubeos-ootb.service", "/mnt/usr/lib/systemd/system/tubeos-ootb.service")
-        run_chroot("systemctl disable tubeos-installer install-runner 2>/dev/null || true")
-        run_chroot("systemctl enable tubeos-ootb NetworkManager avahi-daemon 2>/dev/null || true")
+        run_chroot("systemctl disable tubeos-installer install-runner tubeos-ootb 2>/dev/null || true")
+        run_chroot("systemctl enable NetworkManager avahi-daemon 2>/dev/null || true")
 
         # 12. Cleanup mounts
         update_installer_progress(0.99, "Cleaning up and synchronizing disk writes")
@@ -1201,22 +1285,22 @@ async def api_editions():
                 {
                     "id": "bigscreen_casaos",
                     "title": "Plasma Bigscreen + CasaOS",
-                    "badge": "Desktop & Server",
-                    "desc": "KDE Plasma Bigscreen TV UI with background CasaOS Docker and NAS services.",
+                    "badge": "TV UI & Home Server",
+                    "desc": "KDE Plasma Bigscreen 10-foot TV interface (100% remote/gamepad navigation) alongside background CasaOS Docker, Nextcloud, and NAS services.",
                     "icon": "tv-server",
                 },
                 {
                     "id": "bigscreen_solo",
                     "title": "Plasma Bigscreen",
-                    "badge": "TV UI",
-                    "desc": "KDE Plasma Bigscreen 10-foot TV interface.",
+                    "badge": "Standalone TV UI",
+                    "desc": "KDE Plasma Bigscreen interface designed for big-screen televisions, remotes, gamepads, and media apps.",
                     "icon": "tv",
                 },
                 {
                     "id": "casaos_solo",
                     "title": "CasaOS Server",
-                    "badge": "Headless",
-                    "desc": "Headless system with CasaOS web dashboard, Docker, and network storage.",
+                    "badge": "Headless (No Display)",
+                    "desc": "Headless home server and personal cloud without a local GUI. Web dashboard on port 80 for Docker containers, Jellyfin, and storage.",
                     "icon": "server",
                 },
             ]
@@ -1227,28 +1311,131 @@ async def api_editions():
             "editions": [
                 {
                     "id": "tubeos_ui_casaos",
-                    "title": "Tube TV UI + CasaOS",
-                    "badge": "Desktop & Server",
-                    "desc": "Tube TV interface with CasaOS Docker management services.",
+                    "title": "Tube OS (TV) + CasaOS (Server)",
+                    "badge": "Recommended · TV & Cloud",
+                    "desc": "Complete living room experience: tvOS-style Smart TV interface with TV remote navigation + CasaOS web dashboard on port 80 for Docker, Nextcloud, and NAS.",
                     "icon": "tv-server",
                 },
                 {
                     "id": "tubeos_ui_solo",
-                    "title": "Tube TV UI",
-                    "badge": "TV UI",
-                    "desc": "Lightweight fullscreen TV interface.",
+                    "title": "Tube OS (Standalone Smart TV)",
+                    "badge": "Lightweight Smart TV",
+                    "desc": "Fast and lightweight 10-foot media center interface: live IPTV channels worldwide, IMDb movie & series catalog, app launcher, and virtual keyboard.",
                     "icon": "tv",
                 },
                 {
                     "id": "casaos_solo",
-                    "title": "CasaOS Server",
-                    "badge": "Headless",
-                    "desc": "Headless Debian server with CasaOS web dashboard and Docker management.",
+                    "title": "CasaOS Server (Headless / Cloud)",
+                    "badge": "Headless Server",
+                    "desc": "Dedicated headless home server. Web dashboard on port 80 to manage Docker containers, disks, and backups without a local desktop interface.",
                     "icon": "server",
                 },
             ]
         }
 
+
+def get_all_timezones() -> List[str]:
+    """Return all available IANA timezones on the system or standard database."""
+    try:
+        import zoneinfo
+        tzs = sorted(list(zoneinfo.available_timezones()))
+        if tzs:
+            return tzs
+    except Exception:
+        pass
+    # Fallback to scanning /usr/share/zoneinfo
+    tzs = []
+    zi_path = Path("/usr/share/zoneinfo")
+    if zi_path.exists():
+        for p in zi_path.rglob("*"):
+            if p.is_file() and not p.name.endswith(".tab") and not p.name.startswith("posix") and not p.name.startswith("right"):
+                rel = str(p.relative_to(zi_path))
+                if "/" in rel or rel == "UTC":
+                    tzs.append(rel)
+    if not tzs:
+        tzs = ["UTC", "Europe/Madrid", "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Rome", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "America/Mexico_City", "America/Bogota", "America/Buenos_Aires", "America/Santiago", "America/Lima", "America/Sao_Paulo", "Asia/Tokyo", "Asia/Shanghai", "Asia/Seoul", "Asia/Singapore", "Asia/Dubai", "Australia/Sydney", "Pacific/Auckland"]
+    return sorted(list(set(tzs)))
+
+LOCALES_LIST = [
+    {"code": "es_ES.UTF-8", "name": "Español (España)", "lang": "es", "keymap": "es"},
+    {"code": "es_MX.UTF-8", "name": "Español (México)", "lang": "es", "keymap": "latam"},
+    {"code": "es_AR.UTF-8", "name": "Español (Argentina)", "lang": "es", "keymap": "latam"},
+    {"code": "es_CO.UTF-8", "name": "Español (Colombia)", "lang": "es", "keymap": "latam"},
+    {"code": "es_CL.UTF-8", "name": "Español (Chile)", "lang": "es", "keymap": "latam"},
+    {"code": "es_PE.UTF-8", "name": "Español (Perú)", "lang": "es", "keymap": "latam"},
+    {"code": "es_VE.UTF-8", "name": "Español (Venezuela)", "lang": "es", "keymap": "latam"},
+    {"code": "es_US.UTF-8", "name": "Español (Estados Unidos)", "lang": "es", "keymap": "us"},
+    {"code": "en_US.UTF-8", "name": "English (United States)", "lang": "en", "keymap": "us"},
+    {"code": "en_GB.UTF-8", "name": "English (United Kingdom)", "lang": "en", "keymap": "gb"},
+    {"code": "en_CA.UTF-8", "name": "English (Canada)", "lang": "en", "keymap": "us"},
+    {"code": "en_AU.UTF-8", "name": "English (Australia)", "lang": "en", "keymap": "us"},
+    {"code": "fr_FR.UTF-8", "name": "Français (France)", "lang": "fr", "keymap": "fr"},
+    {"code": "fr_CA.UTF-8", "name": "Français (Canada)", "lang": "fr", "keymap": "ca"},
+    {"code": "fr_BE.UTF-8", "name": "Français (Belgique)", "lang": "fr", "keymap": "be"},
+    {"code": "fr_CH.UTF-8", "name": "Français (Suisse)", "lang": "fr", "keymap": "ch"},
+    {"code": "de_DE.UTF-8", "name": "Deutsch (Deutschland)", "lang": "de", "keymap": "de"},
+    {"code": "de_AT.UTF-8", "name": "Deutsch (Österreich)", "lang": "de", "keymap": "de"},
+    {"code": "de_CH.UTF-8", "name": "Deutsch (Schweiz)", "lang": "de", "keymap": "sg"},
+    {"code": "it_IT.UTF-8", "name": "Italiano (Italia)", "lang": "it", "keymap": "it"},
+    {"code": "pt_BR.UTF-8", "name": "Português (Brasil)", "lang": "pt", "keymap": "br"},
+    {"code": "pt_PT.UTF-8", "name": "Português (Portugal)", "lang": "pt", "keymap": "pt"},
+    {"code": "ru_RU.UTF-8", "name": "Русский (Россия)", "lang": "ru", "keymap": "ru"},
+    {"code": "zh_CN.UTF-8", "name": "简体中文 (中国)", "lang": "zh", "keymap": "us"},
+    {"code": "zh_TW.UTF-8", "name": "繁體中文 (台灣)", "lang": "zh", "keymap": "us"},
+    {"code": "ja_JP.UTF-8", "name": "日本語 (日本)", "lang": "ja", "keymap": "jp"},
+    {"code": "ko_KR.UTF-8", "name": "한국어 (대한민국)", "lang": "ko", "keymap": "kr"},
+    {"code": "nl_NL.UTF-8", "name": "Nederlands (Nederland)", "lang": "nl", "keymap": "us"},
+    {"code": "pl_PL.UTF-8", "name": "Polski (Polska)", "lang": "pl", "keymap": "pl"},
+    {"code": "tr_TR.UTF-8", "name": "Türkçe (Türkiye)", "lang": "tr", "keymap": "tr"},
+    {"code": "sv_SE.UTF-8", "name": "Svenska (Sverige)", "lang": "sv", "keymap": "se"},
+    {"code": "nb_NO.UTF-8", "name": "Norsk Bokmål (Norge)", "lang": "no", "keymap": "no"},
+    {"code": "da_DK.UTF-8", "name": "Dansk (Danmark)", "lang": "da", "keymap": "dk"},
+    {"code": "fi_FI.UTF-8", "name": "Suomi (Suomi)", "lang": "fi", "keymap": "fi"},
+    {"code": "cs_CZ.UTF-8", "name": "Čeština (Česko)", "lang": "cs", "keymap": "cz"},
+    {"code": "hu_HU.UTF-8", "name": "Magyar (Magyarország)", "lang": "hu", "keymap": "hu"},
+    {"code": "ro_RO.UTF-8", "name": "Română (România)", "lang": "ro", "keymap": "ro"},
+    {"code": "el_GR.UTF-8", "name": "Ελληνικά (Ελλάδα)", "lang": "el", "keymap": "gr"},
+    {"code": "uk_UA.UTF-8", "name": "Українська (Україна)", "lang": "uk", "keymap": "ua"},
+    {"code": "ar_SA.UTF-8", "name": "العربية (السعودية)", "lang": "ar", "keymap": "ara"},
+    {"code": "hi_IN.UTF-8", "name": "हिन्दी (भारत)", "lang": "hi", "keymap": "in"},
+    {"code": "ca_ES.UTF-8", "name": "Català (Espanya)", "lang": "ca", "keymap": "es"},
+    {"code": "eu_ES.UTF-8", "name": "Euskara (Espainia)", "lang": "eu", "keymap": "es"},
+    {"code": "gl_ES.UTF-8", "name": "Galego (España)", "lang": "gl", "keymap": "es"},
+]
+
+KEYMAPS_LIST = [
+    {"code": "es", "name": "Spanish (es)"},
+    {"code": "latam", "name": "Latin American (latam)"},
+    {"code": "us", "name": "English US (us)"},
+    {"code": "gb", "name": "British English (gb)"},
+    {"code": "fr", "name": "French (fr)"},
+    {"code": "de", "name": "German (de)"},
+    {"code": "it", "name": "Italian (it)"},
+    {"code": "pt", "name": "Portuguese (pt)"},
+    {"code": "br", "name": "Brazilian (br)"},
+    {"code": "ru", "name": "Russian (ru)"},
+    {"code": "tr", "name": "Turkish (tr)"},
+    {"code": "pl", "name": "Polish (pl)"},
+    {"code": "se", "name": "Swedish (se)"},
+    {"code": "no", "name": "Norwegian (no)"},
+    {"code": "dk", "name": "Danish (dk)"},
+    {"code": "fi", "name": "Finnish (fi)"},
+    {"code": "cz", "name": "Czech (cz)"},
+    {"code": "hu", "name": "Hungarian (hu)"},
+    {"code": "ro", "name": "Romanian (ro)"},
+    {"code": "gr", "name": "Greek (gr)"},
+    {"code": "ua", "name": "Ukrainian (ua)"},
+    {"code": "jp", "name": "Japanese (jp)"},
+    {"code": "kr", "name": "Korean (kr)"},
+]
+
+@app.get("/api/localization")
+async def api_localization():
+    return {
+        "timezones": get_all_timezones(),
+        "locales": LOCALES_LIST,
+        "keymaps": KEYMAPS_LIST,
+    }
 
 @app.post("/api/install")
 async def api_install(request: Request):

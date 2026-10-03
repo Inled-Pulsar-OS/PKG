@@ -1,0 +1,303 @@
+/* IPTV Tile Styles */
+.iptv-tile {
+  position: relative;
+  contain: layout style paint;
+  width: calc(var(--tile-size) * 1.34);
+}
+
+.iptv-art {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  background: radial-gradient(circle at center, #25252c 0%, #121215 100%) !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--corner-radius);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  padding: 16px;
+}
+
+.iptv-art img {
+  width: auto;
+  height: auto;
+  max-width: 84%;
+  max-height: 84%;
+  object-fit: contain;
+  margin: auto;
+  display: block;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.6));
+  z-index: 2;
+  transition: transform var(--tv-dur) var(--tv-ease);
+}
+
+.tile.is-focused .iptv-art img {
+  transform: scale(1.08);
+}
+
+/* Elegant centered fallback when channel has no logo */
+.iptv-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: rgba(255, 255, 255, 0.85);
+  padding: 8px 12px;
+  z-index: 1;
+}
+
+.iptv-live-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  padding: 2px 6px;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  background: rgba(239, 68, 68, 0.92);
+  color: #ffffff;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  z-index: 3;
+}
+
+.iptv-fav-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  color: #fbbf24;
+  font-size: 14px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  z-index: 3;
+}
+
+/* Fullscreen TV Player Modal */
+.tv-player-modal {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #000000;
+  z-index: 1000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.tv-player__video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000000;
+}
+
+/* Top Mini HUD */
+.tv-player__hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 28px 44px;
+  background: linear-gradient(180deg, rgba(14, 14, 18, 0.92) 0%, rgba(14, 14, 18, 0.4) 60%, transparent 100%);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  z-index: 10;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.tv-player__hud.is-hidden {
+  opacity: 0;
+  transform: translateY(-20px);
+  pointer-events: none;
+}
+
+.tv-player__logo {
+  width: 50px;
+  height: 50px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  backdrop-filter: blur(16px);
+}
+
+.tv-player__logo img {
+  max-width: 80%;
+  max-height: 80%;
+  object-fit: contain;
+}
+
+.tv-player__meta {
+  flex: 1;
+}
+
+.tv-player__title {
+  font-family: var(--font-display, system-ui, sans-serif);
+  font-size: 24px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+.tv-player__sub {
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 3px;
+}
+
+.tv-player__fav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  padding: 6px 14px;
+  border-radius: 16px;
+}
+
+.tv-player__hint {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 6px 16px;
+  border-radius: 20px;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tv-hint-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tv-player__spinner {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: tv-spin 0.8s linear infinite;
+  z-index: 5;
+}
+
+@keyframes tv-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* TV Player Interactive OSD Drawer (Opened on Enter) */
+.tv-player__osd {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(14, 14, 18, 0) 0%, rgba(14, 14, 18, 0.88) 30%, rgba(10, 10, 14, 0.98) 100%);
+  padding: 40px var(--shelf-padding, 46px) 36px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  transform: translateY(100%);
+  opacity: 0;
+  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms ease;
+  pointer-events: none;
+}
+
+.tv-player__osd.is-open {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tv-osd-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.tv-osd-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+}
+
+.tv-osd-sub {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 2px 0 0;
+}
+
+.tv-osd-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* TV Player Error Overlay */
+.tv-player__error {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(20, 20, 24, 0.96), rgba(8, 8, 10, 0.98));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  z-index: 8;
+  padding: 32px;
+  text-align: center;
+}
+
+.tv-player__error-icon {
+  color: #ef4444;
+  margin-bottom: 4px;
+}
+
+.tv-player__error-title {
+  font-family: var(--font-display, system-ui, sans-serif);
+  font-size: 24px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.tv-player__error-desc {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.6);
+  max-width: 520px;
+  line-height: 1.5;
+}
+
+.tv-player__error-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 8px 20px;
+  border-radius: 20px;
+}

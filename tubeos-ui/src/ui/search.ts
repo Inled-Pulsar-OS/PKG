@@ -1,5 +1,5 @@
 import { api } from "../api";
-import { focusEngine, makeFocusable } from "../focus/focus-engine";
+import { focusEngine } from "../focus/focus-engine";
 import { sound } from "../sound";
 import { store } from "../state";
 import type { AppInfo, MediaItem } from "../types";
@@ -107,68 +107,35 @@ function refresh(): void {
   debounce = window.setTimeout(() => void runSearch(), 220);
 }
 
-const KEY_ROWS = ["ABCDEFGHIJ", "KLMNOPQRST", "UVWXYZ0123", "456789"];
+import { VirtualKeyboard } from "./keyboard";
 
-function buildKeyboard(): HTMLElement {
-  const keyboard = el("div", "keyboard");
-  KEY_ROWS.forEach((row, index) => {
-    const line = el("div", "keyboard__row");
-    for (const key of row) {
-      const keyEl = el("button", "key");
-      keyEl.textContent = key;
-      makeFocusable(
-        keyEl,
-        {
-          onFocus: () => sound.focus(),
-          onActivate: () => {
-            sound.select();
-            query += key;
-            paintField();
-            refresh();
-          },
-        },
-        `kb-${index}-${key}`,
-      );
-      line.appendChild(keyEl);
+let activeKeyboard: VirtualKeyboard | null = null;
+
+function buildKeyboard(wrap: HTMLElement): HTMLElement {
+  activeKeyboard = new VirtualKeyboard({
+    container: wrap,
+    initialValue: query,
+    onInput: (newVal) => {
+      query = newVal;
+      paintField();
+      refresh();
+    },
+    onSubmit: () => {
+      // If there are results, focus first app or media
+      const firstApp = appsEl?.querySelector<HTMLElement>(".focusable");
+      const firstMedia = mediaEl?.querySelector<HTMLElement>(".focusable");
+      if (firstApp) focusEngine.focusElement(firstApp);
+      else if (firstMedia) focusEngine.focusElement(firstMedia);
+    },
+    onClose: () => {
+      // User moved UP past top row or pressed Back -> focus search field or results
+      const firstApp = appsEl?.querySelector<HTMLElement>(".focusable");
+      if (firstApp) focusEngine.focusElement(firstApp);
+      else focusEngine.rebuild("tab-search");
     }
-    keyboard.appendChild(line);
   });
 
-  const wide = el("div", "keyboard__row");
-  const del = el("button", "key key--wide", "Delete");
-  makeFocusable(
-    del,
-    {
-      onFocus: () => sound.focus(),
-      onActivate: () => {
-        sound.select();
-        query = query.slice(0, -1);
-        paintField();
-        refresh();
-      },
-    },
-    "kb-delete",
-  );
-  const clear = el("button", "key key--wide", "Clear");
-  makeFocusable(
-    clear,
-    {
-      onFocus: () => sound.focus(),
-      onActivate: () => {
-        sound.select();
-        query = "";
-        paintField();
-        refresh();
-      },
-    },
-    "kb-clear",
-  );
-  wide.appendChild(del);
-  wide.appendChild(clear);
-  keyboard.appendChild(wide);
-
-  focusEngine.registerZone("search-keys", keyboard, 0);
-  return keyboard;
+  return activeKeyboard.render();
 }
 
 export function openSearch(): void {
@@ -206,13 +173,15 @@ export function openSearch(): void {
       body.appendChild(emptyEl);
       wrap.appendChild(body);
 
-      wrap.appendChild(buildKeyboard());
+      wrap.appendChild(buildKeyboard(wrap));
       root.appendChild(wrap);
     },
     returnKey: "tab-search",
     onClose: () => {
       window.clearTimeout(debounce);
       query = "";
+      activeKeyboard?.close();
+      activeKeyboard = null;
       focusEngine.rebuild(`tab-${store.state.tab}`);
     },
   });

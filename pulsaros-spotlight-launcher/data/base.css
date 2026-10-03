@@ -1,37 +1,51 @@
 /* PulsarOS Spotlight — Base Layout & Structural Styles */
 
+window.spotlight-window,
 .spotlight-window {
-    border-radius: 24px;
+    border-radius: 26px;
+    background: transparent;
+    background-color: transparent;
     transition: background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
 }
 
 .spotlight-main {
     background-color: transparent;
-    border-radius: 24px;
+    border-radius: 26px;
 }
 
 .search-header {
-    padding: 14px 20px;
-    border-radius: 24px 24px 0 0;
+    padding: 16px 22px;
+    border-radius: 26px 26px 0 0;
+    background: transparent;
 }
 
 .search-icon {
-    -gtk-icon-size: 24px;
+    -gtk-icon-size: 26px;
+    margin-right: 8px;
 }
 
-.search-input {
-    font-size: 20px;
-    font-weight: 500;
-    padding: 6px 10px;
-    border-radius: 10px;
+/* Authentic macOS Spotlight: Clean seamless input */
+window.spotlight-window entry,
+window.spotlight-window entry:focus,
+window.spotlight-window entry:focus-within,
+window.spotlight-window entry:hover,
+window.spotlight-window entry > text,
+window.spotlight-window entry > text:focus,
+window.spotlight-window .search-header entry,
+window.spotlight-window .search-header entry:focus,
+entry.search-input,
+entry.search-input:focus,
+entry.search-input > text,
+entry.search-input > text:focus {
+    font-size: 22px;
+    font-weight: 400;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Cantarell", sans-serif;
+    padding: 0 4px;
     border: none;
     outline: none;
-    background: none;
-    box-shadow: none;
-}
-
-.search-input:focus {
-    background: none;
+    background: transparent;
+    background-color: transparent;
+    background-image: none;
     box-shadow: none;
 }
 
@@ -40,10 +54,21 @@
     border-radius: 9999px;
     min-width: 32px;
     min-height: 32px;
+    border: none;
+    background: transparent;
+}
+
+.category-scroll,
+.category-scroll viewport {
+    background: transparent;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
 }
 
 .category-bar {
-    padding: 8px 18px;
+    padding: 6px 18px 10px 18px;
     border-radius: 0;
 }
 
@@ -58,21 +83,33 @@
     transition: all 150ms ease;
 }
 
-.results-area {
-    padding: 4px 0;
+.results-area,
+.results-area viewport,
+.results-area listbox,
+.results-area flowbox,
+listbox,
+listbox > row,
+flowbox,
+flowbox > flowboxchild {
+    padding: 4px 6px;
     background: transparent;
-    min-height: 260px;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    outline: none;
 }
 
 /* list view */
 .result-item-list {
     padding: 8px 14px;
-    border-radius: 8px;
-    margin: 2px 8px;
+    border-radius: 12px;
+    margin: 2px 10px;
+    background-color: transparent;
+    transition: background-color 100ms ease;
 }
 
 .result-icon {
-    -gtk-icon-size: 24px;
+    -gtk-icon-size: 32px;
 }
 
 .result-title {
@@ -86,14 +123,15 @@
 
 /* grid view */
 .result-item-grid {
-    padding: 14px 10px;
+    padding: 10px 6px;
     border-radius: 16px;
-    margin: 4px;
+    margin: 2px;
+    background-color: transparent;
     transition: all 120ms ease;
 }
 
 .result-icon-grid {
-    -gtk-icon-size: 52px;
+    -gtk-icon-size: 64px;
 }
 
 .result-title-grid {

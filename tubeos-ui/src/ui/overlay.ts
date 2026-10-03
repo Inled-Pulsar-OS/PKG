@@ -72,13 +72,20 @@ export function openOverlay(options: OverlayOptions): OverlayHandle {
   return handle;
 }
 
-/** True when at least one overlay is open. */
+import { closeMenu, isMenuOpen } from "./menu";
+
+/** True when at least one overlay or action sheet is open. */
 export function hasOverlay(): boolean {
-  return stack.length > 0;
+  return stack.length > 0 || isMenuOpen();
 }
 
-/** Close the topmost overlay; returns true when something was closed. */
+/** Close the topmost overlay or action sheet; returns true when something was closed. */
 export function closeTopOverlay(): boolean {
+  if (isMenuOpen()) {
+    sound.back();
+    closeMenu();
+    return true;
+  }
   const top = stack[stack.length - 1];
   if (!top) return false;
   sound.back();
@@ -86,8 +93,9 @@ export function closeTopOverlay(): boolean {
   return true;
 }
 
-/** Close every open overlay (used when switching tabs). */
+/** Close every open overlay and action sheet (used when switching tabs). */
 export function closeAllOverlays(): void {
+  if (isMenuOpen()) closeMenu();
   while (stack.length) stack[stack.length - 1].close();
 }
 
