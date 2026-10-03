@@ -209,22 +209,39 @@ export class AppearanceManager {
 		const fontSize = s.get_int('menu-font-size');
 		const colorScheme = this._ifaceSettings.get_string('color-scheme');
 		const isDark = (colorScheme === 'prefer-dark');
+		const blurEnabled = s.get_boolean('blur-popups');
+		const hasLiquidGlass = !!(global.blur_my_shell || Main.extensionManager.lookup('blur-my-shell@aunetx') || Main.extensionManager.lookup('pulsaros-liquid-glass@inled.es'));
 
-		const alpha = (Math.min(opacity, 82) / 100).toFixed(2);
 		let style = `border-radius: ${radius}px;`;
 		if (fontSize > 0)
 			style += ` font-size: ${fontSize}pt;`;
 
-		if (isDark) {
-			style += ` background-color: rgba(28, 32, 44, ${alpha});` +
-				` border: 1px solid rgba(255, 255, 255, 0.18);` +
-				` box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.28), 0 16px 44px rgba(0, 0, 0, 0.60), 0 2px 8px rgba(0, 0, 0, 0.35);` +
-				` color: #ffffff;`;
+		if (hasLiquidGlass || blurEnabled) {
+			// When Liquid Glass or Blur is active, use translucent glass styling so refraction shines through
+			if (isDark) {
+				style += ` background-color: rgba(30, 30, 35, 0.25);` +
+					` border: 1px solid rgba(255, 255, 255, 0.14);` +
+					` box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.20), 0 12px 32px rgba(0, 0, 0, 0.35);` +
+					` color: #ffffff;`;
+			} else {
+				style += ` background-color: rgba(255, 255, 255, 0.30);` +
+					` border: 1px solid rgba(255, 255, 255, 0.40);` +
+					` box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.60), 0 12px 28px rgba(0, 0, 0, 0.12);` +
+					` color: #1d1d1f;`;
+			}
 		} else {
-			style += ` background-color: rgba(235, 242, 252, ${alpha});` +
-				` border: 1px solid rgba(255, 255, 255, 0.65);` +
-				` box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.90), 0 16px 36px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08);` +
-				` color: #1d1d1f;`;
+			const alpha = (Math.min(opacity, 82) / 100).toFixed(2);
+			if (isDark) {
+				style += ` background-color: rgba(28, 32, 44, ${alpha});` +
+					` border: 1px solid rgba(255, 255, 255, 0.18);` +
+					` box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.28), 0 16px 44px rgba(0, 0, 0, 0.60), 0 2px 8px rgba(0, 0, 0, 0.35);` +
+					` color: #ffffff;`;
+			} else {
+				style += ` background-color: rgba(235, 242, 252, ${alpha});` +
+					` border: 1px solid rgba(255, 255, 255, 0.65);` +
+					` box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.90), 0 16px 36px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08);` +
+					` color: #1d1d1f;`;
+			}
 		}
 
 		btn.menu.box.set_style(style);

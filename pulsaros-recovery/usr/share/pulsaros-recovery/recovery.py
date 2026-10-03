@@ -5292,6 +5292,16 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
 
                 exec_cmd(["chroot", "/mnt", "glib-compile-schemas", "/usr/share/glib-2.0/schemas/"])
                 exec_cmd(["chroot", "/mnt", "dconf", "update"])
+
+                # Configure zRAM kernel module and enable pulsaros-optimizer.service
+                try:
+                    os.makedirs("/mnt/etc/modules-load.d", exist_ok=True)
+                    with open("/mnt/etc/modules-load.d/zram.conf", "w") as zf:
+                        zf.write("zram\n")
+                    exec_cmd(["chroot", "/mnt", "systemctl", "enable", "pulsaros-optimizer.service"])
+                    log_msg("✅ Enabled pulsaros-optimizer.service and zram module in target system.")
+                except Exception as opt_err:
+                    log_msg(f"Notice: optimizer service setup: {opt_err}")
             except Exception as dconf_err:
                 print(f"Warning: dconf/schema update failed (non-fatal): {dconf_err}")
 

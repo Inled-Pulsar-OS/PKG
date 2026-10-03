@@ -11,7 +11,64 @@ import gi
 
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import Gtk, Adw, GLib, Gio
+_last_cpu_stat = None
+
+def get_cpu_usage_stats():
+    global _last_cpu_stat
+    try:
+        with open("/proc/stat", "r") as f:
+            line = f.readline()
+        fields = [float(x) for x in line.split()[1:]]
+        idle = fields[3] + fields[4]
+        total = sum(fields)
+        if _last_cpu_stat is not None:
+            prev_idle, prev_total = _last_cpu_stat
+            idle_delta = idle - prev_idle
+            total_delta = total - prev_total
+            _last_cpu_stat = (idle, total)
+            if total_delta > 0:
+                usage = max(0.0, min(100.0, (1.0 - (idle_delta / total_delta)) * 100.0))
+                return usage
+        _last_cpu_stat = (idle, total)
+        return 0.0
+    except Exception:
+        return 0.0
+
+def apply_custom_css():
+    css = """
+    levelbar.resource-bar trough block.filled {
+        border-radius: 4px;
+        transition: background-color 0.25s ease;
+    }
+    levelbar.resource-bar.usage-normal trough block.filled {
+        background-color: #30d158;
+    }
+    levelbar.resource-bar.usage-warning trough block.filled {
+        background-color: #ff9f0a;
+    }
+    levelbar.resource-bar.usage-critical trough block.filled {
+        background-color: #ff453a;
+    }
+    """
+    provider = Gtk.CssProvider()
+    provider.load_from_data(css.encode())
+    Gtk.StyleContext.add_provider_for_display(
+        gi.repository.Gdk.Display.get_default(),
+        provider,
+        Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+    )
+
+def set_levelbar_usage(levelbar, fraction):
+    levelbar.set_value(fraction)
+    levelbar.remove_css_class("usage-normal")
+    levelbar.remove_css_class("usage-warning")
+    levelbar.remove_css_class("usage-critical")
+    if fraction >= 0.90:
+        levelbar.add_css_class("usage-critical")
+    elif fraction >= 0.70:
+        levelbar.add_css_class("usage-warning")
+    else:
+        levelbar.add_css_class("usage-normal")
 
 def run_privileged(cmd_list):
     """Execute a privileged system command safely handling sudo/pkexec without crashes."""
@@ -231,6 +288,8 @@ class OptimizerWindow(Adw.ApplicationWindow):
         self.set_default_size(700, 820)
         self.set_icon_name("pulsaros-optimizer")
         
+        apply_custom_css()
+        
         # Track persistent row widgets: {pid: ProcessRow}
         self.rows_by_pid = {}
         self.service_updating = False
@@ -304,11 +363,43 @@ class OptimizerWindow(Adw.ApplicationWindow):
         grid_card.set_margin_start(2)
         grid_card.set_margin_end(2)
 
+        # --- Gauge 0: CPU Processor Usage ---
+        cpu_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        cpu_box.set_margin_start(16)
+        cpu_box.set_margin_end(16)
+        cpu_box.set_margin_top(14)
+
+        cpu_header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        cpu_title = Gtk.Label(label="CPU Processor Usage", xalign=0.0)
+        cpu_title.add_css_class("heading")
+        cpu_title.set_hexpand(True)
+        cpu_header_box.append(cpu_title)
+
+        self.cpu_val_label = Gtk.Label(label="0%", xalign=1.0)
+        self.cpu_val_label.add_css_class("heading")
+        cpu_header_box.append(self.cpu_val_label)
+        cpu_box.append(cpu_header_box)
+
+        self.cpu_levelbar = Gtk.LevelBar()
+        self.cpu_levelbar.set_min_value(0.0)
+        self.cpu_levelbar.set_max_value(1.0)
+        self.cpu_levelbar.set_size_request(-1, 8)
+        self.cpu_levelbar.add_css_class("resource-bar")
+        cpu_box.append(self.cpu_levelbar)
+
+        cores = os.cpu_count() or 1
+        self.cpu_sub_label = Gtk.Label(label=f"Active load across {cores} CPU core(s)", xalign=0.0)
+        self.cpu_sub_label.add_css_class("caption")
+        self.cpu_sub_label.add_css_class("dim-label")
+        cpu_box.append(self.cpu_sub_label)
+
+        grid_card.append(cpu_box)
+        grid_card.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+
         # --- Gauge 1: RAM Usage Volume ---
         ram_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         ram_box.set_margin_start(16)
         ram_box.set_margin_end(16)
-        ram_box.set_margin_top(14)
 
         ram_header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         ram_title = Gtk.Label(label="Physical Memory Usage", xalign=0.0)
@@ -326,6 +417,7 @@ class OptimizerWindow(Adw.ApplicationWindow):
         self.ram_levelbar.set_min_value(0.0)
         self.ram_levelbar.set_max_value(1.0)
         self.ram_levelbar.set_size_request(-1, 8)
+        self.ram_levelbar.add_css_class("resource-bar")
         ram_box.append(self.ram_levelbar)
 
         self.ram_sub_label = Gtk.Label(label="Reading /proc/meminfo...", xalign=0.0)
@@ -350,7 +442,6 @@ class OptimizerWindow(Adw.ApplicationWindow):
         self.zram_ratio_label = Gtk.Label(label="1.00:1 Ratio", xalign=1.0)
         self.zram_ratio_label.add_css_class("heading")
         zram_header_box.append(self.zram_ratio_label)
-        zram_box.append(ram_header_box := zram_header_box)
         zram_box.append(zram_header_box)
 
         # LevelBar for zRAM
@@ -358,6 +449,7 @@ class OptimizerWindow(Adw.ApplicationWindow):
         self.zram_levelbar.set_min_value(0.0)
         self.zram_levelbar.set_max_value(1.0)
         self.zram_levelbar.set_size_request(-1, 8)
+        self.zram_levelbar.add_css_class("resource-bar")
         zram_box.append(self.zram_levelbar)
 
         self.zram_sub_label = Gtk.Label(label="Reading /sys/block/zram0...", xalign=0.0)
@@ -487,6 +579,11 @@ class OptimizerWindow(Adw.ApplicationWindow):
                 self.service_switch.set_active(active)
                 self.service_updating = False
 
+            # CPU metrics
+            cpu_pct = get_cpu_usage_stats()
+            self.cpu_val_label.set_text(f"{int(cpu_pct)}%")
+            set_levelbar_usage(self.cpu_levelbar, cpu_pct / 100.0)
+
             mem = read_meminfo()
             total_kb = mem.get("MemTotal", 1)
             avail_kb = mem.get("MemAvailable", 0)
@@ -498,7 +595,7 @@ class OptimizerWindow(Adw.ApplicationWindow):
             fraction = min(max(used_kb / total_kb, 0.0), 1.0)
 
             self.ram_val_label.set_text(f"{used_gb:.1f} / {total_gb:.1f} GB ({int(fraction * 100)}%)")
-            self.ram_levelbar.set_value(fraction)
+            set_levelbar_usage(self.ram_levelbar, fraction)
             self.ram_sub_label.set_text(f"{avail_gb:.1f} GB available  •  {used_gb:.1f} GB active")
 
             # zRAM metrics
@@ -506,13 +603,13 @@ class OptimizerWindow(Adw.ApplicationWindow):
             if zstats["active"]:
                 self.zram_ratio_label.set_text(f"{zstats['ratio_str']}")
                 zram_used_frac = (zstats["orig_data_mb"] / zstats["disksize_mb"]) if zstats["disksize_mb"] > 0 else 0.0
-                self.zram_levelbar.set_value(min(max(zram_used_frac, 0.0), 1.0))
+                set_levelbar_usage(self.zram_levelbar, min(max(zram_used_frac, 0.0), 1.0))
                 self.zram_sub_label.set_text(
                     f"{zstats['orig_data_mb']:.1f} MB compressed to {zstats['compr_data_mb']:.1f} MB ({zstats['algorithm']})  •  {zstats['saved_mb']:.1f} MB RAM saved"
                 )
             else:
                 self.zram_ratio_label.set_text("Inactive")
-                self.zram_levelbar.set_value(0.0)
+                set_levelbar_usage(self.zram_levelbar, 0.0)
                 self.zram_sub_label.set_text("zRAM device not initialized")
 
             # Kernel sysctls

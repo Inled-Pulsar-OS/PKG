@@ -75,8 +75,8 @@ where
     let mut user_group_memberships: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
 
     if Path::new(&old_root).exists() {
-        if let Ok(file) = File::open(format!("{}/etc/passwd", old_root)) {
-            for line in BufReader::new(file).lines().flatten() {
+        if let Ok(passwd_raw) = exec_cmd(&format!("cat {}/etc/passwd 2>/dev/null || true", old_root)) {
+            for line in passwd_raw.lines() {
                 let parts: Vec<&str> = line.split(':').collect();
                 if parts.len() >= 3 {
                     let uname = parts[0].to_string();
@@ -87,22 +87,22 @@ where
                     if let Ok(uid) = parts[2].parse::<u32>() {
                         if uid >= 1000 && uid < 65534 {
                             preserved_usernames.push(uname);
-                            preserved_passwd.push(line);
+                            preserved_passwd.push(line.to_string());
                         }
                     }
                 }
             }
         }
-        if let Ok(file) = File::open(format!("{}/etc/shadow", old_root)) {
-            for line in BufReader::new(file).lines().flatten() {
+        if let Ok(shadow_raw) = exec_cmd(&format!("cat {}/etc/shadow 2>/dev/null || true", old_root)) {
+            for line in shadow_raw.lines() {
                 let uname = line.split(':').next().unwrap_or_default();
                 if preserved_usernames.iter().any(|u| u == uname) {
-                    preserved_shadow.push(line);
+                    preserved_shadow.push(line.to_string());
                 }
             }
         }
-        if let Ok(file) = File::open(format!("{}/etc/group", old_root)) {
-            for line in BufReader::new(file).lines().flatten() {
+        if let Ok(group_raw) = exec_cmd(&format!("cat {}/etc/group 2>/dev/null || true", old_root)) {
+            for line in group_raw.lines() {
                 let parts: Vec<&str> = line.split(':').collect();
                 if parts.len() >= 4 {
                     let gname = parts[0].to_string();
@@ -121,17 +121,17 @@ where
                     }
                     if let Ok(gid) = parts[2].parse::<u32>() {
                         if gid >= 1000 && gid < 65534 {
-                            preserved_group.push(line);
+                            preserved_group.push(line.to_string());
                         }
                     }
                 }
             }
         }
-        if let Ok(file) = File::open(format!("{}/etc/gshadow", old_root)) {
-            for line in BufReader::new(file).lines().flatten() {
+        if let Ok(gshadow_raw) = exec_cmd(&format!("cat {}/etc/gshadow 2>/dev/null || true", old_root)) {
+            for line in gshadow_raw.lines() {
                 let gname = line.split(':').next().unwrap_or_default();
                 if gname != "live" && gname != "root" && gname != "archiso" {
-                    preserved_gshadow.push(line);
+                    preserved_gshadow.push(line.to_string());
                 }
             }
         }
@@ -140,12 +140,10 @@ where
     // Also check for existing /etc/crypttab to preserve LUKS configuration
     let mut preserved_crypttab: Option<String> = None;
     let old_crypttab = format!("{}/etc/crypttab", old_root);
-    if Path::new(&old_crypttab).exists() {
-        if let Ok(c) = fs::read_to_string(&old_crypttab) {
-            if !c.trim().is_empty() {
-                log("Preserved existing /etc/crypttab disk encryption configuration.");
-                preserved_crypttab = Some(c);
-            }
+    if let Ok(c) = exec_cmd(&format!("cat {} 2>/dev/null || true", old_crypttab)) {
+        if !c.trim().is_empty() {
+            log("Preserved existing /etc/crypttab disk encryption configuration.");
+            preserved_crypttab = Some(c);
         }
     }
 
@@ -159,7 +157,6 @@ where
                     if uname != "live" && uname != "root" && uname != "lost+found" && !preserved_usernames.contains(&uname) {
                         log(&format!("Discovered existing user home directory in @home: /home/{}", uname));
                         preserved_passwd.push(format!("{}:x:1000:1000::{}:/bin/bash", uname, format!("/home/{}", uname)));
-                        preserved_shadow.push(format!("{}:!!:19700:0:99999:7:::", uname));
                         preserved_group.push(format!("{}:x:1000:", uname));
                         preserved_usernames.push(uname);
                     }
@@ -199,8 +196,13 @@ where
 
     // 4. Wipe and recreate @ root subvolume (SAFE: Image is 100% verified)
     progress(0.45, "Recreating @ root subvolume...");
-    log("Removing old root (@) subvolume...");
-    let _ = exec_cmd(&format!("btrfs subvolume delete {}/@ 2>/dev/null || rm -rf {}/@", btrfs_mnt, btrfs_mnt));
+    log("Cleaning nested mounts and removing old root (@) subvolume...");
+    let _ = exec_cmd(&format!("umount -R {}/@ 2>/dev/null || true", btrfs_mnt));
+    let _ = exec_cmd(&format!("umount -l {}/@ 2>/dev/null || true", btrfs_mnt));
+    let _ = exec_cmd(&format!("btrfs subvolume delete -c {}/@ 2>/dev/null || btrfs subvolume delete {}/@ 2>/dev/null || rm -rf {}/@ 2>/dev/null || true", btrfs_mnt, btrfs_mnt, btrfs_mnt));
+    if Path::new(&format!("{}/@", btrfs_mnt)).exists() {
+        let _ = exec_cmd(&format!("btrfs subvolume delete -c {}/@ 2>/dev/null || btrfs subvolume delete {}/@ 2>/dev/null || true", btrfs_mnt, btrfs_mnt));
+    }
     log("Creating fresh root (@) subvolume...");
     exec_cmd(&format!("btrfs subvolume create {}/@", btrfs_mnt))?;
 
