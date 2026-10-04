@@ -26,18 +26,17 @@
 
 set -e
 
-STAGE_DIR="$(realpath -m "${1:?Usage: prepare-assets.sh <STAGE_DIR>}")"
 PKG_ROOT="$(cd "$(dirname "$0")" && pwd)"
+STAGE_DIR="${1:-$PKG_ROOT}"
 SRC_DIR="$PKG_ROOT/usr/share/pulsaros-welcome"
 
 echo "🎨 pulsaros-welcome: preparando assets (build RELEASE) → $STAGE_DIR"
 
-# Directorios que NUNCA deben entrar en el paquete
-JUNK_DIRS="src-tauri/target node_modules usr/bin/__pycache__"
+# Directorios que NUNCA deben entrar en el paquete final empaquetado
+JUNK_DIRS="src-tauri/target usr/bin/__pycache__"
 
 # ------------------------------------------------------------------------------
-# 0. Purga en el árbol fuente (para que futuros cp -r del empaquetador sean
-#    rápidos y nunca arrastren artefactos de desarrollo)
+# 0. Purga en el árbol fuente
 # ------------------------------------------------------------------------------
 purge_source() {
     for d in $JUNK_DIRS; do
@@ -49,23 +48,18 @@ purge_source() {
 }
 
 # ------------------------------------------------------------------------------
-# 1. Frontend: dist/ ya construido tiene prioridad; si falta o hay node_modules
-#    se reconstruye con vite (build de producción, nunca dev)
+# 1. Frontend: Siempre compilar con vite (build de producción)
 # ------------------------------------------------------------------------------
 build_frontend() {
-    if [ ! -f "$SRC_DIR/dist/index.html" ]; then
-        echo "📦 dist/ ausente — compilando frontend de producción (vite)..."
-        cd "$SRC_DIR"
-        if [ -d node_modules ] || command -v pnpm >/dev/null 2>&1; then
-            command -v pnpm >/dev/null 2>&1 && pnpm install --frozen-lockfile || npm ci
-        else
-            npm ci
-        fi
-        command -v pnpm >/dev/null 2>&1 && pnpm run build || npm run build
-        [ -f "$SRC_DIR/dist/index.html" ] || { echo "❌ El build de vite no generó dist/index.html"; exit 1; }
+    echo "📦 Compilando frontend de producción (vite)..."
+    cd "$SRC_DIR"
+    if [ -d node_modules ] || command -v pnpm >/dev/null 2>&1; then
+        command -v pnpm >/dev/null 2>&1 && pnpm install --frozen-lockfile 2>/dev/null || pnpm install || npm install
     else
-        echo "✔ dist/ ya compilado — reutilizando assets de producción"
+        npm install
     fi
+    command -v pnpm >/dev/null 2>&1 && pnpm run build || npm run build
+    [ -f "$SRC_DIR/dist/index.html" ] || { echo "❌ El build de vite no generó dist/index.html"; exit 1; }
 }
 
 # ------------------------------------------------------------------------------
@@ -74,16 +68,10 @@ build_frontend() {
 build_tauri() {
     cd "$SRC_DIR/src-tauri"
     echo "🦀 Compilando Tauri en RELEASE (frontendDist=../dist embebido)..."
-    # CRITICAL: --features custom-protocol es OBLIGATORIO en builds de
-    # producción. Sin él, el binario arranca en modo dev y espera el dev
-    # server de Vite (http://localhost:1420) → "connection refused".
     cargo build --release --features custom-protocol --frozen 2>/dev/null \
         || cargo build --release --features custom-protocol
     [ -f "target/release/pulsaros-welcome" ] || { echo "❌ cargo no generó el binario release"; exit 1; }
-    # Verificación: un binario de producción embebe dist/ (frontendDist), por
-    # lo que pesa mucho más que uno en modo dev (~4.5 MB). Nota: devUrl aparece
-    # en TODO binario (la config se embebe íntegra), así que strings/grep no
-    # sirve para discriminar.
+    
     _size=$(stat -c%s "target/release/pulsaros-welcome" 2>/dev/null || echo 0)
     _dist_size=$(du -sb "$SRC_DIR/dist" 2>/dev/null | cut -f1 || echo 0)
     if [ "${_size:-0}" -lt "$((_dist_size + 3000000))" ] 2>/dev/null; then
@@ -94,16 +82,19 @@ build_tauri() {
 }
 
 # ------------------------------------------------------------------------------
-# 3. Instalación en staging
+# 3. Instalación en staging y en el árbol del paquete
 # ------------------------------------------------------------------------------
 install_to_stage() {
     mkdir -p "$STAGE_DIR/usr/lib/pulsaros-welcome"
+    mkdir -p "$PKG_ROOT/usr/lib/pulsaros-welcome"
     install -m 755 "$SRC_DIR/src-tauri/target/release/pulsaros-welcome" \
         "$STAGE_DIR/usr/lib/pulsaros-welcome/pulsaros-welcome"
+    install -m 755 "$SRC_DIR/src-tauri/target/release/pulsaros-welcome" \
+        "$PKG_ROOT/usr/lib/pulsaros-welcome/pulsaros-welcome"
     strip --strip-unneeded "$STAGE_DIR/usr/lib/pulsaros-welcome/pulsaros-welcome" 2>/dev/null || true
-    # Marcador: el wrapper SOLO lanza el binario Tauri si existe este archivo,
-    # garantizando que jamás se ejecute un binario en modo dev.
+    strip --strip-unneeded "$PKG_ROOT/usr/lib/pulsaros-welcome/pulsaros-welcome" 2>/dev/null || true
     echo "release $(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$STAGE_DIR/usr/lib/pulsaros-welcome/RELEASE_BUILD"
+    echo "release $(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$PKG_ROOT/usr/lib/pulsaros-welcome/RELEASE_BUILD"
     echo "✔ Binario RELEASE instalado en usr/lib/pulsaros-welcome/pulsaros-welcome"
 }
 

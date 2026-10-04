@@ -14,19 +14,19 @@ export const FEATURE_SLIDES: FeatureSlide[] = [
     id: "optimizer",
     title: "Dynamic Adaptive Optimizer",
     subtitle:
-      "Real-time continuous habit learning engine and anti-saturation governor. Guarantees zero-lag desktop fluidity, proactive memory compaction and intelligent multi-core load balancing.",
+      "Continuous habit learning engine and anti-saturation governor. Guarantees zero-lag desktop fluidity, proactive memory compaction, and intelligent multi-core load balancing.",
   },
   {
     id: "global-menu",
     title: "Real Global Menu",
     subtitle:
-      "A true macOS-style unified top menu bar seamlessly integrated across native, GTK, Qt, Electron and classic applications for maximum screen real estate.",
+      "A true macOS-style unified top menu bar that seamlessly extracts and presents real native application menus (File, Edit, View, Window, Help) across GTK, Qt, Electron and native apps.",
   },
   {
     id: "app-store",
     title: "AppInstall - Unified App Center",
     subtitle:
-      "Browse and install apps from all package managers: APT, Flathub, Snap, AppImage and custom deb packages. Update your system, manage packages, and clean disk trash in one click.",
+      "Browse and install apps from all package managers: APT, Flathub, Snap, AppImage, and packages. Manage GNOME Shell extensions, clean disk trash, perform updates, and access the Pulsar Store ecosystem in one place.",
     video: "./videos/app-store.webp",
   },
   {

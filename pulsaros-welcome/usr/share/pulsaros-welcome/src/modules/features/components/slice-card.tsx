@@ -26,6 +26,8 @@ export function SliceCard({ slide, idx, index, prev, next }: SliceCardProps) {
       </p>
 
       <div className="relative mt-8 w-full max-w-3xl">
+        {slide.id === "optimizer" && <OptimizerSlice />}
+        {slide.id === "global-menu" && <GlobalMenuSlice />}
         {slide.id === "adblock" && <AdblockSlice />}
         {slide.providers && <PictureSlice slide={slide} />}
         {slide.video && <AnimatedSlice src={slide.video} />}
@@ -85,6 +87,64 @@ function PictureSlice({ slide }: { slide: FeatureSlide }) {
   );
 }
 
+function OptimizerSlice() {
+  return (
+    <div className="glass-grouped flex w-full flex-col items-center justify-center rounded-2xl p-6 sm:p-8 shadow-inner">
+      <div className="flex items-center gap-6">
+        <img
+          src="./logos/pulsaros-optimizer.svg"
+          alt="Pulsar OS Optimizer"
+          className="h-20 w-20 object-contain drop-shadow-md"
+          draggable={false}
+        />
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-3 w-3 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[14px] font-semibold text-text-primary">
+              Habit Learning Engine Active
+            </span>
+          </div>
+          <div className="h-2 w-56 overflow-hidden rounded-full bg-black/10">
+            <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-emerald-500 to-apple-blue" />
+          </div>
+          <div className="flex justify-between text-[11px] text-text-secondary">
+            <span>Adaptive CPU & Memory Governor</span>
+            <span className="font-semibold text-emerald-600">Zero-Lag</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GlobalMenuSlice() {
+  return (
+    <div className="glass-grouped flex w-full flex-col items-center justify-center rounded-2xl p-6 shadow-inner">
+      {/* Top Bar Preview */}
+      <div className="w-full rounded-xl bg-neutral-900/90 p-2.5 px-4 text-white shadow-lg backdrop-blur-md">
+        <div className="flex items-center justify-between text-[13px] font-medium">
+          <div className="flex items-center gap-4">
+            <img src="./logo.png" alt="Pulsar" className="h-4 w-4 object-contain brightness-200" />
+            <span className="font-bold text-white">Application</span>
+            <span className="text-white/80 hover:text-white cursor-default">File</span>
+            <span className="text-white/80 hover:text-white cursor-default">Edit</span>
+            <span className="text-white/80 hover:text-white cursor-default">View</span>
+            <span className="text-white/80 hover:text-white cursor-default">Window</span>
+            <span className="text-white/80 hover:text-white cursor-default">Help</span>
+          </div>
+          <div className="flex items-center gap-3 text-[12px] text-white/70">
+            <span>100%</span>
+            <span>Fri 14:20</span>
+          </div>
+        </div>
+      </div>
+      <p className="mt-3 text-center text-[12px] text-text-secondary">
+        Native menus are automatically extracted from GTK, Qt and Electron apps directly to the top bar.
+      </p>
+    </div>
+  );
+}
+
 function AdblockSlice() {
   return (
     <div className="flex w-full min-h-[220px] items-center justify-center py-6">
@@ -97,3 +157,4 @@ function AdblockSlice() {
     </div>
   );
 }
+

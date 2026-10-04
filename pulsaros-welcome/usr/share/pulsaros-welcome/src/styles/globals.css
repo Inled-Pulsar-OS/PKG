@@ -55,8 +55,10 @@ body {
 
 /* Fullscreen backdrop — Pulsar default wallpaper with soft dim + blur */
 .screen-backdrop {
+  background-color: #0d1527;
   background-image:
     linear-gradient(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.35)),
+    url("/background.png"),
     url("file:///usr/share/backgrounds/pulsar-os-tahoe.png"),
     url("https://raw.githubusercontent.com/Inled-Pulsar-OS/pulsar-art/refs/heads/main/pulsar-os-tahoe.png");
   background-size: cover;

@@ -5,11 +5,8 @@ import {
   Cpu,
   Palette,
   ShoppingBag,
-  Zap,
-  Menu,
-  Moon,
-  Volume2,
 } from "lucide-react";
+
 import type { LucideIcon } from "lucide-react";
 
 export interface SettingsCard {
@@ -31,16 +28,9 @@ export const SETTINGS_CARDS: SettingsCard[] = [
   {
     id: "software",
     title: "AppInstall",
-    description: "Unified App Store for APT, Flatpak & packages.",
+    description: "Unified App Center for apps, packages & extensions.",
     icon: ShoppingBag,
     action: "software",
-  },
-  {
-    id: "optimizer",
-    title: "System Optimizer",
-    description: "Real-time habit governor & memory compaction.",
-    icon: Zap,
-    action: "optimizer",
   },
   {
     id: "driverman",
@@ -57,6 +47,13 @@ export const SETTINGS_CARDS: SettingsCard[] = [
     action: "display",
   },
   {
+    id: "appearance",
+    title: "Appearance",
+    description: "Wallpapers, themes and accent colors.",
+    icon: Palette,
+    action: "appearance",
+  },
+  {
     id: "wifi",
     title: "Wi-Fi",
     description: "Connect to networks and manage connections.",
@@ -69,12 +66,5 @@ export const SETTINGS_CARDS: SettingsCard[] = [
     description: "Pair headphones, keyboards and mice.",
     icon: Bluetooth,
     action: "bluetooth",
-  },
-  {
-    id: "appearance",
-    title: "Appearance",
-    description: "Wallpapers, themes and accent colors.",
-    icon: Palette,
-    action: "appearance",
   },
 ];
