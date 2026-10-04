@@ -1,0 +1,41 @@
+# Maintainer: Jaime <info@inled.es>
+
+pkgname=pulsaros-notchnux
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="macOS-style dynamic notch and dashboard for Pulsar OS"
+arch=(any)
+url="https://inled.es"
+license=(MIT)
+
+depends=(
+  gnome-shell
+  gstreamer
+  gst-plugins-base-libs
+)
+
+optdepends=(
+  'gst-plugins-good: additional GStreamer support for the Studio tab'
+)
+
+options=(!strip)
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-notchnux && pwd)"
+    cd "$_src"
+
+    mkdir -p "$pkgdir/usr/share/gnome-shell/extensions"
+
+    cp -r \
+        usr/share/gnome-shell/extensions/notchnux@adityasah.programs \
+        "$pkgdir/usr/share/gnome-shell/extensions/"
+
+    if [ -f LICENSE ]; then
+        install -Dm644 LICENSE \
+            "$pkgdir/usr/share/licenses/pulsaros-notchnux/LICENSE"
+    fi
+
+    chmod -R a+rX "$pkgdir/usr"
+    find "$pkgdir/usr" -type d -exec chmod 755 {} +
+    find "$pkgdir/usr/share" -type f -exec chmod 644 {} +
+}
