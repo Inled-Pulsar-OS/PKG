@@ -11,6 +11,25 @@ export const FEATURE_SLIDES: FeatureSlide[] = [
     video: "./videos/session-restore.webp",
   },
   {
+    id: "optimizer",
+    title: "Dynamic Adaptive Optimizer",
+    subtitle:
+      "Real-time continuous habit learning engine and anti-saturation governor. Guarantees zero-lag desktop fluidity, proactive memory compaction and intelligent multi-core load balancing.",
+  },
+  {
+    id: "global-menu",
+    title: "Real Global Menu",
+    subtitle:
+      "A true macOS-style unified top menu bar seamlessly integrated across native, GTK, Qt, Electron and classic applications for maximum screen real estate.",
+  },
+  {
+    id: "app-store",
+    title: "AppInstall - Unified App Center",
+    subtitle:
+      "Browse and install apps from all package managers: APT, Flathub, Snap, AppImage and custom deb packages. Update your system, manage packages, and clean disk trash in one click.",
+    video: "./videos/app-store.webp",
+  },
+  {
     id: "sayri",
     title: "Sayri, AI Assistant",
     subtitle:
@@ -33,13 +52,6 @@ export const FEATURE_SLIDES: FeatureSlide[] = [
       { name: "Nextcloud", src: "./logos/providers/nextcloud.svg" },
       { name: "Proton", src: "./logos/providers/proton.svg" },
     ],
-  },
-  {
-    id: "app-store",
-    title: "App Store",
-    subtitle:
-      "Browse and install apps from all the package managers. Update your system, uninstall ANY system package and clean system trash.",
-    video: "./videos/app-store.webp",
   },
   {
     id: "spotlight",

@@ -56,6 +56,10 @@ export async function invoke<T = any>(cmd: string, args: Record<string, any> = {
   if (cmd === "get_system_mode") return "Normal" as any;
   if (cmd === "get_resolutions") return [] as any;
   if (cmd === "get_effects_state") return false as any;
+  if (cmd === "get_global_menu_state") return true as any;
+  if (cmd === "get_dark_mode") return true as any;
+  if (cmd === "get_bootsound_state") return true as any;
+  if (cmd === "get_optimizer_state") return true as any;
   if (cmd === "wifi_slide_enabled") return (window.IS_WIFI_SLIDE ?? false) as any;
   if (cmd === "check_adb_devices") return "" as any;
   if (cmd === "scan_wifi_networks") return [] as any;
@@ -138,12 +142,48 @@ export function getEffectsState(): Promise<boolean> {
   return invoke("get_effects_state");
 }
 
-export function wifiSlideEnabled(): Promise<boolean> {
-  return invoke("wifi_slide_enabled");
-}
-
 export function setEffects(useLiquidGlass: boolean): Promise<void> {
   return invoke("set_effects", { useLiquidGlass });
+}
+
+export function getGlobalMenuState(): Promise<boolean> {
+  return invoke("get_global_menu_state");
+}
+
+export function setGlobalMenu(enable: boolean): Promise<void> {
+  return invoke("set_global_menu", { enable });
+}
+
+export function getDarkMode(): Promise<boolean> {
+  return invoke("get_dark_mode");
+}
+
+export function setDarkMode(dark: boolean): Promise<void> {
+  return invoke("set_dark_mode", { dark });
+}
+
+export function getBootsoundState(): Promise<boolean> {
+  return invoke("get_bootsound_state");
+}
+
+export function setBootsoundState(enable: boolean): Promise<void> {
+  return invoke("set_bootsound_state", { enable });
+}
+
+export function getOptimizerState(): Promise<boolean> {
+  return invoke("get_optimizer_state");
+}
+
+export function setOptimizerState(enable: boolean): Promise<void> {
+  return invoke("set_optimizer_state", { enable });
+}
+
+export function launchOptimizerGui(): Promise<void> {
+  return invoke("launch_optimizer_gui");
+}
+
+export function wifiSlideEnabled(): Promise<boolean> {
+  return invoke("wifi_slide_enabled");
 }
 
 export function checkAdbDevices(): Promise<string> {

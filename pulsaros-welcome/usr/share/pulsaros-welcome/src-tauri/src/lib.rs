@@ -48,14 +48,6 @@ fn preflight() {
 pub fn run() {
     #[cfg(target_os = "linux")]
     {
-        // Videos played black because the WebKitWebProcess bubblewrap sandbox
-        // hides the gstreamer decode plugins from the web process (CLI decode
-        // works, the page shows a black frame). Disable the sandbox so the web
-        // process can dlopen the gst plugins. WEBKIT_DISABLE_COMPOSITING_MODE=1
-        // is REQUIRED: without it video surfaces render as black frames on
-        // these WebKitGTK builds (verified on host: removing it reintroduced
-        // the black-video regression). Keep DMABUF renderer disabled too
-        // (transparent-window black-background bug).
         std::env::set_var("WEBKIT_FORCE_SANDBOX", "0");
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
         std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
@@ -88,6 +80,15 @@ pub fn run() {
             commands::bluetooth::launch_bluetooth_settings,
             commands::effects::get_effects_state,
             commands::effects::set_effects,
+            commands::effects::get_global_menu_state,
+            commands::effects::set_global_menu,
+            commands::effects::get_dark_mode,
+            commands::effects::set_dark_mode,
+            commands::effects::get_bootsound_state,
+            commands::effects::set_bootsound_state,
+            commands::effects::get_optimizer_state,
+            commands::effects::set_optimizer_state,
+            commands::effects::launch_optimizer_gui,
             commands::software::check_adb_devices,
             commands::software::launch_ootb,
             commands::software::launch_recovery,
