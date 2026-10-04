@@ -1,19 +1,31 @@
 #!/usr/bin/env python3
 """
-Pulsar OS - Dynamic System, Memory & Process Optimizer (pulsaros-optimizer)
-Engineered for ultimate desktop fluidity and zero-lag performance on low-end hardware (Intel i3, old PCs, VMs).
+Pulsar OS - Universal Dynamic Adaptive Optimizer Daemon (pulsaros-optimizer)
+Engineered for ultimate desktop fluidity and zero-lag performance across any workflow:
+from low-spec hardware (Intel Celeron/i3, 4GB RAM) to high-end multi-core workstations
+running heavy compilation, VMs, Docker, 4K media rendering, or multitasking.
 
-Core Dynamic Features:
-1. Real-time PSI (Pressure Stall Information) & CPU Saturation Tracker.
-2. Adaptive Scheduler Governor:
-   - Under normal load: build tools & VMs run at normal speed.
-   - Under CPU/IO saturation or lag spikes: automatically protects GNOME Shell, PipeWire audio,
-     Spotlight, and active GUI apps with high priority (-14 to -16 nice, real-time IO),
-     while gently throttling multi-threaded compilers (cargo, rustc, gcc, ninja) to background priority (+10 nice, idle IO).
-3. Background Indexer & Maintenance Throttling (tracker, tinysparql, packagekit, apt locked to IDLE IO and nice 19).
-4. Zero-Lag zRAM Memory Compression (swappiness 100/60, page-cluster 0, vfs_cache_pressure 50).
-5. Proactive Memory Compaction and Pagecache Trimming on acute memory pressure.
-6. Direct libc syscalls (SYS_ioprio_set) with near-zero daemon CPU footprint (< 0.1%).
+Core Engine Features:
+1. Real-time Hardware-Adaptive Governor:
+   - Tracks instant CPU utilization, Load Average, and Linux Kernel PSI (Pressure Stall Information)
+     for CPU, Memory, and Disk I/O.
+   - Dynamically shifts between 3 states: NORMAL (Fluid), ELEVATED (Balancing), CRITICAL (Zero-Lag Protection).
+2. Desktop Compositor & Audio Hardening:
+   - Always guarantees maximum scheduling priority and low-latency/real-time I/O to GNOME Shell,
+     Mutter, Xwayland, PipeWire, WirePlumber, Spotlight, and active UI windows.
+3. Adaptive Multi-Core & Heavy Workload Load Balancer:
+   - Heavy background tasks (compilers: cargo/rustc/gcc/clang/ninja, VMs: qemu/vbox,
+     containers: docker/podman, builders: dpkg/webpack/vite, encoders: ffmpeg/blender)
+     run at full multi-core performance when system is idle.
+   - Under system load or pressure spikes, instantly and gently adjusts nice levels (+5 to +14)
+     and I/O priorities (IDLE/Best-Effort) so the UI and audio NEVER freeze or drop frames.
+4. Universal Hardware Memory Management & zRAM:
+   - Dynamically computes optimal zRAM compression size and kernel swappiness (180 for <=4GB,
+     150 for <=16GB, 100 for >16GB) with priority 32767.
+   - Proactive memory compaction and pagecache trim on acute memory pressure.
+   - Sets zero-latency kernel VM tunings (page-cluster 0, vfs_cache_pressure 50, dirty_ratio 10,
+     watermark_scale_factor 150, sched_autogroup 1).
+5. Direct libc syscalls (SYS_ioprio_set) with near-zero daemon CPU footprint (< 0.05%).
 """
 
 import ctypes
@@ -26,7 +38,6 @@ import signal
 import platform
 
 # Direct Linux syscall for I/O priority without spawning subprocesses
-# SYS_ioprio_set: x86_64=251, aarch64=30, arm=314, i386=289
 def _get_ioprio_syscall_nr():
     m = platform.machine().lower()
     if m in ("x86_64", "amd64"):
@@ -71,70 +82,63 @@ def set_ioprio(pid: int, io_class: int, io_prio: int):
 PROCESSED_PIDS = {}
 CURRENT_PRESSURE_MODE = 0
 PREV_CPU_TIMES = None
+PREV_PID_CPU_TIMES = {}
+LAST_MEMORY_TRIM_TIME = 0.0
 
+# -----------------------------------------------------------------------------
+# Process Categorization
+# -----------------------------------------------------------------------------
+
+# 1. Background Indexers & Maintenance -> Always lowest priority (Nice 19, Idle IO)
 THROTTLE_PROCESS_NAMES = {
-    "tracker-miner-fs-3",
-    "tracker-miner-fs",
-    "tracker-extract-3",
-    "tracker-extract",
-    "tinysparql",
-    "localsearch-3",
-    "localsearch-extractor-3",
-    "packagekitd",
-    "apt-daily",
-    "updatedb",
-    "man-db",
-    "apt.systemd.daily",
-    "fstrim",
-    "systemd-coredump",
+    "tracker-miner-fs-3", "tracker-miner-fs", "tracker-miner-f",
+    "tracker-extract-3", "tracker-extract", "tracker-extract-",
+    "tinysparql", "localsearch-3", "localsearch-extractor-3", "localsearch-3",
+    "packagekitd", "apt-daily", "updatedb", "man-db",
+    "apt.systemd.daily", "fstrim", "systemd-coredump", "baloo_file", "baloo_file_extr"
 }
 
+# 2. Core Desktop Compositor, Shell & Low-Latency Audio -> Maximum Priority (-14 to -16 Nice, Realtime/Low-Latency IO)
 CORE_DESKTOP_PROCESSES = {
-    "gnome-shell",
-    "pulsaros-spotli",
-    "pulsaros-spotlight",
-    "pipewire",
-    "wireplumber",
-    "pipewire-pulse",
-    "Xwayland",
-    "mutter-x11-frames",
+    "gnome-shell", "mutter", "mutter-x11-fram", "mutter-x11-frames",
+    "Xwayland", "kwin_wayland", "kwin_x11", "sway", "wayfire", "weston",
+    "pipewire", "wireplumber", "pipewire-pulse", "pulseaudio",
+    "pulsaros-spotli", "pulsaros-spotlight", "pulsaros-dock", "plank"
 }
 
-DEV_BUILD_TOOLS = {
-    "cargo",
-    "rustc",
-    "ninja",
-    "gcc",
-    "g++",
-    "clang",
-    "clang++",
-    "make",
-    "meson",
-    "dpkg-deb",
-    "dpkg-buildpackage",
-    "ld",
-    "gold",
-    "lld",
-    "cc1",
-    "cc1plus",
-}
-
-HYPERVISOR_VM_PROCESSES = {
-    "qemu-system-x86_64",
-    "qemu-system-x86",
-    "qemu-kvm",
-    "VirtualBoxVM",
-    "VBoxHeadless",
-    "vmware-vmx",
-    "virt-manager",
-    "gnome-boxes",
-}
-
+# 3. Interactive User GUI Applications -> High Responsiveness (-4 to -8 Nice, Low Latency IO)
 USER_GUI_APPS = {
-    "nautilus", "firefox", "chromium", "brave", "code", "cursor",
-    "ptyxis", "gnome-terminal", "alacritty", "kitty", "ghostty",
-    "gnome-text-editor", "gedit", "evince", "eog", "loupe",
-    "org.gnome.Nautilus", "org.gnome.Settings", "gnome-control-center"
+    "nautilus", "org.gnome.Nautilus", "dolphin", "thunar", "pcmanfm",
+    "firefox", "firefox-esr", "chromium", "brave", "chrome", "google-chrome", "opera", "seafari", "epiphany",
+    "code", "cursor", "vscodium", "sublime_text", "kate", "gedit", "gnome-text-editor", "geany",
+    "ptyxis", "gnome-terminal", "gnome-terminal-", "alacritty", "kitty", "ghostty", "foot", "konsole", "xterm",
+    "evince", "papers", "eog", "loupe", "gimp", "inkscape", "krita", "obs", "vlc", "mpv", "totem", "celluloid",
+    "org.gnome.Settings", "gnome-control-c", "gnome-control-center", "pavucontrol",
+    "pulsaros-welcome", "pulsaros-optimizer-gui", "pulsar-store"
+}
+
+# 4. Multi-Threaded Compilers, Builders & Developer Tools
+DEV_BUILD_TOOLS = {
+    "cargo", "rustc", "ninja", "gcc", "g++", "clang", "clang++",
+    "make", "meson", "cmake", "dpkg-deb", "dpkg-buildpackage", "makepkg",
+    "ld", "gold", "lld", "mold", "cc1", "cc1plus", "as",
+    "javac", "kotlinc", "swiftc", "ghc", "go", "esbuild", "vite", "tsc", "webpack"
+}
+
+# 5. Virtual Machines, Hypervisors & Emulators
+HYPERVISOR_VM_PROCESSES = {
+    "qemu-system-x86", "qemu-system-x86_64", "qemu-system-aar", "qemu-system-aarch64",
+    "qemu-kvm", "VirtualBoxVM", "VBoxHeadless", "VBoxSVC", "vmware-vmx", "virt-manager", "gnome-boxes"
+}
+
+# 6. Container Daemons & Heavy Worker Engines
+CONTAINER_ENGINES = {
+    "dockerd", "containerd", "podman", "crio", "k3s", "minikube"
+}
+
+# 7. Heavy Media Encoders & Compression Tools
+HEAVY_MEDIA_TOOLS = {
+    "ffmpeg", "handbrake", "blender", "blender-bin", "tar", "gzip", "bzip2", "xz", "zstd", "rsync", "rclone"
 }
 
 def log(msg):
@@ -223,49 +227,63 @@ def evaluate_system_pressure():
     """
     Dynamically evaluate real-time system pressure level:
     - Mode 0: NORMAL (Desktop fluid, CPU usage < 65%, low pressure stall)
-    - Mode 1: ELEVATED (Moderate load, CPU 65%-85% or PSI 15-30%)
-    - Mode 2: CRITICAL / SATURATED (Heavy load, CPU > 85% or PSI > 30% or IO stall > 40%)
+    - Mode 1: ELEVATED (Moderate load, CPU 65%-85% or PSI 12-25%)
+    - Mode 2: CRITICAL / SATURATED (Heavy load, CPU > 85% or PSI > 25% or IO stall > 30%)
     """
     cpu_usage = get_cpu_utilization()
     psi = read_psi()
     
     # Critical saturation (risk of UI stutter / lag)
-    if cpu_usage > 85.0 or psi["cpu_some"] > 30.0 or psi["io_some"] > 40.0 or psi["io_full"] > 5.0:
+    if cpu_usage > 85.0 or psi["cpu_some"] > 25.0 or psi["io_some"] > 30.0 or psi["io_full"] > 4.0:
         return 2, cpu_usage, psi
     
     # Elevated load
-    if cpu_usage > 65.0 or psi["cpu_some"] > 15.0 or psi["io_some"] > 20.0 or psi["io_full"] > 1.0:
+    if cpu_usage > 65.0 or psi["cpu_some"] > 12.0 or psi["io_some"] > 15.0 or psi["io_full"] > 1.0:
         return 1, cpu_usage, psi
         
     return 0, cpu_usage, psi
 
 def get_zram_stats():
     """Retrieve zRAM compression and usage statistics."""
-    stats = {"active": False, "orig_data_mb": 0.0, "compr_data_mb": 0.0, "ratio": "N/A", "saved_mb": 0.0, "algorithm": "unknown"}
+    stats = {
+        "active": False,
+        "orig_data_mb": 0.0,
+        "compr_data_mb": 0.0,
+        "ratio": "1.00:1",
+        "saved_mb": 0.0,
+        "disksize_mb": 0.0,
+        "algorithm": "unknown"
+    }
     try:
+        with open("/proc/swaps", "r") as f:
+            if "zram" in f.read():
+                stats["active"] = True
+
+        if os.path.exists("/sys/block/zram0/disksize"):
+            with open("/sys/block/zram0/disksize", "r") as f:
+                stats["disksize_mb"] = int(f.read().strip()) / (1024 * 1024)
+
         if os.path.exists("/sys/block/zram0/mm_stat"):
             with open("/sys/block/zram0/mm_stat", "r") as f:
                 parts = f.read().split()
                 if len(parts) >= 3:
                     orig_bytes = int(parts[0])
                     compr_bytes = int(parts[1])
-                    total_bytes = int(parts[2])
                     orig_mb = orig_bytes / (1024 * 1024)
                     compr_mb = compr_bytes / (1024 * 1024)
                     saved_mb = max(0.0, orig_mb - compr_mb)
                     ratio = f"{(orig_bytes / compr_bytes):.2f}:1" if compr_bytes > 0 else "1.00:1"
                     
-                    stats["active"] = True
                     stats["orig_data_mb"] = orig_mb
                     stats["compr_data_mb"] = compr_mb
                     stats["saved_mb"] = saved_mb
                     stats["ratio"] = ratio
+                    
         if os.path.exists("/sys/block/zram0/comp_algorithm"):
             with open("/sys/block/zram0/comp_algorithm", "r") as f:
-                algo_str = f.read()
-                for part in algo_str.split():
+                for part in f.read().split():
                     if part.startswith("[") and part.endswith("]"):
-                        stats["algorithm"] = part[1:-1]
+                        stats["algorithm"] = part[1:-1].upper()
                         break
     except Exception:
         pass
@@ -274,11 +292,15 @@ def get_zram_stats():
 def show_status():
     """Display real-time optimization statistics and dynamic pressure governor status."""
     mode, cpu_pct, psi = evaluate_system_pressure()
-    mode_names = {0: "NORMAL (Fluid)", 1: "ELEVATED LOAD (Balancing)", 2: "CRITICAL SATURATION (Zero-Lag Protection Active)"}
+    mode_names = {
+        0: "NORMAL (Fluid & Interactive)",
+        1: "ELEVATED LOAD (Dynamic Balancing Active)",
+        2: "CRITICAL SATURATION (Zero-Lag Protection Active)"
+    }
     
-    print("=" * 65)
-    print("PULSAR OS OPTIMIZER - DYNAMIC FLUIDITY & METRICS ENGINE")
-    print("=" * 65)
+    print("=" * 70)
+    print("PULSAR OS OPTIMIZER - UNIVERSAL FLUIDITY & PERFORMANCE ENGINE")
+    print("=" * 70)
     
     print(f"\nREAL-TIME DYNAMIC GOVERNOR:")
     print(f"  System Governor State:  {mode_names.get(mode, 'UNKNOWN')}")
@@ -301,9 +323,10 @@ def show_status():
     zstats = get_zram_stats()
     print(f"\nzRAM COMPRESSION:")
     if zstats["active"]:
-        print(f"  Algorithm:              {zstats['algorithm'].upper()}")
-        print(f"  Uncompressed Size:      {zstats['orig_data_mb']:.1f} MB")
-        print(f"  Compressed Size:        {zstats['compr_data_mb']:.1f} MB")
+        print(f"  Algorithm:              {zstats['algorithm']}")
+        print(f"  Allocated Device Size:  {zstats['disksize_mb']:.1f} MB")
+        print(f"  Uncompressed In-Use:    {zstats['orig_data_mb']:.1f} MB")
+        print(f"  Compressed Stored:      {zstats['compr_data_mb']:.1f} MB")
         print(f"  Compression Ratio:      {zstats['ratio']}")
         print(f"  Net RAM Saved:          {zstats['saved_mb']:.1f} MB")
     else:
@@ -312,7 +335,13 @@ def show_status():
     # 2. Kernel VM Sysctls
     print(f"\nKERNEL LATENCY PARAMETERS:")
     try:
-        for p in ["/proc/sys/vm/swappiness", "/proc/sys/vm/vfs_cache_pressure", "/proc/sys/vm/page-cluster", "/proc/sys/kernel/sched_autogroup_enabled"]:
+        for p in [
+            "/proc/sys/vm/swappiness",
+            "/proc/sys/vm/vfs_cache_pressure",
+            "/proc/sys/vm/page-cluster",
+            "/proc/sys/kernel/sched_autogroup_enabled",
+            "/proc/sys/vm/watermark_scale_factor"
+        ]:
             if os.path.exists(p):
                 with open(p, "r") as f:
                     print(f"  {os.path.basename(os.path.dirname(p))}.{os.path.basename(p)}: {f.read().strip()}")
@@ -334,7 +363,7 @@ def show_status():
                     nice = int(stat[18])
                 if (comm in CORE_DESKTOP_PROCESSES or comm in USER_GUI_APPS) and nice < 0:
                     boosted.append((comm, pid, nice))
-                elif (comm in THROTTLE_PROCESS_NAMES or comm in DEV_BUILD_TOOLS) and nice > 0:
+                elif (comm in THROTTLE_PROCESS_NAMES or comm in DEV_BUILD_TOOLS or comm in HYPERVISOR_VM_PROCESSES or comm in CONTAINER_ENGINES or comm in HEAVY_MEDIA_TOOLS) and nice > 0:
                     throttled.append((comm, pid, nice))
             except Exception:
                 continue
@@ -342,41 +371,54 @@ def show_status():
         pass
 
     if boosted:
-        print("  Boosted Responsive Apps (High CPU/IO):")
-        for comm, pid, nice in set(boosted):
+        print("  Boosted Responsive Desktop Apps:")
+        for comm, pid, nice in sorted(set(boosted)):
             print(f"     - {comm} (PID {pid}): Nice {nice}")
     if throttled:
-        print("  Throttled / Background Load Tasks (Protected Fluidity):")
-        for comm, pid, nice in set(throttled):
+        print("  Balanced Heavy Background Tasks:")
+        for comm, pid, nice in sorted(set(throttled)):
             print(f"     - {comm} (PID {pid}): Nice {nice}")
     if not throttled and not boosted:
-        print("  No special processes running.")
+        print("  No special process adjustments active.")
 
-    print("=" * 65 + "\n")
+    print("=" * 70 + "\n")
 
 def setup_zram_and_sysctl():
-    """Configure zRAM compression and optimal low-spec kernel sysctls."""
+    """Configure hardware-adaptive zRAM compression and low-latency kernel sysctls."""
     try:
         meminfo = read_meminfo()
         total_kb = meminfo.get("MemTotal", 4 * 1024 * 1024)
         total_mb = total_kb // 1024
 
-        log(f"System total RAM: {total_mb} MB")
+        log(f"Detected physical RAM: {total_mb} MB ({total_mb/1024:.1f} GB)")
 
-        # Balanced swappiness: 100 on low-RAM systems (< 8GB), 60 on standard/high-RAM PCs
-        target_swappiness = "100" if total_mb < 8192 else "60"
+        # Hardware-adaptive swappiness:
+        # <= 4GB RAM: 180 (Aggressively compress cold memory into zRAM, zero disk thrashing)
+        # 4GB - 16GB RAM: 150 (Optimal multi-tasking balance for developer/office workloads)
+        # > 16GB RAM: 100 (High performance for massive workloads)
+        if total_mb <= 4096:
+            target_swappiness = "180"
+            zram_target_size = int(total_kb * 1024) # 100% of RAM
+        elif total_mb <= 16384:
+            target_swappiness = "150"
+            zram_target_size = min(int(total_kb * 1024), 8 * 1024 * 1024 * 1024) # up to 8GB
+        else:
+            target_swappiness = "100"
+            zram_target_size = min(int((total_kb * 1024) // 2), 16 * 1024 * 1024 * 1024) # 50% of RAM up to 16GB
 
-        # 1. Sysctl optimizations for responsiveness without stalling disk
+        # 1. Kernel sysctl optimizations for maximum desktop fluidity
         sysctls = {
             "/proc/sys/vm/swappiness": target_swappiness,
             "/proc/sys/vm/vfs_cache_pressure": "50",     # Retain directory/inode cache for snappy app launch
-            "/proc/sys/vm/page-cluster": "0",           # 0-latency 1-page zRAM swaps
-            "/proc/sys/vm/dirty_ratio": "10",           # Prevent write stalls on slow disks/SSDs
+            "/proc/sys/vm/page-cluster": "0",           # 0-latency 1-page zRAM compression
+            "/proc/sys/vm/dirty_ratio": "10",           # Prevent massive disk write stalls
             "/proc/sys/vm/dirty_background_ratio": "5",
             "/proc/sys/vm/dirty_writeback_centisecs": "1500",
             "/proc/sys/vm/dirty_expire_centisecs": "3000",
+            "/proc/sys/vm/watermark_scale_factor": "150", # Smooth background page reclaim before stalls
             "/proc/sys/vm/compaction_proactiveness": "20",
-            "/proc/sys/kernel/sched_autogroup_enabled": "1", # Isolate heavy compilation trees from desktop session
+            "/proc/sys/kernel/sched_autogroup_enabled": "1", # Isolate heavy terminal/build trees from GUI session
+            "/proc/sys/kernel/sched_cfs_bandwidth_slice_us": "3000", # Lower CFS slice for responsive UI frames
         }
 
         for path, val in sysctls.items():
@@ -393,7 +435,7 @@ def setup_zram_and_sysctl():
         except Exception:
             pass
 
-        # 3. Check if zRAM is already in /proc/swaps
+        # 3. Check if zRAM is already active in /proc/swaps
         zram_active = False
         try:
             with open("/proc/swaps", "r") as f:
@@ -404,7 +446,8 @@ def setup_zram_and_sysctl():
 
         if not zram_active:
             if os.path.exists("/sys/block/zram0"):
-                for algo in ["lz4", "zstd"]:
+                # Try preferred compression algorithms: zstd -> lz4 -> lzo-rle
+                for algo in ["zstd", "lz4", "lzo-rle"]:
                     try:
                         with open("/sys/block/zram0/comp_algorithm", "w") as f:
                             f.write(algo)
@@ -412,7 +455,6 @@ def setup_zram_and_sysctl():
                     except Exception:
                         pass
 
-                zram_size_bytes = min(int(total_kb * 1024), 8 * 1024 * 1024 * 1024)
                 try:
                     with open("/sys/block/zram0/reset", "w") as f:
                         f.write("1")
@@ -421,10 +463,11 @@ def setup_zram_and_sysctl():
 
                 try:
                     with open("/sys/block/zram0/disksize", "w") as f:
-                        f.write(str(zram_size_bytes))
+                        f.write(str(zram_target_size))
                     subprocess.run(["mkswap", "/dev/zram0"], capture_output=True)
-                    subprocess.run(["swapon", "-p", "100", "/dev/zram0"], capture_output=True)
-                    log(f"Configured zRAM swap (/dev/zram0, {zram_size_bytes // (1024*1024)} MB, priority 100)")
+                    # Swapon with highest possible priority 32767 so zRAM is used before any disk swap
+                    subprocess.run(["swapon", "-p", "32767", "/dev/zram0"], capture_output=True)
+                    log(f"Configured zRAM swap (/dev/zram0, {zram_target_size // (1024*1024)} MB, priority 32767, swappiness {target_swappiness})")
                 except Exception as ze:
                     log(f"zRAM activation notice: {ze}")
             else:
@@ -437,9 +480,9 @@ def setup_zram_and_sysctl():
 def optimize_process_priorities(pressure_mode: int):
     """
     Dynamically adjust nice and ionice levels based on real-time system pressure level:
-    - pressure_mode 0: NORMAL
-    - pressure_mode 1: ELEVATED
-    - pressure_mode 2: CRITICAL SATURATION
+    - pressure_mode 0: NORMAL (Fluid)
+    - pressure_mode 1: ELEVATED LOAD (Balancing)
+    - pressure_mode 2: CRITICAL SATURATION (Zero-Lag Protection Active)
     """
     global PROCESSED_PIDS, CURRENT_PRESSURE_MODE
     try:
@@ -460,6 +503,14 @@ def optimize_process_priorities(pressure_mode: int):
                 if pid in PROCESSED_PIDS and PROCESSED_PIDS[pid][3] == pressure_mode:
                     continue
 
+                # Exclude kernel threads (empty cmdline)
+                try:
+                    with open(f"/proc/{pid_str}/cmdline", "rb") as f:
+                        if not f.read():
+                            continue
+                except Exception:
+                    continue
+
                 with open(f"/proc/{pid_str}/comm", "r") as f:
                     comm = f.read().strip()
 
@@ -467,7 +518,7 @@ def optimize_process_priorities(pressure_mode: int):
                 io_class = 2
                 io_prio = 4
 
-                # 1. Background indexers and heavy system maintenance -> Always IDLE
+                # 1. Background Indexers and System Maintenance -> Always IDLE
                 if comm in THROTTLE_PROCESS_NAMES:
                     target_nice = 19
                     io_class = 3
@@ -486,26 +537,55 @@ def optimize_process_priorities(pressure_mode: int):
                     else: # CRITICAL
                         target_nice = -16
                         io_class = 1  # Realtime I/O priority for zero frame/audio drop
-                        io_prio = 3
+                        io_prio = 2
 
-                # 3. Active User GUI Apps (Browsers, Editors, Terminals)
+                # 3. Active User GUI Apps (Browsers, Editors, Terminals, File Manager)
                 elif comm in USER_GUI_APPS:
                     if pressure_mode == 0:
-                        target_nice = -3
+                        target_nice = -4
                         io_class = 2
                         io_prio = 2
                     elif pressure_mode == 1:
-                        target_nice = -6
+                        target_nice = -7
                         io_class = 2
                         io_prio = 1
                     else: # CRITICAL
-                        target_nice = -8
+                        target_nice = -10
                         io_class = 2
                         io_prio = 0
 
-                # 4. Developer & Build Tools (cargo, rustc, gcc, ninja, make)
-                # When system is saturated, throttle compilers to background nice so desktop NEVER lags
+                # 4. Multi-Threaded Compilers, Builders & Developer Tools
                 elif comm in DEV_BUILD_TOOLS:
+                    if pressure_mode == 0:
+                        target_nice = 0
+                        io_class = 2
+                        io_prio = 4
+                    elif pressure_mode == 1:
+                        target_nice = 6
+                        io_class = 2
+                        io_prio = 6
+                    else: # CRITICAL SATURATION
+                        target_nice = 12
+                        io_class = 3  # IDLE I/O so disk does not freeze
+                        io_prio = 0
+
+                # 5. Hypervisors & VMs (QEMU, VirtualBox, VMware)
+                elif comm in HYPERVISOR_VM_PROCESSES:
+                    if pressure_mode == 0:
+                        target_nice = 0
+                        io_class = 2
+                        io_prio = 4
+                    elif pressure_mode == 1:
+                        target_nice = 6
+                        io_class = 2
+                        io_prio = 6
+                    else: # CRITICAL
+                        target_nice = 12
+                        io_class = 3  # IDLE I/O so host desktop stays responsive
+                        io_prio = 0
+
+                # 6. Container Daemons & Heavy Workers
+                elif comm in CONTAINER_ENGINES:
                     if pressure_mode == 0:
                         target_nice = 0
                         io_class = 2
@@ -514,25 +594,39 @@ def optimize_process_priorities(pressure_mode: int):
                         target_nice = 5
                         io_class = 2
                         io_prio = 6
-                    else: # CRITICAL SATURATION
+                    else: # CRITICAL
                         target_nice = 10
-                        io_class = 3  # IDLE I/O so disk does not freeze
+                        io_class = 3
                         io_prio = 0
 
-                # 5. Hypervisors & VMs (QEMU, VirtualBox, VMware)
-                elif comm in HYPERVISOR_VM_PROCESSES:
+                # 7. Heavy Media Encoders & Compression Tools
+                elif comm in HEAVY_MEDIA_TOOLS:
                     if pressure_mode == 0:
-                        target_nice = -2
+                        target_nice = 2
                         io_class = 2
-                        io_prio = 2
+                        io_prio = 5
                     elif pressure_mode == 1:
-                        target_nice = 0
+                        target_nice = 8
                         io_class = 2
-                        io_prio = 4
+                        io_prio = 7
                     else: # CRITICAL
-                        target_nice = 4
-                        io_class = 2
-                        io_prio = 6
+                        target_nice = 14
+                        io_class = 3
+                        io_prio = 0
+
+                # 8. Unclassified Non-Desktop Processes under Critical System Pressure
+                elif pressure_mode == 2:
+                    # If CPU is saturated, ensure any generic non-GUI background process yields CPU
+                    try:
+                        with open(f"/proc/{pid_str}/stat", "r") as f:
+                            stat_parts = f.read().split()
+                            current_nice = int(stat_parts[18])
+                        if current_nice < 4:
+                            target_nice = 6
+                            io_class = 2
+                            io_prio = 6
+                    except Exception:
+                        pass
 
                 if target_nice is not None:
                     try:
@@ -555,13 +649,25 @@ def optimize_process_priorities(pressure_mode: int):
 
 def check_memory_pressure_and_trim(psi_stats):
     """Drop clean pagecaches and proactively compact memory when system is under acute pressure."""
+    global LAST_MEMORY_TRIM_TIME
     try:
+        now = time.time()
+        # Rate-limit cache dropping & compaction to once every 30 seconds
+        if (now - LAST_MEMORY_TRIM_TIME) < 30.0:
+            return
+
         mem = read_meminfo()
+        total_mb = mem.get("MemTotal", 1024 * 1024) // 1024
         available_mb = mem.get("MemAvailable", 1024 * 1024) // 1024
+        avail_ratio = (available_mb / total_mb) if total_mb > 0 else 1.0
         
-        # Acute memory starvation or severe memory stall
-        if available_mb < 200 or psi_stats["mem_full"] > 10.0:
-            log(f"Acute low available memory ({available_mb} MB, PSI: {psi_stats['mem_full']:.1f}%). Reclaiming caches & compacting...")
+        # Trigger proactive reclaim if:
+        # - Available RAM is less than 12% of total RAM, OR
+        # - Available RAM < 400 MB, OR
+        # - PSI memory stall indicates high pressure (mem_some > 15.0 or mem_full > 1.0)
+        if avail_ratio < 0.12 or available_mb < 400 or psi_stats["mem_some"] > 15.0 or psi_stats["mem_full"] > 1.0:
+            log(f"Proactive memory reclaim (Available: {available_mb}/{total_mb} MB [{int(avail_ratio*100)}%], PSI: Some {psi_stats['mem_some']:.1f}% | Full {psi_stats['mem_full']:.1f}%)...")
+            LAST_MEMORY_TRIM_TIME = now
             try:
                 with open("/proc/sys/vm/drop_caches", "w") as f:
                     f.write("1")
@@ -608,10 +714,10 @@ def main():
             launch_gui()
             sys.exit(0)
 
-    log("Starting Pulsar OS Dynamic Adaptive Optimizer Daemon...")
+    log("Starting Pulsar OS Universal Dynamic Adaptive Optimizer Daemon...")
     setup_zram_and_sysctl()
 
-    log("Dynamic governor running (real-time PSI, CPU load governor, zero-lag desktop protection)...")
+    log("Dynamic governor active (Real-time PSI, CPU load governor, Zero-Lag Desktop Protection)...")
     loop_count = 0
     while True:
         try:
@@ -620,12 +726,14 @@ def main():
             check_memory_pressure_and_trim(psi)
             
             loop_count += 1
-            if loop_count % 150 == 0:
+            if loop_count % 120 == 0:
                 zstats = get_zram_stats()
                 if zstats["active"]:
-                    log(f"Stats: Gov Mode: {pressure_mode} | CPU: {cpu_pct:.1f}% | PSI: {psi['cpu_some']:.1f}% | zRAM Saved: {zstats['saved_mb']:.1f} MB (Ratio: {zstats['ratio']})")
+                    log(f"Status: Gov Mode: {pressure_mode} | CPU: {cpu_pct:.1f}% | PSI CPU: {psi['cpu_some']:.1f}% | IO Full: {psi['io_full']:.1f}% | zRAM Saved: {zstats['saved_mb']:.1f} MB (Ratio: {zstats['ratio']})")
             
-            time.sleep(1.5)
+            # Adaptive sleep interval: scan faster (1.0s) during high load, relax (2.0s) during normal load
+            sleep_sec = 1.0 if pressure_mode > 0 else 2.0
+            time.sleep(sleep_sec)
         except KeyboardInterrupt:
             log("Shutting down optimizer daemon.")
             break

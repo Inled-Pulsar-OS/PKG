@@ -26,9 +26,18 @@ sync_theme() {
         # Libadwaita / GTK4 user overrides (Dark)
         if [ -d "/usr/share/themes/MacTahoe-Dark/gtk-4.0" ]; then
             cp -rf /usr/share/themes/MacTahoe-Dark/gtk-4.0/* "$HOME/.config/gtk-4.0/" 2>/dev/null || true
+            if [ -f "$HOME/.config/gtk-4.0/gtk-dark.css" ] && [ ! -f "$HOME/.config/gtk-4.0/gtk.css" ]; then
+                cp -f "$HOME/.config/gtk-4.0/gtk-dark.css" "$HOME/.config/gtk-4.0/gtk.css" 2>/dev/null || true
+            fi
         fi
         if [ -d "/usr/share/themes/MacTahoe-Dark/gtk-3.0" ]; then
             cp -rf /usr/share/themes/MacTahoe-Dark/gtk-3.0/gtk-dark.css "$HOME/.config/gtk-3.0/gtk.css" 2>/dev/null || true
+        fi
+        if [ -d "/usr/share/themes/MacTahoe-Dark/gtk-3.0/windows-assets" ]; then
+            ln -sfn "/usr/share/themes/MacTahoe-Dark/gtk-3.0/windows-assets" "$HOME/.config/gtk-3.0/windows-assets" 2>/dev/null || true
+        fi
+        if [ -d "/usr/share/themes/MacTahoe-Dark/gtk-4.0/windows-assets" ]; then
+            ln -sfn "/usr/share/themes/MacTahoe-Dark/gtk-4.0/windows-assets" "$HOME/.config/gtk-4.0/windows-assets" 2>/dev/null || true
         fi
 
         cat <<'EOF' > "$HOME/.config/gtk-3.0/settings.ini"
@@ -36,6 +45,7 @@ sync_theme() {
 gtk-theme-name=MacTahoe-Dark
 gtk-icon-theme-name=MacTahoe-blue-dark
 gtk-application-prefer-dark-theme=1
+gtk-decoration-layout=close,minimize,maximize:
 EOF
 
         cat <<'EOF' > "$HOME/.config/gtk-4.0/settings.ini"
@@ -43,6 +53,7 @@ EOF
 gtk-theme-name=MacTahoe-Dark
 gtk-icon-theme-name=MacTahoe-blue-dark
 gtk-application-prefer-dark-theme=1
+gtk-decoration-layout=close,minimize,maximize:
 EOF
 
     else
@@ -61,12 +72,19 @@ EOF
         if [ -d "/usr/share/themes/MacTahoe-Light/gtk-3.0" ]; then
             cp -rf /usr/share/themes/MacTahoe-Light/gtk-3.0/gtk.css "$HOME/.config/gtk-3.0/gtk.css" 2>/dev/null || true
         fi
+        if [ -d "/usr/share/themes/MacTahoe-Light/gtk-3.0/windows-assets" ]; then
+            ln -sfn "/usr/share/themes/MacTahoe-Light/gtk-3.0/windows-assets" "$HOME/.config/gtk-3.0/windows-assets" 2>/dev/null || true
+        fi
+        if [ -d "/usr/share/themes/MacTahoe-Light/gtk-4.0/windows-assets" ]; then
+            ln -sfn "/usr/share/themes/MacTahoe-Light/gtk-4.0/windows-assets" "$HOME/.config/gtk-4.0/windows-assets" 2>/dev/null || true
+        fi
 
         cat <<'EOF' > "$HOME/.config/gtk-3.0/settings.ini"
 [Settings]
 gtk-theme-name=MacTahoe-Light
 gtk-icon-theme-name=MacTahoe-blue-light
 gtk-application-prefer-dark-theme=0
+gtk-decoration-layout=close,minimize,maximize:
 EOF
 
         cat <<'EOF' > "$HOME/.config/gtk-4.0/settings.ini"
@@ -74,6 +92,7 @@ EOF
 gtk-theme-name=MacTahoe-Light
 gtk-icon-theme-name=MacTahoe-blue-light
 gtk-application-prefer-dark-theme=0
+gtk-decoration-layout=close,minimize,maximize:
 EOF
 
     fi
