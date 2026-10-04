@@ -6,6 +6,7 @@ Displays exact kernel metrics, allows live process scheduling adjustments, and s
 
 import os
 import sys
+import json
 import subprocess
 import gi
 
@@ -14,6 +15,39 @@ gi.require_version('Adw', '1')
 from gi.repository import Gtk, Adw, GLib, Gio, Gdk
 
 _last_cpu_stat = None
+
+# Habit database paths
+HABIT_DB_PATHS = [
+    "/var/lib/pulsaros/optimizer_habits.json",
+    os.path.expanduser("~/.local/share/pulsaros/optimizer_habits.json"),
+    "/tmp/pulsaros_optimizer_habits.json"
+]
+
+def load_habits_data():
+    for p in HABIT_DB_PATHS:
+        if os.path.exists(p):
+            try:
+                with open(p, "r") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+    return {"habits": {}, "user_overrides": {}}
+
+def save_user_override(comm, prio_idx):
+    for p in HABIT_DB_PATHS:
+        try:
+            d = os.path.dirname(p)
+            os.makedirs(d, exist_ok=True)
+            data = load_habits_data()
+            data.setdefault("user_overrides", {})[comm] = prio_idx
+            tmp = f"{p}.tmp"
+            with open(tmp, "w") as f:
+                json.dump(data, f, indent=2)
+            os.replace(tmp, p)
+            return True
+        except Exception:
+            continue
+    return False
 
 def get_cpu_usage_stats():
     global _last_cpu_stat
@@ -38,39 +72,71 @@ def get_cpu_usage_stats():
 
 def apply_custom_css():
     css = """
-    levelbar.resource-bar trough block.filled {
+    /* Ensure high CSS specificity with !important to prevent theme battery-green from overriding */
+    levelbar.resource-bar > trough > block.filled,
+    levelbar.resource-bar.full > trough > block.filled,
+    levelbar.resource-bar.high > trough > block.filled,
+    levelbar.resource-bar.low > trough > block.filled,
+    levelbar.resource-bar.empty > trough > block.filled {
         border-radius: 4px;
         transition: background-color 0.25s ease;
     }
-    levelbar.resource-bar.usage-normal trough block.filled {
-        background-color: #30d158;
+
+    levelbar.resource-bar.usage-normal > trough > block.filled,
+    levelbar.resource-bar.usage-normal.full > trough > block.filled,
+    levelbar.resource-bar.usage-normal.high > trough > block.filled,
+    levelbar.resource-bar.usage-normal.low > trough > block.filled {
+        background-color: #30d158 !important;
     }
-    levelbar.resource-bar.usage-warning trough block.filled {
-        background-color: #ff9f0a;
+
+    levelbar.resource-bar.usage-warning > trough > block.filled,
+    levelbar.resource-bar.usage-warning.full > trough > block.filled,
+    levelbar.resource-bar.usage-warning.high > trough > block.filled,
+    levelbar.resource-bar.usage-warning.low > trough > block.filled {
+        background-color: #ff9f0a !important;
     }
-    levelbar.resource-bar.usage-critical trough block.filled {
-        background-color: #ff453a;
+
+    levelbar.resource-bar.usage-critical > trough > block.filled,
+    levelbar.resource-bar.usage-critical.full > trough > block.filled,
+    levelbar.resource-bar.usage-critical.high > trough > block.filled,
+    levelbar.resource-bar.usage-critical.low > trough > block.filled {
+        background-color: #ff453a !important;
     }
     """
     provider = Gtk.CssProvider()
     provider.load_from_data(css.encode())
     Gtk.StyleContext.add_provider_for_display(
-        gi.repository.Gdk.Display.get_default(),
+        Gdk.Display.get_default(),
         provider,
         Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
     )
 
-def set_levelbar_usage(levelbar, fraction):
+def set_levelbar_usage(levelbar, fraction, is_inverted=False):
+    """
+    fraction: 0.0 to 1.0
+    is_inverted: if True (like efficiency), higher is better/green.
+                 if False (CPU & RAM usage), higher is worse: 0-60% green, 60-80% warning (orange), 80-100% critical (red).
+    """
     levelbar.set_value(fraction)
     levelbar.remove_css_class("usage-normal")
     levelbar.remove_css_class("usage-warning")
     levelbar.remove_css_class("usage-critical")
-    if fraction >= 0.90:
-        levelbar.add_css_class("usage-critical")
-    elif fraction >= 0.70:
-        levelbar.add_css_class("usage-warning")
+
+    if is_inverted:
+        if fraction >= 0.50:
+            levelbar.add_css_class("usage-normal")
+        elif fraction >= 0.20:
+            levelbar.add_css_class("usage-warning")
+        else:
+            levelbar.add_css_class("usage-critical")
     else:
-        levelbar.add_css_class("usage-normal")
+        # Standard Resource Usage (CPU, RAM): Higher is critical/red
+        if fraction >= 0.80:
+            levelbar.add_css_class("usage-critical")  # RED
+        elif fraction >= 0.60:
+            levelbar.add_css_class("usage-warning")   # ORANGE / YELLOW
+        else:
+            levelbar.add_css_class("usage-normal")    # GREEN
 
 def run_privileged(cmd_list):
     """Execute a privileged system command safely handling sudo/pkexec without crashes."""
@@ -101,7 +167,8 @@ def run_privileged(cmd_list):
     # 4. Polkit pkexec fallback
     try:
         res = subprocess.run(["pkexec"] + cmd_list, capture_output=True, text=True)
-        return res.returncode == 0
+        if res.returncode == 0:
+            return True
     except Exception:
         pass
 
@@ -177,7 +244,7 @@ def get_zram_stats():
 
 def get_kernel_sysctls():
     """Read live kernel virtual memory configuration."""
-    sysctls = {"swappiness": "100", "vfs_cache_pressure": "50", "page_cluster": "0"}
+    sysctls = {"swappiness": "150", "vfs_cache_pressure": "50", "page_cluster": "0"}
     try:
         if os.path.exists("/proc/sys/vm/swappiness"):
             with open("/proc/sys/vm/swappiness", "r") as f:
@@ -193,8 +260,12 @@ def get_kernel_sysctls():
     return sysctls
 
 def get_process_list():
-    """Retrieve running user and system processes with genuine nice and RSS memory values."""
+    """Retrieve running user and system processes with genuine nice and RSS memory values and learned habit scores."""
     processes = []
+    habits_data = load_habits_data()
+    habits_map = habits_data.get("habits", {})
+    overrides_map = habits_data.get("user_overrides", {})
+
     try:
         pids = [p for p in os.listdir("/proc") if p.isdigit()]
         for pid_str in pids:
@@ -231,20 +302,34 @@ def get_process_list():
                 else:
                     prio_idx = 2
 
+                # Learned Habit info
+                habit_info = habits_map.get(comm, {})
+                habit_score = habit_info.get("habit_score", 0.0)
+                focus_mins = habit_info.get("focus_seconds", 0.0) / 60.0
+                is_user_pinned = comm in overrides_map
+
                 processes.append({
                     "pid": pid,
                     "name": comm,
                     "nice": nice,
                     "rss_mb": rss_mb,
-                    "prio_idx": prio_idx
+                    "prio_idx": prio_idx,
+                    "habit_score": habit_score,
+                    "focus_mins": focus_mins,
+                    "is_user_pinned": is_user_pinned
                 })
             except Exception:
                 continue
     except Exception:
         pass
     
-    # Sort: non-normal priorities first, then by memory consumption
-    processes.sort(key=lambda x: (0 if x["prio_idx"] != 2 else 1, x["nice"], -x["rss_mb"]))
+    # Sort: pinned / learned high habit first, then non-normal priorities, then by memory consumption
+    processes.sort(key=lambda x: (
+        0 if x["is_user_pinned"] else (1 if x["prio_idx"] != 2 else 2),
+        -x["habit_score"],
+        x["nice"],
+        -x["rss_mb"]
+    ))
     return processes
 
 class ProcessRow(Adw.ActionRow):
@@ -255,8 +340,7 @@ class ProcessRow(Adw.ActionRow):
         self.on_priority_change = on_priority_change
         self.is_updating = True
 
-        self.set_title(proc_data["name"])
-        self.set_subtitle(f"PID {self.pid}  •  {proc_data['rss_mb']:.1f} MB RAM  •  Nice {proc_data['nice']}")
+        self._render_row(proc_data)
 
         options = ["Turbo (-10)", "High (-5)", "Normal (0)", "Low (+19)"]
         model = Gtk.StringList.new(options)
@@ -269,9 +353,22 @@ class ProcessRow(Adw.ActionRow):
         self.add_suffix(self.dropdown)
         self.is_updating = False
 
+    def _render_row(self, proc_data):
+        title = proc_data["name"]
+        if proc_data.get("is_user_pinned"):
+            title += " ⭐ (Pinned)"
+        elif proc_data.get("habit_score", 0.0) >= 0.4:
+            title += f" 🔥 (Learned: Score {proc_data['habit_score']:.2f})"
+        
+        self.set_title(title)
+        sub = f"PID {self.pid}  •  {proc_data['rss_mb']:.1f} MB RAM  •  Nice {proc_data['nice']}"
+        if proc_data.get("focus_mins", 0) > 0.5:
+            sub += f"  •  {proc_data['focus_mins']:.1f}m active"
+        self.set_subtitle(sub)
+
     def update_data(self, proc_data):
         self.proc_data = proc_data
-        self.set_subtitle(f"PID {self.pid}  •  {proc_data['rss_mb']:.1f} MB RAM  •  Nice {proc_data['nice']}")
+        self._render_row(proc_data)
         
         if self.dropdown.get_selected() != proc_data["prio_idx"]:
             self.is_updating = True
@@ -287,7 +384,7 @@ class ProcessRow(Adw.ActionRow):
 class OptimizerWindow(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title="Pulsar Optimizer")
-        self.set_default_size(700, 820)
+        self.set_default_size(720, 840)
         self.set_icon_name("pulsaros-optimizer")
         
         apply_custom_css()
@@ -308,7 +405,7 @@ class OptimizerWindow(Adw.ApplicationWindow):
         header = Adw.HeaderBar()
         header.set_title_widget(Adw.WindowTitle(
             title="Pulsar Optimizer",
-            subtitle="System Resources & Process Manager"
+            subtitle="System Resources, Habit Learning & Process Governor"
         ))
         
         refresh_btn = Gtk.Button(icon_name="view-refresh-symbolic")
@@ -323,7 +420,7 @@ class OptimizerWindow(Adw.ApplicationWindow):
         scrolled.set_hexpand(True)
         main_box.append(scrolled)
 
-        clamp = Adw.Clamp(maximum_size=660, tightening_threshold=480)
+        clamp = Adw.Clamp(maximum_size=680, tightening_threshold=500)
         scrolled.set_child(clamp)
 
         content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
@@ -340,8 +437,8 @@ class OptimizerWindow(Adw.ApplicationWindow):
         content_box.append(service_group)
 
         self.service_row = Adw.ActionRow(
-            title="Optimizer Background Service",
-            subtitle="Dynamic zRAM, low-latency scheduling and background throttler"
+            title="Adaptive Governor & Habit Engine",
+            subtitle="Zero-lag desktop protection, zRAM compaction, and continuous workflow learning"
         )
         
         self.service_switch = Gtk.Switch()
@@ -355,7 +452,7 @@ class OptimizerWindow(Adw.ApplicationWindow):
         # -------------------------------------------------------------
         # 2. REAL-TIME METRICS & GAUGES
         # -------------------------------------------------------------
-        metrics_group = Adw.PreferencesGroup(title="System Resources")
+        metrics_group = Adw.PreferencesGroup(title="System Resources & Pressure")
         content_box.append(metrics_group)
 
         grid_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
@@ -414,7 +511,6 @@ class OptimizerWindow(Adw.ApplicationWindow):
         ram_header_box.append(self.ram_val_label)
         ram_box.append(ram_header_box)
 
-        # LevelBar for RAM
         self.ram_levelbar = Gtk.LevelBar()
         self.ram_levelbar.set_min_value(0.0)
         self.ram_levelbar.set_max_value(1.0)
@@ -436,7 +532,7 @@ class OptimizerWindow(Adw.ApplicationWindow):
         zram_box.set_margin_end(16)
 
         zram_header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        zram_title = Gtk.Label(label="zRAM Compressed In-Memory Swap", xalign=0.0)
+        zram_title = Gtk.Label(label="zRAM In-Memory Compression", xalign=0.0)
         zram_title.add_css_class("heading")
         zram_title.set_hexpand(True)
         zram_header_box.append(zram_title)
@@ -446,7 +542,6 @@ class OptimizerWindow(Adw.ApplicationWindow):
         zram_header_box.append(self.zram_ratio_label)
         zram_box.append(zram_header_box)
 
-        # LevelBar for zRAM
         self.zram_levelbar = Gtk.LevelBar()
         self.zram_levelbar.set_min_value(0.0)
         self.zram_levelbar.set_max_value(1.0)
@@ -471,7 +566,7 @@ class OptimizerWindow(Adw.ApplicationWindow):
 
         # Swappiness
         col1 = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        self.c1_val = Gtk.Label(label="100", xalign=0.5)
+        self.c1_val = Gtk.Label(label="150", xalign=0.5)
         self.c1_val.add_css_class("title-3")
         c1_sub = Gtk.Label(label="vm.swappiness", xalign=0.5)
         c1_sub.add_css_class("caption")
@@ -508,7 +603,7 @@ class OptimizerWindow(Adw.ApplicationWindow):
         # -------------------------------------------------------------
         # 3. ACTIONS
         # -------------------------------------------------------------
-        flush_btn = Gtk.Button(label="Flush Page Cache and Compact Memory")
+        flush_btn = Gtk.Button(label="Proactively Flush Page Cache & Compact Memory")
         flush_btn.add_css_class("pill")
         flush_btn.set_size_request(-1, 40)
         flush_btn.connect("clicked", self.on_compact_memory_clicked)
@@ -518,8 +613,8 @@ class OptimizerWindow(Adw.ApplicationWindow):
         # 4. PROCESS SCHEDULER & PRIORITY MANAGER
         # -------------------------------------------------------------
         proc_group = Adw.PreferencesGroup(
-            title="Process Priority Control",
-            description="Adjust CPU nice and I/O scheduling priorities for running processes."
+            title="Continuous Habit Learning & Process Governor",
+            description="Adjust and pin scheduling priorities. The optimizer learns your workflow habits continuously."
         )
         content_box.append(proc_group)
 
@@ -581,11 +676,12 @@ class OptimizerWindow(Adw.ApplicationWindow):
                 self.service_switch.set_active(active)
                 self.service_updating = False
 
-            # CPU metrics
+            # CPU metrics (0-60% green, 60-80% warning, 80-100% critical red)
             cpu_pct = get_cpu_usage_stats()
             self.cpu_val_label.set_text(f"{int(cpu_pct)}%")
-            set_levelbar_usage(self.cpu_levelbar, cpu_pct / 100.0)
+            set_levelbar_usage(self.cpu_levelbar, cpu_pct / 100.0, is_inverted=False)
 
+            # RAM metrics
             mem = read_meminfo()
             total_kb = mem.get("MemTotal", 1)
             avail_kb = mem.get("MemAvailable", 0)
@@ -597,21 +693,21 @@ class OptimizerWindow(Adw.ApplicationWindow):
             fraction = min(max(used_kb / total_kb, 0.0), 1.0)
 
             self.ram_val_label.set_text(f"{used_gb:.1f} / {total_gb:.1f} GB ({int(fraction * 100)}%)")
-            set_levelbar_usage(self.ram_levelbar, fraction)
-            self.ram_sub_label.set_text(f"{avail_gb:.1f} GB available  •  {used_gb:.1f} GB active")
+            set_levelbar_usage(self.ram_levelbar, fraction, is_inverted=False)
+            self.ram_sub_label.set_text(f"{avail_gb:.1f} GB available  •  {used_gb:.1f} GB in use")
 
             # zRAM metrics
             zstats = get_zram_stats()
             if zstats["active"]:
                 self.zram_ratio_label.set_text(f"{zstats['ratio_str']}")
                 zram_used_frac = (zstats["orig_data_mb"] / zstats["disksize_mb"]) if zstats["disksize_mb"] > 0 else 0.0
-                set_levelbar_usage(self.zram_levelbar, min(max(zram_used_frac, 0.0), 1.0))
+                set_levelbar_usage(self.zram_levelbar, min(max(zram_used_frac, 0.0), 1.0), is_inverted=False)
                 self.zram_sub_label.set_text(
-                    f"{zstats['orig_data_mb']:.1f} MB compressed to {zstats['compr_data_mb']:.1f} MB ({zstats['algorithm']})  •  {zstats['saved_mb']:.1f} MB RAM saved"
+                    f"{zstats['orig_data_mb']:.1f} MB in RAM  •  {zstats['saved_mb']:.1f} MB saved ({zstats['algorithm']})"
                 )
             else:
                 self.zram_ratio_label.set_text("Inactive")
-                set_levelbar_usage(self.zram_levelbar, 0.0)
+                set_levelbar_usage(self.zram_levelbar, 0.0, is_inverted=False)
                 self.zram_sub_label.set_text("zRAM device not initialized")
 
             # Kernel sysctls
@@ -629,9 +725,9 @@ class OptimizerWindow(Adw.ApplicationWindow):
         if query:
             filtered = [p for p in all_procs if query in p["name"].lower() or query == str(p["pid"])]
         else:
-            boosted = [p for p in all_procs if p["prio_idx"] != 2]
-            top_ram = sorted([p for p in all_procs if p["prio_idx"] == 2], key=lambda x: -x["rss_mb"])[:12]
-            filtered = boosted + top_ram
+            pinned_or_learned = [p for p in all_procs if p["is_user_pinned"] or p["habit_score"] >= 0.35 or p["prio_idx"] != 2]
+            top_ram = sorted([p for p in all_procs if p not in pinned_or_learned], key=lambda x: -x["rss_mb"])[:10]
+            filtered = pinned_or_learned + top_ram
 
         current_pids = {p["pid"] for p in filtered}
 
@@ -669,21 +765,25 @@ class OptimizerWindow(Adw.ApplicationWindow):
         
         target_nice, io_class, io_prio, label = nice_map[selected_idx]
         
+        # 1. Apply live
         run_privileged(["renice", "-n", str(target_nice), "-p", str(pid)])
         if io_class == 3:
             run_privileged(["ionice", "-c", "3", "-p", str(pid)])
         else:
             run_privileged(["ionice", "-c", str(io_class), "-n", str(io_prio), "-p", str(pid)])
         
-        toast = Adw.Toast.new(f"{name} (PID {pid}) set to {label}")
+        # 2. Persist to real Habit Learning Model
+        save_user_override(name, selected_idx)
+
+        toast = Adw.Toast.new(f"{name} set to {label} (Learned preference saved)")
         self.toast_overlay.add_toast(toast)
         self.refresh_all()
 
     def on_compact_memory_clicked(self, widget):
-        success = run_privileged(["sh", "-c", "echo 1 > /proc/sys/vm/drop_caches && (echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true)"])
+        success = run_privileged(["sh", "-c", "echo 3 > /proc/sys/vm/drop_caches && (echo 1 > /proc/sys/vm/compact_memory 2>/dev/null || true)"])
         self.update_metrics()
         if success:
-            toast = Adw.Toast.new("Memory caches flushed and compacted.")
+            toast = Adw.Toast.new("Memory caches flushed, dentries freed & memory compacted.")
         else:
             toast = Adw.Toast.new("Notice: Authentication needed to flush system cache.")
         self.toast_overlay.add_toast(toast)
