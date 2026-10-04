@@ -222,6 +222,13 @@ pub(crate) fn build_ui(app: &Application) {
         "/usr/share/pulsaros-recovery/terminal.png",
         "terminal",
     );
+    add_row(
+        "logs",
+        "System & Installation Logs",
+        "View and inspect installer, recovery and setup logs stored in /var/log/pulsaros.",
+        "/usr/share/pulsaros-recovery/terminal.png",
+        "file-text",
+    );
 
     util_box.append(&listbox);
 
@@ -2025,6 +2032,13 @@ pub(crate) fn build_ui(app: &Application) {
                 let _ = Command::new("sh")
                     .arg("-c")
                     .arg("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; xhost +SI:localuser:root >/dev/null 2>&1 || xhost +local: >/dev/null 2>&1 || xhost + >/dev/null 2>&1 || true; (xterm -title 'Pulsar OS Recovery Terminal' -bg '#18181b' -fg '#ffffff' -fa Monospace -fs 11 -e sudo bash || gnome-terminal -- sudo bash || alacritty -e sudo bash || x-terminal-emulator -e sudo bash || xterm -e sudo bash) &")
+                    .spawn();
+            }
+            "logs" => {
+                log_msg("Opening Pulsar OS logs directory...");
+                let _ = Command::new("sh")
+                    .arg("-c")
+                    .arg("mkdir -p /var/log/pulsaros; xhost +SI:localuser:root >/dev/null 2>&1 || true; (nautilus /var/log/pulsaros || xdg-open /var/log/pulsaros || gnome-text-editor /var/log/pulsaros/installer.log || xterm -title 'Pulsar OS Logs' -e less /var/log/pulsaros/installer.log) &")
                     .spawn();
             }
             "internet_info" => {

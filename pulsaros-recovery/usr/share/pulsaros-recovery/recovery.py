@@ -24,6 +24,99 @@ gi.require_version('GdkPixbuf', '2.0')
 
 from gi.repository import Gtk, Gdk, GLib, Adw, Gio, GdkPixbuf
 
+# Granular catalogs for extra packages and hardware drivers (in English)
+EXTRA_PACKAGES_ITEMS = [
+    {
+        "id": "onlyoffice",
+        "name": "ONLYOFFICE Desktop Editors",
+        "desc": "Complete office productivity suite compatible with MS Office documents.",
+        "arch_pkgs": ["flatpak"],
+        "debian_pkgs": ["flatpak"],
+        "flatpak": "org.onlyoffice.desktopeditors",
+    },
+    {
+        "id": "localsend",
+        "name": "LocalSend",
+        "desc": "Cross-platform local network file sharing across nearby devices.",
+        "arch_pkgs": ["localsend-bin"],
+        "debian_pkgs": [],
+        "is_localsend": True,
+    },
+    {
+        "id": "multimedia",
+        "name": "Multimedia & Codecs",
+        "desc": "VLC media player, Totem, ImageMagick, and audio/video codecs.",
+        "arch_pkgs": ["vlc", "totem", "imagemagick", "gvfs-smb", "gvfs-gphoto2"],
+        "debian_pkgs": ["vlc", "totem", "imagemagick", "gvfs-fuse", "gvfs-backends"],
+    },
+    {
+        "id": "gnome_apps",
+        "name": "GNOME Productivity Apps",
+        "desc": "Weather, Clocks, Music, Contacts, Geary Mail, Loupe viewer, and Papers.",
+        "arch_pkgs": ["geary", "gnome-music", "gnome-contacts", "gnome-weather", "gnome-clocks", "xournalpp", "papers", "loupe"],
+        "debian_pkgs": ["geary", "gnome-music", "gnome-contacts", "gnome-weather", "gnome-clocks"],
+    },
+    {
+        "id": "disk_tools",
+        "name": "Disk & System Utilities",
+        "desc": "GNOME Disk Utility, Baobab Disk Usage Analyzer, and System Logs.",
+        "arch_pkgs": ["gnome-disk-utility", "gnome-logs", "baobab", "inxi", "xfsprogs", "p7zip"],
+        "debian_pkgs": ["gnome-disk-utility", "gnome-logs", "baobab"],
+    },
+    {
+        "id": "cups",
+        "name": "Print Server (CUPS)",
+        "desc": "Printing subsystem and drivers for local and network printers.",
+        "arch_pkgs": ["cups"],
+        "debian_pkgs": ["cups"],
+    },
+    {
+        "id": "virtualization",
+        "name": "Virtualization (QEMU & KVM)",
+        "desc": "QEMU, Libvirt, Virt-Manager, and OVMF UEFI firmware for virtual machines.",
+        "arch_pkgs": ["qemu-desktop", "libvirt", "virt-manager", "edk2-ovmf", "dnsmasq"],
+        "debian_pkgs": ["qemu-system-x86", "qemu-utils", "libvirt-daemon-system", "libvirt-clients", "virt-manager", "ovmf", "dnsmasq-base", "bridge-utils"],
+    },
+    {
+        "id": "docker",
+        "name": "Docker Engine",
+        "desc": "Docker container runtime and tools for development and virtualization.",
+        "arch_pkgs": ["docker"],
+        "debian_pkgs": ["docker.io"],
+    },
+]
+
+DRIVER_ITEMS = [
+    {
+        "id": "broadcom",
+        "name": "Broadcom Wi-Fi Drivers",
+        "desc": "Proprietary broadcom-wl drivers for Apple MacBook and PC wireless chipsets.",
+        "arch_pkgs": ["broadcom-wl-dkms", "linux-headers", "dkms"],
+        "debian_pkgs": ["broadcom-sta-dkms", "linux-headers-amd64", "dkms"],
+    },
+    {
+        "id": "nvidia",
+        "name": "NVIDIA Graphics Drivers",
+        "desc": "Kernel modules, DKMS support, and NVIDIA control panel for graphics cards.",
+        "arch_pkgs": ["nvidia-open", "nvidia-settings", "dkms", "linux-headers"],
+        "debian_pkgs": ["nvidia-driver", "dkms", "linux-headers-amd64"],
+    },
+    {
+        "id": "firmware",
+        "name": "Hardware Firmware & Audio",
+        "desc": "Full Linux firmware, Intel SOF (Sound Open Firmware), and ALSA audio firmware.",
+        "arch_pkgs": ["linux-firmware", "sof-firmware", "alsa-firmware"],
+        "debian_pkgs": ["firmware-linux", "firmware-sof-signed", "firmware-misc-nonfree"],
+    },
+    {
+        "id": "vm_tools",
+        "name": "Virtual Machine Guest Tools",
+        "desc": "Integration drivers for VMware (Open-VM-Tools), VirtualBox, and QXL.",
+        "arch_pkgs": ["open-vm-tools", "virtualbox-guest-utils", "xf86-video-qxl", "xf86-video-ati"],
+        "debian_pkgs": ["open-vm-tools", "xserver-xorg-video-qxl"],
+    },
+]
+
 # Custom CSS for Apple macOS Recovery and Installer Look-and-Feel
 CSS_DATA = """
 @define-color window_bg_color #1e1e1e;
@@ -908,6 +1001,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.selected_install_mode = None
         self.selected_bootloader = "refind"
         
+        # Package & Driver selection state
+        self.packages_selected = {item["id"]: True for item in EXTRA_PACKAGES_ITEMS}
+        self.drivers_selected = {item["id"]: True for item in DRIVER_ITEMS}
+        self.packages_select_return_screen = "install_options"
+        self.drivers_select_return_screen = "install_options"
+
         # Build views
         self.build_utilities_screen()
         self.build_network_check_screen()
@@ -916,6 +1015,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.build_install_mode_select_screen()
         self.build_install_partition_select_screen()
         self.build_install_options_screen()
+        self.build_packages_selection_screen()
+        self.build_drivers_selection_screen()
         self.build_install_confirm_screen()
         self.build_install_progress_screen()
         self.build_install_error_screen()
@@ -1075,7 +1176,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.add_utility_row(self.listbox, "disk", "Disk Utility", 
                              "Repair or manage storage drives using Disk Utility.", "disk")
         self.add_utility_row(self.listbox, "packages", "Install Extra Packages",
-                             "Install full drivers, firmware, and multimedia apps on the installed system.", "logo")
+                             "Install productivity apps, ONLYOFFICE, and media tools.", "logo")
+        self.add_utility_row(self.listbox, "drivers", "Install Hardware Drivers",
+                             "Install Wi-Fi Broadcom, NVIDIA, and hardware firmware.", "logo")
+        self.add_utility_row(self.listbox, "logs", "System & Installation Logs",
+                             "View or inspect installer, recovery, and setup logs.", "disk")
                              
         bottom_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         bottom_box.set_margin_top(12)
@@ -1182,7 +1287,15 @@ class RecoveryWindow(Adw.ApplicationWindow):
         elif self.selected_action == "disk":
             subprocess.Popen("gparted || pkexec gparted || gnome-disks || gnome-disk-utility", shell=True)
         elif self.selected_action == "packages":
-            self._show_network_check_screen()
+            self.install_extra_packages = True
+            self.install_broadcom = False
+            self._show_packages_selection_screen(return_screen="utilities")
+        elif self.selected_action == "drivers":
+            self.install_extra_packages = False
+            self.install_broadcom = True
+            self._show_drivers_selection_screen(return_screen="utilities")
+        elif self.selected_action == "logs":
+            self._open_logs_viewer()
 
     def _show_install_packages_dialog(self):
         """Show a confirmation dialog before installing extra packages."""
@@ -1212,6 +1325,64 @@ class RecoveryWindow(Adw.ApplicationWindow):
         dialog.connect("response", on_response)
         dialog.present()
 
+    def _get_selected_packages_info(self, is_arch=True):
+        pkgs = []
+        aur_pkgs = []
+        install_onlyoffice = False
+        install_localsend = False
+        install_cups = False
+
+        for item in EXTRA_PACKAGES_ITEMS:
+            item_id = item["id"]
+            if self.packages_selected.get(item_id, True):
+                if item.get("is_flatpak_onlyoffice"):
+                    install_onlyoffice = True
+                if item.get("is_localsend"):
+                    install_localsend = True
+                if item.get("is_cups"):
+                    install_cups = True
+
+                if is_arch:
+                    for p in item.get("arch_pkgs", []):
+                        if p not in pkgs:
+                            pkgs.append(p)
+                    for ap in item.get("arch_aur_pkgs", []):
+                        if ap not in aur_pkgs:
+                            aur_pkgs.append(ap)
+                else:
+                    for p in item.get("debian_pkgs", []):
+                        if p not in pkgs:
+                            pkgs.append(p)
+
+        return {
+            "pkgs": pkgs,
+            "aur_pkgs": aur_pkgs,
+            "install_onlyoffice": install_onlyoffice,
+            "install_localsend": install_localsend,
+            "install_cups": install_cups,
+        }
+
+    def _get_selected_drivers_info(self, is_arch=True):
+        pkgs = []
+        for item in DRIVER_ITEMS:
+            item_id = item["id"]
+            if self.drivers_selected.get(item_id, True):
+                if is_arch:
+                    for p in item.get("arch_pkgs", []):
+                        if p not in pkgs:
+                            pkgs.append(p)
+                else:
+                    for p in item.get("debian_pkgs", []):
+                        if p not in pkgs:
+                            pkgs.append(p)
+        return {
+            "pkgs": pkgs,
+            "broadcom": self.drivers_selected.get("broadcom", False),
+            "nvidia": self.drivers_selected.get("nvidia", False),
+            "firmware": self.drivers_selected.get("firmware", False),
+            "vm_tools": self.drivers_selected.get("vm_tools", False),
+        }
+
     def _start_package_installation(self):
         """Switch to the progress screen and install extra packages in a thread."""
         self.progress_subtitle.set_label("Installing extra packages on the installed system.")
@@ -1221,25 +1392,38 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.stack.set_visible_child_name("install_progress")
         threading.Thread(target=self._packages_installation_backend, daemon=True).start()
 
-    def _packages_installation_backend(self):
-        """Install extra packages directly on the running system.
+    def _start_driver_installation(self):
+        """Switch to the progress screen and install hardware drivers in a thread."""
+        self.progress_subtitle.set_label("Installing hardware drivers on the installed system.")
+        self.target_disk_name_lbl.set_label("Hardware Drivers")
+        self.image.set_visible(True)
+        self.title_label.set_visible(True)
+        self.stack.set_visible_child_name("install_progress")
+        threading.Thread(target=self._driver_installation_backend, daemon=True).start()
 
-        Detects whether the system is Arch (pacman) or Debian (apt) and
-        runs the appropriate package manager.  The app is already running
-        on the installed system, so no chroot or mounting is needed.
-        pkexec is used for root privileges.
-        """
+    def _driver_installation_backend(self):
+        """Install hardware drivers directly on the running system."""
         import datetime
-        log_file = "/tmp/pulsaros-packages.log"
+        os.makedirs("/var/log/pulsaros", exist_ok=True)
+        try:
+            os.chmod("/var/log/pulsaros", 0o755)
+        except Exception:
+            pass
+        log_file = "/var/log/pulsaros/drivers.log"
         try:
             with open(log_file, "w") as lf:
-                lf.write(f"{datetime.datetime.now()} - Extra package installation started\n")
+                lf.write(f"{datetime.datetime.now()} - Hardware driver installation started\n")
 
             def log_msg(msg):
                 ts = datetime.datetime.now().strftime("%H:%M:%S")
                 line = f"[{ts}] {msg}"
                 with open(log_file, "a") as lf:
                     lf.write(line + "\n")
+                try:
+                    with open("/tmp/pulsaros-drivers.log", "a") as tf:
+                        tf.write(line + "\n")
+                except Exception:
+                    pass
                 print(msg)
                 GLib.idle_add(self.append_log, line)
 
@@ -1257,51 +1441,145 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 GLib.idle_add(self.on_installation_failed, "Cannot detect system type. Is Pulsar OS installed?")
                 return
 
-            # ── Package lists ──
-            arch_packages = [
-                "docker", "linux-firmware", "sof-firmware", "alsa-firmware",
-                "open-vm-tools", "virtualbox-guest-utils", "xf86-video-qxl",
-                "xf86-video-ati", "xfsprogs", "p7zip", "inxi", "wl-clipboard",
-                "python-yaml", "vlc", "totem", "imagemagick",
-                "gvfs-smb", "gvfs-gphoto2",
-                "geary", "gnome-music", "gnome-contacts", "gnome-weather",
-                "gnome-clocks", "xournalpp", "papers", "loupe",
-                "gnome-disk-utility", "gnome-logs", "baobab",
-                "vim", "webkitgtk-6.0",
-                "nvidia-open", "nvidia-settings",
-                "dkms", "linux-headers",
-                "appmenu-gtk-module", "python-xlib",
-                "python-setuptools", "python-pip",
-                "qemu-desktop", "libvirt", "virt-manager",
-                "edk2-ovmf", "dnsmasq", "python-requests",
-                # Print server
-                "cups",
-            ]
-            # Packages that live only in the AUR (not in official or Inled repos)
-            arch_aur_packages = [
-                "localsend-bin",
-            ]
-            debian_packages = [
-                "docker.io",
-                "firmware-linux", "firmware-sof-signed", "firmware-misc-nonfree",
-                "open-vm-tools", "xserver-xorg-video-qxl",
-                "vlc", "totem", "imagemagick",
-                "gvfs-fuse", "gvfs-backends",
-                "geary", "gnome-music", "gnome-contacts", "gnome-weather",
-                "gnome-clocks",
-                "nvidia-driver", "dkms", "linux-headers-amd64",
-                "xdotool", "python3-xlib",
-                "qemu-system-x86", "qemu-utils", "libvirt-daemon-system",
-                "libvirt-clients", "virt-manager", "ovmf", "dnsmasq-base",
-                "bridge-utils", "python3-requests", "dmg2img",
-                # Print server
-                "cups",
-                # LocalSend is NOT packaged in Debian stable; it is installed
-                # separately from its official .deb below (_install_localsend_debian).
-            ]
+            driver_info = self._get_selected_drivers_info(is_arch=is_arch)
+            packages = driver_info["pkgs"]
+
+            if not packages:
+                log_msg("No drivers selected for installation.")
+                GLib.idle_add(self.update_progress, 1.0, "No drivers selected.")
+                GLib.idle_add(self.on_installation_completed)
+                return
 
             if is_arch:
-                packages = arch_packages
+                GLib.idle_add(self.update_progress, 0.15, "Syncing package databases...")
+                log_msg("Syncing package databases...")
+                subprocess.run(["pkexec", "pacman", "-Sy", "--noconfirm"], capture_output=True, text=True)
+
+                GLib.idle_add(self.update_progress, 0.30, f"Installing {len(packages)} driver packages...")
+                log_msg(f"Installing {len(packages)} driver packages via pacman: {', '.join(packages)}")
+                install_cmd = ["pkexec", "pacman", "-S", "--noconfirm", "--needed"] + packages
+                proc = subprocess.Popen(install_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                _buf = ""
+                while True:
+                    ch = proc.stdout.read(1)
+                    if not ch:
+                        break
+                    if ch in ('\r', '\n'):
+                        line = _buf.strip()
+                        _buf = ""
+                        if not line:
+                            continue
+                        log_msg(f"  pacman: {line}")
+                        m_dl = re.search(r"(\d+)%", line)
+                        if m_dl and '[#' in line:
+                            pct = int(m_dl.group(1))
+                            frac = 0.30 + (pct / 100.0) * 0.35
+                            GLib.idle_add(self.update_progress, frac, f"Downloading drivers: {pct}%")
+                        m_inst = re.search(r"\((\d+)/(\d+)\)\s+installing\s+", line)
+                        if m_inst:
+                            cur, total = int(m_inst.group(1)), int(m_inst.group(2))
+                            frac = 0.65 + (cur / total) * 0.30
+                            GLib.idle_add(self.update_progress, frac, f"Installing driver {cur}/{total}")
+                    else:
+                        _buf += ch
+                proc.wait()
+                if proc.returncode != 0:
+                    log_msg(f"WARNING: pacman finished with code {proc.returncode}")
+                else:
+                    log_msg("All selected driver packages installed successfully.")
+
+            elif is_debian:
+                GLib.idle_add(self.update_progress, 0.10, "Updating package lists...")
+                log_msg("Running apt-get update...")
+                subprocess.run(["pkexec", "apt-get", "update"], capture_output=True, text=True)
+
+                GLib.idle_add(self.update_progress, 0.30, f"Installing {len(packages)} driver packages...")
+                log_msg(f"Installing {len(packages)} driver packages via apt: {', '.join(packages)}")
+                install_cmd = ["pkexec", "apt-get", "install", "-y", "--no-install-recommends"] + packages
+                proc = subprocess.Popen(install_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                _buf = ""
+                while True:
+                    ch = proc.stdout.read(1)
+                    if not ch:
+                        break
+                    if ch in ('\r', '\n'):
+                        line = _buf.strip()
+                        _buf = ""
+                        if not line:
+                            continue
+                        log_msg(f"  apt: {line}")
+                        m_inst = re.search(r"(\d+)/(\d+)", line)
+                        if m_inst:
+                            cur, total = int(m_inst.group(1)), int(m_inst.group(2))
+                            frac = 0.30 + (cur / total) * 0.65
+                            GLib.idle_add(self.update_progress, frac, f"Installing driver {cur}/{total}")
+                    else:
+                        _buf += ch
+                proc.wait()
+                if proc.returncode != 0:
+                    log_msg(f"WARNING: apt finished with code {proc.returncode}")
+                else:
+                    log_msg("All selected driver packages installed successfully.")
+
+            GLib.idle_add(self.update_progress, 1.0, "Hardware drivers installed successfully!")
+            log_msg("Done! Hardware drivers have been installed.")
+            GLib.idle_add(self.on_installation_completed)
+
+        except Exception as err:
+            log_msg(f"FAILED: {err}")
+            GLib.idle_add(self.on_installation_failed, str(err))
+
+    def _packages_installation_backend(self):
+        """Install extra packages directly on the running system.
+
+        Detects whether the system is Arch (pacman) or Debian (apt) and
+        runs the appropriate package manager.  The app is already running
+        on the installed system, so no chroot or mounting is needed.
+        pkexec is used for root privileges.
+        """
+        import datetime
+        os.makedirs("/var/log/pulsaros", exist_ok=True)
+        try:
+            os.chmod("/var/log/pulsaros", 0o755)
+        except Exception:
+            pass
+        log_file = "/var/log/pulsaros/packages.log"
+        try:
+            with open(log_file, "w") as lf:
+                lf.write(f"{datetime.datetime.now()} - Extra package installation started\n")
+
+            def log_msg(msg):
+                ts = datetime.datetime.now().strftime("%H:%M:%S")
+                line = f"[{ts}] {msg}"
+                with open(log_file, "a") as lf:
+                    lf.write(line + "\n")
+                try:
+                    with open("/tmp/pulsaros-packages.log", "a") as tf:
+                        tf.write(line + "\n")
+                except Exception:
+                    pass
+                print(msg)
+                GLib.idle_add(self.append_log, line)
+
+            # ── Detect distro ──
+            GLib.idle_add(self.update_progress, 0.05, "Detecting system type...")
+            is_arch = os.path.exists("/etc/pacman.conf")
+            is_debian = os.path.exists("/etc/apt/sources.list") or os.path.exists("/etc/apt/sources.list.d")
+
+            if is_arch:
+                log_msg("Detected Arch Linux system — using pacman")
+            elif is_debian:
+                log_msg("Detected Debian system — using apt")
+            else:
+                log_msg("ERROR: Cannot detect system type (no pacman.conf or apt sources)")
+                GLib.idle_add(self.on_installation_failed, "Cannot detect system type. Is Pulsar OS installed?")
+                return
+
+            pkg_info = self._get_selected_packages_info(is_arch=is_arch)
+            packages = pkg_info["pkgs"]
+            arch_aur_packages = pkg_info["aur_pkgs"] if is_arch else []
+
+            if is_arch:
                 # Ensure Inled repo key is imported
                 GLib.idle_add(self.update_progress, 0.10, "Setting up package manager...")
                 log_msg("Importing Inled repository key...")
@@ -1319,9 +1597,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 log_msg("Syncing package databases...")
                 subprocess.run(["pkexec", "pacman", "-Sy", "--noconfirm"], capture_output=True, text=True)
 
-                # Install AUR packages (not in official/Inled repos). We build
-                # them from source with makepkg when no helper (yay/paru) is
-                # installed, which is the common case in a fresh Pulsar OS.
+                # Install AUR packages (not in official/Inled repos).
                 if arch_aur_packages:
                     log_msg(f"Installing {len(arch_aur_packages)} AUR package(s)...")
                     GLib.idle_add(self.update_progress, 0.18, f"Installing {len(arch_aur_packages)} AUR packages...")
@@ -1338,8 +1614,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         else:
                             log_msg(f"AUR packages installed successfully via {aur_helper}.")
                     else:
-                        # No helper available: clone each AUR repo, build with
-                        # makepkg, and install the resulting .pkg.tar.zst.
                         real_user = self._get_real_user() or "root"
                         aur_tmp = "/tmp/pulsaros-aur-build"
                         os.makedirs(aur_tmp, exist_ok=True)
@@ -1350,12 +1624,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             clone_res = subprocess.run(
                                 ["git", "clone", "--depth", "1",
                                  f"https://aur.archlinux.org/{pkg}.git", pkg_dir],
-                                capture_output=True, text=True, timeout=60,
+                                 capture_output=True, text=True, timeout=60,
                             )
                             if clone_res.returncode != 0:
                                 log_msg(f"WARNING: Could not clone AUR repo for {pkg}: {clone_res.stderr.strip()}")
                                 continue
-                            # Build as the real user (makepkg refuses root)
                             build_res = subprocess.run(
                                 ["sudo", "-u", real_user, "makepkg", "-s", "--noconfirm",
                                  "--skippgpcheck", "--nocheck"],
@@ -1364,7 +1637,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             if build_res.returncode != 0:
                                 log_msg(f"WARNING: makepkg failed for {pkg}: {build_res.stdout[-200:]}")
                                 continue
-                            # Find and install the built package
                             import glob as glob_mod
                             built = glob_mod.glob(os.path.join(pkg_dir, "*.pkg.tar.zst"))
                             if not built:
@@ -1381,96 +1653,98 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         shutil.rmtree(aur_tmp, ignore_errors=True)
 
                 # Install packages with streaming progress
-                GLib.idle_add(self.update_progress, 0.20, f"Installing {len(packages)} packages...")
-                log_msg(f"Installing {len(packages)} extra packages via pacman...")
-                install_cmd = ["pkexec", "pacman", "-S", "--noconfirm", "--needed"] + packages
-                proc = subprocess.Popen(install_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-                _buf = ""
-                while True:
-                    ch = proc.stdout.read(1)
-                    if not ch:
-                        break
-                    if ch in ('\r', '\n'):
-                        line = _buf.strip()
-                        _buf = ""
-                        if not line:
-                            continue
-                        log_msg(f"  pacman: {line}")
-                        m_dl = re.search(r"(\d+)%", line)
-                        if m_dl and '[#' in line:
-                            pct = int(m_dl.group(1))
-                            frac = 0.20 + (pct / 100.0) * 0.40
-                            GLib.idle_add(self.update_progress, frac, f"Downloading: {pct}%")
-                        m_inst = re.search(r"\((\d+)/(\d+)\)\s+installing\s+", line)
-                        if m_inst:
-                            cur, total = int(m_inst.group(1)), int(m_inst.group(2))
-                            frac = 0.60 + (cur / total) * 0.30
-                            GLib.idle_add(self.update_progress, frac, f"Installing {cur}/{total}: {line.split('installing ')[-1]}")
+                if packages:
+                    GLib.idle_add(self.update_progress, 0.20, f"Installing {len(packages)} packages...")
+                    log_msg(f"Installing {len(packages)} extra packages via pacman...")
+                    install_cmd = ["pkexec", "pacman", "-S", "--noconfirm", "--needed"] + packages
+                    proc = subprocess.Popen(install_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                    _buf = ""
+                    while True:
+                        ch = proc.stdout.read(1)
+                        if not ch:
+                            break
+                        if ch in ('\r', '\n'):
+                            line = _buf.strip()
+                            _buf = ""
+                            if not line:
+                                continue
+                            log_msg(f"  pacman: {line}")
+                            m_dl = re.search(r"(\d+)%", line)
+                            if m_dl and '[#' in line:
+                                pct = int(m_dl.group(1))
+                                frac = 0.20 + (pct / 100.0) * 0.40
+                                GLib.idle_add(self.update_progress, frac, f"Downloading: {pct}%")
+                            m_inst = re.search(r"\((\d+)/(\d+)\)\s+installing\s+", line)
+                            if m_inst:
+                                cur, total = int(m_inst.group(1)), int(m_inst.group(2))
+                                frac = 0.60 + (cur / total) * 0.30
+                                GLib.idle_add(self.update_progress, frac, f"Installing {cur}/{total}: {line.split('installing ')[-1]}")
+                        else:
+                            _buf += ch
+                    proc.wait()
+                    if proc.returncode != 0:
+                        log_msg(f"WARNING: pacman finished with code {proc.returncode}")
                     else:
-                        _buf += ch
-                proc.wait()
-                if proc.returncode != 0:
-                    log_msg(f"WARNING: pacman finished with code {proc.returncode}")
-                else:
-                    log_msg("All extra packages installed successfully.")
+                        log_msg("Selected extra packages installed successfully.")
 
             elif is_debian:
-                packages = debian_packages
                 # Update and install with streaming progress
                 GLib.idle_add(self.update_progress, 0.10, "Updating package lists...")
                 log_msg("Running apt-get update...")
                 subprocess.run(["pkexec", "apt-get", "update"], capture_output=True, text=True)
 
-                GLib.idle_add(self.update_progress, 0.20, f"Installing {len(packages)} packages...")
-                log_msg(f"Installing {len(packages)} extra packages via apt...")
-                install_cmd = ["pkexec", "apt-get", "install", "-y", "--no-install-recommends"] + packages
-                proc = subprocess.Popen(install_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-                _buf = ""
-                while True:
-                    ch = proc.stdout.read(1)
-                    if not ch:
-                        break
-                    if ch in ('\r', '\n'):
-                        line = _buf.strip()
-                        _buf = ""
-                        if not line:
-                            continue
-                        log_msg(f"  apt: {line}")
-                        m_inst = re.search(r"(\d+)/(\d+)", line)
-                        if m_inst:
-                            cur, total = int(m_inst.group(1)), int(m_inst.group(2))
-                            frac = 0.20 + (cur / total) * 0.70
-                            GLib.idle_add(self.update_progress, frac, f"Installing {cur}/{total}")
+                if packages:
+                    GLib.idle_add(self.update_progress, 0.20, f"Installing {len(packages)} packages...")
+                    log_msg(f"Installing {len(packages)} extra packages via apt...")
+                    install_cmd = ["pkexec", "apt-get", "install", "-y", "--no-install-recommends"] + packages
+                    proc = subprocess.Popen(install_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                    _buf = ""
+                    while True:
+                        ch = proc.stdout.read(1)
+                        if not ch:
+                            break
+                        if ch in ('\r', '\n'):
+                            line = _buf.strip()
+                            _buf = ""
+                            if not line:
+                                continue
+                            log_msg(f"  apt: {line}")
+                            m_inst = re.search(r"(\d+)/(\d+)", line)
+                            if m_inst:
+                                cur, total = int(m_inst.group(1)), int(m_inst.group(2))
+                                frac = 0.20 + (cur / total) * 0.70
+                                GLib.idle_add(self.update_progress, frac, f"Installing {cur}/{total}")
+                        else:
+                            _buf += ch
+                    proc.wait()
+                    if proc.returncode != 0:
+                        log_msg(f"WARNING: apt finished with code {proc.returncode}")
                     else:
-                        _buf += ch
-                proc.wait()
-                if proc.returncode != 0:
-                    log_msg(f"WARNING: apt finished with code {proc.returncode}")
-                else:
-                    log_msg("All extra packages installed successfully.")
-                # LocalSend is not in Debian stable; install from its .deb.
-                self._install_localsend_debian(
-                    log_msg,
-                    ["pkexec", "apt-get"],
-                    "/tmp/LocalSend-latest-linux-x86-64.deb",
-                )
+                        log_msg("Selected extra packages installed successfully.")
 
-            # Enable the CUPS print service (installed as part of the extras).
-            GLib.idle_add(self.update_progress, 0.98, "Enabling print service (CUPS)...")
-            try:
-                subprocess.run(
-                    ["pkexec", "systemctl", "enable", "--now", "cups.service"],
-                    capture_output=True, text=True,
-                )
-                log_msg("CUPS print service enabled.")
-            except Exception as cups_err:
-                log_msg(f"WARNING: could not enable CUPS: {cups_err}")
+                if pkg_info["install_localsend"]:
+                    self._install_localsend_debian(
+                        log_msg,
+                        ["pkexec", "apt-get"],
+                        "/tmp/LocalSend-latest-linux-x86-64.deb",
+                    )
 
-            # Install ONLYOFFICE Desktop Editors from Flathub via Flatpak
-            self._install_onlyoffice_flatpak(log_msg, chroot_target=None)
+            if pkg_info["install_cups"]:
+                GLib.idle_add(self.update_progress, 0.95, "Enabling print service (CUPS)...")
+                try:
+                    subprocess.run(
+                        ["pkexec", "systemctl", "enable", "--now", "cups.service"],
+                        capture_output=True, text=True,
+                    )
+                    log_msg("CUPS print service enabled.")
+                except Exception as cups_err:
+                    log_msg(f"WARNING: could not enable CUPS: {cups_err}")
 
-            GLib.idle_add(self.update_progress, 1.0, "Extra packages installed successfully!")
-            log_msg("Done! All extra packages and ONLYOFFICE have been installed.")
+            if pkg_info["install_onlyoffice"]:
+                self._install_onlyoffice_flatpak(log_msg, chroot_target=None)
+
+            GLib.idle_add(self.update_progress, 1.0, "Selected packages installed successfully!")
+            log_msg("Done! All selected packages have been installed.")
             GLib.idle_add(self.on_installation_completed)
 
         except Exception as err:
@@ -2157,19 +2431,26 @@ class RecoveryWindow(Adw.ApplicationWindow):
         lbl_b_title.add_css_class("option-title")
         lbl_b_title.set_halign(Gtk.Align.START)
         lbl_b_title.set_wrap(True)
-        lbl_b_title.set_max_width_chars(42)
+        lbl_b_title.set_max_width_chars(38)
         txt_b.append(lbl_b_title)
-        lbl_b_desc = Gtk.Label(label="Ensures maximum hardware compatibility, including Broadcom Wi-Fi and specialized wireless chipsets.")
-        lbl_b_desc.add_css_class("option-desc")
-        lbl_b_desc.set_halign(Gtk.Align.START)
-        lbl_b_desc.set_wrap(True)
-        lbl_b_desc.set_max_width_chars(42)
-        txt_b.append(lbl_b_desc)
+        self.lbl_b_desc = Gtk.Label(label="Ensures maximum hardware compatibility (Broadcom, NVIDIA, firmware, VM tools).")
+        self.lbl_b_desc.add_css_class("option-desc")
+        self.lbl_b_desc.set_halign(Gtk.Align.START)
+        self.lbl_b_desc.set_wrap(True)
+        self.lbl_b_desc.set_max_width_chars(38)
+        txt_b.append(self.lbl_b_desc)
         row_broadcom.append(txt_b)
+
+        btn_cust_drv = Gtk.Button(label="Customize...")
+        btn_cust_drv.add_css_class("secondary-action")
+        btn_cust_drv.set_valign(Gtk.Align.CENTER)
+        btn_cust_drv.connect("clicked", lambda b: self._show_drivers_selection_screen("install_options"))
+        row_broadcom.append(btn_cust_drv)
 
         self.chk_broadcom = Gtk.CheckButton()
         self.chk_broadcom.set_active(True)
         self.chk_broadcom.set_valign(Gtk.Align.CENTER)
+        self.chk_broadcom.connect("toggled", self._on_broadcom_chk_toggled)
         row_broadcom.append(self.chk_broadcom)
         opt_group.append(row_broadcom)
 
@@ -2188,19 +2469,26 @@ class RecoveryWindow(Adw.ApplicationWindow):
         lbl_e_title.add_css_class("option-title")
         lbl_e_title.set_halign(Gtk.Align.START)
         lbl_e_title.set_wrap(True)
-        lbl_e_title.set_max_width_chars(42)
+        lbl_e_title.set_max_width_chars(38)
         txt_e.append(lbl_e_title)
-        lbl_e_desc = Gtk.Label(label="Installs ONLYOFFICE Desktop Editors, LocalSend, multimedia codecs, tools, and drivers for the full out-of-the-box experience.")
-        lbl_e_desc.add_css_class("option-desc")
-        lbl_e_desc.set_halign(Gtk.Align.START)
-        lbl_e_desc.set_wrap(True)
-        lbl_e_desc.set_max_width_chars(42)
-        txt_e.append(lbl_e_desc)
+        self.lbl_e_desc = Gtk.Label(label="Installs ONLYOFFICE Desktop Editors, LocalSend, multimedia codecs, tools, and apps.")
+        self.lbl_e_desc.add_css_class("option-desc")
+        self.lbl_e_desc.set_halign(Gtk.Align.START)
+        self.lbl_e_desc.set_wrap(True)
+        self.lbl_e_desc.set_max_width_chars(38)
+        txt_e.append(self.lbl_e_desc)
         row_extra.append(txt_e)
+
+        btn_cust_pkg = Gtk.Button(label="Customize...")
+        btn_cust_pkg.add_css_class("secondary-action")
+        btn_cust_pkg.set_valign(Gtk.Align.CENTER)
+        btn_cust_pkg.connect("clicked", lambda b: self._show_packages_selection_screen("install_options"))
+        row_extra.append(btn_cust_pkg)
 
         self.chk_extra = Gtk.CheckButton()
         self.chk_extra.set_active(True)
         self.chk_extra.set_valign(Gtk.Align.CENTER)
+        self.chk_extra.connect("toggled", self._on_extra_chk_toggled)
         row_extra.append(self.chk_extra)
         opt_group.append(row_extra)
 
@@ -2347,6 +2635,289 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
         box.append(nav_box)
         self.stack.add_named(box, "install_options")
+
+    def _on_broadcom_chk_toggled(self, chk):
+        active = chk.get_active()
+        self.install_broadcom = active
+        for k in self.drivers_selected:
+            self.drivers_selected[k] = active
+        self._update_drivers_summary_label()
+
+    def _on_extra_chk_toggled(self, chk):
+        active = chk.get_active()
+        self.install_extra_packages = active
+        for k in self.packages_selected:
+            self.packages_selected[k] = active
+        self._update_packages_summary_label()
+
+    def _update_drivers_summary_label(self):
+        sel_count = sum(1 for v in self.drivers_selected.values() if v)
+        total = len(DRIVER_ITEMS)
+        if hasattr(self, 'lbl_b_desc'):
+            self.lbl_b_desc.set_text(f"Selected drivers: {sel_count}/{total}. Click 'Customize...' to change.")
+
+    def _update_packages_summary_label(self):
+        sel_count = sum(1 for v in self.packages_selected.values() if v)
+        total = len(EXTRA_PACKAGES_ITEMS)
+        if hasattr(self, 'lbl_e_desc'):
+            self.lbl_e_desc.set_text(f"Selected components: {sel_count}/{total}. Click 'Customize...' to change.")
+
+    def build_packages_selection_screen(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_valign(Gtk.Align.CENTER)
+        box.set_halign(Gtk.Align.CENTER)
+        box.set_size_request(480, -1)
+
+        image = self.get_logo_image(64, is_installer=True)
+        box.append(image)
+
+        title = Gtk.Label()
+        title.set_markup("<span font_weight='bold' size='16000'>Select Additional Packages</span>")
+        box.append(title)
+
+        subtitle = Gtk.Label(label="Select the applications and components you wish to install:")
+        subtitle.add_css_class("progress-text")
+        box.append(subtitle)
+
+        # Scrolled container
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_min_content_height(220)
+        scrolled.set_max_content_height(260)
+        scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scrolled.set_propagate_natural_height(True)
+
+        listbox = Gtk.ListBox()
+        listbox.add_css_class("options-group")
+        listbox.set_selection_mode(Gtk.SelectionMode.NONE)
+
+        self.pkg_check_widgets = {}
+        for item in EXTRA_PACKAGES_ITEMS:
+            row = Gtk.ListBoxRow()
+            r_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            r_box.add_css_class("option-row")
+            r_box.set_margin_top(6)
+            r_box.set_margin_bottom(6)
+            r_box.set_margin_start(8)
+            r_box.set_margin_end(8)
+
+            txt_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            txt_box.set_hexpand(True)
+            lbl_title = Gtk.Label()
+            lbl_title.set_markup(f"<b>{item['name']}</b>")
+            lbl_title.set_halign(Gtk.Align.START)
+            txt_box.append(lbl_title)
+
+            lbl_desc = Gtk.Label(label=item['desc'])
+            lbl_desc.add_css_class("option-desc")
+            lbl_desc.set_halign(Gtk.Align.START)
+            lbl_desc.set_wrap(True)
+            lbl_desc.set_max_width_chars(38)
+            txt_box.append(lbl_desc)
+            r_box.append(txt_box)
+
+            chk = Gtk.CheckButton()
+            chk.set_active(self.packages_selected.get(item['id'], True))
+            chk.set_valign(Gtk.Align.CENTER)
+            chk.item_id = item['id']
+            self.pkg_check_widgets[item['id']] = chk
+            r_box.append(chk)
+
+            row.set_child(r_box)
+            listbox.append(row)
+
+        scrolled.set_child(listbox)
+        box.append(scrolled)
+
+        # Action Buttons
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        btn_box.set_halign(Gtk.Align.CENTER)
+        btn_box.set_margin_top(8)
+
+        self.btn_pkg_toggle_all = Gtk.Button(label="Deselect All")
+        self.btn_pkg_toggle_all.add_css_class("secondary-action")
+        self.btn_pkg_toggle_all.connect("clicked", self._on_pkg_toggle_all_clicked)
+        btn_box.append(self.btn_pkg_toggle_all)
+
+        btn_back = Gtk.Button(label="Back")
+        btn_back.add_css_class("secondary-action")
+        btn_back.connect("clicked", self._on_pkg_select_back_clicked)
+        btn_box.append(btn_back)
+
+        btn_continue = Gtk.Button(label="Continue")
+        btn_continue.add_css_class("suggested-action")
+        btn_continue.connect("clicked", self._on_pkg_select_continue_clicked)
+        btn_box.append(btn_continue)
+
+        box.append(btn_box)
+        self.stack.add_named(box, "install_packages_select")
+
+    def build_drivers_selection_screen(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_valign(Gtk.Align.CENTER)
+        box.set_halign(Gtk.Align.CENTER)
+        box.set_size_request(480, -1)
+
+        image = self.get_logo_image(64, is_installer=True)
+        box.append(image)
+
+        title = Gtk.Label()
+        title.set_markup("<span font_weight='bold' size='16000'>Select Hardware Drivers &amp; Firmware</span>")
+        box.append(title)
+
+        subtitle = Gtk.Label(label="Select the hardware drivers and firmware to enable on your system:")
+        subtitle.add_css_class("progress-text")
+        box.append(subtitle)
+
+        # Scrolled container
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_min_content_height(200)
+        scrolled.set_max_content_height(240)
+        scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scrolled.set_propagate_natural_height(True)
+
+        listbox = Gtk.ListBox()
+        listbox.add_css_class("options-group")
+        listbox.set_selection_mode(Gtk.SelectionMode.NONE)
+
+        self.drv_check_widgets = {}
+        for item in DRIVER_ITEMS:
+            row = Gtk.ListBoxRow()
+            r_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            r_box.add_css_class("option-row")
+            r_box.set_margin_top(6)
+            r_box.set_margin_bottom(6)
+            r_box.set_margin_start(8)
+            r_box.set_margin_end(8)
+
+            txt_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            txt_box.set_hexpand(True)
+            lbl_title = Gtk.Label()
+            lbl_title.set_markup(f"<b>{item['name']}</b>")
+            lbl_title.set_halign(Gtk.Align.START)
+            txt_box.append(lbl_title)
+
+            lbl_desc = Gtk.Label(label=item['desc'])
+            lbl_desc.add_css_class("option-desc")
+            lbl_desc.set_halign(Gtk.Align.START)
+            lbl_desc.set_wrap(True)
+            lbl_desc.set_max_width_chars(38)
+            txt_box.append(lbl_desc)
+            r_box.append(txt_box)
+
+            chk = Gtk.CheckButton()
+            chk.set_active(self.drivers_selected.get(item['id'], True))
+            chk.set_valign(Gtk.Align.CENTER)
+            chk.item_id = item['id']
+            self.drv_check_widgets[item['id']] = chk
+            r_box.append(chk)
+
+            row.set_child(r_box)
+            listbox.append(row)
+
+        scrolled.set_child(listbox)
+        box.append(scrolled)
+
+        # Action Buttons
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        btn_box.set_halign(Gtk.Align.CENTER)
+        btn_box.set_margin_top(8)
+
+        self.btn_drv_toggle_all = Gtk.Button(label="Deselect All")
+        self.btn_drv_toggle_all.add_css_class("secondary-action")
+        self.btn_drv_toggle_all.connect("clicked", self._on_drv_toggle_all_clicked)
+        btn_box.append(self.btn_drv_toggle_all)
+
+        btn_back = Gtk.Button(label="Back")
+        btn_back.add_css_class("secondary-action")
+        btn_back.connect("clicked", self._on_drv_select_back_clicked)
+        btn_box.append(btn_back)
+
+        btn_continue = Gtk.Button(label="Continue")
+        btn_continue.add_css_class("suggested-action")
+        btn_continue.connect("clicked", self._on_drv_select_continue_clicked)
+        btn_box.append(btn_continue)
+
+        box.append(btn_box)
+        self.stack.add_named(box, "install_drivers_select")
+
+    def _on_pkg_toggle_all_clicked(self, btn):
+        any_unchecked = any(not chk.get_active() for chk in self.pkg_check_widgets.values())
+        for chk in self.pkg_check_widgets.values():
+            chk.set_active(any_unchecked)
+        self.btn_pkg_toggle_all.set_label("Deselect All" if any_unchecked else "Select All")
+
+    def _on_drv_toggle_all_clicked(self, btn):
+        any_unchecked = any(not chk.get_active() for chk in self.drv_check_widgets.values())
+        for chk in self.drv_check_widgets.values():
+            chk.set_active(any_unchecked)
+        self.btn_drv_toggle_all.set_label("Deselect All" if any_unchecked else "Select All")
+
+    def _show_packages_selection_screen(self, return_screen="install_options"):
+        self.packages_select_return_screen = return_screen
+        for item_id, chk in self.pkg_check_widgets.items():
+            chk.set_active(self.packages_selected.get(item_id, True))
+        any_unchecked = any(not chk.get_active() for chk in self.pkg_check_widgets.values())
+        self.btn_pkg_toggle_all.set_label("Select All" if any_unchecked else "Deselect All")
+        self.stack.set_visible_child_name("install_packages_select")
+
+    def _show_drivers_selection_screen(self, return_screen="install_options"):
+        self.drivers_select_return_screen = return_screen
+        for item_id, chk in self.drv_check_widgets.items():
+            chk.set_active(self.drivers_selected.get(item_id, True))
+        any_unchecked = any(not chk.get_active() for chk in self.drv_check_widgets.values())
+        self.btn_drv_toggle_all.set_label("Select All" if any_unchecked else "Deselect All")
+        self.stack.set_visible_child_name("install_drivers_select")
+
+    def _on_pkg_select_back_clicked(self, btn):
+        self.stack.set_visible_child_name(self.packages_select_return_screen)
+
+    def _on_drv_select_back_clicked(self, btn):
+        self.stack.set_visible_child_name(self.drivers_select_return_screen)
+
+    def _on_pkg_select_continue_clicked(self, btn):
+        for item_id, chk in self.pkg_check_widgets.items():
+            self.packages_selected[item_id] = chk.get_active()
+        sel_count = sum(1 for v in self.packages_selected.values() if v)
+        self.install_extra_packages = sel_count > 0
+        if hasattr(self, 'chk_extra'):
+            self.chk_extra.set_active(self.install_extra_packages)
+            self._update_packages_summary_label()
+
+        if self.packages_select_return_screen == "utilities":
+            self.selected_action = "packages"
+            if self.install_extra_packages:
+                self._show_network_check_screen()
+            else:
+                self.stack.set_visible_child_name("utilities")
+        else:
+            self.stack.set_visible_child_name("install_options")
+
+    def _on_drv_select_continue_clicked(self, btn):
+        for item_id, chk in self.drv_check_widgets.items():
+            self.drivers_selected[item_id] = chk.get_active()
+        sel_count = sum(1 for v in self.drivers_selected.values() if v)
+        self.install_broadcom = self.drivers_selected.get("broadcom", False)
+        if hasattr(self, 'chk_broadcom'):
+            self.chk_broadcom.set_active(sel_count > 0)
+            self._update_drivers_summary_label()
+
+        if self.drivers_select_return_screen == "utilities":
+            self.selected_action = "drivers"
+            if sel_count > 0:
+                self._show_network_check_screen()
+            else:
+                self.stack.set_visible_child_name("utilities")
+        else:
+            self.stack.set_visible_child_name("install_options")
+
+    def _open_logs_viewer(self):
+        log_dir = "/var/log/pulsaros"
+        os.makedirs(log_dir, exist_ok=True)
+        try:
+            os.chmod(log_dir, 0o755)
+        except Exception:
+            pass
+        self._popen_as_user(f"nautilus {log_dir} || xdg-open {log_dir} || gnome-text-editor {log_dir}/installer.log || xterm -title 'Pulsar OS Logs' -e less {log_dir}/installer.log")
 
     def _show_options_screen(self):
         # Auto-detect Broadcom hardware (pre-selected by default as recommended)
@@ -2940,13 +3511,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
     def _on_network_check_back(self):
         if self.selected_action == "packages":
-            self.stack.set_visible_child_name("utilities")
+            self.stack.set_visible_child_name("install_packages_select" if getattr(self, 'packages_select_return_screen', '') == 'utilities' else "utilities")
+        elif self.selected_action == "drivers":
+            self.stack.set_visible_child_name("install_drivers_select" if getattr(self, 'drivers_select_return_screen', '') == 'utilities' else "utilities")
         else:
             self.stack.set_visible_child_name("install_options")
 
     def _net_continue_clicked(self, btn):
         if self.selected_action == "packages":
             self._start_package_installation()
+        elif self.selected_action == "drivers":
+            self._start_driver_installation()
         else:
             self._proceed_to_confirm_screen()
 
@@ -3238,11 +3813,22 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
     def installation_backend(self, disk_path):
         import datetime
-        log_file = "/tmp/pulsaros-install.log"
+        os.makedirs("/var/log/pulsaros", exist_ok=True)
+        try:
+            os.chmod("/var/log/pulsaros", 0o755)
+        except Exception:
+            pass
+        log_file = "/var/log/pulsaros/installer.log"
         try:
             with open(log_file, "w") as lf:
                 lf.write(f"{datetime.datetime.now()} - Pulsar OS Installation started\n")
                 lf.write(f"Target disk: {disk_path}\n")
+            try:
+                with open("/tmp/pulsaros-install.log", "w") as tf:
+                    tf.write(f"{datetime.datetime.now()} - Pulsar OS Installation started\n")
+                    tf.write(f"Target disk: {disk_path}\n")
+            except Exception:
+                pass
             # Stop udisks2 automount daemon during formatting and system replication
             if "TEST_MODE" not in os.environ:
                 subprocess.run(["systemctl", "stop", "udisks2.service"], capture_output=True)
@@ -3269,6 +3855,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 line = f"[{ts}] {msg}"
                 with open(log_file, "a") as lf:
                     lf.write(line + "\n")
+                try:
+                    with open("/tmp/pulsaros-install.log", "a") as tf:
+                        tf.write(line + "\n")
+                except Exception:
+                    pass
                 print(msg)
                 GLib.idle_add(self.append_log, line)
 
@@ -3697,242 +4288,150 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 if is_arch:
                     # ── Arch: install via pacman from the [inled] + Arch repos ──
                     if self.install_extra_packages:
-                        GLib.idle_add(self.update_progress, 0.80, "Installing extra packages (Docker, firmware, drivers, apps)...")
-                        log_msg("Post-install: installing extra packages and ONLYOFFICE...")
-                        try:
-                            # Every package removed from base-arch.list when building
-                            # base-arch-minimal.list, grouped for readability.
-                            extra_packages = [
-                                # Docker container runtime
-                                "docker",
-                                # Full firmware (replaces the split sub-packages with the meta)
-                                "linux-firmware",
-                                "sof-firmware",
-                                "alsa-firmware",
-                                # VM guest tools (for VM installs)
-                                "open-vm-tools",
-                                "virtualbox-guest-utils",
-                                "xf86-video-qxl",
-                                # Old (pre-GCN) AMD video driver and misc system utils
-                                "xf86-video-ati",
-                                "xfsprogs",
-                                "p7zip",
-                                "inxi",
-                                "wl-clipboard",
-                                "python-yaml",
-                                # Multimedia & image tools
-                                "vlc",
-                                "totem",
-                                "imagemagick",
-                                "flatpak",
-                                # Network shares & portal GVFS backends
-                                "gvfs-smb",
-                                "gvfs-gphoto2",
-                                # GNOME apps
-                                "geary",
-                                "gnome-music",
-                                "gnome-contacts",
-                                "gnome-weather",
-                                "gnome-clocks",
-                                "xournalpp",
-                                "papers",
-                                "loupe",
-                                "gnome-disk-utility",
-                                "gnome-logs",
-                                "baobab",
-                                # Editor and WebKit/GTK3 extras pulled by the welcome app
-                                "vim",
-                                "webkitgtk-6.0",
-                                # NVIDIA proprietary drivers
-                                "nvidia-open",
-                                "nvidia-settings",
-                                # Broadcom & DKMS driver support
-                                "dkms",
-                                "linux-headers",
-                                # Global menu / Fildem dependencies
-                                "python-setuptools",
-                                "python-pip",
-                                # Virtualization & KVM (macOS KVM & VM Support)
-                                "qemu-desktop",
-                                "libvirt",
-                                "virt-manager",
-                                "edk2-ovmf",
-                                "dnsmasq",
-                                "python-requests",
-                                # Print server
-                                "cups",
-                            ]
-                            # Initialize pacman keyring inside the chroot so
-                            # signature verification works (avoids GPGME errors),
-                            # then import the Inled repository GPG key.
-                            GLib.idle_add(self.update_progress, 0.81, "Setting up package manager...")
-                            log_msg("Initializing pacman keyring and Inled repo key...")
-                            exec_cmd(["chroot", "/mnt", "bash", "-c",
-                                       "mkdir -p /etc/pacman.d/gnupg && "
-                                       "pacman-key --init && "
-                                       "pacman-key --populate archlinux && "
-                                       "curl -s https://apt.inled.es/archive.key | pacman-key -a - && "
-                                       "pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F"])
-                            GLib.idle_add(self.update_progress, 0.82, "Syncing package databases...")
-                            exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
-                            GLib.idle_add(self.update_progress, 0.83, f"Installing {len(extra_packages)} extra packages...")
-                            # ── Streaming pacman install (parse download progress) ──
-                            pacman_cmd = [
-                                "chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
-                                *extra_packages
-                            ]
-                            pacman_proc = subprocess.Popen(
-                                pacman_cmd,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT,
-                                text=True,
-                                bufsize=1,
-                            )
-                            _pbuf = ""
-                            while True:
-                                ch = pacman_proc.stdout.read(1)
-                                if not ch:
-                                    break
-                                if ch in ('\r', '\n'):
-                                    line = _pbuf.strip()
-                                    _pbuf = ""
-                                    if not line:
-                                        continue
-                                    log_msg(f"  pacman: {line}")
-                                    # Download progress: "pkgname  123.4 KiB  0.5 MiB/s 00:00 [####] 100%"
-                                    m_dl = re.search(r"(\d+)%", line)
-                                    if m_dl and '[#' in line:
-                                        pct = int(m_dl.group(1))
-                                        frac = 0.83 + (pct / 100.0) * 0.07
-                                        GLib.idle_add(self.update_progress, frac, f"Downloading packages: {pct}%")
-                                    # Install progress: "(1/3) installing pkg..."
-                                    m_inst = re.search(r"\((\d+)/(\d+)\)\s+installing\s+", line)
-                                    if m_inst:
-                                        cur, total = int(m_inst.group(1)), int(m_inst.group(2))
-                                        frac = 0.90 + (cur / total) * 0.02
-                                        GLib.idle_add(self.update_progress, frac, f"Installing package {cur}/{total}: {line.split('installing ')[-1]}")
-                                else:
-                                    _pbuf += ch
-                            pacman_proc.wait()
-                            if pacman_proc.returncode != 0:
-                                raise Exception(f"pacman -S failed (code {pacman_proc.returncode})")
-                            log_msg("Post-install: extra packages installed successfully.")
-                            extra_packages_installed = True
-
-                            # Enable the CUPS print service on the installed system.
+                        pkg_info = self._get_selected_packages_info(is_arch=True)
+                        extra_packages = pkg_info["pkgs"]
+                        if extra_packages or pkg_info["install_onlyoffice"]:
+                            GLib.idle_add(self.update_progress, 0.80, "Installing selected packages and apps...")
+                            log_msg(f"Post-install: installing {len(extra_packages)} selected extra packages...")
                             try:
-                                exec_cmd(["chroot", "/mnt", "systemctl", "enable", "cups.service"])
-                                log_msg("CUPS print service enabled on installed system.")
-                            except Exception as cups_err:
-                                log_msg(f"Notice: could not enable CUPS: {cups_err}")
+                                # Initialize pacman keyring inside the chroot so
+                                # signature verification works (avoids GPGME errors),
+                                # then import the Inled repository GPG key.
+                                GLib.idle_add(self.update_progress, 0.81, "Setting up package manager...")
+                                log_msg("Initializing pacman keyring and Inled repo key...")
+                                exec_cmd(["chroot", "/mnt", "bash", "-c",
+                                           "mkdir -p /etc/pacman.d/gnupg && "
+                                           "pacman-key --init && "
+                                           "pacman-key --populate archlinux && "
+                                           "curl -s https://apt.inled.es/archive.key | pacman-key -a - && "
+                                           "pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F"])
+                                GLib.idle_add(self.update_progress, 0.82, "Syncing package databases...")
+                                exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
 
-                            # Install ONLYOFFICE via Flatpak from Flathub
-                            self._install_onlyoffice_flatpak(log_msg, chroot_target="/mnt")
-                        except Exception as post_err:
-                            log_msg(f"Post-install package installation: {post_err}")
+                                if extra_packages:
+                                    GLib.idle_add(self.update_progress, 0.83, f"Installing {len(extra_packages)} extra packages...")
+                                    # ── Streaming pacman install (parse download progress) ──
+                                    pacman_cmd = [
+                                        "chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
+                                        *extra_packages
+                                    ]
+                                    pacman_proc = subprocess.Popen(
+                                        pacman_cmd,
+                                        stdout=subprocess.PIPE,
+                                        stderr=subprocess.STDOUT,
+                                        text=True,
+                                        bufsize=1,
+                                    )
+                                    _pbuf = ""
+                                    while True:
+                                        ch = pacman_proc.stdout.read(1)
+                                        if not ch:
+                                            break
+                                        if ch in ('\r', '\n'):
+                                            line = _pbuf.strip()
+                                            _buf = ""
+                                            if not line:
+                                                continue
+                                            log_msg(f"  pacman: {line}")
+                                            m_dl = re.search(r"(\d+)%", line)
+                                            if m_dl and '[#' in line:
+                                                pct = int(m_dl.group(1))
+                                                frac = 0.83 + (pct / 100.0) * 0.07
+                                                GLib.idle_add(self.update_progress, frac, f"Downloading packages: {pct}%")
+                                            m_inst = re.search(r"\((\d+)/(\d+)\)\s+installing\s+", line)
+                                            if m_inst:
+                                                cur, total = int(m_inst.group(1)), int(m_inst.group(2))
+                                                frac = 0.90 + (cur / total) * 0.02
+                                                GLib.idle_add(self.update_progress, frac, f"Installing package {cur}/{total}: {line.split('installing ')[-1]}")
+                                        else:
+                                            _pbuf += ch
+                                    pacman_proc.wait()
+                                    if pacman_proc.returncode != 0:
+                                        raise Exception(f"pacman -S failed (code {pacman_proc.returncode})")
+                                    log_msg("Post-install: extra packages installed successfully.")
+                                    extra_packages_installed = True
+
+                                # Enable the CUPS print service on the installed system if selected.
+                                if pkg_info["install_cups"]:
+                                    try:
+                                        exec_cmd(["chroot", "/mnt", "systemctl", "enable", "cups.service"])
+                                        log_msg("CUPS print service enabled on installed system.")
+                                    except Exception as cups_err:
+                                        log_msg(f"Notice: could not enable CUPS: {cups_err}")
+
+                                # Install ONLYOFFICE via Flatpak from Flathub if selected
+                                if pkg_info["install_onlyoffice"]:
+                                    self._install_onlyoffice_flatpak(log_msg, chroot_target="/mnt")
+                            except Exception as post_err:
+                                log_msg(f"Post-install package installation: {post_err}")
 
                 else:
                     # ── Debian: install via apt from Debian + Inled repositories ──
                     if self.install_extra_packages:
-                        GLib.idle_add(self.update_progress, 0.80, "Installing extra packages (Docker, firmware, drivers, apps)...")
-                        log_msg("Post-install: installing packages removed from minimal ISO via apt...")
-                        try:
-                            extra_packages = [
-                                "docker.io",
-                                "firmware-linux",
-                                "firmware-sof-signed",
-                                "firmware-misc-nonfree",
-                                "open-vm-tools",
-                                "xserver-xorg-video-qxl",
-                                "flatpak",
-                                "vlc",
-                                "totem",
-                                "imagemagick",
-                                "gvfs-fuse",
-                                "gvfs-backends",
-                                "geary",
-                                "gnome-music",
-                                "gnome-contacts",
-                                "gnome-weather",
-                                "gnome-clocks",
-                                "nvidia-driver",
-                                "xdotool",
-                                "python3-xlib",
-                                "qemu-system-x86",
-                                "qemu-utils",
-                                "libvirt-daemon-system",
-                                "libvirt-clients",
-                                "virt-manager",
-                                "ovmf",
-                                "dnsmasq-base",
-                                "bridge-utils",
-                                "python3-requests",
-                                "dmg2img",
-                                # Print server
-                                "cups",
-                                # LocalSend is not in Debian stable; installed
-                                # separately from its official .deb below.
-                            ]
-                            exec_cmd(["chroot", "/mnt", "apt-get", "update"])
-                            # ── Streaming apt install (parse progress) ──
-                            apt_cmd = [
-                                "chroot", "/mnt", "apt-get", "install", "-y",
-                                "--no-install-recommends",
-                                *extra_packages,
-                            ]
-                            apt_proc = subprocess.Popen(
-                                apt_cmd,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT,
-                                text=True,
-                                bufsize=1,
-                            )
-                            _abuf = ""
-                            while True:
-                                ch = apt_proc.stdout.read(1)
-                                if not ch:
-                                    break
-                                if ch in ('\r', '\n'):
-                                    line = _abuf.strip()
-                                    _abuf = ""
-                                    if not line:
-                                        continue
-                                    log_msg(f"  apt: {line}")
-                                    # Progress: "Do you want to continue? [Y/n]"
-                                    # or "Unpacking pkg (1/23)..."
-                                    m_inst = re.search(r"(\d+)/(\d+)", line)
-                                    if m_inst:
-                                        cur, total = int(m_inst.group(1)), int(m_inst.group(2))
-                                        frac = 0.83 + (cur / total) * 0.07
-                                        GLib.idle_add(self.update_progress, frac, f"Installing package {cur}/{total}")
-                                else:
-                                    _abuf += ch
-                            apt_proc.wait()
-                            if apt_proc.returncode != 0:
-                                raise Exception(f"apt-get install failed (code {apt_proc.returncode})")
-                            log_msg("Post-install: extra packages installed successfully (apt).")
-                            extra_packages_installed = True
-
-                            # Enable the CUPS print service on the installed system.
+                        pkg_info = self._get_selected_packages_info(is_arch=False)
+                        extra_packages = pkg_info["pkgs"]
+                        if extra_packages or pkg_info["install_onlyoffice"] or pkg_info["install_localsend"]:
+                            GLib.idle_add(self.update_progress, 0.80, "Installing selected packages and apps...")
+                            log_msg(f"Post-install: installing {len(extra_packages)} selected packages via apt...")
                             try:
-                                exec_cmd(["chroot", "/mnt", "systemctl", "enable", "cups.service"])
-                                log_msg("CUPS print service enabled on installed system.")
-                            except Exception as cups_err:
-                                log_msg(f"Notice: could not enable CUPS: {cups_err}")
+                                exec_cmd(["chroot", "/mnt", "apt-get", "update"])
+                                if extra_packages:
+                                    apt_cmd = [
+                                        "chroot", "/mnt", "apt-get", "install", "-y",
+                                        "--no-install-recommends",
+                                        *extra_packages,
+                                    ]
+                                    apt_proc = subprocess.Popen(
+                                        apt_cmd,
+                                        stdout=subprocess.PIPE,
+                                        stderr=subprocess.STDOUT,
+                                        text=True,
+                                        bufsize=1,
+                                    )
+                                    _abuf = ""
+                                    while True:
+                                        ch = apt_proc.stdout.read(1)
+                                        if not ch:
+                                            break
+                                        if ch in ('\r', '\n'):
+                                            line = _abuf.strip()
+                                            _abuf = ""
+                                            if not line:
+                                                continue
+                                            log_msg(f"  apt: {line}")
+                                            m_inst = re.search(r"(\d+)/(\d+)", line)
+                                            if m_inst:
+                                                cur, total = int(m_inst.group(1)), int(m_inst.group(2))
+                                                frac = 0.83 + (cur / total) * 0.07
+                                                GLib.idle_add(self.update_progress, frac, f"Installing package {cur}/{total}")
+                                        else:
+                                            _abuf += ch
+                                    apt_proc.wait()
+                                    if apt_proc.returncode != 0:
+                                        raise Exception(f"apt-get install failed (code {apt_proc.returncode})")
+                                    log_msg("Post-install: extra packages installed successfully (apt).")
+                                    extra_packages_installed = True
 
-                            # LocalSend is not in Debian stable; install from its .deb
-                            # (downloaded to /mnt/tmp so the chroot can see it at /tmp).
-                            self._install_localsend_debian(
-                                log_msg,
-                                ["chroot", "/mnt", "apt-get"],
-                                "/tmp/LocalSend-latest-linux-x86-64.deb",
-                                "/mnt/tmp/LocalSend-latest-linux-x86-64.deb",
-                            )
+                                # Enable the CUPS print service on the installed system if selected.
+                                if pkg_info["install_cups"]:
+                                    try:
+                                        exec_cmd(["chroot", "/mnt", "systemctl", "enable", "cups.service"])
+                                        log_msg("CUPS print service enabled on installed system.")
+                                    except Exception as cups_err:
+                                        log_msg(f"Notice: could not enable CUPS: {cups_err}")
 
-                            # Install ONLYOFFICE via Flatpak from Flathub
-                            self._install_onlyoffice_flatpak(log_msg, chroot_target="/mnt")
-                        except Exception as post_err:
-                            log_msg(f"Post-install apt installation: {post_err}")
+                                if pkg_info["install_localsend"]:
+                                    self._install_localsend_debian(
+                                        log_msg,
+                                        ["chroot", "/mnt", "apt-get"],
+                                        "/tmp/LocalSend-latest-linux-x86-64.deb",
+                                        "/mnt/tmp/LocalSend-latest-linux-x86-64.deb",
+                                    )
+
+                                if pkg_info["install_onlyoffice"]:
+                                    self._install_onlyoffice_flatpak(log_msg, chroot_target="/mnt")
+                            except Exception as post_err:
+                                log_msg(f"Post-install apt installation: {post_err}")
 
                 # Remove the marker so extra packages are not re-installed on reboot.
                 try:
@@ -5424,7 +5923,26 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                 except Exception as touch_err:
                     print(f"Warning: Failed to create setup flag: {touch_err}")
 
-            # 2. Cleanup and unmount all filesystems
+            # 2. Copy installation logs to target filesystem for persistence
+            if "TEST_MODE" not in os.environ:
+                try:
+                    os.makedirs("/mnt/var/log/pulsaros", exist_ok=True)
+                    os.chmod("/mnt/var/log/pulsaros", 0o755)
+                    if os.path.exists(log_file):
+                        shutil.copy2(log_file, "/mnt/var/log/pulsaros/installer.log")
+                    for aux_log in glob.glob("/var/log/pulsaros/*.log") + glob.glob("/tmp/pulsaros-*.log"):
+                        if os.path.isfile(aux_log):
+                            shutil.copy2(aux_log, f"/mnt/var/log/pulsaros/{os.path.basename(aux_log)}")
+                    for plog in glob.glob("/mnt/var/log/pulsaros/*"):
+                        try:
+                            os.chmod(plog, 0o644)
+                        except Exception:
+                            pass
+                    log_msg("Installation logs saved to /mnt/var/log/pulsaros/")
+                except Exception as log_copy_err:
+                    print(f"Notice: Failed to copy installation logs to target: {log_copy_err}")
+
+            # 3. Cleanup and unmount all filesystems
             cleanup_mounts(is_efi)
             
             GLib.idle_add(self.on_installation_completed)
@@ -5449,13 +5967,15 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
         
         # Read the log file to display inside the textview
         log_content = ""
-        log_file = "/tmp/pulsaros-install.log"
-        if os.path.exists(log_file):
-            try:
-                with open(log_file, "r") as f:
-                    log_content = f.read()
-            except Exception as e:
-                log_content = f"Could not read log file: {e}\n"
+        for lf in ["/var/log/pulsaros/installer.log", "/tmp/pulsaros-install.log", "/var/log/pulsaros/packages.log", "/tmp/pulsaros-packages.log"]:
+            if os.path.exists(lf):
+                try:
+                    with open(lf, "r") as f:
+                        log_content = f.read()
+                    if log_content:
+                        break
+                except Exception:
+                    pass
         
         if not log_content:
             log_content = f"Error details:\n{error}"

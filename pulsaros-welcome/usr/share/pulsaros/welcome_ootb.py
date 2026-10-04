@@ -1303,7 +1303,9 @@ class OOTBWindow(Adw.ApplicationWindow):
         clipboard.set_text(text)
 
     def load_log_to_view(self):
-        log_path = "/tmp/pulsar-ootb.log"
+        log_path = "/var/log/pulsaros/ootb.log"
+        if not os.path.exists(log_path):
+            log_path = "/tmp/pulsar-ootb.log"
         content = ""
         if os.path.exists(log_path):
             try:
@@ -1459,12 +1461,32 @@ class OOTBWindow(Adw.ApplicationWindow):
 
     def run_setup_backend(self, fullname, username, password):
         try:
-            with open("/tmp/pulsar-ootb.log", "w") as log:
-                log.write(f"Pulsar OS OOTB Config Log - {time.ctime()}\n")
+            log_dir = "/var/log/pulsaros"
+            try:
+                os.makedirs(log_dir, exist_ok=True)
+                os.chmod(log_dir, 0o755)
+            except Exception:
+                pass
+
+            main_log_file = "/var/log/pulsaros/ootb.log"
+            tmp_log_file = "/tmp/pulsar-ootb.log"
+            init_header = f"Pulsar OS OOTB Config Log - {time.ctime()}\n"
+
+            for fpath in (main_log_file, tmp_log_file):
+                try:
+                    with open(fpath, "w") as log:
+                        log.write(init_header)
+                    os.chmod(fpath, 0o644)
+                except Exception:
+                    pass
 
             def log_msg(msg):
-                with open("/tmp/pulsar-ootb.log", "a") as log:
-                    log.write(f"{msg}\n")
+                for fpath in (main_log_file, tmp_log_file):
+                    try:
+                        with open(fpath, "a") as log:
+                            log.write(f"{msg}\n")
+                    except Exception:
+                        pass
 
             def run_cmd(cmd, check=True):
                 cmd_str = ' '.join(cmd) if isinstance(cmd, list) else cmd

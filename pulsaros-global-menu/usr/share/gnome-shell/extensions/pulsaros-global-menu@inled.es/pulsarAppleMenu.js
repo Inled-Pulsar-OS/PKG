@@ -59,6 +59,7 @@ const I18N = {
         graphics: "Graphics:",
         storage: "Storage:",
         copyInfo: "Copy Info",
+        viewLogs: "View Logs",
         version: "Version",
         themeLogoutTitle: "Appearance Changed",
         themeLogoutDesc: "Logging out in %d seconds to apply the new appearance completely.",
@@ -112,6 +113,7 @@ const I18N = {
         graphics: "Gráficos:",
         storage: "Almacenamiento:",
         copyInfo: "Copiar información",
+        viewLogs: "Ver registros",
         version: "Versión",
         themeLogoutTitle: "Cambio de aspecto aplicado",
         themeLogoutDesc: "Se cerrará la sesión en %d segundos para aplicar el nuevo tema por completo.",
@@ -642,6 +644,24 @@ const AboutDialog = GObject.registerClass({
         addDetail(_t('graphics'), gpuModel);
         addDetail(_t('storage'), diskInfo);
 
+        // View Logs Button
+        this.addButton({
+            label: _t('viewLogs') || "Ver registros",
+            action: () => {
+                try {
+                    let logsDir = "/var/log/pulsaros";
+                    let file = Gio.File.new_for_path(logsDir);
+                    if (!file.query_exists(null)) {
+                        GLib.mkdir_with_parents(logsDir, 0o755);
+                    }
+                    let context = global.create_app_launch_context(0, -1);
+                    Gio.AppInfo.launch_default_for_uri(`file://${logsDir}`, context);
+                } catch (e) {
+                    logError(e);
+                }
+            }
+        });
+
         // Copy Info Button
         this.addButton({
             label: _t('copyInfo'),
@@ -659,7 +679,7 @@ const AboutDialog = GObject.registerClass({
 
         // Close Button
         this.addButton({
-            label: "Close",
+            label: _t('close') || "Close",
             action: () => {
                 this.close();
             },
