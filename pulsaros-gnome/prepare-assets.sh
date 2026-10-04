@@ -656,19 +656,72 @@ fi
 # but we install to /usr/share, so patch the paths to match
 # Parche de rutas en config.js de GSConnect: las builds de EGO pueden traer prefijos /usr/local/share
 # pero instalamos en /usr/share, así que ajustamos las rutas
-GSCONNECT_CONFIG="$STAGE_DIR/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/config.js"
+GSCONNECT_DIR="$STAGE_DIR/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io"
+GSCONNECT_CONFIG="$GSCONNECT_DIR/config.js"
 if [ -f "$GSCONNECT_CONFIG" ]; then
     sed -i "s|'/usr/local/share/gnome-shell/extensions/gsconnect@andyholmes.github.io'|'/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io'|g" "$GSCONNECT_CONFIG"
     sed -i "s|'/usr/local/share/glib-2.0/schemas'|'/usr/share/glib-2.0/schemas'|g" "$GSCONNECT_CONFIG"
     sed -i "s|'/usr/local/share/locale'|'/usr/share/locale'|g" "$GSCONNECT_CONFIG"
-    sed -i "s|'/usr/local/lib/x86_64-linux-gnu'|'/usr/lib/x86_64-linux-gnu'|g" "$GSCONNECT_CONFIG" 2>/dev/null || true
+    sed -i "s|'/usr/local/lib/x86_64-linux-gnu'|'/usr/lib'|g" "$GSCONNECT_CONFIG" 2>/dev/null || true
+    sed -i "s|'/usr/lib/x86_64-linux-gnu'|'/usr/lib'|g" "$GSCONNECT_CONFIG" 2>/dev/null || true
     echo "✅ [ES] Rutas de config.js de GSConnect parcheadas a /usr/share"
     echo "✅ [EN] GSConnect config.js paths patched to /usr/share"
 fi
 
-# GSConnect service scripts
-if [ -d "$STAGE_DIR/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/service" ]; then
-    find "$STAGE_DIR/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/service" -name "*.js" -exec chmod 755 {} \; 2>/dev/null || true
+# GSConnect D-Bus service, desktop files and icons (required for service activation & UI)
+if [ -d "$GSCONNECT_DIR" ]; then
+    echo "🔌 [ES] Instalando servicio D-Bus y archivos de integración para GSConnect..."
+    echo "🔌 [EN] Installing D-Bus service and integration files for GSConnect..."
+
+    mkdir -p "$STAGE_DIR/usr/share/dbus-1/services"
+    cat << 'EOF' > "$STAGE_DIR/usr/share/dbus-1/services/org.gnome.Shell.Extensions.GSConnect.service"
+[D-BUS Service]
+Name=org.gnome.Shell.Extensions.GSConnect
+Exec=/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/service/daemon.js
+EOF
+    chmod 644 "$STAGE_DIR/usr/share/dbus-1/services/org.gnome.Shell.Extensions.GSConnect.service"
+
+    mkdir -p "$STAGE_DIR/usr/share/applications"
+    cat << 'EOF' > "$STAGE_DIR/usr/share/applications/org.gnome.Shell.Extensions.GSConnect.desktop"
+[Desktop Entry]
+Type=Application
+Name=GSConnect
+Exec=gapplication launch org.gnome.Shell.Extensions.GSConnect %U
+Terminal=false
+NoDisplay=true
+Icon=org.gnome.Shell.Extensions.GSConnect
+Categories=Network;
+MimeType=x-scheme-handler/sms;x-scheme-handler/tel;
+DBusActivatable=true
+X-GNOME-UsesNotifications=true
+EOF
+    chmod 644 "$STAGE_DIR/usr/share/applications/org.gnome.Shell.Extensions.GSConnect.desktop"
+
+    cat << 'EOF' > "$STAGE_DIR/usr/share/applications/org.gnome.Shell.Extensions.GSConnect.Preferences.desktop"
+[Desktop Entry]
+Type=Application
+Name=GSConnect Preferences
+Exec=gapplication action org.gnome.Shell.Extensions.GSConnect preferences
+Terminal=false
+NoDisplay=true
+Icon=org.gnome.Shell.Extensions.GSConnect
+Categories=Network;
+EOF
+    chmod 644 "$STAGE_DIR/usr/share/applications/org.gnome.Shell.Extensions.GSConnect.Preferences.desktop"
+
+    if [ -f "$GSCONNECT_DIR/org.gnome.Shell.Extensions.GSConnect.gresource" ] && command -v gresource >/dev/null 2>&1; then
+        mkdir -p "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps" "$STAGE_DIR/usr/share/icons/hicolor/symbolic/apps"
+        gresource extract "$GSCONNECT_DIR/org.gnome.Shell.Extensions.GSConnect.gresource" /org/gnome/Shell/Extensions/GSConnect/icons/org.gnome.Shell.Extensions.GSConnect.svg > "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps/org.gnome.Shell.Extensions.GSConnect.svg" 2>/dev/null || true
+        gresource extract "$GSCONNECT_DIR/org.gnome.Shell.Extensions.GSConnect.gresource" /org/gnome/Shell/Extensions/GSConnect/icons/org.gnome.Shell.Extensions.GSConnect-symbolic.svg > "$STAGE_DIR/usr/share/icons/hicolor/symbolic/apps/org.gnome.Shell.Extensions.GSConnect-symbolic.svg" 2>/dev/null || true
+    fi
+
+    # GSConnect service scripts permissions
+    if [ -d "$GSCONNECT_DIR/service" ]; then
+        find "$GSCONNECT_DIR/service" -name "*.js" -exec chmod 755 {} \; 2>/dev/null || true
+    fi
+    if [ -f "$GSCONNECT_DIR/gsconnect-preferences" ]; then
+        chmod 755 "$GSCONNECT_DIR/gsconnect-preferences"
+    fi
 fi
 
 # Ensure executable permissions for scripts
