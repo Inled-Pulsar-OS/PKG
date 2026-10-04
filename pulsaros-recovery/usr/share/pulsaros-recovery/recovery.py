@@ -302,6 +302,27 @@ entry, password-entry {
 entry:focus, password-entry:focus {
     border-color: #0071e3;
 }
+checkbutton check {
+    border-radius: 4px;
+    border: 1.5px solid #8e8e93;
+    background-color: #1a1a1c;
+    min-width: 18px;
+    min-height: 18px;
+    transition: all 0.12s ease-in-out;
+}
+checkbutton:hover check {
+    border-color: #ffffff;
+    background-color: #2c2c2e;
+}
+checkbutton:checked check {
+    background-color: #0071e3;
+    border-color: #0071e3;
+    color: #ffffff;
+}
+checkbutton:checked:hover check {
+    background-color: #0077ed;
+    border-color: #0077ed;
+}
 .welcome-title {
     font-size: 26px;
     font-weight: 700;
@@ -1170,6 +1191,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.drivers_selected = {item["id"]: True for item in DRIVER_ITEMS}
         self.packages_select_return_screen = "install_options"
         self.drivers_select_return_screen = "install_options"
+        self._updating_master_checkbox = False
+        self._updating_selection_ui = False
 
         # Build views
         self.build_utilities_screen()
@@ -2801,17 +2824,29 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.stack.add_named(box, "install_options")
 
     def _on_broadcom_chk_toggled(self, chk):
+        if getattr(self, '_updating_master_checkbox', False):
+            return
         active = chk.get_active()
         self.install_broadcom = active
         for k in self.drivers_selected:
             self.drivers_selected[k] = active
+        self._updating_selection_ui = True
+        for item_id, w in getattr(self, 'drv_check_widgets', {}).items():
+            w.set_active(active)
+        self._updating_selection_ui = False
         self._update_drivers_summary_label()
 
     def _on_extra_chk_toggled(self, chk):
+        if getattr(self, '_updating_master_checkbox', False):
+            return
         active = chk.get_active()
         self.install_extra_packages = active
         for k in self.packages_selected:
             self.packages_selected[k] = active
+        self._updating_selection_ui = True
+        for item_id, w in getattr(self, 'pkg_check_widgets', {}).items():
+            w.set_active(active)
+        self._updating_selection_ui = False
         self._update_packages_summary_label()
 
     def _update_drivers_summary_label(self):
@@ -2825,6 +2860,50 @@ class RecoveryWindow(Adw.ApplicationWindow):
         total = len(EXTRA_PACKAGES_ITEMS)
         if hasattr(self, 'lbl_e_desc'):
             self.lbl_e_desc.set_text(f"Selected components: {sel_count}/{total}. Click 'Customize...' to change.")
+
+    def _on_individual_pkg_toggled(self, chk):
+        if getattr(self, '_updating_selection_ui', False):
+            return
+        item_id = getattr(chk, 'item_id', None)
+        if item_id:
+            self.packages_selected[item_id] = chk.get_active()
+        self._sync_packages_selection()
+
+    def _on_individual_drv_toggled(self, chk):
+        if getattr(self, '_updating_selection_ui', False):
+            return
+        item_id = getattr(chk, 'item_id', None)
+        if item_id:
+            self.drivers_selected[item_id] = chk.get_active()
+        self._sync_drivers_selection()
+
+    def _sync_packages_selection(self):
+        for item_id, chk in getattr(self, 'pkg_check_widgets', {}).items():
+            self.packages_selected[item_id] = chk.get_active()
+        sel_count = sum(1 for v in self.packages_selected.values() if v)
+        self.install_extra_packages = sel_count > 0
+        if hasattr(self, 'chk_extra'):
+            self._updating_master_checkbox = True
+            self.chk_extra.set_active(self.install_extra_packages)
+            self._updating_master_checkbox = False
+            self._update_packages_summary_label()
+        if hasattr(self, 'btn_pkg_toggle_all'):
+            any_unchecked = any(not v for v in self.packages_selected.values())
+            self.btn_pkg_toggle_all.set_label("Select All" if any_unchecked else "Deselect All")
+
+    def _sync_drivers_selection(self):
+        for item_id, chk in getattr(self, 'drv_check_widgets', {}).items():
+            self.drivers_selected[item_id] = chk.get_active()
+        sel_count = sum(1 for v in self.drivers_selected.values() if v)
+        self.install_broadcom = self.drivers_selected.get("broadcom", False)
+        if hasattr(self, 'chk_broadcom'):
+            self._updating_master_checkbox = True
+            self.chk_broadcom.set_active(sel_count > 0)
+            self._updating_master_checkbox = False
+            self._update_drivers_summary_label()
+        if hasattr(self, 'btn_drv_toggle_all'):
+            any_unchecked = any(not v for v in self.drivers_selected.values())
+            self.btn_drv_toggle_all.set_label("Select All" if any_unchecked else "Deselect All")
 
     def build_packages_selection_screen(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -2883,6 +2962,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             chk.set_active(self.packages_selected.get(item['id'], True))
             chk.set_valign(Gtk.Align.CENTER)
             chk.item_id = item['id']
+            chk.connect("toggled", self._on_individual_pkg_toggled)
             self.pkg_check_widgets[item['id']] = chk
             r_box.append(chk)
 
@@ -2972,6 +3052,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             chk.set_active(self.drivers_selected.get(item['id'], True))
             chk.set_valign(Gtk.Align.CENTER)
             chk.item_id = item['id']
+            chk.connect("toggled", self._on_individual_drv_toggled)
             self.drv_check_widgets[item['id']] = chk
             r_box.append(chk)
 
@@ -3009,44 +3090,45 @@ class RecoveryWindow(Adw.ApplicationWindow):
         for chk in self.pkg_check_widgets.values():
             chk.set_active(any_unchecked)
         self.btn_pkg_toggle_all.set_label("Deselect All" if any_unchecked else "Select All")
+        self._sync_packages_selection()
 
     def _on_drv_toggle_all_clicked(self, btn):
         any_unchecked = any(not chk.get_active() for chk in self.drv_check_widgets.values())
         for chk in self.drv_check_widgets.values():
             chk.set_active(any_unchecked)
         self.btn_drv_toggle_all.set_label("Deselect All" if any_unchecked else "Select All")
+        self._sync_drivers_selection()
 
     def _show_packages_selection_screen(self, return_screen="install_options"):
         self.packages_select_return_screen = return_screen
+        self._updating_selection_ui = True
         for item_id, chk in self.pkg_check_widgets.items():
             chk.set_active(self.packages_selected.get(item_id, True))
+        self._updating_selection_ui = False
         any_unchecked = any(not chk.get_active() for chk in self.pkg_check_widgets.values())
         self.btn_pkg_toggle_all.set_label("Select All" if any_unchecked else "Deselect All")
         self.stack.set_visible_child_name("install_packages_select")
 
     def _show_drivers_selection_screen(self, return_screen="install_options"):
         self.drivers_select_return_screen = return_screen
+        self._updating_selection_ui = True
         for item_id, chk in self.drv_check_widgets.items():
             chk.set_active(self.drivers_selected.get(item_id, True))
+        self._updating_selection_ui = False
         any_unchecked = any(not chk.get_active() for chk in self.drv_check_widgets.values())
         self.btn_drv_toggle_all.set_label("Select All" if any_unchecked else "Deselect All")
         self.stack.set_visible_child_name("install_drivers_select")
 
     def _on_pkg_select_back_clicked(self, btn):
+        self._sync_packages_selection()
         self.stack.set_visible_child_name(self.packages_select_return_screen)
 
     def _on_drv_select_back_clicked(self, btn):
+        self._sync_drivers_selection()
         self.stack.set_visible_child_name(self.drivers_select_return_screen)
 
     def _on_pkg_select_continue_clicked(self, btn):
-        for item_id, chk in self.pkg_check_widgets.items():
-            self.packages_selected[item_id] = chk.get_active()
-        sel_count = sum(1 for v in self.packages_selected.values() if v)
-        self.install_extra_packages = sel_count > 0
-        if hasattr(self, 'chk_extra'):
-            self.chk_extra.set_active(self.install_extra_packages)
-            self._update_packages_summary_label()
-
+        self._sync_packages_selection()
         if self.packages_select_return_screen == "utilities":
             self.selected_action = "packages"
             if self.install_extra_packages:
@@ -3057,14 +3139,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
             self.stack.set_visible_child_name("install_options")
 
     def _on_drv_select_continue_clicked(self, btn):
-        for item_id, chk in self.drv_check_widgets.items():
-            self.drivers_selected[item_id] = chk.get_active()
+        self._sync_drivers_selection()
         sel_count = sum(1 for v in self.drivers_selected.values() if v)
-        self.install_broadcom = self.drivers_selected.get("broadcom", False)
-        if hasattr(self, 'chk_broadcom'):
-            self.chk_broadcom.set_active(sel_count > 0)
-            self._update_drivers_summary_label()
-
         if self.drivers_select_return_screen == "utilities":
             self.selected_action = "drivers"
             if sel_count > 0:
@@ -3084,8 +3160,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self._popen_as_user(f"nautilus {log_dir} || xdg-open {log_dir} || gnome-text-editor {log_dir}/installer.log || xterm -title 'Pulsar OS Logs' -e less {log_dir}/installer.log")
 
     def _show_options_screen(self):
-        # Auto-detect Broadcom hardware (pre-selected by default as recommended)
-        self.chk_broadcom.set_active(True)
+        self._update_packages_summary_label()
+        self._update_drivers_summary_label()
 
         # Check UEFI on GRUB ISO
         self.uefi_notice_box.set_visible(self._is_uefi_grub_incompatible())
