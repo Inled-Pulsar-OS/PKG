@@ -29,91 +29,239 @@ EXTRA_PACKAGES_ITEMS = [
     {
         "id": "onlyoffice",
         "name": "ONLYOFFICE Desktop Editors",
-        "desc": "Complete office productivity suite compatible with MS Office documents.",
+        "desc": "Complete office productivity suite for documents, spreadsheets, and presentations.",
         "arch_pkgs": ["flatpak"],
         "debian_pkgs": ["flatpak"],
-        "flatpak": "org.onlyoffice.desktopeditors",
+        "is_flatpak_onlyoffice": True,
     },
     {
         "id": "localsend",
         "name": "LocalSend",
-        "desc": "Cross-platform local network file sharing across nearby devices.",
-        "arch_pkgs": ["localsend-bin"],
+        "desc": "Cross-platform local network file sharing across nearby devices (AirDrop alternative).",
+        "arch_aur_pkgs": ["localsend-bin"],
         "debian_pkgs": [],
         "is_localsend": True,
     },
     {
-        "id": "multimedia",
-        "name": "Multimedia & Codecs",
-        "desc": "VLC media player, Totem, ImageMagick, and audio/video codecs.",
-        "arch_pkgs": ["vlc", "totem", "imagemagick", "gvfs-smb", "gvfs-gphoto2"],
-        "debian_pkgs": ["vlc", "totem", "imagemagick", "gvfs-fuse", "gvfs-backends"],
+        "id": "vlc",
+        "name": "VLC Media Player",
+        "desc": "Universal multimedia player and streaming framework for audio and video formats.",
+        "arch_pkgs": ["vlc"],
+        "debian_pkgs": ["vlc"],
     },
     {
-        "id": "gnome_apps",
-        "name": "GNOME Productivity Apps",
-        "desc": "Weather, Clocks, Music, Contacts, Geary Mail, Loupe viewer, and Papers.",
-        "arch_pkgs": ["geary", "gnome-music", "gnome-contacts", "gnome-weather", "gnome-clocks", "xournalpp", "papers", "loupe"],
-        "debian_pkgs": ["geary", "gnome-music", "gnome-contacts", "gnome-weather", "gnome-clocks"],
+        "id": "totem",
+        "name": "Totem (GNOME Videos)",
+        "desc": "Official GNOME movie and video player with hardware acceleration support.",
+        "arch_pkgs": ["totem"],
+        "debian_pkgs": ["totem"],
     },
     {
-        "id": "disk_tools",
-        "name": "Disk & System Utilities",
-        "desc": "GNOME Disk Utility, Baobab Disk Usage Analyzer, and System Logs.",
-        "arch_pkgs": ["gnome-disk-utility", "gnome-logs", "baobab", "inxi", "xfsprogs", "p7zip"],
-        "debian_pkgs": ["gnome-disk-utility", "gnome-logs", "baobab"],
+        "id": "geary",
+        "name": "Geary Mail",
+        "desc": "Modern desktop email client designed for the GNOME desktop environment.",
+        "arch_pkgs": ["geary"],
+        "debian_pkgs": ["geary"],
+    },
+    {
+        "id": "gnome-music",
+        "name": "GNOME Music",
+        "desc": "Music playback application and local audio library organizer.",
+        "arch_pkgs": ["gnome-music"],
+        "debian_pkgs": ["gnome-music"],
+    },
+    {
+        "id": "gnome-weather",
+        "name": "GNOME Weather",
+        "desc": "Current weather conditions and multi-day forecasts from world meteorological services.",
+        "arch_pkgs": ["gnome-weather"],
+        "debian_pkgs": ["gnome-weather"],
+    },
+    {
+        "id": "gnome-clocks",
+        "name": "GNOME Clocks",
+        "desc": "World clocks, multiple alarms, stopwatch with laps, and timers.",
+        "arch_pkgs": ["gnome-clocks"],
+        "debian_pkgs": ["gnome-clocks"],
+    },
+    {
+        "id": "gnome-contacts",
+        "name": "GNOME Contacts",
+        "desc": "Address book application to manage local and cloud address books.",
+        "arch_pkgs": ["gnome-contacts"],
+        "debian_pkgs": ["gnome-contacts"],
+    },
+    {
+        "id": "papers",
+        "name": "Papers (Document Viewer)",
+        "desc": "Modern GNOME document and PDF viewer with search and print support.",
+        "arch_pkgs": ["papers"],
+        "debian_pkgs": [],
+    },
+    {
+        "id": "loupe",
+        "name": "Loupe (Image Viewer)",
+        "desc": "Fast and responsive GNOME image viewer with gesture zooming.",
+        "arch_pkgs": ["loupe"],
+        "debian_pkgs": [],
+    },
+    {
+        "id": "xournalpp",
+        "name": "Xournal++",
+        "desc": "Handwriting notetaking, PDF markup, and stylus drawing application.",
+        "arch_pkgs": ["xournalpp"],
+        "debian_pkgs": [],
+    },
+    {
+        "id": "gnome-disk-utility",
+        "name": "GNOME Disks",
+        "desc": "Disk management utility to format, inspect, partition, and benchmark drives.",
+        "arch_pkgs": ["gnome-disk-utility"],
+        "debian_pkgs": ["gnome-disk-utility"],
+    },
+    {
+        "id": "baobab",
+        "name": "Disk Usage Analyzer (Baobab)",
+        "desc": "Graphical storage visualizer to find large files and reclaim disk space.",
+        "arch_pkgs": ["baobab"],
+        "debian_pkgs": ["baobab"],
+    },
+    {
+        "id": "gnome-logs",
+        "name": "GNOME System Logs",
+        "desc": "Event and diagnostic log viewer for the systemd journal.",
+        "arch_pkgs": ["gnome-logs"],
+        "debian_pkgs": ["gnome-logs"],
     },
     {
         "id": "cups",
-        "name": "Print Server (CUPS)",
-        "desc": "Printing subsystem and drivers for local and network printers.",
+        "name": "CUPS Print Server",
+        "desc": "Common Unix Printing System for network and USB printer discovery and printing.",
         "arch_pkgs": ["cups"],
         "debian_pkgs": ["cups"],
+        "is_cups": True,
     },
     {
-        "id": "virtualization",
-        "name": "Virtualization (QEMU & KVM)",
-        "desc": "QEMU, Libvirt, Virt-Manager, and OVMF UEFI firmware for virtual machines.",
-        "arch_pkgs": ["qemu-desktop", "libvirt", "virt-manager", "edk2-ovmf", "dnsmasq"],
-        "debian_pkgs": ["qemu-system-x86", "qemu-utils", "libvirt-daemon-system", "libvirt-clients", "virt-manager", "ovmf", "dnsmasq-base", "bridge-utils"],
+        "id": "virt-manager",
+        "name": "Virt-Manager (Virtual Machines)",
+        "desc": "Desktop GUI management interface for KVM / QEMU virtual machines.",
+        "arch_pkgs": ["virt-manager"],
+        "debian_pkgs": ["virt-manager"],
+    },
+    {
+        "id": "qemu-kvm",
+        "name": "QEMU & Libvirt Hypervisor",
+        "desc": "Kernel-based Virtual Machine (KVM), QEMU emulators, OVMF UEFI, and bridge networking.",
+        "arch_pkgs": ["qemu-desktop", "libvirt", "edk2-ovmf", "dnsmasq", "python-requests"],
+        "debian_pkgs": ["qemu-system-x86", "qemu-utils", "libvirt-daemon-system", "libvirt-clients", "ovmf", "dnsmasq-base", "bridge-utils", "python3-requests", "dmg2img"],
     },
     {
         "id": "docker",
         "name": "Docker Engine",
-        "desc": "Docker container runtime and tools for development and virtualization.",
+        "desc": "Industry standard container runtime and CLI tools for containerized applications.",
         "arch_pkgs": ["docker"],
         "debian_pkgs": ["docker.io"],
+    },
+    {
+        "id": "vim",
+        "name": "Vim Text Editor",
+        "desc": "Powerful terminal modal text editor with syntax highlighting.",
+        "arch_pkgs": ["vim"],
+        "debian_pkgs": ["vim"],
+    },
+    {
+        "id": "p7zip",
+        "name": "7-Zip Compression Tools",
+        "desc": "High-ratio file archiver utility with support for 7z, ZIP, TAR, and RAR files.",
+        "arch_pkgs": ["p7zip"],
+        "debian_pkgs": ["p7zip-full"],
+    },
+    {
+        "id": "inxi",
+        "name": "Inxi Hardware Info",
+        "desc": "Full-featured CLI system and hardware information tool.",
+        "arch_pkgs": ["inxi"],
+        "debian_pkgs": ["inxi"],
+    },
+    {
+        "id": "imagemagick",
+        "name": "ImageMagick Utilities",
+        "desc": "CLI image conversion, composition, and thumbnail generation toolset.",
+        "arch_pkgs": ["imagemagick"],
+        "debian_pkgs": ["imagemagick"],
+    },
+    {
+        "id": "gvfs",
+        "name": "Network Shares & Cameras (GVFS)",
+        "desc": "Samba / Windows SMB file shares, Digital camera MTP / GPhoto backends.",
+        "arch_pkgs": ["gvfs-smb", "gvfs-gphoto2"],
+        "debian_pkgs": ["gvfs-fuse", "gvfs-backends"],
     },
 ]
 
 DRIVER_ITEMS = [
     {
         "id": "broadcom",
-        "name": "Broadcom Wi-Fi Drivers",
-        "desc": "Proprietary broadcom-wl drivers for Apple MacBook and PC wireless chipsets.",
+        "name": "Broadcom Wireless Drivers (broadcom-wl)",
+        "desc": "Proprietary broadcom-wl kernel modules for Apple MacBooks and PC Wi-Fi cards.",
         "arch_pkgs": ["broadcom-wl-dkms", "linux-headers", "dkms"],
         "debian_pkgs": ["broadcom-sta-dkms", "linux-headers-amd64", "dkms"],
     },
     {
         "id": "nvidia",
-        "name": "NVIDIA Graphics Drivers",
-        "desc": "Kernel modules, DKMS support, and NVIDIA control panel for graphics cards.",
+        "name": "NVIDIA Graphics Drivers & DKMS",
+        "desc": "Proprietary NVIDIA graphics driver, DKMS kernel support, and settings panel.",
         "arch_pkgs": ["nvidia-open", "nvidia-settings", "dkms", "linux-headers"],
         "debian_pkgs": ["nvidia-driver", "dkms", "linux-headers-amd64"],
     },
     {
-        "id": "firmware",
-        "name": "Hardware Firmware & Audio",
-        "desc": "Full Linux firmware, Intel SOF (Sound Open Firmware), and ALSA audio firmware.",
-        "arch_pkgs": ["linux-firmware", "sof-firmware", "alsa-firmware"],
-        "debian_pkgs": ["firmware-linux", "firmware-sof-signed", "firmware-misc-nonfree"],
+        "id": "linux-firmware",
+        "name": "Linux Kernel Hardware Firmware",
+        "desc": "Complete official Linux firmware binaries for wireless, Bluetooth, and SoC devices.",
+        "arch_pkgs": ["linux-firmware"],
+        "debian_pkgs": ["firmware-linux", "firmware-misc-nonfree"],
     },
     {
-        "id": "vm_tools",
-        "name": "Virtual Machine Guest Tools",
-        "desc": "Integration drivers for VMware (Open-VM-Tools), VirtualBox, and QXL.",
-        "arch_pkgs": ["open-vm-tools", "virtualbox-guest-utils", "xf86-video-qxl", "xf86-video-ati"],
-        "debian_pkgs": ["open-vm-tools", "xserver-xorg-video-qxl"],
+        "id": "sof-firmware",
+        "name": "Intel Sound Open Firmware (SOF)",
+        "desc": "DSP audio firmware for modern Intel Core and laptop microphone/speaker arrays.",
+        "arch_pkgs": ["sof-firmware"],
+        "debian_pkgs": ["firmware-sof-signed"],
+    },
+    {
+        "id": "alsa-firmware",
+        "name": "ALSA Audio Hardware Firmware",
+        "desc": "Advanced Linux Sound Architecture firmware for dedicated DSP soundcards.",
+        "arch_pkgs": ["alsa-firmware"],
+        "debian_pkgs": [],
+    },
+    {
+        "id": "open-vm-tools",
+        "name": "VMware Guest Integration (open-vm-tools)",
+        "desc": "Auto-resize, shared clipboard, and time synchronization for VMware guests.",
+        "arch_pkgs": ["open-vm-tools"],
+        "debian_pkgs": ["open-vm-tools"],
+    },
+    {
+        "id": "virtualbox-guest",
+        "name": "VirtualBox Guest Utilities",
+        "desc": "Integration services and seamless display drivers for Oracle VirtualBox VMs.",
+        "arch_pkgs": ["virtualbox-guest-utils"],
+        "debian_pkgs": [],
+    },
+    {
+        "id": "xf86-video-qxl",
+        "name": "QXL Video Driver",
+        "desc": "Fast accelerated 2D/3D video driver for SPICE and KVM virtual machines.",
+        "arch_pkgs": ["xf86-video-qxl"],
+        "debian_pkgs": ["xserver-xorg-video-qxl"],
+    },
+    {
+        "id": "xf86-video-ati",
+        "name": "Legacy AMD / Radeon Video Driver",
+        "desc": "X.Org open-source video driver for older pre-GCN AMD / ATI graphics cards.",
+        "arch_pkgs": ["xf86-video-ati"],
+        "debian_pkgs": [],
     },
 ]
 
@@ -529,6 +677,22 @@ textview.live-log-text text {
     border: none;
     border-radius: 0;
     padding: 0;
+}
+.btn-customize-pill {
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    min-height: 22px;
+    min-width: 0;
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #0a84ff;
+    border: 1px solid rgba(10, 132, 255, 0.35);
+}
+.btn-customize-pill:hover {
+    background-color: rgba(10, 132, 255, 0.25);
+    color: #ffffff;
+    border-color: #0a84ff;
 }
 """
 
@@ -2442,7 +2606,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         row_broadcom.append(txt_b)
 
         btn_cust_drv = Gtk.Button(label="Customize...")
-        btn_cust_drv.add_css_class("secondary-action")
+        btn_cust_drv.add_css_class("btn-customize-pill")
         btn_cust_drv.set_valign(Gtk.Align.CENTER)
         btn_cust_drv.connect("clicked", lambda b: self._show_drivers_selection_screen("install_options"))
         row_broadcom.append(btn_cust_drv)
@@ -2480,7 +2644,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         row_extra.append(txt_e)
 
         btn_cust_pkg = Gtk.Button(label="Customize...")
-        btn_cust_pkg.add_css_class("secondary-action")
+        btn_cust_pkg.add_css_class("btn-customize-pill")
         btn_cust_pkg.set_valign(Gtk.Align.CENTER)
         btn_cust_pkg.connect("clicked", lambda b: self._show_packages_selection_screen("install_options"))
         row_extra.append(btn_cust_pkg)
@@ -2663,26 +2827,26 @@ class RecoveryWindow(Adw.ApplicationWindow):
             self.lbl_e_desc.set_text(f"Selected components: {sel_count}/{total}. Click 'Customize...' to change.")
 
     def build_packages_selection_screen(self):
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         box.set_valign(Gtk.Align.CENTER)
         box.set_halign(Gtk.Align.CENTER)
-        box.set_size_request(480, -1)
+        box.set_size_request(520, -1)
 
-        image = self.get_logo_image(64, is_installer=True)
+        image = self.get_logo_image(56, is_installer=True)
         box.append(image)
 
         title = Gtk.Label()
-        title.set_markup("<span font_weight='bold' size='16000'>Select Additional Packages</span>")
+        title.set_markup("<span font_weight='bold' size='15000'>Select Individual Packages</span>")
         box.append(title)
 
-        subtitle = Gtk.Label(label="Select the applications and components you wish to install:")
+        subtitle = Gtk.Label(label="Select the individual applications and components to include:")
         subtitle.add_css_class("progress-text")
         box.append(subtitle)
 
         # Scrolled container
         scrolled = Gtk.ScrolledWindow()
-        scrolled.set_min_content_height(220)
-        scrolled.set_max_content_height(260)
+        scrolled.set_min_content_height(250)
+        scrolled.set_max_content_height(280)
         scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scrolled.set_propagate_natural_height(True)
 
@@ -2693,14 +2857,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.pkg_check_widgets = {}
         for item in EXTRA_PACKAGES_ITEMS:
             row = Gtk.ListBoxRow()
-            r_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            r_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
             r_box.add_css_class("option-row")
-            r_box.set_margin_top(6)
-            r_box.set_margin_bottom(6)
+            r_box.set_margin_top(4)
+            r_box.set_margin_bottom(4)
             r_box.set_margin_start(8)
             r_box.set_margin_end(8)
 
-            txt_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            txt_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
             txt_box.set_hexpand(True)
             lbl_title = Gtk.Label()
             lbl_title.set_markup(f"<b>{item['name']}</b>")
@@ -2711,7 +2875,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             lbl_desc.add_css_class("option-desc")
             lbl_desc.set_halign(Gtk.Align.START)
             lbl_desc.set_wrap(True)
-            lbl_desc.set_max_width_chars(38)
+            lbl_desc.set_max_width_chars(44)
             txt_box.append(lbl_desc)
             r_box.append(txt_box)
 
@@ -2752,26 +2916,26 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.stack.add_named(box, "install_packages_select")
 
     def build_drivers_selection_screen(self):
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         box.set_valign(Gtk.Align.CENTER)
         box.set_halign(Gtk.Align.CENTER)
-        box.set_size_request(480, -1)
+        box.set_size_request(520, -1)
 
-        image = self.get_logo_image(64, is_installer=True)
+        image = self.get_logo_image(56, is_installer=True)
         box.append(image)
 
         title = Gtk.Label()
-        title.set_markup("<span font_weight='bold' size='16000'>Select Hardware Drivers &amp; Firmware</span>")
+        title.set_markup("<span font_weight='bold' size='15000'>Select Hardware Drivers &amp; Firmware</span>")
         box.append(title)
 
-        subtitle = Gtk.Label(label="Select the hardware drivers and firmware to enable on your system:")
+        subtitle = Gtk.Label(label="Select the individual hardware drivers and firmware to include:")
         subtitle.add_css_class("progress-text")
         box.append(subtitle)
 
         # Scrolled container
         scrolled = Gtk.ScrolledWindow()
-        scrolled.set_min_content_height(200)
-        scrolled.set_max_content_height(240)
+        scrolled.set_min_content_height(220)
+        scrolled.set_max_content_height(260)
         scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scrolled.set_propagate_natural_height(True)
 
@@ -2782,14 +2946,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.drv_check_widgets = {}
         for item in DRIVER_ITEMS:
             row = Gtk.ListBoxRow()
-            r_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            r_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
             r_box.add_css_class("option-row")
-            r_box.set_margin_top(6)
-            r_box.set_margin_bottom(6)
+            r_box.set_margin_top(4)
+            r_box.set_margin_bottom(4)
             r_box.set_margin_start(8)
             r_box.set_margin_end(8)
 
-            txt_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            txt_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
             txt_box.set_hexpand(True)
             lbl_title = Gtk.Label()
             lbl_title.set_markup(f"<b>{item['name']}</b>")
@@ -2800,7 +2964,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             lbl_desc.add_css_class("option-desc")
             lbl_desc.set_halign(Gtk.Align.START)
             lbl_desc.set_wrap(True)
-            lbl_desc.set_max_width_chars(38)
+            lbl_desc.set_max_width_chars(44)
             txt_box.append(lbl_desc)
             r_box.append(txt_box)
 
