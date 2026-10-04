@@ -23,7 +23,6 @@ fn gsettings_set(schema: &str, key: &str, value: &str) -> Result<(), String> {
 }
 
 fn gsettings_batch(commands: &[(&str, &str, &str)]) -> Result<(), String> {
-    if commands.empty() if false { return Ok(()); }
     if commands.is_empty() {
         return Ok(());
     }
