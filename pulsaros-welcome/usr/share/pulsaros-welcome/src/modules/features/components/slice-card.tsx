@@ -89,39 +89,21 @@ function PictureSlice({ slide }: { slide: FeatureSlide }) {
 
 function OptimizerSlice() {
   return (
-    <div className="glass-grouped flex w-full flex-col items-center justify-center rounded-2xl p-6 sm:p-8 shadow-inner">
-      <div className="flex items-center gap-6">
-        <img
-          src="./logos/pulsaros-optimizer.svg"
-          alt="Pulsar OS Optimizer"
-          className="h-20 w-20 object-contain drop-shadow-md"
-          draggable={false}
-        />
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="inline-block h-3 w-3 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[14px] font-semibold text-text-primary">
-              Habit Learning Engine Active
-            </span>
-          </div>
-          <div className="h-2 w-56 overflow-hidden rounded-full bg-black/10">
-            <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-emerald-500 to-apple-blue" />
-          </div>
-          <div className="flex justify-between text-[11px] text-text-secondary">
-            <span>Adaptive CPU & Memory Governor</span>
-            <span className="font-semibold text-emerald-600">Zero-Lag</span>
-          </div>
-        </div>
-      </div>
+    <div className="flex w-full min-h-[220px] items-center justify-center py-6">
+      <img
+        src="./logos/pulsaros-optimizer.svg"
+        alt="Pulsar OS Optimizer"
+        className="h-32 w-32 object-contain drop-shadow-xl"
+        draggable={false}
+      />
     </div>
   );
 }
 
 function GlobalMenuSlice() {
   return (
-    <div className="glass-grouped flex w-full flex-col items-center justify-center rounded-2xl p-6 shadow-inner">
-      {/* Top Bar Preview */}
-      <div className="w-full rounded-xl bg-neutral-900/90 p-2.5 px-4 text-white shadow-lg backdrop-blur-md">
+    <div className="flex w-full min-h-[200px] flex-col items-center justify-center px-16 py-6">
+      <div className="w-full max-w-[500px] rounded-xl bg-neutral-900/90 p-3 px-5 text-white shadow-2xl backdrop-blur-md ring-1 ring-white/10">
         <div className="flex items-center justify-between text-[13px] font-medium">
           <div className="flex items-center gap-4">
             <img src="./logo.png" alt="Pulsar" className="h-4 w-4 object-contain brightness-200" />
@@ -138,7 +120,7 @@ function GlobalMenuSlice() {
           </div>
         </div>
       </div>
-      <p className="mt-3 text-center text-[12px] text-text-secondary">
+      <p className="mt-4 text-center text-[12px] text-text-secondary">
         Native menus are automatically extracted from GTK, Qt and Electron apps directly to the top bar.
       </p>
     </div>
