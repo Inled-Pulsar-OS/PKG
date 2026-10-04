@@ -1,6 +1,6 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-meta
-pkgver=1.0.6
+pkgver=1.0.7
 pkgrel=1
 pkgdesc="Metapackage that pulls in every Pulsar OS package (delivers newly added packages to existing installations)"
 arch=(any)
@@ -17,6 +17,7 @@ depends=(
   pulsaros-circle-to-search
   pulsaros-emoji-fonts
   pulsaros-global-menu
+  pulsaros-notchnux
   pulsaros-gnome
   pulsaros-hibernate
   pulsaros-live-wallpaper

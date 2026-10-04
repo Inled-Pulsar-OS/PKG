@@ -1,0 +1,2293 @@
+/* NotchNux — "Nook" dashboard
+ *
+ * A dark glass panel that hangs off the top edge of the screen: flat top,
+ * curved bottom corners, a bright hairline rim that reads like the light
+ * frame in the concept. One focused panel per tab, blue (#7aa2ff) accent.
+ *
+ * NOTE: St's CSS is a restricted subset (no conic gradients, no CSS
+ * animation, no custom properties). The vinyl disc, volume knob, radial
+ * meters and analog clock are therefore drawn in Cairo (see helpers/widgets.js);
+ * this file styles only the flat chrome around them.
+ */
+
+/* ---------- The hanging glass panel ---------- */
+.notchnux-island {
+    background-color: #0d0d10;
+    /* Flat top (flush with the screen edge), curved bottom corners only. */
+    border-radius: 0px 0px 22px 22px;
+    /* A single hairline rim defines the edge; a soft, low shadow just lifts it
+     * off the panel. Kept intentionally minimal — no heavy drop cloud. */
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: 1px solid rgba(255, 255, 255, 0.10);
+    padding: 0px 16px;
+    box-shadow: 0px 6px 18px rgba(0, 0, 0, 0.28);
+    color: #f4f4f6;
+    font-size: 13px;
+    transition: border-radius 300ms ease-out, box-shadow 300ms ease-out, padding 300ms ease-out;
+}
+
+.notchnux-island-expanded {
+    border-radius: 0px 0px 28px 28px;
+    padding: 16px 20px 20px 20px;
+    /* Slightly deeper when open, but still restrained. */
+    box-shadow: 0px 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+/* Transient notification-peek: between the pill and the full dashboard in
+ * size. Rounder and a touch more padded than the pill so the banner reads as
+ * a card, but nowhere near as open as the dashboard. */
+.notchnux-island-peek {
+    border-radius: 0px 0px 24px 24px;
+    padding: 10px 16px 12px 16px;
+    box-shadow: 0px 8px 22px rgba(0, 0, 0, 0.32);
+}
+
+/* ---------- Notification peek banner ---------- */
+.nook-notif-peek {
+    background-color: transparent;
+    padding: 0;
+    spacing: 8px;
+}
+.nook-notif-peek-main {
+    background-color: transparent;
+    border: none;
+    padding: 0;
+}
+.nook-notif-peek-main:hover {
+    background-color: transparent;
+}
+.nook-notif-peek-row {
+    spacing: 12px;
+    padding: 2px 2px;
+}
+.nook-notif-peek-actions {
+    spacing: 8px;
+    padding: 0 2px;
+}
+.nook-notif-peek-action {
+    padding: 7px 12px;
+    border-radius: 9px;
+    font-size: 12px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.92);
+    background-color: rgba(255, 255, 255, 0.09);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    transition: background-color 120ms ease-out;
+}
+.nook-notif-peek-action:hover {
+    background-color: rgba(255, 255, 255, 0.16);
+}
+.nook-notif-peek-action:active {
+    background-color: rgba(255, 255, 255, 0.22);
+}
+.nook-notif-peek-iconbin {
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    background-color: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.nook-notif-peek-iconbin StIcon {
+    color: rgba(255, 255, 255, 0.9);
+}
+.nook-notif-peek-text {
+    spacing: 2px;
+}
+.nook-notif-peek-title {
+    font-weight: bold;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.95);
+}
+.nook-notif-peek-body {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.62);
+}
+
+/* ---------- Collapsed pill ---------- */
+.notchnux-pill-content {
+    background-color: transparent;
+    spacing: 9px;
+    padding: 0 4px;
+}
+
+/* When the island is expanded the pill stays pinned as a top strip above the
+ * dashboard. Give it a little breathing room below so it reads as its own row
+ * rather than crowding the tab bar. */
+.notchnux-island-expanded .notchnux-pill-content {
+    margin-bottom: 14px;
+}
+
+/* Same idea in the transient notification peek: pill stays on top, banner
+ * below it, with a touch of separation. */
+.notchnux-island-peek .notchnux-pill-content {
+    margin-bottom: 10px;
+}
+
+.notchnux-pill-icon {
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.notchnux-pill-clock {
+    font-weight: bold;
+    font-size: 13px;
+    letter-spacing: 0.3px;
+    color: rgba(255, 255, 255, 0.92);
+}
+
+/* ---- Pill: mic / camera privacy indicators (grouped, far right) ---- */
+/* Default (idle) is white; state modifiers recolour. */
+.notchnux-pill-priv-box {
+    spacing: 5px;
+    padding-left: 6px;
+}
+.notchnux-pill-priv {
+    color: rgba(255, 255, 255, 0.85);
+}
+.notchnux-pill-priv.priv-green {
+    color: #57d977;
+}
+.notchnux-pill-priv.priv-red {
+    color: #ff6b5e;
+}
+
+/* ---- Pill: notification indicator (bell + unread count) ---- */
+.notchnux-pill-notif {
+    spacing: 4px;
+    padding-left: 6px;
+}
+.notchnux-pill-notif-count {
+    font-size: 12px;
+    font-weight: bold;
+    /* Colour set inline to follow the accent; this is the fallback. */
+    color: #7aa2ff;
+}
+
+/* ---- Pill: left music zone (eq bars + scrolling title + play/pause) ---- */
+.notchnux-pill-music {
+    spacing: 7px;
+}
+
+.notchnux-pill-title-clip {
+    width: 96px;
+    height: 16px;
+}
+
+.notchnux-pill-title {
+    font-size: 12px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* ---- Pill: right battery zone ---- */
+.notchnux-pill-battery {
+    spacing: 4px;
+}
+
+.notchnux-pill-battery-pct {
+    font-size: 12px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.88);
+}
+
+/* ---------- Dashboard shell ---------- */
+.notchnux-dashboard-content {
+    background-color: transparent;
+}
+
+/* ---------- Tab bar: a grouped pill container ---------- */
+.notchnux-dashboard-header-wrap {
+    spacing: 10px;
+    margin-bottom: 18px;
+}
+
+/* Horizontal fade on the scrollable tab carousel: content dissolves toward the
+ * edges when there are more tabs than fit, hinting that the strip scrolls. The
+ * fade only appears on the side(s) with off-screen content. */
+.notchnux-dashboard-header {
+    -st-hfade-offset: 28px;
+}
+
+.notchnux-tab-strip {
+    spacing: 2px;
+    padding: 3px;
+    background-color: rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+}
+
+.notchnux-tab-btn {
+    padding: 6px 13px;
+    border-radius: 9px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12.5px;
+    font-weight: bold;
+    background-color: transparent;
+    border: 1px solid transparent;
+    transition: all 160ms ease-out;
+}
+
+.notchnux-tab-btn:hover {
+    color: rgba(255, 255, 255, 0.85);
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.notchnux-tab-btn-active {
+    color: #eaf0ff;
+    background-color: rgba(122, 162, 255, 0.18);
+    border: 1px solid rgba(122, 162, 255, 0.4);
+}
+
+.notchnux-tab-icon {
+    margin-right: 6px;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.notchnux-tab-btn-active .notchnux-tab-icon {
+    color: #a7bfff;
+}
+
+/* Live count pill beside the Alerts tab label — hidden when the count is 0. */
+.notchnux-tab-count {
+    margin-left: 6px;
+    padding: 0px 6px;
+    border-radius: 9px;
+    background-color: #7aa2ff;
+    color: #0d0d10;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.notchnux-tab-btn-active .notchnux-tab-count {
+    background-color: #eaf0ff;
+}
+
+.notchnux-settings-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.65);
+    transition: all 150ms ease-out;
+}
+
+.notchnux-settings-btn:hover {
+    color: #eaf0ff;
+    background-color: rgba(122, 162, 255, 0.18);
+    border: 1px solid rgba(122, 162, 255, 0.34);
+}
+
+/* Power button sits beside the settings gear in the dashboard header. */
+.notchnux-power-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    margin-right: 6px;
+    background-color: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.65);
+    transition: all 150ms ease-out;
+}
+
+.notchnux-power-btn:hover {
+    color: #ffd3d3;
+    background-color: rgba(255, 92, 92, 0.20);
+    border: 1px solid rgba(255, 92, 92, 0.38);
+}
+
+/* ---------- Generic panel wrapper ---------- */
+.notchnux-panel {
+    spacing: 16px;
+    x-expand: true;
+    y-expand: true;
+}
+
+/* ============================================================
+ * NOOK — media player
+ * ============================================================ */
+.nook-media-body {
+    spacing: 20px;
+}
+
+.nook-media-mid {
+    spacing: 2px;
+}
+
+.nook-vinyl-art-frame {
+    width: 52px;
+    height: 52px;
+    border-radius: 26px;
+    background-color: rgba(12, 12, 16, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 0 0 2px rgba(19, 19, 23, 0.9);
+}
+
+.nook-vinyl-art {
+    width: 52px;
+    height: 52px;
+    border-radius: 26px;
+}
+
+.nook-eyebrow-row {
+    spacing: 10px;
+    margin-bottom: 2px;
+}
+
+.nook-eyebrow {
+    font-size: 10px;
+    font-weight: bold;
+    color: #7aa2ff;
+    /* letter-spacing approximates the concept's tracked caps */
+    letter-spacing: 1.5px;
+}
+
+.nook-eq {
+    spacing: 2px;
+    height: 12px;
+    width: 22px;
+}
+
+.nook-eq-bar {
+    width: 3px;
+    height: 12px;
+    background-color: #7aa2ff;
+    border-radius: 2px;
+}
+
+.nook-track-title {
+    font-size: 19px;
+    font-weight: bold;
+    color: #f4f4f6;
+    margin-top: 3px;
+}
+
+.nook-track-artist {
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.55);
+    margin-top: 1px;
+}
+
+.nook-transport {
+    spacing: 12px;
+    margin-top: 14px;
+}
+
+.nook-transport-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    color: rgba(255, 255, 255, 0.75);
+    background-color: transparent;
+    transition: all 150ms ease-out;
+}
+
+.nook-transport-btn:hover {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.nook-transport-primary {
+    width: 42px;
+    height: 42px;
+    color: #0d0d10;
+    background-color: #7aa2ff;
+    box-shadow: 0px 2px 8px rgba(122, 162, 255, 0.28);
+}
+
+.nook-transport-primary:hover {
+    background-color: #a7bfff;
+    color: #0d0d10;
+}
+
+/* Volume knob column */
+.nook-knob-col {
+    spacing: 7px;
+}
+
+.nook-knob-btn {
+    background-color: transparent;
+    border-radius: 999px;
+}
+
+.nook-knob-num {
+    font-size: 16px;
+    font-weight: bold;
+    color: #f4f4f6;
+}
+
+.nook-scroll-hint {
+    spacing: 3px;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+/* Media timeline scrubber (full width, below controls + knob) */
+.nook-timeline {
+    spacing: 5px;
+    margin-top: 2px;
+    padding: 0 4px;
+}
+
+.nook-timeline-track {
+    padding: 6px 0;
+    border-radius: 999px;
+    background-color: transparent;
+}
+
+.nook-timeline-base {
+    height: 5px;
+    min-height: 5px;
+    border-radius: 999px;
+    background-color: rgba(255, 255, 255, 0.14);
+}
+
+.nook-timeline-fill {
+    height: 5px;
+    min-height: 5px;
+    border-radius: 999px;
+    /* background-color is set inline to the current accent */
+}
+
+.nook-timeline-labels {
+    padding: 0 2px;
+}
+
+.nook-timeline-elapsed,
+.nook-timeline-total {
+    font-size: 10px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.5);
+    font-feature-settings: "tnum";
+}
+
+/* ============================================================
+ * TRAY — system meters, devices, toggles
+ * ============================================================ */
+.nook-meters-row {
+    spacing: 5px;
+}
+
+.nook-meter-tile {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 12px 4px;
+    spacing: 8px;
+}
+
+/* Network tiles (DOWN / UP): each shows a rate split value+unit in the ring,
+ * same footprint as the other meter tiles. */
+.nook-meter-tile-net {
+    padding: 12px 4px;
+}
+
+/* Down/up rates stacked below the NET ring — roomy, left-aligned arrows so
+ * they read as a clean two-line readout instead of crammed ring text. */
+.nook-meter-subrates {
+    spacing: 3px;
+    margin-top: 2px;
+}
+.nook-meter-subrate {
+    font-size: 10.5px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.75);
+    text-align: center;
+}
+
+.nook-meter-num {
+    font-size: 13px;
+    font-weight: bold;
+    color: #f4f4f6;
+}
+
+/* Compact readout for tiles whose value is a longer string (e.g. "1.2 MB/s"
+ * or the two-line ↓/↑ network rates). */
+.nook-meter-num-sm {
+    font-size: 9px;
+    text-align: center;
+}
+
+/* NET ring center now holds just the down rate split as value + unit (two
+ * short tokens), so it can be larger and clearer than the old crammed pair. */
+.nook-meter-rates {
+    spacing: 1px;
+}
+.nook-meter-rates .nook-meter-num-sm {
+    font-size: 11px;
+    line-height: 1.1;
+}
+
+/* Interactive meter tile (brightness) — reactive so scroll adjusts it. */
+.nook-meter-knob-btn {
+    background-color: transparent;
+    border-radius: 999px;
+    padding: 0;
+    transition: background-color 150ms ease-out;
+}
+
+.nook-meter-knob-btn:hover {
+    background-color: rgba(232, 176, 106, 0.10);
+}
+
+.nook-meter-label-row {
+    spacing: 4px;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 10.5px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+}
+
+.nook-tray-lower {
+    spacing: 12px;
+}
+
+/* Devices card */
+.nook-devices-card {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    /* Trimmed vertical padding + tighter row spacing so the card is a little
+     * shorter, leaving room for the WiFi row beneath it. */
+    padding: 8px 14px;
+    spacing: 5px;
+    /* No fixed width: the card flexes (x_expand) to fill the space left by the
+     * fixed-width toggle grid, so the lower row never overruns the panel. */
+    min-width: 240px;
+}
+/* Header row: eyebrow + Bluetooth mini-toggle, baseline-aligned. */
+.nook-devices-head {
+    spacing: 8px;
+}
+/* Device rows added straight to the card, capped at 3 with a "+N more…" line;
+ * card sizes to its content. */
+.nook-devices-list {
+    spacing: 6px;
+    margin-top: 2px;
+}
+
+/* "+N more…" row that opens the full list overlay. */
+.nook-more-row {
+    padding: 3px 6px;
+    margin: 0 -6px;
+    border-radius: 8px;
+    transition: background-color 150ms ease-out;
+}
+.nook-more-row:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+.nook-more-label {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+/* A small square radio toggle (Bluetooth on the devices card, Wi-Fi on the
+ * WiFi card). Lights up when the radio is on. */
+.nook-mini-toggle {
+    padding: 5px;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.75);
+    transition: background-color 150ms ease-out;
+}
+.nook-mini-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.10);
+}
+.nook-mini-toggle-on {
+    background-color: rgba(120, 170, 255, 0.22);
+    color: #ffffff;
+}
+
+/* "Add device… / Add network…" footer button. */
+.nook-add-row {
+    padding: 4px 6px;
+    margin: 0 -6px;
+    border-radius: 8px;
+    transition: background-color 150ms ease-out;
+}
+.nook-add-row:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+.nook-add-icon {
+    color: rgba(255, 255, 255, 0.55);
+}
+.nook-add-label {
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-left: 9px;
+}
+
+.nook-card-eyebrow {
+    font-size: 10px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 1.5px;
+    margin-bottom: 2px;
+}
+
+.nook-device-row {
+    spacing: 9px;
+}
+
+/* Paired Bluetooth rows are buttons: give them a padded, hover-highlighted
+ * pill so it reads as tappable to connect/disconnect. */
+.nook-device-row-btn {
+    padding: 3px 6px;
+    margin: 0 -6px;
+    border-radius: 8px;
+    transition: background-color 150ms ease-out;
+}
+.nook-device-row-btn:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Mirrored top-bar indicators: a card holding a wrap-free row of small icon
+ * buttons that stand in for the (often hidden) GNOME panel status area. */
+.nook-tray-mirror {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 10px 14px;
+    spacing: 8px;
+    margin-top: 12px;
+}
+.nook-tray-mirror-row {
+    spacing: 6px;
+}
+.nook-tray-mirror-btn {
+    padding: 6px;
+    border-radius: 9px;
+    transition: background-color 150ms ease-out;
+}
+.nook-tray-mirror-btn:hover {
+    background-color: rgba(255, 255, 255, 0.10);
+}
+.nook-tray-mirror-btn:active {
+    background-color: rgba(255, 255, 255, 0.16);
+}
+.nook-tray-mirror-icon {
+    color: rgba(255, 255, 255, 0.85);
+}
+.nook-tray-mirror-text {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.75);
+    padding: 0 2px;
+}
+.nook-tray-mirror-empty {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+/* Bottom band: WiFi card (left, flexes) beside the mirrored top-bar row.
+ * No margin-top: it's a direct child of .notchnux-panel, so it already gets the
+ * panel's 16px spacing — the same gap that sits between the stats and devices
+ * rows. An extra margin here would make the device→wifi gap look bigger. */
+.nook-tray-band {
+    spacing: 12px;
+}
+/* Left column stacks DEVICES over WIFI; right column stacks the toggle cluster
+ * over the TOP BAR. The vertical gap matches the horizontal card spacing. */
+.nook-tray-leftcol {
+    spacing: 12px;
+}
+.nook-tray-rightcol {
+    spacing: 12px;
+}
+/* The top-bar row now sits under the cluster (not beside WiFi); it grows to
+ * fill the column height (y_expand in JS), so give it a taller feel with more
+ * vertical padding. */
+.nook-tray-mirror-beside {
+    margin-top: 0;
+    max-width: 300px;
+    padding-top: 14px;
+    padding-bottom: 14px;
+}
+.nook-tray-mirror-beside .nook-tray-mirror-btn {
+    padding: 8px;
+}
+
+/* WiFi card: status + radio toggle + hotspot button, under the devices card. */
+.nook-wifi-card {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 9px 14px;
+    spacing: 6px;
+    min-width: 240px;
+}
+.nook-wifi-row {
+    spacing: 8px;
+}
+.nook-wifi-toggle {
+    padding: 3px 6px;
+    margin: 0 -6px;
+    border-radius: 8px;
+    transition: background-color 150ms ease-out;
+}
+.nook-wifi-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+.nook-wifi-icon {
+    color: rgba(255, 255, 255, 0.85);
+}
+.nook-wifi-name {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.9);
+}
+.nook-wifi-sub {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.45);
+}
+/* Hotspot toggle button — a small square that lights up when the AP is live. */
+.nook-wifi-hotspot {
+    padding: 6px;
+    border-radius: 9px;
+    color: rgba(255, 255, 255, 0.8);
+    transition: background-color 150ms ease-out;
+}
+.nook-wifi-hotspot:hover {
+    background-color: rgba(255, 255, 255, 0.10);
+}
+.nook-wifi-hotspot-on {
+    background-color: rgba(120, 170, 255, 0.22);
+    color: #ffffff;
+}
+
+/* WiFi card header: eyebrow + hotspot + Wi-Fi radio toggle on one line. */
+.nook-wifi-head {
+    spacing: 8px;
+}
+/* Saved/known networks added straight to the card, capped at 3 with "+N more…". */
+.nook-wifi-list {
+    spacing: 3px;
+    margin-top: 2px;
+}
+.nook-wifi-net-row {
+    padding: 3px 6px;
+    margin: 0 -6px;
+    border-radius: 8px;
+    transition: background-color 150ms ease-out;
+}
+.nook-wifi-net-row:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+.nook-wifi-net-icon {
+    color: rgba(255, 255, 255, 0.7);
+}
+.nook-wifi-net-name {
+    font-size: 12px;
+    color: #eaeaee;
+    margin-left: 8px;
+}
+.nook-wifi-net-sub {
+    font-size: 10px;
+    color: rgba(120, 200, 140, 0.9);
+}
+
+/* --- Scan overlay (Add Bluetooth device / Add Wi-Fi network) --- */
+/* Dimming scrim that covers the dashboard; the card centers within it. */
+.nook-scan-overlay {
+    background-color: rgba(10, 10, 12, 0.55);
+    border-radius: 18px;
+}
+.nook-scan-card {
+    background-color: rgba(28, 28, 32, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 16px;
+    padding: 14px 16px;
+    spacing: 10px;
+    width: 340px;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+    /* Drop from just under the header rather than hug the very top edge. */
+    margin-top: 64px;
+}
+.nook-scan-header {
+    spacing: 8px;
+}
+.nook-scan-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: #f2f2f4;
+}
+.nook-scan-close {
+    padding: 4px;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    transition: background-color 150ms ease-out;
+}
+.nook-scan-close:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+.nook-scan-status {
+    font-size: 10.5px;
+    color: rgba(255, 255, 255, 0.45);
+}
+.nook-scan-scroll {
+    max-height: 210px;
+}
+.nook-scan-body {
+    spacing: 3px;
+}
+.nook-scan-empty {
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.4);
+    padding: 8px 2px;
+}
+.nook-scan-row {
+    padding: 7px 8px;
+    border-radius: 9px;
+    transition: background-color 150ms ease-out;
+}
+.nook-scan-row:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+.nook-scan-row-icon {
+    color: rgba(255, 255, 255, 0.8);
+}
+.nook-scan-row-name {
+    font-size: 12.5px;
+    color: #eaeaee;
+    margin-left: 10px;
+}
+.nook-scan-row-lock {
+    color: rgba(255, 255, 255, 0.5);
+    margin: 0 6px;
+}
+.nook-scan-row-sub {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.5);
+}
+/* Inline password entry for a secure Wi-Fi network. */
+.nook-scan-pw {
+    spacing: 8px;
+    padding: 4px 2px 8px 2px;
+}
+.nook-scan-entry {
+    font-size: 12px;
+    color: #f0f0f2;
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+.nook-scan-entry:focus {
+    border: 1px solid rgba(120, 170, 255, 0.7);
+    background-color: rgba(255, 255, 255, 0.12);
+}
+.nook-scan-connect {
+    font-size: 12px;
+    color: #ffffff;
+    background-color: rgba(120, 170, 255, 0.28);
+    border-radius: 8px;
+    padding: 6px 14px;
+    transition: background-color 150ms ease-out;
+}
+.nook-scan-connect:hover {
+    background-color: rgba(120, 170, 255, 0.42);
+}
+
+.nook-tray-tooltip {
+    background-color: rgba(20, 20, 22, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 8px;
+    padding: 4px 9px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+/* Invisible top-edge strip that captures scroll to switch workspaces while the
+   panel is hidden. Fully transparent — its only job is to receive scroll. */
+.nook-topscroll {
+    background-color: transparent;
+}
+
+.nook-device-icon {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.nook-device-name {
+    font-size: 12.5px;
+    color: #eaeaee;
+}
+
+.nook-batt-track {
+    width: 44px;
+    height: 6px;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.14);
+    spacing: 0px;
+}
+
+.nook-batt-fill {
+    height: 6px;
+    border-radius: 4px;
+    background-color: #7aa2ff;
+}
+
+.nook-batt-low {
+    background-color: #e8b06a;
+}
+
+.nook-device-pct {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.55);
+    width: 32px;
+    text-align: right;
+}
+
+/* "Connected" / "Paired" status badges on device rows. These carry words, not
+ * a "NN%" reading, so they drop the narrow fixed width and size to the text.
+ * Connected is accent-tinted to read as active; paired is muted (tap to
+ * connect). */
+.nook-device-badge-connected,
+.nook-device-badge-paired {
+    width: auto;
+    min-width: 52px;
+}
+.nook-device-badge-connected {
+    color: rgba(255, 255, 255, 0.85);
+}
+.nook-device-badge-paired {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+/* Quick-toggle grid */
+.nook-toggle-grid {
+    spacing: 8px;
+}
+
+.nook-toggle {
+    width: 96px;
+    height: 62px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.7);
+    transition: all 150ms ease-out;
+}
+
+.nook-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.09);
+}
+
+.nook-toggle-on {
+    background-color: rgba(122, 162, 255, 0.16);
+    border: 1px solid rgba(122, 162, 255, 0.4);
+    color: #eaf0ff;
+}
+
+.nook-toggle-icon {
+    color: rgba(255, 255, 255, 0.45);
+    margin-bottom: 4px;
+}
+
+/* ---- Airplane-mode cross cluster ---- */
+.nook-cluster {
+    /* size is set inline; this just centers the group in the lower row */
+}
+
+/* Arms share .nook-toggle look but size/position come from code. Shaped like
+ * flower petals radiating from the center circle: the two center-facing corners
+ * curve deeply (large radius) to cradle the circle, while the outer corners
+ * stay generously rounded so each arm reads as a soft teardrop/petal. */
+.nook-arm {
+    padding: 8px 6px;
+}
+
+.nook-arm-top {
+    border-radius: 28px 28px 48px 48px;
+}
+.nook-arm-bottom {
+    border-radius: 48px 48px 28px 28px;
+}
+.nook-arm-left {
+    border-radius: 28px 48px 48px 28px;
+}
+.nook-arm-right {
+    border-radius: 48px 28px 28px 48px;
+}
+
+/* Central circular airplane toggle. */
+.nook-air-btn {
+    border-radius: 999px;
+    background-color: rgba(20, 22, 30, 0.96);
+    border: 2px solid rgba(255, 255, 255, 0.10);
+    color: rgba(255, 255, 255, 0.7);
+    transition: all 150ms ease-out;
+}
+.nook-air-btn:hover {
+    background-color: rgba(30, 33, 44, 0.98);
+    border: 2px solid rgba(255, 255, 255, 0.18);
+}
+.nook-air-on {
+    background-color: rgba(122, 162, 255, 0.22);
+    border: 2px solid rgba(122, 162, 255, 0.55);
+    color: #eaf0ff;
+}
+.nook-air-icon {
+    color: rgba(255, 255, 255, 0.6);
+}
+.nook-air-on .nook-air-icon {
+    color: #bcd0ff;
+}
+.nook-air-sub {
+    font-size: 9px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.45);
+    margin-top: 2px;
+}
+.nook-air-on .nook-air-sub {
+    color: #a7bfff;
+}
+
+.nook-toggle-on .nook-toggle-icon {
+    color: #a7bfff;
+}
+
+.nook-toggle-name {
+    font-size: 11.5px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.85);
+    text-align: center;
+}
+
+.nook-toggle-sub {
+    font-size: 9.5px;
+    color: rgba(255, 255, 255, 0.45);
+    text-align: center;
+}
+
+/* ============================================================
+ * WEATHER — analog clock, conditions, hourly
+ * ============================================================ */
+.nook-weather-top {
+    spacing: 16px;
+}
+
+.nook-clock-col {
+    spacing: 6px;
+    width: 138px;
+    padding: 6px 0px;
+}
+
+.nook-clock-digital {
+    font-size: 19px;
+    font-weight: bold;
+    color: #f4f4f6;
+    text-align: center;
+}
+
+.nook-clock-date {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    text-align: center;
+}
+
+.nook-cond-col {
+    spacing: 5px;
+}
+
+.nook-loc-row {
+    spacing: 7px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+}
+
+.nook-weather-icon-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    background-color: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.65);
+    transition: all 150ms ease-out;
+}
+
+.nook-weather-icon-btn:hover {
+    background-color: rgba(122, 162, 255, 0.18);
+    color: #eaf0ff;
+}
+
+.nook-temp-row {
+    spacing: 6px;
+}
+
+.nook-temp {
+    font-size: 43px;
+    font-weight: bold;
+    color: #f4f4f6;
+}
+
+.nook-cond-icon {
+    color: #a7bfff;
+}
+
+.nook-cond-text {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+    margin-top: 2px;
+}
+
+.nook-cond-hl {
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 0px;
+    margin-bottom: 6px;
+}
+
+.nook-wx-grid {
+    spacing: 7px;
+}
+
+.nook-wx-stat {
+    spacing: 7px;
+    width: 138px;
+    padding: 7px 9px;
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.nook-wx-icon {
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.nook-wx-label {
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.nook-wx-value {
+    font-size: 12px;
+    font-weight: bold;
+    color: #eaeaee;
+}
+
+/* ============================================================
+ * STUDIO — webcam preview, device pickers, recording
+ * ============================================================ */
+.nook-studio-panel {
+    padding: 6px;
+}
+.nook-studio-row {
+    spacing: 12px;
+}
+.nook-studio-col {
+    spacing: 8px;
+}
+
+/* The two big rounded squares: live camera + audio recorder. */
+.nook-cam-view,
+.nook-studio-audio {
+    border-radius: 18px;
+    background-color: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.nook-cam-placeholder,
+.nook-studio-audio-icon {
+    color: rgba(255, 255, 255, 0.30);
+}
+
+/* Middle column of device drop-downs. */
+.nook-studio-mid {
+    spacing: 10px;
+    min-width: 120px;
+}
+.nook-studio-picker {
+    background-color: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 7px 9px;
+    color: rgba(255, 255, 255, 0.85);
+    transition: background-color 150ms ease-out;
+}
+.nook-studio-picker:hover {
+    background-color: rgba(255, 255, 255, 0.10);
+}
+.nook-studio-picker-icon {
+    color: rgba(255, 255, 255, 0.55);
+    margin-right: 6px;
+}
+.nook-studio-picker-label {
+    font-size: 11px;
+    font-weight: bold;
+    max-width: 96px;
+}
+.nook-studio-picker-caret {
+    color: rgba(255, 255, 255, 0.40);
+    margin-left: 4px;
+}
+
+/* Record buttons under each square. */
+.nook-studio-rec {
+    background-color: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 999px;
+    padding: 5px 14px;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 11px;
+    font-weight: bold;
+    transition: all 150ms ease-out;
+}
+.nook-studio-rec:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+.nook-studio-rec-on {
+    background-color: rgba(232, 74, 74, 0.20);
+    border: 1px solid rgba(232, 74, 74, 0.55);
+    color: #ffd9d9;
+}
+.nook-studio-rec-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background-color: #e84a4a;
+    margin-right: 7px;
+}
+.nook-studio-error {
+    padding: 20px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 11px;
+}
+
+/* Scrollable calendar agenda */
+.nook-calendar-panel {
+    spacing: 9px;
+}
+
+.nook-calendar-summary {
+    spacing: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.nook-calendar-summary-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    color: #eaf0ff;
+    background-color: rgba(122, 162, 255, 0.18);
+    border: 1px solid rgba(122, 162, 255, 0.28);
+}
+
+.nook-calendar-summary-day {
+    font-size: 17px;
+    font-weight: bold;
+    color: #f4f4f6;
+}
+
+.nook-calendar-summary-date {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.55);
+    margin-top: 2px;
+}
+
+.nook-date-strip {
+    padding: 0px 2px 4px 2px;
+    height: 58px;
+}
+
+.nook-date-strip-row {
+    spacing: 7px;
+}
+
+.nook-date-pill {
+    width: 48px;
+    height: 54px;
+    padding: 5px 0px 4px 0px;
+    border-radius: 9px;
+    color: rgba(255, 255, 255, 0.52);
+    background-color: transparent;
+    border: 1px solid transparent;
+    transition: all 150ms ease-out;
+}
+
+.nook-date-pill:hover {
+    color: rgba(255, 255, 255, 0.85);
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.nook-date-pill-active {
+    width: 58px;
+    color: #eaf0ff;
+    background-color: transparent;
+    border: 1px solid transparent;
+}
+
+.nook-date-pill-near {
+    width: 42px;
+}
+
+.nook-date-pill-far {
+    width: 34px;
+    color: rgba(255, 255, 255, 0.32);
+}
+
+.nook-date-pill-today {
+    width: 58px;
+    color: #92d6ff;
+}
+
+.nook-date-weekday {
+    font-size: 9px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.nook-date-number {
+    font-size: 17px;
+    font-weight: bold;
+    color: #f4f4f6;
+    margin-top: 1px;
+}
+
+.nook-date-pill-active .nook-date-number {
+    font-size: 24px;
+}
+
+.nook-date-pill-today .nook-date-number {
+    font-size: 23px;
+    color: #92d6ff;
+}
+
+.nook-date-pill-near .nook-date-number {
+    font-size: 15px;
+}
+
+.nook-date-pill-far .nook-date-number {
+    font-size: 13px;
+}
+
+.nook-date-pill-far .nook-date-weekday {
+    font-size: 8px;
+}
+
+.nook-date-today {
+    font-size: 7px;
+    font-weight: bold;
+    color: #92d6ff;
+    margin-top: 0px;
+}
+
+.nook-calendar {
+    spacing: 8px;
+    margin-top: 2px;
+}
+
+.nook-calendar-header {
+    spacing: 8px;
+}
+
+.nook-calendar-title {
+    font-size: 12px;
+    font-weight: bold;
+    color: #f4f4f6;
+}
+
+.nook-calendar-date {
+    font-size: 11px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.nook-calendar-scroll {
+    max-height: 154px;
+    padding-right: 3px;
+}
+
+/* Full-height calendar (the Calendar tab) sizes to its agenda like the Alerts
+ * list does: max-height lets the container grow with the events and only cap +
+ * scroll once they overflow, so the dashboard animates to fit each day. */
+.nook-calendar-full .nook-calendar-scroll {
+    max-height: 340px;
+}
+
+.nook-calendar-scroll StScrollBar {
+    min-width: 0px;
+    width: 0px;
+    opacity: 0;
+}
+
+.nook-calendar-list {
+    spacing: 7px;
+}
+
+.nook-calendar-day {
+    font-size: 10px;
+    font-weight: bold;
+    color: #7aa2ff;
+    letter-spacing: 1px;
+    margin-top: 3px;
+}
+
+.nook-calendar-event {
+    spacing: 10px;
+    padding: 9px 10px;
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.nook-calendar-time {
+    width: 48px;
+    spacing: 1px;
+}
+
+.nook-calendar-start {
+    font-size: 11px;
+    font-weight: bold;
+    color: #eaf0ff;
+}
+
+.nook-calendar-end {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.nook-calendar-event-title {
+    font-size: 12.5px;
+    font-weight: bold;
+    color: #f4f4f6;
+}
+
+.nook-calendar-event-location {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.52);
+    margin-top: 2px;
+}
+
+.nook-calendar-empty {
+    spacing: 5px;
+    padding: 16px 0px;
+}
+
+.nook-calendar-empty-icon {
+    color: rgba(122, 162, 255, 0.75);
+}
+
+.nook-calendar-empty-title {
+    font-size: 12.5px;
+    font-weight: bold;
+    color: #f4f4f6;
+}
+
+.nook-calendar-empty-sub {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.48);
+}
+
+/* ============================================================
+ * ALERTS — grouped notification tray
+ * ============================================================ */
+.nook-alerts-panel {
+    spacing: 10px;
+}
+
+.nook-alerts-header {
+    spacing: 8px;
+    margin-bottom: 2px;
+}
+
+.nook-alerts-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: #f4f4f6;
+    margin-right: 8px;
+}
+
+.nook-alerts-badge {
+    background-color: #7aa2ff;
+    border-radius: 10px;
+    padding: 1px 7px;
+    color: #0d0d10;
+    font-size: 10.5px;
+    font-weight: bold;
+}
+
+.nook-clear-btn {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 11px;
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 8px;
+    transition: all 150ms ease-out;
+}
+
+.nook-clear-btn:hover {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.07);
+}
+
+.nook-clear-btn StIcon {
+    margin-right: 4px;
+}
+
+/* Bounded so the dashboard doesn't grow to fit every notification; the
+ * queue scrolls inside this instead. */
+.nook-alerts-scroll {
+    max-height: 340px;
+}
+
+/* Invisible scrollbar — the alerts list still scrolls (wheel / drag) but the
+ * bar itself is collapsed to zero width so it never draws a visible track. */
+.nook-alerts-scroll StScrollBar {
+    min-width: 0px;
+    width: 0px;
+    opacity: 0;
+}
+
+.nook-alerts-list {
+    spacing: 9px;
+}
+
+.nook-alert-card {
+    spacing: 11px;
+    padding: 12px 13px;
+    border-radius: 14px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Clickable (expandable) cards get a subtle hover to signal interactivity. */
+.nook-alert-expandable:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.nook-alert-chevron {
+    color: rgba(255, 255, 255, 0.4);
+    margin-left: 6px;
+}
+
+.nook-alert-accent {
+    background-color: rgba(122, 162, 255, 0.1);
+    border: 1px solid rgba(122, 162, 255, 0.28);
+}
+
+.nook-alert-badge {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    color: #ffffff;
+}
+
+.nook-alert-title {
+    font-size: 12.5px;
+    font-weight: bold;
+    color: #f4f4f6;
+}
+
+.nook-alert-body {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.62);
+    margin-top: 2px;
+}
+
+.nook-alerts-more {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+    margin-top: 4px;
+}
+
+.nook-alerts-empty {
+    spacing: 6px;
+    padding: 24px 0px;
+}
+
+.nook-alerts-empty-icon {
+    color: rgba(255, 255, 255, 0.3);
+    margin-bottom: 6px;
+}
+
+.nook-alerts-empty-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.nook-alerts-empty-sub {
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+/* ============================================================
+ * SHELF — temporary file holding + quick-share
+ * ============================================================ */
+.nook-shelf-panel {
+    spacing: 10px;
+}
+
+.nook-shelf-header {
+    spacing: 8px;
+    margin-bottom: 2px;
+}
+
+.nook-shelf-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: #f4f4f6;
+    margin-right: 8px;
+}
+
+.nook-shelf-badge {
+    background-color: #7aa2ff;
+    border-radius: 10px;
+    padding: 1px 7px;
+    color: #0d0d10;
+    font-size: 10.5px;
+    font-weight: bold;
+}
+
+.nook-shelf-add {
+    font-size: 11px;
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 8px;
+    transition: all 150ms ease-out;
+}
+
+.nook-shelf-add:hover {
+    background-color: rgba(255, 255, 255, 0.07);
+}
+
+.nook-shelf-add StIcon {
+    margin-right: 4px;
+}
+
+/* Bounded like the alerts list so long shelves scroll instead of stretching
+ * the dashboard. */
+.nook-shelf-scroll {
+    max-height: 240px;
+}
+
+.nook-shelf-scroll StScrollBar {
+    min-width: 0px;
+    width: 0px;
+    opacity: 0;
+}
+
+.nook-shelf-list {
+    spacing: 8px;
+}
+
+.nook-shelf-row {
+    spacing: 11px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.nook-shelf-row:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.nook-shelf-row-icon {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.nook-shelf-row-name {
+    font-size: 12.5px;
+    font-weight: bold;
+    color: #f4f4f6;
+    max-width: 300px;
+}
+
+.nook-shelf-row-size {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+    margin-top: 1px;
+}
+
+.nook-shelf-row-actions {
+    spacing: 2px;
+}
+
+.nook-shelf-action {
+    color: rgba(255, 255, 255, 0.55);
+    padding: 5px;
+    border-radius: 8px;
+    transition: all 120ms ease-out;
+}
+
+.nook-shelf-action:hover {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Drop zone — click-to-browse / paste-a-file target. A dashed outline reads
+ * as a droppable area even though Wayland won't deliver external drops here. */
+.nook-shelf-drop {
+    border: 2px dashed rgba(255, 255, 255, 0.16);
+    border-radius: 14px;
+    background-color: rgba(255, 255, 255, 0.02);
+    padding: 14px 12px;
+    transition: all 150ms ease-out;
+}
+
+.nook-shelf-drop:hover {
+    border: 2px dashed rgba(255, 255, 255, 0.32);
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.nook-shelf-drop-spacious {
+    padding: 28px 12px;
+}
+
+.nook-shelf-drop-icon {
+    color: rgba(255, 255, 255, 0.45);
+    margin-bottom: 8px;
+}
+
+.nook-shelf-drop-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.78);
+}
+
+.nook-shelf-drop-sub {
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.42);
+    margin-top: 2px;
+}
+
+.nook-shelf-paste {
+    font-size: 11px;
+    font-weight: bold;
+    padding: 5px 10px;
+    border-radius: 8px;
+    margin-top: 10px;
+    background-color: rgba(255, 255, 255, 0.06);
+    transition: all 150ms ease-out;
+}
+
+.nook-shelf-paste:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.nook-shelf-paste StIcon {
+    margin-right: 5px;
+}
+
+/* Quick-share footer: status + device hint below the file list / drop zone. */
+.nook-share-box {
+    spacing: 4px;
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.nook-share-title {
+    font-size: 11px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.nook-share-devlabel {
+    font-size: 11px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.nook-share-sub {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.42);
+    margin-top: 2px;
+}
+
+.nook-share-status {
+    font-size: 10.5px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.55);
+    margin-top: 2px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Wallpaper tab — horizontal filmstrip of thumbnails. Scroll or click *
+ * to switch; the active image gets an accent-coloured border.         *
+ * ------------------------------------------------------------------ */
+.nook-wp-panel {
+    spacing: 12px;
+}
+
+.nook-wp-header {
+    spacing: 8px;
+    margin-bottom: 2px;
+}
+
+.nook-wp-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: #f4f4f6;
+}
+
+.nook-wp-subtitle {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+    margin-top: 1px;
+}
+
+.nook-wp-gear {
+    padding: 6px;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.55);
+    transition: all 150ms ease-out;
+}
+
+.nook-wp-gear:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #f4f4f6;
+}
+
+.nook-wp-scroll {
+    max-height: 168px;
+}
+
+/* Show a slim horizontal scrollbar so the strip reads as scrollable. */
+.nook-wp-scroll StScrollBar {
+    min-height: 0px;
+    height: 4px;
+    opacity: 0.5;
+}
+
+.nook-wp-strip {
+    spacing: 10px;
+    padding: 4px 2px 8px 2px;
+}
+
+.nook-wp-cell {
+    padding: 4px;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    background-color: rgba(255, 255, 255, 0.04);
+    transition: all 150ms ease-out;
+}
+
+.nook-wp-cell:hover {
+    background-color: rgba(255, 255, 255, 0.09);
+}
+
+/* Active border colour is set inline from the accent; this just keeps the
+ * baseline appearance when no inline style has been applied yet. */
+.nook-wp-cell-active {
+    background-color: rgba(255, 255, 255, 0.09);
+    border: 2px solid #7aa2ff;
+}
+
+.nook-wp-thumb {
+    border-radius: 8px;
+    width: 132px;
+    height: 82px;
+}
+
+.nook-wp-name {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.55);
+    max-width: 132px;
+    margin-top: 5px;
+    text-align: center;
+}
+
+.nook-wp-empty {
+    spacing: 6px;
+    padding: 28px 16px;
+}
+
+.nook-wp-empty-icon {
+    color: rgba(255, 255, 255, 0.32);
+    margin-bottom: 4px;
+}
+
+.nook-wp-empty-title {
+    font-size: 12.5px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.nook-wp-empty-sub {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.42);
+    margin-top: 2px;
+}
+
+/* PulsarOS MacBook-notch tweak */
+.notchnux-island {
+    border-radius: 0px 0px 22px 22px !important;
+    border-top: 0px !important;
+    background-color: #000000 !important;
+    box-shadow: 0px 5px 14px rgba(0,0,0,0.35) !important;
+}
+
+.notchnux-island-expanded {
+    border-radius: 0px 0px 28px 28px !important;
+    border-top: 0px !important;
+}
+
+.notchnux-island-peek {
+    border-radius: 0px 0px 24px 24px !important;
+    border-top: 0px !important;
+}
+
+/* PulsarOS: strict notch containment */
+.nook-tray-rightcol {
+    width: 200px;
+}
+
+.nook-tray-mirror-beside {
+    width: 200px;
+    max-width: 200px;
+}
+
+.nook-tray-mirror-scroll {
+    width: 172px;
+}
+
+.nook-tray-mirror-row {
+    spacing: 5px;
+}
+
+.nook-tray-mirror-beside .nook-tray-mirror-btn {
+    padding: 6px;
+}
+
+
+/* PULSAR_MAC_PASS_V1 */
+
+/* ---------------------------------------------------------
+   MACBOOK NOTCH
+   --------------------------------------------------------- */
+
+.notchnux-island {
+    background-color: #000000 !important;
+    border: 0px !important;
+    border-top: 0px !important;
+
+    border-radius: 0px 0px 18px 18px !important;
+
+    padding: 0px 12px !important;
+    box-shadow: none !important;
+
+    color: #ffffff !important;
+}
+
+/* Expanded notch / Control Center */
+.notchnux-island-expanded {
+    background-color: rgba(28, 28, 30, 0.96) !important;
+
+    border: 0px !important;
+    border-radius: 0px 0px 26px 26px !important;
+
+    padding: 12px 14px 16px 14px !important;
+
+    box-shadow:
+        0px 18px 46px rgba(0, 0, 0, 0.46) !important;
+}
+
+/* Notification expansion */
+.notchnux-island-peek {
+    background-color: rgba(28, 28, 30, 0.97) !important;
+    border: 0px !important;
+    border-radius: 0px 0px 22px 22px !important;
+    box-shadow: 0px 14px 36px rgba(0,0,0,0.42) !important;
+}
+
+
+/* ---------------------------------------------------------
+   NOTCH CONTENT
+   --------------------------------------------------------- */
+
+.notchnux-pill-content {
+    height: 34px !important;
+    padding: 0px 8px !important;
+    spacing: 7px !important;
+}
+
+.notchnux-pill-clock {
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0px !important;
+    color: rgba(255,255,255,0.92) !important;
+}
+
+.notchnux-pill-icon,
+.notchnux-pill-priv {
+    color: rgba(255,255,255,0.82) !important;
+}
+
+.notchnux-pill-battery-pct {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+}
+
+
+/* ---------------------------------------------------------
+   MACOS SEGMENTED TAB BAR
+   --------------------------------------------------------- */
+
+.notchnux-dashboard-header-wrap {
+    spacing: 8px !important;
+    margin-bottom: 14px !important;
+}
+
+.notchnux-tab-strip {
+    spacing: 2px !important;
+    padding: 3px !important;
+
+    background-color: rgba(118,118,128,0.18) !important;
+
+    border: 0px !important;
+    border-radius: 11px !important;
+}
+
+.notchnux-tab-btn {
+    padding: 6px 11px !important;
+
+    border: 0px !important;
+    border-radius: 8px !important;
+
+    background-color: transparent !important;
+
+    color: rgba(255,255,255,0.58) !important;
+
+    font-size: 12px !important;
+    font-weight: 600 !important;
+}
+
+.notchnux-tab-btn:hover {
+    background-color: rgba(255,255,255,0.08) !important;
+    color: rgba(255,255,255,0.90) !important;
+}
+
+.notchnux-tab-btn-active {
+    background-color: rgba(255,255,255,0.15) !important;
+
+    border: 0px !important;
+
+    color: #ffffff !important;
+}
+
+.notchnux-tab-btn-active .notchnux-tab-icon {
+    color: #0a84ff !important;
+}
+
+.notchnux-tab-icon {
+    color: rgba(255,255,255,0.65) !important;
+}
+
+
+/* ---------------------------------------------------------
+   CONTROL CENTER BUTTONS
+   --------------------------------------------------------- */
+
+.notchnux-settings-btn,
+.notchnux-power-btn {
+    width: 32px !important;
+    height: 32px !important;
+
+    border-radius: 10px !important;
+
+    background-color: rgba(255,255,255,0.08) !important;
+
+    border: 0px !important;
+
+    color: rgba(255,255,255,0.78) !important;
+}
+
+.notchnux-settings-btn:hover {
+    background-color: rgba(255,255,255,0.14) !important;
+    color: #ffffff !important;
+}
+
+.notchnux-power-btn:hover {
+    background-color: rgba(255,69,58,0.24) !important;
+    color: #ff6961 !important;
+}
+
+
+/* ---------------------------------------------------------
+   APPLE-STYLE CARDS
+   --------------------------------------------------------- */
+
+.nook-meter-tile,
+.nook-devices-card,
+.nook-wifi-card,
+.nook-tray-mirror,
+.nook-calendar-summary,
+.nook-alert-card,
+.nook-shelf-row {
+    background-color: rgba(255,255,255,0.055) !important;
+
+    border: 1px solid rgba(255,255,255,0.065) !important;
+
+    border-radius: 16px !important;
+
+    box-shadow: none !important;
+}
+
+.nook-meter-tile {
+    padding: 11px 5px !important;
+}
+
+.nook-devices-card,
+.nook-wifi-card {
+    border-radius: 17px !important;
+}
+
+
+/* ---------------------------------------------------------
+   MACOS SYSTEM BLUE
+   --------------------------------------------------------- */
+
+.nook-eyebrow,
+.nook-tab-count,
+.nook-meter-label-row,
+.notchnux-tab-btn-active .notchnux-tab-icon {
+    color: #0a84ff !important;
+}
+
+.nook-mini-toggle-on,
+.nook-wifi-hotspot-on {
+    background-color: rgba(10,132,255,0.28) !important;
+    color: #ffffff !important;
+}
+
+
+/* ---------------------------------------------------------
+   CONTROL CENTER TOGGLES
+   --------------------------------------------------------- */
+
+.nook-toggle {
+    background-color: rgba(255,255,255,0.075) !important;
+
+    border: 0px !important;
+
+    border-radius: 16px !important;
+
+    color: rgba(255,255,255,0.82) !important;
+}
+
+.nook-toggle:hover {
+    background-color: rgba(255,255,255,0.12) !important;
+}
+
+.nook-toggle-on {
+    background-color: rgba(10,132,255,0.30) !important;
+
+    border: 0px !important;
+
+    color: #ffffff !important;
+}
+
+/* Kill the Linux-looking flower/petal shape */
+.nook-arm-top,
+.nook-arm-bottom,
+.nook-arm-left,
+.nook-arm-right {
+    border-radius: 16px !important;
+}
+
+.nook-air-btn {
+    background-color: rgba(255,255,255,0.09) !important;
+
+    border: 0px !important;
+
+    color: rgba(255,255,255,0.84) !important;
+}
+
+.nook-air-on {
+    background-color: #0a84ff !important;
+    color: white !important;
+}
+
+
+/* ---------------------------------------------------------
+   MENU BAR MIRROR
+   --------------------------------------------------------- */
+
+.nook-tray-mirror {
+    padding: 10px 12px !important;
+}
+
+.nook-tray-mirror-row {
+    spacing: 7px !important;
+}
+
+.nook-tray-mirror-btn {
+    width: 28px !important;
+    height: 28px !important;
+
+    padding: 0px !important;
+
+    border-radius: 9px !important;
+
+    background-color: transparent !important;
+}
+
+.nook-tray-mirror-btn:hover {
+    background-color: rgba(255,255,255,0.10) !important;
+}
+
+.nook-tray-mirror-icon {
+    color: rgba(255,255,255,0.90) !important;
+}
+
+
+/* ---------------------------------------------------------
+   TYPOGRAPHY
+   --------------------------------------------------------- */
+
+.nook-card-eyebrow {
+    color: rgba(255,255,255,0.42) !important;
+
+    font-size: 10px !important;
+
+    font-weight: 600 !important;
+
+    letter-spacing: 1px !important;
+}
+
+.nook-device-name,
+.nook-wifi-name {
+    color: rgba(255,255,255,0.92) !important;
+}
+
+.nook-device-pct,
+.nook-wifi-sub {
+    color: rgba(255,255,255,0.48) !important;
+}
+
+.notchnux-panel {
+    spacing: 14px !important;
+}
+
+
+/* PULSAR_DUAL_AMOLED_V1 */
+
+/* Actual MacBook-notch black */
+.notchnux-island {
+    background-color: #000000 !important;
+    border-top: 0px !important;
+}
+
+/* Expanded Control Center — ALSO true AMOLED black */
+.notchnux-island-expanded {
+    background-color: #000000 !important;
+    border-top: 0px !important;
+}
+
+/* Notification / temporary expansion */
+.notchnux-island-peek {
+    background-color: #000000 !important;
+    border-top: 0px !important;
+}
+
+/* Keep the inner modules subtly separated like macOS Control Center */
+.notchnux-island-expanded .nook-meter-tile,
+.notchnux-island-expanded .nook-devices-card,
+.notchnux-island-expanded .nook-wifi-card,
+.notchnux-island-expanded .nook-tray-mirror {
+    background-color: rgba(255,255,255,0.065) !important;
+}
