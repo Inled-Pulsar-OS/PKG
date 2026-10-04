@@ -6012,5 +6012,11 @@ class RecoveryApp(Adw.Application):
 
 
 if __name__ == "__main__":
+    if "--demo" in sys.argv:
+        os.environ["DEMO_MODE"] = "1"
+        os.environ["TEST_MODE"] = "1"
+    if "--test" in sys.argv:
+        os.environ["TEST_MODE"] = "1"
     app = RecoveryApp()
-    sys.exit(app.run(sys.argv))
+    filtered_args = [arg for arg in sys.argv if arg not in ("--demo", "--test")]
+    sys.exit(app.run(filtered_args))
