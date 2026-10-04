@@ -72,7 +72,9 @@ def get_cpu_usage_stats():
 
 def apply_custom_css():
     css = """
-    /* Ensure high CSS specificity with !important to prevent theme battery-green from overriding */
+    /* Ensure maximum specificity with !important and STYLE_PROVIDER_PRIORITY_USER */
+    levelbar.resource-bar trough block.filled,
+    levelbar.resource-bar block.filled,
     levelbar.resource-bar > trough > block.filled,
     levelbar.resource-bar.full > trough > block.filled,
     levelbar.resource-bar.high > trough > block.filled,
@@ -82,25 +84,31 @@ def apply_custom_css():
         transition: background-color 0.25s ease;
     }
 
+    levelbar.resource-bar.usage-normal trough block.filled,
+    levelbar.resource-bar.usage-normal block.filled,
     levelbar.resource-bar.usage-normal > trough > block.filled,
     levelbar.resource-bar.usage-normal.full > trough > block.filled,
-    levelbar.resource-bar.usage-normal.high > trough > block.filled,
-    levelbar.resource-bar.usage-normal.low > trough > block.filled {
+    levelbar.resource-bar.usage-normal.high > trough > block.filled {
         background-color: #30d158 !important;
+        border-color: #30d158 !important;
     }
 
+    levelbar.resource-bar.usage-warning trough block.filled,
+    levelbar.resource-bar.usage-warning block.filled,
     levelbar.resource-bar.usage-warning > trough > block.filled,
     levelbar.resource-bar.usage-warning.full > trough > block.filled,
-    levelbar.resource-bar.usage-warning.high > trough > block.filled,
-    levelbar.resource-bar.usage-warning.low > trough > block.filled {
+    levelbar.resource-bar.usage-warning.high > trough > block.filled {
         background-color: #ff9f0a !important;
+        border-color: #ff9f0a !important;
     }
 
+    levelbar.resource-bar.usage-critical trough block.filled,
+    levelbar.resource-bar.usage-critical block.filled,
     levelbar.resource-bar.usage-critical > trough > block.filled,
     levelbar.resource-bar.usage-critical.full > trough > block.filled,
-    levelbar.resource-bar.usage-critical.high > trough > block.filled,
-    levelbar.resource-bar.usage-critical.low > trough > block.filled {
+    levelbar.resource-bar.usage-critical.high > trough > block.filled {
         background-color: #ff453a !important;
+        border-color: #ff453a !important;
     }
     """
     provider = Gtk.CssProvider()
@@ -108,7 +116,7 @@ def apply_custom_css():
     Gtk.StyleContext.add_provider_for_display(
         Gdk.Display.get_default(),
         provider,
-        Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        Gtk.STYLE_PROVIDER_PRIORITY_USER
     )
 
 def set_levelbar_usage(levelbar, fraction, is_inverted=False):
