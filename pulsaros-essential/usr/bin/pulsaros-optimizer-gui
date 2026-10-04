@@ -72,43 +72,62 @@ def get_cpu_usage_stats():
 
 def apply_custom_css():
     css = """
-    /* Ensure maximum specificity with !important and STYLE_PROVIDER_PRIORITY_USER */
-    levelbar.resource-bar trough block.filled,
-    levelbar.resource-bar block.filled,
-    levelbar.resource-bar > trough > block.filled,
-    levelbar.resource-bar.full > trough > block.filled,
-    levelbar.resource-bar.high > trough > block.filled,
-    levelbar.resource-bar.low > trough > block.filled,
-    levelbar.resource-bar.empty > trough > block.filled {
+    /* Pure ProgressBar styling completely free from GTK LevelBar battery offsets */
+    progressbar.resource-bar {
+        min-height: 8px;
+        padding: 0;
+    }
+    progressbar.resource-bar > trough {
+        min-height: 8px;
+        border-radius: 4px;
+        background-color: rgba(255, 255, 255, 0.12);
+    }
+    progressbar.resource-bar > trough > progress {
+        min-height: 8px;
         border-radius: 4px;
         transition: background-color 0.25s ease;
     }
 
-    levelbar.resource-bar.usage-normal trough block.filled,
-    levelbar.resource-bar.usage-normal block.filled,
-    levelbar.resource-bar.usage-normal > trough > block.filled,
-    levelbar.resource-bar.usage-normal.full > trough > block.filled,
-    levelbar.resource-bar.usage-normal.high > trough > block.filled {
+    progressbar.resource-bar.usage-normal > trough > progress {
         background-color: #30d158 !important;
-        border-color: #30d158 !important;
     }
 
-    levelbar.resource-bar.usage-warning trough block.filled,
-    levelbar.resource-bar.usage-warning block.filled,
-    levelbar.resource-bar.usage-warning > trough > block.filled,
-    levelbar.resource-bar.usage-warning.full > trough > block.filled,
-    levelbar.resource-bar.usage-warning.high > trough > block.filled {
+    progressbar.resource-bar.usage-warning > trough > progress {
         background-color: #ff9f0a !important;
-        border-color: #ff9f0a !important;
     }
 
-    levelbar.resource-bar.usage-critical trough block.filled,
-    levelbar.resource-bar.usage-critical block.filled,
-    levelbar.resource-bar.usage-critical > trough > block.filled,
-    levelbar.resource-bar.usage-critical.full > trough > block.filled,
-    levelbar.resource-bar.usage-critical.high > trough > block.filled {
+    progressbar.resource-bar.usage-critical > trough > progress {
         background-color: #ff453a !important;
-        border-color: #ff453a !important;
+    }
+
+    .habit-card {
+        padding: 10px 14px;
+        border-radius: 8px;
+        background-color: rgba(255, 255, 255, 0.04);
+    }
+    .badge-turbo {
+        background-color: rgba(255, 69, 58, 0.2);
+        color: #ff453a;
+        font-weight: bold;
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 6px;
+    }
+    .badge-learned {
+        background-color: rgba(0, 113, 227, 0.2);
+        color: #2997ff;
+        font-weight: bold;
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 6px;
+    }
+    .badge-pinned {
+        background-color: rgba(255, 159, 10, 0.2);
+        color: #ff9f0a;
+        font-weight: bold;
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 6px;
     }
     """
     provider = Gtk.CssProvider()
@@ -119,32 +138,36 @@ def apply_custom_css():
         Gtk.STYLE_PROVIDER_PRIORITY_USER
     )
 
-def set_levelbar_usage(levelbar, fraction, is_inverted=False):
+def set_progressbar_usage(pbar, fraction, is_inverted=False):
     """
     fraction: 0.0 to 1.0
-    is_inverted: if True (like efficiency), higher is better/green.
-                 if False (CPU & RAM usage), higher is worse: 0-60% green, 60-80% warning (orange), 80-100% critical (red).
+    is_inverted: if True (like compression savings), higher is better/green.
+                 if False (CPU & RAM usage):
+                 - 0% - 60%: GREEN (.usage-normal)
+                 - 60% - 80%: ORANGE (.usage-warning)
+                 - 80% - 100%: RED (.usage-critical)
     """
-    levelbar.set_value(fraction)
-    levelbar.remove_css_class("usage-normal")
-    levelbar.remove_css_class("usage-warning")
-    levelbar.remove_css_class("usage-critical")
+    fraction = max(0.0, min(1.0, float(fraction)))
+    pbar.set_fraction(fraction)
+    pbar.remove_css_class("usage-normal")
+    pbar.remove_css_class("usage-warning")
+    pbar.remove_css_class("usage-critical")
 
     if is_inverted:
         if fraction >= 0.50:
-            levelbar.add_css_class("usage-normal")
+            pbar.add_css_class("usage-normal")
         elif fraction >= 0.20:
-            levelbar.add_css_class("usage-warning")
+            pbar.add_css_class("usage-warning")
         else:
-            levelbar.add_css_class("usage-critical")
+            pbar.add_css_class("usage-critical")
     else:
-        # Standard Resource Usage (CPU, RAM): Higher is critical/red
+        # Standard Resource Usage (CPU 17% -> Green, RAM 78% -> Orange, 85%+ -> Red):
         if fraction >= 0.80:
-            levelbar.add_css_class("usage-critical")  # RED
+            pbar.add_css_class("usage-critical")  # RED
         elif fraction >= 0.60:
-            levelbar.add_css_class("usage-warning")   # ORANGE / YELLOW
+            pbar.add_css_class("usage-warning")   # ORANGE
         else:
-            levelbar.add_css_class("usage-normal")    # GREEN
+            pbar.add_css_class("usage-normal")    # GREEN
 
 def run_privileged(cmd_list):
     """Execute a privileged system command safely handling sudo/pkexec without crashes."""
@@ -333,7 +356,7 @@ def get_process_list():
     
     # Sort: pinned / learned high habit first, then non-normal priorities, then by memory consumption
     processes.sort(key=lambda x: (
-        0 if x["is_user_pinned"] else (1 if x["prio_idx"] != 2 else 2),
+        0 if x["is_user_pinned"] else (1 if x["habit_score"] >= 0.35 else (2 if x["prio_idx"] != 2 else 3)),
         -x["habit_score"],
         x["nice"],
         -x["rss_mb"]
@@ -364,9 +387,9 @@ class ProcessRow(Adw.ActionRow):
     def _render_row(self, proc_data):
         title = proc_data["name"]
         if proc_data.get("is_user_pinned"):
-            title += " ⭐ (Pinned)"
+            title += " ⭐ [Pinned]"
         elif proc_data.get("habit_score", 0.0) >= 0.4:
-            title += f" 🔥 (Learned: Score {proc_data['habit_score']:.2f})"
+            title += f" 🔥 [Learned Habit: {proc_data['habit_score']:.2f}]"
         
         self.set_title(title)
         sub = f"PID {self.pid}  •  {proc_data['rss_mb']:.1f} MB RAM  •  Nice {proc_data['nice']}"
@@ -392,7 +415,7 @@ class ProcessRow(Adw.ActionRow):
 class OptimizerWindow(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title="Pulsar Optimizer")
-        self.set_default_size(720, 840)
+        self.set_default_size(720, 860)
         self.set_icon_name("pulsaros-optimizer")
         
         apply_custom_css()
@@ -487,12 +510,10 @@ class OptimizerWindow(Adw.ApplicationWindow):
         cpu_header_box.append(self.cpu_val_label)
         cpu_box.append(cpu_header_box)
 
-        self.cpu_levelbar = Gtk.LevelBar()
-        self.cpu_levelbar.set_min_value(0.0)
-        self.cpu_levelbar.set_max_value(1.0)
-        self.cpu_levelbar.set_size_request(-1, 8)
-        self.cpu_levelbar.add_css_class("resource-bar")
-        cpu_box.append(self.cpu_levelbar)
+        # Custom ProgressBar for CPU
+        self.cpu_progressbar = Gtk.ProgressBar()
+        self.cpu_progressbar.add_css_class("resource-bar")
+        cpu_box.append(self.cpu_progressbar)
 
         cores = os.cpu_count() or 1
         self.cpu_sub_label = Gtk.Label(label=f"Active load across {cores} CPU core(s)", xalign=0.0)
@@ -519,12 +540,10 @@ class OptimizerWindow(Adw.ApplicationWindow):
         ram_header_box.append(self.ram_val_label)
         ram_box.append(ram_header_box)
 
-        self.ram_levelbar = Gtk.LevelBar()
-        self.ram_levelbar.set_min_value(0.0)
-        self.ram_levelbar.set_max_value(1.0)
-        self.ram_levelbar.set_size_request(-1, 8)
-        self.ram_levelbar.add_css_class("resource-bar")
-        ram_box.append(self.ram_levelbar)
+        # Custom ProgressBar for RAM
+        self.ram_progressbar = Gtk.ProgressBar()
+        self.ram_progressbar.add_css_class("resource-bar")
+        ram_box.append(self.ram_progressbar)
 
         self.ram_sub_label = Gtk.Label(label="Reading /proc/meminfo...", xalign=0.0)
         self.ram_sub_label.add_css_class("caption")
@@ -550,12 +569,10 @@ class OptimizerWindow(Adw.ApplicationWindow):
         zram_header_box.append(self.zram_ratio_label)
         zram_box.append(zram_header_box)
 
-        self.zram_levelbar = Gtk.LevelBar()
-        self.zram_levelbar.set_min_value(0.0)
-        self.zram_levelbar.set_max_value(1.0)
-        self.zram_levelbar.set_size_request(-1, 8)
-        self.zram_levelbar.add_css_class("resource-bar")
-        zram_box.append(self.zram_levelbar)
+        # Custom ProgressBar for zRAM
+        self.zram_progressbar = Gtk.ProgressBar()
+        self.zram_progressbar.add_css_class("resource-bar")
+        zram_box.append(self.zram_progressbar)
 
         self.zram_sub_label = Gtk.Label(label="Reading /sys/block/zram0...", xalign=0.0)
         self.zram_sub_label.add_css_class("caption")
@@ -618,10 +635,22 @@ class OptimizerWindow(Adw.ApplicationWindow):
         content_box.append(flush_btn)
 
         # -------------------------------------------------------------
-        # 4. PROCESS SCHEDULER & PRIORITY MANAGER
+        # 4. LEARNED WORKFLOW PATTERNS & HABIT MODEL
+        # -------------------------------------------------------------
+        self.patterns_group = Adw.PreferencesGroup(
+            title="Learned Workflow Patterns & Dynamic Priorities",
+            description="Real-time continuous habit engine automatically shielding your active workflow"
+        )
+        content_box.append(self.patterns_group)
+
+        self.patterns_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.patterns_group.add(self.patterns_container)
+
+        # -------------------------------------------------------------
+        # 5. PROCESS SCHEDULER & PRIORITY MANAGER
         # -------------------------------------------------------------
         proc_group = Adw.PreferencesGroup(
-            title="Continuous Habit Learning & Process Governor",
+            title="All Running Processes & Priority Control",
             description="Adjust and pin scheduling priorities. The optimizer learns your workflow habits continuously."
         )
         content_box.append(proc_group)
@@ -672,6 +701,7 @@ class OptimizerWindow(Adw.ApplicationWindow):
 
     def refresh_all(self):
         self.update_metrics()
+        self.refresh_patterns_ui()
         self.refresh_process_list()
         return True
 
@@ -684,12 +714,12 @@ class OptimizerWindow(Adw.ApplicationWindow):
                 self.service_switch.set_active(active)
                 self.service_updating = False
 
-            # CPU metrics (0-60% green, 60-80% warning, 80-100% critical red)
+            # CPU metrics (0-60% green, 60-80% warning orange, 80-100% critical red)
             cpu_pct = get_cpu_usage_stats()
             self.cpu_val_label.set_text(f"{int(cpu_pct)}%")
-            set_levelbar_usage(self.cpu_levelbar, cpu_pct / 100.0, is_inverted=False)
+            set_progressbar_usage(self.cpu_progressbar, cpu_pct / 100.0, is_inverted=False)
 
-            # RAM metrics
+            # RAM metrics (0-60% green, 60-80% warning orange, 80-100% critical red)
             mem = read_meminfo()
             total_kb = mem.get("MemTotal", 1)
             avail_kb = mem.get("MemAvailable", 0)
@@ -701,7 +731,7 @@ class OptimizerWindow(Adw.ApplicationWindow):
             fraction = min(max(used_kb / total_kb, 0.0), 1.0)
 
             self.ram_val_label.set_text(f"{used_gb:.1f} / {total_gb:.1f} GB ({int(fraction * 100)}%)")
-            set_levelbar_usage(self.ram_levelbar, fraction, is_inverted=False)
+            set_progressbar_usage(self.ram_progressbar, fraction, is_inverted=False)
             self.ram_sub_label.set_text(f"{avail_gb:.1f} GB available  •  {used_gb:.1f} GB in use")
 
             # zRAM metrics
@@ -709,13 +739,13 @@ class OptimizerWindow(Adw.ApplicationWindow):
             if zstats["active"]:
                 self.zram_ratio_label.set_text(f"{zstats['ratio_str']}")
                 zram_used_frac = (zstats["orig_data_mb"] / zstats["disksize_mb"]) if zstats["disksize_mb"] > 0 else 0.0
-                set_levelbar_usage(self.zram_levelbar, min(max(zram_used_frac, 0.0), 1.0), is_inverted=False)
+                set_progressbar_usage(self.zram_progressbar, min(max(zram_used_frac, 0.0), 1.0), is_inverted=False)
                 self.zram_sub_label.set_text(
                     f"{zstats['orig_data_mb']:.1f} MB in RAM  •  {zstats['saved_mb']:.1f} MB saved ({zstats['algorithm']})"
                 )
             else:
                 self.zram_ratio_label.set_text("Inactive")
-                set_levelbar_usage(self.zram_levelbar, 0.0, is_inverted=False)
+                set_progressbar_usage(self.zram_progressbar, 0.0, is_inverted=False)
                 self.zram_sub_label.set_text("zRAM device not initialized")
 
             # Kernel sysctls
@@ -725,6 +755,62 @@ class OptimizerWindow(Adw.ApplicationWindow):
             self.c3_val.set_text(sysctls["page_cluster"])
         except Exception:
             pass
+
+    def refresh_patterns_ui(self):
+        """Render learned application habits and workflow priority patterns."""
+        habits_data = load_habits_data()
+        habits_map = habits_data.get("habits", {})
+        overrides_map = habits_data.get("user_overrides", {})
+
+        # Clear existing patterns
+        while True:
+            child = self.patterns_container.get_first_child()
+            if not child:
+                break
+            self.patterns_container.remove(child)
+
+        # Collect top learned or pinned apps
+        ranked_habits = []
+        for comm, h in habits_map.items():
+            score = h.get("habit_score", 0.0)
+            focus_sec = h.get("focus_seconds", 0.0)
+            is_pinned = comm in overrides_map
+            if is_pinned or score >= 0.25 or focus_sec > 30:
+                ranked_habits.append((comm, score, focus_sec, h.get("focus_count", 0), is_pinned))
+
+        ranked_habits.sort(key=lambda x: (0 if x[4] else 1, -x[1], -x[2]))
+
+        if not ranked_habits:
+            empty_row = Adw.ActionRow(
+                title="Model Training Active",
+                subtitle="The habit engine is currently observing your workflow patterns."
+            )
+            self.patterns_container.append(empty_row)
+            return
+
+        for comm, score, focus_sec, count, is_pinned in ranked_habits[:6]:
+            row = Adw.ActionRow()
+            mins = focus_sec / 60.0
+            hrs = mins / 60.0
+            time_str = f"{hrs:.1f}h" if hrs >= 1.0 else f"{mins:.1f}m"
+
+            row.set_title(comm)
+            row.set_subtitle(f"Focused: {time_str} ({count} active sessions)  •  Auto-Shielded from lag")
+
+            badge = Gtk.Label()
+            if is_pinned:
+                badge.set_text("⭐ Pinned")
+                badge.add_css_class("badge-pinned")
+            elif score >= 0.60:
+                badge.set_text(f"🔥 Core Habit ({int(score*100)}%)")
+                badge.add_css_class("badge-turbo")
+            else:
+                badge.set_text(f"Learned ({int(score*100)}%)")
+                badge.add_css_class("badge-learned")
+
+            badge.set_valign(Gtk.Align.CENTER)
+            row.add_suffix(badge)
+            self.patterns_container.append(row)
 
     def refresh_process_list(self):
         query = self.search_entry.get_text().strip().lower()
