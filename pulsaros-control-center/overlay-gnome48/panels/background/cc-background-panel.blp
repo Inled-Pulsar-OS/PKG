@@ -300,6 +300,29 @@ template $CcBackgroundPanel: $CcPanel {
               }
             }
           }
+
+          Adw.PreferencesGroup {
+            title: _("Notch");
+            description: _("NotchNux dynamic pill island and its drop shelf");
+
+            Adw.SwitchRow notch_switch_row {
+              title: _("Enable Notch");
+              subtitle: _("Show the dynamic island, media controls and file shelf in the top bar");
+              notify::active => $on_notch_active_changed_cb(template);
+            }
+
+            Adw.ActionRow {
+              title: _("Notch Settings");
+              subtitle: _("Shelf behaviour, media, weather and appearance options");
+
+              [suffix]
+              Button {
+                valign: center;
+                label: _("Open…");
+                clicked => $on_notch_prefs_clicked_cb(template);
+              }
+            }
+          }
         };
       };
     };

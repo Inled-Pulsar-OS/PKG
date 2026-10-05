@@ -324,6 +324,32 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                         </child>
                       </object>
                     </child>
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">Notch</property>
+                        <property name="description" translatable="yes">NotchNux dynamic pill island and its drop shelf</property>
+                        <child>
+                          <object class="AdwSwitchRow" id="notch_switch_row">
+                            <property name="title" translatable="yes">Enable Notch</property>
+                            <property name="subtitle" translatable="yes">Show the dynamic island, media controls and file shelf in the top bar</property>
+                            <signal name="notify::active" handler="on_notch_active_changed_cb" object="CcBackgroundPanel"/>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwActionRow">
+                            <property name="title" translatable="yes">Notch Settings</property>
+                            <property name="subtitle" translatable="yes">Shelf behaviour, media, weather and appearance options</property>
+                            <child type="suffix">
+                              <object class="GtkButton">
+                                <property name="valign">3</property>
+                                <property name="label" translatable="yes">Open…</property>
+                                <signal name="clicked" handler="on_notch_prefs_clicked_cb" object="CcBackgroundPanel"/>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
                   </object>
                 </property>
               </object>

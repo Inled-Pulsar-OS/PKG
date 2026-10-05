@@ -70,7 +70,11 @@ struct _CcBackgroundPanel
   AdwSwitchRow *macos_remap_switch_row;
   AdwSwitchRow *macos_fullscreen_switch_row;
   AdwSwitchRow *liquid_glass_switch_row;
+  AdwSwitchRow *notch_switch_row;
 };
+
+/* UUID of the NotchNux shell extension, toggled from the Appearance panel. */
+#define NOTCH_UUID "notchnux@adityasah.programs"
 
 CC_PANEL_REGISTER (CcBackgroundPanel, cc_background_panel)
 
@@ -701,6 +705,32 @@ set_extension_enabled (const gchar *uuid, gboolean enable)
     }
 }
 
+static gboolean
+is_extension_enabled (const gchar *uuid)
+{
+  g_autoptr(GSettingsSchema) schema = NULL;
+  g_autoptr(GSettings) shell_settings = safe_settings_new ("org.gnome.shell", &schema);
+  gboolean found = FALSE;
+
+  if (!shell_settings || !schema || !g_settings_schema_has_key (schema, "enabled-extensions"))
+    return FALSE;
+
+  g_auto(GStrv) enabled_exts = g_settings_get_strv (shell_settings, "enabled-extensions");
+  if (enabled_exts)
+    {
+      for (guint i = 0; enabled_exts[i] != NULL; i++)
+        {
+          if (g_str_equal (enabled_exts[i], uuid))
+            {
+              found = TRUE;
+              break;
+            }
+        }
+    }
+
+  return found;
+}
+
 static void
 apply_desktop_effects_mode (gboolean use_liquid_glass)
 {
@@ -921,6 +951,21 @@ on_macos_fullscreen_active_changed_cb (CcBackgroundPanel *self)
 }
 
 static void
+on_notch_active_changed_cb (CcBackgroundPanel *self)
+{
+  if (!self->notch_switch_row)
+    return;
+
+  set_extension_enabled (NOTCH_UUID, adw_switch_row_get_active (self->notch_switch_row));
+}
+
+static void
+on_notch_prefs_clicked_cb (CcBackgroundPanel *self)
+{
+  g_spawn_command_line_async ("/bin/sh -c 'gnome-extensions prefs notchnux@adityasah.programs >/dev/null 2>&1 &'", NULL);
+}
+
+static void
 cc_background_panel_class_init (CcBackgroundPanelClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
@@ -947,6 +992,7 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_remap_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_fullscreen_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, liquid_glass_switch_row);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, notch_switch_row);
 
   gtk_widget_class_bind_template_callback (widget_class, on_color_scheme_toggle_active_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_chooser_background_chosen_cb);
@@ -960,6 +1006,8 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_callback (widget_class, on_activate_gnome_overview_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_macos_remap_active_changed_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_macos_fullscreen_active_changed_cb);
+  gtk_widget_class_bind_template_callback (widget_class, on_notch_active_changed_cb);
+  gtk_widget_class_bind_template_callback (widget_class, on_notch_prefs_clicked_cb);
 }
 
 static void
@@ -1028,6 +1076,14 @@ cc_background_panel_init (CcBackgroundPanel *self)
       g_signal_handlers_block_by_func (self->liquid_glass_switch_row, on_liquid_glass_active_changed_cb, self);
       adw_switch_row_set_active (self->liquid_glass_switch_row, lg_active);
       g_signal_handlers_unblock_by_func (self->liquid_glass_switch_row, on_liquid_glass_active_changed_cb, self);
+    }
+
+  if (self->notch_switch_row)
+    {
+      gboolean notch_active = is_extension_enabled (NOTCH_UUID);
+      g_signal_handlers_block_by_func (self->notch_switch_row, on_notch_active_changed_cb, self);
+      adw_switch_row_set_active (self->notch_switch_row, notch_active);
+      g_signal_handlers_unblock_by_func (self->notch_switch_row, on_notch_active_changed_cb, self);
     }
 
   self->connection = g_application_get_dbus_connection (g_application_get_default ());
