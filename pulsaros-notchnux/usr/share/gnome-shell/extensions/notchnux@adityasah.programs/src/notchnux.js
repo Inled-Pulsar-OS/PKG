@@ -12,6 +12,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import * as SystemActions from 'resource:///org/gnome/shell/misc/systemActions.js';
+import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
 
 import { SystemHelper } from './helpers/system.js';
 import { MprisHelper } from './helpers/mpris.js';
@@ -142,6 +143,24 @@ export const NotchNux = GObject.registerClass({
             vertical: true });
         this.add_child(this._surface);
 
+        // Make Notch and surface DND targets for file staging
+        this._delegate = this;
+        this._surface._delegate = this;
+        this._activeFlydropTransfer = null;
+        this._flydropDismissTimer = 0;
+
+        if (this._isPrimaryInstance) {
+            this._flydropSubCleanup = this._shelf.subscribeTransferSignals({
+                onProgress: (data) => this._onFlyDropProgress(data),
+                onCompleted: (data) => this._onFlyDropCompleted(data),
+                onDevicesChanged: () => {
+                    if (this.isExpanded && this._activeTab === 'shelf') {
+                        this._renderActiveTab();
+                    }
+                }
+            });
+        }
+
         // 1. Collapsed pill
         this._buildPill();
         // 2. Expanded dashboard
@@ -224,6 +243,49 @@ export const NotchNux = GObject.registerClass({
         // apply to the live notch without a shell restart.
         this._watchConfig();
 
+        // Panel position sync for auto-hiding when top bar hides in spaces mode
+        if (Main.layoutManager.panelBox) {
+            this._panelBoxYId = Main.layoutManager.panelBox.connect('notify::y', () => this._syncWithPanelPosition());
+            this._panelBoxVisId = Main.layoutManager.panelBox.connect('notify::visible', () => this._syncWithPanelPosition());
+            this._syncWithPanelPosition();
+        }
+
+        // Drag monitor. It only opens the shelf when a drag passes over the
+        // notch; it never claims the drop, so it always returns CONTINUE and the
+        // shell keeps walking the actor tree until our own handleDragOver
+        // responds.
+        //
+        // A drag coming from another application reaches this too (Mutter routes
+        // it through Main.xdndHandler), which is why the shelf opens on hover
+        // from Nautilus. The drop itself cannot be received: Mutter hands the
+        // payload to whichever client is under the pointer, the shell is not a
+        // drop target, and js/ui/xdndHandler.js has no drop callback at all.
+        // See the note on acceptDrop for what to use instead.
+        this._dragMonitor = {
+            dragMotion: (dropEvent) => {
+                if (!this._config.isFeatureEnabled('stageOnDrag'))
+                    return DND.DragMotionResult.CONTINUE;
+
+                if (this._isPointOverNotch(dropEvent.x, dropEvent.y) && !this.isExpanded) {
+                    this._activeTab = 'shelf';
+                    this.expand();
+                }
+                return DND.DragMotionResult.CONTINUE;
+            },
+        };
+        try {
+            DND.addDragMonitor(this._dragMonitor);
+        } catch (e) {
+            console.error('NotchNux: addDragMonitor error', e);
+        }
+
+        // Global instance registry for accurate pointer and space bounds tracking
+        if (!Array.isArray(global._notchnuxInstances)) global._notchnuxInstances = [];
+        global._notchnuxInstances.push(this);
+
+        // Clipboard watcher: when user copies text or files, stage & show Notch Shelf
+        this._initClipboardWatch();
+
         // Global shell state is owned only by the primary-monitor instance.
         if (this._isPrimaryInstance) {
             this._applyPanelVisibility();
@@ -305,6 +367,77 @@ export const NotchNux = GObject.registerClass({
             blurKey: JSON.stringify(this._config.blur),
             trayMirrorKey: this._config.trayMirrorKey,
         };
+    }
+
+    // --- Clipboard Monitor (Stage copied text/files directly into Notch Shelf) ---
+    _initClipboardWatch() {
+        try {
+            let selection = global.display.get_selection();
+            if (selection) {
+                this._clipboardOwnerId = selection.connect('owner-changed', (_sel, selType) => {
+                    // Meta.SelectionType.SELECTION_CLIPBOARD = 1
+                    if (selType === 1 && this._config.isFeatureEnabled('stageOnClipboard')) {
+                        this._onClipboardChanged();
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('NotchNux: Failed to watch clipboard', e);
+        }
+    }
+
+    _onClipboardChanged() {
+        if (!this._config.isFeatureEnabled('stageOnClipboard')) return;
+        if (this._clipboardDebounce) {
+            GLib.source_remove(this._clipboardDebounce);
+            this._clipboardDebounce = 0;
+        }
+        this._clipboardDebounce = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => {
+            this._clipboardDebounce = 0;
+            if (this._config.isFeatureEnabled('singleClipboardItem')) {
+                this._shelf.clearShelf();
+            }
+            this._shelf.pasteFromClipboardOrDnd((added, type) => {
+                if (added > 0) {
+                    this._activeTab = 'shelf';
+                    let files = this._shelf.getFiles();
+                    let latest = files[files.length - 1];
+                    let preview = latest ? latest.name : 'Item';
+                    let badge = (type === 'image') ? `📷 Image Staged`
+                              : (type === 'file') ? `📁 ${preview}`
+                              : `📋 ${preview.length > 20 ? preview.slice(0, 20) + '…' : preview}`;
+
+                    this._showPillClipboardPreview(badge);
+
+                    if (this.isExpanded) {
+                        this._renderActiveTab();
+                        this._flashShareStatus(badge);
+                    }
+                }
+            });
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _showPillClipboardPreview(msg) {
+        this._pillClipboardMessage = msg;
+        if (this._pillClipboardTimer) {
+            GLib.source_remove(this._pillClipboardTimer);
+            this._pillClipboardTimer = 0;
+        }
+        if (!this.isExpanded) {
+            this._pillClock.set_text(msg);
+            this._syncPillWidth();
+        }
+        this._pillClipboardTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 3500, () => {
+            this._pillClipboardTimer = 0;
+            this._pillClipboardMessage = null;
+            if (!this.isExpanded) {
+                this._updateClock();
+                this._syncPillWidth();
+            }
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     // Monitor ~/.config/notchnux/config.json for external writes (from the
@@ -427,6 +560,23 @@ export const NotchNux = GObject.registerClass({
             this._configMonitor = null;
             this._configMonitorId = 0;
         }
+        if (this._restackedId) {
+            global.display.disconnect(this._restackedId);
+            this._restackedId = null;
+        }
+        if (this._panelBoxYId && Main.layoutManager.panelBox) {
+            try { Main.layoutManager.panelBox.disconnect(this._panelBoxYId); } catch (_) {}
+            this._panelBoxYId = null;
+        }
+        if (this._panelBoxVisId && Main.layoutManager.panelBox) {
+            try { Main.layoutManager.panelBox.disconnect(this._panelBoxVisId); } catch (_) {}
+            this._panelBoxVisId = null;
+        }
+        if (this._dragMonitor) {
+            try { DND.removeDragMonitor(this._dragMonitor); } catch (_) {}
+            this._dragMonitor = null;
+        }
+        
         if (this._stageClickId) {
             global.stage.disconnect(this._stageClickId);
             this._stageClickId = null;
@@ -435,9 +585,27 @@ export const NotchNux = GObject.registerClass({
         if (this._monitorsChangedId) {
             Main.layoutManager.disconnect(this._monitorsChangedId);
         }
-        if (this._restackedId) {
-            global.display.disconnect(this._restackedId);
-            this._restackedId = 0;
+        if (this._flydropSubCleanup) {
+            try { this._flydropSubCleanup(); } catch (_) {}
+            this._flydropSubCleanup = null;
+        }
+        if (this._clipboardOwnerId) {
+            try {
+                let selection = global.display.get_selection();
+                if (selection) selection.disconnect(this._clipboardOwnerId);
+            } catch (_) {}
+            this._clipboardOwnerId = 0;
+        }
+        if (this._clipboardDebounce) {
+            GLib.source_remove(this._clipboardDebounce);
+            this._clipboardDebounce = 0;
+        }
+        if (Array.isArray(global._notchnuxInstances)) {
+            let idx = global._notchnuxInstances.indexOf(this);
+            if (idx >= 0) global._notchnuxInstances.splice(idx, 1);
+        }
+        if (global._notchnuxActive) {
+            global._notchnuxActive = false;
         }
         super.destroy();
     }
@@ -521,6 +689,32 @@ export const NotchNux = GObject.registerClass({
         // Keep the top-edge scroll strip aligned to the (possibly new) primary
         // monitor geometry.
         this._positionTopScroll();
+        this._syncWithPanelPosition();
+    }
+
+    _syncWithPanelPosition() {
+        if (!this._config.isFeatureEnabled('autoHideWithPanel')) {
+            this.translation_y = 0;
+            this.opacity = 255;
+            return;
+        }
+
+        let panelBox = Main.layoutManager.panelBox;
+        if (!panelBox) return;
+
+        if (this.isExpanded || this._pointerInside || global._notchnuxActive) {
+            this.translation_y = 0;
+            this.opacity = 255;
+            return;
+        }
+
+        let py = panelBox.y;
+        this.translation_y = py;
+        if (!panelBox.visible || py < -15) {
+            this.opacity = 0;
+        } else {
+            this.opacity = 255;
+        }
     }
 
     // Measure how tall the currently-rendered dashboard wants to be at the
@@ -1037,6 +1231,14 @@ export const NotchNux = GObject.registerClass({
             item.connect('activate', () => {
                 // Collapse the notch first so the confirm dialog isn't behind it.
                 this.collapse();
+                if (typeof global._pulsarTriggerPowerAction === 'function') {
+                    try {
+                        global._pulsarTriggerPowerAction(actionName);
+                        return;
+                    } catch (e) {
+                        console.error('NotchNux: pulsarTriggerPowerAction failed', e);
+                    }
+                }
                 try {
                     this._systemActions.activateAction(actionName);
                 } catch (e) {
@@ -4078,8 +4280,16 @@ export const NotchNux = GObject.registerClass({
                 if (this.isExpanded)
                     this._renderActiveTab();
                 break;
+            case 'showDateOnPill':
+                this._updateClock();
+                break;
+            case 'stageOnClipboard':
+                break;
             case 'topScroll':
                 this._applyTopScroll();
+                break;
+            case 'autoHideWithPanel':
+                this._syncWithPanelPosition();
                 break;
         }
     }
@@ -5188,21 +5398,21 @@ export const NotchNux = GObject.registerClass({
     }
 
     // ============================================================
-    // Tab: Shelf — a temporary file holding area plus quick-share.
-    // Files live in ~/.local/share/notchnux/shelf and are wiped on shell
-    // restart (see the clearShelf() call in _init). Each file can be opened,
-    // revealed in Files, copied (as a real file via wl-copy, or its path as a
-    // fallback), or removed. A small notes box below offers quick-share text.
+    // Tab: Shelf — FlyDrop & drag-and-drop staging shelf.
+    // Files live in ~/.local/share/notchnux/shelf. Staged files can be dragged
+    // out to external apps, shared via FlyDrop / LocalSend in one click,
+    // copied to clipboard, or revealed in Files.
     // ============================================================
     _renderShelfTab() {
         let panel = new St.BoxLayout({ style_class: 'notchnux-panel nook-shelf-panel', vertical: true, x_expand: true, y_expand: true });
 
         let files = this._shelf.getFiles();
 
-        // Header: "Shelf" + count badge · Add file · Clear.
+        // Header: "FlyDrop Shelf" + count badge · Actions (Downloads, Scan, Clear)
         let header = new St.BoxLayout({ style_class: 'nook-shelf-header', vertical: false, x_expand: true });
         let titleBox = new St.BoxLayout({ vertical: false, x_expand: true });
-        titleBox.add_child(new St.Label({ text: 'Shelf', style_class: 'nook-shelf-title', y_align: Clutter.ActorAlign.CENTER }));
+        titleBox.add_child(new St.Icon({ icon_name: 'document-send-symbolic', icon_size: 16, style_class: 'nook-shelf-header-icon', y_align: Clutter.ActorAlign.CENTER }));
+        titleBox.add_child(new St.Label({ text: 'FlyDrop Shelf', style_class: 'nook-shelf-title', y_align: Clutter.ActorAlign.CENTER }));
         if (files.length > 0) {
             let badge = new St.Bin({ style_class: 'nook-shelf-badge', y_align: Clutter.ActorAlign.CENTER });
             badge.set_style(`background-color: ${accentHex()};`);
@@ -5211,6 +5421,23 @@ export const NotchNux = GObject.registerClass({
         }
         header.add_child(titleBox);
 
+        let headerActions = new St.BoxLayout({ vertical: false });
+
+        // Downloads folder button
+        let dlBtn = new St.Button({ style_class: 'nook-shelf-hdr-btn', reactive: true, y_align: Clutter.ActorAlign.CENTER });
+        let dlRow = new St.BoxLayout({ vertical: false });
+        dlRow.add_child(new St.Icon({ icon_name: 'folder-download-symbolic', icon_size: 13, y_align: Clutter.ActorAlign.CENTER }));
+        dlRow.add_child(new St.Label({ text: 'Downloads', y_align: Clutter.ActorAlign.CENTER }));
+        dlBtn.set_child(dlRow);
+        dlBtn.connect('clicked', () => this._shelf.openDownloadsFolder());
+        headerActions.add_child(dlBtn);
+
+        // FlyDrop settings button
+        let setBtn = new St.Button({ style_class: 'nook-shelf-hdr-btn', reactive: true, y_align: Clutter.ActorAlign.CENTER });
+        setBtn.set_child(new St.Icon({ icon_name: 'preferences-other-symbolic', icon_size: 13, y_align: Clutter.ActorAlign.CENTER }));
+        setBtn.connect('clicked', () => this._shelf.openFlyDropSettings());
+        headerActions.add_child(setBtn);
+
         if (files.length > 0) {
             let clearBtn = new St.Button({ style_class: 'nook-clear-btn', reactive: true, y_align: Clutter.ActorAlign.CENTER });
             let clearRow = new St.BoxLayout({ vertical: false });
@@ -5218,14 +5445,24 @@ export const NotchNux = GObject.registerClass({
             clearRow.add_child(new St.Label({ text: 'Clear', y_align: Clutter.ActorAlign.CENTER }));
             clearBtn.set_child(clearRow);
             clearBtn.connect('clicked', () => { this._shelf.clearShelf(); this._renderActiveTab(); });
-            header.add_child(clearBtn);
+            headerActions.add_child(clearBtn);
         }
+        header.add_child(headerActions);
         panel.add_child(header);
 
-        // Cache the paired/connected devices once per render so every file row
-        // shares the same list without re-hitting D-Bus.
+        // Active Live Transfer Card (if currently sending or receiving)
+        let transferCard = this._buildFlyDropTransferCard();
+        if (transferCard) {
+            panel.add_child(transferCard);
+        }
+
+        // Cache FlyDrop & GSConnect reachable devices
         let devices = this._shelf.getShareDevices();
 
+        // Discovered Devices Bar (FlyDrop / LocalSend chips)
+        panel.add_child(this._buildNearbyDevicesBar(devices));
+
+        // Staged Files List
         if (files.length > 0) {
             let scroll = new St.ScrollView({ style_class: 'nook-shelf-scroll', x_expand: true, y_expand: true });
             scroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
@@ -5236,35 +5473,158 @@ export const NotchNux = GObject.registerClass({
             panel.add_child(scroll);
         }
 
-        // Drop zone: always shown so it's a persistent target. Wayland won't
-        // deliver external file drops into our actors, so "drop" here means
-        // click-to-browse or paste a file copied in the file manager.
+        // Drop zone: stage new files or send
         panel.add_child(this._buildDropZone(files.length === 0));
-
-        panel.add_child(this._buildQuickShareBox(devices));
 
         this._contentContainer.add_child(panel);
     }
 
-    // The click-to-add / paste-from-clipboard drop zone. `spacious` gives it
-    // extra vertical room when the shelf is empty so it reads as the main hero.
+    _buildFlyDropTransferCard() {
+        let t = this._activeFlydropTransfer;
+        if (!t) return null;
+
+        let card = new St.BoxLayout({ style_class: 'nook-flydrop-progress', vertical: true, x_expand: true });
+        this._transferCardActor = card;
+
+        let topRow = new St.BoxLayout({ vertical: false, x_expand: true });
+        let iconName = t.isCompleted ? (t.success ? 'emblem-ok-symbolic' : 'dialog-warning-symbolic') : 'document-send-symbolic';
+        topRow.add_child(new St.Icon({ icon_name: iconName, icon_size: 16, y_align: Clutter.ActorAlign.CENTER, style_class: 'nook-flydrop-icon' }));
+
+        let title = t.isCompleted
+            ? (t.success ? '✓ Transfer completed!' : `✕ Transfer failed: ${t.message || ''}`)
+            : `${t.currentFile || 'Transferring…'} (${t.progressPercent || 0}%)`;
+        let label = new St.Label({ text: title, style_class: 'nook-flydrop-title', x_expand: true, y_align: Clutter.ActorAlign.CENTER });
+        label.clutter_text.ellipsize = Pango.EllipsizeMode.MIDDLE;
+        this._transferStatusLabel = label;
+        topRow.add_child(label);
+
+        let speedLabel = new St.Label({ text: t.isCompleted ? '' : (t.speedStr || ''), style_class: 'nook-flydrop-speed', y_align: Clutter.ActorAlign.CENTER });
+        this._transferSpeedLabel = speedLabel;
+        topRow.add_child(speedLabel);
+        card.add_child(topRow);
+
+        let bar = new St.Bin({ style_class: 'nook-flydrop-bar-bg', x_expand: true, height: 6 });
+        let pct = Math.max(0, Math.min(100, t.progressPercent || 0));
+        let fill = new St.Bin({ style_class: 'nook-flydrop-bar-fill', height: 6 });
+        fill.set_style(`background-color: ${accentHex()}; border-radius: 3px;`);
+        fill.set_width(Math.max(4, Math.floor((pct / 100) * 440)));
+        this._transferBarFill = fill;
+        bar.set_child(fill);
+        card.add_child(bar);
+
+        return card;
+    }
+
+    _buildNearbyDevicesBar(devices) {
+        let box = new St.BoxLayout({ style_class: 'nook-flydrop-devices-box', vertical: true, x_expand: true });
+        let head = new St.BoxLayout({ vertical: false, x_expand: true });
+        head.add_child(new St.Label({ text: 'Nearby Devices (FlyDrop / LocalSend)', style_class: 'nook-share-title', x_expand: true, y_align: Clutter.ActorAlign.CENTER }));
+
+        let scanBtn = new St.Button({ style_class: 'nook-scan-btn', reactive: true, y_align: Clutter.ActorAlign.CENTER });
+        let scanRow = new St.BoxLayout({ vertical: false });
+        scanRow.add_child(new St.Icon({ icon_name: 'view-refresh-symbolic', icon_size: 12, y_align: Clutter.ActorAlign.CENTER }));
+        scanRow.add_child(new St.Label({ text: 'Scan', y_align: Clutter.ActorAlign.CENTER }));
+        scanBtn.set_child(scanRow);
+        scanBtn.connect('clicked', () => {
+            this._shelf.triggerScan();
+            this._flashShareStatus('Scanning for FlyDrop devices…');
+        });
+        head.add_child(scanBtn);
+        box.add_child(head);
+
+        if (devices && devices.length > 0) {
+            let scroll = new St.ScrollView({ style_class: 'nook-devices-scroll', x_expand: true, y_expand: false });
+            scroll.set_policy(St.PolicyType.AUTOMATIC, St.PolicyType.NEVER);
+            let devRow = new St.BoxLayout({ style_class: 'nook-devices-row', vertical: false, x_expand: true });
+
+            for (let d of devices) {
+                let chip = new St.Button({ style_class: 'nook-device-chip', reactive: true, can_focus: false });
+                let chipInner = new St.BoxLayout({ vertical: false });
+                let iconName = d.type === 'phone' || d.type === 'mobile' ? 'phone-symbolic' : 'computer-symbolic';
+                chipInner.add_child(new St.Icon({ icon_name: iconName, icon_size: 14, y_align: Clutter.ActorAlign.CENTER }));
+
+                let infoBox = new St.BoxLayout({ vertical: true, y_align: Clutter.ActorAlign.CENTER });
+                let devName = new St.Label({ text: d.name, style_class: 'nook-device-chip-name' });
+                devName.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+                infoBox.add_child(devName);
+                if (d.model) {
+                    let devModel = new St.Label({ text: d.model, style_class: 'nook-device-chip-sub' });
+                    infoBox.add_child(devModel);
+                }
+                chipInner.add_child(infoBox);
+                chip.set_child(chipInner);
+
+                chip.connect('clicked', () => {
+                    let files = this._shelf.getFiles();
+                    if (files.length > 0) {
+                        let paths = files.map(f => f.path);
+                        this._shelf.sendFileToDevice(d, paths);
+                        this._flashShareStatus(`Sending ${files.length} file(s) to ${d.name}…`);
+                    } else {
+                        this._shelf.openSendDialog([]);
+                    }
+                });
+
+                devRow.add_child(chip);
+            }
+            scroll.set_child(devRow);
+            box.add_child(scroll);
+        } else {
+            let sub = new St.Label({
+                text: this._shelf.isFlyDropAvailable()
+                    ? 'Looking for LocalSend / FlyDrop devices on your local Wi-Fi…'
+                    : 'FlyDrop background service not detected.',
+                style_class: 'nook-share-sub', x_expand: true
+            });
+            sub.clutter_text.line_wrap = true;
+            box.add_child(sub);
+        }
+
+        let status = new St.Label({ text: '', style_class: 'nook-share-status', x_expand: true });
+        status.visible = false;
+        box.add_child(status);
+        this._shareStatus = status;
+
+        return box;
+    }
+
+    // The click-to-add / paste-from-clipboard / DND drop zone.
     _buildDropZone(spacious) {
         let zone = new St.Button({
             style_class: spacious ? 'nook-shelf-drop nook-shelf-drop-spacious' : 'nook-shelf-drop',
             reactive: true, can_focus: false, x_expand: true,
         });
+
+        // Drop target for shell-internal drags. A file dragged in from Nautilus
+        // never arrives here: Mutter hands the payload to the client under the
+        // pointer, and Main.xdndHandler exposes no drop callback for it.
+        zone._delegate = {
+            handleDragOver: () => DND.DragMotionResult.COPY_DROP,
+            acceptDrop: (source) => {
+                let uris = this._extractUris(source);
+                let count = 0;
+                for (let u of uris) {
+                    if (this._shelf.addFile(u)) count++;
+                }
+                if (count > 0) {
+                    this._flashShareStatus(`Staged ${count} file(s) in Shelf`);
+                    this._renderActiveTab();
+                    return true;
+                }
+                return false;
+            }
+        };
+
         let inner = new St.BoxLayout({ vertical: true, x_expand: true,
             x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER });
         inner.add_child(new St.Icon({ icon_name: 'document-send-symbolic',
             icon_size: spacious ? 30 : 22, style_class: 'nook-shelf-drop-icon',
             x_align: Clutter.ActorAlign.CENTER }));
-        inner.add_child(new St.Label({ text: 'Drop files here',
+        inner.add_child(new St.Label({ text: 'Drop files here to stage or send',
             style_class: 'nook-shelf-drop-title', x_align: Clutter.ActorAlign.CENTER }));
-        inner.add_child(new St.Label({ text: 'Click to browse · or paste a copied file',
+        inner.add_child(new St.Label({ text: 'Drag into notch · Click to browse · Paste from clipboard',
             style_class: 'nook-shelf-drop-sub', x_align: Clutter.ActorAlign.CENTER }));
 
-        // A small "Paste" affordance inside the zone. Its own click must not
-        // also trigger the zone's browse click, so it swallows the event.
         let pasteBtn = new St.Button({ style_class: 'nook-shelf-paste', reactive: true, can_focus: false,
             x_align: Clutter.ActorAlign.CENTER });
         let pasteRow = new St.BoxLayout({ vertical: false });
@@ -5292,10 +5652,52 @@ export const NotchNux = GObject.registerClass({
         return zone;
     }
 
-    // One file row: icon + name/size, then Send / Copy / Open / Reveal / Remove.
+    // One file row: icon + name/size, plus FlyDrop Send / Copy / Save a copy /
+    // Open / Reveal / Remove.
+    //
+    // The row is deliberately not draggable. A DND.makeDraggable drag never
+    // leaves the shell: Mutter is handed no wl_data_source for it, so dropping
+    // it on Nautilus, a browser or the desktop silently does nothing and the
+    // cursor shows the "not allowed" icon. "Save a copy" and "Copy to clipboard"
+    // are what actually move a file out of the shelf.
     _buildShelfRow(f, devices) {
-        let row = new St.BoxLayout({ style_class: 'nook-shelf-row', vertical: false, x_expand: true });
-        row.add_child(new St.Icon({ icon_name: f.icon, icon_size: 20, style_class: 'nook-shelf-row-icon', y_align: Clutter.ActorAlign.CENTER }));
+        let row = new St.BoxLayout({ style_class: 'nook-shelf-row', vertical: false, x_expand: true, reactive: true });
+
+        let thumb = new St.BoxLayout({
+            style_class: 'nook-shelf-thumb-holder',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+
+        let isImg = Boolean(f.name && f.name.match(/\.(png|jpg|jpeg|webp|svg|gif|bmp)$/i));
+        let thumbIcon;
+        if (isImg) {
+            try {
+                let gicon = Gio.FileIcon.new(Gio.File.new_for_path(f.path));
+                thumbIcon = new St.Icon({
+                    gicon: gicon,
+                    icon_size: 24,
+                    style_class: 'nook-shelf-row-icon nook-shelf-thumb',
+                    y_align: Clutter.ActorAlign.CENTER
+                });
+            } catch (_) {
+                thumbIcon = new St.Icon({
+                    icon_name: 'image-x-generic-symbolic',
+                    icon_size: 20,
+                    style_class: 'nook-shelf-row-icon',
+                    y_align: Clutter.ActorAlign.CENTER
+                });
+            }
+        } else {
+            thumbIcon = new St.Icon({
+                icon_name: f.icon || 'text-x-generic-symbolic',
+                icon_size: 20,
+                style_class: 'nook-shelf-row-icon',
+                y_align: Clutter.ActorAlign.CENTER
+            });
+        }
+        thumb.add_child(thumbIcon);
+
+        row.add_child(thumb);
 
         let meta = new St.BoxLayout({ vertical: true, x_expand: true, y_align: Clutter.ActorAlign.CENTER });
         let name = new St.Label({ text: f.name, style_class: 'nook-shelf-row-name' });
@@ -5308,17 +5710,19 @@ export const NotchNux = GObject.registerClass({
         const mkAction = (icon, tip, fn) => {
             let b = new St.Button({ style_class: 'nook-shelf-action', reactive: true, can_focus: false });
             b.set_child(new St.Icon({ icon_name: icon, icon_size: 14 }));
-            b.connect('clicked', fn);
+            b.connect('clicked', () => {
+                fn();
+                return Clutter.EVENT_STOP;
+            });
             actions.add_child(b);
             return b;
         };
-        // Send: quick-share this file to a paired GSConnect device (the Linux
-        // "nearby share"). With one device we send straight to it; with several
-        // we pop a small menu to pick. Hidden entirely when nothing is paired.
+
+        // FlyDrop Send action
         if (devices && devices.length === 1) {
             let d = devices[0];
             mkAction('send-to-symbolic', `Send to ${d.name}`, () => {
-                if (this._shelf.sendFileToDevice(d.path, f.path))
+                if (this._shelf.sendFileToDevice(d, f.path))
                     this._flashShareStatus(`Sending to ${d.name}…`);
                 else
                     this._flashShareStatus('Send failed');
@@ -5326,16 +5730,27 @@ export const NotchNux = GObject.registerClass({
         } else if (devices && devices.length > 1) {
             let sendBtn = mkAction('send-to-symbolic', 'Send to device', () => {});
             sendBtn.connect('clicked', () => this._showDevicePicker(sendBtn, f, devices));
+        } else {
+            mkAction('send-to-symbolic', 'Send via FlyDrop', () => {
+                this._shelf.openSendDialog([f.path]);
+            });
         }
-        // Copy: put the real file on the clipboard, falling back to its URI as
-        // text if wl-copy isn't available.
-        mkAction('edit-copy-symbolic', 'Copy', () => {
+
+        // Copy file to clipboard
+        mkAction('edit-copy-symbolic', 'Copy to clipboard', () => {
             if (!this._shelf.copyFileToClipboard(f.path))
                 this._shelf.copyToClipboard(f.uri);
-            this._flashShareStatus('Copied to clipboard');
+            this._flashShareStatus('Copied file to clipboard');
+        });
+        // Write a copy wherever the user wants. This is the way a shelf item
+        // actually reaches the filesystem again.
+        mkAction('document-save-symbolic', 'Save a copy…', () => {
+            this._shelf.saveCopyToChosenPath(f.path, (n) => {
+                this._flashShareStatus(n > 0 ? 'Copy saved' : 'Save cancelled');
+            });
         });
         mkAction('document-open-symbolic', 'Open', () => this._shelf.openFile(f.path));
-        mkAction('folder-symbolic', 'Reveal', () => this._shelf.showInFiles(f.path));
+        mkAction('folder-symbolic', 'Reveal in Files', () => this._shelf.showInFiles(f.path));
         mkAction('user-trash-symbolic', 'Remove', () => {
             this._shelf.deleteFile(f.path);
             this._renderActiveTab();
@@ -5345,58 +5760,16 @@ export const NotchNux = GObject.registerClass({
         return row;
     }
 
-    // Quick Share footer: a status line plus a hint about where files go. The
-    // per-file "Send" actions are the actual share control (they target paired
-    // GSConnect devices); this box just reports what's happening and nudges the
-    // user when there's no device to send to. `devices` is the list already
-    // gathered by the render.
-    _buildQuickShareBox(devices) {
-        let box = new St.BoxLayout({ style_class: 'nook-share-box', vertical: true, x_expand: true });
-
-        let head = new St.BoxLayout({ vertical: false, x_expand: true });
-        head.add_child(new St.Label({ text: 'Quick share', style_class: 'nook-share-title', x_expand: true, y_align: Clutter.ActorAlign.CENTER }));
-
-        // Right-hand hint reflects device state at a glance.
-        let hintText;
-        if (devices.length === 1) hintText = devices[0].name;
-        else if (devices.length > 1) hintText = `${devices.length} devices`;
-        else if (this._shelf.isShareServiceAvailable()) hintText = 'No device connected';
-        else hintText = 'GSConnect not running';
-        let hint = new St.Label({ text: hintText, style_class: 'nook-share-devlabel', y_align: Clutter.ActorAlign.CENTER });
-        head.add_child(hint);
-        box.add_child(head);
-
-        // Subline: how to get a device when there isn't one.
-        if (devices.length === 0) {
-            let sub = new St.Label({
-                text: this._shelf.isShareServiceAvailable()
-                    ? 'Pair & connect a device in GSConnect to send files.'
-                    : 'Install/enable the GSConnect extension to send files to your phone.',
-                style_class: 'nook-share-sub', x_expand: true });
-            sub.clutter_text.line_wrap = true;
-            box.add_child(sub);
-        }
-
-        let status = new St.Label({ text: '', style_class: 'nook-share-status', x_expand: true });
-        status.visible = false;
-        box.add_child(status);
-        this._shareStatus = status;
-
-        return box;
-    }
-
-    // Popup a device menu for a file when more than one device is paired. Reuses
-    // the Studio picker registry so the outside-click guard treats it as
-    // "inside" and picking a device doesn't collapse the dashboard.
+    // Popup a device menu for a file when more than one device is discovered.
     _showDevicePicker(anchorBtn, f, devices) {
         let menu = new PopupMenu.PopupMenu(anchorBtn, 0.5, St.Side.TOP);
         Main.uiGroup.add_child(menu.actor);
         menu.actor.hide();
         this._studioMenus.push(menu);
         for (let d of devices) {
-            let item = new PopupMenu.PopupMenuItem(d.name);
+            let item = new PopupMenu.PopupMenuItem(d.name + (d.model ? ` (${d.model})` : ''));
             item.connect('activate', () => {
-                if (this._shelf.sendFileToDevice(d.path, f.path))
+                if (this._shelf.sendFileToDevice(d, f.path))
                     this._flashShareStatus(`Sending to ${d.name}…`);
                 else
                     this._flashShareStatus('Send failed');
@@ -5407,7 +5780,6 @@ export const NotchNux = GObject.registerClass({
         menu.open();
     }
 
-    // Briefly show a confirmation line under the quick-share box, then hide it.
     _flashShareStatus(msg) {
         if (!this._shareStatus) return;
         this._shareStatus.set_text(msg);
@@ -5419,6 +5791,157 @@ export const NotchNux = GObject.registerClass({
             this._shareStatusId = 0;
             return GLib.SOURCE_REMOVE;
         });
+    }
+
+    // DND and FlyDrop transfer handlers
+    handleDragOver(source, actor, x, y, id) {
+        if (!this._config.isFeatureEnabled('stageOnDrag')) return DND.DragMotionResult.NO_DROP;
+        if (!this.isExpanded) {
+            this._activeTab = 'shelf';
+            this.expand();
+        }
+        return DND.DragMotionResult.COPY_DROP;
+    }
+
+    // Stage rect for the notch: the island grown by a margin, so a drop aimed at
+    // the seam between the collapsed pill and the expanded dashboard still lands.
+    _notchDropZoneRect() {
+        let [x, y] = this.get_transformed_position();
+        let [w, h] = this.get_transformed_size();
+        const pad = 40;
+        return { x1: x - pad, y1: y - pad, x2: x + w + pad, y2: y + h + pad };
+    }
+
+    _isPointOverNotch(x, y) {
+        if (typeof x !== 'number' || typeof y !== 'number') return false;
+        let r = this._notchDropZoneRect();
+        return x >= r.x1 && x <= r.x2 && y >= r.y1 && y <= r.y2;
+    }
+
+    // Reached only for drags that started inside the shell, because a
+    // cross-application drag never produces a drop event the shell can see.
+    // The ways to actually get files in are the folder picker in the drop zone
+    // and pasting a file copied in Nautilus, which stageOnClipboard handles.
+    acceptDrop(source, actor, x, y, time) {
+        if (!this._config.isFeatureEnabled('stageOnDrag')) return false;
+        let uris = this._extractUris(source);
+        let count = 0;
+        for (let u of uris) {
+            if (this._shelf.addFile(u)) count++;
+        }
+        if (count > 0) {
+            this._flashShareStatus(`Staged ${count} file(s) in Shelf`);
+            this._activeTab = 'shelf';
+            if (!this.isExpanded) {
+                this.expand();
+            } else {
+                this._renderActiveTab();
+            }
+            return true;
+        }
+        // Refuse the drop when nothing was staged. Returning true here would
+        // swallow every internal drop that passes over the notch (tabs, calendar
+        // entries, app icons) and let a stale clipboard masquerade as a file.
+        return false;
+    }
+
+    _extractUris(source) {
+        let uris = [];
+        if (!source) return uris;
+
+        const check = (obj) => {
+            if (!obj) return;
+            if (typeof obj === 'string') {
+                uris.push(obj);
+            } else if (Array.isArray(obj.uris)) {
+                uris.push(...obj.uris);
+            } else if (typeof obj.get_uris === 'function') {
+                try { uris.push(...obj.get_uris()); } catch (_) {}
+            } else if (typeof obj.get_uri === 'function') {
+                try { uris.push(obj.get_uri()); } catch (_) {}
+            } else if (obj.uri && typeof obj.uri === 'string') {
+                uris.push(obj.uri);
+            } else if (obj.realUri && typeof obj.realUri === 'string') {
+                uris.push(obj.realUri);
+            } else if (obj.path && typeof obj.path === 'string') {
+                uris.push(`file://${obj.path}`);
+            } else if (obj.filePath && typeof obj.filePath === 'string') {
+                uris.push(`file://${obj.filePath}`);
+            } else if (obj.file) {
+                if (typeof obj.file.get_uri === 'function') uris.push(obj.file.get_uri());
+                else if (typeof obj.file.get_path === 'function') uris.push(`file://${obj.file.get_path()}`);
+            } else if (obj._file) {
+                if (typeof obj._file.get_uri === 'function') uris.push(obj._file.get_uri());
+                else if (typeof obj._file.get_path === 'function') uris.push(`file://${obj._file.get_path()}`);
+            }
+        };
+
+        check(source);
+        if (source._delegate) check(source._delegate);
+        if (source.actor) check(source.actor);
+        if (source.actor && source.actor._delegate) check(source.actor._delegate);
+
+        return uris.filter(u => typeof u === 'string' && u.length > 0);
+    }
+
+    _onFlyDropProgress(data) {
+        this._activeFlydropTransfer = {
+            ...data,
+            progressPercent: Math.round((data.progress || 0) * 100),
+            isCompleted: false,
+        };
+        if (this._flydropDismissTimer) {
+            GLib.source_remove(this._flydropDismissTimer);
+            this._flydropDismissTimer = 0;
+        }
+        if (this.isExpanded && this._activeTab === 'shelf') {
+            this._updateFlyDropTransferCard();
+        }
+    }
+
+    _onFlyDropCompleted(data) {
+        if (!this._activeFlydropTransfer) {
+            this._activeFlydropTransfer = {
+                sessionId: data.sessionId,
+                currentFile: data.message || 'Transfer',
+                speedStr: '',
+                progressPercent: 100,
+            };
+        }
+        this._activeFlydropTransfer.isCompleted = true;
+        this._activeFlydropTransfer.success = data.success;
+        this._activeFlydropTransfer.message = data.message;
+        this._activeFlydropTransfer.progressPercent = 100;
+
+        if (this.isExpanded && this._activeTab === 'shelf') {
+            this._updateFlyDropTransferCard();
+        }
+
+        if (this._flydropDismissTimer) GLib.source_remove(this._flydropDismissTimer);
+        this._flydropDismissTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 3500, () => {
+            this._activeFlydropTransfer = null;
+            this._flydropDismissTimer = 0;
+            if (this.isExpanded && this._activeTab === 'shelf') {
+                this._renderActiveTab();
+            }
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _updateFlyDropTransferCard() {
+        if (!this._transferCardActor || !this._activeFlydropTransfer) return;
+        let t = this._activeFlydropTransfer;
+        if (this._transferStatusLabel) {
+            this._transferStatusLabel.text = t.isCompleted
+                ? (t.success ? '✓ Transfer completed!' : `✕ Transfer failed: ${t.message || ''}`)
+                : `${t.currentFile || 'Transferring…'} (${t.progressPercent || 0}%)`;
+        }
+        if (this._transferSpeedLabel) {
+            this._transferSpeedLabel.text = t.isCompleted ? '' : (t.speedStr || '');
+        }
+        if (this._transferBarFill) {
+            this._transferBarFill.set_width(Math.max(4, Math.floor(((t.progressPercent || 0) / 100) * 440)));
+        }
     }
 
     // ============================================================
@@ -5639,6 +6162,8 @@ export const NotchNux = GObject.registerClass({
         this._pointerInside = entering;
 
         if (entering) {
+            global._notchnuxActive = true;
+            this._syncWithPanelPosition();
             // Cancel any pending collapse and (if collapsed) schedule expand.
             if (this._collapseTimeoutId) {
                 GLib.Source.remove(this._collapseTimeoutId);
@@ -5658,6 +6183,10 @@ export const NotchNux = GObject.registerClass({
             if (this._expandTimeoutId) {
                 GLib.Source.remove(this._expandTimeoutId);
                 this._expandTimeoutId = null;
+            }
+            if (!this.isExpanded && !this._anyOwnedMenuOpen()) {
+                global._notchnuxActive = false;
+                this._syncWithPanelPosition();
             }
             // Don't collapse while one of our popup menus is open — the pointer
             // has merely moved onto the menu (which lives in Main.uiGroup, not
@@ -5758,6 +6287,8 @@ export const NotchNux = GObject.registerClass({
     // ============================================================
     expand() {
         if (this.isExpanded) return;
+        global._notchnuxActive = true;
+        this._syncWithPanelPosition();
         // A notification peek is a transient pill state; opening the full
         // dashboard supersedes it. Tear its state/timer down (immediate, so it
         // doesn't animate back to the pill and fight this expand).
@@ -5849,6 +6380,10 @@ export const NotchNux = GObject.registerClass({
     collapse() {
         if (!this.isExpanded) return;
         this.isExpanded = false;
+        if (!this._pointerInside && !this._anyOwnedMenuOpen()) {
+            global._notchnuxActive = false;
+            this._syncWithPanelPosition();
+        }
         this._closeScanOverlay();
         this._stopMediaAnimations();
         this._stopSystemRefresh();
@@ -5962,8 +6497,14 @@ export const NotchNux = GObject.registerClass({
     }
 
     _updateClock() {
-        let date = new Date();
-        this._pillClock.set_text(pillClockText(date));
+        if (this._pillClipboardMessage) {
+            this._pillClock.set_text(this._pillClipboardMessage);
+        } else {
+            let date = new Date();
+            let showDate = this._config.isFeatureEnabled('showDateOnPill');
+            let clockText = showDate ? pillClockText(date) : date.toLocaleTimeString([], PILL_TIME_FMT);
+            this._pillClock.set_text(clockText);
+        }
 
         let showBattery = this._config.isFeatureEnabled('showBattery');
         this._pillBatteryBox.visible = showBattery;

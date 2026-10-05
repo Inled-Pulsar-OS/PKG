@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, QrCode } from "lucide-react";
 import { cn } from "@/modules/ui/utils";
 import { FeatureSlide } from "../types";
 
@@ -26,6 +26,7 @@ export function SliceCard({ slide, idx, index, prev, next }: SliceCardProps) {
       </p>
 
       <div className="relative mt-8 w-full max-w-3xl">
+        {slide.id === "flydrop" && <FlyDropSlice />}
         {slide.id === "optimizer" && <OptimizerSlice />}
         {slide.id === "global-menu" && <GlobalMenuSlice />}
         {slide.id === "adblock" && <AdblockSlice />}
@@ -60,6 +61,50 @@ function AnimatedSlice({ src }: { src: string }) {
       className="w-full rounded-2xl border border-border shadow-lg"
       style={{ maxHeight: "55vh", objectFit: "contain" }}
     />
+  );
+}
+
+function FlyDropSlice() {
+  return (
+    <div className="flex w-full min-h-[240px] flex-col sm:flex-row items-center justify-center gap-10 py-4">
+      {/* Left: FlyDrop App Icon */}
+      <div className="flex flex-col items-center text-center">
+        <img
+          src="./logos/flydrop.svg"
+          alt="FlyDrop"
+          className="h-28 w-28 object-contain drop-shadow-xl hover:scale-105 transition-transform"
+          draggable={false}
+        />
+        <span className="mt-3 text-base font-semibold text-text-primary">FlyDrop</span>
+        <span className="text-xs text-text-secondary">Our own AirDrop</span>
+      </div>
+
+      {/* Right: LocalSend QR code and centered link button underneath */}
+      <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center bg-white p-3 rounded-2xl shadow-lg ring-1 ring-black/5">
+          <img
+            src="./logos/localsend-qr.svg"
+            alt="Scan QR for LocalSend"
+            className="h-28 w-28 object-contain"
+            draggable={false}
+          />
+          <div className="mt-1 flex items-center gap-1 text-[11px] font-medium text-neutral-800">
+            <QrCode className="h-3 w-3" />
+            <span>Scan to get LocalSend</span>
+          </div>
+        </div>
+
+        <a
+          href="https://localsend.org"
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-semibold text-white shadow-md transition-all hover:bg-blue-500 active:scale-95"
+        >
+          <span>localsend.org</span>
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      </div>
+    </div>
   );
 }
 
@@ -139,4 +184,3 @@ function AdblockSlice() {
     </div>
   );
 }
-

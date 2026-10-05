@@ -19,7 +19,8 @@ export function RecoveryPage({ onBack }: RecoveryPageProps) {
           </h1>
           <p className="mt-3 max-w-120 text-center text-[15px] leading-relaxed text-text-secondary">
             Now it's time to install the operating system on your computer.
-            Click the button below to open the installer and begin the setup.
+            There are already more than a thousand users who have downloaded Pulsar OS thanks to its reliability and high features.  
+            The installer does not require professional technical knowledge and does not need a terminal! If you have any questions during the process, ask us through our Discord and Telegram channels.
           </p>
           <button
             className="btn-primary mt-8 flex items-center gap-2 px-6 py-3 text-[16px]"
@@ -47,7 +48,7 @@ export function RecoveryPage({ onBack }: RecoveryPageProps) {
               await closeWindow();
             }}
           >
-            Finish
+            Continue without installing
             <ArrowRight className="h-4 w-4" strokeWidth={2} />
           </button>
         </footer>

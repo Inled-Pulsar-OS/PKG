@@ -11,22 +11,28 @@ export const FEATURE_SLIDES: FeatureSlide[] = [
     video: "./videos/session-restore.webp",
   },
   {
-    id: "optimizer",
-    title: "Dynamic Adaptive Optimizer",
+    id: "flydrop",
+    title: "Send files from any OS, like with Apple",
     subtitle:
-      "Continuous habit learning engine and anti-saturation governor. Guarantees zero-lag desktop fluidity, proactive memory compaction, and intelligent multi-core load balancing.",
+      "Flydrop is like AirDrop but on Pulsar OS. Use it on your devices with Localsend apps",
+  },
+  {
+    id: "optimizer",
+    title: "Your PC is not very fast?",
+    subtitle:
+      "Thanks to Pulsar Optimizer, your computer will no longer freeze every minute! Reassign priority to each application and process for a seamless experience.",
   },
   {
     id: "global-menu",
     title: "Real Global Menu",
     subtitle:
-      "A true macOS-style unified top menu bar that seamlessly extracts and presents real native application menus (File, Edit, View, Window, Help) across GTK, Qt, Electron and native apps.",
+      "No Linux distribution offers a real global menu like MacOS, with the real menus of almost all apps.",
   },
   {
     id: "app-store",
-    title: "AppInstall - Unified App Center",
+    title: "AppInstall is the app store",
     subtitle:
-      "Browse and install apps from all package managers: APT, Flathub, Snap, AppImage, and packages. Manage GNOME Shell extensions, clean disk trash, perform updates, and access the Pulsar Store ecosystem in one place.",
+      "For anything related to installing something, Appinstall offers you a friendly visual interface similar to the style of the MacOS app store. You won't have to use the terminal",
     video: "./videos/app-store.webp",
   },
   {
@@ -76,8 +82,8 @@ export const FEATURE_SLIDES: FeatureSlide[] = [
   },
   {
     id: "adblock",
-    title: "System-wide Adblocker",
+    title: "Never more ads with our system-level AdBlock!",
     subtitle:
-      "Native DNS-level protection against ads, trackers, and malicious domains across all apps and browsers. Can be enabled or disabled at any time from System Settings.",
+      "Say goodbye to the damn ads that MacOS, Windows or other Linux distros don't protect you from! Welcome to tranquility!",
   },
 ];

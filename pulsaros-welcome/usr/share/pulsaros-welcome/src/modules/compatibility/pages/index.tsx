@@ -15,11 +15,10 @@ export function CompatibilityPage({
       <div className="screen-enter glass flex h-[88vh] max-h-[740px] w-full max-w-[860px] flex-col overflow-hidden">
         <header className="flex shrink-0 flex-col items-center px-8 pt-12 pb-2 select-none">
           <h1 className="text-center text-[26px] font-semibold leading-tight text-text-primary sm:text-[30px]">
-            Connected everywhere
+            All OS in one
           </h1>
           <p className="mt-2.5 max-w-130 text-center text-[14px] leading-relaxed text-text-secondary sm:text-[15px]">
-            Your other systems aren't islands. Pulsar OS bridges macOS, Windows,
-            and Android, natively.
+            With Pulsar OS you can connect your Android or iOS phone and run your Windows apps on real Windows and use MacOS within Pulsar OS
           </p>
         </header>
 
@@ -62,11 +61,10 @@ export function CompatibilityPage({
               />
               <div className="flex flex-col items-start">
                 <div className="text-[15px] font-semibold text-text-primary">
-                  KDE Connect for your phone
+                  Let's connect your phone!
                 </div>
                 <p className="mt-1 text-[12px] leading-snug text-text-secondary">
-                  Scan the code to install KDE Connect and pair your phone with
-                  Pulsar OS. Notifications, file sharing and remote control.
+                  Pulsar OS uses an application called KDE Connect that you can download to your phone and that allows you to connect it to your computer and synchronize notifications and many more things.
                 </p>
                 <button
                   className="btn-secondary mt-3"
