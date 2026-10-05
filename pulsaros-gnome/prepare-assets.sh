@@ -249,6 +249,24 @@ else
     fi
 fi
 
+# ==============================================================================
+# APPLY PULSAR OS DOCK PATCHES
+# ==============================================================================
+PULSAR_DOCK_PATCH="$SCRIPT_DIR/patches/pulsar-dock-magnification-popout.patch"
+
+if [ -f "$PULSAR_DOCK_PATCH" ]; then
+    echo "🔧 [EN] Applying Pulsar Dock magnification pop-out patch..."
+
+    if git -C "$PULSAR_DOCK_SRC" apply --check "$PULSAR_DOCK_PATCH"; then
+        git -C "$PULSAR_DOCK_SRC" apply "$PULSAR_DOCK_PATCH"
+    elif git -C "$PULSAR_DOCK_SRC" apply --reverse --check "$PULSAR_DOCK_PATCH"; then
+        echo "✅ [EN] Pulsar Dock patch is already applied."
+    else
+        echo "❌ [EN] Pulsar Dock magnification patch no longer applies cleanly."
+        exit 1
+    fi
+fi
+
 if [ -d "$PULSAR_DOCK_SRC/_build" ]; then
     rm -rf "$PULSAR_DOCK_SRC/_build" 2>/dev/null || rm -rf "$PULSAR_DOCK_SRC/_build" || true
 fi

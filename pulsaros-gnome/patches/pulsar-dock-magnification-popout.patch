@@ -1,0 +1,300 @@
+diff --git a/dash.js b/dash.js
+index 6690638..4bf674e 100755
+--- a/dash.js
++++ b/dash.js
+@@ -775,22 +775,35 @@ export const DockDash = GObject.registerClass({
+         }
+ 
+         const [pointerX, pointerY] = event.get_coords();
+-        const maxFactor = Docking.DockManager.settings.magnificationSizeFactor || 1.42;
++        const maxFactor =
++            Docking.DockManager.settings.magnificationSizeFactor || 1.42;
+         const appIcons = this.getAppIcons();
+ 
+-        // Effective distance of magnification influence in px
+         const spreadRadius = (this.iconSize || 48) * 2.5;
+ 
+-        // First pass: compute target scale and vertical lift for each icon
++        // PulsarOS:
++        // Magnified icons are drawn as clones in Main.uiGroup.
++        // This lets them physically paint outside the dock/scroll viewport.
++        this._pulsarMagnificationClones ??= new Map();
++
+         const iconData = [];
++
+         appIcons.forEach((icon, idx) => {
+             if (!icon.mapped) {
+-                iconData.push({icon, scale: 1.0, transX: 0, transY: 0, spreadOffset: 0});
++                iconData.push({
++                    icon,
++                    scale: 1.0,
++                    transX: 0,
++                    transY: 0,
++                    spreadOffset: 0,
++                    idx,
++                });
+                 return;
+             }
+ 
+             const [x, y] = icon.get_transformed_position();
+             const [w, h] = icon.get_transformed_size();
++
+             const centerX = x + w / 2;
+             const centerY = y + h / 2;
+ 
+@@ -799,95 +812,199 @@ export const DockDash = GObject.registerClass({
+                 : Math.abs(pointerY - centerY);
+ 
+             let scale = 1.0;
+-            let transY = 0;
+             let transX = 0;
++            let transY = 0;
+ 
+             if (distance < spreadRadius) {
+-                // Smooth cosine curve
+-                const factor = (1 + Math.cos((Math.PI * distance) / spreadRadius)) / 2;
++                const factor =
++                    (1 + Math.cos((Math.PI * distance) / spreadRadius)) / 2;
++
+                 scale = 1.0 + (maxFactor - 1.0) * factor;
+ 
+-                // Rise towards the outer edge
+-                const lift = ((scale - 1.0) * (this.iconSize || 48)) * 0.55;
+-                if (this._position === St.Side.BOTTOM) {
++                const lift =
++                    (scale - 1.0) * (this.iconSize || 48) * 0.55;
++
++                if (this._position === St.Side.BOTTOM)
+                     transY = -lift;
+-                } else if (this._position === St.Side.TOP) {
++                else if (this._position === St.Side.TOP)
+                     transY = lift;
+-                } else if (this._position === St.Side.LEFT) {
++                else if (this._position === St.Side.LEFT)
+                     transX = lift;
+-                } else if (this._position === St.Side.RIGHT) {
++                else if (this._position === St.Side.RIGHT)
+                     transX = -lift;
+-                }
+             }
+ 
+-            iconData.push({icon, scale, transX, transY, spreadOffset: 0, idx, centerX, centerY});
++            iconData.push({
++                icon,
++                scale,
++                transX,
++                transY,
++                spreadOffset: 0,
++                idx,
++            });
+         });
+ 
+-        // Second pass: lateral displacement (push neighbours away like dash2dock-lite & macOS)
++        // macOS-style neighbour spreading
+         for (let i = 0; i < iconData.length; i++) {
+             const data = iconData[i];
+-            if (data.scale > 1.05) {
+-                const extraWidth = (data.scale - 1.0) * (this.iconSize || 48) * 0.5;
+-                for (let j = 0; j < i; j++)
+-                    iconData[j].spreadOffset -= extraWidth * (1 / (i - j + 1));
+-                for (let j = i + 1; j < iconData.length; j++)
+-                    iconData[j].spreadOffset += extraWidth * (1 / (j - i + 1));
+-            }
++
++            if (data.scale <= 1.05)
++                continue;
++
++            const extra =
++                (data.scale - 1.0) * (this.iconSize || 48) * 0.5;
++
++            for (let j = 0; j < i; j++)
++                iconData[j].spreadOffset -=
++                    extra * (1 / (i - j + 1));
++
++            for (let j = i + 1; j < iconData.length; j++)
++                iconData[j].spreadOffset +=
++                    extra * (1 / (j - i + 1));
+         }
+ 
+-        // Apply scales and translations directly to the visual icon actor
++        const active = new Set();
++
+         iconData.forEach(data => {
+-            const targetActor = data.icon.icon?._iconBin ?? data.icon.icon ?? data.icon._previewBin ?? data.icon;
+-            if (!targetActor)
++            const sourceActor =
++                data.icon.icon?._iconBin ??
++                data.icon.icon ??
++                data.icon._previewBin ??
++                data.icon;
++
++            if (!sourceActor)
+                 return;
+ 
+-            let finalTransX = data.transX;
+-            let finalTransY = data.transY;
++            // Undo the old in-dock scaling implementation.
++            for (const actor of [data.icon, sourceActor]) {
++                actor.remove_transition?.('scale-x');
++                actor.remove_transition?.('scale-y');
++                actor.remove_transition?.('translation-x');
++                actor.remove_transition?.('translation-y');
++
++                actor.scale_x = 1.0;
++                actor.scale_y = 1.0;
++                actor.translation_x = 0;
++                actor.translation_y = 0;
++            }
++
++            if (data.scale <= 1.001) {
++                const oldClone =
++                    this._pulsarMagnificationClones.get(data.icon);
++
++                if (oldClone)
++                    oldClone.hide();
++
++                const originalVisual = data.icon.icon ?? sourceActor;
++                originalVisual.opacity = 255;
++
++                return;
++            }
++
++            active.add(data.icon);
++
++            let clone =
++                this._pulsarMagnificationClones.get(data.icon);
++
++            if (!clone) {
++                clone = new Clutter.Clone({
++                    source: sourceActor,
++                    reactive: false,
++                });
++
++                clone.clip_to_allocation = false;
++
++                Main.uiGroup.add_child(clone);
++
++                this._pulsarMagnificationClones.set(
++                    data.icon,
++                    clone
++                );
++            }
++
++            const [x, y] =
++                sourceActor.get_transformed_position();
++
++            const [w, h] =
++                sourceActor.get_transformed_size();
++
++            clone.set_position(x, y);
++            clone.set_size(w, h);
++
++            let finalX = data.transX;
++            let finalY = data.transY;
+ 
+             if (this._isHorizontal)
+-                finalTransX += data.spreadOffset;
++                finalX += data.spreadOffset;
+             else
+-                finalTransY += data.spreadOffset;
++                finalY += data.spreadOffset;
++
++            if (this._position === St.Side.BOTTOM)
++                clone.set_pivot_point(0.5, 1.0);
++            else if (this._position === St.Side.TOP)
++                clone.set_pivot_point(0.5, 0.0);
++            else if (this._position === St.Side.LEFT)
++                clone.set_pivot_point(0.0, 0.5);
++            else
++                clone.set_pivot_point(1.0, 0.5);
+ 
+-            // Pivot from bottom center (0.5, 1.0) for bottom dock so it scales upwards naturally
+-            if (this._position === St.Side.BOTTOM) {
+-                targetActor.set_pivot_point(0.5, 0.9);
+-            } else {
+-                targetActor.set_pivot_point(0.5, 0.5);
+-            }
++            clone.scale_x = data.scale;
++            clone.scale_y = data.scale;
++
++            clone.translation_x = finalX;
++            clone.translation_y = finalY;
++
++            clone.show();
++
++            // Hide the original dock icon while the floating clone is visible.
++            // Keep the dock item itself alive so hover/click/layout still work.
++            const originalVisual = data.icon.icon ?? sourceActor;
++            originalVisual.opacity = 0;
+ 
+-            // Raise magnified icons above their siblings so neighbouring
+-            // icons never paint over the enlarged one
+-            const parent = targetActor.get_parent();
+-            if (parent && parent.get_child_at_index(parent.get_n_children() - 1) !== targetActor)
+-                parent.set_child_above_sibling(targetActor, null);
+-
+-            targetActor.remove_transition('scale-x');
+-            targetActor.remove_transition('scale-y');
+-            targetActor.remove_transition('translation-x');
+-            targetActor.remove_transition('translation-y');
+-            targetActor.scale_x = data.scale;
+-            targetActor.scale_y = data.scale;
+-            targetActor.translation_x = finalTransX;
+-            targetActor.translation_y = finalTransY * 0.3;
++            // Keep magnified icons above the dock itself.
++            Main.uiGroup.set_child_above_sibling(clone, null);
+         });
++
++        // Hide clones that are no longer inside the magnification radius.
++        for (const [icon, clone] of this._pulsarMagnificationClones) {
++            if (!active.has(icon))
++                clone.hide();
++        }
+     }
+ 
+     _resetMagnification() {
+         const appIcons = this.getAppIcons();
++
+         appIcons.forEach(icon => {
+-            const targetActor = icon.icon?._iconBin ?? icon.icon ?? icon._previewBin ?? icon;
+-            if (targetActor) {
+-                targetActor.remove_transition('scale-x');
+-                targetActor.remove_transition('scale-y');
+-                targetActor.remove_transition('translation-x');
+-                targetActor.remove_transition('translation-y');
+-                targetActor.scale_x = 1.0;
+-                targetActor.scale_y = 1.0;
+-                targetActor.translation_x = 0;
+-                targetActor.translation_y = 0;
++            const sourceActor =
++                icon.icon?._iconBin ??
++                icon.icon ??
++                icon._previewBin ??
++                icon;
++
++            for (const actor of [icon, sourceActor]) {
++                if (!actor)
++                    continue;
++
++                actor.remove_transition?.('scale-x');
++                actor.remove_transition?.('scale-y');
++                actor.remove_transition?.('translation-x');
++                actor.remove_transition?.('translation-y');
++
++                actor.scale_x = 1.0;
++                actor.scale_y = 1.0;
++                actor.translation_x = 0;
++                actor.translation_y = 0;
++                actor.opacity = 255;
+             }
+         });
++
++        if (this._pulsarMagnificationClones) {
++            for (const clone of this._pulsarMagnificationClones.values())
++                clone.destroy();
++
++            this._pulsarMagnificationClones.clear();
++        }
+     }
+ 
+     /**
