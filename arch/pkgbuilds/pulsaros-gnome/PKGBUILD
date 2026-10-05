@@ -18,9 +18,8 @@ prepare() {
     cd "$_src"
     mkdir -p "$srcdir/staging"
     cp -r "$_src"/* "$srcdir/staging/" 2>/dev/null || true
-    rm -rf "$srcdir/staging/DEBIAN" "$srcdir/staging/arch" "$srcdir/staging/patches"
+    rm -rf "$srcdir/staging/DEBIAN" "$srcdir/staging/arch"
     cp prepare-assets.sh "$srcdir/prepare-assets.sh"
-    cp -r patches "$srcdir/patches"
     TARGET_DISTRO="arch" bash "$srcdir/prepare-assets.sh" "$srcdir/staging"
 }
 
