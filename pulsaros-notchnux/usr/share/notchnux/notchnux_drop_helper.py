@@ -21,9 +21,7 @@ import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Gio', '2.0')
 gi.require_version('GLib', '2.0')
-gi.require_version('Adw', '1')
-
-from gi.repository import Gtk, Gio, GLib, Adw, Gdk
+from gi.repository import Gtk, Gio, GLib, Gdk
 
 logging.basicConfig(level=logging.INFO, format='[NotchNux-Helper] %(levelname)s: %(message)s')
 logger = logging.getLogger('notchnux-helper')
@@ -50,7 +48,7 @@ class HelperDBus(Gio.Application):
         self._ext_proxy = None
 
     def do_startup(self):
-        Adw.Application.do_startup(self)
+        Gtk.Application.do_startup(self)
         # Try to connect to extension DBus if it exposes staging
         self._connect_ext_proxy()
 
