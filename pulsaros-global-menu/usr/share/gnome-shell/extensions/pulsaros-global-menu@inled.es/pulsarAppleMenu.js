@@ -1306,7 +1306,39 @@ export const PulsarLogoButton = GObject.registerClass({
 
         let shutdownItem = new PopupMenu.PopupMenuItem(_t('shutDown'));
         shutdownItem.connect('activate', () => {
-            let dialog = new PowerConfirmDialog('shutdown', () => {
+            this.triggerPowerAction('shutdown');
+        });
+        this.menu.addMenuItem(shutdownItem);
+
+        global._pulsarTriggerPowerAction = (action) => this.triggerPowerAction(action);
+    }
+
+    triggerPowerAction(action) {
+        switch (action) {
+            case 'lock-screen':
+            case 'lock':
+                if (this._extension._lockScreenOverlay) {
+                    this._extension._lockScreenOverlay.lock();
+                } else {
+                    try { Main.screenShield.lock(true); } catch (_) {}
+                }
+                break;
+            case 'logout':
+                try {
+                    let session = new Gio.DBusProxy({
+                        g_connection: Gio.DBus.session,
+                        g_name: 'org.gnome.SessionManager',
+                        g_object_path: '/org/gnome/SessionManager',
+                        g_interface_name: 'org.gnome.SessionManager'
+                    });
+                    session.init(null);
+                    session.call_sync('Logout', GLib.Variant.new('(u)', [0]), Gio.DBusCallFlags.NONE, -1, null);
+                } catch (e) {
+                    GLib.spawn_command_line_async("gnome-session-quit --logout");
+                }
+                break;
+            case 'suspend':
+            case 'sleep':
                 try {
                     let login1 = new Gio.DBusProxy({
                         g_connection: Gio.DBus.system,
@@ -1315,12 +1347,53 @@ export const PulsarLogoButton = GObject.registerClass({
                         g_interface_name: 'org.freedesktop.login1.Manager'
                     });
                     login1.init(null);
-                    login1.call_sync('PowerOff', GLib.Variant.new('(b)', [true]), Gio.DBusCallFlags.NONE, -1, null);
+                    login1.call_sync('Suspend', GLib.Variant.new('(b)', [true]), Gio.DBusCallFlags.NONE, -1, null);
                 } catch (e) {}
-            });
-            this._extension._activePowerDialog = dialog;
-            dialog.open();
-        });
-        this.menu.addMenuItem(shutdownItem);
+                break;
+            case 'restart':
+            case 'reboot': {
+                let dialog = new PowerConfirmDialog('restart', () => {
+                    try {
+                        let login1 = new Gio.DBusProxy({
+                            g_connection: Gio.DBus.system,
+                            g_name: 'org.freedesktop.login1',
+                            g_object_path: '/org/freedesktop/login1',
+                            g_interface_name: 'org.freedesktop.login1.Manager'
+                        });
+                        login1.init(null);
+                        login1.call_sync('Reboot', GLib.Variant.new('(b)', [true]), Gio.DBusCallFlags.NONE, -1, null);
+                    } catch (e) {}
+                });
+                this._extension._activePowerDialog = dialog;
+                dialog.open();
+                break;
+            }
+            case 'power-off':
+            case 'poweroff':
+            case 'shutdown': {
+                let dialog = new PowerConfirmDialog('shutdown', () => {
+                    try {
+                        let login1 = new Gio.DBusProxy({
+                            g_connection: Gio.DBus.system,
+                            g_name: 'org.freedesktop.login1',
+                            g_object_path: '/org/freedesktop/login1',
+                            g_interface_name: 'org.freedesktop.login1.Manager'
+                        });
+                        login1.init(null);
+                        login1.call_sync('PowerOff', GLib.Variant.new('(b)', [true]), Gio.DBusCallFlags.NONE, -1, null);
+                    } catch (e) {}
+                });
+                this._extension._activePowerDialog = dialog;
+                dialog.open();
+                break;
+            }
+        }
+    }
+
+    destroy() {
+        if (global._pulsarTriggerPowerAction) {
+            global._pulsarTriggerPowerAction = null;
+        }
+        super.destroy();
     }
 });

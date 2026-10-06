@@ -35,8 +35,28 @@ export class MacOSFullscreenManager {
 
     // ─── Utilities ─────────────────────────────────────────────────────────────
 
+    _isPointerOverNotch(x, y) {
+        if (global._notchnuxActive) return true;
+        if (Array.isArray(global._notchnuxInstances)) {
+            for (let notch of global._notchnuxInstances) {
+                try {
+                    if (!notch || !notch.mapped || !notch.visible) continue;
+                    let [nx, ny] = notch.get_transformed_position();
+                    let nw = notch.width;
+                    let nh = notch.height;
+                    if (x >= (nx - 30) && x <= (nx + nw + 30) && y >= 0 && y <= (ny + nh + 30)) {
+                        return true;
+                    }
+                } catch (_) {}
+            }
+        }
+        return false;
+    }
+
     _hasOpenMenu() {
         try {
+            let [px, py] = global.get_pointer();
+            if (this._isPointerOverNotch(px, py)) return true;
             if (Main.overview?.visible) return true;
             if (Main.panel?.menuManager?.activeMenu) return true;
             if (Main.panel?.statusArea) {
@@ -389,6 +409,14 @@ export class MacOSFullscreenManager {
 
     _onPointerMoved(x, y) {
         if (!this._enabled) return;
+        if (this._isPointerOverNotch(x, y)) {
+            if (this._hideTimeoutId) {
+                GLib.source_remove(this._hideTimeoutId);
+                this._hideTimeoutId = 0;
+            }
+            if (!this._panelVisible) this._showPanel(true);
+            return;
+        }
         if (!this._isCurrentWorkspaceFullscreenSpace()) {
             if (!this._panelVisible || (Main.layoutManager.panelBox && Main.layoutManager.panelBox.y !== 0)) {
                 this._setPanelStruts(true);
