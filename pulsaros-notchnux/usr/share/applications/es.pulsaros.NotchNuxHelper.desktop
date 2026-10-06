@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=NotchNux DnD Helper
+Exec=/usr/bin/notchnux-drop-helper
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+StartupNotify=false
+X-GNOME-HiddenUnderSystemd=true
