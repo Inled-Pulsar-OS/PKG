@@ -29,6 +29,7 @@ mkdir -p "$STAGE_DIR/usr/share/pulsaros-spotlight"
 install -m 644 data/base.css "$STAGE_DIR/usr/share/pulsaros-spotlight/base.css"
 install -m 644 data/dark.css "$STAGE_DIR/usr/share/pulsaros-spotlight/dark.css"
 install -m 644 data/light.css "$STAGE_DIR/usr/share/pulsaros-spotlight/light.css"
+install -m 644 data/liquid-glass.css "$STAGE_DIR/usr/share/pulsaros-spotlight/liquid-glass.css"
 install -m 644 data/index.css "$STAGE_DIR/usr/share/pulsaros-spotlight/index.css"
 
 # Install Icons

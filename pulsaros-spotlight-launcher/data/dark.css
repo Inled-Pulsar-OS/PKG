@@ -1,207 +1,198 @@
-/* PulsarOS Spotlight — macOS Dark Liquid Glass Theme */
+/* PulsarOS Spotlight — Apple Dark */
 
-.spotlight-window.dark,
-.spotlight-window {
-    background-color: rgba(28, 32, 44, 0.78);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.30), 0 24px 64px rgba(0, 0, 0, 0.60);
-    color: #ffffff;
+window.spotlight-window.dark {
+    color: #f5f5f7;
+    background-color: rgba(32, 32, 36, 0.94);
+    border: 1px solid rgba(255, 255, 255, 0.17);
+    box-shadow:
+        inset 0 1px rgba(255, 255, 255, 0.20),
+        0 28px 70px rgba(0, 0, 0, 0.58);
 }
 
-.spotlight-window.dark .search-header,
-.search-header {
+window.spotlight-window.dark .search-header {
+    background-color: rgba(255, 255, 255, 0.025);
     border-bottom: 1px solid rgba(255, 255, 255, 0.10);
-    background-color: rgba(255, 255, 255, 0.04);
 }
 
-.spotlight-window.dark .search-icon,
-.search-icon {
-    opacity: 0.80;
-    color: rgba(255, 255, 255, 0.70);
+window.spotlight-window.dark .search-input,
+window.spotlight-window.dark .search-input * {
+    color: #f5f5f7;
+    caret-color: #0a84ff;
 }
 
-.spotlight-window.dark entry,
-.spotlight-window.dark entry *,
-.spotlight-window.dark entry:focus,
-.spotlight-window.dark entry:focus *,
-.spotlight-window.dark entry > text,
-.spotlight-window.dark entry > text:focus,
-.spotlight-window.dark .search-input,
-.spotlight-window.dark .search-input * {
-    background: transparent;
-    background-color: transparent;
-    background-image: none;
-    border: none;
-    outline: none;
-    box-shadow: none;
-    color: #ffffff;
-    caret-color: #0A84FF;
+window.spotlight-window.dark .search-input placeholder {
+    color: rgba(235, 235, 245, 0.43);
 }
 
-.search-input placeholder {
-    color: rgba(255, 255, 255, 0.40);
+window.spotlight-window.dark .search-icon {
+    color: rgba(255, 255, 255, 0.72);
 }
 
-.view-toggle {
-    opacity: 0.80;
+window.spotlight-window.dark .quick-filter {
     color: rgba(255, 255, 255, 0.85);
     background-color: rgba(255, 255, 255, 0.10);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.11);
 }
 
-.view-toggle:hover {
-    background-color: rgba(255, 255, 255, 0.20);
-    opacity: 1.0;
+window.spotlight-window.dark .quick-filter:hover {
+    background-color: rgba(255, 255, 255, 0.17);
 }
 
-.spotlight-window.dark .category-bar,
-.category-bar {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.10);
-    background-color: transparent;
-}
-
-.spotlight-window.dark .category-btn,
-.category-btn {
-    color: rgba(255, 255, 255, 0.75);
-    background-color: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.10);
-}
-
-.category-btn:hover {
-    background-color: rgba(255, 255, 255, 0.18);
+window.spotlight-window.dark .quick-filter:checked {
     color: #ffffff;
+    background-color: rgba(10, 132, 255, 0.78);
+    border-color: rgba(110, 190, 255, 0.85);
+    box-shadow:
+        inset 0 1px rgba(255, 255, 255, 0.30),
+        0 3px 10px rgba(0, 0, 0, 0.28);
 }
 
-.category-btn:checked {
-    background-color: rgba(255, 255, 255, 0.28);
-    border-color: rgba(255, 255, 255, 0.38);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-    color: #ffffff;
-    font-weight: 600;
-}
-
-/* Semi-transparent hover and selection states in List view */
-listbox,
-listbox row,
-listbox row:selected,
-listbox row:hover,
-listbox row:focus {
-    background: transparent;
-    background-color: transparent;
-    border: none;
-    outline: none;
-    box-shadow: none;
-}
-
-listbox row:hover .result-item-list {
+window.spotlight-window.dark listbox row:hover .result-item-list {
     background-color: rgba(255, 255, 255, 0.08);
 }
 
-listbox row:selected .result-item-list,
-.result-item-list:selected {
-    background-color: rgba(10, 132, 255, 0.65);
-    border: 1px solid rgba(255, 255, 255, 0.30);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+window.spotlight-window.dark listbox row:selected .result-item-list {
     color: #ffffff;
+    background-color: rgba(10, 132, 255, 0.75);
 }
 
-.result-item-list:selected .result-title,
-.result-item-list:selected .result-snippet,
-listbox row:selected .result-title,
+window.spotlight-window.dark .result-snippet {
+    color: rgba(235, 235, 245, 0.58);
+}
+
+window.spotlight-window.dark
 listbox row:selected .result-snippet {
-    color: #ffffff;
-    opacity: 1.0;
+    color: rgba(255, 255, 255, 0.86);
 }
 
-.result-icon {
-    opacity: 0.90;
+window.spotlight-window.dark
+flowbox flowboxchild:hover .result-item-grid {
+    background-color: rgba(255, 255, 255, 0.08);
 }
 
-.result-snippet {
-    opacity: 0.60;
+window.spotlight-window.dark
+flowbox flowboxchild:selected .result-item-grid {
+    background-color: rgba(10, 132, 255, 0.75);
 }
 
-/* Semi-transparent hover and selection states in Grid view */
-flowbox,
-flowbox flowboxchild,
-flowbox flowboxchild:selected,
-flowbox flowboxchild:hover,
-flowbox flowboxchild:focus {
+window.spotlight-window.dark.compact .search-header {
+    border-bottom-color: transparent;
+}
+
+
+window.spotlight-window.dark.compact .search-header {
     background: transparent;
     background-color: transparent;
     border: none;
-    outline: none;
     box-shadow: none;
 }
 
-flowbox flowboxchild:hover .result-item-grid {
-    background-color: rgba(255, 255, 255, 0.10);
+window.spotlight-window.dark .search-display {
+    color: #f5f5f7;
 }
 
-flowbox flowboxchild:selected .result-item-grid,
-.result-item-grid:selected {
-    background-color: rgba(10, 132, 255, 0.65);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.40), 0 4px 14px rgba(0, 0, 0, 0.40);
+/* Dark Spotlight result text */
+window.spotlight-window.dark .result-title,
+window.spotlight-window.dark .result-title-grid {
+    color: #f5f5f7;
+}
+
+window.spotlight-window.dark .result-snippet {
+    color: rgba(235, 235, 245, 0.60);
+}
+
+/* Normal rows stay completely transparent */
+window.spotlight-window.dark listbox row .result-item-list,
+window.spotlight-window.dark flowbox flowboxchild .result-item-grid {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+/* Only hover gets a subtle Apple-style highlight */
+window.spotlight-window.dark listbox row:hover .result-item-list,
+window.spotlight-window.dark flowbox flowboxchild:hover .result-item-grid {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Selected result */
+window.spotlight-window.dark listbox row:selected .result-item-list,
+window.spotlight-window.dark flowbox flowboxchild:selected .result-item-grid {
+    background-color: rgba(10, 132, 255, 0.72);
+}
+
+window.spotlight-window.dark listbox row:selected .result-title,
+window.spotlight-window.dark listbox row:selected .result-snippet,
+window.spotlight-window.dark flowbox flowboxchild:selected .result-title-grid {
     color: #ffffff;
 }
 
-.result-icon-grid {
-    opacity: 0.95;
-}
-
-.result-title-grid {
-    opacity: 0.90;
-}
-
-.ctx-menu-btn {
+/* Dark-mode result readability */
+window.spotlight-window.dark .result-title,
+window.spotlight-window.dark .result-title-grid {
     color: #ffffff;
 }
 
-.ctx-menu-btn:hover,
-.ctx-menu-btn:focus,
-.ctx-menu-btn-selected {
-    background-color: rgba(10, 132, 255, 0.28);
-    box-shadow: 0 0 0 1px rgba(10, 132, 255, 0.35),
-                inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-                0 2px 8px rgba(0, 0, 0, 0.35);
+window.spotlight-window.dark .result-snippet {
+    color: rgba(255,255,255,0.62);
 }
 
-.ctx-menu-btn-danger {
-    color: #ff453a;
-}
-
-.ctx-menu-btn-danger:hover,
-.ctx-menu-btn-danger:focus,
-.ctx-menu-btn-danger.ctx-menu-btn-selected {
-    background-color: rgba(255, 69, 58, 0.20);
-    box-shadow: 0 0 0 1px rgba(255, 69, 58, 0.35),
-                inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-                0 2px 8px rgba(0, 0, 0, 0.35);
-}
-
-.uninstall-progress {
-    background-color: rgba(10, 132, 255, 0.10);
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.uninstall-progress label {
+/* Dark-mode result readability */
+window.spotlight-window.dark .result-title,
+window.spotlight-window.dark .result-title-grid {
     color: #ffffff;
 }
 
-.indexing-status-bar {
-    background-color: rgba(0, 0, 0, 0.20);
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+window.spotlight-window.dark .result-snippet {
+    color: rgba(255,255,255,0.62);
 }
 
-.indexing-status-bar label {
-    color: rgba(255, 255, 255, 0.7);
+/* Dark Apple-style interactive states */
+window.spotlight-window.dark .search-header.focused {
+    background-color: rgba(255,255,255,0.035);
+    box-shadow:
+        inset 0 1px rgba(255,255,255,0.18);
 }
 
-.indexing-status-bar progressbar trough {
-    background-color: rgba(255, 255, 255, 0.15);
+window.spotlight-window.dark .search-header.pressed {
+    background-color: rgba(255,255,255,0.065);
 }
 
-.indexing-status-bar progressbar progress {
-    background-color: #0A84FF;
+window.spotlight-window.dark list > row:hover .result-item-list,
+window.spotlight-window.dark flowbox > flowboxchild:hover .result-item-grid {
+    background-color: rgba(255,255,255,0.085);
+}
+
+window.spotlight-window.dark list > row:selected .result-item-list,
+window.spotlight-window.dark flowbox > flowboxchild:selected .result-item-grid {
+    background-color: rgba(10,132,255,0.68);
+    box-shadow:
+        inset 0 1px rgba(255,255,255,0.14);
+}
+
+window.spotlight-window.dark .category-btn {
+    color: rgba(255,255,255,0.72);
+    background-color: rgba(255,255,255,0.065);
+    border: 1px solid rgba(255,255,255,0.07);
+}
+
+window.spotlight-window.dark .category-btn:hover {
+    color: #ffffff;
+    background-color: rgba(255,255,255,0.12);
+}
+
+window.spotlight-window.dark .category-btn:checked {
+    color: #ffffff;
+    background-color: #0a84ff;
+    border-color: rgba(110,190,255,0.72);
+}
+
+window.spotlight-window.dark .view-toggle {
+    color: rgba(255,255,255,0.82);
+    background-color: rgba(255,255,255,0.075);
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+window.spotlight-window.dark .view-toggle:hover {
+    background-color: rgba(255,255,255,0.14);
 }

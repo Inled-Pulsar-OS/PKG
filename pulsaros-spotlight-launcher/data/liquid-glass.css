@@ -1,0 +1,119 @@
+/* PulsarOS Spotlight — Pulsar Liquid Glass */
+
+window.spotlight-window.liquid-glass.dark {
+    background-color: rgba(15, 17, 23, 0.17);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    box-shadow:
+        inset 0 1px rgba(255, 255, 255, 0.45),
+        inset 0 -1px rgba(255, 255, 255, 0.06),
+        0 30px 80px rgba(0, 0, 0, 0.50);
+}
+
+window.spotlight-window.liquid-glass.light {
+    background-color: rgba(245, 250, 255, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.74);
+    box-shadow:
+        inset 0 1px rgba(255, 255, 255, 1.0),
+        inset 0 -1px rgba(255, 255, 255, 0.25),
+        0 30px 80px rgba(0, 0, 0, 0.20);
+}
+
+window.spotlight-window.liquid-glass.dark .search-header {
+    background-color: rgba(255, 255, 255, 0.055);
+    border-bottom-color: rgba(255, 255, 255, 0.15);
+}
+
+window.spotlight-window.liquid-glass.light .search-header {
+    background-color: rgba(255, 255, 255, 0.24);
+    border-bottom-color: rgba(255, 255, 255, 0.42);
+}
+
+window.spotlight-window.liquid-glass.dark .quick-filter {
+    background-color: rgba(255, 255, 255, 0.10);
+    border-color: rgba(255, 255, 255, 0.20);
+}
+
+window.spotlight-window.liquid-glass.light .quick-filter {
+    background-color: rgba(245, 250, 255, 0.34);
+    border-color: rgba(255, 255, 255, 0.70);
+}
+
+window.spotlight-window.liquid-glass.dark
+listbox row:hover .result-item-list {
+    background-color: rgba(255, 255, 255, 0.11);
+}
+
+window.spotlight-window.liquid-glass.light
+listbox row:hover .result-item-list {
+    background-color: rgba(255, 255, 255, 0.38);
+}
+
+window.spotlight-window.liquid-glass.compact .search-header {
+    border-bottom-color: transparent;
+}
+
+
+window.spotlight-window.liquid-glass.compact .search-header {
+    background: transparent;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+/* Liquid Glass keeps result rows transparent */
+window.spotlight-window.liquid-glass listbox row .result-item-list,
+window.spotlight-window.liquid-glass flowbox flowboxchild .result-item-grid {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+window.spotlight-window.liquid-glass.dark listbox row:hover .result-item-list,
+window.spotlight-window.liquid-glass.dark flowbox flowboxchild:hover .result-item-grid {
+    background-color: rgba(255, 255, 255, 0.10);
+}
+
+window.spotlight-window.liquid-glass.light listbox row:hover .result-item-list,
+window.spotlight-window.liquid-glass.light flowbox flowboxchild:hover .result-item-grid {
+    background-color: rgba(255, 255, 255, 0.30);
+}
+
+/* Liquid Glass interaction stays subtle so the shader remains visible */
+window.spotlight-window.liquid-glass.dark .search-header.focused {
+    background-color: rgba(255,255,255,0.065);
+}
+
+window.spotlight-window.liquid-glass.light .search-header.focused {
+    background-color: rgba(255,255,255,0.24);
+}
+
+window.spotlight-window.liquid-glass.dark
+list > row:hover .result-item-list {
+    background-color: rgba(255,255,255,0.105);
+}
+
+window.spotlight-window.liquid-glass.light
+list > row:hover .result-item-list {
+    background-color: rgba(255,255,255,0.30);
+}
+
+window.spotlight-window.liquid-glass.dark .category-btn,
+window.spotlight-window.liquid-glass.dark .view-toggle {
+    background-color: rgba(255,255,255,0.09);
+    border-color: rgba(255,255,255,0.14);
+}
+
+window.spotlight-window.liquid-glass.light .category-btn,
+window.spotlight-window.liquid-glass.light .view-toggle {
+    background-color: rgba(255,255,255,0.28);
+    border-color: rgba(255,255,255,0.52);
+}
+
+window.spotlight-window.liquid-glass.dark .category-btn:checked {
+    background-color: rgba(10,132,255,0.78);
+}
+
+window.spotlight-window.liquid-glass.light .category-btn:checked {
+    color: #ffffff;
+    background-color: rgba(0,122,255,0.78);
+}

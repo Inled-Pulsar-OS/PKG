@@ -12,23 +12,24 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Duration;
 
-const CATEGORIES: &[(&str, &str)] = &[
-    ("all", "All"),
-    ("applications", "Apps"),
-    ("documents", "Docs"),
-    ("images", "Images"),
-    ("audio", "Music"),
-    ("video", "Video"),
-    ("clipboard", "Clip"),
-    ("web", "Web"),
+const CATEGORIES: &[(&str, &str, &str)] = &[
+    ("all",          "All",    "All"),
+    ("applications", "Apps",   "Applications"),
+    ("documents",    "Docs",   "Documents"),
+    ("images",       "Images", "Images"),
+    ("audio",        "Music",  "Music"),
+    ("video",        "Video",  "Videos"),
+    ("clipboard",    "Clip",   "Clipboard"),
+    ("web",          "Web",    "Web"),
 ];
 
 const DEBOUNCE_MS: u64 = 80;
 
 pub struct SpotlightWindow {
     window: gtk4::ApplicationWindow,
-    search_entry: gtk4::Entry,
+    search_entry: gtk4::Text,
     view_toggle: gtk4::Button,
+    content_revealer: gtk4::Revealer,
     result_view: Rc<ResultView>,
     config: Rc<RefCell<SpotlightConfig>>,
     backend: SearchBackend,
@@ -52,6 +53,19 @@ pub struct SpotlightWindow {
     progress_label: gtk4::Label,
 }
 
+
+fn pulsar_liquid_glass_enabled() -> bool {
+    let settings = gtk4::gio::Settings::new("org.gnome.shell");
+
+    settings
+        .strv("enabled-extensions")
+        .iter()
+        .any(|uuid| {
+            uuid.as_str() ==
+                "liquid-glass@thinkingcoding1231.gmail.com"
+        })
+}
+
 impl SpotlightWindow {
     pub fn new(
         app: &gtk4::Application,
@@ -64,14 +78,19 @@ impl SpotlightWindow {
         let window = gtk4::ApplicationWindow::builder()
             .application(app)
             .title("Spotlight")
-            .default_width(680)
-            .default_height(520)
+            .default_width(760)
+            .default_height(44)
             .resizable(false)
             .decorated(false)
             .build();
 
-        window.set_size_request(680, 520);
+        window.set_size_request(760, 44);
         window.add_css_class("spotlight-window");
+        window.add_css_class("compact");
+
+        if pulsar_liquid_glass_enabled() {
+            window.add_css_class("liquid-glass");
+        }
 
         let style_manager = adw::StyleManager::default();
         let window_c = window.clone();
@@ -94,70 +113,147 @@ impl SpotlightWindow {
         }
 
         let main_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        main_box.set_size_request(680, 520);
+        main_box.set_size_request(760, -1);
         main_box.add_css_class("spotlight-main");
         window.set_child(Some(&main_box));
 
-        // -- Search Header --
-        let search_container = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
+        // -- Apple-style Spotlight Search Header --
+        let search_container =
+            gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+
         search_container.add_css_class("search-header");
 
         let search_icon = {
             let mut img = None;
+
             for base in &[get_local_icon_dir(), get_icon_dir()] {
                 let f = base.join("spotlight-symbolic.svg");
+
                 if f.exists() {
                     img = Some(gtk4::Image::from_file(f));
                     break;
                 }
             }
-            img.unwrap_or_else(|| gtk4::Image::from_icon_name("system-search-symbolic"))
+
+            img.unwrap_or_else(|| {
+                gtk4::Image::from_icon_name("system-search-symbolic")
+            })
         };
+
         search_icon.add_css_class("search-icon");
 
-        let search_entry = gtk4::Entry::builder()
+        // Keep the real text widget invisible so the GTK theme cannot
+        // draw its own inner textbox around it.
+        let search_entry = gtk4::Text::builder()
             .placeholder_text("Spotlight Search")
             .hexpand(true)
-            .has_frame(false)
+            .valign(gtk4::Align::Center)
             .build();
-        search_entry.add_css_class("search-input");
 
+        search_entry.add_css_class("search-input");
+        search_entry.set_opacity(0.0);
+
+        let search_overlay = gtk4::Overlay::new();
+        search_overlay.set_hexpand(true);
+        search_overlay.set_child(Some(&search_entry));
+
+        let search_display =
+            gtk4::Label::new(Some("Spotlight Search"));
+
+        search_display.add_css_class("search-display");
+        search_display.add_css_class("placeholder");
+        search_display.set_xalign(0.0);
+        search_display.set_halign(gtk4::Align::Fill);
+        search_display.set_valign(gtk4::Align::Center);
+        search_display.set_can_target(false);
+
+        search_overlay.add_overlay(&search_display);
+
+        let search_display_c = search_display.clone();
+
+        search_entry.connect_changed(move |entry| {
+            let value = entry.text();
+
+            if value.is_empty() {
+                search_display_c.set_text("Spotlight Search");
+                search_display_c.add_css_class("placeholder");
+            } else {
+                search_display_c.set_text(value.as_str());
+                search_display_c.remove_css_class("placeholder");
+            }
+        });
+
+        // Grid / list button
         let view_toggle = gtk4::Button::new();
         view_toggle.add_css_class("view-toggle");
+        view_toggle.set_tooltip_text(Some("Toggle grid/list view"));
+
         let is_grid = config_rc.borrow().is_grid_view;
-        view_toggle.set_icon_name(if is_grid { "view-list-symbolic" } else { "view-grid-symbolic" });
+
+        view_toggle.set_icon_name(
+            if is_grid {
+                "view-list-symbolic"
+            } else {
+                "view-grid-symbolic"
+            }
+        );
 
         search_container.append(&search_icon);
-        search_container.append(&search_entry);
+        search_container.append(&search_overlay);
         search_container.append(&view_toggle);
+
         main_box.append(&search_container);
 
-        // -- Category Bar --
-        let category_bar = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-        category_bar.add_css_class("category-bar");
-        let mut category_buttons = HashMap::new();
-        let current_category = Rc::new(RefCell::new("all".to_string()));
+        // -- Spotlight Sections --
+        let category_bar =
+            gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
 
-        for &(cat_id, cat_label) in CATEGORIES {
+        category_bar.add_css_class("category-bar");
+
+        let mut category_buttons = HashMap::new();
+        let current_category =
+            Rc::new(RefCell::new("all".to_string()));
+
+        for &(cat_id, label, tooltip) in CATEGORIES {
             let btn = gtk4::ToggleButton::builder()
-                .label(cat_label)
+                .label(label)
                 .active(cat_id == "all")
                 .build();
+
             btn.add_css_class("category-btn");
+            btn.set_tooltip_text(Some(tooltip));
+
             category_bar.append(&btn);
             category_buttons.insert(cat_id.to_string(), btn);
         }
 
         let category_scroll = gtk4::ScrolledWindow::builder()
-            .hscrollbar_policy(gtk4::PolicyType::Automatic)
+            .hscrollbar_policy(gtk4::PolicyType::Never)
             .vscrollbar_policy(gtk4::PolicyType::Never)
-            .propagate_natural_width(false)
-            .propagate_natural_height(false)
             .hexpand(true)
             .build();
+
         category_scroll.add_css_class("category-scroll");
         category_scroll.set_child(Some(&category_bar));
+
         main_box.append(&category_scroll);
+
+        // -- Expandable Spotlight Results --
+        // The launcher initially contains ONLY the search pill.
+        // Results expand below it after the user begins typing.
+        let content_revealer = gtk4::Revealer::builder()
+            .transition_type(gtk4::RevealerTransitionType::SlideDown)
+            .transition_duration(180)
+            .reveal_child(false)
+            .build();
+
+        content_revealer.add_css_class("spotlight-content");
+
+        let content_box =
+            gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+
+        content_revealer.set_child(Some(&content_box));
+        main_box.append(&content_revealer);
 
         // -- Uninstall Progress Bar --
         let progress_revealer = gtk4::Revealer::builder()
@@ -319,10 +415,10 @@ impl SpotlightWindow {
             .build();
         scroll.add_css_class("results-area");
         scroll.set_child(Some(result_view.widget()));
-        main_box.append(&scroll);
+        content_box.append(&scroll);
 
-        main_box.append(&progress_revealer);
-        main_box.append(&indexing_revealer);
+        content_box.append(&progress_revealer);
+        content_box.append(&indexing_revealer);
 
         result_view.set_popover_parent(&window);
 
@@ -330,6 +426,7 @@ impl SpotlightWindow {
             window,
             search_entry,
             view_toggle,
+            content_revealer,
             result_view,
             config: config_rc,
             backend,
@@ -354,9 +451,40 @@ impl SpotlightWindow {
     }
 
     pub fn present_with_focus(self: &Rc<Self>) {
+        // Follow the Liquid Glass switch from Pulsar Settings.
+        if pulsar_liquid_glass_enabled() {
+            self.window.add_css_class("liquid-glass");
+        } else {
+            self.window.remove_css_class("liquid-glass");
+        }
+
         *self.current_dir.borrow_mut() = None;
-        self.search_entry.set_placeholder_text(Some("Search applications, files, or clipboard..."));
+        self.search_entry.set_placeholder_text(Some("Spotlight Search"));
         self.search_entry.set_text("");
+
+                self.window.remove_css_class("compact");
+        self.window.add_css_class("expanded");
+        self.content_revealer.set_reveal_child(true);
+        self.window.set_size_request(760, 520);
+        self.do_search();
+self.window.remove_css_class("compact");
+        self.window.add_css_class("expanded");
+
+        self.content_revealer.set_reveal_child(true);
+        self.window.set_size_request(760, 520);
+
+        // Empty "all" search returns the installed application list.
+        self.do_search();
+
+
+        // Always open Spotlight with its application list visible.
+        *self.category.borrow_mut() = "all".to_string();
+
+        self.window.remove_css_class("compact");
+        self.window.add_css_class("expanded");
+        self.content_revealer.set_reveal_child(true);
+        self.window.set_size_request(760, 520);
+
         self.do_search();
 
         self.window.present();
@@ -453,7 +581,7 @@ impl SpotlightWindow {
                 if btn_c.is_active() {
                     *self_c3.category.borrow_mut() = cat_id_c.clone();
                     *self_c3.current_dir.borrow_mut() = None;
-                    self_c3.search_entry.set_placeholder_text(Some("Search applications, files, or clipboard..."));
+                    self_c3.search_entry.set_placeholder_text(Some("Spotlight Search"));
 
                     // Deactivate others
                     for (cid, b) in &self_c3.category_buttons {
@@ -512,20 +640,30 @@ impl SpotlightWindow {
     }
 
     fn on_search_changed(self: &Rc<Self>) {
-        *self.last_typed.borrow_mut() = Some(std::time::Instant::now());
+        *self.last_typed.borrow_mut() =
+            Some(std::time::Instant::now());
 
         if let Some(id) = self.debounce_id.borrow_mut().take() {
             id.remove();
         }
 
+        self.window.remove_css_class("compact");
+        self.window.add_css_class("expanded");
+        self.content_revealer.set_reveal_child(true);
+        self.window.set_size_request(760, 520);
+        self.window.queue_resize();
+
         let self_c = self.clone();
-        let id = glib::timeout_add_local(Duration::from_millis(DEBOUNCE_MS), move || {
-            // The source has fired: drop the stale handle so a later
-            // on_search_changed never removes an already-destroyed source
-            *self_c.debounce_id.borrow_mut() = None;
-            self_c.do_search();
-            glib::ControlFlow::Break
-        });
+
+        let id = glib::timeout_add_local(
+            Duration::from_millis(DEBOUNCE_MS),
+            move || {
+                *self_c.debounce_id.borrow_mut() = None;
+                self_c.do_search();
+                glib::ControlFlow::Break
+            },
+        );
+
         *self.debounce_id.borrow_mut() = Some(id);
     }
 
@@ -536,6 +674,34 @@ impl SpotlightWindow {
 
         let query = self.search_entry.text().to_string();
         let category = self.category.borrow().clone();
+
+        // Pulsar Spotlight home view:
+        // an empty search always displays installed applications.
+        if query.trim().is_empty()
+            && self.current_dir.borrow().is_none()
+        {
+            let apps =
+                self.backend.search_instant("", "all", DEFAULT_LIMIT);
+
+            self.result_view.set_results(
+                apps,
+                self.config.borrow().is_grid_view,
+            );
+
+            return;
+        }
+
+        // Apple's Spotlight starts as only a search field.
+        // Do not show applications/results until something is typed.
+        if query.trim().is_empty()
+            && self.current_dir.borrow().is_none()
+        {
+            self.result_view.set_results(
+                Vec::new(),
+                self.config.borrow().is_grid_view,
+            );
+            return;
+        }
 
         // If in documents and query empty and not browsing, start browsing $HOME
         if category == "documents" && query.trim().is_empty() && self.current_dir.borrow().is_none() {
@@ -607,7 +773,7 @@ fn browse_directory(&self, path_str: &str, filter: &str) -> Vec<SearchResult> {
 
     fn cycle_category(&self, step: i32) {
         let mut current_idx = 0;
-        for (idx, &(cat_id, _)) in CATEGORIES.iter().enumerate() {
+        for (idx, &(cat_id, _, _)) in CATEGORIES.iter().enumerate() {
             if cat_id == *self.category.borrow() {
                 current_idx = idx;
                 break;
@@ -651,7 +817,7 @@ fn browse_directory(&self, path_str: &str, filter: &str) -> Vec<SearchResult> {
             if self.current_dir.borrow().is_some() {
                 *self.current_dir.borrow_mut() = None;
                 self.search_entry.set_text("");
-                self.search_entry.set_placeholder_text(Some("Search applications, files, or clipboard..."));
+                self.search_entry.set_placeholder_text(Some("Spotlight Search"));
                 self.do_search();
                 return glib::Propagation::Stop;
             }
