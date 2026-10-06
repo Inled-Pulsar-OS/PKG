@@ -153,6 +153,7 @@ export default class NotchNuxExtension extends Extension {
         this._helperBusId = 0;
         this._helperProxy = null;
         this._dbusConnection = null;
+    }
 
     _setupExtensionDbus() {
         try {
