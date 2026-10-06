@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=FlyDrop
+GenericName=File Transfer
+GenericName[es]=Transferencia de archivos
+Comment=Send and receive files seamlessly across devices with AirDrop & LocalSend protocol
+Comment[es]=Comparte y recibe archivos sin cables entre dispositivos con protocolo AirDrop y LocalSend
+Exec=/usr/bin/flydrop settings
+Icon=flydrop
+Terminal=false
+Type=Application
+Categories=Network;FileTransfer;Utility;
+Keywords=airdrop;localsend;share;files;transfer;flydrop;enviar;recibir;
+StartupNotify=true

@@ -1,0 +1,15 @@
+{
+  "name": "FlyDrop & Dynamic Shelf",
+  "description": "Native AirDrop & LocalSend integration with Dynamic Drop Shelf for Pulsar OS",
+  "uuid": "flydrop@pulsaros.org",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50"
+  ],
+  "url": "https://github.com/pulsar-os/flydrop",
+  "version": 1
+}

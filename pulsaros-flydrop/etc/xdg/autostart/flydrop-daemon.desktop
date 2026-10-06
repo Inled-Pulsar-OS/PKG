@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=FlyDrop Daemon
+Exec=/usr/bin/flydrop-daemon
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

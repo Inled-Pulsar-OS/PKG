@@ -1,0 +1,85 @@
+/* FlyDrop GNOME Shell Extension Styles */
+
+.flydrop-panel-btn {
+    padding: 0 8px;
+    font-weight: 500;
+}
+
+.flydrop-panel-btn StIcon {
+    icon-size: 16px;
+    margin-right: 4px;
+}
+
+/* Dynamic Island Shelf */
+#flydrop-island-container {
+    padding: 0;
+    margin: 0;
+}
+
+.flydrop-island {
+    background-color: rgba(18, 18, 22, 0.94);
+    border: 1.5px solid rgba(255, 255, 255, 0.16);
+    border-radius: 26px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+    padding: 8px 18px;
+    color: #ffffff;
+    transition-duration: 250ms;
+}
+
+.flydrop-island-hover {
+    background-color: rgba(28, 28, 36, 0.98);
+    border-color: #0a84ff;
+    box-shadow: 0 14px 44px rgba(10, 132, 255, 0.35);
+}
+
+.flydrop-island-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #ffffff;
+    margin-left: 6px;
+}
+
+.flydrop-island-hint {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-left: 4px;
+}
+
+/* Staged Shelf Items */
+.flydrop-shelf-chip {
+    background-color: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 16px;
+    padding: 4px 10px;
+    margin: 0 4px;
+    font-size: 12px;
+}
+
+.flydrop-action-btn {
+    background-color: #0a84ff;
+    color: #ffffff;
+    border-radius: 18px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+    transition-duration: 150ms;
+}
+
+.flydrop-action-btn:hover {
+    background-color: #0071e3;
+}
+
+.flydrop-close-btn {
+    background-color: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.85);
+    border-radius: 14px;
+    padding: 4px 8px;
+    font-size: 11px;
+    border: none;
+    margin-left: 6px;
+}
+
+.flydrop-close-btn:hover {
+    background-color: rgba(255, 255, 255, 0.22);
+}

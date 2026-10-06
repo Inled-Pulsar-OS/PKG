@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""
+FlyDrop Command Line & Application Launcher
+Usage:
+  flydrop send <file1> [file2...]
+  flydrop text "message"
+  flydrop settings
+  flydrop list
+  flydrop scan
+  flydrop daemon
+"""
+
+import os
+import sys
+import json
+import argparse
+import subprocess
+
+pkg_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+for p in [pkg_root, "/usr/share", "/usr/share/flydrop"]:
+    if os.path.exists(p) and p not in sys.path:
+        sys.path.insert(0, p)
+
+import dbus
+
+
+def get_dbus_iface():
+    try:
+        bus = dbus.SessionBus()
+        proxy = bus.get_object("es.pulsaros.FlyDrop", "/es/pulsaros/FlyDrop")
+        return dbus.Interface(proxy, "es.pulsaros.FlyDrop")
+    except Exception as e:
+        print(f"Error: FlyDrop Daemon is not running ({e})")
+        print("Inicia el servicio ejecutando: systemctl --user start flydrop.service")
+        return None
+
+
+def main():
+    parser = argparse.ArgumentParser(description="FlyDrop - LocalSend & AirDrop para Pulsar OS")
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Send files
+    send_p = subparsers.add_parser("send", help="Enviar archivos")
+    send_p.add_argument("files", nargs="+", help="Rutas de archivos a enviar")
+    send_p.add_argument("--to", help="IP o ID del destinatario (opcional)")
+
+    # Send text
+    text_p = subparsers.add_parser("text", help="Enviar texto")
+    text_p.add_argument("content", help="Texto a enviar")
+    text_p.add_argument("--to", help="IP o ID del destinatario (opcional)")
+
+    # Settings
+    subparsers.add_parser("settings", help="Abrir panel de ajustes")
+
+    # List devices
+    subparsers.add_parser("list", help="Listar dispositivos detectados")
+
+    # Scan
+    subparsers.add_parser("scan", help="Escanear red local")
+
+    # Daemon
+    subparsers.add_parser("daemon", help="Ejecutar demonio en primer plano")
+
+    args = parser.parse_args()
+
+    if not args.command or args.command == "settings":
+        iface = get_dbus_iface()
+        if iface:
+            iface.OpenSettingsDialog()
+        else:
+            ui_script = os.path.join(pkg_root, "ui", "settings_dialog.py")
+            if not os.path.exists(ui_script):
+                ui_script = "/usr/share/flydrop/ui/settings_dialog.py"
+            subprocess.Popen([sys.executable, ui_script])
+        return
+
+    if args.command == "daemon":
+        try:
+            from daemon.flydrop_daemon import main as daemon_main
+        except ImportError:
+            from flydrop.daemon.flydrop_daemon import main as daemon_main
+        daemon_main()
+        return
+
+    if args.command == "send":
+        valid_files = [os.path.abspath(f) for f in args.files if os.path.exists(f)]
+        if not valid_files:
+            print("Error: Ningún archivo especificado existe.")
+            sys.exit(1)
+
+        iface = get_dbus_iface()
+        if not iface:
+            sys.exit(1)
+
+        if args.to:
+            print(f"Enviando {len(valid_files)} archivo(s) a {args.to}...")
+            iface.SendFiles(args.to, json.dumps(valid_files))
+        else:
+            iface.OpenSendDialog(json.dumps(valid_files))
+        return
+
+    if args.command == "text":
+        iface = get_dbus_iface()
+        if not iface:
+            sys.exit(1)
+
+        if args.to:
+            print(f"Enviando texto a {args.to}...")
+            iface.SendText(args.to, args.content)
+        else:
+            ui_script = os.path.join(pkg_root, "ui", "send_dialog.py")
+            if not os.path.exists(ui_script):
+                ui_script = "/usr/share/flydrop/ui/send_dialog.py"
+            subprocess.Popen([sys.executable, ui_script, "--text", args.content])
+        return
+
+    if args.command == "list":
+        iface = get_dbus_iface()
+        if not iface:
+            sys.exit(1)
+        raw = iface.GetDiscoveredDevices()
+        devices = json.loads(raw)
+        print(f"\n--- Dispositivos FlyDrop / LocalSend Detectados ({len(devices)}) ---")
+        for d in devices:
+            print(f" • {d.get('alias')} [{d.get('deviceModel', 'LocalSend')}] - {d.get('ip')}:{d.get('port')} ({d.get('deviceType')})")
+        print()
+        return
+
+    if args.command == "scan":
+        iface = get_dbus_iface()
+        if not iface:
+            sys.exit(1)
+        iface.TriggerScan()
+        print("Escaneo de red iniciado por Multicast UDP...")
+
+
+if __name__ == "__main__":
+    main()

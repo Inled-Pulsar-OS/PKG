@@ -1,0 +1,52 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: pulsaros-flydrop
+Upstream-Contact: Jaime <info@inled.es>
+Source: https://github.com/pulsar-os/flydrop
+
+Files: *
+Copyright: 2025-2026 Inled <info@inled.es>
+License: MIT-INLED
+
+Files: usr/share/flydrop/ui/assets/airdrop.svg
+       usr/share/flydrop/ui/assets/airdrop-symbolic.svg
+       usr/share/icons/hicolor/scalable/apps/flydrop.svg
+       usr/share/icons/hicolor/scalable/apps/flydrop-symbolic.svg
+       usr/share/icons/hicolor/scalable/status/flydrop-symbolic.svg
+       usr/share/gnome-shell/extensions/flydrop@pulsaros.org/icons/*
+Copyright: 2025-2026 Inled <info@inled.es>
+License: MIT-INLED
+Comment: Icons drawn from scratch for Pulsar OS. They are not copies of any
+ Apple artwork.
+
+Comment: FlyDrop is an independent Python/GTK4 + GNOME Shell implementation of
+ the LocalSend v2 wire protocol (UDP multicast discovery on 224.0.0.167:53317
+ plus HTTP/HTTPS transfers with a self-signed TLS client certificate), written
+ so that Pulsar OS interoperates with LocalSend applications on other devices.
+ No LocalSend source code is redistributed inside this package.
+ .
+ LocalSend (https://localsend.org, https://github.com/localsend/localsend) is
+ Copyright 2022-2026 Tien Do Nam and is licensed under the Apache License,
+ Version 2.0 (see https://www.apache.org/licenses/LICENSE-2.0).
+ .
+ The "AirDrop" wording in the package description refers to the user experience
+ only: this package does not implement Apple's proprietary AWDL/BLE AirDrop
+ protocol, and ships no Apple asset, icon or code.
+
+License: MIT-INLED
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
+ .
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.

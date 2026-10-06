@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    chmod +x /usr/bin/flydrop /usr/bin/flydrop-daemon 2>/dev/null || true
+    chmod +x /usr/share/flydrop/ui/*.py 2>/dev/null || true
+    update-desktop-database -q /usr/share/applications 2>/dev/null || true
+fi
+
+exit 0
