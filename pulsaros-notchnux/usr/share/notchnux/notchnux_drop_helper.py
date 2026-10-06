@@ -67,9 +67,7 @@ class HelperDBus(Gio.Application):
         self._window.set_resizable(False)
         self._window.set_modal(False)
         self._window.set_transient_for(None)
-        self._window.set_keep_above(True)
         self._window.set_can_focus(False)
-        self._window.set_opacity(0.85)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         box.set_margin_top(20)
