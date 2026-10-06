@@ -170,40 +170,6 @@ class HelperDBus(Gio.Application):
     def do_dbus_unregister(self, connection, object_path):
         pass
 
-    def handle_method_call(self, connection, sender, object_path, interface_name,
-                           method_name, parameters, invocation):
-        if method_name == 'ShowDropZone':
-            show = parameters.unpack()[0]
-            if show:
-                if self._window is None:
-                    self._create_window()
-                self._window.present()
-                self._window.set_visible(True)
-            else:
-                if self._window:
-                    self._window.set_visible(False)
-            invocation.return_value(GLib.Variant('()'))
-        elif method_name == 'StageFiles':
-            uris = parameters.unpack()[0]
-            res = self.stage_uris_via_proxy(uris)
-            invocation.return_value(GLib.Variant('(b)', (res,)))
-        elif method_name == 'Exit':
-            self.quit()
-            invocation.return_value(GLib.Variant('()'))
-        else:
-            invocation.return_error_literal(Gio.dbus_error_quark(),
-                                            Gio.DBUS_ERROR_UNKNOWN_METHOD,
-                                            'Unknown method')
-
-    def handle_get_property(self, connection, sender, object_path, interface_name,
-                            property_name):
-        return None
-
-    def handle_set_property(self, connection, sender, object_path, interface_name,
-                            property_name, value):
-        return False
-
-
 def main():
     app = HelperDBus()
     exit_status = app.run(sys.argv)
