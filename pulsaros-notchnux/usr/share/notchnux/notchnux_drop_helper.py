@@ -165,36 +165,10 @@ class HelperDBus(Gio.Application):
         return True
 
     def do_dbus_register(self, connection, object_path):
-        info = Gio.DBusNodeInfo.new_for_xml("""
-<node>
-  <interface name="es.pulsaros.NotchNuxHelper">
-    <method name="ShowDropZone">
-      <arg type="b" direction="in" name="show"/>
-    </method>
-    <method name="StageFiles">
-      <arg type="as" direction="in" name="uris"/>
-      <arg type="b" direction="out" name="result"/>
-    </method>
-    <method name="Exit"/>
-  </interface>
-</node>
-""")
-        try:
-            self._bus_id = connection.register_object(
-                object_path,
-                info.interfaces[0],
-                None,  # method_call_closure
-                None,  # get_property_closure
-                None)  # set_property_closure
-        except Exception:
-            self._bus_id = 0
-        return Gio.Application.do_dbus_register(self, connection, object_path)
+        return True
 
     def do_dbus_unregister(self, connection, object_path):
-        if self._bus_id > 0:
-            connection.unregister_object(self._bus_id)
-            self._bus_id = 0
-        Gio.Application.do_dbus_unregister(self, connection, object_path)
+        pass
 
     def handle_method_call(self, connection, sender, object_path, interface_name,
                            method_name, parameters, invocation):
