@@ -134,24 +134,24 @@ export const BLUR_PRESETS = [
 // compositor cost bounded on lower-end GPUs.
 export const BLUR_RADIUS_RANGE = { min: 0, max: 64 };
 
-// Blur defaults: off, so nothing changes until the user opts in. `preset` names
-// one of BLUR_PRESETS above; the two radii are the collapsed/expanded strengths.
+// Blur defaults: clear preset by default for macOS-like glass aesthetic.
 export const BLUR_DEFAULTS = {
-    enabled: false,
-    preset: 'liquid',
-    collapsedRadius: 18,
-    expandedRadius: 36,
+    enabled: true,
+    preset: 'clear',
+    collapsedRadius: 12,
+    expandedRadius: 24,
 };
 
-// Look up a blur preset by id, falling back to the first (default) preset so a
+// Look up a blur preset by id, falling back to the clear preset so a
 // stale/unknown id from an old or hand-edited config never breaks rendering.
 export function blurPreset(id) {
-    return BLUR_PRESETS.find(p => p.id === id) ?? BLUR_PRESETS[0];
+    return BLUR_PRESETS.find(p => p.id === id) ?? BLUR_PRESETS[2] ?? BLUR_PRESETS[0];
 }
 
 // Feature toggles exposed in settings. `id` is the stored key; `default`
 // is used when the config file has no opinion yet.
 export const FEATURE_DEFS = [
+    { id: 'showDateOnPill',    label: 'Show date on notch',   description: 'Show the weekday and date beside the clock on the collapsed pill.', default: true },
     { id: 'showBattery',       label: 'Battery on pill',      description: 'Show the battery indicator on the collapsed pill.',        default: true },
     { id: 'showPrivacy',       label: 'Privacy indicators',   description: 'Show mic/camera in-use dots on the collapsed pill.',        default: true },
     { id: 'pillMarquee',       label: 'Scrolling track title', description: 'Scroll long track titles across the pill while playing.',  default: true },
@@ -159,6 +159,11 @@ export const FEATURE_DEFS = [
     { id: 'calendarSync',      label: 'Calendar sync',        description: 'Pull events from GNOME Online Accounts into the Calendar tab.', default: true },
     { id: 'notifPeek',         label: 'Notification peek',    description: 'Expand the pill into a banner when a notification arrives.',   default: true },
     { id: 'showPowerButton',   label: 'Power button',         description: 'Show a power menu (suspend, log out, restart, power off) in the dashboard header.', default: true },
+    { id: 'stageOnDrag',       label: 'Drop staging shelf',   description: 'Allow dragging files to the notch to stage them or send via FlyDrop.', default: true },
+    { id: 'stageOnClipboard',  label: 'Stage on copy',        description: 'Auto-stage copied text, files or images into Shelf and preview on notch pill.', default: true },
+    { id: 'singleClipboardItem', label: 'Single item in shelf', description: 'Replace previous items when copying something new to keep Shelf clean.', default: true },
+    { id: 'autoHideWithPanel', label: 'Hide notch with top bar in spaces mode', description: 'Hide notch when top bar is retracted on maximized windows, revealing on top edge hover.', default: true },
+    { id: 'hideShellDateMenu', label: 'Hide top bar date/clock', description: 'Hide the standard GNOME date and clock from the top bar.', default: false },
     { id: 'hidePanel',         label: 'Hide top panel',       description: 'Hide the GNOME top bar and rely on the notch instead.',        default: false },
     { id: 'reclaimSpace',      label: 'Reclaim panel space',  description: 'Let maximized windows use the top strip the panel occupied (only applies when the panel is hidden).', default: false },
     { id: 'mirrorTray',        label: 'Mirror top-bar indicators', description: 'Show the top bar’s extension and status icons inside the Tray tab, so you can reach them with the panel hidden.', default: true },
@@ -217,6 +222,7 @@ export class ConfigStore {
         return {
             accent: DEFAULT_ACCENT,
             tabOrder: TAB_DEFS.map(t => t.id),
+            displayMonitor: 'primary',
             tabs,
             features,
             wallpaper: { ...WALLPAPER_DEFAULTS },
@@ -245,6 +251,7 @@ export class ConfigStore {
                 // Shallow-merge over defaults so a partial/older file keeps
                 // sensible values for anything it doesn't mention.
                 data = { ...data, ...parsed };
+                data.displayMonitor = (parsed.displayMonitor !== undefined) ? String(parsed.displayMonitor) : 'primary';
                 data.tabs = { ...this._defaults().tabs, ...(parsed.tabs ?? {}) };
                 data.features = { ...this._defaults().features, ...(parsed.features ?? {}) };
                 data.wallpaper = { ...WALLPAPER_DEFAULTS, ...(parsed.wallpaper ?? {}) };
@@ -452,6 +459,16 @@ export class ConfigStore {
     // the validation, so this just persists the merged blob.
     setBlur(patch) {
         this._data.blur = { ...BLUR_DEFAULTS, ...(this._data.blur ?? {}), ...(patch ?? {}) };
+        this._save();
+    }
+
+    // ---- Display Monitor ----
+    // 'primary' (default), 'all', or specific monitor index string ('0', '1', etc.)
+    get displayMonitor() {
+        return this._data.displayMonitor ?? 'primary';
+    }
+    setDisplayMonitor(value) {
+        this._data.displayMonitor = String(value ?? 'primary');
         this._save();
     }
 }

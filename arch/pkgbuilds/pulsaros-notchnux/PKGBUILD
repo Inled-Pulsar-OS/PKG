@@ -2,7 +2,7 @@
 
 pkgname=pulsaros-notchnux
 pkgver=1.0.0
-pkgrel=1
+pkgrel=2
 pkgdesc="macOS-style dynamic notch and dashboard for Pulsar OS"
 arch=(any)
 url="https://inled.es"

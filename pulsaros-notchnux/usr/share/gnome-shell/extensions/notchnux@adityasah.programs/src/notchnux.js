@@ -111,6 +111,10 @@ export const NotchNux = GObject.registerClass({
         this._studioPreviewIdle = 0;
         this._selectedCam = null;
         this._selectedMic = null;
+        // Drag-out gesture state (shelf rows -> companion drag-source card).
+        this._rowDragInit = null;
+        this._rowStageMotionId = 0;
+        this._rowStageReleaseId = 0;
         this._artSession = new Soup.Session({ timeout: 15 });
         this._artCache = new Map();
         this._artPending = new Map();
@@ -266,9 +270,21 @@ export const NotchNux = GObject.registerClass({
                 if (!this._config.isFeatureEnabled('stageOnDrag'))
                     return DND.DragMotionResult.CONTINUE;
 
-                if (this._isPointOverNotch(dropEvent.x, dropEvent.y) && !this.isExpanded) {
-                    this._activeTab = 'shelf';
-                    this.expand();
+                if (this._isPointOverNotch(dropEvent.x, dropEvent.y)) {
+                    if (!this.isExpanded) {
+                        this._activeTab = 'shelf';
+                        this.expand();
+                    }
+                    // A drag from another application (source is the shell's
+                    // XdndHandler) can never deliver its payload to us -- see
+                    // acceptDrop. Surface the helper's GTK drop zone instead:
+                    // an *invisible* window the extension sizes and places
+                    // exactly over this expanded notch, and this subtree is
+                    // made non-reactive during the drag so Mutter's REACTIVE
+                    // pick skips the chrome and reaches the zone window.
+                    if (dropEvent.source === Main.xdndHandler) {
+                        this.extension?._showDropZone?.(dropEvent.x, dropEvent.y, this);
+                    }
                 }
                 return DND.DragMotionResult.CONTINUE;
             },
@@ -521,6 +537,7 @@ export const NotchNux = GObject.registerClass({
     }
 
     destroy() {
+        this._endRowDrag();
         this._stopClock();
         this._stopWeatherRefresh();
         this._stopSystemRefresh();
@@ -5655,11 +5672,14 @@ export const NotchNux = GObject.registerClass({
     // One file row: icon + name/size, plus FlyDrop Send / Copy / Save a copy /
     // Open / Reveal / Remove.
     //
-    // The row is deliberately not draggable. A DND.makeDraggable drag never
-    // leaves the shell: Mutter is handed no wl_data_source for it, so dropping
-    // it on Nautilus, a browser or the desktop silently does nothing and the
-    // cursor shows the "not allowed" icon. "Save a copy" and "Copy to clipboard"
-    // are what actually move a file out of the shelf.
+    // One file row: icon + name/size, plus FlyDrop Send / Copy / Save a copy /
+    // Open / Reveal / Remove. The row itself is never a shell drag source (a
+    // shell drag can never leave the shell -- Mutter is handed no
+    // wl_data_source for it, so dropping on Nautilus, a browser or the desktop
+    // silently does nothing with the "not allowed" cursor). Pressing a row and
+    // dragging >14px hands the file to the companion, which maps a real GTK
+    // drag-source card at the pointer that CAN be dragged into any external
+    // app; "Save a copy" and "Copy to clipboard" remain the alternatives.
     _buildShelfRow(f, devices) {
         let row = new St.BoxLayout({ style_class: 'nook-shelf-row', vertical: false, x_expand: true, reactive: true });
 
@@ -5757,7 +5777,44 @@ export const NotchNux = GObject.registerClass({
         });
         row.add_child(actions);
 
+        // Drag-out to an external app via the companion's drag-source card.
+        // The gesture lives on the row background only (the action buttons
+        // are separate reactive actors and swallow their own presses).
+        row.connect('button-press-event', (w, event) => {
+            if (event.get_button() !== 1) return Clutter.EVENT_PROPAGATE;
+            let [sx, sy] = event.get_coords();
+            this._rowDragInit = { sx, sy, uri: f.uri };
+            this._rowStageMotionId = global.stage.connect('motion-event', (s, ev) => {
+                if (!this._rowDragInit) return Clutter.EVENT_PROPAGATE;
+                let [gx, gy] = ev.get_coords();
+                let dist = Math.hypot(gx - this._rowDragInit.sx, gy - this._rowDragInit.sy);
+                if (dist < 14) return Clutter.EVENT_PROPAGATE;
+                let uri = this._rowDragInit.uri;
+                this._endRowDrag();
+                this.extension?._startCompanionDrag?.([uri], gx, gy);
+                this._flashShareStatus('Grab the card and drag it into an app');
+                return Clutter.EVENT_STOP;
+            });
+            this._rowStageReleaseId = global.stage.connect('button-release-event', () => {
+                this._endRowDrag();
+                return Clutter.EVENT_PROPAGATE;
+            });
+            return Clutter.EVENT_PROPAGATE;
+        });
+
         return row;
+    }
+
+    _endRowDrag() {
+        if (this._rowStageMotionId) {
+            try { global.stage.disconnect(this._rowStageMotionId); } catch (_) {}
+            this._rowStageMotionId = 0;
+        }
+        if (this._rowStageReleaseId) {
+            try { global.stage.disconnect(this._rowStageReleaseId); } catch (_) {}
+            this._rowStageReleaseId = 0;
+        }
+        this._rowDragInit = null;
     }
 
     // Popup a device menu for a file when more than one device is discovered.

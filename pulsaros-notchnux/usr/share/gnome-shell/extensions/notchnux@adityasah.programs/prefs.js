@@ -35,11 +35,12 @@ export default class NotchNuxPreferences extends ExtensionPreferences {
 
         this._addAppearanceGroup(page, config);
         this._addBlurGroup(page, config);
+        this._addDisplayGroup(page, config);
         this._addWallpaperGroup(page, config, window);
         this._addTabsGroup(page, config);
         this._addFeaturesGroup(page, config);
         this._addTrayMirrorGroup(page, config);
-        this._addQuickShareGroup(page);
+        this._addFlyDropGroup(page);
         this._addSystemGroup(page);
 
         window.set_default_size(560, 720);
@@ -691,117 +692,118 @@ export default class NotchNuxPreferences extends ExtensionPreferences {
         }
     }
 
-    // ---- Quick Share (GSConnect) ----
-    // The Shelf's "Send" action sends files to paired devices through GSConnect.
-    // This group surfaces whether GSConnect is available and which devices are
-    // reachable, and links out to GSConnect's own settings to pair a new one.
-    // We talk to the same session-bus service the shell uses.
-    _addQuickShareGroup(page) {
-        const GSC_NAME = 'org.gnome.Shell.Extensions.GSConnect';
-        const GSC_BASE = '/org/gnome/Shell/Extensions/GSConnect';
-
+    // ---- Display & Monitor selection ----
+    _addDisplayGroup(page, config) {
         const group = new Adw.PreferencesGroup({
-            title: 'Quick Share',
-            description: 'Send files from the Shelf to your phone or another device via GSConnect (the Linux “nearby share”).',
+            title: 'Display Placement',
+            description: 'Choose which monitor shows the notch.',
         });
         page.add(group);
 
-        // Determine service availability + reachable devices synchronously; this
-        // runs once when the prefs window is built.
+        const monitorRow = new Adw.ComboRow({
+            title: 'Display monitor',
+            subtitle: 'Choose where the notch should appear',
+        });
+
+        const model = new Gtk.StringList();
+        model.append('Primary Display');
+        model.append('All Displays');
+        model.append('Display 1');
+        model.append('Display 2');
+        model.append('Display 3');
+        monitorRow.set_model(model);
+
+        let cur = config.displayMonitor;
+        if (cur === 'all') monitorRow.set_selected(1);
+        else if (cur === '0') monitorRow.set_selected(2);
+        else if (cur === '1') monitorRow.set_selected(3);
+        else if (cur === '2') monitorRow.set_selected(4);
+        else monitorRow.set_selected(0);
+
+        monitorRow.connect('notify::selected', () => {
+            let sel = monitorRow.get_selected();
+            if (sel === 1) config.setDisplayMonitor('all');
+            else if (sel === 2) config.setDisplayMonitor('0');
+            else if (sel === 3) config.setDisplayMonitor('1');
+            else if (sel === 4) config.setDisplayMonitor('2');
+            else config.setDisplayMonitor('primary');
+        });
+        group.add(monitorRow);
+    }
+
+    // ---- FlyDrop & File Sharing ----
+    _addFlyDropGroup(page) {
+        const FLYDROP_NAME = 'es.pulsaros.FlyDrop';
+        const FLYDROP_PATH = '/es/pulsaros/FlyDrop';
+        const FLYDROP_IFACE = 'es.pulsaros.FlyDrop';
+
+        const group = new Adw.PreferencesGroup({
+            title: 'FlyDrop & File Sharing',
+            description: 'Send and receive files wirelessly with LocalSend and FlyDrop devices on your local network.',
+        });
+        page.add(group);
+
         let serviceUp = false;
         let devices = [];
         try {
             const bus = Gio.DBus.session;
             const owner = bus.call_sync(
                 'org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus',
-                'NameHasOwner', new GLib.Variant('(s)', [GSC_NAME]),
+                'NameHasOwner', new GLib.Variant('(s)', [FLYDROP_NAME]),
                 new GLib.VariantType('(b)'), Gio.DBusCallFlags.NONE, -1, null);
             serviceUp = owner.deepUnpack()[0];
 
             if (serviceUp) {
                 const reply = bus.call_sync(
-                    GSC_NAME, GSC_BASE, 'org.freedesktop.DBus.ObjectManager',
-                    'GetManagedObjects', null,
-                    new GLib.VariantType('(a{oa{sa{sv}}})'),
+                    FLYDROP_NAME, FLYDROP_PATH, FLYDROP_IFACE,
+                    'GetDiscoveredDevices', null,
+                    new GLib.VariantType('(s)'),
                     Gio.DBusCallFlags.NONE, -1, null);
-                const [objects] = reply.deepUnpack();
-                for (const path in objects) {
-                    const dev = objects[path]['org.gnome.Shell.Extensions.GSConnect.Device'];
-                    if (!dev) continue;
-                    devices.push({
-                        name: dev['Name'] ? dev['Name'].deepUnpack() : 'Device',
-                        type: dev['Type'] ? dev['Type'].deepUnpack() : 'phone',
-                        connected: dev['Connected'] ? dev['Connected'].deepUnpack() : false,
-                        paired: dev['Paired'] ? dev['Paired'].deepUnpack() : false,
-                    });
-                }
+                const [jsonStr] = reply.deepUnpack();
+                devices = JSON.parse(jsonStr || '[]');
             }
-        } catch (e) {
-            // Leave serviceUp=false; the status row below explains the situation.
-        }
+        } catch (e) {}
 
-        // Status row.
         const statusRow = new Adw.ActionRow({
-            title: 'GSConnect',
-            subtitle: serviceUp ? 'Running' : 'Not detected',
+            title: 'FlyDrop Service',
+            subtitle: serviceUp ? `Running · ${devices.length} nearby device(s) found` : 'Not running',
         });
         statusRow.add_prefix(new Gtk.Image({
-            icon_name: serviceUp ? 'emblem-ok-symbolic' : 'dialog-warning-symbolic',
+            icon_name: serviceUp ? 'emblem-ok-symbolic' : 'network-wireless-acquiring-symbolic',
             valign: Gtk.Align.CENTER,
         }));
         group.add(statusRow);
 
-        if (serviceUp) {
-            const iconFor = (t) => t === 'phone' ? 'phone-symbolic'
-                : t === 'tablet' ? 'tablet-symbolic' : 'computer-symbolic';
-            if (devices.length === 0) {
-                const emptyRow = new Adw.ActionRow({
-                    title: 'No paired devices',
-                    subtitle: 'Pair a device in GSConnect to send files to it.',
+        if (devices.length > 0) {
+            for (const d of devices) {
+                const row = new Adw.ActionRow({
+                    title: d.alias || d.ip,
+                    subtitle: `${d.deviceModel || d.deviceType || 'Device'} · ${d.ip}`,
                 });
-                group.add(emptyRow);
-            } else {
-                for (const d of devices) {
-                    const ready = d.connected && d.paired;
-                    const row = new Adw.ActionRow({
-                        title: d.name,
-                        subtitle: ready ? 'Ready to receive'
-                            : !d.paired ? 'Not paired' : 'Not connected',
-                    });
-                    row.add_prefix(new Gtk.Image({ icon_name: iconFor(d.type), valign: Gtk.Align.CENTER }));
-                    if (ready) {
-                        row.add_suffix(new Gtk.Image({ icon_name: 'emblem-ok-symbolic', valign: Gtk.Align.CENTER }));
-                    }
-                    group.add(row);
-                }
+                const iconName = d.deviceType === 'mobile' || d.deviceType === 'phone' ? 'phone-symbolic' : 'computer-symbolic';
+                row.add_prefix(new Gtk.Image({ icon_name: iconName, valign: Gtk.Align.CENTER }));
+                row.add_suffix(new Gtk.Image({ icon_name: 'emblem-ok-symbolic', valign: Gtk.Align.CENTER }));
+                group.add(row);
             }
-        } else {
-            const helpRow = new Adw.ActionRow({
-                title: 'GSConnect is not running',
-                subtitle: 'Install & enable the GSConnect extension to send Shelf files to your devices.',
-            });
-            group.add(helpRow);
         }
 
-        // Open GSConnect's own preferences to manage pairing.
-        const manageRow = new Adw.ActionRow({
-            title: 'Manage devices',
-            subtitle: 'Open GSConnect settings to pair or configure a device',
+        const settingsRow = new Adw.ActionRow({
+            title: 'FlyDrop Settings',
+            subtitle: 'Configure device name, auto-accept and download folder',
             activatable: true,
         });
-        manageRow.add_suffix(new Gtk.Image({ icon_name: 'go-next-symbolic', valign: Gtk.Align.CENTER }));
-        manageRow.connect('activated', () => {
-            // Open GSConnect's own preferences via the Extensions app. Its UUID
-            // is the well-known gsconnect@andyholmes.github.io.
+        settingsRow.add_suffix(new Gtk.Image({ icon_name: 'go-next-symbolic', valign: Gtk.Align.CENTER }));
+        settingsRow.connect('activated', () => {
             try {
-                Gio.Subprocess.new(
-                    ['gnome-extensions', 'prefs', 'gsconnect@andyholmes.github.io'],
-                    Gio.SubprocessFlags.NONE);
-            } catch (e) {
-                logError(e, 'NotchNux: failed to open GSConnect settings');
+                Gio.DBus.session.call(
+                    FLYDROP_NAME, FLYDROP_PATH, FLYDROP_IFACE,
+                    'OpenSettingsDialog', null, null,
+                    Gio.DBusCallFlags.NONE, -1, null, null);
+            } catch (_) {
+                GLib.spawn_command_line_async('python3 /usr/share/flydrop/ui/settings_dialog.py');
             }
         });
-        group.add(manageRow);
+        group.add(settingsRow);
     }
 
     // ---- System shortcuts ----
