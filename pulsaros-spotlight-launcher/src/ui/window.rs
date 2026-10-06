@@ -52,6 +52,15 @@ pub struct SpotlightWindow {
     progress_label: gtk4::Label,
 }
 
+fn pulsar_liquid_glass_enabled() -> bool {
+    let settings = gtk4::gio::Settings::new("org.gnome.shell");
+
+    settings
+        .strv("enabled-extensions")
+        .iter()
+        .any(|uuid| uuid.as_str() == "liquid-glass@thinkingcoding1231.gmail.com")
+}
+
 impl SpotlightWindow {
     pub fn new(
         app: &gtk4::Application,
@@ -72,6 +81,10 @@ impl SpotlightWindow {
 
         window.set_size_request(680, 520);
         window.add_css_class("spotlight-window");
+
+        if pulsar_liquid_glass_enabled() {
+            window.add_css_class("liquid-glass");
+        }
 
         let style_manager = adw::StyleManager::default();
         let window_c = window.clone();
@@ -354,6 +367,13 @@ impl SpotlightWindow {
     }
 
     pub fn present_with_focus(self: &Rc<Self>) {
+        // Follow the Liquid Glass switch from Pulsar Settings.
+        if pulsar_liquid_glass_enabled() {
+            self.window.add_css_class("liquid-glass");
+        } else {
+            self.window.remove_css_class("liquid-glass");
+        }
+
         *self.current_dir.borrow_mut() = None;
         self.search_entry.set_placeholder_text(Some("Search applications, files, or clipboard..."));
         self.search_entry.set_text("");
