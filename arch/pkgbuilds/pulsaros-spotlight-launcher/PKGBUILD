@@ -1,6 +1,6 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-spotlight-launcher
-pkgver=2.0.2
+pkgver=2.0.34
 pkgrel=2
 pkgdesc="Spotlight search for Pulsar OS"
 arch=(any)
@@ -36,6 +36,7 @@ package() {
     install -Dm644 data/base.css "$pkgdir/usr/share/pulsaros-spotlight/base.css"
     install -Dm644 data/dark.css "$pkgdir/usr/share/pulsaros-spotlight/dark.css"
     install -Dm644 data/light.css "$pkgdir/usr/share/pulsaros-spotlight/light.css"
+    install -Dm644 data/liquid-glass.css "$pkgdir/usr/share/pulsaros-spotlight/liquid-glass.css"
     install -Dm644 data/index.css "$pkgdir/usr/share/pulsaros-spotlight/index.css"
     mkdir -p "$pkgdir/usr/share/pulsaros-spotlight/icons"
     cp -r data/icons/* "$pkgdir/usr/share/pulsaros-spotlight/icons/" 2>/dev/null || true

@@ -224,11 +224,15 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
             const actor = win.get_compositor_private ? win.get_compositor_private() : null;
             if (!actor || !Shell.BlurEffect) return;
 
+            // Shell.BlurEffect takes `radius` in device pixels, not `sigma`:
+            // passing the old key throws "No property sigma on ShellBlurEffect"
+            // and no blur is applied at all.
+            const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
             let blur = actor.get_effect ? actor.get_effect('spotlight-glass-blur') : null;
             if (!blur) {
                 blur = new Shell.BlurEffect({
                     brightness: 0.92,
-                    sigma: 32,
+                    radius: Math.round(32 * scale),
                     mode: Shell.BlurMode.BACKGROUND
                 });
                 actor.add_effect_with_name('spotlight-glass-blur', blur);
