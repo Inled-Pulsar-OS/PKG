@@ -60,6 +60,7 @@ repository and consumed by the [ISO build](https://github.com/Inled-Pulsar-OS/IS
 | `pulsaros-recovery` | **Recovery & installer UI** in the style of macOS Recovery: a full-screen GTK4/Libadwaita flow with Recovery Utilities (Install Pulsar OS, Seafari browser, Disk Utility/GParted, Time Machine, extra packages), disk/partition pickers, clean-install and dual-boot installers writing Btrfs with rEFInd/GRUB, plus a native Rust helper (`pulsar-recovery-assistant`) for privileged operations. |
 | `pulsaros-timemachine` | **Continuous backup suite**: local **Btrfs snapshots** that are synced with **restic** to USB drives, Samba/NAS shares and rclone cloud storage. Ships a GTK4/Libadwaita UI, a scheduler service and a CLI. |
 | `pulsaros-circle-to-search` | **Circle to Search** for the Linux desktop: shake the mouse or press a shortcut, select a screen region, and get real-time **OCR** (Tesseract), an optional AI query answered by **Sayri**, and instant visual Google search. GNOME Shell extension + Python helper. |
+| `pulsaros-flydrop` | **FlyDrop: AirDrop-style local file sharing.** A self-contained Python daemon that speaks the open **LocalSend v2** protocol on the LAN — UDP multicast discovery on `224.0.0.167:53317` plus HTTP/HTTPS transfers with a self-signed TLS client cert — so Pulsar OS can exchange files with any LocalSend app (Android, iOS, Windows, macOS, other distros) **without installing LocalSend itself** (`localsend` stays an optional `Suggests:`). Ships a GTK4 send/transfer UI with circular progress and per-file retry, a **"Dynamic Shelf" GNOME Shell extension** (`flydrop@pulsaros.org`) whose island stages whatever is in the clipboard so you can drag it straight into an open window, a **"Send with FlyDrop"** Nautilus right-click action, and a user systemd service + autostart entry that keeps the daemon up. `flydrop` CLI wraps the same daemon for terminal use. |
 | `sayri` | **Siri-like AI assistant**: an always-available orb pinned to the top of the screen (GTK4 layer-shell). Speech-to-text with **whisper.cpp**, text-to-speech with **Piper**, and any OpenAI-compatible provider (OpenAI, Ollama, LM Studio…). Runs in agent mode with 5 sandbox levels, wake word, skills, plugins and gateway instances (Discord, Telegram…). |
 | `driverman` | **GPU driver manager**: detects the installed GPU and manages its driver packages through `apt`, with a CLI (`driverman`) and a dark GTK front-end (`driverman-gui`). If a package install hits a dependency conflict the user keeps control of a terminal to resolve it. |
 | `scrcpy` | The **scrcpy** Android screen mirroring & control utility, packaged for Pulsar OS (uses `adb`). |
@@ -102,6 +103,10 @@ maintains in its own repositories are noted as such.
 | `nautilus` (Finder) | **GNOME Files / Nautilus** (GNOME Project) — custom macOS-inspired fork, GPL-3.0. Built from the Inled fork repo (git submodule `Inled-Pulsar-OS/finder`). |
 | `pulsaros-control-center` | **GNOME Control Center** (GNOME Project) — recompiled from upstream GNOME source with Pulsar OS patches (same overlay as the Arch edition). |
 | `pulsaros-circle-to-search` | **Shotzy** by *SamkitJain660* (EGO extension #9707) — fork that adds the Sayri AI query box, Google Lens/visual search and screenshot uploader. Keeps Shotzy's GPL-3.0 license. |
+| `pulsaros-notchnux` → `notchnux@adityasah.programs` | **NotchNux** by *Aditya Sah* (`Adityasah2004/NotchNux`, MIT) — an existing third-party notch/dashboard extension that Inled packages as-is and then customizes for Pulsar OS (multi-monitor notch, AMOLED-black styling, Wayland drag & drop helper, Notch section in Control Center). Upstream code is not original Inled work. |
+| `hblock` | **hblock** v3.5.1 by *Héctor Molinero Fernández* (`hectorm/hblock`, MIT) — repackaged verbatim for Pulsar OS with the extra `hblock.service` / `hblock.timer` systemd units and the Pulsar blocklist defaults. |
+| `pulsaros-hblock` | Original Inled GTK4/Libadwaita switch & statistics UI built **around hblock**; the blocking engine itself is upstream `hectorm/hblock`. |
+| `pulsaros-flydrop` | Original Inled **Python/GTK4 + GNOME Shell** code, written as an independent reimplementation of the **LocalSend v2 wire protocol** so FlyDrop interoperates with LocalSend devices. **No LocalSend source is bundled.** The "AirDrop" side is an in-house UI/concept over the same LocalSend transport — Apple's real AWDL/BLE AirDrop protocol is *not* implemented and no Apple asset is used. |
 | `pulsaros-gnome` → `pulsar-dock@inled.es` | **Dash-to-Dock** (micheleg/dash-to-dock) — Inled fork maintained at `Inled-Pulsar-OS/dash-to-dock`. |
 | `pulsaros-gnome` → `liquid-glass@…` | **Liquid Glass** GNOME extension by *thinkingcoding1231* / *ryohsuke1231* — upstream repository at `ryohsuke1231/liquid-glass`. |
 | `pulsaros-gnome` (other extensions) | Bundles selected EGO extensions as-is: **Blur my Shell** (aunetx), **Wiggle** (mechtifs, patched for GNOME 50), **Compiz alike magic lamp effect** (hermes83), **Just Perfection**, **Notification Banner Position** (drugo), **No overview** (fthx), **Desktop Icons NG / ding** (rastersoft), **GSConnect** (andyholmes), **GNOME UI Tune** (itstime.tech), **AppIndicator & KStatusNotifierItem** (rgcjonas) and **User Themes**. |
@@ -120,7 +125,7 @@ maintains in its own repositories are noted as such.
 | `pulsaros-hibernate` | Original Pulsar OS logic on **Plymouth** and **systemd**; also keeps the NVIDIA hibernate requirements in mind. |
 | `pulsaros-welcome` | Original **Tauri (Rust + React)** application. Its "hello" animation is the **apple-hello** CodePen original by *steef* (see below). |
 | `sayri` | Original **Python/GTK4** assistant by Inled. Speech stack: **whisper.cpp** (STT) and **Piper** (TTS); designed as a lighter, sandboxed alternative to OpenClaw-style agents for any OpenAI-compatible API. |
-| `pulsaros-global-menu`, `pulsaros-control-center-button`, `pulsaros-recovery`, `driverman`, `dockermigrate`, `tubeos-installer`, `tubeos-plymouth`, `tubeos-branding`, `pulsaros-branding`, `pulsaros-bootsound`, `pulsar-pear-sound-theme`, `pulsar-boot-icons`, `pulsaros-emoji-fonts`, `pulsaros-meta` | **Original Inled / Pulsar OS work** — no third-party upstream (content may be inspired by macOS visuals, but the code is original). |
+| `pulsaros-global-menu`, `pulsaros-control-center-button`, `pulsaros-recovery`, `driverman`, `pulsaros-island`, `pulsaros-update`, `dockermigrate`, `tubeos-installer`, `tubeos-plymouth`, `tubeos-branding`, `tubeos-ui`, `pulsaros-branding`, `pulsaros-bootsound`, `pulsar-pear-sound-theme`, `pulsar-boot-icons`, `pulsaros-emoji-fonts`, `pulsaros-meta` | **Original Inled / Pulsar OS work** — no third-party upstream (content may be inspired by macOS visuals, but the code is original). |
 | `scrcpy` | **scrcpy** (Genymobile) — repackaged as-is for Pulsar OS. |
 | `apple-hello/` | The Apple-style "hello" animation by **steef** (CodePen: steefmaster/MWvdyGb), MIT — the same animation the Welcome app embeds. |
 
@@ -141,6 +146,14 @@ of their upstream, as required by it. Notable examples:
 - `pulsaros-sddm`'s `Apple.Tahoe` theme — permissive ISC-style license (©
   Alexey Varfolomeev / varlesh).
 - `apple-hello` — **MIT** (© steef, CodePen).
+- `hblock` — **MIT** (© Héctor Molinero Fernández, `hectorm/hblock`), upstream
+  v3.5.1 redistributed with our systemd units.
+- `pulsaros-notchnux` — **MIT** (© Aditya Sah, `Adityasah2004/NotchNux`),
+  Pulsar OS modifications applied on top.
+- `pulsaros-flydrop` — the package code is original Inled code, **MIT-INLED**;
+  it implements the **LocalSend** v2 protocol specification to interoperate with
+  other LocalSend apps. LocalSend itself (© Tien Do Nam) is **Apache-2.0** and
+  its source is *not* redistributed inside this package.
 - `pulsaros-spotlight-launcher`, `sayri` and the rest of the in-house apps —
   original Inled code, **MIT-INLED**.
 
