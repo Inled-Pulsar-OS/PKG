@@ -181,10 +181,15 @@ class HelperDBus(Gio.Application):
   </interface>
 </node>
 """)
-        self._bus_id = connection.register_object(object_path, info.interfaces[0],
-                                                  self.handle_method_call,
-                                                  self.handle_get_property,
-                                                  self.handle_set_property)
+        try:
+            self._bus_id = connection.register_object(
+                object_path,
+                info.interfaces[0],
+                None,  # method_call_closure
+                None,  # get_property_closure
+                None)  # set_property_closure
+        except Exception:
+            self._bus_id = 0
         return Gio.Application.do_dbus_register(self, connection, object_path)
 
     def do_dbus_unregister(self, connection, object_path):
