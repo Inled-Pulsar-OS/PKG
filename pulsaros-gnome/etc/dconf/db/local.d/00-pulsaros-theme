@@ -1,8 +1,8 @@
 [org/gnome/desktop/interface]
-gtk-theme='MacTahoe-Dark'
+gtk-theme='MacTahoe-Light-solid'
 cursor-theme='MacTahoe-dark'
-icon-theme='MacTahoe-blue-dark'
-color-scheme='prefer-dark'
+icon-theme='MacTahoe-blue-light'
+color-scheme='prefer-light'
 enable-animations=true
 
 
@@ -20,10 +20,13 @@ disable-lock-screen=false
 button-layout='close,minimize,maximize:'
 
 [org/gnome/shell/extensions/user-theme]
-name='MacTahoe-Dark'
+name='MacTahoe-Light-solid'
 
 [org/gnome/shell]
-enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'pulsar-dock@inled.es', 'blur-my-shell@aunetx', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'just-perfection-desktop@just-perfection', 'pulsaros-global-menu@inled.es', 'notchnux@adityasah.programs', 'pulsaros-spotlight-launcher@inled.es', 'pulsar-circle-to-search@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'notification-position@drugo.dev', 'wiggle@mechtifs', 'gsconnect@andyholmes.github.io', 'no-overview@fthx', 'ding@rastersoft.com', 'gnome-ui-tune@itstime.tech']
+# Keep in sync with /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override.
+# liquid-glass@thinkingcoding1231.gmail.com stays out on purpose: it and
+# blur-my-shell@aunetx both draw glass backdrops and fight each other.
+enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'pulsar-dock@inled.es', 'blur-my-shell@aunetx', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'just-perfection-desktop@just-perfection', 'pulsaros-global-menu@inled.es', 'notchnux@adityasah.programs', 'pulsaros-spotlight-launcher@inled.es', 'pulsar-circle-to-search@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'notification-position@drugo.dev', 'wiggle@mechtifs', 'gsconnect@andyholmes.github.io', 'no-overview@fthx', 'gnome-ui-tune@itstime.tech']
 favorite-apps=['org.gnome.Nautilus.desktop', 'pulsaros-recovery.desktop', 'pulsaros-spotlight.desktop', 'brave-browser.desktop', 'seafari.desktop', 'org.gnome.Terminal.desktop', 'org.gnome.Geary.desktop', 'org.gnome.Calendar.desktop', 'org.gnome.Calculator.desktop', 'com.github.xournalpp.xournalpp.desktop', 'org.gnome.Loupe.desktop', 'io.bassi.Amberol.desktop', 'org.gnome.clocks.desktop', 'org.gnome.Weather.desktop', 'es.inled.PulsarStore.desktop', 'es.inled.AppInstall.desktop']
 disable-extension-version-validation=true
 
@@ -64,38 +67,53 @@ support-notifier-type=0
 activity-menu-visibility=false
 icon=10
 
+[org/gnome/shell/extensions/pulsaros-global-menu]
+macos-fullscreen-spaces=true
+blur-popups=true
+popup-blur-sigma=28
+popup-blur-brightness=0.85
+popup-opacity=78
+
 [org/gnome/shell/extensions/blur-my-shell/appfolder]
 brightness=0.6
 sigma=30
 
 [org/gnome/shell/extensions/blur-my-shell/applications]
-blacklist=['Plank', 'Conky', 'gjs', 'Gjs', 'gjs-console', 'ding', 'DING', 'org.gnome.Shell.Extensions.DING', '*ding*', '*DING*', 'sayri', 'Sayri', 'es.inled.sayri', 'sayri-overlay', 'sayri-indicator', '*sayri*', '*Sayri*']
+blacklist=['Plank', 'Conky', 'gjs', 'Gjs', 'gjs-console', 'ding', 'DING', 'org.gnome.Shell.Extensions.DING', '*ding*', '*DING*', 'sayri', 'Sayri', 'es.inled.sayri', 'sayri-overlay', 'sayri-indicator', '*sayri*', '*Sayri*', 'sayri-tray', 'sayri-ui-clippy', 'sayri-companion', 'clippy', '*clippy*', 'Sayri Companion', 'flydrop', 'FlyDrop', 'es.pulsaros.FlyDrop', '*flydrop*', '*FlyDrop*', 'notchnux', 'NotchNux', '*notchnux*', '*NotchNux*']
 blur=true
 blur-on-overview=false
-corner-when-maximized=true
+corner-radius=18
+corner-when-maximized=false
 dynamic-opacity=false
 enable-all=true
+# Windows stay fully opaque: only the parts an app leaves transparent (rounded
+# corners, shadows) show any blur. Lowering this turns *every* window into a
+# uniform translucent sheet, which is not what we want.
 opacity=255
+pipeline='pipeline_default_rounded'
 sigma=23
+static-blur=false
 
 [org/gnome/shell/extensions/blur-my-shell/dash-to-dock]
 blur=true
-brightness=0.64000000000000001
+brightness=0.6
 override-background=true
 pipeline='pipeline_default_rounded'
-sigma=0
+# sigma=0 built a zero-radius blur, which is no blur at all.
+sigma=30
 static-blur=true
 style-dash-to-dock=2
 unblur-in-overview=true
 
 [org/gnome/shell/extensions/blur-my-shell/panel]
 blur=false
-brightness=0.59999999999999998
+brightness=0.6
 corner-radius=0
 force-light-text=false
 override-background=false
 pipeline='pipeline_default'
 sigma=30
+static-blur=false
 
 [org/gnome/shell/extensions/blur-my-shell/window-list]
 brightness=0.6

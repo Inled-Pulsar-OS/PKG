@@ -18,81 +18,86 @@ sync_theme() {
     scheme=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")
     mkdir -p "$HOME/.config/gtk-4.0" "$HOME/.config/gtk-3.0"
 
+    GTK_NOW=$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d "'")
+    CUR_NOW=$(gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null | tr -d "'")
+    ICON_NOW=$(gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null | tr -d "'")
+
     if [ "$scheme" = "prefer-dark" ]; then
-        gsettings set org.gnome.desktop.interface gtk-theme "MacTahoe-Dark" 2>/dev/null || true
-        gsettings set org.gnome.desktop.interface icon-theme "MacTahoe-blue-dark" 2>/dev/null || true
-        gsettings set org.gnome.shell.extensions.user-theme name "MacTahoe-Dark" 2>/dev/null || true
-        
-        # Libadwaita / GTK4 user overrides (Dark)
-        if [ -d "/usr/share/themes/MacTahoe-Dark/gtk-4.0" ]; then
-            cp -rf /usr/share/themes/MacTahoe-Dark/gtk-4.0/* "$HOME/.config/gtk-4.0/" 2>/dev/null || true
-            if [ -f "$HOME/.config/gtk-4.0/gtk-dark.css" ] && [ ! -f "$HOME/.config/gtk-4.0/gtk.css" ]; then
-                cp -f "$HOME/.config/gtk-4.0/gtk-dark.css" "$HOME/.config/gtk-4.0/gtk.css" 2>/dev/null || true
-            fi
+        if [[ "$GTK_NOW" == MacTahoe* ]]; then
+            GTK_TGT="MacTahoe-Dark-solid"
+        else
+            GTK_TGT="$GTK_NOW"
         fi
-        if [ -d "/usr/share/themes/MacTahoe-Dark/gtk-3.0" ]; then
-            cp -rf /usr/share/themes/MacTahoe-Dark/gtk-3.0/gtk-dark.css "$HOME/.config/gtk-3.0/gtk.css" 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface gtk-theme "$GTK_TGT" 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface icon-theme "$ICON_NOW" 2>/dev/null || true
+        if [[ "$CUR_NOW" == MacTahoe* ]]; then
+            CUR_TGT="MacTahoe-dark"
+        else
+            CUR_TGT="$CUR_NOW"
         fi
-        if [ -d "/usr/share/themes/MacTahoe-Dark/gtk-3.0/windows-assets" ]; then
-            ln -sfn "/usr/share/themes/MacTahoe-Dark/gtk-3.0/windows-assets" "$HOME/.config/gtk-3.0/windows-assets" 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface cursor-theme "$CUR_TGT" 2>/dev/null || true
+        # gsettings set org.gnome.shell.extensions.user-theme name "MacTahoe-Dark" 2>/dev/null || true
+
+        if [ -d "/usr/share/themes/${GTK_TGT}/gtk-4.0" ] && [[ "$GTK_NOW" == MacTahoe* ]]; then
+            cp -rf "/usr/share/themes/${GTK_TGT}/gtk-4.0"/* "$HOME/.config/gtk-4.0/" 2>/dev/null || true
         fi
-        if [ -d "/usr/share/themes/MacTahoe-Dark/gtk-4.0/windows-assets" ]; then
-            ln -sfn "/usr/share/themes/MacTahoe-Dark/gtk-4.0/windows-assets" "$HOME/.config/gtk-4.0/windows-assets" 2>/dev/null || true
+        if [ -d "/usr/share/themes/${GTK_TGT}/gtk-3.0" ] && [[ "$GTK_NOW" == MacTahoe* ]]; then
+            cp -rf "/usr/share/themes/${GTK_TGT}/gtk-3.0/gtk-dark.css" "$HOME/.config/gtk-3.0/gtk.css" 2>/dev/null || true
         fi
 
-        cat <<'EOF' > "$HOME/.config/gtk-3.0/settings.ini"
+        cat <<EOF > "$HOME/.config/gtk-3.0/settings.ini"
 [Settings]
-gtk-theme-name=MacTahoe-Dark
-gtk-icon-theme-name=MacTahoe-blue-dark
+gtk-theme-name=$GTK_TGT
+gtk-icon-theme-name=$ICON_NOW
 gtk-application-prefer-dark-theme=1
-gtk-decoration-layout=close,minimize,maximize:
+gtk-cursor-theme-name=$CUR_TGT
 EOF
 
-        cat <<'EOF' > "$HOME/.config/gtk-4.0/settings.ini"
+        cat <<EOF > "$HOME/.config/gtk-4.0/settings.ini"
 [Settings]
-gtk-theme-name=MacTahoe-Dark
-gtk-icon-theme-name=MacTahoe-blue-dark
+gtk-theme-name=$GTK_TGT
+gtk-icon-theme-name=$ICON_NOW
 gtk-application-prefer-dark-theme=1
-gtk-decoration-layout=close,minimize,maximize:
+gtk-cursor-theme-name=$CUR_TGT
 EOF
 
     else
-        gsettings set org.gnome.desktop.interface gtk-theme "MacTahoe-Light" 2>/dev/null || true
-        gsettings set org.gnome.desktop.interface icon-theme "MacTahoe-blue-light" 2>/dev/null || true
-        gsettings set org.gnome.shell.extensions.user-theme name "MacTahoe-Light" 2>/dev/null || true
-        
-        # Libadwaita / GTK4 user overrides (Light)
-        if [ -d "/usr/share/themes/MacTahoe-Light/gtk-4.0" ]; then
-            cp -rf /usr/share/themes/MacTahoe-Light/gtk-4.0/* "$HOME/.config/gtk-4.0/" 2>/dev/null || true
-            # Asegurar que gtk-dark.css no fuerce modo oscuro en apps Libadwaita durante modo claro
-            if [ -f "$HOME/.config/gtk-4.0/gtk.css" ]; then
-                cp -f "$HOME/.config/gtk-4.0/gtk.css" "$HOME/.config/gtk-4.0/gtk-dark.css" 2>/dev/null || true
-            fi
+        if [[ "$GTK_NOW" == MacTahoe* ]]; then
+            GTK_TGT="MacTahoe-Light-solid"
+        else
+            GTK_TGT="$GTK_NOW"
         fi
-        if [ -d "/usr/share/themes/MacTahoe-Light/gtk-3.0" ]; then
-            cp -rf /usr/share/themes/MacTahoe-Light/gtk-3.0/gtk.css "$HOME/.config/gtk-3.0/gtk.css" 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface gtk-theme "$GTK_TGT" 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface icon-theme "$ICON_NOW" 2>/dev/null || true
+        if [[ "$CUR_NOW" == MacTahoe* ]]; then
+            CUR_TGT="MacTahoe"
+        else
+            CUR_TGT="$CUR_NOW"
         fi
-        if [ -d "/usr/share/themes/MacTahoe-Light/gtk-3.0/windows-assets" ]; then
-            ln -sfn "/usr/share/themes/MacTahoe-Light/gtk-3.0/windows-assets" "$HOME/.config/gtk-3.0/windows-assets" 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface cursor-theme "$CUR_TGT" 2>/dev/null || true
+        # gsettings set org.gnome.shell.extensions.user-theme name "MacTahoe-Light" 2>/dev/null || true
+
+        if [ -d "/usr/share/themes/${GTK_TGT}/gtk-4.0" ] && [[ "$GTK_NOW" == MacTahoe* ]]; then
+            cp -rf "/usr/share/themes/${GTK_TGT}/gtk-4.0"/* "$HOME/.config/gtk-4.0/" 2>/dev/null || true
         fi
-        if [ -d "/usr/share/themes/MacTahoe-Light/gtk-4.0/windows-assets" ]; then
-            ln -sfn "/usr/share/themes/MacTahoe-Light/gtk-4.0/windows-assets" "$HOME/.config/gtk-4.0/windows-assets" 2>/dev/null || true
+        if [ -d "/usr/share/themes/${GTK_TGT}/gtk-3.0" ] && [[ "$GTK_NOW" == MacTahoe* ]]; then
+            cp -rf "/usr/share/themes/${GTK_TGT}/gtk-3.0/gtk.css" "$HOME/.config/gtk-3.0/gtk.css" 2>/dev/null || true
         fi
 
-        cat <<'EOF' > "$HOME/.config/gtk-3.0/settings.ini"
+        cat <<EOF > "$HOME/.config/gtk-3.0/settings.ini"
 [Settings]
-gtk-theme-name=MacTahoe-Light
-gtk-icon-theme-name=MacTahoe-blue-light
+gtk-theme-name=$GTK_TGT
+gtk-icon-theme-name=$ICON_NOW
 gtk-application-prefer-dark-theme=0
-gtk-decoration-layout=close,minimize,maximize:
+gtk-cursor-theme-name=$CUR_TGT
 EOF
 
-        cat <<'EOF' > "$HOME/.config/gtk-4.0/settings.ini"
+        cat <<EOF > "$HOME/.config/gtk-4.0/settings.ini"
 [Settings]
-gtk-theme-name=MacTahoe-Light
-gtk-icon-theme-name=MacTahoe-blue-light
+gtk-theme-name=$GTK_TGT
+gtk-icon-theme-name=$ICON_NOW
 gtk-application-prefer-dark-theme=0
-gtk-decoration-layout=close,minimize,maximize:
+gtk-cursor-theme-name=$CUR_TGT
 EOF
 
     fi
@@ -102,13 +107,10 @@ EOF
     fi
 
     if [ "$show_prompt" = "true" ]; then
-        if command -v pulsaros-theme-logout-prompt >/dev/null 2>&1; then
-            pulsaros-theme-logout-prompt &
-        elif [ -x "/usr/bin/pulsaros-theme-logout-prompt" ]; then
-            /usr/bin/pulsaros-theme-logout-prompt &
         fi
     fi
 }
+
 
 # Ejecución inicial silenciosa
 LAST_SCHEME=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")
@@ -119,6 +121,6 @@ gsettings monitor org.gnome.desktop.interface color-scheme 2>/dev/null | while r
     CURRENT_SCHEME=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")
     if [ "$CURRENT_SCHEME" != "$LAST_SCHEME" ]; then
         LAST_SCHEME="$CURRENT_SCHEME"
-        sync_theme true
+        sync_theme false
     fi
 done

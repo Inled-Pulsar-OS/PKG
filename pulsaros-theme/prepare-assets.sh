@@ -505,6 +505,50 @@ DOCK_HOVER_FIX
 find "$STAGE_DIR" -path "*/gnome-shell/gnome-shell.css" -exec sh -c 'cat /tmp/dock_hover_fix.css >> "$1"' _ {} \; 2>/dev/null || true
 rm -f /tmp/dock_hover_fix.css
 
+# 2.4 Pulsar OS - OSD translucido y flecha de submenu sin circulo azul
+# NOTA 1: just-perfection deja el OSD opaco con
+# (.just-perfection .osd-window { background-color: rgba(0,0,0,1) }), que es
+# mas especifico que .osd-window: por eso hace falta !important. El valor
+# nuevo conserva el contraste del texto pero deja entrever el fondo.
+# NOTA 2: .quick-toggle-menu-button:checked hereda -st-accent-color del tema
+# oscuro de GNOME y eso pinta el circulo azul en la flecha de los botones con
+# submenu de Ajustes rapidos. Se anula el fondo y se deja un anillo neutro.
+cat <<'SHELL_OSD_FIX' > /tmp/shell_osd_fix.css
+/* ==========================================================================
+ * Pulsar OS - Ajustes locales del tema de GNOME Shell (no vienen de MacTahoe)
+ * 1) OSD (volumen/brillo/wifi): translucido y con contraste.
+ * 2) Flecha de los botones con submenu de Ajustes rapidos: sin circulo azul.
+ * ========================================================================== */
+
+.osd-window {
+    background-color: rgba(36, 36, 36, 0.66) !important;
+    border: solid rgba(255, 255, 255, 0.14) !important;
+    border-width: 1px !important;
+    box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.45) !important;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
+}
+
+.quick-toggle-has-menu .quick-toggle-menu-button:checked,
+.quick-toggle-has-menu .quick-toggle-menu-button:checked:hover,
+.quick-toggle-has-menu .quick-toggle-menu-button:checked:active {
+    background-color: transparent !important;
+    color: white !important;
+}
+
+.quick-toggle-has-menu .quick-toggle-menu-button:focus,
+.quick-toggle-has-menu .quick-toggle-menu-button:focus:hover,
+.quick-toggle-has-menu .quick-toggle-menu-button:focus:active,
+.quick-toggle-has-menu .quick-toggle-menu-button:checked:focus,
+.quick-toggle-has-menu .quick-toggle-menu-button:checked:focus:hover {
+    background-color: rgba(255, 255, 255, 0.16) !important;
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55) !important;
+    color: white !important;
+}
+SHELL_OSD_FIX
+
+find "$STAGE_DIR" -path "*/gnome-shell/gnome-shell.css" -exec sh -c 'cat /tmp/shell_osd_fix.css >> "$1"' _ {} \; 2>/dev/null || true
+rm -f /tmp/shell_osd_fix.css
+
 # Symlink MacTahoe to MacTahoe-Light for backward compatibility
 if [ -d "$STAGE_DIR/usr/share/themes/MacTahoe-Light" ] && [ ! -d "$STAGE_DIR/usr/share/themes/MacTahoe" ]; then
     ln -sf MacTahoe-Light "$STAGE_DIR/usr/share/themes/MacTahoe"
