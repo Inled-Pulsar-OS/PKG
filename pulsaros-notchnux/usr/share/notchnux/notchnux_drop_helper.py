@@ -119,21 +119,16 @@ class DropApp(Gtk.Application):
         self._show_zone(present=True)
 
     def do_open(self, files, *rest):
-        # GApplication::open vfunc; rest carries n_files on older bindings and
-        # the hints a{sv} either way. We need the GFile array and the hover
-        # hint that marks the transparent shelf card (vs the visible
-        # row-gesture fallback card).
-        hints = {}
-        for r in rest:
-            if isinstance(r, dict):
-                hints = r
-                break
+        # GApplication::open vfunc; rest carries n_files and the hint string
+        # (GIO extracts only the a{sv} 'hint' key over D-Bus, not a dict).
+        # Every drag-out card is transparent in the invisible helper mode, so
+        # no hint is needed: Opacity lives in _show_card.
         if self._win is None:
             self._build_window()
         if self._cold_hidden:
             self._cold_hidden = False
         files = [f for f in files if isinstance(f, Gio.File)]
-        self._show_card(files, hover=bool(hints.get('hover')))
+        self._show_card(files)
 
     def _build_window(self):
         self._win = Gtk.ApplicationWindow(application=self, title='NotchNux')
@@ -228,7 +223,7 @@ class DropApp(Gtk.Application):
         if not was_visible:
             print('[NotchNux-Helper] drop zone shown', file=sys.stderr)
 
-    def _show_card(self, files, hover=False):
+    def _show_card(self, files):
         self._drag_files = files
         if files:
             name = files[0].get_basename() if len(files) == 1 else None
@@ -240,11 +235,13 @@ class DropApp(Gtk.Application):
             self._card_label.set_text('Drag into an app')
         if self._win.get_child() is not self._card_box:
             self._win.set_child(self._card_box)
-        # Hover card: transparent drag surface over the shelf (imperceptible
-        # but a real surface, like the drop zone). The row-gesture fallback
-        # card stays visible so it can be re-grabbed. The drag icon below
-        # stays opaque so the user sees what they are carrying.
-        self._win.set_opacity(0.01 if (self._invisible and hover) else 1.0)
+        # Every drag-out card is a transparent drag surface (imperceptible but
+        # a real surface, like the drop zone): the visible drag-out card was a
+        # gray rectangle behind the notch. Only the opaque drag icon below
+        # tells the user what they are carrying.
+        self._win.set_opacity(0.01 if self._invisible else 1.0)
+        print(f'[NotchNux-Helper] drag-out card opacity {self._win.get_opacity():.2f}',
+              file=sys.stderr)
         self._drag_source.set_content(self._make_file_provider(files))
         try:
             self._drag_source.set_icon(self._make_drag_icon(files))
