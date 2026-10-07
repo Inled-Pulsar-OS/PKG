@@ -14,19 +14,21 @@ share that one window:
     (StageFiles) and staged in the shelf.
 
   * drag-out card (org.freedesktop.Application.Open(files, hints)): the window
-    becomes a small visible card under the pointer carrying a Gtk.DragSource
-    with the shelf file(s), so the user can drag it into any external app
-    (Nautilus, a browser...). A shell actor can never be a Wayland drag
-    source, so this companion card is the only way to move a staged file out
-    with the pointer.
+    becomes the drag source of a real Wayland drag: the extension's shelf row
+    gesture sends Open with the 'start-drag' hint and the helper begins the
+    drag with Gdk.Drag.begin (content = the staged files). A shell actor can
+    never be a Wayland drag source, so this companion window is the only way
+    to move staged files out with the pointer -- and because the drag is
+    started programmatically, the shelf itself stays fully interactive.
 
 Protocol with the extension:
   * started with --hidden (window built but never mapped, so the first drop
     pays no Python/GTK startup cost) and --invisible at enable();
   * an external drag crossing the notch calls org.freedesktop.Application.
     Activate: maps the zone and the extension moves/resizes it to the notch;
-  * dragging a shelf row out calls org.freedesktop.Application.Open: the card
-    appears under the pointer and hides when its drag ends;
+  * dragging a shelf row out calls org.freedesktop.Application.Open with the
+    'start-drag' hint: the helper loads the content and starts the drag
+    itself; it hides when the drag finishes;
   * the zone hides itself a few seconds after the last drag activity.
 
 Deliberately minimal: no custom D-Bus registration, no proxies, no Adw -- those
@@ -121,14 +123,18 @@ class DropApp(Gtk.Application):
     def do_open(self, files, *rest):
         # GApplication::open vfunc; rest carries n_files and the hint string
         # (GIO extracts only the a{sv} 'hint' key over D-Bus, not a dict).
-        # Every drag-out card is transparent in the invisible helper mode, so
-        # no hint is needed: Opacity lives in _show_card.
+        # The shelf stays fully interactive; drag-out begins here: the
+        # extension sends 'start-drag' in the hint and the helper starts the
+        # Gdk drag itself (see _begin_gdk_drag).
         if self._win is None:
             self._build_window()
         if self._cold_hidden:
             self._cold_hidden = False
         files = [f for f in files if isinstance(f, Gio.File)]
+        hint = rest[1] if len(rest) > 1 else ''
         self._show_card(files)
+        if hint and hint.startswith('start-drag'):
+            self._begin_gdk_drag()
 
     def _build_window(self):
         self._win = Gtk.ApplicationWindow(application=self, title='NotchNux')
@@ -287,6 +293,55 @@ class DropApp(Gtk.Application):
         self._show_zone(present=False)
         if self._win.get_visible():
             self._arm_hide(300)
+
+    # -- programmatic drag-out --------------------------------------------
+
+    def _begin_gdk_drag(self):
+        # The shelf never stops being interactive: instead of grabbing a card
+        # under the cursor, the extension's row gesture calls Open with the
+        # 'start-drag' hint and the drag is begun *here*, from the helper
+        # window, with Gdk.Drag.begin. That creates a real Wayland drag the
+        # user can drop into any app, continuing their motion -- no re-grab,
+        # no non-reactive chrome.
+        try:
+            display = self._win.get_display()
+            seat = display.get_default_seat()
+            device = seat.get_pointer()
+            content = self._drag_source.get_content()
+            if content is None:
+                content = self._make_file_provider(self._drag_files)
+            drag = Gdk.Drag.begin(self._win, device, content,
+                                  Gdk.DragAction.COPY, 0, 0)
+            if drag is None:
+                raise RuntimeError('gdk_drag_begin returned None')
+            drag.connect('dnd-finished', self._on_gdk_drag_finished)
+            drag.connect('cancel', self._on_gdk_drag_finished)
+            self._attach_drag_icon(drag)
+            self._notify_companion_drag(True)
+            print('[NotchNux-Helper] gdk drag begin', file=sys.stderr)
+        except Exception as exc:
+            print(f'[NotchNux-Helper] gdk drag begin failed: {exc}',
+                  file=sys.stderr)
+            self._notify_companion_drag(False)
+
+    def _attach_drag_icon(self, drag):
+        # Gtk.DragIcon is a separate surface that follows the pointer during
+        # the drag and is destroyed when it ends; the window's own 0.01
+        # opacity does not affect it, so the "N file(s)" hint stays visible.
+        try:
+            icon = Gtk.DragIcon.get_for_drag(drag)
+            icon.set_child(self._make_drag_icon(self._drag_files))
+        except Exception as exc:
+            print(f'[NotchNux-Helper] drag icon failed: {exc}', file=sys.stderr)
+
+    def _on_gdk_drag_finished(self, _drag):
+        # Dropped into an app or cancelled: tell the shell the companion drag
+        # is over, revert to the (invisible) zone mode and hide shortly.
+        self._notify_companion_drag(False)
+        self._show_zone(present=False)
+        if self._win.get_visible():
+            self._arm_hide(300)
+        print('[NotchNux-Helper] gdk drag finished', file=sys.stderr)
 
     def _notify_companion_drag(self, active):
         try:
