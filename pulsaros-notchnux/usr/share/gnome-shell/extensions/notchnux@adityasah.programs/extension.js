@@ -210,7 +210,7 @@ export default class NotchNuxExtension extends Extension {
 
     _setupExtensionDbus() {
         try {
-            let xml = '<node><interface name="org.gnome.Shell.Extensions.NotchNux"><method name="StageFiles"><arg type="as" direction="in" name="uris"/></method><method name="CompanionDragState"><arg type="b" direction="in" name="active"/></method><method name="ForwardClick"><arg type="i" direction="in" name="x"/><arg type="i" direction="in" name="y"/><arg type="d" direction="in" name="button"/></method><method name="ForwardScroll"><arg type="d" direction="in" name="dx"/><arg type="d" direction="in" name="dy"/></method></interface></node>';
+            let xml = '<node><interface name="org.gnome.Shell.Extensions.NotchNux"><method name="StageFiles"><arg type="as" direction="in" name="uris"/></method><method name="CompanionDragState"><arg type="b" direction="in" name="active"/></method><method name="ForwardClick"><arg type="i" direction="in" name="x"/><arg type="i" direction="in" name="y"/><arg type="d" direction="in" name="button"/></method><method name="ForwardScroll"><arg type="d" direction="in" name="dx"/><arg type="d" direction="in" name="dy"/></method><method name="PointerLeave"/></interface></node>';
             let nodeInfo = Gio.DBusNodeInfo.new_for_xml(xml);
             this._helperBusId = this._dbusConnection.register_object('/org/gnome/Shell/Extensions/NotchNux', nodeInfo.interfaces[0], (conn, sender, path, iface, method, params, inv) => {
                 if (method === 'StageFiles') {
@@ -238,6 +238,13 @@ export default class NotchNuxExtension extends Extension {
                         this._handleForwardScroll(dx, dy);
                     } catch (e) { console.warn('NotchNux: ForwardScroll error', e); }
                     inv.return_value(new GLib.Variant('()', []));
+                } else if (method === 'PointerLeave') {
+                    for (let n of (this._notches || [])) {
+                        if (n && n.isExpanded && !n._anyOwnedMenuOpen?.()) {
+                            n.collapse?.();
+                        }
+                    }
+                    inv.return_value(new GLib.Variant('()', []));
                 } else {
                     inv.return_error_literal(Gio.dbus_error_quark(), Gio.DBUS_ERROR_UNKNOWN_METHOD, 'Unknown');
                 }
@@ -260,7 +267,7 @@ export default class NotchNuxExtension extends Extension {
                 target.clicked(0);
                 return;
             }
-            if (typeof target.emit === 'function' && target.reactive) {
+            if (typeof target.emit === 'function' && (target.has_style_class_name?.('notchnux-tab-btn') || target.has_style_class_name?.('nook-shelf-action') || target.has_style_class_name?.('notchnux-power-btn') || target.has_style_class_name?.('notchnux-settings-btn'))) {
                 if (target.can_focus) target.grab_key_focus?.();
                 target.emit('clicked', 0);
                 return;
@@ -457,11 +464,19 @@ export default class NotchNuxExtension extends Extension {
         let box = this._notchZoneBox(notch);
         this._pendingCardTarget = box;
         this._lastZoneBox = box;
+
+        if (!this._notchesReactiveOff) {
+            this._notchesReactiveOff = true;
+            this._setNotchesReactive(false);
+        }
+
         this._positionDropZone();
         for (let ms of [40, 150, 350, 700]) {
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
-                if (this._pendingCardTarget && !this._externalDragActive)
+                if (this._pendingCardTarget && !this._externalDragActive) {
                     this._positionDropZone();
+                    if (this._notchesReactiveOff) this._setNotchesReactive(false);
+                }
                 return GLib.SOURCE_REMOVE;
             });
         }
@@ -480,6 +495,10 @@ export default class NotchNuxExtension extends Extension {
 
     _hideDragCards() {
         this._pendingCardTarget = null;
+        if (this._notchesReactiveOff && !this._externalDragActive) {
+            this._notchesReactiveOff = false;
+            this._setNotchesReactive(true);
+        }
         if (!this._dbusConnection) return;
         try {
             this._dbusConnection.call('es.pulsaros.NotchNuxHelper',

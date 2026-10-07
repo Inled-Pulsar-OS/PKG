@@ -218,6 +218,11 @@ class DropApp(Gtk.Application):
         scroll.connect('scroll', self._on_scroll)
         self._win.add_controller(scroll)
 
+        # Motion controller: notify shell when pointer leaves the notch
+        motion = Gtk.EventControllerMotion.new()
+        motion.connect('leave', self._on_pointer_leave)
+        self._win.add_controller(motion)
+
         self._win.set_child(self._zone_box)
 
     # -- mode switching ----------------------------------------------------
@@ -302,6 +307,22 @@ class DropApp(Gtk.Application):
 
     def _on_scroll(self, controller, dx, dy):
         self._notify_scroll(dx, dy)
+
+    def _on_pointer_leave(self, controller):
+        if self._drag_active or not self._drag_files:
+            return
+        try:
+            if self._bus is None:
+                self._bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+            self._bus.call(
+                'org.gnome.Shell',
+                '/org/gnome/Shell/Extensions/NotchNux',
+                'org.gnome.Shell.Extensions.NotchNux',
+                'PointerLeave',
+                None, None,
+                Gio.DBusCallFlags.NONE, 1000, None, None)
+        except Exception:
+            pass
 
     def _on_card_drag_begin(self, drag_source, drag):
         if not self._drag_files:
