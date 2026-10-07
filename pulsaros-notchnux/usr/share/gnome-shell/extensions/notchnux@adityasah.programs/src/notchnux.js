@@ -5680,6 +5680,13 @@ export const NotchNux = GObject.registerClass({
     // dragging >14px hands the file to the companion, which maps a real GTK
     // drag-source card at the pointer that CAN be dragged into any external
     // app; "Save a copy" and "Copy to clipboard" remain the alternatives.
+    // All staged URIs; the drag-out bar and the hover card drag every staged
+    // file at once ("para eso esta el staging").
+    getStagedFiles() {
+        try { return (this._shelf?.getFiles?.() ?? []).map(f => f.uri); }
+        catch (_) { return []; }
+    }
+
     _buildShelfRow(f, devices) {
         let row = new St.BoxLayout({ style_class: 'nook-shelf-row', vertical: false, x_expand: true, reactive: true });
 
@@ -5791,8 +5798,8 @@ export const NotchNux = GObject.registerClass({
                 if (dist < 14) return Clutter.EVENT_PROPAGATE;
                 let uri = this._rowDragInit.uri;
                 this._endRowDrag();
-                this.extension?._startCompanionDrag?.([uri], gx, gy);
-                this._flashShareStatus('Grab the card and drag it into an app');
+                this.extension?._startCompanionDrag?.(this.getStagedFiles?.() ?? [uri], gx, gy);
+                this._flashShareStatus('Drag all staged files into any app');
                 return Clutter.EVENT_STOP;
             });
             this._rowStageReleaseId = global.stage.connect('button-release-event', () => {

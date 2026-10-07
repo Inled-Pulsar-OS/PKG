@@ -21,6 +21,10 @@ export default class NotchNuxExtension extends Extension {
         this._winCreatedId = 0;
         this._notchesReactiveOff = false;
         this._dragEndId = 0;
+        this._externalDragActive = false;
+        this._hoverCardOn = false;
+        this._hoverCardLastShow = 0;
+        this._stageMotionId = 0;
         this._config = new ConfigStore();
         this._currentDisplayMode = this._config.displayMonitor;
 
@@ -32,6 +36,8 @@ export default class NotchNuxExtension extends Extension {
         // Restore the notch subtrees' reactivity and drop any pending
         // drag-out card target the moment an external drag ends.
         this._dragEndId = Main.xdndHandler?.connect?.('drag-end', () => {
+            this._externalDragActive = false;
+            this._hoverCardOn = false;
             this._pendingCardTarget = null;
             if (this._notchesReactiveOff) {
                 this._notchesReactiveOff = false;
@@ -42,6 +48,15 @@ export default class NotchNuxExtension extends Extension {
         // Move the helper's window the moment it exists (before its first
         // frame), so Mutter's own center placement never flashes on screen;
         // the retry timers in _showDropZone cover later re-maps.
+        // Hover drag-out: while the shelf is expanded with staged files and
+        // the pointer is over the notch, keep the companion's transparent
+        // drag-source card materialized over the same notch rectangle, so
+        // pressing any shelf row *is* grabbing the card (no re-grab). A
+        // position-based stage monitor survives the card covering the shelf.
+        this._stageMotionId = global.stage.connect('motion-event', (_s, ev) => {
+            try { this._updateHoverCard(ev); } catch (e) {}
+        });
+
         this._winCreatedId = global.display.connect('window-created', (_d, win) => {
             try {
                 if (this._pendingDropZonePos &&
@@ -194,6 +209,12 @@ export default class NotchNuxExtension extends Extension {
         } catch (_) {}
         this._pendingDropZonePos = null;
         this._zoneLastShow = 0;
+        this._externalDragActive = false;
+        this._hoverCardOn = false;
+        if (this._stageMotionId) {
+            try { global.stage.disconnect(this._stageMotionId); } catch (_) {}
+            this._stageMotionId = 0;
+        }
         try {
             if (this._helperBusId > 0 && this._dbusConnection) {
                 this._dbusConnection.unregister_object(this._helperBusId);
@@ -284,6 +305,7 @@ export default class NotchNuxExtension extends Extension {
     // (clutter_actor_should_pick), and shell chrome is not a surface, so any
     // reactive child of the expanded dashboard would refuse the drop.
     _showDropZone(x, y, notch) {
+        this._externalDragActive = true;
         let now = GLib.get_monotonic_time();
         if (this._zoneLastShow && now - this._zoneLastShow < 700 * 1000) return;
         this._zoneLastShow = now;
@@ -390,12 +412,7 @@ export default class NotchNuxExtension extends Extension {
                 let nn = this._pendingNotch;
                 if (!nn || typeof nn.get_transformed_position !== 'function')
                     return;
-                let [nx, ny] = nn.get_transformed_position();
-                let [nw, nh] = nn.get_transformed_size();
-                box = {
-                    x: Math.round(nx) - 40, y: Math.round(ny) - 40,
-                    w: Math.round(nw) + 80, h: Math.round(nh) + 80,
-                };
+                box = this._notchZoneBox(nn);
             }
 
             let zx = Math.max(mon.x + 8, Math.min(box.x, mon.x + mon.width - box.w - 8));
@@ -405,6 +422,82 @@ export default class NotchNuxExtension extends Extension {
             win.move_resize_frame(global.get_current_time(), zx, zy, box.w, box.h);
             win.make_above();  // GTK4 lost keep_above, so keep the zone on top
         } catch (e) { console.warn('NotchNux: drop zone positioning failed', e); }
+    }
+
+    // The notch rectangle both the invisible drop zone and the transparent
+    // drag-out card live in: the widget's live bounds plus a small margin.
+    _notchZoneBox(notch) {
+        let [nx, ny] = notch.get_transformed_position();
+        let [nw, nh] = notch.get_transformed_size();
+        return {
+            x: Math.round(nx) - 40, y: Math.round(ny) - 40,
+            w: Math.round(nw) + 80, h: Math.round(nh) + 80,
+        };
+    }
+
+    // Called by the stage motion monitor: materialize the transparent
+    // drag-out card while hovering an expanded shelf that has staged files,
+    // hide it otherwise. External drop-drags take precedence.
+    _updateHoverCard(ev) {
+        if (this._externalDragActive) return;
+        let [x, y] = ev?.get_coords?.() ?? [0, 0];
+        let target = null;
+        for (let n of this._notches ?? []) {
+            try {
+                if (!n?.isExpanded) continue;
+                let [nx, ny] = n.get_transformed_position();
+                let [nw, nh] = n.get_transformed_size();
+                if (x >= nx && x < nx + nw && y >= ny && y < ny + nh) {
+                    target = n;
+                    break;
+                }
+            } catch (_) {}
+        }
+        if (!target) { this._hideHoverCard(); return; }
+        let uris = target.getStagedFiles?.() ?? [];
+        if (!uris || !uris.length) { this._hideHoverCard(); return; }
+        let now = GLib.get_monotonic_time();
+        if (now - this._hoverCardLastShow < 250 * 1000) return;
+        this._hoverCardLastShow = now;
+        this._showCompanionCard(uris, target, x, y);
+    }
+
+    // Map the helper's drag-source card over the notch (same rectangle as the
+    // drop zone) and hand it every staged file, so a press on any shelf row
+    // becomes a real Wayland drag of all of them.
+    _showCompanionCard(uris, notch, x, y) {
+        if (!this._dbusConnection || !uris?.length) return;
+        this._pendingDropZonePos = { x, y };
+        this._pendingCardTarget = this._notchZoneBox(notch);
+        this._hoverCardOn = true;
+        this._positionDropZone();
+        for (let ms of [40, 160, 400]) {
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
+                if (this._pendingCardTarget && !this._externalDragActive)
+                    this._positionDropZone();
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+        try {
+            this._dbusConnection.call('es.pulsaros.NotchNuxHelper',
+                '/es/pulsaros/NotchNuxHelper',
+                'org.freedesktop.Application', 'Open',
+                new GLib.Variant('(asa{sv})', [uris, {}]), null,
+                Gio.DBusCallFlags.NONE, 3000, null,
+                (c, res) => {
+                    try { c.call_finish(res); }
+                    catch (e) { console.warn('NotchNux: hover card Open failed', e); }
+                });
+        } catch (e) { console.warn('NotchNux: hover card failed', e); }
+    }
+
+    // Pointer left the shelf (or it collapsed/emptied): revert to the
+    // invisible drop-zone mode of the same window.
+    _hideHoverCard() {
+        if (!this._hoverCardOn) return;
+        this._hoverCardOn = false;
+        this._pendingCardTarget = null;
+        this._activateDropZone();
     }
 
     _startCompanionDrag(uris, x, y) {
@@ -433,7 +526,7 @@ export default class NotchNuxExtension extends Extension {
             this._dbusConnection.call('es.pulsaros.NotchNuxHelper',
                 '/es/pulsaros/NotchNuxHelper',
                 'org.freedesktop.Application', 'Open',
-                new GLib.Variant('(as a{sv})', [uris, {}]), null,
+                new GLib.Variant('(asa{sv})', [uris, {}]), null,
                 Gio.DBusCallFlags.NONE, 3000, null,
                 (c, res) => {
                     try { c.call_finish(res); }

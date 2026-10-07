@@ -137,7 +137,10 @@ class DropApp(Gtk.Application):
         # pointer (drag-out card).
         self._win.set_resizable(True)
         if self._invisible:
-            self._win.set_opacity(0.0)
+            # 0.0 exacto = sin buffer visible => Mutter no lo trata como
+            # target de drag (nunca llega enter). 0.01 es imperceptible pero
+            # mantiene la ventana como destino DnD real.
+            self._win.set_opacity(0.01)
 
         # -- zone child ----------------------------------------------------
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -149,12 +152,6 @@ class DropApp(Gtk.Application):
         self._label = Gtk.Label(label=DEFAULT_LABEL)
         self._label.set_wrap(True)
         box.append(self._label)
-
-        self._area = Gtk.Box()
-        self._area.set_size_request(320, 90)
-        self._area.set_hexpand(True)
-        self._area.set_valign(Gtk.Align.CENTER)
-        box.append(self._area)
 
         self._zone_box = box
 
@@ -170,7 +167,9 @@ class DropApp(Gtk.Application):
         target.connect('enter', self._on_enter)
         target.connect('motion', self._on_motion)
         target.connect('leave', self._on_leave)
-        self._area.add_controller(target)
+        # The whole zone window is the drop surface: dragging to any point of
+        # the rectangle stages the files.
+        self._win.add_controller(target)
 
         # -- drag-out card child -------------------------------------------
         card = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
@@ -208,7 +207,10 @@ class DropApp(Gtk.Application):
         if self._win.get_child() is not self._zone_box:
             self._win.set_child(self._zone_box)
         if self._invisible:
-            self._win.set_opacity(0.0)
+            # 0.0 exacto = sin buffer visible => Mutter no lo trata como
+            # target de drag (nunca llega enter). 0.01 es imperceptible pero
+            # mantiene la ventana como destino DnD real.
+            self._win.set_opacity(0.01)
         if not present:
             return
         was_visible = self._win.get_visible()
@@ -230,14 +232,31 @@ class DropApp(Gtk.Application):
             self._card_label.set_text('Drag into an app')
         if self._win.get_child() is not self._card_box:
             self._win.set_child(self._card_box)
-        self._win.set_opacity(1.0)
+        # Hover card: when running in the invisible zone mode this card is the
+        # transparent drag surface covering the same notch rectangle. The drag
+        # icon below stays opaque so the user sees what they are carrying.
+        self._win.set_opacity(0.01 if self._invisible else 1.0)
         self._drag_source.set_content(self._make_file_provider(files))
+        try:
+            self._drag_source.set_icon(self._make_drag_icon(files))
+        except Exception:
+            pass
         was_visible = self._win.get_visible()
         self._win.present()
         self._arm_hide(CARD_HIDE_MS)
         if not was_visible:
             print(f'[NotchNux-Helper] drag-out card: {len(files)} file(s)',
                   file=sys.stderr)
+
+    def _make_drag_icon(self, files):
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        box.set_margin_top(6)
+        box.set_margin_bottom(6)
+        box.set_margin_start(10)
+        box.set_margin_end(10)
+        box.append(Gtk.Image.new_from_icon_name('document-send-symbolic'))
+        box.append(Gtk.Label(label=f'{len(files)} file(s)'))
+        return box
 
     def _make_file_provider(self, files):
         """text/uri-list is the universal file-drag mime (Nautilus, browsers,
@@ -276,6 +295,7 @@ class DropApp(Gtk.Application):
 
     def _on_enter(self, target, x, y):
         # Only fires while a drag is in progress.
+        print(f'[NotchNux-Helper] ZONE-ENTER x={x:.0f} y={y:.0f}', file=sys.stderr)
         self._label.set_text('Release to stage the files')
         self._arm_hide(HIDE_IDLE_MS)
         return Gdk.DragAction.COPY
