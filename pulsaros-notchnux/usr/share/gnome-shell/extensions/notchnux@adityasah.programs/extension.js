@@ -22,9 +22,14 @@ export default class NotchNuxExtension extends Extension {
         this._notchesReactiveOff = false;
         this._dragEndId = 0;
         this._externalDragActive = false;
+        this._companionDragActive = false;
         this._hoverCardOn = false;
         this._hoverCardLastShow = 0;
         this._stageMotionId = 0;
+        this._companionDragActive = false;
+        this._hoverTargetNotch = null;
+        this._hoverLastPointer = null;
+        this._lastCardBox = null;
         this._config = new ConfigStore();
         this._currentDisplayMode = this._config.displayMonitor;
 
@@ -37,12 +42,13 @@ export default class NotchNuxExtension extends Extension {
         // drag-out card target the moment an external drag ends.
         this._dragEndId = Main.xdndHandler?.connect?.('drag-end', () => {
             this._externalDragActive = false;
-            this._hoverCardOn = false;
+            this._companionDragActive = false;
             this._pendingCardTarget = null;
             if (this._notchesReactiveOff) {
                 this._notchesReactiveOff = false;
                 this._setNotchesReactive(true);
             }
+            this._teardownHoverCard();
         }) ?? 0;
 
         // Move the helper's window the moment it exists (before its first
@@ -210,6 +216,7 @@ export default class NotchNuxExtension extends Extension {
         this._pendingDropZonePos = null;
         this._zoneLastShow = 0;
         this._externalDragActive = false;
+        this._companionDragActive = false;
         this._hoverCardOn = false;
         if (this._stageMotionId) {
             try { global.stage.disconnect(this._stageMotionId); } catch (_) {}
@@ -226,7 +233,7 @@ export default class NotchNuxExtension extends Extension {
 
     _setupExtensionDbus() {
         try {
-            let xml = '<node><interface name="org.gnome.Shell.Extensions.NotchNux"><method name="StageFiles"><arg type="as" direction="in" name="uris"/></method></interface></node>';
+            let xml = '<node><interface name="org.gnome.Shell.Extensions.NotchNux"><method name="StageFiles"><arg type="as" direction="in" name="uris"/></method><method name="CompanionDragState"><arg type="b" direction="in" name="active"/></method></interface></node>';
             let nodeInfo = Gio.DBusNodeInfo.new_for_xml(xml);
             this._helperBusId = this._dbusConnection.register_object('/org/gnome/Shell/Extensions/NotchNux', nodeInfo.interfaces[0], (conn, sender, path, iface, method, params, inv) => {
                 if (method === 'StageFiles') {
@@ -236,6 +243,12 @@ export default class NotchNuxExtension extends Extension {
                         ? urisVariant.deep_unpack() : urisVariant;
                     if (!Array.isArray(uris)) uris = uris ? [uris] : [];
                     this._stageFilesFromHelper(uris);
+                    inv.return_value(new GLib.Variant('()', []));
+                } else if (method === 'CompanionDragState') {
+                    try {
+                        let [active] = params.unpack();
+                        this._companionDragActive = !!active;
+                    } catch (_) {}
                     inv.return_value(new GLib.Variant('()', []));
                 } else {
                     inv.return_error_literal(Gio.dbus_error_quark(), Gio.DBUS_ERROR_UNKNOWN_METHOD, 'Unknown');
@@ -440,14 +453,19 @@ export default class NotchNuxExtension extends Extension {
     // hide it otherwise. External drop-drags take precedence.
     _updateHoverCard(ev) {
         if (this._externalDragActive) return;
+        if (this._companionDragActive) return;
         let [x, y] = ev?.get_coords?.() ?? [0, 0];
+        this._hoverLastPointer = { x, y };
         let target = null;
         for (let n of this._notches ?? []) {
             try {
                 if (!n?.isExpanded) continue;
-                let [nx, ny] = n.get_transformed_position();
-                let [nw, nh] = n.get_transformed_size();
-                if (x >= nx && x < nx + nw && y >= ny && y < ny + nh) {
+                // Same rect the card covers: pill + expanded dashboard, so the
+                // card shows exactly while the pointer is over the shelf and
+                // hides the moment it leaves (hover-out gating is consistent).
+                let box = this._shelfCardBox(n);
+                if (x >= box.x && x < box.x + box.w &&
+                    y >= box.y && y < box.y + box.h) {
                     target = n;
                     break;
                 }
@@ -462,19 +480,67 @@ export default class NotchNuxExtension extends Extension {
         this._showCompanionCard(uris, target, x, y);
     }
 
-    // Map the helper's drag-source card over the notch (same rectangle as the
-    // drop zone) and hand it every staged file, so a press on any shelf row
-    // becomes a real Wayland drag of all of them.
+    // Map the helper's drag-source card over the expanded shelf. Just like
+    // the drop-in zone, the whole notch subtree goes non-reactive so Mutter's
+    // REACTIVE pick skips the chrome and a press on any shelf row lands on
+    // the card (the "grab the element directly" behaviour). Open carries the
+    // hover hint so the helper keeps this card a transparent drag surface.
+    //
+    // The hover card must cover the *expanded shelf* (where the rows live),
+    // not just the pill: the dashboard's live bounds plus a small margin,
+    // unioned with the pill rectangle. The card and the invisible drop zone
+    // therefore share the very same real estate on screen.
+    _shelfCardBox(notch) {
+        let box = this._notchZoneBox(notch);
+        let dash = notch?._dashboard;
+        if (dash && typeof dash.get_transformed_position === 'function') {
+            try {
+                let [dx, dy] = dash.get_transformed_position();
+                let [dw, dh] = dash.get_transformed_size();
+                let r = Math.round(dx) - 16, b = Math.round(dy) - 16;
+                let rw = Math.round(dw) + 32, bh = Math.round(dh) + 32;
+                let x0 = Math.min(box.x, r), y0 = Math.min(box.y, b);
+                box = {
+                    x: x0, y: y0,
+                    w: Math.max(box.x + box.w, r + rw) - x0,
+                    h: Math.max(box.y + box.h, b + bh) - y0,
+                };
+            } catch (_) {}
+        }
+        return box;
+    }
+
+    // Map the helper's drag-source card over the expanded shelf. Just like
+    // the drop-in zone, the whole notch subtree goes non-reactive so Mutter's
+    // REACTIVE pick skips the chrome and a press on any shelf row lands on
+    // the card (the "grab the element directly" behaviour). Open carries the
+    // hover hint so the helper keeps this card a transparent drag surface.
     _showCompanionCard(uris, notch, x, y) {
         if (!this._dbusConnection || !uris?.length) return;
         this._pendingDropZonePos = { x, y };
-        this._pendingCardTarget = this._notchZoneBox(notch);
+        this._pendingCardTarget = this._shelfCardBox(notch);
+        this._lastCardBox = { ...this._pendingCardTarget };
+        this._hoverTargetNotch = notch;
         this._hoverCardOn = true;
+        if (!this._notchesReactiveOff) {
+            this._notchesReactiveOff = true;
+            this._setNotchesReactive(false);
+        }
         this._positionDropZone();
         for (let ms of [40, 160, 400]) {
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
-                if (this._pendingCardTarget && !this._externalDragActive)
-                    this._positionDropZone();
+                if (!this._hoverCardOn) return GLib.SOURCE_REMOVE;
+                if (this._externalDragActive || this._companionDragActive)
+                    return GLib.SOURCE_REMOVE;
+                let t = this._hoverTargetNotch;
+                if (t && typeof t.get_transformed_position === 'function') {
+                    this._pendingCardTarget = this._shelfCardBox(t);
+                    this._lastCardBox = { ...this._pendingCardTarget };
+                }
+                this._positionDropZone();
+                // Rows born after the first walk would beat the card in the
+                // pick, so re-apply the non-reactive walk every pass.
+                if (this._notchesReactiveOff) this._setNotchesReactive(false);
                 return GLib.SOURCE_REMOVE;
             });
         }
@@ -482,7 +548,8 @@ export default class NotchNuxExtension extends Extension {
             this._dbusConnection.call('es.pulsaros.NotchNuxHelper',
                 '/es/pulsaros/NotchNuxHelper',
                 'org.freedesktop.Application', 'Open',
-                new GLib.Variant('(asa{sv})', [uris, {}]), null,
+                new GLib.Variant('(asa{sv})',
+                    [uris, { hover: GLib.Variant.new_boolean(true) }]), null,
                 Gio.DBusCallFlags.NONE, 3000, null,
                 (c, res) => {
                     try { c.call_finish(res); }
@@ -495,9 +562,31 @@ export default class NotchNuxExtension extends Extension {
     // invisible drop-zone mode of the same window.
     _hideHoverCard() {
         if (!this._hoverCardOn) return;
-        this._hoverCardOn = false;
-        this._pendingCardTarget = null;
+        if (this._companionDragActive) return; // never touch the source mid-drag
+        this._teardownHoverCard();
         this._activateDropZone();
+    }
+
+    // Shared teardown (also used on drag-end): restore the chrome walk and
+    // collapse the shelf when the pointer has actually left the card box
+    // (the leave-event is swallowed while the subtree is non-reactive).
+    _teardownHoverCard() {
+        let notch = this._hoverTargetNotch;
+        this._hoverCardOn = false;
+        this._hoverTargetNotch = null;
+        this._pendingCardTarget = null;
+        if (this._notchesReactiveOff && !this._externalDragActive) {
+            this._notchesReactiveOff = false;
+            this._setNotchesReactive(true);
+        }
+        try {
+            let box = this._lastCardBox;
+            let p = this._hoverLastPointer;
+            if (notch && typeof notch.collapse === 'function' && box && p &&
+                (p.x < box.x || p.x >= box.x + box.w ||
+                 p.y < box.y || p.y >= box.y + box.h))
+                notch.collapse();
+        } catch (_) {}
     }
 
     _startCompanionDrag(uris, x, y) {

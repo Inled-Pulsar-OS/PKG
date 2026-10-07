@@ -120,13 +120,20 @@ class DropApp(Gtk.Application):
 
     def do_open(self, files, *rest):
         # GApplication::open vfunc; rest carries n_files on older bindings and
-        # the hints a{sv} either way. We only need the GFile array.
+        # the hints a{sv} either way. We need the GFile array and the hover
+        # hint that marks the transparent shelf card (vs the visible
+        # row-gesture fallback card).
+        hints = {}
+        for r in rest:
+            if isinstance(r, dict):
+                hints = r
+                break
         if self._win is None:
             self._build_window()
         if self._cold_hidden:
             self._cold_hidden = False
         files = [f for f in files if isinstance(f, Gio.File)]
-        self._show_card(files)
+        self._show_card(files, hover=bool(hints.get('hover')))
 
     def _build_window(self):
         self._win = Gtk.ApplicationWindow(application=self, title='NotchNux')
@@ -195,6 +202,7 @@ class DropApp(Gtk.Application):
 
         self._drag_source = Gtk.DragSource.new()
         self._drag_source.set_actions(Gdk.DragAction.COPY)
+        self._drag_source.connect('drag-begin', self._on_card_drag_begin)
         self._drag_source.connect('drag-end', self._on_card_drag_end)
         self._drag_source.connect('drag-cancel', self._on_card_drag_end)
         self._card_box.add_controller(self._drag_source)
@@ -220,7 +228,7 @@ class DropApp(Gtk.Application):
         if not was_visible:
             print('[NotchNux-Helper] drop zone shown', file=sys.stderr)
 
-    def _show_card(self, files):
+    def _show_card(self, files, hover=False):
         self._drag_files = files
         if files:
             name = files[0].get_basename() if len(files) == 1 else None
@@ -232,10 +240,11 @@ class DropApp(Gtk.Application):
             self._card_label.set_text('Drag into an app')
         if self._win.get_child() is not self._card_box:
             self._win.set_child(self._card_box)
-        # Hover card: when running in the invisible zone mode this card is the
-        # transparent drag surface covering the same notch rectangle. The drag
-        # icon below stays opaque so the user sees what they are carrying.
-        self._win.set_opacity(0.01 if self._invisible else 1.0)
+        # Hover card: transparent drag surface over the shelf (imperceptible
+        # but a real surface, like the drop zone). The row-gesture fallback
+        # card stays visible so it can be re-grabbed. The drag icon below
+        # stays opaque so the user sees what they are carrying.
+        self._win.set_opacity(0.01 if (self._invisible and hover) else 1.0)
         self._drag_source.set_content(self._make_file_provider(files))
         try:
             self._drag_source.set_icon(self._make_drag_icon(files))
@@ -266,12 +275,36 @@ class DropApp(Gtk.Application):
         return Gdk.ContentProvider.new_for_bytes(
             'text/uri-list', GLib.Bytes.new(lines.encode('utf-8')))
 
+    def _on_card_drag_begin(self, *_args):
+        # Tell the shell this drag is OURS: the drag monitor must NOT treat it
+        # as an external drop-in and swap this window back to the zone mode
+        # mid-drag (that unmaps the drag source and cancels the drag).
+        self._notify_companion_drag(True)
+        print('[NotchNux-Helper] companion drag begin', file=sys.stderr)
+
     def _on_card_drag_end(self, *_args):
-        # The drag finished (dropped elsewhere or cancelled): revert to the
-        # (invisible) zone mode and hide shortly.
+        # The drag finished (dropped elsewhere or cancelled): tell the shell
+        # the card drag is over, revert to the (invisible) zone mode and hide
+        # shortly.
+        self._notify_companion_drag(False)
         self._show_zone(present=False)
         if self._win.get_visible():
             self._arm_hide(300)
+
+    def _notify_companion_drag(self, active):
+        try:
+            if getattr(self, '_bus', None) is None:
+                self._bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+            self._bus.call_sync(
+                'org.gnome.Shell.Extensions.NotchNux',
+                '/org/gnome/Shell/Extensions/NotchNux',
+                'org.gnome.Shell.Extensions.NotchNux',
+                'CompanionDragState',
+                GLib.Variant('(b)', (bool(active),)), None,
+                Gio.DBusCallFlags.NONE, 2000, None)
+        except Exception as e:
+            print(f'[NotchNux-Helper] drag state notify failed: {e}',
+                  file=sys.stderr)
 
     # -- visibility --------------------------------------------------------
 

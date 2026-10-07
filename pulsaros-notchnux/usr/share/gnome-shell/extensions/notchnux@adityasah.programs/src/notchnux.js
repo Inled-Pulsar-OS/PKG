@@ -282,7 +282,14 @@ export const NotchNux = GObject.registerClass({
                     // exactly over this expanded notch, and this subtree is
                     // made non-reactive during the drag so Mutter's REACTIVE
                     // pick skips the chrome and reaches the zone window.
-                    if (dropEvent.source === Main.xdndHandler) {
+                    // A drag that arrives via Main.xdndHandler can also be OUR
+                    // OWN companion drag-source card crossing back over the
+                    // shelf. That must not reclaim the window as a drop zone
+                    // mid-drag (it would unmap the drag source and cancel the
+                    // drag): the helper signals begin/end via
+                    // CompanionDragState on the extension's D-Bus object.
+                    if (dropEvent.source === Main.xdndHandler &&
+                        !this.extension?._companionDragActive) {
                         this.extension?._showDropZone?.(dropEvent.x, dropEvent.y, this);
                     }
                 }
