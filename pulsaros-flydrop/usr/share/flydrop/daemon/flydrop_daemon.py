@@ -361,7 +361,10 @@ class FlyDropDaemon:
         return False
 
     def _on_transfer_progress(self, session):
+        # Nunca por encima de 1: los reintentos de un archivo descartan el
+        # progreso anterior, pero por si acaso se salta el techo.
         fraction = session.transferred_bytes / session.total_size if session.total_size > 0 else 0.0
+        fraction = min(1.0, fraction)
         speed_mb = session.speed / (1024 * 1024)
         speed_str = f"{speed_mb:.1f} MB/s" if speed_mb >= 1.0 else f"{session.speed / 1024:.0f} KB/s"
         total_mb = session.total_size / (1024 * 1024)
@@ -467,6 +470,7 @@ class FlyDropDaemon:
         self._launch_transfer_ui(session_id, peer_name, summary, is_incoming=False)
 
         def on_prog(fraction, speed_bps, current_file, transferred, total):
+            fraction = min(1.0, float(fraction))
             speed_mb = speed_bps / (1024 * 1024)
             speed_str = f"{speed_mb:.1f} MB/s" if speed_mb >= 1.0 else f"{speed_bps / 1024:.0f} KB/s"
             total_mb = total / (1024 * 1024)
@@ -553,6 +557,7 @@ class FlyDropDaemon:
         self._launch_transfer_ui(session_id, peer_name, summary, is_incoming=False)
 
         def on_prog(fraction, speed_bps, current_file, transferred, total):
+            fraction = min(1.0, float(fraction))
             self.transfer_states[session_id] = {
                 "session_id": session_id,
                 "status": "in_progress",

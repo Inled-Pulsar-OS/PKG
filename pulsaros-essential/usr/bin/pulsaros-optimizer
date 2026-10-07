@@ -1,25 +1,42 @@
 #!/usr/bin/env python3
 """
 Pulsar OS - Universal Dynamic Adaptive Optimizer & Real-Time Habit Learning Engine
-Engineered for zero-lag desktop fluidity and automatic anti-saturation across any workflow.
+Engineered for zero-lag desktop fluidity, honest habit learning, and a low
+resource regime that is held *before* saturation instead of after it.
 
-Core Engine Features:
-1. Genuine Continuous Habit Learning Engine (No Mocks):
-   - Actively monitors user focus, foreground window time, interaction frequency, and process recency.
-   - Persists learned application profiles in /var/lib/pulsaros/optimizer_habits.json (and user fallback).
-   - Dynamically calculates an Interactive Habit Score (IHS) for every process.
-   - Honors explicit user priority preferences (Turbo, High, Normal, Low) across reboots.
-2. Radical Anti-Saturation Governor (CPU & Memory):
-   - Guarantees CPU and RAM never hit unrecoverable saturation.
-   - Under memory pressure (<20% available or high PSI), proactively reclaims pagecaches,
-     flushes dentries/inodes, and compacts memory into zRAM.
-   - Under critical memory (<10% available), triggers radical memory reclamation and zRAM boost (swappiness 180).
-   - Under heavy CPU load (>80%), automatically protects the Desktop Compositor and learned user apps
-     while radically throttling rogue or heavy background processes (compilers, VMs, builders, encoders)
-     with nice +16/+19, idle I/O, and dynamic duty-cycle pacing.
-3. Desktop Compositor & Audio Hardening:
-   - GNOME Shell, Mutter, Xwayland, PipeWire, WirePlumber, and Spotlight run with top priority (-16 nice, real-time IO).
-4. Direct libc syscalls (SYS_ioprio_set) with near-zero daemon CPU footprint (< 0.05%).
+Priority model (highest first):
+  0. Explicit user pins (Turbo/High/Normal/Low set from pulsaros-optimizer-gui).
+  1. GNOME Shell, Mutter, Xwayland, PipeWire, WirePlumber and friends:
+     absolute top scheduling priority at every load level (smoothness first).
+  2. The window that currently has focus: always above regular GUI apps.
+  3. Indexers & system maintenance: nice 19 + idle I/O, unconditionally.
+  4. Interactive GUI apps and learned habit apps.
+  5. Heavy background classes: compilers, VMs, container engines, encoders.
+  6. Anything else that is actually burning CPU - only while it burns it.
+
+Low regime (soft governor, active *before* any saturation):
+  - Load level 0..4 from smoothed CPU% + PSI.
+  - All heavy background jobs share one cgroup, /sys/fs/cgroup/pulsaros-optimizer,
+    with a soft cpu.max ceiling that tightens with the load level
+    (none -> 70% -> 50% -> 35% -> 25% of the machine). The shell, the audio
+    stack and the focused app never enter that cgroup, so background work can
+    never push the desktop into contention no matter how hard it tries.
+  - memory.high tightens when available RAM drops, so background jobs yield
+    memory through reclaim instead of forcing swap storms / OOM.
+  - nice/ionice tiers escalate per load level for every heavy class.
+
+Genuine habit learning engine (no mocks):
+  - Focus is reported by the pulsaros-focus GNOME Shell extension into
+    $XDG_RUNTIME_DIR/pulsaros-focused.json. This is the only reliable channel:
+    GNOME >= 45 disabled org.gnome.Shell.Eval (returns (false, '')) and this
+    daemon is a root *system* service, so it has no session bus and no display
+    (gdbus/xdotool/xprop are kept as throttled fallbacks anyway).
+  - Only windowed apps are recorded, focus *sessions* are counted on focus
+    changes instead of once per loop, scores are recomputed from raw counters
+    and stale profiles are pruned at startup.
+  - Profiles persist in /var/lib/pulsaros/optimizer_habits.json; manual pins
+    written by the GUI (which can only write to the user home) are merged in
+    from every location, so user intent always reaches this root daemon.
 """
 
 import ctypes
@@ -27,10 +44,11 @@ import os
 import sys
 import time
 import json
-import subprocess
 import glob
 import signal
 import platform
+import atexit
+import subprocess
 
 # -----------------------------------------------------------------------------
 # Direct Linux syscall for I/O priority without spawning subprocesses
@@ -73,114 +91,59 @@ def set_ioprio(pid: int, io_class: int, io_prio: int):
     except Exception:
         return False
 
+def _sys_write(path: str, value: str) -> bool:
+    """Write a sysctl/sysfs/cgroup file, returning success instead of raising."""
+    try:
+        with open(path, "w") as f:
+            f.write(value)
+        return True
+    except Exception:
+        return False
+
+try:
+    CLK_TCK = float(os.sysconf("SC_CLK_TCK"))
+except Exception:
+    CLK_TCK = 100.0
+
+def log(msg):
+    print(f"[pulsaros-optimizer] {msg}", flush=True)
+
+_WARNED = set()
+def warn_once(msg, limit=20):
+    """Rate-limited error reporting: a recurring fault is logged, not hidden."""
+    if msg in _WARNED or len(_WARNED) >= limit:
+        return
+    _WARNED.add(msg)
+    log(f"WARNING: {msg}")
+
 # -----------------------------------------------------------------------------
-# Genuine Habit Learning Engine (Persistent Model)
+# Governor tuning (the "low regime" knobs)
 # -----------------------------------------------------------------------------
-HABIT_DB_PATHS = [
-    "/var/lib/pulsaros/optimizer_habits.json",
-    os.path.expanduser("~/.local/share/pulsaros/optimizer_habits.json"),
-    "/tmp/pulsaros_optimizer_habits.json"
-]
+LOAD_CPU_THRESHOLDS = (30.0, 45.0, 60.0, 80.0)   # smoothed CPU% -> load level 1..4
+PSI_ELEVATED = {"cpu_some": 10.0, "io_some": 12.0, "io_full": 0.8}
+PSI_CRITICAL = {"cpu_some": 22.0, "io_some": 25.0, "io_full": 3.0}
+BUSY_BACKGROUND_CPU_PCT = 8.0    # % of total machine CPU that makes an unclassified process "busy"
 
-class HabitLearningEngine:
-    def __init__(self):
-        self.db_path = self._resolve_db_path()
-        self.habits = {}
-        self.user_overrides = {}
-        self.last_save_time = time.time()
-        self.load()
+# Background cgroup soft ceilings, indexed by load level (None = unlimited)
+BG_CPU_CAP = (None, 0.70, 0.50, 0.35, 0.25)
+# memory.high fractions of total RAM by available-RAM ratio
+MEM_HIGH_LOW_AVAIL = 0.15    # below this: background may hold 45% of RAM
+MEM_HIGH_MID_AVAIL = 0.25    # below this: background may hold 60% of RAM
+CGROUP_DIR = "/sys/fs/cgroup/pulsaros-optimizer"
 
-    def _resolve_db_path(self):
-        for p in HABIT_DB_PATHS:
-            try:
-                d = os.path.dirname(p)
-                if not os.path.exists(d):
-                    os.makedirs(d, exist_ok=True)
-                # Test write capability
-                if os.access(d, os.W_OK):
-                    return p
-            except Exception:
-                continue
-        return "/tmp/pulsaros_optimizer_habits.json"
-
-    def load(self):
-        if os.path.exists(self.db_path):
-            try:
-                with open(self.db_path, "r") as f:
-                    data = json.load(f)
-                    self.habits = data.get("habits", {})
-                    self.user_overrides = data.get("user_overrides", {})
-            except Exception:
-                self.habits = {}
-                self.user_overrides = {}
-
-    def save(self):
-        try:
-            d = os.path.dirname(self.db_path)
-            os.makedirs(d, exist_ok=True)
-            tmp_path = f"{self.db_path}.tmp"
-            data = {
-                "version": 1,
-                "last_updated": time.time(),
-                "habits": self.habits,
-                "user_overrides": self.user_overrides
-            }
-            with open(tmp_path, "w") as f:
-                json.dump(data, f, indent=2)
-            os.replace(tmp_path, self.db_path)
-            self.last_save_time = time.time()
-        except Exception:
-            pass
-
-    def record_activity(self, comm: str, is_foreground: bool, duration_sec: float):
-        """Update continuous user interaction statistics for a process name."""
-        if not comm:
-            return
-        entry = self.habits.setdefault(comm, {
-            "focus_seconds": 0.0,
-            "focus_count": 0,
-            "background_seconds": 0.0,
-            "last_active": 0.0,
-            "habit_score": 0.5
-        })
-        now = time.time()
-        entry["last_active"] = now
-        if is_foreground:
-            entry["focus_seconds"] += duration_sec
-            entry["focus_count"] += 1
-        else:
-            entry["background_seconds"] += duration_sec
-
-        # Recalculate dynamic habit score: [0.0 = Pure Background / Unused, 1.0 = Highly Interacted Core App]
-        focus_hrs = entry["focus_seconds"] / 3600.0
-        focus_count = entry["focus_count"]
-        # Score based on total foreground engagement and frequency
-        base_score = min(1.0, (focus_hrs * 0.3) + (min(focus_count, 100) * 0.007))
-        entry["habit_score"] = round(base_score, 3)
-
-        # Periodic save every 60 seconds
-        if (now - self.last_save_time) > 60.0:
-            self.save()
-
-    def set_user_override(self, comm: str, prio_idx: int):
-        """Save manual user preference (0=Turbo, 1=High, 2=Normal, 3=Low)."""
-        self.user_overrides[comm] = prio_idx
-        self.save()
-
-    def get_user_override(self, comm: str):
-        return self.user_overrides.get(comm, None)
-
-    def get_habit_score(self, comm: str) -> float:
-        """Returns the calculated habit score for the process."""
-        if comm in self.habits:
-            return self.habits[comm].get("habit_score", 0.1)
-        return 0.1
-
-HABIT_ENGINE = HabitLearningEngine()
+# Focus channel (written by pulsaros-focus@inled.es)
+FOCUS_STATE_GLOB = "/run/user/*/pulsaros-focused.json"
+FOCUS_STATE_MAX_AGE = 60.0   # seconds before a focus report is considered stale
+FOCUS_HOLD_SEC = 20.0        # keep the last known focus this long if reporting pauses
+FALLBACK_PROBE_INTERVAL = 30.0
 
 # -----------------------------------------------------------------------------
 # Process Categorization & Sets
+# (Kernel comm is capped at 15 chars, so matching is done on truncated names:
+#  "org.gnome.Nautilus" and comm "org.gnome.Nautil" must still match.)
 # -----------------------------------------------------------------------------
+def _truncated(names):
+    return {n[:15] for n in names}
 
 THROTTLE_PROCESS_NAMES = {
     "tracker-miner-fs-3", "tracker-miner-fs", "tracker-miner-f",
@@ -193,8 +156,8 @@ THROTTLE_PROCESS_NAMES = {
 CORE_DESKTOP_PROCESSES = {
     "gnome-shell", "mutter", "mutter-x11-fram", "mutter-x11-frames",
     "Xwayland", "kwin_wayland", "kwin_x11", "sway", "wayfire", "weston",
-    "pipewire", "wireplumber", "pipewire-pulse", "pulseaudio",
-    "pulsaros-spotli", "pulsaros-spotlight", "pulsaros-dock", "plank"
+    "pipewire", "wireplumber", "pipewire-pulse", "pulseaudio", "pipewire-jack",
+    "rtkit-daemon", "pulsaros-spotli", "pulsaros-spotlight", "pulsaros-dock", "plank"
 }
 
 USER_GUI_APPS = {
@@ -204,7 +167,8 @@ USER_GUI_APPS = {
     "ptyxis", "gnome-terminal", "gnome-terminal-", "alacritty", "kitty", "ghostty", "foot", "konsole", "xterm",
     "evince", "papers", "eog", "loupe", "gimp", "inkscape", "krita", "obs", "vlc", "mpv", "totem", "celluloid",
     "org.gnome.Settings", "gnome-control-c", "gnome-control-center", "pavucontrol",
-    "pulsaros-welcome", "pulsaros-optimizer-gui", "pulsar-store"
+    "pulsaros-welcome", "pulsaros-optimizer-gui", "pulsar-store",
+    "org.gnome.Nautil", "gnome-text-edit", "pulsaros-optimiz"
 }
 
 DEV_BUILD_TOOLS = {
@@ -223,22 +187,280 @@ CONTAINER_ENGINES = {
     "dockerd", "containerd", "podman", "crio", "k3s", "minikube"
 }
 
+# Shells are never managed: they are short-lived CPU spikes, and because a
+# child inherits its parent's nice, throttling a shell would silently throttle
+# every workload the user launches from it (including focused apps).
+SHELL_INTERPRETERS = {
+    "bash", "sh", "dash", "zsh", "fish", "ksh", "tcsh", "csh", "ash",
+    "busybox", "nu", "elvish", "xonsh"
+}
+
 HEAVY_MEDIA_TOOLS = {
     "ffmpeg", "handbrake", "blender", "blender-bin", "tar", "gzip", "bzip2", "xz", "zstd", "rsync", "rclone"
 }
 
+THROTTLE15 = _truncated(THROTTLE_PROCESS_NAMES)
+CORE15 = _truncated(CORE_DESKTOP_PROCESSES)
+GUI15 = _truncated(USER_GUI_APPS)
+DEV15 = _truncated(DEV_BUILD_TOOLS)
+VM15 = _truncated(HYPERVISOR_VM_PROCESSES)
+CONTAINER15 = _truncated(CONTAINER_ENGINES)
+MEDIA15 = _truncated(HEAVY_MEDIA_TOOLS)
+SHELL15 = _truncated(SHELL_INTERPRETERS)
+
+# Categories that belong to the background (capped) cgroup
+BG_CATEGORIES = {"idle", "dev", "vm", "container", "media", "busy"}
+
+# Never manage ourselves: this daemon must stay responsive at all times.
+SELF_COMM = {"pulsaros-optimiz", "pulsaros-optimizer"}
+
+# -----------------------------------------------------------------------------
+# Priority tables (index = load level 0..4)
+# -----------------------------------------------------------------------------
+PRIORITY_PINS = {          # user override index -> (nice, io_class, io_prio)
+    0: (-10, 2, 0),        # Turbo
+    1: (-5, 2, 1),         # High
+    2: (0, 2, 4),          # Normal
+    3: (19, 3, 0),         # Low
+}
+CORE_NICE = (-15, -16, -18, -19, -20)
+FOCUS_NICE = (-10, -11, -12, -13, -14)
+GUI_NICE = (-6, -6, -7, -9, -11)
+DEV_NICE = (0, 4, 8, 12, 16)
+VM_NICE = (0, 4, 8, 12, 16)
+CONTAINER_NICE = (0, 4, 7, 10, 14)
+MEDIA_NICE = (2, 6, 10, 12, 16)
+BUSY_NICE = (0, 5, 10, 12, 14)
+GUI_IO_PRIO = (2, 2, 1, 1, 0)
+BG_IO = ((2, 4), (2, 5), (2, 6), (2, 7), (3, 0))   # last one = idle I/O
+_CLASS_TABLES = {
+    "dev": DEV_NICE, "vm": VM_NICE, "container": CONTAINER_NICE,
+    "media": MEDIA_NICE, "busy": BUSY_NICE,
+}
+
+# -----------------------------------------------------------------------------
+# Genuine Habit Learning Engine (Persistent Model)
+# -----------------------------------------------------------------------------
+HABIT_DB_PATHS = [
+    "/var/lib/pulsaros/optimizer_habits.json",
+    os.path.expanduser("~/.local/share/pulsaros/optimizer_habits.json"),
+    "/tmp/pulsaros_optimizer_habits.json"
+]
+
+class HabitLearningEngine:
+    def __init__(self):
+        self.db_path = self._resolve_db_path()
+        # Read from the first location that exists (root-owned /var/lib is
+        # readable by everyone), write only where we actually have permission.
+        self.read_paths = [p for p in HABIT_DB_PATHS if os.path.exists(p)]
+        self.habits = {}
+        self.user_overrides = {}
+        self.last_save_time = time.time()
+        self._focus_comm = None
+        self._focus_change_ts = 0.0
+        self.load()
+        self.refresh_overrides()
+        self._recompute_scores()
+        self.prune()
+
+    def _resolve_db_path(self):
+        for p in HABIT_DB_PATHS:
+            try:
+                d = os.path.dirname(p)
+                if not os.path.exists(d):
+                    os.makedirs(d, exist_ok=True)
+                # Test write capability
+                if os.access(d, os.W_OK):
+                    return p
+            except Exception:
+                continue
+        return "/tmp/pulsaros_optimizer_habits.json"
+
+    def load(self):
+        for p in self.read_paths or HABIT_DB_PATHS:
+            try:
+                if not os.path.exists(p):
+                    continue
+                with open(p, "r") as f:
+                    data = json.load(f)
+                self.habits = data.get("habits", {})
+                self.user_overrides = data.get("user_overrides", {})
+                return
+            except Exception:
+                continue
+        self.habits = {}
+        self.user_overrides = {}
+
+    def refresh_overrides(self):
+        """Merge manual pins from every DB location (newest value wins).
+
+        The GUI runs as the unprivileged user and can only write to the home
+        fallback, while this root daemon owns /var/lib: without this merge the
+        pins set in the GUI would silently never reach the daemon.
+        """
+        try:
+            entries = []
+            for p in HABIT_DB_PATHS:
+                try:
+                    if not os.path.exists(p):
+                        continue
+                    with open(p, "r") as f:
+                        data = json.load(f)
+                    entries.append((os.path.getmtime(p), data.get("user_overrides") or {}))
+                except Exception:
+                    continue
+            entries.sort(key=lambda x: x[0])
+            merged = {}
+            for _, overrides in entries:
+                merged.update(overrides)
+            self.user_overrides = merged
+        except Exception:
+            pass
+
+    @staticmethod
+    def _score(entry) -> float:
+        """[0.0 = never used in the foreground, 1.0 = core daily app]."""
+        focus_hrs = entry.get("focus_seconds", 0.0) / 3600.0
+        sessions = min(entry.get("focus_count", 0), 25)
+        return round(min(1.0, (focus_hrs * 0.5) + (sessions * 0.02)), 3)
+
+    def _recompute_scores(self):
+        for entry in self.habits.values():
+            entry["habit_score"] = self._score(entry)
+
+    def prune(self):
+        """Drop profiles that never saw real foreground focus (noise/junk).
+
+        Manual pins are always kept, so nothing the user configured is lost.
+        """
+        pinned = set(self.user_overrides.keys())
+        before = len(self.habits)
+        self.habits = {
+            comm: e for comm, e in self.habits.items()
+            if e.get("focus_seconds", 0.0) > 0.0 or comm in pinned
+        }
+        dropped = before - len(self.habits)
+        if dropped:
+            log(f"Pruned {dropped} habit profiles without foreground focus (pinned entries kept).")
+            # Only the root daemon persists this: read-only CLI runs must not
+            # leave a stray copy of the database in the caller's home.
+            if os.geteuid() == 0:
+                self.save()
+
+    def save(self):
+        try:
+            d = os.path.dirname(self.db_path)
+            os.makedirs(d, exist_ok=True)
+            tmp_path = f"{self.db_path}.tmp"
+            data = {
+                "version": 2,
+                "last_updated": time.time(),
+                "habits": self.habits,
+                "user_overrides": self.user_overrides
+            }
+            with open(tmp_path, "w") as f:
+                json.dump(data, f, indent=2)
+            os.replace(tmp_path, self.db_path)
+            self.last_save_time = time.time()
+        except Exception:
+            pass
+
+    def _entry(self, comm: str):
+        return self.habits.setdefault(comm, {
+            "focus_seconds": 0.0,
+            "focus_count": 0,
+            "background_seconds": 0.0,
+            "last_active": 0.0,
+            "habit_score": 0.0
+        })
+
+    def record_focus(self, comm: str, duration_sec: float):
+        """Accumulate foreground time; count a new session on focus *change*."""
+        if not comm:
+            return
+        now = time.time()
+        if self._focus_comm != comm:
+            if (now - self._focus_change_ts) > 2.0:
+                self._entry(comm)["focus_count"] += 1
+            self._focus_comm = comm
+            self._focus_change_ts = now
+        entry = self._entry(comm)
+        entry["last_active"] = now
+        if 0.0 < duration_sec < 15.0:
+            entry["focus_seconds"] += duration_sec
+        entry["habit_score"] = self._score(entry)
+        if (now - self.last_save_time) > 60.0:
+            self.save()
+
+    def record_background(self, comm: str, duration_sec: float):
+        """Track background time for GUI/known apps only (keeps the DB honest)."""
+        if not comm:
+            return
+        if comm not in self.habits and comm not in GUI15:
+            return
+        entry = self._entry(comm)
+        entry["last_active"] = time.time()
+        if 0.0 < duration_sec < 15.0:
+            entry["background_seconds"] += duration_sec
+        if (time.time() - self.last_save_time) > 60.0:
+            self.save()
+
+    def end_focus(self):
+        """Called when no focused window is known, so sessions count correctly."""
+        self._focus_comm = None
+
+    def set_user_override(self, comm: str, prio_idx: int):
+        """Save manual user preference (0=Turbo, 1=High, 2=Normal, 3=Low)."""
+        self.user_overrides[comm] = prio_idx
+        self.save()
+
+    def get_user_override(self, comm: str):
+        return self.user_overrides.get(comm, None)
+
+    def get_habit_score(self, comm: str) -> float:
+        if comm in self.habits:
+            return self.habits[comm].get("habit_score", 0.0)
+        return 0.1
+
+HABIT_ENGINE = HabitLearningEngine()
+
 # -----------------------------------------------------------------------------
 # Runtime State & Cache
 # -----------------------------------------------------------------------------
-PROCESSED_PIDS = {}
-CURRENT_PRESSURE_MODE = 0
-PREV_CPU_TIMES = None
-PREV_PID_STAT = {}
-LAST_MEMORY_TRIM_TIME = 0.0
-LAST_ACTIVE_WINDOW_PID = 0
+class _ProcState:
+    """What we last applied to a process (and what it looked like before)."""
+    __slots__ = ("nice", "orig", "io", "pinned", "manual")
 
-def log(msg):
-    print(f"[pulsaros-optimizer] {msg}", flush=True)
+    def __init__(self, nice, orig, io, pinned, manual=False):
+        self.nice = nice        # last nice value written by us
+        self.orig = orig        # baseline to return to when policy steps aside
+        self.io = io            # last (io_class, io_prio) written by us
+        self.pinned = pinned    # whether a user pin was active when written
+        self.manual = manual    # True => changed outside the daemon, honor it
+
+PROCESSED_PIDS = {}
+PREV_PID_STAT = {}
+PROC_CPU_EMA = {}
+BG_MEMBERS = set()
+CPU_SMOOTH = None
+PREV_CPU_TIMES = None
+LAST_ACTIVE_PID = 0
+LAST_ACTIVE_TS = 0.0
+PREV_FOCUSED_PID = 0
+FOCUS_SOURCE = "none"
+SESSION_ENV_CACHE = {}
+SESSION_ENV_TS = 0.0
+FALLBACK_PROBE = {"pid": 0, "ts": 0.0}
+LAST_MEMORY_TRIM_TIME = 0.0
+CGROUP_OK = False
+LAST_CPU_CAP = None
+LAST_MEM_HIGH = None
+CAP_LEVEL = 0
+CAP_LEVEL_TS = 0.0
+MEM_HIGH_LEVEL = 1.0
+MEM_HIGH_TS = 0.0
+DAEMON_RUNNING = False
+RUNNING = True
 
 def read_meminfo():
     info = {}
@@ -255,7 +477,7 @@ def read_meminfo():
     return info
 
 def get_cpu_utilization():
-    """Calculate instantaneous CPU usage % across all cores from /proc/stat."""
+    """CPU usage % across all cores since the previous call (interval average)."""
     global PREV_CPU_TIMES
     try:
         with open("/proc/stat", "r") as f:
@@ -264,17 +486,17 @@ def get_cpu_utilization():
                 times = [int(x) for x in line[1:]]
                 idle_time = times[3] + (times[4] if len(times) > 4 else 0)
                 total_time = sum(times)
-                
+
                 if PREV_CPU_TIMES is None:
                     PREV_CPU_TIMES = (total_time, idle_time)
                     return 0.0
-                
+
                 prev_total, prev_idle = PREV_CPU_TIMES
                 PREV_CPU_TIMES = (total_time, idle_time)
-                
+
                 d_total = total_time - prev_total
                 d_idle = idle_time - prev_idle
-                
+
                 if d_total > 0:
                     usage = 100.0 * (1.0 - (d_idle / d_total))
                     return max(0.0, min(100.0, usage))
@@ -286,58 +508,56 @@ def read_psi():
     """Read Linux kernel Pressure Stall Information (PSI) for CPU, I/O and Memory."""
     psi = {"cpu_some": 0.0, "io_some": 0.0, "io_full": 0.0, "mem_some": 0.0, "mem_full": 0.0}
     try:
-        if os.path.exists("/proc/pressure/cpu"):
-            with open("/proc/pressure/cpu", "r") as f:
+        for path, keys in (("/proc/pressure/cpu", ("cpu_some",)),
+                           ("/proc/pressure/io", ("io_some", "io_full")),
+                           ("/proc/pressure/memory", ("mem_some", "mem_full"))):
+            if not os.path.exists(path):
+                continue
+            with open(path, "r") as f:
                 for line in f:
-                    if line.startswith("some"):
-                        for part in line.split():
-                            if part.startswith("avg10="):
-                                psi["cpu_some"] = float(part.split("=")[1])
-        if os.path.exists("/proc/pressure/io"):
-            with open("/proc/pressure/io", "r") as f:
-                for line in f:
-                    if line.startswith("some"):
-                        for part in line.split():
-                            if part.startswith("avg10="):
-                                psi["io_some"] = float(part.split("=")[1])
-                    elif line.startswith("full"):
-                        for part in line.split():
-                            if part.startswith("avg10="):
-                                psi["io_full"] = float(part.split("=")[1])
-        if os.path.exists("/proc/pressure/memory"):
-            with open("/proc/pressure/memory", "r") as f:
-                for line in f:
-                    if line.startswith("some"):
-                        for part in line.split():
-                            if part.startswith("avg10="):
-                                psi["mem_some"] = float(part.split("=")[1])
-                    elif line.startswith("full"):
-                        for part in line.split():
-                            if part.startswith("avg10="):
-                                psi["mem_full"] = float(part.split("=")[1])
+                    kind = keys[0].split("_")[0]
+                    if not line.startswith(kind):
+                        continue
+                    for part in line.split():
+                        if part.startswith("avg10="):
+                            key = "io_some" if (kind == "io" and line.startswith("some")) else \
+                                  "io_full" if (kind == "io") else \
+                                  "mem_some" if (kind == "memory" and line.startswith("some")) else \
+                                  "mem_full" if kind == "memory" else "cpu_some"
+                            psi[key] = float(part.split("=")[1])
     except Exception:
         pass
     return psi
 
-def evaluate_system_pressure():
+def compute_load_state():
+    """Return (load_level 0..4, pressure_mode 0..2, smoothed CPU%, psi).
+
+    Level 0-2 are the "low regime" band where the soft ceilings do the work,
+    3 is elevated (balancing) and 4 is critical (zero-lag protection).
     """
-    Dynamically evaluate real-time system pressure level:
-    - Mode 0: NORMAL (Desktop fluid, CPU usage < 65%, low pressure stall)
-    - Mode 1: ELEVATED (Moderate load, CPU 65%-80% or PSI 10-22%)
-    - Mode 2: CRITICAL SATURATION (Heavy load, CPU > 80% or PSI > 22% or IO stall > 25%)
-    """
-    cpu_usage = get_cpu_utilization()
+    global CPU_SMOOTH
+    cpu = get_cpu_utilization()
+    CPU_SMOOTH = cpu if CPU_SMOOTH is None else (CPU_SMOOTH * 0.65) + (cpu * 0.35)
     psi = read_psi()
-    
-    # Critical saturation (risk of UI stutter / lag)
-    if cpu_usage > 80.0 or psi["cpu_some"] > 22.0 or psi["io_some"] > 25.0 or psi["io_full"] > 3.0:
-        return 2, cpu_usage, psi
-    
-    # Elevated load
-    if cpu_usage > 60.0 or psi["cpu_some"] > 10.0 or psi["io_some"] > 12.0 or psi["io_full"] > 0.8:
-        return 1, cpu_usage, psi
-        
-    return 0, cpu_usage, psi
+
+    level = 0
+    if CPU_SMOOTH >= LOAD_CPU_THRESHOLDS[0]:
+        level = 1
+    if CPU_SMOOTH >= LOAD_CPU_THRESHOLDS[1]:
+        level = 2
+    if (CPU_SMOOTH >= LOAD_CPU_THRESHOLDS[2]
+            or psi["cpu_some"] > PSI_ELEVATED["cpu_some"]
+            or psi["io_some"] > PSI_ELEVATED["io_some"]
+            or psi["io_full"] > PSI_ELEVATED["io_full"]):
+        level = 3
+    if (CPU_SMOOTH >= LOAD_CPU_THRESHOLDS[3]
+            or psi["cpu_some"] > PSI_CRITICAL["cpu_some"]
+            or psi["io_some"] > PSI_CRITICAL["io_some"]
+            or psi["io_full"] > PSI_CRITICAL["io_full"]):
+        level = 4
+
+    mode = 0 if level <= 2 else (1 if level == 3 else 2)
+    return level, mode, CPU_SMOOTH, psi
 
 def get_zram_stats():
     """Retrieve zRAM compression and usage statistics."""
@@ -369,12 +589,12 @@ def get_zram_stats():
                     compr_mb = compr_bytes / (1024 * 1024)
                     saved_mb = max(0.0, orig_mb - compr_mb)
                     ratio = f"{(orig_bytes / compr_bytes):.2f}:1" if compr_bytes > 0 else "1.00:1"
-                    
+
                     stats["orig_data_mb"] = orig_mb
                     stats["compr_data_mb"] = compr_mb
                     stats["saved_mb"] = saved_mb
                     stats["ratio"] = ratio
-                    
+
         if os.path.exists("/sys/block/zram0/comp_algorithm"):
             with open("/sys/block/zram0/comp_algorithm", "r") as f:
                 for part in f.read().split():
@@ -385,37 +605,591 @@ def get_zram_stats():
         pass
     return stats
 
+# -----------------------------------------------------------------------------
+# Focus detection (extension file first, session fallbacks second)
+# -----------------------------------------------------------------------------
+def _pid_alive(pid: int) -> bool:
+    return pid > 0 and os.path.exists(f"/proc/{pid}")
+
+def _session_env():
+    """Environment of the graphical session (this daemon is a system service)."""
+    global SESSION_ENV_CACHE, SESSION_ENV_TS
+    now = time.time()
+    if SESSION_ENV_CACHE and (now - SESSION_ENV_TS) < 60.0:
+        return SESSION_ENV_CACHE
+    SESSION_ENV_TS = now
+    try:
+        for pid_str in os.listdir("/proc"):
+            if not pid_str.isdigit():
+                continue
+            try:
+                with open(f"/proc/{pid_str}/comm", "r") as f:
+                    if f.read().strip() != "gnome-shell":
+                        continue
+                with open(f"/proc/{pid_str}/environ", "rb") as f:
+                    raw = f.read().split(b"\0")
+                env = {}
+                wanted = (b"DBUS_SESSION_BUS_ADDRESS", b"DISPLAY", b"WAYLAND_DISPLAY", b"XDG_RUNTIME_DIR")
+                for item in raw:
+                    if b"=" not in item:
+                        continue
+                    k, v = item.split(b"=", 1)
+                    if k in wanted:
+                        env[k.decode()] = v.decode()
+                if env:
+                    SESSION_ENV_CACHE = env
+                    return env
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return SESSION_ENV_CACHE
+
+def _x11_active_pid(env):
+    if not env.get("DISPLAY"):
+        return 0
+    run_env = {**os.environ, **env}
+    try:
+        res = subprocess.run(["xprop", "-root", "_NET_ACTIVE_WINDOW"],
+                             capture_output=True, text=True, timeout=0.3, env=run_env)
+        if "#" in res.stdout:
+            wid = res.stdout.rsplit("#", 1)[1].strip()
+            res2 = subprocess.run(["xprop", "-id", wid, "_NET_WM_PID"],
+                                  capture_output=True, text=True, timeout=0.3, env=run_env)
+            if "_NET_WM_PID" in res2.stdout and "not found" not in res2.stdout:
+                pid = int(res2.stdout.split("=")[-1].strip())
+                if pid > 0:
+                    return pid
+    except Exception:
+        pass
+    return 0
+
+def _probe_fallback_pid():
+    """Throttled fallbacks for setups without the pulsaros-focus extension."""
+    env = _session_env()
+    if env.get("DBUS_SESSION_BUS_ADDRESS"):
+        # Works on GNOME <= 44 and builds running with Eval allowed
+        try:
+            res = subprocess.run(
+                ["gdbus", "call", "--session", "--dest", "org.gnome.Shell",
+                 "--object-path", "/org/gnome/Shell",
+                 "--method", "org.gnome.Shell.Eval",
+                 "global.display.focus_window ? global.display.focus_window.get_pid() : 0"],
+                capture_output=True, text=True, timeout=0.3,
+                env={**os.environ, **env})
+            out = res.stdout.strip()
+            if out.startswith("(true,") and "'" in out:
+                pid = int(out.split("'")[1])
+                if _pid_alive(pid):
+                    return pid
+        except Exception:
+            pass
+    # X11 / Xwayland-only fallbacks
+    pid = _x11_active_pid(env)
+    if pid and _pid_alive(pid):
+        return pid
+    if os.path.exists("/usr/bin/xdotool") and env.get("DISPLAY"):
+        try:
+            res = subprocess.run(["xdotool", "getwindowfocus", "getwindowpid"],
+                                 capture_output=True, text=True, timeout=0.3,
+                                 env={**os.environ, **env})
+            if res.stdout.strip().isdigit():
+                pid = int(res.stdout.strip())
+                if _pid_alive(pid):
+                    return pid
+        except Exception:
+            pass
+    return 0
+
+def detect_active_window_pid() -> int:
+    """Focused window PID via the pulsaros-focus extension, then fallbacks."""
+    global FOCUS_SOURCE
+    now = time.time()
+
+    # 1. Extension state file: one small read, no subprocess, no session bus
+    try:
+        for path in glob.glob(FOCUS_STATE_GLOB):
+            try:
+                if (now - os.path.getmtime(path)) > FOCUS_STATE_MAX_AGE:
+                    continue
+                with open(path, "r") as f:
+                    data = json.load(f)
+                pid = int(data.get("pid", 0))
+                ts = float(data.get("ts", 0.0))
+                if pid > 0 and (now - ts) <= FOCUS_STATE_MAX_AGE and _pid_alive(pid):
+                    FOCUS_SOURCE = "pulsaros-focus extension"
+                    return pid
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    # 2. Fallbacks, probed at most once every FALLBACK_PROBE_INTERVAL seconds
+    if (now - FALLBACK_PROBE["ts"]) >= FALLBACK_PROBE_INTERVAL:
+        FALLBACK_PROBE["ts"] = now
+        FALLBACK_PROBE["pid"] = _probe_fallback_pid()
+    if FALLBACK_PROBE["pid"] > 0 and _pid_alive(FALLBACK_PROBE["pid"]):
+        FOCUS_SOURCE = "session fallback (Eval/xprop)"
+        return FALLBACK_PROBE["pid"]
+
+    FOCUS_SOURCE = "none"
+    return 0
+
+# -----------------------------------------------------------------------------
+# Classification & policy
+# -----------------------------------------------------------------------------
+def classify(comm: str, is_focused: bool, override, cpu_ema: float, level: int):
+    """Highest-priority category for a process (order = priority order)."""
+    if override is not None:
+        return "pin"
+    if comm in CORE15:
+        return "core"
+    if is_focused:
+        return "focused"
+    if comm in SHELL15:
+        return None
+    if comm in THROTTLE15:
+        return "idle"
+    if comm in GUI15 or HABIT_ENGINE.get_habit_score(comm) >= 0.35:
+        return "gui"
+    if comm in DEV15:
+        return "dev"
+    if comm in VM15:
+        return "vm"
+    if comm in CONTAINER15:
+        return "container"
+    if comm in MEDIA15:
+        return "media"
+    if level >= 1 and cpu_ema >= BUSY_BACKGROUND_CPU_PCT:
+        return "busy"
+    return None
+
+def policy_target(category: str, level: int, habit_boost: int = 0):
+    """(nice, io_class, io_prio) for a category at this load level, or None."""
+    if category == "pin":
+        return None
+    if category == "core":
+        # Absolute top priority at every level: the desktop must stay smooth.
+        if level >= 4:
+            return (CORE_NICE[level], 1, 2)   # realtime I/O at critical load
+        return (CORE_NICE[level], 2, 0)
+    if category == "focused":
+        return (FOCUS_NICE[level], 2, 0)
+    if category == "idle":
+        return (19, 3, 0)
+    if category == "gui":
+        return (max(-12, GUI_NICE[level] - habit_boost), 2, GUI_IO_PRIO[level])
+    table = _CLASS_TABLES[category]
+    if category == "busy" and level == 0:
+        return None
+    io_class, io_prio = BG_IO[level]
+    return (table[level], io_class, io_prio)
+
+# -----------------------------------------------------------------------------
+# Background cgroup (soft CPU ceiling + memory.high)
+# -----------------------------------------------------------------------------
+def setup_bg_cgroup():
+    """Create the shared cgroup that keeps background work in a low regime."""
+    global CGROUP_OK, BG_MEMBERS, LAST_CPU_CAP, LAST_MEM_HIGH
+    try:
+        os.makedirs(CGROUP_DIR, exist_ok=True)
+        if _sys_write(f"{CGROUP_DIR}/cpu.max", "max 100000"):
+            LAST_CPU_CAP = "max 100000"
+        if _sys_write(f"{CGROUP_DIR}/memory.high", "max"):
+            LAST_MEM_HIGH = "max"
+        try:
+            with open(f"{CGROUP_DIR}/cgroup.procs", "r") as f:
+                BG_MEMBERS = {int(x) for x in f.read().split() if x.strip()}
+        except Exception:
+            BG_MEMBERS = set()
+        CGROUP_OK = True
+        log(f"Background resource governor ready ({CGROUP_DIR}, {len(BG_MEMBERS)} members adopted)")
+    except Exception as e:
+        CGROUP_OK = False
+        log(f"cgroup v2 governor unavailable ({e}); falling back to nice/ionice only")
+
+def release_bg_cgroup_caps():
+    if CGROUP_OK:
+        _sys_write(f"{CGROUP_DIR}/cpu.max", "max 100000")
+        _sys_write(f"{CGROUP_DIR}/memory.high", "max")
+
+def _set_cpu_cap(fraction):
+    global LAST_CPU_CAP
+    if not CGROUP_OK:
+        return
+    if fraction is None:
+        want = "max 100000"
+    else:
+        cpus = os.cpu_count() or 1
+        want = f"{max(10000, int(cpus * fraction * 100000))} 100000"
+    if want == LAST_CPU_CAP:
+        return
+    if _sys_write(f"{CGROUP_DIR}/cpu.max", want):
+        LAST_CPU_CAP = want
+
+def _set_memory_high(total_bytes: int, fraction: float):
+    global LAST_MEM_HIGH
+    if not CGROUP_OK:
+        return
+    want = "max" if fraction >= 1.0 else str(max(64 * 1024 * 1024, int(total_bytes * fraction)))
+    if want == LAST_MEM_HIGH:
+        return
+    if _sys_write(f"{CGROUP_DIR}/memory.high", want):
+        LAST_MEM_HIGH = want
+
+def update_resource_caps(level: int, avail_ratio: float, total_bytes: int, now: float):
+    """Tighten the background ceilings quickly, relax them gradually."""
+    global CAP_LEVEL, CAP_LEVEL_TS, MEM_HIGH_LEVEL, MEM_HIGH_TS
+
+    # CPU ceiling: tighten instantly, relax one step every 15s of calm
+    if level > CAP_LEVEL:
+        CAP_LEVEL, CAP_LEVEL_TS = level, now
+    elif level < CAP_LEVEL and (now - CAP_LEVEL_TS) > 15.0:
+        CAP_LEVEL, CAP_LEVEL_TS = CAP_LEVEL - 1, now
+    _set_cpu_cap(BG_CPU_CAP[CAP_LEVEL])
+
+    # Background memory ceiling: tighten instantly, relax after 30s of headroom
+    if avail_ratio < MEM_HIGH_LOW_AVAIL:
+        target = 0.45
+    elif avail_ratio < MEM_HIGH_MID_AVAIL:
+        target = 0.60
+    else:
+        target = 1.0
+    if target < MEM_HIGH_LEVEL or (target > MEM_HIGH_LEVEL and (now - MEM_HIGH_TS) > 30.0):
+        MEM_HIGH_LEVEL, MEM_HIGH_TS = target, now
+        _set_memory_high(total_bytes, MEM_HIGH_LEVEL)
+
+def _cgroup_path(pid: int) -> str:
+    try:
+        with open(f"/proc/{pid}/cgroup", "r") as f:
+            for line in f:
+                if line.startswith("0::"):
+                    return line.strip().split("::", 1)[1]
+    except Exception:
+        pass
+    return ""
+
+def _session_owned(cgroup: str) -> bool:
+    """Eligible for migration into the background cgroup.
+
+    Only user-launched work qualifies: session scopes and app scopes launched
+    from a terminal or the desktop (both live under /user.slice and end in
+    .scope). System services (system.slice) and user services
+    (user@...service/*.service) are never touched, so `systemctl stop` on them
+    keeps working — systemd only kills processes still in the unit's cgroup.
+    """
+    return cgroup == "/" or (cgroup.startswith("/user.slice/") and cgroup.endswith(".scope"))
+
+def _update_membership(pid: int, should_be_member: bool, cgroup: str):
+    """Move a process in/out of the background cgroup as its role changes."""
+    global BG_MEMBERS
+    if not CGROUP_OK:
+        return
+    is_member = pid in BG_MEMBERS
+    if should_be_member and not is_member:
+        if not _session_owned(cgroup):
+            return
+        if _sys_write(f"{CGROUP_DIR}/cgroup.procs", str(pid)):
+            BG_MEMBERS.add(pid)
+    elif not should_be_member and is_member:
+        if _sys_write("/sys/fs/cgroup/cgroup.procs", str(pid)):
+            BG_MEMBERS.discard(pid)
+
+# -----------------------------------------------------------------------------
+# Main optimization pass
+# -----------------------------------------------------------------------------
+def optimize_process_priorities(level: int, interval: float):
+    """Converge every process to the policy for this load level.
+
+    Each loop compares the *actual* nice value with the policy target, so
+    focus changes, GUI pins, load changes and external renices all converge
+    without needing to re-scan everything on transitions.
+    """
+    global PROCESSED_PIDS, PREV_PID_STAT, PROC_CPU_EMA
+    global LAST_ACTIVE_PID, LAST_ACTIVE_TS, PREV_FOCUSED_PID
+    try:
+        now = time.time()
+        cpu_valid = interval <= 10.0          # sane after suspend/resume
+        step = interval if 0.0 < interval < 15.0 else 1.0
+
+        # ---- focused window (extension first) ----
+        focused_pid = detect_active_window_pid()
+        if focused_pid > 0:
+            LAST_ACTIVE_PID, LAST_ACTIVE_TS = focused_pid, now
+        elif LAST_ACTIVE_PID > 0 and (now - LAST_ACTIVE_TS) < FOCUS_HOLD_SEC and _pid_alive(LAST_ACTIVE_PID):
+            focused_pid = LAST_ACTIVE_PID
+        else:
+            focused_pid = 0
+
+        if focused_pid != PREV_FOCUSED_PID:
+            if focused_pid <= 0:
+                HABIT_ENGINE.end_focus()
+            PREV_FOCUSED_PID = focused_pid
+
+        active_pids = set()
+
+        for pid_str in os.listdir("/proc"):
+            if not pid_str.isdigit():
+                continue
+            pid = int(pid_str)
+            if pid <= 2 or pid == os.getpid():
+                continue
+            try:
+                with open(f"/proc/{pid_str}/stat", "r") as f:
+                    raw = f.read()
+            except Exception:
+                continue
+
+            lparen = raw.find("(")
+            rparen = raw.rfind(")")
+            if lparen < 0 or rparen < lparen:
+                continue
+            try:
+                comm = raw[lparen + 1:rparen]
+                rest = raw[rparen + 2:].split()
+                jiffies = int(rest[11]) + int(rest[12])
+                nice = int(rest[16])
+            except Exception:
+                continue
+
+            # Kernel threads and zombies expose no executable: never manage them.
+            try:
+                os.readlink(f"/proc/{pid_str}/exe")
+            except Exception:
+                continue
+
+            active_pids.add(pid)
+
+            # ---- per-process CPU (share of the whole machine, EMA-smoothed) ----
+            prev = PREV_PID_STAT.get(pid)
+            cpu_pct = 0.0
+            if prev is not None and cpu_valid and interval > 0:
+                delta = jiffies - prev
+                if delta >= 0:
+                    cpu_pct = min(400.0, 100.0 * delta / (CLK_TCK * interval))
+            PREV_PID_STAT[pid] = jiffies
+            ema = PROC_CPU_EMA.get(pid)
+            ema = cpu_pct if ema is None else (ema * 0.5) + (cpu_pct * 0.5)
+            PROC_CPU_EMA[pid] = ema
+
+            is_focused = (pid == focused_pid)
+            override = HABIT_ENGINE.get_user_override(comm)
+
+            # ---- habit learning ----
+            if is_focused:
+                HABIT_ENGINE.record_focus(comm, step)
+            elif comm in GUI15 or comm in HABIT_ENGINE.habits:
+                HABIT_ENGINE.record_background(comm, step)
+
+            if comm in SELF_COMM:
+                continue
+
+            # ---- policy ----
+            category = classify(comm, is_focused, override, ema, level)
+            pinned_now = override is not None
+            target = None
+            if category == "pin":
+                target = PRIORITY_PINS.get(override)
+            elif category is not None:
+                habit = HABIT_ENGINE.get_habit_score(comm)
+                habit_boost = min(3, int((habit - 0.35) * 6)) if category == "gui" else 0
+                target = policy_target(category, level, habit_boost)
+
+            entry = PROCESSED_PIDS.get(pid)
+            if entry is not None:
+                if entry.pinned != pinned_now:
+                    # Pin added/removed: re-baseline and re-engage the policy.
+                    entry.orig = nice
+                    entry.nice = nice
+                    entry.pinned = pinned_now
+                    entry.manual = False
+                elif nice != entry.nice:
+                    # Reniced outside this daemon (manual renice): honor it.
+                    entry.orig = nice
+                    entry.nice = nice
+                    entry.manual = True
+                if entry.manual:
+                    # Explicit human intent wins until the process exits.
+                    continue
+
+            # Background cgroup membership follows the process' role
+            should_be_member = (
+                CGROUP_OK
+                and category in BG_CATEGORIES
+                and not is_focused
+                and not pinned_now
+            )
+            if should_be_member or (entry is not None and pid in BG_MEMBERS):
+                _update_membership(pid, should_be_member, _cgroup_path(pid))
+
+            if target is None:
+                # Policy stepped aside: restore the baseline once, then stop.
+                if entry is not None:
+                    if entry.nice != entry.orig and nice == entry.nice:
+                        try:
+                            os.setpriority(os.PRIO_PROCESS, pid, entry.orig)
+                        except Exception:
+                            pass
+                        set_ioprio(pid, 2, 4)
+                    del PROCESSED_PIDS[pid]
+                continue
+
+            t_nice, io_class, io_prio = target
+            baseline = entry.orig if entry is not None else nice
+            if t_nice < 0:
+                # Boosts are applied exactly: a nice inherited from a reniced
+                # parent (or a launcher) is not a human decision, and a manual
+                # throttle is already covered by the `manual` flag below.
+                applied = t_nice
+            else:
+                # Throttles never push a process below its own baseline, so a
+                # workload the user niced down by hand stays niced down.
+                applied = max(t_nice, baseline)
+
+            io_wanted = (io_class, io_prio)
+            changed = applied != nice
+            io_changed = entry is None or entry.io != io_wanted
+            if changed:
+                try:
+                    os.setpriority(os.PRIO_PROCESS, pid, applied)
+                except Exception:
+                    pass
+                io_changed = True
+            if io_changed:
+                set_ioprio(pid, io_class, io_prio)
+
+            if entry is None:
+                PROCESSED_PIDS[pid] = _ProcState(applied, baseline, io_wanted, pinned_now)
+            else:
+                entry.nice = applied
+                entry.io = io_wanted
+                entry.pinned = pinned_now
+
+        # Prune terminated PIDs from caches
+        for dead in list(PROCESSED_PIDS.keys()):
+            if dead not in active_pids:
+                del PROCESSED_PIDS[dead]
+                BG_MEMBERS.discard(dead)
+        for dead in list(PREV_PID_STAT.keys()):
+            if dead not in active_pids:
+                del PREV_PID_STAT[dead]
+                PROC_CPU_EMA.pop(dead, None)
+
+    except Exception as e:
+        warn_once(f"optimization pass failed: {e!r}")
+
+# -----------------------------------------------------------------------------
+# Memory pressure handling
+# -----------------------------------------------------------------------------
+def check_memory_pressure_and_radical_reclaim(psi_stats):
+    """Never let memory reach unrecoverable saturation.
+
+    The moderate tier only drops clean page cache and compacts; the radical
+    tier (below 10% available) flushes everything. Both are rate limited so
+    the reclaim itself cannot become the stall.
+    """
+    global LAST_MEMORY_TRIM_TIME
+    try:
+        now = time.time()
+        mem = read_meminfo()
+        total_mb = mem.get("MemTotal", 1024 * 1024) // 1024
+        available_mb = mem.get("MemAvailable", 1024 * 1024) // 1024
+        avail_ratio = (available_mb / total_mb) if total_mb > 0 else 1.0
+
+        # Radical: Available < 10% or < 400MB or heavy PSI stall
+        if avail_ratio < 0.10 or available_mb < 400 or psi_stats["mem_some"] > 20.0 or psi_stats["mem_full"] > 1.0:
+            if (now - LAST_MEMORY_TRIM_TIME) > 15.0:
+                log(f"RADICAL memory reclaim (Available: {available_mb}/{total_mb} MB [{int(avail_ratio*100)}%], "
+                    f"PSI: Some {psi_stats['mem_some']:.1f}% | Full {psi_stats['mem_full']:.1f}%)...")
+                LAST_MEMORY_TRIM_TIME = now
+                _sys_write("/proc/sys/vm/drop_caches", "3")
+                _sys_write("/proc/sys/vm/compact_memory", "1")
+                _sys_write("/proc/sys/vm/swappiness", "180")
+
+        # Moderate: Available < 20% or < 800MB or rising PSI stall
+        elif avail_ratio < 0.20 or available_mb < 800 or psi_stats["mem_some"] > 10.0:
+            if (now - LAST_MEMORY_TRIM_TIME) > 45.0:
+                log(f"Proactive memory compaction (Available: {available_mb}/{total_mb} MB [{int(avail_ratio*100)}%], "
+                    f"PSI: Some {psi_stats['mem_some']:.1f}%)...")
+                LAST_MEMORY_TRIM_TIME = now
+                _sys_write("/proc/sys/vm/drop_caches", "1")
+                _sys_write("/proc/sys/vm/compact_memory", "1")
+    except Exception:
+        pass
+
+# -----------------------------------------------------------------------------
+# Status
+# -----------------------------------------------------------------------------
 def show_status():
-    """Display real-time optimization statistics and dynamic pressure governor status."""
-    mode, cpu_pct, psi = evaluate_system_pressure()
-    mode_names = {
-        0: "NORMAL (Fluid & Interactive)",
-        1: "ELEVATED LOAD (Dynamic Balancing Active)",
-        2: "CRITICAL SATURATION (Zero-Lag Protection Active)"
+    """Display real-time optimization statistics and governor status."""
+    global CPU_SMOOTH
+    # A standalone --status process starts with no history: prime the meter
+    # with a short real sample instead of printing a fake 0.0%.
+    if CPU_SMOOTH is None:
+        get_cpu_utilization()
+        time.sleep(0.35)
+    level, mode, cpu_smooth, psi = compute_load_state()
+    level_names = {
+        0: "REST (idle, no ceilings)",
+        1: "LIGHT (soft regime: background capped at 70%)",
+        2: "MODERATE (background capped at 50%)",
+        3: "ELEVATED (background capped at 35%, balancing active)",
+        4: "CRITICAL (background capped at 25%, zero-lag protection)",
     }
-    
+
+    focused_pid = detect_active_window_pid()
+    focused_comm = ""
+    if focused_pid > 0:
+        try:
+            with open(f"/proc/{focused_pid}/comm", "r") as f:
+                focused_comm = f.read().strip()
+        except Exception:
+            focused_comm = "?"
+
     print("=" * 70)
-    print("PULSAR OS OPTIMIZER - UNIVERSAL FLUIDITY & PERFORMANCE ENGINE")
+    print("PULSAR OS OPTIMIZER - FLUIDITY, HABIT LEARNING & LOW REGIME ENGINE")
     print("=" * 70)
-    
-    print(f"\nREAL-TIME DYNAMIC GOVERNOR:")
-    print(f"  System Governor State:  {mode_names.get(mode, 'UNKNOWN')}")
-    print(f"  Instantaneous CPU Load: {cpu_pct:.1f}%")
+
+    print(f"\nGOVERNOR:")
+    print(f"  Load Level:             {level} - {level_names.get(level, 'UNKNOWN')}")
+    print(f"  Smoothed CPU Load:      {cpu_smooth:.1f}%")
     print(f"  CPU Pressure Stall:     {psi['cpu_some']:.1f}%")
     print(f"  Disk I/O Pressure:      Some {psi['io_some']:.1f}% | Full {psi['io_full']:.1f}%")
     print(f"  Memory Pressure Stall:  Some {psi['mem_some']:.1f}% | Full {psi['mem_full']:.1f}%")
-    
+
+    print(f"\nFOCUSED WINDOW:")
+    if focused_pid > 0:
+        print(f"  Source:                 {FOCUS_SOURCE}")
+        print(f"  PID {focused_pid} ({focused_comm}) - boosted to nice {FOCUS_NICE[level]}")
+    else:
+        print(f"  Source:                 {FOCUS_SOURCE}")
+        print("  No focused window known (install/enable pulsaros-focus + relogin).")
+
+    print(f"\nBACKGROUND RESOURCE CEILING (cgroup v2):")
+    try:
+        with open(f"{CGROUP_DIR}/cpu.max") as f:
+            cpu_max = f.read().strip()
+        with open(f"{CGROUP_DIR}/memory.high") as f:
+            mem_high = f.read().strip()
+        with open(f"{CGROUP_DIR}/cgroup.procs") as f:
+            members = len([x for x in f.read().split() if x.strip()])
+        print(f"  cpu.max:                {cpu_max}")
+        print(f"  memory.high:            {mem_high} bytes")
+        print(f"  Members in background:  {members}")
+    except Exception:
+        print("  Status:                 unavailable (nice/ionice tiers only)")
+
     # 1. Memory & zRAM
     mem = read_meminfo()
     total_mb = mem.get("MemTotal", 0) // 1024
     avail_mb = mem.get("MemAvailable", 0) // 1024
     used_mb = total_mb - avail_mb
-    
+
     print(f"\nSYSTEM MEMORY:")
     print(f"  Total RAM:              {total_mb} MB ({total_mb/1024:.1f} GB)")
     print(f"  Used:                   {used_mb} MB ({used_mb/1024:.1f} GB)")
     print(f"  Available:              {avail_mb} MB ({avail_mb/1024:.1f} GB)")
-    
+
     zstats = get_zram_stats()
     print(f"\nzRAM COMPRESSION:")
     if zstats["active"]:
@@ -427,7 +1201,7 @@ def show_status():
         print(f"  Net RAM Saved:          {zstats['saved_mb']:.1f} MB")
     else:
         print("  Status:                 Inactive")
-        
+
     # 2. Kernel VM Sysctls
     print(f"\nKERNEL LATENCY PARAMETERS:")
     try:
@@ -450,12 +1224,15 @@ def show_status():
     if top_habits:
         for comm, h in top_habits:
             mins = h.get("focus_seconds", 0) / 60.0
-            print(f"  - {comm:20s}: Habit Score {h.get('habit_score', 0):.2f} ({mins:.1f} mins focused, {h.get('focus_count', 0)} sessions)")
+            print(f"  - {comm:20s}: Habit Score {h.get('habit_score', 0):.2f} "
+                  f"({mins:.1f} mins focused, {h.get('focus_count', 0)} sessions)")
     else:
         print("  Model learning active. Initial profile building in progress.")
+    if HABIT_ENGINE.user_overrides:
+        print(f"  Manual pins: {', '.join(f'{k}=P{v}' for k, v in HABIT_ENGINE.user_overrides.items())}")
 
     # 4. Process priorities
-    print(f"\nDYNAMIC PROCESS SCHEDULER:")
+    print(f"\nDYNAMIC PROCESS SCHEDULER (load level {level}):")
     boosted = []
     throttled = []
     try:
@@ -467,9 +1244,12 @@ def show_status():
                 with open(f"/proc/{pid_str}/stat", "r") as f:
                     stat = f.read().split()
                     nice = int(stat[18])
-                if (comm in CORE_DESKTOP_PROCESSES or comm in USER_GUI_APPS or HABIT_ENGINE.get_habit_score(comm) > 0.4) and nice < 0:
+                if (comm in CORE_DESKTOP_PROCESSES or comm in USER_GUI_APPS
+                        or HABIT_ENGINE.get_habit_score(comm) > 0.4) and nice < 0:
                     boosted.append((comm, pid, nice))
-                elif (comm in THROTTLE_PROCESS_NAMES or comm in DEV_BUILD_TOOLS or comm in HYPERVISOR_VM_PROCESSES or comm in CONTAINER_ENGINES or comm in HEAVY_MEDIA_TOOLS) and nice > 0:
+                elif (comm in THROTTLE_PROCESS_NAMES or comm in DEV_BUILD_TOOLS
+                      or comm in HYPERVISOR_VM_PROCESSES or comm in CONTAINER_ENGINES
+                      or comm in HEAVY_MEDIA_TOOLS) and nice > 0:
                     throttled.append((comm, pid, nice))
             except Exception:
                 continue
@@ -489,6 +1269,9 @@ def show_status():
 
     print("=" * 70 + "\n")
 
+# -----------------------------------------------------------------------------
+# Setup
+# -----------------------------------------------------------------------------
 def setup_zram_and_sysctl():
     """Configure hardware-adaptive zRAM compression and low-latency kernel sysctls."""
     try:
@@ -504,36 +1287,32 @@ def setup_zram_and_sysctl():
         # > 16GB RAM: 100 (High performance for massive workloads)
         if total_mb <= 4096:
             target_swappiness = "180"
-            zram_target_size = int(total_kb * 1024) # 100% of RAM
+            zram_target_size = int(total_kb * 1024)  # 100% of RAM
         elif total_mb <= 16384:
             target_swappiness = "150"
-            zram_target_size = min(int(total_kb * 1024), 8 * 1024 * 1024 * 1024) # up to 8GB
+            zram_target_size = min(int(total_kb * 1024), 8 * 1024 * 1024 * 1024)  # up to 8GB
         else:
             target_swappiness = "100"
-            zram_target_size = min(int((total_kb * 1024) // 2), 16 * 1024 * 1024 * 1024) # 50% of RAM up to 16GB
+            zram_target_size = min(int((total_kb * 1024) // 2), 16 * 1024 * 1024 * 1024)  # 50% of RAM up to 16GB
 
         # 1. Kernel sysctl optimizations for maximum desktop fluidity
         sysctls = {
             "/proc/sys/vm/swappiness": target_swappiness,
-            "/proc/sys/vm/vfs_cache_pressure": "50",     # Retain directory/inode cache for snappy app launch
-            "/proc/sys/vm/page-cluster": "0",           # 0-latency 1-page zRAM compression
-            "/proc/sys/vm/dirty_ratio": "10",           # Prevent massive disk write stalls
+            "/proc/sys/vm/vfs_cache_pressure": "50",      # Retain directory/inode cache for snappy app launch
+            "/proc/sys/vm/page-cluster": "0",             # 0-latency 1-page zRAM compression
+            "/proc/sys/vm/dirty_ratio": "10",             # Prevent massive disk write stalls
             "/proc/sys/vm/dirty_background_ratio": "5",
             "/proc/sys/vm/dirty_writeback_centisecs": "1500",
             "/proc/sys/vm/dirty_expire_centisecs": "3000",
-            "/proc/sys/vm/watermark_scale_factor": "150", # Smooth background page reclaim before stalls
+            "/proc/sys/vm/watermark_scale_factor": "150",  # Smooth background page reclaim before stalls
             "/proc/sys/vm/compaction_proactiveness": "20",
-            "/proc/sys/kernel/sched_autogroup_enabled": "1", # Isolate heavy terminal/build trees from GUI session
-            "/proc/sys/kernel/sched_cfs_bandwidth_slice_us": "3000", # Lower CFS slice for responsive UI frames
+            "/proc/sys/kernel/sched_autogroup_enabled": "1",  # Isolate heavy terminal/build trees from GUI session
+            "/proc/sys/kernel/sched_cfs_bandwidth_slice_us": "3000",  # Lower CFS slice for responsive UI frames
         }
 
         for path, val in sysctls.items():
             if os.path.exists(path):
-                try:
-                    with open(path, "w") as f:
-                        f.write(val)
-                except Exception:
-                    pass
+                _sys_write(path, val)
 
         # 2. Ensure zram module is loaded
         try:
@@ -554,26 +1333,17 @@ def setup_zram_and_sysctl():
             if os.path.exists("/sys/block/zram0"):
                 # Try preferred compression algorithms: zstd -> lz4 -> lzo-rle
                 for algo in ["zstd", "lz4", "lzo-rle"]:
-                    try:
-                        with open("/sys/block/zram0/comp_algorithm", "w") as f:
-                            f.write(algo)
+                    if _sys_write("/sys/block/zram0/comp_algorithm", algo):
                         break
-                    except Exception:
-                        pass
 
+                _sys_write("/sys/block/zram0/reset", "1")
+                _sys_write("/sys/block/zram0/disksize", str(zram_target_size))
                 try:
-                    with open("/sys/block/zram0/reset", "w") as f:
-                        f.write("1")
-                except Exception:
-                    pass
-
-                try:
-                    with open("/sys/block/zram0/disksize", "w") as f:
-                        f.write(str(zram_target_size))
                     subprocess.run(["mkswap", "/dev/zram0"], capture_output=True)
                     # Swapon with highest possible priority 32767 so zRAM is used before any disk swap
                     subprocess.run(["swapon", "-p", "32767", "/dev/zram0"], capture_output=True)
-                    log(f"Configured zRAM swap (/dev/zram0, {zram_target_size // (1024*1024)} MB, priority 32767, swappiness {target_swappiness})")
+                    log(f"Configured zRAM swap (/dev/zram0, {zram_target_size // (1024*1024)} MB, "
+                        f"priority 32767, swappiness {target_swappiness})")
                 except Exception as ze:
                     log(f"zRAM activation notice: {ze}")
             else:
@@ -583,288 +1353,9 @@ def setup_zram_and_sysctl():
     except Exception as e:
         log(f"Error in setup_zram_and_sysctl: {e}")
 
-def detect_active_window_pid():
-    """Detect current focused GUI window PID on GNOME / Wayland / X11."""
-    try:
-        # 1. Try GNOME Shell via session DBus
-        res = subprocess.run(
-            ["gdbus", "call", "--session", "--dest", "org.gnome.Shell",
-             "--object-path", "/org/gnome/Shell",
-             "--method", "org.gnome.Shell.Eval",
-             "global.display.focus_window ? global.display.focus_window.get_pid() : 0"],
-            capture_output=True, text=True, timeout=0.25
-        )
-        if res.returncode == 0:
-            out = res.stdout.strip()
-            # Format: (true, '1234')
-            if "true" in out:
-                parts = out.split("'")
-                if len(parts) >= 2 and parts[1].isdigit():
-                    pid = int(parts[1])
-                    if pid > 0:
-                        return pid
-    except Exception:
-        pass
-
-    # 2. X11 / Xwayland fallback via xdotool
-    try:
-        res = subprocess.run(["xdotool", "getwindowfocus", "getwindowpid"], capture_output=True, text=True, timeout=0.2)
-        if res.returncode == 0 and res.stdout.strip().isdigit():
-            pid = int(res.stdout.strip())
-            if pid > 0:
-                return pid
-    except Exception:
-        pass
-
-    return 0
-
-def optimize_process_priorities(pressure_mode: int, loop_interval_sec: float):
-    """
-    Dynamically adjust nice and ionice levels based on real-time system pressure level & habit model:
-    - pressure_mode 0: NORMAL (Fluid)
-    - pressure_mode 1: ELEVATED LOAD (Balancing)
-    - pressure_mode 2: CRITICAL SATURATION (Zero-Lag Protection Active)
-    """
-    global PROCESSED_PIDS, CURRENT_PRESSURE_MODE, PREV_PID_STAT, LAST_ACTIVE_WINDOW_PID
-    try:
-        # If the pressure mode transitioned, reset cache to update all running processes
-        if pressure_mode != CURRENT_PRESSURE_MODE:
-            PROCESSED_PIDS.clear()
-            CURRENT_PRESSURE_MODE = pressure_mode
-
-        active_window_pid = detect_active_window_pid()
-        if active_window_pid > 0:
-            LAST_ACTIVE_WINDOW_PID = active_window_pid
-
-        active_pids = set()
-        pids = [pid for pid in os.listdir("/proc") if pid.isdigit()]
-        
-        for pid_str in pids:
-            try:
-                pid = int(pid_str)
-                active_pids.add(pid)
-
-                # Exclude kernel threads (empty cmdline)
-                try:
-                    with open(f"/proc/{pid_str}/cmdline", "rb") as f:
-                        if not f.read():
-                            continue
-                except Exception:
-                    continue
-
-                with open(f"/proc/{pid_str}/comm", "r") as f:
-                    comm = f.read().strip()
-
-                is_focused = (pid == active_window_pid or pid == LAST_ACTIVE_WINDOW_PID)
-                HABIT_ENGINE.record_activity(comm, is_focused, loop_interval_sec)
-
-                # Check if user set an explicit manual override in GUI
-                user_override = HABIT_ENGINE.get_user_override(comm)
-
-                # Fast-path check if already in optimal state for current mode
-                if user_override is None and pid in PROCESSED_PIDS and PROCESSED_PIDS[pid][3] == pressure_mode:
-                    continue
-
-                target_nice = None
-                io_class = 2
-                io_prio = 4
-
-                # 0. User Manual Override has highest authority
-                if user_override is not None:
-                    # 0=Turbo(-10), 1=High(-5), 2=Normal(0), 3=Low(19)
-                    if user_override == 0:
-                        target_nice, io_class, io_prio = -10, 2, 0
-                    elif user_override == 1:
-                        target_nice, io_class, io_prio = -5, 2, 1
-                    elif user_override == 2:
-                        target_nice, io_class, io_prio = 0, 2, 4
-                    elif user_override == 3:
-                        target_nice, io_class, io_prio = 19, 3, 0
-
-                # 1. Background Indexers and System Maintenance -> Always IDLE
-                elif comm in THROTTLE_PROCESS_NAMES:
-                    target_nice = 19
-                    io_class = 3
-                    io_prio = 0
-                
-                # 2. Core Desktop Compositor, Audio & Shell -> Absolute Responsiveness
-                elif comm in CORE_DESKTOP_PROCESSES:
-                    if pressure_mode == 0:
-                        target_nice = -10
-                        io_class = 2
-                        io_prio = 0
-                    elif pressure_mode == 1:
-                        target_nice = -14
-                        io_class = 2
-                        io_prio = 0
-                    else: # CRITICAL
-                        target_nice = -16
-                        io_class = 1  # Realtime I/O priority for zero frame/audio drop
-                        io_prio = 2
-
-                # 3. Active / Focused GUI Window -> Immediate Boost
-                elif is_focused:
-                    target_nice = -10
-                    io_class = 2
-                    io_prio = 0
-
-                # 4. Interactive User GUI Apps & High-Habit Learned Apps
-                elif comm in USER_GUI_APPS or HABIT_ENGINE.get_habit_score(comm) >= 0.35:
-                    habit_boost = 2 if HABIT_ENGINE.get_habit_score(comm) >= 0.6 else 0
-                    if pressure_mode == 0:
-                        target_nice = -4 - habit_boost
-                        io_class = 2
-                        io_prio = 2
-                    elif pressure_mode == 1:
-                        target_nice = -7 - habit_boost
-                        io_class = 2
-                        io_prio = 1
-                    else: # CRITICAL
-                        target_nice = -10 - habit_boost
-                        io_class = 2
-                        io_prio = 0
-
-                # 5. Multi-Threaded Compilers, Builders & Developer Tools
-                elif comm in DEV_BUILD_TOOLS:
-                    if pressure_mode == 0:
-                        target_nice = 0
-                        io_class = 2
-                        io_prio = 4
-                    elif pressure_mode == 1:
-                        target_nice = 6
-                        io_class = 2
-                        io_prio = 6
-                    else: # CRITICAL SATURATION
-                        target_nice = 14
-                        io_class = 3  # IDLE I/O so disk does not freeze
-                        io_prio = 0
-
-                # 6. Hypervisors & VMs (QEMU, VirtualBox, VMware)
-                elif comm in HYPERVISOR_VM_PROCESSES:
-                    if pressure_mode == 0:
-                        target_nice = 0
-                        io_class = 2
-                        io_prio = 4
-                    elif pressure_mode == 1:
-                        target_nice = 6
-                        io_class = 2
-                        io_prio = 6
-                    else: # CRITICAL
-                        target_nice = 14
-                        io_class = 3  # IDLE I/O so host desktop stays responsive
-                        io_prio = 0
-
-                # 7. Container Daemons & Heavy Workers
-                elif comm in CONTAINER_ENGINES:
-                    if pressure_mode == 0:
-                        target_nice = 0
-                        io_class = 2
-                        io_prio = 4
-                    elif pressure_mode == 1:
-                        target_nice = 5
-                        io_class = 2
-                        io_prio = 6
-                    else: # CRITICAL
-                        target_nice = 12
-                        io_class = 3
-                        io_prio = 0
-
-                # 8. Heavy Media Encoders & Compression Tools
-                elif comm in HEAVY_MEDIA_TOOLS:
-                    if pressure_mode == 0:
-                        target_nice = 2
-                        io_class = 2
-                        io_prio = 5
-                    elif pressure_mode == 1:
-                        target_nice = 8
-                        io_class = 2
-                        io_prio = 7
-                    else: # CRITICAL
-                        target_nice = 16
-                        io_class = 3
-                        io_prio = 0
-
-                # 9. Unclassified Non-Desktop Processes under Critical System Pressure
-                elif pressure_mode == 2:
-                    try:
-                        with open(f"/proc/{pid_str}/stat", "r") as f:
-                            stat_parts = f.read().split()
-                            current_nice = int(stat_parts[18])
-                        if current_nice < 4:
-                            target_nice = 8
-                            io_class = 2
-                            io_prio = 6
-                    except Exception:
-                        pass
-
-                if target_nice is not None:
-                    try:
-                        os.setpriority(os.PRIO_PROCESS, pid, target_nice)
-                    except Exception:
-                        pass
-                    set_ioprio(pid, io_class, io_prio)
-                    PROCESSED_PIDS[pid] = (target_nice, io_class, io_prio, pressure_mode)
-
-            except Exception:
-                continue
-
-        # Prune terminated PIDs from cache
-        for dead_pid in list(PROCESSED_PIDS.keys()):
-            if dead_pid not in active_pids:
-                del PROCESSED_PIDS[dead_pid]
-
-    except Exception:
-        pass
-
-def check_memory_pressure_and_radical_reclaim(psi_stats):
-    """
-    Radical dynamic memory reclamation:
-    Never allows memory to hit unrecoverable saturation.
-    Reclaims pagecache, flushes dentries/inodes, and compacts memory into zRAM.
-    """
-    global LAST_MEMORY_TRIM_TIME
-    try:
-        now = time.time()
-        mem = read_meminfo()
-        total_mb = mem.get("MemTotal", 1024 * 1024) // 1024
-        available_mb = mem.get("MemAvailable", 1024 * 1024) // 1024
-        avail_ratio = (available_mb / total_mb) if total_mb > 0 else 1.0
-
-        # Radical memory threshold: Available < 10% or < 400MB or PSI mem_some > 20% or mem_full > 1.0%
-        if avail_ratio < 0.10 or available_mb < 400 or psi_stats["mem_some"] > 20.0 or psi_stats["mem_full"] > 1.0:
-            # Rate-limit radical reclaim to once every 10 seconds under extreme pressure
-            if (now - LAST_MEMORY_TRIM_TIME) > 10.0:
-                log(f"RADICAL memory reclaim triggered (Available: {available_mb}/{total_mb} MB [{int(avail_ratio*100)}%], PSI: Some {psi_stats['mem_some']:.1f}% | Full {psi_stats['mem_full']:.1f}%)...")
-                LAST_MEMORY_TRIM_TIME = now
-                try:
-                    # Drop clean pagecaches, dentries, and inodes
-                    with open("/proc/sys/vm/drop_caches", "w") as f:
-                        f.write("3")
-                    if os.path.exists("/proc/sys/vm/compact_memory"):
-                        with open("/proc/sys/vm/compact_memory", "w") as f:
-                            f.write("1")
-                    # Boost kernel swappiness dynamically to 180 to immediately push stale pages to zRAM
-                    with open("/proc/sys/vm/swappiness", "w") as f:
-                        f.write("180")
-                except Exception:
-                    pass
-
-        # Moderate memory threshold: Available < 20% or PSI mem_some > 10%
-        elif avail_ratio < 0.20 or available_mb < 800 or psi_stats["mem_some"] > 10.0:
-            if (now - LAST_MEMORY_TRIM_TIME) > 25.0:
-                log(f"Proactive memory compaction (Available: {available_mb}/{total_mb} MB [{int(avail_ratio*100)}%], PSI: Some {psi_stats['mem_some']:.1f}%)...")
-                LAST_MEMORY_TRIM_TIME = now
-                try:
-                    with open("/proc/sys/vm/drop_caches", "w") as f:
-                        f.write("1")
-                    if os.path.exists("/proc/sys/vm/compact_memory"):
-                        with open("/proc/sys/vm/compact_memory", "w") as f:
-                            f.write("1")
-                except Exception:
-                    pass
-    except Exception:
-        pass
-
+# -----------------------------------------------------------------------------
+# CLI helpers
+# -----------------------------------------------------------------------------
 def launch_gui():
     gui_bin = "/usr/bin/pulsaros-optimizer-gui"
     if os.path.exists(gui_bin):
@@ -875,7 +1366,40 @@ def launch_gui():
         if os.path.exists(local_gui):
             os.execv(sys.executable, [sys.executable, local_gui] + sys.argv[1:])
 
+def _cli_clear_habits():
+    count = len(HABIT_ENGINE.habits)
+    HABIT_ENGINE.habits = {}
+    HABIT_ENGINE.save()
+    log(f"Cleared {count} learned habit profiles (manual pins kept).")
+    sys.exit(0)
+
+def _cli_forget_habit(comm: str):
+    removed = HABIT_ENGINE.habits.pop(comm, None)
+    HABIT_ENGINE.save()
+    if removed is not None:
+        log(f"Forgot habit profile for '{comm}'.")
+    else:
+        log(f"No habit profile for '{comm}'.")
+    sys.exit(0)
+
+def _on_exit():
+    if not DAEMON_RUNNING:
+        return
+    try:
+        HABIT_ENGINE.save()
+    except Exception:
+        pass
+    try:
+        release_bg_cgroup_caps()
+    except Exception:
+        pass
+
+def _on_signal(signum, frame):
+    global RUNNING
+    RUNNING = False
+
 def main():
+    global DAEMON_RUNNING, RUNNING
     if len(sys.argv) > 1:
         arg = sys.argv[1]
         if arg in ["--status", "-s", "status"]:
@@ -884,6 +1408,10 @@ def main():
         elif arg in ["--gui", "-g", "gui"]:
             launch_gui()
             sys.exit(0)
+        elif arg in ["--clear-habits"]:
+            _cli_clear_habits()
+        elif arg in ["--forget-habit"] and len(sys.argv) > 2:
+            _cli_forget_habit(sys.argv[2])
         elif arg in ["--start"]:
             subprocess.run(["systemctl", "start", "pulsaros-optimizer.service"])
             sys.exit(0)
@@ -902,35 +1430,54 @@ def main():
 
     log("Starting Pulsar OS Universal Dynamic Adaptive Optimizer & Real Habit Engine...")
     setup_zram_and_sysctl()
+    setup_bg_cgroup()
 
-    log("Dynamic governor & habit engine active (Real-time PSI, CPU load governor, Zero-Lag Desktop Protection)...")
+    signal.signal(signal.SIGTERM, _on_signal)
+    signal.signal(signal.SIGINT, _on_signal)
+    atexit.register(_on_exit)
+    DAEMON_RUNNING = True
+
+    log("Governor active: priorities (shell/audio > focused app > GUI > background), "
+        "soft CPU/RAM ceilings, PSI watch, habit engine (pulsaros-focus).")
     loop_count = 0
     prev_time = time.time()
-    while True:
+    while RUNNING:
         try:
             curr_time = time.time()
-            loop_interval = max(0.5, curr_time - prev_time)
+            loop_interval = max(0.1, curr_time - prev_time)
             prev_time = curr_time
 
-            pressure_mode, cpu_pct, psi = evaluate_system_pressure()
-            optimize_process_priorities(pressure_mode, loop_interval)
+            level, mode, cpu_smooth, psi = compute_load_state()
+            mem = read_meminfo()
+            total_bytes = mem.get("MemTotal", 1024 * 1024 * 1024) * 1024
+            total_mb = total_bytes // (1024 * 1024)
+            avail_mb = mem.get("MemAvailable", total_mb) // 1024
+            avail_ratio = (avail_mb / total_mb) if total_mb > 0 else 1.0
+
+            optimize_process_priorities(level, loop_interval)
+            update_resource_caps(level, avail_ratio, total_bytes, time.time())
             check_memory_pressure_and_radical_reclaim(psi)
-            
+
             loop_count += 1
+            if loop_count % 30 == 0:
+                HABIT_ENGINE.refresh_overrides()
             if loop_count % 120 == 0:
                 zstats = get_zram_stats()
-                if zstats["active"]:
-                    log(f"Status: Gov Mode: {pressure_mode} | CPU: {cpu_pct:.1f}% | PSI CPU: {psi['cpu_some']:.1f}% | IO Full: {psi['io_full']:.1f}% | zRAM Saved: {zstats['saved_mb']:.1f} MB (Ratio: {zstats['ratio']})")
-            
-            # Adaptive sleep interval: scan faster (1.0s) during high load, relax (2.0s) during normal load
-            sleep_sec = 1.0 if pressure_mode > 0 else 2.0
+                zram_info = (f"zRAM Saved: {zstats['saved_mb']:.1f} MB (Ratio: {zstats['ratio']})"
+                             if zstats["active"] else "zRAM inactive")
+                log(f"Status: Level {level} | CPU {cpu_smooth:.1f}% | PSI CPU {psi['cpu_some']:.1f}% | "
+                    f"IO Full {psi['io_full']:.1f}% | RAM free {avail_mb} MB | focus: {FOCUS_SOURCE} | {zram_info}")
+
+            # Scan faster while the machine is busy, relax when it is calm
+            sleep_sec = 1.0 if level > 0 else 2.0
             time.sleep(sleep_sec)
         except KeyboardInterrupt:
-            log("Shutting down optimizer daemon.")
-            HABIT_ENGINE.save()
             break
         except Exception as e:
+            warn_once(f"governor loop failed: {e!r}")
             time.sleep(2.0)
+
+    log("Shutting down optimizer daemon (habits saved, ceilings released).")
 
 if __name__ == "__main__":
     main()

@@ -16,6 +16,7 @@ import threading
 import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
+from concurrent.futures import ThreadPoolExecutor
 import requests
 import urllib3
 
@@ -26,10 +27,27 @@ from .tls_cert import get_or_generate_cert
 
 logger = logging.getLogger("FlyDrop.Protocol")
 
+# Subidas simultaneas cuando se envian varios archivos (una peticion HTTP por
+# archivo). Una sola peticion por archivo es lo que permite el protocolo
+# LocalSend v2; el paralelismo aprovecha el ancho de banda que un unico
+# flujo TCP no llega a llenar sobre Wi-Fi.
+MAX_PARALLEL_UPLOADS = 4
+
+
+class HandshakeFailed(Exception):
+    """Fallo al abrir el canal TLS: se registra sin volcar traza completa."""
+
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
+
+    def handle_error(self, request, client_address):
+        exc = sys.exc_info()[1]
+        if isinstance(exc, HandshakeFailed):
+            logger.info(f"Canal TLS fallido desde {client_address[0]}: {exc}")
+            return
+        super().handle_error(request, client_address)
 
 
 class TransferSession:
@@ -49,11 +67,27 @@ class TransferSession:
         self.speed = 0.0
         self.saved_files = []
         self.current_file_name = ""
+        self.dest_paths = {}   # file_id -> destino elegido (los reintentos lo reusan)
+        self.file_bytes = {}   # file_id -> bytes del ultimo intento de ese archivo
+        self.completed_notified = False
+        self.completion_success = None
         self.lock = threading.Lock()
 
-    def update_progress(self, added_bytes, current_file=""):
+    def update_file_progress(self, file_id, current_total, current_file=""):
+        """
+        Progreso contado POR ARCHIVO: `current_total` es lo que lleva el intento
+        ACTUAL, de modo que un reintento que vuelve a cero corrige el agregado
+        en lugar de acumular bytes duplicados (antes un reintento podia marcar
+        'progress: 1.55').
+
+        Devuelve True solo cuando toca emitir un evento de progreso (>= 0,15 s):
+        antes se lanzaba uno por cada trozo de 64 KB, inundando el main loop con
+        miles de GLib.idle_add + senales D-Bus por segundo.
+        """
         with self.lock:
-            self.transferred_bytes += added_bytes
+            prev = self.file_bytes.get(file_id, 0)
+            self.transferred_bytes += current_total - prev
+            self.file_bytes[file_id] = current_total
             if current_file:
                 self.current_file_name = current_file
             now = time.time()
@@ -63,6 +97,15 @@ class TransferSession:
                 self.speed = delta_bytes / dt if dt > 0 else 0.0
                 self.last_transferred_bytes = self.transferred_bytes
                 self.last_update_time = now
+                return True
+            return False
+
+    def reset_file_progress(self, file_id):
+        """Descarta el progreso de un intento fallido de `file_id`."""
+        with self.lock:
+            prev = self.file_bytes.pop(file_id, 0)
+            if prev:
+                self.transferred_bytes -= prev
 
 
 class ProgressFileReader:
@@ -94,6 +137,40 @@ class ProgressFileReader:
         self.fp.close()
 
 
+class _SharedProgress:
+    """
+    Contador de progreso compartido entre los hilos de subida (envio paralelo).
+    Emite como maximo un evento cada 0,15 s: antes se lanzaba uno por cada
+    trozo de 64 KB, y a alta velocidad eso inunda el main loop con miles de
+    GLib.idle_add + senales D-Bus por segundo.
+    """
+    def __init__(self, total_bytes, on_progress):
+        self.total_bytes = total_bytes
+        self.on_progress = on_progress
+        self.transferred = 0
+        self.current_file = ""
+        self.last_time = time.time()
+        self.last_bytes = 0
+        self.lock = threading.Lock()
+
+    def add(self, file_name, chunk_len):
+        event = None
+        with self.lock:
+            self.transferred += chunk_len
+            self.current_file = file_name
+            now = time.time()
+            dt = now - self.last_time
+            if dt >= 0.15 and self.on_progress:
+                speed = (self.transferred - self.last_bytes) / dt if dt > 0 else 0.0
+                fraction = (min(1.0, self.transferred / self.total_bytes)
+                            if self.total_bytes > 0 else 1.0)
+                event = (fraction, speed, file_name, self.transferred, self.total_bytes)
+                self.last_bytes = self.transferred
+                self.last_time = now
+        if event:
+            self.on_progress(*event)
+
+
 class LocalSendServer:
     def __init__(self, discovery_service, on_transfer_request=None, on_progress=None, on_completed=None):
         self.config = Config.get()
@@ -107,6 +184,7 @@ class LocalSendServer:
         self.running = False
         self.bound_port = self.config.port
         self.use_https = True
+        self.ssl_ctx = None
 
     def start(self):
         if self.running:
@@ -119,6 +197,7 @@ class LocalSendServer:
                 ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
                 ssl_ctx.load_cert_chain(cert_path, key_path)
                 ssl_ctx.verify_mode = ssl.CERT_NONE
+                self.ssl_ctx = ssl_ctx
                 self.use_https = True
                 self.config.set_value("protocol", "https")
                 logger.info("FlyDrop TLS Context initialized for HTTPS (mTLS compatible)")
@@ -135,8 +214,10 @@ class LocalSendServer:
             try:
                 server_address = ("", try_port)
                 self.server = ThreadedHTTPServer(server_address, self._create_handler())
-                if ssl_ctx:
-                    self.server.socket = ssl_ctx.wrap_socket(self.server.socket, server_side=True)
+                # El handshake TLS NO se hace aqui: se negocia por conexion dentro
+                # del hilo de cada peticion (ver LocalSendHandler.setup). Asi la
+                # cola de accept() nunca se bloquea esperando un handshake y
+                # varias conexiones en paralelo no se serializan.
                 self.bound_port = self.server.server_port
                 self.config.port = self.bound_port
                 logger.info(f"FlyDrop LocalSend Server running ({'HTTPS' if self.use_https else 'HTTP'}) on port {self.bound_port}")
@@ -161,30 +242,86 @@ class LocalSendServer:
             except Exception:
                 pass
 
+    def notify_completed(self, session, success, message):
+        """
+        Avisa del final de una sesion evitando dobles avisos (varios archivos
+        en paralelo), con una excepcion: si un intento fallo y un REINTENTO
+        acaba bien, el exito sí se notifica para que la UI no se quede en
+        'fallido' con el archivo ya guardado.
+        """
+        with session.lock:
+            recovered = (success and session.completed_notified
+                         and session.completion_success is False)
+            if session.completed_notified and not recovered:
+                return
+            session.completed_notified = True
+            session.completion_success = success
+            session.status = "completed" if success else "failed"
+        if self.on_completed:
+            self.on_completed(session, success, message)
+
     def _create_handler(self):
         outer = self
 
         class LocalSendHandler(BaseHTTPRequestHandler):
+            # HTTP/1.1 con keep-alive: una sola conexion por sesion en lugar de
+            # un TCP+TLS nuevo por cada peticion/archivo.
+            protocol_version = "HTTP/1.1"
+            disable_nagle_algorithm = True
+            rbufsize = 128 * 1024
+
+            def setup(self):
+                # El handshake TLS ocurre aqui, en el hilo de ESTA peticion
+                # (wrap_socket transfiere el fd al socket TLS; el objeto crudo
+                # queda detach, asi que el cierre posterior no duplica fd).
+                if outer.ssl_ctx is not None:
+                    try:
+                        self.request = outer.ssl_ctx.wrap_socket(self.request, server_side=True)
+                    except Exception as e:
+                        raise HandshakeFailed(str(e)) from e
+                super().setup()
+
+            def finish(self):
+                try:
+                    super().finish()
+                except OSError:
+                    pass
+                finally:
+                    try:
+                        self.connection.close()
+                    except OSError:
+                        pass
+
             def log_message(self, format, *args):
                 logger.info(f"[HTTP] {self.address_string()} - {format % args}")
 
-            def _send_json(self, status_code, data):
+            def _send_json(self, status_code, data, close=False):
                 body = json.dumps(data, ensure_ascii=False).encode("utf-8")
-                self.send_response(status_code)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.end_headers()
-                self.wfile.write(body)
+                try:
+                    self.send_response(status_code)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    if close:
+                        self.close_connection = True
+                        self.send_header("Connection", "close")
+                    self.end_headers()
+                    self.wfile.write(body)
+                except (BrokenPipeError, ConnectionResetError, OSError) as e:
+                    # El remoto desaparecio (habitual con moviles que se duermen
+                    # a mitad de envio): no volcar traza, solo cerrar.
+                    self.close_connection = True
+                    logger.debug(f"Respuesta {status_code} no entregada: {e}")
 
-            def _send_error(self, status_code, message):
-                self._send_json(status_code, {"message": message})
+            def _send_error(self, status_code, message, close=False):
+                self._send_json(status_code, {"message": message}, close=close)
 
             def do_OPTIONS(self):
                 self.send_response(200)
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
                 self.send_header("Access-Control-Allow-Headers", "*")
+                self.send_header("Content-Length", "0")
                 self.end_headers()
 
             def do_GET(self):
@@ -307,12 +444,14 @@ class LocalSendServer:
                     session = outer.active_sessions.get(session_id)
                     if not session:
                         logger.warning(f"Upload attempt with unknown sessionId: {session_id}")
-                        self._send_error(404, "Session not found")
+                        # El cuerpo del POST no se va a leer: cerrar la conexion
+                        # para que no queden bytes huerfanos en keep-alive.
+                        self._send_json(404, {"message": "Session not found"}, close=True)
                         return
 
                     if session.tokens.get(file_id) != token:
                         logger.warning(f"Invalid token for fileId {file_id}")
-                        self._send_error(403, "Invalid file token")
+                        self._send_json(403, {"message": "Invalid file token"}, close=True)
                         return
 
                     file_meta = session.files_dict.get(file_id, {})
@@ -323,12 +462,20 @@ class LocalSendServer:
                     dest_dir = outer.config.download_dir
                     os.makedirs(dest_dir, exist_ok=True)
 
-                    base, ext = os.path.splitext(file_name)
-                    dest_path = os.path.join(dest_dir, file_name)
-                    counter = 1
-                    while os.path.exists(dest_path):
-                        dest_path = os.path.join(dest_dir, f"{base} ({counter}){ext}")
-                        counter += 1
+                    # Un reintento reutiliza el destino del primer intento: se
+                    # sobrescribe en el MISMO archivo en lugar de amontonar
+                    # "copia (1).mp4", "(2).mp4"... por cada reinicio del envio.
+                    with session.lock:
+                        dest_path = session.dest_paths.get(file_id)
+                        if not dest_path:
+                            base, ext = os.path.splitext(file_name)
+                            dest_path = os.path.join(dest_dir, file_name)
+                            taken = set(session.dest_paths.values())
+                            counter = 1
+                            while os.path.exists(dest_path) or dest_path in taken:
+                                dest_path = os.path.join(dest_dir, f"{base} ({counter}){ext}")
+                                counter += 1
+                            session.dest_paths[file_id] = dest_path
 
                     session.status = "in_progress"
 
@@ -339,7 +486,8 @@ class LocalSendServer:
                     logger.info(f"Receiving file '{file_name}' (expected: {expected_size} bytes, chunked={is_chunked}) to {dest_path}")
 
                     bytes_received = 0
-                    chunk_buffer_size = 64 * 1024
+                    chunk_buffer_size = 128 * 1024
+                    complete = False
 
                     try:
                         with open(dest_path, "wb") as f_out:
@@ -358,11 +506,13 @@ class LocalSendServer:
                                         break
 
                                     if chunk_size == 0:
-                                        # Consume trailers until empty line
+                                        # Consume trailers until empty line: aqui
+                                        # acaba el cuerpo de verdad.
                                         while True:
                                             trailer = self.rfile.readline()
                                             if not trailer or trailer in (b"\r\n", b"\n"):
                                                 break
+                                        complete = True
                                         break
 
                                     rem = chunk_size
@@ -374,8 +524,8 @@ class LocalSendServer:
                                         f_out.write(data)
                                         bytes_received += len(data)
                                         rem -= len(data)
-                                        session.update_progress(len(data), current_file=file_name)
-                                        if outer.on_progress:
+                                        emit = session.update_file_progress(file_id, bytes_received, current_file=file_name)
+                                        if emit and outer.on_progress:
                                             outer.on_progress(session)
 
                                     # Discard trailing CRLF after chunk data
@@ -390,26 +540,42 @@ class LocalSendServer:
                                     f_out.write(data)
                                     bytes_received += len(data)
                                     remaining -= len(data)
-                                    session.update_progress(len(data), current_file=file_name)
-                                    if outer.on_progress:
+                                    emit = session.update_file_progress(file_id, bytes_received, current_file=file_name)
+                                    if emit and outer.on_progress:
                                         outer.on_progress(session)
+                                complete = (remaining == 0 and bytes_received == content_length)
 
-                        session.saved_files.append(dest_path)
+                        if not outer.running:
+                            complete = False
+
+                        # Un corte a mitad de camino (FIN sin RST) se daba por
+                        # bueno y se guardaba un archivo truncado como exito.
+                        if not complete:
+                            want = expected_size if is_chunked else content_length
+                            raise IOError(f"Transferencia incompleta: {bytes_received} de {want} bytes")
+
+                        if dest_path not in session.saved_files:
+                            session.saved_files.append(dest_path)
                         logger.info(f"File '{file_name}' received successfully ({bytes_received} bytes)")
 
                         if len(session.saved_files) >= len(session.files_dict):
-                            session.status = "completed"
-                            if outer.on_completed:
-                                outer.on_completed(session, True, "Transferencia completada")
+                            outer.notify_completed(session, True, "Transferencia completada")
 
                         self._send_json(200, {"message": "OK"})
 
                     except Exception as e:
                         logger.error(f"Error saving incoming file {dest_path}: {e}")
+                        # Sin restos: borra el parcial y olvida su progreso para
+                        # que el reintento empiece limpio en el mismo archivo.
                         session.status = "failed"
-                        if outer.on_completed:
-                            outer.on_completed(session, False, str(e))
-                        self._send_error(500, f"Error saving file: {e}")
+                        session.reset_file_progress(file_id)
+                        try:
+                            if os.path.exists(dest_path):
+                                os.remove(dest_path)
+                        except OSError as cleanup_err:
+                            logger.warning(f"Could not remove partial file {dest_path}: {cleanup_err}")
+                        outer.notify_completed(session, False, str(e))
+                        self._send_json(500, {"message": f"Error saving file: {e}"}, close=True)
                     return
 
                 # 4. Cancel Endpoint
@@ -417,13 +583,11 @@ class LocalSendServer:
                     session_id = query.get("sessionId", [""])[0]
                     session = outer.active_sessions.get(session_id)
                     if session:
-                        session.status = "cancelled"
-                        if outer.on_completed:
-                            outer.on_completed(session, False, "Transferencia cancelada")
+                        outer.notify_completed(session, False, "Transferencia cancelada")
                     self._send_json(200, {"message": "Cancelled"})
                     return
 
-                self._send_error(404, "Endpoint not found")
+                self._send_error(404, "Endpoint not found", close=True)
 
         return LocalSendHandler
 
@@ -513,100 +677,117 @@ class LocalSendClient:
         }
 
         client_cert = self._get_client_cert()
+
+        # Una sola sesion HTTP para prepare-upload + todos los uploads: con el
+        # servidor en HTTP/1.1 keep-alive se reutiliza la conexion (y su TLS) en
+        # lugar de abrir un TCP+TLS nuevo por archivo.
+        http = requests.Session()
+        http.verify = False
+        if client_cert:
+            http.cert = client_cert
+        adapter = requests.adapters.HTTPAdapter(pool_connections=4, pool_maxsize=MAX_PARALLEL_UPLOADS + 4)
+        http.mount("http://", adapter)
+        http.mount("https://", adapter)
+
         protocols_to_try = ["https", "http"] if target_protocol == "https" else ["http", "https"]
-        prep_data = None
         used_url_base = None
         session_id = None
         tokens = {}
 
-        for proto in protocols_to_try:
-            url_base = f"{proto}://{target_ip}:{target_port}/api/localsend/v2"
-            try:
-                logger.info(f"Connecting to {url_base}/prepare-upload with mTLS cert...")
-                resp = requests.post(
-                    f"{url_base}/prepare-upload",
-                    json=session_meta,
-                    cert=client_cert if proto == "https" else None,
-                    verify=False,
-                    timeout=30
-                )
-                if resp.status_code == 200:
-                    prep_data = resp.json()
-                    session_id = prep_data.get("sessionId")
-                    tokens = prep_data.get("files", {})
-                    used_url_base = url_base
-                    break
-                elif resp.status_code == 403:
-                    if on_completed:
-                        on_completed(False, "El destinatario rechazó la transferencia")
-                    return
-                else:
-                    logger.warning(f"prepare-upload failed on {proto} with status {resp.status_code}: {resp.text}")
-            except Exception as e:
-                logger.warning(f"Connection failed on {proto} to {url_base}: {e}")
-                continue
+        try:
+            for proto in protocols_to_try:
+                url_base = f"{proto}://{target_ip}:{target_port}/api/localsend/v2"
+                try:
+                    logger.info(f"Connecting to {url_base}/prepare-upload with mTLS cert...")
+                    resp = http.post(f"{url_base}/prepare-upload", json=session_meta, timeout=30)
+                    if resp.status_code == 200:
+                        prep_data = resp.json()
+                        session_id = prep_data.get("sessionId")
+                        tokens = prep_data.get("files", {})
+                        used_url_base = url_base
+                        break
+                    elif resp.status_code == 403:
+                        if on_completed:
+                            on_completed(False, "El destinatario rechazó la transferencia")
+                        return
+                    else:
+                        logger.warning(f"prepare-upload failed on {proto} with status {resp.status_code}: {resp.text}")
+                except Exception as e:
+                    logger.warning(f"Connection failed on {proto} to {url_base}: {e}")
+                    continue
 
-        if not session_id or not used_url_base:
-            if on_completed:
-                on_completed(False, f"No se pudo establecer conexión con {target_ip}:{target_port}")
-            return
-
-        # Stream files
-        transferred_total = 0
-        start_time = time.time()
-        last_time = start_time
-        last_bytes = 0
-
-        for fid, path in file_id_map.items():
-            token = tokens.get(fid)
-            if not token:
-                continue
-
-            fname = os.path.basename(path)
-            fsize = os.path.getsize(path)
-            upload_url = f"{used_url_base}/upload?sessionId={session_id}&fileId={fid}&token={token}"
-
-            def on_chunk_read(chunk_len):
-                nonlocal transferred_total, last_time, last_bytes
-                transferred_total += chunk_len
-                now = time.time()
-                dt = now - last_time
-                if dt >= 0.15:
-                    speed = (transferred_total - last_bytes) / dt if dt > 0 else 0.0
-                    last_bytes = transferred_total
-                    last_time = now
-                    if on_progress:
-                        fraction = transferred_total / total_bytes if total_bytes > 0 else 1.0
-                        on_progress(fraction, speed, fname, transferred_total, total_bytes)
-
-            try:
-                reader = ProgressFileReader(path, on_chunk_read)
-                headers = {
-                    "Content-Type": "application/octet-stream",
-                    "Content-Length": str(fsize)
-                }
-                upload_resp = requests.post(
-                    upload_url,
-                    data=reader,
-                    headers=headers,
-                    cert=client_cert if used_url_base.startswith("https") else None,
-                    verify=False,
-                    timeout=120
-                )
-                reader.close()
-                if upload_resp.status_code != 200:
-                    if on_completed:
-                        on_completed(False, f"Error al subir {fname}: {upload_resp.text}")
-                    return
-            except Exception as e:
+            if not session_id or not used_url_base:
                 if on_completed:
-                    on_completed(False, f"Error transfiriendo {fname}: {e}")
+                    on_completed(False, f"No se pudo establecer conexión con {target_ip}:{target_port}")
                 return
 
-        if on_progress:
-            on_progress(1.0, 0.0, "Completado", total_bytes, total_bytes)
-        if on_completed:
-            on_completed(True, "Todos los archivos se enviaron con éxito")
+            # Progreso compartido entre los hilos de subida (throttled a 0,15 s)
+            progress = _SharedProgress(total_bytes, on_progress)
+            results = {}
+            results_lock = threading.Lock()
+
+            def upload_one(fid, path):
+                token = tokens.get(fid)
+                if not token:
+                    with results_lock:
+                        results[fid] = (False, "sin token de subida")
+                    return
+
+                fname = os.path.basename(path)
+                fsize = os.path.getsize(path)
+                upload_url = f"{used_url_base}/upload?sessionId={session_id}&fileId={fid}&token={token}"
+                reader = ProgressFileReader(path, lambda n: progress.add(fname, n))
+                try:
+                    upload_resp = http.post(
+                        upload_url,
+                        data=reader,
+                        headers={
+                            "Content-Type": "application/octet-stream",
+                            "Content-Length": str(fsize)
+                        },
+                        timeout=120
+                    )
+                    ok = upload_resp.status_code == 200
+                    err = "" if ok else upload_resp.text
+                except Exception as e:
+                    ok, err = False, str(e)
+                finally:
+                    reader.close()
+
+                if not ok:
+                    logger.warning(f"Error uploading {fname}: {err}")
+                with results_lock:
+                    results[fid] = (ok, err)
+
+            pending = list(file_id_map.items())
+            if len(pending) <= 1:
+                for fid, path in pending:
+                    upload_one(fid, path)
+            else:
+                # Varios archivos en paralelo: LocalSend v2 lo permite (una
+                # peticion HTTP independiente por archivo) y evita que N
+                # archivos viajen serializados de uno en uno.
+                with ThreadPoolExecutor(max_workers=MAX_PARALLEL_UPLOADS,
+                                        thread_name_prefix="FlyDrop-Upload") as pool:
+                    futures = [pool.submit(upload_one, fid, path) for fid, path in pending]
+                    for fut in futures:
+                        fut.result()
+
+            failed = [(fid, err) for fid, (ok, err) in results.items() if not ok]
+            if failed:
+                first_fid, first_err = failed[0]
+                fname = os.path.basename(file_id_map.get(first_fid, ""))
+                if on_completed:
+                    on_completed(False, f"Error al subir {fname}: {first_err or 'error desconocido'} "
+                                        f"({len(failed)} de {len(pending)} archivos fallaron)")
+                return
+
+            if on_progress:
+                on_progress(1.0, 0.0, "Completado", total_bytes, total_bytes)
+            if on_completed:
+                on_completed(True, "Todos los archivos se enviaron con éxito")
+        finally:
+            http.close()
 
     def _send_text_worker(self, target_ip, target_port, text, target_protocol, on_progress, on_completed):
         fid = str(uuid.uuid4())

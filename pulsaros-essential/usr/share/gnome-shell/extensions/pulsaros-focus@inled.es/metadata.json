@@ -1,0 +1,15 @@
+{
+  "uuid": "pulsaros-focus@inled.es",
+  "name": "Pulsar OS Focus Reporter",
+  "description": "Reports the focused window (PID + app) to $XDG_RUNTIME_DIR/pulsaros-focused.json so pulsaros-optimizer can boost the foreground app and learn workflow habits. GNOME >= 45 disabled org.gnome.Shell.Eval, and a root system service has no session bus, so this extension is the only reliable focus channel on Wayland.",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50"
+  ],
+  "url": "https://inled.es",
+  "version": 1
+}
