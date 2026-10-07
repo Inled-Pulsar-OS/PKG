@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=MacTahoe Theme Auto-Apply
+Exec=/bin/bash -c "sleep 2.5 && /usr/bin/mactahoe-theme-apply"
+Hidden=true
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+StartupNotify=false
+Terminal=false

@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Apply MacTahoe theme respecting user preferences
+LOCKDIR="/tmp/mactahoe-apply.lock.d"
+[ ! -d "$LOCKDIR" ] && mkdir "$LOCKDIR" 2>/dev/null || exit 0
+cleanup() { rmdir "$LOCKDIR" 2>/dev/null || true; }
+trap cleanup EXIT
+
+COLOR_SCHEME="$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null || echo "'prefer-light'")"
+GTK_NOW="$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d "'")"
+CUR_NOW="$(gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null | tr -d "'")"
+ICON_NOW="$(gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null | tr -d "'")"
+
+mkdir -p "$HOME/.config/gtk-3.0" "$HOME/.config/gtk-4.0"
+
+if [[ "$COLOR_SCHEME" == *dark* ]]; then
+  if [[ "$GTK_NOW" == MacTahoe* ]]; then GTK_TGT="MacTahoe-Dark-solid"; else GTK_TGT="$GTK_NOW"; fi
+  gsettings set org.gnome.desktop.interface gtk-theme "$GTK_TGT" >/dev/null 2>&1 || true
+  gsettings set org.gnome.desktop.interface gtk-application-prefer-dark-theme true >/dev/null 2>&1 || true
+  if [[ "$CUR_NOW" == MacTahoe* ]]; then CUR_TGT="MacTahoe-dark"; else CUR_TGT="$CUR_NOW"; fi
+  gsettings set org.gnome.desktop.interface cursor-theme "$CUR_TGT" >/dev/null 2>&1 || true
+  gsettings set org.gnome.desktop.interface icon-theme "$ICON_NOW" >/dev/null 2>&1 || true
+  cat > "$HOME/.config/gtk-3.0/settings.ini" <<INI
+[Settings]
+gtk-theme-name=$GTK_TGT
+gtk-application-prefer-dark-theme=true
+gtk-icon-theme-name=$ICON_NOW
+gtk-cursor-theme-name=$CUR_TGT
+gtk-font-name=Inter 11
+INI
+  cat > "$HOME/.config/gtk-4.0/settings.ini" <<INI
+[Settings]
+gtk-theme-name=$GTK_TGT
+gtk-application-prefer-dark-theme=true
+gtk-icon-theme-name=$ICON_NOW
+gtk-cursor-theme-name=$CUR_TGT
+INI
+  flatpak override --user --env=GTK_THEME="$GTK_TGT" >/dev/null 2>&1 || true
+  flatpak override --user --env=GTK4_THEME="$GTK_TGT" >/dev/null 2>&1 || true
+else
+  if [[ "$GTK_NOW" == MacTahoe* ]]; then GTK_TGT="MacTahoe-Light-solid"; else GTK_TGT="$GTK_NOW"; fi
+  gsettings set org.gnome.desktop.interface gtk-theme "$GTK_TGT" >/dev/null 2>&1 || true
+  gsettings set org.gnome.desktop.interface gtk-application-prefer-dark-theme false >/dev/null 2>&1 || true
+  if [[ "$CUR_NOW" == MacTahoe* ]]; then CUR_TGT="MacTahoe"; else CUR_TGT="$CUR_NOW"; fi
+  gsettings set org.gnome.desktop.interface cursor-theme "$CUR_TGT" >/dev/null 2>&1 || true
+  gsettings set org.gnome.desktop.interface icon-theme "$ICON_NOW" >/dev/null 2>&1 || true
+  cat > "$HOME/.config/gtk-3.0/settings.ini" <<INI
+[Settings]
+gtk-theme-name=$GTK_TGT
+gtk-application-prefer-dark-theme=false
+gtk-icon-theme-name=$ICON_NOW
+gtk-cursor-theme-name=$CUR_TGT
+gtk-font-name=Inter 11
+INI
+  cat > "$HOME/.config/gtk-4.0/settings.ini" <<INI
+[Settings]
+gtk-theme-name=$GTK_TGT
+gtk-application-prefer-dark-theme=false
+gtk-icon-theme-name=$ICON_NOW
+gtk-cursor-theme-name=$CUR_TGT
+INI
+  flatpak override --user --env=GTK_THEME="$GTK_TGT" >/dev/null 2>&1 || true
+  flatpak override --user --env=GTK4_THEME="$GTK_TGT" >/dev/null 2>&1 || true
+fi

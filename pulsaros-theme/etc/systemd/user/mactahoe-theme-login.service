@@ -1,0 +1,13 @@
+[Unit]
+Description=Apply MacTahoe theme at login (delayed)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sleep 3
+ExecStart=/usr/bin/mactahoe-theme-apply
+RemainAfterExit=no
+
+[Install]
+WantedBy=graphical-session.target

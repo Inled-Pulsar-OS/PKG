@@ -549,6 +549,272 @@ SHELL_OSD_FIX
 find "$STAGE_DIR" -path "*/gnome-shell/gnome-shell.css" -exec sh -c 'cat /tmp/shell_osd_fix.css >> "$1"' _ {} \; 2>/dev/null || true
 rm -f /tmp/shell_osd_fix.css
 
+# 2.5 Pulsar OS - macOS Rounded Capsule Modal Action Buttons
+cat <<'SHELL_MODAL_DARK_FIX' > /tmp/shell_modal_dark_fix.css
+/* ==============================================================================
+ * Pulsar OS - Clean macOS Rounded Capsule Modal Buttons (Dark)
+ * ============================================================================== */
+
+/* Button box layout: macOS spacing between action buttons */
+.modal-dialog .modal-dialog-button-box {
+  padding-top: 14px !important;
+  spacing: 12px !important;
+}
+
+/* 1. Base / Secondary / Cancel Button */
+.modal-dialog .modal-dialog-button,
+.modal-dialog .modal-dialog-linked-button,
+.modal-dialog .button,
+.modal-dialog-button {
+  min-height: 38px !important;
+  padding: 0 22px !important;
+  margin: 0 !important;
+  border-radius: 9999px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  border: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  icon-shadow: none !important;
+  background-color: rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
+  transition-duration: 150ms !important;
+}
+
+.modal-dialog .modal-dialog-button:hover,
+.modal-dialog .modal-dialog-linked-button:hover,
+.modal-dialog .button:hover,
+.modal-dialog-button:hover {
+  background-color: rgba(255, 255, 255, 0.20) !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+}
+
+.modal-dialog .modal-dialog-button:active,
+.modal-dialog .modal-dialog-linked-button:active,
+.modal-dialog .button:active,
+.modal-dialog-button:active {
+  background-color: rgba(255, 255, 255, 0.28) !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+}
+
+.modal-dialog .modal-dialog-button:focus,
+.modal-dialog .modal-dialog-linked-button:focus,
+.modal-dialog .button:focus,
+.modal-dialog-button:focus {
+  background-color: rgba(255, 255, 255, 0.18) !important;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35) !important;
+  border: none !important;
+  color: #ffffff !important;
+}
+
+.modal-dialog .modal-dialog-button:insensitive,
+.modal-dialog .modal-dialog-linked-button:insensitive,
+.modal-dialog .button:insensitive,
+.modal-dialog-button:insensitive {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+
+/* 2. Primary / Default Action Button (Blue / Accent) */
+.modal-dialog .modal-dialog-button:last-child,
+.modal-dialog .modal-dialog-linked-button:last-child,
+.modal-dialog .button:last-child,
+.modal-dialog .modal-dialog-button:default,
+.modal-dialog .modal-dialog-linked-button:default,
+.modal-dialog .button:default,
+.modal-dialog .modal-dialog-button.default,
+.modal-dialog .modal-dialog-button:checked,
+.modal-dialog .modal-dialog-linked-button:checked {
+  color: #ffffff !important;
+  background-color: -st-accent-color !important;
+  border: none !important;
+  box-shadow: none !important;
+  background-gradient-direction: none !important;
+}
+
+.modal-dialog .modal-dialog-button:hover:last-child,
+.modal-dialog .modal-dialog-linked-button:hover:last-child,
+.modal-dialog .button:hover:last-child,
+.modal-dialog .modal-dialog-button:default:hover,
+.modal-dialog .modal-dialog-linked-button:default:hover,
+.modal-dialog .button:default:hover,
+.modal-dialog .modal-dialog-button.default:hover {
+  color: #ffffff !important;
+  background-color: st-lighten(-st-accent-color, 8%) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.modal-dialog .modal-dialog-button:active:last-child,
+.modal-dialog .modal-dialog-linked-button:active:last-child,
+.modal-dialog .button:active:last-child,
+.modal-dialog .modal-dialog-button:default:active,
+.modal-dialog .modal-dialog-linked-button:default:active,
+.modal-dialog .button:default:active,
+.modal-dialog .modal-dialog-button.default:active {
+  color: #ffffff !important;
+  background-color: st-darken(-st-accent-color, 6%) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.modal-dialog .modal-dialog-button:focus:last-child,
+.modal-dialog .modal-dialog-linked-button:focus:last-child,
+.modal-dialog .button:focus:last-child,
+.modal-dialog .modal-dialog-button:default:focus,
+.modal-dialog .modal-dialog-linked-button:default:focus,
+.modal-dialog .button:default:focus {
+  box-shadow: 0 0 0 2px st-lighten(-st-accent-color, 25%) !important;
+  border: none !important;
+  color: #ffffff !important;
+}
+
+.modal-dialog .modal-dialog-button:insensitive:last-child,
+.modal-dialog .modal-dialog-linked-button:insensitive:last-child,
+.modal-dialog .button:insensitive:last-child,
+.modal-dialog .modal-dialog-button:default:insensitive {
+  background-color: st-transparentize(-st-accent-color, 0.7) !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+SHELL_MODAL_DARK_FIX
+
+cat <<'SHELL_MODAL_LIGHT_FIX' > /tmp/shell_modal_light_fix.css
+/* ==============================================================================
+ * Pulsar OS - Clean macOS Rounded Capsule Modal Buttons (Light)
+ * ============================================================================== */
+
+.modal-dialog .modal-dialog-button-box {
+  padding-top: 14px !important;
+  spacing: 12px !important;
+}
+
+/* 1. Base / Secondary / Cancel Button */
+.modal-dialog .modal-dialog-button,
+.modal-dialog .modal-dialog-linked-button,
+.modal-dialog .button,
+.modal-dialog-button {
+  min-height: 38px !important;
+  padding: 0 22px !important;
+  margin: 0 !important;
+  border-radius: 9999px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  border: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  icon-shadow: none !important;
+  background-color: rgba(0, 0, 0, 0.08) !important;
+  color: #1d1d1f !important;
+  transition-duration: 150ms !important;
+}
+
+.modal-dialog .modal-dialog-button:hover,
+.modal-dialog .modal-dialog-linked-button:hover,
+.modal-dialog .button:hover,
+.modal-dialog-button:hover {
+  background-color: rgba(0, 0, 0, 0.14) !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #000000 !important;
+}
+
+.modal-dialog .modal-dialog-button:active,
+.modal-dialog .modal-dialog-linked-button:active,
+.modal-dialog .button:active,
+.modal-dialog-button:active {
+  background-color: rgba(0, 0, 0, 0.20) !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #000000 !important;
+}
+
+.modal-dialog .modal-dialog-button:focus,
+.modal-dialog .modal-dialog-linked-button:focus,
+.modal-dialog .button:focus,
+.modal-dialog-button:focus {
+  background-color: rgba(0, 0, 0, 0.12) !important;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.2) !important;
+  border: none !important;
+  color: #000000 !important;
+}
+
+.modal-dialog .modal-dialog-button:insensitive,
+.modal-dialog .modal-dialog-linked-button:insensitive,
+.modal-dialog .button:insensitive,
+.modal-dialog-button:insensitive {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: rgba(0, 0, 0, 0.3) !important;
+}
+
+/* 2. Primary / Default Button */
+.modal-dialog .modal-dialog-button:last-child,
+.modal-dialog .modal-dialog-linked-button:last-child,
+.modal-dialog .button:last-child,
+.modal-dialog .modal-dialog-button:default,
+.modal-dialog .modal-dialog-linked-button:default,
+.modal-dialog .button:default,
+.modal-dialog .modal-dialog-button.default,
+.modal-dialog .modal-dialog-button:checked,
+.modal-dialog .modal-dialog-linked-button:checked {
+  color: #ffffff !important;
+  background-color: -st-accent-color !important;
+  border: none !important;
+  box-shadow: none !important;
+  background-gradient-direction: none !important;
+}
+
+.modal-dialog .modal-dialog-button:hover:last-child,
+.modal-dialog .modal-dialog-linked-button:hover:last-child,
+.modal-dialog .button:hover:last-child,
+.modal-dialog .modal-dialog-button:default:hover,
+.modal-dialog .modal-dialog-linked-button:default:hover,
+.modal-dialog .button:default:hover,
+.modal-dialog .modal-dialog-button.default:hover {
+  color: #ffffff !important;
+  background-color: st-lighten(-st-accent-color, 8%) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.modal-dialog .modal-dialog-button:active:last-child,
+.modal-dialog .modal-dialog-linked-button:active:last-child,
+.modal-dialog .button:active:last-child,
+.modal-dialog .modal-dialog-button:default:active,
+.modal-dialog .modal-dialog-linked-button:default:active,
+.modal-dialog .button:default:active,
+.modal-dialog .modal-dialog-button.default:active {
+  color: #ffffff !important;
+  background-color: st-darken(-st-accent-color, 6%) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.modal-dialog .modal-dialog-button:focus:last-child,
+.modal-dialog .modal-dialog-linked-button:focus:last-child,
+.modal-dialog .button:focus:last-child,
+.modal-dialog .modal-dialog-button:default:focus,
+.modal-dialog .modal-dialog-linked-button:default:focus,
+.modal-dialog .button:default:focus {
+  box-shadow: 0 0 0 2px st-lighten(-st-accent-color, 25%) !important;
+  border: none !important;
+  color: #ffffff !important;
+}
+SHELL_MODAL_LIGHT_FIX
+
+find "$STAGE_DIR" -path "*/MacTahoe-Dark*/gnome-shell/gnome-shell.css" -exec sh -c 'cat /tmp/shell_modal_dark_fix.css >> "$1"' _ {} \; 2>/dev/null || true
+find "$STAGE_DIR" -path "*/MacTahoe-Light*/gnome-shell/gnome-shell.css" -exec sh -c 'cat /tmp/shell_modal_light_fix.css >> "$1"' _ {} \; 2>/dev/null || true
+rm -f /tmp/shell_modal_dark_fix.css /tmp/shell_modal_light_fix.css
+
 # Symlink MacTahoe to MacTahoe-Light for backward compatibility
 if [ -d "$STAGE_DIR/usr/share/themes/MacTahoe-Light" ] && [ ! -d "$STAGE_DIR/usr/share/themes/MacTahoe" ]; then
     ln -sf MacTahoe-Light "$STAGE_DIR/usr/share/themes/MacTahoe"
