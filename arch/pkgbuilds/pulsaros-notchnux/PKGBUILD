@@ -24,11 +24,8 @@ package() {
     _src="$(cd "$startdir"/../../../pulsaros-notchnux && pwd)"
     cd "$_src"
 
-    mkdir -p "$pkgdir/usr/share/gnome-shell/extensions"
-
-    cp -r \
-        usr/share/gnome-shell/extensions/notchnux@adityasah.programs \
-        "$pkgdir/usr/share/gnome-shell/extensions/"
+    mkdir -p "$pkgdir/usr"
+    cp -r usr/* "$pkgdir/usr/"
 
     if [ -f LICENSE ]; then
         install -Dm644 LICENSE \
@@ -38,4 +35,5 @@ package() {
     chmod -R a+rX "$pkgdir/usr"
     find "$pkgdir/usr" -type d -exec chmod 755 {} +
     find "$pkgdir/usr/share" -type f -exec chmod 644 {} +
+    chmod 755 "$pkgdir/usr/share/notchnux/notchnux_drop_helper.py" "$pkgdir/usr/bin/notchnux-drop-helper" 2>/dev/null || true
 }

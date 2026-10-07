@@ -111,7 +111,10 @@ export const NotchNux = GObject.registerClass({
         this._studioPreviewIdle = 0;
         this._selectedCam = null;
         this._selectedMic = null;
-        // Drag-out gesture state (shelf rows -> companion drag-source card).
+        // Drag-out card sync (shelf rows -> companion drag-source card).
+        this._syncDragCardId = 0;
+        // Drag-out gesture state (shelf rows -> companion drag-source card):
+        // a press on a row background + >14px motion starts the drag.
         this._rowDragInit = null;
         this._rowStageMotionId = 0;
         this._rowStageReleaseId = 0;
@@ -544,7 +547,6 @@ export const NotchNux = GObject.registerClass({
     }
 
     destroy() {
-        this._endRowDrag();
         this._stopClock();
         this._stopWeatherRefresh();
         this._stopSystemRefresh();
@@ -1962,6 +1964,12 @@ export const NotchNux = GObject.registerClass({
         // open animation (it renders first, then animates size itself).
         if (this.isExpanded && !this._isExpanding)
             this._resizeToContent();
+
+        if (this._activeTab === 'shelf' && this.isExpanded && (this._shelf?.getFiles?.()?.length ?? 0) > 0) {
+            this.extension?._showCompanionCard?.(this._shelf.getFiles().map(f => f.uri), this);
+        } else {
+            this.extension?._hideDragCards?.();
+        }
     }
 
     // Halt vinyl spin + EQ bounce and drop the references, so nothing keeps
@@ -5487,6 +5495,10 @@ export const NotchNux = GObject.registerClass({
         panel.add_child(this._buildNearbyDevicesBar(devices));
 
         // Staged Files List
+        // The drag-out card sync needs the rows' viewport and the per-row
+        // action boxes: stash them here, reset when there are no files.
+        this._shelfScroll = null;
+        this._shelfActionBoxes = [];
         if (files.length > 0) {
             let scroll = new St.ScrollView({ style_class: 'nook-shelf-scroll', x_expand: true, y_expand: true });
             scroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
@@ -5494,6 +5506,7 @@ export const NotchNux = GObject.registerClass({
             for (let f of files)
                 list.add_child(this._buildShelfRow(f, devices));
             scroll.set_child(list);
+            this._shelfScroll = scroll;
             panel.add_child(scroll);
         }
 
@@ -5791,44 +5804,7 @@ export const NotchNux = GObject.registerClass({
         });
         row.add_child(actions);
 
-        // Drag-out to an external app via the companion's drag-source card.
-        // The gesture lives on the row background only (the action buttons
-        // are separate reactive actors and swallow their own presses).
-        row.connect('button-press-event', (w, event) => {
-            if (event.get_button() !== 1) return Clutter.EVENT_PROPAGATE;
-            let [sx, sy] = event.get_coords();
-            this._rowDragInit = { sx, sy, uri: f.uri };
-            this._rowStageMotionId = global.stage.connect('motion-event', (s, ev) => {
-                if (!this._rowDragInit) return Clutter.EVENT_PROPAGATE;
-                let [gx, gy] = ev.get_coords();
-                let dist = Math.hypot(gx - this._rowDragInit.sx, gy - this._rowDragInit.sy);
-                if (dist < 14) return Clutter.EVENT_PROPAGATE;
-                let uri = this._rowDragInit.uri;
-                this._endRowDrag();
-                this.extension?._startCompanionDrag?.(this.getStagedFiles?.() ?? [uri], gx, gy);
-                this._flashShareStatus('Drag all staged files into any app');
-                return Clutter.EVENT_STOP;
-            });
-            this._rowStageReleaseId = global.stage.connect('button-release-event', () => {
-                this._endRowDrag();
-                return Clutter.EVENT_PROPAGATE;
-            });
-            return Clutter.EVENT_PROPAGATE;
-        });
-
         return row;
-    }
-
-    _endRowDrag() {
-        if (this._rowStageMotionId) {
-            try { global.stage.disconnect(this._rowStageMotionId); } catch (_) {}
-            this._rowStageMotionId = 0;
-        }
-        if (this._rowStageReleaseId) {
-            try { global.stage.disconnect(this._rowStageReleaseId); } catch (_) {}
-            this._rowStageReleaseId = 0;
-        }
-        this._rowDragInit = null;
     }
 
     // Popup a device menu for a file when more than one device is discovered.
@@ -6222,12 +6198,12 @@ export const NotchNux = GObject.registerClass({
         if (related && this._isDescendant(related))
             return Clutter.EVENT_PROPAGATE;
 
-        // A click inside the widget triggers an implicit pointer grab, which
-        // fires a spurious leave-event whose `related` is null while the
-        // pointer is still physically over us. Ignore those so clicking a
-        // button never schedules a collapse. Verify against the real pointer
-        // position rather than trusting the (grab-poisoned) crossing.
-        if (!entering && related === null && this._pointerIsOverWidget())
+        // A leave while the pointer is STILL physically over us is spurious:
+        // a click/drag inside arms an implicit grab (related === null), and
+        // the helper's drag-out card crossing over the rows fires related
+        // non-descendant leaves -- neither may collapse the shelf. Only a
+        // leave with the pointer truly outside the widget collapses.
+        if (!entering && this._pointerIsOverWidget())
             return Clutter.EVENT_PROPAGATE;
 
         this._pointerInside = entering;
@@ -6451,6 +6427,8 @@ export const NotchNux = GObject.registerClass({
     collapse() {
         if (!this.isExpanded) return;
         this.isExpanded = false;
+        // The drag-out card is command-driven: take it down with the shelf.
+        this.extension?._hideDragCards?.();
         if (!this._pointerInside && !this._anyOwnedMenuOpen()) {
             global._notchnuxActive = false;
             this._syncWithPanelPosition();

@@ -1,5 +1,6 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
+import Clutter from 'gi://Clutter';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
@@ -17,6 +18,7 @@ export default class NotchNuxExtension extends Extension {
         this._pendingDropZonePos = null;
         this._pendingNotch = null;
         this._pendingCardTarget = null;
+        this._lastZoneBox = null;
         this._zoneLastShow = 0;
         this._winCreatedId = 0;
         this._notchesReactiveOff = false;
@@ -31,29 +33,20 @@ export default class NotchNuxExtension extends Extension {
         this._setupExtensionDbus();
         this._startDropHelper();
 
-        // Restore the notch subtrees' reactivity and drop any pending
-        // drag-out card target the moment an external drag ends.
+        // Restore notch reactivity when an external drag ends
         this._dragEndId = Main.xdndHandler?.connect?.('drag-end', () => {
             this._externalDragActive = false;
             this._companionDragActive = false;
-            this._pendingCardTarget = null;
             if (this._notchesReactiveOff) {
                 this._notchesReactiveOff = false;
                 this._setNotchesReactive(true);
             }
         }) ?? 0;
 
-        // Move the helper's window the moment it exists (before its first
-        // frame), so Mutter's own center placement never flashes on screen;
-        // the retry timers in _showDropZone cover later re-maps.
-        // Drag-out is gesture-driven: pressing a shelf row and moving starts
-        // the helper's Gdk drag (see _startCompanionDrag); the shelf itself
-        // stays fully interactive and collapses on its own hover-out logic.
-
         this._winCreatedId = global.display.connect('window-created', (_d, win) => {
             try {
-                if (this._pendingDropZonePos &&
-                    win.get_wm_class() === 'es.pulsaros.NotchNuxHelper')
+                if ((this._pendingDropZonePos || this._pendingCardTarget) &&
+                    (win.get_wm_class() === 'es.pulsaros.NotchNuxHelper' || win.get_gtk_application_id?.() === 'es.pulsaros.NotchNuxHelper' || String(win.get_wm_class() ?? '').includes('NotchNux')))
                     this._applyDropZonePos(win);
             } catch (_) {}
         });
@@ -184,6 +177,8 @@ export default class NotchNuxExtension extends Extension {
         }
         this._pendingNotch = null;
         this._pendingCardTarget = null;
+        this._lastZoneBox = null;
+        this._hideDragCards();
         if (this._notchesReactiveOff) {
             this._notchesReactiveOff = false;
             this._setNotchesReactive(true);
@@ -215,11 +210,10 @@ export default class NotchNuxExtension extends Extension {
 
     _setupExtensionDbus() {
         try {
-            let xml = '<node><interface name="org.gnome.Shell.Extensions.NotchNux"><method name="StageFiles"><arg type="as" direction="in" name="uris"/></method><method name="CompanionDragState"><arg type="b" direction="in" name="active"/></method></interface></node>';
+            let xml = '<node><interface name="org.gnome.Shell.Extensions.NotchNux"><method name="StageFiles"><arg type="as" direction="in" name="uris"/></method><method name="CompanionDragState"><arg type="b" direction="in" name="active"/></method><method name="ForwardClick"><arg type="i" direction="in" name="x"/><arg type="i" direction="in" name="y"/><arg type="d" direction="in" name="button"/></method><method name="ForwardScroll"><arg type="d" direction="in" name="dx"/><arg type="d" direction="in" name="dy"/></method></interface></node>';
             let nodeInfo = Gio.DBusNodeInfo.new_for_xml(xml);
             this._helperBusId = this._dbusConnection.register_object('/org/gnome/Shell/Extensions/NotchNux', nodeInfo.interfaces[0], (conn, sender, path, iface, method, params, inv) => {
                 if (method === 'StageFiles') {
-                    // unpack() es superficial: el hijo 'as' llega como Variant
                     let [urisVariant] = params.unpack();
                     let uris = (urisVariant && typeof urisVariant.deep_unpack === 'function')
                         ? urisVariant.deep_unpack() : urisVariant;
@@ -232,11 +226,64 @@ export default class NotchNuxExtension extends Extension {
                         this._companionDragActive = !!active;
                     } catch (_) {}
                     inv.return_value(new GLib.Variant('()', []));
+                } else if (method === 'ForwardClick') {
+                    try {
+                        let [x, y, btn] = params.unpack();
+                        this._handleForwardClick(x, y, btn);
+                    } catch (e) { console.warn('NotchNux: ForwardClick error', e); }
+                    inv.return_value(new GLib.Variant('()', []));
+                } else if (method === 'ForwardScroll') {
+                    try {
+                        let [dx, dy] = params.unpack();
+                        this._handleForwardScroll(dx, dy);
+                    } catch (e) { console.warn('NotchNux: ForwardScroll error', e); }
+                    inv.return_value(new GLib.Variant('()', []));
                 } else {
                     inv.return_error_literal(Gio.dbus_error_quark(), Gio.DBUS_ERROR_UNKNOWN_METHOD, 'Unknown');
                 }
             }, null, null);
         } catch (e) { console.warn('NotchNux: D-Bus reg failed', e); }
+    }
+
+    _handleForwardClick(winX, winY, button) {
+        let box = this._lastZoneBox;
+        let rootX = box ? box.x + winX : winX;
+        let rootY = box ? box.y + winY : winY;
+
+        let actor = global.stage.get_actor_at_pos(Clutter.PickMode.ALL, rootX, rootY);
+        if (!actor) return;
+
+        let target = actor;
+        while (target && target !== global.stage) {
+            if (typeof target.clicked === 'function') {
+                if (target.can_focus) target.grab_key_focus?.();
+                target.clicked(0);
+                return;
+            }
+            if (typeof target.emit === 'function' && target.reactive) {
+                if (target.can_focus) target.grab_key_focus?.();
+                target.emit('clicked', 0);
+                return;
+            }
+            if (target._delegate && typeof target._delegate.activate === 'function') {
+                target._delegate.activate();
+                return;
+            }
+            target = target.get_parent?.();
+        }
+    }
+
+    _handleForwardScroll(dx, dy) {
+        for (let notch of this._notches ?? []) {
+            if (notch && notch._shelfScroll && notch._shelfScroll.get_vscroll_bar) {
+                try {
+                    let adj = notch._shelfScroll.get_vscroll_bar().get_adjustment();
+                    if (adj) {
+                        adj.value = Math.max(adj.lower, Math.min(adj.upper - adj.page_size, adj.value + dy * 35));
+                    }
+                } catch (_) {}
+            }
+        }
     }
 
     _stageFilesFromHelper(uris) {
@@ -260,8 +307,6 @@ export default class NotchNuxExtension extends Extension {
     }
 
     _helperHasOwner() {
-        // deep_unpack(): unpack() deja los hijos como GLib.Variant, que sería
-        // truthy aunque el nombre no tuviera dueño.
         let conn = this._dbusConnection ?? Gio.bus_get_sync(Gio.BusType.SESSION, null);
         let [hasOwner] = conn.call_sync('org.freedesktop.DBus', '/org/freedesktop/DBus',
             'org.freedesktop.DBus', 'NameHasOwner',
@@ -279,8 +324,6 @@ export default class NotchNuxExtension extends Extension {
         return true;
     }
 
-    // Warm the helper up at enable time: the window gets built but stays
-    // unmapped, so the first drag does not pay the Python/GTK startup cost.
     _startDropHelper() {
         try {
             if (this._helperHasOwner()) return;
@@ -288,17 +331,6 @@ export default class NotchNuxExtension extends Extension {
         } catch (e) { console.warn('NotchNux: helper start failed', e); }
     }
 
-    // Called by the notch's drag monitor while an external drag (source ===
-    // Main.xdndHandler: files dragged out of Nautilus or any other app)
-    // crosses the notch. Mutter hands the payload to whatever *client surface*
-    // sits under the pointer, and the shell is never a drop target (see
-    // acceptDrop in notchnux.js), so we map the helper's GTK drop zone
-    // invisibly exactly where the notch is -- the "invisible drop rectangle at
-    // the notch" the UI promises. For the pick to reach it, the whole notch
-    // subtree is made non-reactive for the duration of the drag: with
-    // CLUTTER_PICK_REACTIVE only individually reactive actors are recorded
-    // (clutter_actor_should_pick), and shell chrome is not a surface, so any
-    // reactive child of the expanded dashboard would refuse the drop.
     _showDropZone(x, y, notch) {
         this._externalDragActive = true;
         let now = GLib.get_monotonic_time();
@@ -315,13 +347,6 @@ export default class NotchNuxExtension extends Extension {
 
         this._activateDropZone();
 
-        // The first activation maps a window Mutter places on its own (and a
-        // cold spawn needs a few hundred ms to even exist), so retry the move
-        // until the zone is on screen. Guards on _pendingDropZonePos keep this
-        // inert after disable(). Re-applying the walk matters: expand() only
-        // renders the dashboard rows *after* the first dragMotion, and any
-        // reactive child born after the first walk would beat the zone in the
-        // pick.
         this._positionDropZone();
         for (let ms of [60, 240, 500, 900]) {
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
@@ -334,12 +359,6 @@ export default class NotchNuxExtension extends Extension {
         }
     }
 
-    // NEVER call_sync from the shell's main loop here: the helper answers
-    // Activate by calling Gtk.present(), which needs Mutter to process its
-    // Wayland requests — and Mutter is us, blocked waiting for that reply.
-    // The result was a deadlock released only by the 2s timeout: every drag
-    // event froze the shell (and the zone appeared seconds late). Measured
-    // with the shell free, this roundtrip takes ~20ms, so fire and forget.
     _activateDropZone() {
         let conn;
         try {
@@ -348,6 +367,8 @@ export default class NotchNuxExtension extends Extension {
             console.warn('NotchNux: no session bus', e);
             return;
         }
+        let box = this._pendingNotch ? this._notchZoneBox(this._pendingNotch) : null;
+        let uri = box ? `notchnux://zone?w=${box.w}&h=${box.h}` : 'notchnux://zone';
         try {
             conn.call('org.freedesktop.DBus', '/org/freedesktop/DBus',
                 'org.freedesktop.DBus', 'NameHasOwner',
@@ -356,15 +377,15 @@ export default class NotchNuxExtension extends Extension {
                 (c, res) => {
                     let owned = false;
                     try { owned = c.call_finish(res).deep_unpack()[0]; } catch (_) { return; }
-                    if (!this._dbusConnection) return; // extension disabled meanwhile
+                    if (!this._dbusConnection) return;
                     if (!owned) {
                         this._spawnDropHelper(false);
                         return;
                     }
                     try {
                         conn.call('es.pulsaros.NotchNuxHelper', '/es/pulsaros/NotchNuxHelper',
-                            'org.freedesktop.Application', 'Activate',
-                            new GLib.Variant('(a{sv})', [{}]), null,
+                            'org.freedesktop.Application', 'Open',
+                            new GLib.Variant('(asa{sv})', [[uri], {}]), null,
                             Gio.DBusCallFlags.NONE, 3000, null,
                             (c2, res2) => {
                                 try { c2.call_finish(res2); }
@@ -376,51 +397,49 @@ export default class NotchNuxExtension extends Extension {
     }
 
     _positionDropZone() {
-        if (!this._pendingDropZonePos) return;
+        if (!this._pendingDropZonePos && !this._pendingCardTarget) return;
         let win = null;
         try {
             for (let a of global.get_window_actors()) {
                 let w = a.metaWindow ?? a.get_meta_window?.();
-                if (w && w.get_wm_class() === 'es.pulsaros.NotchNuxHelper') { win = w; break; }
+                if (w && (w.get_wm_class() === 'es.pulsaros.NotchNuxHelper' || w.get_gtk_application_id?.() === 'es.pulsaros.NotchNuxHelper' || String(w.get_wm_class() ?? '').includes('NotchNux'))) {
+                    win = w;
+                    break;
+                }
             }
         } catch (_) {}
         if (win) this._applyDropZonePos(win);
     }
 
     _applyDropZonePos(win) {
-        let pos = this._pendingDropZonePos;
-        if (!pos || !win) return;
+        if (!win) return;
         try {
-            let mon = (Main.layoutManager.monitors ?? []).find(m =>
-                pos.x >= m.x && pos.x < m.x + m.width &&
-                pos.y >= m.y && pos.y < m.y + m.height);
-            if (!mon) return;
-
-            let box;
+            let pos = this._pendingDropZonePos;
+            let box, mon;
             if (this._pendingCardTarget) {
-                // Drag-out card: fixed size, under the pointer.
                 box = { ...this._pendingCardTarget };
+                mon = (Main.layoutManager.monitors ?? []).find(m =>
+                    box.x + box.w / 2 >= m.x && box.x + box.w / 2 < m.x + m.width);
             } else {
-                // Invisible drop rectangle: the notch widget's live bounds
-                // (re-measured every pass, so the expand animation converges)
-                // plus a small margin. get_transformed_* give floats.
+                if (!pos) return;
+                mon = (Main.layoutManager.monitors ?? []).find(m =>
+                    pos.x >= m.x && pos.x < m.x + m.width &&
+                    pos.y >= m.y && pos.y < m.y + m.height);
                 let nn = this._pendingNotch;
                 if (!nn || typeof nn.get_transformed_position !== 'function')
                     return;
                 box = this._notchZoneBox(nn);
             }
+            if (!mon) return;
 
             let zx = Math.max(mon.x + 8, Math.min(box.x, mon.x + mon.width - box.w - 8));
             let zy = Math.max(mon.y + 8, Math.min(box.y, mon.y + mon.height - box.h - 8));
-            // One call sizes AND places the window; the client honors it
-            // (the helper window is resizable).
+            this._lastZoneBox = { x: zx, y: zy, w: box.w, h: box.h };
             win.move_resize_frame(global.get_current_time(), zx, zy, box.w, box.h);
-            win.make_above();  // GTK4 lost keep_above, so keep the zone on top
+            win.make_above();
         } catch (e) { console.warn('NotchNux: drop zone positioning failed', e); }
     }
 
-    // The notch rectangle both the invisible drop zone and the transparent
-    // drag-out card live in: the widget's live bounds plus a small margin.
     _notchZoneBox(notch) {
         let [nx, ny] = notch.get_transformed_position();
         let [nw, nh] = notch.get_transformed_size();
@@ -430,60 +449,51 @@ export default class NotchNuxExtension extends Extension {
         };
     }
 
-    _startCompanionDrag(uris, x, y) {
-        if (!this._dbusConnection) return;
-        if (!uris || !uris.length) return;
-        this._pendingDropZonePos = { x, y };
-        this._pendingCardTarget = {
-            x: Math.round(x - 130), y: Math.round(y - 16),
-            w: 260, h: 64,
-        };
-        // This drag is OURS from now on: keep the drop monitor from treating
-        // it as an external drop-in (which would swap the helper window to
-        // zone mode mid-drag and cancel the drag source). The helper clears
-        // the flag when the Gdk drag finishes (CompanionDragState(false));
-        // the xdnd drag-end hook also resets it.
-        this._companionDragActive = true;
-        // If the helper window is already mapped (it usually is), place the
-        // card before Open so it's up when the drag begins; otherwise the
-        // retries below catch Open's present() mapping it.
+    _showCompanionCard(uris, notch) {
+        if (!this._dbusConnection || !uris || !uris.length || !notch) return;
+        if (!this._helperHasOwner()) {
+            this._spawnDropHelper(false);
+        }
+        let box = this._notchZoneBox(notch);
+        this._pendingCardTarget = box;
+        this._lastZoneBox = box;
         this._positionDropZone();
-        for (let ms of [40, 160, 400]) {
+        for (let ms of [40, 150, 350, 700]) {
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
-                if (this._pendingCardTarget) this._positionDropZone();
+                if (this._pendingCardTarget && !this._externalDragActive)
+                    this._positionDropZone();
                 return GLib.SOURCE_REMOVE;
             });
         }
-        // org.freedesktop.Application.Open loads the staged files into the
-        // helper's drag source; the 'start-drag' hint tells the helper to
-        // begin the drag itself with Gdk.Drag.begin -- a real Wayland drag,
-        // so this gesture never needs a re-grab on the card.
-        // Fire and forget, never call_sync: the reply only arrives after the
-        // helper's Gtk.present(), which needs Mutter to process Wayland
-        // requests -- and Mutter is our own main loop.
         try {
             this._dbusConnection.call('es.pulsaros.NotchNuxHelper',
                 '/es/pulsaros/NotchNuxHelper',
                 'org.freedesktop.Application', 'Open',
                 new GLib.Variant('(asa{sv})',
-                    [uris, { hint: GLib.Variant.new_string('start-drag') }]), null,
+                    [[`notchnux://card?w=${box.w}&h=${box.h}`, ...uris], {}]), null,
+                Gio.DBusCallFlags.NONE, 3000, null,
+                (c, res) => {
+                    try { c.call_finish(res); } catch (_) {}
+                });
+        } catch (_) {}
+    }
+
+    _hideDragCards() {
+        this._pendingCardTarget = null;
+        if (!this._dbusConnection) return;
+        try {
+            this._dbusConnection.call('es.pulsaros.NotchNuxHelper',
+                '/es/pulsaros/NotchNuxHelper',
+                'org.freedesktop.Application', 'Open',
+                new GLib.Variant('(asa{sv})', [['notchnux://hide'], {}]), null,
                 Gio.DBusCallFlags.NONE, 3000, null,
                 (c, res) => {
                     try { c.call_finish(res); }
-                    catch (e) { console.warn('NotchNux: drag-out Open failed', e); }
-                    this._pendingCardTarget = null;
+                    catch (_) {}
                 });
-        } catch (e) {
-            console.warn('NotchNux: drag-out failed', e);
-            this._pendingCardTarget = null;
-        }
+        } catch (_) {}
     }
 
-    // Make every shell actor of every notch non-reactive while an external
-    // drop is possible. Reactivity is per-actor in Clutter (children of a
-    // non-reactive parent are STILL picked -- clutter_actor_real_pick recurses
-    // unconditionally), so the whole subtree must be walked. Restored on
-    // drag-end.
     _setNotchesReactive(reactive) {
         for (let n of this._notches ?? []) {
             try { this._setSubtreeReactive(n, reactive); }
