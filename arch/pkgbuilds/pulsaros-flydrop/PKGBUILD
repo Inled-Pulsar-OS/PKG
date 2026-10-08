@@ -1,7 +1,7 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-flydrop
 pkgver=1.0.0
-pkgrel=2
+pkgrel=7
 pkgdesc="AirDrop & LocalSend v2 integration with Dynamic Island Drop Shelf for Pulsar OS"
 arch=(any)
 url="https://inled.es"

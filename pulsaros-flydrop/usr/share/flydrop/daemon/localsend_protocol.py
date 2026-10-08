@@ -33,6 +33,14 @@ logger = logging.getLogger("FlyDrop.Protocol")
 # flujo TCP no llega a llenar sobre Wi-Fi.
 MAX_PARALLEL_UPLOADS = 4
 
+# Anti-zombi: si el cuerpo de un upload no mueve bytes durante
+# STALL_ABORT_S segundos, el movil se ha dormido o ha desaparecido. Se
+# aborta limpiando el parcial y marcando la sesion fallida en vez de
+# bloquear el hilo de peticion para siempre (ventana congelada + sesion
+# zombi). Solo aplica al cuerpo del archivo; el keep-alive entre archivos
+# de la misma sesion se restaura a bloqueante tras cada respuesta.
+STALL_ABORT_S = 15
+
 
 class HandshakeFailed(Exception):
     """Fallo al abrir el canal TLS: se registra sin volcar traza completa."""
@@ -485,6 +493,14 @@ class LocalSendServer:
 
                     logger.info(f"Receiving file '{file_name}' (expected: {expected_size} bytes, chunked={is_chunked}) to {dest_path}")
 
+                    # Timeout solo durante el cuerpo: sin bytes durante
+                    # STALL_ABORT_S s se aborta (ver except) en lugar de
+                    # esperar eternamente.
+                    try:
+                        self.connection.settimeout(STALL_ABORT_S)
+                    except OSError:
+                        pass
+
                     bytes_received = 0
                     chunk_buffer_size = 128 * 1024
                     complete = False
@@ -563,8 +579,20 @@ class LocalSendServer:
 
                         self._send_json(200, {"message": "OK"})
 
+                        # Restaurar keep-alive entre archivos de la sesion.
+                        try:
+                            self.connection.settimeout(None)
+                        except OSError:
+                            pass
+
                     except Exception as e:
-                        logger.error(f"Error saving incoming file {dest_path}: {e}")
+                        err_msg = str(e)
+                        if isinstance(e, TimeoutError) or "timed out" in err_msg.lower():
+                            err_msg = (f"Sin datos del dispositivo durante "
+                                       f"{int(STALL_ABORT_S)} s — ¿pantalla del móvil encendida?")
+                            logger.warning(f"Timeout leyendo {dest_path}: {err_msg}")
+                        else:
+                            logger.error(f"Error saving incoming file {dest_path}: {err_msg}")
                         # Sin restos: borra el parcial y olvida su progreso para
                         # que el reintento empiece limpio en el mismo archivo.
                         session.status = "failed"
@@ -574,8 +602,8 @@ class LocalSendServer:
                                 os.remove(dest_path)
                         except OSError as cleanup_err:
                             logger.warning(f"Could not remove partial file {dest_path}: {cleanup_err}")
-                        outer.notify_completed(session, False, str(e))
-                        self._send_json(500, {"message": f"Error saving file: {e}"}, close=True)
+                        outer.notify_completed(session, False, err_msg)
+                        self._send_json(500, {"message": f"Error saving file: {err_msg}"}, close=True)
                     return
 
                 # 4. Cancel Endpoint

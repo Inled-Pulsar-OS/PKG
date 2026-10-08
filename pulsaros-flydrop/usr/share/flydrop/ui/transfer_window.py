@@ -213,6 +213,9 @@ class FlyDropTransferWindow(Gtk.Window):
         self.mode = mode
         self.saved_file = saved_file
         self.finished = False
+        self.stalled = False
+        self._stall_speed = ""
+        self._stall_message = ""
         self._status_poll_id = None
 
         self.add_css_class("flydrop-window")
@@ -271,9 +274,12 @@ class FlyDropTransferWindow(Gtk.Window):
             background: rgba(22, 22, 28, 0.96);
             border: 1px solid rgba(255, 255, 255, 0.16);
             border-radius: 28px;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65);
+            /* La sombra tiene que caber entera en el margen transparente:
+               si se recorta contra el borde de la ventana queda un marco
+               duro con esquinas en punta. */
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
             padding: 24px;
-            margin: 12px;
+            margin: 32px 32px 42px;
         }
         window.flydrop-window .dim-label {
             color: rgba(255, 255, 255, 0.65);
@@ -319,10 +325,17 @@ class FlyDropTransferWindow(Gtk.Window):
                 self._finish_ui(False, status_data.get("message", "Error"))
             elif status_data.get("status") == "in_progress":
                 prog = float(status_data.get("progress", 0.0))
-                self.progress_widget.set_progress(prog, status_data.get("speed_str", ""))
-                cur_file = status_data.get("current_file")
-                if cur_file:
-                    self.status_label.set_text(cur_file)
+                self.stalled = bool(status_data.get("stalled"))
+                if self.stalled:
+                    self._stall_speed = status_data.get("speed_str") or "⚠ sin datos"
+                    self._stall_message = status_data.get("message") or "Sin datos del dispositivo"
+                    self.progress_widget.set_progress(prog, self._stall_speed)
+                    self.status_label.set_text(self._stall_message)
+                else:
+                    self.progress_widget.set_progress(prog, status_data.get("speed_str", ""))
+                    cur_file = status_data.get("current_file")
+                    if cur_file:
+                        self.status_label.set_text(cur_file)
         except Exception:
             pass
 
@@ -355,9 +368,15 @@ class FlyDropTransferWindow(Gtk.Window):
     def _update_progress_ui(self, progress, speed_str, current_file):
         if self.finished:
             return
-        self.progress_widget.set_progress(progress, speed_str)
-        if current_file:
-            self.status_label.set_text(current_file)
+        if self.stalled:
+            # Las senales de progreso siguen llegando (o no) con la ultima
+            # velocidad conocida: mientras dure el corte, mantener el aviso.
+            self.progress_widget.set_progress(progress, self._stall_speed)
+            self.status_label.set_text(self._stall_message)
+        else:
+            self.progress_widget.set_progress(progress, speed_str)
+            if current_file:
+                self.status_label.set_text(current_file)
 
     def _on_transfer_completed(self, session_id, success, message):
         if session_id == self.session_id or not self.session_id:

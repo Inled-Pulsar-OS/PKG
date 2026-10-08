@@ -43,6 +43,7 @@ DEFAULT_CONFIG = {
     "protocol": "http",
     "download_dir": get_default_download_dir(),
     "auto_accept": False,
+    "auto_open": True,
     "discovery_enabled": True,
     "fingerprint": str(uuid.uuid4()),
     "version": "2.1"
@@ -103,6 +104,14 @@ class Config:
     @auto_accept.setter
     def auto_accept(self, val):
         self.set_value("auto_accept", bool(val))
+
+    @property
+    def auto_open(self):
+        return bool(self.data.get("auto_open", True))
+
+    @auto_open.setter
+    def auto_open(self, val):
+        self.set_value("auto_open", bool(val))
 
     @property
     def download_dir(self):

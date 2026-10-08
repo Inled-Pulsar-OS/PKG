@@ -50,6 +50,13 @@ DBUS_SERVICE_NAME = "es.pulsaros.FlyDrop"
 DBUS_OBJECT_PATH = "/es/pulsaros/FlyDrop"
 DBUS_INTERFACE_NAME = "es.pulsaros.FlyDrop"
 
+# Deteccion de corte: si una sesion en curso no ve bytes durante
+# STALL_WARN_S s, la UI muestra 'sin datos' (el corte duro a los
+# STALL_ABORT_S s del protocolo lo hace el servidor).
+STALL_WARN_S = 5.0
+STALL_SPEED_TEXT = "⚠ sin datos"
+STALL_MESSAGE = "Sin datos del dispositivo — ¿pantalla del móvil encendida?"
+
 
 def get_gui_env():
     env = dict(os.environ)
@@ -60,6 +67,39 @@ def get_gui_env():
         if os.path.exists(os.path.join(xdg_runtime, "wayland-0")):
             env["WAYLAND_DISPLAY"] = "wayland-0"
     return env
+
+
+def ensure_gui_env():
+    """Complete os.environ with the graphical session variables, in-process.
+
+    flydrop.service can be started by systemd before gnome-session has run
+    ``systemctl import-environment``: GTK then initialises without a screen
+    and creating the AppIndicator tray segfaults inside libgtk. Probing the
+    runtime sockets makes Gtk.init_check() succeed and the tray come up no
+    matter whether systemd or the autostart .desktop started the daemon.
+    """
+    if not os.environ.get("WAYLAND_DISPLAY"):
+        xdg_runtime = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+        try:
+            sockets = sorted(
+                name for name in os.listdir(xdg_runtime)
+                if name.startswith("wayland-") and not name.endswith("-lock")
+            )
+        except OSError:
+            sockets = []
+        if sockets:
+            os.environ["WAYLAND_DISPLAY"] = sockets[0]
+
+    if not os.environ.get("DISPLAY"):
+        try:
+            xs = sorted(
+                name for name in os.listdir("/tmp/.X11-unix")
+                if name.startswith("X")
+            )
+        except OSError:
+            xs = []
+        if xs:
+            os.environ["DISPLAY"] = f":{xs[0][1:]}"
 
 
 class FlyDropDBusService(dbus.service.Object):
@@ -114,7 +154,7 @@ class FlyDropDBusService(dbus.service.Object):
 
     @dbus.service.method(DBUS_INTERFACE_NAME, in_signature="s", out_signature="s")
     def GetTransferStatus(self, session_id):
-        status_info = self.daemon.transfer_states.get(session_id, {
+        status_info = dict(self.daemon.transfer_states.get(session_id, {
             "session_id": session_id,
             "status": "unknown",
             "progress": 0.0,
@@ -123,7 +163,15 @@ class FlyDropDBusService(dbus.service.Object):
             "total_bytes_str": "",
             "success": False,
             "message": ""
-        })
+        }))
+        stalled = False
+        if status_info.get("status") == "in_progress":
+            age = time.time() - self.daemon.transfer_updated_at.get(session_id, time.time())
+            stalled = age >= STALL_WARN_S
+        status_info["stalled"] = stalled
+        if stalled:
+            status_info["speed_str"] = STALL_SPEED_TEXT
+            status_info["message"] = STALL_MESSAGE
         return json.dumps(status_info, ensure_ascii=False)
 
     @dbus.service.method(DBUS_INTERFACE_NAME, out_signature="b")
@@ -193,10 +241,13 @@ class FlyDropDaemon:
         self.pending_decisions = {}
         self.active_transfers = {}
         self.transfer_states = {}
+        self.transfer_updated_at = {}   # sid -> ultimo byte visto (deteccion de corte)
         self.dbus_service = None
         self.main_loop = None
         self.indicator = None
         self.indicator_auto_accept_item = None
+        self._tray_retry_id = None
+        self._tray_retry_count = 0
 
         self.discovery = DeviceDiscovery(
             on_device_found=self._on_device_found,
@@ -215,6 +266,29 @@ class FlyDropDaemon:
     def _setup_indicator(self):
         if not AppIndicator:
             logger.warning("AyatanaAppIndicator3 / AppIndicator3 not available, skipping panel tray indicator")
+            return
+
+        # GTK widget creation segfaults without a screen, and Gtk.init_check()
+        # is the only safe way to find out whether there is one: initialise
+        # GTK explicitly (filling in missing display variables first) and, when
+        # no usable session exists *yet*, retry in a few seconds instead of
+        # giving up — at boot the daemon is often started before the desktop.
+        ensure_gui_env()
+        try:
+            # Not `gtk_ready, _ = ...`: that would shadow the i18n `_`
+            # helper used below inside this method.
+            gtk_ready = Gtk.init_check()[0]
+        except Exception as e:
+            logger.warning("Gtk.init_check failed (%s), deferring panel tray indicator", e)
+            self._schedule_tray_retry()
+            return
+        if not gtk_ready:
+            if self._tray_retry_count:
+                logger.debug("Still no usable graphical session (attempt %d), daemon keeps running",
+                             self._tray_retry_count + 1)
+            else:
+                logger.info("No usable graphical session yet, deferring panel tray indicator (daemon keeps running)")
+            self._schedule_tray_retry()
             return
 
         try:
@@ -260,6 +334,19 @@ class FlyDropDaemon:
         except Exception as e:
             logger.error(f"Failed to setup AppIndicator: {e}")
 
+    def _schedule_tray_retry(self):
+        """Reintenta crear el indicador en 10 s hasta que haya sesion grafica."""
+        if self._tray_retry_id is not None:
+            return
+        self._tray_retry_count += 1
+        self._tray_retry_id = GLib.timeout_add_seconds(10, self._retry_indicator)
+
+    def _retry_indicator(self):
+        self._tray_retry_id = None
+        if self.indicator is None:
+            self._setup_indicator()
+        return GLib.SOURCE_REMOVE
+
     def _on_indicator_auto_accept_toggled(self, widget):
         new_val = widget.get_active()
         self.config.set_value("auto_accept", new_val)
@@ -291,6 +378,10 @@ class FlyDropDaemon:
         if self.dbus_service:
             GLib.idle_add(self.dbus_service.DeviceLost, device.get("fingerprint"))
 
+    def _touch_transfer(self, session_id):
+        """Marca la ultima actividad de la sesion para detectar cortes."""
+        self.transfer_updated_at[session_id] = time.time()
+
     def _on_incoming_transfer_request(self, session, decision_callback=None, accepted=False):
         sender_alias = session.sender_info.get("alias", "Dispositivo LocalSend")
         files_count = len(session.files_dict)
@@ -311,6 +402,8 @@ class FlyDropDaemon:
             "success": False,
             "message": ""
         }
+
+        self._touch_transfer(session.session_id)
 
         if accepted:
             self._launch_transfer_ui(session.session_id, sender_alias, summary, is_incoming=True)
@@ -353,6 +446,7 @@ class FlyDropDaemon:
                 summary = "Recibiendo archivos..."
                 if session_id in self.transfer_states:
                     self.transfer_states[session_id]["status"] = "in_progress"
+                self._touch_transfer(session_id)
                 self._launch_transfer_ui(session_id, sender_alias, summary, is_incoming=True)
             else:
                 if session_id in self.transfer_states:
@@ -361,6 +455,7 @@ class FlyDropDaemon:
         return False
 
     def _on_transfer_progress(self, session):
+        self._touch_transfer(session.session_id)
         # Nunca por encima de 1: los reintentos de un archivo descartan el
         # progreso anterior, pero por si acaso se salta el techo.
         fraction = session.transferred_bytes / session.total_size if session.total_size > 0 else 0.0
@@ -414,12 +509,16 @@ class FlyDropDaemon:
             )
 
         # If incoming transfer was successful, auto-open the received file
+        # (unless the user disabled it in Settings)
         if success and session.is_incoming and session.saved_files:
             last_file = session.saved_files[-1]
-            try:
-                subprocess.Popen(["xdg-open", last_file], env=get_gui_env())
-            except Exception as e:
-                logger.error(f"Error auto-opening received file: {e}")
+            if self.config.auto_open:
+                try:
+                    subprocess.Popen(["xdg-open", last_file], env=get_gui_env())
+                except Exception as e:
+                    logger.error(f"Error auto-opening received file: {e}")
+            else:
+                logger.info("Auto-open disabled, skipping %s", last_file)
 
     def _launch_transfer_ui(self, session_id, peer_name, summary, is_incoming=True):
         ui_script = os.path.join(BASE_DIR, "ui", "transfer_window.py")
@@ -466,11 +565,13 @@ class FlyDropDaemon:
             "success": False,
             "message": ""
         }
+        self._touch_transfer(session_id)
 
         self._launch_transfer_ui(session_id, peer_name, summary, is_incoming=False)
 
         def on_prog(fraction, speed_bps, current_file, transferred, total):
             fraction = min(1.0, float(fraction))
+            self._touch_transfer(session_id)
             speed_mb = speed_bps / (1024 * 1024)
             speed_str = f"{speed_mb:.1f} MB/s" if speed_mb >= 1.0 else f"{speed_bps / 1024:.0f} KB/s"
             total_mb = total / (1024 * 1024)
@@ -553,11 +654,13 @@ class FlyDropDaemon:
             "success": False,
             "message": ""
         }
+        self._touch_transfer(session_id)
 
         self._launch_transfer_ui(session_id, peer_name, summary, is_incoming=False)
 
         def on_prog(fraction, speed_bps, current_file, transferred, total):
             fraction = min(1.0, float(fraction))
+            self._touch_transfer(session_id)
             self.transfer_states[session_id] = {
                 "session_id": session_id,
                 "status": "in_progress",

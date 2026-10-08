@@ -85,9 +85,12 @@ class PromptWindow(Gtk.Window):
             background: rgba(22, 22, 28, 0.96);
             border: 1px solid rgba(255, 255, 255, 0.16);
             border-radius: 28px;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65);
+            /* La sombra tiene que caber entera en el margen transparente:
+               si se recorta contra el borde de la ventana queda un marco
+               duro con esquinas en punta. */
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
             padding: 24px;
-            margin: 12px;
+            margin: 32px 32px 42px;
         }
         window.flydrop-prompt-window .dim-label {
             color: rgba(255, 255, 255, 0.70);

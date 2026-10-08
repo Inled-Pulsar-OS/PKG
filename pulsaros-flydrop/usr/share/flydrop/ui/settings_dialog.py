@@ -64,6 +64,14 @@ class SettingsWindow(Adw.PreferencesWindow):
         self.auto_accept_row.connect("notify::active", self.on_auto_accept_toggled)
         group_receiving.add(self.auto_accept_row)
 
+        # Auto Open Switch Row
+        self.auto_open_row = Adw.SwitchRow()
+        self.auto_open_row.set_title(_("auto_open"))
+        self.auto_open_row.set_subtitle(_("auto_open_subtitle"))
+        self.auto_open_row.set_active(self.config.auto_open)
+        self.auto_open_row.connect("notify::active", self.on_auto_open_toggled)
+        group_receiving.add(self.auto_open_row)
+
         # Download Directory Action Row
         self.dir_row = Adw.ActionRow()
         self.dir_row.set_title(_("save_destination"))
@@ -140,6 +148,11 @@ class SettingsWindow(Adw.PreferencesWindow):
         val = switch.get_active()
         self.config.auto_accept = val
         self._notify_dbus_config("auto_accept", val)
+
+    def on_auto_open_toggled(self, switch, pspec):
+        val = switch.get_active()
+        self.config.auto_open = val
+        self._notify_dbus_config("auto_open", val)
 
     def on_choose_folder_clicked(self, btn):
         dialog = Gtk.FileDialog()
