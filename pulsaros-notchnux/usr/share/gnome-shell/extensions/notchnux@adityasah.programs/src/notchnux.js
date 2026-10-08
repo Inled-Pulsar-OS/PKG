@@ -95,6 +95,8 @@ export const NotchNux = GObject.registerClass({
         this._calendarScrollFlushId = 0;
         this._collapseTimeoutId = null;
         this._expandTimeoutId = null;
+        this._hoverWatchId = 0;
+        this._outsideCount = 0;
         this._weatherRefreshId = null;
         // Media timeline scrubber state. _timelineTickId drives the 1s progress
         // tick; the rest cache the current track's timing so scroll-to-seek and
@@ -637,6 +639,7 @@ export const NotchNux = GObject.registerClass({
     }
 
     _clearTimers() {
+        this._stopHoverWatch();
         if (this._collapseTimeoutId) {
             GLib.Source.remove(this._collapseTimeoutId);
             this._collapseTimeoutId = null;
@@ -794,6 +797,55 @@ export const NotchNux = GObject.registerClass({
         let w = this.get_width();
         let h = this.get_height();
         return px >= ax && px <= ax + w && py >= ay && py <= ay + h;
+    }
+
+    _startHoverWatch() {
+        if (this._hoverWatchId) return;
+        this._outsideCount = 0;
+        this._hoverWatchId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+            if (!this.isExpanded) {
+                this._hoverWatchId = 0;
+                return GLib.SOURCE_REMOVE;
+            }
+
+            if (this._anyOwnedMenuOpen() || this.extension?._externalDragActive || this.extension?._companionDragActive) {
+                this._outsideCount = 0;
+                return GLib.SOURCE_CONTINUE;
+            }
+
+            let [px, py] = global.get_pointer();
+            let [ax, ay] = this.get_transformed_position();
+            let w = this.get_width();
+            let h = this.get_height();
+
+            let inside = (px >= ax - 4 && px <= ax + w + 4 && py >= ay - 4 && py <= ay + h + 4);
+            if (!inside && this._clickInOwnedMenu(null, px, py)) {
+                inside = true;
+            }
+
+            if (inside) {
+                this._outsideCount = 0;
+                this._pointerInside = true;
+            } else {
+                this._pointerInside = false;
+                this._outsideCount++;
+                if (this._outsideCount >= 3) {
+                    this._hoverWatchId = 0;
+                    this.collapse();
+                    return GLib.SOURCE_REMOVE;
+                }
+            }
+
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    _stopHoverWatch() {
+        if (this._hoverWatchId) {
+            GLib.Source.remove(this._hoverWatchId);
+            this._hoverWatchId = 0;
+        }
+        this._outsideCount = 0;
     }
 
     // ============================================================
@@ -6422,10 +6474,14 @@ export const NotchNux = GObject.registerClass({
                 this._scrollActiveTabIntoView();
             return GLib.SOURCE_REMOVE;
         });
+
+        // Watch pointer position to guarantee auto-collapse when moving outside (even in fullscreen apps)
+        this._startHoverWatch();
     }
 
     collapse() {
         if (!this.isExpanded) return;
+        this._stopHoverWatch();
         this.isExpanded = false;
         // The drag-out card is command-driven: take it down with the shelf.
         this.extension?._hideDragCards?.();
