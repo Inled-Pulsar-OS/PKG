@@ -111,7 +111,8 @@ export default class NotchNuxExtension extends Extension {
         let mode = this._config.displayMonitor;
 
         let chromeOptions = {
-            trackFullscreen: false
+            trackFullscreen: false,
+            affectsStruts: false
         };
 
         if (mode === 'all') {

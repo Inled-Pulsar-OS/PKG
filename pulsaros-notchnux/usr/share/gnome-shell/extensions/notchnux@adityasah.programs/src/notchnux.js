@@ -455,6 +455,16 @@ export const NotchNux = GObject.registerClass({
         }
         if (!this.isExpanded) {
             this._pillClock.set_text(msg);
+            this._inhibitUnredirect();
+            this._raiseToTop();
+            this.remove_all_transitions();
+            this.opacity = 255;
+            this.visible = true;
+            this.ease({
+                translation_y: 0,
+                duration: 200,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD
+            });
             this._syncPillWidth();
         }
         this._pillClipboardTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 3500, () => {
@@ -463,6 +473,8 @@ export const NotchNux = GObject.registerClass({
             if (!this.isExpanded) {
                 this._updateClock();
                 this._syncPillWidth();
+                this._syncWithPanelPosition();
+                this._updateUnredirect();
             }
             return GLib.SOURCE_REMOVE;
         });
@@ -676,6 +688,10 @@ export const NotchNux = GObject.registerClass({
             GLib.Source.remove(this._trayReRenderId);
             this._trayReRenderId = 0;
         }
+        if (this._pillClipboardTimer) {
+            GLib.Source.remove(this._pillClipboardTimer);
+            this._pillClipboardTimer = 0;
+        }
     }
 
     // PulsarOS multi-monitor support
@@ -736,7 +752,7 @@ export const NotchNux = GObject.registerClass({
             }
         } catch (_) {}
 
-        if (this.isExpanded || this._pointerInside || global._notchnuxActive) {
+        if (this.isExpanded || this._pointerInside || global._notchnuxActive || this._pillClipboardMessage) {
             this.translation_y = 0;
             this.opacity = 255;
             return;
@@ -6395,6 +6411,8 @@ export const NotchNux = GObject.registerClass({
     // ============================================================
     expand() {
         if (this.isExpanded) return;
+        this._inhibitUnredirect();
+        this._raiseToTop();
         global._notchnuxActive = true;
         this._syncWithPanelPosition();
         // A notification peek is a transient pill state; opening the full
@@ -6502,6 +6520,7 @@ export const NotchNux = GObject.registerClass({
         if (!this._pointerInside && !this._anyOwnedMenuOpen()) {
             global._notchnuxActive = false;
             this._syncWithPanelPosition();
+            this._updateUnredirect();
         }
         this._closeScanOverlay();
         this._stopMediaAnimations();
@@ -6548,6 +6567,7 @@ export const NotchNux = GObject.registerClass({
             duration: DURATION, mode: CURVE,
             onComplete: () => {
                 this._syncWithPanelPosition();
+                this._updateUnredirect();
             } });
     }
 
