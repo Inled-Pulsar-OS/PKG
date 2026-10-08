@@ -33,11 +33,11 @@ export default class NotchNuxExtension extends Extension {
         this._setupExtensionDbus();
         this._startDropHelper();
 
-        // Restore notch reactivity when an external drag ends
+        // Restore notch reactivity when an external drag ends (unless shelf companion card is active)
         this._dragEndId = Main.xdndHandler?.connect?.('drag-end', () => {
             this._externalDragActive = false;
             this._companionDragActive = false;
-            if (this._notchesReactiveOff) {
+            if (this._notchesReactiveOff && !this._pendingCardTarget) {
                 this._notchesReactiveOff = false;
                 this._setNotchesReactive(true);
             }
@@ -449,10 +449,15 @@ export default class NotchNuxExtension extends Extension {
 
     _notchZoneBox(notch) {
         let [nx, ny] = notch.get_transformed_position();
-        let [nw, nh] = notch.get_transformed_size();
+        let nw = (notch.isExpanded || notch.width > 300) ? 640 : notch.get_width();
+        let nh = notch.isExpanded ? (notch._measureDashboardHeight ? Math.max(300, notch._measureDashboardHeight()) : Math.max(300, notch.get_height())) : notch.get_height();
+        let mon = (Main.layoutManager.monitors ?? []).find(m =>
+            nx + 100 >= m.x && nx + 100 < m.x + m.width);
+        let cx = mon ? mon.x + Math.floor((mon.width - nw) / 2) : nx;
+        let cy = mon ? mon.y : ny;
         return {
-            x: Math.round(nx) - 40, y: Math.round(ny) - 40,
-            w: Math.round(nw) + 80, h: Math.round(nh) + 80,
+            x: Math.round(cx) - 20, y: Math.round(cy) - 10,
+            w: Math.round(nw) + 40, h: Math.round(nh) + 40,
         };
     }
 

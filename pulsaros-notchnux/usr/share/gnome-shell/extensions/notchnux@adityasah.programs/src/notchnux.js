@@ -728,8 +728,13 @@ export const NotchNux = GObject.registerClass({
             return;
         }
 
-        let panelBox = Main.layoutManager.panelBox;
-        if (!panelBox) return;
+        let monitorIdx = this._getMonitorIndex();
+        let inFullscreen = false;
+        try {
+            if (global.display.get_monitor_in_fullscreen(monitorIdx)) {
+                inFullscreen = true;
+            }
+        } catch (_) {}
 
         if (this.isExpanded || this._pointerInside || global._notchnuxActive) {
             this.translation_y = 0;
@@ -737,11 +742,15 @@ export const NotchNux = GObject.registerClass({
             return;
         }
 
-        let py = panelBox.y;
-        this.translation_y = py;
-        if (!panelBox.visible || py < -15) {
+        let panelBox = Main.layoutManager.panelBox;
+        let py = panelBox ? panelBox.y : 0;
+        let panelHidden = panelBox ? (!panelBox.visible || py < -15) : false;
+
+        if (inFullscreen || panelHidden) {
+            this.translation_y = -PILL_HEIGHT - 10;
             this.opacity = 0;
         } else {
+            this.translation_y = 0;
             this.opacity = 255;
         }
     }
@@ -6475,6 +6484,11 @@ export const NotchNux = GObject.registerClass({
             return GLib.SOURCE_REMOVE;
         });
 
+        // Ensure the helper window covers the full expanded shelf area
+        if (this._activeTab === 'shelf' && (this._shelf?.getFiles?.()?.length ?? 0) > 0) {
+            this.extension?._showCompanionCard?.(this._shelf.getFiles().map(f => f.uri), this);
+        }
+
         // Watch pointer position to guarantee auto-collapse when moving outside (even in fullscreen apps)
         this._startHoverWatch();
     }
@@ -6531,7 +6545,10 @@ export const NotchNux = GObject.registerClass({
             onComplete: () => { this._dashboard.visible = false; } });
         this.ease({
             x: targetX, y: targetY, width: pillW, height: PILL_HEIGHT,
-            duration: DURATION, mode: CURVE });
+            duration: DURATION, mode: CURVE,
+            onComplete: () => {
+                this._syncWithPanelPosition();
+            } });
     }
 
     // ============================================================
