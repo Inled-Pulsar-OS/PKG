@@ -535,7 +535,7 @@ index 201d2ab3b..a76b38189 100644
 +          safe_set_boolean (glass_settings, glass_schema, "enable-menu-glass", TRUE);
 +          safe_set_boolean (glass_settings, glass_schema, "enable-notification-glass", TRUE);
 +          safe_set_boolean (glass_settings, glass_schema, "enable-osd-glass", TRUE);
-+          safe_set_boolean (glass_settings, glass_schema, "enable-quick-settings-glass", FALSE);
++          safe_set_boolean (glass_settings, glass_schema, "enable-quick-settings-glass", TRUE);
 +          safe_set_double (glass_settings, glass_schema, "glass-chroma-strength", 0.0);
 +          safe_set_double (glass_settings, glass_schema, "glass-displacement-scale", 188.37209302325581);
 +          safe_set_double (glass_settings, glass_schema, "glass-edge-smoothing", 0.0);
@@ -568,7 +568,7 @@ index 201d2ab3b..a76b38189 100644
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-menu-glass 'true' ; "
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-notification-glass 'true' ; "
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-osd-glass 'true' ; "
-+        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-quick-settings-glass 'false' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-quick-settings-glass 'true' ; "
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/menu-corner-radius '14.0' ; "
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/menu-glass-expand '4' ; "
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/panel-menu-corner-radius '14.0' ; "

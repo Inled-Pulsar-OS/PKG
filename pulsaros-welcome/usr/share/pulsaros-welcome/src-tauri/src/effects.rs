@@ -226,7 +226,7 @@ fn apply_glass_settings() -> Result<(), String> {
         (glass, "dock-tint-color", "'#000000'"),
         (glass, "enable-application-glass", "true"),
         (glass, "enable-menu-glass", "true"),
-        (glass, "enable-quick-settings-glass", "false"),
+        (glass, "enable-quick-settings-glass", "true"),
         (glass, "glass-chroma-strength", "0.0"),
         (glass, "glass-displacement-scale", "188.37209302325581"),
         (glass, "glass-edge-smoothing", "0.0"),

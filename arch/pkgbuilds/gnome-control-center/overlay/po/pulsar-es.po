@@ -103,3 +103,27 @@ msgstr "Espacios de pantalla completa estilo macOS"
 
 msgid "Moving maximized apps to dedicated workspaces and auto-hiding the top bar"
 msgstr "Al maximizar una app, se traslada a un nuevo espacio y oculta la barra superior"
+
+msgid "Control Centre"
+msgstr "Centro de Control"
+
+msgid "Display and behaviour of the top-right centre of control"
+msgstr "Visualización y comportamiento del centro de control superior"
+
+msgid "macOS Control Centre"
+msgstr "Centro de Control de macOS"
+
+msgid "Replace the GNOME quick settings menu with the macOS-style Control Centre panel"
+msgstr "Sustituye el menú de ajustes rápidos de GNOME por el panel de Control de estilo macOS"
+
+msgid "FlyDrop"
+msgstr "FlyDrop"
+
+msgid "FlyDrop File Sharing"
+msgstr "Compartir Archivos con FlyDrop"
+
+msgid "AirDrop & LocalSend integration to share files between devices"
+msgstr "Integración AirDrop y LocalSend para compartir archivos entre dispositivos"
+
+msgid "Settings…"
+msgstr "Ajustes…"

@@ -126,6 +126,17 @@ template $CcBackgroundPanel: $CcPanel {
           }
 
           Adw.PreferencesGroup {
+            title: _("Control Centre");
+            description: _("Display and behaviour of the top-right centre of control");
+
+            Adw.SwitchRow cc_switch_row {
+              title: _("macOS Control Centre");
+              subtitle: _("Replace the GNOME quick settings menu with the macOS-style Control Centre panel");
+              notify::active => $on_cc_active_changed_cb(template);
+            }
+          }
+
+          Adw.PreferencesGroup {
             title: _("Theme");
 
             Adw.ActionRow {

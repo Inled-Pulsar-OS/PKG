@@ -71,10 +71,14 @@ struct _CcBackgroundPanel
   AdwSwitchRow *macos_fullscreen_switch_row;
   AdwSwitchRow *liquid_glass_switch_row;
   AdwSwitchRow *notch_switch_row;
+  AdwSwitchRow *cc_switch_row;
 };
 
 /* UUID of the NotchNux shell extension, toggled from the Appearance panel. */
 #define NOTCH_UUID "notchnux@adityasah.programs"
+
+/* UUID of the macOS Control Centre shell extension, toggled from the Appearance panel. */
+#define CC_UUID "macos-control-centre@pulsar.local"
 
 CC_PANEL_REGISTER (CcBackgroundPanel, cc_background_panel)
 
@@ -806,7 +810,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass)
           safe_set_boolean (glass_settings, glass_schema, "enable-menu-glass", TRUE);
           safe_set_boolean (glass_settings, glass_schema, "enable-notification-glass", TRUE);
           safe_set_boolean (glass_settings, glass_schema, "enable-osd-glass", TRUE);
-          safe_set_boolean (glass_settings, glass_schema, "enable-quick-settings-glass", FALSE);
+          safe_set_boolean (glass_settings, glass_schema, "enable-quick-settings-glass", TRUE);
           safe_set_double (glass_settings, glass_schema, "glass-chroma-strength", 0.0);
           safe_set_double (glass_settings, glass_schema, "glass-displacement-scale", 188.37209302325581);
           safe_set_double (glass_settings, glass_schema, "glass-edge-smoothing", 0.0);
@@ -844,7 +848,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass)
         "dconf write /org/gnome/shell/extensions/liquid-glass/enable-menu-glass 'true' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/enable-notification-glass 'true' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/enable-osd-glass 'true' ; "
-        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-quick-settings-glass 'false' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-quick-settings-glass 'true' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/menu-corner-radius '14.0' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/menu-glass-expand '4' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/panel-menu-corner-radius '14.0' ; "
@@ -993,6 +997,15 @@ on_notch_prefs_clicked_cb (CcBackgroundPanel *self)
 }
 
 static void
+on_cc_active_changed_cb (CcBackgroundPanel *self)
+{
+  if (!self->cc_switch_row)
+    return;
+
+  set_extension_enabled (CC_UUID, adw_switch_row_get_active (self->cc_switch_row));
+}
+
+static void
 cc_background_panel_class_init (CcBackgroundPanelClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
@@ -1020,6 +1033,7 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_fullscreen_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, liquid_glass_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, notch_switch_row);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, cc_switch_row);
 
   gtk_widget_class_bind_template_callback (widget_class, on_color_scheme_toggle_active_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_chooser_background_chosen_cb);
@@ -1035,6 +1049,7 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_callback (widget_class, on_macos_fullscreen_active_changed_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_notch_active_changed_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_notch_prefs_clicked_cb);
+  gtk_widget_class_bind_template_callback (widget_class, on_cc_active_changed_cb);
 }
 
 static void
@@ -1111,6 +1126,14 @@ cc_background_panel_init (CcBackgroundPanel *self)
       g_signal_handlers_block_by_func (self->notch_switch_row, on_notch_active_changed_cb, self);
       adw_switch_row_set_active (self->notch_switch_row, notch_active);
       g_signal_handlers_unblock_by_func (self->notch_switch_row, on_notch_active_changed_cb, self);
+    }
+
+  if (self->cc_switch_row)
+    {
+      gboolean cc_active = is_extension_enabled (CC_UUID);
+      g_signal_handlers_block_by_func (self->cc_switch_row, on_cc_active_changed_cb, self);
+      adw_switch_row_set_active (self->cc_switch_row, cc_active);
+      g_signal_handlers_unblock_by_func (self->cc_switch_row, on_cc_active_changed_cb, self);
     }
 
   self->connection = g_application_get_dbus_connection (g_application_get_default ());

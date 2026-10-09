@@ -255,15 +255,15 @@ row_data_new (CcPanelCategory     category,
   /* Setup the row */
   grid = gtk_grid_new ();
   gtk_widget_set_hexpand (grid, TRUE);
-  gtk_widget_set_margin_top (grid, 12);
-  gtk_widget_set_margin_bottom (grid, 12);
+  gtk_widget_set_margin_top (grid, 7);
+  gtk_widget_set_margin_bottom (grid, 7);
   gtk_widget_set_margin_start (grid, 6);
   gtk_widget_set_margin_end (grid, 6);
   gtk_grid_set_column_spacing (GTK_GRID (grid), 12);
 
   /* Icon */
   image = gtk_image_new ();
-  gtk_image_set_pixel_size (GTK_IMAGE (image), 28);
+  gtk_image_set_pixel_size (GTK_IMAGE (image), 24);
   gtk_widget_set_valign (image, GTK_ALIGN_CENTER);
 
   const gchar *apple_icon = NULL;
