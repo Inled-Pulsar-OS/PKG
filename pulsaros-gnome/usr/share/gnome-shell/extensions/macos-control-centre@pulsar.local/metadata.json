@@ -1,0 +1,7 @@
+{
+  "uuid": "macos-control-centre@pulsar.local",
+  "name": "macOS Control Centre",
+  "description": "Replaces Quick Settings with a macOS-styled Control Centre panel for Pulsar OS.",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "version": 9
+}

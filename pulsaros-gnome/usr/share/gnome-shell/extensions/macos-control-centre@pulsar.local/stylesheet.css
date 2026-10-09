@@ -1,0 +1,331 @@
+/* macOS Control Centre for Pulsar OS - Floating Glass UI */
+
+/* 1. Only style Quick Settings popup while this extension is active */
+.mac-cc-quick-settings,
+.mac-cc-quick-settings .popup-menu-content,
+.popup-menu-boxpointer.mac-cc-quick-settings,
+.quick-settings-menu.mac-cc-quick-settings,
+.quick-settings-menu.mac-cc-quick-settings .popup-menu-content {
+    -arrow-background-color: transparent !important;
+    -arrow-border-color: transparent !important;
+    -arrow-border-width: 0px !important;
+    -arrow-border-radius: 0px !important;
+    -boxpointer-gap: 0px !important;
+    background-color: transparent !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0px !important;
+    padding: 0px !important;
+    margin: 0px !important;
+}
+
+/* 2. Main Containers - Zero Enclosing Background (Only Floating Pills) */
+.mac-cc,
+.mac-subview {
+    padding: 8px 4px;
+    spacing: 12px;
+    width: 336px;
+    background-color: transparent !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* 3. Dark Theme Floating Glass Pills (Rounded & Liquid Glass Compatible) */
+.mac-dark-theme .mac-tile,
+.mac-dark-theme .mac-circle,
+.mac-dark-theme .mac-media,
+.mac-dark-theme .mac-slider-tile,
+.mac-dark-theme .mac-sub-card,
+.mac-dark-theme .mac-bottom-action-btn,
+.mac-dark-theme .mac-back-btn {
+    background-color: rgba(30, 30, 40, 0.76);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    color: #ffffff;
+}
+
+.mac-dark-theme .mac-title { color: #ffffff; }
+.mac-dark-theme .mac-sub { color: rgba(255, 255, 255, 0.70); }
+.mac-dark-theme .mac-icon { color: #ffffff; }
+.mac-dark-theme .mac-chevron { color: rgba(255, 255, 255, 0.45); }
+
+.mac-dark-theme .mac-bubble {
+    background-color: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+}
+.mac-dark-theme .mac-bubble.active,
+.mac-dark-theme .mac-bubble:checked {
+    background-color: #007AFF !important;
+    color: #ffffff !important;
+}
+
+.mac-dark-theme .mac-circle.active,
+.mac-dark-theme .mac-circle:checked {
+    background-color: #007AFF !important;
+    border-color: #007AFF !important;
+    color: #ffffff !important;
+}
+
+.mac-dark-theme .mac-item-btn:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+.mac-dark-theme .mac-item-btn.active {
+    background-color: rgba(0, 122, 255, 0.22);
+}
+
+/* 4. Light Theme Floating Glass Pills (Rounded & Liquid Glass Compatible) */
+.mac-light-theme .mac-tile,
+.mac-light-theme .mac-circle,
+.mac-light-theme .mac-media,
+.mac-light-theme .mac-slider-tile,
+.mac-light-theme .mac-sub-card,
+.mac-light-theme .mac-bottom-action-btn,
+.mac-light-theme .mac-back-btn {
+    background-color: rgba(245, 245, 247, 0.85);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    color: #1d1d1f;
+}
+
+.mac-light-theme .mac-title { color: #1d1d1f; }
+.mac-light-theme .mac-sub { color: rgba(0, 0, 0, 0.60); }
+.mac-light-theme .mac-icon { color: #1d1d1f; }
+.mac-light-theme .mac-chevron { color: rgba(0, 0, 0, 0.40); }
+
+.mac-light-theme .mac-bubble {
+    background-color: rgba(0, 0, 0, 0.08);
+    color: #1d1d1f;
+}
+.mac-light-theme .mac-bubble.active,
+.mac-light-theme .mac-bubble:checked {
+    background-color: #007AFF !important;
+    color: #ffffff !important;
+}
+
+.mac-light-theme .mac-circle.active,
+.mac-light-theme .mac-circle:checked {
+    background-color: #007AFF !important;
+    border-color: #007AFF !important;
+    color: #ffffff !important;
+}
+
+.mac-light-theme .mac-item-btn:hover {
+    background-color: rgba(0, 0, 0, 0.06);
+}
+.mac-light-theme .mac-item-btn.active {
+    background-color: rgba(0, 122, 255, 0.15);
+}
+
+/* 5. Layout Rows & Columns */
+.mac-row { spacing: 12px; }
+.mac-col { spacing: 12px; width: 156px; }
+
+/* 6. Large Tiles (Pills) */
+.mac-tile {
+    width: 156px;
+    min-width: 156px;
+    max-width: 156px;
+    height: 62px;
+    min-height: 62px;
+    border-radius: 20px;
+    padding: 0 8px;
+}
+
+.mac-bubble {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    max-width: 36px;
+    min-height: 36px;
+    max-height: 36px;
+    border-radius: 18px;
+    padding: 0;
+    margin-right: 6px;
+}
+.mac-bubble:hover { opacity: 0.85; }
+
+.mac-tile-content-btn {
+    background-color: transparent;
+    border-radius: 14px;
+    padding: 4px 4px;
+}
+.mac-tile-content-btn:hover {
+    background-color: rgba(128, 128, 128, 0.15);
+}
+
+.mac-icon { icon-size: 18px; }
+.mac-small { icon-size: 14px; }
+
+.mac-title { font-size: 11px; font-weight: 700; }
+.mac-sub { font-size: 9px; font-weight: 500; }
+
+/* 7. Circle Buttons */
+.mac-circle {
+    width: 72px;
+    min-width: 72px;
+    max-width: 72px;
+    height: 62px;
+    min-height: 62px;
+    border-radius: 20px;
+    padding: 0;
+}
+.mac-circle .mac-icon { icon-size: 22px; }
+.mac-circle:hover { opacity: 0.85; }
+
+/* 8. Media Tile */
+.mac-media {
+    width: 156px;
+    min-width: 156px;
+    max-width: 156px;
+    height: 136px;
+    min-height: 136px;
+    max-height: 136px;
+    border-radius: 20px;
+    padding: 10px;
+}
+
+.mac-media-art {
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    max-height: 44px;
+    border-radius: 10px;
+    background-color: rgba(128, 128, 128, 0.25);
+    margin-bottom: 6px;
+}
+
+.mac-media-title {
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.mac-media-controls {
+    spacing: 12px;
+}
+
+.mac-media-button {
+    width: 30px;
+    min-width: 30px;
+    max-width: 30px;
+    height: 30px;
+    min-height: 30px;
+    max-height: 30px;
+    border-radius: 15px;
+    background-color: transparent;
+    padding: 0;
+}
+.mac-media-button:hover { background-color: rgba(128, 128, 128, 0.2); }
+.mac-media-icon { icon-size: 16px; }
+
+/* 9. Sliders */
+.mac-slider-tile {
+    width: 302px;
+    height: 44px;
+    padding: 8px 16px;
+    border-radius: 22px;
+    spacing: 2px;
+}
+.mac-slider-row { spacing: 10px; }
+.mac-slider-tile .slider {
+    -slider-height: 8px;
+    -slider-background-color: rgba(128, 128, 128, 0.35);
+    -slider-border-color: transparent;
+    -slider-active-background-color: #007AFF;
+    -slider-active-border-color: transparent;
+    -slider-border-width: 0px;
+    -slider-handle-radius: 0px;
+    height: 16px;
+    min-width: 140px;
+}
+
+.mac-airplay {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    border-radius: 12px;
+    background-color: rgba(128, 128, 128, 0.2);
+    padding: 0;
+}
+.mac-airplay:hover { background-color: rgba(128, 128, 128, 0.35); }
+
+/* 10. Subview (Wi-Fi & Bluetooth Detail Views) */
+.mac-sub-header {
+    spacing: 12px;
+    padding: 4px 6px;
+}
+.mac-back-btn {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    border-radius: 17px;
+    padding: 0;
+}
+.mac-back-btn:hover { opacity: 0.85; }
+
+.mac-sub-title {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+/* 11. Switches use the shell's native `.toggle-switch` widget, themed by the active shell theme. */
+
+/* 12. Subview Card & Device Lists */
+.mac-sub-card {
+    border-radius: 20px;
+    padding: 12px;
+    spacing: 10px;
+    width: 310px;
+}
+
+.mac-sub-section-title {
+    font-size: 10px;
+    font-weight: 700;
+    opacity: 0.65;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 6px;
+}
+
+.mac-scroll-area {
+    height: 230px;
+    min-height: 160px;
+    max-height: 260px;
+}
+
+.mac-item-btn {
+    border-radius: 12px;
+    padding: 8px 10px;
+    spacing: 10px;
+    background-color: transparent;
+}
+
+.mac-item-icon-circle {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    border-radius: 14px;
+    background-color: rgba(128, 128, 128, 0.2);
+}
+.mac-item-icon-circle.connected {
+    background-color: #007AFF;
+    color: #ffffff;
+}
+
+.mac-item-name {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.mac-bottom-action-btn {
+    border-radius: 16px;
+    padding: 8px 16px;
+    font-size: 11px;
+    font-weight: 600;
+}
+.mac-bottom-action-btn:hover {
+    opacity: 0.85;
+}
