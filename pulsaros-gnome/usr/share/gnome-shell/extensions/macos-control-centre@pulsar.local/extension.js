@@ -1,6 +1,7 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Gvc from 'gi://Gvc';
 import Pango from 'gi://Pango';
 import St from 'gi://St';
 import Soup from 'gi://Soup?version=3.0';
@@ -23,6 +24,8 @@ function symbol(name) {
 }
 
 const BL_DIR = '/sys/class/backlight';
+const LG_UUID = 'liquid-glass@thinkingcoding1231.gmail.com';
+
 function findBacklight() {
     try {
         const en = Gio.File.new_for_path(BL_DIR).enumerate_children(
@@ -283,6 +286,20 @@ export default class MacControlCentre extends Extension {
         this._artUrl = null;
         this._building = false;
         this._hiddenChildren = [];
+        this._connectingSsid = null;
+        this._pollId = 0;
+        this._lgActive = false;
+        this._lgKey = null;
+        this._lastVol = null;
+        this._soundDragging = false;
+        this._displayDragging = false;
+        this._dragStartVol = null;
+        this._volCancellable = null;
+        this._lgSettings = null;
+        this._lgPods = [];
+        this._sinkObject = null;
+        this._sinkSignals = [];
+        this._mixerRefId = 0;
 
         try {
             this._ifaceSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
@@ -341,6 +358,8 @@ export default class MacControlCentre extends Extension {
                 this._showView('main');
                 this._updateThemeContrast();
                 this._refresh();
+                this._updateLiquidGlass();
+                this._startPolling();
                 later(250, () => this._dropQuickSettingsBlur());
             }
         })]);
@@ -352,7 +371,50 @@ export default class MacControlCentre extends Extension {
             Gio.DBus.session.signal_subscribe('org.freedesktop.DBus', 'org.freedesktop.DBus',
                 'NameOwnerChanged', null, null, Gio.DBusSignalFlags.NONE,
                 () => later(200, () => this._refreshMedia())),
+            /* Live brightness: keyboard keys go through SettingsDaemon.Power. */
+            Gio.DBus.session.signal_subscribe(null, 'org.freedesktop.DBus.Properties',
+                'PropertiesChanged', '/org/gnome/SettingsDaemon/Power', null,
+                Gio.DBusSignalFlags.NONE,
+                (c, sender, path, iface, signal, params) => {
+                    try {
+                        const [intf, changed] = params.deepUnpack();
+                        if (intf !== 'org.gnome.SettingsDaemon.Power.Screen')
+                            return;
+                        if (!('Brightness' in changed) || typeof changed['Brightness'] !== 'number')
+                            return;
+                        if (!this._display?.slider || this._displayDragging)
+                            return;
+                        // Match _refresh(): prefer the raw backlight scale when
+                        // one is available, otherwise use gsd's 0-100 value.
+                        let v = null;
+                        const bl = findBacklight();
+                        const max = bl ? readInt(`${BL_DIR}/${bl}/max_brightness`) : null;
+                        if (bl && max) {
+                            const cur = readInt(`${BL_DIR}/${bl}/brightness`);
+                            if (cur !== null)
+                                v = Math.min(1, Math.max(0, cur / max));
+                        }
+                        if (v === null)
+                            v = Math.min(1, Math.max(0, changed['Brightness'] / 100));
+                        this._building = true;
+                        this._display.slider.value = v;
+                        this._building = false;
+                    } catch (e) {}
+                }),
         ];
+
+        try {
+            this._lgSettings = new Gio.Settings({schema_id: `org.gnome.shell.extensions.${LG_UUID}`});
+            this._ids.push([this._lgSettings, this._lgSettings.connect(
+                'changed::enable-quick-settings-glass', () => this._updateLiquidGlass())]);
+            this._ids.push([this._lgSettings, this._lgSettings.connect(
+                'changed::quick-settings-apply-to', () => this._updateLiquidGlass())]);
+        } catch (e) {
+            this._lgSettings = null;
+        }
+
+        this._connectVolumeSignals();
+        this._updateLiquidGlass();
         this._refresh();
     }
 
@@ -433,6 +495,30 @@ export default class MacControlCentre extends Extension {
     }
 
     disable() {
+        this._stopPolling();
+
+        if (this._volCancellable) {
+            try {
+                this._volCancellable.cancel();
+            } catch (e) {}
+            this._volCancellable = null;
+        }
+
+        for (const [obj, id] of this._sinkSignals ?? []) {
+            try {
+                obj.disconnect(id);
+            } catch (e) {}
+        }
+        this._sinkSignals = [];
+        this._sinkObject = null;
+        if (this._mixerRefId && this._mixer) {
+            try {
+                this._mixer.disconnect(this._mixerRefId);
+            } catch (e) {}
+        }
+        this._mixerRefId = 0;
+
+        this._applyLiquidGlass(false, false);
         this._applyTransparentContainer(false);
 
         for (const id of this._subs ?? []) {
@@ -471,6 +557,10 @@ export default class MacControlCentre extends Extension {
         this._btList = null;
         this._ifaceSettings = this._notifSettings = this._colorSettings = null;
         this._mixer = null;
+        this._lgSettings = null;
+        this._lgPods = [];
+        this._lgActive = false;
+        this._connectingSsid = null;
     }
 
     _updateThemeContrast() {
@@ -503,6 +593,170 @@ export default class MacControlCentre extends Extension {
             this._refreshBluetoothList();
     }
 
+    /* Live refresh while the menu is open: keeps the Wi-Fi/Bluetooth
+       subtitles and the toggles in sync when things change outside (e.g. a
+       network connects) without re-opening the menu. */
+    _startPolling() {
+        if (this._pollId)
+            return;
+        this._pollId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
+            try {
+                if (!this._qs?.menu?.isOpen) {
+                    this._pollId = null;
+                    return GLib.SOURCE_REMOVE;
+                }
+                this._refresh();
+                this._updateLiquidGlass();
+            } catch (e) {}
+            return GLib.SOURCE_CONTINUE;
+        });
+        GLib.Source.set_name_by_id(this._pollId, '[macos-cc] open-poll');
+    }
+
+    _stopPolling() {
+        if (this._pollId) {
+            GLib.source_remove(this._pollId);
+            this._pollId = 0;
+        }
+    }
+
+    /* Live volume: follows the mixer's default sink so keyboard volume keys
+       (or anything else that changes the sink) are reflected in the CC the
+       moment they happen. Also restores the "pop" feedback sound that stock
+       GNOME plays on a volume change. */
+    _connectVolumeSignals() {
+        try {
+            this._mixer ??= Volume.getMixerControl();
+            if (!this._mixerRefId)
+                this._mixerRefId = this._mixer.connect('default-sink-changed',
+                    () => this._watchDefaultSink());
+            this._watchDefaultSink();
+        } catch (e) {
+            console.warn(`macos-cc: mixer unavailable: ${e}`);
+        }
+    }
+
+    _watchDefaultSink() {
+        for (const [obj, id] of this._sinkSignals ?? []) {
+            try {
+                obj.disconnect(id);
+            } catch (e) {}
+        }
+        this._sinkSignals = [];
+        this._sinkObject = null;
+
+        const sink = this._mixer?.get_default_sink?.();
+        if (!sink)
+            return;
+        this._sinkObject = sink;
+        try {
+            this._lastVol = sink.volume / this._mixer.get_vol_max_norm();
+        } catch (e) {}
+        this._sinkSignals = [
+            [sink, sink.connect('notify::volume', () => this._onSinkVolumeChanged(sink))],
+            [sink, sink.connect('notify::is-muted', () => {
+                const m = sink.is_muted;
+                if (!this._sound?.slider)
+                    return;
+                this._building = true;
+                this._sound.slider.value = m
+                    ? 0
+                    : Math.min(1, sink.volume / this._mixer.get_vol_max_norm());
+                this._building = false;
+            })],
+        ];
+    }
+
+    _onSinkVolumeChanged(sink) {
+        try {
+            if (!this._sound?.slider)
+                return;
+            const vol = Math.min(1, sink.volume / this._mixer.get_vol_max_norm());
+            if (!this._soundDragging) {
+                this._building = true;
+                this._sound.slider.value = vol;
+                this._building = false;
+            }
+
+            const prev = this._lastVol;
+            this._lastVol = vol;
+            if (prev === null)
+                return;
+
+            // Feedback sound, mirroring the shell's own guards: skip while the
+            // user is dragging, while muted, or while audio is actually
+            // playing; ignore reconnects/jumps (too large a delta).
+            if (this._soundDragging || sink.is_muted ||
+                sink.state === Gvc.MixerStreamState.RUNNING)
+                return;
+            const delta = Math.abs(vol - prev);
+            if (delta < 0.005 || delta > 0.35)
+                return;
+            this._playVolumeFeedback();
+        } catch (e) {
+            console.warn(`macos-cc: volume signal: ${e}`);
+        }
+    }
+
+    _playVolumeFeedback() {
+        try {
+            const player = global.display.get_sound_player?.();
+            if (!player)
+                return;
+            if (this._volCancellable)
+                this._volCancellable.cancel();
+            this._volCancellable = new Gio.Cancellable();
+            player.play_from_theme('audio-volume-change', 'Volume changed',
+                this._volCancellable);
+        } catch (e) {
+            console.warn(`macos-cc: volume feedback: ${e}`);
+        }
+    }
+
+    /* Liquid Glass integration -------------------------------------------------
+       When the liquid-glass extension is active on Quick Settings, tag our
+       pills as .quick-toggle so liquid-glass puts a glass sheet behind each
+       one (toggle mode), or, in background mode, let the translucent CSS
+       (.mac-cc-lg) show the glass it already paints behind the whole menu. */
+    _updateLiquidGlass() {
+        let lg = null;
+        try {
+            // lookup() returns the extension whether or not it is running;
+            // stateObj only exists while it is actually enabled.
+            lg = Main.extensionManager?.lookup?.(LG_UUID)?.stateObj ?? null;
+        } catch (e) {}
+        const active = !!lg &&
+            (this._lgSettings?.get_boolean('enable-quick-settings-glass') ?? false);
+        const togglesMode = active &&
+            (this._lgSettings?.get_int('quick-settings-apply-to') === 1);
+        const key = active ? (togglesMode ? 'toggles' : 'background') : 'off';
+        if (key === this._lgKey)
+            return;
+        this._lgKey = key;
+        this._lgActive = active;
+        this._applyLiquidGlass(active, togglesMode);
+    }
+
+    _applyLiquidGlass(active, togglesMode) {
+        if (!this._root)
+            return;
+        const toggle = (actor, cls, on) => {
+            try {
+                if (on)
+                    actor.add_style_class_name(cls);
+                else
+                    actor.remove_style_class_name(cls);
+            } catch (e) {}
+        };
+
+        toggle(this._root, 'mac-cc-lg', active);
+        toggle(this._root, 'mac-lg-toggles', !!togglesMode);
+        for (const pod of this._lgPods ?? []) {
+            if (pod)
+                toggle(pod, 'quick-toggle', !!togglesMode);
+        }
+    }
+
     _buildMainPanel() {
         const panel = new St.BoxLayout({vertical: true, style_class: 'mac-cc'});
         this._mainPanel = panel;
@@ -528,16 +782,18 @@ export default class MacControlCentre extends Extension {
         left.add_child(this._bt);
         left.add_child(this._night);
 
-        right.add_child(this._buildMedia());
+        right.add_child(this._media = this._buildMedia());
         const pair = new St.BoxLayout({style_class: 'mac-row'});
-        pair.add_child(circleButton('mc:stage', '', () => {
+        this._stageCircle = circleButton('mc:stage', '', () => {
             this._qs.menu.close();
             Main.overview.toggle();
-        }));
-        pair.add_child(circleButton('mc:mirror', '', () => {
+        });
+        this._mirrorCircle = circleButton('mc:mirror', '', () => {
             this._qs.menu.close();
             launch('gnome-control-center display');
-        }));
+        });
+        pair.add_child(this._stageCircle);
+        pair.add_child(this._mirrorCircle);
         right.add_child(pair);
 
         top.add_child(left);
@@ -550,13 +806,14 @@ export default class MacControlCentre extends Extension {
         
         this._dark = circleButton('mc:contrast', '', () => this._toggleDark());
         circles.add_child(this._dark);
-        circles.add_child(circleButton('mc:screenshot', '', () => {
+        this._screenshot = circleButton('mc:screenshot', '', () => {
             this._qs.menu.close();
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
                 Main.screenshotUI.open();
                 return GLib.SOURCE_REMOVE;
             });
-        }));
+        });
+        circles.add_child(this._screenshot);
         this._dnd = wideTile('mc:moon', 'Do Not Disturb', 'Off', '', 
             () => this._toggleDnd(), 
             () => { this._qs.menu.close(); launch('gnome-control-center notifications'); }
@@ -600,6 +857,33 @@ export default class MacControlCentre extends Extension {
                 console.warn(`macos-cc: volume: ${e}`);
             }
         });
+        // Track dragging so external syncs don't fight the user, and so the
+        // volume "pop" is only played once, when the drag ends.
+        this._display.slider.connect('drag-begin', () => (this._displayDragging = true));
+        this._display.slider.connect('drag-end', () => (this._displayDragging = false));
+        this._sound.slider.connect('drag-begin', () => {
+            this._soundDragging = true;
+            this._dragStartVol = this._sound.slider.value;
+        });
+        this._sound.slider.connect('drag-end', () => {
+            this._soundDragging = false;
+            try {
+                const sink = this._mixer?.get_default_sink?.();
+                const changed = this._dragStartVol !== null &&
+                    Math.abs(this._sound.slider.value - this._dragStartVol) > 0.01;
+                if (changed && sink && !sink.is_muted &&
+                    sink.state !== Gvc.MixerStreamState.RUNNING)
+                    this._playVolumeFeedback();
+            } catch (e) {}
+            this._dragStartVol = null;
+        });
+
+        // Pills that liquid-glass should treat as toggles when it is active.
+        this._lgPods = [
+            this._wifi, this._bt, this._night, this._dnd,
+            this._dark, this._screenshot, this._stageCircle, this._mirrorCircle,
+            this._media, this._display, this._sound,
+        ];
     }
 
     _buildMedia() {
@@ -771,6 +1055,8 @@ export default class MacControlCentre extends Extension {
         // Check Wi-Fi state
         propGet(Gio.DBus.system, 'org.freedesktop.NetworkManager', '/org/freedesktop/NetworkManager',
             'org.freedesktop.NetworkManager', 'WirelessEnabled', on => {
+                if (!on)
+                    this._connectingSsid = null;
                 if (this._wifiSwitch)
                     this._wifiSwitch.updateState(!!on);
             });
@@ -814,8 +1100,13 @@ export default class MacControlCentre extends Extension {
                     });
 
                     for (const net of networks) {
+                        // A network we just clicked to join: keep it marked as
+                        // selected/connecting until it actually activates.
+                        if (net.inUse && this._connectingSsid === net.ssid)
+                            this._connectingSsid = null;
+                        const connecting = !net.inUse && this._connectingSsid === net.ssid;
                         const item = new St.Button({
-                            style_class: `mac-item-btn ${net.inUse ? 'active' : ''}`,
+                            style_class: `mac-item-btn ${net.inUse ? 'active' : ''} ${connecting ? 'active' : ''}`,
                             can_focus: true,
                             x_expand: true,
                         });
@@ -854,13 +1145,33 @@ export default class MacControlCentre extends Extension {
                                 style: 'color: #007AFF;',
                                 y_align: Clutter.ActorAlign.CENTER,
                             }));
+                        } else if (connecting) {
+                            row.add_child(new St.Label({
+                                text: 'Connecting…',
+                                style_class: 'mac-sub',
+                                style: 'color: #007AFF; font-weight: 600;',
+                                y_align: Clutter.ActorAlign.CENTER,
+                            }));
                         }
 
                         item.set_child(row);
                         item.connect('clicked', () => {
                             if (net.inUse) return;
+                            // Optimistic UI: mark it selected right away and
+                            // keep polling so the main view + list settle as
+                            // soon as the connection activates.
+                            this._connectingSsid = net.ssid;
+                            if (this._wifi?._sub)
+                                this._wifi._sub.text = `${net.ssid}…`;
+                            this._refreshWifiList();
                             launch(`nmcli device wifi connect "${net.ssid}"`);
-                            later(1500, () => this._refreshWifiList());
+                            later(1200, () => this._refreshWifiList());
+                            later(3500, () => {
+                                if (this._connectingSsid) this._refreshWifiList();
+                            });
+                            later(7000, () => {
+                                if (this._connectingSsid) this._refreshWifiList();
+                            });
                         });
                         this._wifiList.add_child(item);
                     }
@@ -1124,6 +1435,7 @@ export default class MacControlCentre extends Extension {
                     setOn(this._wifi._bubble, isEnabled);
                 }
                 if (!isEnabled) {
+                    this._connectingSsid = null;
                     if (this._wifi?._sub) this._wifi._sub.text = 'Off';
                 } else {
                     try {
@@ -1142,8 +1454,11 @@ export default class MacControlCentre extends Extension {
                                         break;
                                     }
                                 }
+                                if (activeSSID && this._connectingSsid === activeSSID)
+                                    this._connectingSsid = null;
                                 if (this._wifi?._sub) {
-                                    this._wifi._sub.text = activeSSID || 'On';
+                                    this._wifi._sub.text = activeSSID ||
+                                        (this._connectingSsid ? `${this._connectingSsid}…` : 'On');
                                 }
                             } catch (e) {
                                 if (this._wifi?._sub) this._wifi._sub.text = 'On';
