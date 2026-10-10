@@ -53,16 +53,13 @@
 
 .mac-dark-theme .mac-bubble {
     background-color: rgba(255, 255, 255, 0.18);
-    /* Liquid-glass clears a toggle's `background-color`, but leaves its
-       box-shadow alone, so the on/off circle keeps its fill through the
-       inset-shadow trick the shell theme itself uses. */
-    box-shadow: inset 0 0 0 1000px rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     color: #ffffff;
 }
 .mac-dark-theme .mac-bubble.active,
 .mac-dark-theme .mac-bubble:checked {
     background-color: #007AFF !important;
-    box-shadow: inset 0 0 0 1000px #007AFF !important;
+    border: 1px solid #007AFF !important;
     color: #ffffff !important;
 }
 
@@ -75,11 +72,11 @@
 
 .mac-dark-theme .mac-item-btn:hover {
     background-color: rgba(255, 255, 255, 0.12);
-    box-shadow: inset 0 0 0 1000px rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.12);
 }
 .mac-dark-theme .mac-item-btn.active {
     background-color: rgba(0, 122, 255, 0.22);
-    box-shadow: inset 0 0 0 1000px rgba(0, 122, 255, 0.22);
+    border: 1px solid rgba(0, 122, 255, 0.22);
 }
 
 /* 4. Light Theme Floating Glass Pills (Rounded & Liquid Glass Compatible) */
@@ -103,13 +100,13 @@
 
 .mac-light-theme .mac-bubble {
     background-color: rgba(0, 0, 0, 0.08);
-    box-shadow: inset 0 0 0 1000px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.08);
     color: #1d1d1f;
 }
 .mac-light-theme .mac-bubble.active,
 .mac-light-theme .mac-bubble:checked {
     background-color: #007AFF !important;
-    box-shadow: inset 0 0 0 1000px #007AFF !important;
+    border: 1px solid #007AFF !important;
     color: #ffffff !important;
 }
 
@@ -122,11 +119,11 @@
 
 .mac-light-theme .mac-item-btn:hover {
     background-color: rgba(0, 0, 0, 0.06);
-    box-shadow: inset 0 0 0 1000px rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(0, 0, 0, 0.06);
 }
 .mac-light-theme .mac-item-btn.active {
     background-color: rgba(0, 122, 255, 0.15);
-    box-shadow: inset 0 0 0 1000px rgba(0, 122, 255, 0.15);
+    border: 1px solid rgba(0, 122, 255, 0.15);
 }
 
 /* 5. Layout Rows & Columns */
@@ -151,15 +148,22 @@
 }
 
 .mac-bubble {
-    width: 36px;
-    height: 36px;
-    min-width: 36px;
-    max-width: 36px;
-    min-height: 36px;
-    max-height: 36px;
+    /* Content is 34px because of the 1px hairline border (St adds borders on
+       top of `width`), keeping the circle 36px total and identical in every
+       mode. The border is what lets St render the inset box-shadow fills in
+       Liquid Glass mode (see section 13): St only draws an inset shadow when
+       the node has a border or a non-transparent background, and Liquid Glass
+       keeps `background-color` transparent. */
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    max-width: 34px;
+    min-height: 34px;
+    max-height: 34px;
     border-radius: 18px;
     padding: 0;
     margin-right: 6px;
+    border: 1px solid transparent;
 }
 .mac-bubble:hover { opacity: 0.85; }
 
@@ -321,19 +325,25 @@
     padding: 8px 10px;
     spacing: 10px;
     background-color: transparent;
+    /* Hairline border so Liquid Glass mode can repaint the state fills via an
+       inset box-shadow (St needs a border to draw inset shadows, see section
+       13). */
+    border: 1px solid transparent;
 }
 
 .mac-item-icon-circle {
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
+    /* 26px content + 1px hairline border = 28px total (the border lets Liquid
+       Glass mode repaint the fill with an inset box-shadow). */
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
     border-radius: 14px;
     background-color: rgba(128, 128, 128, 0.2);
-    box-shadow: inset 0 0 0 1000px rgba(128, 128, 128, 0.2);
+    border: 1px solid rgba(128, 128, 128, 0.2);
 }
 .mac-item-icon-circle.connected {
     background-color: #007AFF;
-    box-shadow: inset 0 0 0 1000px #007AFF;
+    border: 1px solid #007AFF;
     color: #ffffff;
 }
 
@@ -437,15 +447,92 @@
     border: none !important;
     box-shadow: none !important;
 }
+.mac-lg-toggles .mac-back-btn {
+    width: 34px;
+    min-width: 34px;
+    max-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    max-height: 34px;
+    border-radius: 17px;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+/* Liquid Glass clears the background-colour of every actor inside a pod, and
+   St only renders an inset box-shadow when its theme node has a border or a
+   non-transparent background. Every fill below pairs the hairline border
+   declared above with a full-bleed `inset 0 0 0 1000px` shadow (the shell
+   theme itself uses this trick), so the circles and state tints stay visible
+   on glass. Border and shadow share the fill colour = solid shapes. */
+.mac-lg-toggles .mac-dark-theme .mac-bubble {
+    box-shadow: inset 0 0 0 1000px rgba(255, 255, 255, 0.18);
+}
+.mac-lg-toggles .mac-light-theme .mac-bubble {
+    box-shadow: inset 0 0 0 1000px rgba(0, 0, 0, 0.08);
+}
+.mac-lg-toggles .mac-dark-theme .mac-bubble.active,
+.mac-lg-toggles .mac-dark-theme .mac-bubble:checked,
+.mac-lg-toggles .mac-light-theme .mac-bubble.active,
+.mac-lg-toggles .mac-light-theme .mac-bubble:checked {
+    box-shadow: inset 0 0 0 1000px #007AFF !important;
+}
+.mac-lg-toggles .mac-dark-theme .mac-item-btn:hover {
+    box-shadow: inset 0 0 0 1000px rgba(255, 255, 255, 0.12);
+}
+.mac-lg-toggles .mac-dark-theme .mac-item-btn.active {
+    box-shadow: inset 0 0 0 1000px rgba(0, 122, 255, 0.22);
+}
+.mac-lg-toggles .mac-light-theme .mac-item-btn:hover {
+    box-shadow: inset 0 0 0 1000px rgba(0, 0, 0, 0.06);
+}
+.mac-lg-toggles .mac-light-theme .mac-item-btn.active {
+    box-shadow: inset 0 0 0 1000px rgba(0, 122, 255, 0.15);
+}
+.mac-lg-toggles .mac-item-icon-circle {
+    box-shadow: inset 0 0 0 1000px rgba(128, 128, 128, 0.2);
+}
+.mac-lg-toggles .mac-item-icon-circle.connected {
+    box-shadow: inset 0 0 0 1000px #007AFF;
+}
+
+/* Hover feedback on a tile's content area and the media-art cover also lose
+   their `background-color` to Liquid Glass; same border + inset-shadow fix. */
+.mac-lg-toggles .mac-tile-content-btn {
+    border: 1px solid transparent;
+}
+.mac-lg-toggles .mac-tile-content-btn:hover {
+    box-shadow: inset 0 0 0 1000px rgba(128, 128, 128, 0.15);
+}
+.mac-lg-toggles .mac-media-art {
+    width: 42px;
+    min-width: 42px;
+    max-width: 42px;
+    height: 42px;
+    min-height: 42px;
+    max-height: 42px;
+    border-radius: 10px;
+    border: 1px solid rgba(128, 128, 128, 0.25);
+    box-shadow: inset 0 0 0 1000px rgba(128, 128, 128, 0.25);
+    margin-bottom: 6px;
+}
+
 /* Liquid Glass clears the background of every actor inside a pod, so the
-   colours the subview relies on are re-painted with the same inset-shadow
-   trick (see .mac-bubble / .mac-item-icon-circle above). */
+   subview scrollbar is repainted: the trough gets the hairline border +
+   inset-shadow fill, and the handle's 4px transparent theme border is
+   recoloured so the whole strip stays visible on glass. */
 .mac-lg-toggles .mac-sub-card StScrollBar StBin#trough {
-    box-shadow: inset 0 0 0 1000px rgba(128, 128, 128, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 0 0 1000px rgba(255, 255, 255, 0.12);
 }
 .mac-lg-toggles .mac-sub-card StScrollBar StButton#vhandle {
-    border: none !important;
-    box-shadow: inset 0 0 0 1000px #999999;
+    border: 4px solid #999999;
+}
+.mac-lg-toggles .mac-sub-card StScrollBar StButton#vhandle:hover {
+    border: 4px solid #afafaf;
+}
+.mac-lg-toggles .mac-sub-card StScrollBar StButton#vhandle:active {
+    border: 4px solid #dedede;
 }
 
 /* Background mode fallback (apply-to = 0): liquid-glass paints one sheet of
