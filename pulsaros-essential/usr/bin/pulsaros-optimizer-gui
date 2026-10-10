@@ -344,12 +344,15 @@ def get_process_list():
                 with open(f"/proc/{pid_str}/comm", "r") as f:
                     comm = f.read().strip()
                 
-                # Exclude kernel threads (empty cmdline)
+                # Exclude kernel threads (empty cmdline) and the optimizer itself.
                 try:
                     with open(f"/proc/{pid_str}/cmdline", "rb") as f:
-                        if not f.read():
-                            continue
+                        cmdline = f.read()
                 except Exception:
+                    continue
+                if not cmdline:
+                    continue
+                if b"pulsaros-optimizer" in cmdline:
                     continue
 
                 with open(f"/proc/{pid_str}/stat", "r") as f:
@@ -393,10 +396,10 @@ def get_process_list():
     except Exception:
         pass
     
-    # Sort: pinned / learned high habit first, then non-normal priorities, then by memory consumption
+    # Pinned apps and anything the governor is actually touching first, then by
+    # real nice, then by memory. Learned habits carry no scheduling weight.
     processes.sort(key=lambda x: (
-        0 if x["is_user_pinned"] else (1 if x["habit_score"] >= 0.35 else (2 if x["prio_idx"] != 2 else 3)),
-        -x["habit_score"],
+        0 if x["is_user_pinned"] else (1 if x["prio_idx"] != 2 else 2),
         x["nice"],
         -x["rss_mb"]
     ))
@@ -427,8 +430,6 @@ class ProcessRow(Adw.ActionRow):
         title = proc_data["name"]
         if proc_data.get("is_user_pinned"):
             title += " ⭐ [Pinned]"
-        elif proc_data.get("habit_score", 0.0) >= 0.4:
-            title += f" 🔥 [Learned Habit: {proc_data['habit_score']:.2f}]"
         
         self.set_title(title)
         sub = f"PID {self.pid}  •  {proc_data['rss_mb']:.1f} MB RAM  •  Nice {proc_data['nice']}"
@@ -677,8 +678,9 @@ class OptimizerWindow(Adw.ApplicationWindow):
         # 4. LEARNED WORKFLOW PATTERNS & HABIT MODEL
         # -------------------------------------------------------------
         self.patterns_group = Adw.PreferencesGroup(
-            title="Learned Workflow Patterns & Dynamic Priorities",
-            description="Real-time continuous habit engine automatically shielding your active workflow"
+            title="Learned Usage (informational)",
+            description="Records how much you use each app so you can review or forget the history. "
+                        "It does not change scheduling: only the essentials and the focused window are boosted."
         )
         content_box.append(self.patterns_group)
 
@@ -721,7 +723,7 @@ class OptimizerWindow(Adw.ApplicationWindow):
         # -------------------------------------------------------------
         proc_group = Adw.PreferencesGroup(
             title="All Running Processes & Priority Control",
-            description="Adjust and pin scheduling priorities. The optimizer learns your workflow habits continuously."
+            description="Adjust and pin scheduling priorities. Habit learning is informational only and never outranks the essentials or the focused window."
         )
         content_box.append(proc_group)
 
@@ -882,10 +884,10 @@ class OptimizerWindow(Adw.ApplicationWindow):
                 badge.set_text(f"⭐ Pinned: {prio_name}")
                 badge.add_css_class("badge-pinned")
             elif score >= 0.60:
-                badge.set_text(f"🔥 Core Habit ({int(score*100)}%)")
-                badge.add_css_class("badge-turbo")
+                badge.set_text(f"Used often ({int(score*100)}%)")
+                badge.add_css_class("badge-learned")
             else:
-                badge.set_text(f"Learned ({int(score*100)}%)")
+                badge.set_text(f"Used ({int(score*100)}%)")
                 badge.add_css_class("badge-learned")
 
             badge.set_valign(Gtk.Align.CENTER)
@@ -961,9 +963,10 @@ class OptimizerWindow(Adw.ApplicationWindow):
         if query:
             filtered = [p for p in all_procs if query in p["name"].lower() or query == str(p["pid"])]
         else:
-            pinned_or_learned = [p for p in all_procs if p["is_user_pinned"] or p["habit_score"] >= 0.35 or p["prio_idx"] != 2]
-            top_ram = sorted([p for p in all_procs if p not in pinned_or_learned], key=lambda x: -x["rss_mb"])[:10]
-            filtered = pinned_or_learned + top_ram
+            special = [p for p in all_procs if p["is_user_pinned"] or p["prio_idx"] != 2]
+            special_pids = {p["pid"] for p in special}
+            top_ram = sorted([p for p in all_procs if p["pid"] not in special_pids], key=lambda x: -x["rss_mb"])[:10]
+            filtered = special + top_ram
 
         current_pids = {p["pid"] for p in filtered}
 

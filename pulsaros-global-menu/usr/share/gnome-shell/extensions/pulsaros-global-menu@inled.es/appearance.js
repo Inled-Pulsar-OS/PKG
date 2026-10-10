@@ -8,6 +8,24 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 const BMS_UUID = 'blur-my-shell@aunetx';
 
+// The "liquid glass" extensions we cooperate with. When one of them is active
+// it paints its own backdrop (and blur) behind the menus, so the menu itself
+// must stay transparent for the glass to show through instead of a grey sheet.
+const LIQUID_GLASS_UUIDS = [
+	'liquid-glass@thinkingcoding1231.gmail.com',
+	'pulsaros-liquid-glass@inled.es',
+];
+
+// ExtensionState.ENABLED is 1 in the shell's extension system.
+function extensionEnabled(uuid) {
+	const ext = Main.extensionManager.lookup(uuid);
+	return !!ext && ext.state === 1;
+}
+
+function liquidGlassActive() {
+	return LIQUID_GLASS_UUIDS.some(extensionEnabled);
+}
+
 // libblur-effect is the same effect family the shell uses, and it additionally
 // rounds the blurred area so it matches the rounded popups. It is optional
 // though, so Shell.BlurEffect stays as the always-available fallback.
@@ -373,7 +391,8 @@ export class AppearanceManager {
 
 		this._extStateId = Main.extensionManager.connect(
 			'extension-state-changed', (_mgr, extension) => {
-				if (extension.uuid === BMS_UUID)
+				if (extension.uuid === BMS_UUID ||
+				    LIQUID_GLASS_UUIDS.includes(extension.uuid))
 					this.applyAll();
 			});
 
@@ -398,7 +417,9 @@ export class AppearanceManager {
 	}
 
 	_applyGenericBlur(menu) {
-		if (!this._settings || !this._settings.get_boolean('blur-popups'))
+		// Liquid Glass blurs every panel/extra menu itself; our own backdrop on
+		// top of it would hide the glass behind a grey sheet.
+		if (liquidGlassActive() || !this._settings || !this._settings.get_boolean('blur-popups'))
 			return;
 
 		// A blur is invisible behind an opaque background, and the shell themes
@@ -485,13 +506,22 @@ export class AppearanceManager {
 		const colorScheme = this._ifaceSettings.get_string('color-scheme');
 		const isDark = (colorScheme === 'prefer-dark');
 		const blurEnabled = s.get_boolean('blur-popups');
-		const hasLiquidGlass = !!(global.blur_my_shell || Main.extensionManager.lookup('blur-my-shell@aunetx') || Main.extensionManager.lookup('pulsaros-liquid-glass@inled.es'));
+		// Blur my Shell also paints a backdrop of its own.
+		const hasBlurBackend = blurEnabled || !!global.blur_my_shell || extensionEnabled(BMS_UUID);
+		// Liquid Glass paints both the backdrop and the blur, so on top of it only
+		// the text must remain: a transparent menu background lets its refraction
+		// shine through instead of a grey sheet.
+		const hasLiquidGlass = liquidGlassActive();
 
 		let style = `border-radius: ${radius}px;`;
 		if (fontSize > 0)
 			style += ` font-size: ${fontSize}pt;`;
 
-		if (hasLiquidGlass || blurEnabled) {
+		if (hasLiquidGlass) {
+			style += ` background-color: transparent;` +
+				` border: none; box-shadow: none;` +
+				` color: ${isDark ? '#ffffff' : '#1d1d1f'};`;
+		} else if (hasBlurBackend) {
 			// When Liquid Glass or Blur is active, use translucent glass styling so refraction shines through
 			if (isDark) {
 				style += ` background-color: rgba(28, 28, 32, 0.62);` +
@@ -525,7 +555,9 @@ export class AppearanceManager {
 	applyBlur(btn) {
 		const s = this._settings;
 
-		if (!s.get_boolean('blur-popups')) {
+		// Liquid Glass paints its own blur behind the menu; a second one from us
+		// would darken the glass.
+		if (liquidGlassActive() || !s.get_boolean('blur-popups')) {
 			this._removeBlur(btn);
 			return;
 		}

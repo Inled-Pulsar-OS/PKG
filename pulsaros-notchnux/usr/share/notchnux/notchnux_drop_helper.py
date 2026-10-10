@@ -213,8 +213,10 @@ class DropApp(Gtk.Application):
         self._win.add_controller(click)
 
         # Scroll controller: forward wheel scrolling to GNOME Shell shelf list
-        scroll = Gtk.EventControllerScroll.new(
-            Gtk.EventControllerScrollFlags.VERTICAL | Gtk.EventControllerScrollFlags.SMOOTH)
+        scroll_flags = Gtk.EventControllerScrollFlags.VERTICAL
+        if hasattr(Gtk.EventControllerScrollFlags, 'DISCRETE'):
+            scroll_flags |= Gtk.EventControllerScrollFlags.DISCRETE
+        scroll = Gtk.EventControllerScroll.new(scroll_flags)
         scroll.connect('scroll', self._on_scroll)
         self._win.add_controller(scroll)
 

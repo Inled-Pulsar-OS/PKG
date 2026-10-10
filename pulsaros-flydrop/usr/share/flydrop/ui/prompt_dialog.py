@@ -30,7 +30,7 @@ class PromptWindow(Gtk.Window):
         self.add_css_class("flydrop-prompt-window")
         self.set_decorated(False)
         self.set_resizable(False)
-        self.set_default_size(360, 240)
+        self.set_default_size(320, 200)
 
         self._load_css()
 
@@ -76,21 +76,28 @@ class PromptWindow(Gtk.Window):
     def _load_css(self):
         css_provider = Gtk.CssProvider()
         css = """
-        window.flydrop-prompt-window, window.flydrop-prompt-window.background {
-            background-color: transparent;
-            background: none;
-            box-shadow: none;
+        window.flydrop-prompt-window,
+        window.flydrop-prompt-window.background,
+        window.flydrop-prompt-window.csd,
+        window.flydrop-prompt-window.solid-csd,
+        window.flydrop-prompt-window decoration,
+        window.flydrop-prompt-window > decoration,
+        .flydrop-prompt-window,
+        .flydrop-prompt-window.background {
+            background-color: transparent !important;
+            background: transparent !important;
+            background-image: none !important;
+            box-shadow: none !important;
+            border: none !important;
+            outline: none !important;
         }
         window.flydrop-prompt-window .flydrop-prompt-card {
             background: rgba(22, 22, 28, 0.96);
             border: 1px solid rgba(255, 255, 255, 0.16);
-            border-radius: 28px;
-            /* La sombra tiene que caber entera en el margen transparente:
-               si se recorta contra el borde de la ventana queda un marco
-               duro con esquinas en punta. */
-            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
-            padding: 24px;
-            margin: 32px 32px 42px;
+            border-radius: 24px;
+            box-shadow: none;
+            padding: 22px 20px;
+            margin: 0;
         }
         window.flydrop-prompt-window .dim-label {
             color: rgba(255, 255, 255, 0.70);
@@ -125,7 +132,7 @@ class PromptWindow(Gtk.Window):
         Gtk.StyleContext.add_provider_for_display(
             Gdk.Display.get_default(),
             css_provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            Gtk.STYLE_PROVIDER_PRIORITY_USER
         )
 
     def on_accept(self, btn):

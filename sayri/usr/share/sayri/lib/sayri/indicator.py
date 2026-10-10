@@ -191,15 +191,6 @@ class SayriIndicator:
         settings.connect("activate", self._on_open_settings)
         self.menu.append(settings)
 
-        sep = Gtk.SeparatorMenuItem()
-        self.menu.append(sep)
-
-        # One click to take everything down, which is what people reach for
-        # when the companion is stuck or in the way.
-        kill = Gtk.MenuItem(label="Terminate all Sayri processes")
-        kill.connect("activate", self._on_kill_all)
-        self.menu.append(kill)
-
         self.quit_item = Gtk.MenuItem(label="Exit")
         self.quit_item.connect("activate", self._on_quit)
         self.menu.append(self.quit_item)
@@ -285,44 +276,35 @@ class SayriIndicator:
                     time.sleep(1.5)
         threading.Thread(target=_run, daemon=True).start()
 
-    def _on_kill_all(self) -> None:
-        """Take every Sayri process down, the daemon excepted.
-
-        The daemon is deliberately left running: it is the background service
-        and it is what would start things again. The companion that owns this
-        indicator goes with everything else, so this process has to go too.
-        """
-        def _run() -> None:
-            _daemon_call("killall", {"include_daemon": False}, 8.0)
-            if self._sayri_proc and self._sayri_proc.poll() is None:
-                self._sayri_proc.terminate()
-            if self._settings_proc and self._settings_proc.poll() is None:
-                self._settings_proc.terminate()
-            Gtk.main_quit()
-        threading.Thread(target=_run, daemon=True).start()
-
     def _on_quit(self, _item=None) -> None:
-        # "Exit" has to mean "Sayri is gone", not "the tray icon is gone".
-        # The daemon owns the companion windows (its core.shutdown() stops
-        # every UI plugin), so ask it first through its own control socket:
-        # sayri.sock may belong to the desktop UI process instead of the
-        # daemon, and a double "quit" would shut the daemon down twice.
-        if send_daemon_command("quit"):
+        try:
+            send_daemon_command("quit")
+        except Exception:
             pass
-        elif not send_sock_command("quit"):
-            # No daemon and no UI process answered, so nobody would clean up
-            # the companions. Do it here rather than leave windows stranded.
+        try:
+            send_sock_command("quit")
+        except Exception:
+            pass
+        try:
+            sysinfo.stop_ui_plugins()
+        except Exception:
+            pass
+        for pat in ("sayri --launch-ui", "sayri ui", "cajita.py", "sayri-web", "gateway.py"):
             try:
-                stopped = sysinfo.stop_ui_plugins()
-                if stopped:
-                    print(f"[Sayri] Stopped UI plugins: {', '.join(stopped)}")
-            except Exception as exc:
-                print(f"[Sayri] UI plugin shutdown notice: {exc}")
+                sysinfo.kill_process_tree(pattern=pat)
+            except Exception:
+                pass
         if self._sayri_proc and self._sayri_proc.poll() is None:
-            self._sayri_proc.terminate()
+            try:
+                self._sayri_proc.terminate()
+            except Exception:
+                pass
         if self._settings_proc and self._settings_proc.poll() is None:
-            self._settings_proc.terminate()
-        Gtk.main_quit()
+            try:
+                self._settings_proc.terminate()
+            except Exception:
+                pass
+        os._exit(0)
 
 
 def main(argv: Optional[list] = None) -> None:

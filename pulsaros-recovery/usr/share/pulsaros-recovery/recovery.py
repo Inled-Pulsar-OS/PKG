@@ -2388,7 +2388,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.card_dual = InstallModeCard(
             "dualboot",
             "Install Alongside (Dual Boot)",
-            "Install Pulsar OS on a specific partition while preserving your existing operating systems (e.g. Windows or Linux).",
+            "Install Pulsar OS on a specific partition alongside existing systems (requires an ext4 partition).",
             "preferences-system-windows",
             self.on_mode_selected
         )
@@ -2451,6 +2451,21 @@ class RecoveryWindow(Adw.ApplicationWindow):
         subtitle.add_css_class("progress-text")
         box.append(subtitle)
 
+        # ext4 requirement banner
+        self.ext4_info_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self.ext4_info_box.add_css_class("efi-info-box")
+        self.ext4_icon = Gtk.Image.new_from_icon_name("dialog-information-symbolic")
+        self.ext4_icon.set_pixel_size(18)
+        self.ext4_info_box.append(self.ext4_icon)
+        self.ext4_lbl = Gtk.Label()
+        self.ext4_lbl.set_markup("<span><b>Dual Boot Notice:</b> The target partition must be formatted as <b>ext4</b>. Use Disk Utility below to create/format it if needed.</span>")
+        self.ext4_lbl.add_css_class("efi-info-text")
+        self.ext4_lbl.set_wrap(True)
+        self.ext4_lbl.set_max_width_chars(42)
+        self.ext4_lbl.set_halign(Gtk.Align.START)
+        self.ext4_info_box.append(self.ext4_lbl)
+        box.append(self.ext4_info_box)
+
         # Scrolled list of partitions
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_min_content_height(160)
@@ -2484,7 +2499,18 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
         btn_gparted = Gtk.Button(label="Open Disk Utility...")
         btn_gparted.add_css_class("secondary-action")
-        btn_gparted.connect("clicked", lambda x: subprocess.Popen("gparted || pkexec gparted || gnome-disks || gnome-disk-utility", shell=True))
+
+        def _launch_gparted(_btn):
+            def _wait_and_refresh():
+                try:
+                    p = subprocess.Popen("gparted || pkexec gparted || gnome-disks || gnome-disk-utility", shell=True)
+                    p.wait()
+                except Exception:
+                    pass
+                GLib.idle_add(self.refresh_partitions)
+            threading.Thread(target=_wait_and_refresh, daemon=True).start()
+
+        btn_gparted.connect("clicked", _launch_gparted)
         tools_box.append(btn_gparted)
 
         btn_refresh_parts = Gtk.Button(label="Refresh")
@@ -2557,13 +2583,24 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 self.btn_partition_continue.set_sensitive(False)
                 self.target_partition = None
                 self.target_partition_info = None
+                if hasattr(self, 'ext4_lbl'):
+                    self.ext4_lbl.set_markup("<span><span foreground='#f59e0b'>⚠</span> The EFI system partition cannot be selected as the install root.</span>")
                 return
             self.target_partition = part_info["path"]
             self.target_partition_info = part_info
             self.btn_partition_continue.set_sensitive(True)
+            fstype = (part_info.get("fstype") or "unformatted").lower()
+            if hasattr(self, 'ext4_lbl'):
+                if fstype == "ext4":
+                    self.ext4_lbl.set_markup(f"<span><span foreground='#2ec27e'>✓</span> <b>{part_info['path']}</b> is formatted as <b>ext4</b> (ready).</span>")
+                else:
+                    self.ext4_lbl.set_markup(f"<span><b>Notice:</b> <b>{part_info['path']}</b> is <b>{fstype.upper()}</b>. It will be formatted as <b>ext4</b> during installation.</span>")
         else:
             self.btn_partition_continue.set_sensitive(False)
             self.target_partition = None
+            self.target_partition_info = None
+            if hasattr(self, 'ext4_lbl'):
+                self.ext4_lbl.set_markup("<span><b>Dual Boot Notice:</b> The target partition must be formatted as <b>ext4</b>. Use Disk Utility below to create/format it if needed.</span>")
             self.target_partition_info = None
 
     def on_partition_continue_clicked(self, btn):
@@ -2652,13 +2689,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
         txt_e = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         txt_e.set_hexpand(True)
         lbl_e_title = Gtk.Label()
-        lbl_e_title.set_markup("<b>Extended Applications &amp; Media Suite</b> <span foreground='#2ec27e' size='smaller'>● Highly Recommended</span>")
+        lbl_e_title.set_markup("<b>Essential System Apps &amp; Multimedia Suite</b> <span foreground='#2ec27e' size='smaller'>● Highly Recommended</span>")
         lbl_e_title.add_css_class("option-title")
         lbl_e_title.set_halign(Gtk.Align.START)
         lbl_e_title.set_wrap(True)
         lbl_e_title.set_max_width_chars(38)
         txt_e.append(lbl_e_title)
-        self.lbl_e_desc = Gtk.Label(label="Installs ONLYOFFICE Desktop Editors, LocalSend, multimedia codecs, tools, and apps.")
+        self.lbl_e_desc = Gtk.Label(label="Installs essential multimedia players, codecs, file sharing, and office productivity tools. Highly recommended for a complete system.")
         self.lbl_e_desc.add_css_class("option-desc")
         self.lbl_e_desc.set_halign(Gtk.Align.START)
         self.lbl_e_desc.set_wrap(True)
@@ -2859,7 +2896,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         sel_count = sum(1 for v in self.packages_selected.values() if v)
         total = len(EXTRA_PACKAGES_ITEMS)
         if hasattr(self, 'lbl_e_desc'):
-            self.lbl_e_desc.set_text(f"Selected components: {sel_count}/{total}. Click 'Customize...' to change.")
+            self.lbl_e_desc.set_text(f"Selected components: {sel_count}/{total} (Highly Recommended). Click 'Customize...' to change.")
 
     def _on_individual_pkg_toggled(self, chk):
         if getattr(self, '_updating_selection_ui', False):
@@ -3305,7 +3342,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         if self.install_broadcom:
             features.append("Hardware Drivers")
         if self.install_extra_packages:
-            features.append("Full App Suite")
+            features.append("Essential System Apps & Utilities")
         if self.install_hibernation:
             features.append("Hibernation (RAM Swapfile)")
         if self.install_encryption:
@@ -5734,14 +5771,16 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                                         pass
 
                             main_icon_cands = [
+                                "/mnt/usr/share/pulsar-boot-icons/os_pulsaros_normal.png",
+                                "/mnt/usr/share/pulsar-boot-icons/normal.png",
+                                "/usr/share/pulsar-boot-icons/os_pulsaros_normal.png",
+                                "/usr/share/pulsar-boot-icons/normal.png",
+                                f"{refind_root}/themes/rEFInd-Regular-Dark/icons/os_pulsaros_normal.png",
+                                f"{refind_root}/themes/rEFInd-Regular-Dark/icons/os_pulsaros.png",
                                 "/mnt/usr/share/icons/hicolor/128x128/apps/pulsar-logo.png",
                                 "/mnt/usr/share/icons/hicolor/128x128/apps/pulsaros-logo.png",
                                 "/usr/share/icons/hicolor/128x128/apps/pulsar-logo.png",
                                 "/usr/share/icons/hicolor/128x128/apps/pulsaros-logo.png",
-                                "/mnt/usr/share/pulsar-boot-icons/normal.png",
-                                "/usr/share/pulsar-boot-icons/normal.png",
-                                f"{refind_root}/themes/rEFInd-Regular-Dark/icons/os_pulsaros_normal.png",
-                                f"{refind_root}/themes/rEFInd-Regular-Dark/icons/os_pulsaros.png",
                                 "/mnt/usr/share/pulsaros-recovery/logo.png",
                                 "/usr/share/pulsaros-recovery/logo.png",
                             ]

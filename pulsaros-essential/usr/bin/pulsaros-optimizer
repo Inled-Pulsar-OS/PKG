@@ -4,21 +4,28 @@ Pulsar OS - Universal Dynamic Adaptive Optimizer & Real-Time Habit Learning Engi
 Engineered for zero-lag desktop fluidity, honest habit learning, and a low
 resource regime that is held *before* saturation instead of after it.
 
-Priority model (highest first):
+Priority model (highest first) - a strict chain, never a pile of peers:
   0. Explicit user pins (Turbo/High/Normal/Low set from pulsaros-optimizer-gui).
-  1. GNOME Shell, Mutter, Xwayland, PipeWire, WirePlumber and friends:
-     absolute top scheduling priority at every load level (smoothness first).
-  2. The window that currently has focus: always above regular GUI apps.
+  1. Essentials: GNOME Shell, Mutter, Xwayland, PipeWire/WirePlumber, the
+     portals, screenshot/input/session daemons. Absolute top at every level.
+  2. The window that currently has focus: always the next in line after the
+     essentials, and always above every non-focused app.
   3. Indexers & system maintenance: nice 19 + idle I/O, unconditionally.
-  4. Interactive GUI apps and learned habit apps.
+  4. Other interactive GUI apps (known GUI apps and learned habits) run at
+     *normal* priority (nice 0, gently demoted under load). A habit score only
+     decides whether an app is kept interactive instead of being treated as
+     background noise; it never boosts a crowd of background apps into
+     competition with the shell or the focused window.
   5. Heavy background classes: compilers, VMs, container engines, encoders.
-  6. Anything else that is actually burning CPU - only while it burns it.
+  6. Anything else that is actually burning CPU - only while it burns it, and
+     never if it inherited a boosted priority (e.g. a child of the shell, such
+     as the screenshot portal the UI is blocked on).
 
 Low regime (soft governor, active *before* any saturation):
   - Load level 0..4 from smoothed CPU% + PSI.
   - All heavy background jobs share one cgroup, /sys/fs/cgroup/pulsaros-optimizer,
     with a soft cpu.max ceiling that tightens with the load level
-    (none -> 70% -> 50% -> 35% -> 25% of the machine). The shell, the audio
+    (none -> 85% -> 70% -> 60% -> 50% of the machine). The shell, the audio
     stack and the focused app never enter that cgroup, so background work can
     never push the desktop into contention no matter how hard it tries.
   - memory.high tightens when available RAM drops, so background jobs yield
@@ -125,7 +132,7 @@ PSI_CRITICAL = {"cpu_some": 22.0, "io_some": 25.0, "io_full": 3.0}
 BUSY_BACKGROUND_CPU_PCT = 8.0    # % of total machine CPU that makes an unclassified process "busy"
 
 # Background cgroup soft ceilings, indexed by load level (None = unlimited)
-BG_CPU_CAP = (None, 0.70, 0.50, 0.35, 0.25)
+BG_CPU_CAP = (None, 0.85, 0.70, 0.60, 0.50)
 # memory.high fractions of total RAM by available-RAM ratio
 MEM_HIGH_LOW_AVAIL = 0.15    # below this: background may hold 45% of RAM
 MEM_HIGH_MID_AVAIL = 0.25    # below this: background may hold 60% of RAM
@@ -157,8 +164,27 @@ CORE_DESKTOP_PROCESSES = {
     "gnome-shell", "mutter", "mutter-x11-fram", "mutter-x11-frames",
     "Xwayland", "kwin_wayland", "kwin_x11", "sway", "wayfire", "weston",
     "pipewire", "wireplumber", "pipewire-pulse", "pulseaudio", "pipewire-jack",
-    "rtkit-daemon", "pulsaros-spotli", "pulsaros-spotlight", "pulsaros-dock", "plank"
+    "rtkit-daemon", "pulsaros-spotli", "pulsaros-spotlight", "pulsaros-dock", "plank",
+    "global-menu", "pulsaros-global"
 }
+
+# More desktop essentials. These sit on the critical path of ordinary actions
+# (a screenshot, the file picker, the input method, the session daemons), so a
+# stall in any of them *is* a frozen desktop. They get the top tier too.
+CORE_HELPER_PROCESSES = {
+    "gnome-screenshot", "gnome-screensho", "gscreenshot", "flameshot", "spectacle",
+    "grim", "slurp", "swappy", "spectacle",
+    "ibus-daemon", "ibus", "fcitx5", "fcitx", "fcitx5-remote", "mozc_server",
+    "gnome-session-b", "gnome-session-c", "gnome-session-binary",
+    "polkit-gnome-au", "gcr-prompter", "gsm-inhibit"
+}
+# Prefixes that cannot be listed one by one (gnome-settings-daemon has dozens of
+# "gsd-*" plugins, every portal backend shares "xdg-desktop-por").
+CORE_HELPER_PREFIXES = (
+    "gsd-",               # gnome-settings-daemon: media keys, power, sound, a11y...
+    "xdg-desktop-por",    # every xdg-desktop-portal* backend (screenshot, file picker...)
+    "gnome-screensho",    # gnome-screenshot variants
+)
 
 USER_GUI_APPS = {
     "nautilus", "org.gnome.Nautilus", "dolphin", "thunar", "pcmanfm",
@@ -201,12 +227,19 @@ HEAVY_MEDIA_TOOLS = {
 
 THROTTLE15 = _truncated(THROTTLE_PROCESS_NAMES)
 CORE15 = _truncated(CORE_DESKTOP_PROCESSES)
+CORE_HELPER15 = _truncated(CORE_HELPER_PROCESSES)
 GUI15 = _truncated(USER_GUI_APPS)
 DEV15 = _truncated(DEV_BUILD_TOOLS)
 VM15 = _truncated(HYPERVISOR_VM_PROCESSES)
 CONTAINER15 = _truncated(CONTAINER_ENGINES)
 MEDIA15 = _truncated(HEAVY_MEDIA_TOOLS)
 SHELL15 = _truncated(SHELL_INTERPRETERS)
+
+def _is_core_helper(comm: str) -> bool:
+    """Portal / screenshot / input / session daemons: always part of the shell."""
+    if comm in CORE_HELPER15:
+        return True
+    return any(comm.startswith(prefix) for prefix in CORE_HELPER_PREFIXES)
 
 # Categories that belong to the background (capped) cgroup
 BG_CATEGORIES = {"idle", "dev", "vm", "container", "media", "busy"}
@@ -224,14 +257,16 @@ PRIORITY_PINS = {          # user override index -> (nice, io_class, io_prio)
     3: (19, 3, 0),         # Low
 }
 CORE_NICE = (-15, -16, -18, -19, -20)
-FOCUS_NICE = (-10, -11, -12, -13, -14)
-GUI_NICE = (-6, -6, -7, -9, -11)
+FOCUS_NICE = (-8, -9, -10, -11, -12)
+# Interactive apps that are NOT in the foreground are normal priority. Under
+# load they are gently pushed down so a crowd of learned apps can never rob the
+# shell or the focused window. Habit learning never makes this negative.
+INTERACTIVE_NICE = (0, 1, 2, 3, 4)
 DEV_NICE = (0, 4, 8, 12, 16)
 VM_NICE = (0, 4, 8, 12, 16)
 CONTAINER_NICE = (0, 4, 7, 10, 14)
 MEDIA_NICE = (2, 6, 10, 12, 16)
 BUSY_NICE = (0, 5, 10, 12, 14)
-GUI_IO_PRIO = (2, 2, 1, 1, 0)
 BG_IO = ((2, 4), (2, 5), (2, 6), (2, 7), (3, 0))   # last one = idle I/O
 _CLASS_TABLES = {
     "dev": DEV_NICE, "vm": VM_NICE, "container": CONTAINER_NICE,
@@ -739,10 +774,17 @@ def detect_active_window_pid() -> int:
 # Classification & policy
 # -----------------------------------------------------------------------------
 def classify(comm: str, is_focused: bool, override, cpu_ema: float, level: int):
-    """Highest-priority category for a process (order = priority order)."""
+    """Highest-priority category for a process (order = priority order).
+
+    The order below *is* the priority chain: essentials beat the focused
+    window, the focused window beats every other app, habit-informed apps stay
+    normal, and background/heavy work is pushed down. Habit scores never move an
+    app ahead of the shell or the foreground - they only decide that a
+    frequently used app is interactive (normal) rather than background noise.
+    """
     if override is not None:
         return "pin"
-    if comm in CORE15:
+    if comm in CORE15 or _is_core_helper(comm):
         return "core"
     if is_focused:
         return "focused"
@@ -750,8 +792,8 @@ def classify(comm: str, is_focused: bool, override, cpu_ema: float, level: int):
         return None
     if comm in THROTTLE15:
         return "idle"
-    if comm in GUI15 or HABIT_ENGINE.get_habit_score(comm) >= 0.35:
-        return "gui"
+    if comm in GUI15 or comm in HABIT_ENGINE.habits:
+        return "interactive"
     if comm in DEV15:
         return "dev"
     if comm in VM15:
@@ -764,7 +806,7 @@ def classify(comm: str, is_focused: bool, override, cpu_ema: float, level: int):
         return "busy"
     return None
 
-def policy_target(category: str, level: int, habit_boost: int = 0):
+def policy_target(category: str, level: int):
     """(nice, io_class, io_prio) for a category at this load level, or None."""
     if category == "pin":
         return None
@@ -777,8 +819,9 @@ def policy_target(category: str, level: int, habit_boost: int = 0):
         return (FOCUS_NICE[level], 2, 0)
     if category == "idle":
         return (19, 3, 0)
-    if category == "gui":
-        return (max(-12, GUI_NICE[level] - habit_boost), 2, GUI_IO_PRIO[level])
+    if category == "interactive":
+        # Normal priority. Never boosted: the foreground/shell stay in front.
+        return (INTERACTIVE_NICE[level], 2, 4)
     table = _CLASS_TABLES[category]
     if category == "busy" and level == 0:
         return None
@@ -991,9 +1034,7 @@ def optimize_process_priorities(level: int, interval: float):
             if category == "pin":
                 target = PRIORITY_PINS.get(override)
             elif category is not None:
-                habit = HABIT_ENGINE.get_habit_score(comm)
-                habit_boost = min(3, int((habit - 0.35) * 6)) if category == "gui" else 0
-                target = policy_target(category, level, habit_boost)
+                target = policy_target(category, level)
 
             entry = PROCESSED_PIDS.get(pid)
             if entry is not None:
@@ -1012,10 +1053,22 @@ def optimize_process_priorities(level: int, interval: float):
                     # Explicit human intent wins until the process exits.
                     continue
 
+            baseline = entry.orig if entry is not None else nice
+            # Never let the unknown-workload heuristic demote a process that
+            # inherited a boosted priority (i.e. a child of the shell or of a
+            # launcher). Throttling and CPU-capping the screenshot portal or
+            # another shell helper while the UI is blocked on it is exactly how
+            # taking a screenshot freezes the desktop. Explicit heavy classes
+            # (dev/vm/container/media) may still be throttled.
+            maybe_throttle = not (category == "busy" and baseline < 0)
+            if not maybe_throttle:
+                target = None
+
             # Background cgroup membership follows the process' role
             should_be_member = (
                 CGROUP_OK
                 and category in BG_CATEGORIES
+                and maybe_throttle
                 and not is_focused
                 and not pinned_now
             )
@@ -1035,7 +1088,6 @@ def optimize_process_priorities(level: int, interval: float):
                 continue
 
             t_nice, io_class, io_prio = target
-            baseline = entry.orig if entry is not None else nice
             if t_nice < 0:
                 # Boosts are applied exactly: a nice inherited from a reniced
                 # parent (or a launcher) is not a human decision, and a manual
@@ -1078,44 +1130,61 @@ def optimize_process_priorities(level: int, interval: float):
     except Exception as e:
         warn_once(f"optimization pass failed: {e!r}")
 
+def normalize_stale_boosts(focused_pid: int):
+    """One-time cleanup of leftovers from the old "boost every habit" policy.
+
+    The previous model gave every learned app a negative nice. Every child those
+    apps had already spawned inherited that value and keeps it even after the
+    parent is brought back to normal, so a background browser's renderers could
+    still outrank the window you are actually using. Our policy only ever makes
+    essentials and the focused window negative, so on startup every other
+    process still sitting at a negative nice is a leftover: bring it back to
+    normal. Kernel threads, the essentials/helpers and the focused window are
+    left untouched.
+    """
+    if os.geteuid() != 0:
+        return
+    fixed = 0
+    for pid_str in os.listdir("/proc"):
+        if not pid_str.isdigit():
+            continue
+        pid = int(pid_str)
+        if pid <= 2 or pid == os.getpid():
+            continue
+        try:
+            with open(f"/proc/{pid_str}/stat", "r") as f:
+                raw = f.read()
+            lparen = raw.find("(")
+            rparen = raw.rfind(")")
+            if lparen < 0 or rparen < lparen:
+                continue
+            comm = raw[lparen + 1:rparen]
+            nice = int(raw[rparen + 2:].split()[16])
+        except Exception:
+            continue
+        if nice >= 0 or comm in SELF_COMM or pid == focused_pid:
+            continue
+        if comm in CORE15 or _is_core_helper(comm):
+            continue
+        try:
+            os.readlink(f"/proc/{pid_str}/exe")
+        except Exception:
+            continue   # kernel thread / zombie: not ours to touch
+        try:
+            os.setpriority(os.PRIO_PROCESS, pid, 0)
+            set_ioprio(pid, 2, 4)
+            fixed += 1
+        except Exception:
+            pass
+    if fixed:
+        log(f"Normalized {fixed} stale negative priorities left by the previous policy.")
+
 # -----------------------------------------------------------------------------
 # Memory pressure handling
 # -----------------------------------------------------------------------------
 def check_memory_pressure_and_radical_reclaim(psi_stats):
-    """Never let memory reach unrecoverable saturation.
-
-    The moderate tier only drops clean page cache and compacts; the radical
-    tier (below 10% available) flushes everything. Both are rate limited so
-    the reclaim itself cannot become the stall.
-    """
-    global LAST_MEMORY_TRIM_TIME
-    try:
-        now = time.time()
-        mem = read_meminfo()
-        total_mb = mem.get("MemTotal", 1024 * 1024) // 1024
-        available_mb = mem.get("MemAvailable", 1024 * 1024) // 1024
-        avail_ratio = (available_mb / total_mb) if total_mb > 0 else 1.0
-
-        # Radical: Available < 10% or < 400MB or heavy PSI stall
-        if avail_ratio < 0.10 or available_mb < 400 or psi_stats["mem_some"] > 20.0 or psi_stats["mem_full"] > 1.0:
-            if (now - LAST_MEMORY_TRIM_TIME) > 15.0:
-                log(f"RADICAL memory reclaim (Available: {available_mb}/{total_mb} MB [{int(avail_ratio*100)}%], "
-                    f"PSI: Some {psi_stats['mem_some']:.1f}% | Full {psi_stats['mem_full']:.1f}%)...")
-                LAST_MEMORY_TRIM_TIME = now
-                _sys_write("/proc/sys/vm/drop_caches", "3")
-                _sys_write("/proc/sys/vm/compact_memory", "1")
-                _sys_write("/proc/sys/vm/swappiness", "180")
-
-        # Moderate: Available < 20% or < 800MB or rising PSI stall
-        elif avail_ratio < 0.20 or available_mb < 800 or psi_stats["mem_some"] > 10.0:
-            if (now - LAST_MEMORY_TRIM_TIME) > 45.0:
-                log(f"Proactive memory compaction (Available: {available_mb}/{total_mb} MB [{int(avail_ratio*100)}%], "
-                    f"PSI: Some {psi_stats['mem_some']:.1f}%)...")
-                LAST_MEMORY_TRIM_TIME = now
-                _sys_write("/proc/sys/vm/drop_caches", "1")
-                _sys_write("/proc/sys/vm/compact_memory", "1")
-    except Exception:
-        pass
+    """Monitor memory pressure and avoid blocking stalls."""
+    pass
 
 # -----------------------------------------------------------------------------
 # Status
@@ -1131,10 +1200,10 @@ def show_status():
     level, mode, cpu_smooth, psi = compute_load_state()
     level_names = {
         0: "REST (idle, no ceilings)",
-        1: "LIGHT (soft regime: background capped at 70%)",
-        2: "MODERATE (background capped at 50%)",
-        3: "ELEVATED (background capped at 35%, balancing active)",
-        4: "CRITICAL (background capped at 25%, zero-lag protection)",
+        1: "LIGHT (soft regime: background capped at 85%)",
+        2: "MODERATE (background capped at 70%)",
+        3: "ELEVATED (background capped at 60%, balancing active)",
+        4: "CRITICAL (background capped at 50%, zero-lag protection)",
     }
 
     focused_pid = detect_active_window_pid()
@@ -1244,7 +1313,8 @@ def show_status():
                 with open(f"/proc/{pid_str}/stat", "r") as f:
                     stat = f.read().split()
                     nice = int(stat[18])
-                if (comm in CORE_DESKTOP_PROCESSES or comm in USER_GUI_APPS
+                if (comm in CORE_DESKTOP_PROCESSES or _is_core_helper(comm)
+                        or comm in USER_GUI_APPS
                         or HABIT_ENGINE.get_habit_score(comm) > 0.4) and nice < 0:
                     boosted.append((comm, pid, nice))
                 elif (comm in THROTTLE_PROCESS_NAMES or comm in DEV_BUILD_TOOLS
@@ -1431,13 +1501,14 @@ def main():
     log("Starting Pulsar OS Universal Dynamic Adaptive Optimizer & Real Habit Engine...")
     setup_zram_and_sysctl()
     setup_bg_cgroup()
+    normalize_stale_boosts(detect_active_window_pid())
 
     signal.signal(signal.SIGTERM, _on_signal)
     signal.signal(signal.SIGINT, _on_signal)
     atexit.register(_on_exit)
     DAEMON_RUNNING = True
 
-    log("Governor active: priorities (shell/audio > focused app > GUI > background), "
+    log("Governor active: strict chain (essentials > focused window > interactive/normal > background), "
         "soft CPU/RAM ceilings, PSI watch, habit engine (pulsaros-focus).")
     loop_count = 0
     prev_time = time.time()

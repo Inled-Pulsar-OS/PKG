@@ -27,6 +27,14 @@ import {MacOSFullscreenManager} from './pulsarFullscreen.js';
 const BUS_NAME = 'space.unmade.GlobalMenu';
 const BUS_PATH = '/space/unmade/GlobalMenu';
 
+// Extensions that can take over the shell backdrop. Toggling them on some
+// systems has been reported to leave the shell on the stock Adwaita theme, so
+// the Pulsar theme is re-asserted whenever one of these changes state.
+const GLASS_UUIDS = [
+	'liquid-glass@thinkingcoding1231.gmail.com',
+	'pulsaros-liquid-glass@inled.es',
+];
+
 class MenuTreeCache {
 	constructor(size = 10) {
 		this._size = size;
@@ -487,6 +495,12 @@ export default class PulsarosGlobalMenuExtension extends Extension {
 				}
 			});
 			this._syncThemes(false);
+
+			// Re-assert the Pulsar theme if a glass/blur extension toggles state.
+			this._glassStateId = Main.extensionManager.connect('extension-state-changed', (_mgr, extension) => {
+				if (extension && GLASS_UUIDS.includes(extension.uuid))
+					this._syncThemes(false);
+			});
 		} catch (e) {
 			console.error("[GlobalMenu] Theme sync error:", e);
 		}
@@ -511,6 +525,11 @@ export default class PulsarosGlobalMenuExtension extends Extension {
 		if (this._ifaceSettings && this._colorSchemeChangeId) {
 			this._ifaceSettings.disconnect(this._colorSchemeChangeId);
 			this._colorSchemeChangeId = 0;
+		}
+
+		if (this._glassStateId) {
+			try { Main.extensionManager.disconnect(this._glassStateId); } catch (e) {}
+			this._glassStateId = 0;
 		}
 
 		if (this._appleLogoButton) {

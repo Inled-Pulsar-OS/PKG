@@ -210,18 +210,25 @@ export class ScreenshotOCRController {
         this.reset();
 
         if (this._overlay) {
-            this._overlay.destroy();
+            try {
+                this._overlay.destroy();
+            } catch (_e) {
+            }
             this._overlay = null;
         }
 
         if (this._hitboxLayer) {
-            this._copyMenu?.destroy();
-            this._copyMenu = null;
-            this._copyButton?.destroy();
+            // The screenshot UI may already have disposed these actors when it
+            // closed, so destroying them defensively must never throw here.
+            for (const actor of [this._copyButton, this._searchButton, this._copyMenu, this._hitboxLayer]) {
+                try {
+                    actor?.destroy();
+                } catch (_e) {
+                }
+            }
             this._copyButton = null;
-            this._searchButton?.destroy();
             this._searchButton = null;
-            this._hitboxLayer.destroy();
+            this._copyMenu = null;
             this._hitboxLayer = null;
         }
     }
@@ -463,7 +470,7 @@ export class ScreenshotOCRController {
 
         const path = GLib.build_filenamev([
             GLib.get_tmp_dir(),
-            `shotzy_ocr_${Date.now()}_${GLib.uuid_string_random()}.png`,
+            `shotzy_ocr_${Date.now()}_${GLib.uuid_string_random()}.bmp`,
         ]);
 
         const sourceWidth = pixbuf.get_width();
@@ -484,7 +491,27 @@ export class ScreenshotOCRController {
             );
         }
 
-        if (!savedPixbuf || !savedPixbuf.savev(path, 'png', [], []))
+        // Save as BMP (uncompressed) instead of PNG. The encode runs on the
+        // shell's main thread, and a PNG encoder burns ~200-400 ms there while
+        // tesseract is already saturating the CPU - which is what makes the
+        // screenshot UI feel frozen. A BMP write is a few milliseconds.
+        // tesseract does not read 32-bit BMP reliably, so flatten alpha to RGB.
+        if (savedPixbuf && savedPixbuf.get_has_alpha()) {
+            const flat = GdkPixbuf.Pixbuf.new(
+                GdkPixbuf.Colorspace.RGB, false, 8,
+                savedPixbuf.get_width(), savedPixbuf.get_height()
+            );
+            flat.fill(0xffffffff);
+            savedPixbuf.composite(
+                flat, 0, 0, savedPixbuf.get_width(), savedPixbuf.get_height(),
+                0, 0, 1, 1, GdkPixbuf.InterpType.NEAREST, 255
+            );
+            savedPixbuf = flat;
+        }
+
+        const saved = savedPixbuf
+            && (savedPixbuf.savev(path, 'bmp', [], []) || savedPixbuf.savev(path, 'png', [], []));
+        if (!saved)
             throw new Error('Failed to save OCR screenshot');
 
         return {

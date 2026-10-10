@@ -516,16 +516,22 @@ rm -f /tmp/dock_hover_fix.css
 cat <<'SHELL_OSD_FIX' > /tmp/shell_osd_fix.css
 /* ==========================================================================
  * Pulsar OS - Ajustes locales del tema de GNOME Shell (no vienen de MacTahoe)
- * 1) OSD (volumen/brillo/wifi): translucido y con contraste.
+ * 1) OSD (volumen/brillo/wifi): translucido, redondeado y en esquina superior derecha.
  * 2) Flecha de los botones con submenu de Ajustes rapidos: sin circulo azul.
  * ========================================================================== */
 
 .osd-window {
-    background-color: rgba(36, 36, 36, 0.66) !important;
-    border: solid rgba(255, 255, 255, 0.14) !important;
+    background-color: rgba(36, 36, 36, 0.72) !important;
+    border: solid rgba(255, 255, 255, 0.16) !important;
     border-width: 1px !important;
-    box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.45) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.5) !important;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
+    margin: 42px 20px !important;
+}
+
+.just-perfection-api-osd-position-top .osd-window {
+    margin: 42px 20px !important;
 }
 
 .quick-toggle-has-menu .quick-toggle-menu-button:checked,

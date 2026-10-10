@@ -3438,57 +3438,21 @@ class SayriCajita(Gtk.Box):
         kill_btn.set_margin_top(4)
 
         def _kill_all_procs(_b):
-            from signal import SIGKILL
-
-            roots = set()
-            buf = {}
             try:
-                for entry in os.listdir("/proc"):
-                    if not entry.isdigit():
-                        continue
-                    try:
-                        with open("/proc/" + entry + "/cmdline", "rb") as fh:
-                            raw = fh.read()
-                    except OSError:
-                        continue
-                    cmd = raw.replace(b"\0", b" ").decode("utf-8", "replace")
-                    buf[entry] = cmd
-                for pid, cmd in buf.items():
-                    low = (cmd or "").lower()
-                    if ("sayri" in low or "prismml" in low or "llama-server" in low
-                            or "llama-cli" in low or "llama-bench" in low):
-                        roots.add(pid)
+                subprocess.Popen(["pkill", "-9", "-f", "sayri"])
             except Exception:
                 pass
-
             try:
-                out = subprocess.check_output(
-                    ["ps", "-eo", "pid=,ppid="], text=True, timeout=10
-                )
-                child = {}
-                for line in out.splitlines():
-                    parts = line.split()
-                    if len(parts) == 2:
-                        child.setdefault(parts[1], []).append(parts[0])
+                subprocess.Popen(["pkill", "-9", "-f", "llama-server"])
             except Exception:
-                child = {}
-
-            kill = set(roots)
-            stack = list(roots)
-            while stack:
-                cur = stack.pop()
-                for sub in child.get(cur, []):
-                    if sub not in kill:
-                        kill.add(sub)
-                        stack.append(sub)
-            for pid in kill:
-                try:
-                    os.kill(int(pid), SIGKILL)
-                except (OSError, ValueError):
-                    pass
+                pass
+            try:
+                subprocess.Popen(["pkill", "-9", "-f", "prismml"])
+            except Exception:
+                pass
             try:
                 subprocess.run(["systemctl", "--user", "stop", "app-sayri@autostart.service"],
-                               capture_output=True, timeout=10)
+                               capture_output=True, timeout=5)
             except Exception:
                 pass
             os._exit(0)

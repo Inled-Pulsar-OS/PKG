@@ -18,15 +18,40 @@ from sayri import xui  # noqa: E402
 def test_wizard_defaults():
     app = wizard.WelcomeApp()
     assert app.idx == 0
-    assert app.val["provider"] == "ollama"
+    assert app.val["provider"] == "openrouter"
     assert app.val["voice"] == ""
     assert app.val["stt_size"] == "base"
     assert app.task.running is False
     scr = app.render()
     assert scr["id"] == "welcome"
-    assert scr["step"] == "7/7"
+    assert scr["step"] == ""
     labels = {b["id"] for b in scr["footer"]}
     assert labels == {"start", "skip"}
+
+
+def test_openrouter_groq_autofill():
+    app = wizard.WelcomeApp()
+    app.dispatch({"type": "action", "widget": "start", "value": {}})
+    app.dispatch({"type": "submit", "value": {"language": "es_ES"}})
+    
+    # Test openrouter selection prefill
+    scr = app.dispatch({"type": "submit", "value": {"provider": "openrouter"}})
+    assert scr["id"] == "provider_details"
+    assert app.val["base_url"] == "https://openrouter.ai/api/v1"
+    assert app.val["model"] == "openrouter/free"
+    defaults = xui.collect_defaults(scr)
+    assert defaults["base_url"] == "https://openrouter.ai/api/v1"
+    assert defaults["model"] == "openrouter/free"
+
+    # Go back and switch to groq
+    app.dispatch({"type": "action", "widget": "back", "value": {}})
+    scr = app.dispatch({"type": "submit", "value": {"provider": "groq"}})
+    assert scr["id"] == "provider_details"
+    assert app.val["base_url"] == "https://api.groq.com/openai/v1"
+    assert app.val["model"] == "llama-3.3-70b-versatile"
+    defaults = xui.collect_defaults(scr)
+    assert defaults["base_url"] == "https://api.groq.com/openai/v1"
+    assert defaults["model"] == "llama-3.3-70b-versatile"
 
 
 def test_module_constant_shapes():
@@ -35,7 +60,8 @@ def test_module_constant_shapes():
         assert opt["value"] and opt["label"]
     for p in wizard.PROVIDERS:
         assert p["value"] and p["label"] and "base_url" in p and "model" in p
-    assert wizard.PROVIDERS[0]["value"] == "ollama"
+    provider_vals = [p["value"] for p in wizard.PROVIDERS]
+    assert "openrouter" in provider_vals and "groq" in provider_vals and "ollama" in provider_vals
     for s in wizard.WHISPER_SIZES:
         assert s["value"] and s["label"]
 
