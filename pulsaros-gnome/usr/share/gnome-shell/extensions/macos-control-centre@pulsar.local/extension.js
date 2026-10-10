@@ -1062,6 +1062,10 @@ export default class MacControlCentre extends Extension {
             launch('gnome-control-center wifi');
         });
         p.add_child(settingsBtn);
+
+        // Liquid-glass (toggles mode) should also draw its own glass behind the
+        // network list and the bottom action button of this subview.
+        this._lgPods.push(card, settingsBtn);
     }
 
     _setWifiEnabled(enable) {
@@ -1271,6 +1275,10 @@ export default class MacControlCentre extends Extension {
             launch('gnome-control-center bluetooth');
         });
         p.add_child(settingsBtn);
+
+        // Same as the Wi-Fi subview: give the device list and the bottom button
+        // their own piece of liquid glass.
+        this._lgPods.push(card, settingsBtn);
     }
 
     _setBtEnabled(enable) {

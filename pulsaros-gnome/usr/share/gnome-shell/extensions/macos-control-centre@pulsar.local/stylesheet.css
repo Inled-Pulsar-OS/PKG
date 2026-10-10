@@ -53,13 +53,16 @@
 
 .mac-dark-theme .mac-bubble {
     background-color: rgba(255, 255, 255, 0.18);
-    box-shadow: inset 0 0 0 40px rgba(255, 255, 255, 0.18);
+    /* Liquid-glass clears a toggle's `background-color`, but leaves its
+       box-shadow alone, so the on/off circle keeps its fill through the
+       inset-shadow trick the shell theme itself uses. */
+    box-shadow: inset 0 0 0 1000px rgba(255, 255, 255, 0.18);
     color: #ffffff;
 }
 .mac-dark-theme .mac-bubble.active,
 .mac-dark-theme .mac-bubble:checked {
     background-color: #007AFF !important;
-    box-shadow: inset 0 0 0 40px #007AFF !important;
+    box-shadow: inset 0 0 0 1000px #007AFF !important;
     color: #ffffff !important;
 }
 
@@ -72,9 +75,11 @@
 
 .mac-dark-theme .mac-item-btn:hover {
     background-color: rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 0 0 1000px rgba(255, 255, 255, 0.12);
 }
 .mac-dark-theme .mac-item-btn.active {
     background-color: rgba(0, 122, 255, 0.22);
+    box-shadow: inset 0 0 0 1000px rgba(0, 122, 255, 0.22);
 }
 
 /* 4. Light Theme Floating Glass Pills (Rounded & Liquid Glass Compatible) */
@@ -98,13 +103,13 @@
 
 .mac-light-theme .mac-bubble {
     background-color: rgba(0, 0, 0, 0.08);
-    box-shadow: inset 0 0 0 40px rgba(0, 0, 0, 0.08);
+    box-shadow: inset 0 0 0 1000px rgba(0, 0, 0, 0.08);
     color: #1d1d1f;
 }
 .mac-light-theme .mac-bubble.active,
 .mac-light-theme .mac-bubble:checked {
     background-color: #007AFF !important;
-    box-shadow: inset 0 0 0 40px #007AFF !important;
+    box-shadow: inset 0 0 0 1000px #007AFF !important;
     color: #ffffff !important;
 }
 
@@ -117,9 +122,11 @@
 
 .mac-light-theme .mac-item-btn:hover {
     background-color: rgba(0, 0, 0, 0.06);
+    box-shadow: inset 0 0 0 1000px rgba(0, 0, 0, 0.06);
 }
 .mac-light-theme .mac-item-btn.active {
     background-color: rgba(0, 122, 255, 0.15);
+    box-shadow: inset 0 0 0 1000px rgba(0, 122, 255, 0.15);
 }
 
 /* 5. Layout Rows & Columns */
@@ -322,9 +329,11 @@
     min-width: 28px;
     border-radius: 14px;
     background-color: rgba(128, 128, 128, 0.2);
+    box-shadow: inset 0 0 0 1000px rgba(128, 128, 128, 0.2);
 }
 .mac-item-icon-circle.connected {
     background-color: #007AFF;
+    box-shadow: inset 0 0 0 1000px #007AFF;
     color: #ffffff;
 }
 
@@ -406,19 +415,54 @@
 .mac-lg-toggles .mac-media > StBoxLayout { spacing: 12px !important; }
 .mac-lg-toggles .mac-slider-tile > StBoxLayout { spacing: 10px !important; }
 
+/* The Wi-Fi/Bluetooth subview's list card and bottom button are pods too, so
+   neutralise the stock toggle geometry as well: the theme's max-width (172px)
+   would shrink the 310px list, and its padding/border/inset glow would reshape
+   both. */
+.mac-lg-toggles .mac-sub-card {
+    width: 310px;
+    min-width: 310px;
+    max-width: 310px;
+    border-radius: 20px;
+    padding: 12px !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+.mac-lg-toggles .mac-bottom-action-btn {
+    min-width: 0;
+    max-width: 1000px;
+    min-height: 0;
+    border-radius: 16px;
+    padding: 8px 16px !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+/* Liquid Glass clears the background of every actor inside a pod, so the
+   colours the subview relies on are re-painted with the same inset-shadow
+   trick (see .mac-bubble / .mac-item-icon-circle above). */
+.mac-lg-toggles .mac-sub-card StScrollBar StBin#trough {
+    box-shadow: inset 0 0 0 1000px rgba(128, 128, 128, 0.18);
+}
+.mac-lg-toggles .mac-sub-card StScrollBar StButton#vhandle {
+    border: none !important;
+    box-shadow: inset 0 0 0 1000px #999999;
+}
+
 /* Background mode fallback (apply-to = 0): liquid-glass paints one sheet of
    glass behind the whole menu, so the pills go translucent to show it. */
 .mac-dark-theme.mac-cc-lg .mac-tile,
 .mac-dark-theme.mac-cc-lg .mac-media,
 .mac-dark-theme.mac-cc-lg .mac-slider-tile,
-.mac-dark-theme.mac-cc-lg .mac-sub-card {
+.mac-dark-theme.mac-cc-lg .mac-sub-card,
+.mac-dark-theme.mac-cc-lg .mac-bottom-action-btn {
     background-color: rgba(30, 30, 40, 0.42);
     border-color: rgba(255, 255, 255, 0.26);
 }
 .mac-light-theme.mac-cc-lg .mac-tile,
 .mac-light-theme.mac-cc-lg .mac-media,
 .mac-light-theme.mac-cc-lg .mac-slider-tile,
-.mac-light-theme.mac-cc-lg .mac-sub-card {
+.mac-light-theme.mac-cc-lg .mac-sub-card,
+.mac-light-theme.mac-cc-lg .mac-bottom-action-btn {
     background-color: rgba(250, 250, 252, 0.45);
     border-color: rgba(0, 0, 0, 0.10);
 }
