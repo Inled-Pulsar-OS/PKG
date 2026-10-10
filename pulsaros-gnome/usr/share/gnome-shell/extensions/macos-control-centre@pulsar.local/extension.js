@@ -290,13 +290,14 @@ export default class MacControlCentre extends Extension {
         this._pollId = 0;
         this._lgActive = false;
         this._lgKey = null;
-        this._lgApplyToOrig = null;
+        this._lgExpandOrig = null;
         this._lastVol = null;
         this._soundDragging = false;
         this._displayDragging = false;
         this._dragStartVol = null;
         this._volCancellable = null;
         this._lgSettings = null;
+        this._lgPods = [];
         this._sinkObject = null;
         this._sinkSignals = [];
         this._mixerRefId = 0;
@@ -518,7 +519,7 @@ export default class MacControlCentre extends Extension {
         }
         this._mixerRefId = 0;
 
-        this._applyLiquidGlass(false);
+        this._applyLiquidGlass(false, false);
         this._applyTransparentContainer(false);
 
         for (const id of this._subs ?? []) {
@@ -535,11 +536,11 @@ export default class MacControlCentre extends Extension {
         }
         this._ids = [];
 
-        // Give liquid-glass its previous Quick Settings mode back.
+        // Give liquid-glass its previous glass-expand value back.
         try {
-            if (this._lgSettings && this._lgApplyToOrig !== null) {
-                this._lgSettings.set_int('quick-settings-apply-to', this._lgApplyToOrig);
-                this._lgApplyToOrig = null;
+            if (this._lgSettings && this._lgExpandOrig !== null) {
+                this._lgSettings.set_int('quick-settings-glass-expand', this._lgExpandOrig);
+                this._lgExpandOrig = null;
             }
         } catch (e) {}
 
@@ -566,8 +567,9 @@ export default class MacControlCentre extends Extension {
         this._ifaceSettings = this._notifSettings = this._colorSettings = null;
         this._mixer = null;
         this._lgSettings = null;
+        this._lgPods = [];
         this._lgActive = false;
-        this._lgApplyToOrig = null;
+        this._lgExpandOrig = null;
         this._connectingSsid = null;
     }
 
@@ -722,16 +724,13 @@ export default class MacControlCentre extends Extension {
     }
 
     /* Liquid Glass integration -------------------------------------------------
-       liquid-glass can draw either one sheet of glass behind the whole Quick
-       Settings menu ("background") or a piece behind every ".quick-toggle"
-       ("toggles"). Our menu is a custom macOS layout, not the stock toggle
-       grid: the shell theme styles ".quick-toggle" with a large padding and
-       min-size, and liquid-glass also grows each toggle's glass by
-       "quick-settings-glass-expand" px per side. Tagging our pills as toggles
-       therefore inflates them and makes their glass overhang and collide. We
-       ask liquid-glass for the single background sheet instead (apply-to = 0)
-       and let the translucent pill CSS (.mac-cc-lg) show it through. The
-       user's previous value is restored when liquid-glass is off. */
+       When the liquid-glass extension is active on Quick Settings, tag our
+       pills as ".quick-toggle" so it draws a piece of glass behind each one.
+       Two of its defaults fight our layout and are handled here: the shell
+       theme styles ".quick-toggle" with a large padding/min-size (reset in
+       the stylesheet) and "quick-settings-glass-expand" grows each pill's
+       glass by 12px per side, which makes the glass overhang and collide with
+       its neighbours, so we ask for a snug fit while our menu is up. */
     _updateLiquidGlass() {
         let lg = null;
         try {
@@ -741,41 +740,52 @@ export default class MacControlCentre extends Extension {
         } catch (e) {}
         const active = !!lg &&
             (this._lgSettings?.get_boolean('enable-quick-settings-glass') ?? false);
+        const togglesMode = active &&
+            (this._lgSettings?.get_int('quick-settings-apply-to') === 1);
 
-        // Force background mode for our layout while liquid-glass is on,
-        // remembering whatever the user had so we can put it back.
+        // Keep the per-pill glass exactly the size of the pill; remember the
+        // user's value so we can restore it when liquid-glass turns off.
         try {
             if (this._lgSettings) {
-                const mode = this._lgSettings.get_int('quick-settings-apply-to');
+                const expand = this._lgSettings.get_int('quick-settings-glass-expand');
                 if (active) {
-                    if (this._lgApplyToOrig === null)
-                        this._lgApplyToOrig = mode;
-                    if (mode !== 0)
-                        this._lgSettings.set_int('quick-settings-apply-to', 0);
-                } else if (this._lgApplyToOrig !== null) {
-                    this._lgSettings.set_int('quick-settings-apply-to', this._lgApplyToOrig);
-                    this._lgApplyToOrig = null;
+                    if (this._lgExpandOrig === null)
+                        this._lgExpandOrig = expand;
+                    if (expand !== 0)
+                        this._lgSettings.set_int('quick-settings-glass-expand', 0);
+                } else if (this._lgExpandOrig !== null) {
+                    this._lgSettings.set_int('quick-settings-glass-expand', this._lgExpandOrig);
+                    this._lgExpandOrig = null;
                 }
             }
         } catch (e) {}
 
-        const key = active ? 'background' : 'off';
+        const key = active ? (togglesMode ? 'toggles' : 'background') : 'off';
         if (key === this._lgKey)
             return;
         this._lgKey = key;
         this._lgActive = active;
-        this._applyLiquidGlass(active);
+        this._applyLiquidGlass(active, togglesMode);
     }
 
-    _applyLiquidGlass(active) {
+    _applyLiquidGlass(active, togglesMode) {
         if (!this._root)
             return;
-        try {
-            if (active)
-                this._root.add_style_class_name('mac-cc-lg');
-            else
-                this._root.remove_style_class_name('mac-cc-lg');
-        } catch (e) {}
+        const toggle = (actor, cls, on) => {
+            try {
+                if (on)
+                    actor.add_style_class_name(cls);
+                else
+                    actor.remove_style_class_name(cls);
+            } catch (e) {}
+        };
+
+        toggle(this._root, 'mac-cc-lg', active);
+        toggle(this._root, 'mac-lg-toggles', !!togglesMode);
+        for (const pod of this._lgPods ?? []) {
+            if (pod)
+                toggle(pod, 'quick-toggle', !!togglesMode);
+        }
     }
 
     _buildMainPanel() {
@@ -898,6 +908,13 @@ export default class MacControlCentre extends Extension {
             } catch (e) {}
             this._dragStartVol = null;
         });
+
+        // Pills that liquid-glass should treat as toggles when it is active.
+        this._lgPods = [
+            this._wifi, this._bt, this._night, this._dnd,
+            this._dark, this._screenshot, this._stageCircle, this._mirrorCircle,
+            this._media, this._display, this._sound,
+        ];
     }
 
     _buildMedia() {
