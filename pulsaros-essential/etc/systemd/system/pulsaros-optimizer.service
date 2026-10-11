@@ -9,8 +9,10 @@ ExecStart=/usr/bin/pulsaros-optimizer
 Restart=always
 RestartSec=5
 Nice=-10
-IOSchedulingClass=realtime
-IOSchedulingPriority=0
+# best-effort I/O (never realtime: it could stall storage and cause the very
+# saturation this daemon exists to prevent)
+IOSchedulingClass=best-effort
+IOSchedulingPriority=4
 
 [Install]
 WantedBy=multi-user.target

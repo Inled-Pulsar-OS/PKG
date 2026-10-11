@@ -2,6 +2,10 @@
 """
 Pulsar OS - Universal Dynamic Adaptive Optimizer & Real-Time Habit Learning Engine
 Engineered for zero-lag desktop fluidity, instant responsiveness, and smooth multitasking.
+Guarantees: the CPU never saturates and RAM never runs out. An escalation ladder
+(priority demotion -> freeze indexers -> freeze all non-essential -> emergency
+reclaim/kill of stateless services) reacts progressively to rising CPU/memory
+pressure and thaws automatically when pressure drops.
 """
 
 import ctypes
@@ -97,6 +101,38 @@ FOCUS_STATE_GLOB = "/run/user/*/pulsaros-focused.json"
 FOCUS_STATE_MAX_AGE = 60.0
 FOCUS_HOLD_SEC = 20.0
 FALLBACK_PROBE_INTERVAL = 30.0
+
+# -----------------------------------------------------------------------------
+# Anti-saturation ladder: guarantees the CPU never saturates and RAM never runs
+# out. Measures escalate with pressure, strongest first on the *least* important
+# work:
+#   CPU tier 1 (>=70%):  demote + freeze indexers/maintenance tasks
+#   CPU tier 2 (>=85%):  + freeze every non-essential process burning CPU
+#   CPU tier 3 (>=95%):  + freeze all non-essential processes (emergency)
+#   MEM tier 1 (<=25%):  drop page cache + compact memory
+#   MEM tier 2 (<=15%):  freeze the biggest non-essential consumers
+#   MEM tier 3 (<=8%):   freeze every non-essential consumer
+#   MEM tier 4 (<=4%):   emergency reclaim + SIGTERM of stateless indexers
+# Everything thaws by itself once pressure drops (hysteresis + min hold time).
+# Core desktop, the focused window/app and its children are never touched.
+# -----------------------------------------------------------------------------
+CPU_FREEZE_L1 = 70.0        # smoothed %  -> tier 1
+CPU_FREEZE_L2 = 85.0        # smoothed %  -> tier 2
+CPU_FREEZE_L3 = 95.0        # smoothed %  -> tier 3
+CPU_HOG_PCT = 20.0          # per-process smoothed % that counts as a CPU hog
+CPU_TIER_HYST = 5.0         # % margin before descending a CPU tier
+
+MEM_AVAIL_T1 = 0.25         # free-RAM ratio -> tier 1
+MEM_AVAIL_T2 = 0.15         #                 -> tier 2
+MEM_AVAIL_T3 = 0.08         #                 -> tier 3
+MEM_AVAIL_T4 = 0.04         #                 -> tier 4
+MEM_KEY_RSS_MB = 150.0      # RSS floor (MB) to be a memory target at tier 2
+MEM_TIER_HYST = 0.02        # ratio margin before descending a memory tier
+MEM_DROP_CACHE_INTERVAL = 90.0   # min seconds between drop_caches calls
+FROZEN_MIN_SEC = 25.0       # a process stays frozen at least this long
+THAW_GRACE_SEC = 15.0       # sustained below-tier time before thawing
+FROZEN_RELEASE_WAIT = 45.0  # don't re-freeze a recently thawed process
+FROZEN_MARKER = "/run/pulsaros-frozen.json"
 
 # -----------------------------------------------------------------------------
 # Process Categorization
@@ -403,6 +439,51 @@ FALLBACK_PROBE = {"pid": 0, "ts": 0.0}
 DAEMON_RUNNING = False
 RUNNING = True
 
+# Anti-saturation runtime state
+FROZEN_PIDS = {}           # pid -> {"since": ts, "tier": int, "kind": "cpu"|"mem", "comm": str}
+_RELEASED = {}             # pid -> ts (recently thawed, bounce guard)
+_PREV_CPU_TIER = 0
+_PREV_MEM_TIER = 0
+_PREV_CPU_SMOOTH = 0.0
+_PREV_MEM_RATIO = 1.0
+_CPU_TIER_SINCE = 0.0
+_MEM_TIER_SINCE = 0.0
+_LAST_MEM_DROP = 0.0
+CPU_TIER_NOW = 0
+MEM_TIER_NOW = 0
+HARD_DENY = {"systemd", "dbus-daemon", "dbus-broker", "systemd-journald"}
+# Stateless/restartable services that are safe to SIGTERM on a memory emergency
+SAFE_KILL15 = set(THROTTLE15)
+
+# Processes that the anti-saturation ladder must NEVER freeze, stop or kill:
+# desktop core, session/DBus/input/file-access/security infra, the compositors
+# (incl. the Pulsar devkit/codexbar display), gjs (GNOME Shell's JS engine),
+# sandbox/runtime helpers and Pulsar's own services. User apps can still be
+# frozen at the strongest tiers; the infrastructure that keeps the desktop
+# alive never is.
+PROTECTED = set(CORE15) | set(_truncated(CORE_HELPER_PROCESSES)) | {
+    "systemd", "dbus-daemon", "dbus-broker", "dbus-broker-lau", "systemd-journald",
+    "at-spi-bus-laun", "at-spi2-registr",
+    "dconf-service", "gsettings",
+    "gnome-keyring-d", "gcr-ssh-agent", "ssh-agent",
+    "gnome-session-i", "gnome-session-s",
+    "gvfsd", "gvfsd-fuse", "gvfsd-trash", "gvfsd-metadata", "gvfsd-sftp",
+    "gvfsd-network", "gvfsd-dnssd", "gvfs-udisks2-vo", "gvfs-mtp-volume",
+    "gvfs-gphoto2-vo", "gvfs-afc-volu", "gvfsd-http",
+    "goa-daemon", "goa-identity-se",
+    "evolution-sourc", "evolution-calen", "evolution-addre", "evolution-alarm",
+    "evolution-data", "evolution",
+    "ssh", "sshd",
+    "mutter-devkit", "gnome-shell-devki", "codexbar",
+    "gjs", "gnome-extension", "bwrap",
+    "warp-taskbar", "pulsar-sync-wal", "pulsar-sync-acc", "pulsar-sync",
+    "geoclue", "udisksd",
+}
+PROTECTED_PREFIXES = (
+    "gsd-", "xdg-desktop-por", "gvfs", "evolution-", "at-spi",
+    "ibus", "ibus-", "pulsaros-", "pulsar-sync", "gnome-session", "gnome-shell",
+)
+
 def read_meminfo():
     info = {}
     try:
@@ -461,6 +542,328 @@ def read_psi():
     except Exception:
         pass
     return psi
+
+# -----------------------------------------------------------------------------
+# Anti-saturation implementation
+# -----------------------------------------------------------------------------
+_ACTIVE_USER_UIDS = {}
+_ACTIVE_USER_UIDS_TS = 0.0
+
+def _active_user_uids():
+    """UIDs of logged-in desktop sessions (from /run/user), refreshed 5 min."""
+    global _ACTIVE_USER_UIDS, _ACTIVE_USER_UIDS_TS
+    now = time.time()
+    if _ACTIVE_USER_UIDS and (now - _ACTIVE_USER_UIDS_TS) < 300.0:
+        return _ACTIVE_USER_UIDS
+    _ACTIVE_USER_UIDS_TS = now
+    uids = set()
+    for d in glob.glob("/run/user/*"):
+        try:
+            uids.add(int(os.path.basename(d)))
+        except Exception:
+            continue
+    _ACTIVE_USER_UIDS = uids
+    return uids
+
+def _pid_uid(pid: int) -> int:
+    try:
+        with open(f"/proc/{pid}/status", "r") as f:
+            for line in f:
+                if line.startswith("Uid:"):
+                    return int(line.split()[1])
+    except Exception:
+        pass
+    return -1
+
+def read_mem_ratio():
+    """Return (available_ratio, available_mb, total_mb)."""
+    mem = read_meminfo()
+    total_kb = mem.get("MemTotal", 4 * 1024 * 1024)
+    avail_kb = mem.get("MemAvailable", 0)
+    if not avail_kb:
+        avail_kb = mem.get("MemFree", 0) + mem.get("Buffers", 0) + mem.get("Cached", 0)
+    ratio = (avail_kb / total_kb) if total_kb > 0 else 1.0
+    return ratio, avail_kb / 1024.0, total_kb / 1024.0
+
+def _tiers(cpu_smooth: float, mem_ratio: float, psi, prev_cpu=None, prev_mem=None):
+    """Compute (cpu_tier, mem_tier) with hysteresis when descending."""
+    cpu_off = -CPU_TIER_HYST if (prev_cpu is not None and cpu_smooth < prev_cpu) else 0.0
+    if cpu_smooth >= CPU_FREEZE_L3 + cpu_off:
+        cpu_tier = 3
+    elif cpu_smooth >= CPU_FREEZE_L2 + cpu_off:
+        cpu_tier = 2
+    elif cpu_smooth >= CPU_FREEZE_L1 + cpu_off:
+        cpu_tier = 1
+    else:
+        cpu_tier = 0
+
+    mem_off = -MEM_TIER_HYST if (prev_mem is not None and mem_ratio > prev_mem) else 0.0
+    if mem_ratio <= MEM_AVAIL_T4 + mem_off or psi["mem_full"] > 30.0:
+        mem_tier = 4
+    elif mem_ratio <= MEM_AVAIL_T3 + mem_off or psi["mem_full"] > 15.0:
+        mem_tier = 3
+    elif mem_ratio <= MEM_AVAIL_T2 + mem_off:
+        mem_tier = 2
+    elif mem_ratio <= MEM_AVAIL_T1 + mem_off:
+        mem_tier = 1
+    else:
+        mem_tier = 0
+    return cpu_tier, mem_tier
+
+def _drop_caches(tier: int):
+    """Reclaim cache/compact memory at tier >= 1 (rate limited, root only)."""
+    global _LAST_MEM_DROP
+    now = time.time()
+    if (now - _LAST_MEM_DROP) < MEM_DROP_CACHE_INTERVAL or os.geteuid() != 0:
+        return
+    _LAST_MEM_DROP = now
+    val = "3" if tier >= 4 else "1"
+    if _sys_write("/proc/sys/vm/drop_caches", val):
+        _sys_write("/proc/sys/vm/compact_memory", "1")
+        log(f"memory tier {tier}: dropped caches ({val}) + compacted memory")
+
+def _thaw_all():
+    """Thaw everything frozen (used on daemon exit so no process stays stuck)."""
+    for pid in list(FROZEN_PIDS.keys()):
+        try:
+            os.kill(pid, signal.SIGCONT)
+        except Exception:
+            pass
+    FROZEN_PIDS.clear()
+
+_LAST_MARKER_SIG = None
+def _save_frozen_marker():
+    """Persist frozen pids so a hard daemon crash can still recover them."""
+    global _LAST_MARKER_SIG
+    sig = tuple(sorted(FROZEN_PIDS.keys()))
+    if sig == _LAST_MARKER_SIG:
+        return
+    _LAST_MARKER_SIG = sig
+    try:
+        if not sig:
+            if os.path.exists(FROZEN_MARKER):
+                os.unlink(FROZEN_MARKER)
+            return
+        with open(FROZEN_MARKER, "w") as f:
+            json.dump({"ts": time.time(), "pids": list(sig)}, f)
+    except Exception:
+        pass
+
+def _recover_from_crash_freeze():
+    """On startup, SIGCONT any process a previous daemon instance left frozen."""
+    try:
+        with open(FROZEN_MARKER, "r") as f:
+            data = json.load(f)
+        for pid in data.get("pids", []):
+            try:
+                with open(f"/proc/{pid}/stat", "r") as f2:
+                    raw = f2.read()
+                rp = raw.rfind(")")
+                state = raw[rp + 2:].split()[0] if rp >= 0 else "?"
+                if state == "T":  # stopped: leftover from a crashed daemon
+                    os.kill(pid, signal.SIGCONT)
+                    log(f"recovered pid {pid} left frozen by a previous crash")
+            except Exception:
+                continue
+        os.unlink(FROZEN_MARKER)
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+
+def _is_fg_descendant(pid: int, focused: int) -> bool:
+    """True if pid is the focused process or a descendant of it (foreground work)."""
+    for _ in range(8):
+        if pid <= 0:
+            return False
+        if pid == focused:
+            return True
+        try:
+            with open(f"/proc/{pid}/stat", "r") as f:
+                raw = f.read()
+            rp = raw.rfind(")")
+            pid = int(raw[rp + 2:].split()[1])  # ppid
+        except Exception:
+            return False
+    return False
+
+def _scan_resources():
+    """One pass over /proc: (pid, comm, cpu_ema, rss_mb, uid, ppid) for live,
+    non-kernel, session-owned processes."""
+    focused = detect_active_window_pid()
+    uids = _active_user_uids()
+    entries = []
+    for pid_str in os.listdir("/proc"):
+        if not pid_str.isdigit():
+            continue
+        pid = int(pid_str)
+        if pid <= 2 or pid == os.getpid():
+            continue
+        try:
+            with open(f"/proc/{pid_str}/stat", "r") as f:
+                raw = f.read()
+            lp = raw.find("(")
+            rp = raw.rfind(")")
+            if lp < 0 or rp < lp:
+                continue
+            comm = raw[lp + 1:rp]
+            rest = raw[rp + 2:].split()
+            if len(rest) < 3:
+                continue
+            if rest[0] in ("Z", "I", "X") or comm.startswith("["):
+                continue
+            ppid = int(rest[1])
+            if comm in HARD_DENY:
+                continue
+        except Exception:
+            continue
+        uid = _pid_uid(pid)
+        if uid not in uids and uid != 0:
+            continue
+        ema = PROC_CPU_EMA.get(pid, 0.0)
+        rss_mb = 0.0
+        try:
+            with open(f"/proc/{pid_str}/status", "r") as f:
+                for line in f:
+                    if line.startswith("VmRSS:"):
+                        rss_mb = int(line.split()[1]) / 1024.0
+                        break
+        except Exception:
+            pass
+        entries.append((pid, comm, ema, rss_mb, uid, ppid))
+    return entries, focused
+
+def _emergency_kill():
+    """Memory tier 4: SIGTERM stateless indexer services to actually free RAM."""
+    killed = 0
+    for pid_str in os.listdir("/proc"):
+        if killed >= 2:
+            break
+        if not pid_str.isdigit():
+            continue
+        pid = int(pid_str)
+        try:
+            with open(f"/proc/{pid_str}/comm", "r") as f:
+                comm = f.read().strip()
+            rss = 0
+            with open(f"/proc/{pid_str}/status", "r") as f:
+                for line in f:
+                    if line.startswith("VmRSS:"):
+                        rss = int(line.split()[1])
+                        break
+        except Exception:
+            continue
+        if rss > 0 and comm in SAFE_KILL15 and comm not in SELF_COMM:
+            try:
+                os.kill(pid, signal.SIGTERM)
+                log(f"EMERGENCY: SIGTERM {comm} (pid {pid}) - memory critical tier 4")
+                killed += 1
+            except Exception:
+                continue
+
+def _is_essential(comm: str, is_focused: bool, override) -> bool:
+    """Processes that must never be frozen/killed by the anti-saturation ladder."""
+    if is_focused or override is not None:
+        return True
+    if comm in SELF_COMM:
+        return True
+    if comm in PROTECTED or any(comm.startswith(p) for p in PROTECTED_PREFIXES):
+        return True
+    return False
+
+def anti_saturation(cpu_smooth: float):
+    """Escalating CPU/memory saturation protection. Must be called every loop."""
+    global _PREV_CPU_TIER, _PREV_MEM_TIER, _PREV_CPU_SMOOTH, _PREV_MEM_RATIO
+    global _CPU_TIER_SINCE, _MEM_TIER_SINCE, CPU_TIER_NOW, MEM_TIER_NOW
+    now = time.time()
+    mem_ratio, mem_avail_mb, mem_total_mb = read_mem_ratio()
+    psi = read_psi()
+
+    cpu_tier, mem_tier = _tiers(cpu_smooth, mem_ratio, psi,
+                                _PREV_CPU_SMOOTH, _PREV_MEM_RATIO)
+    CPU_TIER_NOW, MEM_TIER_NOW = cpu_tier, mem_tier
+    if cpu_tier != _PREV_CPU_TIER:
+        _PREV_CPU_TIER, _CPU_TIER_SINCE = cpu_tier, now
+        log(f"CPU mitigation tier -> {cpu_tier}/3 (load {cpu_smooth:.1f}%)")
+    if mem_tier != _PREV_MEM_TIER:
+        _PREV_MEM_TIER, _MEM_TIER_SINCE = mem_tier, now
+        log(f"Memory mitigation tier -> {mem_tier}/4 (available {100*mem_ratio:.1f}% = {mem_avail_mb:.0f} MB of {mem_total_mb:.0f} MB)")
+    _PREV_CPU_SMOOTH = cpu_smooth
+    _PREV_MEM_RATIO = mem_ratio
+
+    # ---- thaw first: only on sustained drop below the freezing tier -------
+    for pid, info in list(FROZEN_PIDS.items()):
+        if info["kind"] == "cpu":
+            if cpu_tier >= info["tier"] or (now - _CPU_TIER_SINCE) < THAW_GRACE_SEC:
+                continue
+        else:
+            if mem_tier >= info["tier"] or (now - _MEM_TIER_SINCE) < THAW_GRACE_SEC:
+                continue
+        if (now - info["since"]) < FROZEN_MIN_SEC:
+            continue
+        try:
+            os.kill(pid, signal.SIGCONT)
+            _RELEASED[pid] = now
+        except Exception:
+            pass
+        del FROZEN_PIDS[pid]
+        log(f"resumed {info['comm']} (pid {pid}) - {info['kind']} tier {info['tier']} dropped to {cpu_tier}/{mem_tier}")
+    _save_frozen_marker()
+
+    # ---- reclaim memory first (tier 1+), emergency kills only at tier 4 ----
+    if mem_tier >= 1:
+        _drop_caches(mem_tier)
+    if mem_tier >= 4:
+        _emergency_kill()
+
+    if cpu_tier == 0 and mem_tier == 0:
+        return
+
+    # ---- freeze new targets ------------------------------------------------
+    entries, focused = _scan_resources()
+    uids = _active_user_uids()
+    cpu_floor = CPU_HOG_PCT if cpu_tier >= 2 else -1.0
+    mem_floor = MEM_KEY_RSS_MB if mem_tier == 2 else (64.0 if mem_tier == 3 else 16.0)
+
+    for pid, comm, ema, rss_mb, uid, ppid in entries:
+        if pid in FROZEN_PIDS or comm in SELF_COMM:
+            continue
+        if (now - _RELEASED.get(pid, 0.0)) < FROZEN_RELEASE_WAIT:
+            continue
+        if _is_fg_descendant(pid, focused):
+            continue
+        ent = PROCESSED_PIDS.get(pid)
+        if ent is not None and ent.manual:
+            continue  # user manually adjusted this process - leave it alone
+        if _is_essential(comm, False, None):
+            continue
+
+        reason = None
+        # CPU ladder: session-user processes only
+        if uid in uids:
+            if cpu_tier >= 1 and comm in THROTTLE15:
+                reason = ("cpu", 1)
+            if cpu_tier >= 2 and ema >= cpu_floor:
+                reason = ("cpu", 2)
+            if cpu_tier >= 3:
+                reason = ("cpu", 3)
+            # Memory ladder
+            if mem_tier >= 2 and rss_mb >= mem_floor:
+                if reason is None or reason[1] <= mem_tier:
+                    reason = ("mem", mem_tier)
+        if reason is None:
+            continue
+        kind, tier = reason
+        try:
+            os.kill(pid, signal.SIGSTOP)
+            FROZEN_PIDS[pid] = {"since": now, "tier": tier, "kind": kind, "comm": comm}
+            log(f"FROZEN {comm} (pid {pid}, cpu {ema:.0f}%, rss {rss_mb:.0f} MB) [{kind} tier {tier}, {len(FROZEN_PIDS)} frozen]")
+        except ProcessLookupError:
+            continue
+        except Exception:
+            continue
+
+    _save_frozen_marker()
 
 def compute_load_state():
     global CPU_SMOOTH
@@ -836,11 +1239,16 @@ def show_status():
         except Exception:
             focused_comm = "?"
 
+    mem_ratio, mem_avail_mb, mem_total_mb = read_mem_ratio()
+    cpu_tier, mem_tier = _tiers(cpu_smooth, mem_ratio, psi)
+
     print("=" * 70)
     print("PULSAR OS OPTIMIZER - FLUIDITY & ZERO-LAG RESPONSIVENESS")
     print("=" * 70)
     print(f"  Load Level:             {level}")
     print(f"  CPU Load:               {cpu_smooth:.1f}%")
+    print(f"  Memory Available:       {mem_avail_mb:.0f} / {mem_total_mb:.0f} MB ({100*mem_ratio:.1f}%)")
+    print(f"  Mitigation:             CPU tier {cpu_tier}/3  MEM tier {mem_tier}/4  {len(FROZEN_PIDS)} frozen")
     print(f"  Focused PID:            {focused_pid} ({focused_comm})")
     print(f"  Focus Source:           {FOCUS_SOURCE}")
     zstats = get_zram_stats()
@@ -863,9 +1271,22 @@ def main():
         elif arg in ["--restart"]:
             subprocess.run(["systemctl", "restart", "pulsaros-optimizer.service"])
             sys.exit(0)
+        elif arg in ["--forget-habit"] and len(sys.argv) > 2:
+            comm = sys.argv[2][:15]
+            HABIT_ENGINE.habits.pop(comm, None)
+            HABIT_ENGINE.save()
+            log(f"forgot learned habit for '{comm}'")
+            sys.exit(0)
+        elif arg in ["--clear-habits"]:
+            HABIT_ENGINE.habits.clear()
+            HABIT_ENGINE.user_overrides.clear()
+            HABIT_ENGINE.save()
+            log("cleared all learned habits")
+            sys.exit(0)
 
     log("Starting Pulsar OS Zero-Lag Optimizer Daemon...")
     setup_zram_and_sysctl()
+    _recover_from_crash_freeze()
 
     signal.signal(signal.SIGTERM, lambda s, f: sys.exit(0))
     signal.signal(signal.SIGINT, lambda s, f: sys.exit(0))
@@ -881,18 +1302,24 @@ def main():
 
             level, mode, cpu_smooth, psi = compute_load_state()
             optimize_process_priorities(level, loop_interval)
+            anti_saturation(cpu_smooth)
 
             loop_count += 1
             if loop_count % 30 == 0:
                 HABIT_ENGINE.refresh_overrides()
+                _save_frozen_marker()
 
-            sleep_sec = 1.0 if level >= 2 else 2.0
+            sleep_sec = 0.5 if (CPU_TIER_NOW >= 2 or MEM_TIER_NOW >= 3) else \
+                        (1.0 if level >= 2 else 2.0)
             time.sleep(sleep_sec)
         except KeyboardInterrupt:
             break
         except Exception as e:
             warn_once(f"loop error: {e!r}")
             time.sleep(2.0)
+
+# Never leave processes frozen if this daemon exits (thaws on clean exit)
+atexit.register(_thaw_all)
 
 if __name__ == "__main__":
     main()
