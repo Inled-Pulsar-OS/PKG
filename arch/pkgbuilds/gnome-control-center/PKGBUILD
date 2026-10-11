@@ -8,7 +8,7 @@ pkgname=(
   gnome-keybindings
 )
 pkgver=50.4
-pkgrel=1
+pkgrel=2
 pkgdesc="GNOME Settings with Pulsar OS macOS customization and Live Wallpaper engine"
 url="https://inled.es"
 license=(GPL-2.0-or-later)

@@ -8,7 +8,7 @@ index 5ab4a386d..360abec84 100644
 -	url = https://gitlab.gnome.org/GNOME/libgnome-volume-control.git
 +	url = /home/jaime/Documentos/pulsar/PKG/arch/pkgbuilds/gnome-control-center/src/libgnome-volume-control
 diff --git a/panels/background/cc-background-panel.blp b/panels/background/cc-background-panel.blp
-index ff2b3fb6f..edeb8cbab 100644
+index ff2b3fb6f..eb519e789 100644
 --- a/panels/background/cc-background-panel.blp
 +++ b/panels/background/cc-background-panel.blp
 @@ -23,7 +23,7 @@ template $CcBackgroundPanel: $CcPanel {
@@ -51,7 +51,7 @@ index ff2b3fb6f..edeb8cbab 100644
                      mnemonic-widget: dark_toggle;
  
                      layout {
-@@ -117,24 +115,37 @@ template $CcBackgroundPanel: $CcPanel {
+@@ -117,24 +115,63 @@ template $CcBackgroundPanel: $CcPanel {
            }
  
            Adw.PreferencesGroup {
@@ -68,15 +68,41 @@ index ff2b3fb6f..edeb8cbab 100644
 +              subtitle: _("Apply translucent blurs and reflective borders to active windows in macOS style");
 +              notify::active => $on_liquid_glass_active_changed_cb(template);
 +            }
++
++            Adw.ComboRow liquid_glass_mode_row {
++              title: _("Window Transparency Mode");
++              subtitle: _("Appearance and opacity of application windows");
++              sensitive: bind liquid_glass_switch_row.active;
++              notify::selected => $on_liquid_glass_mode_selected_cb(template);
++
++              model: StringList {
++                strings [
++                  _("Full Transparent Glass (60%)"),
++                  _("Semi-Transparent Glass (85%)"),
++                  _("Opaque Windows (Native Tint Only)"),
++                ]
++              };
++            }
++          }
++
++          Adw.PreferencesGroup {
++            title: _("Control Centre");
++            description: _("Display and behaviour of the top-right centre of control");
++
++            Adw.SwitchRow cc_switch_row {
++              title: _("macOS Control Centre");
++              subtitle: _("Replace the GNOME quick settings menu with the macOS-style Control Centre panel");
++              notify::active => $on_cc_active_changed_cb(template);
++            }
 +          }
 +
 +          Adw.PreferencesGroup {
 +            title: _("Theme");
- 
++
 +            Adw.ActionRow {
 +              title: _("Accent Color");
 +              subtitle: _("System-wide accent color");
-+
+ 
 +              [suffix]
                Box accent_box {
 -                spacing: 12;
@@ -99,7 +125,7 @@ index ff2b3fb6f..edeb8cbab 100644
  
              header-suffix: Button {
                Adw.ButtonContent {
-@@ -150,6 +161,31 @@ template $CcBackgroundPanel: $CcPanel {
+@@ -150,6 +187,31 @@ template $CcBackgroundPanel: $CcPanel {
                ]
              };
  
@@ -131,10 +157,24 @@ index ff2b3fb6f..edeb8cbab 100644
              Adw.Bin {
                styles [
                  "card",
-@@ -166,6 +202,91 @@ template $CcBackgroundPanel: $CcPanel {
+@@ -165,6 +227,127 @@ template $CcBackgroundPanel: $CcPanel {
+                 background-chosen => $on_chooser_background_chosen_cb(template);
                }
              }
-           }
++
++            Adw.ActionRow {
++              title: _("Legal Notice &amp; Attribution");
++              subtitle: _("macOS wallpapers are property of Apple Inc. and were obtained from dynamicwallpaper.club.");
++              activatable: false;
++              selectable: false;
++
++              [prefix]
++              Image {
++                icon-name: "dialog-information-symbolic";
++                valign: center;
++              }
++            }
++          }
 +
 +          Adw.PreferencesGroup {
 +            title: _("Spotlight &amp; App Launcher");
@@ -220,24 +260,57 @@ index ff2b3fb6f..edeb8cbab 100644
 +              }
 +            }
 +          }
++
++          Adw.PreferencesGroup {
++            title: _("Notch");
++            description: _("NotchNux dynamic pill island and its drop shelf");
++
++            Adw.SwitchRow notch_switch_row {
++              title: _("Enable Notch");
++              subtitle: _("Show the dynamic island, media controls and file shelf in the top bar");
++              notify::active => $on_notch_active_changed_cb(template);
++            }
++
++            Adw.ActionRow {
++              title: _("Notch Settings");
++              subtitle: _("Shelf behaviour, media, weather and appearance options");
++
++              [suffix]
++              Button {
++                valign: center;
++                label: _("Open…");
++                clicked => $on_notch_prefs_clicked_cb(template);
++              }
++            }
+           }
          };
        };
-     };
 diff --git a/panels/background/cc-background-panel.c b/panels/background/cc-background-panel.c
-index 201d2ab3b..a76b38189 100644
+index 201d2ab3b..ab001cd12 100644
 --- a/panels/background/cc-background-panel.c
 +++ b/panels/background/cc-background-panel.c
-@@ -67,6 +67,9 @@ struct _CcBackgroundPanel
+@@ -67,8 +67,20 @@ struct _CcBackgroundPanel
    CcBackgroundPreview *dark_preview;
    GtkToggleButton *default_toggle;
    GtkToggleButton *dark_toggle;
 +  AdwSwitchRow *macos_remap_switch_row;
 +  AdwSwitchRow *macos_fullscreen_switch_row;
 +  AdwSwitchRow *liquid_glass_switch_row;
++  AdwComboRow *liquid_glass_mode_row;
++  AdwSwitchRow *notch_switch_row;
++  AdwSwitchRow *cc_switch_row;
  };
  
++/* UUID of the NotchNux shell extension, toggled from the Appearance panel. */
++#define NOTCH_UUID "notchnux@adityasah.programs"
++
++/* UUID of the macOS Control Centre shell extension, toggled from the Appearance panel. */
++#define CC_UUID "macos-control-centre@pulsar.local"
++
  CC_PANEL_REGISTER (CcBackgroundPanel, cc_background_panel)
-@@ -77,32 +80,58 @@ static void
+ 
+ static void on_settings_changed (CcBackgroundPanel *self);
+@@ -77,32 +89,58 @@ static void
  load_custom_css (CcBackgroundPanel *self)
  {
    g_autoptr(GtkCssProvider) provider = NULL;
@@ -310,7 +383,7 @@ index 201d2ab3b..a76b38189 100644
  }
  
  static void
-@@ -461,6 +490,45 @@ static void
+@@ -461,6 +499,45 @@ static void
  on_chooser_background_chosen_cb (CcBackgroundPanel *self,
                                   CcBackgroundItem  *item)
  {
@@ -356,7 +429,7 @@ index 201d2ab3b..a76b38189 100644
    g_signal_handlers_block_by_func (self->settings, on_settings_changed, self);
  
    set_background (self, self->settings, item, TRUE);
-@@ -506,6 +574,339 @@ cc_background_panel_finalize (GObject *object)
+@@ -506,6 +583,466 @@ cc_background_panel_finalize (GObject *object)
    G_OBJECT_CLASS (cc_background_panel_parent_class)->finalize (object);
  }
  
@@ -487,13 +560,69 @@ index 201d2ab3b..a76b38189 100644
 +    }
 +}
 +
++static gboolean
++is_extension_enabled (const gchar *uuid)
++{
++  g_autoptr(GSettingsSchema) schema = NULL;
++  g_autoptr(GSettings) shell_settings = safe_settings_new ("org.gnome.shell", &schema);
++  gboolean found = FALSE;
++
++  if (!shell_settings || !schema || !g_settings_schema_has_key (schema, "enabled-extensions"))
++    return FALSE;
++
++  g_auto(GStrv) enabled_exts = g_settings_get_strv (shell_settings, "enabled-extensions");
++  if (enabled_exts)
++    {
++      for (guint i = 0; enabled_exts[i] != NULL; i++)
++        {
++          if (g_str_equal (enabled_exts[i], uuid))
++            {
++              found = TRUE;
++              break;
++            }
++        }
++    }
++
++  return found;
++}
++
++typedef enum {
++  LIQUID_GLASS_MODE_FULL_TRANSPARENT = 0,
++  LIQUID_GLASS_MODE_SEMI_TRANSPARENT = 1,
++  LIQUID_GLASS_MODE_OPAQUE = 2,
++} LiquidGlassWindowMode;
++
 +static void
-+apply_desktop_effects_mode (gboolean use_liquid_glass)
++apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mode)
 +{
 +  if (use_liquid_glass)
 +    {
-+      /* 1. Toggle extension states: enable liquid glass, disable blur my shell */
-+      set_extension_enabled ("blur-my-shell@aunetx", FALSE);
++      gboolean enable_app_glass = TRUE;
++      gboolean all_windows = TRUE;
++      gdouble opacity = 0.85;
++
++      if (mode == LIQUID_GLASS_MODE_FULL_TRANSPARENT)
++        {
++          enable_app_glass = TRUE;
++          all_windows = TRUE;
++          opacity = 0.60;
++        }
++      else if (mode == LIQUID_GLASS_MODE_OPAQUE)
++        {
++          enable_app_glass = FALSE;
++          all_windows = FALSE;
++          opacity = 1.0;
++        }
++      else
++        {
++          /* LIQUID_GLASS_MODE_SEMI_TRANSPARENT (Default) */
++          enable_app_glass = TRUE;
++          all_windows = TRUE;
++          opacity = 0.85;
++        }
++
++      /* 1. Toggle extension states: enable liquid glass and blur my shell (for overview blur) */
++      set_extension_enabled ("blur-my-shell@aunetx", TRUE);
 +      set_extension_enabled ("liquid-glass@thinkingcoding1231.gmail.com", TRUE);
 +
 +      /* 2. Configure Dash to Dock (Pulsar Dock) with 'Use system theme' enabled */
@@ -518,9 +647,9 @@ index 201d2ab3b..a76b38189 100644
 +      if (glass_settings && glass_schema)
 +        {
 +          safe_set_int (glass_settings, glass_schema, "application-blur-radius", 5);
-+          safe_set_double (glass_settings, glass_schema, "application-content-opacity", 0.85);
++          safe_set_double (glass_settings, glass_schema, "application-content-opacity", opacity);
 +          safe_set_double (glass_settings, glass_schema, "application-corner-radius", 20.689655172413794);
-+          safe_set_boolean (glass_settings, glass_schema, "application-glass-all-windows", TRUE);
++          safe_set_boolean (glass_settings, glass_schema, "application-glass-all-windows", all_windows);
 +          safe_set_string (glass_settings, glass_schema, "application-tint-color", "#000000");
 +          safe_set_double (glass_settings, glass_schema, "application-tint-strength", 0.0);
 +          const gchar *empty_list[] = { NULL };
@@ -531,7 +660,7 @@ index 201d2ab3b..a76b38189 100644
 +          safe_set_double (glass_settings, glass_schema, "dock-tint-strength", 0.12);
 +          safe_set_int (glass_settings, glass_schema, "dock-blur-radius", 5);
 +          safe_set_boolean (glass_settings, glass_schema, "enable-dock-glass", TRUE);
-+          safe_set_boolean (glass_settings, glass_schema, "enable-application-glass", TRUE);
++          safe_set_boolean (glass_settings, glass_schema, "enable-application-glass", enable_app_glass);
 +          safe_set_boolean (glass_settings, glass_schema, "enable-menu-glass", TRUE);
 +          safe_set_boolean (glass_settings, glass_schema, "enable-notification-glass", TRUE);
 +          safe_set_boolean (glass_settings, glass_schema, "enable-osd-glass", TRUE);
@@ -544,19 +673,34 @@ index 201d2ab3b..a76b38189 100644
 +          safe_set_double (glass_settings, glass_schema, "glass-profile-shape-n", 20.0);
 +          safe_set_double (glass_settings, glass_schema, "glass-rim-width", 4.8000000000000007);
 +          safe_set_double (glass_settings, glass_schema, "glass-specular-intensity", 0.0);
++          safe_set_double (glass_settings, glass_schema, "menu-corner-radius", 14.0);
++          safe_set_int (glass_settings, glass_schema, "menu-glass-expand", 4);
 +          safe_set_string (glass_settings, glass_schema, "menu-tint-color", "#000000");
++          safe_set_double (glass_settings, glass_schema, "notification-corner-radius", 16.0);
 +          safe_set_string (glass_settings, glass_schema, "notification-tint-color", "#000000");
++          safe_set_double (glass_settings, glass_schema, "osd-corner-radius", 16.0);
 +          safe_set_string (glass_settings, glass_schema, "osd-tint-color", "#000000");
++          safe_set_double (glass_settings, glass_schema, "quick-settings-corner-radius", 18.0);
 +          safe_set_boolean (glass_settings, glass_schema, "output-logs", FALSE);
 +        }
 +
++      if (mode == LIQUID_GLASS_MODE_OPAQUE)
++        {
++          g_autoptr(GSettingsSchema) bms_apps_schema = NULL;
++          g_autoptr(GSettings) bms_apps_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.applications", &bms_apps_schema);
++          if (bms_apps_settings && bms_apps_schema)
++            safe_set_boolean (bms_apps_settings, bms_apps_schema, "blur", TRUE);
++        }
++
 +      /* Execute dconf writes in background as non-blocking safe helper */
-+      const gchar *dconf_script =
++      const gchar *enable_app_str = enable_app_glass ? "true" : "false";
++      const gchar *all_win_str = all_windows ? "true" : "false";
++      g_autofree gchar *dconf_script = g_strdup_printf (
 +        "/bin/sh -c \""
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/application-blur-radius '5' ; "
-+        "dconf write /org/gnome/shell/extensions/liquid-glass/application-content-opacity '0.85' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/application-content-opacity '%.2f' ; "
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/application-corner-radius '20.689655172413794' ; "
-+        "dconf write /org/gnome/shell/extensions/liquid-glass/application-glass-all-windows 'true' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/application-glass-all-windows '%s' ; "
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/application-tint-color \\\"'#000000'\\\" ; "
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/application-tint-strength '0.0' ; "
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/application-window-whitelist '@as []' ; "
@@ -564,7 +708,7 @@ index 201d2ab3b..a76b38189 100644
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/dock-glass-expand '3' ; "
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/dock-tint-color \\\"'#000000'\\\" ; "
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-dock-glass 'true' ; "
-+        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-application-glass 'true' ; "
++        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-application-glass '%s' ; "
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-menu-glass 'true' ; "
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-notification-glass 'true' ; "
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-osd-glass 'true' ; "
@@ -589,10 +733,16 @@ index 201d2ab3b..a76b38189 100644
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/notification-tint-color \\\"'#000000'\\\" ; "
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/osd-tint-color \\\"'#000000'\\\" ; "
 +        "dconf write /org/gnome/shell/extensions/liquid-glass/output-logs 'false' ; "
++        "gsettings set org.gnome.shell.extensions.blur-my-shell.overview blur true ; "
++        "gsettings set org.gnome.shell.extensions.blur-my-shell.panel blur false ; "
++        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur false ; "
++        "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur false ; "
 +        "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme true ; "
 +        "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' ; "
 +        "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 ; "
-+        "gsettings set org.gnome.shell.extensions.dash-to-dock customize-alphas false >/dev/null 2>&1 &\"";
++        "gsettings set org.gnome.shell.extensions.dash-to-dock customize-alphas false >/dev/null 2>&1 &\"",
++        opacity, all_win_str, enable_app_str
++      );
 +      g_spawn_command_line_async (dconf_script, NULL);
 +    }
 +  else
@@ -651,12 +801,34 @@ index 201d2ab3b..a76b38189 100644
 +on_liquid_glass_active_changed_cb (CcBackgroundPanel *self)
 +{
 +  gboolean active;
++  guint mode = LIQUID_GLASS_MODE_SEMI_TRANSPARENT;
 +
 +  if (!self->liquid_glass_switch_row)
 +    return;
 +
 +  active = adw_switch_row_get_active (self->liquid_glass_switch_row);
-+  apply_desktop_effects_mode (active);
++  if (self->liquid_glass_mode_row)
++    mode = adw_combo_row_get_selected (self->liquid_glass_mode_row);
++
++  apply_desktop_effects_mode (active, (LiquidGlassWindowMode) mode);
++}
++
++static void
++on_liquid_glass_mode_selected_cb (CcBackgroundPanel *self)
++{
++  gboolean active = TRUE;
++  guint mode;
++
++  if (!self->liquid_glass_mode_row)
++    return;
++
++  if (self->liquid_glass_switch_row)
++    active = adw_switch_row_get_active (self->liquid_glass_switch_row);
++
++  mode = adw_combo_row_get_selected (self->liquid_glass_mode_row);
++
++  if (active)
++    apply_desktop_effects_mode (TRUE, (LiquidGlassWindowMode) mode);
 +}
 +
 +static void
@@ -701,10 +873,34 @@ index 201d2ab3b..a76b38189 100644
 +    g_spawn_command_line_async ("/bin/sh -c 'gsettings set org.gnome.shell.extensions.pulsaros-global-menu macos-fullscreen-spaces false'", NULL);
 +}
 +
++static void
++on_notch_active_changed_cb (CcBackgroundPanel *self)
++{
++  if (!self->notch_switch_row)
++    return;
++
++  set_extension_enabled (NOTCH_UUID, adw_switch_row_get_active (self->notch_switch_row));
++}
++
++static void
++on_notch_prefs_clicked_cb (CcBackgroundPanel *self)
++{
++  g_spawn_command_line_async ("/bin/sh -c 'gnome-extensions prefs notchnux@adityasah.programs >/dev/null 2>&1 &'", NULL);
++}
++
++static void
++on_cc_active_changed_cb (CcBackgroundPanel *self)
++{
++  if (!self->cc_switch_row)
++    return;
++
++  set_extension_enabled (CC_UUID, adw_switch_row_get_active (self->cc_switch_row));
++}
++
  static void
  cc_background_panel_class_init (CcBackgroundPanelClass *klass)
  {
-@@ -527,12 +928,25 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
+@@ -527,12 +1064,32 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
    gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, background_chooser);
    gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, default_preview);
    gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, dark_preview);
@@ -714,6 +910,9 @@ index 201d2ab3b..a76b38189 100644
 +  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_remap_switch_row);
 +  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_fullscreen_switch_row);
 +  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, liquid_glass_switch_row);
++  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, liquid_glass_mode_row);
++  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, notch_switch_row);
++  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, cc_switch_row);
  
    gtk_widget_class_bind_template_callback (widget_class, on_color_scheme_toggle_active_cb);
    gtk_widget_class_bind_template_callback (widget_class, on_chooser_background_chosen_cb);
@@ -723,14 +922,18 @@ index 201d2ab3b..a76b38189 100644
 +  gtk_widget_class_bind_template_callback (widget_class, on_apply_cursor_tahoe_clicked_cb);
 +  gtk_widget_class_bind_template_callback (widget_class, on_apply_cursor_adwaita_clicked_cb);
 +  gtk_widget_class_bind_template_callback (widget_class, on_liquid_glass_active_changed_cb);
++  gtk_widget_class_bind_template_callback (widget_class, on_liquid_glass_mode_selected_cb);
 +  gtk_widget_class_bind_template_callback (widget_class, on_activate_spotlight_python_clicked_cb);
 +  gtk_widget_class_bind_template_callback (widget_class, on_activate_gnome_overview_clicked_cb);
 +  gtk_widget_class_bind_template_callback (widget_class, on_macos_remap_active_changed_cb);
 +  gtk_widget_class_bind_template_callback (widget_class, on_macos_fullscreen_active_changed_cb);
++  gtk_widget_class_bind_template_callback (widget_class, on_notch_active_changed_cb);
++  gtk_widget_class_bind_template_callback (widget_class, on_notch_prefs_clicked_cb);
++  gtk_widget_class_bind_template_callback (widget_class, on_cc_active_changed_cb);
  }
  
  static void
-@@ -549,6 +963,60 @@ cc_background_panel_init (CcBackgroundPanel *self)
+@@ -549,6 +1106,107 @@ cc_background_panel_init (CcBackgroundPanel *self)
  
    gtk_widget_init_template (GTK_WIDGET (self));
  
@@ -788,6 +991,53 @@ index 201d2ab3b..a76b38189 100644
 +      g_signal_handlers_unblock_by_func (self->liquid_glass_switch_row, on_liquid_glass_active_changed_cb, self);
 +    }
 +
++  if (self->liquid_glass_mode_row)
++    {
++      guint initial_mode = LIQUID_GLASS_MODE_SEMI_TRANSPARENT;
++      g_autoptr(GSettingsSchema) glass_schema = NULL;
++      g_autoptr(GSettings) glass_settings = safe_settings_new ("org.gnome.shell.extensions.liquid-glass", &glass_schema);
++      if (!glass_settings)
++        glass_settings = safe_settings_new ("org.gnome.shell.extensions.liquid-glass@thinkingcoding1231.gmail.com", &glass_schema);
++
++      if (glass_settings && glass_schema)
++        {
++          gboolean app_glass = TRUE;
++          gdouble opacity = 0.85;
++
++          if (g_settings_schema_has_key (glass_schema, "enable-application-glass"))
++            app_glass = g_settings_get_boolean (glass_settings, "enable-application-glass");
++          if (g_settings_schema_has_key (glass_schema, "application-content-opacity"))
++            opacity = g_settings_get_double (glass_settings, "application-content-opacity");
++
++          if (!app_glass || opacity >= 0.95)
++            initial_mode = LIQUID_GLASS_MODE_OPAQUE;
++          else if (opacity <= 0.70)
++            initial_mode = LIQUID_GLASS_MODE_FULL_TRANSPARENT;
++          else
++            initial_mode = LIQUID_GLASS_MODE_SEMI_TRANSPARENT;
++        }
++
++      g_signal_handlers_block_by_func (self->liquid_glass_mode_row, on_liquid_glass_mode_selected_cb, self);
++      adw_combo_row_set_selected (self->liquid_glass_mode_row, initial_mode);
++      g_signal_handlers_unblock_by_func (self->liquid_glass_mode_row, on_liquid_glass_mode_selected_cb, self);
++    }
++
++  if (self->notch_switch_row)
++    {
++      gboolean notch_active = is_extension_enabled (NOTCH_UUID);
++      g_signal_handlers_block_by_func (self->notch_switch_row, on_notch_active_changed_cb, self);
++      adw_switch_row_set_active (self->notch_switch_row, notch_active);
++      g_signal_handlers_unblock_by_func (self->notch_switch_row, on_notch_active_changed_cb, self);
++    }
++
++  if (self->cc_switch_row)
++    {
++      gboolean cc_active = is_extension_enabled (CC_UUID);
++      g_signal_handlers_block_by_func (self->cc_switch_row, on_cc_active_changed_cb, self);
++      adw_switch_row_set_active (self->cc_switch_row, cc_active);
++      g_signal_handlers_unblock_by_func (self->cc_switch_row, on_cc_active_changed_cb, self);
++    }
++
    self->connection = g_application_get_dbus_connection (g_application_get_default ());
  
    self->settings = g_settings_new (WP_PATH_ID);
@@ -819,11 +1069,172 @@ index 53c1842db..18da2bf4c 100644
                                  NULL);
  }
 +
+diff --git a/panels/network/cc-network-panel.blp b/panels/network/cc-network-panel.blp
+index a59eceb01..4f79a7dc5 100644
+--- a/panels/network/cc-network-panel.blp
++++ b/panels/network/cc-network-panel.blp
+@@ -25,6 +25,28 @@ template $CcNetworkPanel: $CcPanel {
+             name: "network-page";
+ 
+             child: Adw.PreferencesPage {
++              Adw.PreferencesGroup {
++                title: _("FlyDrop");
++
++                Adw.ActionRow {
++                  title: _("FlyDrop File Sharing");
++                  subtitle: _("AirDrop &amp; LocalSend integration to share files between devices");
++
++                  [prefix]
++                  Image {
++                    icon-name: "flydrop-symbolic";
++                    valign: center;
++                  }
++
++                  [suffix]
++                  Button {
++                    valign: center;
++                    label: _("Settings…");
++                    clicked => $on_flydrop_settings_clicked_cb(template);
++                  }
++                }
++              }
++
+               Adw.PreferencesGroup {
+                 Box box_wired {
+                   orientation: vertical;
+diff --git a/panels/network/cc-network-panel.c b/panels/network/cc-network-panel.c
+index 3b19ed516..1f34e8623 100644
+--- a/panels/network/cc-network-panel.c
++++ b/panels/network/cc-network-panel.c
+@@ -674,6 +674,12 @@ create_connection_cb (CcNetworkPanel *self)
+         gtk_window_present (GTK_WINDOW (editor));
+ }
+ 
++static void
++on_flydrop_settings_clicked_cb (CcNetworkPanel *self)
++{
++        g_spawn_command_line_async ("/bin/sh -c '/usr/bin/flydrop settings >/dev/null 2>&1 &'", NULL);
++}
++
+ static void
+ cc_network_panel_map (GtkWidget *widget)
+ {
+@@ -713,6 +719,7 @@ cc_network_panel_class_init (CcNetworkPanelClass *klass)
+         gtk_widget_class_bind_template_child (widget_class, CcNetworkPanel, proxy_row);
+ 
+         gtk_widget_class_bind_template_callback (widget_class, create_connection_cb);
++        gtk_widget_class_bind_template_callback (widget_class, on_flydrop_settings_clicked_cb);
+ 
+         g_type_ensure (CC_TYPE_LIST_ROW);
+         g_type_ensure (CC_TYPE_NET_PROXY_PAGE);
+diff --git a/panels/power/cc-power-panel.c b/panels/power/cc-power-panel.c
+index 23791bc52..e33e6ca36 100644
+--- a/panels/power/cc-power-panel.c
++++ b/panels/power/cc-power-panel.c
+@@ -784,7 +784,9 @@ setup_blank_screen_rows (CcPowerPanel *self)
+ static void
+ setup_suspend_delay_rows (CcPowerPanel *self)
+ {
+-  static const int normal_times[] = {900, 1200, 1500, 1800, 2700, 3600, 4800, 5400, 6000, 7200};
++  /* Pulsar OS: offer 1/2/5/10 min (in addition to the upstream 15+ min
++   * options) so automatic suspend can be configured from GNOME Settings. */
++  static const int normal_times[] = {60, 120, 300, 600, 900, 1200, 1500, 1800, 2700, 3600, 4800, 5400, 6000, 7200};
+   static const int mobile_times[] = {60, 120, 300, 600};
+   int i;
+ 
+diff --git a/panels/sound/cc-sound-panel.blp b/panels/sound/cc-sound-panel.blp
+index ee4f177b4..501ca84d8 100644
+--- a/panels/sound/cc-sound-panel.blp
++++ b/panels/sound/cc-sound-panel.blp
+@@ -214,6 +214,11 @@ template $CcSoundPanel: $CcPanel {
+             show-arrow: true;
+             activated => $alert_sound_activated_cb(template);
+           }
++
++          Adw.SwitchRow startup_sound_switch_row {
++            title: _("Startup Sound");
++            subtitle: _("Play startup melody when the system turns on");
++          }
+         }
+       };
+     }
+diff --git a/panels/sound/cc-sound-panel.c b/panels/sound/cc-sound-panel.c
+index 635bde1bd..7438a805c 100644
+--- a/panels/sound/cc-sound-panel.c
++++ b/panels/sound/cc-sound-panel.c
+@@ -25,6 +25,7 @@
+ 
+ #include <glib/gi18n-lib.h>
+ #include <glib.h>
++#include <glib/gstdio.h>
+ #include <gtk/gtk.h>
+ #include <pulse/pulseaudio.h>
+ #include <gvc-mixer-control.h>
+@@ -65,6 +66,7 @@ struct _CcSoundPanel
+   CcVolumeSlider      *input_volume_slider;
+   AdwPreferencesGroup *input_no_devices_group;
+   CcListRow           *alert_sound_row;
++  AdwSwitchRow        *startup_sound_switch_row;
+ 
+   GvcMixerControl   *mixer_control;
+   GSettings         *sound_settings;
+@@ -80,6 +82,27 @@ enum
+ 
+ #define KEY_SOUNDS_SCHEMA "org.gnome.desktop.sound"
+ 
++static void
++startup_sound_switch_changed_cb (CcSoundPanel *self)
++{
++  gboolean active = adw_switch_row_get_active (self->startup_sound_switch_row);
++  const gchar *config_dir = g_get_user_config_dir ();
++  g_autofree gchar *pulsar_dir = g_build_filename (config_dir, "pulsar", NULL);
++  g_autofree gchar *disable_file = g_build_filename (pulsar_dir, "bootsound.disabled", NULL);
++
++  g_mkdir_with_parents (pulsar_dir, 0755);
++
++  if (active)
++    {
++      if (g_file_test (disable_file, G_FILE_TEST_EXISTS))
++        g_unlink (disable_file);
++    }
++  else
++    {
++      g_file_set_contents (disable_file, "disabled\n", -1, NULL);
++    }
++}
++
+ static void
+ update_alert_sound_label (CcSoundPanel *self)
+ {
+@@ -261,6 +284,7 @@ cc_sound_panel_class_init (CcSoundPanelClass *klass)
+   gtk_widget_class_bind_template_child (widget_class, CcSoundPanel, input_volume_slider);
+   gtk_widget_class_bind_template_child (widget_class, CcSoundPanel, input_no_devices_group);
+   gtk_widget_class_bind_template_child (widget_class, CcSoundPanel, alert_sound_row);
++  gtk_widget_class_bind_template_child (widget_class, CcSoundPanel, startup_sound_switch_row);
+ 
+   gtk_widget_class_bind_template_callback (widget_class, test_output_configuration_button_clicked_cb);
+   gtk_widget_class_bind_template_callback (widget_class, volume_levels_activated_cb);
+@@ -312,5 +336,15 @@ cc_sound_panel_init (CcSoundPanel *self)
+ 
+   gvc_mixer_control_open (self->mixer_control);
+ 
++  const gchar *config_dir = g_get_user_config_dir ();
++  g_autofree gchar *disable_file = g_build_filename (config_dir, "pulsar", "bootsound.disabled", NULL);
++  gboolean is_enabled = !g_file_test (disable_file, G_FILE_TEST_EXISTS);
++
++  adw_switch_row_set_active (self->startup_sound_switch_row, is_enabled);
++  g_signal_connect_swapped (self->startup_sound_switch_row,
++                            "notify::active",
++                            G_CALLBACK (startup_sound_switch_changed_cb),
++                            self);
++
+   update_alert_sound_label (self);
+ }
 diff --git a/po/es.po b/po/es.po
-index d0dd0c515..d71c2e2c8 100644
+index d0dd0c515..5daef1864 100644
 --- a/po/es.po
 +++ b/po/es.po
-@@ -1,37 +1,123 @@
+@@ -1,37 +1,152 @@
 -# translation of gnome-control-center.master.po to Español
 -# Copyright © 1999-2002, 2006, 2007, 2008 Free Software Foundation, Inc.
 -# This file is distributed under the same license as the gnome-control-center package.
@@ -973,11 +1384,40 @@ index d0dd0c515..d71c2e2c8 100644
 +msgstr ""
 +"Al maximizar una app, se traslada a un nuevo espacio y oculta la barra "
 +"superior"
++
++msgid "Control Centre"
++msgstr "Centro de Control"
++
++msgid "Display and behaviour of the top-right centre of control"
++msgstr "Visualización y comportamiento del centro de control superior"
++
++msgid "macOS Control Centre"
++msgstr "Centro de Control de macOS"
++
++msgid ""
++"Replace the GNOME quick settings menu with the macOS-style Control Centre "
++"panel"
++msgstr ""
++"Sustituye el menú de ajustes rápidos de GNOME por el panel de Control de "
++"estilo macOS"
++
++msgid "FlyDrop"
++msgstr "FlyDrop"
++
++msgid "FlyDrop File Sharing"
++msgstr "Compartir Archivos con FlyDrop"
++
++msgid "AirDrop & LocalSend integration to share files between devices"
++msgstr ""
++"Integración AirDrop y LocalSend para compartir archivos entre dispositivos"
++
++msgid "Settings…"
++msgstr "Ajustes…"
  
  #: global-shortcuts-provider/cc-global-shortcut-dialog.blp:7
  msgid "Add Keyboard Shortcuts"
 diff --git a/shell/cc-panel-list.c b/shell/cc-panel-list.c
-index 2b59587b1..bde79ca42 100644
+index 2b59587b1..319522bc4 100644
 --- a/shell/cc-panel-list.c
 +++ b/shell/cc-panel-list.c
 @@ -213,7 +213,6 @@ static const gchar*
@@ -988,7 +1428,16 @@ index 2b59587b1..bde79ca42 100644
    RowData *row_data = g_object_get_data (G_OBJECT (row), "data");
  
    g_assert (row_data != NULL);
-@@ -263,10 +262,71 @@ row_data_new (CcPanelCategory     category,
+@@ -256,17 +255,78 @@ row_data_new (CcPanelCategory     category,
+   /* Setup the row */
+   grid = gtk_grid_new ();
+   gtk_widget_set_hexpand (grid, TRUE);
+-  gtk_widget_set_margin_top (grid, 12);
+-  gtk_widget_set_margin_bottom (grid, 12);
++  gtk_widget_set_margin_top (grid, 7);
++  gtk_widget_set_margin_bottom (grid, 7);
+   gtk_widget_set_margin_start (grid, 6);
+   gtk_widget_set_margin_end (grid, 6);
    gtk_grid_set_column_spacing (GTK_GRID (grid), 12);
  
    /* Icon */
@@ -997,7 +1446,7 @@ index 2b59587b1..bde79ca42 100644
 -                        "icon-name", icon,
 -                        NULL);
 +  image = gtk_image_new ();
-+  gtk_image_set_pixel_size (GTK_IMAGE (image), 28);
++  gtk_image_set_pixel_size (GTK_IMAGE (image), 24);
 +  gtk_widget_set_valign (image, GTK_ALIGN_CENTER);
 +
 +  const gchar *apple_icon = NULL;
@@ -1422,7 +1871,7 @@ index 2b59587b1..bde79ca42 100644
 +  self->center_activated_row = center;
 +}
 diff --git a/shell/cc-window.blp b/shell/cc-window.blp
-index 017f1a3ba..1c0f67703 100644
+index 017f1a3ba..edfe4bbdc 100644
 --- a/shell/cc-window.blp
 +++ b/shell/cc-window.blp
 @@ -38,6 +38,57 @@ template $CcWindow: Adw.ApplicationWindow {
@@ -1469,7 +1918,7 @@ index 017f1a3ba..1c0f67703 100644
 +              }
 +
 +              Label user_email_label {
-+                label: _("Pulsar OS ID, iCloud and Media");
++                label: _("Local Account");
 +                halign: start;
 +                styles [
 +                  "caption",
@@ -1484,7 +1933,7 @@ index 017f1a3ba..1c0f67703 100644
          SearchBar search_bar {
            search-mode-enabled: bind search_button.active bidirectional;
 diff --git a/shell/cc-window.c b/shell/cc-window.c
-index e80087c05..934b93358 100644
+index e80087c05..163e23828 100644
 --- a/shell/cc-window.c
 +++ b/shell/cc-window.c
 @@ -58,6 +58,10 @@ struct _CcWindow
@@ -1546,7 +1995,7 @@ index e80087c05..934b93358 100644
 +  if (email && email[0] != '\0')
 +    gtk_label_set_text (self->user_email_label, email);
 +  else
-+    gtk_label_set_text (self->user_email_label, _("ID de Pulsar OS, iCloud y Medios"));
++    gtk_label_set_text (self->user_email_label, _("Local Account"));
 +
 +  /* Set Avatar initials */
 +  adw_avatar_set_text (self->user_avatar, real_name ? real_name : "Pulsar OS");

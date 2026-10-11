@@ -11,6 +11,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Switch} from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Slider} from 'resource:///org/gnome/shell/ui/slider.js';
 import * as Volume from 'resource:///org/gnome/shell/ui/status/volume.js';
+import {MacNotificationCenter} from './notificationCenter.js';
 
 const NONE = Gio.DBusCallFlags.NONE;
 
@@ -21,6 +22,20 @@ function symbol(name) {
     } catch (e) {
         return Gio.ThemedIcon.new_with_default_fallbacks('image-missing');
     }
+}
+
+// GJS makes an exception that escapes a GObject async callback fatal: it logs
+// "terminated with uncatchable exception" at the error level and aborts the
+// process, taking the whole session with it. Wrap every async callback in this
+// so a stale widget or a vanished bus name can never kill gnome-shell.
+function guard(fn) {
+    return (...args) => {
+        try {
+            return fn(...args);
+        } catch (e) {
+            logError(e, 'macos-cc: uncaught exception in async callback');
+        }
+    };
 }
 
 const BL_DIR = '/sys/class/backlight';
@@ -77,14 +92,14 @@ function propGet(bus, name, path, iface, prop, cb) {
         bus.call(name, path, 'org.freedesktop.DBus.Properties', 'Get',
             new GLib.Variant('(ss)', [iface, prop]), GLib.VariantType.new('(v)'),
             NONE, -1, null, (c, r) => {
+                let value = null;
                 try {
-                    cb(c.call_finish(r).get_child_value(0).get_variant().unpack());
-                } catch (e) {
-                    cb(null);
-                }
+                    value = c.call_finish(r).get_child_value(0).get_variant().unpack();
+                } catch (e) {}
+                guard(cb)(value);
             });
     } catch (e) {
-        cb(null);
+        guard(cb)(null);
     }
 }
 
@@ -109,15 +124,15 @@ function findPlayer(cb) {
         Gio.DBus.session.call('org.freedesktop.DBus', '/org/freedesktop/DBus',
             'org.freedesktop.DBus', 'ListNames', null, GLib.VariantType.new('(as)'),
             NONE, -1, null, (c, r) => {
+                let name = null;
                 try {
                     const names = c.call_finish(r).deepUnpack()[0];
-                    cb(names.find(n => n.startsWith(MPRIS_PREFIX)) ?? null);
-                } catch (e) {
-                    cb(null);
-                }
+                    name = names.find(n => n.startsWith(MPRIS_PREFIX)) ?? null;
+                } catch (e) {}
+                guard(cb)(name);
             });
     } catch (e) {
-        cb(null);
+        guard(cb)(null);
     }
 }
 
@@ -164,7 +179,7 @@ function wideTile(iconName, title, subtitle, extraClass, onToggle, onMenu) {
         style: 'spacing: 4px;',
     });
 
-    const texts = new St.BoxLayout({vertical: true, y_align: Clutter.ActorAlign.CENTER, x_expand: true});
+    const texts = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, y_align: Clutter.ActorAlign.CENTER, x_expand: true});
     const t = new St.Label({text: title, style_class: 'mac-title'});
     const s = new St.Label({text: subtitle, style_class: 'mac-sub'});
     for (const l of [t, s])
@@ -254,7 +269,7 @@ function launch(cmd) {
 }
 
 function sliderTile(title, lowIcon, highIcon, onTrail) {
-    const box = new St.BoxLayout({vertical: true, style_class: 'mac-slider-tile'});
+    const box = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'mac-slider-tile'});
     box.add_child(new St.Label({text: title, style_class: 'mac-title'}));
     const row = new St.BoxLayout({y_align: Clutter.ActorAlign.CENTER, style_class: 'mac-slider-row'});
     const slider = new Slider(0.5);
@@ -322,7 +337,7 @@ export default class MacControlCentre extends Extension {
 
         this._applyTransparentContainer(true);
 
-        this._root = new St.BoxLayout({vertical: true});
+        this._root = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL});
         this._buildMainPanel();
         this._buildWifiPanel();
         this._buildBluetoothPanel();
@@ -334,7 +349,7 @@ export default class MacControlCentre extends Extension {
 
         const box = this._qs.menu.box;
         box.get_children().forEach(child => {
-            if (child !== this._root && child.visible) {
+            if (child !== this._root && !child.get_name()?.startsWith('liquid-glass') && child.visible) {
                 child.visible = false;
                 this._hiddenChildren.push(child);
             }
@@ -361,6 +376,8 @@ export default class MacControlCentre extends Extension {
                 this._refresh();
                 this._updateLiquidGlass();
                 this._startPolling();
+                this._dropQuickSettingsBlur();
+                later(50, () => this._dropQuickSettingsBlur());
                 later(250, () => this._dropQuickSettingsBlur());
             }
         })]);
@@ -417,6 +434,13 @@ export default class MacControlCentre extends Extension {
         this._connectVolumeSignals();
         this._updateLiquidGlass();
         this._refresh();
+
+        try {
+            this._notificationCenter = new MacNotificationCenter(this);
+            this._notificationCenter.enable();
+        } catch (e) {
+            console.warn(`macos-cc: failed to enable notification center: ${e}`);
+        }
     }
 
     _applyTransparentContainer(enable) {
@@ -497,6 +521,13 @@ export default class MacControlCentre extends Extension {
 
     disable() {
         this._stopPolling();
+
+        if (this._notificationCenter) {
+            try {
+                this._notificationCenter.disable();
+            } catch (e) {}
+            this._notificationCenter = null;
+        }
 
         if (this._volCancellable) {
             try {
@@ -789,13 +820,13 @@ export default class MacControlCentre extends Extension {
     }
 
     _buildMainPanel() {
-        const panel = new St.BoxLayout({vertical: true, style_class: 'mac-cc'});
+        const panel = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'mac-cc'});
         this._mainPanel = panel;
 
         /* Top 2 Columns */
         const top = new St.BoxLayout({style_class: 'mac-row'});
-        const left = new St.BoxLayout({vertical: true, style_class: 'mac-col'});
-        const right = new St.BoxLayout({vertical: true, style_class: 'mac-col'});
+        const left = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'mac-col'});
+        const right = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'mac-col'});
 
         this._wifi = wideTile('mc:wifi', 'Wi-Fi', 'Off', '', 
             () => this._toggleWifi(), 
@@ -919,7 +950,7 @@ export default class MacControlCentre extends Extension {
 
     _buildMedia() {
         const tile = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             style_class: 'mac-media',
             x_expand: true,
         });
@@ -1016,7 +1047,7 @@ export default class MacControlCentre extends Extension {
 
     /* Subviews: Wi-Fi */
     _buildWifiPanel() {
-        const p = new St.BoxLayout({vertical: true, style_class: 'mac-subview'});
+        const p = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'mac-subview'});
         this._wifiPanel = p;
 
         const header = new St.BoxLayout({y_align: Clutter.ActorAlign.CENTER, style_class: 'mac-sub-header'});
@@ -1037,7 +1068,7 @@ export default class MacControlCentre extends Extension {
         header.add_child(this._wifiSwitch);
         p.add_child(header);
 
-        const card = new St.BoxLayout({vertical: true, style_class: 'mac-sub-card'});
+        const card = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'mac-sub-card'});
         card.add_child(new St.Label({text: 'Known & Available Networks', style_class: 'mac-sub-section-title'}));
 
         this._wifiScroll = new St.ScrollView({
@@ -1047,7 +1078,7 @@ export default class MacControlCentre extends Extension {
             x_expand: true,
             y_expand: true,
         });
-        this._wifiList = new St.BoxLayout({vertical: true, style: 'spacing: 4px;', x_expand: true});
+        this._wifiList = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style: 'spacing: 4px;', x_expand: true});
         this._wifiScroll.set_child(this._wifiList);
         card.add_child(this._wifiScroll);
         p.add_child(card);
@@ -1229,7 +1260,7 @@ export default class MacControlCentre extends Extension {
 
     /* Subviews: Bluetooth */
     _buildBluetoothPanel() {
-        const p = new St.BoxLayout({vertical: true, style_class: 'mac-subview'});
+        const p = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'mac-subview'});
         this._btPanel = p;
 
         const header = new St.BoxLayout({y_align: Clutter.ActorAlign.CENTER, style_class: 'mac-sub-header'});
@@ -1250,7 +1281,7 @@ export default class MacControlCentre extends Extension {
         header.add_child(this._btSwitch);
         p.add_child(header);
 
-        const card = new St.BoxLayout({vertical: true, style_class: 'mac-sub-card'});
+        const card = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'mac-sub-card'});
         card.add_child(new St.Label({text: 'Devices', style_class: 'mac-sub-section-title'}));
 
         this._btScroll = new St.ScrollView({
@@ -1260,7 +1291,7 @@ export default class MacControlCentre extends Extension {
             x_expand: true,
             y_expand: true,
         });
-        this._btList = new St.BoxLayout({vertical: true, style: 'spacing: 4px;', x_expand: true});
+        this._btList = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style: 'spacing: 4px;', x_expand: true});
         this._btScroll.set_child(this._btList);
         card.add_child(this._btScroll);
         p.add_child(card);
@@ -1594,7 +1625,7 @@ export default class MacControlCentre extends Extension {
     }
 
     _refreshMedia() {
-        findPlayer(name => {
+        findPlayer(guard(name => {
             if (!this._mainPanel || !this._mediaTitle || !this._playBtn?.child)
                 return;
             if (!name) {
@@ -1613,7 +1644,7 @@ export default class MacControlCentre extends Extension {
                         res(null);
                     }
                 }));
-            Promise.all([get('PlaybackStatus'), get('Metadata')]).then(([st, md]) => {
+            Promise.all([get('PlaybackStatus'), get('Metadata')]).then(guard(([st, md]) => {
                 if (!this._mainPanel || !this._mediaTitle || !this._playBtn?.child)
                     return;
                 const playing = st?.get_string()[0] === 'Playing';
@@ -1626,7 +1657,7 @@ export default class MacControlCentre extends Extension {
                     this._mediaTitle.text = 'Not Playing';
                     this._setArt(null);
                 }
-            });
-        });
+            })).catch(guard(() => {}));
+        }));
     }
 }

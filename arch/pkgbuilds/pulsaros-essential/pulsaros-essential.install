@@ -53,6 +53,11 @@ post_install() {
     systemctl enable vboxservice.service 2>/dev/null || true
     systemctl enable vmtoolsd.service 2>/dev/null || true
     systemctl enable pulsar-live-nopasswd.service 2>/dev/null || true
+    # GNOME Shell needs org.gnome.DisplayManager to exist to allow screen
+    # locking (Ctrl+L / idle lock). Pulsar OS uses SDDM, so a tiny shim owns
+    # that name and reports a compatible GDM version.
+    systemctl enable pulsaros-display-manager-shim.service 2>/dev/null || true
+    systemctl start pulsaros-display-manager-shim.service 2>/dev/null || true
     mkdir -p /etc/sudoers.d
 
     # Reduce systemd timeouts

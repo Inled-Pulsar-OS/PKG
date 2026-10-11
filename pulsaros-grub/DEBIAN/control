@@ -4,6 +4,6 @@ Section: admin
 Priority: optional
 Architecture: all
 Maintainer: Jaime <info@inled.es>
-Depends: grub-pc | grub-efi-amd64 | grub-efi-ia32 | grub-efi-arm64, git
+Depends: grub-pc | grub-efi-amd64 | grub-efi-ia32 | grub-efi-arm64, git, mokutil
 Description: GRUB bootloader theme for Pulsar OS.
  Packages and configures the macOS-like bootloader theme for GRUB.

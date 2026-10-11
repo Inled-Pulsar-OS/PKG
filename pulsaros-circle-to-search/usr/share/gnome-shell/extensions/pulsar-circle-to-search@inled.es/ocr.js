@@ -276,7 +276,7 @@ export class ScreenshotOCRController {
             }));
 
             this._copyMenu = new St.BoxLayout({
-                vertical: false,
+                orientation: Clutter.Orientation.HORIZONTAL,
                 visible: false,
                 reactive: true,
                 style: `
@@ -532,10 +532,29 @@ export class ScreenshotOCRController {
 
         const language = _buildTesseractLanguageArgument(this._ocrConfig.languages);
         const argv = ['tesseract', imagePath, 'stdout', '-l', language, '--psm', '11', 'tsv'];
-        const subprocess = Gio.Subprocess.new(
-            argv,
-            Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
-        );
+
+        // Tesseract is linked against OpenMP and, left alone, spawns one worker
+        // per logical CPU. On this class of machine that oversubscription is
+        // pathological: it is slower *and* burns several times the CPU while
+        // gnome-shell keeps compositing the screenshot, which is what freezes
+        // the session. Cap the workers and run the OCR at low priority so the
+        // desktop always wins; an idle machine still feeds it all spare cycles.
+        const cores = (typeof GLib.get_num_processors === 'function')
+            ? GLib.get_num_processors()
+            : 4;
+        const workers = Math.max(1, Math.min(2, Math.floor(cores / 2)));
+
+        const launcher = new Gio.SubprocessLauncher({
+            flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
+        });
+        launcher.setenv('OMP_THREAD_LIMIT', String(workers), true);
+        launcher.setenv('OMP_NUM_THREADS', String(workers), true);
+
+        const fullArgv = GLib.find_program_in_path('nice')
+            ? ['nice', '-n', '19', ...argv]
+            : argv;
+
+        const subprocess = launcher.spawnv(fullArgv);
         this._subprocess = subprocess;
 
         let stdout;

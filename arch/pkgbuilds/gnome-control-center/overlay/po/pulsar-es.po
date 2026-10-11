@@ -17,6 +17,21 @@ msgstr "Efecto Liquid Glass"
 msgid "Apply translucent blurs and reflective borders to active windows in macOS style"
 msgstr "Aplica desenfoques translúcidos y bordes reflectantes a las ventanas activas estilo macOS"
 
+msgid "Window Transparency Mode"
+msgstr "Modo de transparencia de ventanas"
+
+msgid "Appearance and opacity of application windows"
+msgstr "Aspecto y opacidad de las ventanas de aplicaciones"
+
+msgid "Full Transparent Glass (60%)"
+msgstr "Cristal transparente total (60%)"
+
+msgid "Semi-Transparent Glass (85%)"
+msgstr "Cristal semi-transparente (85%)"
+
+msgid "Opaque Windows (Native Tint Only)"
+msgstr "Ventanas opacas (solo tintado nativo)"
+
 msgid "System-wide accent color"
 msgstr "Color de acento del sistema"
 

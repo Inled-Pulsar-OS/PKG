@@ -6,7 +6,7 @@ pkgdesc="macOS-like GRUB bootloader theme for Pulsar OS"
 arch=(any)
 url="https://inled.es"
 license=(custom)
-depends=(grub)
+depends=(grub mokutil)
 options=(!strip)
 install=pulsaros-grub.install
 

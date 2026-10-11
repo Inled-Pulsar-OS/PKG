@@ -128,6 +128,11 @@ if command -v systemctl >/dev/null 2>&1; then
     systemctl enable docker.socket || true
     # Avahi/mDNS: GSConnect/KDE Connect phone discovery on the LAN
     systemctl enable avahi-daemon.service avahi-daemon.socket || true
+    # GNOME Shell needs org.gnome.DisplayManager to exist to allow screen
+    # locking (Ctrl+L / idle lock). Pulsar OS uses SDDM, so a tiny shim owns
+    # that name and reports a compatible GDM version.
+    systemctl enable pulsaros-display-manager-shim.service || true
+    systemctl start pulsaros-display-manager-shim.service || true
 fi
 
 # English: Enable the live passwordless bypass: grants NOPASSWD sudo + a polkit

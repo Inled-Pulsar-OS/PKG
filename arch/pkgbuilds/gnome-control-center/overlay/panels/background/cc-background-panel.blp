@@ -123,6 +123,20 @@ template $CcBackgroundPanel: $CcPanel {
               subtitle: _("Apply translucent blurs and reflective borders to active windows in macOS style");
               notify::active => $on_liquid_glass_active_changed_cb(template);
             }
+
+            Adw.ComboRow liquid_glass_mode_row {
+              title: _("Window Transparency Mode");
+              subtitle: _("Appearance and opacity of application windows");
+              sensitive: bind liquid_glass_switch_row.active;
+              notify::selected => $on_liquid_glass_mode_selected_cb(template);
+
+              model: StringList {
+                strings [
+                  _("Cristal Transparente (Fondos y Barras)"),
+                  _("Ventanas Opacas (Solo Desenfoque de Barras)"),
+                ]
+              };
+            }
           }
 
           Adw.PreferencesGroup {

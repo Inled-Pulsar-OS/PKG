@@ -32,9 +32,6 @@ export const LockScreen = GObject.registerClass({
         this._monitorContainers = [];
         this._clocks = [];
         this._passwordEntry = null;
-        this._lockIdleTimerId = 0;
-        this._lockIdleTimeoutSeconds = 60;
-        this._stageEventId = 0;
         this._selectedUsername = GLib.get_user_name();
         this._userPickerBox = null;
         this._avatarWidget = null;
@@ -767,47 +764,14 @@ export const LockScreen = GObject.registerClass({
         }
     }
     
-    _resetLockIdleTimer() {
-        if (!this._isLocked) return;
-        if (this._lockIdleTimerId) {
-            GLib.source_remove(this._lockIdleTimerId);
-            this._lockIdleTimerId = 0;
-        }
-        this._lockIdleTimerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, this._lockIdleTimeoutSeconds, () => {
-            this._lockIdleTimerId = 0;
-            if (this._isLocked) {
-                this._suspendOnLockIdle();
-            }
-            return GLib.SOURCE_REMOVE;
-        });
-    }
-
-    _suspendOnLockIdle() {
-        if (!this._isLocked) return;
+    _focusPasswordEntry() {
+        if (!this._passwordEntry || !this._isLocked) return;
+        this._passwordEntry.set_reactive(true);
+        let text = this._passwordEntry.clutter_text || this._passwordEntry.clutterText || this._passwordEntry;
         try {
-            let bus = Gio.DBus.system;
-            bus.call(
-                'org.freedesktop.login1',
-                '/org/freedesktop/login1',
-                'org.freedesktop.login1.Manager',
-                'Suspend',
-                new GLib.Variant('(b)', [true]),
-                null,
-                Gio.DBusCallFlags.NONE,
-                -1,
-                null,
-                (connection, res) => {
-                    try {
-                        connection.call_finish(res);
-                    } catch (e) {
-                        GLib.spawn_command_line_async("systemctl suspend");
-                    }
-                }
-            );
-        } catch (e) {
-            console.error("[LockScreen] Failed to trigger lockscreen idle suspend:", e);
-            GLib.spawn_command_line_async("systemctl suspend");
-        }
+            if (text && text.grab_key_focus) text.grab_key_focus();
+            if (text && global.stage && global.stage.set_key_focus) global.stage.set_key_focus(text);
+        } catch (e) {}
     }
 
     _switchUser() {
@@ -864,18 +828,14 @@ export const LockScreen = GObject.registerClass({
     
     lock() {
         if (this._isLocked) {
-            // Already locked: ensure top of uiGroup stack and reset lock idle timer
+            // Already locked: ensure top of uiGroup stack and refocus the entry.
             try {
                 let parent = this.get_parent();
                 if (parent) {
                     parent.set_child_at_index(this, -1);
                 }
             } catch (e) {}
-            this._resetLockIdleTimer();
-            if (this._passwordEntry) {
-                let activeText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText || this._passwordEntry;
-                if (activeText && activeText.grab_key_focus) activeText.grab_key_focus();
-            }
+            this._focusPasswordEntry();
             return;
         }
         this._isLocked = true;
@@ -922,17 +882,14 @@ export const LockScreen = GObject.registerClass({
         // Defer input grab and key focus to the next main loop cycle to guarantee the actor is mapped
         GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
             if (!this._isLocked) return GLib.SOURCE_REMOVE;
-            
-            if (Main.pushModal(this)) {
-                this._hasGrab = true;
-            } else {
+
+            try {
+                this._hasGrab = Main.pushModal(this) === true;
+            } catch (e) {
                 this._hasGrab = false;
             }
-            
-            if (this._passwordEntry) {
-                let activeText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText || this._passwordEntry;
-                if (activeText && activeText.grab_key_focus) activeText.grab_key_focus();
-            }
+
+            this._focusPasswordEntry();
             return GLib.SOURCE_REMOVE;
         });
         
@@ -943,18 +900,9 @@ export const LockScreen = GObject.registerClass({
             return GLib.SOURCE_CONTINUE;
         });
 
-        // Start lockscreen inactivity timer for automatic suspension
-        this._resetLockIdleTimer();
-
-        // Listen to global events to reset the inactivity timer
-        if (!this._stageEventId) {
-            this._stageEventId = global.stage.connect('captured-event', () => {
-                if (this._isLocked) {
-                    this._resetLockIdleTimer();
-                }
-                return Clutter.EVENT_PROPAGATE;
-            });
-        }
+        // Inactivity -> suspend is handled by gnome-settings-daemon
+        // (sleep-inactive-ac-timeout), which respects idle inhibitors such as
+        // video playback. We intentionally do NOT run a private idle timer.
     }
     
     unlock() {
@@ -967,9 +915,15 @@ export const LockScreen = GObject.registerClass({
         
         this._stopVideoWallpaper();
         
-        // Release modal input grab
+        // Release modal input grab. Guard against stale grab accounting (the
+        // native "incorrect pop" happened when another modal was on top):
+        // never let a throw abort the rest of the unlock cleanup.
         if (this._hasGrab) {
-            Main.popModal(this);
+            try {
+                Main.popModal(this);
+            } catch (e) {
+                console.warn("[LockScreen] popModal during unlock failed:", e);
+            }
             this._hasGrab = false;
         }
         
@@ -977,16 +931,6 @@ export const LockScreen = GObject.registerClass({
         if (this._timerId) {
             GLib.source_remove(this._timerId);
             this._timerId = 0;
-        }
-
-        // Clean lock idle timer and stage event listener
-        if (this._lockIdleTimerId) {
-            GLib.source_remove(this._lockIdleTimerId);
-            this._lockIdleTimerId = 0;
-        }
-        if (this._stageEventId) {
-            global.stage.disconnect(this._stageEventId);
-            this._stageEventId = 0;
         }
     }
     
@@ -1123,11 +1067,10 @@ export const LockScreen = GObject.registerClass({
         }
         this._authenticating = false;
         if (this._passwordEntry) {
-            this._passwordEntry.set_reactive(true);
             this._passwordEntry.set_text('');
             this._passwordEntry.set_hint_text('Incorrect Password');
             this._passwordEntry.style_class = 'pulsaros-lockscreen-entry-failed';
-            this._passwordEntry.grab_key_focus();
+            this._focusPasswordEntry();
             
             // Shake animation
             let originalX = this._passwordEntry.translation_x;
@@ -1179,16 +1122,9 @@ export const LockScreen = GObject.registerClass({
             GLib.source_remove(this._timerId);
             this._timerId = 0;
         }
-        if (this._lockIdleTimerId) {
-            GLib.source_remove(this._lockIdleTimerId);
-            this._lockIdleTimerId = 0;
-        }
-        if (this._stageEventId) {
-            global.stage.disconnect(this._stageEventId);
-            this._stageEventId = 0;
-        }
-        if (this._isLocked && this._hasGrab) {
-            Main.popModal(this);
+        if (this._hasGrab) {
+            try { Main.popModal(this); } catch (e) {}
+            this._hasGrab = false;
         }
         if (this._monitorContainers) {
             for (let container of this._monitorContainers) {

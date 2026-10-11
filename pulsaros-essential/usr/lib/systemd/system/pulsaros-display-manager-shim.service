@@ -1,0 +1,23 @@
+[Unit]
+Description=Pulsar OS GDM compatibility shim (org.gnome.DisplayManager)
+Documentation=https://inled.es
+After=dbus.service
+ConditionPathExists=/run/systemd/seats
+
+[Service]
+Type=dbus
+BusName=org.gnome.DisplayManager
+ExecStart=/usr/bin/gjs /usr/lib/pulsaros/display-manager-shim
+# If the name is already owned (e.g. the real GDM is the active display
+# manager) the shim exits immediately; never restart-loop in that case.
+Restart=no
+
+# The shim only owns a D-Bus name and answers a Version query.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=graphical.target

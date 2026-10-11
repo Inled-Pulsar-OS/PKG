@@ -206,7 +206,75 @@ for uuid in "${EGO_EXTENSIONS[@]}"; do
     fi
 done
 
-# ==============================================================================
+# --- DECLARATIVE PATCHES FOR BLUR-MY-SHELL ---
+BMS_DIR="$STAGE_DIR/usr/share/gnome-shell/extensions/blur-my-shell@aunetx"
+if [ -d "$BMS_DIR" ]; then
+    echo "🔧 [ES] Aplicando parches declarativos para Blur My Shell..."
+    echo "🔧 [EN] Applying declarative patches for Blur My Shell..."
+
+    BMS_TARGETS="$BMS_DIR/components/popup/targets.js"
+    if [ -f "$BMS_TARGETS" ]; then
+        python3 -c "
+import sys
+f = sys.argv[1]
+with open(f, 'r') as fp: c = fp.read()
+target_needle = '''    find_actor(actor) {
+        if (this.actor.is_internal_actor(actor) || !this.actor.watch_actor(actor))
+            return [];
+
+        const targets = this.create_targets();
+        const delegate = this.actor.get_actor_delegate(actor);'''
+replacement = '''    find_actor(actor) {
+        if (this.actor.is_internal_actor(actor) || !this.actor.watch_actor(actor))
+            return [];
+
+        const delegate = this.actor.get_actor_delegate(actor);
+        const isExcluded = a => {
+            if (!a) return false;
+            return this.has_any_style_class(a, [
+                \'mac-nc-datemenu\', \'mac-cc-quick-settings\', \'mac-nc-sidebar\',
+            ]);
+        };
+        if (isExcluded(actor) || isExcluded(delegate?.box) || isExcluded(delegate?.actor))
+            return [];
+
+        let parentCheck = actor?.get_parent ? actor.get_parent() : null;
+        while (parentCheck) {
+            if (isExcluded(parentCheck))
+                return [];
+            parentCheck = parentCheck.get_parent ? parentCheck.get_parent() : null;
+        }
+
+        const targets = this.create_targets();'''
+if 'mac-nc-datemenu' not in c and target_needle in c:
+    c = c.replace(target_needle, replacement, 1)
+    with open(f, 'w') as fp: fp.write(c)
+" "$BMS_TARGETS"
+    fi
+
+    BMS_DUMMY="$BMS_DIR/conveniences/dummy_pipeline.js"
+    if [ -f "$BMS_DUMMY" ]; then
+        python3 -c "
+import sys
+f = sys.argv[1]
+with open(f, 'r') as fp: c = fp.read()
+if 'this.corner_effect = null' not in c:
+    c = c.replace('this.effect = null;', 'this.effect = null;\n        this.corner_effect = null;')
+    c = c.replace('if (this.actor)\n            this.actor.add_effect(this.effect);', 'if (this.actor) {\n            this.actor.add_effect(this.effect);\n            if (this.corner_effect)\n                this.actor.add_effect(this.corner_effect);\n        }')
+    c = c.replace('this.effect = this.effects_manager.new_native_dynamic_gaussian_blur_effect(params);', 'this.effect = this.effects_manager.new_native_dynamic_gaussian_blur_effect(params);\n\n        if (!this.effect.constructor.supports_corner_radius) {\n            this.corner_effect = this.effects_manager.new_corner_effect({\n                radius: this.corner_radius_getter(),\n            });\n        }')
+    c = c.replace('this.effect.unscaled_corner_radius = this.corner_radius_getter();', 'this.effect.unscaled_corner_radius = this.corner_radius_getter();\n        if (this.corner_effect)\n            this.corner_effect.radius = this.corner_radius_getter();')
+    c = c.replace('this.effect?.queue_repaint();', 'this.effect?.queue_repaint();\n        this.corner_effect?.queue_repaint();')
+    c = c.replace('if (this.effect)\n            this.effects_manager.remove(this.effect);\n        this.effect = null;', 'if (this.effect)\n            this.effects_manager.remove(this.effect);\n        this.effect = null;\n        if (this.corner_effect)\n            this.effects_manager.remove(this.corner_effect);\n        this.corner_effect = null;')
+    with open(f, 'w') as fp: fp.write(c)
+" "$BMS_DUMMY"
+    fi
+
+    BMS_CSS="$BMS_DIR/styles/popup/base.css"
+    if [ -f "$BMS_CSS" ]; then
+        sed -i 's/border-radius: 0 0 13px 13px;/border-radius: 12px;/g' "$BMS_CSS"
+        sed -i 's/border-radius: 0 0 12px 12px;/border-radius: 8px;/g' "$BMS_CSS"
+    fi
+fi
 # INSTALL PULSAR DOCK (OUR DASH-TO-DOCK FORK) REPLACING UPSTREAM DASH TO DOCK
 # INSTALAR PULSAR DOCK (NUESTRO FORK DE DASH-TO-DOCK) EN LUGAR DEL ORIGINAL
 # ==============================================================================
@@ -607,6 +675,192 @@ with open(f, 'w') as fp: fp.write(c)
     if [ -f "$LG_APP_MGR" ]; then
         sed -i 's/_shouldApplyToWindow(windowActor) {/_shouldApplyToWindow(windowActor) {\n        const _mWin = windowActor.get_meta_window();\n        if (_mWin) {\n            const _wm = (_mWin.get_wm_class() || "").toLowerCase();\n            const _tt = (_mWin.get_title() || "").toLowerCase();\n            if (_wm.includes("sayri") || _tt.includes("sayri") || _wm.includes("welcome") || _tt.includes("welcome")) return false;\n        }/g' "$LG_APP_MGR"
     fi
+
+    # 3. Add DialogManager to Liquid Glass for modal/system dialogs (Auth, Run, Power off, etc.)
+    LG_DIR="$STAGE_DIR/usr/share/gnome-shell/extensions/liquid-glass@thinkingcoding1231.gmail.com"
+    cat << 'EOF' > "$LG_DIR/dist/dialogManager.js"
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import Clutter from 'gi://Clutter';
+import St from 'gi://St';
+import GLib from 'gi://GLib';
+import { BackdropGlass } from './rendering/backdropGlass.js';
+import { hexToColorArray } from './animation/colors.js';
+
+const SHADER_PADDING = 20;
+
+export class DialogManager {
+    constructor(extensionPath, settings, logger) {
+        this.extensionPath = extensionPath;
+        this._settings = settings;
+        this._logger = logger;
+        this._dialogStates = new Map();
+        this._signals = [];
+        this._enabled = false;
+    }
+
+    setup() {
+        if (!this._settings) return;
+        this._enabled = true;
+        this._bindSignals();
+        this._scanExisting();
+    }
+
+    _bindSignals() {
+        const group = Main.layoutManager.modalDialogGroup;
+        if (group) {
+            this._signals.push({
+                obj: group,
+                id: group.connect('child-added', (_g, child) => this._onChildAdded(child)),
+            });
+            this._signals.push({
+                obj: group,
+                id: group.connect('child-removed', (_g, child) => this._onChildRemoved(child)),
+            });
+        }
+    }
+
+    _scanExisting() {
+        const group = Main.layoutManager.modalDialogGroup;
+        if (!group) return;
+        for (const child of group.get_children()) {
+            this._onChildAdded(child);
+        }
+    }
+
+    _findDialogBox(actor) {
+        if (!actor) return null;
+        if (actor.has_style_class_name?.('modal-dialog') || actor.has_style_class_name?.('run-dialog'))
+            return actor;
+        if (actor.get_children) {
+            for (const c of actor.get_children()) {
+                const found = this._findDialogBox(c);
+                if (found) return found;
+            }
+        }
+        return null;
+    }
+
+    _onChildAdded(child) {
+        if (!this._enabled || !child) return;
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            if (!this._enabled || !child || !child.get_parent()) return GLib.SOURCE_REMOVE;
+            this._attachGlass(child);
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _onChildRemoved(child) {
+        this._detachGlass(child);
+    }
+
+    _attachGlass(child) {
+        if (this._dialogStates.has(child)) return;
+        const targetBox = this._findDialogBox(child) || child;
+        targetBox.add_style_class_name('liquid-glass-transparent');
+
+        const glass = new BackdropGlass({
+            extensionPath: this.extensionPath,
+            settings: this._settings,
+            logger: this._logger,
+            owner: 'dialog',
+        });
+        glass.set_size(1.0, 1.0);
+        glass.set_pivot_point(0.0, 0.0);
+
+        const parent = child.get_parent() || Main.layoutManager.modalDialogGroup;
+        parent.insert_child_below(glass, child);
+
+        const cornerRadius = 20.0;
+        let tintColorStr = '#000000';
+        try { tintColorStr = this._settings.get_string('menu-tint-color') || '#000000'; } catch (e) {}
+        let tintStrength = 0.12;
+        try { tintStrength = this._settings.get_double('menu-tint-strength') || 0.12; } catch (e) {}
+        let blurRadius = 16;
+        try { blurRadius = this._settings.get_int('menu-blur-radius') || 16; } catch (e) {}
+
+        glass.setPadding(SHADER_PADDING);
+        glass.setTintColor(...hexToColorArray(tintColorStr));
+        glass.setTintStrength(tintStrength);
+        glass.setCornerRadius(cornerRadius);
+        glass.setIsDock(false);
+        glass.setBlurRadius(blurRadius);
+
+        const syncGeometry = () => {
+            if (!child || !targetBox || !glass) return;
+            if (!child.visible || targetBox.opacity === 0) {
+                glass.hide();
+                return;
+            }
+            try {
+                const [x, y] = targetBox.get_transformed_position();
+                const [w, h] = targetBox.get_transformed_size();
+                if (w > 0 && h > 0) {
+                    glass.set_position(x - SHADER_PADDING, y - SHADER_PADDING);
+                    glass.set_size(w + SHADER_PADDING * 2, h + SHADER_PADDING * 2);
+                    glass.setCornerRadius(cornerRadius);
+                    glass.show();
+                    glass.opacity = targetBox.get_paint_opacity ? targetBox.get_paint_opacity() : targetBox.opacity;
+                }
+            } catch (e) {}
+        };
+
+        const conns = [
+            child.connect('notify::allocation', syncGeometry),
+            child.connect('notify::visible', syncGeometry),
+            child.connect('notify::opacity', syncGeometry),
+            targetBox.connect('notify::allocation', syncGeometry),
+            targetBox.connect('notify::visible', syncGeometry),
+            targetBox.connect('notify::opacity', syncGeometry),
+            child.connect('destroy', () => this._detachGlass(child)),
+        ];
+
+        this._dialogStates.set(child, { targetBox, glass, conns });
+        syncGeometry();
+    }
+
+    _detachGlass(child) {
+        const state = this._dialogStates.get(child);
+        if (!state) return;
+        this._dialogStates.delete(child);
+
+        for (const id of state.conns) {
+            try { child.disconnect(id); } catch (e) {}
+            try { state.targetBox.disconnect(id); } catch (e) {}
+        }
+        try { state.targetBox.remove_style_class_name('liquid-glass-transparent'); } catch (e) {}
+        try { state.glass.destroy(); } catch (e) {}
+    }
+
+    destroy() {
+        this._enabled = false;
+        for (const s of this._signals) {
+            try { s.obj.disconnect(s.id); } catch (e) {}
+        }
+        this._signals = [];
+        for (const child of [...this._dialogStates.keys()]) {
+            this._detachGlass(child);
+        }
+    }
+}
+EOF
+
+    # Register DialogManager in extension.js
+    sed -i "s/import {ApplicationManager} from '.\/dist\/applicationManager.js';/import {ApplicationManager} from '.\/dist\/applicationManager.js';\nimport {DialogManager} from '.\/dist\/dialogManager.js';/g" "$LG_DIR/extension.js"
+    sed -i "s/this._applicationManager.setup();/this._applicationManager.setup();\n    this._dialogManager = new DialogManager(path, this._settings, this._logger);\n    this._dialogManager.setup();/g" "$LG_DIR/extension.js"
+    sed -i "s/this._applicationManager = null;/this._applicationManager = null;\n    if (this._dialogManager) { this._dialogManager.destroy(); this._dialogManager = null; }/g" "$LG_DIR/extension.js"
+
+    # Add dialog stylesheet rules
+    cat << 'EOF' >> "$LG_DIR/stylesheet.css"
+
+/* Dialogs with Liquid Glass */
+.modal-dialog.liquid-glass-transparent,
+.run-dialog.liquid-glass-transparent {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.20) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45) !important;
+}
+EOF
 else
     echo "❌ [ES] Error al clonar Liquid Glass de GitHub."
     echo "❌ [EN] Error cloning Liquid Glass from GitHub."

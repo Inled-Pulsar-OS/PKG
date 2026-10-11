@@ -6,7 +6,7 @@ pkgdesc="macOS rEFInd bootloader theme for Pulsar OS"
 arch=(any)
 url="https://inled.es"
 license=(custom)
-depends=(refind efibootmgr curl git unzip)
+depends=(refind efibootmgr curl git unzip mokutil)
 options=(!strip)
 install=pulsaros-refind.install
 

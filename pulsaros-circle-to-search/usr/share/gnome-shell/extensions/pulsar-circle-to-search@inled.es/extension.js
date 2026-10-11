@@ -7,7 +7,7 @@ import Clutter from 'gi://Clutter';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
-import { getPointerWatcher } from 'resource:///org/gnome/shell/ui/pointerWatcher.js';
+import { getPointerWatcher } from './pointerWatcher.js';
 
 import { ScreenshotOCRController } from './ocr.js';
 import { LensUploader } from './uploader.js';
@@ -85,6 +85,7 @@ export default class ShotzyExtension extends Extension {
         this._tooltips = [];
         this._overlayMessage = null;
         this._overlayMessageTimeoutId = 0;
+        this._areaSelectorSetCursorTypeOriginal = null;
 
         this._setupShakeDetector();
         this._hookScreenshotUI();
@@ -330,6 +331,9 @@ export default class ShotzyExtension extends Extension {
             ui.open = async (...args) => {
                 const result = await this._uiOpenOriginal.apply(ui, args);
 
+                // The area selector may only be created on first open.
+                this._patchAreaSelectorCursor(ui);
+
                 this._ocrController.ensureAttached(ui);
                 if (ui._selectionButton?.checked) {
                     this._ocrController.start(ui).catch(e => {
@@ -365,9 +369,22 @@ export default class ShotzyExtension extends Extension {
                 });
             });
         }
+
+        this._patchAreaSelectorCursor(ui);
     }
 
     _unhookScreenshotUI(ui) {
+        if (this._areaSelectorSetCursorTypeOriginal) {
+            if (ui._areaSelector) {
+                try {
+                    delete ui._areaSelector.set_cursor_type;
+                } catch (_e) {
+                    ui._areaSelector.set_cursor_type = this._areaSelectorSetCursorTypeOriginal;
+                }
+            }
+            this._areaSelectorSetCursorTypeOriginal = null;
+        }
+
         if (this._uiOpenOriginal) {
             ui.open = this._uiOpenOriginal;
             this._uiOpenOriginal = null;
@@ -378,6 +395,35 @@ export default class ShotzyExtension extends Extension {
         }
     }
 
+    _patchAreaSelectorCursor(ui) {
+        if (!ui || !ui._areaSelector)
+            return;
+
+        const areaSelector = ui._areaSelector;
+
+        if (this._areaSelectorSetCursorTypeOriginal === null) {
+            try {
+                this._areaSelectorSetCursorTypeOriginal = areaSelector.set_cursor_type;
+            } catch (_e) {
+                this._areaSelectorSetCursorTypeOriginal = null;
+            }
+        }
+
+        try {
+            areaSelector.set_cursor_type = (type) => {
+                // GNOME Shell 51 uses CROSSHAIR outside selection; use CELL instead.
+                if (type === Clutter.CursorType.CROSSHAIR)
+                    type = Clutter.CursorType.CELL;
+                if (this._areaSelectorSetCursorTypeOriginal)
+                    this._areaSelectorSetCursorTypeOriginal.call(areaSelector, type);
+                else
+                    areaSelector.__proto__.set_cursor_type.call(areaSelector, type);
+            };
+        } catch (_e) {
+            // Ignore if we can't patch.
+        }
+    }
+
     _injectLensButton() {
         const ui = Main.screenshotUI;
         if (!ui || !ui._panel) return;
@@ -385,7 +431,7 @@ export default class ShotzyExtension extends Extension {
         if (!this._actionsRow) {
             this._actionsRow = new St.BoxLayout({
                 style_class: 'screenshot-ui-actions-row',
-                vertical: false,
+                orientation: Clutter.Orientation.HORIZONTAL,
                 x_align: Clutter.ActorAlign.CENTER,
                 y_align: Clutter.ActorAlign.CENTER,
                 style: `
@@ -553,7 +599,7 @@ export default class ShotzyExtension extends Extension {
         });
 
         this._lensSideBox = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             y_align: Clutter.ActorAlign.CENTER,
         });
         this._lensSideBox.set_style('margin-left: 16px; padding-left: 16px; border-left: 1px solid rgba(255,255,255,0.2);');

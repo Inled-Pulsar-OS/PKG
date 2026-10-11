@@ -10,8 +10,7 @@ export default class FlyDropExtension extends Extension {
         // Dynamic Island Drop Shelf (Top Chrome layer so pointer/DnD is always on top)
         this._island = new DynamicDropIsland();
         Main.layoutManager.addTopChrome(this._island, {
-            affectsInputRegion: true,
-            affectsStruts: false,
+                        affectsStruts: false,
             trackFullscreen: true,
         });
     }

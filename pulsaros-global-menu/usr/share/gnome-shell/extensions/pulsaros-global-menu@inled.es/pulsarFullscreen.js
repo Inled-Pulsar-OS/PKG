@@ -4,7 +4,7 @@ import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import { getPointerWatcher } from 'resource:///org/gnome/shell/ui/pointerWatcher.js';
+import { getPointerWatcher } from './pointerWatcher.js';
 
 const IGNORED_APPS = [
     'Plank', 'Conky', 'gjs', 'Gjs', 'gjs-console',

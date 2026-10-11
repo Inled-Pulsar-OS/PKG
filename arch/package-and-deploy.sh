@@ -69,10 +69,19 @@ if [ "$EUID" -eq 0 ]; then
     fi
 fi
 
+BUILD_VERBOSE="${BUILD_VERBOSE:-${VERBOSE:-0}}"
 INCREMENTAL=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --verbose|-v)
+            BUILD_VERBOSE=1
+            shift
+            ;;
+        --quiet|-q)
+            BUILD_VERBOSE=0
+            shift
+            ;;
         --deploy|-d)
             DEPLOY_FLAG="--deploy"
             shift
@@ -325,23 +334,61 @@ build_single_package() {
             if [ "$EUID" -ne 0 ]; then
                 command -v sudo >/dev/null 2>&1 && auth_cmd="sudo" || auth_cmd="pkexec"
             fi
-            $auth_cmd pacman -S --needed --noconfirm "${to_install[@]}" 2>/dev/null || {
-                for d in "${to_install[@]}"; do
-                    $auth_cmd pacman -S --needed --noconfirm "$d" 2>/dev/null || true
-                done
-            }
+            if [ "$BUILD_VERBOSE" = "1" ]; then
+                $auth_cmd pacman -S --needed --noconfirm "${to_install[@]}" 2>/dev/null || {
+                    for d in "${to_install[@]}"; do
+                        $auth_cmd pacman -S --needed --noconfirm "$d" 2>/dev/null || true
+                    done
+                }
+            else
+                local dep_log="/tmp/pulsaros-pacman-deps-$$.log"
+                if ! $auth_cmd pacman -S --needed --noconfirm "${to_install[@]}" > "$dep_log" 2>&1; then
+                    for d in "${to_install[@]}"; do
+                        $auth_cmd pacman -S --needed --noconfirm "$d" >> "$dep_log" 2>&1 || true
+                    done
+                fi
+                rm -f "$dep_log"
+            fi
         fi
     fi
 
+    local log_file="$BUILD_DIR/makepkg-${name}.log"
+    rm -f "$log_file"
+
+    local make_cmd=""
     if [ "$EUID" -eq 0 ] && [ -n "$BUILD_USER" ] && [ "$BUILD_USER" != "root" ]; then
         chown -R "$BUILD_USER":"$BUILD_USER" "$BUILD_DIR" "$pkgbuild_dir" 2>/dev/null || true
         if command -v runuser >/dev/null 2>&1; then
-            runuser -u "$BUILD_USER" -- env PULSAR_VERSION="$PULSAR_VERSION" PKGDEST="$OUTPUT_DIR" makepkg -cfd --noconfirm --nosign
+            make_cmd="runuser -u \"$BUILD_USER\" -- env PULSAR_VERSION=\"$PULSAR_VERSION\" PKGDEST=\"$OUTPUT_DIR\" makepkg -cfd --noconfirm --nosign"
         else
-            sudo -u "$BUILD_USER" env PULSAR_VERSION="$PULSAR_VERSION" PKGDEST="$OUTPUT_DIR" makepkg -cfd --noconfirm --nosign
+            make_cmd="sudo -u \"$BUILD_USER\" env PULSAR_VERSION=\"$PULSAR_VERSION\" PKGDEST=\"$OUTPUT_DIR\" makepkg -cfd --noconfirm --nosign"
         fi
     else
-        PKGDEST="$OUTPUT_DIR" makepkg -cfd --noconfirm --nosign
+        make_cmd="env PULSAR_VERSION=\"$PULSAR_VERSION\" PKGDEST=\"$OUTPUT_DIR\" makepkg -cfd --noconfirm --nosign"
+    fi
+
+    if [ "$BUILD_VERBOSE" = "1" ]; then
+        eval "$make_cmd"
+    else
+        local start_sec=$SECONDS
+        eval "$make_cmd" > "$log_file" 2>&1 &
+        local pid=$!
+        local spin='-\|/'
+        local i=0
+        while kill -0 $pid 2>/dev/null; do
+            i=$(( (i+1) % 4 ))
+            local elapsed=$(( SECONDS - start_sec ))
+            printf "\r   \e[36m[%c]\e[0m Compiling %s... (%ds) " "${spin:$i:1}" "$name" "$elapsed"
+            sleep 0.5
+        done
+        printf "\r\033[K"
+        if ! wait $pid; then
+            echo "❌ Error building package $name! (see $log_file)"
+            echo "--- Last 40 lines of build log ---"
+            tail -n 40 "$log_file" 2>/dev/null || true
+            echo "-----------------------------------"
+            return 1
+        fi
     fi
 
     local pkg_file=$(ls "$OUTPUT_DIR/${name}-"*.pkg.tar.zst 2>/dev/null | head -n 1)

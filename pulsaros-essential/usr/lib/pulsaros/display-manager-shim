@@ -1,0 +1,115 @@
+#!/usr/bin/gjs
+// Pulsar OS - minimal org.gnome.DisplayManager (GDM) compatibility shim.
+//
+// GNOME Shell decides whether the screen can be locked by querying GDM on the
+// system bus. From js/misc/loginManager.js (GNOME Shell 50):
+//
+//   const params = GLib.Variant.new('(ss)',
+//       ['org.gnome.DisplayManager.Manager', 'Version']);
+//   const result = Gio.DBus.system.call_sync(
+//       'org.gnome.DisplayManager',
+//       '/org/gnome/DisplayManager/Manager',
+//       'org.freedesktop.DBus.Properties', 'Get', params, null,
+//       Gio.DBusCallFlags.NONE, -1, null);
+//   const version = result.deepUnpack()[0].deepUnpack();
+//   return haveSystemd() && versionCompare('3.5.91', version);
+//
+// On a system that uses a non-GDM display manager (Pulsar OS uses SDDM) that
+// name has no owner, so canLock() returns false, Main.screenShield is never
+// created and Ctrl+L / idle locking silently do nothing.
+//
+// This tiny service owns the name on the system bus and reports a compatible
+// Version, so the shell creates its real (native) ScreenShield. The Pulsar
+// lockscreen overlay then redirects that shield. RegisterSession /
+// RegisterDisplay are accepted and ignored: nothing depends on their result
+// for locking.
+
+const GLib = imports.gi.GLib;
+const Gio = imports.gi.Gio;
+
+const DISPLAY_MANAGER_NAME = 'org.gnome.DisplayManager';
+const MANAGER_PATH = '/org/gnome/DisplayManager/Manager';
+const MANAGER_IFACE = 'org.gnome.DisplayManager.Manager';
+const DISPLAY_MANAGER_PATH = '/org/gnome/DisplayManager';
+const DISPLAY_MANAGER_IFACE = 'org.gnome.DisplayManager';
+
+// Keep this >= 3.5.91 so versionCompare('3.5.91', version) succeeds.
+const FAKE_VERSION = '50.0.0';
+
+const MANAGER_XML = '\
+<node>\
+  <interface name="org.gnome.DisplayManager.Manager">\
+    <property name="Version" type="s" access="read"/>\
+    <property name="UserVerifier" type="s" access="read"/>\
+    <method name="RegisterSession">\
+      <arg type="s" name="session_id" direction="out"/>\
+    </method>\
+    <method name="RegisterDisplay">\
+      <arg type="s" name="display_id" direction="out"/>\
+    </method>\
+  </interface>\
+</node>';
+
+const DISPLAY_MANAGER_XML = '\
+<node>\
+  <interface name="org.gnome.DisplayManager">\
+    <property name="Version" type="s" access="read"/>\
+    <method name="SwitchToGreeter"/>\
+    <method name="SwitchToUser">\
+      <arg type="s" name="username" direction="in"/>\
+    </method>\
+  </interface>\
+</node>';
+
+let counter = 0;
+
+function handleMethodCall(connection, sender, objectPath, interfaceName, methodName, parameters, invocation) {
+    if (methodName === 'RegisterSession') {
+        counter++;
+        invocation.return_value(new GLib.Variant('(s)', ['/org/gnome/DisplayManager/Session' + counter]));
+    } else if (methodName === 'RegisterDisplay') {
+        counter++;
+        invocation.return_value(new GLib.Variant('(s)', ['/org/gnome/DisplayManager/Display' + counter]));
+    } else {
+        // SwitchToGreeter / SwitchToUser: no-op success.
+        invocation.return_value(null);
+    }
+}
+
+function handleGetProperty(connection, sender, objectPath, interfaceName, propertyName) {
+    if (propertyName === 'Version')
+        return new GLib.Variant('s', FAKE_VERSION);
+    if (propertyName === 'UserVerifier')
+        return new GLib.Variant('s', '/org/gnome/DisplayManager/UserVerifier');
+    return null;
+}
+
+const nodeInfo = Gio.DBusNodeInfo.new_for_xml(MANAGER_XML);
+const managerInfo = nodeInfo.lookup_interface(MANAGER_IFACE);
+const dmNodeInfo = Gio.DBusNodeInfo.new_for_xml(DISPLAY_MANAGER_XML);
+const displayManagerInfo = dmNodeInfo.lookup_interface(DISPLAY_MANAGER_IFACE);
+
+const loop = GLib.MainLoop.new(null, false);
+
+Gio.bus_own_name(
+    Gio.BusType.SYSTEM,
+    DISPLAY_MANAGER_NAME,
+    Gio.BusNameOwnerFlags.NONE,
+    connection => {
+        connection.register_object(MANAGER_PATH, managerInfo,
+            handleMethodCall, handleGetProperty, null);
+        connection.register_object(DISPLAY_MANAGER_PATH, displayManagerInfo,
+            handleMethodCall, handleGetProperty, null);
+        log('Pulsar GDM shim: org.gnome.DisplayManager is now owned (Version=' + FAKE_VERSION + ')');
+    },
+    () => {},
+    () => {
+        // Name lost or already owned (e.g. the real GDM is running). Exit
+        // cleanly so the systemd unit does not restart-loop; locking keeps
+        // working through whatever owns the name.
+        log('Pulsar GDM shim: could not own org.gnome.DisplayManager, exiting');
+        loop.quit();
+    }
+);
+
+loop.run();

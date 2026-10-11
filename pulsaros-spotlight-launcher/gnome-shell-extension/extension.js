@@ -70,7 +70,7 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
 
         // Initialize virtual keyboard device for injecting keystrokes into any Wayland window
         try {
-            const seat = Clutter.get_default_backend().get_default_seat();
+            const seat = (Clutter.get_default_backend ? Clutter.get_default_backend().get_default_seat() : (Meta.get_backend ? Meta.get_backend().get_default_seat() : null));
             if (seat) {
                 this._virtualKeyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
             }

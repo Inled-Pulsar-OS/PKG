@@ -178,7 +178,7 @@ export function sendShortcut(accel) {
 }
 
 function synthesize(Clutter, chords) {
-	const seat = Clutter.get_default_backend().get_default_seat();
+	const seat = (Clutter.get_default_backend ? Clutter.get_default_backend().get_default_seat() : (Meta.get_backend ? Meta.get_backend().get_default_seat() : null));
 	const dev = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
 	let t = GLib.get_monotonic_time();
 	for (const {modifiers, keyval} of chords) {

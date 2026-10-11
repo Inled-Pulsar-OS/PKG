@@ -573,7 +573,7 @@ const AboutDialog = GObject.registerClass({
         super._init({ styleClass: 'pulsaros-about-dialog' });
 
         let mainBox = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             style_class: 'pulsaros-about-mainbox'
         });
         this.contentLayout.add_child(mainBox);
@@ -613,14 +613,14 @@ const AboutDialog = GObject.registerClass({
 
         // Details Grid/Table
         let detailsBox = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             style_class: 'pulsaros-about-details'
         });
         mainBox.add_child(detailsBox);
 
         let addDetail = (label, value) => {
             let row = new St.BoxLayout({
-                vertical: false,
+                orientation: Clutter.Orientation.HORIZONTAL,
                 style_class: 'pulsaros-about-row'
             });
             let lbl = new St.Label({
@@ -707,7 +707,7 @@ const PowerConfirmDialog = GObject.registerClass({
         this._progressTimerId = 0;
 
         let mainBox = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             style_class: 'pulsaros-power-mainbox'
         });
         this.contentLayout.add_child(mainBox);
@@ -730,7 +730,7 @@ const PowerConfirmDialog = GObject.registerClass({
         circleBox.set_child(this._icon);
 
         let iconContainer = new St.BoxLayout({
-            vertical: false,
+            orientation: Clutter.Orientation.HORIZONTAL,
             x_align: Clutter.ActorAlign.START,
             style_class: 'pulsaros-power-icon-container'
         });
@@ -769,7 +769,7 @@ const PowerConfirmDialog = GObject.registerClass({
 
         // Option Container (Reopen windows checkbox, left-aligned)
         this._optionBox = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             style_class: 'pulsaros-power-option-box',
             x_align: Clutter.ActorAlign.START
         });
@@ -786,7 +786,7 @@ const PowerConfirmDialog = GObject.registerClass({
         });
 
         let checkLayout = new St.BoxLayout({
-            vertical: false,
+            orientation: Clutter.Orientation.HORIZONTAL,
             style_class: 'pulsaros-power-checkbox-layout',
             y_align: Clutter.ActorAlign.CENTER
         });
@@ -908,7 +908,7 @@ const PowerConfirmDialog = GObject.registerClass({
 
         // Progress Container
         let progressBox = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             style_class: 'pulsaros-power-progress-container',
             x_align: Clutter.ActorAlign.CENTER
         });
@@ -991,7 +991,7 @@ export const ThemeLogoutPromptDialog = GObject.registerClass({
         this._timerId = 0;
 
         let mainBox = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             style_class: 'pulsaros-power-mainbox'
         });
         this.contentLayout.add_child(mainBox);

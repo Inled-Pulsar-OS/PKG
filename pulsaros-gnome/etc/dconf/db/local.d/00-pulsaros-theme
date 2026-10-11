@@ -121,19 +121,20 @@ brightness=0.6
 sigma=30
 
 [org/gnome/settings-daemon/plugins/power]
-# Pulsar OS: el auto-suspend S3 por inactividad está DESACTIVADO a propósito.
-# gsd-power re-evalúa su temporizador de inactividad al reanudar de un
-# hibernate y ordena un suspend S3 ~60s después del resume (el reloj de idle
-# no se resetea), dejando la pantalla muerta justo tras restaurar la sesión.
-# El reposo del sistema en Pulsar OS es el flujo propio: "Guardar sesión y
-# apagar" (hibernate S4 + shutdown).
-sleep-inactive-ac-type='nothing'
-sleep-inactive-ac-timeout=900
-sleep-inactive-battery-type='nothing'
-sleep-inactive-battery-timeout=600
+# Pulsar OS: auto-suspend S3 por inactividad ACTIVADO (1 min por defecto).
+# gsd-power respeta los inhibidores de idle (reproducción de vídeo, etc.) y
+# solo suspende si no hay actividad de cursor/teclado ni inhibidores activos.
+# El bug de re-suspend tras hibernate se mitiga con el periodo de gracia de
+# pulsaros-hibernate (inhibidor de 'sleep' tras reanudar) para que gsd-power
+# no dispare un S3 inmediato y no se resetee el reloj de idle.
+# Configurable en Ajustes > Energía (1/2/5/10/15 min...).
+sleep-inactive-ac-type='suspend'
+sleep-inactive-ac-timeout=60
+sleep-inactive-battery-type='suspend'
+sleep-inactive-battery-timeout=120
 
 [org/gnome/desktop/session]
-idle-delay=uint32 300
+idle-delay=uint32 60
 
 [org/gnome/shell/extensions/liquid-glass]
 # Default settings for Liquid Glass extension extracted from host

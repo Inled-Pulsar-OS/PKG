@@ -561,3 +561,790 @@
     background-color: rgba(250, 250, 252, 0.45) !important;
     border-color: rgba(0, 0, 0, 0.10) !important;
 }
+/* macOS Notification Center Sidebar for Pulsar OS - Liquid Glass UI */
+
+/* 1. Transparent popover container */
+.mac-nc-datemenu,
+.mac-nc-datemenu .popup-menu-content,
+.popup-menu-boxpointer.mac-nc-datemenu,
+.datemenu-popover.mac-nc-datemenu,
+.datemenu-popover.mac-nc-datemenu .popup-menu-content {
+    -arrow-background-color: transparent !important;
+    -arrow-border-color: transparent !important;
+    -arrow-border-width: 0px !important;
+    -arrow-border-radius: 0px !important;
+    -boxpointer-gap: 0px !important;
+    background-color: transparent !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0px !important;
+    padding: 0px !important;
+    margin: 0px !important;
+}
+
+/* 2. Main Root Container */
+.mac-nc-sidebar {
+    padding: 6px 0 !important;
+    width: 324px !important;
+    min-width: 324px !important;
+    max-width: 324px !important;
+    background-color: transparent !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.mac-nc-scroll {
+    max-height: 900px;
+    width: 324px !important;
+    max-width: 324px !important;
+}
+
+.mac-nc-content {
+    spacing: 8px;
+    width: 324px !important;
+    min-width: 324px !important;
+    max-width: 324px !important;
+}
+
+.mac-nc-section {
+    spacing: 6px;
+    width: 324px !important;
+    min-width: 324px !important;
+    max-width: 324px !important;
+}
+
+.mac-nc-section-header,
+.mac-nc-notif-header {
+    padding: 2px 2px;
+}
+
+.mac-nc-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.65);
+}
+
+.mac-nc-clear-btn {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+}
+.mac-nc-clear-btn:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+}
+
+.mac-nc-widgets {
+    spacing: 8px;
+    width: 324px !important;
+    min-width: 324px !important;
+    max-width: 324px !important;
+}
+
+.mac-nc-row {
+    spacing: 12px;
+    width: 324px !important;
+    min-width: 324px !important;
+    max-width: 324px !important;
+}
+
+/* 3. Base Floating Glass Cards & Quick-Toggle Reset */
+.mac-nc-card,
+.mac-nc-card.quick-toggle,
+.mac-lg-toggles .mac-nc-card,
+.mac-lg-toggles .mac-nc-card.quick-toggle {
+    border-radius: 18px !important;
+    padding: 10px 10px !important;
+    margin: 0 !important;
+    min-width: 0 !important;
+    max-width: 1000px !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.32) !important;
+    color: #ffffff !important;
+    background-color: rgba(30, 32, 46, 0.86) !important;
+    transition: all 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.mac-nc-card:hover,
+.mac-nc-card.quick-toggle:hover {
+    background-color: rgba(42, 45, 62, 0.90) !important;
+    border-color: rgba(255, 255, 255, 0.24) !important;
+}
+
+.mac-nc-card > StBoxLayout,
+.mac-nc-card.quick-toggle > StBoxLayout,
+.mac-lg-toggles .mac-nc-card > StBoxLayout,
+.mac-lg-toggles .mac-nc-card.quick-toggle > StBoxLayout {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+.mac-nc-card-inner {
+    spacing: 6px;
+}
+
+.mac-nc-square,
+.mac-nc-square.quick-toggle,
+.mac-lg-toggles .mac-nc-square,
+.mac-lg-toggles .mac-nc-square.quick-toggle {
+    width: 138px !important;
+    min-width: 138px !important;
+    max-width: 138px !important;
+    height: 138px !important;
+    min-height: 138px !important;
+    max-height: 138px !important;
+    padding: 8px 8px !important;
+}
+
+.mac-nc-wide,
+.mac-nc-wide.quick-toggle,
+.mac-lg-toggles .mac-nc-wide,
+.mac-lg-toggles .mac-nc-wide.quick-toggle {
+    width: 302px !important;
+    min-width: 302px !important;
+    max-width: 302px !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    padding: 10px 10px !important;
+}
+
+/* 4. Notifications */
+.mac-nc-notif-card,
+.mac-nc-notif-card.quick-toggle,
+.mac-lg-toggles .mac-nc-notif-card,
+.mac-lg-toggles .mac-nc-notif-card.quick-toggle {
+    padding: 10px 10px !important;
+    border-radius: 16px !important;
+    width: 302px !important;
+    min-width: 302px !important;
+    max-width: 302px !important;
+}
+
+.mac-nc-notif-top {
+    spacing: 8px;
+}
+
+.mac-nc-notif-icon {
+    icon-size: 16px;
+    width: 16px;
+    height: 16px;
+    color: #ffffff;
+}
+
+.mac-nc-notif-app {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    opacity: 0.75;
+    color: #ffffff;
+}
+
+.mac-nc-notif-time {
+    font-size: 10px;
+    opacity: 0.55;
+    color: #ffffff;
+}
+
+.mac-nc-notif-close {
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    padding: 0;
+    background-color: rgba(255, 255, 255, 0.15);
+    opacity: 0.7;
+}
+.mac-nc-notif-close:hover {
+    background-color: rgba(255, 69, 58, 0.85);
+    opacity: 1;
+}
+
+.mac-nc-mini-icon {
+    icon-size: 10px;
+    width: 10px;
+    height: 10px;
+    color: #ffffff;
+}
+
+.mac-nc-notif-title {
+    font-size: 12px;
+    font-weight: 700;
+    margin-top: 2px;
+    color: #ffffff;
+}
+
+.mac-nc-notif-body {
+    font-size: 11px;
+    opacity: 0.85;
+    margin-top: 2px;
+    color: #ffffff;
+}
+
+.mac-nc-empty-card,
+.mac-nc-empty-card.quick-toggle,
+.mac-lg-toggles .mac-nc-empty-card,
+.mac-lg-toggles .mac-nc-empty-card.quick-toggle {
+    padding: 12px 10px !important;
+    spacing: 10px;
+    border-radius: 16px !important;
+    width: 302px !important;
+    min-width: 302px !important;
+    max-width: 302px !important;
+}
+
+.mac-nc-empty-icon {
+    icon-size: 16px;
+    width: 16px;
+    height: 16px;
+    opacity: 0.6;
+    color: #ffffff;
+}
+
+.mac-nc-empty-notif {
+    font-size: 12px;
+    opacity: 0.65;
+    color: #ffffff;
+}
+
+.mac-nc-more-notifs-btn {
+    padding: 8px 10px;
+    border-radius: 14px;
+    background-color: rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    width: 302px !important;
+    min-width: 302px !important;
+    max-width: 302px !important;
+}
+.mac-nc-more-notifs-btn:hover {
+    background-color: rgba(255, 255, 255, 0.18);
+}
+.mac-nc-more-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+/* 5. Common Card Headers */
+.mac-nc-card-header {
+    spacing: 6px;
+}
+
+.mac-nc-card-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.mac-nc-mini-white {
+    icon-size: 12px;
+    width: 12px;
+    height: 12px;
+    color: #ffffff;
+}
+
+/* 6. Calendar Widget (Month Grid) */
+.mac-nc-calendar-card,
+.mac-lg-toggles .mac-nc-calendar-card {
+    padding: 8px 6px !important;
+    height: 138px !important;
+    min-height: 138px !important;
+    max-height: 138px !important;
+}
+
+.mac-nc-cal-month-title {
+    font-size: 9.5px;
+    font-weight: 700;
+    color: #ff453a !important;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.mac-nc-cal-grid {
+    spacing: 1px;
+    margin-top: 1px;
+}
+
+.mac-nc-cal-row {
+    spacing: 1px;
+}
+
+.mac-nc-cal-header-day {
+    font-size: 7.5px;
+    font-weight: 700;
+    opacity: 0.55;
+    color: #ffffff;
+    width: 17px;
+    text-align: center;
+}
+
+.mac-nc-cal-cell {
+    width: 17px;
+    height: 13px;
+    x-align: center;
+    y-align: center;
+}
+
+.mac-nc-cal-day-label {
+    font-size: 8px;
+    font-weight: 500;
+    color: #ffffff;
+    text-align: center;
+}
+
+.mac-nc-cal-other-month {
+    opacity: 0.25;
+}
+
+.mac-nc-cal-today-bubble,
+.mac-lg-toggles .mac-nc-cal-today-bubble {
+    background-color: #ff453a !important;
+    border: 1px solid #ff453a !important;
+    box-shadow: inset 0 0 0 1000px #ff453a !important;
+    border-radius: 7px;
+    width: 15px;
+    height: 13px;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+}
+
+.mac-nc-cal-today-text {
+    font-size: 8px;
+    font-weight: 700;
+    color: #ffffff !important;
+}
+
+.mac-nc-cal-event {
+    font-size: 8.5px;
+    font-weight: 600;
+    opacity: 0.85;
+    margin-top: 2px;
+    color: #ffffff !important;
+}
+
+/* 7. Tasks Widget */
+.mac-nc-reminders-card,
+.mac-lg-toggles .mac-nc-reminders-card {
+    padding: 8px 8px !important;
+    height: 138px !important;
+    min-height: 138px !important;
+    max-height: 138px !important;
+}
+
+.mac-nc-reminders-icon-bg,
+.mac-lg-toggles .mac-nc-reminders-icon-bg {
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    background-color: #ff9f0a;
+    border: 1px solid #ff9f0a;
+    box-shadow: inset 0 0 0 1000px #ff9f0a;
+}
+
+.mac-nc-reminders-list {
+    spacing: 4px;
+    margin-top: 6px;
+}
+
+.mac-nc-reminders-item {
+    spacing: 6px;
+}
+
+.mac-nc-check-icon {
+    icon-size: 14px;
+    width: 14px;
+    height: 14px;
+    color: #30d158;
+}
+
+.mac-nc-reminders-text-done {
+    font-size: 10px;
+    font-weight: 600;
+    opacity: 0.85;
+    color: #ffffff;
+}
+
+/* 8. Performance Widget */
+.mac-nc-perf-card,
+.mac-lg-toggles .mac-nc-perf-card {
+    padding: 8px 10px !important;
+    height: 84px !important;
+    min-height: 84px !important;
+    max-height: 84px !important;
+}
+
+.mac-nc-perf-icon-bg,
+.mac-lg-toggles .mac-nc-perf-icon-bg {
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    background-color: #30d158;
+    border: 1px solid #30d158;
+    box-shadow: inset 0 0 0 1000px #30d158;
+}
+
+.mac-nc-perf-status {
+    font-size: 9px;
+    font-weight: 700;
+    opacity: 0.65;
+    letter-spacing: 0.4px;
+    color: #ffffff;
+}
+
+.mac-nc-perf-row {
+    spacing: 14px;
+    margin: 3px 0 2px 0;
+}
+
+.mac-nc-perf-col {
+    spacing: 2px;
+}
+
+.mac-nc-stat-label {
+    font-size: 9.5px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.mac-nc-stat-val {
+    font-size: 9.5px;
+    font-weight: 600;
+    color: #ffffff;
+    text-align: right;
+}
+
+.mac-nc-progress-bar {
+    border-radius: 2px;
+}
+
+.mac-nc-perf-footer {
+    margin-top: 2px;
+}
+
+.mac-nc-uptime-label {
+    font-size: 8.5px;
+    opacity: 0.55;
+    color: #ffffff;
+}
+
+.mac-nc-uptime-val {
+    font-size: 8.5px;
+    font-weight: 600;
+    opacity: 0.8;
+    color: #ffffff;
+}
+
+/* 9. Weather Widget */
+.mac-nc-weather-card,
+.mac-lg-toggles .mac-nc-weather-card {
+    padding: 8px 10px !important;
+    height: 122px !important;
+    min-height: 122px !important;
+    max-height: 122px !important;
+}
+
+.mac-nc-weather-top {
+    spacing: 8px;
+}
+
+.mac-nc-weather-city {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.mac-nc-weather-desc {
+    font-size: 9.5px;
+    opacity: 0.75;
+    color: #ffffff;
+}
+
+.mac-nc-weather-icon {
+    icon-size: 24px;
+    width: 24px;
+    height: 24px;
+    color: #ffd60a;
+}
+
+.mac-nc-weather-temp {
+    font-size: 22px;
+    font-weight: 300;
+    color: #ffffff;
+}
+
+.mac-nc-weather-hourly {
+    spacing: 4px;
+    margin-top: 4px;
+    height: 52px !important;
+    min-height: 52px !important;
+    max-height: 52px !important;
+}
+
+.mac-nc-weather-pill,
+.mac-lg-toggles .mac-nc-weather-pill {
+    spacing: 1px;
+    padding: 2px 2px !important;
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 0 0 1000px rgba(255, 255, 255, 0.08);
+}
+
+.mac-nc-pill-time {
+    font-size: 8px;
+    font-weight: 600;
+    opacity: 0.75;
+    text-align: center;
+    color: #ffffff;
+    line-height: 1;
+}
+
+.mac-nc-pill-icon {
+    icon-size: 13px;
+    width: 13px;
+    height: 13px;
+    color: #ffd60a;
+}
+
+.mac-nc-pill-temp {
+    font-size: 8.5px;
+    font-weight: 700;
+    text-align: center;
+    color: #ffffff;
+}
+
+/* 10. Music Widget */
+.mac-nc-music-card,
+.mac-lg-toggles .mac-nc-music-card {
+    padding: 8px 8px !important;
+    height: 138px !important;
+    min-height: 138px !important;
+    max-height: 138px !important;
+}
+
+.mac-nc-music-icon-bg,
+.mac-lg-toggles .mac-nc-music-icon-bg {
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    background-color: #af52de;
+    border: 1px solid #af52de;
+    box-shadow: inset 0 0 0 1000px #af52de;
+}
+
+.mac-nc-music-mid {
+    spacing: 6px;
+    margin: 4px 0;
+}
+
+.mac-nc-music-art-bin,
+.mac-lg-toggles .mac-nc-music-art-bin {
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    max-height: 32px;
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 0 0 1000px rgba(255, 255, 255, 0.12);
+}
+
+.mac-nc-music-fallback-art {
+    icon-size: 18px;
+    width: 18px;
+    height: 18px;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.mac-nc-music-art-image {
+    icon-size: 32px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+}
+
+.mac-nc-music-info {
+    spacing: 1px;
+}
+
+.mac-nc-music-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.mac-nc-music-artist {
+    font-size: 8.5px;
+    opacity: 0.7;
+    color: #ffffff;
+}
+
+.mac-nc-music-controls {
+    spacing: 6px;
+    margin-top: 4px;
+}
+
+.mac-nc-media-btn,
+.mac-lg-toggles .mac-nc-media-btn {
+    width: 24px;
+    min-width: 24px;
+    max-width: 24px;
+    height: 24px;
+    min-height: 24px;
+    max-height: 24px;
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: inset 0 0 0 1000px rgba(255, 255, 255, 0.10);
+    padding: 0;
+}
+.mac-nc-media-btn:hover,
+.mac-lg-toggles .mac-nc-media-btn:hover {
+    background-color: rgba(255, 255, 255, 0.22);
+}
+
+.mac-nc-play-btn,
+.mac-lg-toggles .mac-nc-play-btn {
+    background-color: rgba(255, 255, 255, 0.20);
+    border: 1px solid rgba(255, 255, 255, 0.20);
+    box-shadow: inset 0 0 0 1000px rgba(255, 255, 255, 0.20);
+}
+
+.mac-nc-media-icon {
+    icon-size: 12px;
+    width: 12px;
+    height: 12px;
+    color: #ffffff;
+}
+
+.mac-nc-play-icon {
+    icon-size: 13px;
+    width: 13px;
+    height: 13px;
+    color: #ffffff;
+}
+
+/* 11. Battery Widget */
+.mac-nc-battery-card,
+.mac-lg-toggles .mac-nc-battery-card {
+    padding: 8px 8px !important;
+    height: 138px !important;
+    min-height: 138px !important;
+    max-height: 138px !important;
+}
+
+.mac-nc-battery-icon-bg,
+.mac-lg-toggles .mac-nc-battery-icon-bg {
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    background-color: #30d158;
+    border: 1px solid #30d158;
+    box-shadow: inset 0 0 0 1000px #30d158;
+}
+
+.mac-nc-battery-list {
+    spacing: 4px;
+    margin-top: 4px;
+}
+
+.mac-nc-battery-row {
+    spacing: 4px;
+}
+
+.mac-nc-battery-item-icon {
+    icon-size: 13px;
+    width: 13px;
+    height: 13px;
+    color: #30d158;
+}
+
+.mac-nc-battery-item-name {
+    font-size: 9.5px;
+    font-weight: 500;
+    color: #ffffff;
+    max-width: 62px;
+}
+
+.mac-nc-battery-item-pct {
+    font-size: 9.5px;
+    font-weight: 700;
+    color: #30d158;
+    min-width: 30px;
+    text-align: right;
+}
+
+/* 12. World Clock Widget */
+.mac-nc-world-card,
+.mac-lg-toggles .mac-nc-world-card {
+    padding: 8px 10px !important;
+    height: 100px !important;
+    min-height: 100px !important;
+    max-height: 100px !important;
+}
+
+.mac-nc-world-icon-bg,
+.mac-lg-toggles .mac-nc-world-icon-bg {
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    background-color: #0a84ff;
+    border: 1px solid #0a84ff;
+    box-shadow: inset 0 0 0 1000px #0a84ff;
+}
+
+.mac-nc-world-grid {
+    spacing: 4px;
+    margin-top: 4px;
+}
+
+.mac-nc-world-col,
+.mac-lg-toggles .mac-nc-world-col {
+    spacing: 1px;
+    padding: 2px 2px !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    max-height: 48px !important;
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 0 0 1000px rgba(255, 255, 255, 0.08);
+}
+
+.mac-nc-city-name {
+    font-size: 8.5px;
+    font-weight: 700;
+    text-align: center;
+    color: #ffffff;
+}
+
+.mac-nc-city-time {
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+    color: #ffffff;
+}
+
+.mac-nc-city-diff {
+    font-size: 7.5px;
+    opacity: 0.65;
+    text-align: center;
+    color: #ffffff;
+}
+
+/* Liquid Glass Mode for Notification Center Cards */
+.mac-lg-toggles .mac-nc-card,
+.mac-lg-toggles .mac-nc-card.quick-toggle {
+    background-color: transparent !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}

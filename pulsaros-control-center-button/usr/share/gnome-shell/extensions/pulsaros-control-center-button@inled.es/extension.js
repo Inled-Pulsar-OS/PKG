@@ -10,7 +10,7 @@ import GObject from 'gi://GObject';
 const ControlCenterButton = GObject.registerClass(
 class ControlCenterButton extends QuickSettings.QuickSettingsItem {
     _init(extension) {
-        super({
+        super._init({
             style_class: 'icon-button system-status-icon',
             can_focus: true,
             icon_name: 'control-center-symbolic',

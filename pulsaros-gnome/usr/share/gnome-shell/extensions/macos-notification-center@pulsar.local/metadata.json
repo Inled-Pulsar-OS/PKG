@@ -1,0 +1,15 @@
+{
+  "uuid": "macos-notification-center@pulsar.local",
+  "name": "macOS Notification Center",
+  "description": "macOS-style Notification Center and Widgets panel for Pulsar OS.",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50",
+    "51"
+  ],
+  "version": 1
+}

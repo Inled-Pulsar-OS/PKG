@@ -152,15 +152,19 @@ osd-corner-radius=16.0
 quick-settings-corner-radius=18.0
 
 [org.gnome.settings-daemon.plugins.power]
-# Pulsar OS: sin auto-suspend S3 por inactividad (rompe el resume del hibernate,
-# ver INFORME-hibernacion-apagado.md). El reposo del OS es hibernate S4 propio.
-sleep-inactive-ac-type='nothing'
-sleep-inactive-ac-timeout=900
-sleep-inactive-battery-type='nothing'
-sleep-inactive-battery-timeout=600
+# Pulsar OS: auto-suspend S3 por inactividad ACTIVADO (1 min por defecto).
+# gsd-power solo suspende si no hay actividad de cursor/teclado NI un
+# inhibidor de idle activo (p. ej. reproducción de vídeo), por lo que respeta
+# vídeos y otras aplicaciones. El bug de re-suspend tras hibernate se mitiga
+# con el periodo de gracia de pulsaros-hibernate (inhibidor de 'sleep' tras
+# reanudar). Configurable en Ajustes > Energía (1/2/5/10/15 min...).
+sleep-inactive-ac-type='suspend'
+sleep-inactive-ac-timeout=60
+sleep-inactive-battery-type='suspend'
+sleep-inactive-battery-timeout=120
 
 [org.gnome.desktop.session]
-idle-delay=uint32 300
+idle-delay=uint32 60
 
 [org.gnome.shell.keybindings]
 toggle-overview=['<Super>s', '<Control>Up']

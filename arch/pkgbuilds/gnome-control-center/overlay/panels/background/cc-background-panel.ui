@@ -128,6 +128,35 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                             <signal name="notify::active" handler="on_liquid_glass_active_changed_cb" object="CcBackgroundPanel"/>
                           </object>
                         </child>
+                        <child>
+                          <object class="AdwComboRow" id="liquid_glass_mode_row">
+                            <property name="title" translatable="yes">Window Transparency Mode</property>
+                            <property name="subtitle" translatable="yes">Appearance and opacity of application windows</property>
+                            <property name="sensitive" bind-source="liquid_glass_switch_row" bind-property="active" bind-flags="sync-create"/>
+                            <signal name="notify::selected" handler="on_liquid_glass_mode_selected_cb" object="CcBackgroundPanel"/>
+                            <property name="model">
+                              <object class="GtkStringList">
+                                <items>
+                                  <item translatable="yes">Cristal Transparente (Fondos y Barras)</item>
+                                  <item translatable="yes">Ventanas Opacas (Solo Desenfoque de Barras)</item>
+                                </items>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">Control Centre</property>
+                        <property name="description" translatable="yes">Display and behaviour of the top-right centre of control</property>
+                        <child>
+                          <object class="AdwSwitchRow" id="cc_switch_row">
+                            <property name="title" translatable="yes">macOS Control Centre</property>
+                            <property name="subtitle" translatable="yes">Replace the GNOME quick settings menu with the macOS-style Control Centre panel</property>
+                            <signal name="notify::active" handler="on_cc_active_changed_cb" object="CcBackgroundPanel"/>
+                          </object>
+                        </child>
                       </object>
                     </child>
                     <child>

@@ -325,7 +325,7 @@ class FallbackMenuButton extends PanelMenu.Button {
                 // Simulate Ctrl+C keypress sequence via virtual keyboard device
                 // Simular secuencia de teclas Ctrl+C mediante el dispositivo de teclado virtual
                 try {
-                    let seat = Clutter.get_default_backend().get_default_seat();
+                    let seat = (Clutter.get_default_backend ? Clutter.get_default_backend().get_default_seat() : (Meta.get_backend ? Meta.get_backend().get_default_seat() : null));
                     let kb = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
                     let time = GLib.get_monotonic_time();
                     kb.notify_keyval(time, Clutter.KEY_Control_L, Clutter.KeyState.PRESSED);
@@ -340,7 +340,7 @@ class FallbackMenuButton extends PanelMenu.Button {
                 // Simulate Ctrl+V keypress sequence via virtual keyboard device
                 // Simular secuencia de teclas Ctrl+V mediante el dispositivo de teclado virtual
                 try {
-                    let seat = Clutter.get_default_backend().get_default_seat();
+                    let seat = (Clutter.get_default_backend ? Clutter.get_default_backend().get_default_seat() : (Meta.get_backend ? Meta.get_backend().get_default_seat() : null));
                     let kb = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
                     let time = GLib.get_monotonic_time();
                     kb.notify_keyval(time, Clutter.KEY_Control_L, Clutter.KeyState.PRESSED);

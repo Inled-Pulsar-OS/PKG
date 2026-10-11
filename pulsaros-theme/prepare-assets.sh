@@ -690,6 +690,14 @@ cat <<'SHELL_MODAL_DARK_FIX' > /tmp/shell_modal_dark_fix.css
   box-shadow: none !important;
   color: rgba(255, 255, 255, 0.4) !important;
 }
+
+#overviewGroup {
+  background-color: transparent !important;
+}
+
+.popup-sub-menu {
+  border-radius: 12px !important;
+}
 SHELL_MODAL_DARK_FIX
 
 cat <<'SHELL_MODAL_LIGHT_FIX' > /tmp/shell_modal_light_fix.css
@@ -814,6 +822,14 @@ cat <<'SHELL_MODAL_LIGHT_FIX' > /tmp/shell_modal_light_fix.css
   box-shadow: 0 0 0 2px st-lighten(-st-accent-color, 25%) !important;
   border: none !important;
   color: #ffffff !important;
+}
+
+#overviewGroup {
+  background-color: transparent !important;
+}
+
+.popup-sub-menu {
+  border-radius: 12px !important;
 }
 SHELL_MODAL_LIGHT_FIX
 

@@ -323,45 +323,91 @@ export default class PulsarosGlobalMenuExtension extends Extension {
 			this._lockScreenOverlay = new LockScreen(this);
 			Main.uiGroup.add_child(this._lockScreenOverlay);
 
-			// Super+L lock screen shortcut
+			// Native screen lock integration.
+			//
+			// Ctrl+L / Super+L are handled by gsd-media-keys, which calls
+			// org.gnome.ScreenSaver.Lock() -> ScreenShield.LockAsync() ->
+			// Main.screenShield.lock(). We must NOT register a competing
+			// keybinding here: the previous attempt failed silently and hid
+			// the real (native) path. Instead we redirect the native
+			// ScreenShield to the custom overlay while preserving its public
+			// state and D-Bus contract (active, lock/unlock, and the
+			// lock-screen-shown / active-changed / wake-up-screen signals).
 			try {
-				Main.wm.addKeybinding(
-					'screensaver',
-					new Gio.Settings({ schema_id: 'org.gnome.settings-daemon.plugins.media-keys' }),
-					Meta.KeyBindingFlags.NONE,
-					Shell.ActionMode.ALL,
-					() => {
-						this._lockScreenOverlay.lock();
-					}
-				);
-			} catch (e) {}
+				const shield = Main.screenShield;
+				const overlay = this._lockScreenOverlay;
 
-			// Native screenShield lock & unlock interception
-			if (Main.screenShield) {
-				this._origLock = Main.screenShield.lock;
-				let self = this;
-				Main.screenShield.lock = function(animate) {
-					try {
-						self._lockScreenOverlay.lock();
-					} catch (err) {}
-					return true;
-				};
+				if (shield && overlay) {
+					// Save originals so disable() can restore them.
+					this._origLock = shield.lock;
+					this._origActivate = shield.activate;
+					this._origDeactivate = shield.deactivate;
+					this._origBecomeModal = shield._becomeModal;
+					this._origActivateFade = shield._activateFade;
+					this._origActiveDesc = Object.getOwnPropertyDescriptor(shield, 'active');
 
-				this._origUnlock = Main.screenShield.unlock;
-				Main.screenShield.unlock = function(animate) {
-					try {
-						self._lockScreenOverlay.unlock();
-					} catch (err) {}
-					if (self._origUnlock) {
-						self._origUnlock.call(Main.screenShield, animate);
-					}
-				};
+					// 1. Neutralize the native shield's own visuals and modal
+					//    grab: it must never paint a black lightbox nor push a
+					//    second modal grab on top of the custom overlay.
+					shield._becomeModal = function () {};
+					shield._activateFade = function () {};
 
-				this._activeChangedId = Main.screenShield.connect('active-changed', () => {
-					if (!Main.screenShield.active && this._lockScreenOverlay) {
-						this._lockScreenOverlay.unlock();
-					}
-				});
+					// 2. Report the overlay's locked state as the shield's
+					//    active state so GetActive() and every consumer agree.
+					Object.defineProperty(shield, 'active', {
+						configurable: true,
+						get: () => overlay._isLocked,
+					});
+
+					// 3. Wrap overlay.lock()/unlock() to keep the shield's
+					//    private _isLocked flag and its signals in sync.
+					overlay._pulsarosOrigLock = overlay.lock;
+					overlay._pulsarosOrigUnlock = overlay.unlock;
+
+					// Mirror exactly what the native _lockScreenShown() /
+					// _completeDeactivate() do: update the private active
+					// flag (so _syncInhibitor() releases/acquires the
+					// "GNOME needs to lock the screen" delay inhibitor and
+					// the locked state is consistent) and emit the public
+					// signals the D-Bus ScreenSaver interface depends on
+					// (active-changed -> ActiveChanged, lock-screen-shown ->
+					// LockAsync resolves, wake-up-screen -> WakeUpScreen).
+					const emitShieldSignals = locked => {
+						try { shield._setActive(locked); } catch (e) {}
+						try { shield._setLocked(locked); } catch (e) {}
+						try {
+							shield.emit(locked ? 'lock-screen-shown' : 'wake-up-screen');
+						} catch (e) {}
+					};
+
+					overlay.lock = function (...args) {
+						const wasLocked = overlay._isLocked;
+						overlay._pulsarosOrigLock.apply(overlay, args);
+						if (!wasLocked && overlay._isLocked)
+							emitShieldSignals(true);
+					};
+					overlay.unlock = function (...args) {
+						const wasLocked = overlay._isLocked;
+						overlay._pulsarosOrigUnlock.apply(overlay, args);
+						if (wasLocked && !overlay._isLocked)
+							emitShieldSignals(false);
+					};
+
+					// 4. Route the shield's public API to the overlay.
+					shield.lock = () => {
+						try { overlay.lock(); } catch (e) {}
+						return true;
+					};
+					shield.activate = () => {
+						try { overlay.lock(); } catch (e) {}
+					};
+					shield.deactivate = () => {
+						try { overlay.unlock(); } catch (e) {}
+						return true;
+					};
+				}
+			} catch (e) {
+				console.error("[GlobalMenu] Failed to integrate screen lock:", e);
 			}
 
 			// Login1 Session Lock signal
@@ -397,6 +443,16 @@ export default class PulsarosGlobalMenuExtension extends Extension {
 						this._activePowerDialog.close();
 						this._activePowerDialog = null;
 					}
+					// On resume (aboutToSuspend === false) show the lockscreen
+					// immediately, guaranteeing the shield is up after S3/S4
+					// even if the pre-suspend lock was skipped.
+					try {
+						const args = parameters && typeof parameters.deepUnpack === 'function'
+							? parameters.deepUnpack()
+							: parameters;
+						if (args && args[0] === false && this._lockScreenOverlay)
+							this._lockScreenOverlay.lock();
+					} catch (e) {}
 				}
 			);
 		} catch (e) {}
@@ -537,23 +593,43 @@ export default class PulsarosGlobalMenuExtension extends Extension {
 			this._appleLogoButton = null;
 		}
 
-		if (this._activeChangedId && Main.screenShield) {
-			Main.screenShield.disconnect(this._activeChangedId);
-			this._activeChangedId = 0;
+		if (Main.screenShield) {
+			const shield = Main.screenShield;
+			if (this._origLock) {
+				shield.lock = this._origLock;
+				this._origLock = null;
+			}
+			if (this._origActivate) {
+				shield.activate = this._origActivate;
+				this._origActivate = null;
+			}
+			if (this._origDeactivate) {
+				shield.deactivate = this._origDeactivate;
+				this._origDeactivate = null;
+			}
+			if (this._origBecomeModal) {
+				shield._becomeModal = this._origBecomeModal;
+				this._origBecomeModal = null;
+			}
+			if (this._origActivateFade) {
+				shield._activateFade = this._origActivateFade;
+				this._origActivateFade = null;
+			}
+			if (this._origActiveDesc) {
+				try { Object.defineProperty(shield, 'active', this._origActiveDesc); } catch (e) {}
+				this._origActiveDesc = null;
+			} else {
+				try { delete shield.active; } catch (e) {}
+			}
 		}
 
-		if (this._origLock && Main.screenShield) {
-			Main.screenShield.lock = this._origLock;
-			this._origLock = null;
+		if (this._lockScreenOverlay) {
+			// Restore the overlay's own methods before it is destroyed.
+			if (this._lockScreenOverlay._pulsarosOrigLock)
+				this._lockScreenOverlay.lock = this._lockScreenOverlay._pulsarosOrigLock;
+			if (this._lockScreenOverlay._pulsarosOrigUnlock)
+				this._lockScreenOverlay.unlock = this._lockScreenOverlay._pulsarosOrigUnlock;
 		}
-		if (this._origUnlock && Main.screenShield) {
-			Main.screenShield.unlock = this._origUnlock;
-			this._origUnlock = null;
-		}
-
-		try {
-			Main.wm.removeKeybinding('screensaver');
-		} catch (e) {}
 
 		if (this._prepareForSleepId) {
 			try { Gio.DBus.system.signal_unsubscribe(this._prepareForSleepId); } catch (e) {}
