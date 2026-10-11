@@ -103,18 +103,39 @@ FOCUS_HOLD_SEC = 20.0
 FALLBACK_PROBE_INTERVAL = 30.0
 
 # -----------------------------------------------------------------------------
-# Anti-saturation ladder: guarantees the CPU never saturates and RAM never runs
-# out. Measures escalate with pressure, strongest first on the *least* important
-# work:
+# Anti-saturation: guarantees the CPU never saturates and RAM never runs out -
+# even when the FOCUSED app is the one consuming everything. Two mechanisms:
+#
+#  PRIMARY (cgroup v2, this system): every user app is moved into a cgroup
+#  (pulsaros/fg = focused app, pulsaros/bg = the rest). Tiers translate into
+#  cpu.max + memory.high/max ceilings, so the focused app is *throttled*, not
+#  frozen, and the desktop (pulsaros/core, uncapped, max weight) always stays
+#  fluid while switching windows.
+#   CPU tier 1 (>=70%):  lower background CPU ceiling to 80% of all cores
+#   CPU tier 2 (>=85%):  background 60%, focused app capped at 90%
+#   CPU tier 3 (>=95%):  background 40%, focused app capped at 75%
+#   MEM tier 1 (<=25%):  drop page cache + compact memory
+#   MEM tier 2 (<=15%):  bg/fg memory.high caps force proactive reclaim
+#   MEM tier 3 (<=8%):   tighter high caps plus hard max (cgroup-local OOM)
+#   MEM tier 4 (<=4%):   emergency: hard ceilings near the floor + SIGTERM of
+#                        stateless indexers.
+#  The ceilings auto-revert (max) once pressure drops (hysteresis).
+#
+#  FALLBACK (kernels without cpu/memory controllers): SIGSTOP ladder below.
+#  Escalates strongest-first on the *least* important work:
 #   CPU tier 1 (>=70%):  demote + freeze indexers/maintenance tasks
 #   CPU tier 2 (>=85%):  + freeze every non-essential process burning CPU
-#   CPU tier 3 (>=95%):  + freeze all non-essential processes (emergency)
+#   CPU tier 3 (>=95%):  + freeze all non-essential processes; at this tier the
+#                        focused app is brought down too if still pinning the
+#                        CPU (stopped, never killed) - the CPU/RAM guarantee
+#                        is absolute.
 #   MEM tier 1 (<=25%):  drop page cache + compact memory
 #   MEM tier 2 (<=15%):  freeze the biggest non-essential consumers
-#   MEM tier 3 (<=8%):   freeze every non-essential consumer
+#   MEM tier 3 (<=8%):   freeze every non-essential consumer (incl. focused
+#                        app if it is the biggest consumer)
 #   MEM tier 4 (<=4%):   emergency reclaim + SIGTERM of stateless indexers
 # Everything thaws by itself once pressure drops (hysteresis + min hold time).
-# Core desktop, the focused window/app and its children are never touched.
+# Core desktop infrastructure is never frozen, killed, or capped.
 # -----------------------------------------------------------------------------
 CPU_FREEZE_L1 = 70.0        # smoothed %  -> tier 1
 CPU_FREEZE_L2 = 85.0        # smoothed %  -> tier 2
@@ -451,6 +472,44 @@ _MEM_TIER_SINCE = 0.0
 _LAST_MEM_DROP = 0.0
 CPU_TIER_NOW = 0
 MEM_TIER_NOW = 0
+
+# -----------------------------------------------------------------------------
+# cgroup v2 isolation (primary anti-saturation mechanism).
+#
+# The daemon (root) creates /sys/fs/cgroup/pulsaros/{core,fg,bg}. When the
+# kernel exposes the cpu+memory controllers, EVERY user app runs inside a
+# capped cgroup instead of being SIGSTOPed:
+#   - pulsaros/core : the desktop (gnome-shell, mutter, pipewire, ...) lives
+#                     here UNCAPTED with the maximal cpu/io weight -> GNOME is
+#                     always fluid, window switching never starves.
+#   - pulsaros/fg   : the FOCUSED app + its whole tree. Capped per tier -> the
+#                     focused app is throttled, never frozen, and can never
+#                     pin the CPU or exhaust RAM on its own.
+#   - pulsaros/bg   : every other session user process. Capped tighter.
+# The SIGSTOP ladder below stays as an automatic fallback for kernels without
+# cpu/memory controllers.
+# -----------------------------------------------------------------------------
+CGROUPS_OK = False
+CGCORE = "/sys/fs/cgroup/pulsaros/core"
+CGFG = "/sys/fs/cgroup/pulsaros/fg"
+CGBG = "/sys/fs/cgroup/pulsaros/bg"
+CGMAP = "/run/pulsaros-cgmap.json"   # pid -> original cgroup (restore on exit)
+_NPROC = os.cpu_count() or 4
+_CG_PERIOD = 100000                  # 100 ms quota period
+_CG_PLACED = {}                      # pid -> cgroup we moved it to
+_CG_ORIG = {}                        # pid -> original cgroup path (restore map)
+_CG_LAST_FOCUSED = 0
+_CG_LAST_PLACE = 0.0
+# CPU caps: fraction of ALL cores allowed to the cgroup (1.0 = uncapped).
+_CPU_CAP_FG = {0: 1.0, 1: 1.0, 2: 0.90, 3: 0.75}
+_CPU_CAP_BG = {0: 1.0, 1: 0.80, 2: 0.60, 3: 0.40}
+# Memory caps: fraction of total RAM. high = throttle via reclaim (slow the
+# app, never kill); max = hard ceiling (cgroup-local OOM only at deep tiers).
+_MEM_HIGH_FG = {0: None, 1: 0.85, 2: 0.70, 3: 0.55, 4: 0.40}
+_MEM_MAX_FG  = {0: None, 1: None, 2: 0.85, 3: 0.70, 4: 0.55}
+_MEM_HIGH_BG = {0: None, 1: 0.55, 2: 0.40, 3: 0.28, 4: 0.18}
+_MEM_MAX_BG  = {0: None, 1: 0.70, 2: 0.55, 3: 0.40, 4: 0.25}
+
 HARD_DENY = {"systemd", "dbus-daemon", "dbus-broker", "systemd-journald"}
 # Stateless/restartable services that are safe to SIGTERM on a memory emergency
 SAFE_KILL15 = set(THROTTLE15)
@@ -623,13 +682,27 @@ def _drop_caches(tier: int):
         log(f"memory tier {tier}: dropped caches ({val}) + compacted memory")
 
 def _thaw_all():
-    """Thaw everything frozen (used on daemon exit so no process stays stuck)."""
+    """Thaw everything frozen and hand placed processes back to their original
+    cgroups (used on daemon exit so nothing stays throttled)."""
     for pid in list(FROZEN_PIDS.keys()):
         try:
             os.kill(pid, signal.SIGCONT)
         except Exception:
             pass
     FROZEN_PIDS.clear()
+    if CGROUPS_OK:
+        _cg_reset_caps()
+    _cg_restore_all()
+
+def _cg_reset_caps():
+    """Remove every cap we may have applied (daemon exit / crash recovery)."""
+    if not os.path.isdir("/sys/fs/cgroup/pulsaros"):
+        return
+    for name in ("core", "fg", "bg"):
+        p = f"/sys/fs/cgroup/pulsaros/{name}"
+        _cg_write(f"{p}/cpu.max", "max")
+        _cg_write(f"{p}/memory.high", "max")
+        _cg_write(f"{p}/memory.max", "max")
 
 _LAST_MARKER_SIG = None
 def _save_frozen_marker():
@@ -650,7 +723,10 @@ def _save_frozen_marker():
         pass
 
 def _recover_from_crash_freeze():
-    """On startup, SIGCONT any process a previous daemon instance left frozen."""
+    """On startup, SIGCONT any process a previous daemon instance left frozen
+    and hand back processes left inside pulsaros cgroups."""
+    _cg_reset_caps()
+    _cg_restore_all()
     try:
         with open(FROZEN_MARKER, "r") as f:
             data = json.load(f)
@@ -771,6 +847,229 @@ def _is_essential(comm: str, is_focused: bool, override) -> bool:
         return True
     return False
 
+# =============================================================================
+# cgroup v2 helpers
+# =============================================================================
+
+def _cg_write(path: str, value: str) -> bool:
+    """Write a cgroup interface file, returning success instead of raising."""
+    try:
+        with open(path, "w") as f:
+            f.write(value)
+        return True
+    except Exception:
+        return False
+
+def _cg_add_pid(cg: str, pid: int) -> bool:
+    """Move `pid` into cgroup `cg` (append semantics, one pid per write)."""
+    try:
+        with open(f"{cg}/cgroup.procs", "a") as f:
+            f.write(f"{pid}\n")
+            f.flush()
+        return True
+    except Exception:
+        return False
+
+def _cpu_quota(fraction) -> str:
+    """cpu.max value capping a cgroup at `fraction` of ALL cores."""
+    if fraction is None or fraction >= 1.0:
+        return "max"
+    quota = max(int(round(fraction * _NPROC * _CG_PERIOD)), _CG_PERIOD // 10)
+    return f"{quota} {_CG_PERIOD}"
+
+def _cg_children(pid: int) -> set:
+    """All descendants of pid (multi-level /proc children walk), minus pid."""
+    todo = [pid]
+    seen = set()
+    while todo:
+        cur = todo.pop()
+        if cur in seen or cur <= 0:
+            continue
+        seen.add(cur)
+        try:
+            with open(f"/proc/{cur}/task/{cur}/children") as cf:
+                todo.extend(int(t) for t in cf.read().split() if t.isdigit())
+        except Exception:
+            continue
+    return seen - {pid}
+
+def setup_pulsar_cgroups() -> bool:
+    """Create pulsaros/{core,fg,bg}, weight them and clear any leftover caps
+    from a previous crashed daemon. Returns True when active (root only)."""
+    global CGROUPS_OK
+    CGROUPS_OK = False
+    if os.geteuid() != 0 or not os.path.isdir("/sys/fs/cgroup"):
+        return False
+    try:
+        with open("/sys/fs/cgroup/cgroup.controllers") as f:
+            ctrl = f.read().split()
+        if "cpu" not in ctrl or "memory" not in ctrl:
+            warn_once("cgroup v2: cpu/memory controllers unavailable -> SIGSTOP ladder")
+            return False
+        os.makedirs("/sys/fs/cgroup/pulsaros", exist_ok=True)
+        _cg_write("/sys/fs/cgroup/pulsaros/cgroup.subtree_control",
+                  "+cpu +memory +io +pids")
+        for name, weight, io_w in (("core", 10000, 1000),
+                                   ("fg", 200, 200),
+                                   ("bg", 25, 50)):
+            os.makedirs(f"/sys/fs/cgroup/pulsaros/{name}", exist_ok=True)
+            _cg_write(f"/sys/fs/cgroup/pulsaros/{name}/cpu.weight", str(weight))
+            _cg_write(f"/sys/fs/cgroup/pulsaros/{name}/io.weight", str(io_w))
+            # clear any caps a crashed previous daemon may have left behind
+            _cg_write(f"/sys/fs/cgroup/pulsaros/{name}/cpu.max", "max")
+            _cg_write(f"/sys/fs/cgroup/pulsaros/{name}/memory.high", "max")
+            _cg_write(f"/sys/fs/cgroup/pulsaros/{name}/memory.max", "max")
+        CGROUPS_OK = True
+        log("cgroup v2 isolation ACTIVE: desktop uncapped (max weight), focused+background capped per tier")
+    except Exception as e:
+        warn_once(f"cgroup v2 setup failed -> SIGSTOP ladder: {e!r}")
+    return CGROUPS_OK
+
+def _cg_move_tree(pid: int, cg: str):
+    """Move pid + all descendants into cgroup cg, remembering originals so the
+    processes can be handed back on daemon exit."""
+    if pid <= 0 or not CGROUPS_OK:
+        return
+    try:
+        orig = None
+        with open(f"/proc/{pid}/cgroup", "r") as f:
+            orig = f.read().strip().split(":")[-1]
+    except Exception:
+        orig = "/"
+    if orig == cg:
+        return
+    kids = _cg_children(pid) | {pid}
+    moved = 0
+    for p in kids:
+        if _cg_add_pid(cg, p):
+            moved += 1
+    if moved:
+        for p in kids:
+            if _CG_ORIG.get(p) is None:
+                _CG_ORIG[p] = orig
+            _CG_PLACED[p] = cg
+        _cg_save_map()
+
+def _cg_save_map():
+    """Persist the pid -> original-cgroup map so a crash can still restore it."""
+    try:
+        with open(CGMAP, "w") as f:
+            json.dump(_CG_ORIG, f)
+    except Exception:
+        pass
+
+def _cg_restore_all():
+    """Move every process we placed back to its original cgroup."""
+    if not _CG_ORIG and not os.path.exists(CGMAP):
+        return
+    _cg_load_map()
+    for pid, orig in list(_CG_ORIG.items()):
+        if pid <= 0:
+            continue
+        if orig in (CGCORE, CGFG, CGBG):
+            continue  # already ours / unknown origin: leave in place
+        _cg_add_pid(orig, pid)
+    _CG_ORIG.clear()
+    _CG_PLACED.clear()
+    try:
+        os.unlink(CGMAP)
+    except Exception:
+        pass
+
+def _cg_load_map():
+    if _CG_ORIG or not os.path.exists(CGMAP):
+        return
+    try:
+        with open(CGMAP, "r") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            _CG_ORIG.update({int(k): v for k, v in data.items()
+                             if isinstance(v, str) and v.startswith("/")})
+    except Exception:
+        pass
+
+def _apply_cgroup_caps(cpu_tier: int, mem_tier: int, mem_total_mb: float):
+    """Tighten/loosen fg/bg ceilings per tier. core stays fully uncapped."""
+    if not CGROUPS_OK:
+        return
+    mb = max(int(mem_total_mb), 1)
+    specs = (
+        (CGFG, _CPU_CAP_FG.get(cpu_tier, 0.75),
+         _MEM_HIGH_FG.get(mem_tier), _MEM_MAX_FG.get(mem_tier)),
+        (CGBG, _CPU_CAP_BG.get(cpu_tier, 0.40),
+         _MEM_HIGH_BG.get(mem_tier), _MEM_MAX_BG.get(mem_tier)),
+    )
+    for cg, cap_f, high_f, max_f in specs:
+        _cg_write(f"{cg}/cpu.max", _cpu_quota(cap_f))
+        _cg_write(f"{cg}/memory.high",
+                  f"{int(mb * high_f) * 1024 * 1024}" if high_f else "max")
+        _cg_write(f"{cg}/memory.max",
+                  f"{int(mb * max_f) * 1024 * 1024}" if max_f else "max")
+    # Core desktop stays uncapped no matter what (self-healing if a previous
+    # daemon instance left a cap behind).
+    _cg_write(f"{CGCORE}/cpu.max", "max")
+    _cg_write(f"{CGCORE}/memory.high", "max")
+    _cg_write(f"{CGCORE}/memory.max", "max")
+
+def place_processes_in_cgroups():
+    """Assign desktop -> core, focused tree -> fg, everything else -> bg.
+    Cheap after the first pass thanks to _CG_PLACED caching."""
+    global _CG_LAST_FOCUSED, _CG_LAST_PLACE
+    if not CGROUPS_OK:
+        return
+    now = time.time()
+    focused = detect_active_window_pid()
+    redo = (focused != _CG_LAST_FOCUSED or CPU_TIER_NOW > 0 or MEM_TIER_NOW > 0
+            or (now - _CG_LAST_PLACE) > 10.0)
+    if not redo:
+        return
+    _CG_LAST_FOCUSED, _CG_LAST_PLACE = focused, now
+
+    fg_set = set()
+    if focused > 0:
+        fg_set = _cg_children(focused) | {focused}
+
+    uids = _active_user_uids()
+    cg_cache = dict(_CG_PLACED)
+    for pid_str in os.listdir("/proc"):
+        if not pid_str.isdigit():
+            continue
+        pid = int(pid_str)
+        if pid <= 2 or pid == os.getpid():
+            continue
+        if pid in fg_set:
+            continue
+        try:
+            with open(f"/proc/{pid}/comm", "r") as f:
+                comm = f.read().strip()
+        except Exception:
+            continue
+        uid = _pid_uid(pid)
+        if uid not in uids and uid != 0:
+            continue
+        # Root services (uid 0) and essential infra are uncapped -> core.
+        # Only ordinary session-user processes go to the capped bg cgroup.
+        if uid != 0 and not (comm in PROTECTED or any(comm.startswith(p) for p in PROTECTED_PREFIXES)
+                or comm in SELF_COMM or comm in HARD_DENY):
+            cg = CGBG
+        else:
+            cg = CGCORE
+        if cg_cache.get(pid) == cg:
+            continue
+        if _cg_add_pid(cg, pid):
+            try:
+                if _CG_ORIG.get(pid) is None:
+                    with open(f"/proc/{pid}/cgroup", "r") as f:
+                        _CG_ORIG[pid] = f.read().strip().split(":")[-1]
+            except Exception:
+                _CG_ORIG[pid] = "/"
+            _CG_PLACED[pid] = cg
+    if focused > 0 and _CG_PLACED.get(focused) != CGFG:
+        _cg_move_tree(focused, CGFG)
+        for p in fg_set:
+            _CG_PLACED[p] = CGFG
+    _cg_save_map()
+
 def anti_saturation(cpu_smooth: float):
     """Escalating CPU/memory saturation protection. Must be called every loop."""
     global _PREV_CPU_TIER, _PREV_MEM_TIER, _PREV_CPU_SMOOTH, _PREV_MEM_RATIO
@@ -790,6 +1089,11 @@ def anti_saturation(cpu_smooth: float):
         log(f"Memory mitigation tier -> {mem_tier}/4 (available {100*mem_ratio:.1f}% = {mem_avail_mb:.0f} MB of {mem_total_mb:.0f} MB)")
     _PREV_CPU_SMOOTH = cpu_smooth
     _PREV_MEM_RATIO = mem_ratio
+
+    # ---- cgroup v2 path: caps + placement implement the whole ladder --------
+    if CGROUPS_OK:
+        _apply_cgroup_caps(cpu_tier, mem_tier, mem_total_mb)
+        place_processes_in_cgroups()
 
     # ---- thaw first: only on sustained drop below the freezing tier -------
     for pid, info in list(FROZEN_PIDS.items()):
@@ -818,8 +1122,10 @@ def anti_saturation(cpu_smooth: float):
 
     if cpu_tier == 0 and mem_tier == 0:
         return
+    if CGROUPS_OK:
+        return  # cgroup caps already throttle background + focused apps
 
-    # ---- freeze new targets ------------------------------------------------
+    # ---- freeze new targets (SIGSTOP fallback for kernels without cgroups) --
     entries, focused = _scan_resources()
     uids = _active_user_uids()
     cpu_floor = CPU_HOG_PCT if cpu_tier >= 2 else -1.0
@@ -831,7 +1137,12 @@ def anti_saturation(cpu_smooth: float):
         if (now - _RELEASED.get(pid, 0.0)) < FROZEN_RELEASE_WAIT:
             continue
         if _is_fg_descendant(pid, focused):
-            continue
+            # Foreground work normally keeps priority, but the hard guarantee
+            # is "CPU/RAM never saturate": at the deepest tiers the focused
+            # app is brought down too (throttled via SIGSTOP, never killed).
+            if not ((cpu_tier >= 3 and ema >= CPU_HOG_PCT)
+                    or (mem_tier >= 3 and rss_mb >= mem_floor)):
+                continue
         ent = PROCESSED_PIDS.get(pid)
         if ent is not None and ent.manual:
             continue  # user manually adjusted this process - leave it alone
@@ -1249,6 +1560,7 @@ def show_status():
     print(f"  CPU Load:               {cpu_smooth:.1f}%")
     print(f"  Memory Available:       {mem_avail_mb:.0f} / {mem_total_mb:.0f} MB ({100*mem_ratio:.1f}%)")
     print(f"  Mitigation:             CPU tier {cpu_tier}/3  MEM tier {mem_tier}/4  {len(FROZEN_PIDS)} frozen")
+    print(f"  Isolation:              {'cgroup v2 ACTIVE (desktop uncapped, focused+background capped)' if CGROUPS_OK else 'SIGSTOP ladder (no cgroup v2)'}")
     print(f"  Focused PID:            {focused_pid} ({focused_comm})")
     print(f"  Focus Source:           {FOCUS_SOURCE}")
     zstats = get_zram_stats()
@@ -1286,6 +1598,7 @@ def main():
 
     log("Starting Pulsar OS Zero-Lag Optimizer Daemon...")
     setup_zram_and_sysctl()
+    setup_pulsar_cgroups()
     _recover_from_crash_freeze()
 
     signal.signal(signal.SIGTERM, lambda s, f: sys.exit(0))
