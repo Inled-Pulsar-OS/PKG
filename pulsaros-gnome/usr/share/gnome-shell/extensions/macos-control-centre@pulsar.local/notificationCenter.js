@@ -273,20 +273,21 @@ export class MacNotificationCenter {
         this._refreshAll();
     }
 
+    _isLiquidGlassActive() {
+        if (!this._lgSettings) return false;
+        try {
+            const active = this._lgSettings.get_boolean('enable-quick-settings-glass') ?? true;
+            const mode = this._lgSettings.get_int('quick-settings-apply-to');
+            return active && mode === 1;
+        } catch (e) {
+            return false;
+        }
+    }
+
     _updateLiquidGlass() {
         if (this._destroyed) return;
-        let lg = null;
-        try {
-            lg = Main.extensionManager?.lookup?.('liquid-glass@thinkingcoding1231.gmail.com')?.stateObj ?? null;
-        } catch (e) {}
+        const togglesMode = this._isLiquidGlassActive();
 
-        const active = !!lg && (this._lgSettings?.get_boolean('enable-quick-settings-glass') ?? true);
-        const togglesMode = active && (this._lgSettings?.get_int('quick-settings-apply-to') === 1);
-
-        // While the cards carry the per-card glass (toggles mode), drop
-        // liquid-glass's single sheet behind the whole date menu so only the
-        // cards end up glassed. The user's value is restored when the per-card
-        // glass goes away.
         try {
             if (this._lgSettings) {
                 const sheet = this._lgSettings.get_boolean('enable-menu-glass');
@@ -303,7 +304,7 @@ export class MacNotificationCenter {
         } catch (e) {}
 
         if (this._root) {
-            if (active && togglesMode) {
+            if (togglesMode) {
                 this._root.add_style_class_name('mac-lg-toggles');
             } else {
                 this._root.remove_style_class_name('mac-lg-toggles');
@@ -400,9 +401,22 @@ export class MacNotificationCenter {
                     const below = children[idx - 1];
                     const classes = below?.get_style_class_name?.() ?? '';
                     const name = below?.name ?? '';
-                    if (classes.includes('bms') || name.includes('bms')) {
+                    if (classes.includes('bms') || name.includes('bms') ||
+                        (this._isLiquidGlassActive() && (name.startsWith('liquid-glass') || classes.includes('liquid-glass')))) {
                         below.visible = false;
                         below.opacity = 0;
+                    }
+                }
+            }
+        } catch (e) {}
+
+        // Hide any liquid-glass background sheet inside menu.box when in liquid glass mode
+        try {
+            if (this._isLiquidGlassActive() && menu.box) {
+                for (const child of menu.box.get_children()) {
+                    if (child !== this._root && child.get_name()?.startsWith('liquid-glass')) {
+                        child.visible = false;
+                        child.opacity = 0;
                     }
                 }
             }

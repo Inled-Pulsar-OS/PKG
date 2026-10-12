@@ -138,7 +138,7 @@ export default class PulsarIdleGuardExtension extends Extension {
                 return true;
         } catch (e) { /* property may not exist */ }
         try {
-            if (Main.screenShield?.locked)
+            if (Main.screenShield?.active || Main.screenShield?.locked || Main.screenShield?._isLocked)
                 return true;
         } catch (e) { /* shield may not exist */ }
         return false;

@@ -276,6 +276,40 @@ if 'this.corner_effect = null' not in c:
         sed -i 's/border-radius: 0 0 12px 12px;/border-radius: 8px;/g' "$BMS_CSS"
     fi
 fi
+
+# --- DECLARATIVE PATCHES FOR APPINDICATOR SUPPORT ---
+APPINDICATOR_DIR="$STAGE_DIR/usr/share/gnome-shell/extensions/appindicatorsupport@rgcjonas.gmail.com"
+if [ -d "$APPINDICATOR_DIR" ]; then
+    echo "🔧 [ES] Aplicando parches para AppIndicator Support (menú click derecho)..."
+    echo "🔧 [EN] Applying patches for AppIndicator Support (right-click menu)..."
+
+    APPIND_ICON="$APPINDICATOR_DIR/indicatorStatusIcon.js"
+    if [ -f "$APPIND_ICON" ]; then
+        python3 -c "
+import sys
+f = sys.argv[1]
+with open(f, 'r') as fp: c = fp.read()
+target = '''        if (event.get_button() === Clutter.BUTTON_SECONDARY) {
+            this.menu.toggle();
+            return Clutter.EVENT_PROPAGATE;
+        }'''
+replacement = '''        if (event.get_button() === Clutter.BUTTON_SECONDARY) {
+            if (this.menu.numMenuItems) {
+                this.menu.toggle();
+            } else if (this._indicator?.secondaryActivate) {
+                this._indicator.secondaryActivate(event.get_time(), ...event.get_coords());
+            } else {
+                this.menu.toggle();
+            }
+            return Clutter.EVENT_STOP;
+        }'''
+if target in c:
+    c = c.replace(target, replacement, 1)
+    with open(f, 'w') as fp: fp.write(c)
+" "$APPIND_ICON"
+    fi
+fi
+
 # INSTALL PULSAR DOCK (OUR DASH-TO-DOCK FORK) REPLACING UPSTREAM DASH TO DOCK
 # INSTALAR PULSAR DOCK (NUESTRO FORK DE DASH-TO-DOCK) EN LUGAR DEL ORIGINAL
 # ==============================================================================

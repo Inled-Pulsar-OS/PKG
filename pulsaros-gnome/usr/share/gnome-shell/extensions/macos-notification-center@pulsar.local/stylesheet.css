@@ -86,7 +86,7 @@
     padding: 12px;
     background-color: rgba(30, 32, 46, 0.86) !important;
     border: 1px solid rgba(255, 255, 255, 0.16) !important;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.32);
+    box-shadow: none !important;
     color: #ffffff !important;
     transition: all 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
