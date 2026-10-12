@@ -1,0 +1,37 @@
+# Maintainer: kancko <kancko>
+# Maintainer: Inled Pulsar OS <dev@inled.es>
+
+pkgname=gnome-rounded-blur
+pkgver=1.0.1
+pkgrel=2
+pkgdesc="GNOME Shell BlurEffect with rounded corners (patched for GNOME / Mutter 51)"
+arch=('x86_64')
+url="https://github.com/kancko/gnome-rounded-blur"
+license=('GPL-3.0')
+conflicts=("gnome-rounded-blur-gnome51")
+provides=("gnome-rounded-blur" "gnome-rounded-blur-gnome51")
+makedepends=(
+  'git'
+  'meson'
+  'mutter'
+  'glib2-devel'
+  'gobject-introspection'
+)
+source=("git+https://github.com/kancko/gnome-rounded-blur.git#tag=v${pkgver}"
+        "gnome-51.patch")
+sha256sums=('6d8b80659426d7cfbd8b9a23553fa139ba8ee1b94481bbdd457de9b1b70d7067'
+            'SKIP')
+
+prepare() {
+  cd gnome-rounded-blur
+  patch -Np1 -i ../gnome-51.patch
+}
+
+build() {
+  arch-meson gnome-rounded-blur build
+  meson compile -C build
+}
+
+package() {
+  meson install -C build --destdir "$pkgdir"
+}

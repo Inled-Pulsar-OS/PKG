@@ -1,0 +1,18 @@
+{
+  "uuid": "pulsaros-idle-guard@inled.es",
+  "name": "Pulsar OS Idle Guard",
+  "description": "Keeps the screen and the session awake while the display is actively changing (video, animation, remote desktop, games) by holding an idle + suspend inhibitor only while the compositor keeps producing frames. When the screen goes static the inhibitor is released, so Pulsar OS still blanks and auto-suspends as configured in Settings > Power.",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50",
+    "51"
+  ],
+  "url": "https://inled.es",
+  "version": 1,
+  "settings-schema": "org.gnome.shell.extensions.pulsaros-idle-guard",
+  "gettext-domain": "pulsaros-idle-guard"
+}

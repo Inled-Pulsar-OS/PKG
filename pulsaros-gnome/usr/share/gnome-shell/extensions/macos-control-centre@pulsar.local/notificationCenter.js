@@ -163,6 +163,9 @@ export class MacNotificationCenter {
         this._locationName = 'A Coruña';
         this._lat = 43.3623;
         this._lon = -8.4115;
+        // Remembers liquid-glass's date-menu sheet setting while the per-card
+        // glass is active, so it can be restored afterwards.
+        this._lgSheetOrig = null;
     }
 
     enable() {
@@ -280,6 +283,25 @@ export class MacNotificationCenter {
         const active = !!lg && (this._lgSettings?.get_boolean('enable-quick-settings-glass') ?? true);
         const togglesMode = active && (this._lgSettings?.get_int('quick-settings-apply-to') === 1);
 
+        // While the cards carry the per-card glass (toggles mode), drop
+        // liquid-glass's single sheet behind the whole date menu so only the
+        // cards end up glassed. The user's value is restored when the per-card
+        // glass goes away.
+        try {
+            if (this._lgSettings) {
+                const sheet = this._lgSettings.get_boolean('enable-menu-glass');
+                if (togglesMode) {
+                    if (this._lgSheetOrig === null)
+                        this._lgSheetOrig = sheet;
+                    if (sheet)
+                        this._lgSettings.set_boolean('enable-menu-glass', false);
+                } else if (this._lgSheetOrig !== null) {
+                    this._lgSettings.set_boolean('enable-menu-glass', this._lgSheetOrig);
+                    this._lgSheetOrig = null;
+                }
+            }
+        } catch (e) {}
+
         if (this._root) {
             if (active && togglesMode) {
                 this._root.add_style_class_name('mac-lg-toggles');
@@ -292,6 +314,15 @@ export class MacNotificationCenter {
     disable() {
         this._destroyed = true;
         this._stopPoll();
+
+        // Restore liquid-glass date-menu sheet if it was forced off while active.
+        try {
+            if (this._lgSettings && this._lgSheetOrig !== null) {
+                if ((this._lgSettings.get_boolean('enable-menu-glass') ?? false) !== this._lgSheetOrig)
+                    this._lgSettings.set_boolean('enable-menu-glass', this._lgSheetOrig);
+                this._lgSheetOrig = null;
+            }
+        } catch (e) {}
 
         for (const [obj, id] of this._ids) {
             try {

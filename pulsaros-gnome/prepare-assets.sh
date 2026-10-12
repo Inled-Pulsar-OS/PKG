@@ -9,7 +9,8 @@
 
 set -e
 
-STAGE_DIR="$(realpath -m "$1")"
+STAGE_DIR="${1:-/tmp/pulsaros-stage}"
+STAGE_DIR="$(realpath -m "$STAGE_DIR")" 2>/dev/null || STAGE_DIR="/tmp/pulsaros-stage"
 
 # --- DYNAMIC GNOME VERSION DETECTION / DETECCIÓN DINÁMICA DE LA VERSIÓN DE GNOME ---
 # We try to detect the installed GNOME Shell version to ensure we download compatible extension zips.
@@ -756,7 +757,8 @@ export class DialogManager {
     _attachGlass(child) {
         if (this._dialogStates.has(child)) return;
         const targetBox = this._findDialogBox(child) || child;
-        targetBox.add_style_class_name('liquid-glass-transparent');
+        if (typeof targetBox.add_style_class_name === 'function')
+            targetBox.add_style_class_name('liquid-glass-transparent');
 
         const glass = new BackdropGlass({
             extensionPath: this.extensionPath,
@@ -861,6 +863,116 @@ EOF
     box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45) !important;
 }
 EOF
+
+    # 4. Add NotificationCenterGlassManager: per-card liquid glass in the
+    #    notification center (dateMenu), reusing Quick Settings toggles mode.
+    cat << 'NCJS' > "$LG_DIR/dist/notificationCenterGlass.js"
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import { QuickSettingsManager } from './quickSettingsManager.js';
+import { ToggleStyles } from './quickSettings/toggleStyles.js';
+import { hexToColorArray } from './animation/colors.js';
+
+export class NotificationCenterGlassManager extends QuickSettingsManager {
+    constructor(extensionPath, settings, logger) {
+        super(extensionPath, settings, logger);
+        const menu = Main.panel.statusArea.dateMenu?.menu ?? null;
+        this.menu = menu;
+        this.targetActor = menu?.actor ?? null;
+        this.animActor = menu?.box ?? null;
+        this._toggleStyles = new ToggleStyles(logger, () => !!this.menu?.isOpen);
+        this._applyTo = 'toggles';
+        this._activeMode = 'toggles';
+    }
+
+    _togglesDesired() {
+        return !!this._settings &&
+            this._settings.get_boolean('enable-quick-settings-glass') &&
+            this._settings.get_int('quick-settings-apply-to') === 1;
+    }
+
+    setup() {
+        if (!this._settings)
+            return;
+        this._bindSettings();
+        this._applyTo = 'toggles';
+        this._toggleBaseStrength = this._settings.get_double('quick-settings-toggle-tint-strength');
+        this._toggleCornerRadius = this._settings.get_double('quick-settings-toggle-corner-radius');
+        if (this._togglesDesired())
+            this._applyEffect();
+    }
+
+    _bindSettings() {
+        const connectSetting = (key, callback) => {
+            this._settingsSignals.push(this._settings.connect(`changed::${key}`, callback.bind(this)));
+        };
+        connectSetting('enable-quick-settings-glass', () => this._syncActivation());
+        connectSetting('quick-settings-apply-to', () => this._syncActivation());
+        connectSetting('quick-settings-tint-color', () => {
+            this._tintColorArray = hexToColorArray(this._settings.get_string('quick-settings-tint-color'));
+            if (this.glass)
+                this.glass.setTintColor(...this._tintColorArray);
+        });
+        connectSetting('quick-settings-tint-strength', () => {
+            if (this.glass)
+                this.glass.setTintStrength(this._settings.get_double('quick-settings-tint-strength'));
+        });
+        connectSetting('quick-settings-blur-radius', () => {
+            if (this.glass)
+                this.glass.setBlurRadius(this._settings.get_int('quick-settings-blur-radius'));
+        });
+        connectSetting('quick-settings-toggle-tint-strength', () => {
+            this._toggleBaseStrength = this._settings.get_double('quick-settings-toggle-tint-strength');
+        });
+        connectSetting('quick-settings-toggle-corner-radius', () => {
+            this._toggleCornerRadius = this._settings.get_double('quick-settings-toggle-corner-radius');
+            if (this.glass && this._activeMode === 'toggles')
+                this.glass.setCornerRadius(this._toggleCornerRadius);
+        });
+        connectSetting('quick-settings-brightness', () => {
+            if (this.glass)
+                this.glass.setBrightness(this._settings.get_double('quick-settings-brightness'));
+        });
+        connectSetting('quick-settings-saturation', () => {
+            if (this.glass)
+                this.glass.setSaturation(this._settings.get_double('quick-settings-saturation'));
+        });
+        connectSetting('quick-settings-contrast', () => {
+            if (this.glass)
+                this.glass.setContrast(this._settings.get_double('quick-settings-contrast'));
+        });
+    }
+
+    _syncActivation() {
+        if (this._togglesDesired()) {
+            if (!this._isEffectActive)
+                this._applyEffect();
+        } else if (this._isEffectActive) {
+            this._removeEffect();
+        }
+    }
+
+    _applyEffect() {
+        if (this._isEffectActive || !this._togglesDesired() || !this.targetActor)
+            return;
+        this._isEffectActive = true;
+        this._activeMode = 'toggles';
+        this._applyTo = 'toggles';
+        this._tintColorArray = hexToColorArray(this._settings.get_string('quick-settings-tint-color'));
+        this._applyToggleEffect();
+    }
+
+    _restoreMenuActors() {
+    }
+
+    _applyMenuOffsets() {
+    }
+}
+NCJS
+
+    # Register NotificationCenterGlassManager in extension.js (using QS anchors)
+    sed -i "s/import {QuickSettingsManager} from '.\/dist\/quickSettingsManager.js';/import {QuickSettingsManager} from '.\/dist\/quickSettingsManager.js';\nimport {NotificationCenterGlassManager} from '.\/dist\/notificationCenterGlass.js';/g" "$LG_DIR/extension.js"
+    sed -i "s/      this._quickSettingsManager.setup();/      this._quickSettingsManager.setup();\n      this._notificationCenterGlass = new NotificationCenterGlassManager(path, this._settings, this._logger);\n      this._notificationCenterGlass.setup();/g" "$LG_DIR/extension.js"
+    sed -i "s/this._quickSettingsManager?.cleanup();/this._quickSettingsManager?.cleanup();\n      this._notificationCenterGlass?.cleanup();\n      this._notificationCenterGlass = null;/g" "$LG_DIR/extension.js"
 else
     echo "❌ [ES] Error al clonar Liquid Glass de GitHub."
     echo "❌ [EN] Error cloning Liquid Glass from GitHub."

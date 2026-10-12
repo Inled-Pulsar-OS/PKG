@@ -31,7 +31,9 @@ function liquidGlassActive() {
 // though, so Shell.BlurEffect stays as the always-available fallback.
 let BlurNamespace = null;
 try {
-	BlurNamespace = (await import('gi://Blur')).default;
+	const mod = (await import('gi://Blur')).default;
+	new mod.BlurEffect();
+	BlurNamespace = mod;
 } catch (e) {
 	BlurNamespace = null;
 }
@@ -260,12 +262,21 @@ class PopupBlur {
 		try {
 			this._effect = new ns.BlurEffect(params);
 			this._widget.add_effect(this._effect);
-			// An effect on a surface that has never been shown has nothing
-			// sampled yet.
 			this._effect.queue_repaint();
 		} catch (e) {
-			console.error('[GlobalMenu] could not create blur effect:', e);
-			this._effect = null;
+			if (ns !== Shell) {
+				try {
+					this._effect = new Shell.BlurEffect(params);
+					this._widget.add_effect(this._effect);
+					this._effect.queue_repaint();
+				} catch (err) {
+					console.error('[GlobalMenu] could not create fallback blur effect:', err);
+					this._effect = null;
+				}
+			} else {
+				console.error('[GlobalMenu] could not create blur effect:', e);
+				this._effect = null;
+			}
 		}
 	}
 

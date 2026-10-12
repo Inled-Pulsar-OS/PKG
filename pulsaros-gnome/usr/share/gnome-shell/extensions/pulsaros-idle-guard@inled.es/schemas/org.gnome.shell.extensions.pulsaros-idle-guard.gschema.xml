@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="pulsaros-idle-guard">
+  <schema id="org.gnome.shell.extensions.pulsaros-idle-guard" path="/org/gnome/shell/extensions/pulsaros-idle-guard/">
+    <key name="active" type="b">
+      <default>true</default>
+      <summary>Keep the screen awake while it is actively changing</summary>
+      <description>
+        When enabled, the guard holds an idle + suspend inhibitor while the
+        compositor keeps producing frames, so video, animations and remote
+        desktop sessions do not let the machine blank or auto-suspend.
+      </description>
+    </key>
+    <key name="minimum-fps" type="i">
+      <range min="1" max="30"/>
+      <default>3</default>
+      <summary>Frames per second considered “the screen is changing”</summary>
+      <description>
+        The average painted frames per second (over a few seconds) above which
+        the screen is treated as active. Reading a static page (blinking caret,
+        panel clock) stays below this; video and animations go far above it.
+      </description>
+    </key>
+    <key name="grace-seconds" type="i">
+      <range min="0" max="120"/>
+      <default>8</default>
+      <summary>Seconds to keep inhibiting after the last change</summary>
+      <description>
+        How long the guard keeps the session awake after the screen stops
+        changing. Prevents flickering between active and idle at scene cuts.
+      </description>
+    </key>
+    <key name="debug" type="b">
+      <default>false</default>
+      <summary>Log frame rate and inhibitor transitions</summary>
+      <description>Verbose logging to the journal, for troubleshooting.</description>
+    </key>
+  </schema>
+</schemalist>
