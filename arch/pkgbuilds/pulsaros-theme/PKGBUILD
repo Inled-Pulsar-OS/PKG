@@ -8,6 +8,7 @@ url="https://inled.es"
 license=(custom)
 depends=(gnome-themes-extra)
 options=(!strip)
+install=pulsaros-theme.install
 
 
 

@@ -1,0 +1,21 @@
+# Pulsar OS - apply the MacTahoe theme to Flatpak apps
+# Makes the host /usr/share/themes and /usr/share/icons visible to every
+# Flatpak app (read-only) so GTK apps pick up the MacTahoe theme/icon theme
+# via the settings portal. Idempotent; safe to run on every install/upgrade.
+# Se aplica a nivel de sistema (global override), no por app.
+
+post_install() {
+    if command -v flatpak >/dev/null 2>&1 && [ -d /var/lib/flatpak ]; then
+        flatpak override --system \
+            --filesystem=/usr/share/themes:ro \
+            --filesystem=/usr/share/icons:ro 2>/dev/null || true
+    fi
+}
+
+post_upgrade() {
+    post_install
+}
+
+post_remove() {
+    true
+}
