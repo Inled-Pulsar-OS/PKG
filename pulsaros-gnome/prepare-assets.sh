@@ -28,8 +28,13 @@ POSSIBLE_DPKG_STATUS=(
 
 POSSIBLE_PACMAN_DB=(
     "$STAGE_DIR/var/lib/pacman/local"
+    "../../ISO/build/rootfs-target-stable-arch-minimal-refind/var/lib/pacman/local"
+    "../../ISO/build/rootfs-target-stable-arch-minimal/var/lib/pacman/local"
+    "../../ISO/build/rootfs-base-stable-arch-minimal/var/lib/pacman/local"
     "../../ISO/build/rootfs-target-stable-arch/var/lib/pacman/local"
     "../../ISO/build/rootfs-base-stable-arch/var/lib/pacman/local"
+    "../../build/rootfs-target-stable-arch-minimal/var/lib/pacman/local"
+    "../../build/rootfs-base-stable-arch-minimal/var/lib/pacman/local"
     "../../build/rootfs-target-stable-arch/var/lib/pacman/local"
     "../../build/rootfs-base-stable-arch/var/lib/pacman/local"
 )
@@ -98,7 +103,7 @@ if [ -z "$GNOME_VER" ]; then
             fi
         fi
         if [ -z "$GNOME_VER" ]; then
-            GNOME_VER="50"
+            GNOME_VER="51"
         fi
     else
         DEBIAN_VERSION="${DEBIAN_VERSION:-trixie}"
@@ -310,6 +315,26 @@ if target in c:
     fi
 fi
 
+# --- DECLARATIVE PATCHES FOR NOTIFICATION POSITION ---
+# GNOME 51 removed St.BoxLayout's :vertical property in favor of :orientation.
+NOTIF_POS_DIR="$STAGE_DIR/usr/share/gnome-shell/extensions/notification-position@drugo.dev"
+if [ -d "$NOTIF_POS_DIR" ]; then
+    echo "🔧 [ES] Aplicando parches para Notification Position (St.BoxLayout GNOME 51)..."
+    echo "🔧 [EN] Applying patches for Notification Position (St.BoxLayout GNOME 51)..."
+    NOTIF_POS_JS="$NOTIF_POS_DIR/extension.js"
+    if [ -f "$NOTIF_POS_JS" ]; then
+        python3 -c "
+import sys
+f = sys.argv[1]
+with open(f, 'r') as fp: c = fp.read()
+c = c.replace(
+    'new St.BoxLayout({ vertical: true, x_expand: true })',
+    'new St.BoxLayout({ orientation: Clutter.Orientation.VERTICAL, x_expand: true })')
+with open(f, 'w') as fp: fp.write(c)
+" "$NOTIF_POS_JS"
+    fi
+fi
+
 # INSTALL PULSAR DOCK (OUR DASH-TO-DOCK FORK) REPLACING UPSTREAM DASH TO DOCK
 # INSTALAR PULSAR DOCK (NUESTRO FORK DE DASH-TO-DOCK) EN LUGAR DEL ORIGINAL
 # ==============================================================================
@@ -370,6 +395,21 @@ rm -f "$PULSAR_DOCK_BUILD_LOG"
 PULSAR_DOCK_DEST="$STAGE_DIR/usr/share/gnome-shell/extensions/${PULSAR_DOCK_UUID}"
 mkdir -p "$PULSAR_DOCK_DEST"
 cp -r "$PULSAR_DOCK_SRC"/_build/* "$PULSAR_DOCK_DEST"/
+
+# Preserve GNOME 51 compatibility patches for pulsar-dock
+for _candidate in \
+    "$SCRIPT_DIR/usr/share/gnome-shell/extensions/${PULSAR_DOCK_UUID}" \
+    "/home/jaime/Documentos/pulsar/PKG/pulsaros-gnome/usr/share/gnome-shell/extensions/${PULSAR_DOCK_UUID}"; do
+    if [ -f "$_candidate/docking.js" ]; then
+        echo "🔧 [ES] Aplicando archivos de compatibilidad GNOME 51 para Pulsar Dock desde $_candidate..."
+        cp -f "$_candidate"/dependencies/shell/ui.js "$PULSAR_DOCK_DEST/dependencies/shell/ui.js" 2>/dev/null || true
+        cp -f "$_candidate"/dash.js "$PULSAR_DOCK_DEST/dash.js" 2>/dev/null || true
+        cp -f "$_candidate"/docking.js "$PULSAR_DOCK_DEST/docking.js" 2>/dev/null || true
+        cp -f "$_candidate"/utils.js "$PULSAR_DOCK_DEST/utils.js" 2>/dev/null || true
+        cp -f "$_candidate"/windowPreview.js "$PULSAR_DOCK_DEST/windowPreview.js" 2>/dev/null || true
+        break
+    fi
+done
 
 # Ship the dock translations system-wide so the dashtodock gettext domain resolves
 # Publicar las traducciones del dock en el sistema para que el dominio gettext dashtodock resuelva
@@ -554,12 +594,93 @@ export default class Effect extends St.Icon {
 }
 WIGGLE_EFFECT_JS
 
+    # GNOME 51 removed the bundled shell module
+    # "resource:///org/gnome/shell/ui/pointerWatcher.js", so we ship our own
+    # copy alongside the extension and import it relatively.
+    # GNOME 51 eliminó el módulo "resource:///org/gnome/shell/ui/pointerWatcher.js"
+    # de la shell, así que incluimos nuestra propia copia junto a la extensión
+    # y la importamos de forma relativa.
+    cat <<'WIGGLE_POINTER_WATCHER_JS' > "$WIGGLE_DIR/pointerWatcher.js"
+import GLib from 'gi://GLib';
+
+class PointerWatch {
+    constructor(watcher, interval, callback) {
+        this.watcher = watcher;
+        this.interval = interval;
+        this.callback = callback;
+        this.paused = false;
+    }
+
+    remove() {
+        this.watcher._removeWatch(this);
+    }
+}
+
+class PointerWatcher {
+    constructor() {
+        this._watches = [];
+        this._idleId = 0;
+        this._lastX = -1;
+        this._lastY = -1;
+    }
+
+    addWatch(interval, callback) {
+        const watch = new PointerWatch(this, interval, callback);
+        this._watches.push(watch);
+        this._updateTimer();
+        return watch;
+    }
+
+    _removeWatch(watch) {
+        const idx = this._watches.indexOf(watch);
+        if (idx !== -1) {
+            this._watches.splice(idx, 1);
+            this._updateTimer();
+        }
+    }
+
+    _updateTimer() {
+        if (this._watches.length > 0 && !this._idleId) {
+            this._idleId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 40, () => {
+                try {
+                    const [x, y] = global.get_pointer();
+                    if (x !== this._lastX || y !== this._lastY) {
+                        this._lastX = x;
+                        this._lastY = y;
+                        for (const watch of this._watches) {
+                            if (!watch.paused) {
+                                try {
+                                    watch.callback(x, y);
+                                } catch (e) {
+                                    console.error('[PointerWatcher] callback error:', e);
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {}
+                return GLib.SOURCE_CONTINUE;
+            });
+        } else if (this._watches.length === 0 && this._idleId) {
+            GLib.source_remove(this._idleId);
+            this._idleId = 0;
+        }
+    }
+}
+
+let _pointerWatcherInstance = null;
+export function getPointerWatcher() {
+    if (!_pointerWatcherInstance)
+        _pointerWatcherInstance = new PointerWatcher();
+    return _pointerWatcherInstance;
+}
+WIGGLE_POINTER_WATCHER_JS
+
     cat <<'WIGGLE_EXT_JS' > "$WIGGLE_DIR/extension.js"
 'use strict';
 
 import GLib from 'gi://GLib';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
-import { getPointerWatcher } from 'resource:///org/gnome/shell/ui/pointerWatcher.js';
+import { getPointerWatcher } from './pointerWatcher.js';
 
 import { Field } from './const.js';
 import Effect from './effect.js';
@@ -1007,6 +1128,7 @@ NCJS
     sed -i "s/import {QuickSettingsManager} from '.\/dist\/quickSettingsManager.js';/import {QuickSettingsManager} from '.\/dist\/quickSettingsManager.js';\nimport {NotificationCenterGlassManager} from '.\/dist\/notificationCenterGlass.js';/g" "$LG_DIR/extension.js"
     sed -i "s/      this._quickSettingsManager.setup();/      this._quickSettingsManager.setup();\n      this._notificationCenterGlass = new NotificationCenterGlassManager(path, this._settings, this._logger);\n      this._notificationCenterGlass.setup();/g" "$LG_DIR/extension.js"
     sed -i "s/this._quickSettingsManager?.cleanup();/this._quickSettingsManager?.cleanup();\n      this._notificationCenterGlass?.cleanup();\n      this._notificationCenterGlass = null;/g" "$LG_DIR/extension.js"
+    sed -i "s/this._uiManager.setup();/\/\/ this._uiManager.setup();/g" "$LG_DIR/extension.js"
 else
     echo "❌ [ES] Error al clonar Liquid Glass de GitHub."
     echo "❌ [EN] Error cloning Liquid Glass from GitHub."

@@ -378,8 +378,8 @@
     max-height: 60px;
     border-radius: 20px;
     padding: 0 8px !important;
-    border: none !important;
-    box-shadow: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.20) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22) !important;
 }
 .mac-lg-toggles .mac-circle {
     width: 70px;
@@ -390,8 +390,8 @@
     max-height: 60px;
     border-radius: 20px;
     padding: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.20) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22) !important;
 }
 .mac-lg-toggles .mac-media {
     width: 134px;
@@ -402,8 +402,8 @@
     max-height: 114px;
     border-radius: 20px;
     padding: 10px !important;
-    border: none !important;
-    box-shadow: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.20) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22) !important;
 }
 .mac-lg-toggles .mac-slider-tile {
     width: 302px;
@@ -414,8 +414,19 @@
     max-height: 44px;
     border-radius: 22px;
     padding: 8px 16px !important;
-    border: none !important;
-    box-shadow: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.20) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22) !important;
+}
+.mac-light-theme .mac-lg-toggles .mac-tile,
+.mac-light-theme.mac-lg-toggles .mac-tile,
+.mac-light-theme .mac-lg-toggles .mac-circle,
+.mac-light-theme.mac-lg-toggles .mac-circle,
+.mac-light-theme .mac-lg-toggles .mac-media,
+.mac-light-theme.mac-lg-toggles .mac-media,
+.mac-light-theme .mac-lg-toggles .mac-slider-tile,
+.mac-light-theme.mac-lg-toggles .mac-slider-tile {
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important;
 }
 /* The theme also pads a toggle's direct box child; restore our own. */
 .mac-lg-toggles .mac-media > StBoxLayout,
@@ -435,8 +446,8 @@
     max-width: 310px;
     border-radius: 20px;
     padding: 12px !important;
-    border: none !important;
-    box-shadow: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.20) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22) !important;
 }
 .mac-lg-toggles .mac-bottom-action-btn {
     min-width: 0;
@@ -444,8 +455,8 @@
     min-height: 0;
     border-radius: 16px;
     padding: 8px 16px !important;
-    border: none !important;
-    box-shadow: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.20) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22) !important;
 }
 .mac-lg-toggles .mac-back-btn {
     width: 34px;
@@ -456,8 +467,17 @@
     max-height: 34px;
     border-radius: 17px;
     padding: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.20) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22) !important;
+}
+.mac-light-theme .mac-lg-toggles .mac-sub-card,
+.mac-light-theme.mac-lg-toggles .mac-sub-card,
+.mac-light-theme .mac-lg-toggles .mac-bottom-action-btn,
+.mac-light-theme.mac-lg-toggles .mac-bottom-action-btn,
+.mac-light-theme .mac-lg-toggles .mac-back-btn,
+.mac-light-theme.mac-lg-toggles .mac-back-btn {
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important;
 }
 /* Liquid Glass clears the background-colour of every actor inside a pod, and
    St only renders an inset box-shadow when its theme node has a border or a
@@ -1343,8 +1363,63 @@
 /* Liquid Glass Mode for Notification Center Cards */
 .mac-lg-toggles .mac-nc-card,
 .mac-lg-toggles .mac-nc-card.quick-toggle {
-    background-color: transparent !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.22) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22) !important;
+}
+
+.mac-light-theme.mac-lg-toggles .mac-nc-card,
+.mac-light-theme .mac-lg-toggles .mac-nc-card {
+    border: 1px solid rgba(0, 0, 0, 0.10) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Light Theme Styling for Notification Center Cards (Normal & Fallback) */
+.mac-light-theme .mac-nc-card,
+.mac-light-theme .mac-nc-card.quick-toggle {
+    background-color: rgba(255, 255, 255, 0.88) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important;
+    color: #1d1d1f !important;
+}
+
+.mac-light-theme .mac-nc-card:hover,
+.mac-light-theme .mac-nc-card.quick-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.96) !important;
+    border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+.mac-light-theme .mac-nc-card-title,
+.mac-light-theme .mac-nc-section-title,
+.mac-light-theme .mac-nc-notif-title,
+.mac-light-theme .mac-nc-cal-month-title,
+.mac-light-theme .mac-nc-city-name,
+.mac-light-theme .mac-nc-music-title,
+.mac-light-theme .mac-nc-weather-city,
+.mac-light-theme .mac-nc-weather-temp,
+.mac-light-theme .mac-nc-stat-val,
+.mac-light-theme .mac-nc-battery-item-name {
+    color: #1d1d1f !important;
+}
+
+.mac-light-theme .mac-nc-notif-body,
+.mac-light-theme .mac-nc-notif-time,
+.mac-light-theme .mac-nc-notif-app,
+.mac-light-theme .mac-nc-weather-desc,
+.mac-light-theme .mac-nc-music-artist,
+.mac-light-theme .mac-nc-stat-label,
+.mac-light-theme .mac-nc-uptime-label,
+.mac-light-theme .mac-nc-uptime-val,
+.mac-light-theme .mac-nc-battery-item-pct,
+.mac-light-theme .mac-nc-city-time,
+.mac-light-theme .mac-nc-city-diff {
+    color: rgba(0, 0, 0, 0.65) !important;
+}
+
+.mac-light-theme .mac-nc-clear-btn {
+    background-color: rgba(0, 0, 0, 0.06) !important;
+    color: #1d1d1f !important;
+}
+
+.mac-light-theme .mac-nc-clear-btn:hover {
+    background-color: rgba(0, 0, 0, 0.12) !important;
 }

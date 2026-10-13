@@ -181,6 +181,11 @@ notification-banner-position=2
 [org.gnome.desktop.wm.keybindings]
 switch-input-source=['<Control>space']
 switch-input-source-backward=['<Shift><Control>space']
+# Ctrl+Alt+Up/Down are assigned to the App Grid (toggle-application-view).
+# Unbind GNOME's default vertical workspace switch so the accelerator is not
+# duplicated; that conflict was what froze the shell when opening the App Grid.
+switch-to-workspace-up=@as []
+switch-to-workspace-down=@as []
 
 [org.gnome.settings-daemon.plugins.media-keys]
 custom-keybindings=['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/']

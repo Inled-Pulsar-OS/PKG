@@ -410,6 +410,28 @@ export class MacNotificationCenter {
             }
         } catch (e) {}
 
+        // Hide any liquid-glass sheet below menuRoot in uiGroup
+        try {
+            if (this._isLiquidGlassActive()) {
+                let menuRoot = menu.actor;
+                while (menuRoot?.get_parent() && menuRoot.get_parent() !== Main.layoutManager.uiGroup) {
+                    menuRoot = menuRoot.get_parent();
+                }
+                if (menuRoot?.get_parent() === Main.layoutManager.uiGroup) {
+                    const uiChildren = Main.layoutManager.uiGroup.get_children();
+                    const idx = uiChildren.indexOf(menuRoot);
+                    if (idx > 0) {
+                        const below = uiChildren[idx - 1];
+                        const name = below?.name ?? '';
+                        if (name.includes('liquid-glass') || below?.has_style_class_name?.('liquid-glass')) {
+                            below.visible = false;
+                            below.opacity = 0;
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+
         // Hide any liquid-glass background sheet inside menu.box when in liquid glass mode
         try {
             if (this._isLiquidGlassActive() && menu.box) {

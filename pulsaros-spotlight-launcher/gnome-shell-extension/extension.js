@@ -30,6 +30,42 @@ const DBUS_NODE = Gio.DBusNodeInfo.new_for_xml(`
 `);
 const DBUS_INFO = DBUS_NODE.lookup_interface(DBUS_NAME);
 
+/**
+ * Returns the default Clutter seat across GNOME Shell versions.
+ * Devuelve el seat por defecto de Clutter entre versiones de GNOME Shell.
+ *
+ * GNOME 45-50: Clutter.get_default_backend() / Meta.get_backend().
+ * GNOME 51+:   the shell exposes the backend as global.backend.
+ */
+function _getDefaultSeat() {
+    const seatOf = backend =>
+        backend && typeof backend.get_default_seat === 'function'
+            ? backend.get_default_seat()
+            : null;
+
+    let seat = null;
+
+    try {
+        seat = seatOf(global.backend);
+    } catch (_) {}
+
+    if (!seat) {
+        try {
+            if (typeof Clutter.get_default_backend === 'function')
+                seat = seatOf(Clutter.get_default_backend());
+        } catch (_) {}
+    }
+
+    if (!seat) {
+        try {
+            if (typeof Meta.get_backend === 'function')
+                seat = seatOf(Meta.get_backend());
+        } catch (_) {}
+    }
+
+    return seat;
+}
+
 const SpotlightLauncherButton = GObject.registerClass({
     GTypeName: 'PulsarosSpotlightLauncherButton'
 }, class SpotlightLauncherButton extends PanelMenu.Button {
@@ -70,7 +106,11 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
 
         // Initialize virtual keyboard device for injecting keystrokes into any Wayland window
         try {
-            const seat = (Clutter.get_default_backend ? Clutter.get_default_backend().get_default_seat() : (Meta.get_backend ? Meta.get_backend().get_default_seat() : null));
+            // GNOME 51 / mutter 51 removed Clutter.get_default_backend() and
+            // Meta.get_backend(). The supported way to reach the default seat is
+            // now the shell's global.backend object. We keep the old fallbacks
+            // (guarded) so the extension still works on GNOME 45-50.
+            const seat = _getDefaultSeat();
             if (seat) {
                 this._virtualKeyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
             }

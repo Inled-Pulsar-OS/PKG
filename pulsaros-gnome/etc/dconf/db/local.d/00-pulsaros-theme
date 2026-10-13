@@ -199,6 +199,10 @@ switch-input-source-backward=@as []
 minimize=['<Primary>m']
 switch-to-workspace-left=['<Super>Left']
 switch-to-workspace-right=['<Super>Right']
+# Ctrl+Alt+Up/Down belong to the App Grid (toggle-application-view); unbind the
+# default vertical workspace switch to avoid a duplicate accelerator.
+switch-to-workspace-up=@as []
+switch-to-workspace-down=@as []
 
 [org/gnome/shell/keybindings]
 toggle-overview=['<Super>s', '<Control>Up', '<Super>Up']

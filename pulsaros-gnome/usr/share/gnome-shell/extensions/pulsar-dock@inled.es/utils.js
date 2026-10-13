@@ -729,6 +729,14 @@ export function getMonitorManager() {
 }
 
 /**
+ * Gets the cursor tracker, using the API available in current GNOME Shell
+ */
+export function getCursorTracker() {
+    return global.backend.get_cursor_tracker?.() ??
+        Meta.CursorTracker.get_for_display(global.display);
+}
+
+/**
  * @param laterType
  * @param callback
  */

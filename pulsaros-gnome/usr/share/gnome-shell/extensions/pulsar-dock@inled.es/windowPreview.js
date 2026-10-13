@@ -107,7 +107,15 @@ class WindowPreviewList extends PopupMenu.PopupMenuSection {
 
         const position = Utils.getPosition();
         this.isHorizontal = position === St.Side.BOTTOM || position === St.Side.TOP;
-        this.box.set_vertical(!this.isHorizontal);
+        // GNOME 51 removed St.BoxLayout.set_vertical()/the :vertical property in
+        // favor of the orientable :orientation property. Use orientation when
+        // available and fall back to the legacy setter on older shells.
+        if (this.box.orientation !== undefined)
+            this.box.orientation = this.isHorizontal
+                ? Clutter.Orientation.HORIZONTAL
+                : Clutter.Orientation.VERTICAL;
+        else
+            this.box.set_vertical(!this.isHorizontal);
         this.box.set_name('dashtodockWindowList');
         Utils.addActor(this.actor, this.box);
         this.actor._delegate = this;
@@ -382,10 +390,14 @@ class WindowPreviewMenuItem extends PopupMenu.PopupBaseMenuItem {
         });
 
         const box = new St.BoxLayout({
-            vertical: true,
             reactive: true,
             x_expand: true,
         });
+
+        if (box.orientation !== undefined)
+            box.orientation = Clutter.Orientation.VERTICAL;
+        else
+            box.vertical = true;
 
         if (box.add) {
             box.add(overlayGroup);

@@ -177,8 +177,41 @@ export function sendShortcut(accel) {
 	return true;
 }
 
+// GNOME 51 removed Clutter.get_default_backend(); the shell now exposes its
+// backend through global.backend. Keep the old API as a fallback for GNOME
+// 45-50 and Meta for completeness. See the module comment.
+function getDefaultSeat(Clutter) {
+	const seatOf = backend =>
+		backend && typeof backend.get_default_seat === 'function'
+			? backend.get_default_seat()
+			: null;
+
+	try {
+		const seat = seatOf(global.backend);
+		if (seat)
+			return seat;
+	} catch (e) {}
+
+	try {
+		if (typeof Clutter.get_default_backend === 'function') {
+			const seat = seatOf(Clutter.get_default_backend());
+			if (seat)
+				return seat;
+		}
+	} catch (e) {}
+
+	try {
+		if (typeof Meta !== 'undefined' && typeof Meta.get_backend === 'function')
+			return seatOf(Meta.get_backend());
+	} catch (e) {}
+
+	return null;
+}
+
 function synthesize(Clutter, chords) {
-	const seat = (Clutter.get_default_backend ? Clutter.get_default_backend().get_default_seat() : (Meta.get_backend ? Meta.get_backend().get_default_seat() : null));
+	const seat = getDefaultSeat(Clutter);
+	if (!seat)
+		throw new Error('No Clutter seat available');
 	const dev = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
 	let t = GLib.get_monotonic_time();
 	for (const {modifiers, keyval} of chords) {
