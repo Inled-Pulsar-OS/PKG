@@ -898,6 +898,10 @@ export class DialogManager {
 
     _onChildAdded(child) {
         if (!this._enabled || !child) return;
+        // Skip our own backdrops: they live in the same modalDialogGroup, so
+        // without this the group's child-added signal would try to glass the
+        // glass and spawn an endless cascade.
+        if (child._pulsarDialogGlass) return;
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             if (!this._enabled || !child || !child.get_parent()) return GLib.SOURCE_REMOVE;
             this._attachGlass(child);
@@ -910,8 +914,13 @@ export class DialogManager {
     }
 
     _attachGlass(child) {
+        if (!child || child._pulsarDialogGlass) return;
         if (this._dialogStates.has(child)) return;
-        const targetBox = this._findDialogBox(child) || child;
+        // Only glass real dialogs. Falling back to `child` used to dress every
+        // unrelated actor dropped in the modalDialogGroup (including our own
+        // backdrops) with glass, feeding the cascade.
+        const targetBox = this._findDialogBox(child);
+        if (!targetBox) return;
         if (typeof targetBox.add_style_class_name === 'function')
             targetBox.add_style_class_name('liquid-glass-transparent');
 
@@ -924,6 +933,9 @@ export class DialogManager {
         glass.set_size(1.0, 1.0);
         glass.set_pivot_point(0.0, 0.0);
 
+        // Tag the backdrop *before* it enters the group so the child-added
+        // handler above can recognise and ignore it.
+        glass._pulsarDialogGlass = true;
         const parent = child.get_parent() || Main.layoutManager.modalDialogGroup;
         parent.insert_child_below(glass, child);
 
@@ -968,10 +980,17 @@ export class DialogManager {
             targetBox.connect('notify::allocation', syncGeometry),
             targetBox.connect('notify::visible', syncGeometry),
             targetBox.connect('notify::opacity', syncGeometry),
-            child.connect('destroy', () => this._detachGlass(child)),
         ];
+        // When the dialog is destroyed the child (and a descendant targetBox)
+        // are already disposed: their signal handlers die with them, so undo
+        // nothing but our own backdrop here. Touching the disposed actor is
+        // what produced the "already disposed" warnings.
+        const destroyId = child.connect('destroy', () => {
+            this._dialogStates.delete(child);
+            try { glass.destroy(); } catch (e) {}
+        });
 
-        this._dialogStates.set(child, { targetBox, glass, conns });
+        this._dialogStates.set(child, { targetBox, glass, conns, destroyId });
         syncGeometry();
     }
 
@@ -983,6 +1002,9 @@ export class DialogManager {
         for (const id of state.conns) {
             try { child.disconnect(id); } catch (e) {}
             try { state.targetBox.disconnect(id); } catch (e) {}
+        }
+        if (state.destroyId) {
+            try { child.disconnect(state.destroyId); } catch (e) {}
         }
         try { state.targetBox.remove_style_class_name('liquid-glass-transparent'); } catch (e) {}
         try { state.glass.destroy(); } catch (e) {}
@@ -1005,6 +1027,95 @@ EOF
     sed -i "s/import {ApplicationManager} from '.\/dist\/applicationManager.js';/import {ApplicationManager} from '.\/dist\/applicationManager.js';\nimport {DialogManager} from '.\/dist\/dialogManager.js';/g" "$LG_DIR/extension.js"
     sed -i "s/this._applicationManager.setup();/this._applicationManager.setup();\n    this._dialogManager = new DialogManager(path, this._settings, this._logger);\n    this._dialogManager.setup();/g" "$LG_DIR/extension.js"
     sed -i "s/this._applicationManager = null;/this._applicationManager = null;\n    if (this._dialogManager) { this._dialogManager.destroy(); this._dialogManager = null; }/g" "$LG_DIR/extension.js"
+
+    # 3b. Stop the Quick Settings colour timer from touching disposed actors.
+    #     Liquid Glass styles every toggle's sub-actors (label/icon boxes), but
+    #     GNOME Shell rebuilds those sub-actors on each state change. A disposed
+    #     GObject accessed from GJS logs "has been already disposed" as a
+    #     g_warning (NOT a catchable JS exception) on every 100ms sample tick,
+    #     flooding the journal. Prune each sub from styledSubs when it dies and
+    #     only restyle sub-actors still inside the pod. Also used by the
+    #     notification-center glass manager (same ToggleStyles class).
+    LG_TOGGLE_STYLES="$LG_DIR/dist/quickSettings/toggleStyles.js"
+    if [ -f "$LG_TOGGLE_STYLES" ]; then
+        python3 - "$LG_TOGGLE_STYLES" << 'PYEOF'
+import sys
+path = sys.argv[1]
+with open(path, 'r') as fp:
+    c = fp.read()
+if 'pod.contains(actor)' not in c:
+    changes = [
+        (
+            """    for (const { actor, origStyle } of entry.styledSubs) {
+        if (actor instanceof St.Widget)
+            actor.set_style(origStyle || null);
+    }
+}""",
+            """    for (const { actor, origStyle } of entry.styledSubs) {
+        if (actor instanceof St.Widget && pod.contains(actor))
+            actor.set_style(origStyle || null);
+    }
+}""",
+        ),
+        (
+            """            const origStyle = sub.get_style() || '';
+            sub.set_style(_withOverride(origStyle));
+            if (!known.has(sub))
+                entry.styledSubs.push({ actor: sub, origStyle });""",
+            """            const origStyle = sub.get_style() || '';
+            sub.set_style(_withOverride(origStyle));
+            if (!known.has(sub)) {
+                const record = { actor: sub, origStyle, destroyId: 0 };
+                // Quick Settings rebuilds its toggle sub-actors on every state
+                // change; drop each sub as soon as it is destroyed so the
+                // colour timer never touches a disposed actor.
+                record.destroyId = sub.connect('destroy', () => {
+                    const idx = entry.styledSubs.indexOf(record);
+                    if (idx >= 0)
+                        entry.styledSubs.splice(idx, 1);
+                });
+                entry.styledSubs.push(record);
+            }""",
+        ),
+        (
+            """        for (const { actor, origStyle } of entry.styledSubs) {
+            if (actor instanceof St.Widget)
+                actor.set_style(origStyle || null);
+        }
+        if (this._releaseIfSliderLostPill(pod, entry))""",
+            """        for (const { actor, origStyle } of entry.styledSubs) {
+            if (actor instanceof St.Widget && pod.contains(actor))
+                actor.set_style(origStyle || null);
+        }
+        if (this._releaseIfSliderLostPill(pod, entry))""",
+        ),
+        (
+            """        for (const { actor, origStyle } of entry.styledSubs) {
+            if (actor instanceof St.Widget)
+                actor.set_style(_withOverride(origStyle));
+        }
+    }""",
+            """        for (const { actor, origStyle } of entry.styledSubs) {
+            if (actor instanceof St.Widget && pod.contains(actor))
+                actor.set_style(_withOverride(origStyle));
+        }
+    }""",
+        ),
+    ]
+    ok = True
+    for old, new in changes:
+        if c.count(old) != 1:
+            ok = False
+            break
+        c = c.replace(old, new, 1)
+    if ok:
+        with open(path, 'w') as fp:
+            fp.write(c)
+        print("patched toggleStyles.js")
+    else:
+        print("WARN: toggleStyles.js shape changed, skipping patch")
+PYEOF
+    fi
 
     # Add dialog stylesheet rules
     cat << 'EOF' >> "$LG_DIR/stylesheet.css"
