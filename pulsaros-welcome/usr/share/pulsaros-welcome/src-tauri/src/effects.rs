@@ -203,7 +203,7 @@ fn apply_blur_settings() -> Result<(), String> {
 
 fn apply_glass_settings() -> Result<(), String> {
     let dock = "org.gnome.shell.extensions.dash-to-dock";
-    let glass = "org.gnome.shell.extensions.liquid-glass";
+    let glass = "org.gnome.shell.extensions.liquid-glass@thinkingcoding1231.gmail.com";
     gsettings_batch(&[
         (dock, "background-opacity", "0.15"),
         (dock, "custom-theme-shrink", "false"),
