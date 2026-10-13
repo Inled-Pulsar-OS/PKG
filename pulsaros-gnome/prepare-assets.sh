@@ -238,7 +238,7 @@ replacement = '''    find_actor(actor) {
         const isExcluded = a => {
             if (!a) return false;
             return this.has_any_style_class(a, [
-                \'mac-nc-datemenu\', \'mac-cc-quick-settings\', \'mac-nc-sidebar\',
+                \'pulsar-blur-exclude\',
             ]);
         };
         if (isExcluded(actor) || isExcluded(delegate?.box) || isExcluded(delegate?.actor))
@@ -252,7 +252,7 @@ replacement = '''    find_actor(actor) {
         }
 
         const targets = this.create_targets();'''
-if 'mac-nc-datemenu' not in c and target_needle in c:
+if 'pulsar-blur-exclude' not in c and target_needle in c:
     c = c.replace(target_needle, replacement, 1)
     with open(f, 'w') as fp: fp.write(c)
 " "$BMS_TARGETS"

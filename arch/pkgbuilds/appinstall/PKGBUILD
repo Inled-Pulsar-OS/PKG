@@ -1,6 +1,6 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=appinstall
-pkgver=21.15
+pkgver=22.20
 pkgrel=1
 pkgdesc="Simple package and application installer for Linux"
 arch=(any)
@@ -10,7 +10,13 @@ depends=(python python-gobject gtk4 libadwaita python-requests python-packaging 
 options=(!strip)
 
 build() {
-    _src="$(cd "$startdir"/../../../../appinstall 2>/dev/null || cd "$startdir"/../../../appinstall 2>/dev/null && pwd)"
+    _src=""
+    for _cand in "${startdir:-$PWD}/../../../../appinstall" "${startdir:-$PWD}/../../../appinstall"; do
+        if [ -d "$_cand" ]; then
+            _src="$(cd "$_cand" && pwd)"
+            break
+        fi
+    done
     if [ -z "$_src" ] || [ ! -d "$_src" ]; then
         if [ ! -d "$srcdir/appinstall-repo" ]; then
             git clone --depth 1 https://github.com/InledGroup/appinstall.git "$srcdir/appinstall-repo"
@@ -24,7 +30,13 @@ build() {
 }
 
 package() {
-    _src="$(cd "$startdir"/../../../../appinstall 2>/dev/null || cd "$startdir"/../../../appinstall 2>/dev/null && pwd)"
+    _src=""
+    for _cand in "${startdir:-$PWD}/../../../../appinstall" "${startdir:-$PWD}/../../../appinstall"; do
+        if [ -d "$_cand" ]; then
+            _src="$(cd "$_cand" && pwd)"
+            break
+        fi
+    done
     if [ -z "$_src" ] || [ ! -d "$_src" ]; then
         _src="$srcdir/appinstall-repo"
     fi

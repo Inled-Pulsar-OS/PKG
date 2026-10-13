@@ -10,6 +10,10 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 const NONE = Gio.DBusCallFlags.NONE;
 
+// Marker Blur My Shell checks (see prepare-assets.sh) so it only skips the
+// date menu while Liquid Glass is drawing its own glass on the cards.
+const BLUR_EXCLUDE_CLASS = 'pulsar-blur-exclude';
+
 const STRINGS = {
     es: {
         NOTIFICATIONS: 'NOTIFICACIONES',
@@ -166,6 +170,8 @@ export class MacNotificationCenter {
         // Remembers liquid-glass's date-menu sheet setting while the per-card
         // glass is active, so it can be restored afterwards.
         this._lgSheetOrig = null;
+        this._lgToggles = false;
+        this._blurExcluded = false;
     }
 
     enable() {
@@ -202,15 +208,17 @@ export class MacNotificationCenter {
             this._dateMenu.menu,
             this._dateMenu.menu.connect('open-state-changed', guard((menu, isOpen) => {
                 if (isOpen) {
-                    this._dropDateMenuBlur();
-                    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, guard(() => {
+                    if (this._lgToggles) {
                         this._dropDateMenuBlur();
-                        return GLib.SOURCE_REMOVE;
-                    }));
-                    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, guard(() => {
-                        this._dropDateMenuBlur();
-                        return GLib.SOURCE_REMOVE;
-                    }));
+                        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, guard(() => {
+                            if (this._lgToggles) this._dropDateMenuBlur();
+                            return GLib.SOURCE_REMOVE;
+                        }));
+                        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, guard(() => {
+                            if (this._lgToggles) this._dropDateMenuBlur();
+                            return GLib.SOURCE_REMOVE;
+                        }));
+                    }
                     this._updateScrollMaxHeight();
                     this._refreshAll();
                     this._startPoll();
@@ -310,6 +318,9 @@ export class MacNotificationCenter {
                 this._root.remove_style_class_name('mac-lg-toggles');
             }
         }
+
+        this._lgToggles = togglesMode;
+        this._syncDateMenuSurface();
     }
 
     disable() {
@@ -362,24 +373,28 @@ export class MacNotificationCenter {
                 actor.remove_style_class_name(cls);
         }
 
-        if (menu.box) {
-            if (enable) {
-                menu.box.remove_style_class_name('datemenu-popover');
-                menu.box.remove_style_class_name('popup-menu-content');
-            } else {
-                menu.box.add_style_class_name('datemenu-popover');
-                menu.box.add_style_class_name('popup-menu-content');
+        // In Liquid Glass mode the cards draw their own glass, so the shell
+        // date-menu surface is dropped along with Blur My Shell's blur. In
+        // normal mode the classes stay so Blur My Shell blurs the panel.
+        if (enable) {
+            this._syncDateMenuSurface();
+        } else if (menu.box) {
+            menu.box.add_style_class_name('datemenu-popover');
+            menu.box.add_style_class_name('popup-menu-content');
+            for (const actor of [menu.actor, menu.box, menu._boxPointer, menu._boxPointer?.bin]) {
+                if (actor)
+                    actor.remove_style_class_name(BLUR_EXCLUDE_CLASS);
             }
         }
-
-        if (enable)
-            this._dropDateMenuBlur();
     }
 
     _dropDateMenuBlur() {
         const menu = this._dateMenu?.menu;
         if (!menu) return;
 
+        // Let Blur My Shell destroy the surface it created for this menu (it
+        // keeps one surface per target actor). Only needed while Liquid Glass
+        // draws the cards itself; in normal mode the blur stays.
         try {
             const bms = Main.extensionManager.lookup('blur-my-shell@aunetx')?.stateObj;
             const popup = bms?._popup;
@@ -391,6 +406,7 @@ export class MacNotificationCenter {
             }
         } catch (e) {}
 
+        // Fallback: hide any blur surface stacked directly below the panel.
         try {
             const actor = menu.actor;
             const parent = actor?.get_parent();
@@ -401,44 +417,9 @@ export class MacNotificationCenter {
                     const below = children[idx - 1];
                     const classes = below?.get_style_class_name?.() ?? '';
                     const name = below?.name ?? '';
-                    if (classes.includes('bms') || name.includes('bms') ||
-                        (this._isLiquidGlassActive() && (name.startsWith('liquid-glass') || classes.includes('liquid-glass')))) {
+                    if (classes.includes('bms') || name.includes('bms')) {
                         below.visible = false;
                         below.opacity = 0;
-                    }
-                }
-            }
-        } catch (e) {}
-
-        // Hide any liquid-glass sheet below menuRoot in uiGroup
-        try {
-            if (this._isLiquidGlassActive()) {
-                let menuRoot = menu.actor;
-                while (menuRoot?.get_parent() && menuRoot.get_parent() !== Main.layoutManager.uiGroup) {
-                    menuRoot = menuRoot.get_parent();
-                }
-                if (menuRoot?.get_parent() === Main.layoutManager.uiGroup) {
-                    const uiChildren = Main.layoutManager.uiGroup.get_children();
-                    const idx = uiChildren.indexOf(menuRoot);
-                    if (idx > 0) {
-                        const below = uiChildren[idx - 1];
-                        const name = below?.name ?? '';
-                        if (name.includes('liquid-glass') || below?.has_style_class_name?.('liquid-glass')) {
-                            below.visible = false;
-                            below.opacity = 0;
-                        }
-                    }
-                }
-            }
-        } catch (e) {}
-
-        // Hide any liquid-glass background sheet inside menu.box when in liquid glass mode
-        try {
-            if (this._isLiquidGlassActive() && menu.box) {
-                for (const child of menu.box.get_children()) {
-                    if (child !== this._root && child.get_name()?.startsWith('liquid-glass')) {
-                        child.visible = false;
-                        child.opacity = 0;
                     }
                 }
             }
@@ -452,6 +433,51 @@ export class MacNotificationCenter {
                 return true;
         }
         return false;
+    }
+
+    /*
+     * Keeps the date-menu shell surface in sync with the Liquid Glass state.
+     * While Liquid Glass draws per-card glass the shell background is dropped
+     * and the menu is marked so Blur My Shell skips it; otherwise the classes
+     * stay and Blur My Shell blurs the panel behind the cards.
+     */
+    _syncDateMenuSurface() {
+        const menu = this._dateMenu?.menu;
+        if (!menu) return;
+        const lg = this._lgToggles;
+
+        if (menu.box) {
+            if (lg) {
+                menu.box.remove_style_class_name('datemenu-popover');
+                menu.box.remove_style_class_name('popup-menu-content');
+            } else {
+                menu.box.add_style_class_name('datemenu-popover');
+                menu.box.add_style_class_name('popup-menu-content');
+            }
+        }
+
+        for (const actor of [menu.actor, menu.box, menu._boxPointer, menu._boxPointer?.bin]) {
+            if (!actor) continue;
+            if (lg)
+                actor.add_style_class_name(BLUR_EXCLUDE_CLASS);
+            else
+                actor.remove_style_class_name(BLUR_EXCLUDE_CLASS);
+        }
+
+        if (lg) {
+            this._dropDateMenuBlur();
+            this._blurExcluded = true;
+        } else if (this._blurExcluded) {
+            this._blurExcluded = false;
+            this._restoreDateMenuBlur();
+        }
+    }
+
+    _restoreDateMenuBlur() {
+        try {
+            const bms = Main.extensionManager.lookup('blur-my-shell@aunetx')?.stateObj;
+            bms?._popup?.reset?.();
+        } catch (e) {}
     }
 
     _updateScrollMaxHeight() {

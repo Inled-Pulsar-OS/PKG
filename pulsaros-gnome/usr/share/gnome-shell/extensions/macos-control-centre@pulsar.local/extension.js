@@ -40,6 +40,10 @@ function guard(fn) {
 
 const BL_DIR = '/sys/class/backlight';
 const LG_UUID = 'liquid-glass@thinkingcoding1231.gmail.com';
+// Marker Blur My Shell checks (see prepare-assets.sh) so it only skips the
+// Quick Settings / Notification Center panels while Liquid Glass is drawing
+// its own glass on them.
+const BLUR_EXCLUDE_CLASS = 'pulsar-blur-exclude';
 
 function findBacklight() {
     try {
@@ -313,6 +317,7 @@ export default class MacControlCentre extends Extension {
         this._volCancellable = null;
         this._lgSettings = null;
         this._lgPods = [];
+        this._blurExcluded = false;
         this._sinkObject = null;
         this._sinkSignals = [];
         this._mixerRefId = 0;
@@ -376,9 +381,11 @@ export default class MacControlCentre extends Extension {
                 this._refresh();
                 this._updateLiquidGlass();
                 this._startPolling();
-                this._dropQuickSettingsBlur();
-                later(50, () => this._dropQuickSettingsBlur());
-                later(250, () => this._dropQuickSettingsBlur());
+                if (this._lgActive) {
+                    this._dropQuickSettingsBlur();
+                    later(50, () => this._lgActive && this._dropQuickSettingsBlur());
+                    later(250, () => this._lgActive && this._dropQuickSettingsBlur());
+                }
             }
         })]);
 
@@ -456,21 +463,20 @@ export default class MacControlCentre extends Extension {
                 actor.remove_style_class_name(cls);
         }
 
-        // The panel draws its own background, so drop the shell's Quick
-        // Settings surface. Removing these classes also keeps Blur My Shell
-        // from finding the menu as a blur target.
-        if (menu.box) {
-            if (enable) {
-                menu.box.remove_style_class_name('quick-settings');
-                menu.box.remove_style_class_name('popup-menu-content');
-            } else {
-                menu.box.add_style_class_name('quick-settings');
-                menu.box.add_style_class_name('popup-menu-content');
+        // In Liquid Glass mode the panel draws its own background per pill, so
+        // the shell's Quick Settings surface is dropped along with Blur My
+        // Shell's blur. In normal mode those classes stay so Blur My Shell
+        // blurs the panel behind the pills.
+        if (enable) {
+            this._syncQuickSettingsSurface();
+        } else if (menu.box) {
+            menu.box.add_style_class_name('quick-settings');
+            menu.box.add_style_class_name('popup-menu-content');
+            for (const actor of [menu.actor, menu.box, menu._boxPointer, menu._boxPointer?.bin]) {
+                if (actor)
+                    actor.remove_style_class_name(BLUR_EXCLUDE_CLASS);
             }
         }
-
-        if (enable)
-            this._dropQuickSettingsBlur();
     }
 
     _dropQuickSettingsBlur() {
@@ -517,6 +523,55 @@ export default class MacControlCentre extends Extension {
                 return true;
         }
         return false;
+    }
+
+    /*
+     * Keeps the Quick Settings shell surface in sync with the Liquid Glass
+     * state. While Liquid Glass draws a piece of glass under every pill we
+     * take the shell background away and mark the menu so Blur My Shell skips
+     * it; otherwise the shell classes stay and Blur My Shell blurs the panel.
+     */
+    _syncQuickSettingsSurface() {
+        const menu = this._qs?.menu;
+        if (!menu)
+            return;
+        const lg = this._lgActive;
+
+        if (menu.box) {
+            if (lg) {
+                menu.box.remove_style_class_name('quick-settings');
+                menu.box.remove_style_class_name('popup-menu-content');
+            } else {
+                menu.box.add_style_class_name('quick-settings');
+                menu.box.add_style_class_name('popup-menu-content');
+            }
+        }
+
+        for (const actor of [menu.actor, menu.box, menu._boxPointer, menu._boxPointer?.bin]) {
+            if (!actor)
+                continue;
+            if (lg)
+                actor.add_style_class_name(BLUR_EXCLUDE_CLASS);
+            else
+                actor.remove_style_class_name(BLUR_EXCLUDE_CLASS);
+        }
+
+        if (lg) {
+            this._dropQuickSettingsBlur();
+            this._blurExcluded = true;
+        } else if (this._blurExcluded) {
+            this._blurExcluded = false;
+            this._restoreQuickSettingsBlur();
+        }
+    }
+
+    // Rebuilds Blur My Shell's popup surfaces after Liquid Glass is disabled,
+    // so the panel is blurred again.
+    _restoreQuickSettingsBlur() {
+        try {
+            const bms = Main.extensionManager.lookup('blur-my-shell@aunetx')?.stateObj;
+            bms?._popup?.reset?.();
+        } catch (e) {}
     }
 
     disable() {
@@ -792,11 +847,12 @@ export default class MacControlCentre extends Extension {
         } catch (e) {}
 
         const key = active ? (togglesMode ? 'toggles' : 'background') : 'off';
-        if (key === this._lgKey)
-            return;
-        this._lgKey = key;
         this._lgActive = active;
-        this._applyLiquidGlass(active, togglesMode);
+        if (key !== this._lgKey) {
+            this._lgKey = key;
+            this._applyLiquidGlass(active, togglesMode);
+        }
+        this._syncQuickSettingsSurface();
     }
 
     _applyLiquidGlass(active, togglesMode) {
