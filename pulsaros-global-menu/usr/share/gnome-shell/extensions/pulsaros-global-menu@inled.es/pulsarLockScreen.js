@@ -24,7 +24,9 @@ export const LockScreen = GObject.registerClass({
         
         this._extension = extension;
         this._isLocked = false;
-        this._hasGrab = false;
+        // Modal grab handle returned by Main.pushModal() (a Clutter.Grab, not a
+        // boolean). Must be kept to be able to release it with popModal(grab).
+        this._grab = null;
         this._authenticating = false;
         this._timerId = 0;
         this._sizeChangedId = 0;
@@ -881,12 +883,14 @@ export const LockScreen = GObject.registerClass({
         
         // Defer input grab and key focus to the next main loop cycle to guarantee the actor is mapped
         GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-            if (!this._isLocked) return GLib.SOURCE_REMOVE;
+            // Bail out if we got unlocked before the actor was mapped, and never
+            // stack a second grab on top of an existing one.
+            if (!this._isLocked || this._grab) return GLib.SOURCE_REMOVE;
 
             try {
-                this._hasGrab = Main.pushModal(this) === true;
+                this._grab = Main.pushModal(this);
             } catch (e) {
-                this._hasGrab = false;
+                this._grab = null;
             }
 
             this._focusPasswordEntry();
@@ -915,16 +919,17 @@ export const LockScreen = GObject.registerClass({
         
         this._stopVideoWallpaper();
         
-        // Release modal input grab. Guard against stale grab accounting (the
+        // Release modal input grab. popModal() takes the grab handle returned by
+        // pushModal(), not the actor. Guard against stale grab accounting (the
         // native "incorrect pop" happened when another modal was on top):
         // never let a throw abort the rest of the unlock cleanup.
-        if (this._hasGrab) {
+        if (this._grab) {
             try {
-                Main.popModal(this);
+                Main.popModal(this._grab);
             } catch (e) {
                 console.warn("[LockScreen] popModal during unlock failed:", e);
             }
-            this._hasGrab = false;
+            this._grab = null;
         }
         
         // Clean clock timer
@@ -1122,9 +1127,9 @@ export const LockScreen = GObject.registerClass({
             GLib.source_remove(this._timerId);
             this._timerId = 0;
         }
-        if (this._hasGrab) {
-            try { Main.popModal(this); } catch (e) {}
-            this._hasGrab = false;
+        if (this._grab) {
+            try { Main.popModal(this._grab); } catch (e) {}
+            this._grab = null;
         }
         if (this._monitorContainers) {
             for (let container of this._monitorContainers) {
