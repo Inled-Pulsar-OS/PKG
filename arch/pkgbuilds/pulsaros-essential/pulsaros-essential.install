@@ -58,6 +58,13 @@ post_install() {
     # that name and reports a compatible GDM version.
     systemctl enable pulsaros-display-manager-shim.service 2>/dev/null || true
     systemctl start pulsaros-display-manager-shim.service 2>/dev/null || true
+    # Performance/memory governor (cgroup v2): keeps the desktop (gnome-shell,
+    # mutter and the essentials) above the focused window and stops any single
+    # app from saturating CPU/RAM. Without this the service stays "disabled"
+    # on a fresh install and the governor never runs. See
+    # /usr/bin/pulsaros-optimizer.
+    systemctl enable pulsaros-optimizer.service 2>/dev/null || true
+    systemctl start pulsaros-optimizer.service 2>/dev/null || true
     mkdir -p /etc/sudoers.d
 
     # Reduce systemd timeouts
