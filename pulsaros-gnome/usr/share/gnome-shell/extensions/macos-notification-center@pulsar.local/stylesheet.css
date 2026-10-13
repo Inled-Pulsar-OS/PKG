@@ -84,9 +84,12 @@
 .mac-nc-card {
     border-radius: 18px;
     padding: 12px;
-    background-color: rgba(30, 32, 46, 0.86) !important;
+    background-color: rgba(30, 30, 40, 0.76) !important;
     border: 1px solid rgba(255, 255, 255, 0.16) !important;
-    box-shadow: none !important;
+    /* Same floating-glass depth as the Control Centre pills, so the
+       Notification Center reads with the identical "liquid glass" lift
+       instead of a flat card. The 18px border-radius rounds the shadow. */
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45) !important;
     color: #ffffff !important;
     transition: all 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }

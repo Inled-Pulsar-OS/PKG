@@ -2381,3 +2381,24 @@
 .notchnux-island-expanded .nook-tray-mirror {
     background-color: rgba(255,255,255,0.065) !important;
 }
+
+/* PULSAR_ROUNDED_NOTCH_SHADOW_V1 ------------------------------------- *
+ * The island hangs flush off the top edge, so its top corners are square
+ * (border-radius 0 0 Npx Npx). A heavy y-offset + small blur makes the drop
+ * shadow read as a hard rectangular slab with square side edges. Keep the
+ * blur generous and the vertical offset small so the shadow wraps the
+ * curved bottom corners as an even, rounded cloud instead of a box.        */
+.notchnux-island {
+    border-radius: 0px 0px 20px 20px !important;
+    box-shadow: 0px 4px 18px rgba(0, 0, 0, 0.38) !important;
+}
+
+.notchnux-island-expanded {
+    border-radius: 0px 0px 28px 28px !important;
+    box-shadow: 0px 10px 30px rgba(0, 0, 0, 0.42) !important;
+}
+
+.notchnux-island-peek {
+    border-radius: 0px 0px 22px 22px !important;
+    box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.38) !important;
+}

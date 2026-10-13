@@ -9,6 +9,12 @@ post_install() {
         flatpak override --system \
             --filesystem=/usr/share/themes:ro \
             --filesystem=/usr/share/icons:ro 2>/dev/null || true
+        # Expose the theme explicitly: Flatpak apps run against a sandboxed
+        # runtime and do not inherit the host GTK_THEME, so the settings
+        # portal alone is not enough for them to render MacTahoe. Pulsar OS
+        # defaults to the light variant; the value matches user-theme above.
+        flatpak override --system \
+            --env=GTK_THEME=MacTahoe-Light 2>/dev/null || true
     fi
 }
 
