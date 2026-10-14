@@ -2,6 +2,9 @@
 # Maintainer: Inled Pulsar OS <dev@inled.es>
 
 pkgname=gnome-rounded-blur
+# Upstream git tag, kept separate from pkgver so the deploy script's
+# `.unstable` pkgver suffix does not produce an invalid tag like v1.0.1.unstable.
+_tag=1.0.1
 pkgver=1.0.1
 pkgrel=2
 pkgdesc="GNOME Shell BlurEffect with rounded corners (patched for GNOME / Mutter 51)"
@@ -17,9 +20,9 @@ makedepends=(
   'glib2-devel'
   'gobject-introspection'
 )
-source=("git+https://github.com/kancko/gnome-rounded-blur.git#tag=v${pkgver}"
+source=("git+https://github.com/kancko/gnome-rounded-blur.git#tag=v${_tag}"
         "gnome-51.patch")
-sha256sums=('6d8b80659426d7cfbd8b9a23553fa139ba8ee1b94481bbdd457de9b1b70d7067'
+sha256sums=('SKIP'
             'SKIP')
 
 prepare() {
