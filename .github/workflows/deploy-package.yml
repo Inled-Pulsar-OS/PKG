@@ -24,6 +24,15 @@ on:
         description: 'Versión del sistema (ej: 0.0.1-beta-pear) [Opcional] / System Version'
         required: false
         default: ''
+      distro:
+        description: 'Distribución a empaquetar / Distro to package'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - arch
+          - debian
 
 permissions:
   contents: write
@@ -145,6 +154,17 @@ jobs:
                 IS_ARCH="true"
               fi
             done
+          fi
+
+          # Filtro opcional de distribución (solo workflow_dispatch).
+          # El valor por defecto 'both' mantiene el comportamiento histórico;
+          # 'arch' o 'debian' permiten publicar una sola plataforma sin tocar
+          # el otro repositorio.
+          DISTRO="${{ github.event.inputs.distro }}"
+          if [ "$DISTRO" = "arch" ]; then
+            IS_DEBIAN="false"
+          elif [ "$DISTRO" = "debian" ]; then
+            IS_ARCH="false"
           fi
 
           echo "is_debian=$IS_DEBIAN" >> $GITHUB_OUTPUT
