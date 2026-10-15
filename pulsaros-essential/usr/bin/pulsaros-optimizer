@@ -477,6 +477,10 @@ PROCESSED_PIDS = {}
 PREV_PID_STAT = {}
 PROC_CPU_EMA = {}
 BG_MEMBERS = set()
+# pid -> cgroup path (relative to /sys/fs/cgroup) the process lived in before we
+# adopted it into CGROUP_DIR. Needed to put it *back* where systemd expects it
+# instead of dumping it in the root cgroup (see _update_membership).
+BG_ORIG_CGROUP = {}
 CPU_SMOOTH = None
 PREV_CPU_TIMES = None
 LAST_ACTIVE_PID = 0
@@ -912,6 +916,26 @@ def _cgroup_path(pid: int) -> str:
         pass
     return ""
 
+def _has_display(pid: int) -> bool:
+    """True if the process looks like a GUI app (Wayland/X11 in its environment).
+
+    Unknown apps that burn CPU get classified "busy" and pulled into the capped
+    background cgroup. But a GUI app the user just opened can easily burn >8% of
+    the machine while it starts, and if focus detection has not caught up yet it
+    would be CPU/memory-throttled exactly when the user is waiting for it: that
+    is how an app "sometimes does not open". Anything with a display connection
+    is treated as interactive and never adopted by the "busy" heuristic.
+    """
+    try:
+        with open(f"/proc/{pid}/environ", "rb") as f:
+            env = f.read()
+    except Exception:
+        return False
+    for var in env.split(b"\0"):
+        if var.startswith(b"WAYLAND_DISPLAY=") or var.startswith(b"DISPLAY="):
+            return True
+    return False
+
 def _session_owned(cgroup: str) -> bool:
     """Eligible for migration into the background cgroup.
 
@@ -920,8 +944,43 @@ def _session_owned(cgroup: str) -> bool:
     .scope). System services (system.slice) and user services
     (user@...service/*.service) are never touched, so `systemctl stop` on them
     keeps working — systemd only kills processes still in the unit's cgroup.
+
+    A process sitting in the *root* cgroup ("/") is deliberately NOT eligible:
+    that is not a real session cgroup, and adopting it would only move it
+    further away from systemd's accounting. (It used to be eligible, which is
+    how the restore path below ended up parking processes in "/".)
     """
-    return cgroup == "/" or (cgroup.startswith("/user.slice/") and cgroup.endswith(".scope"))
+    return cgroup.startswith("/user.slice/") and cgroup.endswith(".scope")
+
+def _cgroup_procs_write(cgroup: str, pid: int) -> bool:
+    """Move `pid` into the cgroup at `cgroup` (path relative to /sys/fs/cgroup).
+
+    Returns False when the path is unusable (empty, root, gone or read-only).
+    """
+    if not cgroup or cgroup == "/":
+        return False
+    return _sys_write(f"/sys/fs/cgroup{cgroup}/cgroup.procs", str(pid))
+
+def _restore_to_session_scope(pid: int) -> bool:
+    """Fallback for a released pid whose original scope no longer exists.
+
+    Keeps the process inside user.slice (its session scope) rather than the root
+    cgroup, so systemd can still account for it and stop it at log out.
+    """
+    try:
+        uid = os.stat(f"/proc/{pid}").st_uid
+    except Exception:
+        return False
+    base = f"/user.slice/user-{uid}.slice"
+    try:
+        scopes = sorted(n for n in os.listdir(f"/sys/fs/cgroup{base}")
+                        if n.endswith(".scope"))
+    except Exception:
+        return False
+    for name in scopes:
+        if _cgroup_procs_write(f"{base}/{name}", pid):
+            return True
+    return False
 
 def _update_membership(pid: int, should_be_member: bool, cgroup: str):
     """Move a process in/out of the background cgroup as its role changes."""
@@ -932,11 +991,22 @@ def _update_membership(pid: int, should_be_member: bool, cgroup: str):
     if should_be_member and not is_member:
         if not _session_owned(cgroup):
             return
+        # Remember where systemd put it, so it can be returned there untouched.
         if _sys_write(f"{CGROUP_DIR}/cgroup.procs", str(pid)):
             BG_MEMBERS.add(pid)
+            BG_ORIG_CGROUP[pid] = cgroup
     elif not should_be_member and is_member:
-        if _sys_write("/sys/fs/cgroup/cgroup.procs", str(pid)):
+        # Return the process to the cgroup systemd assigned it (its session/app
+        # scope). NEVER write it to /sys/fs/cgroup/cgroup.procs: that pulled the
+        # process out of user.slice, after which systemd could no longer account
+        # for or kill it, the session failed to tear down on log out (looking
+        # like "you have to reboot") and the shell logged
+        # "Failed to attach to cgroup ... Permission denied".
+        orig = BG_ORIG_CGROUP.get(pid, "")
+        restored = _cgroup_procs_write(orig, pid) or _restore_to_session_scope(pid)
+        if restored or not _pid_alive(pid):
             BG_MEMBERS.discard(pid)
+            BG_ORIG_CGROUP.pop(pid, None)
 
 # -----------------------------------------------------------------------------
 # Main optimization pass
@@ -1065,12 +1135,22 @@ def optimize_process_priorities(level: int, interval: float):
                 target = None
 
             # Background cgroup membership follows the process' role
+            # If we cannot tell which window is focused at all (no extension and
+            # no working fallback), never throttle an unknown "busy" process:
+            # without focus information the active app is indistinguishable from
+            # background work, and capping it is how apps end up looking like
+            # they "don't open". Explicit heavy classes are still capped.
+            focus_known = FOCUS_SOURCE != "none"
             should_be_member = (
                 CGROUP_OK
                 and category in BG_CATEGORIES
                 and maybe_throttle
                 and not is_focused
                 and not pinned_now
+                # An unknown app that merely looks busy is not adopted if it has
+                # a display connection: it is a GUI app starting up, not
+                # background work.
+                and not (category == "busy" and (not focus_known or _has_display(pid)))
             )
             if should_be_member or (entry is not None and pid in BG_MEMBERS):
                 _update_membership(pid, should_be_member, _cgroup_path(pid))
@@ -1122,10 +1202,13 @@ def optimize_process_priorities(level: int, interval: float):
             if dead not in active_pids:
                 del PROCESSED_PIDS[dead]
                 BG_MEMBERS.discard(dead)
+                BG_ORIG_CGROUP.pop(dead, None)
         for dead in list(PREV_PID_STAT.keys()):
             if dead not in active_pids:
                 del PREV_PID_STAT[dead]
                 PROC_CPU_EMA.pop(dead, None)
+        for dead in [p for p in BG_ORIG_CGROUP if p not in active_pids]:
+            BG_ORIG_CGROUP.pop(dead, None)
 
     except Exception as e:
         warn_once(f"optimization pass failed: {e!r}")
