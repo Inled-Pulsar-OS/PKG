@@ -1251,35 +1251,13 @@ export const PulsarLogoButton = GObject.registerClass({
 
         let logoutItem = new PopupMenu.PopupMenuItem(_t('logOut'));
         logoutItem.connect('activate', () => {
-            try {
-                let session = new Gio.DBusProxy({
-                    g_connection: Gio.DBus.session,
-                    g_name: 'org.gnome.SessionManager',
-                    g_object_path: '/org/gnome/SessionManager',
-                    g_interface_name: 'org.gnome.SessionManager'
-                });
-                session.init(null);
-                session.call_sync('Logout', GLib.Variant.new('(u)', [0]), Gio.DBusCallFlags.NONE, -1, null);
-            } catch (e) {
-                console.error('[GlobalMenu] Logout DBus error:', e);
-            }
+            this._logoutSession();
         });
         this.menu.addMenuItem(logoutItem);
 
         let sleepItem = new PopupMenu.PopupMenuItem(_t('sleep'));
         sleepItem.connect('activate', () => {
-            try {
-                let login1 = new Gio.DBusProxy({
-                    g_connection: Gio.DBus.system,
-                    g_name: 'org.freedesktop.login1',
-                    g_object_path: '/org/freedesktop/login1',
-                    g_interface_name: 'org.freedesktop.login1.Manager'
-                });
-                login1.init(null);
-                login1.call_sync('Suspend', GLib.Variant.new('(b)', [true]), Gio.DBusCallFlags.NONE, -1, null);
-            } catch (e) {
-                console.error('[GlobalMenu] Suspend DBus error:', e);
-            }
+            this._login1Action('Suspend', 'systemctl suspend');
         });
         this.menu.addMenuItem(sleepItem);
 
@@ -1288,16 +1266,7 @@ export const PulsarLogoButton = GObject.registerClass({
         let restartItem = new PopupMenu.PopupMenuItem(_t('restart'));
         restartItem.connect('activate', () => {
             let dialog = new PowerConfirmDialog('restart', () => {
-                try {
-                    let login1 = new Gio.DBusProxy({
-                        g_connection: Gio.DBus.system,
-                        g_name: 'org.freedesktop.login1',
-                        g_object_path: '/org/freedesktop/login1',
-                        g_interface_name: 'org.freedesktop.login1.Manager'
-                    });
-                    login1.init(null);
-                    login1.call_sync('Reboot', GLib.Variant.new('(b)', [true]), Gio.DBusCallFlags.NONE, -1, null);
-                } catch (e) {}
+                this._login1Action('Reboot', 'systemctl reboot');
             });
             this._extension._activePowerDialog = dialog;
             dialog.open();
@@ -1313,6 +1282,55 @@ export const PulsarLogoButton = GObject.registerClass({
         global._pulsarTriggerPowerAction = (action) => this.triggerPowerAction(action);
     }
 
+    // Call a D-Bus method straight on the bus connection instead of going
+    // through a Gio.DBusProxy. A proxy resolves the well-known name
+    // asynchronously (init()), but call_sync() was invoked immediately after
+    // init(), so the proxy often had no name owner yet and returned
+    // "ServiceUnknown: The name org.gnome.SessionManager was not provided by
+    // any .service files". org.gnome.SessionManager is owned by the running
+    // gnome-session process and has no activatable .service file, so that race
+    // made log out fail intermittently (looking like the session needed a
+    // reboot). A direct call_sync on the bus routes by well-known name and has
+    // no such race.
+    _dbusCallSync(bus, busName, objectPath, interfaceName, methodName, parameters = null) {
+        return bus.call_sync(busName, objectPath, interfaceName, methodName,
+            parameters, Gio.DBusCallFlags.NONE, -1, null);
+    }
+
+    _logoutSession() {
+        try {
+            this._dbusCallSync(Gio.DBus.session,
+                'org.gnome.SessionManager', '/org/gnome/SessionManager',
+                'org.gnome.SessionManager', 'Logout', GLib.Variant.new('(u)', [0]));
+            return;
+        } catch (e) {
+            console.error('[GlobalMenu] Logout via D-Bus failed, falling back to gnome-session-quit:', e);
+        }
+        try {
+            GLib.spawn_command_line_async('gnome-session-quit --logout --no-prompt');
+        } catch (e) {
+            console.error('[GlobalMenu] Logout fallback failed:', e);
+        }
+    }
+
+    // login1 (system) actions, with a CLI fallback so a polkit/D-Bus hiccup never
+    // leaves the user without a way to suspend/reboot/power off.
+    _login1Action(methodName, cliFallback) {
+        try {
+            this._dbusCallSync(Gio.DBus.system,
+                'org.freedesktop.login1', '/org/freedesktop/login1',
+                'org.freedesktop.login1.Manager', methodName, GLib.Variant.new('(b)', [true]));
+            return;
+        } catch (e) {
+            console.error(`[GlobalMenu] ${methodName} via D-Bus failed, falling back to "${cliFallback}":`, e);
+        }
+        try {
+            GLib.spawn_command_line_async(cliFallback);
+        } catch (e) {
+            console.error(`[GlobalMenu] "${cliFallback}" failed:`, e);
+        }
+    }
+
     triggerPowerAction(action) {
         switch (action) {
             case 'lock-screen':
@@ -1324,45 +1342,16 @@ export const PulsarLogoButton = GObject.registerClass({
                 }
                 break;
             case 'logout':
-                try {
-                    let session = new Gio.DBusProxy({
-                        g_connection: Gio.DBus.session,
-                        g_name: 'org.gnome.SessionManager',
-                        g_object_path: '/org/gnome/SessionManager',
-                        g_interface_name: 'org.gnome.SessionManager'
-                    });
-                    session.init(null);
-                    session.call_sync('Logout', GLib.Variant.new('(u)', [0]), Gio.DBusCallFlags.NONE, -1, null);
-                } catch (e) {
-                    GLib.spawn_command_line_async("gnome-session-quit --logout");
-                }
+                this._logoutSession();
                 break;
             case 'suspend':
             case 'sleep':
-                try {
-                    let login1 = new Gio.DBusProxy({
-                        g_connection: Gio.DBus.system,
-                        g_name: 'org.freedesktop.login1',
-                        g_object_path: '/org/freedesktop/login1',
-                        g_interface_name: 'org.freedesktop.login1.Manager'
-                    });
-                    login1.init(null);
-                    login1.call_sync('Suspend', GLib.Variant.new('(b)', [true]), Gio.DBusCallFlags.NONE, -1, null);
-                } catch (e) {}
+                this._login1Action('Suspend', 'systemctl suspend');
                 break;
             case 'restart':
             case 'reboot': {
                 let dialog = new PowerConfirmDialog('restart', () => {
-                    try {
-                        let login1 = new Gio.DBusProxy({
-                            g_connection: Gio.DBus.system,
-                            g_name: 'org.freedesktop.login1',
-                            g_object_path: '/org/freedesktop/login1',
-                            g_interface_name: 'org.freedesktop.login1.Manager'
-                        });
-                        login1.init(null);
-                        login1.call_sync('Reboot', GLib.Variant.new('(b)', [true]), Gio.DBusCallFlags.NONE, -1, null);
-                    } catch (e) {}
+                    this._login1Action('Reboot', 'systemctl reboot');
                 });
                 this._extension._activePowerDialog = dialog;
                 dialog.open();
@@ -1372,16 +1361,7 @@ export const PulsarLogoButton = GObject.registerClass({
             case 'poweroff':
             case 'shutdown': {
                 let dialog = new PowerConfirmDialog('shutdown', () => {
-                    try {
-                        let login1 = new Gio.DBusProxy({
-                            g_connection: Gio.DBus.system,
-                            g_name: 'org.freedesktop.login1',
-                            g_object_path: '/org/freedesktop/login1',
-                            g_interface_name: 'org.freedesktop.login1.Manager'
-                        });
-                        login1.init(null);
-                        login1.call_sync('PowerOff', GLib.Variant.new('(b)', [true]), Gio.DBusCallFlags.NONE, -1, null);
-                    } catch (e) {}
+                    this._login1Action('PowerOff', 'systemctl poweroff');
                 });
                 this._extension._activePowerDialog = dialog;
                 dialog.open();

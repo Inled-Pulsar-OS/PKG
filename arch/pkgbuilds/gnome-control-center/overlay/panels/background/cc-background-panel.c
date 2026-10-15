@@ -731,6 +731,16 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
           set_extension_enabled ("liquid-glass@thinkingcoding1231.gmail.com", TRUE);
         }
 
+      /* Liquid Glass draws its own OSD/menu/notification glass. Blur my Shell
+       * folds the volume/brightness popups ("osd-window") into its "popup"
+       * component, so if it keeps blurring them while Liquid Glass is on, the
+       * Fn OSD ends up with a second blur stacked on top of the glass. Turn the
+       * popup component off so the OSD stays pure glass. */
+      g_autoptr(GSettingsSchema) bms_popup_schema = NULL;
+      g_autoptr(GSettings) bms_popup_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.popup", &bms_popup_schema);
+      if (bms_popup_settings && bms_popup_schema)
+        safe_set_boolean (bms_popup_settings, bms_popup_schema, "blur", FALSE);
+
       /* 2. Configure Dash to Dock (Pulsar Dock) with shrink wrap enabled */
       g_autoptr(GSettingsSchema) dock_schema = NULL;
       g_autoptr(GSettings) dock_settings = safe_settings_new ("org.gnome.shell.extensions.dash-to-dock", &dock_schema);
@@ -831,6 +841,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
         "dconf write /org/gnome/shell/extensions/liquid-glass/notification-tint-color \\\"'#000000'\\\" ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/osd-tint-color \\\"'#000000'\\\" ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/output-logs 'false' ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur false ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme true ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 ; "
@@ -874,6 +885,13 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
           safe_set_boolean (bms_dock_settings, bms_dock_schema, "static-blur", TRUE);
         }
 
+      /* Restore Blur my Shell popup blur (OSD/menus/notifications) now that
+       * Liquid Glass is no longer drawing those surfaces. */
+      g_autoptr(GSettingsSchema) bms_popup_schema = NULL;
+      g_autoptr(GSettings) bms_popup_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.popup", &bms_popup_schema);
+      if (bms_popup_settings && bms_popup_schema)
+        safe_set_boolean (bms_popup_settings, bms_popup_schema, "blur", TRUE);
+
       const gchar *dock_script =
         "/bin/sh -c \""
         "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme false ; "
@@ -888,7 +906,8 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock brightness 0.64 ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock pipeline 'pipeline_default_rounded' ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock unblur-in-overview true ; "
-        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock static-blur true >/dev/null 2>&1 &\"";
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock static-blur true ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur true >/dev/null 2>&1 &\"";
       g_spawn_command_line_async (dock_script, NULL);
     }
 }

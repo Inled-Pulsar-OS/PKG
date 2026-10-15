@@ -278,7 +278,11 @@ export class MacNotificationCenter {
         }
         this._updateLiquidGlass();
 
-        this._refreshAll();
+        try {
+            this._refreshAll();
+        } catch (e) {
+            logError(e, 'macos-nc: initial refresh failed');
+        }
     }
 
     _isLiquidGlassActive() {
@@ -568,11 +572,11 @@ export class MacNotificationCenter {
             can_focus: true,
             visible: false,
         });
-        this._expandBtn.connect('clicked', () => {
+        this._expandBtn.connect('clicked', guard(() => {
             this._notifsExpanded = !this._notifsExpanded;
             this._expandBtn.label = this._notifsExpanded ? t('COLLAPSE') : t('EXPAND');
             this._refreshNotifications();
-        });
+        }));
         notifHeader.add_child(this._expandBtn);
 
         this._clearBtn = new St.Button({
@@ -581,7 +585,7 @@ export class MacNotificationCenter {
             can_focus: true,
             visible: false,
         });
-        this._clearBtn.connect('clicked', () => this._clearAllNotifications());
+        this._clearBtn.connect('clicked', guard(() => this._clearAllNotifications()));
         notifHeader.add_child(this._clearBtn);
 
         this._notifSection.add_child(notifHeader);
@@ -714,28 +718,38 @@ export class MacNotificationCenter {
         if (this._clearBtn) this._clearBtn.visible = true;
         if (this._expandBtn) this._expandBtn.visible = (total > 2);
 
-        const displayNotifs = this._notifsExpanded ? notifs : notifs.slice(0, 2);
+        // Hard cap on live cards. A very full notification list would otherwise
+        // allocate - and re-allocate on every items-changed - hundreds of actors,
+        // which is what saturates the shell when the centre is opened while it is
+        // already loaded. Collapsed shows two; expanded shows at most MAX_CARDS.
+        const BASE_LIMIT = 2;
+        const MAX_CARDS = 40;
+        const limit = this._notifsExpanded ? MAX_CARDS : BASE_LIMIT;
+        const displayNotifs = notifs.slice(0, limit);
 
         for (const notif of displayNotifs) {
             const card = this._buildNotificationCard(notif);
             this._notifList.add_child(card);
         }
 
-        if (!this._notifsExpanded && total > 2) {
+        if (total > displayNotifs.length) {
+            const remaining = total - displayNotifs.length;
             const moreBtn = new St.Button({
                 style_class: 'mac-nc-more-notifs-btn',
                 can_focus: true,
                 x_expand: true,
             });
             moreBtn.set_child(new St.Label({
-                text: t('MORE_NOTIFS', total - 2),
+                text: t('MORE_NOTIFS', remaining),
                 style_class: 'mac-nc-more-label',
             }));
-            moreBtn.connect('clicked', () => {
-                this._notifsExpanded = true;
-                if (this._expandBtn) this._expandBtn.label = t('COLLAPSE');
+            moreBtn.connect('clicked', guard(() => {
+                if (!this._notifsExpanded) {
+                    this._notifsExpanded = true;
+                    if (this._expandBtn) this._expandBtn.label = t('COLLAPSE');
+                }
                 this._refreshNotifications();
-            });
+            }));
             this._notifList.add_child(moreBtn);
         }
     }
@@ -800,18 +814,23 @@ export class MacNotificationCenter {
                 style_class: 'mac-nc-mini-icon',
             }),
         });
-        closeBtn.connect('clicked', () => {
+        closeBtn.connect('clicked', guard(() => {
             try {
                 if (typeof notif.destroy === 'function') notif.destroy();
                 else if (typeof notif.close === 'function') notif.close();
             } catch (e) {}
             this._refreshNotifications();
-        });
+        }));
         topRow.add_child(closeBtn);
         box.add_child(topRow);
 
-        const titleText = notif.title || '';
-        const bodyText = notif.body || notif.banner || '';
+        // notif.body is a string; notif.banner is a Clutter actor and must never
+        // be handed to St.Label as text (it would be coerced into garbage and,
+        // in the worst case, throw inside a shell callback).
+        const titleText = typeof notif.title === 'string' ? notif.title : '';
+        const bodyText = typeof notif.body === 'string'
+            ? notif.body
+            : (typeof notif.banner === 'string' ? notif.banner : '');
 
         if (titleText) {
             box.add_child(new St.Label({
@@ -831,12 +850,12 @@ export class MacNotificationCenter {
         }
 
         card.set_child(box);
-        card.connect('clicked', () => {
+        card.connect('clicked', guard(() => {
             try {
                 if (typeof notif.activate === 'function') notif.activate();
             } catch (e) {}
             this._dateMenu?.menu?.close();
-        });
+        }));
 
         return card;
     }
@@ -1284,24 +1303,42 @@ export class MacNotificationCenter {
     }
 
     _drawBar(area, colorHex) {
-        const cr = area.get_context();
-        const [w, h] = area.get_surface_size();
-        const radius = h / 2;
+        // Painting before the actor has a valid (non-NaN, non-zero) allocation
+        // feeds NaN into cairo/Clutter and trips
+        // "clutter_actor_set_allocation_internal: assertion '!isnan (box->x1)'".
+        // Repeated under memory pressure this can take the shell down, so bail
+        // out instead of drawing garbage. Never let a paint error escape either:
+        // an exception in a shell callback aborts the whole session.
+        let cr = null;
+        try {
+            const [w, h] = area.get_surface_size();
+            if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0)
+                return;
 
-        cr.setSourceRGBA(1, 1, 1, 0.15);
-        this._roundedRect(cr, 0, 0, w, h, radius);
-        cr.fill();
+            cr = area.get_context();
+            if (!cr)
+                return;
 
-        const pct = Math.max(0, Math.min(100, area.percent || 0));
-        const fillW = Math.max(h, (w * pct) / 100);
+            const radius = Math.max(0, h / 2);
 
-        if (colorHex === '#30d158') cr.setSourceRGBA(0.18, 0.82, 0.35, 0.95);
-        else if (colorHex === '#0a84ff') cr.setSourceRGBA(0.04, 0.52, 1.0, 0.95);
-        else cr.setSourceRGBA(1, 0.62, 0.04, 0.95);
+            cr.setSourceRGBA(1, 1, 1, 0.15);
+            this._roundedRect(cr, 0, 0, w, h, radius);
+            cr.fill();
 
-        this._roundedRect(cr, 0, 0, fillW, h, radius);
-        cr.fill();
-        cr.$dispose();
+            const pct = Math.max(0, Math.min(100, Number(area.percent) || 0));
+            const fillW = Math.max(h, (w * pct) / 100);
+
+            if (colorHex === '#30d158') cr.setSourceRGBA(0.18, 0.82, 0.35, 0.95);
+            else if (colorHex === '#0a84ff') cr.setSourceRGBA(0.04, 0.52, 1.0, 0.95);
+            else cr.setSourceRGBA(1, 0.62, 0.04, 0.95);
+
+            this._roundedRect(cr, 0, 0, fillW, h, radius);
+            cr.fill();
+        } catch (e) {
+            logError(e, 'macos-nc: _drawBar failed');
+        } finally {
+            try { if (cr) cr.$dispose(); } catch (e) {}
+        }
     }
 
     _roundedRect(cr, x, y, w, h, r) {
