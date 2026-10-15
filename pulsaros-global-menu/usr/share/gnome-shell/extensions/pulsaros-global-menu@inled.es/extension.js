@@ -685,6 +685,13 @@ export default class PulsarosGlobalMenuExtension extends Extension {
 
 	_toggleFallback() {
 		if (this._settings.get_boolean('enable-fallback-menu')) {
+			// Destroy the previous instance first. Creating a second FallbackMenu
+			// re-registers the same panel roles (${uuid}-fallback-N) and
+			// Main.panel.addToStatusArea() throws "Extension point conflict",
+			// aborting the rebuild. This runs when enable-fallback-menu changes,
+			// which also happens right after an update (recompiled schemas emit
+			// changed:: for keys whose default moved).
+			this._fallback?.destroy();
 			this._fallback = new FallbackMenu(this.uuid);
 			this._menubar.setFallback(this._fallback);
 		} else {

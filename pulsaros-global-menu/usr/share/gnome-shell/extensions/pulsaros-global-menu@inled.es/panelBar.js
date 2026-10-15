@@ -39,5 +39,21 @@ function runStart() {
  * 0 is the app-name button, menu buttons start at 1.
  */
 export function addBarButton(role, btn, rank) {
+	// A previous instance may have left its entry behind: a settings change that
+	// rebuilds the menu bar, an extension re-enabled before the old disable()
+	// finished, or a shell reload race. Main.panel.addToStatusArea() then throws
+	// "Extension point conflict: there is already a status indicator for role
+	// <role>", which aborts the caller and can leave the whole menu bar missing.
+	// Drop the leftover (never the button we are adding) so the new one can take
+	// its place.
+	const stale = Main.panel.statusArea[role];
+	if (stale && stale !== btn) {
+		try {
+			stale.destroy();
+		} catch (e) {
+			console.error(`[GlobalMenu] could not drop stale panel entry ${role}:`, e);
+		}
+		delete Main.panel.statusArea[role];
+	}
 	Main.panel.addToStatusArea(role, btn, runStart() + rank, 'left');
 }
