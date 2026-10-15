@@ -247,6 +247,16 @@ BG_CATEGORIES = {"idle", "dev", "vm", "container", "media", "busy"}
 # Never manage ourselves: this daemon must stay responsive at all times.
 SELF_COMM = {"pulsaros-optimiz", "pulsaros-optimizer"}
 
+# Processes that must never be moved into the capped background cgroup, whatever
+# their CPU use looks like. Starving any of these breaks the whole session: the
+# user manager stops being able to spawn/delegate services ("Failed to attach to
+# cgroup ... Permission denied", "Start request repeated too quickly") and the
+# session never shuts down cleanly. pid 1 is in system.slice anyway, but the
+# per-user manager and the session bus live under /user.slice and are otherwise
+# eligible.
+NEVER_ADOPT_COMM = {"systemd", "dbus-daemon", "dbus-broker"}
+NEVER_ADOPT_CGROUP_SUFFIX = "/init.scope"   # the user manager's own scope
+
 # -----------------------------------------------------------------------------
 # Priority tables (index = load level 0..4)
 # -----------------------------------------------------------------------------
@@ -949,7 +959,12 @@ def _session_owned(cgroup: str) -> bool:
     that is not a real session cgroup, and adopting it would only move it
     further away from systemd's accounting. (It used to be eligible, which is
     how the restore path below ended up parking processes in "/".)
+
+    The user manager's own scope (user@<uid>.service/init.scope) is not eligible
+    either: it holds the per-user systemd and the daemons it started directly.
     """
+    if cgroup.startswith("/user.slice/") and cgroup.endswith(NEVER_ADOPT_CGROUP_SUFFIX):
+        return False
     return cgroup.startswith("/user.slice/") and cgroup.endswith(".scope")
 
 def _cgroup_procs_write(cgroup: str, pid: int) -> bool:
@@ -1147,6 +1162,8 @@ def optimize_process_priorities(level: int, interval: float):
                 and maybe_throttle
                 and not is_focused
                 and not pinned_now
+                # Never cap the session manager or the session bus.
+                and comm not in NEVER_ADOPT_COMM
                 # An unknown app that merely looks busy is not adopted if it has
                 # a display connection: it is a GUI app starting up, not
                 # background work.
