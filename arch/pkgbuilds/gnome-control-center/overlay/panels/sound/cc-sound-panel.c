@@ -18,11 +18,10 @@
 #include "config.h"
 
 #include <libintl.h>
-#include <stdlib.h>
-#include <string.h>
+#include <pulse/pulseaudio.h>
 #include <unistd.h>
-#include <errno.h>
 
+#include <adwaita.h>
 #include <glib/gi18n-lib.h>
 #include <glib.h>
 #include <glib/gstdio.h>
@@ -30,12 +29,12 @@
 #include <pulse/pulseaudio.h>
 #include <gvc-mixer-control.h>
 
-#include "cc-list-row.h"
 #include "cc-alert-chooser-page.h"
 #include "cc-balance-slider.h"
 #include "cc-device-combo-row.h"
 #include "cc-fade-slider.h"
 #include "cc-level-bar.h"
+#include "cc-list-row.h"
 #include "cc-output-test-window.h"
 #include "cc-profile-combo-row.h"
 #include "cc-sound-panel.h"
@@ -74,10 +73,9 @@ struct _CcSoundPanel
 
 CC_PANEL_REGISTER (CcSoundPanel, cc_sound_panel)
 
-enum
-{
-  PROP_0,
-  PROP_PARAMETERS
+enum {
+    PROP_0,
+    PROP_PARAMETERS
 };
 
 #define KEY_SOUNDS_SCHEMA "org.gnome.desktop.sound"
@@ -106,151 +104,142 @@ startup_sound_switch_changed_cb (CcSoundPanel *self)
 static void
 update_alert_sound_label (CcSoundPanel *self)
 {
-  const gchar *alert_name = get_selected_alert_display_name ();
-  cc_list_row_set_secondary_label (self->alert_sound_row, alert_name);
+    const gchar *alert_name = get_selected_alert_display_name ();
+    cc_list_row_set_secondary_label (self->alert_sound_row, alert_name);
 }
 
 static void
 allow_amplified_changed_cb (CcSoundPanel *self)
 {
-  cc_volume_slider_set_is_amplified (self->output_volume_slider,
-                                     g_settings_get_boolean (self->sound_settings, "allow-volume-above-100-percent"));
+    cc_volume_slider_set_is_amplified (self->output_volume_slider,
+                                       g_settings_get_boolean (self->sound_settings, "allow-volume-above-100-percent"));
 }
 
 static void
-set_output_stream (CcSoundPanel   *self,
-                   GvcMixerStream *stream)
+set_output_stream (CcSoundPanel *self, GvcMixerStream *stream)
 {
-  GvcChannelMap *map = NULL;
-  gboolean can_fade = FALSE, has_lfe = FALSE;
+    GvcChannelMap *map = NULL;
+    gboolean can_fade = FALSE, has_lfe = FALSE;
 
-  cc_volume_slider_set_stream (self->output_volume_slider, stream, CC_STREAM_TYPE_OUTPUT);
-  cc_level_bar_set_stream (self->output_level_bar, stream);
+    cc_volume_slider_set_stream (self->output_volume_slider, stream, CC_STREAM_TYPE_OUTPUT);
+    cc_level_bar_set_stream (self->output_level_bar, stream, CC_STREAM_TYPE_OUTPUT);
 
-  if (stream != NULL)
-    {
-      map = (GvcChannelMap *) gvc_mixer_stream_get_channel_map (stream);
-      can_fade = gvc_channel_map_can_fade (map);
-      has_lfe = gvc_channel_map_has_lfe (map);
+    if (stream != NULL) {
+        map = (GvcChannelMap *) gvc_mixer_stream_get_channel_map (stream);
+        can_fade = gvc_channel_map_can_fade (map);
+        has_lfe = gvc_channel_map_has_lfe (map);
     }
-  cc_fade_slider_set_channel_map (self->fade_slider, map);
-  cc_balance_slider_set_channel_map (self->balance_slider, map);
-  cc_subwoofer_slider_set_channel_map (self->subwoofer_slider, map);
+    cc_fade_slider_set_channel_map (self->fade_slider, map);
+    cc_balance_slider_set_channel_map (self->balance_slider, map);
+    cc_subwoofer_slider_set_channel_map (self->subwoofer_slider, map);
 
-  gtk_widget_set_visible (GTK_WIDGET (self->fade_row), can_fade);
-  gtk_widget_set_visible (GTK_WIDGET (self->subwoofer_row), has_lfe);
+    gtk_widget_set_visible (GTK_WIDGET (self->fade_row), can_fade);
+    gtk_widget_set_visible (GTK_WIDGET (self->subwoofer_row), has_lfe);
 }
 
 static void
-set_input_stream (CcSoundPanel   *self,
-                  GvcMixerStream *stream)
+set_input_stream (CcSoundPanel *self, GvcMixerStream *stream)
 {
-  cc_volume_slider_set_stream (self->input_volume_slider, stream, CC_STREAM_TYPE_INPUT);
-  cc_level_bar_set_stream (self->input_level_bar, stream);
+    cc_volume_slider_set_stream (self->input_volume_slider, stream, CC_STREAM_TYPE_INPUT);
+    cc_level_bar_set_stream (self->input_level_bar, stream, CC_STREAM_TYPE_INPUT);
 }
 
 static void
-output_device_update_cb (CcSoundPanel *self,
-                         guint         id)
+output_device_update_cb (CcSoundPanel *self, guint id)
 {
-  GvcMixerUIDevice *device;
-  gboolean has_multi_profiles;
-  GvcMixerStream *stream = NULL;
+    GvcMixerUIDevice *device;
+    gboolean has_multi_profiles;
+    GvcMixerStream *stream = NULL;
 
-  device = cc_device_combo_row_get_device (self->output_device_combo_row);
+    device = cc_device_combo_row_get_device (self->output_device_combo_row);
 
-  gtk_widget_set_visible (GTK_WIDGET (self->output_group), device != NULL);
-  gtk_widget_set_visible (GTK_WIDGET (self->output_no_devices_group), device == NULL);
+    gtk_widget_set_visible (GTK_WIDGET (self->output_group), device != NULL);
+    gtk_widget_set_visible (GTK_WIDGET (self->output_no_devices_group), device == NULL);
 
-  cc_profile_combo_row_set_device (self->output_profile_combo_row, self->mixer_control, device);
-  has_multi_profiles = (cc_profile_combo_row_get_profile_count (self->output_profile_combo_row) > 1);
-  gtk_widget_set_visible (GTK_WIDGET (self->output_profile_combo_row),
-                          has_multi_profiles);
+    cc_profile_combo_row_set_device (self->output_profile_combo_row, self->mixer_control, device);
+    has_multi_profiles = (cc_profile_combo_row_get_profile_count (self->output_profile_combo_row) > 1);
+    gtk_widget_set_visible (GTK_WIDGET (self->output_profile_combo_row), has_multi_profiles);
 
-  if (device)
-    stream = gvc_mixer_control_get_stream_from_device (self->mixer_control, device);
+    if (device)
+        stream = gvc_mixer_control_get_stream_from_device (self->mixer_control, device);
 
-  set_output_stream (self, stream);
+    set_output_stream (self, stream);
 }
 
 static void
-input_device_update_cb (CcSoundPanel *self,
-                        guint         id)
+input_device_update_cb (CcSoundPanel *self, guint id)
 {
-  GvcMixerUIDevice *device;
-  gboolean has_multi_profiles;
-  GvcMixerStream *stream = NULL;
+    GvcMixerUIDevice *device;
+    gboolean has_multi_profiles;
+    GvcMixerStream *stream = NULL;
 
-  device = cc_device_combo_row_get_device (self->input_device_combo_row);
+    device = cc_device_combo_row_get_device (self->input_device_combo_row);
 
-  gtk_widget_set_visible (GTK_WIDGET (self->input_group), device != NULL);
-  gtk_widget_set_visible (GTK_WIDGET (self->input_no_devices_group), device == NULL);
+    gtk_widget_set_visible (GTK_WIDGET (self->input_group), device != NULL);
+    gtk_widget_set_visible (GTK_WIDGET (self->input_no_devices_group), device == NULL);
 
-  cc_profile_combo_row_set_device (self->input_profile_combo_row, self->mixer_control, device);
-  has_multi_profiles = (cc_profile_combo_row_get_profile_count (self->input_profile_combo_row) > 1);
-  gtk_widget_set_visible (GTK_WIDGET (self->input_profile_combo_row),
-                          has_multi_profiles);
+    cc_profile_combo_row_set_device (self->input_profile_combo_row, self->mixer_control, device);
+    has_multi_profiles = (cc_profile_combo_row_get_profile_count (self->input_profile_combo_row) > 1);
+    gtk_widget_set_visible (GTK_WIDGET (self->input_profile_combo_row), has_multi_profiles);
 
-  if (device)
-    stream = gvc_mixer_control_get_stream_from_device (self->mixer_control, device);
+    if (device)
+        stream = gvc_mixer_control_get_stream_from_device (self->mixer_control, device);
 
-  set_input_stream (self, stream);
+    set_input_stream (self, stream);
 }
 
 static void
 test_output_configuration_button_clicked_cb (CcSoundPanel *self)
 {
-  GvcMixerUIDevice *device;
-  GvcMixerStream *stream = NULL;
-  CcOutputTestWindow *window;
+    GvcMixerUIDevice *device;
+    GvcMixerStream *stream = NULL;
+    CcOutputTestWindow *window;
 
-  device = cc_device_combo_row_get_device (self->output_device_combo_row);
-  if (device != NULL)
-    stream = gvc_mixer_control_get_stream_from_device (self->mixer_control, device);
+    device = cc_device_combo_row_get_device (self->output_device_combo_row);
+    if (device != NULL)
+        stream = gvc_mixer_control_get_stream_from_device (self->mixer_control, device);
 
-  window = cc_output_test_window_new (stream);
-  adw_dialog_present (ADW_DIALOG (window), GTK_WIDGET (self));
+    window = cc_output_test_window_new (stream);
+    adw_dialog_present (ADW_DIALOG (window), GTK_WIDGET (self));
 }
 
 static void
 volume_levels_activated_cb (CcSoundPanel *self)
 {
-  CcVolumeLevelsPage *volume_levels;
+    CcVolumeLevelsPage *volume_levels;
 
-  volume_levels = cc_volume_levels_page_new (self->mixer_control);
+    volume_levels = cc_volume_levels_page_new (self->mixer_control);
 
-  cc_panel_push_subpage (CC_PANEL (self), ADW_NAVIGATION_PAGE (volume_levels));
+    cc_panel_push_subpage (CC_PANEL (self), ADW_NAVIGATION_PAGE (volume_levels));
 }
 
 static void
 alert_sound_activated_cb (CcSoundPanel *self)
 {
-  AdwNavigationPage *page;
+    AdwNavigationPage *page;
 
-  page = ADW_NAVIGATION_PAGE (cc_alert_chooser_page_new ());
+    page = ADW_NAVIGATION_PAGE (cc_alert_chooser_page_new ());
 
-  g_signal_connect_object (page, "hiding",
-                           G_CALLBACK (update_alert_sound_label),
-                           self, G_CONNECT_SWAPPED);
+    g_signal_connect_object (page, "hiding", G_CALLBACK (update_alert_sound_label), self, G_CONNECT_SWAPPED);
 
-  cc_panel_push_subpage (CC_PANEL (self), page);
+    cc_panel_push_subpage (CC_PANEL (self), page);
 }
 
 static const char *
 cc_sound_panel_get_help_uri (CcPanel *panel)
 {
-  return "help:gnome-help/media#sound";
+    return "help:gnome-help/media#sound";
 }
 
 static void
 cc_sound_panel_finalize (GObject *object)
 {
-  CcSoundPanel *self = CC_SOUND_PANEL (object);
+    CcSoundPanel *self = CC_SOUND_PANEL (object);
 
-  g_clear_object (&self->mixer_control);
-  g_clear_object (&self->sound_settings);
+    g_clear_object (&self->mixer_control);
+    g_clear_object (&self->sound_settings);
 
-  G_OBJECT_CLASS (cc_sound_panel_parent_class)->finalize (object);
+    G_OBJECT_CLASS (cc_sound_panel_parent_class)->finalize (object);
 }
 
 static void
