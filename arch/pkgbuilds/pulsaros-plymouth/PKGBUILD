@@ -7,6 +7,7 @@ arch=(any)
 url="https://inled.es"
 license=(custom)
 depends=(plymouth)
+makedepends=(python python-cairo)
 options=(!strip)
 install=pulsaros-plymouth.install
 
