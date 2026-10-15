@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Pulsar OS Extensions Reconciler
+Comment=Re-enable Pulsar's default GNOME Shell extensions if a stale user dconf list shadowed them
+Exec=/usr/bin/pulsaros-reconcile-extensions --quiet
+NoDisplay=true
+OnlyShowIn=GNOME;
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=2
+AutostartCondition=GNOME3 unless-session gnome-initial-setup
