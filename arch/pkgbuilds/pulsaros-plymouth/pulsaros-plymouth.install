@@ -1,5 +1,18 @@
 post_install() {
+    # /etc/plymouth/plymouthd.conf is owned by Arch's `plymouth` package (as a
+    # backup file), so pulsaros-plymouth must NOT ship it (that is a package
+    # file conflict). We configure it here instead: select the Pulsar theme and
+    # apply the Pulsar daemon settings.
     plymouth-set-default-theme pulsar-plymouth 2>/dev/null || true
+    mkdir -p /etc/plymouth
+    cat > /etc/plymouth/plymouthd.conf << 'PLYMOUTH_CONF_EOF'
+[Daemon]
+Theme=pulsar-plymouth
+ShowDelay=0
+DeviceTimeout=8
+UseFirmwareBackground=false
+UseSimpledrm=false
+PLYMOUTH_CONF_EOF
 
     # Add KMS modules to mkinitcpio
     if [ -f /etc/mkinitcpio.conf ]; then

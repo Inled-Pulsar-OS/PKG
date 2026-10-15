@@ -12,12 +12,18 @@ post_install() {
     # These operations are idempotent and safe to run on every install/upgrade.
     # -----------------------------------------------------------------------
 
-    # 1. HibernateMode=shutdown — avoid ACPI S4 locks on laptops
-    mkdir -p /etc/systemd/sleep.conf.d
-    cat << 'EOF' > /etc/systemd/sleep.conf.d/pulsaros-hibernate.conf
+    # 1. HibernateMode=shutdown — avoid ACPI S4 locks on laptops.
+    #    /etc/systemd/sleep.conf.d/pulsaros-hibernate.conf is OWNED by the
+    #    pulsaros-hibernate package (which ships the full Allow*/Hibernate*
+    #    config). Writing it unconditionally here would clobber that file, so
+    #    only create it as a fallback when pulsaros-hibernate is not installed.
+    if [ ! -e /etc/systemd/sleep.conf.d/pulsaros-hibernate.conf ]; then
+        mkdir -p /etc/systemd/sleep.conf.d
+        cat << 'EOF' > /etc/systemd/sleep.conf.d/pulsaros-hibernate.conf
 [Sleep]
 HibernateMode=shutdown
 EOF
+    fi
 
     # 2. Fix mkinitcpio HOOKS: In systemd-based initramfs, 'resume' hook must NOT be used
     #    because systemd provides systemd-hibernate-resume natively. Mixing them causes boot hangs.

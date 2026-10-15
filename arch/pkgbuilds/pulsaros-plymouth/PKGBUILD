@@ -1,7 +1,7 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-plymouth
 pkgver=1.0.121
-pkgrel=1
+pkgrel=2
 pkgdesc="macOS-like Plymouth boot splash theme for Pulsar OS (Arch edition)"
 arch=(any)
 url="https://inled.es"
@@ -35,6 +35,13 @@ package() {
     # Remove Debian-specific files
     rm -f "$pkgdir/usr/share/plymouth/debian-logo.png"
     rm -f "$pkgdir/usr/share/pixmaps/debian-logo.png"
+    # Do NOT ship files already owned by Arch's `plymouth` package: pacman
+    # aborts with a file conflict ("archivos en conflicto") when both packages
+    # are upgraded in the same transaction. The theme is selected at install
+    # time by pulsaros-plymouth.install (plymouth-set-default-theme), which also
+    # writes /etc/plymouth/plymouthd.conf with the Pulsar settings.
+    rm -f "$pkgdir/etc/plymouth/plymouthd.conf"
+    rm -f "$pkgdir/usr/share/plymouth/themes/spinner/watermark.png"
     # NOTE: do NOT ship /usr/share/pixmaps/archlinux-logo.png: that path is
     # owned by Arch's `filesystem` package, so claiming it creates a package
     # conflict. The file is guaranteed to exist from filesystem anyway, and
