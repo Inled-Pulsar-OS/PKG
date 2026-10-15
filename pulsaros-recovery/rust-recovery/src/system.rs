@@ -1,5 +1,5 @@
 //! Detección del sistema, ejecución privilegiada y escaneo de medios.
-use crate::models::{BtrfsTarget, DiscoveredImage, EncryptedTarget};
+use crate::models::{AppType, BtrfsTarget, DiscoveredImage, EncryptedTarget, ExternalDrive, InstalledApp};
 use regex::Regex;
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
@@ -532,6 +532,358 @@ where
     None
 }
 
+pub(crate) fn set_keyboard_layout(layout: &str) -> Result<(), String> {
+    log_msg(&format!("Setting keyboard layout to: {}", layout));
+    let _ = Command::new("setxkbmap").arg(layout).status();
+    let _ = Command::new("sudo").args(&["-n", "localectl", "set-x11-keymap", layout]).status();
+    let _ = Command::new("sudo").args(&["-n", "loadkeys", layout]).status();
+    Ok(())
+}
+
+pub(crate) fn mount_chroot_environment(part_path: &str) -> Result<String, String> {
+    let mnt_root = "/mnt/pulsar";
+    let _ = fs::create_dir_all(mnt_root);
+
+    log_msg(&format!("Mounting Pulsar OS (@) from {} at {}...", part_path, mnt_root));
+    let _ = exec_cmd(&format!("mountpoint -q {} || mount -t btrfs -o subvol=@,noatime,compress=zstd:1 {} {}", mnt_root, part_path, mnt_root));
+
+    let home_path = format!("{}/home", mnt_root);
+    let _ = fs::create_dir_all(&home_path);
+    let _ = exec_cmd(&format!("mountpoint -q {} || mount -t btrfs -o subvol=@home,noatime,compress=zstd:1 {} {}", home_path, part_path, home_path));
+
+    // Mount EFI partition if present
+    if let Ok(out) = exec_cmd("blkid -t TYPE=vfat -o device | head -n 1") {
+        let efi_dev = out.trim();
+        if !efi_dev.is_empty() {
+            let efi_path = format!("{}/boot/efi", mnt_root);
+            let _ = fs::create_dir_all(&efi_path);
+            let _ = exec_cmd(&format!("mountpoint -q {} || mount {} {}", efi_path, efi_dev, efi_path));
+        }
+    }
+
+    // Mount virtual filesystems
+    for d in &["dev", "proc", "sys", "run"] {
+        let target_dir = format!("{}/{}", mnt_root, d);
+        let _ = fs::create_dir_all(&target_dir);
+        let _ = exec_cmd(&format!("mountpoint -q {} || mount --bind /{} {}", target_dir, d, target_dir));
+    }
+
+    if Path::new("/sys/firmware/efi/efivars").exists() {
+        let efivars_target = format!("{}/sys/firmware/efi/efivars", mnt_root);
+        let _ = fs::create_dir_all(&efivars_target);
+        let _ = exec_cmd(&format!("mountpoint -q {} || mount --bind /sys/firmware/efi/efivars {}", efivars_target, efivars_target));
+    }
+
+    // Copy DNS config so network works inside chroot
+    let _ = exec_cmd(&format!("cp -L /etc/resolv.conf {}/etc/resolv.conf 2>/dev/null || true", mnt_root));
+
+    Ok(mnt_root.to_string())
+}
+
+pub(crate) fn launch_chroot_terminal(part_path: &str) -> Result<(), String> {
+    if crate::demo::is_demo_mode() {
+        log_msg("[DEMO] Opening simulation terminal for chroot...");
+        let _ = Command::new("xterm")
+            .args(&["-title", "Pulsar OS Chroot (DEMO MODE)", "-e", "bash -c 'echo \"=== Pulsar OS Chroot (DEMO MODE) ===\"; echo \"Root filesystem mounted at /mnt/pulsar (simulated).\"; echo; bash'"])
+            .spawn()
+            .map_err(|e| format!("Failed to spawn terminal: {}", e))?;
+        return Ok(());
+    }
+
+    let mnt_root = mount_chroot_environment(part_path)?;
+    log_msg(&format!("Spawning root terminal inside chroot at {}...", mnt_root));
+
+    let terminal_cmds: [(&str, Vec<&str>); 3] = [
+        ("xterm", vec!["-bg", "#1e1e2e", "-fg", "#cdd6f4", "-fa", "Monospace", "-fs", "11", "-geometry", "110x32", "-title", "Pulsar OS Chroot (Root Console)", "-e", "chroot /mnt/pulsar /bin/bash"]),
+        ("gnome-terminal", vec!["--title=Pulsar OS Chroot (Root Console)", "--", "chroot", "/mnt/pulsar", "/bin/bash"]),
+        ("x-terminal-emulator", vec!["-e", "chroot", "/mnt/pulsar", "/bin/bash"]),
+    ];
+
+    let mut launched = false;
+    for (term, args) in &terminal_cmds {
+        if Command::new("which").arg(term).status().map(|s| s.success()).unwrap_or(false) {
+            match Command::new(term).args(args).spawn() {
+                Ok(_) => {
+                    launched = true;
+                    log_msg(&format!("Terminal launched successfully using {}", term));
+                    break;
+                }
+                Err(e) => {
+                    log_msg(&format!("Failed launching {}: {}", term, e));
+                }
+            }
+        }
+    }
+
+    if !launched {
+        Command::new("xterm")
+            .args(&["-title", "Pulsar OS Chroot (Root Console)", "-e", "chroot /mnt/pulsar /bin/bash"])
+            .spawn()
+            .map_err(|e| format!("Could not launch terminal emulator: {}", e))?;
+    }
+
+    Ok(())
+}
+
+pub(crate) fn scan_external_drives() -> Vec<ExternalDrive> {
+    let mut drives = Vec::new();
+    if let Ok(out) = Command::new("sudo").args(&["-n", "lsblk", "-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,TRAN,RM,HOTPLUG,MOUNTPOINTS,TYPE"]).output() {
+        let text = String::from_utf8_lossy(&out.stdout);
+        for line in text.lines() {
+            let get_val = |key: &str| -> String {
+                let re = Regex::new(&format!(r#"{}=\"([^\"]*)\""#, key)).unwrap();
+                re.captures(line).and_then(|c| c.get(1)).map(|m| m.as_str().to_string()).unwrap_or_default()
+            };
+
+            let name = get_val("NAME");
+            let label = get_val("LABEL");
+            let fstype = get_val("FSTYPE");
+            let tran = get_val("TRAN");
+            let rm = get_val("RM");
+            let hotplug = get_val("HOTPLUG");
+            let dev_type = get_val("TYPE");
+            let mountpoints = get_val("MOUNTPOINTS");
+            let size = get_val("SIZE");
+
+            if name.is_empty() || name.starts_with("loop") || name.starts_with("zram") || name.starts_with("sr") {
+                continue;
+            }
+            if label == "PULSAR_ISO" || label == "PULSAR_RECOVERY" || label == "archiso" || label == "LIVE" {
+                continue;
+            }
+            if dev_type == "disk" && fstype.is_empty() {
+                continue;
+            }
+
+            let is_removable = tran == "usb" || rm == "1" || hotplug == "1";
+            if !is_removable && !name.starts_with("sd") {
+                continue;
+            }
+
+            if label == "PULSAR_OS" {
+                continue;
+            }
+
+            let part_dev = format!("/dev/{}", name);
+            let mount_point = if !mountpoints.is_empty() {
+                mountpoints.split_whitespace().next().unwrap_or("").to_string()
+            } else if !fstype.is_empty() {
+                let mnt = format!("/media/{}", name);
+                let _ = fs::create_dir_all(&mnt);
+                let _ = Command::new("sudo").args(&["-n", "mount", &part_dev, &mnt]).output();
+                mnt
+            } else {
+                continue;
+            };
+
+            drives.push(ExternalDrive {
+                name,
+                label: if !label.is_empty() { label } else { format!("Drive ({})", part_dev) },
+                mount_point,
+                fstype,
+                size,
+                is_removable,
+            });
+        }
+    }
+    drives
+}
+
+pub(crate) fn scan_installed_applications(old_root: &str) -> Vec<InstalledApp> {
+    let mut apps = Vec::new();
+    let old_root_p = Path::new(old_root);
+    if !old_root_p.exists() {
+        return apps;
+    }
+
+    // 1. Arch Linux (pacman local database)
+    let pacman_local = old_root_p.join("var/lib/pacman/local");
+    if pacman_local.exists() {
+        if let Ok(entries) = fs::read_dir(&pacman_local) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let desc_file = path.join("desc");
+                if desc_file.exists() {
+                    if let Ok(content) = fs::read_to_string(&desc_file) {
+                        let mut name = String::new();
+                        let mut version = String::new();
+                        let mut desc = String::new();
+                        let mut reason = 1;
+
+                        let lines: Vec<&str> = content.lines().collect();
+                        let mut i = 0;
+                        while i < lines.len() {
+                            match lines[i] {
+                                "%NAME%" if i + 1 < lines.len() => name = lines[i + 1].to_string(),
+                                "%VERSION%" if i + 1 < lines.len() => version = lines[i + 1].to_string(),
+                                "%DESC%" if i + 1 < lines.len() => desc = lines[i + 1].to_string(),
+                                "%REASON%" if i + 1 < lines.len() => {
+                                    if let Ok(r) = lines[i + 1].parse::<u32>() {
+                                        reason = r;
+                                    }
+                                }
+                                _ => {}
+                            }
+                            i += 1;
+                        }
+
+                        if reason == 0 && !name.is_empty() {
+                            let core_system = [
+                                "base", "linux", "linux-firmware", "glibc", "systemd", "coreutils", "bash",
+                                "pacman", "btrfs-progs", "e2fsprogs", "dosfstools", "shadow", "util-linux",
+                                "grub", "refind", "sudo", "pulsaros-recovery"
+                            ];
+                            if core_system.contains(&name.as_str()) {
+                                continue;
+                            }
+
+                            let is_driver = name.starts_with("nvidia")
+                                || name.starts_with("broadcom")
+                                || name.starts_with("rtl8")
+                                || name.starts_with("xf86-video")
+                                || name.starts_with("vulkan-")
+                                || name.ends_with("-dkms")
+                                || name.ends_with("-firmware");
+
+                            let app_type = if is_driver {
+                                AppType::Driver
+                            } else {
+                                AppType::Application
+                            };
+
+                            apps.push(InstalledApp {
+                                id: name.clone(),
+                                name,
+                                version,
+                                description: desc,
+                                app_type,
+                                selected: true,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Debian / Ubuntu (dpkg status)
+    let dpkg_status = old_root_p.join("var/lib/dpkg/status");
+    if dpkg_status.exists() && apps.is_empty() {
+        if let Ok(content) = fs::read_to_string(&dpkg_status) {
+            let mut cur_pkg = String::new();
+            let mut cur_ver = String::new();
+            let mut cur_desc = String::new();
+            let mut is_installed = false;
+
+            for line in content.lines() {
+                if line.is_empty() {
+                    if is_installed && !cur_pkg.is_empty() {
+                        let is_driver = cur_pkg.starts_with("nvidia")
+                            || cur_pkg.starts_with("broadcom")
+                            || cur_pkg.ends_with("-dkms")
+                            || cur_pkg.starts_with("firmware-");
+
+                        let has_desktop = old_root_p.join(format!("usr/share/applications/{}.desktop", cur_pkg)).exists();
+                        if has_desktop || is_driver {
+                            apps.push(InstalledApp {
+                                id: cur_pkg.clone(),
+                                name: cur_pkg.clone(),
+                                version: cur_ver.clone(),
+                                description: cur_desc.clone(),
+                                app_type: if is_driver { AppType::Driver } else { AppType::Application },
+                                selected: true,
+                            });
+                        }
+                    }
+                    cur_pkg.clear();
+                    cur_ver.clear();
+                    cur_desc.clear();
+                    is_installed = false;
+                } else if line.starts_with("Package: ") {
+                    cur_pkg = line["Package: ".len()..].trim().to_string();
+                } else if line.starts_with("Version: ") {
+                    cur_ver = line["Version: ".len()..].trim().to_string();
+                } else if line.starts_with("Description: ") {
+                    cur_desc = line["Description: ".len()..].trim().to_string();
+                } else if line.starts_with("Status: ") {
+                    is_installed = line.contains("installed");
+                }
+            }
+        }
+    }
+
+    // 3. Flatpaks
+    let flatpak_dirs = [
+        old_root_p.join("var/lib/flatpak/app"),
+        Path::new("/tmp/pulsar_btrfs_pool/@home").to_path_buf(),
+    ];
+    for fdir in &flatpak_dirs {
+        if fdir.exists() {
+            if let Ok(entries) = fs::read_dir(fdir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
+                    if name.contains('.') && !apps.iter().any(|a| a.id == name) {
+                        apps.push(InstalledApp {
+                            id: name.clone(),
+                            name: name.clone(),
+                            version: "Flatpak".to_string(),
+                            description: "Sandboxed Flatpak application".to_string(),
+                            app_type: AppType::Flatpak,
+                            selected: true,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    apps.sort_by(|a, b| {
+        let type_ord_a = match a.app_type { AppType::Driver => 0, AppType::Application => 1, AppType::Flatpak => 2 };
+        let type_ord_b = match b.app_type { AppType::Driver => 0, AppType::Application => 1, AppType::Flatpak => 2 };
+        type_ord_a.cmp(&type_ord_b).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+
+    apps
+}
+
+pub(crate) fn copy_folder_with_progress<F, L>(
+    src: &str,
+    dst: &str,
+    progress: F,
+    log: L,
+) -> Result<(), String>
+where
+    F: Fn(f64, &str) + Send + Sync + 'static,
+    L: Fn(&str) + Send + Sync + 'static,
+{
+    log(&format!("Starting copy: {} -> {}", src, dst));
+    progress(0.05, "Preparing copy transfer...");
+
+    let src_p = Path::new(src);
+    let folder_name = src_p.file_name().and_then(|n| n.to_str()).unwrap_or("backup");
+    let target_dest = format!("{}/{}", dst, folder_name);
+
+    let _ = fs::create_dir_all(&target_dest);
+
+    let has_rsync = Command::new("which").arg("rsync").status().map(|s| s.success()).unwrap_or(false);
+    let cmd = if has_rsync {
+        format!("rsync -aHAX --info=progress2 \"{}/\" \"{}/\"", src, target_dest)
+    } else {
+        format!("cp -a \"{}/.\" \"{}/\"", src, target_dest)
+    };
+
+    progress(0.20, &format!("Copying {} to destination drive...", folder_name));
+    exec_cmd_stream(&cmd, &log)?;
+
+    progress(0.95, "Syncing files to storage...");
+    let _ = exec_cmd("sync");
+
+    progress(1.0, "Copy completed successfully!");
+    log(&format!("Successfully copied {} to {}", src, target_dest));
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -566,5 +918,43 @@ mod tests {
         assert_eq!(res_ok.unwrap(), "/dev/mapper/pulsar_cryptroot");
 
         crate::demo::set_demo_mode(false);
+    }
+
+    #[test]
+    fn test_set_keyboard_layout() {
+        assert!(set_keyboard_layout("es").is_ok());
+        assert!(set_keyboard_layout("us").is_ok());
+    }
+
+    #[test]
+    fn test_installed_app_model() {
+        let app = InstalledApp {
+            id: "firefox".to_string(),
+            name: "Firefox Web Browser".to_string(),
+            version: "128.0".to_string(),
+            description: "Fast, Private & Safe Web Browser".to_string(),
+            app_type: AppType::Application,
+            selected: true,
+        };
+        assert_eq!(app.id, "firefox");
+        assert_eq!(app.app_type, AppType::Application);
+        assert!(app.selected);
+    }
+
+    #[test]
+    fn test_scan_installed_applications_mock() {
+        let temp_dir = std::env::temp_dir().join("pulsar_test_mock_root");
+        let pacman_dir = temp_dir.join("var/lib/pacman/local/firefox-128.0-1");
+        let _ = fs::create_dir_all(&pacman_dir);
+
+        let desc_content = "%NAME%\nfirefox\n\n%VERSION%\n128.0-1\n\n%DESC%\nStandalone web browser\n\n%REASON%\n0\n";
+        let _ = fs::write(pacman_dir.join("desc"), desc_content);
+
+        let apps = scan_installed_applications(&temp_dir.to_string_lossy());
+        assert_eq!(apps.len(), 1);
+        assert_eq!(apps[0].id, "firefox");
+        assert_eq!(apps[0].app_type, AppType::Application);
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }

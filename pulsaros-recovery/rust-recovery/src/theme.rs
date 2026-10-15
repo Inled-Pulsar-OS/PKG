@@ -311,4 +311,47 @@ listboxrow:selected .utility-desc-lbl,
     background-color: rgba(255, 255, 255, 0.16);
     border-color: rgba(255, 255, 255, 0.3);
 }
+.keyboard-selector-box {
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    padding: 2px 10px;
+}
+.badge-driver {
+    background-color: rgba(255, 159, 10, 0.2);
+    color: #ff9f0a;
+    border: 1px solid rgba(255, 159, 10, 0.4);
+    border-radius: 6px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: 600;
+}
+.badge-app {
+    background-color: rgba(0, 113, 227, 0.2);
+    color: #2997ff;
+    border: 1px solid rgba(0, 113, 227, 0.4);
+    border-radius: 6px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: 600;
+}
+.badge-flatpak {
+    background-color: rgba(191, 90, 242, 0.2);
+    color: #bf5af2;
+    border: 1px solid rgba(191, 90, 242, 0.4);
+    border-radius: 6px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: 600;
+}
+.app-item-row {
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 6px 12px;
+    margin: 3px 0px;
+}
+.app-item-row:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
 "#;

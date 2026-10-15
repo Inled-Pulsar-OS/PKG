@@ -1,15 +1,15 @@
-//! Motor de restauración / reinstalación del sistema.
 use crate::demo::is_demo_mode;
-use crate::models::{BtrfsTarget, RecoveryMode};
+use crate::models::{AppType, BtrfsTarget, InstalledApp, PreservedSettings, RecoveryMode};
 use crate::system::{detect_local_squashfs, exec_cmd, exec_cmd_stream, is_valid_base_squashfs};
 use regex::Regex;
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader};
+use std::io::BufReader;
 use std::path::Path;
 use std::thread;
 pub(crate) fn run_restoration<F, L>(
     target: &BtrfsTarget,
     mode: RecoveryMode,
+    apps_to_reinstall: Vec<InstalledApp>,
     progress: F,
     log: L,
 ) -> Result<(), String>
@@ -42,6 +42,12 @@ where
             RecoveryMode::Local => log("[DEMO] Simulación: unsquashfs -f -d /tmp/pulsar_btrfs_pool/@ /run/archiso/bootmnt/..."),
         }
         thread::sleep(std::time::Duration::from_millis(900));
+
+        if !apps_to_reinstall.is_empty() {
+            progress(0.85, &format!("[DEMO] Simulating reinstallation of {} user applications and drivers...", apps_to_reinstall.len()));
+            log(&format!("[DEMO] Preserved applications to reinstall: {:?}", apps_to_reinstall.iter().map(|a| &a.id).collect::<Vec<_>>()));
+            thread::sleep(std::time::Duration::from_millis(600));
+        }
 
         progress(0.90, "[DEMO] Simulando sincronización de /etc/fstab y entradas UEFI...");
         log("[DEMO] Simulación: Actualizando UUID de partición y regenerando bootloader");
@@ -144,6 +150,66 @@ where
         if !c.trim().is_empty() {
             log("Preserved existing /etc/crypttab disk encryption configuration.");
             preserved_crypttab = Some(c);
+        }
+    }
+
+    // Preserve timezone, locale, language and keyboard layout
+    let mut preserved_settings = PreservedSettings::default();
+    if Path::new(&old_root).exists() {
+        let old_localtime = format!("{}/etc/localtime", old_root);
+        if let Ok(link) = fs::read_link(&old_localtime) {
+            log(&format!("Preserved timezone symlink: {}", link.display()));
+            preserved_settings.localtime_link = Some(link.to_string_lossy().to_string());
+        }
+        let old_timezone = format!("{}/etc/timezone", old_root);
+        if let Ok(tz) = fs::read_to_string(&old_timezone) {
+            let tz_trimmed = tz.trim();
+            if !tz_trimmed.is_empty() {
+                log(&format!("Preserved timezone: {}", tz_trimmed));
+                preserved_settings.timezone = Some(tz_trimmed.to_string());
+            }
+        }
+        let old_locale_conf = format!("{}/etc/locale.conf", old_root);
+        if let Ok(lc) = fs::read_to_string(&old_locale_conf) {
+            if !lc.trim().is_empty() {
+                log("Preserved /etc/locale.conf language configuration.");
+                preserved_settings.locale_conf = Some(lc);
+            }
+        }
+        let old_locale_gen = format!("{}/etc/locale.gen", old_root);
+        if let Ok(lg) = fs::read_to_string(&old_locale_gen) {
+            if !lg.trim().is_empty() {
+                log("Preserved /etc/locale.gen configuration.");
+                preserved_settings.locale_gen = Some(lg);
+            }
+        }
+        let old_def_locale = format!("{}/etc/default/locale", old_root);
+        if let Ok(dl) = fs::read_to_string(&old_def_locale) {
+            if !dl.trim().is_empty() {
+                log("Preserved /etc/default/locale language configuration.");
+                preserved_settings.default_locale = Some(dl);
+            }
+        }
+        let old_vconsole = format!("{}/etc/vconsole.conf", old_root);
+        if let Ok(vc) = fs::read_to_string(&old_vconsole) {
+            if !vc.trim().is_empty() {
+                log("Preserved /etc/vconsole.conf keyboard layout.");
+                preserved_settings.vconsole_conf = Some(vc);
+            }
+        }
+        let old_def_kb = format!("{}/etc/default/keyboard", old_root);
+        if let Ok(dk) = fs::read_to_string(&old_def_kb) {
+            if !dk.trim().is_empty() {
+                log("Preserved /etc/default/keyboard layout.");
+                preserved_settings.default_keyboard = Some(dk);
+            }
+        }
+        let old_x11_kb = format!("{}/etc/X11/xorg.conf.d/00-keyboard.conf", old_root);
+        if let Ok(xk) = fs::read_to_string(&old_x11_kb) {
+            if !xk.trim().is_empty() {
+                log("Preserved X11 keyboard configuration.");
+                preserved_settings.x11_keyboard = Some(xk);
+            }
         }
     }
 
@@ -314,6 +380,94 @@ where
             let _ = fs::write(&user_rule, format!("{} ALL=(ALL:ALL) ALL\n", uname));
             let _ = exec_cmd(&format!("chmod 0440 {}", user_rule));
             log(&format!("Granted full sudo privileges to user '{}' via sudoers and wheel group", uname));
+        }
+    }
+
+    // Restore timezone, locale, language and keyboard configuration
+    log("Restoring system timezone, language, and keyboard configuration...");
+    if let Some(ref link) = preserved_settings.localtime_link {
+        let dest = format!("{}/etc/localtime", new_root);
+        let _ = fs::remove_file(&dest);
+        let _ = exec_cmd(&format!("ln -s {} {}", link, dest));
+        log(&format!("Restored timezone symlink: -> {}", link));
+    } else if let Some(ref tz) = preserved_settings.timezone {
+        let _ = fs::write(format!("{}/etc/timezone", new_root), tz);
+        let tz_trimmed = tz.trim();
+        let zoneinfo = format!("/usr/share/zoneinfo/{}", tz_trimmed);
+        let dest = format!("{}/etc/localtime", new_root);
+        let _ = fs::remove_file(&dest);
+        let _ = exec_cmd(&format!("ln -s {} {}", zoneinfo, dest));
+        log(&format!("Restored timezone: {}", tz_trimmed));
+    }
+
+    if let Some(ref lc) = preserved_settings.locale_conf {
+        let _ = fs::write(format!("{}/etc/locale.conf", new_root), lc);
+    }
+    if let Some(ref lg) = preserved_settings.locale_gen {
+        let _ = fs::write(format!("{}/etc/locale.gen", new_root), lg);
+        let _ = exec_cmd(&format!("chroot {} locale-gen 2>/dev/null || true", new_root));
+    }
+    if let Some(ref dl) = preserved_settings.default_locale {
+        let _ = fs::write(format!("{}/etc/default/locale", new_root), dl);
+    }
+    if let Some(ref vc) = preserved_settings.vconsole_conf {
+        let _ = fs::write(format!("{}/etc/vconsole.conf", new_root), vc);
+    }
+    if let Some(ref dk) = preserved_settings.default_keyboard {
+        let _ = fs::write(format!("{}/etc/default/keyboard", new_root), dk);
+    }
+    if let Some(ref xk) = preserved_settings.x11_keyboard {
+        let x11_dir = format!("{}/etc/X11/xorg.conf.d", new_root);
+        let _ = fs::create_dir_all(&x11_dir);
+        let _ = fs::write(format!("{}/00-keyboard.conf", x11_dir), xk);
+    }
+
+    // Reinstall retained user applications and drivers
+    if !apps_to_reinstall.is_empty() {
+        progress(0.88, &format!("Reinstalling {} user applications & drivers...", apps_to_reinstall.len()));
+        log(&format!("Reinstalling {} preserved user applications and drivers...", apps_to_reinstall.len()));
+
+        let mut native_pkgs: Vec<String> = Vec::new();
+        let mut flatpak_apps: Vec<String> = Vec::new();
+
+        for app in &apps_to_reinstall {
+            match app.app_type {
+                AppType::Application | AppType::Driver => {
+                    native_pkgs.push(app.id.clone());
+                }
+                AppType::Flatpak => {
+                    flatpak_apps.push(app.id.clone());
+                }
+            }
+        }
+
+        if !native_pkgs.is_empty() {
+            let is_arch = Path::new(&format!("{}/etc/arch-release", new_root)).exists();
+            let is_debian = Path::new(&format!("{}/etc/debian_version", new_root)).exists();
+
+            let _ = exec_cmd(&format!("cp -L /etc/resolv.conf {}/etc/resolv.conf 2>/dev/null || true", new_root));
+
+            let pkg_chunk = native_pkgs.join(" ");
+            if is_arch {
+                log(&format!("Reinstalling Arch packages via pacman: {}", pkg_chunk));
+                let _ = exec_cmd_stream(
+                    &format!("chroot {} pacman -Sy --noconfirm --needed {}", new_root, pkg_chunk),
+                    &log,
+                );
+            } else if is_debian {
+                log(&format!("Reinstalling Debian packages via apt: {}", pkg_chunk));
+                let _ = exec_cmd_stream(
+                    &format!("chroot {} apt-get update -y && chroot {} apt-get install -y --no-install-recommends {}", new_root, new_root, pkg_chunk),
+                    &log,
+                );
+            }
+        }
+
+        if !flatpak_apps.is_empty() {
+            for fp in flatpak_apps {
+                log(&format!("Restoring Flatpak application: {}", fp));
+                let _ = exec_cmd(&format!("chroot {} flatpak install -y --noninteractive flathub {} 2>/dev/null || true", new_root, fp));
+            }
         }
     }
 

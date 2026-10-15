@@ -187,3 +187,42 @@ pub enum RecoveryUpdate {
     Log(String),
     Finished(Result<(), String>),
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AppType {
+    Application,
+    Driver,
+    Flatpak,
+}
+
+#[derive(Clone, Debug)]
+pub struct InstalledApp {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub app_type: AppType,
+    pub selected: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct ExternalDrive {
+    pub name: String,
+    pub label: String,
+    pub mount_point: String,
+    pub fstype: String,
+    pub size: String,
+    pub is_removable: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct PreservedSettings {
+    pub timezone: Option<String>,
+    pub localtime_link: Option<String>,
+    pub locale_conf: Option<String>,
+    pub locale_gen: Option<String>,
+    pub default_locale: Option<String>,
+    pub vconsole_conf: Option<String>,
+    pub default_keyboard: Option<String>,
+    pub x11_keyboard: Option<String>,
+}

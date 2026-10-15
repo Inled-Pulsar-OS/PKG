@@ -3,24 +3,27 @@ use crate::demo::is_demo_mode;
 use crate::icons::{create_button_with_icon, create_icon_widget, get_lucide_icon_path};
 use crate::manifest::{fetch_release_manifest, local_manifest_fallback};
 use crate::models::{
-    BtrfsTarget, DownloadMsg, EncryptedTarget, ManifestData, NetConnType, RecoveryMode,
-    RecoveryUpdate, WifiNetwork,
+    AppType, BtrfsTarget, DownloadMsg, EncryptedTarget, ExternalDrive, InstalledApp, ManifestData,
+    NetConnType, RecoveryMode, RecoveryUpdate, WifiNetwork,
 };
 use crate::network::{
     connect_wifi, get_network_status, open_external_network_settings, scan_wifi_networks,
 };
 use crate::restore::run_restoration;
 use crate::system::{
-    detect_system_base, detect_system_bootloader, find_btrfs_targets, find_encrypted_targets,
-    format_file_size, is_valid_base_squashfs, log_msg, scan_usb_devices, unlock_luks_partition,
+    copy_folder_with_progress, detect_system_base, detect_system_bootloader, exec_cmd,
+    find_btrfs_targets, find_encrypted_targets, format_file_size, is_valid_base_squashfs,
+    launch_chroot_terminal, log_msg, scan_external_drives, scan_installed_applications,
+    scan_usb_devices, set_keyboard_layout, unlock_luks_partition,
 };
 use crate::theme::APP_CSS;
 use glib::clone;
 use gtk4::prelude::*;
 use gtk4::{
-    Align, Application, Box as GtkBox, Button, CenterBox, CssProvider, DropDown, GestureClick,
-    Label, ListBox, ListBoxRow, Orientation, PasswordEntry, ProgressBar, ScrolledWindow,
-    SelectionMode, Spinner, Stack, StackTransitionType, StringList, TextView, WrapMode,
+    Align, Application, Box as GtkBox, Button, CenterBox, CheckButton, CssProvider, DropDown,
+    GestureClick, Label, ListBox, ListBoxRow, Orientation, PasswordEntry, ProgressBar,
+    ScrolledWindow, SelectionMode, Spinner, Stack, StackTransitionType, StringList, TextView,
+    WrapMode,
 };
 use libadwaita::prelude::*;
 use libadwaita::ApplicationWindow;
@@ -36,7 +39,7 @@ use std::time::Instant;
 pub(crate) fn build_ui(app: &Application) {
     let window = ApplicationWindow::builder()
         .application(app)
-        .title(if is_demo_mode() { "Pulsar OS Recovery (MODO DEMO / PRUEBAS)" } else { "Pulsar OS Recovery" })
+        .title(if is_demo_mode() { "Pulsar OS Recovery (DEMO / SIMULATION MODE)" } else { "Pulsar OS Recovery" })
         .default_width(1024)
         .default_height(720)
         .resizable(true)
@@ -114,6 +117,41 @@ pub(crate) fn build_ui(app: &Application) {
 
     bottom_bar.append(&btn_restart);
     bottom_bar.append(&btn_shutdown);
+
+    let kb_box = GtkBox::new(Orientation::Horizontal, 6);
+    kb_box.add_css_class("keyboard-selector-box");
+    let kb_icon = create_icon_widget("", "keyboard", 16);
+    let kb_layouts = [
+        "Spanish (ES)",
+        "English (US)",
+        "Spanish (Latin America)",
+        "English (UK)",
+        "French (FR)",
+        "German (DE)",
+        "Italian (IT)",
+        "Portuguese (PT)",
+    ];
+    let kb_list = StringList::new(&kb_layouts);
+    let combo_kb = DropDown::new(Some(kb_list), gtk4::Expression::NONE);
+    combo_kb.add_css_class("secondary-action");
+    combo_kb.connect_selected_notify(|dd| {
+        let code = match dd.selected() {
+            0 => "es",
+            1 => "us",
+            2 => "latam",
+            3 => "gb",
+            4 => "fr",
+            5 => "de",
+            6 => "it",
+            7 => "pt",
+            _ => "es",
+        };
+        let _ = set_keyboard_layout(code);
+    });
+    kb_box.append(&kb_icon);
+    kb_box.append(&combo_kb);
+    bottom_bar.append(&kb_box);
+
     root_box.append(&bottom_bar);
 
     window.set_content(Some(&root_box));
@@ -126,6 +164,8 @@ pub(crate) fn build_ui(app: &Application) {
     let selected_image_path: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
     let recovery_mode: Rc<RefCell<RecoveryMode>> = Rc::new(RefCell::new(RecoveryMode::Local));
     let current_browser_dir: Rc<RefCell<PathBuf>> = Rc::new(RefCell::new(PathBuf::from("/media")));
+    let selected_apps_to_reinstall: Rc<RefCell<Vec<InstalledApp>>> = Rc::new(RefCell::new(Vec::new()));
+    let _discovered_rescue_drives: Rc<RefCell<Vec<ExternalDrive>>> = Rc::new(RefCell::new(Vec::new()));
 
     // ─────────────────────────────────────────────────────────────
     // 1. Utilities Screen (macOS Recovery main view)
@@ -223,6 +263,20 @@ pub(crate) fn build_ui(app: &Application) {
         "terminal",
     );
     add_row(
+        "chroot_terminal",
+        "Open System Terminal (Chroot)",
+        "Mount your installed Pulsar OS system and open a root terminal directly inside your system.",
+        "/usr/share/pulsaros-recovery/terminal.png",
+        "terminal",
+    );
+    add_row(
+        "rescue_files",
+        "Rescue Files to External Storage",
+        "Browse and copy personal folders from your user system to a connected USB drive.",
+        "",
+        "folder",
+    );
+    add_row(
         "logs",
         "System & Installation Logs",
         "View and inspect installer, recovery and setup logs stored in /var/log/pulsaros.",
@@ -316,7 +370,7 @@ pub(crate) fn build_ui(app: &Application) {
     lbl_version.set_hexpand(true);
     ver_header_row.append(&lbl_version);
 
-    let btn_refresh_versions = create_button_with_icon("Check Updates", "refresh", 14, "secondary-action");
+    let btn_refresh_versions = create_button_with_icon("Reload Images List", "refresh", 14, "secondary-action");
     ver_header_row.append(&btn_refresh_versions);
     version_box.append(&ver_header_row);
 
@@ -398,7 +452,7 @@ pub(crate) fn build_ui(app: &Application) {
         let lbl_status_c = lbl_net_status.clone();
 
         Rc::new(move || {
-            lbl_status_c.set_text("Checking downloads-os.inled.es for new releases...");
+            lbl_status_c.set_text("Connecting to mirrors and reloading releases manifest...");
             let (tx, rx) = std::sync::mpsc::channel::<ManifestData>();
             let manifest_rc_inner = manifest_rc_c.clone();
             let combo_version_inner = combo_version_c.clone();
@@ -422,7 +476,7 @@ pub(crate) fn build_ui(app: &Application) {
                         let mirror_list = StringList::new(&mirror_names);
                         combo_mirror_inner.set_model(Some(&mirror_list));
 
-                        lbl_status_inner.set_text("Ready to download (~3.1 GB). System root (@) will be restored, keeping @home intact.");
+                        lbl_status_inner.set_text("Releases manifest reloaded successfully. Images ready to download.");
                         glib::ControlFlow::Break
                     }
                     Err(_) => glib::ControlFlow::Continue,
@@ -913,6 +967,143 @@ pub(crate) fn build_ui(app: &Application) {
 
     err_box.append(&err_btn_box);
     stack.add_named(&err_box, Some("error"));
+
+    // ─────────────────────────────────────────────────────────────
+    // 9. Rescue Files to External Storage Screen
+    // ─────────────────────────────────────────────────────────────
+    let rescue_box = GtkBox::new(Orientation::Vertical, 8);
+    rescue_box.set_valign(Align::Center);
+    rescue_box.set_halign(Align::Center);
+
+    let rescue_icon = create_icon_widget("", "folder", 48);
+    rescue_box.append(&rescue_icon);
+
+    let rescue_title = Label::new(Some("Rescue Files to External Storage"));
+    rescue_title.add_css_class("welcome-title");
+    rescue_box.append(&rescue_title);
+
+    let rescue_desc = Label::new(Some("Select a user folder to copy and choose your destination USB drive."));
+    rescue_desc.add_css_class("welcome-subtitle");
+    rescue_box.append(&rescue_desc);
+
+    let rescue_card = GtkBox::new(Orientation::Vertical, 8);
+    rescue_card.add_css_class("info-card");
+    rescue_card.set_size_request(580, -1);
+
+    let lbl_src_folder = Label::new(Some("Source Folder:"));
+    lbl_src_folder.add_css_class("setting-label");
+    lbl_src_folder.set_halign(Align::Start);
+    rescue_card.append(&lbl_src_folder);
+
+    let combo_src_folder = DropDown::new(None::<StringList>, gtk4::Expression::NONE);
+    combo_src_folder.set_hexpand(true);
+    rescue_card.append(&combo_src_folder);
+
+    let dst_hdr_box = GtkBox::new(Orientation::Horizontal, 8);
+    let lbl_dst_drive = Label::new(Some("Destination External Drive:"));
+    lbl_dst_drive.add_css_class("setting-label");
+    lbl_dst_drive.set_halign(Align::Start);
+    lbl_dst_drive.set_hexpand(true);
+    dst_hdr_box.append(&lbl_dst_drive);
+
+    let btn_refresh_drives = create_button_with_icon("Refresh Drives", "refresh", 14, "secondary-action");
+    dst_hdr_box.append(&btn_refresh_drives);
+    rescue_card.append(&dst_hdr_box);
+
+    let combo_dst_drive = DropDown::new(None::<StringList>, gtk4::Expression::NONE);
+    combo_dst_drive.set_hexpand(true);
+    rescue_card.append(&combo_dst_drive);
+
+    let pbar_rescue = ProgressBar::new();
+    pbar_rescue.add_css_class("progress-bar-thin");
+    pbar_rescue.set_fraction(0.0);
+    pbar_rescue.set_margin_top(6);
+    rescue_card.append(&pbar_rescue);
+
+    let lbl_rescue_status = Label::new(Some("Ready to copy files."));
+    lbl_rescue_status.add_css_class("progress-text");
+    lbl_rescue_status.set_halign(Align::Start);
+    lbl_rescue_status.set_wrap(true);
+    rescue_card.append(&lbl_rescue_status);
+
+    let rescue_nav_box = GtkBox::new(Orientation::Horizontal, 14);
+    rescue_nav_box.set_halign(Align::Center);
+    rescue_nav_box.set_margin_top(8);
+
+    let btn_rescue_back = Button::with_label("Back to Utilities");
+    btn_rescue_back.add_css_class("secondary-action");
+    rescue_nav_box.append(&btn_rescue_back);
+
+    let btn_rescue_start = Button::with_label("Start Rescue Copy");
+    btn_rescue_start.add_css_class("suggested-action");
+    rescue_nav_box.append(&btn_rescue_start);
+
+    rescue_card.append(&rescue_nav_box);
+    rescue_box.append(&rescue_card);
+    stack.add_named(&rescue_box, Some("rescue_files"));
+
+    // ─────────────────────────────────────────────────────────────
+    // 10. Installed Applications & Drivers Review Screen
+    // ─────────────────────────────────────────────────────────────
+    let app_box = GtkBox::new(Orientation::Vertical, 8);
+    app_box.set_valign(Align::Center);
+    app_box.set_halign(Align::Center);
+
+    let app_icon = create_icon_widget("", "package", 48);
+    app_box.append(&app_icon);
+
+    let app_title = Label::new(Some("Preserve Installed Applications & Drivers"));
+    app_title.add_css_class("welcome-title");
+    app_box.append(&app_title);
+
+    let app_sub = Label::new(Some("The following applications and hardware drivers will be reinstalled.\nUncheck any items you wish to remove."));
+    app_sub.add_css_class("welcome-subtitle");
+    app_sub.set_justify(gtk4::Justification::Center);
+    app_box.append(&app_sub);
+
+    let app_card = GtkBox::new(Orientation::Vertical, 8);
+    app_card.add_css_class("info-card");
+    app_card.set_size_request(600, -1);
+
+    let app_actions_box = GtkBox::new(Orientation::Horizontal, 8);
+    let btn_select_all = Button::with_label("Select All");
+    btn_select_all.add_css_class("secondary-action");
+    let btn_deselect_all = Button::with_label("Deselect All");
+    btn_deselect_all.add_css_class("secondary-action");
+    let lbl_app_count = Label::new(Some("Detected: 0 items"));
+    lbl_app_count.add_css_class("progress-text");
+    lbl_app_count.set_hexpand(true);
+    lbl_app_count.set_halign(Align::End);
+    app_actions_box.append(&btn_select_all);
+    app_actions_box.append(&btn_deselect_all);
+    app_actions_box.append(&lbl_app_count);
+    app_card.append(&app_actions_box);
+
+    let scrolled_apps = ScrolledWindow::new();
+    scrolled_apps.set_size_request(580, 220);
+    scrolled_apps.add_css_class("live-log-view");
+
+    let app_listbox = ListBox::new();
+    app_listbox.add_css_class("transparent-list");
+    app_listbox.set_selection_mode(SelectionMode::None);
+    scrolled_apps.set_child(Some(&app_listbox));
+    app_card.append(&scrolled_apps);
+
+    let app_nav_box = GtkBox::new(Orientation::Horizontal, 14);
+    app_nav_box.set_halign(Align::Center);
+    app_nav_box.set_margin_top(10);
+
+    let btn_app_back = Button::with_label("Back");
+    btn_app_back.add_css_class("secondary-action");
+    app_nav_box.append(&btn_app_back);
+
+    let btn_app_continue = Button::with_label("Confirm & Reinstall System");
+    btn_app_continue.add_css_class("suggested-action");
+    app_nav_box.append(&btn_app_continue);
+
+    app_card.append(&app_nav_box);
+    app_box.append(&app_card);
+    stack.add_named(&app_box, Some("app_review"));
 
     // ─────────────────────────────────────────────────────────────
     // Helper: Refresh Target Partitions & Show Target Screen
@@ -1848,21 +2039,48 @@ pub(crate) fn build_ui(app: &Application) {
             let _ = fs::remove_file(tmp_part);
             let _ = fs::remove_file(tmp_final);
 
-            let mut child = match Command::new("curl")
-                .args(&[
-                    "-sSL",
-                    "-L",
-                    "--connect-timeout", "10",
-                    "--retry", "3",
-                    "-o", tmp_part,
-                    &download_url,
-                ])
-                .spawn()
-            {
-                Ok(c) => c,
-                Err(e) => {
-                    let _ = tx.send(DownloadMsg::Error(format!("Could not run curl: {}", e)));
-                    return;
+            let has_aria2c = Command::new("which").arg("aria2c").status().map(|s| s.success()).unwrap_or(false);
+            let mut child = if has_aria2c {
+                log_msg("Using aria2c download manager (segmented download with resume support)...");
+                match Command::new("aria2c")
+                    .args(&[
+                        "-c",
+                        "-x", "4",
+                        "-s", "4",
+                        "--connect-timeout=15",
+                        "--max-tries=5",
+                        "--dir=/tmp",
+                        "-o", "pulsaros-internet-recovery.squashfs.part",
+                        &download_url,
+                    ])
+                    .spawn()
+                {
+                    Ok(c) => c,
+                    Err(e) => {
+                        let _ = tx.send(DownloadMsg::Error(format!("Could not run aria2c: {}", e)));
+                        return;
+                    }
+                }
+            } else {
+                log_msg("Using curl download engine with range resume support (-C -)...");
+                match Command::new("curl")
+                    .args(&[
+                        "-C", "-",
+                        "-sSL",
+                        "-L",
+                        "--connect-timeout", "15",
+                        "--retry", "5",
+                        "--retry-connrefused",
+                        "-o", tmp_part,
+                        &download_url,
+                    ])
+                    .spawn()
+                {
+                    Ok(c) => c,
+                    Err(e) => {
+                        let _ = tx.send(DownloadMsg::Error(format!("Could not run curl: {}", e)));
+                        return;
+                    }
                 }
             };
 
@@ -1873,10 +2091,11 @@ pub(crate) fn build_ui(app: &Application) {
                 thread::sleep(std::time::Duration::from_millis(200));
 
                 if cancel_flag.load(Ordering::SeqCst) {
-                    log_msg("Download cancelled by user. Terminating curl and cleaning temporary files...");
+                    log_msg("Download cancelled by user. Terminating download manager and cleaning temporary files...");
                     let _ = child.kill();
                     let _ = child.wait();
                     let _ = fs::remove_file(tmp_part);
+                    let _ = fs::remove_file(format!("{}.aria2", tmp_part));
                     let _ = fs::remove_file(tmp_final);
                     let _ = tx.send(DownloadMsg::Cancelled);
                     return;
@@ -2004,12 +2223,294 @@ pub(crate) fn build_ui(app: &Application) {
         }
     }));
 
+    let rescue_src_paths: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+    let rescue_dst_paths: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+
+    let populate_rescue_options = {
+        let combo_src = combo_src_folder.clone();
+        let combo_dst = combo_dst_drive.clone();
+        let src_paths = rescue_src_paths.clone();
+        let dst_paths = rescue_dst_paths.clone();
+        let lbl_status = lbl_rescue_status.clone();
+
+        Rc::new(move || {
+            lbl_status.set_text("Scanning storage devices and user folders...");
+            let targets = find_btrfs_targets();
+            let mut detected_sources: Vec<String> = Vec::new();
+            let mut display_sources: Vec<String> = Vec::new();
+
+            if let Some(target) = targets.first() {
+                let mnt_rescue = "/tmp/pulsar_rescue_pool";
+                let _ = fs::create_dir_all(mnt_rescue);
+                let _ = exec_cmd(&format!("mountpoint -q {} || mount -t btrfs -o ro,subvol=@home {} {}", mnt_rescue, target.part_path, mnt_rescue));
+
+                if let Ok(entries) = fs::read_dir(mnt_rescue) {
+                    for entry in entries.flatten() {
+                        let uname = entry.file_name().to_string_lossy().to_string();
+                        if uname != "lost+found" && !uname.starts_with('.') {
+                            let user_root = format!("{}/{}", mnt_rescue, uname);
+                            display_sources.push(format!("Full Home: /home/{}", uname));
+                            detected_sources.push(user_root.clone());
+
+                            for sub in &["Documents", "Desktop", "Downloads", "Pictures", "Projects", "Videos", "Music"] {
+                                let sub_path = format!("{}/{}", user_root, sub);
+                                if Path::new(&sub_path).exists() {
+                                    display_sources.push(format!("Folder: /home/{}/{}", uname, sub));
+                                    detected_sources.push(sub_path);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if display_sources.is_empty() {
+                display_sources.push("No user folders found in @home".to_string());
+                detected_sources.push("/tmp".to_string());
+            }
+
+            *src_paths.borrow_mut() = detected_sources;
+            let src_strs: Vec<&str> = display_sources.iter().map(|s| s.as_str()).collect();
+            let src_list = StringList::new(&src_strs);
+            combo_src.set_model(Some(&src_list));
+            combo_src.set_selected(0);
+
+            // Scan external drives
+            let ext_drives = scan_external_drives();
+            let mut display_dsts: Vec<String> = Vec::new();
+            let mut detected_dsts: Vec<String> = Vec::new();
+
+            for d in ext_drives {
+                display_dsts.push(format!("{} ({} - {})", d.label, d.size, d.mount_point));
+                detected_dsts.push(d.mount_point);
+            }
+
+            if display_dsts.is_empty() {
+                display_dsts.push("No external USB drives detected (Connect one and click Refresh)".to_string());
+                detected_dsts.push("/tmp".to_string());
+            }
+
+            *dst_paths.borrow_mut() = detected_dsts;
+            let dst_strs: Vec<&str> = display_dsts.iter().map(|s| s.as_str()).collect();
+            let dst_list = StringList::new(&dst_strs);
+            combo_dst.set_model(Some(&dst_list));
+            combo_dst.set_selected(0);
+
+            lbl_status.set_text("Select source folder and external drive to begin copying.");
+        })
+    };
+
+    btn_refresh_drives.connect_clicked(clone!(@strong populate_rescue_options => move |_| {
+        populate_rescue_options();
+    }));
+
+    btn_rescue_back.connect_clicked(clone!(@weak stack => move |_| {
+        stack.set_visible_child_name("utilities");
+    }));
+
+    btn_rescue_start.connect_clicked(clone!(
+        @weak pbar_rescue,
+        @weak lbl_rescue_status,
+        @weak btn_rescue_start,
+        @weak btn_rescue_back,
+        @weak combo_src_folder,
+        @weak combo_dst_drive,
+        @strong rescue_src_paths,
+        @strong rescue_dst_paths
+     => move |_| {
+        let src_idx = combo_src_folder.selected() as usize;
+        let dst_idx = combo_dst_drive.selected() as usize;
+
+        let src = match rescue_src_paths.borrow().get(src_idx).cloned() {
+            Some(s) => s,
+            None => return,
+        };
+        let dst = match rescue_dst_paths.borrow().get(dst_idx).cloned() {
+            Some(d) => d,
+            None => return,
+        };
+
+        if dst == "/tmp" || !Path::new(&dst).exists() {
+            lbl_rescue_status.set_text("Please connect and select a valid external drive destination.");
+            return;
+        }
+
+        btn_rescue_start.set_sensitive(false);
+        btn_rescue_back.set_sensitive(false);
+        pbar_rescue.set_fraction(0.05);
+        lbl_rescue_status.set_text("Starting copy to external drive...");
+
+        let (tx, rx) = std::sync::mpsc::channel::<(f64, String, bool)>();
+        let pbar_c = pbar_rescue.clone();
+        let lbl_c = lbl_rescue_status.clone();
+        let btn_s_c = btn_rescue_start.clone();
+        let btn_b_c = btn_rescue_back.clone();
+
+        glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
+            while let Ok((fraction, msg, is_done)) = rx.try_recv() {
+                pbar_c.set_fraction(fraction);
+                lbl_c.set_text(&msg);
+                if is_done {
+                    btn_s_c.set_sensitive(true);
+                    btn_b_c.set_sensitive(true);
+                    return glib::ControlFlow::Break;
+                }
+            }
+            glib::ControlFlow::Continue
+        });
+
+        thread::spawn(move || {
+            let tx_p = tx.clone();
+            let update_fn = move |pct: f64, text: &str| {
+                let _ = tx_p.send((pct, text.to_string(), false));
+            };
+            let log_fn = move |text: &str| {
+                log_msg(text);
+            };
+
+            match copy_folder_with_progress(&src, &dst, update_fn, log_fn) {
+                Ok(_) => {
+                    let _ = tx.send((1.0, "Rescue copy finished successfully!".to_string(), true));
+                }
+                Err(e) => {
+                    let _ = tx.send((0.0, format!("Copy failed: {}", e), true));
+                }
+            }
+        });
+    }));
+
+    let app_checkboxes: Rc<RefCell<Vec<CheckButton>>> = Rc::new(RefCell::new(Vec::new()));
+
+    btn_select_all.connect_clicked(clone!(@strong app_checkboxes => move |_| {
+        for chk in app_checkboxes.borrow().iter() {
+            chk.set_active(true);
+        }
+    }));
+
+    btn_deselect_all.connect_clicked(clone!(@strong app_checkboxes => move |_| {
+        for chk in app_checkboxes.borrow().iter() {
+            chk.set_active(false);
+        }
+    }));
+
+    btn_app_back.connect_clicked(clone!(@weak stack => move |_| {
+        stack.set_visible_child_name("target_select");
+    }));
+
+    let run_restore_job = {
+        let stack = stack.clone();
+        let pbar = pbar.clone();
+        let prog_desc = prog_desc.clone();
+        let log_view = log_view.clone();
+        let scrolled_log = scrolled_log.clone();
+        let err_msg_lbl = err_msg_lbl.clone();
+        let err_log_view = err_log_view.clone();
+
+        Rc::new(move |target: BtrfsTarget, mode: RecoveryMode, apps: Vec<InstalledApp>| {
+            stack.set_visible_child_name("progress");
+
+            let (sender, receiver) = std::sync::mpsc::channel::<RecoveryUpdate>();
+
+            let pbar_c = pbar.clone();
+            let desc_c = prog_desc.clone();
+            let stack_c = stack.clone();
+            let buffer = log_view.buffer();
+            let err_buffer = err_log_view.buffer();
+            let err_lbl_c = err_msg_lbl.clone();
+            let scroll_c = scrolled_log.clone();
+
+            buffer.set_text("");
+            err_buffer.set_text("");
+
+            glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
+                while let Ok(msg) = receiver.try_recv() {
+                    match msg {
+                        RecoveryUpdate::Progress(fraction, text) => {
+                            pbar_c.set_fraction(fraction);
+                            desc_c.set_label(&text);
+                        }
+                        RecoveryUpdate::Log(line) => {
+                            let mut end = buffer.end_iter();
+                            buffer.insert(&mut end, &format!("{}\n", line));
+                            let mut err_end = err_buffer.end_iter();
+                            err_buffer.insert(&mut err_end, &format!("{}\n", line));
+                            let adj = scroll_c.vadjustment();
+                            adj.set_value(adj.upper());
+                        }
+                        RecoveryUpdate::Finished(res) => {
+                            match res {
+                                Ok(_) => {
+                                    stack_c.set_visible_child_name("complete");
+                                }
+                                Err(e) => {
+                                    log_msg(&format!("Restoration error: {}", e));
+                                    err_lbl_c.set_label(&format!("Failed: {}", e));
+                                    stack_c.set_visible_child_name("error");
+                                }
+                            }
+                            return glib::ControlFlow::Break;
+                        }
+                    }
+                }
+                glib::ControlFlow::Continue
+            });
+
+            thread::spawn(move || {
+                let sender_p = sender.clone();
+                let update_ui = move |pct: f64, msg: &str| {
+                    let _ = sender_p.send(RecoveryUpdate::Progress(pct, msg.to_string()));
+                };
+
+                let sender_l = sender.clone();
+                let append_log = move |text: &str| {
+                    let _ = sender_l.send(RecoveryUpdate::Log(text.to_string()));
+                };
+
+                update_ui(0.05, "Scanning target partition...");
+                append_log(&format!("Target partition: {}", target.part_path));
+
+                // Run restoration steps with preserved apps
+                let res = run_restoration(&target, mode, apps, update_ui, append_log);
+                let _ = sender.send(RecoveryUpdate::Finished(res));
+            });
+        })
+    };
+
+    btn_app_continue.connect_clicked(clone!(
+        @strong run_restore_job,
+        @strong selected_target,
+        @strong recovery_mode,
+        @strong selected_apps_to_reinstall,
+        @strong app_checkboxes
+     => move |_| {
+        let target = match selected_target.borrow().clone() {
+            Some(t) => t,
+            None => return,
+        };
+        let mode = recovery_mode.borrow().clone();
+
+        let mut kept_apps: Vec<InstalledApp> = Vec::new();
+        let all_apps = selected_apps_to_reinstall.borrow().clone();
+        let chks = app_checkboxes.borrow();
+
+        for (idx, chk) in chks.iter().enumerate() {
+            if chk.is_active() {
+                if let Some(app) = all_apps.get(idx) {
+                    kept_apps.push(app.clone());
+                }
+            }
+        }
+
+        run_restore_job(target, mode, kept_apps);
+    }));
+
     btn_util_continue.connect_clicked(clone!(
         @weak stack,
         @strong selected_action,
         @strong recovery_mode,
         @strong show_target_screen,
-        @strong populate_usb_images
+        @strong populate_usb_images,
+        @strong populate_rescue_options
      => move |_| {
         let action = selected_action.borrow().clone().unwrap_or_default();
         match action.as_str() {
@@ -2033,6 +2534,37 @@ pub(crate) fn build_ui(app: &Application) {
                     .arg("-c")
                     .arg("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; xhost +SI:localuser:root >/dev/null 2>&1 || xhost +local: >/dev/null 2>&1 || xhost + >/dev/null 2>&1 || true; (xterm -title 'Pulsar OS Recovery Terminal' -bg '#18181b' -fg '#ffffff' -fa Monospace -fs 11 -e sudo bash || gnome-terminal -- sudo bash || alacritty -e sudo bash || x-terminal-emulator -e sudo bash || xterm -e sudo bash) &")
                     .spawn();
+            }
+            "chroot_terminal" => {
+                log_msg("Initiating 1-Click Chroot Terminal session...");
+                let targets = find_btrfs_targets();
+                if let Some(first) = targets.first() {
+                    let part = first.part_path.clone();
+                    std::thread::spawn(move || {
+                        if let Err(e) = launch_chroot_terminal(&part) {
+                            log_msg(&format!("Error opening chroot terminal: {}", e));
+                        }
+                    });
+                } else {
+                    let enc = find_encrypted_targets();
+                    if let Some(first_enc) = enc.first() {
+                        if first_enc.is_unlocked {
+                            let part = format!("/dev/mapper/{}", first_enc.mapper_name);
+                            std::thread::spawn(move || {
+                                let _ = launch_chroot_terminal(&part);
+                            });
+                        } else {
+                            stack.set_visible_child_name("unlock_luks");
+                        }
+                    } else {
+                        log_msg("No Pulsar OS system partition detected to chroot into.");
+                    }
+                }
+            }
+            "rescue_files" => {
+                log_msg("Opening File Rescue utility...");
+                populate_rescue_options();
+                stack.set_visible_child_name("rescue_files");
             }
             "logs" => {
                 log_msg("Opening Pulsar OS logs directory...");
@@ -2058,86 +2590,73 @@ pub(crate) fn build_ui(app: &Application) {
 
     btn_target_restore.connect_clicked(clone!(
         @weak stack,
-        @weak pbar,
-        @weak prog_desc,
-        @weak log_view,
-        @weak scrolled_log,
-        @weak err_msg_lbl,
-        @weak err_log_view,
+        @weak app_listbox,
+        @weak lbl_app_count,
         @strong selected_target,
-        @strong recovery_mode
+        @strong recovery_mode,
+        @strong selected_apps_to_reinstall,
+        @strong app_checkboxes,
+        @strong run_restore_job
      => move |_| {
         let target = match selected_target.borrow().clone() {
             Some(t) => t,
             None => return,
         };
         let mode = recovery_mode.borrow().clone();
-        stack.set_visible_child_name("progress");
 
-        let (sender, receiver) = std::sync::mpsc::channel::<RecoveryUpdate>();
+        // Scan installed applications from existing system @ subvolume
+        let audit_mnt = "/tmp/pulsar_audit_root";
+        let _ = fs::create_dir_all(audit_mnt);
+        let _ = exec_cmd(&format!("umount -l {} 2>/dev/null || true", audit_mnt));
+        let _ = exec_cmd(&format!("mount -t btrfs -o ro,subvol=@ {} {}", target.part_path, audit_mnt));
+        let discovered = scan_installed_applications(audit_mnt);
+        let _ = exec_cmd(&format!("umount -l {} 2>/dev/null || true", audit_mnt));
 
-        let pbar_c = pbar.clone();
-        let desc_c = prog_desc.clone();
-        let stack_c = stack.clone();
-        let buffer = log_view.buffer();
-        let err_buffer = err_log_view.buffer();
-        let err_lbl_c = err_msg_lbl.clone();
-        let scroll_c = scrolled_log.clone();
-
-        buffer.set_text("");
-        err_buffer.set_text("");
-
-        glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
-            while let Ok(msg) = receiver.try_recv() {
-                match msg {
-                    RecoveryUpdate::Progress(fraction, text) => {
-                        pbar_c.set_fraction(fraction);
-                        desc_c.set_label(&text);
-                    }
-                    RecoveryUpdate::Log(line) => {
-                        let mut end = buffer.end_iter();
-                        buffer.insert(&mut end, &format!("{}\n", line));
-                        let mut err_end = err_buffer.end_iter();
-                        err_buffer.insert(&mut err_end, &format!("{}\n", line));
-                        let adj = scroll_c.vadjustment();
-                        adj.set_value(adj.upper());
-                    }
-                    RecoveryUpdate::Finished(res) => {
-                        match res {
-                            Ok(_) => {
-                                stack_c.set_visible_child_name("complete");
-                            }
-                            Err(e) => {
-                                log_msg(&format!("Restoration error: {}", e));
-                                err_lbl_c.set_label(&format!("Failed: {}", e));
-                                stack_c.set_visible_child_name("error");
-                            }
-                        }
-                        return glib::ControlFlow::Break;
-                    }
-                }
+        if !discovered.is_empty() {
+            while let Some(child) = app_listbox.first_child() {
+                app_listbox.remove(&child);
             }
-            glib::ControlFlow::Continue
-        });
 
-        thread::spawn(move || {
-            let sender_p = sender.clone();
-            let update_ui = move |pct: f64, msg: &str| {
-                let _ = sender_p.send(RecoveryUpdate::Progress(pct, msg.to_string()));
-            };
+            lbl_app_count.set_text(&format!("Detected: {} items", discovered.len()));
+            app_checkboxes.borrow_mut().clear();
 
-            let sender_l = sender.clone();
-            let append_log = move |text: &str| {
-                let _ = sender_l.send(RecoveryUpdate::Log(text.to_string()));
-            };
+            for app in &discovered {
+                let row = ListBoxRow::new();
+                row.add_css_class("app-item-row");
 
-            update_ui(0.05, "Scanning target partition...");
-            append_log(&format!("Target partition: {}", target.part_path));
+                let h_box = GtkBox::new(Orientation::Horizontal, 12);
+                let chk = CheckButton::with_label(&app.name);
+                chk.set_active(true);
+                chk.set_hexpand(true);
+                h_box.append(&chk);
 
-            // Run restoration steps
-            let res = run_restoration(&target, mode, update_ui, append_log);
-            let _ = sender.send(RecoveryUpdate::Finished(res));
-        });
+                let badge_lbl = Label::new(Some(match app.app_type {
+                    AppType::Driver => "Driver",
+                    AppType::Application => "App",
+                    AppType::Flatpak => "Flatpak",
+                }));
+                badge_lbl.add_css_class(match app.app_type {
+                    AppType::Driver => "badge-driver",
+                    AppType::Application => "badge-app",
+                    AppType::Flatpak => "badge-flatpak",
+                });
+                h_box.append(&badge_lbl);
+
+                let ver_lbl = Label::new(Some(&app.version));
+                ver_lbl.add_css_class("setting-label");
+                h_box.append(&ver_lbl);
+
+                row.set_child(Some(&h_box));
+                app_listbox.append(&row);
+
+                app_checkboxes.borrow_mut().push(chk);
+            }
+
+            *selected_apps_to_reinstall.borrow_mut() = discovered;
+            stack.set_visible_child_name("app_review");
+        } else {
+            run_restore_job(target, mode, Vec::new());
+        }
     }));
 
     // ─────────────────────────────────────────────────────────────
