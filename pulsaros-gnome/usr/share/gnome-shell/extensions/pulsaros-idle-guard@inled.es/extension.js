@@ -22,7 +22,10 @@
  *
  * A blinking text caret (~1 paint/s) and the panel clock (~1 paint/min) stay
  * below the threshold on purpose, so reading a document does not keep the
- * machine powered forever.
+ * machine powered forever. The threshold must also be cleared on consecutive
+ * samples (MIN_ACTIVE_SAMPLES): a single one-second blip — a window opening, a
+ * notification, the clock redrawing — must never hold the session awake on its
+ * own for a whole grace period.
  *
  * The guard does nothing while the session is locked, so the lock screen can
  * still blank and suspend normally.
@@ -48,7 +51,13 @@ const APP_ID = 'pulsaros-idle-guard';
 const REASON = 'Pulsar OS: the screen is actively changing';
 
 const SAMPLE_MS = 1000; // evaluate the frame rate once per second
-const WINDOW = 3;       // one-second samples averaged together
+const WINDOW = 3;       // one-second samples kept in the sliding window
+// How many of those samples must clear the threshold before the screen counts
+// as "changing". One isolated burst (a window opening, a notification, the panel
+// clock redrawing) is not enough; real video and animations clear it on
+// consecutive samples. This keeps a single blip from holding the session awake
+// for the whole grace period.
+const MIN_ACTIVE_SAMPLES = 2;
 
 export default class PulsarIdleGuardExtension extends Extension {
     enable() {
@@ -116,18 +125,22 @@ export default class PulsarIdleGuardExtension extends Extension {
             this._history.shift();
 
         const avg = this._history.reduce((a, b) => a + b, 0) / this._history.length;
+        // Sustain the motion: require MIN_ACTIVE_SAMPLES samples above the
+        // threshold within the window, so a single blip cannot set _lastActive
+        // (and with it, a whole grace period of inhibition).
+        const activeSamples = this._history.filter(f => f >= minFps).length;
         const now = GLib.get_monotonic_time() / 1e6;
-        if (avg >= minFps)
+        if (activeSamples >= MIN_ACTIVE_SAMPLES)
             this._lastActive = now;
 
         const changing = this._lastActive > 0 && (now - this._lastActive) <= grace;
         if (changing) {
             if (this._settings.get_boolean('debug'))
-                this._log(`frames/s=${frames} avg=${avg.toFixed(1)} -> keep awake`);
+                this._log(`frames/s=${frames} avg=${avg.toFixed(1)} active=${activeSamples}/${this._history.length} -> keep awake`);
             this._ensureInhibitor();
         } else {
             if (this._held && this._settings.get_boolean('debug'))
-                this._log(`frames/s=${frames} avg=${avg.toFixed(1)} -> allow idle`);
+                this._log(`frames/s=${frames} avg=${avg.toFixed(1)} active=${activeSamples}/${this._history.length} -> allow idle`);
             this._releaseInhibitor();
         }
     }
