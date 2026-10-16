@@ -498,26 +498,53 @@ export default class NotchNuxExtension extends Extension {
         };
     }
 
+    _shelfCardBox(notch) {
+        if (!notch || !notch.isExpanded) return null;
+        try {
+            let targetActor = notch._shelfScroll ?? notch._contentContainer;
+            if (targetActor && typeof targetActor.get_transformed_position === 'function') {
+                let [ax, ay] = targetActor.get_transformed_position();
+                let [aw, ah] = targetActor.get_transformed_size();
+                if (aw > 50 && ah > 30) {
+                    return {
+                        x: Math.round(ax),
+                        y: Math.round(ay),
+                        w: Math.round(aw),
+                        h: Math.round(ah),
+                    };
+                }
+            }
+            let box = this._notchZoneBox(notch);
+            return {
+                x: box.x,
+                y: box.y + 48,
+                w: box.w,
+                h: Math.max(150, box.h - 48),
+            };
+        } catch (_) {}
+        return null;
+    }
+
     _showCompanionCard(uris, notch) {
         if (!this._dbusConnection || !uris || !uris.length || !notch) return;
         if (!this._helperHasOwner()) {
             this._spawnDropHelper(false);
         }
-        let box = this._notchZoneBox(notch);
+        let box = this._shelfCardBox(notch) ?? this._notchZoneBox(notch);
         this._pendingCardTarget = box;
         this._lastZoneBox = box;
 
-        if (!this._notchesReactiveOff) {
-            this._notchesReactiveOff = true;
-            this._setNotchesReactive(false);
-        }
-
+        // Keep notch reactive so tabs, power menu, and buttons respond directly!
         this._positionDropZone();
-        for (let ms of [40, 150, 350, 700]) {
+        for (let ms of [40, 120, 250, 500]) {
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
                 if (this._pendingCardTarget && !this._externalDragActive) {
+                    let newBox = this._shelfCardBox(notch);
+                    if (newBox) {
+                        this._pendingCardTarget = newBox;
+                        this._lastZoneBox = newBox;
+                    }
                     this._positionDropZone();
-                    if (this._notchesReactiveOff) this._setNotchesReactive(false);
                 }
                 return GLib.SOURCE_REMOVE;
             });

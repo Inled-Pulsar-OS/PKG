@@ -2042,7 +2042,11 @@ export const NotchNux = GObject.registerClass({
         if (this.isExpanded && !this._isExpanding)
             this._resizeToContent();
 
-        this.extension?._hideDragCards?.();
+        if (this._activeTab === 'shelf' && this.isExpanded && (this._shelf?.getFiles?.()?.length ?? 0) > 0) {
+            this.extension?._showCompanionCard?.(this._shelf.getFiles().map(f => f.uri), this);
+        } else {
+            this.extension?._hideDragCards?.();
+        }
     }
 
     // Halt vinyl spin + EQ bounce and drop the references, so nothing keeps
@@ -5877,34 +5881,6 @@ export const NotchNux = GObject.registerClass({
         });
         row.add_child(actions);
 
-        let pressX = 0, pressY = 0, dragInitiated = false;
-        row.connect('button-press-event', (actor, event) => {
-            if (event.get_button() === 1) {
-                let [x, y] = event.get_coords();
-                pressX = x;
-                pressY = y;
-                dragInitiated = false;
-            }
-            return Clutter.EVENT_PROPAGATE;
-        });
-        row.connect('motion-event', (actor, event) => {
-            if (!dragInitiated && pressX > 0 && pressY > 0) {
-                let [x, y] = event.get_coords();
-                let dist = Math.hypot(x - pressX, y - pressY);
-                if (dist > 14) {
-                    dragInitiated = true;
-                    this.extension?._showCompanionCard?.([f.uri], this);
-                }
-            }
-            return Clutter.EVENT_PROPAGATE;
-        });
-        row.connect('button-release-event', () => {
-            pressX = 0;
-            pressY = 0;
-            dragInitiated = false;
-            return Clutter.EVENT_PROPAGATE;
-        });
-
         return row;
     }
 
@@ -6526,6 +6502,11 @@ export const NotchNux = GObject.registerClass({
             return GLib.SOURCE_REMOVE;
         });
 
+
+        // Ensure the helper window covers the shelf area when opened onto shelf
+        if (this._activeTab === 'shelf' && (this._shelf?.getFiles?.()?.length ?? 0) > 0) {
+            this.extension?._showCompanionCard?.(this._shelf.getFiles().map(f => f.uri), this);
+        }
 
         // Watch pointer position to guarantee auto-collapse when moving outside (even in fullscreen apps)
         this._startHoverWatch();

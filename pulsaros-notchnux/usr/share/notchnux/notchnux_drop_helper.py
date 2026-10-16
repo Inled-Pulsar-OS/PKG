@@ -214,6 +214,7 @@ class DropApp(Gtk.Application):
         self._win.set_size_request(600, 300)
         self._win.set_decorated(False)
         self._win.set_resizable(True)
+        self._win.set_focusable(False)
         self._win.add_css_class('notch-drag-window')
         self._win.set_opacity(0.01)
 
@@ -362,20 +363,7 @@ class DropApp(Gtk.Application):
         self._notify_scroll(dx, dy)
 
     def _on_pointer_leave(self, controller):
-        if self._drag_active or not self._drag_files:
-            return
-        try:
-            if self._bus is None:
-                self._bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-            self._bus.call(
-                'org.gnome.Shell',
-                '/org/gnome/Shell/Extensions/NotchNux',
-                'org.gnome.Shell.Extensions.NotchNux',
-                'PointerLeave',
-                None, None,
-                Gio.DBusCallFlags.NONE, 1000, None, None)
-        except Exception:
-            pass
+        pass
 
     def _on_card_drag_begin(self, drag_source, drag):
         if not self._drag_files:
