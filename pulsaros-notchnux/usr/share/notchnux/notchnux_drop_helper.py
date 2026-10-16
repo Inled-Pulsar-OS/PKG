@@ -62,6 +62,17 @@ def files_from_value(value):
         return []
     if isinstance(value, Gio.File):
         return [value]
+    if isinstance(value, str):
+        files = []
+        for line in value.splitlines():
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            if line.startswith('file://'):
+                files.append(Gio.File.new_for_uri(line))
+            elif line.startswith('/'):
+                files.append(Gio.File.new_for_path(line))
+        return files
     get_files = getattr(value, 'get_files', None)
     if callable(get_files):
         try:
@@ -69,9 +80,19 @@ def files_from_value(value):
         except Exception:
             return []
     try:
-        return [v for v in value if isinstance(v, Gio.File)]
+        res = []
+        for v in value:
+            if isinstance(v, Gio.File):
+                res.append(v)
+            elif isinstance(v, str):
+                if v.startswith('file://'):
+                    res.append(Gio.File.new_for_uri(v))
+                elif v.startswith('/'):
+                    res.append(Gio.File.new_for_path(v))
+        return res
     except TypeError:
         return []
+
 
 
 def _exclude_from_blur():
@@ -215,7 +236,7 @@ class DropApp(Gtk.Application):
 
         # Drop target for incoming external drops (ALWAYS active!)
         target = Gtk.DropTarget.new(Gio.File, Gdk.DragAction.COPY)
-        gtypes = [Gio.File]
+        gtypes = [Gio.File, GObject.TYPE_STRING]
         if hasattr(Gdk, 'FileList'):
             gtypes.insert(0, Gdk.FileList)
         try:
@@ -420,6 +441,20 @@ class DropApp(Gtk.Application):
             print(f'[NotchNux-Helper] drag state notify failed: {e}',
                   file=sys.stderr)
 
+    def _notify_zone_closed(self):
+        try:
+            if self._bus is None:
+                self._bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+            self._bus.call(
+                'org.gnome.Shell',
+                '/org/gnome/Shell/Extensions/NotchNux',
+                'org.gnome.Shell.Extensions.NotchNux',
+                'DropZoneClosed',
+                None, None,
+                Gio.DBusCallFlags.NONE, 1000, None, None)
+        except Exception:
+            pass
+
     # -- visibility --------------------------------------------------------
 
     def _arm_hide(self, ms):
@@ -435,6 +470,7 @@ class DropApp(Gtk.Application):
         self._hideId = 0
         if self._win.get_visible() and not self._drag_files:
             self._win.set_visible(False)
+            self._notify_zone_closed()
             print('[NotchNux-Helper] drop zone hidden by timeout', file=sys.stderr)
         return GLib.SOURCE_REMOVE
 
@@ -452,23 +488,20 @@ class DropApp(Gtk.Application):
 
     def _on_leave(self, target):
         self._label.set_text(DEFAULT_LABEL)
-        self._arm_hide(HIDE_IDLE_MS)
+        self._arm_hide(1000)
 
     def _on_drop(self, target, value, x, y):
         uris = [f.get_uri() for f in files_from_value(value)]
         print(f'[NotchNux-Helper] drop: {len(uris)} file(s), '
               f'value={type(value).__name__}', file=sys.stderr)
+        self._cancel_hide()
+        self._win.set_visible(False)
+        self._notify_zone_closed()
         if not uris:
-            self._label.set_text('Nothing to stage')
-            self._arm_hide(HIDE_AFTER_DROP_MS)
             return True
         ok = stage_uris(uris)
         if ok:
             print(f'[NotchNux-Helper] staged {len(uris)} file(s)', file=sys.stderr)
-            self._label.set_text(f'Staged {len(uris)} file(s) in the Shelf')
-        else:
-            self._label.set_text('Could not reach NotchNux')
-        self._arm_hide(HIDE_AFTER_DROP_MS)
         return True
 
 

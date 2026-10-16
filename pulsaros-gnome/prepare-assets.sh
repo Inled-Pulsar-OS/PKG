@@ -275,10 +275,68 @@ if 'this.corner_effect = null' not in c:
 " "$BMS_DUMMY"
     fi
 
+    BMS_NATIVE="$BMS_DIR/effects/native_dynamic_gaussian_blur.js"
+    if [ -f "$BMS_NATIVE" ]; then
+        python3 -c "
+import sys
+f = sys.argv[1]
+with open(f, 'r') as fp: c = fp.read()
+needle = '''        static get supports_corner_radius() {
+            return SUPPORTS_CORNER_RADIUS;
+        }'''
+replacement = '''        static get supports_corner_radius() {
+            return false;
+        }'''
+if needle in c:
+    c = c.replace(needle, replacement, 1)
+    with open(f, 'w') as fp: fp.write(c)
+" "$BMS_NATIVE"
+    fi
+
+    BMS_APP="$BMS_DIR/components/applications.js"
+    if [ -f "$BMS_APP" ]; then
+        python3 -c "
+import sys
+f = sys.argv[1]
+with open(f, 'r') as fp: c = fp.read()
+needle = '''        } else {
+            if (meta_window.bg_manager?._bms_pipeline?.effect)
+                meta_window.bg_manager._bms_pipeline.effect.unscaled_corner_radius = use_0_radius ?
+                    0 : this.settings.applications.CORNER_RADIUS;
+        }'''
+replacement = '''        } else {
+            const pipeline = meta_window.bg_manager?._bms_pipeline;
+            if (pipeline?.effect) {
+                pipeline.effect.unscaled_corner_radius = use_0_radius ?
+                    0 : this.settings.applications.CORNER_RADIUS;
+            }
+            if (pipeline?.corner_effect) {
+                pipeline.corner_effect.radius = use_0_radius ? 0 : this.settings.applications.CORNER_RADIUS;
+                pipeline.corner_effect.straight_corners = use_0_radius;
+            }
+        }'''
+if needle in c:
+    c = c.replace(needle, replacement, 1)
+    with open(f, 'w') as fp: fp.write(c)
+" "$BMS_APP"
+    fi
+
     BMS_CSS="$BMS_DIR/styles/popup/base.css"
     if [ -f "$BMS_CSS" ]; then
         sed -i 's/border-radius: 0 0 13px 13px;/border-radius: 12px;/g' "$BMS_CSS"
         sed -i 's/border-radius: 0 0 12px 12px;/border-radius: 8px;/g' "$BMS_CSS"
+        python3 -c "
+import sys
+f = sys.argv[1]
+with open(f, 'r') as fp: c = fp.read()
+c = c.replace('.bms-popup-blurred-widget {\n    background: rgba(0, 0, 0, 0.01);\n}',
+              '.bms-popup-blurred-widget {\n    background: rgba(0, 0, 0, 0.01);\n    border-radius: 18px;\n}')
+c = c.replace('    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.08);\n}',
+              '    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.08);\n    border-radius: 18px;\n}')
+c = c.replace('    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);\n}',
+              '    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);\n    border-radius: 18px;\n}')
+with open(f, 'w') as fp: fp.write(c)
+" "$BMS_CSS"
     fi
 fi
 

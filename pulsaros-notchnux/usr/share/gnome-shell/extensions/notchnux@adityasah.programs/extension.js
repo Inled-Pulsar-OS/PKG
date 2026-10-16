@@ -212,7 +212,7 @@ export default class NotchNuxExtension extends Extension {
 
     _setupExtensionDbus() {
         try {
-            let xml = '<node><interface name="org.gnome.Shell.Extensions.NotchNux"><method name="StageFiles"><arg type="as" direction="in" name="uris"/></method><method name="CompanionDragState"><arg type="b" direction="in" name="active"/></method><method name="ForwardClick"><arg type="i" direction="in" name="x"/><arg type="i" direction="in" name="y"/><arg type="d" direction="in" name="button"/></method><method name="ForwardScroll"><arg type="d" direction="in" name="dx"/><arg type="d" direction="in" name="dy"/></method><method name="PointerLeave"/></interface></node>';
+            let xml = '<node><interface name="org.gnome.Shell.Extensions.NotchNux"><method name="StageFiles"><arg type="as" direction="in" name="uris"/></method><method name="CompanionDragState"><arg type="b" direction="in" name="active"/></method><method name="ForwardClick"><arg type="i" direction="in" name="x"/><arg type="i" direction="in" name="y"/><arg type="d" direction="in" name="button"/></method><method name="ForwardScroll"><arg type="d" direction="in" name="dx"/><arg type="d" direction="in" name="dy"/></method><method name="PointerLeave"/><method name="DropZoneClosed"/></interface></node>';
             let nodeInfo = Gio.DBusNodeInfo.new_for_xml(xml);
             this._helperBusId = this._dbusConnection.register_object('/org/gnome/Shell/Extensions/NotchNux', nodeInfo.interfaces[0], (conn, sender, path, iface, method, params, inv) => {
                 if (method === 'StageFiles') {
@@ -247,6 +247,14 @@ export default class NotchNuxExtension extends Extension {
                         }
                     }
                     inv.return_value(new GLib.Variant('()', []));
+                } else if (method === 'DropZoneClosed') {
+                    this._externalDragActive = false;
+                    this._pendingDropZonePos = null;
+                    if (this._notchesReactiveOff && !this._pendingCardTarget) {
+                        this._notchesReactiveOff = false;
+                        this._setNotchesReactive(true);
+                    }
+                    inv.return_value(new GLib.Variant('()', []));
                 } else {
                     inv.return_error_literal(Gio.dbus_error_quark(), Gio.DBUS_ERROR_UNKNOWN_METHOD, 'Unknown');
                 }
@@ -277,7 +285,8 @@ export default class NotchNuxExtension extends Extension {
         while (target && target !== global.stage) {
             if (target instanceof St.Button) {
                 if (target.can_focus) target.grab_key_focus?.();
-                target.emit('clicked');
+                if (typeof target.clicked === 'function') target.clicked(0);
+                else target.emit('clicked', 0);
                 return;
             }
             if (typeof target.clicked === 'function') {
@@ -325,6 +334,14 @@ export default class NotchNuxExtension extends Extension {
     }
 
     _stageFilesFromHelper(uris) {
+        this._externalDragActive = false;
+        this._pendingDropZonePos = null;
+        if (this._notchesReactiveOff && !this._pendingCardTarget) {
+            this._notchesReactiveOff = false;
+            this._setNotchesReactive(true);
+        }
+        this._hideDragCards();
+
         let staged = 0;
         for (let n of (this._notches || [])) {
             try {
@@ -372,7 +389,7 @@ export default class NotchNuxExtension extends Extension {
     _showDropZone(x, y, notch) {
         this._externalDragActive = true;
         let now = GLib.get_monotonic_time();
-        if (this._zoneLastShow && now - this._zoneLastShow < 700 * 1000) return;
+        if (this._zoneLastShow && now - this._zoneLastShow < 250 * 1000) return;
         this._zoneLastShow = now;
         this._pendingDropZonePos = { x, y };
         this._pendingNotch = notch ?? null;
@@ -386,9 +403,9 @@ export default class NotchNuxExtension extends Extension {
         this._activateDropZone();
 
         this._positionDropZone();
-        for (let ms of [60, 240, 500, 900]) {
+        for (let ms of [50, 150, 300, 600]) {
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
-                if (this._pendingDropZonePos) {
+                if (this._pendingDropZonePos && this._externalDragActive) {
                     this._positionDropZone();
                     if (this._notchesReactiveOff) this._setNotchesReactive(false);
                 }
@@ -408,30 +425,19 @@ export default class NotchNuxExtension extends Extension {
         let box = this._pendingNotch ? this._notchZoneBox(this._pendingNotch) : null;
         let uri = box ? `notchnux://zone?w=${box.w}&h=${box.h}` : 'notchnux://zone';
         try {
-            conn.call('org.freedesktop.DBus', '/org/freedesktop/DBus',
-                'org.freedesktop.DBus', 'NameHasOwner',
-                new GLib.Variant('(s)', ['es.pulsaros.NotchNuxHelper']),
-                new GLib.VariantType('(b)'), Gio.DBusCallFlags.NONE, 2000, null,
+            conn.call('es.pulsaros.NotchNuxHelper', '/es/pulsaros/NotchNuxHelper',
+                'org.freedesktop.Application', 'Open',
+                new GLib.Variant('(asa{sv})', [[uri], {}]), null,
+                Gio.DBusCallFlags.NONE, 2000, null,
                 (c, res) => {
-                    let owned = false;
-                    try { owned = c.call_finish(res).deep_unpack()[0]; } catch (_) { return; }
-                    if (!this._dbusConnection) return;
-                    if (!owned) {
+                    try { c.call_finish(res); }
+                    catch (_) {
                         this._spawnDropHelper(false);
-                        return;
                     }
-                    try {
-                        conn.call('es.pulsaros.NotchNuxHelper', '/es/pulsaros/NotchNuxHelper',
-                            'org.freedesktop.Application', 'Open',
-                            new GLib.Variant('(asa{sv})', [[uri], {}]), null,
-                            Gio.DBusCallFlags.NONE, 3000, null,
-                            (c2, res2) => {
-                                try { c2.call_finish(res2); }
-                                catch (e) { console.warn('NotchNux: drop zone activation failed', e); }
-                            });
-                    } catch (e) { console.warn('NotchNux: drop zone activation failed', e); }
                 });
-        } catch (e) { console.warn('NotchNux: drop zone activation failed', e); }
+        } catch (_) {
+            this._spawnDropHelper(false);
+        }
     }
 
     _positionDropZone() {
@@ -480,8 +486,8 @@ export default class NotchNuxExtension extends Extension {
 
     _notchZoneBox(notch) {
         let [nx, ny] = notch.get_transformed_position();
-        let nw = (notch.isExpanded || notch.width > 300) ? 640 : notch.get_width();
-        let nh = notch.isExpanded ? (notch._measureDashboardHeight ? Math.max(300, notch._measureDashboardHeight()) : Math.max(300, notch.get_height())) : notch.get_height();
+        let nw = Math.max(640, notch.get_width());
+        let nh = Math.max(350, notch.get_height());
         let mon = (Main.layoutManager.monitors ?? []).find(m =>
             nx + 100 >= m.x && nx + 100 < m.x + m.width);
         let cx = mon ? mon.x + Math.floor((mon.width - nw) / 2) : nx;
