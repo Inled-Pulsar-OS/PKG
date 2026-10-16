@@ -1,6 +1,7 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import Clutter from 'gi://Clutter';
+import * as St from 'gi://St';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
@@ -258,19 +259,30 @@ export default class NotchNuxExtension extends Extension {
         let rootX = box ? box.x + winX : winX;
         let rootY = box ? box.y + winY : winY;
 
-        let actor = global.stage.get_actor_at_pos(Clutter.PickMode.ALL, rootX, rootY);
-        if (!actor) return;
+        // Hit-test inside the notch chrome instead of picking on the stage:
+        // the helper window sits over the notch and a stage pick can return
+        // its own (handler-less) window actor, so the forwarded click was
+        // silently dropped. The notch actors are the only thing the user can
+        // be clicking on.
+        let actor = null;
+        for (const notch of this._notches ?? []) {
+            const inner = this._pickInActor(notch, rootX, rootY);
+            if (inner)
+                actor = inner;
+        }
+        if (!actor)
+            return;
 
         let target = actor;
         while (target && target !== global.stage) {
+            if (target instanceof St.Button) {
+                if (target.can_focus) target.grab_key_focus?.();
+                target.emit('clicked');
+                return;
+            }
             if (typeof target.clicked === 'function') {
                 if (target.can_focus) target.grab_key_focus?.();
                 target.clicked(0);
-                return;
-            }
-            if (typeof target.emit === 'function' && (target.has_style_class_name?.('notchnux-tab-btn') || target.has_style_class_name?.('nook-shelf-action') || target.has_style_class_name?.('notchnux-power-btn') || target.has_style_class_name?.('notchnux-settings-btn'))) {
-                if (target.can_focus) target.grab_key_focus?.();
-                target.emit('clicked', 0);
                 return;
             }
             if (target._delegate && typeof target._delegate.activate === 'function') {
@@ -279,6 +291,24 @@ export default class NotchNuxExtension extends Extension {
             }
             target = target.get_parent?.();
         }
+    }
+
+    // Deepest visible actor of the subtree containing (x, y); later children
+    // win, matching Clutter's paint order.
+    _pickInActor(root, x, y) {
+        const [rx, ry] = root.get_transformed_position();
+        const [rw, rh] = root.get_transformed_size();
+        if (!(rw > 0 && rh > 0) || x < rx || y < ry || x > rx + rw || y > ry + rh)
+            return null;
+        let best = root;
+        for (const child of root.get_children?.() ?? []) {
+            if (!child.visible)
+                continue;
+            const inner = this._pickInActor(child, x, y);
+            if (inner)
+                best = inner;
+        }
+        return best;
     }
 
     _handleForwardScroll(dx, dy) {

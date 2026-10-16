@@ -74,6 +74,36 @@ def files_from_value(value):
         return []
 
 
+def _exclude_from_blur():
+    """Keep this helper window out of blur-my-shell's application blur.
+
+    The window is transparent (opacity 0.01) and only exists to catch drops
+    and drag-outs; when blur-my-shell blurs it, a visible blurred rectangle
+    shows over the notch. blur-my-shell blurs every managed window unless the
+    WM class is blacklisted, and a system default cannot override a user-set
+    list, so register ourselves at startup (same approach sayri uses).
+    """
+    try:
+        schema_id = "org.gnome.shell.extensions.blur-my-shell.applications"
+        source = Gio.SettingsSchemaSource.get_default()
+        if source is None or not source.lookup(schema_id, True):
+            return
+        settings = Gio.Settings.new(schema_id)
+        current = list(settings.get_strv("blacklist"))
+        wanted = ["es.pulsaros.NotchNuxHelper", "notchnux-drop-helper",
+                  "*NotchNux*", "*notchnux*"]
+        missing = [entry for entry in wanted if entry not in current]
+        if not missing:
+            return
+        settings.set_strv("blacklist", current + missing)
+        Gio.Settings.sync()
+    except Exception:
+        pass
+
+
+_exclude_from_blur()
+
+
 class DropApp(Gtk.Application):
     def __init__(self, warm_start=False, invisible=False):
         super().__init__(application_id='es.pulsaros.NotchNuxHelper',
