@@ -525,6 +525,27 @@ export default class NotchNuxExtension extends Extension {
         return null;
     }
 
+    _setShelfCompanionReactivity(notch, active) {
+        if (!notch) return;
+        if (active) {
+            notch.reactive = false;
+            if (notch._surface) notch._surface.reactive = false;
+            if (notch._dashboard) notch._dashboard.reactive = false;
+            if (notch._contentContainer) notch._contentContainer.reactive = false;
+            if (notch._shelfScroll) notch._shelfScroll.reactive = false;
+            if (notch._tabStrip) notch._tabStrip.reactive = true;
+            if (notch._headerWrap) notch._headerWrap.reactive = true;
+            if (notch._powerButton) notch._powerButton.reactive = true;
+            if (notch._settingsButton) notch._settingsButton.reactive = true;
+        } else {
+            notch.reactive = true;
+            if (notch._surface) notch._surface.reactive = true;
+            if (notch._dashboard) notch._dashboard.reactive = true;
+            if (notch._contentContainer) notch._contentContainer.reactive = true;
+            if (notch._shelfScroll) notch._shelfScroll.reactive = true;
+        }
+    }
+
     _showCompanionCard(uris, notch) {
         if (!this._dbusConnection || !uris || !uris.length || !notch) return;
         if (!this._helperHasOwner()) {
@@ -534,7 +555,8 @@ export default class NotchNuxExtension extends Extension {
         this._pendingCardTarget = box;
         this._lastZoneBox = box;
 
-        // Keep notch reactive so tabs, power menu, and buttons respond directly!
+        this._setShelfCompanionReactivity(notch, true);
+
         this._positionDropZone();
         for (let ms of [40, 120, 250, 500]) {
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
@@ -564,6 +586,9 @@ export default class NotchNuxExtension extends Extension {
 
     _hideDragCards() {
         this._pendingCardTarget = null;
+        for (let n of this._notches ?? []) {
+            this._setShelfCompanionReactivity(n, false);
+        }
         if (this._notchesReactiveOff && !this._externalDragActive) {
             this._notchesReactiveOff = false;
             this._setNotchesReactive(true);

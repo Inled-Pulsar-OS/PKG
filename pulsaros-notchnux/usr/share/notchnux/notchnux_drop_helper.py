@@ -211,7 +211,7 @@ class DropApp(Gtk.Application):
 
         self._win = Gtk.ApplicationWindow(application=self, title='NotchNux')
         self._win.set_default_size(600, 300)
-        self._win.set_size_request(600, 300)
+        self._win.set_size_request(50, 50)
         self._win.set_decorated(False)
         self._win.set_resizable(True)
         self._win.set_focusable(False)
@@ -224,7 +224,6 @@ class DropApp(Gtk.Application):
         box.set_vexpand(True)
         box.set_halign(Gtk.Align.FILL)
         box.set_valign(Gtk.Align.FILL)
-        box.set_size_request(600, 300)
 
         self._label = Gtk.Label(label=DEFAULT_LABEL)
         self._label.set_wrap(True)
@@ -252,7 +251,8 @@ class DropApp(Gtk.Application):
 
         # Drag source for drag out - attached to the WINDOW directly
         self._drag_source = Gtk.DragSource.new()
-        self._drag_source.set_actions(Gdk.DragAction.COPY)
+        self._drag_source.set_actions(Gdk.DragAction.COPY | Gdk.DragAction.MOVE)
+        self._drag_source.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         self._drag_source.connect('drag-begin', self._on_card_drag_begin)
         self._drag_source.connect('drag-end', self._on_card_drag_end)
         self._drag_source.connect('drag-cancel', self._on_card_drag_end)
@@ -261,6 +261,7 @@ class DropApp(Gtk.Application):
         # Click gesture: when the user clicks without dragging, forward the click to GNOME Shell
         click = Gtk.GestureClick.new()
         click.set_button(0)
+        click.set_propagation_phase(Gtk.PropagationPhase.BUBBLE)
         click.connect('released', self._on_click_released)
         self._win.add_controller(click)
 
@@ -283,6 +284,8 @@ class DropApp(Gtk.Application):
 
     def _show_zone(self, present=True, w=0, h=0):
         self._win.set_opacity(0.01)
+        if self._label:
+            self._label.set_visible(True)
         if w > 50 and h > 50:
             self._win.set_size_request(w, h)
             self._win.set_default_size(w, h)
@@ -300,7 +303,9 @@ class DropApp(Gtk.Application):
     def _show_card(self, files, w=0, h=0):
         self._drag_files = files
         self._win.set_opacity(0.01)
-        if w > 50 and h > 50:
+        if self._label:
+            self._label.set_visible(False)
+        if w > 50 and h > 20:
             self._win.set_size_request(w, h)
             self._win.set_default_size(w, h)
             if self._zone_box:

@@ -5785,11 +5785,12 @@ export const NotchNux = GObject.registerClass({
     }
 
     _buildShelfRow(f, devices) {
-        let row = new St.BoxLayout({ style_class: 'nook-shelf-row', orientation: Clutter.Orientation.HORIZONTAL, x_expand: true, reactive: true });
+        let row = new St.BoxLayout({ style_class: 'nook-shelf-row', orientation: Clutter.Orientation.HORIZONTAL, x_expand: true, reactive: false });
 
         let thumb = new St.BoxLayout({
             style_class: 'nook-shelf-thumb-holder',
             y_align: Clutter.ActorAlign.CENTER,
+            reactive: false,
         });
 
         let isImg = Boolean(f.name && f.name.match(/\.(png|jpg|jpeg|webp|svg|gif|bmp)$/i));
@@ -5801,14 +5802,16 @@ export const NotchNux = GObject.registerClass({
                     gicon: gicon,
                     icon_size: 24,
                     style_class: 'nook-shelf-row-icon nook-shelf-thumb',
-                    y_align: Clutter.ActorAlign.CENTER
+                    y_align: Clutter.ActorAlign.CENTER,
+                    reactive: false,
                 });
             } catch (_) {
                 thumbIcon = new St.Icon({
                     icon_name: 'image-x-generic-symbolic',
                     icon_size: 20,
                     style_class: 'nook-shelf-row-icon',
-                    y_align: Clutter.ActorAlign.CENTER
+                    y_align: Clutter.ActorAlign.CENTER,
+                    reactive: false,
                 });
             }
         } else {
@@ -5816,21 +5819,22 @@ export const NotchNux = GObject.registerClass({
                 icon_name: f.icon || 'text-x-generic-symbolic',
                 icon_size: 20,
                 style_class: 'nook-shelf-row-icon',
-                y_align: Clutter.ActorAlign.CENTER
+                y_align: Clutter.ActorAlign.CENTER,
+                reactive: false,
             });
         }
         thumb.add_child(thumbIcon);
 
         row.add_child(thumb);
 
-        let meta = new St.BoxLayout({ orientation: Clutter.Orientation.VERTICAL, x_expand: true, y_align: Clutter.ActorAlign.CENTER });
-        let name = new St.Label({ text: f.name, style_class: 'nook-shelf-row-name' });
+        let meta = new St.BoxLayout({ orientation: Clutter.Orientation.VERTICAL, x_expand: true, y_align: Clutter.ActorAlign.CENTER, reactive: false });
+        let name = new St.Label({ text: f.name, style_class: 'nook-shelf-row-name', reactive: false });
         name.clutter_text.ellipsize = Pango.EllipsizeMode.MIDDLE;
         meta.add_child(name);
-        meta.add_child(new St.Label({ text: f.sizeStr, style_class: 'nook-shelf-row-size' }));
+        meta.add_child(new St.Label({ text: f.sizeStr, style_class: 'nook-shelf-row-size', reactive: false }));
         row.add_child(meta);
 
-        let actions = new St.BoxLayout({ style_class: 'nook-shelf-row-actions', orientation: Clutter.Orientation.HORIZONTAL, y_align: Clutter.ActorAlign.CENTER });
+        let actions = new St.BoxLayout({ style_class: 'nook-shelf-row-actions', orientation: Clutter.Orientation.HORIZONTAL, y_align: Clutter.ActorAlign.CENTER, reactive: true });
         const mkAction = (icon, tip, fn) => {
             let b = new St.Button({ style_class: 'nook-shelf-action', reactive: true, can_focus: false });
             b.set_child(new St.Icon({ icon_name: icon, icon_size: 14 }));
@@ -6316,10 +6320,10 @@ export const NotchNux = GObject.registerClass({
             // has merely moved onto the menu (which lives in Main.uiGroup, not
             // our subtree, so it reads as "left"). The menu's own click handling
             // or a click-outside will close things.
-            if (this.isExpanded && !this._collapseTimeoutId && !this._anyOwnedMenuOpen()) {
+            if (this.isExpanded && !this._collapseTimeoutId && !this._anyOwnedMenuOpen() && !this.extension?._companionDragActive && !this.extension?._pendingCardTarget) {
                 this._collapseTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
                     this._collapseTimeoutId = null;
-                    if (!this._pointerInside && this.isExpanded && !this._anyOwnedMenuOpen())
+                    if (!this._pointerInside && this.isExpanded && !this._anyOwnedMenuOpen() && !this.extension?._companionDragActive && !this.extension?._pendingCardTarget)
                         this.collapse();
                     return GLib.SOURCE_REMOVE;
                 });
