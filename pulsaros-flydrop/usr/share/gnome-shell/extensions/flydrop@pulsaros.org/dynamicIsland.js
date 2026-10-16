@@ -50,11 +50,14 @@ class DynamicDropIsland extends St.Widget {
         this._pill.connect('enter-event', () => this._onEnter());
         this._pill.connect('leave-event', () => this._onLeave());
 
-        // Register Global Drag Monitor
-        this._dragMonitor = {
-            dragMotion: (dropEvent) => this._onGlobalDragMotion(dropEvent),
-        };
-        DND.addDragMonitor(this._dragMonitor);
+        // NOTE: deliberately no global drag monitor. It used to pop the
+        // "drop here to retain" pill over the top-centre of the screen (right
+        // over the Notch) the moment *any* drag started, and could swallow the
+        // drop, so a file dragged out of the Notch shelf vanished into the
+        // island. The island no longer appears on its own; files are sent from
+        // the FlyDrop indicator menu ("Send files...") or with
+        // `flydrop send <files>`.
+        this._dragMonitor = null;
 
         // Position on Top Center of Screen
         this._reposition();
@@ -259,15 +262,6 @@ class DynamicDropIsland extends St.Widget {
                 ? this._stagedItems.map(p => `file://${p}`).join('\r\n')
                 : this._stagedItems[0],
         };
-    }
-
-    _onGlobalDragMotion(dropEvent) {
-        // As long as drag is happening, reveal island
-        if (this._stagedItems.length === 0) {
-            this.reveal();
-            this._scheduleHide(2000);
-        }
-        return DND.DragMotionResult.CONTINUE;
     }
 
     _scheduleHide(delayMs) {

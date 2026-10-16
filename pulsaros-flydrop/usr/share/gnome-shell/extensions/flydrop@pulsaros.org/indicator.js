@@ -85,6 +85,13 @@ class FlyDropIndicator extends PanelMenu.Button {
         });
         this.menu.addMenuItem(settingsItem);
 
+        // 3b. Action: Send files (send target selector with a file picker)
+        const sendFilesItem = new PopupMenu.PopupMenuItem('Enviar ficheros...');
+        sendFilesItem.connect('activate', () => {
+            this._openSendDialog();
+        });
+        this.menu.addMenuItem(sendFilesItem);
+
         // 4. Action: Open Downloads Folder
         const downloadsItem = new PopupMenu.PopupMenuItem('Abrir carpeta de descargas');
         downloadsItem.connect('activate', () => {
@@ -207,6 +214,22 @@ class FlyDropIndicator extends PanelMenu.Button {
             null,
             null
         );
+    }
+
+    _openSendDialog() {
+        if (!this._dbusProxy) return;
+        try {
+            this._dbusProxy.call(
+                'OpenSendDialog',
+                new GLib.Variant('(s)', ['[]']),
+                Gio.DBusCallFlags.NONE,
+                -1,
+                null,
+                null
+            );
+        } catch (e) {
+            console.log(`[FlyDrop] Error opening send dialog: ${e.message}`);
+        }
     }
 
     _callDBusMethod(methodName) {

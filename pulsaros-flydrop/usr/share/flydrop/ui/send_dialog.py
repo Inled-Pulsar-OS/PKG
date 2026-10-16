@@ -58,6 +58,7 @@ class SendDialogWindow(Adw.Window):
         subtitle = Gtk.Label(label=summary_text or _("nearby_devices_subtitle"))
         subtitle.add_css_class("dim-label")
         header_box.append(subtitle)
+        self.subtitle = subtitle
         main_box.append(header_box)
 
         scrolled = Gtk.ScrolledWindow()
@@ -72,6 +73,12 @@ class SendDialogWindow(Adw.Window):
 
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         btn_box.set_halign(Gtk.Align.CENTER)
+
+        self.pick_btn = Gtk.Button(label=_("add_files"))
+        self.pick_btn.add_css_class("pill")
+        self.pick_btn.add_css_class("suggested-action")
+        self.pick_btn.connect("clicked", self.on_pick_files_clicked)
+        btn_box.append(self.pick_btn)
 
         self.scan_btn = Gtk.Button(label=_("scanning"))
         self.scan_btn.add_css_class("pill")
@@ -140,6 +147,36 @@ class SendDialogWindow(Adw.Window):
     def on_rescan_clicked(self, btn):
         self._trigger_scan()
         GLib.timeout_add(600, self._load_devices)
+
+    def on_pick_files_clicked(self, btn):
+        dialog = Gtk.FileDialog()
+        dialog.set_title(_("add_files"))
+        try:
+            dialog.open_multiple(self, None, self._on_files_picked)
+        except Exception as e:
+            print(f"Error opening file picker: {e}", file=sys.stderr)
+
+    def _on_files_picked(self, dialog, result):
+        try:
+            files = dialog.open_multiple_finish(result)
+        except GLib.Error:
+            return
+        paths = []
+        if files is not None:
+            for i in range(files.get_n_items()):
+                try:
+                    p = files.get_item(i).get_path()
+                except Exception:
+                    p = None
+                if p:
+                    paths.append(p)
+        if not paths:
+            return
+        self.files_list = paths
+        self.text_content = ""
+        cnt = len(paths)
+        first = os.path.basename(paths[0])
+        self.subtitle.set_text(f"{first}" if cnt == 1 else f"{first} (+{cnt-1} {_('file_plural')})")
 
     def on_device_selected(self, list_box, row):
         idx = row.get_index()
