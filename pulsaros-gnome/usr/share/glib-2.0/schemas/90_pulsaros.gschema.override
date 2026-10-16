@@ -176,8 +176,10 @@ sleep-inactive-battery-timeout=600
 idle-delay=uint32 600
 
 [org.gnome.shell.keybindings]
-toggle-overview=['<Super>s', '<Control>Up', '<Super>Up']
-toggle-application-view=['<Super>a', '<Control><Alt>Up', '<Super><Alt>Up']
+toggle-overview=['<Super>s', '<Control>Up', '<Super>Up', '<Control><Alt>Up', '<Super><Alt>Up']
+toggle-application-view=['<Super>a']
+shift-overview-up=@as []
+shift-overview-down=@as []
 
 [org.gnome.shell.extensions.just-perfection]
 notification-banner-position=2

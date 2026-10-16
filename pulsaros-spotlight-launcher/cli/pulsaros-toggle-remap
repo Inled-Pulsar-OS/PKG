@@ -38,8 +38,10 @@ def enable_macos_full_remap():
     run_gsettings(["set", "org.gnome.shell.keybindings", "screenshot", "['<Primary><Shift>numbersign']"])
     run_gsettings(["set", "org.gnome.shell.keybindings", "show-screenshot-ui", "['Print', '<Shift><Control>dollar', '<Shift><Super>4', '<Shift><Super>5']"])
     run_gsettings(["set", "org.gnome.shell.keybindings", "screenshot-window", "['<Shift><Control>percent']"])
-    run_gsettings(["set", "org.gnome.shell.keybindings", "toggle-overview", "['<Super>s', '<Control>Up', '<Super>Up']"])
-    run_gsettings(["set", "org.gnome.shell.keybindings", "toggle-application-view", "['<Super>a', '<Control><Alt>Up', '<Super><Alt>Up']"])
+    run_gsettings(["set", "org.gnome.shell.keybindings", "toggle-overview", "['<Super>s', '<Control>Up', '<Super>Up', '<Control><Alt>Up', '<Super><Alt>Up']"])
+    run_gsettings(["set", "org.gnome.shell.keybindings", "toggle-application-view", "['<Super>a']"])
+    run_gsettings(["set", "org.gnome.shell.keybindings", "shift-overview-up", "@as []"])
+    run_gsettings(["set", "org.gnome.shell.keybindings", "shift-overview-down", "@as []"])
     run_gsettings(["set", "org.gnome.shell.keybindings", "toggle-message-tray", "[]"])
 
     # 4. Media Keys & Lock

@@ -22,8 +22,92 @@ import gi
 
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
+try:
+    gi.require_version('WebKit', '6.0')
+    from gi.repository import WebKit
+    HAS_WEBKIT = True
+except Exception:
+    HAS_WEBKIT = False
 
 from gi.repository import Gtk, Gdk, GLib, Adw, Gio
+
+# ── Animated Fingerprint Widget (WebKit 6.0 Native SVG Animation Engine) ──────
+def create_animated_fingerprint_widget(size=130):
+    if HAS_WEBKIT:
+        try:
+            wv = WebKit.WebView()
+            bg = Gdk.RGBA()
+            bg.parse("rgba(0,0,0,0)")
+            wv.set_background_color(bg)
+            wv.set_size_request(size, size)
+            wv.set_halign(Gtk.Align.CENTER)
+            wv.set_valign(Gtk.Align.CENTER)
+            wv.connect("context-menu", lambda *args: True)
+
+            settings = wv.get_settings()
+            settings.set_enable_javascript(True)
+            settings.set_enable_developer_extras(False)
+
+            svg_path = "/usr/share/pulsaros/icons/fingerprint.svg"
+            if not os.path.exists(svg_path):
+                svg_path = "/home/jaime/Documentos/pulsar/PKG/fingerprint.svg"
+
+            svg_content = ""
+            if os.path.exists(svg_path):
+                with open(svg_path, "r", encoding="utf-8") as f:
+                    svg_content = f.read()
+
+            html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  html, body {{
+    background: transparent !important;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    -webkit-user-select: none;
+  }}
+  svg {{
+    width: {size - 10}px;
+    height: {size - 10}px;
+    display: block;
+  }}
+  @media (prefers-color-scheme: light) {{
+    path[stroke="#ededed"] {{
+      stroke: #8e8e93 !important;
+    }}
+  }}
+</style>
+</head>
+<body>
+{svg_content}
+</body>
+</html>"""
+            wv.load_html(html, "file:///")
+            return wv
+        except Exception as e:
+            print("WebKit widget exception:", e)
+
+    # Fallback to Gtk.Picture / Gtk.Image
+    svg_path = "/usr/share/pulsaros/icons/fingerprint.svg"
+    if os.path.exists(svg_path):
+        pic = Gtk.Picture.new_for_filename(svg_path)
+        pic.set_size_request(size, size)
+        pic.set_can_shrink(True)
+        pic.set_halign(Gtk.Align.CENTER)
+        return pic
+    img = Gtk.Image.new_from_icon_name("fingerprint-symbolic")
+    img.set_pixel_size(80)
+    img.set_halign(Gtk.Align.CENTER)
+    return img
+
 
 # Custom CSS for Apple macOS OOTB Setup Look-and-Feel (LIGHT MODE)
 CSS_DATA = """
@@ -469,11 +553,38 @@ def nmcli_connect_wifi(ssid, password=""):
         return False, str(e)
 
 
+def has_fingerprint_hardware():
+    if "TEST_MODE" in os.environ:
+        return True
+    try:
+        import dbus
+        bus = dbus.SystemBus()
+        mgr = bus.get_object('net.reactivated.Fprint', '/net/reactivated/Fprint/Manager')
+        devs = mgr.GetDevices(dbus_interface='net.reactivated.Fprint.Manager')
+        if devs and len(devs) > 0:
+            return True
+    except Exception:
+        pass
+    if shutil.which("fprintd-list"):
+        try:
+            res = subprocess.run(["fprintd-list"], capture_output=True, text=True, timeout=2)
+            if "found 1 devices" in res.stdout or "Using device" in res.stdout:
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def has_camera_hardware():
+    if "TEST_MODE" in os.environ:
+        return True
+    return any(os.path.exists(f"/dev/video{i}") for i in range(4))
+
+
 class OOTBWindow(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app)
         self.set_title("Pulsar OS Setup Assistant")
-        self.set_default_size(720, 560)
         self.set_resizable(False)
 
         if "TEST_MODE" not in os.environ:
@@ -561,9 +672,18 @@ class OOTBWindow(Adw.ApplicationWindow):
         self.build_keymap_page()
         self.build_timezone_page()
         self.build_account_page()
+        self.build_touch_id_page()
+        self.build_face_id_page()
+        self.build_presence_page()
         self.build_theme_page()
         self.build_progress_page()
         self.build_finished_page()
+
+        # States
+        self.selected_presence_enabled = False
+        self.selected_presence_timeout = 30
+        self.touch_id_enrolled = False
+        self.face_id_enrolled = False
 
         # Show first page
         self.stack.set_visible_child_name("country_select")
@@ -1148,6 +1268,385 @@ class OOTBWindow(Adw.ApplicationWindow):
         btn.add_css_class("selected")
         self.selected_avatar_path = btn.avatar_path
 
+    def is_spanish(self):
+        if getattr(self, "selected_language", None):
+            return self.selected_language.lower().startswith("es")
+        for k in ("LC_ALL", "LC_MESSAGES", "LANG"):
+            v = os.environ.get(k, "")
+            if v:
+                return v.lower().startswith("es")
+        return False
+
+    def tr(self, en_text, es_text):
+        return es_text if self.is_spanish() else en_text
+
+    # ==========================================================================
+    # Touch ID / Fingerprint Page
+    # ==========================================================================
+    def build_touch_id_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        box.set_valign(Gtk.Align.CENTER)
+        box.set_halign(Gtk.Align.CENTER)
+        box.set_size_request(520, -1)
+
+        # Animated Fingerprint Graphic
+        self.ootb_fp_widget = create_animated_fingerprint_widget(130)
+        box.append(self.ootb_fp_widget)
+
+        title = Gtk.Label()
+        title.set_markup("<span font_weight='bold' size='16000'>Touch ID</span>")
+        title.add_css_class("welcome-title")
+        box.append(title)
+
+        subtitle = Gtk.Label(label=self.tr(
+            "Use your fingerprint to unlock your device and authorize system tasks quickly and securely.",
+            "Usa tu huella dactilar para desbloquear tu equipo y autorizar tareas del sistema de forma rápida y segura."
+        ))
+        subtitle.set_wrap(True)
+        subtitle.set_justify(Gtk.Justification.CENTER)
+        subtitle.add_css_class("welcome-subtitle")
+        subtitle.set_max_width_chars(52)
+        box.append(subtitle)
+
+        # Interactive enrollment status card
+        self.touch_status_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.touch_status_card.add_css_class("apple-box")
+        self.touch_status_card.set_margin_top(6)
+        self.touch_status_card.set_margin_bottom(10)
+        self.touch_status_card.set_size_request(380, -1)
+
+        self.touch_progress_bar = Gtk.ProgressBar()
+        self.touch_progress_bar.set_fraction(0.0)
+        self.touch_progress_bar.set_visible(False)
+        self.touch_status_card.append(self.touch_progress_bar)
+
+        self.touch_instruction_label = Gtk.Label(label=self.tr(
+            "Place your finger on the sensor when you start setup.",
+            "Coloca tu dedo en el sensor cuando inicies la configuración."
+        ))
+        self.touch_instruction_label.set_wrap(True)
+        self.touch_instruction_label.set_justify(Gtk.Justification.CENTER)
+        self.touch_instruction_label.add_css_class("welcome-subtitle")
+        self.touch_status_card.append(self.touch_instruction_label)
+
+        box.append(self.touch_status_card)
+
+        # Buttons
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        btn_box.set_halign(Gtk.Align.CENTER)
+
+        self.btn_start_touch_id = Gtk.Button(label=self.tr("Set Up Touch ID", "Configurar Touch ID"))
+        self.btn_start_touch_id.add_css_class("pulsar-continue-btn")
+        self.btn_start_touch_id.connect("clicked", self.on_start_touch_id_clicked)
+        btn_box.append(self.btn_start_touch_id)
+
+        self.btn_skip_touch_id = Gtk.Button(label=self.tr("Set Up Later", "Configurar más tarde"))
+        self.btn_skip_touch_id.add_css_class("secondary-action")
+        self.btn_skip_touch_id.connect("clicked", self.on_skip_touch_id_clicked)
+        btn_box.append(self.btn_skip_touch_id)
+
+        box.append(btn_box)
+
+        self.stack.add_named(box, "touch_id")
+
+    def on_start_touch_id_clicked(self, btn):
+        self.btn_start_touch_id.set_sensitive(False)
+        self.touch_progress_bar.set_visible(True)
+        self.touch_progress_bar.set_fraction(0.08)
+        self.touch_instruction_label.set_markup(f"<b>{self.tr('Place your finger on the sensor...', 'Coloca tu dedo en el sensor de huella...')}</b>")
+
+        username = getattr(self, "saved_username", None) or self.username_entry.get_text().strip() or GLib.get_user_name()
+        self.touch_enroll_proc = None
+
+        def enroll_thread():
+            if "TEST_MODE" in os.environ and not shutil.which("fprintd-enroll"):
+                for step in range(1, 6):
+                    time.sleep(0.5)
+                    frac = step / 5.0
+                    GLib.idle_add(self.update_touch_id_progress, frac, self.tr("Lift your finger and place it again...", "Levanta el dedo y vuelve a colocarlo..."))
+                GLib.idle_add(self.on_touch_id_success)
+                return
+
+            try:
+                self.touch_enroll_proc = subprocess.Popen(
+                    ["fprintd-enroll", username],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1
+                )
+                stages = 0
+                max_stages = 8
+                completed = False
+                for line in self.touch_enroll_proc.stdout:
+                    line_s = line.strip()
+                    if not line_s:
+                        continue
+                    if "Enrolling" in line_s:
+                        GLib.idle_add(self.update_touch_id_progress, 0.1, self.tr("Place your finger on the sensor...", "Coloca tu dedo en el sensor..."))
+                    elif "enroll-stage-passed" in line_s:
+                        stages += 1
+                        frac = min(0.92, stages / float(max_stages))
+                        msg = f"{self.tr('Lift and place your finger again', 'Levanta el dedo y vuelve a colocarlo')} ({stages}/{max_stages})"
+                        GLib.idle_add(self.update_touch_id_progress, frac, msg)
+                    elif "enroll-retry-scan" in line_s:
+                        GLib.idle_add(self.update_touch_id_progress, None, self.tr("Reposition your finger firmly...", "Vuelve a colocar el dedo firmemente..."))
+                    elif "enroll-swipe-too-short" in line_s:
+                        GLib.idle_add(self.update_touch_id_progress, None, self.tr("Keep your finger longer on the sensor...", "Mantén el dedo más tiempo..."))
+                    elif "enroll-finger-not-centered" in line_s:
+                        GLib.idle_add(self.update_touch_id_progress, None, self.tr("Center your finger on the sensor...", "Centra tu dedo en el sensor..."))
+                    elif "enroll-completed" in line_s:
+                        completed = True
+                        GLib.idle_add(self.update_touch_id_progress, 1.0, self.tr("Touch ID configured successfully!", "¡Touch ID configurado con éxito!"))
+                        break
+                self.touch_enroll_proc.wait()
+                if self.touch_enroll_proc.returncode == 0 or completed:
+                    GLib.idle_add(self.on_touch_id_success)
+                else:
+                    GLib.idle_add(self.on_touch_id_failed)
+            except Exception:
+                GLib.idle_add(self.on_touch_id_failed)
+
+        threading.Thread(target=enroll_thread, daemon=True).start()
+
+    def update_touch_id_progress(self, frac, msg):
+        if frac is not None:
+            self.touch_progress_bar.set_fraction(frac)
+        self.touch_instruction_label.set_markup(f"<b>{msg}</b>")
+
+    def on_touch_id_success(self):
+        self.touch_id_enrolled = True
+        self.touch_progress_bar.set_fraction(1.0)
+        self.touch_instruction_label.set_markup(f"<span color='#34c759'><b>✓ {self.tr('Touch ID configured successfully', 'Touch ID configurado con éxito')}</b></span>")
+        self.btn_start_touch_id.set_visible(False)
+        self.btn_skip_touch_id.set_label(self.tr("Continue", "Continuar"))
+        self.btn_skip_touch_id.remove_css_class("secondary-action")
+        self.btn_skip_touch_id.add_css_class("pulsar-continue-btn")
+        if hasattr(self, "ootb_fp_widget") and hasattr(self.ootb_fp_widget, "evaluate_javascript"):
+            try:
+                self.ootb_fp_widget.evaluate_javascript("if(document.querySelector('svg')){ document.querySelector('svg').pauseAnimations(); } if(document.getElementById('i8')){ document.getElementById('i8').style.opacity = '1'; }", -1, None, None, None, None, None)
+            except Exception:
+                pass
+
+    def on_touch_id_failed(self):
+        self.btn_start_touch_id.set_sensitive(True)
+        self.touch_instruction_label.set_markup(f"<span color='#ff3b30'>{self.tr('Could not complete fingerprint registration. You can retry or set up later.', 'No se pudo completar el registro. Puedes reintentar o configurar más tarde.')}</span>")
+
+    def on_skip_touch_id_clicked(self, btn):
+        if hasattr(self, "touch_enroll_proc") and self.touch_enroll_proc and self.touch_enroll_proc.poll() is None:
+            try:
+                self.touch_enroll_proc.terminate()
+            except Exception:
+                pass
+        if has_camera_hardware():
+            self.stack.set_visible_child_name("face_id")
+        else:
+            self.stack.set_visible_child_name("presence_select")
+
+    # ==========================================================================
+    # Face ID Page
+    # ==========================================================================
+    def build_face_id_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        box.set_valign(Gtk.Align.CENTER)
+        box.set_halign(Gtk.Align.CENTER)
+        box.set_size_request(520, -1)
+
+        face_icon = Gtk.Image.new_from_icon_name("camera-web-symbolic")
+        face_icon.set_pixel_size(80)
+        face_icon.add_css_class("symbolic-blue")
+        box.append(face_icon)
+
+        title = Gtk.Label()
+        title.set_markup("<span font_weight='bold' size='16000'>Face ID</span>")
+        title.add_css_class("welcome-title")
+        box.append(title)
+
+        subtitle = Gtk.Label(label=self.tr(
+            "Log in and unlock your Pulsar OS instantly just by looking at the screen.",
+            "Inicia sesión y desbloquea tu Pulsar OS al instante con solo mirar a la pantalla."
+        ))
+        subtitle.set_wrap(True)
+        subtitle.set_justify(Gtk.Justification.CENTER)
+        subtitle.add_css_class("welcome-subtitle")
+        subtitle.set_max_width_chars(52)
+        box.append(subtitle)
+
+        # Status Card
+        self.face_status_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.face_status_card.add_css_class("apple-box")
+        self.face_status_card.set_margin_top(6)
+        self.face_status_card.set_margin_bottom(10)
+        self.face_status_card.set_size_request(380, -1)
+
+        self.face_progress_bar = Gtk.ProgressBar()
+        self.face_progress_bar.set_fraction(0.0)
+        self.face_progress_bar.set_visible(False)
+        self.face_status_card.append(self.face_progress_bar)
+
+        self.face_instruction_label = Gtk.Label(label=self.tr(
+            "Center your face in front of the screen with good lighting.",
+            "Centra tu rostro frente a la pantalla con iluminación adecuada."
+        ))
+        self.face_instruction_label.set_wrap(True)
+        self.face_instruction_label.set_justify(Gtk.Justification.CENTER)
+        self.face_instruction_label.add_css_class("welcome-subtitle")
+        self.face_status_card.append(self.face_instruction_label)
+
+        box.append(self.face_status_card)
+
+        # Buttons
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        btn_box.set_halign(Gtk.Align.CENTER)
+
+        self.btn_start_face_id = Gtk.Button(label=self.tr("Set Up Face ID", "Configurar Face ID"))
+        self.btn_start_face_id.add_css_class("pulsar-continue-btn")
+        self.btn_start_face_id.connect("clicked", self.on_start_face_id_clicked)
+        btn_box.append(self.btn_start_face_id)
+
+        self.btn_skip_face_id = Gtk.Button(label=self.tr("Set Up Later", "Configurar más tarde"))
+        self.btn_skip_face_id.add_css_class("secondary-action")
+        self.btn_skip_face_id.connect("clicked", self.on_skip_face_id_clicked)
+        btn_box.append(self.btn_skip_face_id)
+
+        box.append(btn_box)
+
+        self.stack.add_named(box, "face_id")
+
+    def on_start_face_id_clicked(self, btn):
+        self.btn_start_face_id.set_sensitive(False)
+        self.face_progress_bar.set_visible(True)
+        self.face_progress_bar.set_fraction(0.2)
+        self.face_instruction_label.set_markup(f"<b>{self.tr('Looking at camera. Keep your face centered...', 'Mirando a la cámara. Mantén el rostro centrado...')}</b>")
+
+        username = getattr(self, "saved_username", None) or self.username_entry.get_text().strip() or GLib.get_user_name()
+
+        def face_thread():
+            if "TEST_MODE" in os.environ and not shutil.which("gaze"):
+                for step in range(1, 5):
+                    time.sleep(0.6)
+                    frac = step / 4.0
+                    GLib.idle_add(self.update_face_id_progress, frac, self.tr("Analyzing facial features...", "Analizando rasgos faciales..."))
+                GLib.idle_add(self.on_face_id_success)
+                return
+
+            try:
+                proc = subprocess.run(["gaze", "add-face", "default", "-u", username], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=20)
+                if proc.returncode == 0:
+                    GLib.idle_add(self.on_face_id_success)
+                else:
+                    GLib.idle_add(self.on_face_id_failed)
+            except Exception:
+                GLib.idle_add(self.on_face_id_failed)
+
+        threading.Thread(target=face_thread, daemon=True).start()
+
+    def update_face_id_progress(self, frac, msg):
+        if frac is not None:
+            self.face_progress_bar.set_fraction(frac)
+        self.face_instruction_label.set_markup(f"<b>{msg}</b>")
+
+    def on_face_id_success(self):
+        self.face_id_enrolled = True
+        self.face_progress_bar.set_fraction(1.0)
+        self.face_instruction_label.set_markup(f"<span color='#34c759'><b>✓ {self.tr('Face ID configured successfully', 'Face ID configurado con éxito')}</b></span>")
+        self.btn_start_face_id.set_visible(False)
+        self.btn_skip_face_id.set_label(self.tr("Continue", "Continuar"))
+        self.btn_skip_face_id.remove_css_class("secondary-action")
+        self.btn_skip_face_id.add_css_class("pulsar-continue-btn")
+
+    def on_face_id_failed(self):
+        self.btn_start_face_id.set_sensitive(True)
+        self.face_instruction_label.set_markup(f"<span color='#ff3b30'>{self.tr('Could not detect face clearly. Try with better lighting.', 'No se pudo detectar el rostro con claridad. Intenta con más iluminación.')}</span>")
+
+    def on_skip_face_id_clicked(self, btn):
+        self.stack.set_visible_child_name("presence_select")
+
+    # ==========================================================================
+    # Presence Detection Page
+    # ==========================================================================
+    def build_presence_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        box.set_valign(Gtk.Align.CENTER)
+        box.set_halign(Gtk.Align.CENTER)
+        box.set_size_request(520, -1)
+
+        radar_icon = Gtk.Image.new_from_icon_name("security-high-symbolic")
+        radar_icon.set_pixel_size(72)
+        radar_icon.add_css_class("symbolic-blue")
+        box.append(radar_icon)
+
+        title = Gtk.Label()
+        title.set_markup(f"<span font_weight='bold' size='16000'>{self.tr('Presence Detection', 'Detección de Presencia')}</span>")
+        title.add_css_class("welcome-title")
+        box.append(title)
+
+        subtitle = Gtk.Label(label=self.tr(
+            "Protect your privacy by automatically locking your computer when you walk away from the screen.",
+            "Protege tu privacidad bloqueando el equipo automáticamente cuando te alejes de la pantalla."
+        ))
+        subtitle.set_wrap(True)
+        subtitle.set_justify(Gtk.Justification.CENTER)
+        subtitle.add_css_class("welcome-subtitle")
+        subtitle.set_max_width_chars(52)
+        box.append(subtitle)
+
+        # Settings Box
+        pref_group = Adw.PreferencesGroup()
+        pref_group.set_size_request(420, -1)
+
+        self.ootb_presence_switch = Adw.SwitchRow()
+        self.ootb_presence_switch.set_title(self.tr("Auto-lock on absence", "Bloqueo automático por ausencia"))
+        self.ootb_presence_switch.set_subtitle(self.tr(
+            "Lock screen when not in front of the computer",
+            "Bloquear pantalla cuando no estés frente al equipo"
+        ))
+        self.ootb_presence_switch.set_active(False)
+        pref_group.add(self.ootb_presence_switch)
+
+        self.ootb_presence_timeout = Adw.ComboRow()
+        self.ootb_presence_timeout.set_title(self.tr("Lock timeout", "Tiempo de espera"))
+        self.ootb_presence_timeout.set_subtitle(self.tr("Time of absence before locking", "Tiempo de ausencia antes de bloquear"))
+        model = Gtk.StringList.new([
+            self.tr("15 seconds (High security)", "15 segundos (Máxima seguridad)"),
+            self.tr("30 seconds (Recommended)", "30 segundos (Recomendado)"),
+            self.tr("1 minute", "1 minuto"),
+            self.tr("2 minutes", "2 minutos")
+        ])
+        self.ootb_presence_timeout.set_model(model)
+        self.ootb_presence_timeout.set_selected(1) # 30s
+        pref_group.add(self.ootb_presence_timeout)
+
+        box.append(pref_group)
+
+        privacy_lbl = Gtk.Label()
+        privacy_lbl.set_markup(f"<span size='small' color='#86868b'>{self.tr('Processing is 100% on-device and private. You can change this later in Settings.', 'El procesamiento se realiza 100% de forma local en tu equipo. Podrás cambiar esto más adelante en Ajustes.')}</span>")
+        privacy_lbl.set_wrap(True)
+        privacy_lbl.set_justify(Gtk.Justification.CENTER)
+        privacy_lbl.set_max_width_chars(52)
+        box.append(privacy_lbl)
+
+        # Action Buttons
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        btn_box.set_halign(Gtk.Align.CENTER)
+
+        btn_continue = Gtk.Button(label=self.tr("Continue", "Continuar"))
+        btn_continue.add_css_class("pulsar-continue-btn")
+        btn_continue.connect("clicked", self.on_presence_continue_clicked)
+        btn_box.append(btn_continue)
+
+        box.append(btn_box)
+
+        self.stack.add_named(box, "presence_select")
+
+    def on_presence_continue_clicked(self, btn):
+        self.selected_presence_enabled = self.ootb_presence_switch.get_active()
+        idx = self.ootb_presence_timeout.get_selected()
+        mapping = {0: 15, 1: 30, 2: 60, 3: 120}
+        self.selected_presence_timeout = mapping.get(idx, 30)
+        self.stack.set_visible_child_name("theme_select")
+
+
     def build_theme_page(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         box.set_valign(Gtk.Align.CENTER)
@@ -1338,10 +1837,30 @@ class OOTBWindow(Adw.ApplicationWindow):
         elif current_page == "account":
             self.btn_next.set_sensitive(bool(self.selected_timezone))
             self.stack.set_visible_child_name("timezone")
+        elif current_page == "touch_id":
+            self.btn_next.set_sensitive(True)
+            self.stack.set_visible_child_name("account")
+        elif current_page == "face_id":
+            if has_fingerprint_hardware():
+                self.stack.set_visible_child_name("touch_id")
+            else:
+                self.stack.set_visible_child_name("account")
+        elif current_page == "presence_select":
+            if has_camera_hardware():
+                self.stack.set_visible_child_name("face_id")
+            elif has_fingerprint_hardware():
+                self.stack.set_visible_child_name("touch_id")
+            else:
+                self.stack.set_visible_child_name("account")
         elif current_page == "theme_select":
             self.btn_next.set_sensitive(True)
             self.btn_next.set_label("Continue")
-            self.stack.set_visible_child_name("account")
+            if has_camera_hardware():
+                self.stack.set_visible_child_name("presence_select")
+            elif has_fingerprint_hardware():
+                self.stack.set_visible_child_name("touch_id")
+            else:
+                self.stack.set_visible_child_name("account")
 
     def show_error(self, message):
         dialog = Adw.MessageDialog(
@@ -1437,6 +1956,24 @@ class OOTBWindow(Adw.ApplicationWindow):
 
             self.btn_next.set_sensitive(True)
             self.btn_next.set_label("Continue")
+
+            if has_fingerprint_hardware():
+                self.stack.set_visible_child_name("touch_id")
+            elif has_camera_hardware():
+                self.stack.set_visible_child_name("face_id")
+            else:
+                self.stack.set_visible_child_name("theme_select")
+
+        elif current_page == "touch_id":
+            if has_camera_hardware():
+                self.stack.set_visible_child_name("face_id")
+            else:
+                self.stack.set_visible_child_name("theme_select")
+
+        elif current_page == "face_id":
+            self.stack.set_visible_child_name("presence_select")
+
+        elif current_page == "presence_select":
             self.stack.set_visible_child_name("theme_select")
 
         elif current_page == "theme_select":
@@ -1783,8 +2320,10 @@ class OOTBWindow(Adw.ApplicationWindow):
                     ("org.gnome.mutter.keybindings", "toggle-tiled-right", "[]"),
                     ("org.gnome.desktop.wm.keybindings", "switch-to-workspace-left", "['<Super>Left']"),
                     ("org.gnome.desktop.wm.keybindings", "switch-to-workspace-right", "['<Super>Right']"),
-                    ("org.gnome.shell.keybindings", "toggle-overview", "['<Super>s', '<Control>Up', '<Super>Up']"),
-                    ("org.gnome.shell.keybindings", "toggle-application-view", "['<Super>a', '<Control><Alt>Up', '<Super><Alt>Up']"),
+                    ("org.gnome.shell.keybindings", "toggle-overview", "['<Super>s', '<Control>Up', '<Super>Up', '<Control><Alt>Up', '<Super><Alt>Up']"),
+                    ("org.gnome.shell.keybindings", "toggle-application-view", "['<Super>a']"),
+                    ("org.gnome.shell.keybindings", "shift-overview-up", "@as []"),
+                    ("org.gnome.shell.keybindings", "shift-overview-down", "@as []"),
                     ("org.gnome.shell.keybindings", "toggle-message-tray", "[]"),
                     ("org.gnome.shell.keybindings", "screenshot", "['<Primary><Shift>numbersign']"),
                     ("org.gnome.shell.keybindings", "show-screenshot-ui", "['Print', '<Shift><Control>dollar', '<Shift><Super>4', '<Shift><Super>5']"),
@@ -1877,6 +2416,26 @@ class OOTBWindow(Adw.ApplicationWindow):
                         pass
 
                 run_cmd(["chown", "-R", f"{username}:{username}", f"{user_home}/.config"], check=False)
+
+                # ── Presence Detection Configuration ─────────────
+                presence_enabled = getattr(self, "selected_presence_enabled", False)
+                presence_timeout = getattr(self, "selected_presence_timeout", 30)
+                user_presence_cfg = {
+                    "enabled": presence_enabled,
+                    "timeout_seconds": presence_timeout,
+                    "idle_threshold_seconds": 15
+                }
+                user_cfg_dir = f"{user_home}/.config/pulsaros"
+                os.makedirs(user_cfg_dir, exist_ok=True)
+                try:
+                    with open(f"{user_cfg_dir}/presence.json", "w") as f_pres:
+                        json.dump(user_presence_cfg, f_pres, indent=2)
+                    with open("/etc/pulsaros/presence.json", "w") as f_pres_sys:
+                        json.dump(user_presence_cfg, f_pres_sys, indent=2)
+                    run_cmd(["chown", "-R", f"{username}:{username}", user_cfg_dir], check=False)
+                    log_msg(f"Presence config saved: enabled={presence_enabled}, timeout={presence_timeout}s")
+                except Exception as ex_p:
+                    log_msg(f"Notice: presence config write error: {ex_p}")
 
             GLib.idle_add(self.on_setup_completed)
 
