@@ -2676,5 +2676,8 @@ class OOTBApp(Adw.Application):
 
 
 if __name__ == "__main__":
+    # Strip our custom flags from sys.argv before passing to GTK Application
+    # so it doesn't reject them as unknown options
+    sys.argv = [a for a in sys.argv if a not in ("--force", "--test")]
     app = OOTBApp()
     sys.exit(app.run(sys.argv))
