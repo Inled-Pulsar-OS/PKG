@@ -1,0 +1,151 @@
+/* Pulsar OS - What's New
+ * Styling for the release notes rendered inside the WebKit webview.
+ * The palette follows the system light/dark preference. */
+
+:root {
+  color-scheme: light;
+  --ink: #1c1c1e;
+  --muted: #6e6e73;
+  --link: #0071e3;
+  --rule: rgba(0, 0, 0, 0.10);
+  --code-bg: rgba(120, 120, 128, 0.12);
+  --quote-bg: rgba(0, 113, 227, 0.07);
+  --bg: #ffffff;
+}
+
+/* The dark palette is applied explicitly by the viewer according to
+ * libadwaita's current color scheme (class="dark" on <html>). We do not rely
+ * on prefers-color-scheme because WebKitGTK does not always report it. */
+:root.dark {
+  color-scheme: dark;
+  --ink: #f5f5f7;
+  --muted: #9a9aa0;
+  --link: #2997ff;
+  --rule: rgba(255, 255, 255, 0.14);
+  --code-bg: rgba(235, 235, 245, 0.14);
+  --quote-bg: rgba(41, 151, 255, 0.12);
+  --bg: #1e1e20;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  font-family: -apple-system, "Cantarell", "Inter", "Segoe UI", system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.content {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 22px 26px 44px 26px;
+}
+
+.note h1 {
+  font-size: 1.9em;
+  line-height: 1.2;
+  margin: 0.2em 0 0.25em 0;
+  letter-spacing: -0.02em;
+}
+
+.note h1 + .note-meta {
+  margin-top: 0;
+}
+
+.note-meta {
+  color: var(--muted);
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.9em;
+}
+
+.note-packages {
+  margin: 0.2em 0 1.2em 0;
+}
+
+.note-packages code {
+  margin-right: 0.35em;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 1.5em 0 0.55em 0;
+}
+
+h2 { font-size: 1.4em; letter-spacing: -0.01em; }
+h3 { font-size: 1.18em; }
+h4 { font-size: 1.05em; }
+
+p { margin: 0.7em 0; }
+
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+ul, ol { margin: 0.6em 0; padding-left: 1.6em; }
+li { margin: 0.3em 0; }
+li > ul, li > ol { margin: 0.3em 0; }
+
+code {
+  font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+  font-size: 0.9em;
+  background: var(--code-bg);
+  padding: 0.12em 0.4em;
+  border-radius: 6px;
+}
+
+pre {
+  background: var(--code-bg);
+  padding: 14px 16px;
+  border-radius: 12px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.88em;
+}
+
+blockquote {
+  margin: 1em 0;
+  padding: 0.7em 1.1em;
+  border-left: 3px solid var(--link);
+  background: var(--quote-bg);
+  border-radius: 0 10px 10px 0;
+  color: var(--ink);
+}
+
+blockquote p { margin: 0.35em 0; }
+
+hr {
+  border: none;
+  border-top: 1px solid var(--rule);
+  margin: 1.8em 0;
+}
+
+hr.note-sep { margin: 2.6em 0; }
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  font-size: 0.95em;
+}
+
+th, td {
+  border: 1px solid var(--rule);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+th { background: var(--code-bg); font-weight: 600; }
+
+img { max-width: 100%; border-radius: 10px; }
+
+del { color: var(--muted); }

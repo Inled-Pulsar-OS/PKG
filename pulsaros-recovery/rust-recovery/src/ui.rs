@@ -4,7 +4,7 @@ use crate::icons::{create_button_with_icon, create_icon_widget, get_lucide_icon_
 use crate::manifest::{fetch_release_manifest, local_manifest_fallback};
 use crate::models::{
     AppType, BtrfsTarget, DownloadMsg, EncryptedTarget, ExternalDrive, InstalledApp, ManifestData,
-    NetConnType, RecoveryMode, RecoveryUpdate, WifiNetwork,
+    NetConnType, RecoveryMode, RecoveryUpdate, UnlockCaller, WifiNetwork,
 };
 use crate::network::{
     connect_wifi, get_network_status, open_external_network_settings, scan_wifi_networks,
@@ -12,9 +12,9 @@ use crate::network::{
 use crate::restore::run_restoration;
 use crate::system::{
     copy_folder_with_progress, detect_system_base, detect_system_bootloader, exec_cmd,
-    find_btrfs_targets, find_encrypted_targets, format_file_size, is_valid_base_squashfs,
-    launch_chroot_terminal, log_msg, scan_external_drives, scan_installed_applications,
-    scan_usb_devices, set_keyboard_layout, unlock_luks_partition,
+    find_btrfs_targets, find_encrypted_targets, format_file_size, is_root, is_valid_base_squashfs,
+    launch_chroot_terminal, launch_terminal_with_command, log_msg, open_system_logs, scan_external_drives,
+    scan_installed_applications, scan_usb_devices, set_keyboard_layout, unlock_luks_partition,
 };
 use crate::theme::APP_CSS;
 use glib::clone;
@@ -71,7 +71,7 @@ pub(crate) fn build_ui(app: &Application) {
 
     let card_box = GtkBox::new(Orientation::Vertical, 0);
     card_box.add_css_class("apple-box");
-    card_box.set_size_request(680, 580);
+    card_box.set_size_request(660, 480);
     card_box.set_valign(Align::Center);
     card_box.set_halign(Align::Center);
 
@@ -84,10 +84,10 @@ pub(crate) fn build_ui(app: &Application) {
     root_box.append(&center_box);
 
     // Bottom center control buttons: Restart & Shut Down
-    let bottom_bar = GtkBox::new(Orientation::Horizontal, 16);
+    let bottom_bar = GtkBox::new(Orientation::Horizontal, 14);
     bottom_bar.set_halign(Align::Center);
     bottom_bar.set_valign(Align::End);
-    bottom_bar.set_margin_bottom(24);
+    bottom_bar.set_margin_bottom(12);
 
     if is_demo_mode() {
         let demo_pill = GtkBox::new(Orientation::Horizontal, 6);
@@ -133,7 +133,7 @@ pub(crate) fn build_ui(app: &Application) {
     ];
     let kb_list = StringList::new(&kb_layouts);
     let combo_kb = DropDown::new(Some(kb_list), gtk4::Expression::NONE);
-    combo_kb.add_css_class("secondary-action");
+    combo_kb.add_css_class("keyboard-dropdown");
     combo_kb.connect_selected_notify(|dd| {
         let code = match dd.selected() {
             0 => "es",
@@ -160,6 +160,7 @@ pub(crate) fn build_ui(app: &Application) {
     let selected_action: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
     let selected_target: Rc<RefCell<Option<BtrfsTarget>>> = Rc::new(RefCell::new(None));
     let selected_encrypted_target: Rc<RefCell<Option<EncryptedTarget>>> = Rc::new(RefCell::new(None));
+    let unlock_caller: Rc<RefCell<Option<UnlockCaller>>> = Rc::new(RefCell::new(None));
     let current_source_desc: Rc<RefCell<String>> = Rc::new(RefCell::new("Source: Built-in Recovery Partition".to_string()));
     let selected_image_path: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
     let recovery_mode: Rc<RefCell<RecoveryMode>> = Rc::new(RefCell::new(RecoveryMode::Local));
@@ -170,7 +171,7 @@ pub(crate) fn build_ui(app: &Application) {
     // ─────────────────────────────────────────────────────────────
     // 1. Utilities Screen (macOS Recovery main view)
     // ─────────────────────────────────────────────────────────────
-    let util_box = GtkBox::new(Orientation::Vertical, 10);
+    let util_box = GtkBox::new(Orientation::Vertical, 4);
     util_box.set_valign(Align::Center);
 
     let header_lbl = Label::new(Some("Pulsar OS Recovery Utilities"));
@@ -191,17 +192,17 @@ pub(crate) fn build_ui(app: &Application) {
         row.set_widget_name(id);
         row.add_css_class("utility-item-row");
 
-        let card = GtkBox::new(Orientation::Horizontal, 16);
+        let card = GtkBox::new(Orientation::Horizontal, 12);
         card.add_css_class("utility-row-card");
-        card.set_margin_top(3);
-        card.set_margin_bottom(3);
+        card.set_margin_top(1);
+        card.set_margin_bottom(1);
         card.set_margin_start(2);
         card.set_margin_end(2);
 
-        let icon = create_icon_widget(icon_file, icon_fallback, 44);
+        let icon = create_icon_widget(icon_file, icon_fallback, 30);
         card.append(&icon);
 
-        let vbox = GtkBox::new(Orientation::Vertical, 2);
+        let vbox = GtkBox::new(Orientation::Vertical, 1);
         vbox.set_valign(Align::Center);
 
         let title_l = Label::new(Some(title));
@@ -223,28 +224,28 @@ pub(crate) fn build_ui(app: &Application) {
     add_row(
         "timemachine",
         "Restore from Time Machine (Btrfs + Restic)",
-        "Restore full system or personal files from a Time Machine backup (USB, Samba/NAS or Cloud Rclone).",
+        "Restore system or personal files from a local or network Time Machine backup.",
         "/usr/share/pulsaros-recovery/timemachine.png",
         "restore",
     );
     add_row(
         "reinstall",
         "Reinstall Pulsar OS (Local Partition)",
-        "Install a fresh copy of Pulsar OS from built-in recovery while keeping personal files intact.",
+        "Install a fresh copy of Pulsar OS while keeping personal files intact.",
         "/usr/share/pulsaros-recovery/reinstall.png",
         "restore",
     );
     add_row(
         "usb_restore",
         "Restore from USB Flash Drive",
-        "Scan connected USB drives to find and restore a downloaded .squashfs system image.",
+        "Scan connected USB drives to find and restore a downloaded .squashfs image.",
         "",
         "usb",
     );
     add_row(
         "internet_info",
         "Pulsar Internet Recovery",
-        "Download latest recovery image from SourceForge CDN and reinstall directly over the internet.",
+        "Download official system recovery image from SourceForge CDN and reinstall.",
         "/usr/share/pulsaros-recovery/safari.png",
         "safari",
     );
@@ -265,7 +266,7 @@ pub(crate) fn build_ui(app: &Application) {
     add_row(
         "chroot_terminal",
         "Open System Terminal (Chroot)",
-        "Mount your installed Pulsar OS system and open a root terminal directly inside your system.",
+        "Mount your installed Pulsar OS system and open a root terminal directly inside it.",
         "/usr/share/pulsaros-recovery/terminal.png",
         "terminal",
     );
@@ -279,15 +280,22 @@ pub(crate) fn build_ui(app: &Application) {
     add_row(
         "logs",
         "System & Installation Logs",
-        "View and inspect installer, recovery and setup logs stored in /var/log/pulsaros.",
+        "View and inspect installer and system logs stored in /var/log/pulsaros.",
         "/usr/share/pulsaros-recovery/terminal.png",
         "file-text",
     );
 
-    util_box.append(&listbox);
+    let scrolled_util = ScrolledWindow::builder()
+        .hscrollbar_policy(gtk4::PolicyType::Never)
+        .vscrollbar_policy(gtk4::PolicyType::Automatic)
+        .propagate_natural_height(true)
+        .max_content_height(330)
+        .build();
+    scrolled_util.set_child(Some(&listbox));
+    util_box.append(&scrolled_util);
 
     let util_btn_box = GtkBox::new(Orientation::Horizontal, 0);
-    util_btn_box.set_margin_top(14);
+    util_btn_box.set_margin_top(6);
     let util_spacer = GtkBox::new(Orientation::Horizontal, 0);
     util_spacer.set_hexpand(true);
     util_btn_box.append(&util_spacer);
@@ -1106,6 +1114,51 @@ pub(crate) fn build_ui(app: &Application) {
     stack.add_named(&app_box, Some("app_review"));
 
     // ─────────────────────────────────────────────────────────────
+    // Helper: Prompt Unlock LUKS Partition
+    // ─────────────────────────────────────────────────────────────
+    let prompt_unlock = {
+        let selected_encrypted_target = selected_encrypted_target.clone();
+        let unlock_caller = unlock_caller.clone();
+        let lbl_unlock_part_info = lbl_unlock_part_info.clone();
+        let unlock_desc = unlock_desc.clone();
+        let entry_luks_pw = entry_luks_pw.clone();
+        let lbl_unlock_err = lbl_unlock_err.clone();
+        let lbl_unlock_status = lbl_unlock_status.clone();
+        let spinner_unlock = spinner_unlock.clone();
+        let btn_unlock_do = btn_unlock_do.clone();
+        let stack = stack.clone();
+
+        Rc::new(move |target: EncryptedTarget, caller: UnlockCaller| {
+            *selected_encrypted_target.borrow_mut() = Some(target.clone());
+            *unlock_caller.borrow_mut() = Some(caller.clone());
+            lbl_unlock_part_info.set_text(&format!("Partition: {}  |  Size: {}", target.part_path, target.size));
+            match caller {
+                UnlockCaller::Chroot => {
+                    unlock_desc.set_text("This disk partition is encrypted with LUKS.\nEnter your passphrase to unlock and launch the system terminal.");
+                }
+                UnlockCaller::RescueFiles => {
+                    unlock_desc.set_text("This disk partition is encrypted with LUKS.\nEnter your passphrase to unlock and rescue files from your home directory.");
+                }
+                UnlockCaller::Logs => {
+                    unlock_desc.set_text("This disk partition is encrypted with LUKS.\nEnter your passphrase to unlock and inspect system logs.");
+                }
+                UnlockCaller::TargetSelect(_) => {
+                    unlock_desc.set_text("This disk partition is encrypted with LUKS.\nEnter your passphrase to unlock and access the system for recovery.");
+                }
+            }
+            entry_luks_pw.set_text("");
+            lbl_unlock_err.set_text("");
+            lbl_unlock_err.set_visible(false);
+            lbl_unlock_status.set_text("");
+            spinner_unlock.set_spinning(false);
+            spinner_unlock.set_visible(false);
+            btn_unlock_do.set_sensitive(true);
+            stack.set_visible_child_name("unlock_luks");
+            entry_luks_pw.grab_focus();
+        })
+    };
+
+    // ─────────────────────────────────────────────────────────────
     // Helper: Refresh Target Partitions & Show Target Screen
     // ─────────────────────────────────────────────────────────────
     let show_target_screen = {
@@ -1113,15 +1166,9 @@ pub(crate) fn build_ui(app: &Application) {
         let targets_flow = targets_flow.clone();
         let btn_target_restore = btn_target_restore.clone();
         let selected_target = selected_target.clone();
-        let selected_encrypted_target = selected_encrypted_target.clone();
         let current_source_desc = current_source_desc.clone();
         let source_img_lbl = source_img_lbl.clone();
-        let lbl_unlock_part_info = lbl_unlock_part_info.clone();
-        let entry_luks_pw = entry_luks_pw.clone();
-        let lbl_unlock_err = lbl_unlock_err.clone();
-        let lbl_unlock_status = lbl_unlock_status.clone();
-        let spinner_unlock = spinner_unlock.clone();
-        let btn_unlock_do = btn_unlock_do.clone();
+        let prompt_unlock = prompt_unlock.clone();
 
         Rc::new(move |source_desc: &str| {
             *current_source_desc.borrow_mut() = source_desc.to_string();
@@ -1222,27 +1269,11 @@ pub(crate) fn build_ui(app: &Application) {
 
                     let gesture = GestureClick::new();
                     let enc_clone = enc.clone();
-                    let sel_enc_c = selected_encrypted_target.clone();
-                    let stack_c = stack.clone();
-                    let info_lbl_c = lbl_unlock_part_info.clone();
-                    let pw_entry_c = entry_luks_pw.clone();
-                    let err_lbl_c = lbl_unlock_err.clone();
-                    let status_lbl_c = lbl_unlock_status.clone();
-                    let spin_c = spinner_unlock.clone();
-                    let btn_do_c = btn_unlock_do.clone();
+                    let prompt_unlock_c = prompt_unlock.clone();
+                    let src_clone = source_desc.to_string();
 
                     gesture.connect_released(move |_, _, _, _| {
-                        *sel_enc_c.borrow_mut() = Some(enc_clone.clone());
-                        info_lbl_c.set_text(&format!("Partition: {}  |  Size: {}", enc_clone.part_path, enc_clone.size));
-                        pw_entry_c.set_text("");
-                        err_lbl_c.set_text("");
-                        err_lbl_c.set_visible(false);
-                        status_lbl_c.set_text("");
-                        spin_c.set_spinning(false);
-                        spin_c.set_visible(false);
-                        btn_do_c.set_sensitive(true);
-                        stack_c.set_visible_child_name("unlock_luks");
-                        pw_entry_c.grab_focus();
+                        prompt_unlock_c(enc_clone.clone(), UnlockCaller::TargetSelect(src_clone.clone()));
                     });
 
                     card.add_controller(gesture);
@@ -2510,7 +2541,8 @@ pub(crate) fn build_ui(app: &Application) {
         @strong recovery_mode,
         @strong show_target_screen,
         @strong populate_usb_images,
-        @strong populate_rescue_options
+        @strong populate_rescue_options,
+        @strong prompt_unlock
      => move |_| {
         let action = selected_action.borrow().clone().unwrap_or_default();
         match action.as_str() {
@@ -2530,10 +2562,10 @@ pub(crate) fn build_ui(app: &Application) {
             }
             "terminal" => {
                 log_msg("Launching recovery root terminal...");
-                let _ = Command::new("sh")
-                    .arg("-c")
-                    .arg("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; xhost +SI:localuser:root >/dev/null 2>&1 || xhost +local: >/dev/null 2>&1 || xhost + >/dev/null 2>&1 || true; (xterm -title 'Pulsar OS Recovery Terminal' -bg '#18181b' -fg '#ffffff' -fa Monospace -fs 11 -e sudo bash || gnome-terminal -- sudo bash || alacritty -e sudo bash || x-terminal-emulator -e sudo bash || xterm -e sudo bash) &")
-                    .spawn();
+                let root_cmd = if is_root() { "bash" } else { "sudo bash" };
+                if let Err(e) = launch_terminal_with_command("Pulsar OS Recovery Terminal", root_cmd) {
+                    log_msg(&format!("Failed to open terminal: {}", e));
+                }
             }
             "chroot_terminal" => {
                 log_msg("Initiating 1-Click Chroot Terminal session...");
@@ -2547,15 +2579,13 @@ pub(crate) fn build_ui(app: &Application) {
                     });
                 } else {
                     let enc = find_encrypted_targets();
-                    if let Some(first_enc) = enc.first() {
-                        if first_enc.is_unlocked {
-                            let part = format!("/dev/mapper/{}", first_enc.mapper_name);
-                            std::thread::spawn(move || {
-                                let _ = launch_chroot_terminal(&part);
-                            });
-                        } else {
-                            stack.set_visible_child_name("unlock_luks");
-                        }
+                    if let Some(first_enc) = enc.into_iter().find(|e| !e.is_unlocked) {
+                        prompt_unlock(first_enc, UnlockCaller::Chroot);
+                    } else if let Some(unlocked_enc) = find_encrypted_targets().into_iter().find(|e| e.is_unlocked) {
+                        let part = format!("/dev/mapper/{}", unlocked_enc.mapper_name);
+                        std::thread::spawn(move || {
+                            let _ = launch_chroot_terminal(&part);
+                        });
                     } else {
                         log_msg("No Pulsar OS system partition detected to chroot into.");
                     }
@@ -2563,15 +2593,33 @@ pub(crate) fn build_ui(app: &Application) {
             }
             "rescue_files" => {
                 log_msg("Opening File Rescue utility...");
+                let targets = find_btrfs_targets();
+                if targets.is_empty() {
+                    let enc = find_encrypted_targets();
+                    if let Some(first_enc) = enc.into_iter().find(|e| !e.is_unlocked) {
+                        prompt_unlock(first_enc, UnlockCaller::RescueFiles);
+                        return;
+                    }
+                }
                 populate_rescue_options();
                 stack.set_visible_child_name("rescue_files");
             }
             "logs" => {
-                log_msg("Opening Pulsar OS logs directory...");
-                let _ = Command::new("sh")
-                    .arg("-c")
-                    .arg("mkdir -p /var/log/pulsaros; xhost +SI:localuser:root >/dev/null 2>&1 || true; (nautilus /var/log/pulsaros || xdg-open /var/log/pulsaros || gnome-text-editor /var/log/pulsaros/installer.log || xterm -title 'Pulsar OS Logs' -e less /var/log/pulsaros/installer.log) &")
-                    .spawn();
+                log_msg("Opening Pulsar OS logs utility...");
+                let targets = find_btrfs_targets();
+                if let Some(first) = targets.first() {
+                    open_system_logs(Some(&first.part_path));
+                } else {
+                    let enc = find_encrypted_targets();
+                    if let Some(first_enc) = enc.into_iter().find(|e| !e.is_unlocked) {
+                        prompt_unlock(first_enc, UnlockCaller::Logs);
+                    } else if let Some(unlocked_enc) = find_encrypted_targets().into_iter().find(|e| e.is_unlocked) {
+                        let mapper_dev = format!("/dev/mapper/{}", unlocked_enc.mapper_name);
+                        open_system_logs(Some(&mapper_dev));
+                    } else {
+                        open_system_logs(None);
+                    }
+                }
             }
             "internet_info" => {
                 stack.set_visible_child_name("internet_info");
@@ -2664,6 +2712,7 @@ pub(crate) fn build_ui(app: &Application) {
     // ─────────────────────────────────────────────────────────────
     let do_unlock_action = {
         let selected_encrypted_target = selected_encrypted_target.clone();
+        let unlock_caller = unlock_caller.clone();
         let entry_luks_pw = entry_luks_pw.clone();
         let lbl_unlock_err = lbl_unlock_err.clone();
         let lbl_unlock_status = lbl_unlock_status.clone();
@@ -2672,6 +2721,8 @@ pub(crate) fn build_ui(app: &Application) {
         let btn_unlock_back = btn_unlock_back.clone();
         let show_target_screen = show_target_screen.clone();
         let current_source_desc = current_source_desc.clone();
+        let populate_rescue_options = populate_rescue_options.clone();
+        let stack = stack.clone();
 
         Rc::new(move || {
             let enc_opt = selected_encrypted_target.borrow().clone();
@@ -2712,6 +2763,9 @@ pub(crate) fn build_ui(app: &Application) {
             let show_tgt_c = show_target_screen.clone();
             let cur_src_c = current_source_desc.clone();
             let pw_entry_c = entry_luks_pw.clone();
+            let unlock_caller_c = unlock_caller.clone();
+            let populate_rescue_c = populate_rescue_options.clone();
+            let stack_c = stack.clone();
 
             glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
                 match rx.try_recv() {
@@ -2724,9 +2778,34 @@ pub(crate) fn build_ui(app: &Application) {
 
                         match res {
                             Ok(mapper_dev) => {
-                                log_msg(&format!("Unlocked {}, refreshing target screen...", mapper_dev));
-                                let src = cur_src_c.borrow().clone();
-                                show_tgt_c(&src);
+                                log_msg(&format!("Unlocked {}, processing caller action...", mapper_dev));
+                                let caller = unlock_caller_c.borrow().clone();
+                                match caller {
+                                    Some(UnlockCaller::Chroot) => {
+                                        let dev = mapper_dev.clone();
+                                        thread::spawn(move || {
+                                            if let Err(e) = launch_chroot_terminal(&dev) {
+                                                log_msg(&format!("Error opening chroot terminal: {}", e));
+                                            }
+                                        });
+                                        stack_c.set_visible_child_name("utilities");
+                                    }
+                                    Some(UnlockCaller::RescueFiles) => {
+                                        populate_rescue_c();
+                                        stack_c.set_visible_child_name("rescue_files");
+                                    }
+                                    Some(UnlockCaller::Logs) => {
+                                        open_system_logs(Some(&mapper_dev));
+                                        stack_c.set_visible_child_name("utilities");
+                                    }
+                                    Some(UnlockCaller::TargetSelect(ref src)) => {
+                                        show_tgt_c(src);
+                                    }
+                                    None => {
+                                        let src = cur_src_c.borrow().clone();
+                                        show_tgt_c(&src);
+                                    }
+                                }
                             }
                             Err(e) => {
                                 err_c.set_text(&e);
@@ -2752,8 +2831,15 @@ pub(crate) fn build_ui(app: &Application) {
         do_unlock_c2();
     });
 
-    btn_unlock_back.connect_clicked(clone!(@weak stack => move |_| {
-        stack.set_visible_child_name("target_select");
+    btn_unlock_back.connect_clicked(clone!(@weak stack, @strong unlock_caller => move |_| {
+        match unlock_caller.borrow().clone() {
+            Some(UnlockCaller::TargetSelect(_)) => {
+                stack.set_visible_child_name("target_select");
+            }
+            _ => {
+                stack.set_visible_child_name("utilities");
+            }
+        }
     }));
 
     stack.set_visible_child_name("utilities");

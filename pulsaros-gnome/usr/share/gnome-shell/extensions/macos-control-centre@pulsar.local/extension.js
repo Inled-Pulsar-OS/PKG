@@ -2,6 +2,7 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Gvc from 'gi://Gvc';
+import NM from 'gi://NM';
 import Pango from 'gi://Pango';
 import St from 'gi://St';
 import Soup from 'gi://Soup?version=3.0';
@@ -381,11 +382,9 @@ export default class MacControlCentre extends Extension {
                 this._refresh();
                 this._updateLiquidGlass();
                 this._startPolling();
-                if (this._lgActive) {
-                    this._dropQuickSettingsBlur();
-                    later(50, () => this._lgActive && this._dropQuickSettingsBlur());
-                    later(250, () => this._lgActive && this._dropQuickSettingsBlur());
-                }
+                this._dropQuickSettingsBlur();
+                later(50, () => this._dropQuickSettingsBlur());
+                later(250, () => this._dropQuickSettingsBlur());
             }
         })]);
 
@@ -535,34 +534,20 @@ export default class MacControlCentre extends Extension {
         const menu = this._qs?.menu;
         if (!menu)
             return;
-        const lg = this._lgActive;
 
         if (menu.box) {
-            if (lg) {
-                menu.box.remove_style_class_name('quick-settings');
-                menu.box.remove_style_class_name('popup-menu-content');
-            } else {
-                menu.box.add_style_class_name('quick-settings');
-                menu.box.add_style_class_name('popup-menu-content');
-            }
+            menu.box.remove_style_class_name('quick-settings');
+            menu.box.remove_style_class_name('popup-menu-content');
         }
 
         for (const actor of [menu.actor, menu.box, menu._boxPointer, menu._boxPointer?.bin]) {
             if (!actor)
                 continue;
-            if (lg)
-                actor.add_style_class_name(BLUR_EXCLUDE_CLASS);
-            else
-                actor.remove_style_class_name(BLUR_EXCLUDE_CLASS);
+            actor.add_style_class_name(BLUR_EXCLUDE_CLASS);
         }
 
-        if (lg) {
-            this._dropQuickSettingsBlur();
-            this._blurExcluded = true;
-        } else if (this._blurExcluded) {
-            this._blurExcluded = false;
-            this._restoreQuickSettingsBlur();
-        }
+        this._dropQuickSettingsBlur();
+        this._blurExcluded = true;
     }
 
     // Rebuilds Blur My Shell's popup surfaces after Liquid Glass is disabled,
@@ -1564,34 +1549,24 @@ export default class MacControlCentre extends Extension {
                     this._connectingSsid = null;
                     if (this._wifi?._sub) this._wifi._sub.text = 'Off';
                 } else {
+                    let activeSSID = null;
                     try {
-                        const proc = Gio.Subprocess.new(
-                            ['nmcli', '-t', '-f', 'IN-USE,SSID', 'dev', 'wifi'],
-                            Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE
-                        );
-                        proc.communicate_utf8_async(null, null, (p, res) => {
-                            try {
-                                const [, stdout] = p.communicate_utf8_finish(res);
-                                const lines = (stdout || '').split('\n');
-                                let activeSSID = null;
-                                for (const line of lines) {
-                                    if (line.startsWith('*:')) {
-                                        activeSSID = line.slice(2).trim();
-                                        break;
-                                    }
-                                }
-                                if (activeSSID && this._connectingSsid === activeSSID)
-                                    this._connectingSsid = null;
-                                if (this._wifi?._sub) {
-                                    this._wifi._sub.text = activeSSID ||
-                                        (this._connectingSsid ? `${this._connectingSsid}…` : 'On');
-                                }
-                            } catch (e) {
-                                if (this._wifi?._sub) this._wifi._sub.text = 'On';
+                        const client = NM.Client.new(null);
+                        const active = client.get_active_connections();
+                        for (let i = 0; i < active.length; i++) {
+                            const c = active[i];
+                            if (c.get_connection_type() === '802-11-wireless') {
+                                activeSSID = c.get_id();
+                                break;
                             }
-                        });
-                    } catch (e) {
-                        if (this._wifi?._sub) this._wifi._sub.text = 'On';
+                        }
+                    } catch (e) {}
+
+                    if (activeSSID && this._connectingSsid === activeSSID)
+                        this._connectingSsid = null;
+                    if (this._wifi?._sub) {
+                        this._wifi._sub.text = activeSSID ||
+                            (this._connectingSsid ? `${this._connectingSsid}…` : 'On');
                     }
                 }
             });

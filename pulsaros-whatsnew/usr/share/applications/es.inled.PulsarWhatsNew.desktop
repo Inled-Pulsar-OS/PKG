@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=What's New in Pulsar OS
+GenericName=Changelog
+Comment=Browse the release notes and changelog of Pulsar OS
+Exec=pulsaros-whatsnew
+Icon=pulsaros-whatsnew
+Terminal=false
+Categories=System;Settings;GTK;Utility;
+Keywords=whatsnew;changelog;history;updates;release notes;pulsaros;
+StartupNotify=true
+StartupWMClass=es.inled.PulsarWhatsNew

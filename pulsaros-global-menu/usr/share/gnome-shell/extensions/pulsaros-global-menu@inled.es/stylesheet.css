@@ -599,3 +599,96 @@
 }
 
 
+
+/* ── Biometrics Indicator (Face ID & Touch ID) ── */
+.pulsaros-lockscreen-biometrics-box {
+    spacing: 8px;
+    margin-bottom: 12px;
+}
+
+.pulsaros-lockscreen-bio-icons-row {
+    spacing: 16px;
+}
+
+.pulsaros-lockscreen-eye-outer {
+    width: 38px;
+    height: 26px;
+    border-radius: 13px;
+    background-color: rgba(255, 255, 255, 0.18);
+    border: 1.5px solid rgba(255, 255, 255, 0.65);
+    transition: all 200ms ease;
+}
+
+.pulsaros-lockscreen-eye-matched {
+    width: 38px;
+    height: 26px;
+    border-radius: 13px;
+    background-color: rgba(48, 209, 88, 0.25);
+    border: 1.5px solid #30d158;
+}
+
+.pulsaros-lockscreen-eye-failed {
+    width: 38px;
+    height: 26px;
+    border-radius: 13px;
+    background-color: rgba(255, 69, 58, 0.25);
+    border: 1.5px solid #ff453a;
+}
+
+.pulsaros-lockscreen-pupil {
+    width: 10px;
+    height: 10px;
+    border-radius: 5px;
+    background-color: #ffffff;
+    margin-top: 7px;
+    margin-left: 13px;
+    transition: all 150ms ease;
+}
+
+.pulsaros-lockscreen-check {
+    font-size: 13pt;
+    font-weight: bold;
+    color: #30d158;
+    margin-top: 2px;
+    margin-left: 12px;
+}
+
+.pulsaros-lockscreen-fp-icon {
+    color: rgba(255, 255, 255, 0.85);
+    transition: all 200ms ease;
+}
+
+.pulsaros-lockscreen-fp-matched {
+    color: #30d158;
+}
+
+.pulsaros-lockscreen-fp-failed {
+    color: #ff453a;
+}
+
+.pulsaros-lockscreen-bio-badge {
+    padding: 3px 12px;
+    border-radius: 9999px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.pulsaros-lockscreen-bio-badge-matched {
+    padding: 3px 12px;
+    border-radius: 9999px;
+    background-color: rgba(48, 209, 88, 0.3);
+    border: 1px solid #30d158;
+}
+
+.pulsaros-lockscreen-bio-badge-failed {
+    padding: 3px 12px;
+    border-radius: 9999px;
+    background-color: rgba(255, 69, 58, 0.3);
+    border: 1px solid #ff453a;
+}
+
+.pulsaros-lockscreen-bio-label {
+    font-size: 9.5pt;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+}

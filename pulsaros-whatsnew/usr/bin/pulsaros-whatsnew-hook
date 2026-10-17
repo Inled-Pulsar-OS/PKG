@@ -1,0 +1,32 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - What's New pending marker (root side)
+# ==============================================================================
+# Called by:
+#   - /etc/apt/apt.conf.d/99-pulsaros-whatsnew   (DPkg::Post-Invoke)
+#   - /usr/share/libalpm/hooks/pulsaros-whatsnew.hook (Arch PostTransaction)
+#   - the package postinst / .install scripts
+#
+# It only writes a marker on an atomic rename; the per-user watcher watches the
+# directory and decides whether there is anything new to show. This script must
+# never fail a package transaction, so every step is best-effort.
+# ==============================================================================
+
+STATE_DIR="/var/lib/pulsaros/whatsnew"
+PENDING="$STATE_DIR/pending"
+TRIGGER="${1:-unknown}"
+
+set +e
+
+# Nothing to flag if the viewer is not installed.
+[ -d /usr/share/pulsaros-whatsnew ] || exit 0
+
+install -d -m 0755 "$STATE_DIR" 2>/dev/null || exit 0
+
+TOKEN="$(date +%s)-$$-${RANDOM:-0}"
+tmp="$(mktemp "$STATE_DIR/.pending.XXXXXX" 2>/dev/null)" || exit 0
+printf '{"token": "%s", "trigger": "%s"}\n' "$TOKEN" "$TRIGGER" > "$tmp" 2>/dev/null
+chmod 0644 "$tmp" 2>/dev/null
+mv -f "$tmp" "$PENDING" 2>/dev/null
+
+exit 0

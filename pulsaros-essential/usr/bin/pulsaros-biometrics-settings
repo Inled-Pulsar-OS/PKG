@@ -1,0 +1,1314 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# ==============================================================================
+# Pulsar OS - Touch ID, Face ID & Presence Settings (macOS Tahoe GTK4 / Libadwaita)
+# Bilingual Support: English (default) + Spanish (when LANG starts with 'es')
+# ==============================================================================
+
+import os
+import sys
+import json
+import time
+import subprocess
+import shutil
+import threading
+import gi
+
+gi.require_version('Gtk', '4.0')
+gi.require_version('Adw', '1')
+try:
+    gi.require_version('WebKit', '6.0')
+    from gi.repository import WebKit
+    HAS_WEBKIT = True
+except Exception:
+    HAS_WEBKIT = False
+from gi.repository import Gtk, Adw, GLib, Gio, Gdk, Pango
+
+# ── Native Animated Touch ID Widget using official fingerprint-symbolic icon ──
+CSS_TOUCHID = """
+.touchid-circle-frame {
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 3px solid rgba(255, 255, 255, 0.22);
+    border-radius: 9999px;
+    padding: 20px;
+    transition: all 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+}
+@media (prefers-color-scheme: light) {
+    .touchid-circle-frame {
+        background-color: rgba(0, 0, 0, 0.05);
+        border: 3px solid rgba(0, 0, 0, 0.16);
+    }
+}
+.touchid-fp-icon {
+    color: #0071e3;
+    transition: all 0.3s ease;
+}
+.touchid-circle-frame.pulse {
+    border-color: #0071e3;
+    background-color: rgba(0, 113, 227, 0.18);
+    box-shadow: 0 0 24px rgba(0, 113, 227, 0.65);
+    transform: scale(1.06);
+}
+.touchid-circle-frame.retry {
+    border-color: #ff9f0a;
+    background-color: rgba(255, 159, 10, 0.18);
+    box-shadow: 0 0 24px rgba(255, 159, 10, 0.65);
+}
+.touchid-circle-frame.completed {
+    background-color: #30d158;
+    border-color: #30d158;
+    box-shadow: 0 0 28px rgba(48, 209, 88, 0.7);
+    transform: scale(1.08);
+}
+.touchid-circle-frame.completed .touchid-fp-icon {
+    color: #ffffff !important;
+}
+"""
+
+class NativeAnimatedFingerprint(Gtk.Box):
+    def __init__(self, size=130):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL)
+        self.set_halign(Gtk.Align.CENTER)
+        self.set_valign(Gtk.Align.CENTER)
+
+        self.circle_box = Gtk.Box()
+        self.circle_box.set_size_request(size, size)
+        self.circle_box.set_halign(Gtk.Align.CENTER)
+        self.circle_box.set_valign(Gtk.Align.CENTER)
+        self.circle_box.add_css_class("touchid-circle-frame")
+
+        self.icon = Gtk.Image.new_from_icon_name("fingerprint-symbolic")
+        self.icon.set_pixel_size(int(size * 0.58))
+        self.icon.set_halign(Gtk.Align.CENTER)
+        self.icon.set_valign(Gtk.Align.CENTER)
+        self.icon.add_css_class("touchid-fp-icon")
+
+        self.circle_box.append(self.icon)
+        self.append(self.circle_box)
+        self._pulse_timer = None
+
+    def set_stage(self, stage, total_stages):
+        self.circle_box.remove_css_class("retry")
+        self.circle_box.add_css_class("pulse")
+        if self._pulse_timer:
+            GLib.source_remove(self._pulse_timer)
+        self._pulse_timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 350, self._clear_pulse)
+
+    def _clear_pulse(self):
+        self.circle_box.remove_css_class("pulse")
+        self._pulse_timer = None
+        return GLib.SOURCE_REMOVE
+
+    def set_retry(self):
+        self.circle_box.remove_css_class("pulse")
+        self.circle_box.add_css_class("retry")
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 450, lambda: self.circle_box.remove_css_class("retry"))
+
+    def set_completed(self):
+        self.circle_box.remove_css_class("pulse")
+        self.circle_box.remove_css_class("retry")
+        self.circle_box.add_css_class("completed")
+        self.icon.set_from_icon_name("emblem-ok-symbolic")
+
+    def reset(self):
+        self.circle_box.remove_css_class("pulse")
+        self.circle_box.remove_css_class("retry")
+        self.circle_box.remove_css_class("completed")
+        self.icon.set_from_icon_name("fingerprint-symbolic")
+
+def create_animated_fingerprint_widget(size=130):
+    return NativeAnimatedFingerprint(size)
+
+# ── Localization Helper ────────────────────────────────────────────────────────
+def is_spanish():
+    for k in ("LC_ALL", "LC_MESSAGES", "LANG"):
+        v = os.environ.get(k, "")
+        if v:
+            return v.lower().startswith("es")
+    return False
+
+def _t(en_text, es_text):
+    return es_text if is_spanish() else en_text
+
+# ── Goodix & Fingerprint Hardware Detection ──────────────────────────────────
+FINGER_NAMES = {
+    "right-thumb": ("Right Thumb", "Pulgar derecho"),
+    "right-index-finger": ("Right Index Finger", "Índice derecho"),
+    "right-middle-finger": ("Right Middle Finger", "Corazón derecho"),
+    "right-ring-finger": ("Right Ring Finger", "Anular derecho"),
+    "right-little-finger": ("Right Little Finger", "Meñique derecho"),
+    "left-thumb": ("Left Thumb", "Pulgar izquierdo"),
+    "left-index-finger": ("Left Index Finger", "Índice izquierdo"),
+    "left-middle-finger": ("Left Middle Finger", "Corazón izquierdo"),
+    "left-ring-finger": ("Left Ring Finger", "Anular izquierdo"),
+    "left-little-finger": ("Left Little Finger", "Meñique izquierdo"),
+}
+
+def get_finger_display_name(finger_id):
+    pair = FINGER_NAMES.get(finger_id)
+    if pair:
+        return _t(pair[0], pair[1])
+    return finger_id.replace("-", " ").title()
+
+def get_num_enroll_stages():
+    try:
+        res = subprocess.run([
+            "gdbus", "call", "--system",
+            "--dest", "net.reactivated.Fprint",
+            "--object-path", "/net/reactivated/Fprint/Device/0",
+            "--method", "org.freedesktop.DBus.Properties.Get",
+            "net.reactivated.Fprint.Device", "num-enroll-stages"
+        ], capture_output=True, text=True, timeout=2)
+        if res.returncode == 0:
+            val = res.stdout.strip().replace("(<", "").replace(">,)", "").replace("uint32", "").replace("(", "").replace(")", "").strip()
+            return max(5, int(val))
+    except Exception:
+        pass
+    return 13
+
+def get_enrolled_fingers(username):
+    # 1. Try D-Bus ListEnrolledFingers
+    try:
+        res = subprocess.run([
+            "gdbus", "call", "--system",
+            "--dest", "net.reactivated.Fprint",
+            "--object-path", "/net/reactivated/Fprint/Device/0",
+            "--method", "net.reactivated.Fprint.Device.ListEnrolledFingers",
+            username
+        ], capture_output=True, text=True, timeout=2)
+        if res.returncode == 0:
+            out = res.stdout.strip()
+            fingers = []
+            for f_key in FINGER_NAMES.keys():
+                if f_key in out and f_key not in fingers:
+                    fingers.append(f_key)
+            if fingers:
+                return fingers
+    except Exception:
+        pass
+
+    # 2. Try fprintd-list CLI
+    fingers = []
+    try:
+        res = subprocess.run(["fprintd-list", username], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=2)
+        if res.returncode == 0:
+            for line in res.stdout.splitlines():
+                line_lower = line.lower().strip()
+                for f_key in FINGER_NAMES.keys():
+                    if f_key in line_lower and f_key not in fingers:
+                        fingers.append(f_key)
+    except Exception:
+        pass
+    return fingers
+
+# ── Biometrics & Presence Config Helpers ─────────────────────────────────────
+def get_biometrics_config_path():
+    return os.path.expanduser("~/.config/pulsaros/biometrics.json")
+
+def load_biometrics_config():
+    p = get_biometrics_config_path()
+    cfg = {"touch_id_enabled": True, "face_id_enabled": True}
+    paths = [p, "/etc/pulsaros/biometrics.json"]
+    for path in paths:
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    cfg.update(json.load(f))
+                    break
+            except Exception:
+                pass
+    return cfg
+
+def save_biometrics_config(cfg):
+    p = get_biometrics_config_path()
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    try:
+        with open(p, "w") as f:
+            json.dump(cfg, f, indent=2)
+    except Exception as e:
+        print("Error saving biometrics config:", e)
+
+    # Notify biometrics daemon
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            "http://127.0.0.1:39281/config",
+            data=json.dumps(cfg).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        urllib.request.urlopen(req, timeout=1)
+    except Exception:
+        pass
+
+
+# ── System Activity & Face Helpers ─────────────────────────────────────────────
+def get_mutter_idletime():
+    try:
+        res = subprocess.run([
+            "gdbus", "call", "--session",
+            "--dest", "org.gnome.Mutter.IdleMonitor",
+            "--object-path", "/org/gnome/Mutter/IdleMonitor/Core",
+            "--method", "org.gnome.Mutter.IdleMonitor.GetIdletime"
+        ], capture_output=True, text=True, timeout=1)
+        if res.returncode == 0:
+            val = res.stdout.strip().replace("(", "").replace(")", "").replace("uint64", "").replace(",", "").strip()
+            return int(val)
+    except Exception:
+        pass
+    return 0
+
+
+# ==============================================================================
+# Graphical Touch ID Enrollment Dialog (Zero-Terminal, Real-Time Hardware Events)
+# ==============================================================================
+class TouchIDEnrollDialog(Adw.Window):
+    def __init__(self, parent_window, username, finger=None):
+        super().__init__()
+        self.set_transient_for(parent_window)
+        self.set_modal(True)
+        self.finger = finger
+        finger_name = get_finger_display_name(finger) if finger else _t("Touch ID", "Touch ID")
+        self.set_title(f"{_t('Touch ID Setup', 'Configurar Touch ID')} - {finger_name}")
+        self.set_default_size(440, 520)
+        self.set_resizable(False)
+
+        self.username = username
+        self.proc = None
+        self.stage_count = 0
+        self.max_stages = get_num_enroll_stages()
+        self.enrolled_successfully = False
+
+        # Main Box
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.set_content(main_box)
+
+        # Header Bar
+        header = Adw.HeaderBar()
+        header.set_show_end_title_buttons(False)
+        header.set_show_start_title_buttons(True)
+        main_box.append(header)
+
+        # Content Card
+        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        content_box.set_margin_top(20)
+        content_box.set_margin_bottom(28)
+        content_box.set_margin_start(36)
+        content_box.set_margin_end(36)
+        content_box.set_valign(Gtk.Align.CENTER)
+        content_box.set_halign(Gtk.Align.CENTER)
+        main_box.append(content_box)
+
+        # 1. Fingerprint Graphic (Native Animated GTK4 Widget)
+        self.fp_widget = create_animated_fingerprint_widget(130)
+        content_box.append(self.fp_widget)
+
+        # 2. Title & Status
+        self.title_lbl = Gtk.Label()
+        self.title_lbl.set_markup(f"<span font_weight='bold' size='15000'>{finger_name}</span>")
+        content_box.append(self.title_lbl)
+
+        self.instruction_lbl = Gtk.Label(label=_t("Place your finger on the sensor to begin", "Coloca tu dedo en el sensor para comenzar"))
+        self.instruction_lbl.set_wrap(True)
+        self.instruction_lbl.set_justify(Gtk.Justification.CENTER)
+        self.instruction_lbl.set_max_width_chars(38)
+        self.instruction_lbl.add_css_class("dim-label")
+        content_box.append(self.instruction_lbl)
+
+        # 3. Progress Bar
+        self.progress_bar = Gtk.ProgressBar()
+        self.progress_bar.set_fraction(0.0)
+        self.progress_bar.set_size_request(300, 8)
+        self.progress_bar.set_halign(Gtk.Align.CENTER)
+        self.progress_bar.add_css_class("suggested-action")
+        content_box.append(self.progress_bar)
+
+        self.stage_lbl = Gtk.Label(label=_t("Waiting for sensor...", "Esperando lector..."))
+        self.stage_lbl.add_css_class("caption")
+        content_box.append(self.stage_lbl)
+
+        # 4. Action Buttons
+        self.btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self.btn_box.set_halign(Gtk.Align.CENTER)
+        self.btn_box.set_margin_top(12)
+        content_box.append(self.btn_box)
+
+        self.btn_cancel = Gtk.Button(label=_t("Cancel", "Cancelar"))
+        self.btn_cancel.connect("clicked", self.on_cancel_clicked)
+        self.btn_box.append(self.btn_cancel)
+
+        self.btn_done = Gtk.Button(label=_t("Done", "Aceptar"))
+        self.btn_done.add_css_class("suggested-action")
+        self.btn_done.set_visible(False)
+        self.btn_done.connect("clicked", self.on_done_clicked)
+        self.btn_box.append(self.btn_done)
+
+        self.connect("close-request", self.on_close_request)
+
+        # Start background enrollment thread
+        self.start_enrollment()
+
+    def start_enrollment(self):
+        def worker():
+            try:
+                cmd = ["fprintd-enroll"]
+                if self.finger:
+                    cmd.extend(["-f", self.finger])
+                cmd.append(self.username)
+                self.proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1
+                )
+                for line in self.proc.stdout:
+                    line_s = line.strip()
+                    if not line_s:
+                        continue
+                    GLib.idle_add(self.handle_enroll_line, line_s)
+                self.proc.wait()
+                rc = self.proc.returncode
+                GLib.idle_add(self.handle_enroll_finished, rc)
+            except Exception as e:
+                GLib.idle_add(self.handle_enroll_error, str(e))
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+
+    def handle_enroll_line(self, line):
+        if "Enrolling" in line:
+            self.instruction_lbl.set_markup(f"<b>{_t('Place and hold your finger on the sensor', 'Coloca tu dedo en el sensor')}</b>")
+            self.stage_lbl.set_text(_t("Sensor ready. Touch lightly.", "Sensor listo. Toca suavemente."))
+        elif "enroll-stage-passed" in line:
+            self.stage_count += 1
+            frac = min(0.95, self.stage_count / float(self.max_stages))
+            self.progress_bar.set_fraction(frac)
+            self.instruction_lbl.set_markup(f"<b>{_t('Lift your finger and place it again', 'Levanta el dedo y vuelve a colocarlo')}</b>")
+            self.stage_lbl.set_text(f"{_t('Stage', 'Paso')} {self.stage_count} / {self.max_stages}")
+            if hasattr(self, "fp_widget") and hasattr(self.fp_widget, "set_stage"):
+                self.fp_widget.set_stage(self.stage_count, self.max_stages)
+        elif "enroll-retry-scan" in line:
+            self.instruction_lbl.set_markup(f"<b>{_t('Could not read fingerprint. Try again firmly.', 'No se pudo leer bien. Vuelve a colocarlo firmemente.')}</b>")
+            if hasattr(self, "fp_widget") and hasattr(self.fp_widget, "set_retry"):
+                self.fp_widget.set_retry()
+        elif "enroll-swipe-too-short" in line:
+            self.instruction_lbl.set_markup(f"<b>{_t('Swipe longer and steadier.', 'Mantén el dedo más tiempo sobre el sensor.')}</b>")
+            if hasattr(self, "fp_widget") and hasattr(self.fp_widget, "set_retry"):
+                self.fp_widget.set_retry()
+        elif "enroll-finger-not-centered" in line:
+            self.instruction_lbl.set_markup(f"<b>{_t('Center your finger on the sensor.', 'Centra tu dedo en el lector.')}</b>")
+            if hasattr(self, "fp_widget") and hasattr(self.fp_widget, "set_retry"):
+                self.fp_widget.set_retry()
+        elif "enroll-completed" in line:
+            self.enrolled_successfully = True
+            self.progress_bar.set_fraction(1.0)
+            self.instruction_lbl.set_markup(f"<span color='#34c759'><b>✓ {_t('Touch ID setup complete!', '¡Touch ID configurado con éxito!')}</b></span>")
+            self.stage_lbl.set_text(f"{_t('Stage', 'Paso')} {self.max_stages} / {self.max_stages}")
+            self.btn_cancel.set_visible(False)
+            self.btn_done.set_visible(True)
+            if hasattr(self, "fp_widget") and hasattr(self.fp_widget, "set_completed"):
+                self.fp_widget.set_completed()
+
+    def handle_enroll_finished(self, rc):
+        if rc == 0 or self.enrolled_successfully:
+            self.enrolled_successfully = True
+            self.progress_bar.set_fraction(1.0)
+            self.instruction_lbl.set_markup(f"<span color='#34c759'><b>✓ {_t('Touch ID setup complete!', '¡Touch ID configurado con éxito!')}</b></span>")
+            self.stage_lbl.set_text(f"{_t('Stage', 'Paso')} {self.max_stages} / {self.max_stages}")
+            self.btn_cancel.set_visible(False)
+            self.btn_done.set_visible(True)
+            if hasattr(self, "fp_widget") and hasattr(self.fp_widget, "evaluate_javascript"):
+                try:
+                    self.fp_widget.evaluate_javascript("setCompleted();", -1, None, None, None, None, None)
+                except Exception:
+                    pass
+        else:
+            if not self.enrolled_successfully:
+                self.instruction_lbl.set_markup(f"<span color='#ff3b30'><b>{_t('Enrollment was canceled or interrupted.', 'Registro cancelado o interrumpido.')}</b></span>")
+                self.stage_lbl.set_text(_t("Please try again.", "Puedes volver a intentarlo."))
+                self.btn_cancel.set_label(_t("Close", "Cerrar"))
+
+    def handle_enroll_error(self, err_msg):
+        self.instruction_lbl.set_markup(f"<span color='#ff3b30'><b>{_t('Sensor error:', 'Error en el lector:')} {err_msg}</b></span>")
+        self.btn_cancel.set_label(_t("Close", "Cerrar"))
+
+    def on_cancel_clicked(self, btn):
+        self.stop_proc()
+        self.close()
+
+    def on_done_clicked(self, btn):
+        self.stop_proc()
+        self.close()
+
+    def on_close_request(self, win):
+        self.stop_proc()
+        return False
+
+    def stop_proc(self):
+        if self.proc and self.proc.poll() is None:
+            try:
+                self.proc.terminate()
+            except Exception:
+                pass
+
+
+# ==============================================================================
+# Touch ID Fingerprints Manager Window (macOS Tahoe & Gaze-like Style)
+# ==============================================================================
+class TouchIDManagerWindow(Adw.Window):
+    def __init__(self, parent_window, username):
+        super().__init__()
+        self.set_transient_for(parent_window)
+        self.set_title(_t("Touch ID", "Touch ID"))
+        self.set_default_size(520, 560)
+        self.set_resizable(False)
+        self.username = username
+        self.parent_window = parent_window
+
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.set_content(main_box)
+
+        header = Adw.HeaderBar()
+        header.set_show_start_title_buttons(True)
+        header.set_show_end_title_buttons(True)
+        main_box.append(header)
+
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_vexpand(True)
+        scrolled.set_hexpand(True)
+        main_box.append(scrolled)
+
+        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        content_box.set_margin_top(16)
+        content_box.set_margin_bottom(24)
+        content_box.set_margin_start(24)
+        content_box.set_margin_end(24)
+        scrolled.set_child(content_box)
+
+        # Top Hero Card
+        hero_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        hero_box.set_halign(Gtk.Align.CENTER)
+        hero_box.set_margin_bottom(6)
+
+        hero_icon = Gtk.Image.new_from_icon_name("fingerprint-symbolic")
+        hero_icon.set_pixel_size(60)
+        hero_box.append(hero_icon)
+
+        hero_title = Gtk.Label()
+        hero_title.set_markup(f"<span font_weight='bold' size='14000'>{_t('Configured Fingerprints', 'Huellas Registradas')}</span>")
+        hero_box.append(hero_title)
+
+        hero_subtitle = Gtk.Label(label=_t(
+            "Use your registered fingerprints to log in and authorize actions without typing your password.",
+            "Usa tus huellas registradas para iniciar sesión y autorizar tareas del sistema sin introducir tu contraseña."
+        ))
+        hero_subtitle.set_wrap(True)
+        hero_subtitle.set_justify(Gtk.Justification.CENTER)
+        hero_subtitle.set_max_width_chars(44)
+        hero_subtitle.add_css_class("dim-label")
+        hero_box.append(hero_subtitle)
+
+        content_box.append(hero_box)
+
+        # Fingerprints List Group
+        self.finger_group = Adw.PreferencesGroup()
+        self.finger_group.set_title(_t("Fingerprints", "Huellas"))
+        content_box.append(self.finger_group)
+        self.finger_rows = []
+
+        # Add Button Row / Bar
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        btn_box.set_margin_top(10)
+        btn_box.set_halign(Gtk.Align.CENTER)
+        content_box.append(btn_box)
+
+        self.btn_add_finger = Gtk.Button(label=_t("+ Add Fingerprint…", "+ Añadir huella…"))
+        self.btn_add_finger.add_css_class("suggested-action")
+        self.btn_add_finger.add_css_class("pill")
+        self.btn_add_finger.set_size_request(220, 42)
+        self.btn_add_finger.connect("clicked", self.on_add_finger_clicked)
+        btn_box.append(self.btn_add_finger)
+
+        self.refresh_list()
+
+    def refresh_list(self):
+        for r in self.finger_rows:
+            self.finger_group.remove(r)
+        self.finger_rows.clear()
+
+        enrolled = get_enrolled_fingers(self.username)
+        if not enrolled:
+            empty_row = Adw.ActionRow()
+            empty_row.set_title(_t("No fingerprints registered yet", "No hay huellas registradas"))
+            empty_row.set_subtitle(_t("Click '+ Add Fingerprint…' below to register a finger.", "Pulsa en '+ Añadir huella…' para registrar tu primer dedo."))
+            empty_icon = Gtk.Image.new_from_icon_name("fingerprint-symbolic")
+            empty_icon.set_pixel_size(24)
+            empty_row.add_prefix(empty_icon)
+            self.finger_group.add(empty_row)
+            self.finger_rows.append(empty_row)
+        else:
+            for f in enrolled:
+                row = Adw.ActionRow()
+                row.set_title(get_finger_display_name(f))
+                row.set_subtitle(_t("Enrolled and active for unlock and sudo", "Registrada y activa para desbloqueo y sudo"))
+                icon = Gtk.Image.new_from_icon_name("fingerprint-symbolic")
+                icon.set_pixel_size(24)
+                row.add_prefix(icon)
+
+                btn_del = Gtk.Button(label=_t("Delete", "Eliminar"))
+                btn_del.set_valign(Gtk.Align.CENTER)
+                btn_del.add_css_class("destructive-action")
+                btn_del.connect("clicked", lambda b, finger=f: self.on_delete_finger_clicked(finger))
+                row.add_suffix(btn_del)
+
+                self.finger_group.add(row)
+                self.finger_rows.append(row)
+
+        if hasattr(self.parent_window, "refresh_status"):
+            self.parent_window.refresh_status()
+
+    def on_delete_finger_clicked(self, finger):
+        finger_name = get_finger_display_name(finger)
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading=_t(f"Delete {finger_name}?", f"¿Eliminar {finger_name}?"),
+            body=_t(
+                "Are you sure you want to delete this fingerprint? You will no longer be able to use it with Touch ID.",
+                "¿Seguro que deseas eliminar esta huella? Ya no podrás usarla para identificarte con Touch ID."
+            )
+        )
+        dialog.add_response("cancel", _t("Cancel", "Cancelar"))
+        dialog.add_response("delete", _t("Delete", "Eliminar"))
+        dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
+
+        def on_response(d, resp):
+            if resp == "delete":
+                subprocess.run(["fprintd-delete", self.username, "-f", finger], check=False)
+                self.refresh_list()
+
+        dialog.connect("response", on_response)
+        dialog.present()
+
+    def on_add_finger_clicked(self, btn):
+        all_fingers = list(FINGER_NAMES.keys())
+        enrolled = get_enrolled_fingers(self.username)
+        available = [f for f in all_fingers if f not in enrolled]
+
+        if not available:
+            diag = Adw.MessageDialog(
+                transient_for=self,
+                heading=_t("Maximum fingerprints reached", "Límite de huellas alcanzado"),
+                body=_t("You have already registered all 10 fingers.", "Ya has registrado los 10 dedos.")
+            )
+            diag.add_response("ok", _t("OK", "Aceptar"))
+            diag.present()
+            return
+
+        pref_default = "right-index-finger" if "right-index-finger" in available else available[0]
+
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading=_t("Choose Finger to Enroll", "Elegir Dedo a Registrar"),
+            body=_t("Select which finger you want to add to Touch ID:", "Selecciona qué dedo deseas añadir a Touch ID:")
+        )
+        dialog.add_response("cancel", _t("Cancel", "Cancelar"))
+        dialog.add_response("enroll", _t("Start Setup", "Comenzar"))
+        dialog.set_response_appearance("enroll", Adw.ResponseAppearance.SUGGESTED)
+
+        drop_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        drop_box.set_margin_top(14)
+        drop_box.set_margin_bottom(14)
+        drop_box.set_margin_start(24)
+        drop_box.set_margin_end(24)
+
+        row_select = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        row_select.set_halign(Gtk.Align.CENTER)
+
+        lbl_finger = Gtk.Label(label=_t("Finger:", "Dedo:"))
+        lbl_finger.add_css_class("heading")
+        row_select.append(lbl_finger)
+
+        labels = [get_finger_display_name(f) for f in available]
+        dropdown = Gtk.DropDown.new_from_strings(labels)
+        try:
+            default_idx = available.index(pref_default)
+        except ValueError:
+            default_idx = 0
+        dropdown.set_selected(default_idx)
+        dropdown.set_size_request(240, 38)
+        row_select.append(dropdown)
+        drop_box.append(row_select)
+
+        dialog.set_extra_child(drop_box)
+
+        def on_response(d, resp):
+            if resp == "enroll":
+                sel_idx = dropdown.get_selected()
+                chosen_finger = available[sel_idx] if 0 <= sel_idx < len(available) else available[0]
+                enroll_dialog = TouchIDEnrollDialog(self, self.username, finger=chosen_finger)
+                enroll_dialog.connect("destroy", lambda w: self.refresh_list())
+                enroll_dialog.present()
+
+        dialog.connect("response", on_response)
+        dialog.present()
+
+
+# ==============================================================================
+# Live Presence Detection & Face ID Diagnostics Window
+# ==============================================================================
+class PresenceDebugWindow(Adw.Window):
+    def __init__(self, parent_window=None):
+        super().__init__()
+        if parent_window:
+            self.set_transient_for(parent_window)
+        self.set_title(_t("Live Presence & Face ID Diagnostics", "Diagnóstico en Vivo de Presencia y Face ID"))
+        self.set_default_size(720, 680)
+
+        self.username = GLib.get_user_name()
+        self.is_running = True
+        self.last_face_match_time = time.time()
+        self.last_probe_time = 0
+        self.is_probing_camera = False
+        self.timeout_limit = 30
+        self.absent_seconds = 0
+        self.simulate_mode = False
+
+        # Load configured timeout
+        try:
+            cfg_path = os.path.expanduser("~/.config/pulsaros/presence.json")
+            if os.path.exists(cfg_path):
+                with open(cfg_path, "r") as f:
+                    cfg = json.load(f)
+                    self.timeout_limit = int(cfg.get("timeout_seconds", 30))
+        except Exception:
+            pass
+
+        # Main Box
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.set_content(main_box)
+
+        # HeaderBar
+        header = Adw.HeaderBar()
+        title_widget = Adw.WindowTitle(
+            title=_t("Presence Detection Live Monitor", "Monitor en Vivo de Presencia"),
+            subtitle=_t("Real-time biometric camera & activity verification", "Verificación biométrica de cámara y actividad en tiempo real")
+        )
+        header.set_title_widget(title_widget)
+        main_box.append(header)
+
+        # Pause / Resume Button in Header
+        self.btn_pause = Gtk.Button(icon_name="media-playback-pause-symbolic")
+        self.btn_pause.set_tooltip_text(_t("Pause / Resume polling", "Pausar / Reanudar monitoreo"))
+        self.btn_pause.connect("clicked", self.toggle_pause)
+        header.pack_end(self.btn_pause)
+
+        # Scrolled container for cards
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_vexpand(True)
+        main_box.append(scroller)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        vbox.set_margin_top(16)
+        vbox.set_margin_bottom(16)
+        vbox.set_margin_start(20)
+        vbox.set_margin_end(20)
+        scroller.set_child(vbox)
+
+        # ── 1. Top Real-Time Status Card ─────────────────────────────
+        status_group = Adw.PreferencesGroup()
+        status_group.set_title(_t("Current Presence Status", "Estado Actual de Presencia"))
+        vbox.append(status_group)
+
+        self.status_banner = Adw.ActionRow()
+        self.status_banner.set_title(_t("Checking Hardware...", "Comprobando Hardware..."))
+        self.status_banner.set_subtitle(_t("Initializing Gaze and Mutter sensors...", "Iniciando sensores de Gaze y Mutter..."))
+        self.status_icon = Gtk.Image.new_from_icon_name("security-high-symbolic")
+        self.status_icon.set_pixel_size(32)
+        self.status_banner.add_prefix(self.status_icon)
+        status_group.add(self.status_banner)
+
+        # ── 2. Metric Details ─────────────────────────────────────────
+        metrics_group = Adw.PreferencesGroup()
+        metrics_group.set_title(_t("Biometric & Session Telemetry", "Telemetría Biométrica y de Sesión"))
+        vbox.append(metrics_group)
+
+        # Row A: Gaze Face Engine
+        self.face_metric_row = Adw.ActionRow()
+        self.face_metric_row.set_title(_t("Face Recognition (Gaze Engine)", "Reconocimiento Facial (Motor Gaze)"))
+        self.face_metric_row.set_subtitle(_t("Idle", "En reposo"))
+        face_img = Gtk.Image.new_from_icon_name("camera-web-symbolic")
+        self.face_metric_row.add_prefix(face_img)
+        self.btn_manual_probe = Gtk.Button(label=_t("Probe Now", "Escanear Ahora"))
+        self.btn_manual_probe.set_valign(Gtk.Align.CENTER)
+        self.btn_manual_probe.connect("clicked", lambda b: self.probe_camera_async(forced=True))
+        self.face_metric_row.add_suffix(self.btn_manual_probe)
+        metrics_group.add(self.face_metric_row)
+
+        # Row B: Mutter Idle Monitor
+        self.idle_metric_row = Adw.ActionRow()
+        self.idle_metric_row.set_title(_t("System User Activity (Mutter)", "Actividad del Usuario (Mutter)"))
+        self.idle_metric_row.set_subtitle(_t("Reading...", "Leyendo..."))
+        input_img = Gtk.Image.new_from_icon_name("input-keyboard-symbolic")
+        self.idle_metric_row.add_prefix(input_img)
+        metrics_group.add(self.idle_metric_row)
+
+        # Row C: Auto-Lock Countdown
+        self.lock_metric_row = Adw.ActionRow()
+        self.lock_metric_row.set_title(_t("Auto-Lock Absence Countdown", "Cuenta Atrás de Bloqueo"))
+        self.lock_metric_row.set_subtitle(f"0 / {self.timeout_limit}s")
+        timer_img = Gtk.Image.new_from_icon_name("alarm-symbolic")
+        self.lock_metric_row.add_prefix(timer_img)
+
+        self.btn_test_lock = Gtk.Button(label=_t("Test Lock Screen", "Probar Bloqueo"))
+        self.btn_test_lock.set_valign(Gtk.Align.CENTER)
+        self.btn_test_lock.add_css_class("destructive-action")
+        self.btn_test_lock.connect("clicked", self.on_test_lock_clicked)
+        self.lock_metric_row.add_suffix(self.btn_test_lock)
+        metrics_group.add(self.lock_metric_row)
+
+        self.lock_progress = Gtk.ProgressBar()
+        self.lock_progress.set_fraction(1.0)
+        self.lock_progress.set_margin_top(4)
+        self.lock_progress.set_margin_bottom(6)
+        metrics_group.add(self.lock_progress)
+
+        # Simulation Switch
+        self.sim_row = Adw.SwitchRow()
+        self.sim_row.set_title(_t("Simulation Mode (Do not actually lock)", "Modo Simulación (No bloquear realmente)"))
+        self.sim_row.set_subtitle(_t("Keeps monitoring and counting down, but logs lock action without activating screen saver", "Monitorea y descuenta tiempo, pero registra la acción sin apagar la pantalla"))
+        self.sim_row.set_active(False)
+        self.simulate_mode = False
+        self.sim_row.connect("notify::active", self.on_sim_toggled)
+        metrics_group.add(self.sim_row)
+
+        # ── 3. Live Console Event Log ─────────────────────────────────
+        log_group = Adw.PreferencesGroup()
+        log_group.set_title(_t("Live Event Log Stream", "Registro de Eventos en Tiempo Real"))
+        vbox.append(log_group)
+
+        log_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        log_group.add(log_box)
+
+        log_scroll = Gtk.ScrolledWindow()
+        log_scroll.set_min_content_height(180)
+        log_scroll.set_max_content_height(240)
+        log_scroll.add_css_class("card")
+        log_box.append(log_scroll)
+
+        self.text_view = Gtk.TextView()
+        self.text_view.set_editable(False)
+        self.text_view.set_monospace(True)
+        self.text_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self.text_view.set_left_margin(10)
+        self.text_view.set_right_margin(10)
+        self.text_view.set_top_margin(10)
+        self.text_view.set_bottom_margin(10)
+        self.text_buffer = self.text_view.get_buffer()
+        log_scroll.set_child(self.text_view)
+
+        btn_clear = Gtk.Button(label=_t("Clear Logs", "Limpiar Registro"))
+        btn_clear.set_halign(Gtk.Align.END)
+        btn_clear.connect("clicked", lambda b: self.text_buffer.set_text(""))
+        log_box.append(btn_clear)
+
+        # Initial log
+        self.log_event(_t("Presence Diagnostics initialized. Target user: ", "Diagnóstico de Presencia iniciado. Usuario objetivo: ") + self.username)
+        self.log_event(_t("Configured timeout: ", "Tiempo de espera configurado: ") + f"{self.timeout_limit}s")
+
+        # Start timer (1000ms loop)
+        GLib.timeout_add(1000, self.on_poll_tick)
+        self.connect("close-request", self.on_close_window)
+
+    def on_sim_toggled(self, row, pspec):
+        self.simulate_mode = row.get_active()
+        self.log_event(_t("Simulation mode: ", "Modo simulación: ") + str(self.simulate_mode))
+
+    def toggle_pause(self, btn):
+        self.is_running = not self.is_running
+        if self.is_running:
+            self.btn_pause.set_icon_name("media-playback-pause-symbolic")
+            self.log_event(_t("Telemetry resumed.", "Monitoreo reanudado."))
+        else:
+            self.btn_pause.set_icon_name("media-playback-start-symbolic")
+            self.log_event(_t("Telemetry paused.", "Monitoreo pausado."))
+
+    def on_close_window(self, win):
+        self.is_running = False
+        return False
+
+    def log_event(self, msg):
+        timestamp = time.strftime("%H:%M:%S")
+        entry = f"[{timestamp}] {msg}\n"
+        end_iter = self.text_buffer.get_end_iter()
+        self.text_buffer.insert(end_iter, entry)
+        # Auto scroll to bottom
+        adj = self.text_view.get_vadjustment()
+        if adj:
+            adj.set_value(adj.get_upper())
+
+    def on_test_lock_clicked(self, btn):
+        self.log_event(_t("Manually triggered lock screen session.", "Bloqueo de pantalla solicitado manualmente."))
+        subprocess.run(["loginctl", "lock-session"], check=False)
+
+    def probe_camera_async(self, forced=False):
+        if self.is_probing_camera:
+            return
+        self.is_probing_camera = True
+        self.face_metric_row.set_subtitle(_t("Scanning camera for owner...", "Escaneando cámara buscando al usuario..."))
+        t0 = time.time()
+
+        def worker():
+            try:
+                res = subprocess.run(
+                    ["gaze", "auth", "-u", self.username, "-s"],
+                    stdin=subprocess.DEVNULL,
+                    capture_output=True,
+                    text=True,
+                    timeout=4
+                )
+                duration_ms = int((time.time() - t0) * 1000)
+                is_match = (res.returncode == 0)
+                GLib.idle_add(self.on_camera_probe_result, is_match, duration_ms, forced)
+            except Exception as e:
+                duration_ms = int((time.time() - t0) * 1000)
+                GLib.idle_add(self.on_camera_probe_result, False, duration_ms, forced, str(e))
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+
+    def on_camera_probe_result(self, is_match, duration_ms, forced, err=None):
+        self.is_probing_camera = False
+        self.last_probe_time = time.time()
+        if is_match:
+            self.last_face_match_time = time.time()
+            self.absent_seconds = 0
+            self.face_metric_row.set_subtitle(
+                f"<span color='#34c759'><b>✓ {_t('Face Confirmed', 'Rostro Confirmado')} ({duration_ms}ms)</b></span>"
+            )
+            self.log_event(
+                f"Gaze Auth: {_t('Owner face VERIFIED', 'Rostro del propietario VERIFICADO')} ({self.username}) in {duration_ms}ms."
+            )
+        else:
+            if err:
+                self.face_metric_row.set_subtitle(f"<span color='#ff3b30'>{_t('Camera error:', 'Error de cámara:')} {err}</span>")
+                self.log_event(f"Gaze Auth Error: {err}")
+            else:
+                self.face_metric_row.set_subtitle(
+                    f"<span color='#ff9500'><b>✗ {_t('No face / mismatch', 'Sin rostro / no coincide')} ({duration_ms}ms)</b></span>"
+                )
+                self.log_event(
+                    f"Gaze Auth: {_t('No owner face detected in frame', 'No se detectó rostro del propietario')} ({duration_ms}ms)."
+                )
+
+    def on_poll_tick(self):
+        if not self.is_running:
+            return True
+
+        idle_ms = get_mutter_idletime()
+        idle_s = idle_ms / 1000.0
+
+        # Update Idle telemetry row
+        if idle_s < 3.0:
+            self.idle_metric_row.set_subtitle(
+                f"<span color='#34c759'><b>{_t('Active User', 'Usuario Activo')}</b></span> ({idle_ms} ms {_t('ago', 'atrás')})"
+            )
+            # Reset absence counter on physical input
+            if self.absent_seconds > 0:
+                self.log_event(f"Mutter: {_t('Physical input detected. Absence timer reset to 0.', 'Actividad física detectada. Temporizador reiniciado a 0.')}")
+            self.absent_seconds = 0
+            self.last_face_match_time = time.time()
+        else:
+            self.idle_metric_row.set_subtitle(
+                f"<span color='#ff9500'>{_t('No keyboard/mouse activity for', 'Sin actividad de teclado/ratón desde hace')} {int(idle_s)}s</span>"
+            )
+
+        # Trigger camera check if idle >= 4s and not checked in the last 4s
+        now = time.time()
+        if idle_s >= 4.0:
+            if (now - self.last_probe_time) >= 4.0 and not self.is_probing_camera:
+                self.probe_camera_async(forced=False)
+
+        # Compute presence status & countdown
+        time_since_face = now - self.last_face_match_time
+        if idle_s < 3.0 or time_since_face < 4.0:
+            # User present
+            self.absent_seconds = 0
+            self.status_banner.set_title(_t("● User Present", "● Usuario Presente"))
+            self.status_banner.set_subtitle(
+                _t("User activity or face confirmed within the last 4 seconds", "Actividad confirmada en los últimos 4 segundos")
+            )
+            self.lock_progress.set_fraction(1.0)
+            self.lock_metric_row.set_subtitle(f"0 / {self.timeout_limit}s ({_t('Safe', 'Protegido')})")
+        else:
+            # User considered absent or inactive
+            self.absent_seconds += 1
+            remaining = max(0, self.timeout_limit - self.absent_seconds)
+            frac = max(0.0, remaining / float(self.timeout_limit))
+            self.lock_progress.set_fraction(frac)
+            self.lock_metric_row.set_subtitle(
+                f"<span color='#ff3b30'><b>{self.absent_seconds} / {self.timeout_limit}s ({remaining}s {_t('remaining', 'restantes')})</b></span>"
+            )
+
+            if remaining > 0:
+                self.status_banner.set_title(_t("⚠ Absence Countdown Running", "⚠ Cuenta Atrás de Ausencia Activa"))
+                self.status_banner.set_subtitle(
+                    f"{_t('No owner face or input detected. Screen locks in', 'No se detecta rostro ni actividad. Bloqueo en')} {remaining}s"
+                )
+            else:
+                self.status_banner.set_title(_t("🔒 Auto-Lock Triggered!", "🔒 ¡Bloqueo Automático Disparado!"))
+                self.status_banner.set_subtitle(
+                    _t("Absence threshold reached.", "Se alcanzó el límite de ausencia sin detectar al usuario.")
+                )
+                if self.simulate_mode:
+                    self.log_event(_t("[SIMULATION] Threshold reached: Screen lock command dispatched (Simulated)", "[SIMULACIÓN] Límite alcanzado: Bloqueo de pantalla disparado (Simulado)"))
+                    self.absent_seconds = 0 # reset simulation cycle
+                else:
+                    self.log_event(_t("[REAL LOCK] Threshold reached: Executing loginctl lock-session...", "[BLOQUEO REAL] Límite alcanzado: Ejecutando loginctl lock-session..."))
+                    subprocess.run(["loginctl", "lock-session"], check=False)
+                    self.absent_seconds = 0
+
+        return True
+
+
+# ==============================================================================
+# Main Biometrics Preferences Window (Bilingual & Tahoe Aesthetics)
+# ==============================================================================
+class BiometricsSettingsWindow(Adw.PreferencesWindow):
+    def __init__(self, app):
+        super().__init__(application=app)
+        self.set_title(_t("Touch ID & Face ID", "Touch ID y Face ID"))
+        self.set_default_size(700, 600)
+        self.username = GLib.get_user_name()
+
+        # Build Page
+        page = Adw.PreferencesPage()
+        page.set_title(_t("Biometrics & Security", "Biometría y Seguridad"))
+        page.set_icon_name("system-users-symbolic")
+        self.add(page)
+
+        # ── Group 1: Touch ID (Fingerprint) ──────────────────────────
+        self.touch_group = Adw.PreferencesGroup()
+        self.touch_group.set_title(_t("Touch ID (Fingerprint)", "Touch ID (Huella Dactilar)"))
+        self.touch_group.set_description(_t(
+            "Use your fingerprint to log in, unlock your screen, and authorize system actions.",
+            "Usa tu huella para iniciar sesión, desbloquear la pantalla y autorizar acciones del sistema."
+        ))
+        page.add(self.touch_group)
+
+        self.touch_switch_row = Adw.SwitchRow()
+        self.touch_switch_row.set_title(_t("Use Touch ID", "Usar Touch ID"))
+        self.touch_switch_row.set_subtitle(_t(
+            "Log in and authorize actions with your fingerprint",
+            "Inicia sesión y autoriza acciones con tu huella dactilar"
+        ))
+        self.touch_switch_row.connect("notify::active", self.on_touch_id_toggled)
+        self.touch_group.add(self.touch_switch_row)
+
+        self.touch_manage_row = Adw.ActionRow()
+        self.touch_manage_row.set_title(_t("Fingerprints", "Huellas Dactilares"))
+        self.touch_manage_row.set_subtitle(_t("Checking fingerprint reader...", "Comprobando lector de huellas..."))
+        self.touch_manage_row.set_activatable(True)
+        self.touch_manage_row.connect("activated", lambda r: self.open_touch_id_manager())
+
+        icon_fp = Gtk.Image.new_from_icon_name("fingerprint-symbolic")
+        icon_fp.set_pixel_size(24)
+        self.touch_manage_row.add_prefix(icon_fp)
+
+        self.btn_manage_touch = Gtk.Button(label=_t("Manage Fingerprints…", "Gestionar Huellas…"))
+        self.btn_manage_touch.set_valign(Gtk.Align.CENTER)
+        self.btn_manage_touch.connect("clicked", lambda b: self.open_touch_id_manager())
+        self.touch_manage_row.add_suffix(self.btn_manage_touch)
+        self.touch_group.add(self.touch_manage_row)
+
+        # ── Group 2: Face ID (Facial Recognition) ─────────────────────
+        self.face_group = Adw.PreferencesGroup()
+        self.face_group.set_title(_t("Face ID (Facial Recognition)", "Face ID (Reconocimiento Facial)"))
+        self.face_group.set_description(_t(
+            "Unlock Pulsar OS and authorize system commands using Gaze facial recognition.",
+            "Desbloquea Pulsar OS y autoriza comandos mediante el reconocimiento facial con Gaze."
+        ))
+        page.add(self.face_group)
+
+        self.face_switch_row = Adw.SwitchRow()
+        self.face_switch_row.set_title(_t("Use Face ID", "Usar Face ID"))
+        self.face_switch_row.set_subtitle(_t(
+            "Log in and authorize actions with facial recognition",
+            "Inicia sesión y autoriza acciones con reconocimiento facial"
+        ))
+        self.face_switch_row.connect("notify::active", self.on_face_id_toggled)
+        self.face_group.add(self.face_switch_row)
+
+        self.face_manage_row = Adw.ActionRow()
+        self.face_manage_row.set_title(_t("Face Profiles", "Perfiles de Rostro"))
+        self.face_manage_row.set_subtitle(_t("Checking camera...", "Comprobando cámara..."))
+        self.face_manage_row.set_activatable(True)
+        self.face_manage_row.connect("activated", lambda r: self.open_face_id_manager())
+
+        icon_face = Gtk.Image.new_from_icon_name("camera-web-symbolic")
+        icon_face.set_pixel_size(24)
+        self.face_manage_row.add_prefix(icon_face)
+
+        self.btn_manage_face = Gtk.Button(label=_t("Manage Faces…", "Gestionar Rostros…"))
+        self.btn_manage_face.set_valign(Gtk.Align.CENTER)
+        self.btn_manage_face.connect("clicked", lambda b: self.open_face_id_manager())
+        self.face_manage_row.add_suffix(self.btn_manage_face)
+        self.face_group.add(self.face_manage_row)
+
+        # ── Group 3: Presence Detection (Auto-Lock) ───────────────────
+        self.presence_group = Adw.PreferencesGroup()
+        self.presence_group.set_title(_t("Presence Detection", "Detección de Presencia"))
+        self.presence_group.set_description(_t(
+            "Automatically locks your computer when it detects you have walked away from the screen.",
+            "Bloquea automáticamente el equipo cuando detecta que te has alejado de la pantalla."
+        ))
+        page.add(self.presence_group)
+
+        self.presence_switch_row = Adw.SwitchRow()
+        self.presence_switch_row.set_title(_t("Auto-lock on absence", "Bloqueo automático por ausencia"))
+        self.presence_switch_row.set_subtitle(_t(
+            "Lock the screen and turn off displays when not in front of the camera",
+            "Apaga la sesión y bloquea la pantalla si no estás frente a la cámara"
+        ))
+        self.presence_switch_row.connect("notify::active", self.on_presence_toggled)
+        self.presence_group.add(self.presence_switch_row)
+
+        self.timeout_row = Adw.ComboRow()
+        self.timeout_row.set_title(_t("Lock timeout", "Tiempo de espera para bloqueo"))
+        self.timeout_row.set_subtitle(_t("Time without detecting presence before locking", "Tiempo sin detectar tu presencia antes de bloquear"))
+        model = Gtk.StringList.new([
+            _t("15 seconds (High security)", "15 segundos (Máxima seguridad)"),
+            _t("30 seconds (Recommended)", "30 segundos (Recomendado)"),
+            _t("1 minute", "1 minuto"),
+            _t("2 minutes", "2 minutos")
+        ])
+        self.timeout_row.set_model(model)
+        self.timeout_row.connect("notify::selected", self.on_timeout_selected)
+        self.presence_group.add(self.timeout_row)
+
+        # Live Diagnostics Monitor launcher button
+        diag_row = Adw.ActionRow()
+        diag_row.set_title(_t("Live Presence & Face ID Diagnostics", "Diagnóstico y Monitor de Presencia en Vivo"))
+        diag_row.set_subtitle(_t(
+            "Inspect real-time camera recognition, Mutter idle status, and countdown",
+            "Observa en tiempo real el escaneo de la cámara, inactividad de Mutter y la cuenta atrás"
+        ))
+        btn_open_diag = Gtk.Button(label=_t("Open Monitor…", "Abrir Monitor…"))
+        btn_open_diag.set_valign(Gtk.Align.CENTER)
+        btn_open_diag.add_css_class("accent")
+        btn_open_diag.connect("clicked", lambda b: self.open_debug_window())
+        diag_row.add_suffix(btn_open_diag)
+        self.presence_group.add(diag_row)
+
+        # ── Group 4: Security & Privacy ──────────────────────────────
+        info_group = Adw.PreferencesGroup()
+        info_group.set_title(_t("Security & Privacy", "Seguridad y Privacidad"))
+        page.add(info_group)
+
+        info_row = Adw.ActionRow()
+        info_row.set_title(_t("100% on-device local processing", "Procesamiento 100% local en el dispositivo"))
+        info_row.set_subtitle(_t(
+            "Your biometric data and camera stream are analyzed exclusively on your hardware. No images or telemetry are ever sent to external servers.",
+            "Tus datos biométricos y la imagen de la cámara se analizan exclusivamente en tu hardware. Nunca se almacenan vídeos ni se transmiten datos a ningún servidor externo."
+        ))
+        icon = Gtk.Image.new_from_icon_name("security-high-symbolic")
+        info_row.add_prefix(icon)
+        info_group.add(info_row)
+
+        # Refresh state from daemon
+        self.refresh_status()
+
+    def open_debug_window(self):
+        diag_win = PresenceDebugWindow(parent_window=self)
+        diag_win.present()
+
+    def get_config_path(self):
+        return os.path.expanduser("~/.config/pulsaros/presence.json")
+
+    def load_presence_config(self):
+        p = self.get_config_path()
+        cfg = {"enabled": False, "timeout_seconds": 30}
+        if os.path.exists(p):
+            try:
+                with open(p, "r") as f:
+                    cfg.update(json.load(f))
+            except Exception:
+                pass
+        return cfg
+
+    def save_presence_config(self, cfg):
+        p = self.get_config_path()
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        try:
+            with open(p, "w") as f:
+                json.dump(cfg, f, indent=2)
+        except Exception as e:
+            print("Error saving presence config:", e)
+
+        # Notify biometrics daemon
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                "http://127.0.0.1:39281/presence",
+                data=json.dumps(cfg).encode("utf-8"),
+                headers={"Content-Type": "application/json"}
+            )
+            urllib.request.urlopen(req, timeout=1)
+        except Exception:
+            pass
+
+    def refresh_status(self):
+        # 0. Load biometrics config toggles
+        bio_cfg = load_biometrics_config()
+        self.touch_switch_row.set_active(bio_cfg.get("touch_id_enabled", True))
+        self.face_switch_row.set_active(bio_cfg.get("face_id_enabled", True))
+
+        # 1. Check Touch ID / Fingerprint Reader
+        has_fp = False
+        try:
+            res = subprocess.run(["fprintd-list", self.username], capture_output=True, text=True, timeout=2)
+            if "found 1 devices" in res.stdout or "Using device" in res.stdout:
+                has_fp = True
+        except Exception:
+            pass
+
+        if not has_fp:
+            self.touch_switch_row.set_sensitive(False)
+            self.touch_manage_row.set_sensitive(False)
+            self.touch_manage_row.set_subtitle(_t("No fingerprint reader detected on this computer.", "No se detectó ningún lector de huellas en este equipo."))
+            self.btn_manage_touch.set_visible(False)
+        else:
+            self.touch_switch_row.set_sensitive(True)
+            self.touch_manage_row.set_sensitive(True)
+            self.btn_manage_touch.set_visible(True)
+            enrolled_fingers = get_enrolled_fingers(self.username)
+            count = len(enrolled_fingers)
+            if count == 0:
+                self.touch_manage_row.set_subtitle(_t("Reader ready, but no fingerprints enrolled yet.", "Lector listo, pero no hay huellas registradas aún."))
+                self.btn_manage_touch.set_label(_t("Set Up…", "Configurar…"))
+            else:
+                self.touch_manage_row.set_subtitle(_t(f"{count} fingerprint(s) registered and ready", f"{count} huella(s) registrada(s) y activa(s)"))
+                self.btn_manage_touch.set_label(_t("Manage…", "Gestionar…"))
+
+        # 2. Check Face ID
+        has_cam = any(os.path.exists(f"/dev/video{i}") for i in range(4))
+        face_enrolled = False
+        try:
+            res = subprocess.run(["gaze", "list-faces", "-u", self.username], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=2)
+            if res.returncode == 0 and res.stdout.strip() and "No faces found" not in res.stdout and "No faces enrolled" not in res.stdout:
+                face_enrolled = True
+        except Exception:
+            pass
+
+        if not has_cam:
+            self.face_switch_row.set_sensitive(False)
+            self.face_manage_row.set_sensitive(False)
+            self.face_manage_row.set_subtitle(_t("No compatible webcam detected.", "No se detectó ninguna cámara web compatible."))
+            self.btn_manage_face.set_visible(False)
+        else:
+            self.face_switch_row.set_sensitive(True)
+            self.face_manage_row.set_sensitive(True)
+            self.btn_manage_face.set_visible(True)
+            if face_enrolled:
+                self.face_manage_row.set_subtitle(_t("Face ID active with enrolled facial profile.", "Face ID activo con perfil de reconocimiento facial."))
+                self.btn_manage_face.set_label(_t("Manage Faces…", "Gestionar Rostros…"))
+            else:
+                self.face_manage_row.set_subtitle(_t("Camera ready, but no face profile enrolled yet.", "Cámara lista, pero no has configurado tu rostro aún."))
+                self.btn_manage_face.set_label(_t("Set Up Face ID…", "Configurar Face ID…"))
+
+        # 3. Check Presence Config
+        cfg = self.load_presence_config()
+        self.presence_switch_row.set_active(cfg.get("enabled", False))
+        t = cfg.get("timeout_seconds", 30)
+        idx = 1
+        if t <= 15:
+            idx = 0
+        elif t <= 30:
+            idx = 1
+        elif t <= 60:
+            idx = 2
+        else:
+            idx = 3
+        self.timeout_row.set_selected(idx)
+
+    def on_touch_id_toggled(self, row, pspec):
+        cfg = load_biometrics_config()
+        cfg["touch_id_enabled"] = row.get_active()
+        save_biometrics_config(cfg)
+
+    def on_face_id_toggled(self, row, pspec):
+        cfg = load_biometrics_config()
+        cfg["face_id_enabled"] = row.get_active()
+        save_biometrics_config(cfg)
+
+    def open_touch_id_manager(self):
+        mgr = TouchIDManagerWindow(parent_window=self, username=self.username)
+        mgr.present()
+
+    def open_face_id_manager(self):
+        if shutil.which("gaze-gui"):
+            subprocess.Popen(["gaze-gui"])
+            GLib.timeout_add_seconds(3, self.refresh_status)
+        else:
+            subprocess.Popen(["gaze", "add-face", "default", "-u", self.username])
+            GLib.timeout_add_seconds(3, self.refresh_status)
+
+    def on_presence_toggled(self, row, pspec):
+        cfg = self.load_presence_config()
+        cfg["enabled"] = row.get_active()
+        self.save_presence_config(cfg)
+
+    def on_timeout_selected(self, row, pspec):
+        idx = row.get_selected()
+        mapping = {0: 15, 1: 30, 2: 60, 3: 120}
+        secs = mapping.get(idx, 30)
+        cfg = self.load_presence_config()
+        cfg["timeout_seconds"] = secs
+        self.save_presence_config(cfg)
+
+
+# ==============================================================================
+# Application Entry Point
+# ==============================================================================
+class BiometricsSettingsApp(Adw.Application):
+    def __init__(self):
+        super().__init__(
+            application_id="es.inled.PulsarOS.BiometricsSettings",
+            flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE
+        )
+        self.debug_mode = False
+
+    def do_command_line(self, command_line):
+        args = command_line.get_arguments()
+        if "--debug-presence" in args or "-d" in args:
+            self.debug_mode = True
+        self.activate()
+        return 0
+
+    def do_activate(self):
+        try:
+            display = Gdk.Display.get_default()
+            if display:
+                css_provider = Gtk.CssProvider()
+                css_provider.load_from_data(CSS_TOUCHID.encode("utf-8"))
+                Gtk.StyleContext.add_provider_for_display(
+                    display,
+                    css_provider,
+                    Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+                )
+        except Exception as e:
+            print("Error loading Touch ID CSS:", e)
+
+        if self.debug_mode:
+            win = PresenceDebugWindow()
+            win.set_application(self)
+            win.present()
+        else:
+            win = self.props.active_window
+            if not win:
+                win = BiometricsSettingsWindow(self)
+            win.present()
+
+
+if __name__ == "__main__":
+    app = BiometricsSettingsApp()
+    sys.exit(app.run(sys.argv))

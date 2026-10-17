@@ -1,0 +1,11 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = pulsaros-*
+Target = pulsar-*
+
+[Action]
+Description = Marking Pulsar OS release notes...
+When = PostTransaction
+Exec = /usr/bin/pulsaros-whatsnew-hook alpm

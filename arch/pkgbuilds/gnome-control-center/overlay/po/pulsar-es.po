@@ -142,3 +142,21 @@ msgstr "Integración AirDrop y LocalSend para compartir archivos entre dispositi
 
 msgid "Settings…"
 msgstr "Ajustes…"
+
+msgid "Biometrics & Presence"
+msgstr "Biometría y Presencia"
+
+msgid "Touch ID & Face ID"
+msgstr "Touch ID y Face ID"
+
+msgid "Fingerprint, facial recognition and presence auto-lock"
+msgstr "Huella dactilar, reconocimiento facial y bloqueo automático por ausencia"
+
+msgid "Presence & Biometrics"
+msgstr "Presencia y Biometría"
+
+msgid "Touch ID, Face ID & Presence Auto-Lock"
+msgstr "Touch ID, Face ID y Bloqueo por Presencia"
+
+msgid "Configure facial recognition, fingerprint and auto-lock on leave"
+msgstr "Configurar reconocimiento facial, huella y bloqueo automático al alejarse"

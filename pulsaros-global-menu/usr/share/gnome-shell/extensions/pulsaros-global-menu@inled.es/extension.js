@@ -373,11 +373,16 @@ export default class PulsarosGlobalMenuExtension extends Extension {
 					// (active-changed -> ActiveChanged, lock-screen-shown ->
 					// LockAsync resolves, wake-up-screen -> WakeUpScreen).
 					const emitShieldSignals = locked => {
-						try { shield._setActive(locked); } catch (e) {}
 						try { shield._setLocked(locked); } catch (e) {}
-						try {
-							shield.emit(locked ? 'lock-screen-shown' : 'wake-up-screen');
-						} catch (e) {}
+						if (locked) {
+							try { shield._setActive(true); } catch (e) {}
+							try { shield.emit('lock-screen-shown'); } catch (e) {}
+							// Unblank display immediately so the lockscreen, biometrics, and clock remain visible
+							try { shield.emit('wake-up-screen'); } catch (e) {}
+						} else {
+							try { shield._setActive(false); } catch (e) {}
+							try { shield.emit('wake-up-screen'); } catch (e) {}
+						}
 					};
 
 					overlay.lock = function (...args) {

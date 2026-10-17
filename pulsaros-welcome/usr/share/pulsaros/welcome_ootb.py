@@ -31,86 +31,105 @@ except Exception:
 
 from gi.repository import Gtk, Gdk, GLib, Adw, Gio
 
-# ── Animated Fingerprint Widget (WebKit 6.0 Native SVG Animation Engine) ──────
+# ── Animated Fingerprint Widget (Native GTK4 Animated Symbolic Fingerprint) ──
+class NativeAnimatedFingerprint(Gtk.Box):
+    def __init__(self, size=130):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL)
+        self.set_halign(Gtk.Align.CENTER)
+        self.set_valign(Gtk.Align.CENTER)
+
+        self.circle_box = Gtk.Box()
+        self.circle_box.set_size_request(size, size)
+        self.circle_box.set_halign(Gtk.Align.CENTER)
+        self.circle_box.set_valign(Gtk.Align.CENTER)
+        self.circle_box.add_css_class("touchid-circle-frame")
+
+        self.icon = Gtk.Image.new_from_icon_name("fingerprint-symbolic")
+        self.icon.set_pixel_size(int(size * 0.58))
+        self.icon.set_halign(Gtk.Align.CENTER)
+        self.icon.set_valign(Gtk.Align.CENTER)
+        self.icon.add_css_class("touchid-fp-icon")
+
+        self.circle_box.append(self.icon)
+        self.append(self.circle_box)
+        self._pulse_timer = None
+
+    def set_stage(self, stage, total_stages=8):
+        self.circle_box.remove_css_class("retry")
+        self.circle_box.add_css_class("pulse")
+        if self._pulse_timer:
+            GLib.source_remove(self._pulse_timer)
+        self._pulse_timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 350, self._clear_pulse)
+
+    def _clear_pulse(self):
+        self.circle_box.remove_css_class("pulse")
+        self._pulse_timer = None
+        return GLib.SOURCE_REMOVE
+
+    def set_retry(self):
+        self.circle_box.remove_css_class("pulse")
+        self.circle_box.add_css_class("retry")
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 450, lambda: self.circle_box.remove_css_class("retry"))
+
+    def set_completed(self):
+        self.circle_box.remove_css_class("pulse")
+        self.circle_box.remove_css_class("retry")
+        self.circle_box.add_css_class("completed")
+        self.icon.set_from_icon_name("emblem-ok-symbolic")
+
+    def reset(self):
+        self.circle_box.remove_css_class("pulse")
+        self.circle_box.remove_css_class("retry")
+        self.circle_box.remove_css_class("completed")
+        self.icon.set_from_icon_name("fingerprint-symbolic")
+
+    # Compatibility methods
+    def evaluate_javascript(self, script, *args):
+        if "setStage" in script:
+            self.set_stage(1, 8)
+        elif "setRetry" in script:
+            self.set_retry()
+        elif "setCompleted" in script:
+            self.set_completed()
+
 def create_animated_fingerprint_widget(size=130):
-    if HAS_WEBKIT:
-        try:
-            wv = WebKit.WebView()
-            bg = Gdk.RGBA()
-            bg.parse("rgba(0,0,0,0)")
-            wv.set_background_color(bg)
-            wv.set_size_request(size, size)
-            wv.set_halign(Gtk.Align.CENTER)
-            wv.set_valign(Gtk.Align.CENTER)
-            wv.connect("context-menu", lambda *args: True)
-
-            settings = wv.get_settings()
-            settings.set_enable_javascript(True)
-            settings.set_enable_developer_extras(False)
-
-            svg_path = "/usr/share/pulsaros/icons/fingerprint.svg"
-            if not os.path.exists(svg_path):
-                svg_path = "/home/jaime/Documentos/pulsar/PKG/fingerprint.svg"
-
-            svg_content = ""
-            if os.path.exists(svg_path):
-                with open(svg_path, "r", encoding="utf-8") as f:
-                    svg_content = f.read()
-
-            html = f"""<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-  html, body {{
-    background: transparent !important;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    user-select: none;
-    -webkit-user-select: none;
-  }}
-  svg {{
-    width: {size - 10}px;
-    height: {size - 10}px;
-    display: block;
-  }}
-  @media (prefers-color-scheme: light) {{
-    path[stroke="#ededed"] {{
-      stroke: #8e8e93 !important;
-    }}
-  }}
-</style>
-</head>
-<body>
-{svg_content}
-</body>
-</html>"""
-            wv.load_html(html, "file:///")
-            return wv
-        except Exception as e:
-            print("WebKit widget exception:", e)
-
-    # Fallback to Gtk.Picture / Gtk.Image
-    svg_path = "/usr/share/pulsaros/icons/fingerprint.svg"
-    if os.path.exists(svg_path):
-        pic = Gtk.Picture.new_for_filename(svg_path)
-        pic.set_size_request(size, size)
-        pic.set_can_shrink(True)
-        pic.set_halign(Gtk.Align.CENTER)
-        return pic
-    img = Gtk.Image.new_from_icon_name("fingerprint-symbolic")
-    img.set_pixel_size(80)
-    img.set_halign(Gtk.Align.CENTER)
-    return img
+    return NativeAnimatedFingerprint(size)
 
 
 # Custom CSS for Apple macOS OOTB Setup Look-and-Feel (LIGHT MODE)
 CSS_DATA = """
+/* ── Native Touch ID Fingerprint Widget ───────────────────────────── */
+.touchid-circle-frame {
+    border-radius: 9999px;
+    border: 3.5px solid rgba(0, 113, 227, 0.4);
+    background-color: rgba(0, 113, 227, 0.08);
+    transition: all 300ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+.touchid-fp-icon {
+    color: #0071e3;
+    transition: all 300ms ease;
+}
+.touchid-circle-frame.pulse {
+    border-color: #0071e3;
+    background-color: rgba(0, 113, 227, 0.22);
+    box-shadow: 0 0 20px rgba(0, 113, 227, 0.6);
+    transform: scale(1.06);
+}
+.touchid-circle-frame.retry {
+    border-color: #ff9f0a;
+    background-color: rgba(255, 159, 10, 0.18);
+    box-shadow: 0 0 24px rgba(255, 159, 10, 0.65);
+}
+.touchid-circle-frame.completed {
+    background-color: #30d158;
+    border-color: #30d158;
+    box-shadow: 0 0 28px rgba(48, 209, 88, 0.7);
+    transform: scale(1.08);
+}
+.touchid-circle-frame.completed .touchid-fp-icon {
+    color: #ffffff !important;
+}
+
 /* ── Design System Variables ──────────────────────────────────────── */
 window {
     --bg-color: #f5f5f7;
@@ -579,6 +598,22 @@ def has_camera_hardware():
     if "TEST_MODE" in os.environ:
         return True
     return any(os.path.exists(f"/dev/video{i}") for i in range(4))
+
+def get_num_enroll_stages():
+    try:
+        res = subprocess.run([
+            "gdbus", "call", "--system",
+            "--dest", "net.reactivated.Fprint",
+            "--object-path", "/net/reactivated/Fprint/Device/0",
+            "--method", "org.freedesktop.DBus.Properties.Get",
+            "net.reactivated.Fprint.Device", "num-enroll-stages"
+        ], capture_output=True, text=True, timeout=2)
+        if res.returncode == 0:
+            val = res.stdout.strip().replace("(<", "").replace(">,)", "").replace("uint32", "").replace("(", "").replace(")", "").strip()
+            return max(5, int(val))
+    except Exception:
+        pass
+    return 13
 
 
 class OOTBWindow(Adw.ApplicationWindow):
@@ -1376,7 +1411,7 @@ class OOTBWindow(Adw.ApplicationWindow):
                     bufsize=1
                 )
                 stages = 0
-                max_stages = 8
+                max_stages = get_num_enroll_stages()
                 completed = False
                 for line in self.touch_enroll_proc.stdout:
                     line_s = line.strip()
@@ -1386,18 +1421,59 @@ class OOTBWindow(Adw.ApplicationWindow):
                         GLib.idle_add(self.update_touch_id_progress, 0.1, self.tr("Place your finger on the sensor...", "Coloca tu dedo en el sensor..."))
                     elif "enroll-stage-passed" in line_s:
                         stages += 1
-                        frac = min(0.92, stages / float(max_stages))
+                        frac = min(0.95, stages / float(max_stages))
                         msg = f"{self.tr('Lift and place your finger again', 'Levanta el dedo y vuelve a colocarlo')} ({stages}/{max_stages})"
                         GLib.idle_add(self.update_touch_id_progress, frac, msg)
+                        ridge_n = min(8, max(1, int(round((stages / float(max_stages)) * 8.0))))
+                        if hasattr(self, "ootb_fp_widget"):
+                            if hasattr(self.ootb_fp_widget, "set_stage"):
+                                GLib.idle_add(self.ootb_fp_widget.set_stage, stages, max_stages)
+                            elif hasattr(self.ootb_fp_widget, "evaluate_javascript"):
+                                try:
+                                    self.ootb_fp_widget.evaluate_javascript(f"setStage({ridge_n});", -1, None, None, None, None, None)
+                                except Exception:
+                                    pass
                     elif "enroll-retry-scan" in line_s:
                         GLib.idle_add(self.update_touch_id_progress, None, self.tr("Reposition your finger firmly...", "Vuelve a colocar el dedo firmemente..."))
+                        if hasattr(self, "ootb_fp_widget"):
+                            if hasattr(self.ootb_fp_widget, "set_retry"):
+                                GLib.idle_add(self.ootb_fp_widget.set_retry)
+                            elif hasattr(self.ootb_fp_widget, "evaluate_javascript"):
+                                try:
+                                    self.ootb_fp_widget.evaluate_javascript("setRetry();", -1, None, None, None, None, None)
+                                except Exception:
+                                    pass
                     elif "enroll-swipe-too-short" in line_s:
                         GLib.idle_add(self.update_touch_id_progress, None, self.tr("Keep your finger longer on the sensor...", "Mantén el dedo más tiempo..."))
+                        if hasattr(self, "ootb_fp_widget"):
+                            if hasattr(self.ootb_fp_widget, "set_retry"):
+                                GLib.idle_add(self.ootb_fp_widget.set_retry)
+                            elif hasattr(self.ootb_fp_widget, "evaluate_javascript"):
+                                try:
+                                    self.ootb_fp_widget.evaluate_javascript("setRetry();", -1, None, None, None, None, None)
+                                except Exception:
+                                    pass
                     elif "enroll-finger-not-centered" in line_s:
                         GLib.idle_add(self.update_touch_id_progress, None, self.tr("Center your finger on the sensor...", "Centra tu dedo en el sensor..."))
+                        if hasattr(self, "ootb_fp_widget"):
+                            if hasattr(self.ootb_fp_widget, "set_retry"):
+                                GLib.idle_add(self.ootb_fp_widget.set_retry)
+                            elif hasattr(self.ootb_fp_widget, "evaluate_javascript"):
+                                try:
+                                    self.ootb_fp_widget.evaluate_javascript("setRetry();", -1, None, None, None, None, None)
+                                except Exception:
+                                    pass
                     elif "enroll-completed" in line_s:
                         completed = True
                         GLib.idle_add(self.update_touch_id_progress, 1.0, self.tr("Touch ID configured successfully!", "¡Touch ID configurado con éxito!"))
+                        if hasattr(self, "ootb_fp_widget"):
+                            if hasattr(self.ootb_fp_widget, "set_completed"):
+                                GLib.idle_add(self.ootb_fp_widget.set_completed)
+                            elif hasattr(self.ootb_fp_widget, "evaluate_javascript"):
+                                try:
+                                    self.ootb_fp_widget.evaluate_javascript("setCompleted();", -1, None, None, None, None, None)
+                                except Exception:
+                                    pass
                         break
                 self.touch_enroll_proc.wait()
                 if self.touch_enroll_proc.returncode == 0 or completed:
@@ -1422,11 +1498,14 @@ class OOTBWindow(Adw.ApplicationWindow):
         self.btn_skip_touch_id.set_label(self.tr("Continue", "Continuar"))
         self.btn_skip_touch_id.remove_css_class("secondary-action")
         self.btn_skip_touch_id.add_css_class("pulsar-continue-btn")
-        if hasattr(self, "ootb_fp_widget") and hasattr(self.ootb_fp_widget, "evaluate_javascript"):
-            try:
-                self.ootb_fp_widget.evaluate_javascript("if(document.querySelector('svg')){ document.querySelector('svg').pauseAnimations(); } if(document.getElementById('i8')){ document.getElementById('i8').style.opacity = '1'; }", -1, None, None, None, None, None)
-            except Exception:
-                pass
+        if hasattr(self, "ootb_fp_widget"):
+            if hasattr(self.ootb_fp_widget, "set_completed"):
+                self.ootb_fp_widget.set_completed()
+            elif hasattr(self.ootb_fp_widget, "evaluate_javascript"):
+                try:
+                    self.ootb_fp_widget.evaluate_javascript("setCompleted();", -1, None, None, None, None, None)
+                except Exception:
+                    pass
 
     def on_touch_id_failed(self):
         self.btn_start_touch_id.set_sensitive(True)

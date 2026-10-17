@@ -1,0 +1,7 @@
+// Pulsar OS - Allow active user and admin groups to manage fingerprints without extra password prompts
+polkit.addRule(function(action, subject) {
+    if (action.id.indexOf("net.reactivated.fprint.device.") === 0 &&
+        (subject.isInGroup("wheel") || subject.isInGroup("sudo") || subject.user == "live")) {
+        return polkit.Result.YES;
+    }
+});

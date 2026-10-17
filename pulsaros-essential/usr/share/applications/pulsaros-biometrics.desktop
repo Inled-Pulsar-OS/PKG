@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Touch ID & Face ID
+Name[es]=Touch ID y Face ID
+Comment=Configure facial recognition, fingerprint login, and presence detection
+Comment[es]=Configura el reconocimiento facial, lector de huellas y detección de presencia
+Exec=pulsaros-biometrics-settings
+Icon=system-users
+Terminal=false
+Type=Application
+Categories=GNOME;GTK;Settings;Security;System;
+Keywords=fingerprint;touchid;faceid;face;auth;biometrics;presencia;lock;huella;
+StartupNotify=true

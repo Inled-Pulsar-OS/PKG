@@ -1,4 +1,5 @@
 #!/bin/bash
+# Sayri Settings - opens the GTK settings window (GUI launcher)
 if [ -z "$SAYRI_PYTHONPATH" ]; then
     SAYRI_PYTHONPATH="/usr/share/sayri/lib"
 fi

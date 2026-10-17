@@ -7,6 +7,57 @@
        Attribution: © Apple Inc. / Curated & upscaled by 512pixels.net
        ========================================================================= -->
   <wallpaper deleted="false">
+    <name>macOS Golden Gate (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/golden-gate.png</filename>
+    <filename-dark>/usr/share/backgrounds/macos/golden-gate-dark.png</filename-dark>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Golden Gate Bridge (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/golden-gate-bridge.jpg</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Tahoe (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/tahoe.png</filename>
+    <filename-dark>/usr/share/backgrounds/macos/tahoe-dark.png</filename-dark>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Tahoe Beach (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/tahoe-beach-day.png</filename>
+    <filename-dark>/usr/share/backgrounds/macos/tahoe-beach-night.png</filename-dark>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Tahoe Beach Dawn (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/tahoe-beach-dawn.png</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Tahoe Beach Dusk (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/tahoe-beach-dusk.png</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
     <name>macOS Sequoia (5K - © Apple Inc. / 512pixels.net)</name>
     <filename>/usr/share/backgrounds/macos/sequoia.jpg</filename>
     <filename-dark>/usr/share/backgrounds/macos/sequoia-dark.jpg</filename-dark>
@@ -16,9 +67,25 @@
   </wallpaper>
 
   <wallpaper deleted="false">
+    <name>macOS Sequoia Sunrise (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/sequoia-sunrise.png</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
     <name>macOS Sonoma (5K - © Apple Inc. / 512pixels.net)</name>
     <filename>/usr/share/backgrounds/macos/sonoma.jpg</filename>
     <filename-dark>/usr/share/backgrounds/macos/sonoma-dark.jpg</filename-dark>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Sonoma Horizon (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/sonoma-horizon.png</filename>
     <options>zoom</options>
     <pcolor>#000000</pcolor>
     <scolor>#000000</scolor>
@@ -46,6 +113,15 @@
     <name>macOS Big Sur (5K - © Apple Inc. / 512pixels.net)</name>
     <filename>/usr/share/backgrounds/macos/big-sur.jpg</filename>
     <filename-dark>/usr/share/backgrounds/macos/big-sur-dark.jpg</filename-dark>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Big Sur Graphic (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/big-sur-graphic.jpg</filename>
+    <filename-dark>/usr/share/backgrounds/macos/big-sur-graphic-dark.jpg</filename-dark>
     <options>zoom</options>
     <pcolor>#000000</pcolor>
     <scolor>#000000</scolor>
@@ -134,8 +210,24 @@
   </wallpaper>
 
   <wallpaper deleted="false">
+    <name>macOS Snow Leopard Server (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/snow-leopard-server.jpg</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
     <name>macOS Leopard (5K - © Apple Inc. / 512pixels.net)</name>
     <filename>/usr/share/backgrounds/macos/leopard.jpg</filename>
+    <options>zoom</options>
+    <pcolor>#000000</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+
+  <wallpaper deleted="false">
+    <name>macOS Leopard Server (5K - © Apple Inc. / 512pixels.net)</name>
+    <filename>/usr/share/backgrounds/macos/leopard-server.jpg</filename>
     <options>zoom</options>
     <pcolor>#000000</pcolor>
     <scolor>#000000</scolor>

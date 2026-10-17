@@ -1,0 +1,4 @@
+// Flag pending release notes after any apt/dpkg transaction.
+// The per-user watcher (pulsaros-whatsnew-watch) picks the marker up and
+// decides whether there is anything new to show. Never block a transaction.
+DPkg::Post-Invoke { "/usr/bin/pulsaros-whatsnew-hook apt"; };

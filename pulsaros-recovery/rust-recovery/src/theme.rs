@@ -11,21 +11,21 @@ window, .root-container, * {
 .apple-box {
     background-color: #323236;
     border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 20px;
-    padding: 24px 28px;
+    border-radius: 18px;
+    padding: 16px 22px;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
 }
 .welcome-title {
-    font-size: 22px;
+    font-size: 19px;
     font-weight: 700;
     color: #ffffff;
-    margin-top: 4px;
-    margin-bottom: 4px;
+    margin-top: 2px;
+    margin-bottom: 2px;
 }
 .welcome-subtitle {
-    font-size: 13px;
+    font-size: 12px;
     color: #c7c7cc;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
 }
 .info-card {
     background-color: transparent;
@@ -128,8 +128,8 @@ listbox > row, listboxrow, row, .utility-item-row {
 .utility-row-card {
     background-color: transparent;
     border: none;
-    border-radius: 8px;
-    padding: 8px 12px;
+    border-radius: 6px;
+    padding: 4px 8px;
     transition: background-color 0.15s ease;
 }
 listbox > row:hover .utility-row-card,
@@ -143,13 +143,14 @@ listboxrow:selected .utility-row-card,
     background-color: #0071e3;
 }
 .utility-title-lbl {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: #ffffff;
 }
 .utility-desc-lbl {
-    font-size: 12px;
-    color: #c7c7cc;
+    font-size: 11px;
+    color: #a1a1a6;
+    line-height: 1.25;
 }
 listbox > row:selected .utility-title-lbl,
 listboxrow:selected .utility-title-lbl,
@@ -302,8 +303,8 @@ listboxrow:selected .utility-desc-lbl,
     color: #ffffff;
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 20px;
-    padding: 5px 24px;
-    font-size: 13px;
+    padding: 4px 16px;
+    font-size: 12px;
     font-weight: 600;
     transition: all 0.15s ease;
 }
@@ -315,7 +316,35 @@ listboxrow:selected .utility-desc-lbl,
     background-color: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 20px;
-    padding: 2px 10px;
+    padding: 3px 12px;
+    transition: all 0.15s ease;
+}
+.keyboard-selector-box:hover {
+    background-color: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+.keyboard-dropdown,
+.keyboard-dropdown button,
+.keyboard-dropdown > button,
+.keyboard-selector-box dropdown,
+.keyboard-selector-box dropdown > button {
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    padding: 0px 4px;
+    min-height: 20px;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 500;
+}
+.keyboard-dropdown button:hover,
+.keyboard-dropdown > button:hover,
+.keyboard-selector-box dropdown > button:hover {
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
 }
 .badge-driver {
     background-color: rgba(255, 159, 10, 0.2);

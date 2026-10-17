@@ -191,7 +191,11 @@ class SayriIndicator:
         settings.connect("activate", self._on_open_settings)
         self.menu.append(settings)
 
-        self.quit_item = Gtk.MenuItem(label="Exit")
+        self.terminate_item = Gtk.MenuItem(label="Terminate All Processes")
+        self.terminate_item.connect("activate", self._on_terminate_all)
+        self.menu.append(self.terminate_item)
+
+        self.quit_item = Gtk.MenuItem(label="Exit (UI only)")
         self.quit_item.connect("activate", self._on_quit)
         self.menu.append(self.quit_item)
 
@@ -240,6 +244,8 @@ class SayriIndicator:
             self._ensure_sayri()
 
     def _ensure_sayri(self) -> None:
+        # A window may already be alive even when our handle is stale; keep a
+        # single instance by reusing it, otherwise kill leftovers first.
         if self._sayri_proc and self._sayri_proc.poll() is None:
             if is_gui_running():
                 send_sock_command("show")
@@ -277,6 +283,45 @@ class SayriIndicator:
         threading.Thread(target=_run, daemon=True).start()
 
     def _on_quit(self, _item=None) -> None:
+        """Close only the displayed UI window, never the indicator itself.
+
+        The old code sent ``quit`` to the daemon, which takes Sayri all the way
+        down together with the indicator. That defeated the purpose of having a
+        tray entry in the first place.
+        """
+        # Classic sockets did not hide the overlay on this machine. Kill whatever
+        # shows the UI ("python3 -m sayri", the cajita window, web UIs) without
+        # terminating the daemon or this indicator process.
+        import glob
+        import os
+        import signal
+
+        def _kill_ui() -> None:
+            for pid_dir in glob.glob("/proc/[0-9]*"):
+                pid_str = os.path.basename(pid_dir)
+                if not pid_str.isdigit():
+                    continue
+                try:
+                    with open(os.path.join(pid_dir, "cmdline"), "rb") as fh:
+                        cmdline = fh.read().decode("utf-8", errors="replace")
+                except OSError:
+                    continue
+                lower = cmdline.lower()
+                # Keep the indicator and the daemon untouched.
+                if "indicator" in lower or "daemon" in lower:
+                    continue
+                # Only the actual Sayri agent process contains "sayri".
+                if "sayri" in lower:
+                    try:
+                        os.kill(int(pid_str), signal.SIGTERM)
+                    except (OSError, ProcessLookupError):
+                        pass
+
+        import threading
+        threading.Thread(target=_kill_ui, daemon=True).start()
+
+    def _on_terminate_all(self, _item=None) -> None:
+        """Terminate all processes, the opposite of Exit."""
         try:
             send_daemon_command("quit")
         except Exception:

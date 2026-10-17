@@ -36,6 +36,12 @@ pub(crate) fn log_msg(msg: &str) {
     println!("{}", msg);
 }
 
+pub(crate) fn is_root() -> bool {
+    Command::new("id").arg("-u").output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "0")
+        .unwrap_or(false)
+}
+
 pub(crate) fn exec_cmd_stream<L>(cmd: &str, log: &L) -> Result<(), String>
 where
     L: Fn(&str) + Send + Sync + 'static,
@@ -43,12 +49,21 @@ where
     log_msg(&format!("Running (as root): {}", cmd));
     log(&format!("$ {}", cmd));
 
-    let mut child = Command::new("sudo")
-        .args(&["-n", "sh", "-c", cmd])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Failed to spawn '{}': {}", cmd, e))?;
+    let mut child = if is_root() {
+        Command::new("sh")
+            .args(&["-c", cmd])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Failed to spawn '{}': {}", cmd, e))?
+    } else {
+        Command::new("sudo")
+            .args(&["-n", "sh", "-c", cmd])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Failed to spawn '{}': {}", cmd, e))?
+    };
 
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
@@ -92,10 +107,17 @@ where
 
 pub(crate) fn exec_cmd(cmd: &str) -> Result<String, String> {
     log_msg(&format!("Running (as root): {}", cmd));
-    let out = Command::new("sudo")
-        .args(&["-n", "sh", "-c", cmd])
-        .output()
-        .map_err(|e| format!("Failed to execute '{}': {}", cmd, e))?;
+    let out = if is_root() {
+        Command::new("sh")
+            .args(&["-c", cmd])
+            .output()
+            .map_err(|e| format!("Failed to execute '{}': {}", cmd, e))?
+    } else {
+        Command::new("sudo")
+            .args(&["-n", "sh", "-c", cmd])
+            .output()
+            .map_err(|e| format!("Failed to execute '{}': {}", cmd, e))?
+    };
 
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
@@ -110,7 +132,14 @@ pub(crate) fn exec_cmd(cmd: &str) -> Result<String, String> {
 
 pub(crate) fn find_btrfs_targets() -> Vec<BtrfsTarget> {
     let mut targets = Vec::new();
-    if let Ok(out) = Command::new("sudo").args(&["-n", "lsblk", "-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,PKNAME,TYPE"]).output() {
+    let cmd_res = if is_root() {
+        Command::new("lsblk").args(&["-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,PKNAME,TYPE"]).output()
+    } else {
+        Command::new("sudo").args(&["-n", "lsblk", "-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,PKNAME,TYPE"]).output()
+            .or_else(|_| Command::new("lsblk").args(&["-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,PKNAME,TYPE"]).output())
+    };
+
+    if let Ok(out) = cmd_res {
         let text = String::from_utf8_lossy(&out.stdout);
         for line in text.lines() {
             if line.contains("FSTYPE=\"btrfs\"") || line.contains("PULSAR_OS") || line.contains("PulsarOS") {
@@ -149,7 +178,14 @@ pub(crate) fn find_btrfs_targets() -> Vec<BtrfsTarget> {
 
 pub(crate) fn find_encrypted_targets() -> Vec<EncryptedTarget> {
     let mut targets = Vec::new();
-    if let Ok(out) = Command::new("sudo").args(&["-n", "lsblk", "-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,PKNAME,TYPE"]).output() {
+    let cmd_res = if is_root() {
+        Command::new("lsblk").args(&["-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,PKNAME,TYPE"]).output()
+    } else {
+        Command::new("sudo").args(&["-n", "lsblk", "-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,PKNAME,TYPE"]).output()
+            .or_else(|_| Command::new("lsblk").args(&["-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,PKNAME,TYPE"]).output())
+    };
+
+    if let Ok(out) = cmd_res {
         let text = String::from_utf8_lossy(&out.stdout);
         for line in text.lines() {
             if line.contains("FSTYPE=\"crypto_LUKS\"") {
@@ -168,7 +204,8 @@ pub(crate) fn find_encrypted_targets() -> Vec<EncryptedTarget> {
 
                 // Check if already mapped/unlocked in /sys/class/block/{name}/holders
                 let mut is_unlocked = false;
-                let mut mapper_name = "pulsar_cryptroot".to_string();
+                let clean_name = name.replace('/', "_");
+                let mut mapper_name = format!("pulsar_crypt_{}", clean_name);
                 if let Ok(holders) = fs::read_dir(format!("/sys/class/block/{}/holders", name)) {
                     for h in holders.flatten() {
                         let hname = h.file_name().to_string_lossy().to_string();
@@ -206,12 +243,36 @@ pub(crate) fn unlock_luks_partition(part_path: &str, passphrase: &str, mapper_na
         return Ok(format!("/dev/mapper/{}", mapper_name));
     }
 
-    let mut child = Command::new("sudo")
-        .args(&["-n", "cryptsetup", "open", part_path, mapper_name, "-"])
-        .stdin(Stdio::piped())
+    // Check if mapper_name is already active
+    if Path::new(&format!("/dev/mapper/{}", mapper_name)).exists() {
+        let check_cmd = if is_root() {
+            Command::new("cryptsetup").args(&["status", mapper_name]).output()
+        } else {
+            Command::new("sudo").args(&["-n", "cryptsetup", "status", mapper_name]).output()
+        };
+        if let Ok(st) = check_cmd {
+            if st.status.success() {
+                log_msg(&format!("Volume /dev/mapper/{} is already unlocked and active.", mapper_name));
+                return Ok(format!("/dev/mapper/{}", mapper_name));
+            }
+        }
+    }
+
+    let mut cmd = if is_root() {
+        let mut c = Command::new("cryptsetup");
+        c.args(&["open", part_path, mapper_name, "-"]);
+        c
+    } else {
+        let mut c = Command::new("sudo");
+        c.args(&["-n", "cryptsetup", "open", part_path, mapper_name, "-"]);
+        c
+    };
+
+    cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+        .stderr(Stdio::piped());
+
+    let mut child = cmd.spawn()
         .map_err(|e| format!("Failed to launch cryptsetup: {}", e))?;
 
     if let Some(mut stdin) = child.stdin.take() {
@@ -223,7 +284,7 @@ pub(crate) fn unlock_luks_partition(part_path: &str, passphrase: &str, mapper_na
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
         let err_msg = if stderr.contains("No key available") || stderr.contains("passphrase") || stderr.contains("key") {
-            "Incorrect encryption password. Please try again.".to_string()
+            "Incorrect encryption passphrase. Please try again.".to_string()
         } else {
             format!("Could not unlock {}: {}", part_path, stderr.trim())
         };
@@ -231,7 +292,12 @@ pub(crate) fn unlock_luks_partition(part_path: &str, passphrase: &str, mapper_na
         return Err(err_msg);
     }
 
-    let _ = Command::new("sudo").args(&["-n", "udevadm", "settle"]).status();
+    if is_root() {
+        let _ = Command::new("udevadm").args(&["settle"]).status();
+    } else {
+        let _ = Command::new("sudo").args(&["-n", "udevadm", "settle"]).status();
+    }
+
     let mapper_dev = format!("/dev/mapper/{}", mapper_name);
     log_msg(&format!("Successfully unlocked LUKS volume: {}", mapper_dev));
     Ok(mapper_dev)
@@ -580,33 +646,27 @@ pub(crate) fn mount_chroot_environment(part_path: &str) -> Result<String, String
     Ok(mnt_root.to_string())
 }
 
-pub(crate) fn launch_chroot_terminal(part_path: &str) -> Result<(), String> {
-    if crate::demo::is_demo_mode() {
-        log_msg("[DEMO] Opening simulation terminal for chroot...");
-        let _ = Command::new("xterm")
-            .args(&["-title", "Pulsar OS Chroot (DEMO MODE)", "-e", "bash -c 'echo \"=== Pulsar OS Chroot (DEMO MODE) ===\"; echo \"Root filesystem mounted at /mnt/pulsar (simulated).\"; echo; bash'"])
-            .spawn()
-            .map_err(|e| format!("Failed to spawn terminal: {}", e))?;
-        return Ok(());
-    }
+pub(crate) fn launch_terminal_with_command(title: &str, command: &str) -> Result<(), String> {
+    let wrapped = format!(
+        "trap 'kill 0 2>/dev/null; exit 0' HUP INT TERM; {}; exit 0",
+        command
+    );
 
-    let mnt_root = mount_chroot_environment(part_path)?;
-    log_msg(&format!("Spawning root terminal inside chroot at {}...", mnt_root));
-
-    let terminal_cmds: [(&str, Vec<&str>); 3] = [
-        ("xterm", vec!["-bg", "#1e1e2e", "-fg", "#cdd6f4", "-fa", "Monospace", "-fs", "11", "-geometry", "110x32", "-title", "Pulsar OS Chroot (Root Console)", "-e", "chroot /mnt/pulsar /bin/bash"]),
-        ("gnome-terminal", vec!["--title=Pulsar OS Chroot (Root Console)", "--", "chroot", "/mnt/pulsar", "/bin/bash"]),
-        ("x-terminal-emulator", vec!["-e", "chroot", "/mnt/pulsar", "/bin/bash"]),
+    let candidates: [(&str, Vec<&str>); 6] = [
+        ("gnome-terminal", vec!["--title", title, "--", "bash", "-c", &wrapped]),
+        ("ptyxis", vec!["--title", title, "--", "bash", "-c", &wrapped]),
+        ("xterm", vec!["-title", title, "-bg", "#18181b", "-fg", "#ffffff", "-fa", "Monospace", "-fs", "11", "-geometry", "110x32", "-e", "bash", "-c", &wrapped]),
+        ("alacritty", vec!["-t", title, "-e", "bash", "-c", &wrapped]),
+        ("konsole", vec!["--title", title, "-e", "bash", "-c", &wrapped]),
+        ("x-terminal-emulator", vec!["-e", "bash", "-c", &wrapped]),
     ];
 
-    let mut launched = false;
-    for (term, args) in &terminal_cmds {
+    for (term, args) in &candidates {
         if Command::new("which").arg(term).status().map(|s| s.success()).unwrap_or(false) {
             match Command::new(term).args(args).spawn() {
                 Ok(_) => {
-                    launched = true;
                     log_msg(&format!("Terminal launched successfully using {}", term));
-                    break;
+                    return Ok(());
                 }
                 Err(e) => {
                     log_msg(&format!("Failed launching {}: {}", term, e));
@@ -615,19 +675,76 @@ pub(crate) fn launch_chroot_terminal(part_path: &str) -> Result<(), String> {
         }
     }
 
-    if !launched {
-        Command::new("xterm")
-            .args(&["-title", "Pulsar OS Chroot (Root Console)", "-e", "chroot /mnt/pulsar /bin/bash"])
-            .spawn()
-            .map_err(|e| format!("Could not launch terminal emulator: {}", e))?;
+    // Direct fallback if 'which' failed
+    for term in &["xterm", "gnome-terminal", "ptyxis", "x-terminal-emulator"] {
+        if let Ok(_) = Command::new(term).arg("-e").arg(&format!("bash -c '{}'", wrapped)).spawn() {
+            log_msg(&format!("Terminal launched using direct fallback {}", term));
+            return Ok(());
+        }
     }
 
-    Ok(())
+    Err("Could not launch any terminal emulator (tried gnome-terminal, ptyxis, xterm, alacritty, konsole)".to_string())
+}
+
+pub(crate) fn launch_chroot_terminal(part_path: &str) -> Result<(), String> {
+    if crate::demo::is_demo_mode() {
+        log_msg("[DEMO] Opening simulation terminal for chroot...");
+        return launch_terminal_with_command(
+            "Pulsar OS Chroot (DEMO MODE)",
+            "echo '=== Pulsar OS Chroot (DEMO MODE) ==='; echo 'Root filesystem mounted at /mnt/pulsar (simulated).'; echo; bash",
+        );
+    }
+
+    let mnt_root = mount_chroot_environment(part_path)?;
+    log_msg(&format!("Spawning root terminal inside chroot at {}...", mnt_root));
+
+    let sudo_cmd = if is_root() { "chroot /mnt/pulsar /bin/bash" } else { "sudo chroot /mnt/pulsar /bin/bash" };
+    launch_terminal_with_command("Pulsar OS Chroot (Root Console)", sudo_cmd)
+}
+
+pub(crate) fn open_system_logs(part_path: Option<&str>) {
+    log_msg("Opening Pulsar OS logs directory...");
+    let _ = fs::create_dir_all("/var/log/pulsaros");
+
+    if let Some(part) = part_path {
+        let log_mnt = "/tmp/pulsar_log_root";
+        let _ = fs::create_dir_all(log_mnt);
+        log_msg(&format!("Mounting installed system from {} to inspect logs at {}...", part, log_mnt));
+        let _ = exec_cmd(&format!("mountpoint -q {} || mount -t btrfs -o ro,subvol=@ {} {} 2>/dev/null || true", log_mnt, part, log_mnt));
+
+        let installed_pulsar_logs = format!("{}/var/log/pulsaros", log_mnt);
+        if Path::new(&installed_pulsar_logs).exists() {
+            let target_link = "/var/log/pulsaros/installed_system_logs";
+            let _ = exec_cmd(&format!("rm -f {} 2>/dev/null; ln -sf {} {} 2>/dev/null || true", target_link, installed_pulsar_logs, target_link));
+        }
+        let installed_var_log = format!("{}/var/log", log_mnt);
+        if Path::new(&installed_var_log).exists() {
+            let target_link = "/var/log/pulsaros/installed_var_log";
+            let _ = exec_cmd(&format!("rm -f {} 2>/dev/null; ln -sf {} {} 2>/dev/null || true", target_link, installed_var_log, target_link));
+        }
+    }
+
+    let fm_cmd = "nautilus /var/log/pulsaros || thunar /var/log/pulsaros || pcmanfm /var/log/pulsaros || xdg-open /var/log/pulsaros || gnome-text-editor /var/log/pulsaros/installer.log";
+    let spawned = Command::new("sh")
+        .arg("-c")
+        .arg(format!("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; xhost +SI:localuser:root >/dev/null 2>&1 || xhost +local: >/dev/null 2>&1 || true; ({})", fm_cmd))
+        .spawn();
+
+    if spawned.is_err() {
+        let _ = launch_terminal_with_command("Pulsar OS Logs", "echo === Pulsar OS Logs ===; ls -la /var/log/pulsaros; echo; bash");
+    }
 }
 
 pub(crate) fn scan_external_drives() -> Vec<ExternalDrive> {
     let mut drives = Vec::new();
-    if let Ok(out) = Command::new("sudo").args(&["-n", "lsblk", "-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,TRAN,RM,HOTPLUG,MOUNTPOINTS,TYPE"]).output() {
+    let cmd_res = if is_root() {
+        Command::new("lsblk").args(&["-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,TRAN,RM,HOTPLUG,MOUNTPOINTS,TYPE"]).output()
+    } else {
+        Command::new("sudo").args(&["-n", "lsblk", "-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,TRAN,RM,HOTPLUG,MOUNTPOINTS,TYPE"]).output()
+            .or_else(|_| Command::new("lsblk").args(&["-P", "-o", "NAME,LABEL,UUID,FSTYPE,SIZE,TRAN,RM,HOTPLUG,MOUNTPOINTS,TYPE"]).output())
+    };
+
+    if let Ok(out) = cmd_res {
         let text = String::from_utf8_lossy(&out.stdout);
         for line in text.lines() {
             let get_val = |key: &str| -> String {

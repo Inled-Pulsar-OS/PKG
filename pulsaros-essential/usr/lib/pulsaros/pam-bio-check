@@ -1,0 +1,54 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - PAM Biometric Token Checker
+# ==============================================================================
+# Executed by pam_exec.so during SDDM and LockScreen login attempts.
+# Verifies if the user just authenticated via Face ID or Touch ID within the
+# last 5 seconds.
+# ==============================================================================
+
+TARGET_USER="${PAM_USER:-$1}"
+if [ -z "$TARGET_USER" ]; then
+    # Fallback: check if there is an active verified token in /run/pulsaros/biometrics-verified/
+    if [ -d "/run/pulsaros/biometrics-verified" ]; then
+        for f in /run/pulsaros/biometrics-verified/*; do
+            if [ -f "$f" ]; then
+                TARGET_USER=$(basename "$f")
+                break
+            fi
+        done
+    fi
+fi
+if [ -z "$TARGET_USER" ]; then
+    exit 1
+fi
+
+TOKEN_FILE="/run/pulsaros/biometrics-verified/$TARGET_USER"
+
+if [ -f "$TOKEN_FILE" ]; then
+    NOW=$(date +%s)
+    FILE_TIME=$(stat -c %Y "$TOKEN_FILE" 2>/dev/null || echo 0)
+    DIFF=$((NOW - FILE_TIME))
+    rm -f "/run/pulsaros/gaze-fails-$TARGET_USER"
+    if [ "$DIFF" -ge 0 ] && [ "$DIFF" -le 8 ]; then
+        exit 0 # Success -> PAM_SUCCESS (valid for 8s to allow full PAM transaction)
+    else
+        rm -f "$TOKEN_FILE"
+    fi
+fi
+
+# Track biometric failures for Polkit / SDDM / LockScreen
+FAIL_FILE="/run/pulsaros/gaze-fails-$TARGET_USER"
+FAILS=0
+if [ -f "$FAIL_FILE" ]; then
+    FAILS=$(cat "$FAIL_FILE" 2>/dev/null || echo 0)
+fi
+FAILS=$((FAILS + 1))
+echo "$FAILS" > "$FAIL_FILE" 2>/dev/null || true
+
+if [ "$FAILS" -ge 2 ]; then
+    # 2 consecutive failures: request daemon to open gaze camera frame window
+    curl -s --connect-timeout 1 "http://127.0.0.1:39281/show_camera?user=$TARGET_USER" >/dev/null 2>&1 || true
+fi
+
+exit 1 # Not verified via recent biometrics -> continue through PAM stack

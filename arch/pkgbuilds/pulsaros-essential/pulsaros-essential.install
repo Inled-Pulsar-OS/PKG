@@ -65,7 +65,33 @@ post_install() {
     # /usr/bin/pulsaros-optimizer.
     systemctl enable pulsaros-optimizer.service 2>/dev/null || true
     systemctl start pulsaros-optimizer.service 2>/dev/null || true
-    mkdir -p /etc/sudoers.d
+
+    # Biometrics (fprintd, gazed, pulsaros-biometrics)
+    systemctl enable fprintd.service 2>/dev/null || true
+    systemctl enable gazed.service 2>/dev/null || true
+    systemctl start gazed.service 2>/dev/null || true
+    systemctl enable pulsaros-biometrics.service 2>/dev/null || true
+    systemctl start pulsaros-biometrics.service 2>/dev/null || true
+
+    # Configure PAM for sudo and polkit-1
+    for pam_file in /etc/pam.d/sudo /etc/pam.d/polkit-1; do
+        if [ -f "$pam_file" ]; then
+            if ! grep -q "pam_gaze.so" "$pam_file"; then
+                sed -i '1s|^|auth        sufficient    pam_gaze.so\n|' "$pam_file" 2>/dev/null || true
+            fi
+            if ! grep -q "pam_fprintd.so" "$pam_file"; then
+                sed -i '/pam_gaze.so/a auth        sufficient    pam_fprintd.so' "$pam_file" 2>/dev/null || true
+            fi
+        fi
+    done
+    if [ -f /etc/pam.d/sddm ]; then
+        if ! grep -q "pam-bio-check" /etc/pam.d/sddm; then
+            sed -i '1i -auth       [success=done default=ignore] pam_exec.so quiet stdout /usr/lib/pulsaros/pam-bio-check' /etc/pam.d/sddm 2>/dev/null || true
+        fi
+        # Remove direct pam_gaze.so and pam_fprintd.so in sddm pam stack to prevent device claim conflicts
+        sed -i '/pam_gaze\.so/d' /etc/pam.d/sddm 2>/dev/null || true
+        sed -i '/pam_fprintd\.so/d' /etc/pam.d/sddm 2>/dev/null || true
+    fi
 
     # Reduce systemd timeouts
     sed -i 's/^#*DefaultTimeoutStopSec=.*/DefaultTimeoutStopSec=10s/' /etc/systemd/system.conf 2>/dev/null || true

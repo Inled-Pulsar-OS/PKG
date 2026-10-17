@@ -1,0 +1,60 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsaros-whatsnew
+pkgver=1.0.0
+pkgrel=1
+
+pkgdesc="Pulsar OS release notes viewer (changelog shown after updates)"
+arch=(any)
+url="https://inled.es"
+license=(custom)
+depends=(python python-gobject gtk4 libadwaita webkitgtk-6.0)
+install=pulsaros-whatsnew.install
+source=()
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-whatsnew && pwd)"
+    _notes="$(cd "$startdir"/../../../releases.d && pwd)"
+
+    mkdir -p "$pkgdir/usr/bin"
+    install -m 755 "$_src/usr/bin/pulsaros-whatsnew" "$pkgdir/usr/bin/pulsaros-whatsnew"
+    install -m 755 "$_src/usr/bin/pulsaros-whatsnew-watch" "$pkgdir/usr/bin/pulsaros-whatsnew-watch"
+    install -m 755 "$_src/usr/bin/pulsaros-whatsnew-hook" "$pkgdir/usr/bin/pulsaros-whatsnew-hook"
+
+    mkdir -p "$pkgdir/usr/lib/pulsaros-whatsnew"
+    install -m 755 "$_src/usr/lib/pulsaros-whatsnew/common.py" "$pkgdir/usr/lib/pulsaros-whatsnew/common.py"
+    install -m 755 "$_src/usr/lib/pulsaros-whatsnew/viewer.py" "$pkgdir/usr/lib/pulsaros-whatsnew/viewer.py"
+    install -m 755 "$_src/usr/lib/pulsaros-whatsnew/watcher.py" "$pkgdir/usr/lib/pulsaros-whatsnew/watcher.py"
+
+    mkdir -p "$pkgdir/usr/share/pulsaros-whatsnew/releases.d"
+    install -m 644 "$_src/usr/share/pulsaros-whatsnew/render.js" "$pkgdir/usr/share/pulsaros-whatsnew/render.js"
+    install -m 644 "$_src/usr/share/pulsaros-whatsnew/style.css" "$pkgdir/usr/share/pulsaros-whatsnew/style.css"
+    install -m 644 "$_src/usr/share/pulsaros-whatsnew/viewer.html" "$pkgdir/usr/share/pulsaros-whatsnew/viewer.html"
+
+    if [ -d "$_notes" ]; then
+        for md in "$_notes"/*.md; do
+            [ -e "$md" ] || continue
+            base="$(basename "$md")"
+            [ "$base" = "README.md" ] && continue
+            install -m 644 "$md" "$pkgdir/usr/share/pulsaros-whatsnew/releases.d/$base"
+        done
+    fi
+
+    mkdir -p "$pkgdir/usr/share/applications"
+    install -m 644 "$_src/usr/share/applications/es.inled.PulsarWhatsNew.desktop" \
+        "$pkgdir/usr/share/applications/es.inled.PulsarWhatsNew.desktop"
+
+    mkdir -p "$pkgdir/usr/share/icons"
+    cp -rf "$_src/usr/share/icons/." "$pkgdir/usr/share/icons/"
+
+    mkdir -p "$pkgdir/etc/xdg/autostart"
+    install -m 644 "$_src/etc/xdg/autostart/pulsaros-whatsnew.desktop" \
+        "$pkgdir/etc/xdg/autostart/pulsaros-whatsnew.desktop"
+
+    mkdir -p "$pkgdir/etc/pulsaros"
+    install -m 644 "$_src/etc/pulsaros/whatsnew.conf" \
+        "$pkgdir/etc/pulsaros/whatsnew.conf"
+
+    mkdir -p "$pkgdir/usr/share/libalpm/hooks"
+    install -m 644 "$_src/usr/share/libalpm/hooks/pulsaros-whatsnew.hook" \
+        "$pkgdir/usr/share/libalpm/hooks/pulsaros-whatsnew.hook"
+}

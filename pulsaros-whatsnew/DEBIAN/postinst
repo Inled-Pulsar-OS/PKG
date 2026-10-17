@@ -1,0 +1,35 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - What's New post-installation script
+# ==============================================================================
+set -e
+
+echo "📰 Setting up the Pulsar OS release notes viewer..."
+
+chmod +x /usr/bin/pulsaros-whatsnew 2>/dev/null || true
+chmod +x /usr/bin/pulsaros-whatsnew-watch 2>/dev/null || true
+chmod +x /usr/bin/pulsaros-whatsnew-hook 2>/dev/null || true
+chmod +x /usr/lib/pulsaros-whatsnew/*.py 2>/dev/null || true
+
+# State directory used by the root-side hook to flag "there are news".
+install -d -m 0755 /var/lib/pulsaros/whatsnew 2>/dev/null || true
+
+# Ensure the apt hook is executable (shipped in etc/apt/apt.conf.d).
+chmod 0644 /etc/apt/apt.conf.d/99-pulsaros-whatsnew 2>/dev/null || true
+
+# Update desktop/icon caches.
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database /usr/share/applications 2>/dev/null || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+fi
+
+# Flag pending news. On a fresh image build this is harmless: the viewer seeds
+# all the notes shipped in the image on first login so nothing pops up.
+if [ -x /usr/bin/pulsaros-whatsnew-hook ]; then
+    /usr/bin/pulsaros-whatsnew-hook postinst || true
+fi
+
+echo "✅ Release notes viewer ready."
+exit 0

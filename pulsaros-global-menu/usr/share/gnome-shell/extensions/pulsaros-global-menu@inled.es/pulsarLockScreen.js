@@ -7,6 +7,7 @@ import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Meta from 'gi://Meta';
 import Pango from 'gi://Pango';
+import Cairo from 'gi://cairo';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 export const LockScreen = GObject.registerClass({
@@ -39,6 +40,13 @@ export const LockScreen = GObject.registerClass({
         this._avatarWidget = null;
         this._nameLabel = null;
         this._cachedWallpaperUrl = null;
+        this._biometricsBox = null;
+        this._bioPollTimerId = 0;
+        this._eyeTimerId = 0;
+        this._fpPulseTimerId = 0;
+        this._matchedTimeoutId = 0;
+        this._hasFace = false;
+        this._hasFp = false;
 
         this._bgSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.background' });
         this._ifaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
@@ -51,9 +59,125 @@ export const LockScreen = GObject.registerClass({
         this._sizeChangedId = global.stage.connect('notify::width', () => this._onSizeChanged());
         this._sizeChangedId2 = global.stage.connect('notify::height', () => this._onSizeChanged());
         this._monitorsChangedId = Main.layoutManager.connect('monitors-changed', () => this._onSizeChanged());
+
+        this._displayInhibitCookie = null;
+        this._displayBlankTimerId = 0;
+
+        // Reset blank grace timer on user interaction while locked
+        this.connect('event', (actor, event) => {
+            if (!this._isLocked) return Clutter.EVENT_PROPAGATE;
+            let type = event.type();
+            if (type === Clutter.EventType.KEY_PRESS || 
+                type === Clutter.EventType.BUTTON_PRESS || 
+                type === Clutter.EventType.MOTION) {
+                this._resetDisplayBlankTimer();
+                try { Main.screenShield.emit('wake-up-screen'); } catch (e) {}
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
+
+        // Listen for system suspend/resume (PrepareForSleep) to re-arm biometrics on wake
+        try {
+            this._sleepSignalId = Gio.DBus.system.signal_subscribe(
+                'org.freedesktop.login1',
+                'org.freedesktop.login1.Manager',
+                'PrepareForSleep',
+                '/org/freedesktop/login1',
+                null,
+                Gio.DBusSignalFlags.NONE,
+                (conn, sender, path, iface, signal, params) => {
+                    try {
+                        let [aboutToSleep] = params.recursiveUnpack();
+                        if (aboutToSleep) {
+                            this._stopBiometrics();
+                        } else {
+                            if (this._isLocked) {
+                                this._acquireDisplayInhibitor();
+                                this._resetDisplayBlankTimer();
+                                try { Main.screenShield.emit('wake-up-screen'); } catch (e) {}
+                                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1200, () => {
+                                    if (this._isLocked) {
+                                        this._startBiometrics(true);
+                                    }
+                                    return GLib.SOURCE_REMOVE;
+                                });
+                            }
+                        }
+                    } catch (e) {}
+                }
+            );
+        } catch (e) {
+            console.error("[LockScreen] Failed to subscribe to PrepareForSleep:", e);
+        }
         
         this._cachedWallpaperUrl = this._getWallpaperUrl();
         this._onSizeChanged();
+    }
+
+    _acquireDisplayInhibitor() {
+        if (this._displayInhibitCookie) return;
+        try {
+            Gio.DBus.session.call(
+                'org.gnome.SessionManager',
+                '/org/gnome/SessionManager',
+                'org.gnome.SessionManager',
+                'Inhibit',
+                new GLib.Variant('(susu)', ['pulsaros-lockscreen', 0, 'Show lockscreen before blanking', 8]),
+                null,
+                Gio.DBusCallFlags.NONE,
+                -1,
+                null,
+                (connection, res) => {
+                    try {
+                        let reply = connection.call_finish(res);
+                        let [cookie] = reply.deepUnpack();
+                        this._displayInhibitCookie = cookie;
+                    } catch (e) {}
+                }
+            );
+        } catch (e) {}
+    }
+
+    _releaseDisplayInhibitor() {
+        if (!this._displayInhibitCookie) return;
+        let cookie = this._displayInhibitCookie;
+        this._displayInhibitCookie = null;
+        try {
+            Gio.DBus.session.call(
+                'org.gnome.SessionManager',
+                '/org/gnome/SessionManager',
+                'org.gnome.SessionManager',
+                'Uninhibit',
+                new GLib.Variant('(u)', [cookie]),
+                null,
+                Gio.DBusCallFlags.NONE,
+                -1,
+                null,
+                (connection, res) => {
+                    try { connection.call_finish(res); } catch (e) {}
+                }
+            );
+        } catch (e) {}
+    }
+
+    _resetDisplayBlankTimer() {
+        if (this._displayBlankTimerId) {
+            GLib.source_remove(this._displayBlankTimerId);
+            this._displayBlankTimerId = 0;
+        }
+        if (!this._isLocked) return;
+
+        if (!this._displayInhibitCookie) {
+            this._acquireDisplayInhibitor();
+        }
+
+        // Give a generous 60-second grace period for the lockscreen
+        // before letting gsd-power blank the monitor or suspend
+        this._displayBlankTimerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 60, () => {
+            this._displayBlankTimerId = 0;
+            this._releaseDisplayInhibitor();
+            return GLib.SOURCE_REMOVE;
+        });
     }
     
     _getWallpaperUrl() {
@@ -540,8 +664,11 @@ export const LockScreen = GObject.registerClass({
         contentLayout.set_size(monitor.width, monitor.height);
         container.add_child(contentLayout);
 
-        // Click anywhere to focus password entry on primary monitor
+        // Click anywhere to focus password entry and wake up biometrics if idle
         container.connect('button-press-event', () => {
+            if (this._isLocked && (!this._bioPollTimerId || this._faceState === 'idle')) {
+                this._startBiometrics();
+            }
             if (this._passwordEntry && (!this._usersListBox || !this._usersListBox.visible)) {
                 let activeText = this._passwordEntry.clutter_text || this._passwordEntry.clutterText || this._passwordEntry;
                 activeText.grab_key_focus();
@@ -588,9 +715,14 @@ export const LockScreen = GObject.registerClass({
 
             let spacer = new St.Widget({
                 style_class: 'pulsaros-lockscreen-spacer',
-                height: 60
+                height: 35
             });
             contentLayout.add_child(spacer);
+
+            this._initBiometricsUI();
+            if (this._biometricsBox) {
+                contentLayout.add_child(this._biometricsBox);
+            }
 
             // 2. Central Clock displays
             let clockBox = new St.BoxLayout({
@@ -899,6 +1031,10 @@ export const LockScreen = GObject.registerClass({
         
         // Start live clock updates
         this._updateClock();
+        this._startBiometrics(false);
+        this._acquireDisplayInhibitor();
+        this._resetDisplayBlankTimer();
+        try { Main.screenShield.emit('wake-up-screen'); } catch (e) {}
         this._timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
             this._updateClock();
             return GLib.SOURCE_CONTINUE;
@@ -917,6 +1053,14 @@ export const LockScreen = GObject.registerClass({
         this.reactive = false;
         this.set_size(0, 0);
         
+        if (this._displayBlankTimerId) {
+            GLib.source_remove(this._displayBlankTimerId);
+            this._displayBlankTimerId = 0;
+        }
+        this._releaseDisplayInhibitor();
+        try { Main.screenShield.emit('wake-up-screen'); } catch (e) {}
+
+        this._stopBiometrics();
         this._stopVideoWallpaper();
         
         // Release modal input grab. popModal() takes the grab handle returned by
@@ -1044,7 +1188,7 @@ export const LockScreen = GObject.registerClass({
         }
 
         // Developer / live fallback safety net
-        if (password === 'pulsar' || password === 'live' || password === 'jaime' || password === '') {
+        if (password === 'pulsar' || password === 'live' || password === '') {
             this._onAuthSuccess(username);
         } else {
             this._onAuthFailure();
@@ -1097,7 +1241,453 @@ export const LockScreen = GObject.registerClass({
         }
     }
     
+    _initBiometricsUI() {
+        this._biometricsBox = new St.BoxLayout({
+            orientation: Clutter.Orientation.VERTICAL,
+            x_align: Clutter.ActorAlign.CENTER,
+            style_class: 'pulsaros-lockscreen-biometrics-box',
+            visible: false
+        });
+
+        let iconsRow = new St.BoxLayout({
+            orientation: Clutter.Orientation.HORIZONTAL,
+            x_align: Clutter.ActorAlign.CENTER,
+            style_class: 'pulsaros-lockscreen-bio-icons-row'
+        });
+        this._biometricsBox.add_child(iconsRow);
+
+        // 1. Windows Hello Face Animation (Cairo St.DrawingArea)
+        // 1. Windows Hello Face Animation (Cairo St.DrawingArea)
+        this._faceArea = new St.DrawingArea({
+            width: 44,
+            height: 44,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+            reactive: true,
+            can_focus: true,
+            track_hover: true,
+            visible: false
+        });
+
+        this._helloScanAngle = 0;
+        this._helloEyeX = 0;
+        this._helloEyeY = 0;
+        this._helloWink = 1.0;
+        this._faceState = 'paused';
+        this._helloAnimTimerId = 0;
+
+        this._faceArea.connect('button-press-event', () => {
+            if (this._faceState === 'paused' || this._faceState === 'idle') {
+                this._activateFaceScan();
+                return Clutter.EVENT_STOP;
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
+
+        this._faceArea.connect('repaint', (area) => {
+            let cr = area.get_context();
+            let [w, h] = area.get_surface_size();
+            let cx = w / 2;
+            let cy = h / 2;
+            let r = 16.5;
+
+            let isMatched = (this._faceState === 'matched');
+            let isFailed = (this._faceState === 'failed');
+            let isPaused = (this._faceState === 'paused');
+
+            if (isMatched) {
+                cr.setSourceRGB(0.19, 0.82, 0.35); // #30d158
+            } else if (isFailed) {
+                cr.setSourceRGB(1.0, 0.27, 0.23); // #ff453a
+            } else if (isPaused) {
+                cr.setSourceRGBA(1.0, 1.0, 1.0, 0.78);
+            } else {
+                cr.setSourceRGB(1.0, 1.0, 1.0); // #ffffff
+            }
+            cr.setLineWidth(3.0);
+            cr.setLineCap(Cairo.LineCap ? Cairo.LineCap.ROUND : 1);
+
+            if (isMatched) {
+                // Warm smile arc
+                cr.arc(cx, cy - 1, 14.0, Math.PI * 0.22, Math.PI * 0.78);
+                cr.stroke();
+
+                // Left eye
+                cr.arc(cx - 7.0, cy - 4.0, 2.5, 0, Math.PI * 2);
+                cr.fill();
+
+                // Right eye: wink!
+                if (this._helloWink < 0.4) {
+                    cr.moveTo(cx + 4.0, cy - 4.0);
+                    cr.lineTo(cx + 10.0, cy - 4.0);
+                    cr.stroke();
+                } else {
+                    cr.arc(cx + 7.0, cy - 4.0, 2.5 * this._helloWink, 0, Math.PI * 2);
+                    cr.fill();
+                }
+            } else if (isFailed) {
+                // Frown arc cleanly below eyes
+                cr.arc(cx, cy + 10, 8.5, Math.PI * 1.18, Math.PI * 1.82);
+                cr.stroke();
+
+                // Downcast sad eyes cleanly separated from mouth
+                cr.arc(cx - 7.0, cy - 4.0, 2.5, 0, Math.PI * 2);
+                cr.fill();
+                cr.arc(cx + 7.0, cy - 4.0, 2.5, 0, Math.PI * 2);
+                cr.fill();
+            } else if (isPaused) {
+                // Resting Windows Hello face: steady ring and calm centered eyes + mouth
+                cr.arc(cx, cy, r, 0, Math.PI * 2);
+                cr.stroke();
+
+                // Calm centered eyes
+                cr.arc(cx - 7.0, cy - 4.0, 2.5, 0, Math.PI * 2);
+                cr.fill();
+                cr.arc(cx + 7.0, cy - 4.0, 2.5, 0, Math.PI * 2);
+                cr.fill();
+
+                // Subtle gentle mouth
+                cr.arc(cx, cy + 2, 8.0, Math.PI * 0.22, Math.PI * 0.78);
+                cr.stroke();
+            } else {
+                // Scanning: rotating Windows Hello arc
+                let rad = (this._helloScanAngle * Math.PI) / 180.0;
+                let arcSpan = Math.PI * 0.78;
+                cr.arc(cx, cy, r, rad, rad + arcSpan);
+                cr.stroke();
+
+                // Glancing eyes looking around
+                let ex = this._helloEyeX;
+                let ey = this._helloEyeY;
+                cr.arc(cx - 7.0 + ex, cy - 4.0 + ey, 2.5, 0, Math.PI * 2);
+                cr.fill();
+                cr.arc(cx + 7.0 + ex, cy - 4.0 + ey, 2.5, 0, Math.PI * 2);
+                cr.fill();
+            }
+            cr.$dispose();
+        });
+        iconsRow.add_child(this._faceArea);
+
+        // 2. Touch ID (Fingerprint)
+        this._fpActor = new St.Icon({
+            icon_name: 'fingerprint-symbolic',
+            style_class: 'pulsaros-lockscreen-fp-icon',
+            icon_size: 26,
+            visible: false
+        });
+        iconsRow.add_child(this._fpActor);
+
+        // 3. Status Badge
+        this._bioStatusBadge = new St.BoxLayout({
+            style_class: 'pulsaros-lockscreen-bio-badge',
+            x_align: Clutter.ActorAlign.CENTER,
+            reactive: true,
+            track_hover: true
+        });
+        this._bioStatusBadge.connect('button-press-event', () => {
+            if (this._faceState === 'paused' || this._faceState === 'idle') {
+                this._activateFaceScan();
+                return Clutter.EVENT_STOP;
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
+        this._bioStatusLabel = new St.Label({
+            style_class: 'pulsaros-lockscreen-bio-label',
+            text: ''
+        });
+        this._bioStatusBadge.add_child(this._bioStatusLabel);
+        this._biometricsBox.add_child(this._bioStatusBadge);
+    }
+
+    _activateFaceScan() {
+        if (!this._isLocked) return;
+        let isSpanish = (GLib.getenv('LANG') || '').startsWith('es');
+        this._faceState = 'scanning';
+        if (this._bioStatusLabel) {
+            this._bioStatusLabel.text = isSpanish ? 'Buscando rostro...' : 'Looking for face...';
+        }
+        if (this._faceArea) {
+            this._faceArea.queue_repaint();
+        }
+        let username = this._selectedUsername || GLib.get_user_name();
+        try {
+            let proc = Gio.Subprocess.new(
+                ['curl', '-s', '-X', 'POST', `http://127.0.0.1:39281/verify/activate_face?user=${encodeURIComponent(username)}`],
+                Gio.SubprocessFlags.NONE
+            );
+            proc.wait_async(null, null);
+        } catch (e) {}
+    }
+
+    _startBiometrics(autoScanFace = false) {
+        this._stopBiometrics();
+        let username = this._selectedUsername || GLib.get_user_name();
+        this._faceState = autoScanFace ? 'scanning' : 'paused';
+        let isSpanish = (GLib.getenv('LANG') || '').startsWith('es');
+        if (!autoScanFace && this._bioStatusLabel) {
+            this._bioStatusLabel.text = isSpanish ? 'Pulsa para activar Face ID o usa la huella' : 'Click to activate Face ID or use fingerprint';
+        }
+        
+        try {
+            let proc = Gio.Subprocess.new(
+                ['curl', '-s', '-X', 'POST', `http://127.0.0.1:39281/verify/start?user=${encodeURIComponent(username)}&source=lockscreen&face=${autoScanFace ? 1 : 0}`],
+                Gio.SubprocessFlags.NONE
+            );
+            proc.wait_async(null, null);
+        } catch (e) {}
+
+        let glanceStep = 0;
+        let glanceOffsets = [
+            { x: -2.8, y: 0 },
+            { x: -2.8, y: 0 },
+            { x: 2.8, y: 0 },
+            { x: 2.8, y: 0 },
+            { x: 0, y: -1.5 },
+            { x: 0, y: 0 }
+        ];
+
+        this._helloAnimTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 45, () => {
+            if (!this._isLocked || !this._faceArea) {
+                this._helloAnimTimerId = 0;
+                return GLib.SOURCE_REMOVE;
+            }
+            if (this._faceState === 'scanning' || this._faceState === 'idle') {
+                this._helloScanAngle = (this._helloScanAngle + 12) % 360;
+                if (Math.random() < 0.06) {
+                    glanceStep = (glanceStep + 1) % glanceOffsets.length;
+                    this._helloEyeX = glanceOffsets[glanceStep].x;
+                    this._helloEyeY = glanceOffsets[glanceStep].y;
+                }
+                this._faceArea.queue_repaint();
+            }
+            return GLib.SOURCE_CONTINUE;
+        });
+
+        this._bioPollTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
+            if (!this._isLocked) return GLib.SOURCE_REMOVE;
+            this._pollBiometricsStatus(username);
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    _stopBiometrics() {
+        if (this._bioPollTimerId) {
+            GLib.source_remove(this._bioPollTimerId);
+            this._bioPollTimerId = 0;
+        }
+        if (this._helloAnimTimerId) {
+            GLib.source_remove(this._helloAnimTimerId);
+            this._helloAnimTimerId = 0;
+        }
+        if (this._fpPulseTimerId) {
+            GLib.source_remove(this._fpPulseTimerId);
+            this._fpPulseTimerId = 0;
+        }
+        if (this._matchedTimeoutId) {
+            GLib.source_remove(this._matchedTimeoutId);
+            this._matchedTimeoutId = 0;
+        }
+        try {
+            let proc = Gio.Subprocess.new(
+                ['curl', '-s', '-X', 'POST', 'http://127.0.0.1:39281/verify/stop'],
+                Gio.SubprocessFlags.NONE
+            );
+            proc.wait_async(null, null);
+        } catch (e) {}
+
+        if (this._biometricsBox) {
+            this._biometricsBox.visible = false;
+        }
+    }
+
+    _pollBiometricsStatus(username) {
+        try {
+            let proc = Gio.Subprocess.new(
+                ['curl', '-s', `http://127.0.0.1:39281/status?user=${encodeURIComponent(username)}`],
+                Gio.SubprocessFlags.STDOUT_PIPE
+            );
+            proc.communicate_utf8_async(null, null, (obj, res) => {
+                try {
+                    let [ok, stdout] = obj.communicate_utf8_finish(res);
+                    if (ok && stdout && this._isLocked) {
+                        let data = JSON.parse(stdout);
+                        this._updateBiometricsUI(data);
+                    }
+                } catch (e) {}
+            });
+        } catch (e) {}
+    }
+
+    _updateBiometricsUI(data) {
+        if (!this._biometricsBox || !this._isLocked) return;
+
+        let hasFace = (data.face_enrolled === true);
+        let hasFp = (data.fingerprint_enrolled === true) || (data.has_fingerprint === true);
+
+        if (!hasFace && !hasFp) {
+            this._biometricsBox.visible = false;
+            return;
+        }
+
+        this._biometricsBox.visible = true;
+        this._faceArea.visible = hasFace;
+        this._fpActor.visible = hasFp;
+
+        if (hasFace) {
+            if (data.face_state === 'matched') {
+                this._faceFailCount = 0;
+                this._onBiometricsMatched('face');
+                return;
+            } else if (data.face_state === 'failed') {
+                this._onBiometricsDenied('face');
+            } else if (data.face_state === 'paused') {
+                if (this._faceState !== 'paused') {
+                    this._faceState = 'paused';
+                    this._faceArea.queue_repaint();
+                }
+            } else if (this._faceState !== 'scanning' && this._faceState !== 'idle') {
+                this._faceState = 'scanning';
+                this._faceArea.queue_repaint();
+            }
+        }
+
+        if (hasFp) {
+            if (data.fingerprint_state === 'matched') {
+                this._onBiometricsMatched('fingerprint');
+                return;
+            } else if (data.fingerprint_state === 'failed') {
+                this._onBiometricsDenied('fingerprint');
+            } else {
+                this._startFpPulse();
+                this._fpActor.style_class = 'pulsaros-lockscreen-fp-icon';
+            }
+        }
+
+        let isSpanish = (GLib.getenv('LANG') || '').startsWith('es');
+        if (data.face_state === 'paused') {
+            if (hasFp) {
+                this._bioStatusLabel.text = isSpanish ? 'Pulsa para activar Face ID o usa la huella' : 'Click to activate Face ID or use fingerprint';
+            } else {
+                this._bioStatusLabel.text = isSpanish ? 'Pulsa para activar Face ID' : 'Click to activate Face ID';
+            }
+        } else if (data.status_message) {
+            this._bioStatusLabel.text = data.status_message;
+        } else if (hasFace && hasFp) {
+            this._bioStatusLabel.text = isSpanish ? 'Esperando rostro o huella...' : 'Waiting for face or fingerprint...';
+        } else if (hasFace) {
+            this._bioStatusLabel.text = isSpanish ? 'Buscando rostro...' : 'Looking for face...';
+        } else if (hasFp) {
+            this._bioStatusLabel.text = isSpanish ? 'Esperando huella...' : 'Waiting for fingerprint...';
+        }
+    }
+
+    _startFpPulse() {
+        if (this._fpPulseTimerId) return;
+        let growing = false;
+        let opacity = 255;
+        this._fpPulseTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+            if (!this._isLocked || !this._fpActor) {
+                this._fpPulseTimerId = 0;
+                return GLib.SOURCE_REMOVE;
+            }
+            if (growing) {
+                opacity += 8;
+                if (opacity >= 255) growing = false;
+            } else {
+                opacity -= 8;
+                if (opacity <= 90) growing = true;
+            }
+            this._fpActor.opacity = opacity;
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    _onBiometricsMatched(type) {
+        if (this._matchedTimeoutId) return;
+        let isSpanish = (GLib.getenv('LANG') || '').startsWith('es');
+        if (type === 'face') {
+            this._faceFailCount = 0;
+            this._faceState = 'matched';
+            this._helloWink = 0.2;
+            if (this._faceArea) this._faceArea.queue_repaint();
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 120, () => {
+                this._helloWink = 1.0;
+                if (this._faceArea) this._faceArea.queue_repaint();
+                return GLib.SOURCE_REMOVE;
+            });
+            this._bioStatusLabel.text = isSpanish ? '¡Rostro verificado!' : 'Face verified!';
+            this._bioStatusBadge.style_class = 'pulsaros-lockscreen-bio-badge-matched';
+        } else {
+            this._fpActor.style_class = 'pulsaros-lockscreen-fp-matched';
+            this._bioStatusLabel.text = isSpanish ? '¡Huella verificada!' : 'Fingerprint verified!';
+            this._bioStatusBadge.style_class = 'pulsaros-lockscreen-bio-badge-matched';
+        }
+        this._matchedTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 380, () => {
+            this._matchedTimeoutId = 0;
+            this._onAuthSuccess(this._selectedUsername);
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _onBiometricsDenied(type) {
+        let isSpanish = (GLib.getenv('LANG') || '').startsWith('es');
+        if (type === 'face') {
+            this._faceFailCount = (this._faceFailCount || 0) + 1;
+            this._faceState = 'failed';
+            if (this._faceArea) {
+                this._faceArea.queue_repaint();
+                this._shakeActor(this._faceArea);
+            }
+            if (this._faceFailCount >= 2) {
+                try {
+                    Gio.Subprocess.new(['curl', '-s', 'http://127.0.0.1:39281/show_camera'], Gio.SubprocessFlags.NONE);
+                } catch (e) {}
+            }
+            this._bioStatusLabel.text = isSpanish ? 'Rostro no reconocido' : 'Face not recognized';
+            this._bioStatusBadge.style_class = 'pulsaros-lockscreen-bio-badge-failed';
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1400, () => {
+                if (this._isLocked && this._faceState === 'failed') {
+                    this._faceState = 'scanning';
+                    if (this._faceArea) this._faceArea.queue_repaint();
+                }
+                return GLib.SOURCE_REMOVE;
+            });
+        } else {
+            this._fpActor.style_class = 'pulsaros-lockscreen-fp-failed';
+            this._bioStatusLabel.text = isSpanish ? 'Huella no reconocida' : 'Fingerprint not recognized';
+            this._bioStatusBadge.style_class = 'pulsaros-lockscreen-bio-badge-failed';
+            this._shakeActor(this._fpActor);
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1400, () => {
+                if (this._isLocked && this._fpActor) {
+                    this._fpActor.style_class = 'pulsaros-lockscreen-fp-icon';
+                }
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+    }
+
+    _shakeActor(actor) {
+        if (!actor) return;
+        let step = 0;
+        let offsets = [-6, 6, -4, 4, -2, 2, 0];
+        let origX = actor.translation_x;
+        let timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 45, () => {
+            if (step >= offsets.length) {
+                actor.translation_x = origX;
+                return GLib.SOURCE_REMOVE;
+            }
+            actor.translation_x = origX + offsets[step];
+            step++;
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+    
     destroy() {
+        if (this._displayBlankTimerId) {
+            GLib.source_remove(this._displayBlankTimerId);
+            this._displayBlankTimerId = 0;
+        }
+        this._releaseDisplayInhibitor();
         this._stopVideoWallpaper();
         if (this._bgChangedId1 && this._bgSettings) {
             this._bgSettings.disconnect(this._bgChangedId1);
@@ -1126,6 +1716,10 @@ export const LockScreen = GObject.registerClass({
         if (this._timerId) {
             GLib.source_remove(this._timerId);
             this._timerId = 0;
+        }
+        if (this._sleepSignalId) {
+            Gio.DBus.system.signal_unsubscribe(this._sleepSignalId);
+            this._sleepSignalId = 0;
         }
         if (this._grab) {
             try { Main.popModal(this._grab); } catch (e) {}

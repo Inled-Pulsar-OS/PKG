@@ -1,0 +1,19 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - What's New removal script
+# ==============================================================================
+set -e
+
+case "$1" in
+    purge)
+        # Drop the system-wide pending marker on purge.
+        rm -rf /var/lib/pulsaros/whatsnew 2>/dev/null || true
+        rmdir /var/lib/pulsaros 2>/dev/null || true
+        ;;
+esac
+
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database /usr/share/applications 2>/dev/null || true
+fi
+
+exit 0

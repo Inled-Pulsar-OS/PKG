@@ -2,9 +2,19 @@ post_upgrade() {
     # Older releases of this package did not ship the ensure-user-session
     # unit, so on upgrades it must be (re)enabled explicitly.
     systemctl enable pulsaros-ensure-user-session.service 2>/dev/null || true
+
+    # Configure SDDM PAM for biometrics (Face ID & Touch ID)
+    if [ -f /etc/pam.d/sddm ]; then
+        if ! grep -q "pam-bio-check" /etc/pam.d/sddm; then
+            sed -i '1i -auth       [success=done default=ignore] pam_exec.so quiet stdout /usr/lib/pulsaros/pam-bio-check' /etc/pam.d/sddm 2>/dev/null || true
+        fi
+        sed -i '/pam_gaze\.so/d' /etc/pam.d/sddm 2>/dev/null || true
+        sed -i '/pam_fprintd\.so/d' /etc/pam.d/sddm 2>/dev/null || true
+    fi
 }
 
 post_install() {
+    post_upgrade
     systemctl enable sddm.service 2>/dev/null || true
     systemctl enable pulsaros-live-autologin.service 2>/dev/null || true
     systemctl enable pulsaros-ensure-user-session.service 2>/dev/null || true

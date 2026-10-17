@@ -31,17 +31,19 @@ def enable_macos_full_remap():
     run_gsettings(["set", "org.gnome.desktop.wm.keybindings", "switch-group-backward", "['<Primary><Shift>grave']"])
     run_gsettings(["set", "org.gnome.desktop.wm.keybindings", "switch-to-workspace-left", "['<Super>Left']"])
     run_gsettings(["set", "org.gnome.desktop.wm.keybindings", "switch-to-workspace-right", "['<Super>Right']"])
-    run_gsettings(["set", "org.gnome.mutter.keybindings", "toggle-tiled-left", "[]"])
-    run_gsettings(["set", "org.gnome.mutter.keybindings", "toggle-tiled-right", "[]"])
+    run_gsettings(["set", "org.gnome.desktop.wm.keybindings", "maximize", "['<Primary>Up', '<Control>Up', '<Super>Up']"])
+    run_gsettings(["set", "org.gnome.desktop.wm.keybindings", "unmaximize", "['<Primary>Down', '<Control>Down', '<Super>Down', '<Alt>F5']"])
+    run_gsettings(["set", "org.gnome.mutter.keybindings", "toggle-tiled-left", "['<Primary>Left', '<Control>Left']"])
+    run_gsettings(["set", "org.gnome.mutter.keybindings", "toggle-tiled-right", "['<Primary>Right', '<Control>Right']"])
 
     # 3. Shell Keybindings & Screenshots
     run_gsettings(["set", "org.gnome.shell.keybindings", "screenshot", "['<Primary><Shift>numbersign']"])
     run_gsettings(["set", "org.gnome.shell.keybindings", "show-screenshot-ui", "['Print', '<Shift><Control>dollar', '<Shift><Super>4', '<Shift><Super>5']"])
     run_gsettings(["set", "org.gnome.shell.keybindings", "screenshot-window", "['<Shift><Control>percent']"])
-    run_gsettings(["set", "org.gnome.shell.keybindings", "toggle-overview", "['<Super>s', '<Control>Up', '<Super>Up', '<Control><Alt>Up', '<Super><Alt>Up']"])
+    run_gsettings(["set", "org.gnome.shell.keybindings", "toggle-overview", "['<Super>s', '<Control><Alt>Up', '<Super><Alt>Up']"])
     run_gsettings(["set", "org.gnome.shell.keybindings", "toggle-application-view", "['<Super>a']"])
     run_gsettings(["set", "org.gnome.shell.keybindings", "shift-overview-up", "@as []"])
-    run_gsettings(["set", "org.gnome.shell.keybindings", "shift-overview-down", "@as []"])
+    run_gsettings(["set", "org.gnome.shell.keybindings", "shift-overview-down", "['<Control><Alt>Down', '<Super><Alt>Down']"])
     run_gsettings(["set", "org.gnome.shell.keybindings", "toggle-message-tray", "[]"])
 
     # 4. Media Keys & Lock

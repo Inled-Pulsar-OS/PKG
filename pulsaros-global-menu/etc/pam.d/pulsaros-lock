@@ -1,3 +1,6 @@
+-auth       [success=done default=ignore] pam_exec.so quiet stdout /usr/lib/pulsaros/pam-bio-check
+auth        sufficient    pam_gaze.so
+auth        sufficient    pam_fprintd.so
 # PAM configuration for Pulsar OS Lock Screen
 # Compatible with Debian (common-auth) and Arch Linux (system-auth)
 

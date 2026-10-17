@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Pulsar OS What's New watcher
+Comment=Shows the Pulsar OS release notes after an update
+Exec=pulsaros-whatsnew-watch
+Icon=pulsaros-whatsnew
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=5

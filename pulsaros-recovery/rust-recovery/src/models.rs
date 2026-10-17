@@ -167,6 +167,14 @@ pub struct EncryptedTarget {
     pub mapper_name: String,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum UnlockCaller {
+    Chroot,
+    RescueFiles,
+    Logs,
+    TargetSelect(String),
+}
+
 #[derive(Clone, Debug)]
 pub struct DiscoveredImage {
     pub file_path: String,

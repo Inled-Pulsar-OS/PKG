@@ -1,0 +1,941 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# ==============================================================================
+# Pulsar OS - Biometrics & Presence Detection Daemon
+# ==============================================================================
+# Manages Face ID (Gaze) and Touch ID / Fingerprint (fprintd) authentication,
+# provides real-time state for SDDM and Pulsar LockScreen, and monitors
+# user presence to auto-lock the system when the owner walks away.
+# ==============================================================================
+
+import os
+import sys
+import time
+import json
+import shutil
+import signal
+import threading
+import subprocess
+from urllib.parse import urlparse, parse_qs
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+PORT = 39281
+VERIFIED_TOKEN_DIR = "/run/pulsaros/biometrics-verified"
+DEFAULT_CONFIG_PATH = "/etc/pulsaros/biometrics.json"
+
+class BiometricsState:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.active_user = None
+        self.verify_source = None
+        self.is_verifying = False
+
+        # States: "idle", "scanning", "waiting", "matched", "failed", "disabled"
+        self.face_state = "idle"
+        self.fingerprint_state = "idle"
+        self.status_message = ""
+        self.last_event = None
+        self.last_match_time = 0
+
+        # Subprocesses
+        self.face_proc = None
+        self.fp_proc = None
+
+        # Presence detection state
+        self.owner_absent_since = 0
+        self.last_presence_check = 0
+
+state = BiometricsState()
+
+def is_spanish():
+    lang = os.environ.get("LANG", "")
+    if not lang:
+        try:
+            with open("/etc/locale.conf", "r") as f:
+                content = f.read()
+                if "es_" in content:
+                    return True
+        except Exception:
+            pass
+    return lang.startswith("es")
+
+def tr(es_str, en_str):
+    return es_str if is_spanish() else en_str
+
+def log(msg):
+    sys.stdout.write(f"[pulsaros-biometrics] {msg}\n")
+    sys.stdout.flush()
+
+def ensure_dirs():
+    os.makedirs(VERIFIED_TOKEN_DIR, mode=0o777, exist_ok=True)
+    try:
+        os.chmod(VERIFIED_TOKEN_DIR, 0o777)
+    except Exception:
+        pass
+    os.makedirs("/etc/pulsaros", mode=0o755, exist_ok=True)
+    try:
+        now = time.time()
+        for f in os.listdir(VERIFIED_TOKEN_DIR):
+            fp = os.path.join(VERIFIED_TOKEN_DIR, f)
+            if os.path.isfile(fp) and (now - os.path.getmtime(fp)) > 15:
+                try:
+                    os.remove(fp)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+def has_camera():
+    return any(os.path.exists(f"/dev/video{i}") for i in range(4))
+
+def has_fingerprint_reader():
+    try:
+        if shutil.which("fprintd-list"):
+            res = subprocess.run(["fprintd-list"], capture_output=True, text=True, timeout=2)
+            if "found 1 devices" in res.stdout or "Using device" in res.stdout:
+                return True
+    except Exception:
+        pass
+    # Fallback to sysfs check
+    try:
+        usb_dir = "/sys/bus/usb/devices"
+        if os.path.exists(usb_dir):
+            for dev in os.listdir(usb_dir):
+                prod_file = os.path.join(usb_dir, dev, "product")
+                if os.path.isfile(prod_file):
+                    with open(prod_file, "r", errors="ignore") as f:
+                        name = f.read().lower()
+                        if "fingerprint" in name or "goodix" in name or "synaptics" in name:
+                            return True
+    except Exception:
+        pass
+    return False
+
+def get_effective_system_user(candidate=None):
+    if candidate and candidate not in ("sddm", "gdm", "lightdm", "nobody", "root", ""):
+        return candidate
+    if state.active_user and state.active_user not in ("sddm", "gdm", "lightdm", "nobody", "root", ""):
+        return state.active_user
+    # 1. Check active user session via loginctl
+    try:
+        res = subprocess.run(["loginctl", "list-sessions", "--no-legend"], capture_output=True, text=True, timeout=1)
+        if res.returncode == 0:
+            for line in res.stdout.strip().splitlines():
+                parts = line.split()
+                if len(parts) >= 3:
+                    uid, user = parts[1], parts[2]
+                    if int(uid) >= 1000 and user not in ("sddm", "gdm", "lightdm", "nobody", "root"):
+                        return user
+    except Exception:
+        pass
+    # 2. Check local accounts in /etc/passwd (UID >= 1000)
+    try:
+        import pwd
+        users = [p.pw_name for p in pwd.getpwall() if 1000 <= p.pw_uid < 60000 and p.pw_name not in ("nobody", "sddm", "gdm", "lightdm")]
+        if users:
+            return users[0]
+    except Exception:
+        pass
+    return candidate or "root"
+
+def is_face_enrolled(username):
+    if not username:
+        return False
+    # Check filesystem enrollment directory
+    user_faces_dir = f"/var/lib/gaze/users/{username}"
+    if os.path.isdir(user_faces_dir) and os.listdir(user_faces_dir):
+        return True
+    try:
+        if shutil.which("gaze"):
+            res = subprocess.run(["gaze", "list-faces", "-u", username], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=2)
+            out = (res.stdout + " " + res.stderr).lower()
+            if "no faces found" in out or "no faces enrolled" in out or "error" in out or not out.strip():
+                return False
+            # Check for non-informational profile lines
+            for line in res.stdout.splitlines():
+                line = line.strip()
+                if line and not line.startswith("i ") and not line.startswith("!") and "no faces" not in line.lower():
+                    return True
+    except Exception:
+        pass
+    return False
+
+def is_fingerprint_enrolled(username):
+    if not username:
+        return False
+    try:
+        if shutil.which("fprintd-list"):
+            res = subprocess.run(["fprintd-list", username], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=2)
+            if res.returncode == 0 and ("right-index-finger" in res.stdout or "enrolled" in res.stdout or "found" in res.stdout):
+                if "no devices" not in res.stdout.lower() and "no fingers" not in res.stdout.lower():
+                    return True
+    except Exception:
+        pass
+    return False
+
+def write_verified_token(username, method):
+    try:
+        ensure_dirs()
+        token_path = os.path.join(VERIFIED_TOKEN_DIR, username)
+        if os.path.exists(token_path):
+            try:
+                os.remove(token_path)
+            except Exception:
+                pass
+        data = {
+            "user": username,
+            "method": method,
+            "timestamp": time.time()
+        }
+        with open(token_path, "w") as f:
+            json.dump(data, f)
+        os.chmod(token_path, 0o644)
+        try:
+            import pwd
+            u = pwd.getpwnam(username)
+            os.chown(token_path, u.pw_uid, u.pw_gid)
+        except Exception:
+            pass
+        log(f"Verified token written for user '{username}' via {method}")
+    except Exception as e:
+        log(f"Error writing token: {e}")
+
+def get_biometrics_config(username=None):
+    cfg = {
+        "touch_id_enabled": True,
+        "face_id_enabled": True
+    }
+    paths = []
+    if username:
+        paths.append(f"/home/{username}/.config/pulsaros/biometrics.json")
+    paths.append("/etc/pulsaros/biometrics.json")
+    for p in paths:
+        if os.path.isfile(p):
+            try:
+                with open(p, "r") as f:
+                    cfg.update(json.load(f))
+                    break
+            except Exception:
+                pass
+    return cfg
+
+def save_biometrics_config(username, cfg):
+    ensure_dirs()
+    if username:
+        u_cfg_dir = f"/home/{username}/.config/pulsaros"
+        os.makedirs(u_cfg_dir, exist_ok=True)
+        u_path = os.path.join(u_cfg_dir, "biometrics.json")
+        try:
+            with open(u_path, "w") as f:
+                json.dump(cfg, f, indent=2)
+            import pwd
+            pw = pwd.getpwnam(username)
+            os.chown(u_path, pw.pw_uid, pw.pw_gid)
+            os.chown(u_cfg_dir, pw.pw_uid, pw.pw_gid)
+        except Exception:
+            pass
+    try:
+        with open("/etc/pulsaros/biometrics.json", "w") as f:
+            json.dump(cfg, f, indent=2)
+    except Exception:
+        pass
+
+def get_presence_config(username=None):
+    cfg = {
+        "enabled": False,
+        "timeout_seconds": 30,
+        "idle_threshold_seconds": 15
+    }
+    paths = []
+    if username:
+        paths.append(f"/home/{username}/.config/pulsaros/presence.json")
+    paths.append("/etc/pulsaros/presence.json")
+    for p in paths:
+        if os.path.isfile(p):
+            try:
+                with open(p, "r") as f:
+                    data = json.load(f)
+                    cfg.update(data)
+                    break
+            except Exception:
+                pass
+    return cfg
+
+def save_presence_config(username, cfg):
+    ensure_dirs()
+    if username:
+        u_cfg_dir = f"/home/{username}/.config/pulsaros"
+        os.makedirs(u_cfg_dir, exist_ok=True)
+        u_path = os.path.join(u_cfg_dir, "presence.json")
+        with open(u_path, "w") as f:
+            json.dump(cfg, f, indent=2)
+        try:
+            # Fix ownership
+            import pwd
+            pw = pwd.getpwnam(username)
+            os.chown(u_path, pw.pw_uid, pw.pw_gid)
+            os.chown(u_cfg_dir, pw.pw_uid, pw.pw_gid)
+        except Exception:
+            pass
+    with open("/etc/pulsaros/presence.json", "w") as f:
+        json.dump(cfg, f, indent=2)
+
+def stop_active_verification():
+    close_gaze_camera_window()
+    with state.lock:
+        state.is_verifying = False
+        if state.face_proc:
+            try:
+                state.face_proc.terminate()
+            except Exception:
+                pass
+            state.face_proc = None
+        if state.fp_proc:
+            try:
+                state.fp_proc.terminate()
+            except Exception:
+                pass
+            state.fp_proc = None
+        state.face_state = "idle"
+        state.fingerprint_state = "idle"
+        state.status_message = ""
+    try:
+        # Graceful terminate first so fprintd releases device cleanly
+        subprocess.run(["pkill", "-TERM", "-f", "fprintd-verify"], capture_output=True)
+    except Exception:
+        pass
+
+def show_gaze_camera_window(username=None):
+    try:
+        # Check if already running
+        res = subprocess.run(["pgrep", "-f", "gaze-gui"], capture_output=True)
+        if res.returncode == 0:
+            return
+
+        env = os.environ.copy()
+        if username and username not in ("sddm", "gdm", "root"):
+            import pwd
+            try:
+                pw = pwd.getpwnam(username)
+                uid = pw.pw_uid
+                gid = pw.pw_gid
+                xdg_runtime = f"/run/user/{uid}"
+                env["XDG_RUNTIME_DIR"] = xdg_runtime
+                env["HOME"] = pw.pw_dir
+                env["USER"] = username
+                env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={xdg_runtime}/bus"
+                
+                # Check Wayland sockets
+                for w in ("wayland-0", "wayland-1"):
+                    if os.path.exists(f"{xdg_runtime}/{w}"):
+                        env["WAYLAND_DISPLAY"] = w
+                        break
+
+                if "DISPLAY" not in env or not env["DISPLAY"]:
+                    env["DISPLAY"] = ":0"
+
+                # Check Xauthority for mutter-Xwayland or user .Xauthority
+                if os.path.exists(xdg_runtime):
+                    for auth in os.listdir(xdg_runtime):
+                        if "Xwaylandauth" in auth or "xauth" in auth:
+                            env["XAUTHORITY"] = os.path.join(xdg_runtime, auth)
+                            break
+
+                cmd = ["gaze-gui"]
+                def demote():
+                    if os.geteuid() == 0:
+                        os.initgroups(username, gid)
+                        os.setgid(gid)
+                        os.setuid(uid)
+                subprocess.Popen(cmd, env=env, preexec_fn=demote)
+                log(f"Spawned gaze-gui camera frame window for user '{username}' (UID {uid})")
+                return
+            except Exception as e:
+                log(f"Error launching gaze-gui as user {username}: {e}")
+
+        # SDDM / Display Fallback
+        if os.path.exists("/run/sddm"):
+            for f in os.listdir("/run/sddm"):
+                if f.startswith("xauth_"):
+                    env["XAUTHORITY"] = os.path.join("/run/sddm", f)
+                    break
+        if "DISPLAY" not in env or not env["DISPLAY"]:
+            env["DISPLAY"] = ":0"
+        subprocess.Popen(["gaze-gui"], env=env)
+        log("Spawned gaze-gui with display fallback env")
+    except Exception as e:
+        log(f"Failed to spawn gaze-gui: {e}")
+
+def close_gaze_camera_window():
+    try:
+        subprocess.run(["pkill", "-f", "gaze-gui"], check=False)
+    except Exception:
+        pass
+
+def run_face_verification(username):
+    log(f"Starting Face ID worker for '{username}'")
+    with state.lock:
+        state.face_state = "scanning"
+        state.status_message = tr("Buscando rostro...", "Looking for face...")
+
+    attempts = 0
+    consecutive_fails = 0
+    while state.is_verifying and state.active_user == username and attempts < 10:
+        attempts += 1
+        try:
+            cmd = ["gaze", "auth", "-u", username, "-s"]
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            with state.lock:
+                state.face_proc = proc
+            ret = proc.wait()
+            with state.lock:
+                state.face_proc = None
+
+            if not state.is_verifying or state.active_user != username:
+                break
+
+            if ret == 0:
+                with state.lock:
+                    state.face_state = "matched"
+                    state.status_message = tr("Rostro verificado", "Face verified")
+                    state.last_match_time = time.time()
+                    state.is_verifying = False
+                    state.last_event = {
+                        "type": "face",
+                        "result": "success",
+                        "user": username,
+                        "time": time.time()
+                    }
+                    if state.fp_proc:
+                        try:
+                            state.fp_proc.terminate()
+                        except Exception:
+                            pass
+                        state.fp_proc = None
+                write_verified_token(username, "face")
+                log(f"Face ID matched for '{username}'!")
+                close_gaze_camera_window()
+                try:
+                    subprocess.run(["pkill", "-TERM", "-f", "fprintd-verify"], capture_output=True)
+                except Exception:
+                    pass
+                return
+            else:
+                consecutive_fails += 1
+                log(f"Face auth failed for '{username}' (consecutive failures: {consecutive_fails})")
+                with state.lock:
+                    state.face_state = "failed"
+                    state.status_message = tr("Rostro no reconocido", "Face not recognized")
+                
+                if consecutive_fails >= 2:
+                    log(f"{consecutive_fails} consecutive Face ID failures: opening Gaze camera frame preview window!")
+                    show_gaze_camera_window(username)
+
+                time.sleep(1.2)
+                if state.is_verifying:
+                    with state.lock:
+                        state.face_state = "scanning"
+                        state.status_message = tr("Buscando rostro...", "Looking for face...")
+        except Exception as e:
+            log(f"Face auth exception: {e}")
+            break
+        time.sleep(0.5)
+
+    with state.lock:
+        if state.face_state != "matched":
+            state.face_state = "idle"
+
+def run_fingerprint_verification(username):
+    log(f"Starting Touch ID worker for '{username}'")
+    with state.lock:
+        state.fingerprint_state = "waiting"
+        if state.face_state == "paused":
+            state.status_message = tr("Pulsa para activar Face ID o usa la huella", "Click to activate Face ID or use fingerprint")
+        elif state.face_state not in ("scanning", "matched", "failed"):
+            state.status_message = tr("Esperando huella...", "Waiting for fingerprint...")
+
+    while state.is_verifying and state.active_user == username:
+        try:
+            cmd = ["fprintd-verify", username]
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            with state.lock:
+                state.fp_proc = proc
+
+            matched = False
+            for line in proc.stdout:
+                line_str = line.strip()
+                if "verify-match" in line_str:
+                    matched = True
+                    break
+                elif "verify-no-match" in line_str or "verify-unknown-error" in line_str:
+                    with state.lock:
+                        state.fingerprint_state = "failed"
+                        state.status_message = tr("Huella no reconocida", "Fingerprint not recognized")
+                    time.sleep(1.2)
+                    if state.is_verifying:
+                        with state.lock:
+                            state.fingerprint_state = "waiting"
+                            if state.face_state == "paused":
+                                state.status_message = tr("Pulsa para activar Face ID o usa la huella", "Click to activate Face ID or use fingerprint")
+                            elif state.face_state not in ("scanning", "matched", "failed"):
+                                state.status_message = tr("Esperando huella...", "Waiting for fingerprint...")
+
+            proc.wait()
+            ret_code = proc.returncode
+            with state.lock:
+                state.fp_proc = None
+
+            if matched:
+                with state.lock:
+                    state.fingerprint_state = "matched"
+                    state.status_message = tr("Huella verificada", "Fingerprint verified")
+                    state.last_match_time = time.time()
+                    state.is_verifying = False
+                    state.last_event = {
+                        "type": "fingerprint",
+                        "result": "success",
+                        "user": username,
+                        "time": time.time()
+                    }
+                    if state.face_proc:
+                        try:
+                            state.face_proc.terminate()
+                        except Exception:
+                            pass
+                        state.face_proc = None
+                write_verified_token(username, "fingerprint")
+                log(f"Touch ID matched for '{username}'!")
+                close_gaze_camera_window()
+                return
+            elif ret_code != 0:
+                time.sleep(1.2)
+        except Exception as e:
+            log(f"Fingerprint verify exception: {e}")
+            break
+        time.sleep(0.5)
+
+    with state.lock:
+        if state.fingerprint_state != "matched":
+            state.fingerprint_state = "idle"
+
+def start_verification(username, source="lockscreen", auto_face=None):
+    stop_active_verification()
+    with state.lock:
+        state.active_user = username
+        state.verify_source = source
+        state.is_verifying = True
+        state.last_event = None
+
+    has_cam = has_camera()
+    has_fp = has_fingerprint_reader()
+    face_enrolled = is_face_enrolled(username)
+    fp_enrolled = is_fingerprint_enrolled(username)
+
+    bio_cfg = get_biometrics_config(username)
+    touch_enabled = bio_cfg.get("touch_id_enabled", True)
+    face_enabled = bio_cfg.get("face_id_enabled", True)
+
+    if auto_face is None:
+        if source in ("wake", "polkit", "test"):
+            auto_face = True
+        else:
+            auto_face = False
+
+    log(f"Verification request for '{username}' (source: {source}, auto_face: {auto_face}). Cam: {has_cam} (enrolled: {face_enrolled}, enabled: {face_enabled}), FP: {has_fp} (enrolled: {fp_enrolled}, enabled: {touch_enabled})")
+
+    if has_cam and face_enrolled and face_enabled:
+        if auto_face:
+            threading.Thread(target=run_face_verification, args=(username,), daemon=True).start()
+        else:
+            with state.lock:
+                state.face_state = "paused"
+                if has_fp and fp_enrolled and touch_enabled:
+                    state.status_message = tr("Pulsa para activar Face ID o usa la huella", "Click to activate Face ID or use fingerprint")
+                else:
+                    state.status_message = tr("Pulsa para activar Face ID", "Click to activate Face ID")
+    else:
+        with state.lock:
+            state.face_state = "disabled" if not face_enabled else "idle"
+
+    if has_fp and fp_enrolled and touch_enabled:
+        threading.Thread(target=run_fingerprint_verification, args=(username,), daemon=True).start()
+
+def activate_face_scan(username=None):
+    if not username:
+        username = state.active_user or get_effective_system_user()
+    bio_cfg = get_biometrics_config(username)
+    face_enabled = bio_cfg.get("face_id_enabled", True)
+    if has_camera() and is_face_enrolled(username) and face_enabled:
+        log(f"Explicit Face ID activation requested for '{username}'")
+        with state.lock:
+            if state.face_proc:
+                try:
+                    state.face_proc.terminate()
+                except Exception:
+                    pass
+                state.face_proc = None
+            state.face_state = "scanning"
+            state.status_message = tr("Buscando rostro...", "Looking for face...")
+            state.is_verifying = True
+        threading.Thread(target=run_face_verification, args=(username,), daemon=True).start()
+        return True
+    return False
+
+def sleep_monitor_loop():
+    log("Sleep/Wake monitor loop started.")
+    while True:
+        try:
+            proc = subprocess.Popen(
+                ["gdbus", "monitor", "--system", "--dest", "org.freedesktop.login1", "--object-path", "/org/freedesktop/login1"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True
+            )
+            for line in proc.stdout:
+                line_str = line.strip()
+                if "PrepareForSleep" in line_str:
+                    if "(true,)" in line_str.lower() or "true" in line_str.lower():
+                        log("System is preparing for sleep: stopping active biometrics verification and camera")
+                        stop_active_verification()
+                        try:
+                            subprocess.run(["pkill", "-TERM", "-f", "gaze auth"], capture_output=True)
+                        except Exception:
+                            pass
+                    elif "(false,)" in line_str.lower() or "false" in line_str.lower():
+                        log("System woke from sleep! Re-initializing Gaze camera pipeline...")
+                        try:
+                            subprocess.run(["systemctl", "try-restart", "gazed.service"], capture_output=True, timeout=5)
+                        except Exception as e:
+                            log(f"Error restarting gazed: {e}")
+                        
+                        # Wait 1.2s for camera hardware reset and driver probe
+                        time.sleep(1.2)
+                        
+                        eff_user = get_effective_system_user()
+                        log(f"Auto-activating Face ID on wake for '{eff_user}'")
+                        start_verification(eff_user, source="wake", auto_face=True)
+            proc.wait()
+        except Exception as e:
+            time.sleep(3)
+
+# ==============================================================================
+# Presence Detection Worker
+# ==============================================================================
+def presence_loop():
+    log("Presence detection background loop started.")
+    consecutive_absent = 0
+
+    while True:
+        try:
+            time.sleep(3)
+
+            # Do not run presence check if we are currently verifying (screen already locked or in SDDM)
+            if state.is_verifying:
+                consecutive_absent = 0
+                continue
+
+            # Find active graphical user and session id
+            user = None
+            session_id = None
+            try:
+                res = subprocess.run(["loginctl", "list-sessions", "--no-legend"], capture_output=True, text=True, timeout=2)
+                for line in res.stdout.strip().splitlines():
+                    parts = line.split()
+                    if len(parts) >= 3 and parts[2] not in ("gdm", "sddm", "root", "lightdm"):
+                        session_id = parts[0]
+                        user = parts[2]
+                        break
+            except Exception:
+                pass
+
+            if not user:
+                continue
+
+            cfg = get_presence_config(user)
+            if not cfg.get("enabled", False):
+                consecutive_absent = 0
+                continue
+
+            if not is_face_enrolled(user):
+                consecutive_absent = 0
+                continue
+
+            timeout_secs = cfg.get("timeout_seconds", 30)
+            idle_thresh_secs = cfg.get("idle_threshold_seconds", 15)
+
+            # Check user idle time via Mutter IdleMonitor (in ms)
+            try:
+                idle_res = subprocess.run(
+                    ["sudo", "-u", user, "gdbus", "call", "--session",
+                     "--dest", "org.gnome.Mutter.IdleMonitor",
+                     "--object-path", "/org/gnome/Mutter/IdleMonitor/Core",
+                     "--method", "org.gnome.Mutter.IdleMonitor.GetIdletime"],
+                    capture_output=True, text=True, timeout=2
+                )
+                if idle_res.returncode == 0:
+                    import re
+                    m = re.search(r"\(uint64\s+(\d+),\)", idle_res.stdout)
+                    if m:
+                        idle_ms = int(m.group(1))
+                        idle_secs = idle_ms / 1000.0
+                        # If user is actively typing or moving mouse, they are present!
+                        if idle_secs < idle_thresh_secs:
+                            consecutive_absent = 0
+                            continue
+            except Exception:
+                pass
+
+            # Check if screensaver is already active
+            try:
+                ss_res = subprocess.run(
+                    ["sudo", "-u", user, "gdbus", "call", "--session",
+                     "--dest", "org.freedesktop.ScreenSaver",
+                     "--object-path", "/org/freedesktop/ScreenSaver",
+                     "--method", "org.freedesktop.ScreenSaver.GetActive"],
+                    capture_output=True, text=True, timeout=2
+                )
+                if "(true,)" in ss_res.stdout.lower():
+                    # Already locked
+                    consecutive_absent = 0
+                    continue
+            except Exception:
+                pass
+
+            # User has been idle > 15s: verify if face is present
+            chk = subprocess.run(["gaze", "auth", "-u", user, "-s"], capture_output=True, timeout=3)
+            if chk.returncode != 0:
+                consecutive_absent += 3
+                log(f"Presence check: owner '{user}' not seen ({consecutive_absent}/{timeout_secs}s)")
+                if consecutive_absent >= timeout_secs:
+                    log(f"Presence auto-lock triggered for '{user}'!")
+                    if session_id:
+                        subprocess.run(["loginctl", "lock-session", session_id], check=False)
+                    else:
+                        subprocess.run(["loginctl", "lock-sessions"], check=False)
+                    try:
+                        subprocess.run([
+                            "sudo", "-u", user, "gdbus", "call", "--session",
+                            "--dest", "org.gnome.ScreenSaver",
+                            "--object-path", "/org/gnome/ScreenSaver",
+                            "--method", "org.gnome.ScreenSaver.Lock"
+                        ], timeout=2, check=False)
+                    except Exception:
+                        pass
+                    consecutive_absent = 0
+            else:
+                consecutive_absent = 0
+
+        except Exception as e:
+            # log(f"Presence loop tick error: {e}")
+            pass
+
+# ==============================================================================
+# REST API Handler
+# ==============================================================================
+class BiometricsHTTPHandler(BaseHTTPRequestHandler):
+    def _send_cors_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self._send_cors_headers()
+        self.end_headers()
+
+    def do_GET(self):
+        url = urlparse(self.path)
+        params = parse_qs(url.query)
+        username = get_effective_system_user(params.get("user", [None])[0])
+
+        if url.path == "/status":
+            has_cam = has_camera()
+            has_fp = has_fingerprint_reader()
+            face_enr = is_face_enrolled(username)
+            fp_enr = is_fingerprint_enrolled(username)
+            presence_cfg = get_presence_config(username)
+            bio_cfg = get_biometrics_config(username)
+            touch_enabled = bio_cfg.get("touch_id_enabled", True)
+            face_enabled = bio_cfg.get("face_id_enabled", True)
+
+            with state.lock:
+                resp = {
+                    "user": username,
+                    "active_user": state.active_user,
+                    "is_verifying": state.is_verifying,
+                    "has_camera": has_cam,
+                    "has_fingerprint": has_fp,
+                    "touch_id_enabled": touch_enabled,
+                    "face_id_enabled": face_enabled,
+                    "face_enrolled": face_enr and face_enabled,
+                    "fingerprint_enrolled": fp_enr and touch_enabled,
+                    "raw_face_enrolled": face_enr,
+                    "raw_fingerprint_enrolled": fp_enr,
+                    "face_state": state.face_state,
+                    "fingerprint_state": state.fingerprint_state,
+                    "status_message": state.status_message,
+                    "last_event": state.last_event,
+                    "presence": presence_cfg,
+                    "biometrics": bio_cfg
+                }
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(resp).encode("utf-8"))
+
+        elif url.path == "/config":
+            cfg = get_biometrics_config(username)
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(cfg).encode("utf-8"))
+
+        elif url.path == "/presence":
+            cfg = get_presence_config(username)
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(cfg).encode("utf-8"))
+
+        elif url.path == "/show_camera":
+            show_gaze_camera_window(username)
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status": "camera_window_opened"}')
+
+        else:
+            self.send_response(404)
+            self._send_cors_headers()
+            self.end_headers()
+
+    def do_POST(self):
+        url = urlparse(self.path)
+        params = parse_qs(url.query)
+        username = params.get("user", [None])[0]
+
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length).decode("utf-8") if content_length > 0 else ""
+        body_json = {}
+        if body:
+            try:
+                body_json = json.loads(body)
+            except Exception:
+                pass
+
+        if not username:
+            username = get_effective_system_user(body_json.get("user", None))
+
+        if url.path == "/verify/start":
+            source = params.get("source", ["lockscreen"])[0] or body_json.get("source", "lockscreen")
+            face_arg = params.get("face", [None])[0] or body_json.get("face", None)
+            auto_face = None
+            if face_arg is not None:
+                auto_face = (str(face_arg).lower() in ("1", "true", "yes"))
+            start_verification(username, source, auto_face)
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status": "started"}')
+
+        elif url.path == "/verify/activate_face":
+            ok = activate_face_scan(username)
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status": "face_activated"}' if ok else b'{"status": "face_unavailable"}')
+
+        elif url.path == "/verify/stop":
+            stop_active_verification()
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status": "stopped"}')
+
+        elif url.path == "/config":
+            cfg = get_biometrics_config(username)
+            cfg.update(body_json)
+            save_biometrics_config(username, cfg)
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(cfg).encode("utf-8"))
+
+        elif url.path == "/presence":
+            cfg = get_presence_config(username)
+            cfg.update(body_json)
+            save_presence_config(username, cfg)
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(cfg).encode("utf-8"))
+
+        elif url.path in ("/simulate", "/test/simulate"):
+            # Simulation endpoint for visual testing of animations
+            sim_type = params.get("type", ["face"])[0] or body_json.get("type", "face")
+            sim_result = params.get("result", ["success"])[0] or body_json.get("result", "success")
+
+            with state.lock:
+                if sim_type == "face":
+                    state.face_state = "matched" if sim_result == "success" else "failed"
+                    state.status_message = tr("Rostro verificado", "Face verified") if sim_result == "success" else tr("Rostro no reconocido", "Face not recognized")
+                else:
+                    state.fingerprint_state = "matched" if sim_result == "success" else "failed"
+                    state.status_message = tr("Huella verificada", "Fingerprint verified") if sim_result == "success" else tr("Huella no reconocida", "Fingerprint not recognized")
+
+                state.last_event = {
+                    "type": sim_type,
+                    "result": sim_result,
+                    "user": username,
+                    "time": time.time()
+                }
+
+            if sim_result == "success":
+                write_verified_token(username, sim_type)
+
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"simulated": true}')
+
+        else:
+            self.send_response(404)
+            self._send_cors_headers()
+            self.end_headers()
+
+    def log_message(self, format, *args):
+        # Suppress routine HTTP spam in journal
+        return
+
+def main():
+    ensure_dirs()
+    log("Starting Pulsar OS Biometrics & Presence Daemon on port 39281...")
+
+    # Start sleep/wake monitor thread
+    sleep_thread = threading.Thread(target=sleep_monitor_loop, daemon=True)
+    sleep_thread.start()
+
+    # Start presence detection thread
+    presence_thread = threading.Thread(target=presence_loop, daemon=True)
+    presence_thread.start()
+
+    server = HTTPServer(("127.0.0.1", PORT), BiometricsHTTPHandler)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        log("Stopping daemon...")
+        stop_active_verification()
+        server.server_close()
+
+if __name__ == "__main__":
+    main()

@@ -42,7 +42,7 @@
 .mac-dark-theme .mac-back-btn {
     background-color: rgba(30, 30, 40, 0.76);
     border: 1px solid rgba(255, 255, 255, 0.16);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    box-shadow: none !important;
     color: #ffffff;
 }
 
@@ -89,7 +89,7 @@
 .mac-light-theme .mac-back-btn {
     background-color: rgba(245, 245, 247, 0.85);
     border: 1px solid rgba(0, 0, 0, 0.08);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    box-shadow: none !important;
     color: #1d1d1f;
 }
 
@@ -685,12 +685,8 @@
     min-width: 0 !important;
     max-width: 1000px !important;
     min-height: 0 !important;
-    max-height: none !important;
     border: 1px solid rgba(255, 255, 255, 0.16) !important;
-    /* Same floating-glass depth as the Control Centre pills, so the
-       Notification Center reads with the identical "liquid glass" lift
-       instead of a flat card. The 18px border-radius rounds the shadow. */
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45) !important;
+    box-shadow: none !important;
     color: #ffffff !important;
     background-color: rgba(30, 30, 40, 0.76) !important;
     transition: all 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -735,7 +731,6 @@
     min-width: 302px !important;
     max-width: 302px !important;
     min-height: 0 !important;
-    max-height: none !important;
     padding: 10px 10px !important;
 }
 
@@ -1367,13 +1362,13 @@
 .mac-lg-toggles .mac-nc-card,
 .mac-lg-toggles .mac-nc-card.quick-toggle {
     border: 1px solid rgba(255, 255, 255, 0.22) !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22) !important;
+    box-shadow: none !important;
 }
 
 .mac-light-theme.mac-lg-toggles .mac-nc-card,
 .mac-light-theme .mac-lg-toggles .mac-nc-card {
     border: 1px solid rgba(0, 0, 0, 0.10) !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important;
+    box-shadow: none !important;
 }
 
 /* Light Theme Styling for Notification Center Cards (Normal & Fallback) */
@@ -1381,8 +1376,7 @@
 .mac-light-theme .mac-nc-card.quick-toggle {
     background-color: rgba(245, 245, 247, 0.85) !important;
     border: 1px solid rgba(0, 0, 0, 0.08) !important;
-    /* Match the Control Centre light pills so the glass depth is identical. */
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
+    box-shadow: none !important;
     color: #1d1d1f !important;
 }
 

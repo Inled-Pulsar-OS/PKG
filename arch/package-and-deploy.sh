@@ -215,6 +215,22 @@ is_pkg_up_to_date() {
         local newest_root_src=$(find "$root_src_dir" -type f -not -path "*/target/*" -not -path "*/.git/*" -printf '%T@\n' 2>/dev/null | sort -nr | head -n 1 | cut -d. -f1)
         [ -n "$newest_root_src" ] && [ "$newest_root_src" -gt "$pkg_time" ] && return 1
 
+        # Optional extra source paths declared by the package (one per line in
+        # EXTRA_PATHS). Used, for example, by pulsaros-whatsnew to rebuild when
+        # the shared releases.d/ changelog directory changes.
+        if [ -f "$root_src_dir/EXTRA_PATHS" ]; then
+            while IFS= read -r extra; do
+                extra="${extra#"${extra%%[![:space:]]*}"}"
+                extra="${extra%"${extra##*[![:space:]]}"}"
+                [ -z "$extra" ] && continue
+                case "$extra" in \#*) continue ;; esac
+                local extra_dir="$root_src_dir/$extra"
+                [ -d "$extra_dir" ] || continue
+                local newest_extra=$(find "$extra_dir" -type f -not -path "*/.git/*" -printf '%T@\n' 2>/dev/null | sort -nr | head -n 1 | cut -d. -f1)
+                [ -n "$newest_extra" ] && [ "$newest_extra" -gt "$pkg_time" ] && return 1
+            done < "$root_src_dir/EXTRA_PATHS"
+        fi
+
         # Detect changes inside nested git subrepos (e.g. sayri) by comparing
         # the current HEAD commit to the commit this package was built from.
         local current_commit built_commit

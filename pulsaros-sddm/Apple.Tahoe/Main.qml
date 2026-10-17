@@ -53,14 +53,26 @@ Rectangle {
         return 0
     }
 
+    function getTargetLoginUser() {
+        if (users && users.finalLoginUserName && users.finalLoginUserName !== "") return users.finalLoginUserName;
+        if (typeof userModel !== "undefined" && userModel) {
+            if (userModel.lastUser && userModel.lastUser !== "") return userModel.lastUser;
+            if (userModel.count > 0 && typeof userModel.get === "function" && userModel.get(0).name) return userModel.get(0).name;
+        }
+        if (biometricsIndicator && biometricsIndicator.targetUser && biometricsIndicator.targetUser !== "") return biometricsIndicator.targetUser;
+        return "";
+    }
+
     function submitLogin() {
         if (isAuthenticating) return
+        var userToLogin = getTargetLoginUser();
+        if (!userToLogin || userToLogin === "") return
         isAuthenticating = true
         // A user created via CLI has no saved session (AccountsService / state.conf):
         // sessionModel.lastIndex is -1 and passing that to sddm.login() makes the
         // greeter fail and loop. Clamp to a valid index (0) so the first session
         // (GNOME) is selected.
-        sddm.login(users.finalLoginUserName, password.text, Math.max(0, session.currentIndex))
+        sddm.login(userToLogin, password.text, Math.max(0, session.currentIndex))
     }
 
     FontLoader {
@@ -86,6 +98,10 @@ Rectangle {
             password.text = ""
             password.focus = true
             shakeAnim.start()
+            if (biometricsIndicator) {
+                biometricsIndicator.authTriggered = false
+                biometricsIndicator.startVerification()
+            }
         }
     }
 
@@ -151,14 +167,27 @@ Rectangle {
         anchors.fill: parent
         visible: rootWindow.isPrimaryScreen
 
+        // Biometrics Indicator (Windows Hello Face + Touch ID above clock)
+        BiometricsIndicator {
+            id: biometricsIndicator
+            anchors.top: parent.top
+            anchors.topMargin: Math.max(28, parent.height * 0.04)
+            anchors.horizontalCenter: parent.horizontalCenter
+            targetUser: (users && users.finalLoginUserName && users.finalLoginUserName !== "") ? users.finalLoginUserName : ((typeof userModel !== "undefined" && userModel && userModel.lastUser) ? userModel.lastUser : "")
+            visible: (!listuser.visible) && (!isAuthenticating) && (hasFace || hasFingerprint)
+            onBiometricsSuccess: {
+                submitLogin()
+            }
+        }
+
         // Central Liquid Glass Clock
         Item {
             id: identclock
-            anchors.top: parent.top
-            anchors.topMargin: Math.max(40, parent.height * 0.12)
+            anchors.top: biometricsIndicator.visible ? biometricsIndicator.bottom : parent.top
+            anchors.topMargin: biometricsIndicator.visible ? 14 : Math.max(85, parent.height * 0.14)
             anchors.horizontalCenter: parent.horizontalCenter
-            width: clock.width
-            height: clock.height
+            width: clock.implicitWidth
+            height: clock.implicitHeight
 
             Clock {
                 id: clock

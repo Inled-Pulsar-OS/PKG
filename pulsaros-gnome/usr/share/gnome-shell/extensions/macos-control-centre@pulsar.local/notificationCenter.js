@@ -208,17 +208,15 @@ export class MacNotificationCenter {
             this._dateMenu.menu,
             this._dateMenu.menu.connect('open-state-changed', guard((menu, isOpen) => {
                 if (isOpen) {
-                    if (this._lgToggles) {
+                    this._dropDateMenuBlur();
+                    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, guard(() => {
                         this._dropDateMenuBlur();
-                        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, guard(() => {
-                            if (this._lgToggles) this._dropDateMenuBlur();
-                            return GLib.SOURCE_REMOVE;
-                        }));
-                        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, guard(() => {
-                            if (this._lgToggles) this._dropDateMenuBlur();
-                            return GLib.SOURCE_REMOVE;
-                        }));
-                    }
+                        return GLib.SOURCE_REMOVE;
+                    }));
+                    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, guard(() => {
+                        this._dropDateMenuBlur();
+                        return GLib.SOURCE_REMOVE;
+                    }));
                     this._updateScrollMaxHeight();
                     this._refreshAll();
                     this._startPoll();
@@ -448,33 +446,19 @@ export class MacNotificationCenter {
     _syncDateMenuSurface() {
         const menu = this._dateMenu?.menu;
         if (!menu) return;
-        const lg = this._lgToggles;
 
         if (menu.box) {
-            if (lg) {
-                menu.box.remove_style_class_name('datemenu-popover');
-                menu.box.remove_style_class_name('popup-menu-content');
-            } else {
-                menu.box.add_style_class_name('datemenu-popover');
-                menu.box.add_style_class_name('popup-menu-content');
-            }
+            menu.box.remove_style_class_name('datemenu-popover');
+            menu.box.remove_style_class_name('popup-menu-content');
         }
 
-        for (const actor of [menu.actor, menu.box, menu._boxPointer, menu._boxPointer?.bin]) {
+        for (const actor of [menu.actor, menu.box, menu._boxPointer, menu._boxPointer?.bin, this._root]) {
             if (!actor) continue;
-            if (lg)
-                actor.add_style_class_name(BLUR_EXCLUDE_CLASS);
-            else
-                actor.remove_style_class_name(BLUR_EXCLUDE_CLASS);
+            actor.add_style_class_name(BLUR_EXCLUDE_CLASS);
         }
 
-        if (lg) {
-            this._dropDateMenuBlur();
-            this._blurExcluded = true;
-        } else if (this._blurExcluded) {
-            this._blurExcluded = false;
-            this._restoreDateMenuBlur();
-        }
+        this._dropDateMenuBlur();
+        this._blurExcluded = true;
     }
 
     _restoreDateMenuBlur() {
@@ -897,9 +881,11 @@ export class MacNotificationCenter {
             null,
             guard((initable, result) => {
                 try {
+                    if (this._destroyed) return;
                     this._calendarProxy = Gio.DBusProxy.new_finish(result);
                     this._loadCalendarEvents();
                     this._calendarProxy.connect('g-signal', guard((proxy, sender, signal, params) => {
+                        if (this._destroyed || !this._root?.get_stage()) return;
                         if (signal === 'EventsAddedOrUpdated' || signal === 'EventsRemoved') {
                             this._loadCalendarEvents();
                         }
@@ -910,7 +896,7 @@ export class MacNotificationCenter {
     }
 
     _loadCalendarEvents() {
-        if (!this._calendarProxy) return;
+        if (!this._calendarProxy || this._destroyed) return;
         const now = GLib.DateTime.new_now_local();
         const startOfDay = GLib.DateTime.new_local(now.get_year(), now.get_month(), now.get_day_of_month(), 0, 0, 0);
         const endOfDay = startOfDay.add_days(1);
@@ -920,7 +906,8 @@ export class MacNotificationCenter {
                 startOfDay.to_unix(),
                 endOfDay.to_unix(),
                 true,
-                guard(() => {
+                guard((result, exc) => {
+                    if (exc || this._destroyed || !this._root?.get_stage()) return;
                     this._refreshCalendar();
                 })
             );
@@ -1309,6 +1296,7 @@ export class MacNotificationCenter {
         // Repeated under memory pressure this can take the shell down, so bail
         // out instead of drawing garbage. Never let a paint error escape either:
         // an exception in a shell callback aborts the whole session.
+        if (!area || this._destroyed || !this._root?.get_stage?.() || !area.get_stage?.()) return;
         let cr = null;
         try {
             const [w, h] = area.get_surface_size();
@@ -1516,20 +1504,21 @@ export class MacNotificationCenter {
     }
 
     _refreshWeather() {
-        if (this._destroyed || !this._soupSession) return;
+        if (this._destroyed || !this._soupSession || !this._root?.get_stage?.()) return;
 
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${this._lat.toFixed(4)}&longitude=${this._lon.toFixed(4)}&current=temperature_2m,weather_code&hourly=temperature_2m,weather_code&timezone=auto&forecast_days=1`;
         const msg = Soup.Message.new('GET', url);
 
-        this._soupSession.send_and_read_async(msg, GLib.PRIORITY_DEFAULT, null, (session, res) => {
-            if (this._destroyed) return;
+        this._soupSession.send_and_read_async(msg, GLib.PRIORITY_DEFAULT, null, guard((session, res) => {
+            if (this._destroyed || !this._root?.get_stage?.()) return;
             try {
                 const bytes = session.send_and_read_finish(res);
+                if (!bytes) return;
                 const data = JSON.parse(new TextDecoder().decode(bytes.get_data()));
                 this._weatherData = data;
                 this._updateWeatherUI();
             } catch (e) {}
-        });
+        }));
     }
 
     _getWeatherInfo(code) {
@@ -1545,7 +1534,7 @@ export class MacNotificationCenter {
     }
 
     _updateWeatherUI() {
-        if (this._destroyed || !this._weatherData || !this._weatherHourlyBox) return;
+        if (this._destroyed || !this._root?.get_stage?.() || !this._weatherData || !this._weatherHourlyBox) return;
 
         if (this._weatherLocLabel) this._weatherLocLabel.text = this._locationName;
 
@@ -2158,22 +2147,7 @@ export class MacNotificationCenter {
             { name: 'París', tz: 'Europe/Paris', offset: 0 },
         ];
 
-        box.add_child(this._clockGrid);
-
-        card.set_child(box);
-        card.connect('clicked', () => {
-            this._dateMenu?.menu?.close();
-            launch('gnome-clocks');
-        });
-        return card;
-    }
-
-    _refreshWorldClock() {
-        if (!this._clockGrid) return;
-        this._clockGrid.destroy_all_children();
-
-        const now = GLib.DateTime.new_now_local();
-
+        this._cityWidgets = [];
         for (const city of this._cityClocks) {
             const col = new St.BoxLayout({
                 orientation: Clutter.Orientation.VERTICAL,
@@ -2187,17 +2161,11 @@ export class MacNotificationCenter {
                 style_class: 'mac-nc-city-name',
             }));
 
-            let cityTime = now;
-            try {
-                const tz = GLib.TimeZone.new_identifier(city.tz);
-                if (tz) cityTime = GLib.DateTime.new_now(tz);
-            } catch (e) {}
-
-            const timeStr = cityTime.format('%H:%M') || '12:00';
-            col.add_child(new St.Label({
-                text: timeStr,
+            const timeLabel = new St.Label({
+                text: '--:--',
                 style_class: 'mac-nc-city-time',
-            }));
+            });
+            col.add_child(timeLabel);
 
             let diffText = t('SAME_TIME');
             if (city.offset > 0) diffText = t('AHEAD', city.offset);
@@ -2209,6 +2177,33 @@ export class MacNotificationCenter {
             }));
 
             this._clockGrid.add_child(col);
+            this._cityWidgets.push({ city, timeLabel });
+        }
+
+        box.add_child(this._clockGrid);
+
+        card.set_child(box);
+        card.connect('clicked', () => {
+            this._dateMenu?.menu?.close();
+            launch('gnome-clocks');
+        });
+        return card;
+    }
+
+    _refreshWorldClock() {
+        if (!this._cityWidgets || this._destroyed || !this._root?.get_stage?.()) return;
+
+        const now = GLib.DateTime.new_now_local();
+
+        for (const { city, timeLabel } of this._cityWidgets) {
+            let cityTime = now;
+            try {
+                const tz = GLib.TimeZone.new_identifier(city.tz);
+                if (tz) cityTime = GLib.DateTime.new_now(tz);
+            } catch (e) {}
+
+            const timeStr = cityTime.format('%H:%M') || '12:00';
+            if (timeLabel) timeLabel.text = timeStr;
         }
     }
 }

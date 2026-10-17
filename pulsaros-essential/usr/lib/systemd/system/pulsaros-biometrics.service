@@ -1,0 +1,16 @@
+[Unit]
+Description=Pulsar OS Biometrics & Presence Detection Service
+Documentation=https://pulsaros.org
+After=network.target dbus.service gazed.service fprintd.service
+Wants=gazed.service fprintd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pulsaros-biometrics-daemon
+Restart=always
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
