@@ -6,9 +6,30 @@
 
 import sys
 import os
+import argparse
+
+# Parse CLI flags before anything else so we can bypass the witness check
+parser = argparse.ArgumentParser(
+    description="Pulsar OS OOTB Setup Assistant",
+    add_help=True,
+)
+parser.add_argument(
+    "--force",
+    action="store_true",
+    help="Run the assistant even if the system does not require setup (no witness file).",
+)
+parser.add_argument(
+    "--test",
+    action="store_true",
+    help="Run in test mode: no system changes are applied, only the UI is shown.",
+)
+_args, _unknown = parser.parse_known_args()
+
+if _args.test:
+    os.environ["TEST_MODE"] = "1"
 
 # Check OOTB witness flag before loading graphical libraries, bypass in test mode
-if not os.path.exists("/etc/pulsar-need-setup") and "TEST_MODE" not in os.environ:
+if not _args.force and not os.path.exists("/etc/pulsar-need-setup") and "TEST_MODE" not in os.environ:
     print("OOTB setup not required. Exiting.")
     sys.exit(0)
 
