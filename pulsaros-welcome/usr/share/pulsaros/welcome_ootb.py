@@ -58,12 +58,16 @@ class NativeAnimatedFingerprint(Gtk.Box):
         super().__init__(orientation=Gtk.Orientation.VERTICAL)
         self.set_halign(Gtk.Align.CENTER)
         self.set_valign(Gtk.Align.CENTER)
+        self.set_hexpand(True)
+        self.set_vexpand(False)
 
         self.circle_box = Gtk.Box()
         self.circle_box.set_size_request(size, size)
         self.circle_box.set_halign(Gtk.Align.CENTER)
         self.circle_box.set_valign(Gtk.Align.CENTER)
         self.circle_box.add_css_class("touchid-circle-frame")
+        self.circle_box.set_hexpand(False)
+        self.circle_box.set_vexpand(False)
 
         self.icon = Gtk.Image.new_from_icon_name("fingerprint-symbolic")
         self.icon.set_pixel_size(int(size * 0.58))
@@ -71,8 +75,12 @@ class NativeAnimatedFingerprint(Gtk.Box):
         self.icon.set_valign(Gtk.Align.CENTER)
         self.icon.add_css_class("touchid-fp-icon")
 
-        self.circle_box.append(self.icon)
-        self.append(self.circle_box)
+        overlay = Gtk.Overlay()
+        overlay.set_halign(Gtk.Align.CENTER)
+        overlay.set_valign(Gtk.Align.CENTER)
+        overlay.set_child(self.circle_box)
+        overlay.add_overlay(self.icon)
+        self.append(overlay)
         self._pulse_timer = None
 
     def set_stage(self, stage, total_stages=8):
@@ -90,7 +98,11 @@ class NativeAnimatedFingerprint(Gtk.Box):
     def set_retry(self):
         self.circle_box.remove_css_class("pulse")
         self.circle_box.add_css_class("retry")
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 450, lambda: self.circle_box.remove_css_class("retry"))
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 450, self._clear_retry)
+
+    def _clear_retry(self):
+        self.circle_box.remove_css_class("retry")
+        return GLib.SOURCE_REMOVE
 
     def set_completed(self):
         self.circle_box.remove_css_class("pulse")
@@ -1347,10 +1359,14 @@ class OOTBWindow(Adw.ApplicationWindow):
 
         # Animated Fingerprint Graphic
         self.ootb_fp_widget = create_animated_fingerprint_widget(130)
+        self.ootb_fp_widget.set_halign(Gtk.Align.CENTER)
+        self.ootb_fp_widget.set_valign(Gtk.Align.CENTER)
+        self.ootb_fp_widget.set_hexpand(False)
+        self.ootb_fp_widget.set_vexpand(False)
         box.append(self.ootb_fp_widget)
 
         title = Gtk.Label()
-        title.set_markup("<span font_weight='bold' size='16000'>Touch ID</span>")
+        title.set_markup(f"<span font_weight='bold' size='16000'>{self.tr('Touch ID', 'Huella dactilar')}</span>")
         title.add_css_class("welcome-title")
         box.append(title)
 
@@ -1364,12 +1380,13 @@ class OOTBWindow(Adw.ApplicationWindow):
         subtitle.set_max_width_chars(52)
         box.append(subtitle)
 
-        # Interactive enrollment status card
+        # Interactive enrollment status card (hidden initially)
         self.touch_status_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.touch_status_card.add_css_class("apple-box")
         self.touch_status_card.set_margin_top(6)
         self.touch_status_card.set_margin_bottom(10)
         self.touch_status_card.set_size_request(380, -1)
+        self.touch_status_card.set_visible(False)
 
         self.touch_progress_bar = Gtk.ProgressBar()
         self.touch_progress_bar.set_fraction(0.0)
@@ -1388,36 +1405,52 @@ class OOTBWindow(Adw.ApplicationWindow):
         box.append(self.touch_status_card)
 
         # Buttons
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         btn_box.set_halign(Gtk.Align.CENTER)
+        btn_box.set_margin_top(14)
 
-        self.btn_start_touch_id = Gtk.Button(label=self.tr("Set Up Touch ID", "Configurar Touch ID"))
+        btn_start_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        btn_start_row.set_halign(Gtk.Align.CENTER)
+
+        self.btn_start_touch_id = Gtk.Button(label=self.tr("Set Up Touch ID", "Configurar huella dactilar"))
         self.btn_start_touch_id.add_css_class("pulsar-continue-btn")
         self.btn_start_touch_id.connect("clicked", self.on_start_touch_id_clicked)
-        btn_box.append(self.btn_start_touch_id)
+        btn_start_row.append(self.btn_start_touch_id)
 
         self.btn_skip_touch_id = Gtk.Button(label=self.tr("Set Up Later", "Configurar más tarde"))
         self.btn_skip_touch_id.add_css_class("secondary-action")
         self.btn_skip_touch_id.connect("clicked", self.on_skip_touch_id_clicked)
-        btn_box.append(self.btn_skip_touch_id)
+        btn_start_row.append(self.btn_skip_touch_id)
 
+        btn_box.append(btn_start_row)
         box.append(btn_box)
 
         self.stack.add_named(box, "touch_id")
 
     def on_start_touch_id_clicked(self, btn):
         self.btn_start_touch_id.set_sensitive(False)
+        self.touch_status_card.set_visible(True)
         self.touch_progress_bar.set_visible(True)
         self.touch_progress_bar.set_fraction(0.08)
-        self.touch_instruction_label.set_markup(f"<b>{self.tr('Place your finger on the sensor...', 'Coloca tu dedo en el sensor de huella...')}</b>")
+        self.touch_instruction_label.set_markup(f"<b>{self.tr('Place your finger on the sensor...', 'Coloca tu dedo en el sensor...')}</b>")
 
         username = getattr(self, "saved_username", None) or self.username_entry.get_text().strip() or GLib.get_user_name()
+        # Asegurar que el usuario existe
+        try:
+            import subprocess
+            if subprocess.run(["id", username], capture_output=True, timeout=2).returncode != 0:
+                try:
+                    subprocess.run(["sudo", "useradd", "-m", "-s", "/bin/bash", username], timeout=3)
+                except Exception:
+                    pass
+        except Exception:
+            pass
         self.touch_enroll_proc = None
 
         def enroll_thread():
-            if "TEST_MODE" in os.environ and not shutil.which("fprintd-enroll"):
+            if "TEST_MODE" in os.environ:
                 for step in range(1, 6):
-                    time.sleep(0.5)
+                    time.sleep(0.4)
                     frac = step / 5.0
                     GLib.idle_add(self.update_touch_id_progress, frac, self.tr("Lift your finger and place it again...", "Levanta el dedo y vuelve a colocarlo..."))
                 GLib.idle_add(self.on_touch_id_success)
@@ -1530,7 +1563,8 @@ class OOTBWindow(Adw.ApplicationWindow):
 
     def on_touch_id_failed(self):
         self.btn_start_touch_id.set_sensitive(True)
-        self.touch_instruction_label.set_markup(f"<span color='#ff3b30'>{self.tr('Could not complete fingerprint registration. You can retry or set up later.', 'No se pudo completar el registro. Puedes reintentar o configurar más tarde.')}</span>")
+        self.touch_progress_bar.set_visible(False)
+        self.touch_instruction_label.set_markup(f"<span color='#ff3b30'>{self.tr('Could not complete fingerprint registration. You can retry or set up later.', 'No se pudo completar el registro de huella dactilar. Puedes reintentar o configurar más tarde.')}</span>")
 
     def on_skip_touch_id_clicked(self, btn):
         if hasattr(self, "touch_enroll_proc") and self.touch_enroll_proc and self.touch_enroll_proc.poll() is None:
@@ -1558,7 +1592,7 @@ class OOTBWindow(Adw.ApplicationWindow):
         box.append(face_icon)
 
         title = Gtk.Label()
-        title.set_markup("<span font_weight='bold' size='16000'>Face ID</span>")
+        title.set_markup(f"<span font_weight='bold' size='16000'>{self.tr('Face ID', 'Reconocimiento facial')}</span>")
         title.add_css_class("welcome-title")
         box.append(title)
 
@@ -1582,6 +1616,7 @@ class OOTBWindow(Adw.ApplicationWindow):
         self.face_progress_bar = Gtk.ProgressBar()
         self.face_progress_bar.set_fraction(0.0)
         self.face_progress_bar.set_visible(False)
+        self.face_status_card.set_visible(False)
         self.face_status_card.append(self.face_progress_bar)
 
         self.face_instruction_label = Gtk.Label(label=self.tr(
@@ -1596,25 +1631,32 @@ class OOTBWindow(Adw.ApplicationWindow):
         box.append(self.face_status_card)
 
         # Buttons
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         btn_box.set_halign(Gtk.Align.CENTER)
+        btn_box.set_margin_top(14)
 
-        self.btn_start_face_id = Gtk.Button(label=self.tr("Set Up Face ID", "Configurar Face ID"))
+        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        btn_row.set_halign(Gtk.Align.CENTER)
+
+        self.btn_start_face_id = Gtk.Button(label=self.tr("Set Up Face ID", "Configurar reconocimiento facial"))
         self.btn_start_face_id.add_css_class("pulsar-continue-btn")
         self.btn_start_face_id.connect("clicked", self.on_start_face_id_clicked)
-        btn_box.append(self.btn_start_face_id)
+        btn_row.append(self.btn_start_face_id)
 
         self.btn_skip_face_id = Gtk.Button(label=self.tr("Set Up Later", "Configurar más tarde"))
         self.btn_skip_face_id.add_css_class("secondary-action")
         self.btn_skip_face_id.connect("clicked", self.on_skip_face_id_clicked)
-        btn_box.append(self.btn_skip_face_id)
+        btn_row.append(self.btn_skip_face_id)
 
+        btn_box.append(btn_row)
         box.append(btn_box)
 
         self.stack.add_named(box, "face_id")
 
     def on_start_face_id_clicked(self, btn):
         self.btn_start_face_id.set_sensitive(False)
+        if hasattr(self, 'face_status_card'):
+            self.face_status_card.set_visible(True)
         self.face_progress_bar.set_visible(True)
         self.face_progress_bar.set_fraction(0.2)
         self.face_instruction_label.set_markup(f"<b>{self.tr('Looking at camera. Keep your face centered...', 'Mirando a la cámara. Mantén el rostro centrado...')}</b>")
@@ -1622,9 +1664,9 @@ class OOTBWindow(Adw.ApplicationWindow):
         username = getattr(self, "saved_username", None) or self.username_entry.get_text().strip() or GLib.get_user_name()
 
         def face_thread():
-            if "TEST_MODE" in os.environ and not shutil.which("gaze"):
+            if "TEST_MODE" in os.environ:
                 for step in range(1, 5):
-                    time.sleep(0.6)
+                    time.sleep(0.4)
                     frac = step / 4.0
                     GLib.idle_add(self.update_face_id_progress, frac, self.tr("Analyzing facial features...", "Analizando rasgos faciales..."))
                 GLib.idle_add(self.on_face_id_success)
@@ -1657,6 +1699,7 @@ class OOTBWindow(Adw.ApplicationWindow):
 
     def on_face_id_failed(self):
         self.btn_start_face_id.set_sensitive(True)
+        self.face_progress_bar.set_visible(False)
         self.face_instruction_label.set_markup(f"<span color='#ff3b30'>{self.tr('Could not detect face clearly. Try with better lighting.', 'No se pudo detectar el rostro con claridad. Intenta con más iluminación.')}</span>")
 
     def on_skip_face_id_clicked(self, btn):
@@ -1677,7 +1720,7 @@ class OOTBWindow(Adw.ApplicationWindow):
         box.append(radar_icon)
 
         title = Gtk.Label()
-        title.set_markup(f"<span font_weight='bold' size='16000'>{self.tr('Presence Detection', 'Detección de Presencia')}</span>")
+        title.set_markup(f"<span font_weight='bold' size='16000'>{self.tr('Presence Detection', 'Detección de presencia')}</span>")
         title.add_css_class("welcome-title")
         box.append(title)
 
@@ -1696,10 +1739,10 @@ class OOTBWindow(Adw.ApplicationWindow):
         pref_group.set_size_request(420, -1)
 
         self.ootb_presence_switch = Adw.SwitchRow()
-        self.ootb_presence_switch.set_title(self.tr("Auto-lock on absence", "Bloqueo automático por ausencia"))
+        self.ootb_presence_switch.set_title(self.tr("Auto-lock on absence", "Bloqueo automático al alejarse"))
         self.ootb_presence_switch.set_subtitle(self.tr(
             "Lock screen when not in front of the computer",
-            "Bloquear pantalla cuando no estés frente al equipo"
+            "Bloquear la pantalla cuando te alejes del equipo"
         ))
         self.ootb_presence_switch.set_active(False)
         pref_group.add(self.ootb_presence_switch)
@@ -1720,7 +1763,7 @@ class OOTBWindow(Adw.ApplicationWindow):
         box.append(pref_group)
 
         privacy_lbl = Gtk.Label()
-        privacy_lbl.set_markup(f"<span size='small' color='#86868b'>{self.tr('Processing is 100% on-device and private. You can change this later in Settings.', 'El procesamiento se realiza 100% de forma local en tu equipo. Podrás cambiar esto más adelante en Ajustes.')}</span>")
+        privacy_lbl.set_markup(f"<span size='small' color='#86868b'>{self.tr('Processing is 100% on-device and private. You can change this later in Settings.', 'El procesamiento es 100% local y privado. Puedes cambiarlo más adelante en Ajustes.')}</span>")
         privacy_lbl.set_wrap(True)
         privacy_lbl.set_justify(Gtk.Justification.CENTER)
         privacy_lbl.set_max_width_chars(52)
@@ -2049,6 +2092,15 @@ class OOTBWindow(Adw.ApplicationWindow):
             if not re.match(r"^[a-z0-9_-]{3,16}$", username):
                 self.show_error("Account name must be 3-16 characters and alphanumeric.")
                 return
+
+            # Crear usuario si no existe (para permitir enrolar huella correctamente)
+            try:
+                import subprocess
+                res = subprocess.run(["id", username], capture_output=True, text=True, timeout=2)
+                if res.returncode != 0:
+                    subprocess.run(["sudo", "useradd", "-m", "-s", "/bin/bash", username], timeout=3)
+            except Exception:
+                pass
 
             self.saved_fullname = fullname
             self.saved_username = username
@@ -2653,6 +2705,10 @@ class OOTBApp(Adw.Application):
             win = OOTBWindow(self)
             win.present()
         except Exception as e:
+            import traceback
+            # Print full error to stderr so it's visible in console
+            traceback.print_exc()
+            print(f"FATAL: Failed to start Pulsar OS Setup Assistant:\n{e}", file=sys.stderr)
             # Create a minimal window to anchor the error dialog
             win = Adw.ApplicationWindow(application=self)
             win.set_default_size(480, 240)
