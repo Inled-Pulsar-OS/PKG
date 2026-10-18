@@ -1,0 +1,20 @@
+#!/bin/sh
+# Pulsar OS - pulsaros-theme
+# Limpia los overrides de sistema obsoletos de Flatpak. Flatpak >= 1.15 rechaza
+# rutas bajo /usr, así que /usr/share/themes no puede compartirse con el
+# sandbox; la provisión real (temas en ~/.local/share/themes +
+# --filesystem=xdg-data/themes + GTK_THEME) la hace pulsaros-theme-daemon en
+# cada login del usuario.
+
+case "$1" in
+    configure|abort-upgrade|abort-remove|abort-deconfigure)
+        if command -v flatpak >/dev/null 2>&1; then
+            flatpak override --system \
+                --nofilesystem=/usr/share/themes \
+                --nofilesystem=/usr/share/icons \
+                --unset-env=GTK_THEME 2>/dev/null || true
+        fi
+        ;;
+esac
+
+exit 0

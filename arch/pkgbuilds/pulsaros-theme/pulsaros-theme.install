@@ -1,20 +1,24 @@
-# Pulsar OS - apply the MacTahoe theme to Flatpak apps
-# Makes the host /usr/share/themes and /usr/share/icons visible to every
-# Flatpak app (read-only) so GTK apps pick up the MacTahoe theme/icon theme
-# via the settings portal. Idempotent; safe to run on every install/upgrade.
-# Se aplica a nivel de sistema (global override), no por app.
-
+# Pulsar OS - MacTahoe theme for Flatpak apps
+# IMPORTANTE: Flatpak >= 1.15 RECHAZA cualquier ruta bajo /usr (está «reservada»),
+# así que un override --filesystem=/usr/share/themes nunca llega al sandbox: las
+# apps aterrizan en el tema «Default» del runtime (Adwaita estilo GTK3).
+# Tampoco sirve fijar GTK_THEME a nivel de sistema, porque además congela la
+# variante clara aunque el usuario esté en modo oscuro.
+#
+# La provisión correcta la hace el usuario en cada login
+# (/usr/bin/pulsaros-theme-daemon y /usr/bin/mactahoe-theme-apply):
+#   - copia los temas MacTahoe a ~/.local/share/themes
+#   - flatpak override --user --filesystem=xdg-data/themes
+#     --filesystem=xdg-config/gtk-3.0:ro --filesystem=xdg-config/gtk-4.0:ro
+#   - flatpak override --user --env=GTK_THEME=<variante activa>
+#
+# Aquí solo se limpian los overrides de sistema obsoletos, idempotente.
 post_install() {
-    if command -v flatpak >/dev/null 2>&1 && [ -d /var/lib/flatpak ]; then
+    if command -v flatpak >/dev/null 2>&1; then
         flatpak override --system \
-            --filesystem=/usr/share/themes:ro \
-            --filesystem=/usr/share/icons:ro 2>/dev/null || true
-        # Expose the theme explicitly: Flatpak apps run against a sandboxed
-        # runtime and do not inherit the host GTK_THEME, so the settings
-        # portal alone is not enough for them to render MacTahoe. Pulsar OS
-        # defaults to the light variant; the value matches user-theme above.
-        flatpak override --system \
-            --env=GTK_THEME=MacTahoe-Light 2>/dev/null || true
+            --nofilesystem=/usr/share/themes \
+            --nofilesystem=/usr/share/icons \
+            --unset-env=GTK_THEME 2>/dev/null || true
     fi
 }
 
@@ -23,5 +27,10 @@ post_upgrade() {
 }
 
 post_remove() {
-    true
+    if command -v flatpak >/dev/null 2>&1; then
+        flatpak override --system \
+            --nofilesystem=/usr/share/themes \
+            --nofilesystem=/usr/share/icons \
+            --unset-env=GTK_THEME 2>/dev/null || true
+    fi
 }

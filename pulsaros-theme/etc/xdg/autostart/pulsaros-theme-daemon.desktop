@@ -5,6 +5,6 @@ Comment=Synchronizes GTK, Libadwaita, and Flatpak themes with GNOME Color Scheme
 Exec=/usr/bin/pulsaros-theme-daemon
 Hidden=true
 NoDisplay=true
-X-GNOME-Autostart-enabled=false
+X-GNOME-Autostart-enabled=true
 StartupNotify=false
 Terminal=false

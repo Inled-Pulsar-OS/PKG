@@ -61,3 +61,23 @@ INI
   flatpak override --user --env=GTK_THEME="$GTK_TGT" >/dev/null 2>&1 || true
   flatpak override --user --env=GTK4_THEME="$GTK_TGT" >/dev/null 2>&1 || true
 fi
+
+# --- Flatpak: hacer visible el tema dentro del sandbox ------------------------
+# Flatpak >= 1.15 rechaza rutas bajo /usr («reservada»), así que el tema del
+# sistema nunca llega a las apps y caen en el «Default» del runtime (Adwaita
+# estilo GTK3). Se copian los temas a ~/.local/share/themes y se exponen con
+# --filesystem=xdg-data/themes (monta en $XDG_DATA_HOME/themes, que GTK3/GTK4
+# sí consultan). GTK_THEME ya se fija arriba para forzar la variante activa.
+mkdir -p "$HOME/.local/share/themes"
+for _t in MacTahoe MacTahoe-Light MacTahoe-Dark MacTahoe-Light-solid MacTahoe-Dark-solid; do
+    { [ -d "/usr/share/themes/$_t" ] || [ -L "/usr/share/themes/$_t" ]; } || continue
+    if [ ! -e "$HOME/.local/share/themes/$_t" ] || [ "/usr/share/themes/$_t" -nt "$HOME/.local/share/themes/$_t" ]; then
+        rm -rf "$HOME/.local/share/themes/$_t" 2>/dev/null || true
+        cp -a "/usr/share/themes/$_t" "$HOME/.local/share/themes/" 2>/dev/null || true
+    fi
+done
+flatpak override --user \
+    --filesystem=xdg-data/themes \
+    --filesystem=xdg-config/gtk-3.0:ro \
+    --filesystem=xdg-config/gtk-4.0:ro \
+    >/dev/null 2>&1 || true
