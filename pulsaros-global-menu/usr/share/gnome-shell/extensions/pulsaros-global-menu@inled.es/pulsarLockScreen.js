@@ -122,7 +122,7 @@ export const LockScreen = GObject.registerClass({
                 '/org/gnome/SessionManager',
                 'org.gnome.SessionManager',
                 'Inhibit',
-                new GLib.Variant('(susu)', ['pulsaros-lockscreen', 0, 'Show lockscreen before blanking', 8]),
+                new GLib.Variant('(susu)', ['pulsaros-lockscreen', 0, 'Show lockscreen before blanking', 0]),
                 null,
                 Gio.DBusCallFlags.NONE,
                 -1,
@@ -171,9 +171,9 @@ export const LockScreen = GObject.registerClass({
             this._acquireDisplayInhibitor();
         }
 
-        // Give a generous 60-second grace period for the lockscreen
-        // before letting gsd-power blank the monitor or suspend
-        this._displayBlankTimerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 60, () => {
+        // Grace period for the lockscreen before letting gsd-power blank/suspend
+        // Reduced to 5s so idle/suspend apply sooner while locked
+        this._displayBlankTimerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 5, () => {
             this._displayBlankTimerId = 0;
             this._releaseDisplayInhibitor();
             return GLib.SOURCE_REMOVE;
