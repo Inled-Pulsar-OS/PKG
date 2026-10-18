@@ -1,18 +1,51 @@
 #!/bin/sh
 # Pulsar OS - pulsaros-theme
-# Limpia los overrides de sistema obsoletos de Flatpak. Flatpak >= 1.15 rechaza
-# rutas bajo /usr, así que /usr/share/themes no puede compartirse con el
-# sandbox; la provisión real (temas en ~/.local/share/themes +
-# --filesystem=xdg-data/themes + GTK_THEME) la hace pulsaros-theme-daemon en
-# cada login del usuario.
+# Flatpak >= 1.15 rechaza rutas bajo /usr («reservada»), así que
+# /usr/share/themes no puede compartirse con el sandbox. Declarativamente:
+#  1) override de sistema con tokens xdg-* (flatpak los resuelve por cada
+#     usuario al crear su sandbox), y
+#  2) siembra de ~/.local/share/themes en cada usuario humano + aplicación
+#     inmediata de su sesión si tiene el bus gráfico activo.
+# En el siguiente login, pulsaros-theme-daemon mantiende settings.ini,
+# gtk.css y GTK_THEME de la variante activa.
+
+pulsaros_theme_seed_user() {
+    _u="$1"
+    _h=$(getent passwd "$_u" | cut -d: -f6)
+    _uid=$(id -u "$_u" 2>/dev/null) || return 0
+    [ -n "$_h" ] && [ -d "$_h" ] || return 0
+    mkdir -p "$_h/.local/share/themes" 2>/dev/null || return 0
+    for _t in MacTahoe MacTahoe-Light MacTahoe-Dark MacTahoe-Light-solid MacTahoe-Dark-solid; do
+        { [ -d "/usr/share/themes/$_t" ] || [ -L "/usr/share/themes/$_t" ]; } || continue
+        if [ ! -e "$_h/.local/share/themes/$_t" ] || [ "/usr/share/themes/$_t" -nt "$_h/.local/share/themes/$_t" ]; then
+            rm -rf "$_h/.local/share/themes/$_t" 2>/dev/null || true
+            cp -a "/usr/share/themes/$_t" "$_h/.local/share/themes/" 2>/dev/null || true
+            chown -hR "$_u" "$_h/.local/share/themes/$_t" 2>/dev/null || true
+        fi
+    done
+    chown -hR "$_u" "$_h/.local/share/themes" 2>/dev/null || true
+    if [ -S "/run/user/$_uid/bus" ]; then
+        runuser -u "$_u" -- env DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$_uid/bus" \
+            /usr/bin/mactahoe-theme-apply >/dev/null 2>&1 || true
+    fi
+}
 
 case "$1" in
     configure|abort-upgrade|abort-remove|abort-deconfigure)
         if command -v flatpak >/dev/null 2>&1; then
+            # Overrides de sistema obsoletos (inservibles desde flatpak 1.15)
             flatpak override --system \
                 --nofilesystem=/usr/share/themes \
                 --nofilesystem=/usr/share/icons \
                 --unset-env=GTK_THEME 2>/dev/null || true
+            # Base declarativa global (tokens xdg-* resueltos por usuario)
+            flatpak override --system \
+                --filesystem=xdg-data/themes \
+                --filesystem=xdg-config/gtk-3.0:ro \
+                --filesystem=xdg-config/gtk-4.0:ro 2>/dev/null || true
+            for _u in $(awk -F: '$3 >= 1000 && $3 < 65534 {print $1}' /etc/passwd); do
+                pulsaros_theme_seed_user "$_u"
+            done
         fi
         ;;
 esac

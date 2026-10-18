@@ -1,25 +1,61 @@
 # Pulsar OS - MacTahoe theme for Flatpak apps
-# IMPORTANTE: Flatpak >= 1.15 RECHAZA cualquier ruta bajo /usr (está «reservada»),
-# así que un override --filesystem=/usr/share/themes nunca llega al sandbox: las
-# apps aterrizan en el tema «Default» del runtime (Adwaita estilo GTK3).
-# Tampoco sirve fijar GTK_THEME a nivel de sistema, porque además congela la
-# variante clara aunque el usuario esté en modo oscuro.
+# Flatpak >= 1.15 RECHAZA cualquier ruta bajo /usr (está «reservada»), así que
+# un override --filesystem=/usr/share/themes nunca llega al sandbox y las apps
+# aterrizan en el tema «Default» del runtime (Adwaita estilo GTK3).
 #
-# La provisión correcta la hace el usuario en cada login
-# (/usr/bin/pulsaros-theme-daemon y /usr/bin/mactahoe-theme-apply):
-#   - copia los temas MacTahoe a ~/.local/share/themes
-#   - flatpak override --user --filesystem=xdg-data/themes
-#     --filesystem=xdg-config/gtk-3.0:ro --filesystem=xdg-config/gtk-4.0:ro
-#   - flatpak override --user --env=GTK_THEME=<variante activa>
-#
-# Aquí solo se limpian los overrides de sistema obsoletos, idempotente.
+# La vía declarativa (sin depender del login) tiene dos mitades:
+#  1) Override de SISTEMA con tokens xdg-*: flatpak los resuelve contra el
+#     home de cada usuario al crear su sandbox, así que sirve para todos los
+#     usuarios sin overrides por usuario.
+#  2) Siembra de ~/.local/share/themes en cada usuario humano (ahí es donde
+#     GTK3/GTK4 buscan temas vía $XDG_DATA_HOME/themes).
+# El usuario en su sesión (pulsaros-theme-daemon / mactahoe-theme-apply)
+# mantiene después settings.ini, gtk.css y GTK_THEME de la variante
+# claro/oscuro; NO se fuerza GTK_THEME a nivel de sistema porque congelaría
+# la variante clara en modo oscuro.
+
+_pulsaros_theme_flatpak_system() {
+    command -v flatpak >/dev/null 2>&1 || return 0
+    # Overrides de sistema obsoletos (inservibles desde flatpak 1.15)
+    flatpak override --system \
+        --nofilesystem=/usr/share/themes \
+        --nofilesystem=/usr/share/icons \
+        --unset-env=GTK_THEME 2>/dev/null || true
+    # Base declarativa global
+    flatpak override --system \
+        --filesystem=xdg-data/themes \
+        --filesystem=xdg-config/gtk-3.0:ro \
+        --filesystem=xdg-config/gtk-4.0:ro 2>/dev/null || true
+}
+
+_pulsaros_theme_seed_users() {
+    command -v flatpak >/dev/null 2>&1 || return 0
+    local u h uid t
+    for u in $(awk -F: '$3 >= 1000 && $3 < 65534 {print $1}' /etc/passwd); do
+        h=$(getent passwd "$u" | cut -d: -f6)
+        uid=$(id -u "$u" 2>/dev/null) || continue
+        [ -n "$h" ] && [ -d "$h" ] || continue
+        mkdir -p "$h/.local/share/themes" 2>/dev/null || continue
+        for t in MacTahoe MacTahoe-Light MacTahoe-Dark MacTahoe-Light-solid MacTahoe-Dark-solid; do
+            { [ -d "/usr/share/themes/$t" ] || [ -L "/usr/share/themes/$t" ]; } || continue
+            if [ ! -e "$h/.local/share/themes/$t" ] || [ "/usr/share/themes/$t" -nt "$h/.local/share/themes/$t" ]; then
+                rm -rf "$h/.local/share/themes/$t" 2>/dev/null || true
+                cp -a "/usr/share/themes/$t" "$h/.local/share/themes/" 2>/dev/null || true
+                chown -hR "$u" "$h/.local/share/themes/$t" 2>/dev/null || true
+            fi
+        done
+        chown -hR "$u" "$h/.local/share/themes" 2>/dev/null || true
+        # Si el usuario tiene sesión gráfica activa, aplicar su configuración YA
+        if [ -S "/run/user/$uid/bus" ]; then
+            runuser -u "$u" -- env DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+                /usr/bin/mactahoe-theme-apply >/dev/null 2>&1 || true
+        fi
+    done
+}
+
 post_install() {
-    if command -v flatpak >/dev/null 2>&1; then
-        flatpak override --system \
-            --nofilesystem=/usr/share/themes \
-            --nofilesystem=/usr/share/icons \
-            --unset-env=GTK_THEME 2>/dev/null || true
-    fi
+    _pulsaros_theme_flatpak_system
+    _pulsaros_theme_seed_users
 }
 
 post_upgrade() {
@@ -27,10 +63,9 @@ post_upgrade() {
 }
 
 post_remove() {
-    if command -v flatpak >/dev/null 2>&1; then
-        flatpak override --system \
-            --nofilesystem=/usr/share/themes \
-            --nofilesystem=/usr/share/icons \
-            --unset-env=GTK_THEME 2>/dev/null || true
-    fi
+    command -v flatpak >/dev/null 2>&1 || return 0
+    flatpak override --system \
+        --nofilesystem=xdg-data/themes \
+        --nofilesystem=xdg-config/gtk-3.0 \
+        --nofilesystem=xdg-config/gtk-4.0 2>/dev/null || true
 }

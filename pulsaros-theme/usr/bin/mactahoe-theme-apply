@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Apply MacTahoe theme respecting user preferences
-LOCKDIR="/tmp/mactahoe-apply.lock.d"
+LOCKDIR="/tmp/mactahoe-apply.lock.d-$(id -u)"
 [ ! -d "$LOCKDIR" ] && mkdir "$LOCKDIR" 2>/dev/null || exit 0
 cleanup() { rmdir "$LOCKDIR" 2>/dev/null || true; }
 trap cleanup EXIT
