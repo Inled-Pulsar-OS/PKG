@@ -121,7 +121,9 @@ Item {
     }
 
     Component.onCompleted: {
-        startVerification(false);
+        // Auto-activate Face ID on greeter start (cold boot AND after logout):
+        // the daemon scans immediately instead of waiting for a click.
+        startVerification(true);
         fetchStatus();
     }
 
@@ -346,9 +348,22 @@ Item {
                     NumberAnimation { target: fpContainer; property: "x"; to: 0; duration: 40 }
                 }
 
+                // GNOME fingerprint icon (same as the lock screen's fingerprint-symbolic)
+                Image {
+                    id: fpIconImg
+                    anchors.centerIn: parent
+                    width: 40
+                    height: 40
+                    source: "../images/fingerprint-symbolic.svg"
+                    sourceSize.width: 40
+                    sourceSize.height: 40
+                    visible: bioRoot.fpState !== "matched"
+                }
+
                 Canvas {
                     id: fpCanvas
                     anchors.fill: parent
+                    visible: bioRoot.fpState === "matched"
 
                     Connections {
                         target: bioRoot
@@ -362,51 +377,21 @@ Item {
                         var cx = width / 2;
                         var cy = height / 2;
 
-                        var mainColor = (bioRoot.fpState === "matched") ? "#30d158" :
-                                        (bioRoot.fpState === "failed") ? "#ff453a" : "#ffffff";
+                        // Green success circle with checkmark
+                        ctx.fillStyle = "#30d158";
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, 16, 0, Math.PI * 2, false);
+                        ctx.fill();
 
-                        if (bioRoot.fpState === "matched") {
-                            // Green success circle with checkmark
-                            ctx.fillStyle = "#30d158";
-                            ctx.beginPath();
-                            ctx.arc(cx, cy, 16, 0, Math.PI * 2, false);
-                            ctx.fill();
-
-                            ctx.strokeStyle = "#ffffff";
-                            ctx.lineWidth = 3.0;
-                            ctx.lineCap = "round";
-                            ctx.lineJoin = "round";
-                            ctx.beginPath();
-                            ctx.moveTo(cx - 6, cy);
-                            ctx.lineTo(cx - 2, cy + 4.5);
-                            ctx.lineTo(cx + 6, cy - 4.5);
-                            ctx.stroke();
-                        } else {
-                            // Native fingerprint ridges
-                            ctx.strokeStyle = mainColor;
-                            ctx.lineWidth = 2.4;
-                            ctx.lineCap = "round";
-
-                            // Innermost loop
-                            ctx.beginPath();
-                            ctx.arc(cx, cy - 2, 4.5, Math.PI * 0.9, Math.PI * 0.1, false);
-                            ctx.stroke();
-
-                            // Middle ridge
-                            ctx.beginPath();
-                            ctx.arc(cx, cy - 1, 9.0, Math.PI * 0.95, Math.PI * 0.05, false);
-                            ctx.stroke();
-
-                            // Outer ridge
-                            ctx.beginPath();
-                            ctx.arc(cx, cy, 13.5, Math.PI * 0.98, Math.PI * 0.02, false);
-                            ctx.stroke();
-
-                            // Lower ridge
-                            ctx.beginPath();
-                            ctx.arc(cx, cy + 5, 8.5, Math.PI * 0.2, Math.PI * 0.8, false);
-                            ctx.stroke();
-                        }
+                        ctx.strokeStyle = "#ffffff";
+                        ctx.lineWidth = 3.0;
+                        ctx.lineCap = "round";
+                        ctx.lineJoin = "round";
+                        ctx.beginPath();
+                        ctx.moveTo(cx - 6, cy);
+                        ctx.lineTo(cx - 2, cy + 4.5);
+                        ctx.lineTo(cx + 6, cy - 4.5);
+                        ctx.stroke();
                     }
                 }
             }
@@ -453,7 +438,7 @@ Item {
                     if (bioRoot.faceState === "failed" && bioRoot.fpState === "failed") {
                         return isSpanish ? "No reconocido. Reintenta." : "Not recognized. Try again.";
                     }
-                    if (bioRoot.faceState === "paused") {
+                    if (bioRoot.faceState === "paused" || bioRoot.faceState === "idle") {
                         if (bioRoot.hasFingerprint) {
                             return isSpanish ? "Pulsa para activar Face ID o usa la huella" : "Click to activate Face ID or use fingerprint";
                         } else {

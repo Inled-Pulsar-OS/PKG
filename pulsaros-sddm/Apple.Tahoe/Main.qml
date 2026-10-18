@@ -100,7 +100,7 @@ Rectangle {
             shakeAnim.start()
             if (biometricsIndicator) {
                 biometricsIndicator.authTriggered = false
-                biometricsIndicator.startVerification()
+                biometricsIndicator.startVerification(true)
             }
         }
     }
