@@ -10,6 +10,9 @@ import Pango from 'gi://Pango';
 import Cairo from 'gi://cairo';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+const LOCKSCREEN_BLANK_TIMEOUT_SEC = 30;   // Inactivity timeout before turning off display
+const LOCKSCREEN_SUSPEND_TIMEOUT_SEC = 60; // Total inactivity timeout before suspending PC
+
 export const LockScreen = GObject.registerClass({
     GTypeName: 'PulsarosLockScreen'
 }, class LockScreen extends St.Widget {
@@ -60,23 +63,24 @@ export const LockScreen = GObject.registerClass({
         this._sizeChangedId2 = global.stage.connect('notify::height', () => this._onSizeChanged());
         this._monitorsChangedId = Main.layoutManager.connect('monitors-changed', () => this._onSizeChanged());
 
-        this._displayInhibitCookie = null;
+        this._isDisplayBlanked = false;
         this._displayBlankTimerId = 0;
+        this._suspendTimerId = 0;
 
-        // Reset blank grace timer on user interaction while locked
+        // Reset blank and suspend idle timers on user interaction while locked
         this.connect('event', (actor, event) => {
             if (!this._isLocked) return Clutter.EVENT_PROPAGATE;
             let type = event.type();
             if (type === Clutter.EventType.KEY_PRESS || 
                 type === Clutter.EventType.BUTTON_PRESS || 
                 type === Clutter.EventType.MOTION) {
-                this._resetDisplayBlankTimer();
-                try { Main.screenShield.emit('wake-up-screen'); } catch (e) {}
+                this._unblankDisplay();
+                this._resetLockscreenIdleTimers();
             }
             return Clutter.EVENT_PROPAGATE;
         });
 
-        // Listen for system suspend/resume (PrepareForSleep) to re-arm biometrics on wake
+        // Listen for system suspend/resume (PrepareForSleep) to manage power & re-arm biometrics on wake
         try {
             this._sleepSignalId = Gio.DBus.system.signal_subscribe(
                 'org.freedesktop.login1',
@@ -90,14 +94,14 @@ export const LockScreen = GObject.registerClass({
                         let [aboutToSleep] = params.recursiveUnpack();
                         if (aboutToSleep) {
                             this._stopBiometrics();
+                            this._stopLockscreenIdleTimers();
                         } else {
                             if (this._isLocked) {
-                                this._acquireDisplayInhibitor();
-                                this._resetDisplayBlankTimer();
-                                try { Main.screenShield.emit('wake-up-screen'); } catch (e) {}
+                                this._unblankDisplay();
+                                this._resetLockscreenIdleTimers();
                                 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1200, () => {
                                     if (this._isLocked) {
-                                        this._startBiometrics(true);
+                                        this._startBiometrics(false);
                                     }
                                     return GLib.SOURCE_REMOVE;
                                 });
@@ -114,70 +118,100 @@ export const LockScreen = GObject.registerClass({
         this._onSizeChanged();
     }
 
-    _acquireDisplayInhibitor() {
-        if (this._displayInhibitCookie) return;
+    _setPowerSaveMode(mode) {
+        // mode: 0 = ON, 3 = OFF
         try {
             Gio.DBus.session.call(
-                'org.gnome.SessionManager',
-                '/org/gnome/SessionManager',
-                'org.gnome.SessionManager',
-                'Inhibit',
-                new GLib.Variant('(susu)', ['pulsaros-lockscreen', 0, 'Show lockscreen before blanking', 0]),
+                'org.gnome.Mutter.DisplayConfig',
+                '/org/gnome/Mutter/DisplayConfig',
+                'org.freedesktop.DBus.Properties',
+                'Set',
+                new GLib.Variant('(ssv)', [
+                    'org.gnome.Mutter.DisplayConfig',
+                    'PowerSaveMode',
+                    new GLib.Variant('i', mode)
+                ]),
                 null,
                 Gio.DBusCallFlags.NONE,
                 -1,
                 null,
-                (connection, res) => {
+                (conn, res) => {
+                    try { conn.call_finish(res); } catch (e) {}
+                }
+            );
+        } catch (e) {
+            console.error('[LockScreen] Failed to set PowerSaveMode:', e);
+        }
+    }
+
+    _blankDisplay() {
+        if (!this._isLocked || this._isDisplayBlanked) return;
+        this._isDisplayBlanked = true;
+        this._setPowerSaveMode(3);
+    }
+
+    _unblankDisplay() {
+        if (this._isDisplayBlanked) {
+            this._isDisplayBlanked = false;
+            this._setPowerSaveMode(0);
+        }
+        try { Main.screenShield.emit('wake-up-screen'); } catch (e) {}
+    }
+
+    _suspendSystem() {
+        if (!this._isLocked) return;
+        try {
+            Gio.DBus.system.call(
+                'org.freedesktop.login1',
+                '/org/freedesktop/login1',
+                'org.freedesktop.login1.Manager',
+                'Suspend',
+                new GLib.Variant('(b)', [true]),
+                null,
+                Gio.DBusCallFlags.NONE,
+                -1,
+                null,
+                (conn, res) => {
                     try {
-                        let reply = connection.call_finish(res);
-                        let [cookie] = reply.deepUnpack();
-                        this._displayInhibitCookie = cookie;
-                    } catch (e) {}
+                        conn.call_finish(res);
+                    } catch (e) {
+                        try { GLib.spawn_command_line_async('systemctl suspend'); } catch (_) {}
+                    }
                 }
             );
-        } catch (e) {}
+        } catch (e) {
+            try { GLib.spawn_command_line_async('systemctl suspend'); } catch (_) {}
+        }
     }
 
-    _releaseDisplayInhibitor() {
-        if (!this._displayInhibitCookie) return;
-        let cookie = this._displayInhibitCookie;
-        this._displayInhibitCookie = null;
-        try {
-            Gio.DBus.session.call(
-                'org.gnome.SessionManager',
-                '/org/gnome/SessionManager',
-                'org.gnome.SessionManager',
-                'Uninhibit',
-                new GLib.Variant('(u)', [cookie]),
-                null,
-                Gio.DBusCallFlags.NONE,
-                -1,
-                null,
-                (connection, res) => {
-                    try { connection.call_finish(res); } catch (e) {}
-                }
-            );
-        } catch (e) {}
+    _resetLockscreenIdleTimers() {
+        this._stopLockscreenIdleTimers();
+        if (!this._isLocked) return;
+
+        // Inactivity 30s: turn off display
+        this._displayBlankTimerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, LOCKSCREEN_BLANK_TIMEOUT_SEC, () => {
+            this._displayBlankTimerId = 0;
+            this._blankDisplay();
+            return GLib.SOURCE_REMOVE;
+        });
+
+        // Inactivity 60s: suspend machine
+        this._suspendTimerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, LOCKSCREEN_SUSPEND_TIMEOUT_SEC, () => {
+            this._suspendTimerId = 0;
+            this._suspendSystem();
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
-    _resetDisplayBlankTimer() {
+    _stopLockscreenIdleTimers() {
         if (this._displayBlankTimerId) {
             GLib.source_remove(this._displayBlankTimerId);
             this._displayBlankTimerId = 0;
         }
-        if (!this._isLocked) return;
-
-        if (!this._displayInhibitCookie) {
-            this._acquireDisplayInhibitor();
+        if (this._suspendTimerId) {
+            GLib.source_remove(this._suspendTimerId);
+            this._suspendTimerId = 0;
         }
-
-        // Grace period for the lockscreen before letting gsd-power blank/suspend
-        // Reduced to 5s so idle/suspend apply sooner while locked
-        this._displayBlankTimerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 5, () => {
-            this._displayBlankTimerId = 0;
-            this._releaseDisplayInhibitor();
-            return GLib.SOURCE_REMOVE;
-        });
     }
     
     _getWallpaperUrl() {
@@ -328,7 +362,7 @@ export const LockScreen = GObject.registerClass({
             this._videoPipeline.set_state(Gst.State.PLAYING);
 
             this._videoTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 33, () => {
-                if (!this._isLocked || !this._videoSink) {
+                if (!this._isLocked || !this._videoSink || this._isDisplayBlanked) {
                     return GLib.SOURCE_CONTINUE;
                 }
                 try {
@@ -1032,17 +1066,12 @@ export const LockScreen = GObject.registerClass({
         // Start live clock updates
         this._updateClock();
         this._startBiometrics(false);
-        this._acquireDisplayInhibitor();
-        this._resetDisplayBlankTimer();
-        try { Main.screenShield.emit('wake-up-screen'); } catch (e) {}
+        this._unblankDisplay();
+        this._resetLockscreenIdleTimers();
         this._timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
             this._updateClock();
             return GLib.SOURCE_CONTINUE;
         });
-
-        // Inactivity -> suspend is handled by gnome-settings-daemon
-        // (sleep-inactive-ac-timeout), which respects idle inhibitors such as
-        // video playback. We intentionally do NOT run a private idle timer.
     }
     
     unlock() {
@@ -1053,12 +1082,8 @@ export const LockScreen = GObject.registerClass({
         this.reactive = false;
         this.set_size(0, 0);
         
-        if (this._displayBlankTimerId) {
-            GLib.source_remove(this._displayBlankTimerId);
-            this._displayBlankTimerId = 0;
-        }
-        this._releaseDisplayInhibitor();
-        try { Main.screenShield.emit('wake-up-screen'); } catch (e) {}
+        this._stopLockscreenIdleTimers();
+        this._unblankDisplay();
 
         this._stopBiometrics();
         this._stopVideoWallpaper();
@@ -1683,11 +1708,8 @@ export const LockScreen = GObject.registerClass({
     }
     
     destroy() {
-        if (this._displayBlankTimerId) {
-            GLib.source_remove(this._displayBlankTimerId);
-            this._displayBlankTimerId = 0;
-        }
-        this._releaseDisplayInhibitor();
+        this._stopLockscreenIdleTimers();
+        this._unblankDisplay();
         this._stopVideoWallpaper();
         if (this._bgChangedId1 && this._bgSettings) {
             this._bgSettings.disconnect(this._bgChangedId1);

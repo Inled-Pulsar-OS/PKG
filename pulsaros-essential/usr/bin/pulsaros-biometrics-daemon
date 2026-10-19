@@ -536,7 +536,7 @@ def start_verification(username, source="lockscreen", auto_face=None):
     face_enabled = bio_cfg.get("face_id_enabled", True)
 
     if auto_face is None:
-        if source in ("wake", "polkit", "test"):
+        if source in ("polkit", "test"):
             auto_face = True
         else:
             auto_face = False
@@ -612,8 +612,8 @@ def sleep_monitor_loop():
                         time.sleep(1.2)
                         
                         eff_user = get_effective_system_user()
-                        log(f"Auto-activating Face ID on wake for '{eff_user}'")
-                        start_verification(eff_user, source="wake", auto_face=True)
+                        log(f"Activating biometrics on wake for '{eff_user}' (paused, click to activate Face ID)")
+                        start_verification(eff_user, source="wake", auto_face=False)
             proc.wait()
         except Exception as e:
             time.sleep(3)

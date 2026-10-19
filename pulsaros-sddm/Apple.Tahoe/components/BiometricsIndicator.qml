@@ -348,13 +348,13 @@ Item {
                     NumberAnimation { target: fpContainer; property: "x"; to: 0; duration: 40 }
                 }
 
-                // GNOME fingerprint icon (same as the lock screen's fingerprint-symbolic)
+                // Tahoe fingerprint icon (custom styled/animated icon)
                 Image {
                     id: fpIconImg
                     anchors.centerIn: parent
                     width: 40
                     height: 40
-                    source: "../images/fingerprint-symbolic.svg"
+                    source: "../images/fingerprint.svg"
                     sourceSize.width: 40
                     sourceSize.height: 40
                     visible: bioRoot.fpState !== "matched"
