@@ -46,15 +46,14 @@ EOF
 # ==============================================================================
 # FONDO DE PANTALLA OFICIAL Y COLECCIÓN COMPLETA DE FONDOS APPLE MACOS
 # ==============================================================================
-echo "📥 Preparando fondos de pantalla oficiales y colección macOS..."
+echo "📥 Preparando fondos de pantalla oficiales de Pulsar OS..."
 mkdir -p "$STAGE_DIR/usr/share/backgrounds/macos" "$STAGE_DIR/usr/share/gnome-background-properties"
+chmod 1777 "$STAGE_DIR/usr/share/backgrounds/macos" 2>/dev/null || true
 
-# El repositorio es la fuente de verdad: los archivos que ya vienen en
-# $STAGE_DIR (copiados desde el árbol del paquete) NUNCA se sobrescriben.
-# El sistema anfitrión solo se usa como relleno para lo que falte localmente.
-if [ -d "/usr/share/backgrounds/macos" ]; then
-    cp -rn /usr/share/backgrounds/macos/* "$STAGE_DIR/usr/share/backgrounds/macos/" 2>/dev/null || true
-fi
+# Los fondos de macOS (Apple Inc.) NO se preinstalan por motivos de copyright;
+# se descargan bajo demanda desde https://github.com/InledLabs/pulsaros-wallpapers.
+rm -rf "$STAGE_DIR/usr/share/backgrounds/macos"/* 2>/dev/null || true
+rm -f "$STAGE_DIR/usr/share/gnome-background-properties/pulsar-macos-wallpapers.xml" 2>/dev/null || true
 
 for bg in pulsar-os-tahoe.png pulsaros-golden-gate-background.png pulsaros-golden-gate-bg-oscuro.png; do
     if [ -f "/usr/share/backgrounds/$bg" ]; then
@@ -66,11 +65,10 @@ done
 [ ! -f "$STAGE_DIR/usr/share/backgrounds/pulsaros-golden-gate-background.png" ] && wget -q --timeout=15 --tries=3 -O "$STAGE_DIR/usr/share/backgrounds/pulsaros-golden-gate-background.png" "https://hosted.inled.es/pulsaros-golden-gate-background.png" || true
 [ ! -f "$STAGE_DIR/usr/share/backgrounds/pulsaros-golden-gate-bg-oscuro.png" ] && wget -q --timeout=15 --tries=3 -O "$STAGE_DIR/usr/share/backgrounds/pulsaros-golden-gate-bg-oscuro.png" "https://hosted.inled.es/pulsaros-golden-gate-bg-oscuro.png" || true
 
-# Archivos de definición de fondos para GNOME Control Center (Ajustes):
-# se respeta el XML del repo y solo se copia el del sistema si el paquete no trae uno.
-if [ ! -f "$STAGE_DIR/usr/share/gnome-background-properties/pulsar-macos-wallpapers.xml" ] && \
-   [ -f "/usr/share/gnome-background-properties/pulsar-macos-wallpapers.xml" ]; then
-    cp -f "/usr/share/gnome-background-properties/pulsar-macos-wallpapers.xml" "$STAGE_DIR/usr/share/gnome-background-properties/"
+# Solo incluimos los fondos propios de Pulsar OS en la preinstalación
+if [ ! -f "$STAGE_DIR/usr/share/gnome-background-properties/pulsar-backgrounds.xml" ] && \
+   [ -f "/usr/share/gnome-background-properties/pulsar-backgrounds.xml" ]; then
+    cp -f "/usr/share/gnome-background-properties/pulsar-backgrounds.xml" "$STAGE_DIR/usr/share/gnome-background-properties/"
 fi
 if [ ! -f "$STAGE_DIR/usr/share/gnome-background-properties/pulsar-backgrounds.xml" ] && \
    [ -f "/usr/share/gnome-background-properties/pulsar-backgrounds.xml" ]; then

@@ -172,6 +172,10 @@ DEFAULTS: dict[str, dict[str, object]] = {
         "default_ui": "desktop",  # UI the launcher opens: "desktop", "orb" or a plugin id
         "autostart_mode": "ui",  # "ui" = UI + daemon at login | "daemon" = daemon only
         "setup_complete": False,  # set by the welcome wizard on first run
+        "close_on_click_outside": True,  # dismiss UI when clicking outside / losing focus
+    },
+    "security": {
+        "gateway_owner_host_mode": True,  # When paired owner speaks via gateway, allow LEVEL_3_HOST_USER
     },
 }
 
@@ -213,6 +217,10 @@ _TYPES: dict[str, dict[str, str]] = {
         "default_ui": "string",
         "autostart_mode": "string",
         "setup_complete": "bool",
+        "close_on_click_outside": "bool",
+    },
+    "security": {
+        "gateway_owner_host_mode": "bool",
     },
 }
 
@@ -322,6 +330,9 @@ class Config:
 
     def set_bool(self, group: str, key: str, value: bool, persist: bool = True) -> None:
         self.set(group, key, bool(value), persist=persist)
+
+    get_boolean = get_bool
+    set_boolean = set_bool
 
     def on_change(self, callback: callable) -> None:
         self._listeners.append(callback)

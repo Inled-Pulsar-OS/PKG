@@ -243,9 +243,51 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                           </object>
                         </child>
                         <child>
+                          <object class="AdwActionRow" id="download_wallpapers_row">
+                            <property name="title" translatable="yes">macOS 5K/6K Wallpaper Collection</property>
+                            <property name="subtitle" translatable="yes">Official historical wallpapers from Mac OS X 10.0 to macOS Tahoe</property>
+                            <child type="prefix">
+                              <object class="GtkImage">
+                                <property name="icon-name">folder-download-symbolic</property>
+                                <property name="valign">3</property>
+                              </object>
+                            </child>
+                            <child type="suffix">
+                              <object class="GtkBox" id="download_status_box">
+                                <property name="spacing">12</property>
+                                <property name="valign">3</property>
+                                <child>
+                                  <object class="GtkProgressBar" id="download_progress_bar">
+                                    <property name="valign">3</property>
+                                    <property name="width-request">140</property>
+                                    <property name="visible">false</property>
+                                    <property name="show-text">true</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkSpinner" id="download_spinner">
+                                    <property name="valign">3</property>
+                                    <property name="visible">false</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkButton" id="download_wallpapers_btn">
+                                    <property name="valign">3</property>
+                                    <property name="label" translatable="yes">Download Collection…</property>
+                                    <signal name="clicked" handler="on_download_wallpapers_clicked_cb" object="CcBackgroundPanel"/>
+                                    <style>
+                                      <class name="suggested-action"/>
+                                    </style>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
                           <object class="AdwActionRow">
                             <property name="title" translatable="yes">Legal Notice &amp;amp; Attribution</property>
-                            <property name="subtitle" translatable="yes">macOS wallpapers are property of Apple Inc. and were obtained from dynamicwallpaper.club.</property>
+                            <property name="subtitle" translatable="yes">macOS wallpapers are property of Apple Inc. and are downloaded optionally on-demand from GitHub.</property>
                             <property name="activatable">false</property>
                             <property name="selectable">false</property>
                             <child type="prefix">

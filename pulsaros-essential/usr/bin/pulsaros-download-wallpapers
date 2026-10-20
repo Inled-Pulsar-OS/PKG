@@ -1,0 +1,140 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - macOS Wallpapers Downloader & Installer
+# ==============================================================================
+# Downloads official 5K/6K macOS wallpapers on-demand into
+# /usr/share/backgrounds/macos/ and enables them in GNOME Settings.
+# Outputs PROGRESS:<fraction>:<current>/<total>:<filename> to stdout.
+# ==============================================================================
+
+set -e
+
+# Disable line buffering for real-time progress parsing
+export PYTHONUNBUFFERED=1
+
+REPO_RAW_URL="https://raw.githubusercontent.com/InledLabs/pulsaros-wallpapers/main"
+REPO_GIT_URL="https://github.com/InledLabs/pulsaros-wallpapers.git"
+DEST_DIR="/usr/share/backgrounds/macos"
+PROP_DIR="/usr/share/gnome-background-properties"
+XML_FILE="pulsar-macos-wallpapers.xml"
+
+WALLPAPERS=(
+  "cheetah.jpg"
+  "jaguar.jpg"
+  "panther.jpg"
+  "tiger.jpg"
+  "leopard.jpg"
+  "leopard-server.jpg"
+  "snow-leopard.jpg"
+  "snow-leopard-server.jpg"
+  "lion.jpg"
+  "mountain-lion.jpg"
+  "mavericks.jpg"
+  "yosemite.jpg"
+  "el-capitan.jpg"
+  "sierra.jpg"
+  "high-sierra.jpg"
+  "mojave.jpg"
+  "mojave-dark.jpg"
+  "catalina.jpg"
+  "catalina-dark.jpg"
+  "big-sur.jpg"
+  "big-sur-dark.jpg"
+  "big-sur-graphic.jpg"
+  "big-sur-graphic-dark.jpg"
+  "monterey.jpg"
+  "monterey-dark.jpg"
+  "ventura.jpg"
+  "ventura-dark.jpg"
+  "sonoma.jpg"
+  "sonoma-dark.jpg"
+  "sonoma-horizon.png"
+  "sequoia.jpg"
+  "sequoia-dark.jpg"
+  "sequoia-sunrise.png"
+  "tahoe.png"
+  "tahoe-dark.png"
+  "tahoe-beach-dawn.png"
+  "tahoe-beach-day.png"
+  "tahoe-beach-dusk.png"
+  "tahoe-beach-night.png"
+  "golden-gate.png"
+  "golden-gate-dark.png"
+  "golden-gate-bridge.jpg"
+  "pulsar-macos-wallpapers.xml"
+)
+
+TOTAL="${#WALLPAPERS[@]}"
+
+# Helper for desktop notifications
+notify() {
+    local title="$1"
+    local msg="$2"
+    local icon="${3:-folder-download-symbolic}"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send "$title" "$msg" -i "$icon" -a "Pulsar OS" 2>/dev/null || true
+    fi
+}
+
+echo "PROGRESS:0.00:0/$TOTAL:Starting download..."
+notify "macOS Wallpapers" "Downloading wallpapers from repository..." "folder-download-symbolic"
+
+# Elevate privileges if /usr/share/backgrounds/macos is not writable
+if [ "$EUID" -ne 0 ] && [ ! -w "$DEST_DIR" ]; then
+    if sudo -n true 2>/dev/null; then
+        exec sudo "$0" "$@"
+    elif command -v pkexec >/dev/null 2>&1; then
+        exec pkexec "$0" "$@"
+    fi
+fi
+
+mkdir -p "$DEST_DIR" "$PROP_DIR"
+
+CURRENT=0
+FAILED=0
+
+for item in "${WALLPAPERS[@]}"; do
+    CURRENT=$((CURRENT + 1))
+    FRACTION=$(awk "BEGIN { printf \"%.2f\", $CURRENT / $TOTAL }")
+
+    echo "PROGRESS:$FRACTION:$CURRENT/$TOTAL:$item"
+
+    if [ "$item" = "$XML_FILE" ]; then
+        TARGET="$PROP_DIR/$item"
+    else
+        TARGET="$DEST_DIR/$item"
+    fi
+
+    # Download file using curl with timeout and retry
+    if ! curl -fsSL --connect-timeout 10 --retry 2 "$REPO_RAW_URL/$item" -o "$TARGET.tmp"; then
+        echo "WARN: Failed to download $item directly, fallback will be used." >&2
+        FAILED=$((FAILED + 1))
+    else
+        mv -f "$TARGET.tmp" "$TARGET"
+    fi
+done
+
+# If multiple files failed via raw CDN, attempt shallow git clone fallback
+if [ "$FAILED" -gt 3 ]; then
+    echo "PROGRESS:0.50:CLONE:Cloning repository fallback..."
+    TEMP_DIR="$(mktemp -d /tmp/pulsaros-wallpapers-git.XXXXXX)"
+    if git clone --depth 1 "$REPO_GIT_URL" "$TEMP_DIR"; then
+        for item in "${WALLPAPERS[@]}"; do
+            if [ "$item" = "$XML_FILE" ]; then
+                [ -f "$TEMP_DIR/$item" ] && cp -f "$TEMP_DIR/$item" "$PROP_DIR/"
+            else
+                [ -f "$TEMP_DIR/$item" ] && cp -f "$TEMP_DIR/$item" "$DEST_DIR/"
+            fi
+        done
+        rm -rf "$TEMP_DIR"
+    fi
+fi
+
+# Ensure correct permissions
+chmod -R 755 "$DEST_DIR" 2>/dev/null || true
+chmod 644 "$PROP_DIR/$XML_FILE" 2>/dev/null || true
+
+echo "PROGRESS:1.00:$TOTAL/$TOTAL:DONE"
+notify "macOS Wallpapers Installed" "All $TOTAL wallpapers have been downloaded and are ready in Settings." "preferences-desktop-wallpaper"
+
+exit 0

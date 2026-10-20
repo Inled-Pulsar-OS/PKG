@@ -44,6 +44,27 @@ Rectangle {
         id: users
     }
 
+    // Inactivity timer: suspend machine after 60s of inactivity on SDDM greeter
+    Timer {
+        id: sddmInactivityTimer
+        interval: 60000 // 60s
+        running: true
+        repeat: false
+        onTriggered: {
+            if (typeof sddm !== "undefined" && sddm.canSuspend) {
+                sddm.suspend()
+            }
+        }
+    }
+
+    function resetInactivity() {
+        if (sddmInactivityTimer.running) {
+            sddmInactivityTimer.restart();
+        } else {
+            sddmInactivityTimer.start();
+        }
+    }
+
     function determinateNewIndex() {
         for (var j = 0; j < qmlUserModel.count; j++) {
             if (qmlUserModel.get(j).name === lastNameUser) {
@@ -100,7 +121,7 @@ Rectangle {
             shakeAnim.start()
             if (biometricsIndicator) {
                 biometricsIndicator.authTriggered = false
-                biometricsIndicator.startVerification(true)
+                biometricsIndicator.startVerification(false)
             }
         }
     }
@@ -108,6 +129,17 @@ Rectangle {
     Item {
         id: wallpaperContainer
         anchors.fill: parent
+
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            propagateComposedEvents: true
+            onPositionChanged: resetInactivity()
+            onPressed: (mouse) => {
+                resetInactivity()
+                mouse.accepted = false
+            }
+        }
 
         Image {
             id: wallpaper
@@ -638,6 +670,39 @@ Rectangle {
                         highlightFollowsCurrentItem: true
                         currentIndex: session.highlightedIndex
                         delegate: session.delegate
+                    }
+                }
+            }
+
+            Image {
+                id: suspendButton
+                height: 22
+                width: 22
+                source: "images/system-suspend.svg"
+                fillMode: Image.PreserveAspectFit
+                visible: (typeof sddm !== "undefined") ? sddm.canSuspend : true
+
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onEntered: {
+                        suspendButton.source = "images/system-suspend-hover.svg"
+                        var component = Qt.createComponent("components/SuspendToolTip.qml")
+                        if (component.status === Component.Ready) {
+                            var tooltip = component.createObject(suspendButton)
+                            tooltip.x = -100
+                            tooltip.y = 40
+                            tooltip.destroy(600)
+                        }
+                    }
+                    onExited: {
+                        suspendButton.source = "images/system-suspend.svg"
+                    }
+                    onClicked: {
+                        suspendButton.source = "images/system-suspend-pressed.svg"
+                        if (typeof sddm !== "undefined" && sddm.canSuspend) {
+                            sddm.suspend()
+                        }
                     }
                 }
             }

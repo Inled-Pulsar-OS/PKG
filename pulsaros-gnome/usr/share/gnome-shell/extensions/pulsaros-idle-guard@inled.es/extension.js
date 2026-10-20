@@ -177,8 +177,8 @@ export default class PulsarIdleGuardExtension extends Extension {
                     // Cancelled on disable, or gnome-session refused it.
                     return;
                 }
-                if (generation !== this._generation || !this._settings) {
-                    // Disabled while the call was in flight: release immediately.
+                if (generation !== this._generation || !this._settings || this._isLocked()) {
+                    // Disabled or locked while the call was in flight: release immediately.
                     this._uninhibit(cookie);
                     return;
                 }

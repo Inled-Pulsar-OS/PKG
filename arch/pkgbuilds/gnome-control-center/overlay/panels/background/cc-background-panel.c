@@ -62,6 +62,7 @@ struct _CcBackgroundPanel {
 
   GtkWidget *accent_box;
   CcBackgroundChooser *background_chooser;
+  AdwToastOverlay *toast_overlay;
   CcBackgroundPreview *default_preview;
   CcBackgroundPreview *dark_preview;
   GtkToggleButton *default_toggle;
@@ -72,6 +73,10 @@ struct _CcBackgroundPanel {
   AdwComboRow *liquid_glass_mode_row;
   AdwSwitchRow *notch_switch_row;
   AdwSwitchRow *cc_switch_row;
+  AdwActionRow *download_wallpapers_row;
+  GtkButton *download_wallpapers_btn;
+  GtkProgressBar *download_progress_bar;
+  GtkSpinner *download_spinner;
 };
 
 /* UUID of the NotchNux shell extension, toggled from the Appearance panel. */
@@ -1012,6 +1017,177 @@ on_cc_active_changed_cb (CcBackgroundPanel *self)
   set_extension_enabled (CC_UUID, adw_switch_row_get_active (self->cc_switch_row));
 }
 
+static void read_downloader_output_async (CcBackgroundPanel *self, GDataInputStream *data_stream);
+
+static void
+on_downloader_line_read (GObject      *source,
+                         GAsyncResult *result,
+                         gpointer      user_data)
+{
+  CcBackgroundPanel *self = CC_BACKGROUND_PANEL (user_data);
+  GDataInputStream *data_stream = G_DATA_INPUT_STREAM (source);
+  g_autoptr(GError) error = NULL;
+  gsize length = 0;
+  g_autofree gchar *line = g_data_input_stream_read_line_finish (data_stream, result, &length, &error);
+
+  if (error != NULL || line == NULL)
+    {
+      /* Subprocess finished or pipe closed */
+      g_object_unref (data_stream);
+
+      if (self->download_spinner)
+        {
+          gtk_spinner_stop (self->download_spinner);
+          gtk_widget_set_visible (GTK_WIDGET (self->download_spinner), FALSE);
+        }
+      if (self->download_progress_bar)
+        gtk_widget_set_visible (GTK_WIDGET (self->download_progress_bar), FALSE);
+      if (self->download_wallpapers_btn)
+        {
+          gtk_widget_set_visible (GTK_WIDGET (self->download_wallpapers_btn), TRUE);
+          gtk_button_set_label (self->download_wallpapers_btn, _("Reinstall…"));
+          gtk_widget_remove_css_class (GTK_WIDGET (self->download_wallpapers_btn), "suggested-action");
+        }
+      if (self->download_wallpapers_row)
+        {
+          adw_preferences_row_set_title (ADW_PREFERENCES_ROW (self->download_wallpapers_row),
+                                         _("macOS 5K/6K Wallpaper Collection (Installed)"));
+          adw_action_row_set_subtitle (self->download_wallpapers_row,
+                                       _("Collection installed (42 wallpapers). Click to reinstall or update."));
+        }
+
+      AdwToast *toast = adw_toast_new (_("macOS wallpapers downloaded and ready in Settings!"));
+      adw_toast_set_timeout (toast, 5);
+      adw_toast_overlay_add_toast (self->toast_overlay, toast);
+
+      reload_current_bg (self);
+      update_preview (self);
+      return;
+    }
+
+  /* Parse progress line: PROGRESS:<fraction>:<current>/<total>:<filename> */
+  if (g_str_has_prefix (line, "PROGRESS:"))
+    {
+      gchar **parts = g_strsplit (line, ":", 4);
+      if (g_strv_length (parts) >= 4)
+        {
+          double frac = g_ascii_strtod (parts[1], NULL);
+          const gchar *count_str = parts[2];
+          const gchar *filename = parts[3];
+
+          if (self->download_progress_bar)
+            {
+              gtk_progress_bar_set_fraction (self->download_progress_bar, frac);
+              g_autofree gchar *perc_text = g_strdup_printf ("%d%%", (int)(frac * 100.0));
+              gtk_progress_bar_set_text (self->download_progress_bar, perc_text);
+            }
+
+          if (self->download_wallpapers_row && g_strcmp0 (filename, "DONE") != 0)
+            {
+              g_autofree gchar *sub_text = g_strdup_printf (_("Downloading %s: %s"), count_str, filename);
+              adw_action_row_set_subtitle (self->download_wallpapers_row, sub_text);
+            }
+        }
+      g_strfreev (parts);
+    }
+
+  /* Continue reading next line */
+  read_downloader_output_async (self, data_stream);
+}
+
+static void
+read_downloader_output_async (CcBackgroundPanel *self,
+                              GDataInputStream  *data_stream)
+{
+  g_data_input_stream_read_line_async (data_stream,
+                                       G_PRIORITY_DEFAULT,
+                                       NULL,
+                                       on_downloader_line_read,
+                                       self);
+}
+
+static void
+on_download_dialog_response_cb (AdwAlertDialog *dialog,
+                                const gchar    *response,
+                                gpointer        user_data)
+{
+  CcBackgroundPanel *self = CC_BACKGROUND_PANEL (user_data);
+
+  if (g_strcmp0 (response, "download") == 0)
+    {
+      AdwToast *toast = adw_toast_new (_("Downloading macOS wallpaper collection from repository…"));
+      adw_toast_set_timeout (toast, 5);
+      adw_toast_overlay_add_toast (self->toast_overlay, toast);
+
+      if (self->download_wallpapers_btn)
+        gtk_widget_set_visible (GTK_WIDGET (self->download_wallpapers_btn), FALSE);
+      if (self->download_progress_bar)
+        {
+          gtk_progress_bar_set_fraction (self->download_progress_bar, 0.0);
+          gtk_progress_bar_set_text (self->download_progress_bar, "0%");
+          gtk_widget_set_visible (GTK_WIDGET (self->download_progress_bar), TRUE);
+        }
+      if (self->download_spinner)
+        {
+          gtk_widget_set_visible (GTK_WIDGET (self->download_spinner), TRUE);
+          gtk_spinner_start (self->download_spinner);
+        }
+      if (self->download_wallpapers_row)
+        adw_action_row_set_subtitle (self->download_wallpapers_row, _("Starting download…"));
+
+      /* Launch downloader helper with stdout pipe for real-time progress */
+      g_autoptr(GSubprocessLauncher) launcher = g_subprocess_launcher_new (G_SUBPROCESS_FLAGS_STDOUT_PIPE);
+      g_autoptr(GError) error = NULL;
+      GSubprocess *proc = g_subprocess_launcher_spawn (launcher, &error, "/usr/bin/pulsaros-download-wallpapers", NULL);
+
+      if (proc != NULL)
+        {
+          GInputStream *stdout_pipe = g_subprocess_get_stdout_pipe (proc);
+          GDataInputStream *data_stream = g_data_input_stream_new (stdout_pipe);
+          read_downloader_output_async (self, data_stream);
+        }
+      else
+        {
+          if (self->download_spinner)
+            {
+              gtk_spinner_stop (self->download_spinner);
+              gtk_widget_set_visible (GTK_WIDGET (self->download_spinner), FALSE);
+            }
+          if (self->download_progress_bar)
+            gtk_widget_set_visible (GTK_WIDGET (self->download_progress_bar), FALSE);
+          if (self->download_wallpapers_btn)
+            gtk_widget_set_visible (GTK_WIDGET (self->download_wallpapers_btn), TRUE);
+        }
+    }
+}
+
+static void
+on_download_wallpapers_clicked_cb (CcBackgroundPanel *self)
+{
+  GtkRoot *root = gtk_widget_get_root (GTK_WIDGET (self));
+  AdwDialog *dialog;
+
+  dialog = adw_alert_dialog_new (
+    _("Apple macOS Wallpapers"),
+    _("Intellectual Property & Copyright Notice:\n\n"
+      "All wallpapers in this collection are the exclusive intellectual property and registered trademarks of Apple Inc.\n\n"
+      "Pulsar OS does not bundle these wallpapers pre-installed in order to respect copyright policies. "
+      "By clicking “Download”, you confirm that you are downloading them for your own personal and private use from the public GitHub repository.\n\n"
+      "Do you want to download and install this collection?")
+  );
+
+  adw_alert_dialog_add_response (ADW_ALERT_DIALOG (dialog), "cancel", _("Cancel"));
+  adw_alert_dialog_add_response (ADW_ALERT_DIALOG (dialog), "download", _("Download"));
+  adw_alert_dialog_set_response_appearance (ADW_ALERT_DIALOG (dialog), "download", ADW_RESPONSE_SUGGESTED);
+  adw_alert_dialog_set_default_response (ADW_ALERT_DIALOG (dialog), "download");
+  adw_alert_dialog_set_close_response (ADW_ALERT_DIALOG (dialog), "cancel");
+
+  g_signal_connect (dialog, "response", G_CALLBACK (on_download_dialog_response_cb), self);
+
+  if (GTK_IS_WIDGET (root))
+    adw_dialog_present (dialog, GTK_WIDGET (root));
+}
+
 static void
 cc_background_panel_class_init (CcBackgroundPanelClass *klass)
 {
@@ -1032,6 +1208,7 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
 
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, accent_box);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, background_chooser);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, toast_overlay);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, default_preview);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, dark_preview);
 
@@ -1043,6 +1220,10 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, liquid_glass_mode_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, notch_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, cc_switch_row);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, download_wallpapers_row);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, download_wallpapers_btn);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, download_progress_bar);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, download_spinner);
 
   gtk_widget_class_bind_template_callback (widget_class, on_color_scheme_toggle_active_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_chooser_background_chosen_cb);
@@ -1060,6 +1241,7 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_callback (widget_class, on_notch_active_changed_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_notch_prefs_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_cc_active_changed_cb);
+  gtk_widget_class_bind_template_callback (widget_class, on_download_wallpapers_clicked_cb);
 }
 
 static void
@@ -1169,6 +1351,22 @@ cc_background_panel_init (CcBackgroundPanel *self)
       g_signal_handlers_block_by_func (self->cc_switch_row, on_cc_active_changed_cb, self);
       adw_switch_row_set_active (self->cc_switch_row, cc_active);
       g_signal_handlers_unblock_by_func (self->cc_switch_row, on_cc_active_changed_cb, self);
+    }
+
+  if (g_file_test ("/usr/share/backgrounds/macos/tahoe.png", G_FILE_TEST_EXISTS))
+    {
+      if (self->download_wallpapers_btn)
+        {
+          gtk_button_set_label (self->download_wallpapers_btn, _("Reinstall…"));
+          gtk_widget_remove_css_class (GTK_WIDGET (self->download_wallpapers_btn), "suggested-action");
+        }
+      if (self->download_wallpapers_row)
+        {
+          adw_preferences_row_set_title (ADW_PREFERENCES_ROW (self->download_wallpapers_row),
+                                         _("macOS 5K/6K Wallpaper Collection (Installed)"));
+          adw_action_row_set_subtitle (self->download_wallpapers_row,
+                                       _("Collection installed (42 wallpapers). Click to reinstall or update."));
+        }
     }
 
   self->connection = g_application_get_dbus_connection (g_application_get_default ());

@@ -331,6 +331,11 @@ export default class ShotzyExtension extends Extension {
             ui.open = async (...args) => {
                 const result = await this._uiOpenOriginal.apply(ui, args);
 
+                // Ensure pointer inclusion is enabled by default so screenshot always captures cursor
+                if (ui._showPointerButton && !ui._showPointerButton.checked) {
+                    ui._showPointerButton.checked = true;
+                }
+
                 // The area selector may only be created on first open.
                 this._patchAreaSelectorCursor(ui);
 
@@ -396,32 +401,47 @@ export default class ShotzyExtension extends Extension {
     }
 
     _patchAreaSelectorCursor(ui) {
-        if (!ui || !ui._areaSelector)
+        if (!ui)
             return;
 
         const areaSelector = ui._areaSelector;
 
-        if (this._areaSelectorSetCursorTypeOriginal === null) {
+        if (areaSelector) {
+            if (this._areaSelectorSetCursorTypeOriginal === null) {
+                try {
+                    this._areaSelectorSetCursorTypeOriginal = areaSelector.set_cursor_type;
+                } catch (_e) {
+                    this._areaSelectorSetCursorTypeOriginal = null;
+                }
+            }
+
             try {
-                this._areaSelectorSetCursorTypeOriginal = areaSelector.set_cursor_type;
+                areaSelector.set_cursor_type = (type) => {
+                    // GNOME Shell 51 uses CROSSHAIR outside selection; use CELL instead.
+                    if (type === Clutter.CursorType.CROSSHAIR)
+                        type = Clutter.CursorType.CELL;
+                    if (this._areaSelectorSetCursorTypeOriginal)
+                        this._areaSelectorSetCursorTypeOriginal.call(areaSelector, type);
+                    else
+                        Clutter.Actor.prototype.set_cursor_type.call(areaSelector, type);
+                };
             } catch (_e) {
-                this._areaSelectorSetCursorTypeOriginal = null;
+                // Ignore if we can't patch.
             }
         }
 
         try {
-            areaSelector.set_cursor_type = (type) => {
-                // GNOME Shell 51 uses CROSSHAIR outside selection; use CELL instead.
-                if (type === Clutter.CursorType.CROSSHAIR)
-                    type = Clutter.CursorType.CELL;
-                if (this._areaSelectorSetCursorTypeOriginal)
-                    this._areaSelectorSetCursorTypeOriginal.call(areaSelector, type);
-                else
-                    areaSelector.__proto__.set_cursor_type.call(areaSelector, type);
-            };
-        } catch (_e) {
-            // Ignore if we can't patch.
-        }
+            const proto = areaSelector ? Object.getPrototypeOf(areaSelector) : null;
+            if (proto && !proto._gnome51CrosshairPatched) {
+                const orig = proto.set_cursor_type || Clutter.Actor.prototype.set_cursor_type;
+                proto.set_cursor_type = function(type) {
+                    if (type === Clutter.CursorType.CROSSHAIR)
+                        type = Clutter.CursorType.CELL;
+                    return orig.call(this, type);
+                };
+                proto._gnome51CrosshairPatched = true;
+            }
+        } catch (_e) {}
     }
 
     _injectLensButton() {

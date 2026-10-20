@@ -123,6 +123,20 @@ template $CcBackgroundPanel: $CcPanel {
               subtitle: _("Apply translucent blurs and reflective borders to active windows in macOS style");
               notify::active => $on_liquid_glass_active_changed_cb(template);
             }
+
+            Adw.ComboRow liquid_glass_mode_row {
+              title: _("Window Transparency Mode");
+              subtitle: _("Appearance and opacity of application windows");
+              sensitive: bind liquid_glass_switch_row.active;
+              notify::selected => $on_liquid_glass_mode_selected_cb(template);
+
+              model: StringList {
+                strings [
+                  _("Cristal Transparente (Fondos y Barras)"),
+                  _("Ventanas Opacas (Solo Desenfoque de Barras)"),
+                ]
+              };
+            }
           }
 
           Adw.PreferencesGroup {
@@ -213,9 +227,47 @@ template $CcBackgroundPanel: $CcPanel {
               }
             }
 
+            Adw.ActionRow download_wallpapers_row {
+              title: _("macOS 5K/6K Wallpaper Collection");
+              subtitle: _("Official historical wallpapers from Mac OS X 10.0 to macOS Tahoe");
+
+              [prefix]
+              Image {
+                icon-name: "folder-download-symbolic";
+                valign: center;
+              }
+
+              [suffix]
+              Box download_status_box {
+                spacing: 12;
+                valign: center;
+
+                ProgressBar download_progress_bar {
+                  valign: center;
+                  width-request: 140;
+                  visible: false;
+                  show-text: true;
+                }
+
+                Spinner download_spinner {
+                  valign: center;
+                  visible: false;
+                }
+
+                Button download_wallpapers_btn {
+                  valign: center;
+                  label: _("Download Collection…");
+                  clicked => $on_download_wallpapers_clicked_cb(template);
+                  styles [
+                    "suggested-action",
+                  ]
+                }
+              }
+            }
+
             Adw.ActionRow {
               title: _("Legal Notice &amp; Attribution");
-              subtitle: _("macOS wallpapers are property of Apple Inc. and were obtained from dynamicwallpaper.club.");
+              subtitle: _("macOS wallpapers are property of Apple Inc. and are downloaded optionally on-demand from GitHub.");
               activatable: false;
               selectable: false;
 

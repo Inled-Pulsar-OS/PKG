@@ -18,6 +18,7 @@ Item {
     signal biometricsSuccess()
 
     property int faceFailCount: 0
+    readonly property bool isSpanish: Qt.locale().name.indexOf("es") === 0
 
     function getEffectiveUser() {
         if (targetUser && targetUser !== "") return targetUser;
@@ -67,8 +68,15 @@ Item {
                         bioRoot.statusText = data.status_message;
                     }
 
-                    // Check for match success
-                    if ((data.face_state === "matched" || data.fingerprint_state === "matched") && !bioRoot.authTriggered) {
+                    // Check for match success: only if it's a fresh match (last_event within last 5 seconds)
+                    var isRecentMatch = false;
+                    if (data.last_event && data.last_event.time) {
+                        var nowSec = Date.now() / 1000;
+                        if (Math.abs(nowSec - data.last_event.time) <= 5.0) {
+                            isRecentMatch = true;
+                        }
+                    }
+                    if ((data.face_state === "matched" || data.fingerprint_state === "matched") && isRecentMatch && !bioRoot.authTriggered) {
                         bioRoot.authTriggered = true;
                         successTimer.start();
                     }
@@ -117,14 +125,12 @@ Item {
     onTargetUserChanged: {
         bioRoot.authTriggered = false;
         startVerification(false);
-        fetchStatus();
     }
 
     Component.onCompleted: {
-        // Auto-activate Face ID on greeter start (cold boot AND after logout):
-        // the daemon scans immediately instead of waiting for a click.
-        startVerification(true);
-        fetchStatus();
+        // Start biometrics with Face ID in paused mode:
+        // Wait for user to click or use fingerprint, do NOT auto-scan on startup/logout
+        startVerification(false);
     }
 
     // ── UI Components Layout ─────────────────────────────────────────
@@ -348,15 +354,16 @@ Item {
                     NumberAnimation { target: fpContainer; property: "x"; to: 0; duration: 40 }
                 }
 
-                // Tahoe fingerprint icon (custom styled/animated icon)
+                // GNOME Adwaita fingerprint icon
                 Image {
                     id: fpIconImg
                     anchors.centerIn: parent
-                    width: 40
-                    height: 40
-                    source: "../images/fingerprint.svg"
-                    sourceSize.width: 40
-                    sourceSize.height: 40
+                    width: 32
+                    height: 32
+                    source: "../images/fingerprint-symbolic.svg"
+                    sourceSize.width: 32
+                    sourceSize.height: 32
+                    opacity: 0.88
                     visible: bioRoot.fpState !== "matched"
                 }
 
@@ -404,6 +411,7 @@ Item {
             height: 20
             width: statusLabel.implicitWidth + 18
             radius: 10
+            visible: statusLabel.text !== ""
             color: (bioRoot.faceState === "matched" || bioRoot.fpState === "matched") ? Qt.rgba(48/255, 209/255, 88/255, 0.35) :
                    (bioRoot.faceState === "failed" || bioRoot.fpState === "failed") ? Qt.rgba(255/255, 69/255, 58/255, 0.35) :
                    Qt.rgba(0, 0, 0, 0.38)
@@ -416,13 +424,11 @@ Item {
                 ColorAnimation { duration: 200 }
             }
 
-            property bool isSpanish: Qt.locale().name.indexOf("es") === 0
-
             MouseArea {
                 anchors.fill: parent
-                cursorShape: (bioRoot.faceState === "paused" || bioRoot.faceState === "idle") ? Qt.PointingHandCursor : Qt.ArrowCursor
+                cursorShape: (bioRoot.hasFace && (bioRoot.faceState === "paused" || bioRoot.faceState === "idle")) ? Qt.PointingHandCursor : Qt.ArrowCursor
                 onClicked: {
-                    if (bioRoot.faceState === "paused" || bioRoot.faceState === "idle") {
+                    if (bioRoot.hasFace && (bioRoot.faceState === "paused" || bioRoot.faceState === "idle")) {
                         bioRoot.startFaceVerification();
                     }
                 }
@@ -433,27 +439,32 @@ Item {
                 anchors.centerIn: parent
                 text: {
                     if (bioRoot.faceState === "matched" || bioRoot.fpState === "matched") {
-                        return isSpanish ? "¡Identidad verificada!" : "Identity verified!";
+                        return bioRoot.isSpanish ? "¡Identidad verificada!" : "Identity verified!";
                     }
                     if (bioRoot.faceState === "failed" && bioRoot.fpState === "failed") {
-                        return isSpanish ? "No reconocido. Reintenta." : "Not recognized. Try again.";
+                        return bioRoot.isSpanish ? "No reconocido. Reintenta." : "Not recognized. Try again.";
+                    }
+                    if (bioRoot.faceState === "scanning") {
+                        return bioRoot.isSpanish ? "Buscando rostro..." : "Looking for face...";
                     }
                     if (bioRoot.faceState === "paused" || bioRoot.faceState === "idle") {
-                        if (bioRoot.hasFingerprint) {
-                            return isSpanish ? "Pulsa para activar Face ID o usa la huella" : "Click to activate Face ID or use fingerprint";
-                        } else {
-                            return isSpanish ? "Pulsa para activar Face ID" : "Click to activate Face ID";
+                        if (bioRoot.hasFace && bioRoot.hasFingerprint) {
+                            return bioRoot.isSpanish ? "Pulsa para activar Face ID o usa la huella" : "Click to activate Face ID or use fingerprint";
+                        } else if (bioRoot.hasFace) {
+                            return bioRoot.isSpanish ? "Pulsa para activar Face ID" : "Click to activate Face ID";
+                        } else if (bioRoot.hasFingerprint) {
+                            return bioRoot.isSpanish ? "Esperando huella..." : "Waiting for fingerprint...";
                         }
                     }
                     if (bioRoot.statusText !== "") return bioRoot.statusText;
                     if (bioRoot.hasFace && bioRoot.hasFingerprint) {
-                        return isSpanish ? "Esperando rostro o huella..." : "Waiting for face or fingerprint...";
+                        return bioRoot.isSpanish ? "Pulsa para activar Face ID o usa la huella" : "Click to activate Face ID or use fingerprint";
                     }
                     if (bioRoot.hasFace) {
-                        return isSpanish ? "Buscando rostro..." : "Looking for face...";
+                        return bioRoot.isSpanish ? "Pulsa para activar Face ID" : "Click to activate Face ID";
                     }
                     if (bioRoot.hasFingerprint) {
-                        return isSpanish ? "Esperando huella..." : "Waiting for fingerprint...";
+                        return bioRoot.isSpanish ? "Esperando huella..." : "Waiting for fingerprint...";
                     }
                     return "";
                 }

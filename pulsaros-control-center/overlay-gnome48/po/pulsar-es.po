@@ -17,6 +17,21 @@ msgstr "Efecto Liquid Glass"
 msgid "Apply translucent blurs and reflective borders to active windows in macOS style"
 msgstr "Aplica desenfoques translúcidos y bordes reflectantes a las ventanas activas estilo macOS"
 
+msgid "Window Transparency Mode"
+msgstr "Modo de transparencia de ventanas"
+
+msgid "Appearance and opacity of application windows"
+msgstr "Aspecto y opacidad de las ventanas de aplicaciones"
+
+msgid "Full Transparent Glass (60%)"
+msgstr "Cristal transparente total (60%)"
+
+msgid "Semi-Transparent Glass (85%)"
+msgstr "Cristal semi-transparente (85%)"
+
+msgid "Opaque Windows (Native Tint Only)"
+msgstr "Ventanas opacas (solo tintado nativo)"
+
 msgid "System-wide accent color"
 msgstr "Color de acento del sistema"
 
@@ -103,3 +118,84 @@ msgstr "Espacios de pantalla completa estilo macOS"
 
 msgid "Moving maximized apps to dedicated workspaces and auto-hiding the top bar"
 msgstr "Al maximizar una app, se traslada a un nuevo espacio y oculta la barra superior"
+
+msgid "Control Centre"
+msgstr "Centro de Control"
+
+msgid "Display and behaviour of the top-right centre of control"
+msgstr "Visualización y comportamiento del centro de control superior"
+
+msgid "macOS Control Centre"
+msgstr "Centro de Control de macOS"
+
+msgid "Replace the GNOME quick settings menu with the macOS-style Control Centre panel"
+msgstr "Sustituye el menú de ajustes rápidos de GNOME por el panel de Control de estilo macOS"
+
+msgid "FlyDrop"
+msgstr "FlyDrop"
+
+msgid "FlyDrop File Sharing"
+msgstr "Compartir Archivos con FlyDrop"
+
+msgid "AirDrop & LocalSend integration to share files between devices"
+msgstr "Integración AirDrop y LocalSend para compartir archivos entre dispositivos"
+
+msgid "Settings…"
+msgstr "Ajustes…"
+
+msgid "Biometrics & Presence"
+msgstr "Biometría y Presencia"
+
+msgid "Touch ID & Face ID"
+msgstr "Touch ID y Face ID"
+
+msgid "Fingerprint, facial recognition and presence auto-lock"
+msgstr "Huella dactilar, reconocimiento facial y bloqueo automático por ausencia"
+
+msgid "Presence & Biometrics"
+msgstr "Presencia y Biometría"
+
+msgid "Touch ID, Face ID & Presence Auto-Lock"
+msgstr "Touch ID, Face ID y Bloqueo por Presencia"
+
+msgid "Configure facial recognition, fingerprint and auto-lock on leave"
+msgstr "Configurar reconocimiento facial, huella y bloqueo automático al alejarse"
+
+msgid "macOS 5K/6K Wallpaper Collection"
+msgstr "Colección de Fondos macOS (5K / 6K)"
+
+msgid "Official historical wallpapers from Mac OS X 10.0 to macOS Tahoe"
+msgstr "Fondos históricos oficiales desde Mac OS X 10.0 hasta macOS Tahoe"
+
+msgid "Download Collection…"
+msgstr "Descargar colección…"
+
+msgid "Reinstall…"
+msgstr "Reinstalar…"
+
+msgid "macOS 5K/6K Wallpaper Collection (Installed)"
+msgstr "Colección de Fondos macOS (Instalada)"
+
+msgid "Collection installed (42 wallpapers). Click to reinstall or update."
+msgstr "Colección instalada (42 fondos). Pulsa para reinstalar o actualizar."
+
+msgid "Apple macOS Wallpapers"
+msgstr "Fondos de pantalla de Apple macOS"
+
+msgid "Intellectual Property & Copyright Notice:\n\nAll wallpapers in this collection are the exclusive intellectual property and registered trademarks of Apple Inc.\n\nPulsar OS does not bundle these wallpapers pre-installed in order to respect copyright policies. By clicking “Download”, you confirm that you are downloading them for your own personal and private use from the public GitHub repository.\n\nDo you want to download and install this collection?"
+msgstr "Aviso de propiedad intelectual y derechos de autor:\n\nTodos los fondos de pantalla de esta colección son propiedad intelectual exclusiva y marcas registradas de Apple Inc.\n\nPulsar OS no incluye estos fondos preinstalados para respetar las políticas de derechos de autor de Apple. Al hacer clic en «Descargar», confirmas que los descargas exclusivamente para tu uso personal y privado desde el repositorio público de GitHub.\n\n¿Deseas descargar e instalar esta colección en el sistema?"
+
+msgid "Downloading macOS wallpaper collection from repository…"
+msgstr "Descargando colección de fondos de macOS desde el repositorio…"
+
+msgid "Starting download…"
+msgstr "Iniciando descarga…"
+
+msgid "Downloading %s: %s"
+msgstr "Descargando %s: %s"
+
+msgid "macOS wallpapers downloaded and ready in Settings!"
+msgstr "¡Fondos de pantalla de macOS descargados y listos en Ajustes!"
+
+msgid "macOS wallpapers are property of Apple Inc. and are downloaded optionally on-demand from GitHub."
+msgstr "Los fondos de pantalla de macOS son propiedad de Apple Inc. y se descargan de forma opcional bajo demanda desde GitHub."

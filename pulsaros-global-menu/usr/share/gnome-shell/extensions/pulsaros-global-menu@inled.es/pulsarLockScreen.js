@@ -68,14 +68,23 @@ export const LockScreen = GObject.registerClass({
         this._suspendTimerId = 0;
 
         // Reset blank and suspend idle timers on user interaction while locked
+        let lastMotionTime = 0;
         this.connect('event', (actor, event) => {
             if (!this._isLocked) return Clutter.EVENT_PROPAGATE;
             let type = event.type();
             if (type === Clutter.EventType.KEY_PRESS || 
-                type === Clutter.EventType.BUTTON_PRESS || 
-                type === Clutter.EventType.MOTION) {
+                type === Clutter.EventType.BUTTON_PRESS) {
                 this._unblankDisplay();
                 this._resetLockscreenIdleTimers();
+            } else if (type === Clutter.EventType.MOTION) {
+                let now = GLib.get_monotonic_time();
+                if (now - lastMotionTime > 500000) { // 500ms throttle
+                    lastMotionTime = now;
+                    if (this._isDisplayBlanked) {
+                        this._unblankDisplay();
+                    }
+                    this._resetLockscreenIdleTimers();
+                }
             }
             return Clutter.EVENT_PROPAGATE;
         });
@@ -160,6 +169,7 @@ export const LockScreen = GObject.registerClass({
 
     _suspendSystem() {
         if (!this._isLocked) return;
+        this._blankDisplay();
         try {
             Gio.DBus.system.call(
                 'org.freedesktop.login1',
@@ -718,6 +728,21 @@ export const LockScreen = GObject.registerClass({
                 y_align: Clutter.ActorAlign.START
             });
             contentLayout.add_child(topBar);
+
+            let suspendBtn = new St.Button({
+                style_class: 'pulsaros-lockscreen-power-button',
+                reactive: true,
+                can_focus: true,
+                child: new St.Icon({
+                    icon_name: 'system-suspend-symbolic',
+                    icon_size: 20
+                })
+            });
+            suspendBtn.connect('clicked', () => {
+                this._blankDisplay();
+                this._suspendSystem();
+            });
+            topBar.add_child(suspendBtn);
 
             let rebootBtn = new St.Button({
                 style_class: 'pulsaros-lockscreen-power-button',
@@ -1558,8 +1583,16 @@ export const LockScreen = GObject.registerClass({
         this._faceArea.visible = hasFace;
         this._fpActor.visible = hasFp;
 
+        let isRecentMatch = false;
+        if (data.last_event && data.last_event.time) {
+            let nowSec = GLib.get_real_time() / 1000000;
+            if (Math.abs(nowSec - data.last_event.time) <= 5.0) {
+                isRecentMatch = true;
+            }
+        }
+
         if (hasFace) {
-            if (data.face_state === 'matched') {
+            if (data.face_state === 'matched' && isRecentMatch) {
                 this._faceFailCount = 0;
                 this._onBiometricsMatched('face');
                 return;
@@ -1577,7 +1610,7 @@ export const LockScreen = GObject.registerClass({
         }
 
         if (hasFp) {
-            if (data.fingerprint_state === 'matched') {
+            if (data.fingerprint_state === 'matched' && isRecentMatch) {
                 this._onBiometricsMatched('fingerprint');
                 return;
             } else if (data.fingerprint_state === 'failed') {

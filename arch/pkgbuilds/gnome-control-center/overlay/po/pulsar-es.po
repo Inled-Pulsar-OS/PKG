@@ -160,3 +160,42 @@ msgstr "Touch ID, Face ID y Bloqueo por Presencia"
 
 msgid "Configure facial recognition, fingerprint and auto-lock on leave"
 msgstr "Configurar reconocimiento facial, huella y bloqueo automático al alejarse"
+
+msgid "macOS 5K/6K Wallpaper Collection"
+msgstr "Colección de Fondos macOS (5K / 6K)"
+
+msgid "Official historical wallpapers from Mac OS X 10.0 to macOS Tahoe"
+msgstr "Fondos históricos oficiales desde Mac OS X 10.0 hasta macOS Tahoe"
+
+msgid "Download Collection…"
+msgstr "Descargar colección…"
+
+msgid "Reinstall…"
+msgstr "Reinstalar…"
+
+msgid "macOS 5K/6K Wallpaper Collection (Installed)"
+msgstr "Colección de Fondos macOS (Instalada)"
+
+msgid "Collection installed (42 wallpapers). Click to reinstall or update."
+msgstr "Colección instalada (42 fondos). Pulsa para reinstalar o actualizar."
+
+msgid "Apple macOS Wallpapers"
+msgstr "Fondos de pantalla de Apple macOS"
+
+msgid "Intellectual Property & Copyright Notice:\n\nAll wallpapers in this collection are the exclusive intellectual property and registered trademarks of Apple Inc.\n\nPulsar OS does not bundle these wallpapers pre-installed in order to respect copyright policies. By clicking “Download”, you confirm that you are downloading them for your own personal and private use from the public GitHub repository.\n\nDo you want to download and install this collection?"
+msgstr "Aviso de propiedad intelectual y derechos de autor:\n\nTodos los fondos de pantalla de esta colección son propiedad intelectual exclusiva y marcas registradas de Apple Inc.\n\nPulsar OS no incluye estos fondos preinstalados para respetar las políticas de derechos de autor de Apple. Al hacer clic en «Descargar», confirmas que los descargas exclusivamente para tu uso personal y privado desde el repositorio público de GitHub.\n\n¿Deseas descargar e instalar esta colección en el sistema?"
+
+msgid "Downloading macOS wallpaper collection from repository…"
+msgstr "Descargando colección de fondos de macOS desde el repositorio…"
+
+msgid "Starting download…"
+msgstr "Iniciando descarga…"
+
+msgid "Downloading %s: %s"
+msgstr "Descargando %s: %s"
+
+msgid "macOS wallpapers downloaded and ready in Settings!"
+msgstr "¡Fondos de pantalla de macOS descargados y listos en Ajustes!"
+
+msgid "macOS wallpapers are property of Apple Inc. and are downloaded optionally on-demand from GitHub."
+msgstr "Los fondos de pantalla de macOS son propiedad de Apple Inc. y se descargan de forma opcional bajo demanda desde GitHub."

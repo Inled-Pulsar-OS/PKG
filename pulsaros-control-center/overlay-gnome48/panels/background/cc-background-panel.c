@@ -20,10 +20,10 @@
 
 #include <config.h>
 
-#include <string.h>
 #include <glib.h>
 #include <glib/gi18n-lib.h>
 #include <glib/gstdio.h>
+#include <string.h>
 
 #include <gdesktop-enums.h>
 
@@ -47,22 +47,22 @@
 #define INTERFACE_COLOR_SCHEME_KEY "color-scheme"
 #define INTERFACE_ACCENT_COLOR_KEY "accent-color"
 
-struct _CcBackgroundPanel
-{
-  CcPanel parent_instance;
+struct _CcBackgroundPanel {
+    CcPanel parent_instance;
 
-  GDBusConnection *connection;
+    GDBusConnection *connection;
 
-  GSettings *settings;
-  GSettings *lock_settings;
-  GSettings *interface_settings;
+    GSettings *settings;
+    GSettings *lock_settings;
+    GSettings *interface_settings;
 
-  GDBusProxy *proxy;
+    GDBusProxy *proxy;
 
-  CcBackgroundItem *current_background;
+    CcBackgroundItem *current_background;
 
   GtkWidget *accent_box;
   CcBackgroundChooser *background_chooser;
+  AdwToastOverlay *toast_overlay;
   CcBackgroundPreview *default_preview;
   CcBackgroundPreview *dark_preview;
   GtkToggleButton *default_toggle;
@@ -70,8 +70,13 @@ struct _CcBackgroundPanel
   AdwSwitchRow *macos_remap_switch_row;
   AdwSwitchRow *macos_fullscreen_switch_row;
   AdwSwitchRow *liquid_glass_switch_row;
+  AdwComboRow *liquid_glass_mode_row;
   AdwSwitchRow *notch_switch_row;
   AdwSwitchRow *cc_switch_row;
+  AdwActionRow *download_wallpapers_row;
+  GtkButton *download_wallpapers_btn;
+  GtkProgressBar *download_progress_bar;
+  GtkSpinner *download_spinner;
 };
 
 /* UUID of the NotchNux shell extension, toggled from the Appearance panel. */
@@ -129,214 +134,163 @@ load_custom_css (CcBackgroundPanel *self)
 static void
 transition_screen (CcBackgroundPanel *self)
 {
-  if (!self->proxy)
-    return;
+    g_autoptr(GError) error = NULL;
 
-  g_dbus_proxy_call (self->proxy,
-                     "ScreenTransition",
-                     NULL,
-                     G_DBUS_CALL_FLAGS_NONE,
-                     500,
-                     NULL,
-                     NULL,
-                     NULL);
+    if (!self->proxy)
+        return;
+
+    g_dbus_proxy_call_sync (self->proxy, "ScreenTransition", NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &error);
+
+    if (error)
+        g_warning ("Couldn't transition screen: %s", error->message);
 }
 
 static void
-on_accent_color_toggled_cb (CcBackgroundPanel *self,
-                            GtkToggleButton   *toggle)
+on_accent_color_toggled_cb (CcBackgroundPanel *self, GtkToggleButton *toggle)
 {
-  GDesktopAccentColor accent_color_from_key;
-  GDesktopAccentColor accent_color = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (toggle), "accent-color"));
+    GDesktopAccentColor accent_color_from_key;
+    GDesktopAccentColor accent_color = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (toggle), "accent-color"));
 
-  if (!gtk_toggle_button_get_active (toggle))
-    return;
+    if (!gtk_toggle_button_get_active (toggle))
+        return;
 
-  accent_color_from_key = g_settings_get_enum (self->interface_settings,
-                                               INTERFACE_ACCENT_COLOR_KEY);
+    accent_color_from_key = g_settings_get_enum (self->interface_settings, INTERFACE_ACCENT_COLOR_KEY);
 
-  /* Don't unnecessarily set the key again */
-  if (accent_color == accent_color_from_key)
-    return;
+    /* Don't unnecessarily set the key again */
+    if (accent_color == accent_color_from_key)
+        return;
 
-  transition_screen (self);
+    transition_screen (self);
 
-  g_settings_set_enum (self->interface_settings,
-                       INTERFACE_ACCENT_COLOR_KEY,
-                       accent_color);
+    g_settings_set_enum (self->interface_settings, INTERFACE_ACCENT_COLOR_KEY, accent_color);
 }
 
 /* Adapted from adw-inspector-page.c */
 static const char *
 get_color_tooltip (GDesktopAccentColor color)
 {
-  switch (color)
-    {
+    switch (color) {
     case G_DESKTOP_ACCENT_COLOR_BLUE:
-      return _("Blue");
+        return _("Blue");
     case G_DESKTOP_ACCENT_COLOR_TEAL:
-      return _("Teal");
+        return _("Teal");
     case G_DESKTOP_ACCENT_COLOR_GREEN:
-      return _("Green");
+        return _("Green");
     case G_DESKTOP_ACCENT_COLOR_YELLOW:
-      return _("Yellow");
+        return _("Yellow");
     case G_DESKTOP_ACCENT_COLOR_ORANGE:
-      return _("Orange");
+        return _("Orange");
     case G_DESKTOP_ACCENT_COLOR_RED:
-      return _("Red");
+        return _("Red");
     case G_DESKTOP_ACCENT_COLOR_PINK:
-      return _("Pink");
+        return _("Pink");
     case G_DESKTOP_ACCENT_COLOR_PURPLE:
-      return _("Purple");
+        return _("Purple");
     case G_DESKTOP_ACCENT_COLOR_SLATE:
-      return _("Slate");
+        return _("Slate");
     default:
-      g_assert_not_reached ();
+        g_assert_not_reached ();
     }
 }
 
 static const char *
 get_untranslated_color (GDesktopAccentColor color)
 {
-  switch (color)
-    {
+    switch (color) {
     case G_DESKTOP_ACCENT_COLOR_BLUE:
-      return "blue";
+        return "blue";
     case G_DESKTOP_ACCENT_COLOR_TEAL:
-      return "teal";
+        return "teal";
     case G_DESKTOP_ACCENT_COLOR_GREEN:
-      return "green";
+        return "green";
     case G_DESKTOP_ACCENT_COLOR_YELLOW:
-      return "yellow";
+        return "yellow";
     case G_DESKTOP_ACCENT_COLOR_ORANGE:
-      return "orange";
+        return "orange";
     case G_DESKTOP_ACCENT_COLOR_RED:
-      return "red";
+        return "red";
     case G_DESKTOP_ACCENT_COLOR_PINK:
-      return "pink";
+        return "pink";
     case G_DESKTOP_ACCENT_COLOR_PURPLE:
-      return "purple";
+        return "purple";
     case G_DESKTOP_ACCENT_COLOR_SLATE:
-      return "slate";
+        return "slate";
     default:
-      g_assert_not_reached ();
+        g_assert_not_reached ();
     }
 }
 
 static void
 setup_accent_color_toggles (CcBackgroundPanel *self)
 {
-  GDesktopAccentColor accent_color = g_settings_get_enum (self->interface_settings, INTERFACE_ACCENT_COLOR_KEY);
-  GDesktopAccentColor i;
+    GDesktopAccentColor accent_color = g_settings_get_enum (self->interface_settings, INTERFACE_ACCENT_COLOR_KEY);
+    GDesktopAccentColor i;
 
-  for (i = G_DESKTOP_ACCENT_COLOR_BLUE; i <= G_DESKTOP_ACCENT_COLOR_SLATE; i++)
-    {
-      GtkWidget *button = GTK_WIDGET (gtk_toggle_button_new ());
-      GtkToggleButton *grouping_button = GTK_TOGGLE_BUTTON (gtk_widget_get_first_child (self->accent_box));
+    for (i = G_DESKTOP_ACCENT_COLOR_BLUE; i <= G_DESKTOP_ACCENT_COLOR_SLATE; i++) {
+        GtkWidget *button = GTK_WIDGET (gtk_toggle_button_new ());
+        GtkToggleButton *grouping_button = GTK_TOGGLE_BUTTON (gtk_widget_get_first_child (self->accent_box));
 
-      gtk_widget_set_tooltip_text (button, get_color_tooltip (i));
-      gtk_widget_add_css_class (button, "accent-button");
-      gtk_widget_add_css_class (button, get_untranslated_color (i));
-      g_object_set_data (G_OBJECT (button), "accent-color", GINT_TO_POINTER (i));
-      g_signal_connect_object (button, "toggled",
-                               G_CALLBACK (on_accent_color_toggled_cb),
-                               self,
-                               G_CONNECT_SWAPPED);
+        gtk_widget_set_tooltip_text (button, get_color_tooltip (i));
+        gtk_widget_add_css_class (button, "accent-button");
+        gtk_widget_add_css_class (button, get_untranslated_color (i));
+        g_object_set_data (G_OBJECT (button), "accent-color", GINT_TO_POINTER (i));
+        g_signal_connect_object (button, "toggled", G_CALLBACK (on_accent_color_toggled_cb), self, G_CONNECT_SWAPPED);
 
-      if (grouping_button != NULL)
-        gtk_toggle_button_set_group (GTK_TOGGLE_BUTTON (button), grouping_button);
+        if (grouping_button != NULL)
+            gtk_toggle_button_set_group (GTK_TOGGLE_BUTTON (button), grouping_button);
 
-      if (i == accent_color)
-        gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (button), TRUE);
+        if (i == accent_color)
+            gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (button), TRUE);
 
-      gtk_box_append (GTK_BOX (self->accent_box), button);
+        gtk_box_append (GTK_BOX (self->accent_box), button);
     }
 }
 
 static void
 reload_accent_color_toggles (CcBackgroundPanel *self)
 {
-  GDesktopAccentColor accent_color = g_settings_get_enum (self->interface_settings, INTERFACE_ACCENT_COLOR_KEY);
-  GtkWidget *child;
+    GDesktopAccentColor accent_color = g_settings_get_enum (self->interface_settings, INTERFACE_ACCENT_COLOR_KEY);
+    GtkWidget *child;
 
-  for (child = gtk_widget_get_first_child (self->accent_box);
-       child;
-       child = gtk_widget_get_next_sibling (child))
-    {
-      GDesktopAccentColor child_color = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (child), "accent-color"));
+    for (child = gtk_widget_get_first_child (self->accent_box); child; child = gtk_widget_get_next_sibling (child)) {
+        GDesktopAccentColor child_color = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (child), "accent-color"));
 
-      gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (child), child_color == accent_color);
+        gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (child), child_color == accent_color);
     }
 }
 
 static void
 reload_color_scheme (CcBackgroundPanel *self)
 {
-  GDesktopColorScheme scheme;
+    GDesktopColorScheme scheme;
 
-  scheme = g_settings_get_enum (self->interface_settings, INTERFACE_COLOR_SCHEME_KEY);
+    scheme = g_settings_get_enum (self->interface_settings, INTERFACE_COLOR_SCHEME_KEY);
 
-  if (scheme == G_DESKTOP_COLOR_SCHEME_DEFAULT)
-    {
-      gtk_toggle_button_set_active (self->default_toggle, TRUE);
-    }
-  else if (scheme == G_DESKTOP_COLOR_SCHEME_PREFER_DARK)
-    {
-      gtk_toggle_button_set_active (self->dark_toggle, TRUE);
-    }
-  else
-    {
-      gtk_toggle_button_set_active (self->default_toggle, FALSE);
-      gtk_toggle_button_set_active (self->dark_toggle, FALSE);
+    if (scheme == G_DESKTOP_COLOR_SCHEME_DEFAULT) {
+        gtk_toggle_button_set_active (self->default_toggle, TRUE);
+    } else if (scheme == G_DESKTOP_COLOR_SCHEME_PREFER_DARK) {
+        gtk_toggle_button_set_active (self->dark_toggle, TRUE);
+    } else {
+        gtk_toggle_button_set_active (self->default_toggle, FALSE);
+        gtk_toggle_button_set_active (self->dark_toggle, FALSE);
     }
 }
 
-#define INTERFACE_GTK_THEME_KEY "gtk-theme"
-#define SHELL_USER_THEME_SCHEMA "org.gnome.shell.extensions.user-theme"
-#define SHELL_USER_THEME_KEY "name"
-
 static void
-set_color_scheme (CcBackgroundPanel   *self,
-                  GDesktopColorScheme  color_scheme)
+set_color_scheme (CcBackgroundPanel *self, GDesktopColorScheme color_scheme)
 {
-  GDesktopColorScheme scheme;
-  const gchar *theme_name;
-  GSettingsSchemaSource *source;
+    GDesktopColorScheme scheme;
 
-  scheme = g_settings_get_enum (self->interface_settings,
-                                INTERFACE_COLOR_SCHEME_KEY);
+    scheme = g_settings_get_enum (self->interface_settings, INTERFACE_COLOR_SCHEME_KEY);
 
-  /* We have to check the equality manually to avoid starting an unnecessary
-   * screen transition */
-  if (color_scheme == scheme)
-    return;
+    /* We have to check the equality manually to avoid starting an unnecessary
+     * screen transition */
+    if (color_scheme == scheme)
+        return;
 
-  transition_screen (self);
+    transition_screen (self);
 
-  g_settings_set_enum (self->interface_settings,
-                       INTERFACE_COLOR_SCHEME_KEY,
-                       color_scheme);
-
-  theme_name = (color_scheme == G_DESKTOP_COLOR_SCHEME_PREFER_DARK) ? "MacTahoe-Dark" : "MacTahoe";
-
-  /* Update GTK application theme */
-  source = g_settings_schema_source_get_default ();
-  if (source != NULL)
-    {
-      g_autoptr(GSettingsSchema) iface_schema = g_settings_schema_source_lookup (source, "org.gnome.desktop.interface", TRUE);
-      if (iface_schema != NULL && g_settings_schema_has_key (iface_schema, INTERFACE_GTK_THEME_KEY))
-        {
-          g_settings_set_string (self->interface_settings, INTERFACE_GTK_THEME_KEY, theme_name);
-        }
-
-      /* Update GNOME Shell user-theme extension if present */
-      g_autoptr(GSettingsSchema) user_theme_schema = g_settings_schema_source_lookup (source, SHELL_USER_THEME_SCHEMA, TRUE);
-      if (user_theme_schema != NULL)
-        {
-          g_autoptr(GSettings) shell_settings = g_settings_new (SHELL_USER_THEME_SCHEMA);
-          g_settings_set_string (shell_settings, SHELL_USER_THEME_KEY, theme_name);
-        }
-    }
+    g_settings_set_enum (self->interface_settings, INTERFACE_COLOR_SCHEME_KEY, color_scheme);
 }
 
 /* Color schemes */
@@ -344,26 +298,23 @@ set_color_scheme (CcBackgroundPanel   *self,
 static void
 on_color_scheme_toggle_active_cb (CcBackgroundPanel *self)
 {
-  if (gtk_toggle_button_get_active (self->default_toggle))
-    set_color_scheme (self, G_DESKTOP_COLOR_SCHEME_DEFAULT);
-  else if (gtk_toggle_button_get_active (self->dark_toggle))
-    set_color_scheme (self, G_DESKTOP_COLOR_SCHEME_PREFER_DARK);
+    if (gtk_toggle_button_get_active (self->default_toggle))
+        set_color_scheme (self, G_DESKTOP_COLOR_SCHEME_DEFAULT);
+    else if (gtk_toggle_button_get_active (self->dark_toggle))
+        set_color_scheme (self, G_DESKTOP_COLOR_SCHEME_PREFER_DARK);
 }
 
 static void
-got_transition_proxy_cb (GObject      *source_object,
-                         GAsyncResult *res,
-                         gpointer      data)
+got_transition_proxy_cb (GObject *source_object, GAsyncResult *res, gpointer data)
 {
-  g_autoptr(GError) error = NULL;
-  CcBackgroundPanel *self = data;
+    g_autoptr(GError) error = NULL;
+    CcBackgroundPanel *self = data;
 
-  self->proxy = g_dbus_proxy_new_for_bus_finish (res, &error);
+    self->proxy = g_dbus_proxy_new_for_bus_finish (res, &error);
 
-  if (self->proxy == NULL)
-    {
-      g_warning ("Error creating proxy: %s", error->message);
-      return;
+    if (self->proxy == NULL) {
+        g_warning ("Error creating proxy: %s", error->message);
+        return;
     }
 }
 
@@ -372,158 +323,136 @@ got_transition_proxy_cb (GObject      *source_object,
 static void
 update_preview (CcBackgroundPanel *self)
 {
-  CcBackgroundItem *current_background;
+    CcBackgroundItem *current_background;
 
-  current_background = self->current_background;
-  cc_background_preview_set_item (self->default_preview, current_background);
-  cc_background_preview_set_item (self->dark_preview, current_background);
+    current_background = self->current_background;
+    cc_background_preview_set_item (self->default_preview, current_background);
+    cc_background_preview_set_item (self->dark_preview, current_background);
 }
 
 static void
 reload_current_bg (CcBackgroundPanel *self)
 {
-  CcBackgroundItem *configured;
-  GSettings *settings = NULL;
-  g_autofree gchar *uri = NULL;
-  g_autofree gchar *dark_uri = NULL;
-  g_autofree gchar *pcolor = NULL;
-  g_autofree gchar *scolor = NULL;
+    CcBackgroundItem *configured;
+    GSettings *settings = NULL;
+    g_autofree gchar *uri = NULL;
+    g_autofree gchar *dark_uri = NULL;
+    g_autofree gchar *pcolor = NULL;
+    g_autofree gchar *scolor = NULL;
 
-  /* initalise the current background information from settings */
-  settings = self->settings;
-  uri = g_settings_get_string (settings, WP_URI_KEY);
-  if (uri && *uri == '\0')
-    g_clear_pointer (&uri, g_free);
+    /* initalise the current background information from settings */
+    settings = self->settings;
+    uri = g_settings_get_string (settings, WP_URI_KEY);
+    if (uri && *uri == '\0')
+        g_clear_pointer (&uri, g_free);
 
+    configured = cc_background_item_new (uri);
 
-  configured = cc_background_item_new (uri);
+    dark_uri = g_settings_get_string (settings, WP_URI_DARK_KEY);
+    pcolor = g_settings_get_string (settings, WP_PCOLOR_KEY);
+    scolor = g_settings_get_string (settings, WP_SCOLOR_KEY);
+    g_object_set (G_OBJECT (configured), "name",
+                  _("Current background"), "uri-dark", dark_uri, "placement",
+                    g_settings_get_enum (settings, WP_OPTIONS_KEY), "shading",
+                    g_settings_get_enum (settings, WP_SHADING_KEY), "primary-color", pcolor, "secondary-color", scolor,
+                    NULL);
 
-  dark_uri = g_settings_get_string (settings, WP_URI_DARK_KEY);
-  pcolor = g_settings_get_string (settings, WP_PCOLOR_KEY);
-  scolor = g_settings_get_string (settings, WP_SCOLOR_KEY);
-  g_object_set (G_OBJECT (configured),
-                "name", _("Current background"),
-                "uri-dark", dark_uri,
-                "placement", g_settings_get_enum (settings, WP_OPTIONS_KEY),
-                "shading", g_settings_get_enum (settings, WP_SHADING_KEY),
-                "primary-color", pcolor,
-                "secondary-color", scolor,
-                NULL);
+    g_clear_object (&self->current_background);
+    self->current_background = configured;
+    cc_background_item_load (configured, NULL);
 
-  g_clear_object (&self->current_background);
-  self->current_background = configured;
-  cc_background_item_load (configured, NULL);
-
-  cc_background_chooser_set_active_item (self->background_chooser, configured);
+    cc_background_chooser_set_active_item (self->background_chooser, configured);
 }
 
 static void
-reset_settings_if_defaults (CcBackgroundPanel *self,
-                            GSettings         *settings,
-                            gboolean           check_dark)
+reset_settings_if_defaults (CcBackgroundPanel *self, GSettings *settings, gboolean check_dark)
 {
-  gsize i;
-  const char *keys[] = {
-    WP_URI_KEY,       /* this key needs to be first */
-    WP_URI_DARK_KEY,
-    WP_OPTIONS_KEY,
-    WP_SHADING_KEY,
-    WP_PCOLOR_KEY,
-    WP_SCOLOR_KEY,
-    NULL
-  };
+    gsize i;
+    const char *keys[] = { WP_URI_KEY, /* this key needs to be first */
+                           WP_URI_DARK_KEY, WP_OPTIONS_KEY, WP_SHADING_KEY, WP_PCOLOR_KEY, WP_SCOLOR_KEY, NULL };
 
-  for (i = 0; keys[i] != NULL; i++)
-    {
-      g_autoptr (GVariant) default_value = NULL;
-      g_autoptr (GVariant) user_value = NULL;
-      gboolean setting_is_default;
+    for (i = 0; keys[i] != NULL; i++) {
+        g_autoptr(GVariant) default_value = NULL;
+        g_autoptr(GVariant) user_value = NULL;
+        gboolean setting_is_default;
 
-      if (!check_dark && g_str_equal (keys[i], WP_URI_DARK_KEY))
-        continue;
+        if (!check_dark && g_str_equal (keys[i], WP_URI_DARK_KEY))
+            continue;
 
-      default_value = g_settings_get_default_value (settings, keys[i]);
-      user_value = g_settings_get_value (settings, keys[i]);
+        default_value = g_settings_get_default_value (settings, keys[i]);
+        user_value = g_settings_get_value (settings, keys[i]);
 
-      setting_is_default = g_variant_equal (default_value, user_value);
+        setting_is_default = g_variant_equal (default_value, user_value);
 
-      /* As a courtesy to distros that are a little lackadaisical about making sure
-       * schema defaults match the settings in the background item with the default
-       * picture, we only look at the URI to determine if we shouldn't clean out dconf.
-       *
-       * In otherwords, we still clean out the picture-uri key from dconf when a user
-       * selects the default background in control-center, even if after selecting it
-       * e.g., primary-color still mismatches with schema defaults.
-       */
-      if (g_str_equal (keys[i], WP_URI_KEY) && !setting_is_default)
+        /* As a courtesy to distros that are a little lackadaisical about making sure
+         * schema defaults match the settings in the background item with the default
+         * picture, we only look at the URI to determine if we shouldn't clean out dconf.
+         *
+         * In otherwords, we still clean out the picture-uri key from dconf when a user
+         * selects the default background in control-center, even if after selecting it
+         * e.g., primary-color still mismatches with schema defaults.
+         */
+        if (g_str_equal (keys[i], WP_URI_KEY) && !setting_is_default)
+            return;
+
+        if (setting_is_default)
+            g_settings_reset (settings, keys[i]);
+    }
+
+    g_settings_apply (settings);
+}
+
+static void
+set_background (CcBackgroundPanel *self, GSettings *settings, CcBackgroundItem *item, gboolean set_dark)
+{
+    GDesktopBackgroundStyle style;
+    CcBackgroundItemFlags flags;
+    g_autofree gchar *filename = NULL;
+    const char *uri;
+
+    if (item == NULL)
         return;
 
-      if (setting_is_default)
-        g_settings_reset (settings, keys[i]);
+    uri = cc_background_item_get_uri (item);
+    flags = cc_background_item_get_flags (item);
+
+    g_settings_set_string (settings, WP_URI_KEY, uri);
+
+    if (set_dark) {
+        const char *uri_dark;
+
+        uri_dark = cc_background_item_get_uri_dark (item);
+
+        if (uri_dark && uri_dark[0])
+            g_settings_set_string (settings, WP_URI_DARK_KEY, uri_dark);
+        else
+            g_settings_set_string (settings, WP_URI_DARK_KEY, uri);
     }
 
-  g_settings_apply (settings);
-}
-
-static void
-set_background (CcBackgroundPanel *self,
-                GSettings         *settings,
-                CcBackgroundItem  *item,
-                gboolean           set_dark)
-{
-  GDesktopBackgroundStyle style;
-  CcBackgroundItemFlags flags;
-  g_autofree gchar *filename = NULL;
-  const char *uri;
-
-  if (item == NULL)
-    return;
-
-  uri = cc_background_item_get_uri (item);
-  flags = cc_background_item_get_flags (item);
-
-  g_settings_set_string (settings, WP_URI_KEY, uri);
-
-  if (set_dark)
-    {
-      const char *uri_dark;
-
-      uri_dark = cc_background_item_get_uri_dark (item);
-
-      if (uri_dark && uri_dark[0])
-        g_settings_set_string (settings, WP_URI_DARK_KEY, uri_dark);
-      else
-        g_settings_set_string (settings, WP_URI_DARK_KEY, uri);
-    }
-
-  /* Also set the placement if we have a URI and the previous value was none */
-  if (flags & CC_BACKGROUND_ITEM_HAS_PLACEMENT)
-    {
-      g_settings_set_enum (settings, WP_OPTIONS_KEY, cc_background_item_get_placement (item));
-    }
-  else if (uri != NULL)
-    {
-      style = g_settings_get_enum (settings, WP_OPTIONS_KEY);
-      if (style == G_DESKTOP_BACKGROUND_STYLE_NONE)
+    /* Also set the placement if we have a URI and the previous value was none */
+    if (flags & CC_BACKGROUND_ITEM_HAS_PLACEMENT) {
         g_settings_set_enum (settings, WP_OPTIONS_KEY, cc_background_item_get_placement (item));
+    } else if (uri != NULL) {
+        style = g_settings_get_enum (settings, WP_OPTIONS_KEY);
+        if (style == G_DESKTOP_BACKGROUND_STYLE_NONE)
+            g_settings_set_enum (settings, WP_OPTIONS_KEY, cc_background_item_get_placement (item));
     }
 
-  if (flags & CC_BACKGROUND_ITEM_HAS_SHADING)
-    g_settings_set_enum (settings, WP_SHADING_KEY, cc_background_item_get_shading (item));
+    if (flags & CC_BACKGROUND_ITEM_HAS_SHADING)
+        g_settings_set_enum (settings, WP_SHADING_KEY, cc_background_item_get_shading (item));
 
-  g_settings_set_string (settings, WP_PCOLOR_KEY, cc_background_item_get_pcolor (item));
-  g_settings_set_string (settings, WP_SCOLOR_KEY, cc_background_item_get_scolor (item));
+    g_settings_set_string (settings, WP_PCOLOR_KEY, cc_background_item_get_pcolor (item));
+    g_settings_set_string (settings, WP_SCOLOR_KEY, cc_background_item_get_scolor (item));
 
-  /* Apply all changes */
-  g_settings_apply (settings);
+    /* Apply all changes */
+    g_settings_apply (settings);
 
-  /* Clean out dconf if the user went back to distro defaults */
-  reset_settings_if_defaults (self, settings, set_dark);
+    /* Clean out dconf if the user went back to distro defaults */
+    reset_settings_if_defaults (self, settings, set_dark);
 }
 
 static void
-on_chooser_background_chosen_cb (CcBackgroundPanel *self,
-                                 CcBackgroundItem  *item)
+on_chooser_background_chosen_cb (CcBackgroundPanel *self, CcBackgroundItem *item)
 {
   const char *uri = NULL;
 
@@ -566,47 +495,47 @@ on_chooser_background_chosen_cb (CcBackgroundPanel *self,
 
   g_signal_handlers_block_by_func (self->settings, on_settings_changed, self);
 
-  set_background (self, self->settings, item, TRUE);
-  set_background (self, self->lock_settings, item, FALSE);
+    set_background (self, self->settings, item, TRUE);
+    set_background (self, self->lock_settings, item, FALSE);
 
-  on_settings_changed (self);
+    on_settings_changed (self);
 
-  g_signal_handlers_unblock_by_func (self->settings, on_settings_changed, self);
+    g_signal_handlers_unblock_by_func (self->settings, on_settings_changed, self);
 }
 
 static void
 on_add_picture_button_clicked_cb (CcBackgroundPanel *self)
 {
-  cc_background_chooser_select_file (self->background_chooser);
+    cc_background_chooser_select_file (self->background_chooser);
 }
 
 static const char *
 cc_background_panel_get_help_uri (CcPanel *panel)
 {
-  return "help:gnome-help/look-background";
+    return "help:gnome-help/look-background";
 }
 
 static void
 cc_background_panel_dispose (GObject *object)
 {
-  CcBackgroundPanel *self = CC_BACKGROUND_PANEL (object);
+    CcBackgroundPanel *self = CC_BACKGROUND_PANEL (object);
 
-  g_clear_object (&self->settings);
-  g_clear_object (&self->lock_settings);
-  g_clear_object (&self->interface_settings);
-  g_clear_object (&self->proxy);
+    g_clear_object (&self->settings);
+    g_clear_object (&self->lock_settings);
+    g_clear_object (&self->interface_settings);
+    g_clear_object (&self->proxy);
 
-  G_OBJECT_CLASS (cc_background_panel_parent_class)->dispose (object);
+    G_OBJECT_CLASS (cc_background_panel_parent_class)->dispose (object);
 }
 
 static void
 cc_background_panel_finalize (GObject *object)
 {
-  CcBackgroundPanel *self = CC_BACKGROUND_PANEL (object);
+    CcBackgroundPanel *self = CC_BACKGROUND_PANEL (object);
 
-  g_clear_object (&self->current_background);
+    g_clear_object (&self->current_background);
 
-  G_OBJECT_CLASS (cc_background_panel_parent_class)->finalize (object);
+    G_OBJECT_CLASS (cc_background_panel_parent_class)->finalize (object);
 }
 
 static void
@@ -762,16 +691,62 @@ is_extension_enabled (const gchar *uuid)
   return found;
 }
 
+typedef enum {
+  LIQUID_GLASS_MODE_TRANSPARENT = 0,
+  LIQUID_GLASS_MODE_OPAQUE = 1,
+} LiquidGlassWindowMode;
+
 static void
-apply_desktop_effects_mode (gboolean use_liquid_glass)
+apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mode)
 {
   if (use_liquid_glass)
     {
-      /* 1. Toggle extension states: enable liquid glass, disable blur my shell */
-      set_extension_enabled ("blur-my-shell@aunetx", FALSE);
-      set_extension_enabled ("liquid-glass@thinkingcoding1231.gmail.com", TRUE);
+      gboolean enable_app_glass = TRUE;
+      gboolean all_windows = TRUE;
+      gdouble opacity = 1.0;
 
-      /* 2. Configure Dash to Dock (Pulsar Dock) with 'Use system theme' enabled */
+      if (mode == LIQUID_GLASS_MODE_OPAQUE)
+        {
+          enable_app_glass = FALSE;
+          all_windows = FALSE;
+          opacity = 1.0;
+
+          /* Liquid Glass handles dock/panel/menus, Blur my Shell handles window sidebars */
+          set_extension_enabled ("liquid-glass@thinkingcoding1231.gmail.com", TRUE);
+          set_extension_enabled ("blur-my-shell@aunetx", TRUE);
+
+          g_autoptr(GSettingsSchema) bms_apps_schema = NULL;
+          g_autoptr(GSettings) bms_apps_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.applications", &bms_apps_schema);
+          if (bms_apps_settings && bms_apps_schema)
+            safe_set_boolean (bms_apps_settings, bms_apps_schema, "blur", TRUE);
+
+          g_autoptr(GSettingsSchema) bms_dash_schema = NULL;
+          g_autoptr(GSettings) bms_dash_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.dash-to-dock", &bms_dash_schema);
+          if (bms_dash_settings && bms_dash_schema)
+            safe_set_boolean (bms_dash_settings, bms_dash_schema, "blur", FALSE);
+        }
+      else
+        {
+          /* LIQUID_GLASS_MODE_TRANSPARENT */
+          enable_app_glass = TRUE;
+          all_windows = TRUE;
+          opacity = 0.85; /* Translucent glass effect visible across windows */
+
+          set_extension_enabled ("blur-my-shell@aunetx", FALSE);
+          set_extension_enabled ("liquid-glass@thinkingcoding1231.gmail.com", TRUE);
+        }
+
+      /* Liquid Glass draws its own OSD/menu/notification glass. Blur my Shell
+       * folds the volume/brightness popups ("osd-window") into its "popup"
+       * component, so if it keeps blurring them while Liquid Glass is on, the
+       * Fn OSD ends up with a second blur stacked on top of the glass. Turn the
+       * popup component off so the OSD stays pure glass. */
+      g_autoptr(GSettingsSchema) bms_popup_schema = NULL;
+      g_autoptr(GSettings) bms_popup_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.popup", &bms_popup_schema);
+      if (bms_popup_settings && bms_popup_schema)
+        safe_set_boolean (bms_popup_settings, bms_popup_schema, "blur", FALSE);
+
+      /* 2. Configure Dash to Dock (Pulsar Dock) with shrink wrap enabled */
       g_autoptr(GSettingsSchema) dock_schema = NULL;
       g_autoptr(GSettings) dock_settings = safe_settings_new ("org.gnome.shell.extensions.dash-to-dock", &dock_schema);
       if (dock_settings && dock_schema)
@@ -780,7 +755,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass)
           safe_set_string (dock_settings, dock_schema, "transparency-mode", "FIXED");
           safe_set_double (dock_settings, dock_schema, "background-opacity", 0.15);
           safe_set_boolean (dock_settings, dock_schema, "customize-alphas", FALSE);
-          safe_set_boolean (dock_settings, dock_schema, "custom-theme-shrink", FALSE);
+          safe_set_boolean (dock_settings, dock_schema, "custom-theme-shrink", TRUE);
           safe_set_double (dock_settings, dock_schema, "height-fraction", 0.9);
         }
 
@@ -793,9 +768,9 @@ apply_desktop_effects_mode (gboolean use_liquid_glass)
       if (glass_settings && glass_schema)
         {
           safe_set_int (glass_settings, glass_schema, "application-blur-radius", 5);
-          safe_set_double (glass_settings, glass_schema, "application-content-opacity", 0.85);
+          safe_set_double (glass_settings, glass_schema, "application-content-opacity", opacity);
           safe_set_double (glass_settings, glass_schema, "application-corner-radius", 20.689655172413794);
-          safe_set_boolean (glass_settings, glass_schema, "application-glass-all-windows", TRUE);
+          safe_set_boolean (glass_settings, glass_schema, "application-glass-all-windows", all_windows);
           safe_set_string (glass_settings, glass_schema, "application-tint-color", "#000000");
           safe_set_double (glass_settings, glass_schema, "application-tint-strength", 0.0);
           const gchar *empty_list[] = { NULL };
@@ -806,7 +781,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass)
           safe_set_double (glass_settings, glass_schema, "dock-tint-strength", 0.12);
           safe_set_int (glass_settings, glass_schema, "dock-blur-radius", 5);
           safe_set_boolean (glass_settings, glass_schema, "enable-dock-glass", TRUE);
-          safe_set_boolean (glass_settings, glass_schema, "enable-application-glass", TRUE);
+          safe_set_boolean (glass_settings, glass_schema, "enable-application-glass", enable_app_glass);
           safe_set_boolean (glass_settings, glass_schema, "enable-menu-glass", TRUE);
           safe_set_boolean (glass_settings, glass_schema, "enable-notification-glass", TRUE);
           safe_set_boolean (glass_settings, glass_schema, "enable-osd-glass", TRUE);
@@ -831,12 +806,14 @@ apply_desktop_effects_mode (gboolean use_liquid_glass)
         }
 
       /* Execute dconf writes in background as non-blocking safe helper */
-      const gchar *dconf_script =
+      const gchar *enable_app_str = enable_app_glass ? "true" : "false";
+      const gchar *all_win_str = all_windows ? "true" : "false";
+      g_autofree gchar *dconf_script = g_strdup_printf (
         "/bin/sh -c \""
         "dconf write /org/gnome/shell/extensions/liquid-glass/application-blur-radius '5' ; "
-        "dconf write /org/gnome/shell/extensions/liquid-glass/application-content-opacity '0.85' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/application-content-opacity '%.2f' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/application-corner-radius '20.689655172413794' ; "
-        "dconf write /org/gnome/shell/extensions/liquid-glass/application-glass-all-windows 'true' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/application-glass-all-windows '%s' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/application-tint-color \\\"'#000000'\\\" ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/application-tint-strength '0.0' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/application-window-whitelist '@as []' ; "
@@ -844,7 +821,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass)
         "dconf write /org/gnome/shell/extensions/liquid-glass/dock-glass-expand '3' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/dock-tint-color \\\"'#000000'\\\" ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/enable-dock-glass 'true' ; "
-        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-application-glass 'true' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-application-glass '%s' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/enable-menu-glass 'true' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/enable-notification-glass 'true' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/enable-osd-glass 'true' ; "
@@ -869,10 +846,14 @@ apply_desktop_effects_mode (gboolean use_liquid_glass)
         "dconf write /org/gnome/shell/extensions/liquid-glass/notification-tint-color \\\"'#000000'\\\" ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/osd-tint-color \\\"'#000000'\\\" ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/output-logs 'false' ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur false ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme true ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 ; "
-        "gsettings set org.gnome.shell.extensions.dash-to-dock customize-alphas false >/dev/null 2>&1 &\"";
+        "gsettings set org.gnome.shell.extensions.dash-to-dock custom-theme-shrink true ; "
+        "gsettings set org.gnome.shell.extensions.dash-to-dock customize-alphas false >/dev/null 2>&1 &\"",
+        opacity, all_win_str, enable_app_str
+      );
       g_spawn_command_line_async (dconf_script, NULL);
     }
   else
@@ -890,7 +871,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass)
           safe_set_string (dock_settings, dock_schema, "transparency-mode", "FIXED");
           safe_set_double (dock_settings, dock_schema, "background-opacity", 0.15);
           safe_set_boolean (dock_settings, dock_schema, "customize-alphas", FALSE);
-          safe_set_boolean (dock_settings, dock_schema, "custom-theme-shrink", FALSE);
+          safe_set_boolean (dock_settings, dock_schema, "custom-theme-shrink", TRUE);
           safe_set_double (dock_settings, dock_schema, "height-fraction", 0.9);
         }
 
@@ -909,11 +890,19 @@ apply_desktop_effects_mode (gboolean use_liquid_glass)
           safe_set_boolean (bms_dock_settings, bms_dock_schema, "static-blur", TRUE);
         }
 
+      /* Restore Blur my Shell popup blur (OSD/menus/notifications) now that
+       * Liquid Glass is no longer drawing those surfaces. */
+      g_autoptr(GSettingsSchema) bms_popup_schema = NULL;
+      g_autoptr(GSettings) bms_popup_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.popup", &bms_popup_schema);
+      if (bms_popup_settings && bms_popup_schema)
+        safe_set_boolean (bms_popup_settings, bms_popup_schema, "blur", TRUE);
+
       const gchar *dock_script =
         "/bin/sh -c \""
         "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme false ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 ; "
+        "gsettings set org.gnome.shell.extensions.dash-to-dock custom-theme-shrink true ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock customize-alphas false ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur true ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock override-background true ; "
@@ -922,7 +911,8 @@ apply_desktop_effects_mode (gboolean use_liquid_glass)
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock brightness 0.64 ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock pipeline 'pipeline_default_rounded' ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock unblur-in-overview true ; "
-        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock static-blur true >/dev/null 2>&1 &\"";
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock static-blur true ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur true >/dev/null 2>&1 &\"";
       g_spawn_command_line_async (dock_script, NULL);
     }
 }
@@ -931,12 +921,34 @@ static void
 on_liquid_glass_active_changed_cb (CcBackgroundPanel *self)
 {
   gboolean active;
+  guint mode = LIQUID_GLASS_MODE_TRANSPARENT;
 
   if (!self->liquid_glass_switch_row)
     return;
 
   active = adw_switch_row_get_active (self->liquid_glass_switch_row);
-  apply_desktop_effects_mode (active);
+  if (self->liquid_glass_mode_row)
+    mode = adw_combo_row_get_selected (self->liquid_glass_mode_row);
+
+  apply_desktop_effects_mode (active, (LiquidGlassWindowMode) mode);
+}
+
+static void
+on_liquid_glass_mode_selected_cb (CcBackgroundPanel *self)
+{
+  gboolean active = TRUE;
+  guint mode;
+
+  if (!self->liquid_glass_mode_row)
+    return;
+
+  if (self->liquid_glass_switch_row)
+    active = adw_switch_row_get_active (self->liquid_glass_switch_row);
+
+  mode = adw_combo_row_get_selected (self->liquid_glass_mode_row);
+
+  if (active)
+    apply_desktop_effects_mode (TRUE, (LiquidGlassWindowMode) mode);
 }
 
 static void
@@ -1005,25 +1017,198 @@ on_cc_active_changed_cb (CcBackgroundPanel *self)
   set_extension_enabled (CC_UUID, adw_switch_row_get_active (self->cc_switch_row));
 }
 
+static void read_downloader_output_async (CcBackgroundPanel *self, GDataInputStream *data_stream);
+
+static void
+on_downloader_line_read (GObject      *source,
+                         GAsyncResult *result,
+                         gpointer      user_data)
+{
+  CcBackgroundPanel *self = CC_BACKGROUND_PANEL (user_data);
+  GDataInputStream *data_stream = G_DATA_INPUT_STREAM (source);
+  g_autoptr(GError) error = NULL;
+  gsize length = 0;
+  g_autofree gchar *line = g_data_input_stream_read_line_finish (data_stream, result, &length, &error);
+
+  if (error != NULL || line == NULL)
+    {
+      /* Subprocess finished or pipe closed */
+      g_object_unref (data_stream);
+
+      if (self->download_spinner)
+        {
+          gtk_spinner_stop (self->download_spinner);
+          gtk_widget_set_visible (GTK_WIDGET (self->download_spinner), FALSE);
+        }
+      if (self->download_progress_bar)
+        gtk_widget_set_visible (GTK_WIDGET (self->download_progress_bar), FALSE);
+      if (self->download_wallpapers_btn)
+        {
+          gtk_widget_set_visible (GTK_WIDGET (self->download_wallpapers_btn), TRUE);
+          gtk_button_set_label (self->download_wallpapers_btn, _("Reinstall…"));
+          gtk_widget_remove_css_class (GTK_WIDGET (self->download_wallpapers_btn), "suggested-action");
+        }
+      if (self->download_wallpapers_row)
+        {
+          adw_preferences_row_set_title (ADW_PREFERENCES_ROW (self->download_wallpapers_row),
+                                         _("macOS 5K/6K Wallpaper Collection (Installed)"));
+          adw_action_row_set_subtitle (self->download_wallpapers_row,
+                                       _("Collection installed (42 wallpapers). Click to reinstall or update."));
+        }
+
+      AdwToast *toast = adw_toast_new (_("macOS wallpapers downloaded and ready in Settings!"));
+      adw_toast_set_timeout (toast, 5);
+      adw_toast_overlay_add_toast (self->toast_overlay, toast);
+
+      reload_current_bg (self);
+      update_preview (self);
+      return;
+    }
+
+  /* Parse progress line: PROGRESS:<fraction>:<current>/<total>:<filename> */
+  if (g_str_has_prefix (line, "PROGRESS:"))
+    {
+      gchar **parts = g_strsplit (line, ":", 4);
+      if (g_strv_length (parts) >= 4)
+        {
+          double frac = g_ascii_strtod (parts[1], NULL);
+          const gchar *count_str = parts[2];
+          const gchar *filename = parts[3];
+
+          if (self->download_progress_bar)
+            {
+              gtk_progress_bar_set_fraction (self->download_progress_bar, frac);
+              g_autofree gchar *perc_text = g_strdup_printf ("%d%%", (int)(frac * 100.0));
+              gtk_progress_bar_set_text (self->download_progress_bar, perc_text);
+            }
+
+          if (self->download_wallpapers_row && g_strcmp0 (filename, "DONE") != 0)
+            {
+              g_autofree gchar *sub_text = g_strdup_printf (_("Downloading %s: %s"), count_str, filename);
+              adw_action_row_set_subtitle (self->download_wallpapers_row, sub_text);
+            }
+        }
+      g_strfreev (parts);
+    }
+
+  /* Continue reading next line */
+  read_downloader_output_async (self, data_stream);
+}
+
+static void
+read_downloader_output_async (CcBackgroundPanel *self,
+                              GDataInputStream  *data_stream)
+{
+  g_data_input_stream_read_line_async (data_stream,
+                                       G_PRIORITY_DEFAULT,
+                                       NULL,
+                                       on_downloader_line_read,
+                                       self);
+}
+
+static void
+on_download_dialog_response_cb (AdwAlertDialog *dialog,
+                                const gchar    *response,
+                                gpointer        user_data)
+{
+  CcBackgroundPanel *self = CC_BACKGROUND_PANEL (user_data);
+
+  if (g_strcmp0 (response, "download") == 0)
+    {
+      AdwToast *toast = adw_toast_new (_("Downloading macOS wallpaper collection from repository…"));
+      adw_toast_set_timeout (toast, 5);
+      adw_toast_overlay_add_toast (self->toast_overlay, toast);
+
+      if (self->download_wallpapers_btn)
+        gtk_widget_set_visible (GTK_WIDGET (self->download_wallpapers_btn), FALSE);
+      if (self->download_progress_bar)
+        {
+          gtk_progress_bar_set_fraction (self->download_progress_bar, 0.0);
+          gtk_progress_bar_set_text (self->download_progress_bar, "0%");
+          gtk_widget_set_visible (GTK_WIDGET (self->download_progress_bar), TRUE);
+        }
+      if (self->download_spinner)
+        {
+          gtk_widget_set_visible (GTK_WIDGET (self->download_spinner), TRUE);
+          gtk_spinner_start (self->download_spinner);
+        }
+      if (self->download_wallpapers_row)
+        adw_action_row_set_subtitle (self->download_wallpapers_row, _("Starting download…"));
+
+      /* Launch downloader helper with stdout pipe for real-time progress */
+      g_autoptr(GSubprocessLauncher) launcher = g_subprocess_launcher_new (G_SUBPROCESS_FLAGS_STDOUT_PIPE);
+      g_autoptr(GError) error = NULL;
+      GSubprocess *proc = g_subprocess_launcher_spawn (launcher, &error, "/usr/bin/pulsaros-download-wallpapers", NULL);
+
+      if (proc != NULL)
+        {
+          GInputStream *stdout_pipe = g_subprocess_get_stdout_pipe (proc);
+          GDataInputStream *data_stream = g_data_input_stream_new (stdout_pipe);
+          read_downloader_output_async (self, data_stream);
+        }
+      else
+        {
+          if (self->download_spinner)
+            {
+              gtk_spinner_stop (self->download_spinner);
+              gtk_widget_set_visible (GTK_WIDGET (self->download_spinner), FALSE);
+            }
+          if (self->download_progress_bar)
+            gtk_widget_set_visible (GTK_WIDGET (self->download_progress_bar), FALSE);
+          if (self->download_wallpapers_btn)
+            gtk_widget_set_visible (GTK_WIDGET (self->download_wallpapers_btn), TRUE);
+        }
+    }
+}
+
+static void
+on_download_wallpapers_clicked_cb (CcBackgroundPanel *self)
+{
+  GtkRoot *root = gtk_widget_get_root (GTK_WIDGET (self));
+  AdwDialog *dialog;
+
+  dialog = adw_alert_dialog_new (
+    _("Apple macOS Wallpapers"),
+    _("Intellectual Property & Copyright Notice:\n\n"
+      "All wallpapers in this collection are the exclusive intellectual property and registered trademarks of Apple Inc.\n\n"
+      "Pulsar OS does not bundle these wallpapers pre-installed in order to respect copyright policies. "
+      "By clicking “Download”, you confirm that you are downloading them for your own personal and private use from the public GitHub repository.\n\n"
+      "Do you want to download and install this collection?")
+  );
+
+  adw_alert_dialog_add_response (ADW_ALERT_DIALOG (dialog), "cancel", _("Cancel"));
+  adw_alert_dialog_add_response (ADW_ALERT_DIALOG (dialog), "download", _("Download"));
+  adw_alert_dialog_set_response_appearance (ADW_ALERT_DIALOG (dialog), "download", ADW_RESPONSE_SUGGESTED);
+  adw_alert_dialog_set_default_response (ADW_ALERT_DIALOG (dialog), "download");
+  adw_alert_dialog_set_close_response (ADW_ALERT_DIALOG (dialog), "cancel");
+
+  g_signal_connect (dialog, "response", G_CALLBACK (on_download_dialog_response_cb), self);
+
+  if (GTK_IS_WIDGET (root))
+    adw_dialog_present (dialog, GTK_WIDGET (root));
+}
+
 static void
 cc_background_panel_class_init (CcBackgroundPanelClass *klass)
 {
-  GObjectClass *object_class = G_OBJECT_CLASS (klass);
-  CcPanelClass *panel_class = CC_PANEL_CLASS (klass);
-  GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
+    GObjectClass *object_class = G_OBJECT_CLASS (klass);
+    CcPanelClass *panel_class = CC_PANEL_CLASS (klass);
+    GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
 
-  g_type_ensure (CC_TYPE_BACKGROUND_CHOOSER);
-  g_type_ensure (CC_TYPE_BACKGROUND_PREVIEW);
+    g_type_ensure (CC_TYPE_BACKGROUND_CHOOSER);
+    g_type_ensure (CC_TYPE_BACKGROUND_PREVIEW);
 
-  panel_class->get_help_uri = cc_background_panel_get_help_uri;
+    panel_class->get_help_uri = cc_background_panel_get_help_uri;
 
-  object_class->dispose = cc_background_panel_dispose;
-  object_class->finalize = cc_background_panel_finalize;
+    object_class->dispose = cc_background_panel_dispose;
+    object_class->finalize = cc_background_panel_finalize;
 
-  gtk_widget_class_set_template_from_resource (widget_class, "/org/gnome/control-center/background/cc-background-panel.ui");
+    gtk_widget_class_set_template_from_resource (widget_class,
+                                                 "/org/gnome/control-center/background/cc-background-panel.ui");
 
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, accent_box);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, background_chooser);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, toast_overlay);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, default_preview);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, dark_preview);
 
@@ -1032,8 +1217,13 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_remap_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_fullscreen_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, liquid_glass_switch_row);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, liquid_glass_mode_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, notch_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, cc_switch_row);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, download_wallpapers_row);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, download_wallpapers_btn);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, download_progress_bar);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, download_spinner);
 
   gtk_widget_class_bind_template_callback (widget_class, on_color_scheme_toggle_active_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_chooser_background_chosen_cb);
@@ -1043,6 +1233,7 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_callback (widget_class, on_apply_cursor_tahoe_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_apply_cursor_adwaita_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_liquid_glass_active_changed_cb);
+  gtk_widget_class_bind_template_callback (widget_class, on_liquid_glass_mode_selected_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_activate_spotlight_python_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_activate_gnome_overview_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_macos_remap_active_changed_cb);
@@ -1050,13 +1241,14 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_callback (widget_class, on_notch_active_changed_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_notch_prefs_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_cc_active_changed_cb);
+  gtk_widget_class_bind_template_callback (widget_class, on_download_wallpapers_clicked_cb);
 }
 
 static void
 on_settings_changed (CcBackgroundPanel *self)
 {
-  reload_current_bg (self);
-  update_preview (self);
+    reload_current_bg (self);
+    update_preview (self);
 }
 
 static void
@@ -1120,6 +1312,31 @@ cc_background_panel_init (CcBackgroundPanel *self)
       g_signal_handlers_unblock_by_func (self->liquid_glass_switch_row, on_liquid_glass_active_changed_cb, self);
     }
 
+  if (self->liquid_glass_mode_row)
+    {
+      guint initial_mode = LIQUID_GLASS_MODE_TRANSPARENT;
+      g_autoptr(GSettingsSchema) glass_schema = NULL;
+      g_autoptr(GSettings) glass_settings = safe_settings_new ("org.gnome.shell.extensions.liquid-glass", &glass_schema);
+      if (!glass_settings)
+        glass_settings = safe_settings_new ("org.gnome.shell.extensions.liquid-glass@thinkingcoding1231.gmail.com", &glass_schema);
+
+      if (glass_settings && glass_schema)
+        {
+          gboolean app_glass = TRUE;
+          if (g_settings_schema_has_key (glass_schema, "enable-application-glass"))
+            app_glass = g_settings_get_boolean (glass_settings, "enable-application-glass");
+
+          if (!app_glass)
+            initial_mode = LIQUID_GLASS_MODE_OPAQUE;
+          else
+            initial_mode = LIQUID_GLASS_MODE_TRANSPARENT;
+        }
+
+      g_signal_handlers_block_by_func (self->liquid_glass_mode_row, on_liquid_glass_mode_selected_cb, self);
+      adw_combo_row_set_selected (self->liquid_glass_mode_row, initial_mode);
+      g_signal_handlers_unblock_by_func (self->liquid_glass_mode_row, on_liquid_glass_mode_selected_cb, self);
+    }
+
   if (self->notch_switch_row)
     {
       gboolean notch_active = is_extension_enabled (NOTCH_UUID);
@@ -1134,6 +1351,22 @@ cc_background_panel_init (CcBackgroundPanel *self)
       g_signal_handlers_block_by_func (self->cc_switch_row, on_cc_active_changed_cb, self);
       adw_switch_row_set_active (self->cc_switch_row, cc_active);
       g_signal_handlers_unblock_by_func (self->cc_switch_row, on_cc_active_changed_cb, self);
+    }
+
+  if (g_file_test ("/usr/share/backgrounds/macos/tahoe.png", G_FILE_TEST_EXISTS))
+    {
+      if (self->download_wallpapers_btn)
+        {
+          gtk_button_set_label (self->download_wallpapers_btn, _("Reinstall…"));
+          gtk_widget_remove_css_class (GTK_WIDGET (self->download_wallpapers_btn), "suggested-action");
+        }
+      if (self->download_wallpapers_row)
+        {
+          adw_preferences_row_set_title (ADW_PREFERENCES_ROW (self->download_wallpapers_row),
+                                         _("macOS 5K/6K Wallpaper Collection (Installed)"));
+          adw_action_row_set_subtitle (self->download_wallpapers_row,
+                                       _("Collection installed (42 wallpapers). Click to reinstall or update."));
+        }
     }
 
   self->connection = g_application_get_dbus_connection (g_application_get_default ());

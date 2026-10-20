@@ -299,6 +299,8 @@ def stop_active_verification():
         state.face_state = "idle"
         state.fingerprint_state = "idle"
         state.status_message = ""
+        state.last_event = None
+        state.last_match_time = 0
     try:
         # Graceful terminate first so fprintd releases device cleanly
         subprocess.run(["pkill", "-TERM", "-f", "fprintd-verify"], capture_output=True)
@@ -759,6 +761,14 @@ class BiometricsHTTPHandler(BaseHTTPRequestHandler):
             face_enabled = bio_cfg.get("face_id_enabled", True)
 
             with state.lock:
+                now = time.time()
+                # Clear stale matched states older than 5 seconds so they never cause
+                # false-positive logins on next greeter or lockscreen load
+                if state.face_state == "matched" and (now - state.last_match_time > 5.0):
+                    state.face_state = "idle"
+                if state.fingerprint_state == "matched" and (now - state.last_match_time > 5.0):
+                    state.fingerprint_state = "idle"
+
                 resp = {
                     "user": username,
                     "active_user": state.active_user,
