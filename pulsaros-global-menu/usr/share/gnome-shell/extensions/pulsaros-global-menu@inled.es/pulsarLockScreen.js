@@ -1470,7 +1470,22 @@ export const LockScreen = GObject.registerClass({
     }
 
     _startBiometrics(autoScanFace = false) {
-        this._stopBiometrics();
+        if (this._bioPollTimerId) {
+            GLib.source_remove(this._bioPollTimerId);
+            this._bioPollTimerId = 0;
+        }
+        if (this._helloAnimTimerId) {
+            GLib.source_remove(this._helloAnimTimerId);
+            this._helloAnimTimerId = 0;
+        }
+        if (this._fpPulseTimerId) {
+            GLib.source_remove(this._fpPulseTimerId);
+            this._fpPulseTimerId = 0;
+        }
+        if (this._matchedTimeoutId) {
+            GLib.source_remove(this._matchedTimeoutId);
+            this._matchedTimeoutId = 0;
+        }
         let username = this._selectedUsername || GLib.get_user_name();
         this._faceState = autoScanFace ? 'scanning' : 'paused';
         let isSpanish = (GLib.getenv('LANG') || '').startsWith('es');

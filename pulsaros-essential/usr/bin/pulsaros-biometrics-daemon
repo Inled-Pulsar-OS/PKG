@@ -29,6 +29,7 @@ class BiometricsState:
         self.active_user = None
         self.verify_source = None
         self.is_verifying = False
+        self.session_id = 0
 
         # States: "idle", "scanning", "waiting", "matched", "failed", "disabled"
         self.face_state = "idle"
@@ -283,6 +284,7 @@ def save_presence_config(username, cfg):
 def stop_active_verification():
     close_gaze_camera_window()
     with state.lock:
+        state.session_id += 1
         state.is_verifying = False
         if state.face_proc:
             try:
@@ -374,27 +376,35 @@ def close_gaze_camera_window():
     except Exception:
         pass
 
-def run_face_verification(username):
-    log(f"Starting Face ID worker for '{username}'")
+def run_face_verification(username, session_id):
+    log(f"Starting Face ID worker for '{username}' (session {session_id})")
     with state.lock:
+        if state.session_id != session_id or not state.is_verifying:
+            return
         state.face_state = "scanning"
         state.status_message = tr("Buscando rostro...", "Looking for face...")
 
     attempts = 0
     consecutive_fails = 0
-    while state.is_verifying and state.active_user == username and attempts < 10:
+    while attempts < 10:
+        with state.lock:
+            if not state.is_verifying or state.active_user != username or state.session_id != session_id:
+                break
         attempts += 1
         try:
             cmd = ["gaze", "auth", "-u", username, "-s"]
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             with state.lock:
+                if state.session_id != session_id or not state.is_verifying:
+                    proc.terminate()
+                    break
                 state.face_proc = proc
             ret = proc.wait()
             with state.lock:
-                state.face_proc = None
-
-            if not state.is_verifying or state.active_user != username:
-                break
+                if state.face_proc == proc:
+                    state.face_proc = None
+                if not state.is_verifying or state.active_user != username or state.session_id != session_id:
+                    break
 
             if ret == 0:
                 with state.lock:
@@ -426,16 +436,17 @@ def run_face_verification(username):
                 consecutive_fails += 1
                 log(f"Face auth failed for '{username}' (consecutive failures: {consecutive_fails})")
                 with state.lock:
-                    state.face_state = "failed"
-                    state.status_message = tr("Rostro no reconocido", "Face not recognized")
+                    if state.session_id == session_id:
+                        state.face_state = "failed"
+                        state.status_message = tr("Rostro no reconocido", "Face not recognized")
                 
                 if consecutive_fails >= 2:
                     log(f"{consecutive_fails} consecutive Face ID failures: opening Gaze camera frame preview window!")
                     show_gaze_camera_window(username)
 
                 time.sleep(1.2)
-                if state.is_verifying:
-                    with state.lock:
+                with state.lock:
+                    if state.is_verifying and state.session_id == session_id:
                         state.face_state = "scanning"
                         state.status_message = tr("Buscando rostro...", "Looking for face...")
         except Exception as e:
@@ -444,48 +455,74 @@ def run_face_verification(username):
         time.sleep(0.5)
 
     with state.lock:
-        if state.face_state != "matched":
+        if state.session_id == session_id and state.face_state != "matched":
             state.face_state = "idle"
 
-def run_fingerprint_verification(username):
-    log(f"Starting Touch ID worker for '{username}'")
+def run_fingerprint_verification(username, session_id):
+    log(f"Starting Touch ID worker for '{username}' (session {session_id})")
     with state.lock:
+        if state.session_id != session_id or not state.is_verifying:
+            return
         state.fingerprint_state = "waiting"
         if state.face_state == "paused":
             state.status_message = tr("Pulsa para activar Face ID o usa la huella", "Click to activate Face ID or use fingerprint")
         elif state.face_state not in ("scanning", "matched", "failed"):
             state.status_message = tr("Esperando huella...", "Waiting for fingerprint...")
 
-    while state.is_verifying and state.active_user == username:
+    # Wait briefly if an old fprintd-verify was terminating to ensure device release
+    time.sleep(0.1)
+
+    while True:
+        with state.lock:
+            if not state.is_verifying or state.active_user != username or state.session_id != session_id:
+                break
+
         try:
             cmd = ["fprintd-verify", username]
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             with state.lock:
+                if state.session_id != session_id or not state.is_verifying:
+                    proc.terminate()
+                    break
                 state.fp_proc = proc
 
             matched = False
             for line in proc.stdout:
+                with state.lock:
+                    if state.session_id != session_id or not state.is_verifying:
+                        break
                 line_str = line.strip()
                 if "verify-match" in line_str:
                     matched = True
                     break
                 elif "verify-no-match" in line_str or "verify-unknown-error" in line_str:
                     with state.lock:
-                        state.fingerprint_state = "failed"
-                        state.status_message = tr("Huella no reconocida", "Fingerprint not recognized")
+                        if state.session_id == session_id:
+                            state.fingerprint_state = "failed"
+                            state.status_message = tr("Huella no reconocida", "Fingerprint not recognized")
                     time.sleep(1.2)
-                    if state.is_verifying:
-                        with state.lock:
+                    with state.lock:
+                        if state.is_verifying and state.session_id == session_id:
                             state.fingerprint_state = "waiting"
                             if state.face_state == "paused":
                                 state.status_message = tr("Pulsa para activar Face ID o usa la huella", "Click to activate Face ID or use fingerprint")
                             elif state.face_state not in ("scanning", "matched", "failed"):
                                 state.status_message = tr("Esperando huella...", "Waiting for fingerprint...")
 
-            proc.wait()
-            ret_code = proc.returncode
+            try:
+                proc.wait(timeout=1)
+            except Exception:
+                try:
+                    proc.terminate()
+                    proc.wait()
+                except Exception:
+                    pass
+
             with state.lock:
-                state.fp_proc = None
+                if state.fp_proc == proc:
+                    state.fp_proc = None
+                if state.session_id != session_id or not state.is_verifying:
+                    break
 
             if matched:
                 with state.lock:
@@ -509,24 +546,41 @@ def run_fingerprint_verification(username):
                 log(f"Touch ID matched for '{username}'!")
                 close_gaze_camera_window()
                 return
-            elif ret_code != 0:
-                time.sleep(1.2)
+            elif proc.returncode != 0:
+                time.sleep(1.0)
         except Exception as e:
             log(f"Fingerprint verify exception: {e}")
             break
-        time.sleep(0.5)
+
+        time.sleep(0.3)
 
     with state.lock:
-        if state.fingerprint_state != "matched":
+        if state.session_id == session_id and state.fingerprint_state != "matched":
             state.fingerprint_state = "idle"
 
 def start_verification(username, source="lockscreen", auto_face=None):
+    if auto_face is None:
+        if source in ("polkit", "test"):
+            auto_face = True
+        else:
+            auto_face = False
+
+    # Debounce duplicate request if already verifying the exact same user and source
+    with state.lock:
+        if state.is_verifying and state.active_user == username and state.verify_source == source:
+            if auto_face and state.face_state not in ("scanning", "matched"):
+                pass
+            else:
+                log(f"Verification already active for '{username}' (source: {source}), ignoring duplicate start")
+                return
+
     stop_active_verification()
     with state.lock:
         state.active_user = username
         state.verify_source = source
         state.is_verifying = True
         state.last_event = None
+        current_session = state.session_id
 
     has_cam = has_camera()
     has_fp = has_fingerprint_reader()
@@ -537,17 +591,11 @@ def start_verification(username, source="lockscreen", auto_face=None):
     touch_enabled = bio_cfg.get("touch_id_enabled", True)
     face_enabled = bio_cfg.get("face_id_enabled", True)
 
-    if auto_face is None:
-        if source in ("polkit", "test"):
-            auto_face = True
-        else:
-            auto_face = False
-
-    log(f"Verification request for '{username}' (source: {source}, auto_face: {auto_face}). Cam: {has_cam} (enrolled: {face_enrolled}, enabled: {face_enabled}), FP: {has_fp} (enrolled: {fp_enrolled}, enabled: {touch_enabled})")
+    log(f"Verification request for '{username}' (session {current_session}, source: {source}, auto_face: {auto_face}). Cam: {has_cam} (enrolled: {face_enrolled}, enabled: {face_enabled}), FP: {has_fp} (enrolled: {fp_enrolled}, enabled: {touch_enabled})")
 
     if has_cam and face_enrolled and face_enabled:
         if auto_face:
-            threading.Thread(target=run_face_verification, args=(username,), daemon=True).start()
+            threading.Thread(target=run_face_verification, args=(username, current_session), daemon=True).start()
         else:
             with state.lock:
                 state.face_state = "paused"
@@ -560,7 +608,7 @@ def start_verification(username, source="lockscreen", auto_face=None):
             state.face_state = "disabled" if not face_enabled else "idle"
 
     if has_fp and fp_enrolled and touch_enabled:
-        threading.Thread(target=run_fingerprint_verification, args=(username,), daemon=True).start()
+        threading.Thread(target=run_fingerprint_verification, args=(username, current_session), daemon=True).start()
 
 def activate_face_scan(username=None):
     if not username:
@@ -579,7 +627,8 @@ def activate_face_scan(username=None):
             state.face_state = "scanning"
             state.status_message = tr("Buscando rostro...", "Looking for face...")
             state.is_verifying = True
-        threading.Thread(target=run_face_verification, args=(username,), daemon=True).start()
+            current_session = state.session_id
+        threading.Thread(target=run_face_verification, args=(username, current_session), daemon=True).start()
         return True
     return False
 
