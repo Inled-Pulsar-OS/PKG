@@ -114,6 +114,19 @@ class AppLauncher:
             if not tokens:
                 return None
             exe_bin = tokens[0]
+            exe_name = os.path.basename(exe_bin)
+
+            # Exclude non-Broadway apps (Chrome, Electron, terminal wrappers, Qt-only, mirrors)
+            # to guarantee that every listed app renders in Broadway and NEVER on the PC screen
+            non_broadway_bins = {
+                "google-chrome", "google-chrome-stable", "chromium", "brave", "firefox",
+                "code", "code-oss", "electron", "kdenlive", "scrcpy", "gnome-terminal",
+                "xdg-open", "cups", "qv4l2", "qvidcap", "lstopo", "virt-manager",
+                "install-macos", "bssh", "bvnc"
+            }
+            if exe_name in non_broadway_bins or any("gnome-terminal" in t or "xdg-open" in t for t in tokens):
+                return None
+
             if os.path.isabs(exe_bin):
                 if not os.path.isfile(exe_bin):
                     return None
@@ -293,10 +306,13 @@ class AppLauncher:
 
         # 4. Launch the application with GDK_BACKEND=broadway
         env = os.environ.copy()
-        # CRITICAL: Strip host displays and session bus to ensure app CANNOT open on PC desktop
-        env.pop("WAYLAND_DISPLAY", None)
-        env.pop("DISPLAY", None)
-        env.pop("DBUS_SESSION_BUS_ADDRESS", None)
+        # CRITICAL: Isolate completely from desktop Wayland/X11 displays and user D-Bus session.
+        # This prevents single-instance GTK apps (Nautilus, Calendar, etc.) from forwarding
+        # activation to desktop processes or opening windows on the PC screen!
+        env["DBUS_SESSION_BUS_ADDRESS"] = "disabled:"
+        env["WAYLAND_DISPLAY"] = "none"
+        env["DISPLAY"] = "none"
+        env["QT_QPA_PLATFORM"] = "offscreen"
 
         env["GDK_BACKEND"] = "broadway"
         env["BROADWAY_DISPLAY"] = f":{self.display_num}"
