@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Launcher for Pulsar VPN GTK4/Adwaita Application
+exec /usr/bin/python3 /usr/lib/pulsaros-vpn/vpn_gui.py "$@"

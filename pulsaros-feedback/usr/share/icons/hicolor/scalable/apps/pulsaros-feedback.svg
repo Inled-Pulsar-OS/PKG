@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="pulsarBlueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="50%" stop-color="#0284C7" />
+      <stop offset="100%" stop-color="#0369A1" />
+    </linearGradient>
+    <filter id="iconShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#0284C7" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Outer rounded squircle -->
+  <rect x="32" y="32" width="448" height="448" rx="100" ry="100"
+        fill="url(#pulsarBlueGrad)" filter="url(#iconShadow)" />
+
+  <!-- Lucide Icon: MessageSquareShare + text strokes -->
+  <g transform="translate(106, 106) scale(12.5)"
+     fill="none"
+     stroke="#FFFFFF"
+     stroke-width="2.2"
+     stroke-linecap="round"
+     stroke-linejoin="round">
+    <!-- Message Bubble -->
+    <path d="M21 12v3a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h7" />
+    <!-- Outgoing share arrow -->
+    <path d="M16 3h5v5" />
+    <path d="m16 8 5-5" />
+    <!-- Note / log lines -->
+    <path d="M7 9h4" stroke-opacity="0.9" />
+    <path d="M7 13h7" stroke-opacity="0.9" />
+  </g>
+</svg>

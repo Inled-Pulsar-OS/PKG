@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Launcher for Pulsar Bridge Daemon
+exec /usr/bin/python3 /usr/lib/pulsaros-vpn/bridge_daemon.py "$@"

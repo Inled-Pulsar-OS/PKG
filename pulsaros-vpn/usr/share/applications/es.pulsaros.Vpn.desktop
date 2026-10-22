@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Pulsar VPN
+GenericName=VPN & Phone Bridge
+Comment=Secure WireGuard VPN & Phone integration for Pulsar OS
+Exec=pulsar-vpn
+Icon=pulsar-vpn
+Terminal=false
+Type=Application
+Categories=Network;Security;GTK;Settings;
+StartupNotify=true
+X-GNOME-UsesNotifications=true
+Keywords=vpn;tailscale;wireguard;phone;broadway;remote;

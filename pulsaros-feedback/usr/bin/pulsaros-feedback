@@ -1,0 +1,3 @@
+#!/bin/bash
+# Pulsar OS - Feedback & Bug Reporter launcher
+exec /usr/bin/python3 /usr/lib/pulsaros-feedback/feedback.py "$@"

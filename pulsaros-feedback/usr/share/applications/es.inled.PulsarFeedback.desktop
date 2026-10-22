@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=Pulsar Feedback
+Name[es]=Pulsar Feedback
+Name[en]=Pulsar Feedback
+GenericName=System Feedback & Bug Report
+GenericName[es]=Feedback del Sistema y Reporte de Errores
+GenericName[en]=System Feedback & Bug Report
+Comment=Send feedback and system logs to the Pulsar OS PKG repository
+Comment[es]=Envía sugerencias y logs del sistema al repositorio PKG de Pulsar OS
+Comment[en]=Send feedback and system logs to the Pulsar OS PKG repository
+Exec=pulsaros-feedback
+Icon=pulsaros-feedback
+Terminal=false
+Categories=System;Utility;GTK;Settings;
+Keywords=feedback;logs;report;bug;issue;pulsaros;system;journalctl;
+StartupNotify=true
+StartupWMClass=es.inled.PulsarFeedback

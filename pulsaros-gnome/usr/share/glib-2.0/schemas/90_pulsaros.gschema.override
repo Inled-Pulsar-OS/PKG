@@ -31,10 +31,10 @@ lock-enabled=true
 disable-lock-screen=false
 
 [org.gnome.desktop.interface]
-gtk-theme='MacTahoe-Light-solid'
+gtk-theme='MacTahoe-Dark-solid'
 cursor-theme='MacTahoe-dark'
-icon-theme='MacTahoe-blue-light'
-color-scheme='prefer-light'
+icon-theme='MacTahoe-blue-dark'
+color-scheme='prefer-dark'
 enable-animations=true
 
 

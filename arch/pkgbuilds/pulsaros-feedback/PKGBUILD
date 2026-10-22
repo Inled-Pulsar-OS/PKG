@@ -1,0 +1,28 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsaros-feedback
+pkgver=1.0.0
+pkgrel=1
+
+pkgdesc="Pulsar OS Feedback and System Logs Reporter"
+arch=(any)
+url="https://inled.es"
+license=(custom)
+depends=(python python-gobject gtk4 libadwaita)
+source=()
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-feedback && pwd)"
+
+    mkdir -p "$pkgdir/usr/bin"
+    install -m 755 "$_src/usr/bin/pulsaros-feedback" "$pkgdir/usr/bin/pulsaros-feedback"
+
+    mkdir -p "$pkgdir/usr/lib/pulsaros-feedback"
+    install -m 755 "$_src/usr/lib/pulsaros-feedback/feedback.py" "$pkgdir/usr/lib/pulsaros-feedback/feedback.py"
+
+    mkdir -p "$pkgdir/usr/share/applications"
+    install -m 644 "$_src/usr/share/applications/es.inled.PulsarFeedback.desktop" \
+        "$pkgdir/usr/share/applications/es.inled.PulsarFeedback.desktop"
+
+    mkdir -p "$pkgdir/usr/share/icons"
+    cp -rf "$_src/usr/share/icons/." "$pkgdir/usr/share/icons/"
+}

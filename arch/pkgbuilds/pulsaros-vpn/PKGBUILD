@@ -1,0 +1,37 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsaros-vpn
+pkgver=1.0.0
+pkgrel=1
+
+pkgdesc="Pulsar VPN & Phone Bridge for Pulsar OS"
+arch=(any)
+url="https://inled.es"
+license=(custom)
+depends=(python python-gobject gtk4 libadwaita qrencode)
+optdepends=('tailscale: WireGuard mesh network daemon'
+            'broadwayd: GTK Broadway HTML5 display daemon'
+            'wl-clipboard: Wayland clipboard support'
+            'pulsaros-flydrop: LocalSend file transfer daemon')
+source=()
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-vpn && pwd)"
+
+    mkdir -p "$pkgdir/usr/bin"
+    install -m 755 "$_src/usr/bin/pulsar-vpn" "$pkgdir/usr/bin/pulsar-vpn"
+    install -m 755 "$_src/usr/bin/pulsar-bridge" "$pkgdir/usr/bin/pulsar-bridge"
+
+    mkdir -p "$pkgdir/usr/lib/pulsaros-vpn"
+    install -m 755 "$_src/usr/lib/pulsaros-vpn/"*.py "$pkgdir/usr/lib/pulsaros-vpn/"
+
+    mkdir -p "$pkgdir/usr/share/applications"
+    install -m 644 "$_src/usr/share/applications/es.pulsaros.Vpn.desktop" \
+        "$pkgdir/usr/share/applications/es.pulsaros.Vpn.desktop"
+
+    mkdir -p "$pkgdir/usr/lib/systemd/user"
+    install -m 644 "$_src/usr/lib/systemd/user/pulsar-bridge.service" \
+        "$pkgdir/usr/lib/systemd/user/pulsar-bridge.service"
+
+    mkdir -p "$pkgdir/usr/share/icons"
+    cp -rf "$_src/usr/share/icons/." "$pkgdir/usr/share/icons/"
+}

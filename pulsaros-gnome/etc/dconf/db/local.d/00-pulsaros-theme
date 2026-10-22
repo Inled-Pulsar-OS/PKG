@@ -1,8 +1,8 @@
 [org/gnome/desktop/interface]
-gtk-theme='MacTahoe-Light-solid'
+gtk-theme='MacTahoe-Dark-solid'
 cursor-theme='MacTahoe-dark'
-icon-theme='MacTahoe-blue-light'
-color-scheme='prefer-light'
+icon-theme='MacTahoe-blue-dark'
+color-scheme='prefer-dark'
 enable-animations=true
 
 
@@ -20,7 +20,7 @@ disable-lock-screen=false
 button-layout='close,minimize,maximize:'
 
 [org/gnome/shell/extensions/user-theme]
-name='MacTahoe-Light-solid'
+name='MacTahoe-Dark-solid'
 
 [org/gnome/shell]
 # Keep in sync with /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override.

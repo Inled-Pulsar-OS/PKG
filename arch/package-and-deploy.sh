@@ -193,10 +193,47 @@ stamp_git_commit() {
     printf '%s\n' "$commit" > "$GIT_STAMP_DIR/$name" 2>/dev/null || true
 }
 
+# Return the newest built artifact whose pkgname is exactly $1.
+#
+# The naive glob "$OUTPUT_DIR/${name}-*.pkg.tar.zst" is NOT safe: packages
+# whose names share a prefix (e.g. "gaze" and "gaze-gui") match each other's
+# files, so building one would delete the artifacts of the other and the
+# resulting `pacman -U` would fail with "duplicate target". Match on the
+# real pkgname stored in .PKGINFO instead, and fall back to a stricter
+# filename pattern when pacman is unavailable.
+find_package_output() {
+    local name="$1"
+    local f pkg_name best="" best_t=0 t
+    for f in "$OUTPUT_DIR"/*.pkg.tar.zst; do
+        [ -f "$f" ] || continue
+        pkg_name=$(LC_ALL=C pacman -Qip "$f" 2>/dev/null | awk -F': ' '/^Name/{print $2; exit}')
+        if [ -n "$pkg_name" ]; then
+            [ "$pkg_name" = "$name" ] || continue
+        else
+            # Fallback: the version segment must start with a digit so that
+            # "gaze" does not match "gaze-gui".
+            case "$(basename "$f")" in
+                "${name}-"[0-9]*) ;;
+                *) continue ;;
+            esac
+        fi
+        t=$(stat -c %Y "$f" 2>/dev/null || echo 0)
+        if [ "$t" -gt "$best_t" ]; then
+            best="$f"
+            best_t="$t"
+        fi
+    done
+    # Always succeed: callers detect "not found" by testing an empty result.
+    # Returning non-zero would abort the script under `set -e` when the
+    # result is captured in a plain assignment.
+    [ -n "$best" ] && printf '%s\n' "$best"
+    return 0
+}
+
 is_pkg_up_to_date() {
     local name="$1"
     local pkgbuild_dir="$PKGBUILDS_DIR/$name"
-    local existing_pkg=$(ls -t "$OUTPUT_DIR/${name}-"*.pkg.tar.zst 2>/dev/null | head -n 1)
+    local existing_pkg=$(find_package_output "$name")
     [ -z "$existing_pkg" ] && return 1
     [ ! -f "$existing_pkg" ] && return 1
 
@@ -303,7 +340,21 @@ build_single_package() {
 
     # Remove stale versions of this package to avoid pacman -U "duplicate
     # target" errors when the ISO build copies every *.pkg.tar.zst.
-    rm -f "$OUTPUT_DIR/${name}-"*.pkg.tar.zst
+    # Only the artifacts whose pkgname is exactly $name are removed: a plain
+    # "${name}-*" glob would also wipe sibling packages sharing the prefix
+    # (e.g. "gaze" removing the freshly built "gaze-gui").
+    local stale_file stale_name
+    for stale_file in "$OUTPUT_DIR"/*.pkg.tar.zst; do
+        [ -f "$stale_file" ] || continue
+        stale_name=$(LC_ALL=C pacman -Qip "$stale_file" 2>/dev/null | awk -F': ' '/^Name/{print $2; exit}')
+        if [ -n "$stale_name" ]; then
+            [ "$stale_name" = "$name" ] && rm -f "$stale_file"
+        else
+            case "$(basename "$stale_file")" in
+                "${name}-"[0-9]*) rm -f "$stale_file" ;;
+            esac
+        fi
+    done
 
     cd "$pkgbuild_dir"
 
@@ -407,7 +458,7 @@ build_single_package() {
         fi
     fi
 
-    local pkg_file=$(ls "$OUTPUT_DIR/${name}-"*.pkg.tar.zst 2>/dev/null | head -n 1)
+    local pkg_file=$(find_package_output "$name")
     if [ -n "$pkg_file" ]; then
         echo "✅ Package built: $(basename "$pkg_file")"
         COMPILED_PKGS+=("$pkg_file")
@@ -568,7 +619,7 @@ if [ -n "$UPLOAD_FLAG" ] || [ -n "$ONLY_UPLOAD_FLAG" ]; then
         else
             echo "⏫  ONLY-UPLOAD MODE: Uploading an already built package..."
         fi
-        UPLOAD_PKG=$(ls -t "$OUTPUT_DIR/${PACKAGE_NAME}-"*.pkg.tar.zst 2>/dev/null | head -n 1)
+        UPLOAD_PKG=$(find_package_output "$PACKAGE_NAME")
     fi
     if [ -z "$UPLOAD_PKG" ] || [ ! -f "$UPLOAD_PKG" ]; then
         echo "❌ Error: No package found for '$PACKAGE_NAME' in $OUTPUT_DIR."
@@ -635,7 +686,7 @@ if [ "$PACKAGE_NAME" == "all" ]; then
             fi
 
             if $INCREMENTAL && is_pkg_up_to_date "$pkg_name"; then
-                existing_pkg=$(ls -t "$OUTPUT_DIR/${pkg_name}-"*.pkg.tar.zst 2>/dev/null | head -n 1)
+                existing_pkg=$(find_package_output "$pkg_name")
                 echo "⚡ [CACHED] Reusing $pkg_name: $(basename "$existing_pkg") (unmodified)"
                 COMPILED_PKGS+=("$existing_pkg")
                 stamp_git_commit "$pkg_name"

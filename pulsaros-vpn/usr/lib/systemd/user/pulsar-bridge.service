@@ -1,0 +1,13 @@
+[Unit]
+Description=Pulsar Phone Bridge Daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pulsar-bridge
+Restart=on-failure
+RestartSec=3s
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target
