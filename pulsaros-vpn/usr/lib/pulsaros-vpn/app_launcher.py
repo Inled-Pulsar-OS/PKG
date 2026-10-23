@@ -75,6 +75,7 @@ class AppLauncher:
         return apps
 
     def _parse_desktop_file(self, filepath: str) -> Optional[Dict[str, Any]]:
+        app_id = os.path.basename(filepath)
         config = configparser.ConfigParser(interpolation=None, strict=False)
         try:
             with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
@@ -149,7 +150,8 @@ class AppLauncher:
                 "nodisplay": nodisplay,
                 "terminal": terminal
             }
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error parsing desktop file {filepath}: {e}")
             return None
 
     def _resolve_icon_base64(self, icon_name: str) -> Optional[str]:
@@ -220,7 +222,8 @@ class AppLauncher:
                 data = f.read()
             b64 = base64.b64encode(data).decode("utf-8")
             return f"data:{mime};base64,{b64}"
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error parsing desktop file {filepath}: {e}")
             return None
 
     def stop_broadwayd(self):
