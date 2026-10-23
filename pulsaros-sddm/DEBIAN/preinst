@@ -1,0 +1,16 @@
+#!/bin/bash
+set -e
+
+CONFLICT_FILE="/usr/share/sddm/themes/Apple.Tahoe/images/fingerprint-symbolic.svg"
+
+# Si el archivo existe y NO es propiedad de ningún paquete .deb, lo renombramos
+# para evitar el error "existe en el sistema de archivos" de dpkg
+if [ -e "$CONFLICT_FILE" ]; then
+    if ! dpkg -S "$CONFLICT_FILE" >/dev/null 2>&1; then
+        echo "⚠️  Archivo huérfano detectado: $CONFLICT_FILE (no pertenece a ningún paquete)"
+        echo "   Renombrando a ${CONFLICT_FILE}.dpkg-old para evitar conflicto..."
+        mv -f "$CONFLICT_FILE" "${CONFLICT_FILE}.dpkg-old" || true
+    fi
+fi
+
+exit 0
