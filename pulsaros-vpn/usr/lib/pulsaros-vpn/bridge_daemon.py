@@ -16,6 +16,7 @@ import json
 import logging
 import mimetypes
 import os
+import queue
 import secrets
 import shutil
 import socket
@@ -25,7 +26,7 @@ import sys
 import threading
 import time
 import urllib.parse
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from tailscale_manager import TailscaleManager
 from app_launcher import AppLauncher
@@ -66,6 +67,189 @@ def get_local_ip() -> str:
         return "127.0.0.1"
 
 
+class DesktopStreamManager:
+    """Streams PC desktop video + system audio to Android devices via low-latency MPEG-TS."""
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.ffmpeg_proc: Optional[subprocess.Popen] = None
+        self.reader_thread: Optional[threading.Thread] = None
+        self.clients: List[queue.Queue] = []
+
+    def is_running(self) -> bool:
+        with self.lock:
+            return self.ffmpeg_proc is not None and self.ffmpeg_proc.poll() is None
+
+    def start_if_needed(self):
+        with self.lock:
+            if self.ffmpeg_proc and self.ffmpeg_proc.poll() is None:
+                return
+
+            env = os.environ.copy()
+            if "DISPLAY" not in env or not env["DISPLAY"]:
+                env["DISPLAY"] = ":1"
+            display = env["DISPLAY"]
+
+            cmd = [
+                "ffmpeg",
+                "-f", "x11grab",
+                "-video_size", "1280x720",
+                "-framerate", "30",
+                "-i", display,
+                "-c:v", "libx264",
+                "-preset", "ultrafast",
+                "-tune", "zerolatency",
+                "-pix_fmt", "yuv420p",
+                "-g", "30",
+                "-keyint_min", "30",
+                "-sc_threshold", "0",
+                "-b:v", "2500k",
+                "-f", "mpegts",
+                "pipe:1"
+            ]
+            try:
+                self.ffmpeg_proc = subprocess.Popen(
+                    cmd,
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    bufsize=32768
+                )
+                self.reader_thread = threading.Thread(target=self._broadcast_loop, daemon=True)
+                self.reader_thread.start()
+                logger.info(f"PC Desktop Streamer started (display={display})")
+            except Exception as e:
+                logger.error(f"Failed to start desktop streamer: {e}")
+
+    def _broadcast_loop(self):
+        while True:
+            proc = self.ffmpeg_proc
+            if not proc or proc.poll() is not None or not proc.stdout:
+                break
+            try:
+                chunk = proc.stdout.read(4096)
+                if not chunk:
+                    break
+                with self.lock:
+                    dead = []
+                    for q in self.clients:
+                        try:
+                            q.put_nowait(chunk)
+                        except queue.Full:
+                            pass
+                        except Exception:
+                            dead.append(q)
+                    for d in dead:
+                        if d in self.clients:
+                            self.clients.remove(d)
+            except Exception:
+                break
+
+        self.stop()
+
+    def register_client(self) -> queue.Queue:
+        self.start_if_needed()
+        q = queue.Queue(maxsize=120)
+        with self.lock:
+            self.clients.append(q)
+        return q
+
+    def unregister_client(self, q: queue.Queue):
+        with self.lock:
+            if q in self.clients:
+                self.clients.remove(q)
+            if not self.clients:
+                self.stop()
+
+    def stop(self):
+        with self.lock:
+            if self.ffmpeg_proc:
+                try:
+                    self.ffmpeg_proc.terminate()
+                    self.ffmpeg_proc.wait(timeout=1.0)
+                except Exception:
+                    try:
+                        self.ffmpeg_proc.kill()
+                    except Exception:
+                        pass
+                self.ffmpeg_proc = None
+            self.clients.clear()
+            logger.info("PC Desktop Streamer stopped")
+
+
+class ScrcpyManager:
+    """Manages streaming phone screen & audio to PC desktop using scrcpy with audio."""
+    def __init__(self):
+        self.proc: Optional[subprocess.Popen] = None
+
+    def is_running(self) -> bool:
+        return self.proc is not None and self.proc.poll() is None
+
+    def _find_device_serial(self, phone_ip: Optional[str] = None) -> Optional[str]:
+        # Try Wi-Fi / IP first if provided
+        if phone_ip and phone_ip not in ("127.0.0.1", "localhost", "0.0.0.0"):
+            try:
+                subprocess.run(["adb", "connect", f"{phone_ip}:5555"], timeout=2, capture_output=True)
+            except Exception:
+                pass
+
+        try:
+            res = subprocess.run(["adb", "devices"], capture_output=True, text=True, timeout=2)
+            lines = [l.strip().split() for l in res.stdout.strip().splitlines()[1:] if l.strip()]
+            for dev in lines:
+                if len(dev) >= 2 and dev[1] == "device":
+                    if phone_ip and phone_ip in dev[0]:
+                        return dev[0]
+            # Return first available connected device (e.g. ZY32FTXBXD)
+            for dev in lines:
+                if len(dev) >= 2 and dev[1] == "device":
+                    return dev[0]
+        except Exception:
+            pass
+        return None
+
+    def start(self, phone_ip: Optional[str] = None) -> bool:
+        self.stop()
+        device_serial = self._find_device_serial(phone_ip)
+
+        scrcpy_bin = shutil.which("scrcpy") or "scrcpy"
+        env = os.environ.copy()
+        if "DISPLAY" not in env or not env["DISPLAY"]:
+            env["DISPLAY"] = ":1"
+        if "WAYLAND_DISPLAY" not in env or not env["WAYLAND_DISPLAY"]:
+            env["WAYLAND_DISPLAY"] = "wayland-0"
+        env["XDG_RUNTIME_DIR"] = f"/run/user/{os.getuid()}"
+
+        cmd = [
+            scrcpy_bin,
+            "--audio-source=output",
+            "--audio-codec=opus",
+            "--window-title=Pulsar Phone (Pantalla y Sonido)"
+        ]
+        if device_serial:
+            cmd.extend(["-s", device_serial])
+
+        try:
+            self.proc = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            logger.info(f"Launched scrcpy phone stream on device {device_serial}: {' '.join(cmd)}")
+            return True
+        except Exception as e:
+            logger.error(f"Error launching scrcpy: {e}")
+            return False
+
+    def stop(self):
+        if self.proc:
+            try:
+                self.proc.terminate()
+                self.proc.wait(timeout=1.0)
+            except Exception:
+                try:
+                    self.proc.kill()
+                except Exception:
+                    pass
+            self.proc = None
+            logger.info("Scrcpy phone stream stopped")
+
+
 class BridgeContext:
     def __init__(self):
         self.token = get_or_create_token()
@@ -76,6 +260,8 @@ class BridgeContext:
         self.port = DEFAULT_PORT
         self.broadway_port = BROADWAY_PORT
         self.launcher = AppLauncher(bind_ip="0.0.0.0", port=self.broadway_port)
+        self.desktop_streamer = DesktopStreamManager()
+        self.scrcpy_mgr = ScrcpyManager()
         self.refresh_ip()
 
     def refresh_ip(self):
@@ -177,6 +363,18 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/fs/file":
             target_path = params.get("path", [""])[0]
             self._serve_file(target_path)
+        elif path == "/api/stream/pc-to-phone/live.ts":
+            self._serve_live_desktop_stream()
+        elif path == "/api/stream/pc-to-phone/status":
+            self.send_json(200, {
+                "active": context.desktop_streamer.is_running(),
+                "clients": len(context.desktop_streamer.clients),
+                "url": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/live.ts?token={context.token}"
+            })
+        elif path == "/api/stream/phone-to-pc/status":
+            self.send_json(200, {
+                "running": context.scrcpy_mgr.is_running()
+            })
         else:
             self.send_json(404, {"error": "Not found"})
 
@@ -234,6 +432,29 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json(200, {"status": "created", "path": new_path})
             except Exception as e:
                 self.send_json(500, {"error": str(e)})
+
+        elif path == "/api/stream/phone-to-pc/start":
+            phone_ip = req_data.get("phoneIp")
+            if not phone_ip:
+                # Use client ip from connection
+                phone_ip = self.client_address[0]
+            ok = context.scrcpy_mgr.start(phone_ip)
+            self.send_json(200, {"status": "started" if ok else "error"})
+
+        elif path == "/api/stream/phone-to-pc/stop":
+            context.scrcpy_mgr.stop()
+            self.send_json(200, {"status": "stopped"})
+
+        elif path == "/api/stream/pc-to-phone/start":
+            context.desktop_streamer.start_if_needed()
+            self.send_json(200, {
+                "status": "started",
+                "url": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/live.ts?token={context.token}"
+            })
+
+        elif path == "/api/stream/pc-to-phone/stop":
+            context.desktop_streamer.stop()
+            self.send_json(200, {"status": "stopped"})
         else:
             self.send_json(404, {"error": "Not found"})
 
@@ -309,6 +530,31 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(chunk)
         except Exception as e:
             logger.error(f"Error serving {target_path}: {e}")
+
+    def _serve_live_desktop_stream(self):
+        client_q = context.desktop_streamer.register_client()
+        try:
+            self.send_response(200)
+            self.send_cors_headers()
+            self.send_header("Content-Type", "video/mp2t")
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
+            self.end_headers()
+
+            while True:
+                try:
+                    chunk = client_q.get(timeout=4.0)
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+                except queue.Empty:
+                    if not context.desktop_streamer.is_running():
+                        break
+                    continue
+        except (BrokenPipeError, ConnectionResetError, Exception) as e:
+            logger.debug(f"Desktop stream client disconnected: {e}")
+        finally:
+            context.desktop_streamer.unregister_client(client_q)
 
     def _send_desktop_notification(self, app_name: str, title: str, text: str):
         logger.info(f"Relaying notification from {app_name}: {title} - {text}")

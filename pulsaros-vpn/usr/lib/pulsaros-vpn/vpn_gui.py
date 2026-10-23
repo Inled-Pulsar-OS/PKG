@@ -2,8 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 Pulsar VPN & Phone - GTK4 / Libadwaita Desktop Control Center
-Allows easy and 100% secure configuration of Tailscale mesh VPN and Pulsar Phone pairing.
-ZERO public internet ports exposed.
+Simple, elegant interface matching Pulsar Adblocker design philosophy:
+- Large centered pill action button (Connect / Disconnect)
+- Clear pairing instructions & inline QR code
+- Bidirectional screen and sound streaming:
+    * PC -> Android (Screen + PulseAudio over low-latency MPEG-TS)
+    * Phone -> PC (Screen + Audio via scrcpy)
+- Zero public internet ports exposed (100% WireGuard mesh)
 """
 
 import json
@@ -15,9 +20,9 @@ import subprocess
 import sys
 import threading
 import urllib.parse
+import urllib.request
 
 import gi
-
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
@@ -27,229 +32,274 @@ from bridge_daemon import get_or_create_token, get_local_ip, DEFAULT_PORT
 
 APP_ID = "es.pulsaros.Vpn"
 QR_CACHE_PATH = "/tmp/pulsar_phone_pair_qr.png"
+DAEMON_URL = f"http://127.0.0.1:{DEFAULT_PORT}"
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
+logger = logging.getLogger("PulsarVPN.GUI")
 
 
 class PulsarVpnWindow(Adw.ApplicationWindow):
     def __init__(self, app):
-        super().__init__(application=app, title="Pulsar VPN & Phone")
-        self.set_default_size(780, 680)
+        super().__init__(application=app, title="Pulsar VPN")
+        self.set_default_size(520, 720)
+        self.set_size_request(420, 580)
 
         self.tailscale = TailscaleManager()
         self.token = get_or_create_token()
         self.hostname = socket.gethostname()
+        self.is_busy = False
 
         self._build_ui()
         self._refresh_status()
 
-        # Periodic refresh every 4 seconds
-        GLib.timeout_add_seconds(4, self._refresh_status)
+        # Periodic refresh every 3 seconds
+        GLib.timeout_add_seconds(3, self._refresh_status)
 
     def _build_ui(self):
         # HeaderBar
         header_bar = Adw.HeaderBar()
-        self.set_title("Pulsar VPN & Phone")
+        self.set_title("Pulsar VPN")
 
-        # Refresh button
         refresh_btn = Gtk.Button(icon_name="view-refresh-symbolic")
         refresh_btn.set_tooltip_text("Actualizar estado")
         refresh_btn.connect("clicked", lambda _: self._refresh_status())
         header_bar.pack_start(refresh_btn)
 
-        # Main Box
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        main_box.append(header_bar)
+        # Main Layout
+        root_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        root_box.append(header_bar)
 
-        # Scrolled Window
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_vexpand(True)
-        main_box.append(scrolled)
+        root_box.append(scrolled)
 
-        # Preferences Page
-        pref_page = Adw.PreferencesPage()
-        scrolled.set_child(pref_page)
+        clamp = Adw.Clamp()
+        clamp.set_maximum_size(540)
+        clamp.set_tightening_threshold(420)
+        scrolled.set_child(clamp)
 
-        # ---------------- GROUP 1: VPN & Tailscale Status ----------------
-        vpn_group = Adw.PreferencesGroup()
-        vpn_group.set_title("Red Privada Segura (Tailscale WireGuard)")
-        vpn_group.set_description(
-            "Conexión directa peer-to-peer cifrada de extremo a extremo sin abrir puertos en el router "
-            "ni exponer el PC a la Internet pública."
+        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=20)
+        content_box.set_margin_top(28)
+        content_box.set_margin_bottom(36)
+        content_box.set_margin_start(20)
+        content_box.set_margin_end(20)
+        content_box.set_halign(Gtk.Align.FILL)
+        clamp.set_child(content_box)
+
+        # Top App Header
+        self.header_icon = Gtk.Image.new_from_icon_name("network-vpn-symbolic")
+        self.header_icon.set_pixel_size(64)
+        self.header_icon.set_halign(Gtk.Align.CENTER)
+        content_box.append(self.header_icon)
+
+        self.title_label = Gtk.Label()
+        self.title_label.set_markup("<b>Pulsar VPN</b>")
+        self.title_label.add_css_class("title-1")
+        self.title_label.set_halign(Gtk.Align.CENTER)
+        content_box.append(self.title_label)
+
+        self.status_label = Gtk.Label()
+        self.status_label.set_text("Comprobando conexión...")
+        self.status_label.add_css_class("heading")
+        self.status_label.set_halign(Gtk.Align.CENTER)
+        content_box.append(self.status_label)
+
+        # ----------------- BIG CENTERED PILL BUTTON (Like Adblocker) -----------------
+        self.btn = Gtk.Button()
+        self.btn.set_size_request(260, 72)
+        self.btn.add_css_class("pill")
+        self.btn.set_halign(Gtk.Align.CENTER)
+        self.btn.connect("clicked", self._on_btn_clicked)
+
+        self.btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        self.btn_box.set_halign(Gtk.Align.CENTER)
+        self.btn_box.set_valign(Gtk.Align.CENTER)
+
+        self.btn_icon = Gtk.Image.new_from_icon_name("network-vpn-symbolic")
+        self.btn_box.append(self.btn_icon)
+
+        self.btn_text = Gtk.Label()
+        self.btn_text.set_markup("<b>CONECTAR VPN</b>")
+        self.btn_text.add_css_class("title-2")
+        self.btn_box.append(self.btn_text)
+
+        self.btn_spinner = Gtk.Spinner()
+        self.btn_spinner.set_size_request(24, 24)
+        self.btn_spinner.set_visible(False)
+        self.btn_box.append(self.btn_spinner)
+
+        self.btn.set_child(self.btn_box)
+        content_box.append(self.btn)
+
+        # ----------------- SIMPLE EXPLANATION -----------------
+        self.info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.info_box.set_halign(Gtk.Align.CENTER)
+        self.info_box.set_margin_top(4)
+
+        info_lbl = Gtk.Label()
+        info_lbl.set_markup(
+            "<span size='medium'>Simplemente <b>inicia sesión con la misma cuenta</b> en otro dispositivo\n"
+            "o escanea el código QR que se muestra a continuación.</span>"
         )
-        pref_page.add(vpn_group)
+        info_lbl.set_wrap(True)
+        info_lbl.set_justify(Gtk.Justification.CENTER)
+        info_lbl.add_css_class("dim-label")
+        self.info_box.append(info_lbl)
+        content_box.append(self.info_box)
 
-        # Status ActionRow
-        self.vpn_status_row = Adw.ActionRow()
-        self.vpn_status_row.set_title("Estado de la VPN")
-        self.vpn_status_row.set_subtitle("Comprobando conexión...")
-        self.vpn_status_icon = Gtk.Image.new_from_icon_name("network-vpn-symbolic")
-        self.vpn_status_row.add_prefix(self.vpn_status_icon)
+        # ----------------- QR PAIRING CARD -----------------
+        qr_card = Adw.PreferencesGroup()
+        qr_card.set_title("Vincular con tu Móvil")
+        content_box.append(qr_card)
 
-        self.vpn_toggle_btn = Gtk.Button(label="Conectar")
-        self.vpn_toggle_btn.set_valign(Gtk.Align.CENTER)
-        self.vpn_toggle_btn.connect("clicked", self._on_toggle_vpn)
-        self.vpn_status_row.add_suffix(self.vpn_toggle_btn)
-        vpn_group.add(self.vpn_status_row)
-
-        # IP Row
-        self.ip_row = Adw.ActionRow()
-        self.ip_row.set_title("Dirección IP Privada")
-        self.ip_row.set_subtitle("No asignada")
-        copy_ip_btn = Gtk.Button(icon_name="edit-copy-symbolic")
-        copy_ip_btn.set_tooltip_text("Copiar IP")
-        copy_ip_btn.set_valign(Gtk.Align.CENTER)
-        copy_ip_btn.connect("clicked", self._copy_ip)
-        self.ip_row.add_suffix(copy_ip_btn)
-        vpn_group.add(self.ip_row)
-
-        # Hostname / MagicDNS Row
-        self.dns_row = Adw.ActionRow()
-        self.dns_row.set_title("Nombre de Red (MagicDNS)")
-        self.dns_row.set_subtitle(self.hostname)
-        vpn_group.add(self.dns_row)
-
-        # ---------------- GROUP 2: Pulsar Phone Pairing ----------------
-        pair_group = Adw.PreferencesGroup()
-        pair_group.set_title("Vincular con Pulsar Phone")
-        pair_group.set_description(
-            "Abre la app Pulsar Phone en tu teléfono Android y escanea el código QR para "
-            "acceder a las aplicaciones del PC, transferir con FlyDrop y montar tus archivos."
-        )
-        pref_page.add(pair_group)
-
-        # QR Card Row
-        qr_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        qr_box.set_margin_top(12)
-        qr_box.set_margin_bottom(12)
+        qr_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         qr_box.set_halign(Gtk.Align.CENTER)
+        qr_box.set_margin_top(8)
+        qr_box.set_margin_bottom(12)
 
         self.qr_image = Gtk.Picture()
-        self.qr_image.set_size_request(220, 220)
+        self.qr_image.set_size_request(200, 200)
         self.qr_image.set_can_shrink(True)
         qr_box.append(self.qr_image)
 
-        self.qr_info_label = Gtk.Label()
-        self.qr_info_label.set_wrap(True)
-        self.qr_info_label.set_justify(Gtk.Justification.CENTER)
-        self.qr_info_label.set_text("Generando código QR seguro...")
-        qr_box.append(self.qr_info_label)
+        self.qr_details_label = Gtk.Label()
+        self.qr_details_label.set_justify(Gtk.Justification.CENTER)
+        self.qr_details_label.set_wrap(True)
+        self.qr_details_label.set_markup(f"<b>PC:</b> {self.hostname}")
+        qr_box.append(self.qr_details_label)
 
-        # Copy pair URI button
-        copy_pair_btn = Gtk.Button(label="Copiar Datos de Vinculación")
+        copy_pair_btn = Gtk.Button(label="Copiar Enlace de Vinculación")
         copy_pair_btn.set_halign(Gtk.Align.CENTER)
-        copy_pair_btn.add_css_class("suggested-action")
+        copy_pair_btn.add_css_class("flat")
         copy_pair_btn.connect("clicked", self._copy_pair_uri)
         qr_box.append(copy_pair_btn)
 
-        pair_group.add(qr_box)
+        qr_card.add(qr_box)
 
-        # ---------------- GROUP 3: Servicios Integrados ----------------
-        services_group = Adw.PreferencesGroup()
-        services_group.set_title("Servicios Activos para el Teléfono")
-        pref_page.add(services_group)
+        # ----------------- BIDIRECTIONAL SCREEN & SOUND STREAMING -----------------
+        stream_group = Adw.PreferencesGroup()
+        stream_group.set_title("Pantalla y Sonido Compartidos")
+        stream_group.set_description("Transmite pantalla y audio en tiempo real entre este PC y tu teléfono Android.")
+        content_box.append(stream_group)
 
-        # Broadway Apps Row
-        self.apps_row = Adw.ActionRow()
-        self.apps_row.set_title("Retransmisión Broadway (GTK)")
-        self.apps_row.set_subtitle("Listo para proyectar aplicaciones en el teléfono (Puerto 8085)")
-        self.apps_row.add_prefix(Gtk.Image.new_from_icon_name("video-display-symbolic"))
-        services_group.add(self.apps_row)
+        # Row 1: PC -> Android Phone (Screen + Sound)
+        self.pc_to_phone_row = Adw.ActionRow()
+        self.pc_to_phone_row.set_title("Transmitir PC al Teléfono (Pantalla + Sonido)")
+        self.pc_to_phone_row.set_subtitle("Envía el escritorio completo y el sonido del sistema al móvil vía Wi-Fi / VPN")
+        self.pc_to_phone_row.add_prefix(Gtk.Image.new_from_icon_name("video-display-symbolic"))
 
-        # FlyDrop Row
-        flydrop_row = Adw.ActionRow()
-        flydrop_row.set_title("Compartir con FlyDrop (LocalSend v2)")
-        flydrop_row.set_subtitle("Envío de archivos, fotos y portapapeles a través de FlyDrop (Puerto 53317)")
-        flydrop_row.add_prefix(Gtk.Image.new_from_icon_name("send-to-symbolic"))
-        services_group.add(flydrop_row)
+        self.btn_stream_pc = Gtk.Button(label="Iniciar")
+        self.btn_stream_pc.set_valign(Gtk.Align.CENTER)
+        self.btn_stream_pc.add_css_class("suggested-action")
+        self.btn_stream_pc.connect("clicked", self._toggle_pc_to_phone_stream)
+        self.pc_to_phone_row.add_suffix(self.btn_stream_pc)
+        stream_group.add(self.pc_to_phone_row)
 
-        # Filesystem Mount Row
-        fs_row = Adw.ActionRow()
-        fs_row.set_title("Montaje de Archivos (Android SAF)")
-        fs_row.set_subtitle("Permite navegar y editar archivos del PC en la app nativa 'Archivos' de Android")
-        fs_row.add_prefix(Gtk.Image.new_from_icon_name("folder-remote-symbolic"))
-        services_group.add(fs_row)
+        # Row 2: Phone -> PC (Screen + Sound)
+        self.phone_to_pc_row = Adw.ActionRow()
+        self.phone_to_pc_row.set_title("Ver Teléfono en el PC (Pantalla + Sonido)")
+        self.phone_to_pc_row.set_subtitle("Proyecta y escucha la pantalla de tu móvil en una ventana del PC con scrcpy")
+        self.phone_to_pc_row.add_prefix(Gtk.Image.new_from_icon_name("phone-symbolic"))
 
-        # Notifications Relay Row
-        notif_row = Adw.ActionRow()
-        notif_row.set_title("Sincronización de Notificaciones")
-        notif_row.set_subtitle("Las notificaciones de tu teléfono aparecerán en tu escritorio de Pulsar OS")
-        notif_row.add_prefix(Gtk.Image.new_from_icon_name("preferences-system-notifications-symbolic"))
-        services_group.add(notif_row)
+        self.btn_stream_phone = Gtk.Button(label="Abrir")
+        self.btn_stream_phone.set_valign(Gtk.Align.CENTER)
+        self.btn_stream_phone.connect("clicked", self._toggle_phone_to_pc_stream)
+        self.phone_to_pc_row.add_suffix(self.btn_stream_phone)
+        stream_group.add(self.phone_to_pc_row)
 
-        self.set_content(main_box)
+        # IP details footer
+        self.footer_label = Gtk.Label()
+        self.footer_label.set_halign(Gtk.Align.CENTER)
+        self.footer_label.add_css_class("caption")
+        self.footer_label.add_css_class("dim-label")
+        content_box.append(self.footer_label)
+
+        self.set_content(root_box)
 
     def _refresh_status(self):
+        if self.is_busy:
+            return True
+
         status = self.tailscale.get_status()
         is_running = status.get("running", False)
         ip = status.get("ip")
-        magic_dns = status.get("magic_dns") or self.hostname
         auth_url = status.get("auth_url")
         self.current_auth_url = auth_url
 
         lan_ip = get_local_ip()
 
-        if not status.get("installed", False):
-            self.vpn_status_row.set_subtitle("Tailscale no está instalado en este sistema")
-            self.vpn_toggle_btn.set_label("Instalar")
-            self.vpn_status_icon.set_from_icon_name("dialog-warning-symbolic")
-        elif is_running and ip:
-            self.vpn_status_row.set_subtitle(f"Conectado a la Tailnet • {status.get('backend_state')}")
-            self.vpn_toggle_btn.set_label("Desconectar")
-            self.vpn_status_icon.set_from_icon_name("network-vpn-symbolic")
-        elif status.get("backend_state") == "NeedsLogin" or auth_url:
-            self.vpn_status_row.set_subtitle("Pendiente de inicio de sesión en Tailscale")
-            self.vpn_toggle_btn.set_label("Iniciar Sesión")
-            self.vpn_status_icon.set_from_icon_name("dialog-password-symbolic")
-        else:
-            self.vpn_status_row.set_subtitle("Desconectado de la VPN (Modo Wi-Fi Local Activo)")
-            self.vpn_toggle_btn.set_label("Conectar VPN")
-            self.vpn_status_icon.set_from_icon_name("network-wireless-symbolic")
+        # Update Main Button & Status Banner
+        self.btn.remove_css_class("suggested-action")
+        self.btn.remove_css_class("destructive-action")
 
-        if ip:
-            self.ip_row.set_subtitle(f"{ip} (Tailscale WireGuard)")
-            self.dns_row.set_subtitle(magic_dns)
-            self._generate_qr(ip)
+        if not status.get("installed", False):
+            self.status_label.set_text("TAILSCALE NO INSTALADO")
+            self.btn_text.set_markup("<b>INSTALAR TAILSCALE</b>")
+            self.btn.add_css_class("suggested-action")
+            self.header_icon.set_from_icon_name("dialog-warning-symbolic")
+        elif is_running and ip:
+            self.status_label.set_text("PROTEGIDO Y CONECTADO")
+            self.btn_text.set_markup("<b>DESCONECTAR</b>")
+            self.btn.add_css_class("destructive-action")
+            self.header_icon.set_from_icon_name("network-vpn-symbolic")
+            self.btn_icon.set_from_icon_name("network-vpn-acquiring-symbolic")
+        elif status.get("backend_state") == "NeedsLogin" or auth_url:
+            self.status_label.set_text("INICIO DE SESIÓN REQUERIDO")
+            self.btn_text.set_markup("<b>INICIAR SESIÓN</b>")
+            self.btn.add_css_class("suggested-action")
+            self.header_icon.set_from_icon_name("dialog-password-symbolic")
+            self.btn_icon.set_from_icon_name("dialog-password-symbolic")
         else:
-            self.ip_row.set_subtitle(f"{lan_ip} (Red Local Wi-Fi)")
-            self.dns_row.set_subtitle(self.hostname)
-            self._generate_qr(lan_ip)
+            self.status_label.set_text("MODO LOCAL (SIN VPN)")
+            self.btn_text.set_markup("<b>CONECTAR VPN</b>")
+            self.btn.add_css_class("suggested-action")
+            self.header_icon.set_from_icon_name("network-wireless-symbolic")
+            self.btn_icon.set_from_icon_name("network-vpn-symbolic")
+
+        # QR and IP display
+        active_ip = ip if ip else lan_ip
+        self.footer_label.set_text(f"IP VPN: {ip or 'Inactivo'} • IP Local: {lan_ip} • Puerto: {DEFAULT_PORT}")
+        self._generate_qr(active_ip, is_vpn=bool(ip))
+
+        # Check streaming status from bridge daemon
+        self._refresh_streaming_status()
 
         return True
 
-    def _generate_qr(self, ip_address: str):
+    def _generate_qr(self, ip_address: str, is_vpn: bool):
         pair_uri = f"pulsar://pair?ip={ip_address}&port={DEFAULT_PORT}&token={self.token}&alias={urllib.parse.quote(self.hostname)}"
         self.current_pair_uri = pair_uri
 
-        # Generate QR code using qrencode if available
         if shutil.which("qrencode"):
             try:
                 subprocess.run(
-                    ["qrencode", "-s", "6", "-m", "2", "-o", QR_CACHE_PATH, pair_uri],
+                    ["qrencode", "-s", "5", "-m", "2", "-o", QR_CACHE_PATH, pair_uri],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     timeout=3
                 )
                 if os.path.exists(QR_CACHE_PATH):
                     self.qr_image.set_filename(QR_CACHE_PATH)
-                    self.qr_info_label.set_markup(
-                        f"<b>PC:</b> {self.hostname} | <b>IP:</b> {ip_address}\n"
-                        f"<small>Cifrado WireGuard • Sin exposición pública</small>"
+                    net_type = "Red Privada Tailscale" if is_vpn else "Red Local Wi-Fi"
+                    self.qr_details_label.set_markup(
+                        f"<b>{self.hostname}</b> ({ip_address})\n"
+                        f"<small>{net_type} • Cifrado de extremo a extremo</small>"
                     )
                     return
             except Exception as e:
-                logging.error(f"Error executing qrencode: {e}")
+                logger.error(f"Error running qrencode: {e}")
 
-        self.qr_info_label.set_text(f"Vinculación: {pair_uri}")
+        self.qr_details_label.set_text(f"Vinculación: {pair_uri}")
 
-    def _on_toggle_vpn(self, button):
+    def _on_btn_clicked(self, _):
         status = self.tailscale.get_status()
         auth_url = status.get("auth_url") or getattr(self, "current_auth_url", None)
 
-        # If needs login and we have an auth URL, launch browser immediately
         if auth_url:
             Gio.AppInfo.launch_default_for_uri(auth_url, None)
             return
 
-        button.set_sensitive(False)
+        self._set_busy(True)
 
         def worker():
             if status.get("running", False):
@@ -259,29 +309,111 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
                 if new_auth_url:
                     GLib.idle_add(lambda: Gio.AppInfo.launch_default_for_uri(new_auth_url, None))
 
-            GLib.idle_add(lambda: (button.set_sensitive(True), self._refresh_status()))
+            GLib.idle_add(lambda: (self._set_busy(False), self._refresh_status()))
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _copy_ip(self, _):
-        status = self.tailscale.get_status()
-        ip = status.get("ip") or "127.0.0.1"
-        clipboard = self.get_display().get_clipboard()
-        clipboard.set(ip)
+    def _set_busy(self, busy: bool):
+        self.is_busy = busy
+        self.btn.set_sensitive(not busy)
+        self.btn_spinner.set_visible(busy)
+        if busy:
+            self.btn_spinner.start()
+        else:
+            self.btn_spinner.stop()
 
     def _copy_pair_uri(self, _):
         if hasattr(self, "current_pair_uri"):
             clipboard = self.get_display().get_clipboard()
             clipboard.set(self.current_pair_uri)
 
-    def _show_info_dialog(self, title: str, text: str):
-        dialog = Adw.MessageDialog(
-            transient_for=self,
-            heading=title,
-            body=text
-        )
-        dialog.add_response("ok", "Aceptar")
-        dialog.present()
+    def _refresh_streaming_status(self):
+        def query():
+            try:
+                req = urllib.request.Request(
+                    f"{DAEMON_URL}/api/stream/pc-to-phone/status",
+                    headers={"X-Pulsar-Token": self.token}
+                )
+                with urllib.request.urlopen(req, timeout=1.0) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    active = data.get("active", False)
+                    GLib.idle_add(lambda: self._update_pc_stream_ui(active))
+            except Exception:
+                pass
+
+            try:
+                req = urllib.request.Request(
+                    f"{DAEMON_URL}/api/stream/phone-to-pc/status",
+                    headers={"X-Pulsar-Token": self.token}
+                )
+                with urllib.request.urlopen(req, timeout=1.0) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    running = data.get("running", False)
+                    GLib.idle_add(lambda: self._update_phone_stream_ui(running))
+            except Exception:
+                pass
+
+        threading.Thread(target=query, daemon=True).start()
+
+    def _update_pc_stream_ui(self, active: bool):
+        if active:
+            self.btn_stream_pc.set_label("Detener")
+            self.btn_stream_pc.remove_css_class("suggested-action")
+            self.btn_stream_pc.add_css_class("destructive-action")
+            self.pc_to_phone_row.set_subtitle("Transmitiendo pantalla y sonido en vivo...")
+        else:
+            self.btn_stream_pc.set_label("Iniciar")
+            self.btn_stream_pc.remove_css_class("destructive-action")
+            self.btn_stream_pc.add_css_class("suggested-action")
+            self.pc_to_phone_row.set_subtitle("Envía el escritorio completo y el sonido del sistema al móvil")
+
+    def _update_phone_stream_ui(self, running: bool):
+        if running:
+            self.btn_stream_phone.set_label("Cerrar")
+            self.btn_stream_phone.add_css_class("destructive-action")
+            self.phone_to_pc_row.set_subtitle("Visualizando pantalla y audio del teléfono con scrcpy")
+        else:
+            self.btn_stream_phone.set_label("Abrir")
+            self.btn_stream_phone.remove_css_class("destructive-action")
+            self.phone_to_pc_row.set_subtitle("Proyecta y escucha la pantalla de tu móvil en una ventana del PC")
+
+    def _toggle_pc_to_phone_stream(self, btn):
+        label = btn.get_label()
+        action = "stop" if label == "Detener" else "start"
+
+        def worker():
+            try:
+                req = urllib.request.Request(
+                    f"{DAEMON_URL}/api/stream/pc-to-phone/{action}",
+                    data=b"{}",
+                    headers={"X-Pulsar-Token": self.token, "Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=2.0) as resp:
+                    pass
+            except Exception as e:
+                logger.error(f"Error toggling PC stream: {e}")
+            GLib.idle_add(self._refresh_streaming_status)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _toggle_phone_to_pc_stream(self, btn):
+        label = btn.get_label()
+        action = "stop" if label == "Cerrar" else "start"
+
+        def worker():
+            try:
+                req = urllib.request.Request(
+                    f"{DAEMON_URL}/api/stream/phone-to-pc/{action}",
+                    data=b"{}",
+                    headers={"X-Pulsar-Token": self.token, "Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=2.0) as resp:
+                    pass
+            except Exception as e:
+                logger.error(f"Error toggling Phone stream: {e}")
+            GLib.idle_add(self._refresh_streaming_status)
+
+        threading.Thread(target=worker, daemon=True).start()
 
 
 class PulsarVpnApp(Adw.Application):
@@ -292,9 +424,7 @@ class PulsarVpnApp(Adw.Application):
         )
 
     def do_activate(self):
-        # Ensure bridge daemon is running in user session
         self._ensure_bridge_running()
-
         win = self.props.active_window
         if not win:
             win = PulsarVpnWindow(self)
@@ -302,16 +432,14 @@ class PulsarVpnApp(Adw.Application):
 
     def _ensure_bridge_running(self):
         try:
-            # Check if bridge daemon is already listening on port 8989
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(0.5)
                 res = s.connect_ex(("127.0.0.1", DEFAULT_PORT))
                 if res == 0:
-                    return  # Already running!
+                    return
         except Exception:
             pass
 
-        # Launch bridge daemon in background
         daemon_script = os.path.join(os.path.dirname(__file__), "bridge_daemon.py")
         if os.path.isfile(daemon_script):
             subprocess.Popen([sys.executable, daemon_script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

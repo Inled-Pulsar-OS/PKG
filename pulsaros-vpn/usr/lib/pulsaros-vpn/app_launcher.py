@@ -19,15 +19,6 @@ import subprocess
 import time
 from typing import Dict, Any, List, Optional
 
-try:
-    import gi
-    gi.require_version('Gtk', '3.0')
-    gi.require_version('GdkPixbuf', '2.0')
-    from gi.repository import Gtk, GdkPixbuf
-    _gtk_icon_theme = Gtk.IconTheme.get_default()
-except Exception:
-    _gtk_icon_theme = None
-
 logger = logging.getLogger("PulsarVPN.AppLauncher")
 
 BROADWAY_DISPLAY_NUM = 5
@@ -161,13 +152,8 @@ class AppLauncher:
         # 1. Direct file path
         if os.path.isabs(icon_name) and os.path.isfile(icon_name):
             fpath = icon_name
-        # 2. GTK System Icon Theme lookup
-        elif _gtk_icon_theme:
-            info = _gtk_icon_theme.lookup_icon(icon_name, 128, 0)
-            if info:
-                fpath = info.get_filename()
 
-        # 3. Fallback search dirs
+        # 2. Search dirs for icon name
         if not fpath:
             icon_extensions = [".svg", ".png", ".webp", ".xpm"]
             base_dirs = [
@@ -197,15 +183,23 @@ class AppLauncher:
         if not fpath:
             return None
 
-        # Convert to PNG using GdkPixbuf so Android can render SVGs, XPMs, etc.
-        try:
-            pix = GdkPixbuf.Pixbuf.new_from_file_at_scale(fpath, 128, 128, True)
-            ok, buf = pix.save_to_bufferv("png", [], [])
-            if ok:
-                b64 = base64.b64encode(buf).decode("utf-8")
-                return f"data:image/png;base64,{b64}"
-        except Exception:
-            pass
+        # If already PNG, return directly
+        if fpath.endswith(".png"):
+            return self._file_to_base64(fpath)
+
+        # For SVG or other formats, convert safely to PNG using rsvg-convert (immune to in-process crashes)
+        if shutil.which("rsvg-convert"):
+            try:
+                res = subprocess.run(
+                    ["rsvg-convert", "-w", "128", "-h", "128", "-f", "png", fpath],
+                    capture_output=True,
+                    timeout=2
+                )
+                if res.returncode == 0 and res.stdout:
+                    b64 = base64.b64encode(res.stdout).decode("utf-8")
+                    return f"data:image/png;base64,{b64}"
+            except Exception:
+                pass
 
         return self._file_to_base64(fpath)
 
@@ -309,9 +303,9 @@ class AppLauncher:
         # CRITICAL: Isolate completely from desktop Wayland/X11 displays and user D-Bus session.
         # This prevents single-instance GTK apps (Nautilus, Calendar, etc.) from forwarding
         # activation to desktop processes or opening windows on the PC screen!
-        env["DBUS_SESSION_BUS_ADDRESS"] = "disabled:"
-        env["WAYLAND_DISPLAY"] = "none"
-        env["DISPLAY"] = "none"
+        env.pop("WAYLAND_DISPLAY", None)
+        env.pop("DISPLAY", None)
+        env.pop("DBUS_SESSION_BUS_ADDRESS", None)
         env["QT_QPA_PLATFORM"] = "offscreen"
 
         env["GDK_BACKEND"] = "broadway"
@@ -324,7 +318,12 @@ class AppLauncher:
             env["ADW_COLOR_SCHEME"] = "prefer-light"
             env["GTK_THEME"] = "Adwaita"
 
-        exec_cmd = shlex.split(app_meta["exec"])
+        raw_tokens = shlex.split(app_meta["exec"])
+        if shutil.which("dbus-run-session"):
+            exec_cmd = ["dbus-run-session", "--"] + raw_tokens
+        else:
+            exec_cmd = raw_tokens
+
         logger.info(f"Launching app in Broadway: {exec_cmd}")
         self.current_app_process = subprocess.Popen(
             exec_cmd,
