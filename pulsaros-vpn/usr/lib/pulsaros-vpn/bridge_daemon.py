@@ -68,20 +68,28 @@ def get_local_ip() -> str:
 
 
 class DesktopStreamManager:
-    """Streams PC desktop video + system audio to Android devices via low-latency MPEG-TS."""
+    """Streams PC desktop video (MJPEG) and audio (MP3) with zero latency."""
     def __init__(self):
-        self.lock = threading.Lock()
-        self.ffmpeg_proc: Optional[subprocess.Popen] = None
-        self.reader_thread: Optional[threading.Thread] = None
-        self.clients: List[queue.Queue] = []
+        self.video_lock = threading.RLock()
+        self.audio_lock = threading.RLock()
+        self.video_proc: Optional[subprocess.Popen] = None
+        self.audio_proc: Optional[subprocess.Popen] = None
+        self.video_clients: List[queue.Queue] = []
+        self.audio_clients: List[queue.Queue] = []
+        self.video_thread: Optional[threading.Thread] = None
+        self.audio_thread: Optional[threading.Thread] = None
 
     def is_running(self) -> bool:
-        with self.lock:
-            return self.ffmpeg_proc is not None and self.ffmpeg_proc.poll() is None
+        with self.video_lock:
+            return (self.video_proc is not None and self.video_proc.poll() is None)
 
     def start_if_needed(self):
-        with self.lock:
-            if self.ffmpeg_proc and self.ffmpeg_proc.poll() is None:
+        self.start_video()
+        self.start_audio()
+
+    def start_video(self):
+        with self.video_lock:
+            if self.video_proc and self.video_proc.poll() is None:
                 return
 
             env = os.environ.copy()
@@ -92,88 +100,179 @@ class DesktopStreamManager:
             cmd = [
                 "ffmpeg",
                 "-f", "x11grab",
-                "-video_size", "1280x720",
                 "-framerate", "30",
                 "-i", display,
-                "-c:v", "libx264",
-                "-preset", "ultrafast",
-                "-tune", "zerolatency",
-                "-pix_fmt", "yuv420p",
-                "-g", "30",
-                "-keyint_min", "30",
-                "-sc_threshold", "0",
-                "-b:v", "2500k",
-                "-f", "mpegts",
-                "pipe:1"
+                "-vf", "scale=1280:-2",
+                "-c:v", "mjpeg",
+                "-q:v", "5",
+                "-f", "image2pipe",
+                "-"
             ]
             try:
-                self.ffmpeg_proc = subprocess.Popen(
-                    cmd,
-                    env=env,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
-                    bufsize=32768
-                )
-                self.reader_thread = threading.Thread(target=self._broadcast_loop, daemon=True)
-                self.reader_thread.start()
-                logger.info(f"PC Desktop Streamer started (display={display})")
+                self.video_proc = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                self.video_thread = threading.Thread(target=self._broadcast_video, daemon=True)
+                self.video_thread.start()
+                logger.info(f"Desktop video streamer started on {display}")
             except Exception as e:
-                logger.error(f"Failed to start desktop streamer: {e}")
+                logger.error(f"Failed to start desktop video: {e}")
 
-    def _broadcast_loop(self):
+    def _broadcast_video(self):
+        buf = b""
         while True:
-            proc = self.ffmpeg_proc
+            proc = self.video_proc
             if not proc or proc.poll() is not None or not proc.stdout:
                 break
             try:
                 chunk = proc.stdout.read(4096)
                 if not chunk:
                     break
-                with self.lock:
-                    dead = []
-                    for q in self.clients:
+                buf += chunk
+                while True:
+                    soi = buf.find(b"\xff\xd8")
+                    if soi == -1:
+                        if len(buf) > 32768: buf = buf[-4096:]
+                        break
+                    eoi = buf.find(b"\xff\xd9", soi)
+                    if eoi == -1:
+                        break
+                    frame = buf[soi:eoi+2]
+                    buf = buf[eoi+2:]
+
+                    frame_packet = (
+                        b"--frame\r\n"
+                        b"Content-Type: image/jpeg\r\n"
+                        b"Content-Length: " + str(len(frame)).encode("ascii") + b"\r\n\r\n" +
+                        frame + b"\r\n"
+                    )
+
+                    with self.video_lock:
+                        clients = list(self.video_clients)
+
+                    for q in clients:
                         try:
-                            q.put_nowait(chunk)
-                        except queue.Full:
-                            pass
+                            if q.full():
+                                try:
+                                    q.get_nowait()
+                                except queue.Empty:
+                                    pass
+                            q.put_nowait(frame_packet)
                         except Exception:
-                            dead.append(q)
-                    for d in dead:
-                        if d in self.clients:
-                            self.clients.remove(d)
+                            with self.video_lock:
+                                if q in self.video_clients:
+                                    self.video_clients.remove(q)
             except Exception:
                 break
+        self.stop_video()
 
-        self.stop()
-
-    def register_client(self) -> queue.Queue:
-        self.start_if_needed()
-        q = queue.Queue(maxsize=120)
-        with self.lock:
-            self.clients.append(q)
+    def register_video_client(self) -> queue.Queue:
+        q = queue.Queue(maxsize=30)
+        with self.video_lock:
+            self.video_clients.append(q)
+        self.start_video()
         return q
 
-    def unregister_client(self, q: queue.Queue):
-        with self.lock:
-            if q in self.clients:
-                self.clients.remove(q)
-            if not self.clients:
-                self.stop()
+    def unregister_video_client(self, q: queue.Queue):
+        with self.video_lock:
+            if q in self.video_clients:
+                self.video_clients.remove(q)
+            rem = len(self.video_clients)
+        if rem == 0:
+            self.stop_video()
+
+    def stop_video(self):
+        with self.video_lock:
+            proc = self.video_proc
+            self.video_proc = None
+            self.video_clients.clear()
+        if proc:
+            try:
+                proc.terminate()
+                proc.wait(timeout=0.5)
+            except Exception:
+                try: proc.kill()
+                except Exception: pass
+
+    def start_audio(self):
+        with self.audio_lock:
+            if self.audio_proc and self.audio_proc.poll() is None:
+                return
+
+            cmd = [
+                "ffmpeg",
+                "-f", "pulse",
+                "-i", "default",
+                "-c:a", "libmp3lame",
+                "-b:a", "128k",
+                "-f", "mp3",
+                "-"
+            ]
+            try:
+                self.audio_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                self.audio_thread = threading.Thread(target=self._broadcast_audio, daemon=True)
+                self.audio_thread.start()
+                logger.info("Desktop audio streamer started")
+            except Exception as e:
+                logger.error(f"Failed to start desktop audio: {e}")
+
+    def _broadcast_audio(self):
+        while True:
+            proc = self.audio_proc
+            if not proc or proc.poll() is not None or not proc.stdout:
+                break
+            try:
+                chunk = proc.stdout.read(2048)
+                if not chunk:
+                    break
+                with self.audio_lock:
+                    clients = list(self.audio_clients)
+
+                for q in clients:
+                    try:
+                        if q.full():
+                            try:
+                                q.get_nowait()
+                            except queue.Empty:
+                                pass
+                        q.put_nowait(chunk)
+                    except Exception:
+                        with self.audio_lock:
+                            if q in self.audio_clients:
+                                self.audio_clients.remove(q)
+            except Exception:
+                break
+        self.stop_audio()
+
+    def register_audio_client(self) -> queue.Queue:
+        q = queue.Queue(maxsize=50)
+        with self.audio_lock:
+            self.audio_clients.append(q)
+        self.start_audio()
+        return q
+
+    def unregister_audio_client(self, q: queue.Queue):
+        with self.audio_lock:
+            if q in self.audio_clients:
+                self.audio_clients.remove(q)
+            rem = len(self.audio_clients)
+        if rem == 0:
+            self.stop_audio()
+
+    def stop_audio(self):
+        with self.audio_lock:
+            proc = self.audio_proc
+            self.audio_proc = None
+            self.audio_clients.clear()
+        if proc:
+            try:
+                proc.terminate()
+                proc.wait(timeout=0.5)
+            except Exception:
+                try: proc.kill()
+                except Exception: pass
 
     def stop(self):
-        with self.lock:
-            if self.ffmpeg_proc:
-                try:
-                    self.ffmpeg_proc.terminate()
-                    self.ffmpeg_proc.wait(timeout=1.0)
-                except Exception:
-                    try:
-                        self.ffmpeg_proc.kill()
-                    except Exception:
-                        pass
-                self.ffmpeg_proc = None
-            self.clients.clear()
-            logger.info("PC Desktop Streamer stopped")
+        self.stop_video()
+        self.stop_audio()
 
 
 class ScrcpyManager:
@@ -296,10 +395,15 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
     def do_HEAD(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
-        if path == "/api/stream/pc-to-phone/live.ts":
+        if path in ("/api/stream/pc-to-phone/live.mjpeg", "/api/stream/pc-to-phone/audio.mp3", "/api/stream/pc-to-phone/view", "/api/stream/pc-to-phone/live.ts"):
             self.send_response(200)
             self.send_cors_headers()
-            self.send_header("Content-Type", "video/mp2t")
+            if path == "/api/stream/pc-to-phone/audio.mp3":
+                self.send_header("Content-Type", "audio/mpeg")
+            elif path in ("/api/stream/pc-to-phone/live.mjpeg", "/api/stream/pc-to-phone/live.ts"):
+                self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+            elif path == "/api/stream/pc-to-phone/view":
+                self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
             self.send_header("Accept-Ranges", "none")
             self.end_headers()
@@ -380,13 +484,22 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/fs/file":
             target_path = params.get("path", [""])[0]
             self._serve_file(target_path)
+        elif path == "/api/stream/pc-to-phone/live.mjpeg":
+            self._serve_live_mjpeg()
+        elif path == "/api/stream/pc-to-phone/audio.mp3":
+            self._serve_audio_mp3()
+        elif path == "/api/stream/pc-to-phone/view":
+            self._serve_stream_view()
         elif path == "/api/stream/pc-to-phone/live.ts":
-            self._serve_live_desktop_stream()
+            self._serve_live_mjpeg()
         elif path == "/api/stream/pc-to-phone/status":
             self.send_json(200, {
                 "active": context.desktop_streamer.is_running(),
-                "clients": len(context.desktop_streamer.clients),
-                "url": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/live.ts?token={context.token}"
+                "videoClients": len(context.desktop_streamer.video_clients),
+                "audioClients": len(context.desktop_streamer.audio_clients),
+                "viewUrl": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/view?token={context.token}",
+                "mjpegUrl": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/live.mjpeg?token={context.token}",
+                "audioUrl": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/audio.mp3?token={context.token}"
             })
         elif path == "/api/stream/phone-to-pc/status":
             self.send_json(200, {
@@ -466,7 +579,7 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
             context.desktop_streamer.start_if_needed()
             self.send_json(200, {
                 "status": "started",
-                "url": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/live.ts?token={context.token}"
+                "url": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/view?token={context.token}"
             })
 
         elif path == "/api/stream/pc-to-phone/stop":
@@ -548,12 +661,12 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
         except Exception as e:
             logger.error(f"Error serving {target_path}: {e}")
 
-    def _serve_live_desktop_stream(self):
-        client_q = context.desktop_streamer.register_client()
+    def _serve_live_mjpeg(self):
+        client_q = context.desktop_streamer.register_video_client()
         try:
             self.send_response(200)
             self.send_cors_headers()
-            self.send_header("Content-Type", "video/mp2t")
+            self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
             self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
             self.send_header("Pragma", "no-cache")
             self.send_header("Expires", "0")
@@ -561,17 +674,86 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
 
             while True:
                 try:
-                    chunk = client_q.get(timeout=4.0)
-                    self.wfile.write(chunk)
+                    packet = client_q.get(timeout=3.0)
+                    self.wfile.write(packet)
                     self.wfile.flush()
                 except queue.Empty:
                     if not context.desktop_streamer.is_running():
                         break
                     continue
         except (BrokenPipeError, ConnectionResetError, Exception) as e:
-            logger.debug(f"Desktop stream client disconnected: {e}")
+            logger.debug(f"MJPEG client disconnected: {e}")
         finally:
-            context.desktop_streamer.unregister_client(client_q)
+            context.desktop_streamer.unregister_video_client(client_q)
+
+    def _serve_audio_mp3(self):
+        client_q = context.desktop_streamer.register_audio_client()
+        try:
+            self.send_response(200)
+            self.send_cors_headers()
+            self.send_header("Content-Type", "audio/mpeg")
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
+            self.end_headers()
+
+            while True:
+                try:
+                    chunk = client_q.get(timeout=3.0)
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+                except queue.Empty:
+                    continue
+        except (BrokenPipeError, ConnectionResetError, Exception) as e:
+            logger.debug(f"Audio client disconnected: {e}")
+        finally:
+            context.desktop_streamer.unregister_audio_client(client_q)
+
+    def _serve_stream_view(self):
+        html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
+<title>Pulsar Desktop Stream</title>
+<style>
+* {{ box-sizing: border-box; }}
+html, body {{
+    margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+    user-select: none; -webkit-user-select: none;
+}}
+img {{
+    width: 100%; height: 100%; object-fit: contain; pointer-events: auto;
+}}
+</style>
+</head>
+<body>
+<img id="streamImg" src="/api/stream/pc-to-phone/live.mjpeg?token={context.token}" />
+<audio id="streamAudio" autoplay src="/api/stream/pc-to-phone/audio.mp3?token={context.token}"></audio>
+<script>
+const audio = document.getElementById('streamAudio');
+if (audio) {{
+    audio.play().catch(() => {{
+        window.addEventListener('click', () => audio.play(), {{ once: true }});
+        window.addEventListener('touchstart', () => audio.play(), {{ once: true }});
+    }});
+}}
+const img = document.getElementById('streamImg');
+img.onerror = () => {{
+    setTimeout(() => {{
+        img.src = '/api/stream/pc-to-phone/live.mjpeg?token={context.token}&t=' + Date.now();
+    }}, 1500);
+}};
+</script>
+</body>
+</html>"""
+        payload = html.encode("utf-8")
+        self.send_response(200)
+        self.send_cors_headers()
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
 
     def _send_desktop_notification(self, app_name: str, title: str, text: str):
         logger.info(f"Relaying notification from {app_name}: {title} - {text}")

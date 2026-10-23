@@ -92,22 +92,40 @@ def has_camera():
 def has_fingerprint_reader():
     try:
         if shutil.which("fprintd-list"):
-            res = subprocess.run(["fprintd-list"], capture_output=True, text=True, timeout=2)
-            if "found 1 devices" in res.stdout or "Using device" in res.stdout:
+            res = subprocess.run(["fprintd-list"], capture_output=True, text=True, timeout=3)
+            out = res.stdout + "\n" + res.stderr
+            out_low = out.lower()
+            if "found 1 devices" in out_low or "using device" in out_low or "device at" in out_low or "goodix" in out_low or "focaltech" in out_low:
                 return True
+            # Also check per-user list
+            try:
+                import pwd
+                for p in pwd.getpwall():
+                    if 1000 <= p.pw_uid < 60000 and p.pw_name not in ("nobody", "sddm", "gdm", "lightdm", "root"):
+                        r2 = subprocess.run(["fprintd-list", p.pw_name], capture_output=True, text=True, timeout=2)
+                        o2 = r2.stdout + "\n" + r2.stderr
+                        if "using device" in o2.lower() or "device at" in o2.lower():
+                            return True
+                        break
+            except Exception:
+                pass
     except Exception:
         pass
-    # Fallback to sysfs check
+    # Fallback to sysfs/usb check
     try:
         usb_dir = "/sys/bus/usb/devices"
         if os.path.exists(usb_dir):
             for dev in os.listdir(usb_dir):
-                prod_file = os.path.join(usb_dir, dev, "product")
-                if os.path.isfile(prod_file):
-                    with open(prod_file, "r", errors="ignore") as f:
-                        name = f.read().lower()
-                        if "fingerprint" in name or "goodix" in name or "synaptics" in name:
-                            return True
+                for fname in ("product", "manufacturer", "uevent"):
+                    fpath = os.path.join(usb_dir, dev, fname)
+                    if os.path.isfile(fpath):
+                        try:
+                            with open(fpath, "r", errors="ignore") as f:
+                                name = f.read().lower()
+                                if "fingerprint" in name or "goodix" in name or "synaptics" in name or "elan" in name or "focaltech" in name or "vfs" in name or "egis" in name:
+                                    return True
+                        except Exception:
+                            pass
     except Exception:
         pass
     return False
@@ -167,8 +185,20 @@ def is_fingerprint_enrolled(username):
     try:
         if shutil.which("fprintd-list"):
             res = subprocess.run(["fprintd-list", username], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=2)
-            if res.returncode == 0 and ("right-index-finger" in res.stdout or "enrolled" in res.stdout or "found" in res.stdout):
-                if "no devices" not in res.stdout.lower() and "no fingers" not in res.stdout.lower():
+            out = res.stdout + "\n" + res.stderr
+            out_low = out.lower()
+            if res.returncode == 0:
+                if "no devices" in out_low or "no fingers" in out_low:
+                    pass
+                else:
+                    if any(k in out_low for k in ["right-", "left-", "thumb", "index", "finger", "enrolled", "found"]) or "prints" in out_low:
+                        return True
+            # Also try without stdin suppression issues
+            if res.returncode != 0:
+                res2 = subprocess.run(["fprintd-list", username], capture_output=True, text=True, timeout=2)
+                out2 = res2.stdout + "\n" + res2.stderr
+                out2_low = out2.lower()
+                if "no devices" not in out2_low and "no fingers" not in out2_low and any(k in out2_low for k in ["right-", "left-", "thumb", "index", "finger", "enrolled"]):
                     return True
     except Exception:
         pass
@@ -472,6 +502,43 @@ def run_fingerprint_verification(username, session_id):
     # Wait briefly if an old fprintd-verify was terminating to ensure device release
     time.sleep(0.1)
 
+    # Try to build environment for the target user (needed for fprintd/DBus/polkit)
+    user_env = os.environ.copy()
+    try:
+        import pwd
+        pw = pwd.getpwnam(username)
+        uid = pw.pw_uid
+        gid = pw.pw_gid
+        xdg_runtime = f"/run/user/{uid}"
+        user_env["XDG_RUNTIME_DIR"] = xdg_runtime
+        user_env["HOME"] = pw.pw_dir
+        user_env["USER"] = username
+        user_env["LOGNAME"] = username
+        user_env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={xdg_runtime}/bus"
+        for w in ("wayland-0", "wayland-1"):
+            if os.path.exists(f"{xdg_runtime}/{w}"):
+                user_env["WAYLAND_DISPLAY"] = w
+                break
+        if "DISPLAY" not in user_env or not user_env["DISPLAY"]:
+            user_env["DISPLAY"] = ":0"
+        if os.path.exists(xdg_runtime):
+            for auth in os.listdir(xdg_runtime):
+                if "Xwaylandauth" in auth or "xauth" in auth:
+                    user_env["XAUTHORITY"] = os.path.join(xdg_runtime, auth)
+                    break
+    except Exception as e:
+        log(f"Warning: could not build user env for fprintd-verify: {e}")
+
+    def _demote():
+        try:
+            import pwd
+            pw = pwd.getpwnam(username)
+            os.initgroups(username, pw.pw_gid)
+            os.setgid(pw.pw_gid)
+            os.setuid(pw.pw_uid)
+        except Exception:
+            pass
+
     while True:
         with state.lock:
             if not state.is_verifying or state.active_user != username or state.session_id != session_id:
@@ -479,7 +546,7 @@ def run_fingerprint_verification(username, session_id):
 
         try:
             cmd = ["fprintd-verify", username]
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=user_env, preexec_fn=_demote if os.geteuid() == 0 else None)
             with state.lock:
                 if state.session_id != session_id or not state.is_verifying:
                     proc.terminate()
@@ -608,6 +675,9 @@ def start_verification(username, source="lockscreen", auto_face=None):
             state.face_state = "disabled" if not face_enabled else "idle"
 
     if has_fp and fp_enrolled and touch_enabled:
+        threading.Thread(target=run_fingerprint_verification, args=(username, current_session), daemon=True).start()
+    elif has_fp and touch_enabled:
+        # Fallback: try to enroll/verify anyway if fprintd has prints
         threading.Thread(target=run_fingerprint_verification, args=(username, current_session), daemon=True).start()
 
 def activate_face_scan(username=None):
