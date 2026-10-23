@@ -84,7 +84,11 @@ TRANSLATIONS_ES = {
     "Integrates all installed apps from phone into your desktop app grid": "Integra las aplicaciones de tu móvil en la cuadrícula de apps del PC",
     "Sync": "Sincronizar",
     "Settings": "Ajustes",
-    "Syncing apps...": "Sincronizando apps..."
+    "Syncing apps...": "Sincronizando apps...",
+    "Remote Access & Power": "Acceso Remoto y Energía",
+    "Keep PC awake when idle or lid closed for 24/7 remote access": "Mantiene el PC encendido para permitir acceso remoto cuando estés fuera",
+    "Prevent PC Sleep": "Impedir suspensión del PC",
+    "Prevents system sleep when idle or lid is closed so you can connect anytime": "Evita que el equipo se suspenda por inactividad o al cerrar la tapa"
 }
 
 
@@ -286,6 +290,24 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
 
         droidtux_group.add(self.droidtux_sync_row)
 
+        # Section 5: Remote Access & Power (Prevent Sleep)
+        power_group = Adw.PreferencesGroup()
+        power_group.set_title(_("Remote Access & Power"))
+        power_group.set_description(_("Keep PC awake when idle or lid closed for 24/7 remote access"))
+        content_box.append(power_group)
+
+        self.inhibit_sleep_row = Adw.ActionRow()
+        self.inhibit_sleep_row.set_title(_("Prevent PC Sleep"))
+        self.inhibit_sleep_row.set_subtitle(_("Prevents system sleep when idle or lid is closed so you can connect anytime"))
+        self.inhibit_sleep_row.add_prefix(Gtk.Image.new_from_icon_name("night-light-symbolic"))
+
+        self.inhibit_sleep_switch = Gtk.Switch()
+        self.inhibit_sleep_switch.set_valign(Gtk.Align.CENTER)
+        self.inhibit_sleep_switch.connect("state-set", self._on_inhibit_sleep_switch_toggled)
+        self.inhibit_sleep_row.add_suffix(self.inhibit_sleep_switch)
+        self.inhibit_sleep_row.set_activatable_widget(self.inhibit_sleep_switch)
+        power_group.add(self.inhibit_sleep_row)
+
         # IP details footer
         self.footer_label = Gtk.Label()
         self.footer_label.set_halign(Gtk.Align.CENTER)
@@ -342,6 +364,7 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
 
         # Check streaming status from bridge daemon
         self._refresh_streaming_status()
+        self._refresh_inhibit_sleep_status()
 
         return True
 
@@ -494,6 +517,47 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
 
         threading.Thread(target=worker, daemon=True).start()
 
+
+    def _refresh_inhibit_sleep_status(self):
+        def query():
+            try:
+                req = urllib.request.Request(
+                    f"{DAEMON_URL}/api/system/inhibit-sleep",
+                    headers={"X-Pulsar-Token": self.token}
+                )
+                with urllib.request.urlopen(req, timeout=1.0) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    enabled = data.get("enabled", False)
+                    def update():
+                        if self.inhibit_sleep_switch.get_active() != enabled:
+                            self._syncing_inhibit_switch = True
+                            self.inhibit_sleep_switch.set_active(enabled)
+                            self._syncing_inhibit_switch = False
+                    GLib.idle_add(update)
+            except Exception:
+                pass
+
+        threading.Thread(target=query, daemon=True).start()
+
+    def _on_inhibit_sleep_switch_toggled(self, switch, state):
+        if getattr(self, "_syncing_inhibit_switch", False):
+            return False
+
+        def worker():
+            try:
+                req = urllib.request.Request(
+                    f"{DAEMON_URL}/api/system/inhibit-sleep",
+                    data=json.dumps({"enabled": state}).encode("utf-8"),
+                    headers={"X-Pulsar-Token": self.token, "Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=2.0) as resp:
+                    pass
+            except Exception as e:
+                logger.error(f"Error toggling inhibit sleep: {e}")
+                GLib.idle_add(self._refresh_inhibit_sleep_status)
+
+        threading.Thread(target=worker, daemon=True).start()
+        return False
 
     def _on_sync_droidtux_apps(self, btn):
         btn.set_sensitive(False)

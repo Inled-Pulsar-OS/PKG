@@ -384,13 +384,16 @@ class DesktopStreamManager:
             if self.audio_proc and self.audio_proc.poll() is None:
                 return
 
-            # Capture desktop speaker monitor so PC sound is heard on the phone
+            # Capture desktop speaker monitor with zero buffering and low delay
             cmd = [
                 "ffmpeg",
+                "-fflags", "nobuffer",
+                "-flags", "low_delay",
                 "-f", "pulse",
                 "-i", "@DEFAULT_SINK@.monitor",
                 "-c:a", "libmp3lame",
                 "-b:a", "128k",
+                "-flush_packets", "1",
                 "-f", "mp3",
                 "-"
             ]
@@ -398,7 +401,7 @@ class DesktopStreamManager:
                 self.audio_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
                 self.audio_thread = threading.Thread(target=self._broadcast_audio, daemon=True)
                 self.audio_thread.start()
-                logger.info("Desktop audio streamer started with @DEFAULT_SINK@.monitor")
+                logger.info("Desktop low-latency audio streamer started with @DEFAULT_SINK@.monitor")
             except Exception as e:
                 logger.error(f"Failed to start desktop audio: {e}")
 
@@ -408,7 +411,7 @@ class DesktopStreamManager:
             if not proc or proc.poll() is not None or not proc.stdout:
                 break
             try:
-                chunk = proc.stdout.read(2048)
+                chunk = proc.stdout.read(1024)
                 if not chunk:
                     break
                 with self.audio_lock:
@@ -416,11 +419,11 @@ class DesktopStreamManager:
 
                 for q in clients:
                     try:
-                        if q.full():
+                        while q.qsize() >= 3:
                             try:
                                 q.get_nowait()
                             except queue.Empty:
-                                pass
+                                break
                         q.put_nowait(chunk)
                     except Exception:
                         with self.audio_lock:
@@ -431,7 +434,7 @@ class DesktopStreamManager:
         self.stop_audio()
 
     def register_audio_client(self) -> queue.Queue:
-        q = queue.Queue(maxsize=50)
+        q = queue.Queue(maxsize=4)
         with self.audio_lock:
             self.audio_clients.append(q)
         self.start_audio()
@@ -544,10 +547,61 @@ class ScrcpyManager:
             logger.info("Scrcpy phone stream stopped")
 
 
+class SleepInhibitorManager:
+    """Manages system sleep/idle inhibition using systemd-inhibit for 24/7 remote access."""
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.proc: Optional[subprocess.Popen] = None
+        self.config_file = os.path.expanduser("~/.config/pulsaros/inhibit_sleep.enabled")
+        if os.path.exists(self.config_file):
+            self.set_inhibit(True)
+
+    def is_inhibited(self) -> bool:
+        with self.lock:
+            return self.proc is not None and self.proc.poll() is None
+
+    def set_inhibit(self, enable: bool) -> bool:
+        with self.lock:
+            if enable:
+                if self.proc and self.proc.poll() is None:
+                    return True
+                try:
+                    self.proc = subprocess.Popen([
+                        "systemd-inhibit",
+                        "--what=idle:sleep:handle-lid-switch",
+                        "--who=Pulsar VPN",
+                        "--why=Acceso remoto activo y retransmisión",
+                        "sleep", "infinity"
+                    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
+                    with open(self.config_file, "w") as f:
+                        f.write("1")
+                    logger.info(f"System sleep inhibited successfully (PID: {self.proc.pid})")
+                    return True
+                except Exception as e:
+                    logger.error(f"Failed to inhibit sleep: {e}")
+                    return False
+            else:
+                if self.proc:
+                    try:
+                        self.proc.terminate()
+                        self.proc.wait(timeout=0.5)
+                    except Exception:
+                        try: self.proc.kill()
+                        except Exception: pass
+                    self.proc = None
+                if os.path.exists(self.config_file):
+                    try: os.remove(self.config_file)
+                    except Exception: pass
+                logger.info("System sleep inhibition released")
+                return True
+
+
 class BridgeContext:
     def __init__(self):
         self.token = get_or_create_token()
         self.tailscale = TailscaleManager()
+        self.sleep_inhibitor = SleepInhibitorManager()
         self.bind_ip = "0.0.0.0"
         self.lan_ip = get_local_ip()
         self.tailscale_ip: Optional[str] = None
@@ -626,6 +680,21 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"error": "Unauthorized: Invalid or missing X-Pulsar-Token"}).encode("utf-8"))
             return False
+
+        # Authenticated phone client - store IP and ensure wireless adb
+        client_ip = self.client_address[0]
+        if client_ip not in ("127.0.0.1", "::1", "localhost"):
+            def track_phone_ip(ip):
+                try:
+                    pfile = os.path.expanduser("~/.config/pulsaros/last_phone_ip.txt")
+                    os.makedirs(os.path.dirname(pfile), exist_ok=True)
+                    with open(pfile, "w") as f:
+                        f.write(ip)
+                    subprocess.run(["adb", "connect", f"{ip}:5555"], timeout=1.5, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except Exception:
+                    pass
+            threading.Thread(target=track_phone_ip, args=(client_ip,), daemon=True).start()
+
         return True
 
     def send_json(self, status_code: int, data: Any):
@@ -719,6 +788,10 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_json(200, {
                 "running": context.scrcpy_mgr.is_running()
             })
+        elif path == "/api/system/inhibit-sleep":
+            self.send_json(200, {
+                "enabled": context.sleep_inhibitor.is_inhibited()
+            })
         else:
             self.send_json(404, {"error": "Not found"})
 
@@ -802,6 +875,14 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/stream/pc-to-phone/stop":
             context.desktop_streamer.stop()
             self.send_json(200, {"status": "stopped"})
+
+        elif path == "/api/system/inhibit-sleep":
+            enable = req_data.get("enabled", True)
+            ok = context.sleep_inhibitor.set_inhibit(enable)
+            self.send_json(200, {
+                "enabled": context.sleep_inhibitor.is_inhibited(),
+                "success": ok
+            })
         else:
             self.send_json(404, {"error": "Not found"})
 
@@ -947,7 +1028,7 @@ img {{
 </head>
 <body>
 <img id="streamImg" src="/api/stream/pc-to-phone/live.mjpeg?token={context.token}{mon_param}" />
-<audio id="streamAudio" autoplay src="/api/stream/pc-to-phone/audio.mp3?token={context.token}"></audio>
+<audio id="streamAudio" autoplay preload="none" src="/api/stream/pc-to-phone/audio.mp3?token={context.token}"></audio>
 <script>
 const audio = document.getElementById('streamAudio');
 if (audio) {{
@@ -955,6 +1036,14 @@ if (audio) {{
         window.addEventListener('click', () => audio.play(), {{ once: true }});
         window.addEventListener('touchstart', () => audio.play(), {{ once: true }});
     }});
+    setInterval(() => {{
+        if (audio.buffered && audio.buffered.length > 0) {{
+            const liveEnd = audio.buffered.end(audio.buffered.length - 1);
+            if (liveEnd - audio.currentTime > 0.3) {{
+                audio.currentTime = liveEnd - 0.05;
+            }}
+        }}
+    }}, 300);
 }}
 const img = document.getElementById('streamImg');
 img.onerror = () => {{

@@ -107,13 +107,21 @@ class AppLauncher:
             exe_bin = tokens[0]
             exe_name = os.path.basename(exe_bin)
 
-            # Exclude non-Broadway apps (Chrome, Electron, terminal wrappers, Qt-only, mirrors)
-            # to guarantee that every listed app renders in Broadway and NEVER on the PC screen
+            # Exclude non-Broadway apps and integrated Android apps (DroidTux)
+            # to guarantee that every listed app renders in Broadway and NEVER on the PC screen,
+            # and that Android apps from the phone are NOT mirrored back into the phone app list
+            if (app_id.startswith("droidtux-") or
+                app_id.startswith("dtapp-") or
+                "X-Android" in categories or
+                "droidtux" in clean_exec or
+                "scrcpy" in clean_exec):
+                return None
+
             non_broadway_bins = {
                 "google-chrome", "google-chrome-stable", "chromium", "brave", "firefox",
                 "code", "code-oss", "electron", "kdenlive", "scrcpy", "gnome-terminal",
                 "xdg-open", "cups", "qv4l2", "qvidcap", "lstopo", "virt-manager",
-                "install-macos", "bssh", "bvnc"
+                "install-macos", "bssh", "bvnc", "droidtux-runner"
             }
             if exe_name in non_broadway_bins or any("gnome-terminal" in t or "xdg-open" in t for t in tokens):
                 return None
