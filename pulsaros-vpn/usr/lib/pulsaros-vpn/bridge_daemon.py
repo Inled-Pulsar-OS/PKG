@@ -67,6 +67,46 @@ def get_local_ip() -> str:
         return "127.0.0.1"
 
 
+def get_connected_monitors() -> List[Dict[str, Any]]:
+    """Queries connected displays from Mutter DisplayConfig via D-Bus."""
+    monitors_list = []
+    try:
+        from gi.repository import Gio
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        disp_proxy = Gio.DBusProxy.new_sync(
+            bus, 0, None,
+            "org.gnome.Mutter.DisplayConfig",
+            "/org/gnome/Mutter/DisplayConfig",
+            "org.gnome.Mutter.DisplayConfig",
+            None
+        )
+        _, monitors, logical, _ = disp_proxy.call_sync("GetCurrentState", None, 0, 2000, None).unpack()
+
+        primary_connectors = set()
+        for lm in logical:
+            if lm[4]:  # is_primary boolean
+                for mon_spec in lm[5]:
+                    primary_connectors.add(mon_spec[0])
+
+        for m in monitors:
+            spec = m[0]
+            connector = spec[0]
+            props = m[2] if len(m) > 2 else {}
+            name = props.get("display-name") or f"Pantalla {connector}"
+            is_builtin = props.get("is-builtin", False)
+            is_primary = connector in primary_connectors
+            monitors_list.append({
+                "connector": connector,
+                "name": name,
+                "isPrimary": is_primary,
+                "isBuiltin": is_builtin
+            })
+    except Exception as e:
+        logger.warning(f"Error querying monitors from Mutter: {e}")
+        monitors_list = [{"connector": "eDP-1", "name": "Pantalla principal", "isPrimary": True, "isBuiltin": True}]
+    return monitors_list
+
+
 class DesktopStreamManager:
     """Streams PC desktop video (Wayland ScreenCast / MJPEG) and audio (MP3) with zero latency."""
     def __init__(self):
@@ -79,39 +119,31 @@ class DesktopStreamManager:
         self.video_thread: Optional[threading.Thread] = None
         self.audio_thread: Optional[threading.Thread] = None
         self.mutter_session = None
+        self.current_connector: Optional[str] = None
 
     def is_running(self) -> bool:
         with self.video_lock:
             return (self.video_proc is not None and self.video_proc.poll() is None)
 
-    def start_if_needed(self):
-        self.start_video()
+    def start_if_needed(self, connector: Optional[str] = None):
+        self.start_video(connector)
         self.start_audio()
 
-    def _start_wayland_stream(self) -> bool:
+    def _start_wayland_stream(self, connector: Optional[str] = None) -> bool:
         try:
             from gi.repository import Gio, GLib
             bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
 
-            # Get primary or first display connector
-            connector = None
-            try:
-                disp_proxy = Gio.DBusProxy.new_sync(
-                    bus, 0, None,
-                    "org.gnome.Mutter.DisplayConfig",
-                    "/org/gnome/Mutter/DisplayConfig",
-                    "org.gnome.Mutter.DisplayConfig",
-                    None
-                )
-                _, monitors, logical, _ = disp_proxy.call_sync("GetCurrentState", None, 0, 2000, None).unpack()
-                for lm in logical:
-                    if lm[5] and len(lm[5]) > 0:
-                        connector = lm[5][0][0]
-                        break
-                if not connector and monitors and len(monitors) > 0:
-                    connector = monitors[0][0][0]
-            except Exception:
-                connector = "eDP-1"
+            # Determine connector if not provided
+            if not connector:
+                monitors = get_connected_monitors()
+                primary = next((m for m in monitors if m.get("isPrimary")), None)
+                if primary:
+                    connector = primary["connector"]
+                elif monitors:
+                    connector = monitors[0]["connector"]
+                else:
+                    connector = "eDP-1"
 
             proxy = Gio.DBusProxy.new_sync(
                 bus, 0, None,
@@ -175,6 +207,7 @@ class DesktopStreamManager:
             self.video_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             self.video_thread = threading.Thread(target=self._broadcast_multipart_video, daemon=True)
             self.video_thread.start()
+            self.current_connector = connector
             logger.info(f"Wayland PipeWire desktop streamer started on {connector} (node {node_id})")
             return True
         except Exception as e:
@@ -202,16 +235,21 @@ class DesktopStreamManager:
             self.video_proc = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             self.video_thread = threading.Thread(target=self._broadcast_x11_video, daemon=True)
             self.video_thread.start()
+            self.current_connector = "X11"
             logger.info(f"Desktop X11 video streamer started on {display}")
         except Exception as e:
             logger.error(f"Failed to start desktop video: {e}")
 
-    def start_video(self):
+    def start_video(self, connector: Optional[str] = None):
         with self.video_lock:
             if self.video_proc and self.video_proc.poll() is None:
-                return
+                if connector and self.current_connector and connector != self.current_connector:
+                    logger.info(f"Switching video stream connector from {self.current_connector} to {connector}")
+                    self.stop_video()
+                else:
+                    return
 
-            if self._start_wayland_stream():
+            if self._start_wayland_stream(connector):
                 return
 
             self._start_x11_stream()
@@ -303,11 +341,11 @@ class DesktopStreamManager:
                 break
         self.stop_video()
 
-    def register_video_client(self) -> queue.Queue:
+    def register_video_client(self, connector: Optional[str] = None) -> queue.Queue:
         q = queue.Queue(maxsize=30)
         with self.video_lock:
             self.video_clients.append(q)
-        self.start_video()
+        self.start_video(connector=connector)
         return q
 
     def unregister_video_client(self, q: queue.Queue):
@@ -325,6 +363,7 @@ class DesktopStreamManager:
             self.video_clients.clear()
             session = self.mutter_session
             self.mutter_session = None
+            self.current_connector = None
 
         if session:
             try:
@@ -345,10 +384,11 @@ class DesktopStreamManager:
             if self.audio_proc and self.audio_proc.poll() is None:
                 return
 
+            # Capture desktop speaker monitor so PC sound is heard on the phone
             cmd = [
                 "ffmpeg",
                 "-f", "pulse",
-                "-i", "default",
+                "-i", "@DEFAULT_SINK@.monitor",
                 "-c:a", "libmp3lame",
                 "-b:a", "128k",
                 "-f", "mp3",
@@ -358,7 +398,7 @@ class DesktopStreamManager:
                 self.audio_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
                 self.audio_thread = threading.Thread(target=self._broadcast_audio, daemon=True)
                 self.audio_thread.start()
-                logger.info("Desktop audio streamer started")
+                logger.info("Desktop audio streamer started with @DEFAULT_SINK@.monitor")
             except Exception as e:
                 logger.error(f"Failed to start desktop audio: {e}")
 
@@ -454,7 +494,7 @@ class ScrcpyManager:
             pass
         return None
 
-    def start(self, phone_ip: Optional[str] = None) -> bool:
+    def start(self, phone_ip: Optional[str] = None, fullscreen: bool = False) -> bool:
         self.stop()
         device_serial = self._find_device_serial(phone_ip)
 
@@ -477,12 +517,14 @@ class ScrcpyManager:
             "--max-size=1600",
             "--window-title=Pulsar Phone (Pantalla y Sonido)"
         ]
+        if fullscreen:
+            cmd.append("--fullscreen")
         if device_serial:
             cmd.extend(["-s", device_serial])
 
         try:
             self.proc = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            logger.info(f"Launched scrcpy phone stream on device {device_serial}: {' '.join(cmd)}")
+            logger.info(f"Launched scrcpy phone stream on device {device_serial} (fullscreen={fullscreen}): {' '.join(cmd)}")
             return True
         except Exception as e:
             logger.error(f"Error launching scrcpy: {e}")
@@ -548,7 +590,7 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
     def do_HEAD(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
-        if path in ("/api/stream/pc-to-phone/live.mjpeg", "/api/stream/pc-to-phone/audio.mp3", "/api/stream/pc-to-phone/view", "/api/stream/pc-to-phone/live.ts"):
+        if path in ("/api/stream/pc-to-phone/live.mjpeg", "/api/stream/pc-to-phone/audio.mp3", "/api/stream/pc-to-phone/view", "/api/stream/pc-to-phone/live.ts", "/api/download/pulsar-phone.apk", "/api/ping"):
             self.send_response(200)
             self.send_cors_headers()
             if path == "/api/stream/pc-to-phone/audio.mp3":
@@ -557,6 +599,8 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
             elif path == "/api/stream/pc-to-phone/view":
                 self.send_header("Content-Type", "text/html; charset=utf-8")
+            elif path == "/api/download/pulsar-phone.apk":
+                self.send_header("Content-Type", "application/vnd.android.package-archive")
             self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
             self.send_header("Accept-Ranges", "none")
             self.end_headers()
@@ -608,6 +652,14 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
             })
             return
 
+        if path == "/api/download/pulsar-phone.apk":
+            apk_path = "/home/jaime/Documentos/pulsar/pulsar-phone/app/build/outputs/apk/debug/app-debug.apk"
+            if os.path.isfile(apk_path):
+                self._serve_file(apk_path)
+            else:
+                self.send_json(404, {"error": "APK not found"})
+            return
+
         if not self.check_auth():
             return
 
@@ -637,17 +689,26 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/fs/file":
             target_path = params.get("path", [""])[0]
             self._serve_file(target_path)
+        elif path == "/api/stream/pc-to-phone/monitors":
+            self.send_json(200, {
+                "monitors": get_connected_monitors(),
+                "current": context.desktop_streamer.current_connector
+            })
         elif path == "/api/stream/pc-to-phone/live.mjpeg":
-            self._serve_live_mjpeg()
+            target_mon = params.get("monitor", [None])[0]
+            self._serve_live_mjpeg(target_mon)
         elif path == "/api/stream/pc-to-phone/audio.mp3":
             self._serve_audio_mp3()
         elif path == "/api/stream/pc-to-phone/view":
-            self._serve_stream_view()
+            target_mon = params.get("monitor", [None])[0]
+            self._serve_stream_view(target_mon)
         elif path == "/api/stream/pc-to-phone/live.ts":
-            self._serve_live_mjpeg()
+            target_mon = params.get("monitor", [None])[0]
+            self._serve_live_mjpeg(target_mon)
         elif path == "/api/stream/pc-to-phone/status":
             self.send_json(200, {
                 "active": context.desktop_streamer.is_running(),
+                "currentMonitor": context.desktop_streamer.current_connector,
                 "videoClients": len(context.desktop_streamer.video_clients),
                 "audioClients": len(context.desktop_streamer.audio_clients),
                 "viewUrl": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/view?token={context.token}",
@@ -721,7 +782,8 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
             if not phone_ip:
                 # Use client ip from connection
                 phone_ip = self.client_address[0]
-            ok = context.scrcpy_mgr.start(phone_ip)
+            fullscreen = req_data.get("fullscreen", False)
+            ok = context.scrcpy_mgr.start(phone_ip, fullscreen=fullscreen)
             self.send_json(200, {"status": "started" if ok else "error"})
 
         elif path == "/api/stream/phone-to-pc/stop":
@@ -729,9 +791,11 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_json(200, {"status": "stopped"})
 
         elif path == "/api/stream/pc-to-phone/start":
-            context.desktop_streamer.start_if_needed()
+            target_mon = req_data.get("monitor")
+            context.desktop_streamer.start_if_needed(connector=target_mon)
             self.send_json(200, {
                 "status": "started",
+                "monitor": context.desktop_streamer.current_connector,
                 "url": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/view?token={context.token}"
             })
 
@@ -814,8 +878,8 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
         except Exception as e:
             logger.error(f"Error serving {target_path}: {e}")
 
-    def _serve_live_mjpeg(self):
-        client_q = context.desktop_streamer.register_video_client()
+    def _serve_live_mjpeg(self, monitor: Optional[str] = None):
+        client_q = context.desktop_streamer.register_video_client(connector=monitor)
         try:
             self.send_response(200)
             self.send_cors_headers()
@@ -862,7 +926,8 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
         finally:
             context.desktop_streamer.unregister_audio_client(client_q)
 
-    def _serve_stream_view(self):
+    def _serve_stream_view(self, monitor: Optional[str] = None):
+        mon_param = f"&monitor={monitor}" if monitor else ""
         html = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -881,7 +946,7 @@ img {{
 </style>
 </head>
 <body>
-<img id="streamImg" src="/api/stream/pc-to-phone/live.mjpeg?token={context.token}" />
+<img id="streamImg" src="/api/stream/pc-to-phone/live.mjpeg?token={context.token}{mon_param}" />
 <audio id="streamAudio" autoplay src="/api/stream/pc-to-phone/audio.mp3?token={context.token}"></audio>
 <script>
 const audio = document.getElementById('streamAudio');
@@ -894,7 +959,7 @@ if (audio) {{
 const img = document.getElementById('streamImg');
 img.onerror = () => {{
     setTimeout(() => {{
-        img.src = '/api/stream/pc-to-phone/live.mjpeg?token={context.token}&t=' + Date.now();
+        img.src = '/api/stream/pc-to-phone/live.mjpeg?token={context.token}{mon_param}&t=' + Date.now();
     }}, 1500);
 }};
 </script>
@@ -997,6 +1062,51 @@ img.onerror = () => {{
         return results
 
 
+class UDPDiscoveryResponder(threading.Thread):
+    """Answers UDP broadcast discovery beacons from Pulsar Phone on port 8989."""
+    def __init__(self, port: int = DEFAULT_PORT):
+        super().__init__(daemon=True, name="UDPDiscoveryResponder")
+        self.port = port
+        self.running = True
+
+    def run(self):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            except Exception:
+                pass
+            sock.bind(("0.0.0.0", self.port))
+            logger.info(f"UDP Discovery responder active on port {self.port}")
+        except Exception as e:
+            logger.error(f"Failed to start UDP Discovery responder: {e}")
+            return
+
+        while self.running:
+            try:
+                data, addr = sock.recvfrom(2048)
+                if not data:
+                    continue
+                msg = data.decode("utf-8", errors="ignore").strip()
+                if msg.startswith("PULSAR_DISCOVER"):
+                    context.refresh_ip()
+                    reply = {
+                        "service": "PulsarBridge",
+                        "hostname": socket.gethostname(),
+                        "lanIp": context.lan_ip,
+                        "tailscaleIp": context.tailscale_ip,
+                        "preferredIp": context.get_preferred_ip(),
+                        "port": context.port,
+                        "token": context.token,
+                        "broadwayPort": context.broadway_port
+                    }
+                    sock.sendto(json.dumps(reply).encode("utf-8"), addr)
+                    logger.info(f"Answered UDP discovery beacon from {addr}")
+            except Exception:
+                pass
+
+
 class ThreadedTCPBridgeServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
     daemon_threads = True
@@ -1005,6 +1115,10 @@ class ThreadedTCPBridgeServer(socketserver.ThreadingMixIn, socketserver.TCPServe
 def run_bridge_server():
     context.refresh_ip()
     port = context.port
+
+    # Start UDP discovery beacon responder
+    udp_responder = UDPDiscoveryResponder(port)
+    udp_responder.start()
 
     server_address = ("0.0.0.0", port)
     logger.info(f"Starting Pulsar Bridge on 0.0.0.0:{port} (Auth Token: {context.token[:6]}...)")

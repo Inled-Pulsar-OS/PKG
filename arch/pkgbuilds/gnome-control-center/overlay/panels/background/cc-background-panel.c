@@ -746,6 +746,11 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
       if (bms_popup_settings && bms_popup_schema)
         safe_set_boolean (bms_popup_settings, bms_popup_schema, "blur", FALSE);
 
+      g_autoptr(GSettingsSchema) bms_dock_schema = NULL;
+      g_autoptr(GSettings) bms_dock_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.dash-to-dock", &bms_dock_schema);
+      if (bms_dock_settings && bms_dock_schema)
+        safe_set_boolean (bms_dock_settings, bms_dock_schema, "blur", FALSE);
+
       /* 2. Configure Dash to Dock (Pulsar Dock) with shrink wrap enabled */
       g_autoptr(GSettingsSchema) dock_schema = NULL;
       g_autoptr(GSettings) dock_settings = safe_settings_new ("org.gnome.shell.extensions.dash-to-dock", &dock_schema);
@@ -846,6 +851,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
         "dconf write /org/gnome/shell/extensions/liquid-glass/notification-tint-color \\\"'#000000'\\\" ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/osd-tint-color \\\"'#000000'\\\" ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/output-logs 'false' ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur false ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur false ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme true ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' ; "
