@@ -14,7 +14,7 @@ export const FEATURE_SLIDES: FeatureSlide[] = [
     id: "flydrop",
     title: "Send files from any OS, like with Apple",
     subtitle:
-      "Flydrop is like AirDrop but on Pulsar OS. Use it on your devices with Localsend apps",
+      "Flydrop is like AirDrop but on Pulsar OS. Seamless zero-configuration file sharing across all your devices on the local network.",
   },
   {
     id: "optimizer",

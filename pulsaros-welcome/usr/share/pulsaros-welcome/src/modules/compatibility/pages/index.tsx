@@ -1,5 +1,5 @@
-import { launchApp, openUrl } from "@/modules/core/api";
-import { CROSS_PLATFORM_APPS, KDE_CONNECT_QR, KDE_CONNECT_URL } from "../constants";
+import { launchApp } from "@/modules/core/api";
+import { CROSS_PLATFORM_APPS } from "../constants";
 
 interface CompatibilityPageProps {
   onContinue: () => void;
@@ -15,10 +15,10 @@ export function CompatibilityPage({
       <div className="screen-enter glass flex h-[88vh] max-h-[740px] w-full max-w-[860px] flex-col overflow-hidden">
         <header className="flex shrink-0 flex-col items-center px-8 pt-12 pb-2 select-none">
           <h1 className="text-center text-[26px] font-semibold leading-tight text-text-primary sm:text-[30px]">
-            All OS in one
+            Ecosystem & Native Integration
           </h1>
           <p className="mt-2.5 max-w-130 text-center text-[14px] leading-relaxed text-text-secondary sm:text-[15px]">
-            With Pulsar OS you can connect your Android or iOS phone and run your Windows apps on real Windows and use MacOS within Pulsar OS
+            Pulsar OS unifies your phone, your Windows apps, and intelligent AI directly into one seamless desktop experience.
           </p>
         </header>
 
@@ -52,25 +52,25 @@ export function CompatibilityPage({
               ))}
             </div>
 
-            {/* KDE Connect QR */}
+            {/* Pulsar Phone Feature Banner */}
             <div className="glass-grouped flex items-center gap-5 rounded-2xl p-5">
               <img
-                src={KDE_CONNECT_QR}
-                alt="KDE Connect download QR"
-                className="h-28 w-28 rounded-lg bg-white p-2"
+                src="./logos/pulsar-phone.svg"
+                alt="Pulsar Phone"
+                className="h-20 w-20 rounded-xl bg-blue-500/10 p-2 object-contain"
               />
               <div className="flex flex-col items-start">
                 <div className="text-[15px] font-semibold text-text-primary">
-                  Let's connect your phone!
+                  Connect your phone with Pulsar Phone
                 </div>
                 <p className="mt-1 text-[12px] leading-snug text-text-secondary">
-                  Pulsar OS uses an application called KDE Connect that you can download to your phone and that allows you to connect it to your computer and synchronize notifications and many more things.
+                  Stream your screen with zero audio lag, launch mobile apps directly on your PC, share your clipboard, and prevent sleep for 24/7 remote access.
                 </p>
                 <button
                   className="btn-secondary mt-3"
-                  onClick={() => openUrl(KDE_CONNECT_URL)}
+                  onClick={() => launchApp("pulsar-vpn")}
                 >
-                  View download page
+                  Configure Pulsar Phone
                 </button>
               </div>
             </div>

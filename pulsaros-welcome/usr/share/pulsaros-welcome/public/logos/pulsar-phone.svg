@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="pulsarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3584e4"/>
+      <stop offset="50%" stop-color="#9141ac"/>
+      <stop offset="100%" stop-color="#e01b24"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded rectangle (Pulsar squircle) -->
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#pulsarGrad)" filter="url(#shadow)"/>
+
+  <!-- Lucide Wi-Fi Icon -->
+  <g transform="translate(24, 24) scale(3.333)"
+     fill="none"
+     stroke="#FFFFFF"
+     stroke-width="2.3"
+     stroke-linecap="round"
+     stroke-linejoin="round">
+    <path d="M12 20h.01" stroke-width="3.2"/>
+    <path d="M2 8.82a15 15 0 0 1 20 0"/>
+    <path d="M5 12.86a10 10 0 0 1 14 0"/>
+    <path d="M8.5 16.43a5 5 0 0 1 7 0"/>
+  </g>
+</svg>

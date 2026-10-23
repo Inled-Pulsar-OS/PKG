@@ -10,12 +10,20 @@ export interface AppEntry {
 
 export const CROSS_PLATFORM_APPS: AppEntry[] = [
   {
-    id: "install-macos",
-    name: "Install macOS",
+    id: "pulsar-phone",
+    name: "Pulsar Phone",
     description:
-      "Run and manage macOS virtual machines on KVM with native speed and simple setup.",
-    logo: "./logos/install-macos.png",
-    launch: "install-macos",
+      "Seamlessly connect your Android phone. Stream screens, run mobile apps on PC and sync notifications.",
+    logo: "./logos/pulsar-phone.svg",
+    launch: "pulsar-vpn",
+  },
+  {
+    id: "sayri",
+    name: "Sayri AI",
+    description:
+      "Your intelligent native assistant with voice, vision and deep system integration.",
+    logo: "./logos/sayri.png",
+    launch: "sayri",
   },
   {
     id: "winboat",
@@ -24,15 +32,6 @@ export const CROSS_PLATFORM_APPS: AppEntry[] = [
       "Windows apps as native windows. Real Windows instance underneath, no Wine, no activation.",
     logo: "./logos/winboat.svg",
     launch: "winboat",
-  },
-  {
-    id: "gsconnect",
-    name: "GSConnect",
-    description:
-      "Notifications, file sharing, and remote control. Your phone and desktop, unified.",
-    logo: "./logos/gsconnect.png",
-    launch:
-      "/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/gsconnect-preferences",
   },
   {
     id: "droidtux",
@@ -44,6 +43,3 @@ export const CROSS_PLATFORM_APPS: AppEntry[] = [
     fallback: "droidtux-settings",
   },
 ];
-
-export const KDE_CONNECT_QR = "./logos/kdeconnect-qr.png";
-export const KDE_CONNECT_URL = "https://kdeconnect.kde.org/download.html";
