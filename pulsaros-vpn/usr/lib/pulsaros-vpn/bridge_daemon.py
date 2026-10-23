@@ -112,12 +112,16 @@ class DesktopStreamManager:
     def __init__(self):
         self.video_lock = threading.RLock()
         self.audio_lock = threading.RLock()
+        self.pcm_audio_lock = threading.RLock()
         self.video_proc: Optional[subprocess.Popen] = None
         self.audio_proc: Optional[subprocess.Popen] = None
+        self.pcm_audio_proc: Optional[subprocess.Popen] = None
         self.video_clients: List[queue.Queue] = []
         self.audio_clients: List[queue.Queue] = []
+        self.pcm_audio_clients: List[queue.Queue] = []
         self.video_thread: Optional[threading.Thread] = None
         self.audio_thread: Optional[threading.Thread] = None
+        self.pcm_audio_thread: Optional[threading.Thread] = None
         self.mutter_session = None
         self.current_connector: Optional[str] = None
 
@@ -411,7 +415,7 @@ class DesktopStreamManager:
             if not proc or proc.poll() is not None or not proc.stdout:
                 break
             try:
-                chunk = proc.stdout.read(1024)
+                chunk = proc.stdout.read(4096)
                 if not chunk:
                     break
                 with self.audio_lock:
@@ -419,7 +423,7 @@ class DesktopStreamManager:
 
                 for q in clients:
                     try:
-                        while q.qsize() >= 3:
+                        while q.qsize() >= 12:
                             try:
                                 q.get_nowait()
                             except queue.Empty:
@@ -434,7 +438,7 @@ class DesktopStreamManager:
         self.stop_audio()
 
     def register_audio_client(self) -> queue.Queue:
-        q = queue.Queue(maxsize=4)
+        q = queue.Queue(maxsize=15)
         with self.audio_lock:
             self.audio_clients.append(q)
         self.start_audio()
@@ -461,9 +465,91 @@ class DesktopStreamManager:
                 try: proc.kill()
                 except Exception: pass
 
+    def start_pcm_audio(self):
+        with self.pcm_audio_lock:
+            if self.pcm_audio_proc and self.pcm_audio_proc.poll() is None:
+                return
+
+            cmd = [
+                "ffmpeg",
+                "-fflags", "nobuffer",
+                "-flags", "low_delay",
+                "-f", "pulse",
+                "-i", "@DEFAULT_SINK@.monitor",
+                "-f", "s16le",
+                "-ar", "48000",
+                "-ac", "2",
+                "-"
+            ]
+            try:
+                self.pcm_audio_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                self.pcm_audio_thread = threading.Thread(target=self._broadcast_pcm_audio, daemon=True)
+                self.pcm_audio_thread.start()
+                logger.info("Desktop low-latency PCM audio streamer started (48000Hz stereo)")
+            except Exception as e:
+                logger.error(f"Failed to start desktop PCM audio: {e}")
+
+    def _broadcast_pcm_audio(self):
+        chunk_size = 1920  # 10ms of 48kHz 16-bit stereo PCM
+        while True:
+            proc = self.pcm_audio_proc
+            if not proc or proc.poll() is not None or not proc.stdout:
+                break
+            try:
+                chunk = proc.stdout.read(chunk_size)
+                if not chunk:
+                    break
+                with self.pcm_audio_lock:
+                    clients = list(self.pcm_audio_clients)
+
+                for q in clients:
+                    try:
+                        while q.qsize() >= 5:
+                            try:
+                                q.get_nowait()
+                            except queue.Empty:
+                                break
+                        q.put_nowait(chunk)
+                    except Exception:
+                        with self.pcm_audio_lock:
+                            if q in self.pcm_audio_clients:
+                                self.pcm_audio_clients.remove(q)
+            except Exception:
+                break
+        self.stop_pcm_audio()
+
+    def register_pcm_client(self) -> queue.Queue:
+        q = queue.Queue(maxsize=10)
+        with self.pcm_audio_lock:
+            self.pcm_audio_clients.append(q)
+        self.start_pcm_audio()
+        return q
+
+    def unregister_pcm_client(self, q: queue.Queue):
+        with self.pcm_audio_lock:
+            if q in self.pcm_audio_clients:
+                self.pcm_audio_clients.remove(q)
+            rem = len(self.pcm_audio_clients)
+        if rem == 0:
+            self.stop_pcm_audio()
+
+    def stop_pcm_audio(self):
+        with self.pcm_audio_lock:
+            proc = self.pcm_audio_proc
+            self.pcm_audio_proc = None
+            self.pcm_audio_clients.clear()
+        if proc:
+            try:
+                proc.terminate()
+                proc.wait(timeout=0.5)
+            except Exception:
+                try: proc.kill()
+                except Exception: pass
+
     def stop(self):
         self.stop_video()
         self.stop_audio()
+        self.stop_pcm_audio()
 
 
 class ScrcpyManager:
@@ -766,11 +852,14 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/stream/pc-to-phone/live.mjpeg":
             target_mon = params.get("monitor", [None])[0]
             self._serve_live_mjpeg(target_mon)
+        elif path == "/api/stream/pc-to-phone/audio.pcm":
+            self._serve_audio_pcm()
         elif path == "/api/stream/pc-to-phone/audio.mp3":
             self._serve_audio_mp3()
         elif path == "/api/stream/pc-to-phone/view":
             target_mon = params.get("monitor", [None])[0]
-            self._serve_stream_view(target_mon)
+            no_audio = params.get("noaudio", ["0"])[0] == "1"
+            self._serve_stream_view(target_mon, no_audio=no_audio)
         elif path == "/api/stream/pc-to-phone/live.ts":
             target_mon = params.get("monitor", [None])[0]
             self._serve_live_mjpeg(target_mon)
@@ -780,9 +869,11 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
                 "currentMonitor": context.desktop_streamer.current_connector,
                 "videoClients": len(context.desktop_streamer.video_clients),
                 "audioClients": len(context.desktop_streamer.audio_clients),
+                "pcmAudioClients": len(context.desktop_streamer.pcm_audio_clients),
                 "viewUrl": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/view?token={context.token}",
                 "mjpegUrl": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/live.mjpeg?token={context.token}",
-                "audioUrl": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/audio.mp3?token={context.token}"
+                "audioUrl": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/audio.mp3?token={context.token}",
+                "pcmAudioUrl": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/audio.pcm?token={context.token}"
             })
         elif path == "/api/stream/phone-to-pc/status":
             self.send_json(200, {
@@ -984,6 +1075,29 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
         finally:
             context.desktop_streamer.unregister_video_client(client_q)
 
+    def _serve_audio_pcm(self):
+        client_q = context.desktop_streamer.register_pcm_client()
+        try:
+            self.send_response(200)
+            self.send_cors_headers()
+            self.send_header("Content-Type", "audio/l16; rate=48000; channels=2")
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
+            self.end_headers()
+
+            while True:
+                try:
+                    chunk = client_q.get(timeout=3.0)
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+                except queue.Empty:
+                    continue
+        except (BrokenPipeError, ConnectionResetError, Exception) as e:
+            logger.debug(f"PCM audio client disconnected: {e}")
+        finally:
+            context.desktop_streamer.unregister_pcm_client(client_q)
+
     def _serve_audio_mp3(self):
         client_q = context.desktop_streamer.register_audio_client()
         try:
@@ -1007,8 +1121,21 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
         finally:
             context.desktop_streamer.unregister_audio_client(client_q)
 
-    def _serve_stream_view(self, monitor: Optional[str] = None):
+    def _serve_stream_view(self, monitor: Optional[str] = None, no_audio: bool = False):
         mon_param = f"&monitor={monitor}" if monitor else ""
+        audio_markup = ""
+        if not no_audio:
+            audio_markup = f"""<audio id="streamAudio" autoplay preload="none" src="/api/stream/pc-to-phone/audio.mp3?token={context.token}"></audio>
+<script>
+const audio = document.getElementById('streamAudio');
+if (audio) {{
+    audio.play().catch(() => {{
+        window.addEventListener('click', () => audio.play(), {{ once: true }});
+        window.addEventListener('touchstart', () => audio.play(), {{ once: true }});
+    }});
+}}
+</script>"""
+
         html = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -1028,23 +1155,8 @@ img {{
 </head>
 <body>
 <img id="streamImg" src="/api/stream/pc-to-phone/live.mjpeg?token={context.token}{mon_param}" />
-<audio id="streamAudio" autoplay preload="none" src="/api/stream/pc-to-phone/audio.mp3?token={context.token}"></audio>
+{audio_markup}
 <script>
-const audio = document.getElementById('streamAudio');
-if (audio) {{
-    audio.play().catch(() => {{
-        window.addEventListener('click', () => audio.play(), {{ once: true }});
-        window.addEventListener('touchstart', () => audio.play(), {{ once: true }});
-    }});
-    setInterval(() => {{
-        if (audio.buffered && audio.buffered.length > 0) {{
-            const liveEnd = audio.buffered.end(audio.buffered.length - 1);
-            if (liveEnd - audio.currentTime > 0.3) {{
-                audio.currentTime = liveEnd - 0.05;
-            }}
-        }}
-    }}, 300);
-}}
 const img = document.getElementById('streamImg');
 img.onerror = () => {{
     setTimeout(() => {{
