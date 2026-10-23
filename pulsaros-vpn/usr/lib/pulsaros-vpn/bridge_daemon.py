@@ -293,6 +293,23 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
         self.send_cors_headers()
         self.end_headers()
 
+    def do_HEAD(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        if path == "/api/stream/pc-to-phone/live.ts":
+            self.send_response(200)
+            self.send_cors_headers()
+            self.send_header("Content-Type", "video/mp2t")
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Accept-Ranges", "none")
+            self.end_headers()
+            return
+        if not self.check_auth():
+            return
+        self.send_response(200)
+        self.send_cors_headers()
+        self.end_headers()
+
     def check_auth(self) -> bool:
         auth_token = self.headers.get("X-Pulsar-Token")
         if not auth_token:
