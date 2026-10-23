@@ -6,12 +6,14 @@ Simple, elegant interface matching Pulsar Adblocker design philosophy:
 - Large centered pill action button (Connect / Disconnect)
 - Clear pairing instructions & inline QR code
 - Bidirectional screen and sound streaming:
-    * PC -> Android (Screen + PulseAudio over low-latency MPEG-TS)
+    * PC -> Android (Screen + PulseAudio over low-latency PipeWire / MJPEG)
     * Phone -> PC (Screen + Audio via scrcpy)
+- Full internationalization with English fallback and Spanish translation
 - Zero public internet ports exposed (100% WireGuard mesh)
 """
 
 import json
+import locale
 import logging
 import os
 import shutil
@@ -37,10 +39,58 @@ DAEMON_URL = f"http://127.0.0.1:{DEFAULT_PORT}"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 logger = logging.getLogger("PulsarVPN.GUI")
 
+# System language detection (fallback is English)
+CURRENT_LANG = (os.environ.get("LANG", "") or locale.getdefaultlocale()[0] or "").lower()
+IS_SPANISH = CURRENT_LANG.startswith("es")
+
+TRANSLATIONS_ES = {
+    "Pulsar VPN": "Pulsar VPN",
+    "Refresh status": "Actualizar estado",
+    "Checking connection...": "Comprobando conexión...",
+    "CONNECT VPN": "CONECTAR VPN",
+    "DISCONNECT": "DESCONECTAR",
+    "CONNECTING...": "CONECTANDO...",
+    "DISCONNECTING...": "DESCONECTANDO...",
+    "PROTECTED & CONNECTED": "PROTEGIDO Y CONECTADO",
+    "LOCAL MODE (NO VPN)": "MODO LOCAL (SIN VPN)",
+    "LOGIN REQUIRED": "INICIO DE SESIÓN REQUERIDO",
+    "LOG IN": "INICIAR SESIÓN",
+    "INSTALL TAILSCALE": "INSTALAR TAILSCALE",
+    "TAILSCALE NOT INSTALLED": "TAILSCALE NO INSTALADO",
+    "Simply sign in with the same account on another device\nor scan the QR code shown below.": "Simplemente inicia sesión con la misma cuenta en otro dispositivo\no escanea el código QR que se muestra a continuación.",
+    "Pair with Mobile Phone": "Vincular con tu Móvil",
+    "Copy Pairing Link": "Copiar Enlace de Vinculación",
+    "Shared Screen & Sound": "Pantalla y Sonido Compartidos",
+    "Stream real-time screen and audio between this PC and your Android phone.": "Transmite pantalla y audio en tiempo real entre este PC y tu teléfono Android.",
+    "Stream PC to Phone (Screen + Sound)": "Transmitir PC al Teléfono (Pantalla + Sonido)",
+    "Sends entire desktop and system sound to mobile via Wi-Fi / VPN": "Envía el escritorio completo y el sonido del sistema al móvil vía Wi-Fi / VPN",
+    "Streaming live screen and audio...": "Transmitiendo pantalla y sonido en vivo...",
+    "View Phone on PC (Screen + Sound)": "Ver Teléfono en el PC (Pantalla + Sonido)",
+    "Mirror and hear your phone screen in a PC window with scrcpy": "Proyecta y escucha la pantalla de tu móvil en una ventana del PC con scrcpy",
+    "Viewing phone screen and audio with scrcpy": "Visualizando pantalla y audio del teléfono con scrcpy",
+    "Start": "Iniciar",
+    "Stop": "Detener",
+    "Open": "Abrir",
+    "Close": "Cerrar",
+    "Tailscale Private Network": "Red Privada Tailscale",
+    "Local Wi-Fi Network": "Red Local Wi-Fi",
+    "End-to-end encrypted": "Cifrado de extremo a extremo",
+    "Pairing link copied to clipboard": "Enlace de vinculación copiado al portapapeles",
+    "VPN IP: %s • Local IP: %s • Port: %s": "IP VPN: %s • IP Local: %s • Puerto: %s",
+    "Inactive": "Inactivo"
+}
+
+
+def _(text: str) -> str:
+    """Returns translated string for Spanish, otherwise returns text in English (fallback)."""
+    if IS_SPANISH:
+        return TRANSLATIONS_ES.get(text, text)
+    return text
+
 
 class PulsarVpnWindow(Adw.ApplicationWindow):
     def __init__(self, app):
-        super().__init__(application=app, title="Pulsar VPN")
+        super().__init__(application=app, title=_("Pulsar VPN"))
         self.set_default_size(520, 720)
         self.set_size_request(420, 580)
 
@@ -58,10 +108,10 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
     def _build_ui(self):
         # HeaderBar
         header_bar = Adw.HeaderBar()
-        self.set_title("Pulsar VPN")
+        self.set_title(_("Pulsar VPN"))
 
         refresh_btn = Gtk.Button(icon_name="view-refresh-symbolic")
-        refresh_btn.set_tooltip_text("Actualizar estado")
+        refresh_btn.set_tooltip_text(_("Refresh status"))
         refresh_btn.connect("clicked", lambda _: self._refresh_status())
         header_bar.pack_start(refresh_btn)
 
@@ -99,7 +149,7 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
         content_box.append(self.title_label)
 
         self.status_label = Gtk.Label()
-        self.status_label.set_text("Comprobando conexión...")
+        self.status_label.set_text(_("Checking connection..."))
         self.status_label.add_css_class("heading")
         self.status_label.set_halign(Gtk.Align.CENTER)
         content_box.append(self.status_label)
@@ -119,7 +169,7 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
         self.btn_box.append(self.btn_icon)
 
         self.btn_text = Gtk.Label()
-        self.btn_text.set_markup("<b>CONECTAR VPN</b>")
+        self.btn_text.set_markup(f"<b>{_('CONNECT VPN')}</b>")
         self.btn_text.add_css_class("title-2")
         self.btn_box.append(self.btn_text)
 
@@ -137,10 +187,7 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
         self.info_box.set_margin_top(4)
 
         info_lbl = Gtk.Label()
-        info_lbl.set_markup(
-            "<span size='medium'>Simplemente <b>inicia sesión con la misma cuenta</b> en otro dispositivo\n"
-            "o escanea el código QR que se muestra a continuación.</span>"
-        )
+        info_lbl.set_markup(f"<span size='medium'>{_('Simply sign in with the same account on another device\nor scan the QR code shown below.')}</span>")
         info_lbl.set_wrap(True)
         info_lbl.set_justify(Gtk.Justification.CENTER)
         info_lbl.add_css_class("dim-label")
@@ -149,7 +196,7 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
 
         # ----------------- QR PAIRING CARD -----------------
         qr_card = Adw.PreferencesGroup()
-        qr_card.set_title("Vincular con tu Móvil")
+        qr_card.set_title(_("Pair with Mobile Phone"))
         content_box.append(qr_card)
 
         qr_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -168,7 +215,7 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
         self.qr_details_label.set_markup(f"<b>PC:</b> {self.hostname}")
         qr_box.append(self.qr_details_label)
 
-        copy_pair_btn = Gtk.Button(label="Copiar Enlace de Vinculación")
+        copy_pair_btn = Gtk.Button(label=_("Copy Pairing Link"))
         copy_pair_btn.set_halign(Gtk.Align.CENTER)
         copy_pair_btn.add_css_class("flat")
         copy_pair_btn.connect("clicked", self._copy_pair_uri)
@@ -178,17 +225,17 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
 
         # ----------------- BIDIRECTIONAL SCREEN & SOUND STREAMING -----------------
         stream_group = Adw.PreferencesGroup()
-        stream_group.set_title("Pantalla y Sonido Compartidos")
-        stream_group.set_description("Transmite pantalla y audio en tiempo real entre este PC y tu teléfono Android.")
+        stream_group.set_title(_("Shared Screen & Sound"))
+        stream_group.set_description(_("Stream real-time screen and audio between this PC and your Android phone."))
         content_box.append(stream_group)
 
         # Row 1: PC -> Android Phone (Screen + Sound)
         self.pc_to_phone_row = Adw.ActionRow()
-        self.pc_to_phone_row.set_title("Transmitir PC al Teléfono (Pantalla + Sonido)")
-        self.pc_to_phone_row.set_subtitle("Envía el escritorio completo y el sonido del sistema al móvil vía Wi-Fi / VPN")
+        self.pc_to_phone_row.set_title(_("Stream PC to Phone (Screen + Sound)"))
+        self.pc_to_phone_row.set_subtitle(_("Sends entire desktop and system sound to mobile via Wi-Fi / VPN"))
         self.pc_to_phone_row.add_prefix(Gtk.Image.new_from_icon_name("video-display-symbolic"))
 
-        self.btn_stream_pc = Gtk.Button(label="Iniciar")
+        self.btn_stream_pc = Gtk.Button(label=_("Start"))
         self.btn_stream_pc.set_valign(Gtk.Align.CENTER)
         self.btn_stream_pc.add_css_class("suggested-action")
         self.btn_stream_pc.connect("clicked", self._toggle_pc_to_phone_stream)
@@ -197,11 +244,11 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
 
         # Row 2: Phone -> PC (Screen + Sound)
         self.phone_to_pc_row = Adw.ActionRow()
-        self.phone_to_pc_row.set_title("Ver Teléfono en el PC (Pantalla + Sonido)")
-        self.phone_to_pc_row.set_subtitle("Proyecta y escucha la pantalla de tu móvil en una ventana del PC con scrcpy")
+        self.phone_to_pc_row.set_title(_("View Phone on PC (Screen + Sound)"))
+        self.phone_to_pc_row.set_subtitle(_("Mirror and hear your phone screen in a PC window with scrcpy"))
         self.phone_to_pc_row.add_prefix(Gtk.Image.new_from_icon_name("phone-symbolic"))
 
-        self.btn_stream_phone = Gtk.Button(label="Abrir")
+        self.btn_stream_phone = Gtk.Button(label=_("Open"))
         self.btn_stream_phone.set_valign(Gtk.Align.CENTER)
         self.btn_stream_phone.connect("clicked", self._toggle_phone_to_pc_stream)
         self.phone_to_pc_row.add_suffix(self.btn_stream_phone)
@@ -233,32 +280,32 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
         self.btn.remove_css_class("destructive-action")
 
         if not status.get("installed", False):
-            self.status_label.set_text("TAILSCALE NO INSTALADO")
-            self.btn_text.set_markup("<b>INSTALAR TAILSCALE</b>")
+            self.status_label.set_text(_("TAILSCALE NOT INSTALLED"))
+            self.btn_text.set_markup(f"<b>{_('INSTALL TAILSCALE')}</b>")
             self.btn.add_css_class("suggested-action")
             self.header_icon.set_from_icon_name("dialog-warning-symbolic")
         elif is_running and ip:
-            self.status_label.set_text("PROTEGIDO Y CONECTADO")
-            self.btn_text.set_markup("<b>DESCONECTAR</b>")
+            self.status_label.set_text(_("PROTECTED & CONNECTED"))
+            self.btn_text.set_markup(f"<b>{_('DISCONNECT')}</b>")
             self.btn.add_css_class("destructive-action")
             self.header_icon.set_from_icon_name("network-vpn-symbolic")
             self.btn_icon.set_from_icon_name("network-vpn-acquiring-symbolic")
         elif status.get("backend_state") == "NeedsLogin" or auth_url:
-            self.status_label.set_text("INICIO DE SESIÓN REQUERIDO")
-            self.btn_text.set_markup("<b>INICIAR SESIÓN</b>")
+            self.status_label.set_text(_("LOGIN REQUIRED"))
+            self.btn_text.set_markup(f"<b>{_('LOG IN')}</b>")
             self.btn.add_css_class("suggested-action")
             self.header_icon.set_from_icon_name("dialog-password-symbolic")
             self.btn_icon.set_from_icon_name("dialog-password-symbolic")
         else:
-            self.status_label.set_text("MODO LOCAL (SIN VPN)")
-            self.btn_text.set_markup("<b>CONECTAR VPN</b>")
+            self.status_label.set_text(_("LOCAL MODE (NO VPN)"))
+            self.btn_text.set_markup(f"<b>{_('CONNECT VPN')}</b>")
             self.btn.add_css_class("suggested-action")
             self.header_icon.set_from_icon_name("network-wireless-symbolic")
             self.btn_icon.set_from_icon_name("network-vpn-symbolic")
 
         # QR and IP display
         active_ip = ip if ip else lan_ip
-        self.footer_label.set_text(f"IP VPN: {ip or 'Inactivo'} • IP Local: {lan_ip} • Puerto: {DEFAULT_PORT}")
+        self.footer_label.set_text(_("VPN IP: %s • Local IP: %s • Port: %s") % (ip or _("Inactive"), lan_ip, DEFAULT_PORT))
         self._generate_qr(active_ip, is_vpn=bool(ip))
 
         # Check streaming status from bridge daemon
@@ -280,16 +327,16 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
                 )
                 if os.path.exists(QR_CACHE_PATH):
                     self.qr_image.set_filename(QR_CACHE_PATH)
-                    net_type = "Red Privada Tailscale" if is_vpn else "Red Local Wi-Fi"
+                    net_type = _("Tailscale Private Network") if is_vpn else _("Local Wi-Fi Network")
                     self.qr_details_label.set_markup(
                         f"<b>{self.hostname}</b> ({ip_address})\n"
-                        f"<small>{net_type} • Cifrado de extremo a extremo</small>"
+                        f"<small>{net_type} • {_('End-to-end encrypted')}</small>"
                     )
                     return
             except Exception as e:
                 logger.error(f"Error running qrencode: {e}")
 
-        self.qr_details_label.set_text(f"Vinculación: {pair_uri}")
+        self.qr_details_label.set_text(f"URI: {pair_uri}")
 
     def _on_btn_clicked(self, _):
         status = self.tailscale.get_status()
@@ -357,29 +404,29 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
 
     def _update_pc_stream_ui(self, active: bool):
         if active:
-            self.btn_stream_pc.set_label("Detener")
+            self.btn_stream_pc.set_label(_("Stop"))
             self.btn_stream_pc.remove_css_class("suggested-action")
             self.btn_stream_pc.add_css_class("destructive-action")
-            self.pc_to_phone_row.set_subtitle("Transmitiendo pantalla y sonido en vivo...")
+            self.pc_to_phone_row.set_subtitle(_("Streaming live screen and audio..."))
         else:
-            self.btn_stream_pc.set_label("Iniciar")
+            self.btn_stream_pc.set_label(_("Start"))
             self.btn_stream_pc.remove_css_class("destructive-action")
             self.btn_stream_pc.add_css_class("suggested-action")
-            self.pc_to_phone_row.set_subtitle("Envía el escritorio completo y el sonido del sistema al móvil")
+            self.pc_to_phone_row.set_subtitle(_("Sends entire desktop and system sound to mobile via Wi-Fi / VPN"))
 
     def _update_phone_stream_ui(self, running: bool):
         if running:
-            self.btn_stream_phone.set_label("Cerrar")
+            self.btn_stream_phone.set_label(_("Close"))
             self.btn_stream_phone.add_css_class("destructive-action")
-            self.phone_to_pc_row.set_subtitle("Visualizando pantalla y audio del teléfono con scrcpy")
+            self.phone_to_pc_row.set_subtitle(_("Viewing phone screen and audio with scrcpy"))
         else:
-            self.btn_stream_phone.set_label("Abrir")
+            self.btn_stream_phone.set_label(_("Open"))
             self.btn_stream_phone.remove_css_class("destructive-action")
-            self.phone_to_pc_row.set_subtitle("Proyecta y escucha la pantalla de tu móvil en una ventana del PC")
+            self.phone_to_pc_row.set_subtitle(_("Mirror and hear your phone screen in a PC window with scrcpy"))
 
     def _toggle_pc_to_phone_stream(self, btn):
         label = btn.get_label()
-        action = "stop" if label == "Detener" else "start"
+        action = "stop" if label in (_("Stop"), "Detener", "Stop") else "start"
 
         def worker():
             try:
@@ -398,7 +445,7 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
 
     def _toggle_phone_to_pc_stream(self, btn):
         label = btn.get_label()
-        action = "stop" if label == "Cerrar" else "start"
+        action = "stop" if label in (_("Close"), "Cerrar", "Close") else "start"
 
         def worker():
             try:

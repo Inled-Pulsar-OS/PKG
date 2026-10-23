@@ -68,7 +68,7 @@ def get_local_ip() -> str:
 
 
 class DesktopStreamManager:
-    """Streams PC desktop video (MJPEG) and audio (MP3) with zero latency."""
+    """Streams PC desktop video (Wayland ScreenCast / MJPEG) and audio (MP3) with zero latency."""
     def __init__(self):
         self.video_lock = threading.RLock()
         self.audio_lock = threading.RLock()
@@ -78,6 +78,7 @@ class DesktopStreamManager:
         self.audio_clients: List[queue.Queue] = []
         self.video_thread: Optional[threading.Thread] = None
         self.audio_thread: Optional[threading.Thread] = None
+        self.mutter_session = None
 
     def is_running(self) -> bool:
         with self.video_lock:
@@ -87,36 +88,174 @@ class DesktopStreamManager:
         self.start_video()
         self.start_audio()
 
+    def _start_wayland_stream(self) -> bool:
+        try:
+            from gi.repository import Gio, GLib
+            bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+
+            # Get primary or first display connector
+            connector = None
+            try:
+                disp_proxy = Gio.DBusProxy.new_sync(
+                    bus, 0, None,
+                    "org.gnome.Mutter.DisplayConfig",
+                    "/org/gnome/Mutter/DisplayConfig",
+                    "org.gnome.Mutter.DisplayConfig",
+                    None
+                )
+                _, monitors, logical, _ = disp_proxy.call_sync("GetCurrentState", None, 0, 2000, None).unpack()
+                for lm in logical:
+                    if lm[5] and len(lm[5]) > 0:
+                        connector = lm[5][0][0]
+                        break
+                if not connector and monitors and len(monitors) > 0:
+                    connector = monitors[0][0][0]
+            except Exception:
+                connector = "eDP-1"
+
+            proxy = Gio.DBusProxy.new_sync(
+                bus, 0, None,
+                "org.gnome.Mutter.ScreenCast",
+                "/org/gnome/Mutter/ScreenCast",
+                "org.gnome.Mutter.ScreenCast",
+                None
+            )
+            res = proxy.call_sync("CreateSession", GLib.Variant("(a{sv})", ({},)), 0, 2000, None)
+            session_path = res.unpack()[0]
+            self.mutter_session = Gio.DBusProxy.new_sync(
+                bus, 0, None,
+                "org.gnome.Mutter.ScreenCast",
+                session_path,
+                "org.gnome.Mutter.ScreenCast.Session",
+                None
+            )
+
+            stream_res = self.mutter_session.call_sync(
+                "RecordMonitor",
+                GLib.Variant("(sa{sv})", (connector, {"cursor-mode": GLib.Variant("u", 1)})),
+                0, 2000, None
+            )
+            stream_path = stream_res.unpack()[0]
+
+            node_id_holder = []
+            loop = GLib.MainLoop()
+
+            def on_sig(conn, sender, path, iface, name, params, udata):
+                if name == "PipeWireStreamAdded":
+                    node_id_holder.append(params.unpack()[0])
+                    loop.quit()
+
+            sub_id = bus.signal_subscribe(
+                "org.gnome.Mutter.ScreenCast",
+                "org.gnome.Mutter.ScreenCast.Stream",
+                "PipeWireStreamAdded",
+                stream_path,
+                None, 0, on_sig, None
+            )
+            self.mutter_session.call_sync("Start", None, 0, 2000, None)
+            GLib.timeout_add_seconds(3, loop.quit)
+            loop.run()
+            bus.signal_unsubscribe(sub_id)
+
+            if not node_id_holder:
+                logger.warning("Failed to obtain PipeWire node ID from Mutter ScreenCast")
+                return False
+
+            node_id = node_id_holder[0]
+            cmd = [
+                "gst-launch-1.0", "-q",
+                "pipewiresrc", f"path={node_id}", "keepalive-time=33", "always-copy=true",
+                "!", "videoconvert",
+                "!", "videoscale",
+                "!", "video/x-raw,width=1280,height=720",
+                "!", "jpegenc", "quality=75",
+                "!", "multipartmux", "boundary=frame",
+                "!", "fdsink", "fd=1"
+            ]
+            self.video_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            self.video_thread = threading.Thread(target=self._broadcast_multipart_video, daemon=True)
+            self.video_thread.start()
+            logger.info(f"Wayland PipeWire desktop streamer started on {connector} (node {node_id})")
+            return True
+        except Exception as e:
+            logger.warning(f"Could not start Wayland ScreenCast: {e}")
+            return False
+
+    def _start_x11_stream(self):
+        env = os.environ.copy()
+        if "DISPLAY" not in env or not env["DISPLAY"]:
+            env["DISPLAY"] = ":1"
+        display = env["DISPLAY"]
+
+        cmd = [
+            "ffmpeg",
+            "-f", "x11grab",
+            "-framerate", "30",
+            "-i", display,
+            "-vf", "scale=1280:-2",
+            "-c:v", "mjpeg",
+            "-q:v", "5",
+            "-f", "image2pipe",
+            "-"
+        ]
+        try:
+            self.video_proc = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            self.video_thread = threading.Thread(target=self._broadcast_x11_video, daemon=True)
+            self.video_thread.start()
+            logger.info(f"Desktop X11 video streamer started on {display}")
+        except Exception as e:
+            logger.error(f"Failed to start desktop video: {e}")
+
     def start_video(self):
         with self.video_lock:
             if self.video_proc and self.video_proc.poll() is None:
                 return
 
-            env = os.environ.copy()
-            if "DISPLAY" not in env or not env["DISPLAY"]:
-                env["DISPLAY"] = ":1"
-            display = env["DISPLAY"]
+            if self._start_wayland_stream():
+                return
 
-            cmd = [
-                "ffmpeg",
-                "-f", "x11grab",
-                "-framerate", "30",
-                "-i", display,
-                "-vf", "scale=1280:-2",
-                "-c:v", "mjpeg",
-                "-q:v", "5",
-                "-f", "image2pipe",
-                "-"
-            ]
+            self._start_x11_stream()
+
+    def _broadcast_multipart_video(self):
+        buf = b""
+        while True:
+            proc = self.video_proc
+            if not proc or proc.poll() is not None or not proc.stdout:
+                break
             try:
-                self.video_proc = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-                self.video_thread = threading.Thread(target=self._broadcast_video, daemon=True)
-                self.video_thread.start()
-                logger.info(f"Desktop video streamer started on {display}")
-            except Exception as e:
-                logger.error(f"Failed to start desktop video: {e}")
+                chunk = proc.stdout.read(4096)
+                if not chunk:
+                    break
+                buf += chunk
+                while True:
+                    pos = buf.find(b"--frame", 7)
+                    if pos == -1:
+                        if len(buf) > 500000:
+                            buf = buf[-4096:]
+                        break
+                    packet = buf[:pos]
+                    buf = buf[pos:]
 
-    def _broadcast_video(self):
+                    with self.video_lock:
+                        clients = list(self.video_clients)
+
+                    for q in clients:
+                        try:
+                            if q.full():
+                                try:
+                                    q.get_nowait()
+                                except queue.Empty:
+                                    pass
+                            q.put_nowait(packet)
+                        except Exception:
+                            with self.video_lock:
+                                if q in self.video_clients:
+                                    self.video_clients.remove(q)
+            except Exception:
+                break
+        self.stop_video()
+
+    def _broadcast_x11_video(self):
         buf = b""
         while True:
             proc = self.video_proc
@@ -184,6 +323,15 @@ class DesktopStreamManager:
             proc = self.video_proc
             self.video_proc = None
             self.video_clients.clear()
+            session = self.mutter_session
+            self.mutter_session = None
+
+        if session:
+            try:
+                session.call_sync("Stop", None, 0, 1000, None)
+            except Exception:
+                pass
+
         if proc:
             try:
                 proc.terminate()
@@ -322,6 +470,11 @@ class ScrcpyManager:
             scrcpy_bin,
             "--audio-source=output",
             "--audio-codec=opus",
+            "--audio-bit-rate=128K",
+            "--audio-buffer=150",
+            "--audio-output-buffer=40",
+            "--video-bit-rate=4M",
+            "--max-size=1600",
             "--window-title=Pulsar Phone (Pantalla y Sonido)"
         ]
         if device_serial:

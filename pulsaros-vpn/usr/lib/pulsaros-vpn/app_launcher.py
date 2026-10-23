@@ -215,30 +215,24 @@ class AppLauncher:
         except Exception:
             return None
 
-    def _ensure_broadwayd(self):
-        """
-        Ensures gtk4-broadwayd is running and actively listening on port self.port.
-        """
-        if self.broadwayd_process and self.broadwayd_process.poll() is None:
-            try:
-                with socket.create_connection(("127.0.0.1", self.port), timeout=0.3):
-                    return
-            except Exception:
-                pass
-
+    def stop_broadwayd(self):
         if self.broadwayd_process:
             try:
                 self.broadwayd_process.kill()
+                self.broadwayd_process.wait(timeout=0.5)
             except Exception:
                 pass
             self.broadwayd_process = None
 
         try:
-            subprocess.run(["pkill", "-9", "-f", "gtk4-broadwayd"], timeout=1)
-            subprocess.run(["pkill", "-9", "-f", "broadwayd"], timeout=1)
+            subprocess.run(["pkill", "-9", "-f", f"gtk4-broadwayd :{self.display_num}"], timeout=1)
+            subprocess.run(["pkill", "-9", "-f", f"broadwayd :{self.display_num}"], timeout=1)
         except Exception:
             pass
-        time.sleep(0.3)
+
+    def _start_broadwayd(self):
+        self.stop_broadwayd()
+        time.sleep(0.1)
 
         broadway_bin = shutil.which("gtk4-broadwayd") or shutil.which("broadwayd") or "broadwayd"
         broadway_cmd = [
@@ -247,7 +241,7 @@ class AppLauncher:
             "--port", str(self.port),
             "--address", self.bind_ip
         ]
-        logger.info(f"Starting {broadway_bin}: {' '.join(broadway_cmd)}")
+        logger.info(f"Starting fresh {broadway_bin}: {' '.join(broadway_cmd)}")
         self.broadwayd_process = subprocess.Popen(
             broadway_cmd,
             stdout=subprocess.DEVNULL,
@@ -255,38 +249,47 @@ class AppLauncher:
         )
 
         for _ in range(25):
-            time.sleep(0.1)
+            time.sleep(0.05)
             try:
-                with socket.create_connection(("127.0.0.1", self.port), timeout=0.2):
+                with socket.create_connection(("127.0.0.1", self.port), timeout=0.1):
                     logger.info("gtk4-broadwayd is ready and listening on port %d", self.port)
                     return
             except Exception:
                 pass
 
+    def _ensure_broadwayd(self):
+        self._start_broadwayd()
+
     def close_current_app(self):
         """
-        Closes current active app, keeping broadwayd alive for rapid subsequent launches.
+        Closes current active app and resets broadwayd to ensure no windows persist on canvas.
         """
         if self.current_app_process:
             try:
                 logger.info(f"Terminating active app {self.current_app_name} (PID: {self.current_app_process.pid})")
-                self.current_app_process.terminate()
-                self.current_app_process.wait(timeout=1.5)
-            except Exception:
                 try:
-                    self.current_app_process.kill()
+                    os.killpg(os.getpgid(self.current_app_process.pid), signal.SIGKILL)
                 except Exception:
-                    pass
+                    self.current_app_process.kill()
+            except Exception:
+                pass
             self.current_app_process = None
+
+        try:
+            subprocess.run(["pkill", "-9", "-f", f"BROADWAY_DISPLAY=:{self.display_num}"], timeout=1)
+        except Exception:
+            pass
+
+        self.stop_broadwayd()
 
         self.current_app_id = None
         self.current_app_name = None
 
     def launch_app(self, app_id: str, client_host: Optional[str] = None, dark_mode: bool = True) -> Dict[str, Any]:
         """
-        Enforces single active app: Closes previous app, ensures broadwayd and spawns target app.
+        Enforces single active app: Closes previous app, restarts broadwayd clean, and spawns target app.
         """
-        # 1. Close previous app
+        # 1. Close previous app and wipe broadwayd canvas
         self.close_current_app()
 
         # 2. Locate app definition
@@ -295,8 +298,8 @@ class AppLauncher:
         if not app_meta:
             raise ValueError(f"Application {app_id} not found")
 
-        # 3. Ensure broadwayd is alive and responding
-        self._ensure_broadwayd()
+        # 3. Start a brand new broadwayd instance with an empty canvas
+        self._start_broadwayd()
 
         # 4. Launch the application with GDK_BACKEND=broadway
         env = os.environ.copy()
@@ -329,7 +332,8 @@ class AppLauncher:
             exec_cmd,
             env=env,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.DEVNULL,
+            start_new_session=True
         )
 
         self.current_app_id = app_meta["id"]
