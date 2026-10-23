@@ -77,7 +77,14 @@ TRANSLATIONS_ES = {
     "End-to-end encrypted": "Cifrado de extremo a extremo",
     "Pairing link copied to clipboard": "Enlace de vinculación copiado al portapapeles",
     "VPN IP: %s • Local IP: %s • Port: %s": "IP VPN: %s • IP Local: %s • Puerto: %s",
-    "Inactive": "Inactivo"
+    "Inactive": "Inactivo",
+    "Android Apps on PC (DroidTux)": "Aplicaciones Android en el PC (DroidTux)",
+    "Run phone apps as native independent windows with redirected sound and clicks.": "Abre aplicaciones del móvil en ventanas independientes con sonido y clics redirigidos.",
+    "Sync Phone Apps to Menu": "Sincronizar Apps al Menú",
+    "Integrates all installed apps from phone into your desktop app grid": "Integra las aplicaciones de tu móvil en la cuadrícula de apps del PC",
+    "Sync": "Sincronizar",
+    "Settings": "Ajustes",
+    "Syncing apps...": "Sincronizando apps..."
 }
 
 
@@ -253,6 +260,31 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
         self.btn_stream_phone.connect("clicked", self._toggle_phone_to_pc_stream)
         self.phone_to_pc_row.add_suffix(self.btn_stream_phone)
         stream_group.add(self.phone_to_pc_row)
+
+        # Section 4: DroidTux Native Android Apps
+        droidtux_group = Adw.PreferencesGroup()
+        droidtux_group.set_title(_("Android Apps on PC (DroidTux)"))
+        droidtux_group.set_description(_("Run phone apps as native independent windows with redirected sound and clicks."))
+        content_box.append(droidtux_group)
+
+        self.droidtux_sync_row = Adw.ActionRow()
+        self.droidtux_sync_row.set_title(_("Sync Phone Apps to Menu"))
+        self.droidtux_sync_row.set_subtitle(_("Integrates all installed apps from phone into your desktop app grid"))
+        self.droidtux_sync_row.add_prefix(Gtk.Image.new_from_icon_name("software-properties-symbolic"))
+
+        self.btn_sync_apps = Gtk.Button(label=_("Sync"))
+        self.btn_sync_apps.set_valign(Gtk.Align.CENTER)
+        self.btn_sync_apps.add_css_class("suggested-action")
+        self.btn_sync_apps.connect("clicked", self._on_sync_droidtux_apps)
+        self.droidtux_sync_row.add_suffix(self.btn_sync_apps)
+
+        btn_droidtux_settings = Gtk.Button(icon_name="preferences-system-symbolic")
+        btn_droidtux_settings.set_valign(Gtk.Align.CENTER)
+        btn_droidtux_settings.set_tooltip_text(_("Settings"))
+        btn_droidtux_settings.connect("clicked", lambda _: subprocess.Popen(["/usr/local/bin/droidtux-settings"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+        self.droidtux_sync_row.add_suffix(btn_droidtux_settings)
+
+        droidtux_group.add(self.droidtux_sync_row)
 
         # IP details footer
         self.footer_label = Gtk.Label()
@@ -459,6 +491,21 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
             except Exception as e:
                 logger.error(f"Error toggling Phone stream: {e}")
             GLib.idle_add(self._refresh_streaming_status)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+
+    def _on_sync_droidtux_apps(self, btn):
+        btn.set_sensitive(False)
+        btn.set_label(_("Syncing apps..."))
+
+        def worker():
+            try:
+                subprocess.run(["python3", "/usr/local/share/droidtux/app_integrator.py", "--add"], timeout=120)
+                subprocess.Popen(["notify-send", "-i", "phone", "Pulsar Phone", "¡Aplicaciones del teléfono sincronizadas al menú del PC!"])
+            except Exception as e:
+                logger.error(f"Error syncing droidtux apps: {e}")
+            GLib.idle_add(lambda: (btn.set_sensitive(True), btn.set_label(_("Sync"))))
 
         threading.Thread(target=worker, daemon=True).start()
 
