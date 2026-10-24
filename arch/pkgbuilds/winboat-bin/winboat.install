@@ -1,5 +1,5 @@
 post_install() {
-    echo ":: Pulsar Windows instalado. Asegúrate de que el servicio docker esté activo (sudo systemctl enable --now docker)."
+    echo ":: Pulsar Windows installed. Ensure docker service is active (sudo systemctl enable --now docker)."
     if command -v update-desktop-database >/dev/null 2>&1; then
         update-desktop-database -q /usr/share/applications || true
     fi
