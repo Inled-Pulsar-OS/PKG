@@ -1,5 +1,16 @@
 post_install() {
-    echo ":: Winboat installed. Ensure docker service is active (sudo systemctl enable --now docker)."
+    echo ":: Pulsar Windows instalado. Asegúrate de que el servicio docker esté activo (sudo systemctl enable --now docker)."
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database -q /usr/share/applications || true
+    fi
+    if command -v xdg-mime >/dev/null 2>&1; then
+        xdg-mime default pulsar-windows.desktop application/x-ms-dos-executable || true
+        xdg-mime default pulsar-windows.desktop application/x-msdownload || true
+        xdg-mime default pulsar-windows.desktop application/exe || true
+        xdg-mime default pulsar-windows.desktop application/x-exe || true
+        xdg-mime default pulsar-windows.desktop application/x-msi || true
+        xdg-mime default pulsar-windows.desktop application/vnd.microsoft.portable-executable || true
+    fi
 }
 
 post_upgrade() {

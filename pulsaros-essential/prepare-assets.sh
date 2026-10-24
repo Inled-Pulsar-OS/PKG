@@ -97,7 +97,7 @@ RequiredBy=docker.service containerd.service
 WantedBy=multi-user.target
 EOF
 
-# Configurar Seafari como el navegador web predeterminado en mimeapps.list
+# Configurar asociaciones de aplicaciones predeterminadas en mimeapps.list
 mkdir -p "$STAGE_DIR/etc/xdg"
 cat <<EOF > "$STAGE_DIR/etc/xdg/mimeapps.list"
 [Default Applications]
@@ -109,6 +109,12 @@ x-scheme-handler/unknown=seafari.desktop
 application/vnd.debian.binary-package=es.inled.AppInstall.desktop
 application/x-debian-package=es.inled.AppInstall.desktop
 application/x-zstd=es.inled.AppInstall.desktop
+application/x-ms-dos-executable=pulsar-windows.desktop
+application/x-msdownload=pulsar-windows.desktop
+application/exe=pulsar-windows.desktop
+application/x-exe=pulsar-windows.desktop
+application/x-msi=pulsar-windows.desktop
+application/vnd.microsoft.portable-executable=pulsar-windows.desktop
 EOF
 
 # Configurar modprobe para preservación de VRAM en NVIDIA
