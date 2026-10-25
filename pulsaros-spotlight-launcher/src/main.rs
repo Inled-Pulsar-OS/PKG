@@ -6,6 +6,7 @@ mod core;
 mod search;
 mod ui;
 mod utils;
+mod windows_client;
 
 use crate::clipboard::ClipboardManager;
 use crate::config::SpotlightConfig;
@@ -58,6 +59,16 @@ fn load_css() {
 }
 
 fn main() -> gtk4::glib::ExitCode {
+    // dmenu mode never touches the normal single-instance app. The GTK window is wired separately.
+    let argv: Vec<String> = std::env::args().collect();
+    if core::dmenu::Args::wants_dmenu(&argv) {
+        if let Err(e) = core::dmenu::Args::parse(&argv) {
+            eprintln!("pulsaros-spotlight: {e}");
+            std::process::exit(2);
+        }
+        // TODO(dmenu UI): run the picker window here and exit with `Outcome::exit_code()`.
+    }
+
     // Initialize libadwaita
     adw::init().expect("Failed to initialize Libadwaita");
 

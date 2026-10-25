@@ -19,12 +19,18 @@
 //!   `Use "<q>" with <engine>` Fallback rows. `ActionDesc{id,title,argv}`: `argv` is `Some` when
 //!   the action is a plain process spawn (commands, URLs); `None` means the UI handles it by id
 //!   (`open`, `favorite`, `alias`, `disable`).
+//! - `dmenu`: `Args::{wants_dmenu,parse}`, `read_items(reader)`, `filter(query,&items)` (fuzzy via ranker),
+//!   `Outcome::{Selected(s),Cancelled}` with `exit_code()` (0/1) and `stdout()`.
+//! - `windows`: `WindowEntry{id,title,wm_class,app_id,workspace}`, `rank(q,&wins,&frecency,now)`,
+//!   `to_row`/`rows(..)` give `Row`s with id `window:<id>` and actions `window_activate`/`window_close`.
 #![allow(dead_code)]
 
 pub mod commands;
+pub mod dmenu;
 pub mod frecency;
 pub mod ranker;
 pub mod root_search;
 pub mod settings;
 pub mod shortcuts;
 pub mod store;
+pub mod windows;
