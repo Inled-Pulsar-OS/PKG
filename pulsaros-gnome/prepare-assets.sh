@@ -56,17 +56,8 @@ if [ -d "$LG_SRC" ]; then
     LG_DEST="$EXT_DIR/liquid-glass@thinkingcoding1231.gmail.com"
     rm -rf "$LG_DEST"
     mkdir -p "$LG_DEST"
-    cp "$LG_SRC/metadata.json" "$LG_DEST/"
-    cp "$LG_SRC/extension.js" "$LG_DEST/"
-    cp "$LG_SRC/prefs.js" "$LG_DEST/"
-    cp "$LG_SRC/stylesheet.css" "$LG_DEST/"
-    [ -d "$LG_SRC/dist" ] && cp -r "$LG_SRC/dist" "$LG_DEST/"
-    [ -d "$LG_SRC/schemas" ] && cp -r "$LG_SRC/schemas" "$LG_DEST/"
-    [ -d "$LG_SRC/fonts" ] && cp -r "$LG_SRC/fonts" "$LG_DEST/"
-    [ -d "$LG_SRC/icons" ] && cp -r "$LG_SRC/icons" "$LG_DEST/"
-    [ -d "$LG_SRC/media" ] && cp -r "$LG_SRC/media" "$LG_DEST/"
-    [ -d "$LG_SRC/shaders" ] && cp -r "$LG_SRC/shaders" "$LG_DEST/"
-    [ -f "$LG_SRC/resources.gresource" ] && cp "$LG_SRC/resources.gresource" "$LG_DEST/"
+    cp -r "$LG_SRC"/* "$LG_DEST/"
+    rm -rf "$LG_DEST/.git" "$LG_DEST/.github"
 fi
 
 # 4. Pulsar Dock (Dash to Dock forked by Inled/Agnelo)
@@ -76,13 +67,8 @@ if [ -d "$DOCK_SRC" ]; then
     DOCK_DEST="$EXT_DIR/pulsar-dock@inled.es"
     rm -rf "$DOCK_DEST"
     mkdir -p "$DOCK_DEST"
-    for f in "$DOCK_SRC"/*.js "$DOCK_SRC"/*.css "$DOCK_SRC"/metadata.json "$DOCK_SRC"/Settings.ui "$DOCK_SRC"/COPYING; do
-        [ -f "$f" ] && cp "$f" "$DOCK_DEST/"
-    done
-    [ -d "$DOCK_SRC/schemas" ] && cp -r "$DOCK_SRC/schemas" "$DOCK_DEST/"
-    [ -d "$DOCK_SRC/media" ] && cp -r "$DOCK_SRC/media" "$DOCK_DEST/"
-    [ -d "$DOCK_SRC/locale" ] && cp -r "$DOCK_SRC/locale" "$DOCK_DEST/"
-    [ -d "$DOCK_SRC/po" ] && cp -r "$DOCK_SRC/po" "$DOCK_DEST/"
+    cp -r "$DOCK_SRC"/* "$DOCK_DEST/"
+    rm -rf "$DOCK_DEST/.git" "$DOCK_DEST/.github"
 fi
 
 # 5. AppIndicator Support
@@ -92,13 +78,8 @@ if [ -d "$APPIND_SRC" ]; then
     APPIND_DEST="$EXT_DIR/appindicatorsupport@rgcjonas.gmail.com"
     rm -rf "$APPIND_DEST"
     mkdir -p "$APPIND_DEST"
-    for f in "$APPIND_SRC"/*.js "$APPIND_SRC"/metadata.json "$APPIND_SRC"/LICENSE; do
-        [ -f "$f" ] && cp "$f" "$APPIND_DEST/"
-    done
-    [ -d "$APPIND_SRC/schemas" ] && cp -r "$APPIND_SRC/schemas" "$APPIND_DEST/"
-    [ -d "$APPIND_SRC/icons" ] && cp -r "$APPIND_SRC/icons" "$APPIND_DEST/"
-    [ -d "$APPIND_SRC/interfaces-xml" ] && cp -r "$APPIND_SRC/interfaces-xml" "$APPIND_DEST/"
-    [ -d "$APPIND_SRC/locale" ] && cp -r "$APPIND_SRC/locale" "$APPIND_DEST/"
+    cp -r "$APPIND_SRC"/* "$APPIND_DEST/"
+    rm -rf "$APPIND_DEST/.git" "$APPIND_DEST/.github"
 fi
 
 # 6. Compiz Alike Magic Lamp Effect
@@ -108,11 +89,8 @@ if [ -d "$COMPIZ_SRC" ]; then
     COMPIZ_DEST="$EXT_DIR/compiz-alike-magic-lamp-effect@hermes83.github.com"
     rm -rf "$COMPIZ_DEST"
     mkdir -p "$COMPIZ_DEST"
-    for f in "$COMPIZ_SRC"/*.js "$COMPIZ_SRC"/metadata.json "$COMPIZ_SRC"/LICENSE; do
-        [ -f "$f" ] && cp "$f" "$COMPIZ_DEST/"
-    done
-    [ -d "$COMPIZ_SRC/schemas" ] && cp -r "$COMPIZ_SRC/schemas" "$COMPIZ_DEST/"
-    [ -d "$COMPIZ_SRC/assets" ] && cp -r "$COMPIZ_SRC/assets" "$COMPIZ_DEST/"
+    cp -r "$COMPIZ_SRC"/* "$COMPIZ_DEST/"
+    rm -rf "$COMPIZ_DEST/.git" "$COMPIZ_DEST/.github"
 fi
 
 # 7. Pulsar UI Tweaks (Just Perfection + Notification Position + GNOME UI Improvements)
@@ -162,11 +140,8 @@ if [ -d "$WIGGLE_SRC" ]; then
     WIGGLE_DEST="$EXT_DIR/wiggle@mechtifs"
     rm -rf "$WIGGLE_DEST"
     mkdir -p "$WIGGLE_DEST"
-    for f in "$WIGGLE_SRC"/*.js "$WIGGLE_SRC"/metadata.json; do
-        [ -f "$f" ] && cp "$f" "$WIGGLE_DEST/"
-    done
-    [ -d "$WIGGLE_SRC/schemas" ] && cp -r "$WIGGLE_SRC/schemas" "$WIGGLE_DEST/"
-    [ -d "$WIGGLE_SRC/icons" ] && cp -r "$WIGGLE_SRC/icons" "$WIGGLE_DEST/"
+    cp -r "$WIGGLE_SRC"/* "$WIGGLE_DEST/"
+    rm -rf "$WIGGLE_DEST/.git" "$WIGGLE_DEST/.github"
 fi
 
 # 11. Pulsar Idle Guard

@@ -13,9 +13,6 @@
 [submodule "Pulsar-Dock"]
 	path = Pulsar-Dock
 	url = git@github.com:Inled-Pulsar-OS/Pulsar-Dock.git
-[submodule "pulsar-notch"]
-	path = pulsar-notch
-	url = git@github.com:Inled-Pulsar-OS/pulsar-notch.git
 [submodule "gnome-shell-extension-appindicator"]
 	path = gnome-shell-extension-appindicator
 	url = git@github.com:Inled-Pulsar-OS/gnome-shell-extension-appindicator.git

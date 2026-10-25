@@ -22,7 +22,7 @@ depends=(
   pulsaros-feedback
   pulsaros-flydrop
   pulsaros-global-menu
-  pulsaros-notch
+  pulsaros-notchnux
   pulsaros-gnome
   pulsaros-hibernate
   pulsaros-live-wallpaper
