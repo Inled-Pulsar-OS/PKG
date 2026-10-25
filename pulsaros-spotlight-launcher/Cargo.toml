@@ -3,6 +3,7 @@ name = "pulsaros-spotlight"
 version = "2.0.34"
 edition = "2021"
 authors = ["Jaime <info@inled.es>"]
+license = "GPL-3.0-or-later"
 
 [dependencies]
 gtk4 = { version = "0.9" }

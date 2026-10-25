@@ -34,3 +34,7 @@ __pycache__/
 .worktrees
 
 .claude/
+arch/pkgbuilds/*/pulsaros-spotlight
+arch/pkgbuilds/*/src/
+arch/pkgbuilds/*/pkg/
+arch/pkgbuilds/*/*.pkg.tar.*

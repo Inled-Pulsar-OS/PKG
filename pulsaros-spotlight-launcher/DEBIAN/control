@@ -4,8 +4,8 @@ Section: gnome
 Priority: optional
 Architecture: amd64
 Maintainer: Jaime <info@inled.es>
-Depends: gnome-shell, libgtk-4-1, libadwaita-1-0, localsearch | tracker-miner-fs, wl-clipboard
-Recommends: ydotool
+Depends: gnome-shell, libgtk-4-1, libadwaita-1-0, libsqlite3-0, libjson-glib-1.0-0, curl, localsearch | tracker-miner-fs, wl-clipboard
+Recommends: ydotool, poppler-utils, ffmpeg, libnotify-bin, xdg-utils, network-manager, wireplumber, playerctl
 Provides: spotlight-gtk, spotlight-python, pulsaros-spotlight
 Replaces: spotlight-gtk, spotlight-python, pulsaros-spotlight
 Conflicts: spotlight-gtk, spotlight-python, pulsaros-spotlight
