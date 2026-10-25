@@ -99,7 +99,7 @@ sigma=23
 static-blur=false
 
 [org.gnome.shell.extensions.blur-my-shell.dash-to-dock]
-blur=true
+blur=false
 brightness=0.6
 override-background=true
 pipeline='pipeline_default_rounded'
