@@ -896,12 +896,12 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
           safe_set_boolean (bms_dock_settings, bms_dock_schema, "static-blur", TRUE);
         }
 
-      /* Restore Blur my Shell popup blur (OSD/menus/notifications) now that
-       * Liquid Glass is no longer drawing those surfaces. */
+      /* Do not enable Blur my Shell popup blur: Pulsar OS uses floating pills
+       * without an enclosing blurred card for CC and Notification Center. */
       g_autoptr(GSettingsSchema) bms_popup_schema = NULL;
       g_autoptr(GSettings) bms_popup_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.popup", &bms_popup_schema);
       if (bms_popup_settings && bms_popup_schema)
-        safe_set_boolean (bms_popup_settings, bms_popup_schema, "blur", TRUE);
+        safe_set_boolean (bms_popup_settings, bms_popup_schema, "blur", FALSE);
 
       const gchar *dock_script =
         "/bin/sh -c \""
@@ -918,7 +918,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock pipeline 'pipeline_default_rounded' ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock unblur-in-overview true ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock static-blur true ; "
-        "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur true >/dev/null 2>&1 &\"";
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur false >/dev/null 2>&1 &\"";
       g_spawn_command_line_async (dock_script, NULL);
     }
 }
