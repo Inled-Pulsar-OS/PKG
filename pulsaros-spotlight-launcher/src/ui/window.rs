@@ -19,6 +19,9 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Duration;
 
+mod extras;
+use extras::{Extras, View};
+
 /// (category id, mode name). The name is the entry placeholder; the glyph is
 /// `data/icons/mode-<id>-symbolic.svg`. "documents" is the Files mode.
 const CATEGORIES: &[(&str, &str, &str)] = &[
@@ -85,7 +88,8 @@ pub struct SpotlightWindow {
     store: Store,
     settings: RefCell<Settings>,
     frecency: RefCell<Frecency>,
-    commands: Vec<Command>,
+    commands: RefCell<Vec<Command>>,
+    x: Extras,
     states: RefCell<HashMap<String, bool>>,
     last_probe: Cell<Option<std::time::Instant>>,
     current: RefCell<SectionList>,
@@ -163,8 +167,10 @@ fn keycap_row(keys: &[String]) -> gtk4::Box {
 
 /// Title of the primary action for the panel and the selected-row hint.
 pub(crate) fn primary_title(r: &RowData) -> String {
-    if r.row.id.starts_with("dmenu:") {
-        return "Select".into();
+    for (prefix, title) in [("dmenu:", "Select"), ("snippet:", "Paste Snippet"), ("window:", "Switch to Window"), ("script:", "Run Script")] {
+        if r.row.id.starts_with(prefix) {
+            return title.into();
+        }
     }
     match r.row.kind {
         RowKind::App => "Open Application".into(),
@@ -233,7 +239,7 @@ fn zoom_css(z: f64) -> String {
     let p = |v: f64| (v * z).round();
     format!(
         "window.spotlight-window .spotlight-main {{ font-size: {}px; }}
-         window.spotlight-window entry, window.spotlight-window entry > text {{ font-size: {}px; }}
+         window.spotlight-window entry.search-input, window.spotlight-window entry.search-input > text {{ font-size: {}px; }}
          window.spotlight-window .result-row {{ min-height: {}px; }}
          window.spotlight-window .result-title {{ font-size: {}px; }}
          window.spotlight-window .result-subtitle, window.spotlight-window .result-kind {{ font-size: {}px; }}
@@ -299,6 +305,9 @@ impl SpotlightWindow {
             gtk4::style_context_add_provider_for_display(&display, &zoom_provider, 1001);
         }
 
+        let store = Store::new(Store::default_dir());
+        let x = Extras::new(&store, commands::builtin());
+
         let root_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         root_box.add_css_class("spotlight-root");
         let main_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
@@ -338,6 +347,7 @@ impl SpotlightWindow {
 
         search_container.append(&mode_icon);
         search_container.append(&search_entry);
+        search_container.append(&x.arg_box);
         search_container.append(&more_button);
         main_box.append(&search_container);
 
@@ -449,6 +459,7 @@ impl SpotlightWindow {
         dialog_buttons.append(&dialog_ok);
         dialog_root.append(&dialog_title);
         dialog_root.append(&dialog_body);
+        dialog_root.append(&x.form);
         dialog_root.append(&dialog_entry);
         dialog_root.append(&dialog_buttons);
 
@@ -457,6 +468,8 @@ impl SpotlightWindow {
         let activate_cell = result_view_cell.clone();
         let context_cell: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
         let context_cell_c = context_cell.clone();
+        let select_cell: Rc<RefCell<Option<Rc<dyn Fn(Option<RowData>)>>>> = Rc::new(RefCell::new(None));
+        let select_cell_c = select_cell.clone();
         let result_view = Rc::new(ResultView::new(
             move || {
                 let cb = activate_cell.borrow().clone();
@@ -470,19 +483,24 @@ impl SpotlightWindow {
                     cb();
                 }
             },
-            |_| {},
+            move |rd| {
+                let cb = select_cell_c.borrow().clone();
+                if let Some(cb) = cb {
+                    cb(rd);
+                }
+            },
         ));
 
+        x.stack.add_named(result_view.widget(), Some("list"));
         let overlay = gtk4::Overlay::new();
         overlay.set_vexpand(true);
-        overlay.set_child(Some(result_view.widget()));
+        overlay.set_child(Some(&x.stack));
         overlay.add_overlay(&panel_root);
         overlay.add_overlay(&dialog_root);
         main_box.append(&overlay);
         main_box.append(&progress_revealer);
         main_box.append(&indexing_revealer);
 
-        let store = Store::new(Store::default_dir());
         let settings = Settings::load(&store);
         let frecency = Frecency::load(&store);
 
@@ -504,7 +522,8 @@ impl SpotlightWindow {
             store,
             settings: RefCell::new(settings),
             frecency: RefCell::new(frecency),
-            commands: commands::builtin(),
+            commands: RefCell::new(Vec::new()),
+            x,
             states: RefCell::new(HashMap::new()),
             last_probe: Cell::new(None),
             current: RefCell::new(Vec::new()),
@@ -549,6 +568,9 @@ impl SpotlightWindow {
         *context_cell.borrow_mut() = Some(Rc::new(move || s.open_panel()));
 
         let s = spotlight.clone();
+        *select_cell.borrow_mut() = Some(Rc::new(move |rd| s.on_row_selected(rd)));
+
+        let s = spotlight.clone();
         dialog_cancel.connect_clicked(move |_| s.close_dialog());
         let s = spotlight.clone();
         dialog_ok.connect_clicked(move |_| s.accept_dialog());
@@ -568,6 +590,7 @@ impl SpotlightWindow {
 
         spotlight.setup_panel_events();
         spotlight.setup_ui_interactions();
+        spotlight.setup_extras();
         spotlight
     }
 
@@ -585,11 +608,13 @@ impl SpotlightWindow {
         self.start_indexing_timer();
         self.refresh_states();
         self.refresh_currencies();
+        self.refresh_extras();
     }
 
     fn reset_to_root(self: &Rc<Self>) {
         self.close_panel();
         self.close_dialog();
+        self.leave_view();
         *self.current_dir.borrow_mut() = None;
         self.history_mode.set(false);
         self.calc_hist_mode.set(false);
@@ -702,7 +727,7 @@ impl SpotlightWindow {
         self.last_probe.set(Some(std::time::Instant::now()));
         self.loading_begin();
         let (tx, rx) = std::sync::mpsc::channel::<HashMap<String, bool>>();
-        let cmds = self.commands.clone();
+        let cmds = self.commands.borrow().clone();
         std::thread::spawn(move || {
             let _ = tx.send(commands::probe_states(&cmds, &commands::system_runner));
         });
@@ -881,9 +906,10 @@ impl SpotlightWindow {
         let settings = self.settings.borrow();
         let frecency = self.frecency.borrow();
         let states = self.states.borrow();
+        let commands = self.commands.borrow();
         let ctx = Ctx {
             apps: &apps,
-            commands: &self.commands,
+            commands: &commands,
             states: &states,
             settings: &settings,
             frecency: &frecency,
@@ -902,6 +928,9 @@ impl SpotlightWindow {
 
         let query = self.search_entry.text().to_string();
         let category = self.category.borrow().clone();
+        if self.search_view(&query, keep) {
+            return;
+        }
 
         // If in documents and query empty and not browsing, start browsing $HOME
         if category == "documents" && query.trim().is_empty() && self.current_dir.borrow().is_none() {
@@ -965,6 +994,9 @@ impl SpotlightWindow {
                 let payloads: HashMap<String, SearchResult> =
                     found.into_iter().map(|r| (row_from_result(&r).row.id, r)).collect();
                 let mut secs = self.core_sections(&query, &extra);
+                if category == "all" && !is_empty {
+                    self.add_extra_rows(&query, &mut secs);
+                }
                 for (_, rows) in secs.iter_mut() {
                     for r in rows.iter_mut() {
                         r.payload = payloads.get(&r.row.id).cloned();
@@ -1084,6 +1116,7 @@ impl SpotlightWindow {
     }
 
     fn goto_mode(self: &Rc<Self>, idx: usize) {
+        self.leave_view();
         self.set_mode(idx);
         *self.current_dir.borrow_mut() = None;
         self.history_mode.set(false);
@@ -1115,6 +1148,9 @@ impl SpotlightWindow {
                 out.push(mk("calc_history", "Calculator History", Vec::new(), false, None));
             }
             return out;
+        }
+        if let Some(a) = self.extra_actions(rd) {
+            return a;
         }
         let primary = rd.row.actions.first().cloned();
         let primary_id = primary.as_ref().map(|a| a.id.clone()).unwrap_or_else(|| "open".into());
@@ -1174,6 +1210,9 @@ impl SpotlightWindow {
         let id = rd.row.id.clone();
         if id == "calc:history" && matches!(action, "open" | "run") {
             self.enter_calc_history();
+            return;
+        }
+        if self.perform_extra(&rd, action) {
             return;
         }
         match action {
@@ -1483,6 +1522,10 @@ impl SpotlightWindow {
     }
 
     fn open_panel(self: &Rc<Self>) {
+        if self.x.view.get() == View::Emoji {
+            self.open_emoji_panel();
+            return;
+        }
         let Some(rd) = self.result_view.selected_row() else { return };
         if self.history_mode.get() {
             return;
@@ -1572,6 +1615,7 @@ impl SpotlightWindow {
         on_ok: Box<dyn Fn(String)>,
     ) {
         self.close_panel();
+        self.dialog_reset_form();
         self.dialog.title.set_label(title);
         self.dialog.body.set_label(body);
         self.dialog.ok.set_label(ok_label);
@@ -1604,12 +1648,16 @@ impl SpotlightWindow {
     fn close_dialog(&self) {
         if self.dialog.root.is_visible() {
             self.dialog.root.set_visible(false);
+            self.dialog_reset_form();
             *self.dialog.on_ok.borrow_mut() = None;
             self.search_entry.grab_focus();
         }
     }
 
     fn accept_dialog(self: &Rc<Self>) {
+        if self.accept_form() {
+            return;
+        }
         let text = self.dialog.entry.text().to_string();
         let cb = self.dialog.on_ok.borrow_mut().take();
         self.close_dialog();
@@ -1636,6 +1684,8 @@ impl SpotlightWindow {
             self.close_dialog();
         } else if self.panel_open() {
             self.close_panel();
+        } else if self.x.view.get() != View::Root {
+            self.pop_view();
         } else if self.calc_hist_mode.get() {
             self.calc_hist_mode.set(false);
             self.search_entry.set_placeholder_text(Some(self.mode_name()));
@@ -1684,6 +1734,13 @@ impl SpotlightWindow {
             return glib::Propagation::Stop;
         }
 
+        if let Some(p) = self.emoji_key(&name, mods) {
+            return p;
+        }
+        if let Some(p) = self.arg_key(&name, mods) {
+            return p;
+        }
+
         if let Some(act) = act {
             return self.handle_act(act);
         }
@@ -1705,7 +1762,7 @@ impl SpotlightWindow {
         }
 
         // Typing while a list row has focus: redirect into the search entry
-        if !self.search_entry.has_focus() && !mods.ctrl && !mods.alt && !state.contains(gdk::ModifierType::SUPER_MASK) {
+        if !self.search_entry.has_focus() && !self.arg_has_focus() && !mods.ctrl && !mods.alt && !state.contains(gdk::ModifierType::SUPER_MASK) {
             if let Some(ch) = keyval.to_unicode() {
                 if ch.is_alphanumeric() || ch.is_ascii_punctuation() || ch == ' ' {
                     self.search_entry.grab_focus();

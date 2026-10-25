@@ -396,3 +396,79 @@ window.spotlight-window .action-filter > text {
     font-size: 11px;
     color: alpha(@window_fg_color, 0.50);
 }
+
+/* ---- argument pills (script / snippet arguments in the search header) ---- */
+entry.arg-pill,
+window.spotlight-window entry.arg-pill,
+window.spotlight-window entry.arg-pill > text {
+    font-size: 13px;
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: none;
+    box-shadow: none;
+    outline: none;
+    color: @window_fg_color;
+    background-color: alpha(@window_fg_color, 0.10);
+}
+
+entry.arg-pill:focus-within {
+    background-color: alpha(@window_fg_color, 0.18);
+}
+
+/* ---- dialog forms ---- */
+.form-text-wrap {
+    border-radius: 7px;
+    border: 1px solid alpha(@window_fg_color, 0.18);
+    background-color: alpha(@window_fg_color, 0.06);
+}
+
+textview.form-text,
+textview.form-text text {
+    font-size: 13px;
+    background: transparent;
+    color: @window_fg_color;
+    padding: 4px 6px;
+}
+
+/* ---- emoji grid ---- */
+.emoji-grid {
+    padding: 8px 14px;
+    background: transparent;
+}
+
+.emoji-grid flowboxchild {
+    border-radius: 12px;
+    padding: 0;
+}
+
+.emoji-grid flowboxchild:selected {
+    background-color: alpha(@window_fg_color, 0.14);
+}
+
+.emoji-cell {
+    font-size: 28px;
+    min-height: 52px;
+}
+
+.emoji-name {
+    font-size: 13px;
+    font-weight: 500;
+    padding: 10px 22px;
+    color: alpha(@window_fg_color, 0.62);
+    border-top: 1px solid alpha(@window_fg_color, 0.10);
+}
+
+/* ---- script full output ---- */
+textview.output-view,
+textview.output-view text {
+    font-size: 13px;
+    padding: 6px 12px;
+    background: transparent;
+    color: @window_fg_color;
+}
+
+.dmenu-prompt {
+    font-size: 14px;
+    color: alpha(@window_fg_color, 0.55);
+}
