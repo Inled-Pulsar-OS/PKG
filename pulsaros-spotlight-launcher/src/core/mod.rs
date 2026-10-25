@@ -26,4 +26,5 @@ pub mod frecency;
 pub mod ranker;
 pub mod root_search;
 pub mod settings;
+pub mod shortcuts;
 pub mod store;
