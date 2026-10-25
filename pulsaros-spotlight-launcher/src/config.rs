@@ -9,10 +9,17 @@ pub struct SpotlightConfig {
     pub clipboard_auto_paste: bool,
     #[serde(default = "default_zoom")]
     pub zoom: f64,
+    /// Fetch daily currency rates for the calculator (cache is still read when false).
+    #[serde(default = "default_true")]
+    pub currency_rates: bool,
 }
 
 fn default_zoom() -> f64 {
     1.0
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for SpotlightConfig {
@@ -22,6 +29,7 @@ impl Default for SpotlightConfig {
             clipboard_max_items: 50,
             clipboard_auto_paste: true,
             zoom: 1.0,
+            currency_rates: true,
         }
     }
 }
