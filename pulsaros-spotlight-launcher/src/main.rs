@@ -2,6 +2,7 @@ mod apps;
 mod calculator;
 mod clipboard;
 mod config;
+mod core;
 mod search;
 mod ui;
 mod utils;
