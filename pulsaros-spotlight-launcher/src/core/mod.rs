@@ -19,12 +19,20 @@
 //!   `Use "<q>" with <engine>` Fallback rows. `ActionDesc{id,title,argv}`: `argv` is `Some` when
 //!   the action is a plain process spawn (commands, URLs); `None` means the UI handles it by id
 //!   (`open`, `favorite`, `alias`, `disable`).
+//! - `script_commands`: `parse_header(text)->Result<Header,String>`, `discover(&[dirs])->Discovery{scripts,skipped}`
+//!   (`default_dir()` = `~/.config/pulsaros-spotlight/scripts`), `to_command(&Script)->commands::Command`
+//!   (id `script:<rel>`), `run(&Script,&args,&dyn Runner)->Outcome{Silent|Compact|FullOutput|Inline|Failed}`
+//!   (30s timeout via `run_with`, 1 MiB cap, `SystemRunner`; fake `Runner` in tests).
+//! - `quicklinks::Quicklinks`: `load/save(&Store)`, `add(alias,name,url)` (rejects duplicates), `remove`,
+//!   `resolve(input)->Option<Resolved{title,url}>` / `resolve_with_clipboard`, `open_argv(url)` = `xdg-open url`.
 #![allow(dead_code)]
 
 pub mod commands;
 pub mod frecency;
+pub mod quicklinks;
 pub mod ranker;
 pub mod root_search;
+pub mod script_commands;
 pub mod settings;
 pub mod shortcuts;
 pub mod store;
