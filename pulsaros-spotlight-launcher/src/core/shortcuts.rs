@@ -27,6 +27,10 @@ pub enum Act {
     CatPrev,
     Up,
     Down,
+    /// Copy "question = answer" of the calculator row.
+    CopyFull,
+    DelItem,
+    DelAll,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
@@ -58,6 +62,9 @@ const fn b(key: &'static str, mods: Mods, act: Act) -> Binding {
 }
 
 pub static TABLE: &[Binding] = &[
+    b("c", CS, Act::CopyFull),
+    b("d", C, Act::DelItem),
+    b("d", CS, Act::DelAll),
     b("up", NONE, Act::Up),
     b("down", NONE, Act::Down),
     b("k", C, Act::ActionPanel),
@@ -155,6 +162,9 @@ mod tests {
         assert_eq!(lookup("up", C), Some(Act::SectionPrev));
         assert_eq!(lookup("5", C), Some(Act::Quick(4)));
         assert_eq!(lookup("escape", S), Some(Act::Root));
+        assert_eq!(lookup("c", CS), Some(Act::CopyFull));
+        assert_eq!(lookup("d", C), Some(Act::DelItem));
+        assert_eq!(lookup("d", CS), Some(Act::DelAll));
         assert_eq!(lookup("k", NONE), None);
     }
 

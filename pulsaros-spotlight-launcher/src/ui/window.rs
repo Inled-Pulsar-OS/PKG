@@ -1,3 +1,4 @@
+use crate::calculator::{CalcHistory, CalcResult, Calculator};
 use crate::clipboard::ClipboardManager;
 use crate::config::SpotlightConfig;
 use crate::core::commands::{self, Command};
@@ -78,6 +79,9 @@ pub struct SpotlightWindow {
     debounce_id: Rc<RefCell<Option<glib::SourceId>>>,
     search_seq: Rc<Cell<u64>>,
     history_mode: Cell<bool>,
+    calc_hist_mode: Cell<bool>,
+    calc_history: RefCell<CalcHistory>,
+    last_currency: Cell<Option<std::time::Instant>>,
 
     // core state
     store: Store,
@@ -149,7 +153,7 @@ fn primary_title(r: &RowData) -> String {
         RowKind::App => "Open Application".into(),
         RowKind::Command => "Run".into(),
         RowKind::Clipboard => "Paste".into(),
-        RowKind::Calc => "Copy Result".into(),
+        RowKind::Calc => "Copy Answer".into(),
         RowKind::File => match &r.payload {
             Some(p) if p.mime == "inode/directory" || p.mime == "folder" => "Open Folder".into(),
             Some(p) if p.url.starts_with("http") => "Open in Browser".into(),
@@ -177,7 +181,15 @@ fn row_from_result(res: &SearchResult) -> RowData {
     if sub.is_empty() {
         sub = res.url.trim_start_matches("file://").to_string();
     }
-    RowData { row: Row::simple(kind, &id, &res.title, &sub, icon), payload: Some(res.clone()) }
+    RowData { row: Row::simple(kind, &id, &res.title, &sub, icon), payload: Some(res.clone()), calc: None }
+}
+
+fn calc_row(c: &CalcResult, id: String) -> RowData {
+    RowData {
+        row: Row::simple(RowKind::Calc, &id, &c.answer, &c.question, "accessories-calculator-symbolic"),
+        payload: None,
+        calc: Some(c.clone()),
+    }
 }
 
 fn app_entry(a: &crate::apps::DesktopApp) -> AppEntry {
@@ -482,6 +494,9 @@ impl SpotlightWindow {
             debounce_id: Rc::new(RefCell::new(None)),
             search_seq: Rc::new(Cell::new(0)),
             history_mode: Cell::new(false),
+            calc_hist_mode: Cell::new(false),
+            calc_history: RefCell::new(CalcHistory::open()),
+            last_currency: Cell::new(None),
             store,
             settings: RefCell::new(settings),
             frecency: RefCell::new(frecency),
@@ -561,6 +576,7 @@ impl SpotlightWindow {
         self.search_entry.grab_focus();
         self.start_indexing_timer();
         self.refresh_states();
+        self.refresh_currencies();
     }
 
     fn reset_to_root(self: &Rc<Self>) {
@@ -568,6 +584,7 @@ impl SpotlightWindow {
         self.close_dialog();
         *self.current_dir.borrow_mut() = None;
         self.history_mode.set(false);
+        self.calc_hist_mode.set(false);
         *self.category.borrow_mut() = "all".to_string();
         self.category_chip.set_label("All");
         self.search_entry.set_placeholder_text(Some(PLACEHOLDER));
@@ -635,6 +652,36 @@ impl SpotlightWindow {
 
     fn save_frecency(&self) {
         let _ = self.frecency.borrow().save(&self.store);
+    }
+
+    /// Fetch currency rates off the UI thread (cache-aware, honours config.currency_rates).
+    fn refresh_currencies(self: &Rc<Self>) {
+        if let Some(t) = self.last_currency.get() {
+            if t.elapsed() < Duration::from_secs(1800) {
+                return;
+            }
+        }
+        self.last_currency.set(Some(std::time::Instant::now()));
+        self.loading_begin();
+        let (tx, rx) = std::sync::mpsc::channel::<bool>();
+        std::thread::spawn(move || {
+            let _ = tx.send(crate::calculator::refresh_currencies());
+        });
+        let s = self.clone();
+        glib::timeout_add_local(Duration::from_millis(100), move || match rx.try_recv() {
+            Ok(fresh) => {
+                s.loading_end();
+                if fresh && s.window.is_visible() {
+                    s.do_search(true);
+                }
+                glib::ControlFlow::Break
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+            Err(_) => {
+                s.loading_end();
+                glib::ControlFlow::Break
+            }
+        });
     }
 
     /// Probe command states off the UI thread, then refresh the list.
@@ -833,7 +880,7 @@ impl SpotlightWindow {
         };
         RootSearch::sections(query, &ctx)
             .into_iter()
-            .map(|s| (s.title, s.rows.into_iter().map(|row| RowData { row, payload: None }).collect()))
+            .map(|s| (s.title, s.rows.into_iter().map(|row| RowData { row, payload: None, calc: None }).collect()))
             .collect()
     }
 
@@ -860,24 +907,58 @@ impl SpotlightWindow {
         }
 
         let is_empty = query.trim().is_empty();
+        if self.calc_hist_mode.get() {
+            let rows: Vec<RowData> = self
+                .calc_history
+                .borrow()
+                .search(&query)
+                .iter()
+                .map(|h| {
+                    calc_row(
+                        &CalcResult {
+                            question: h.question.clone(),
+                            answer: h.answer.clone(),
+                            caption_question: h.caption_question.clone(),
+                            caption_answer: h.caption_answer.clone(),
+                        },
+                        format!("calchist:{}", h.id),
+                    )
+                })
+                .collect();
+            *self.current.borrow_mut() = vec![("Calculator History".to_string(), rows)];
+            self.render(keep);
+            return;
+        }
         let sections: SectionList = match category.as_str() {
             "all" | "applications" => {
                 let found: Vec<SearchResult> = if category == "all" && !is_empty {
                     self.backend
                         .search_instant(&query, "all", DEFAULT_LIMIT)
                         .into_iter()
-                        .filter(|r| r.app.is_none() && (r.url.starts_with("calc://") || r.url.starts_with("clipboard://")))
+                        .filter(|r| r.app.is_none() && r.url.starts_with("clipboard://"))
                         .collect()
                 } else {
                     Vec::new()
                 };
-                let extra: Vec<Row> = found.iter().map(|r| row_from_result(r).row).collect();
+                let calc = if category == "all" && !is_empty { Calculator::calculate(&query) } else { None };
+                let ql = query.trim().to_lowercase();
+                let mut extra: Vec<Row> = Vec::new();
+                if let Some(c) = &calc {
+                    extra.push(calc_row(c, format!("calc:{}", c.answer)).row);
+                }
+                if ql.len() >= 3 && "calculator history".contains(&ql) {
+                    extra.push(Row::simple(RowKind::Command, "calc:history", "Calculator History", "Calculator", "accessories-calculator-symbolic"));
+                }
+                extra.extend(found.iter().map(|r| row_from_result(r).row));
                 let payloads: HashMap<String, SearchResult> =
                     found.into_iter().map(|r| (row_from_result(&r).row.id, r)).collect();
                 let mut secs = self.core_sections(&query, &extra);
                 for (_, rows) in secs.iter_mut() {
                     for r in rows.iter_mut() {
                         r.payload = payloads.get(&r.row.id).cloned();
+                        if r.row.kind == RowKind::Calc {
+                            r.calc = calc.clone();
+                        }
                     }
                 }
                 if category == "applications" {
@@ -939,7 +1020,7 @@ impl SpotlightWindow {
             .iter()
             .map(|q| {
                 let r = Row::simple(RowKind::Fallback, &format!("history:{q}"), q, "", "document-open-recent-symbolic");
-                RowData { row: r, payload: None }
+                RowData { row: r, payload: None, calc: None }
             })
             .collect();
         if rows.is_empty() {
@@ -948,6 +1029,15 @@ impl SpotlightWindow {
         self.history_mode.set(true);
         *self.current.borrow_mut() = vec![("Recent searches".to_string(), rows)];
         self.render(false);
+    }
+
+    fn enter_calc_history(self: &Rc<Self>) {
+        self.close_panel();
+        self.calc_hist_mode.set(true);
+        self.history_mode.set(false);
+        self.search_entry.set_placeholder_text(Some("Search calculator history\u{2026}"));
+        self.search_entry.set_text("");
+        self.do_search(false);
     }
 
     fn cycle_category(self: &Rc<Self>, step: i32) {
@@ -973,6 +1063,20 @@ impl SpotlightWindow {
             argv,
         };
         let mut out = Vec::new();
+        if let Some(c) = &rd.calc {
+            let hist = rd.row.id.starts_with("calchist:");
+            let _ = c;
+            out.push(mk("calc_copy", "Copy Answer", shortcuts::label(Act::Run(0)), false, None));
+            out.push(mk("calc_paste", "Paste Answer", shortcuts::label(Act::Run(1)), false, None));
+            out.push(mk("calc_full", "Copy Question = Answer", shortcuts::label(Act::CopyFull), false, None));
+            if hist {
+                out.push(mk("calc_del", "Delete Entry", shortcuts::label(Act::DelItem), true, None));
+                out.push(mk("calc_delall", "Delete All History", shortcuts::label(Act::DelAll), true, None));
+            } else {
+                out.push(mk("calc_history", "Calculator History", Vec::new(), false, None));
+            }
+            return out;
+        }
         let primary = rd.row.actions.first().cloned();
         let primary_id = primary.as_ref().map(|a| a.id.clone()).unwrap_or_else(|| "open".into());
         out.push(mk(
@@ -1029,7 +1133,54 @@ impl SpotlightWindow {
 
     fn perform(self: &Rc<Self>, rd: RowData, action: &str, argv: Option<Vec<String>>) {
         let id = rd.row.id.clone();
+        if id == "calc:history" && matches!(action, "open" | "run") {
+            self.enter_calc_history();
+            return;
+        }
         match action {
+            "calc_copy" | "calc_paste" | "calc_full" => {
+                let Some(c) = rd.calc.clone() else { return };
+                if !self.calc_hist_mode.get() {
+                    self.calc_history.borrow_mut().add(&c);
+                }
+                match action {
+                    "calc_copy" => self.copy(&c.answer),
+                    "calc_full" => self.copy(&format!("{} = {}", c.question, c.answer)),
+                    _ => {
+                        self.window.set_visible(false);
+                        if let Some(mgr) = self.backend_clipboard() {
+                            mgr.paste_clip(&c.answer);
+                        } else {
+                            self.copy(&c.answer);
+                        }
+                        return;
+                    }
+                }
+                self.window.set_visible(false);
+            }
+            "calc_history" => self.enter_calc_history(),
+            "calc_del" => {
+                if let Some(n) = id.strip_prefix("calchist:").and_then(|n| n.parse::<u64>().ok()) {
+                    self.calc_history.borrow_mut().delete(n);
+                    self.toast("Deleted from history", None);
+                    self.do_search(true);
+                }
+            }
+            "calc_delall" => {
+                let s = self.clone();
+                self.show_dialog(
+                    "Delete all calculator history?",
+                    "This cannot be undone.",
+                    None,
+                    "Delete All",
+                    true,
+                    Box::new(move |_| {
+                        s.calc_history.borrow_mut().delete_all();
+                        s.toast("History cleared", None);
+                        s.do_search(true);
+                    }),
+                );
+            }
             "open" | "run" | "open_url" => {
                 if let Some(q) = id.strip_prefix("history:") {
                     self.history_mode.set(false);
@@ -1446,6 +1597,11 @@ impl SpotlightWindow {
             self.close_dialog();
         } else if self.panel_open() {
             self.close_panel();
+        } else if self.calc_hist_mode.get() {
+            self.calc_hist_mode.set(false);
+            self.search_entry.set_placeholder_text(Some(PLACEHOLDER));
+            self.search_entry.set_text("");
+            self.do_search(false);
         } else if self.history_mode.get() {
             self.history_mode.set(false);
             self.do_search(false);
@@ -1552,6 +1708,7 @@ impl SpotlightWindow {
                 if !self.result_view.step(-1)
                     && self.search_entry.text().is_empty()
                     && !self.history_mode.get()
+                    && !self.calc_hist_mode.get()
                     && self.current_dir.borrow().is_none()
                 {
                     self.show_history();
@@ -1575,6 +1732,9 @@ impl SpotlightWindow {
             }
             Act::Favorite => self.perform_selected("favorite"),
             Act::Disable => self.perform_selected("disable"),
+            Act::CopyFull => self.perform_selected("calc_full"),
+            Act::DelItem => self.perform_selected("calc_del"),
+            Act::DelAll => self.perform_selected("calc_delall"),
             Act::FavUp | Act::FavDown => {
                 if let Some(rd) = self.result_view.selected_row() {
                     if rd.row.favorite {
@@ -1670,7 +1830,7 @@ mod tests {
             app: None,
         });
         assert_eq!(r.row.kind, RowKind::Calc);
-        assert_eq!(primary_title(&r), "Copy Result");
+        assert_eq!(primary_title(&r), "Copy Answer");
     }
 
     #[test]

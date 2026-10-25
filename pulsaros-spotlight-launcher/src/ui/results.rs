@@ -308,6 +308,7 @@ pub fn result_icon(result: &SearchResult) -> gtk4::Image {
 pub struct RowData {
     pub row: Row,
     pub payload: Option<SearchResult>,
+    pub calc: Option<crate::calculator::CalcResult>,
 }
 
 #[derive(Clone, Debug)]
@@ -508,7 +509,49 @@ impl ResultView {
         }
     }
 
+    fn build_calc_card(&self, c: &crate::calculator::CalcResult, n: usize) -> gtk4::Box {
+        let b = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
+        b.add_css_class("result-row");
+        b.add_css_class("calc-card");
+        b.set_homogeneous(false);
+        let pane = |text: &str, caption: &str| {
+            let v = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
+            v.set_hexpand(true);
+            v.set_halign(gtk4::Align::Center);
+            v.set_valign(gtk4::Align::Center);
+            let big = gtk4::Label::builder().label(text).ellipsize(gtk4::pango::EllipsizeMode::End).build();
+            big.add_css_class("calc-big");
+            v.append(&big);
+            if !caption.is_empty() {
+                let cap = gtk4::Label::new(Some(caption));
+                cap.add_css_class("calc-cap");
+                v.append(&cap);
+            }
+            v
+        };
+        b.append(&pane(&c.question, &c.caption_question));
+        let arrow = gtk4::Label::new(Some("\u{2192}"));
+        arrow.add_css_class("calc-cap");
+        b.append(&arrow);
+        b.append(&pane(&c.answer, &c.caption_answer));
+        if n < 9 {
+            let acc = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
+            acc.set_valign(gtk4::Align::Center);
+            for k in crate::core::shortcuts::label(crate::core::shortcuts::Act::Quick(n)) {
+                let l = gtk4::Label::new(Some(&k));
+                l.add_css_class("keycap");
+                l.add_css_class("badge");
+                acc.append(&l);
+            }
+            b.append(&acc);
+        }
+        b
+    }
+
     fn build_row(&self, r: &RowData, n: usize) -> gtk4::Box {
+        if let Some(c) = &r.calc {
+            return self.build_calc_card(c, n);
+        }
         let row = &r.row;
         let b = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
         b.add_css_class("result-row");

@@ -361,3 +361,16 @@ window.spotlight-window .action-filter > text {
     background-color: @error_bg_color;
     color: @error_fg_color;
 }
+
+/* ---- calculator card ---- */
+.calc-card {
+    min-height: 76px;
+}
+.calc-big {
+    font-size: 22px;
+    font-weight: 600;
+}
+.calc-cap {
+    font-size: 11px;
+    color: alpha(@window_fg_color, 0.50);
+}
