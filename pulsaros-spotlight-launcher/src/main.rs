@@ -62,11 +62,13 @@ fn main() -> gtk4::glib::ExitCode {
     // dmenu mode never touches the normal single-instance app. The GTK window is wired separately.
     let argv: Vec<String> = std::env::args().collect();
     if core::dmenu::Args::wants_dmenu(&argv) {
-        if let Err(e) = core::dmenu::Args::parse(&argv) {
-            eprintln!("pulsaros-spotlight: {e}");
-            std::process::exit(2);
+        match core::dmenu::Args::parse(&argv) {
+            Ok(args) => ui::dmenu::run(args, load_css),
+            Err(e) => {
+                eprintln!("pulsaros-spotlight: {e}");
+                std::process::exit(2);
+            }
         }
-        // TODO(dmenu UI): run the picker window here and exit with `Outcome::exit_code()`.
     }
 
     // Initialize libadwaita

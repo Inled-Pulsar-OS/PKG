@@ -163,6 +163,9 @@ fn keycap_row(keys: &[String]) -> gtk4::Box {
 
 /// Title of the primary action for the panel and the selected-row hint.
 pub(crate) fn primary_title(r: &RowData) -> String {
+    if r.row.id.starts_with("dmenu:") {
+        return "Select".into();
+    }
     match r.row.kind {
         RowKind::App => "Open Application".into(),
         RowKind::Command => "Run".into(),
