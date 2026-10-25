@@ -79,6 +79,14 @@ impl SearchBackend {
         }
     }
 
+    pub fn clipboard(&self) -> Option<ClipboardManager> {
+        self.clipboard_mgr.clone()
+    }
+
+    pub fn apps_snapshot(&self) -> Vec<DesktopApp> {
+        self.apps.borrow().clone()
+    }
+
     #[allow(dead_code)]
     pub fn get_indexing_status(&self) -> (bool, String, f64) {
         get_indexing_status_plain()

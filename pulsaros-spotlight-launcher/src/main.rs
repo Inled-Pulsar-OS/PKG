@@ -2,9 +2,11 @@ mod apps;
 mod calculator;
 mod clipboard;
 mod config;
+mod core;
 mod search;
 mod ui;
 mod utils;
+mod windows_client;
 
 use crate::clipboard::ClipboardManager;
 use crate::config::SpotlightConfig;
@@ -24,6 +26,8 @@ fn load_css() {
     let css_paths = &[
         PathBuf::from("/usr/share/pulsaros-spotlight/index.css"),
         get_local_icon_dir().parent().unwrap().join("index.css"),
+        // development builds: run straight from the source tree
+        PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/data/index.css")),
     ];
 
     let mut css_file = None;
@@ -55,6 +59,18 @@ fn load_css() {
 }
 
 fn main() -> gtk4::glib::ExitCode {
+    // dmenu mode never touches the normal single-instance app. The GTK window is wired separately.
+    let argv: Vec<String> = std::env::args().collect();
+    if core::dmenu::Args::wants_dmenu(&argv) {
+        match core::dmenu::Args::parse(&argv) {
+            Ok(args) => ui::dmenu::run(args, load_css),
+            Err(e) => {
+                eprintln!("pulsaros-spotlight: {e}");
+                std::process::exit(2);
+            }
+        }
+    }
+
     // Initialize libadwaita
     adw::init().expect("Failed to initialize Libadwaita");
 
@@ -122,7 +138,7 @@ fn main() -> gtk4::glib::ExitCode {
     });
 
     let clean_args: Vec<String> = std::env::args()
-        .filter(|arg| arg != "--hidden")
+        .filter(|arg| arg != "--hidden" && arg != "--keep-open")
         .collect();
 
     app.run_with_args(&clean_args)

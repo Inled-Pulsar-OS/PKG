@@ -6,3 +6,4 @@ pulsaros-spotlight (2.0.0-1) unstable; urgency=medium
   * Proper Debian packaging with dh-python
 
  -- Jaime <info@inled.es>  Fri, 15 Aug 2025 00:00:00 +0000
+ -- Victor Rosario <hello@victorrosario.dev> Sun, 25 Oct 2026 00:00:00 +0000

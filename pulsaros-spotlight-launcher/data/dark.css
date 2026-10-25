@@ -1,198 +1,24 @@
-/* PulsarOS Spotlight — Apple Dark */
+/* PulsarOS Spotlight - dark glass (tinted charcoal) */
 
-window.spotlight-window.dark {
-    color: #f5f5f7;
-    background-color: rgba(32, 32, 36, 0.94);
-    border: 1px solid rgba(255, 255, 255, 0.17);
-    box-shadow:
-        inset 0 1px rgba(255, 255, 255, 0.20),
-        0 28px 70px rgba(0, 0, 0, 0.58);
+window.spotlight-window.dark .spotlight-main,
+window.spotlight-window.dark .toast-pill,
+window.spotlight-window.dark .action-panel,
+window.spotlight-window.dark .dialog-card {
+    background-color: @glass_dark_top;
+    border-color: rgba(255, 255, 255, 0.16);
+    color: @glass_ink_dark;
 }
 
-window.spotlight-window.dark .search-header {
-    background-color: rgba(255, 255, 255, 0.025);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+window.spotlight-window.dark .spotlight-main {
+    background-image: linear-gradient(to bottom, @glass_dark_top, @glass_dark_bottom);
+    box-shadow: 0 14px 34px -2px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-window.spotlight-window.dark .search-input,
-window.spotlight-window.dark .search-input * {
-    color: #f5f5f7;
-    caret-color: #0a84ff;
+window.spotlight-window.dark .results-list row:selected {
+    background-color: rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
-window.spotlight-window.dark .search-input placeholder {
-    color: rgba(235, 235, 245, 0.43);
-}
-
-window.spotlight-window.dark .search-icon {
-    color: rgba(255, 255, 255, 0.72);
-}
-
-window.spotlight-window.dark .quick-filter {
-    color: rgba(255, 255, 255, 0.85);
-    background-color: rgba(255, 255, 255, 0.10);
-    border: 1px solid rgba(255, 255, 255, 0.11);
-}
-
-window.spotlight-window.dark .quick-filter:hover {
-    background-color: rgba(255, 255, 255, 0.17);
-}
-
-window.spotlight-window.dark .quick-filter:checked {
-    color: #ffffff;
-    background-color: rgba(10, 132, 255, 0.78);
-    border-color: rgba(110, 190, 255, 0.85);
-    box-shadow:
-        inset 0 1px rgba(255, 255, 255, 0.30),
-        0 3px 10px rgba(0, 0, 0, 0.28);
-}
-
-window.spotlight-window.dark listbox row:hover .result-item-list {
-    background-color: rgba(255, 255, 255, 0.08);
-}
-
-window.spotlight-window.dark listbox row:selected .result-item-list {
-    color: #ffffff;
-    background-color: rgba(10, 132, 255, 0.75);
-}
-
-window.spotlight-window.dark .result-snippet {
-    color: rgba(235, 235, 245, 0.58);
-}
-
-window.spotlight-window.dark
-listbox row:selected .result-snippet {
-    color: rgba(255, 255, 255, 0.86);
-}
-
-window.spotlight-window.dark
-flowbox flowboxchild:hover .result-item-grid {
-    background-color: rgba(255, 255, 255, 0.08);
-}
-
-window.spotlight-window.dark
-flowbox flowboxchild:selected .result-item-grid {
-    background-color: rgba(10, 132, 255, 0.75);
-}
-
-window.spotlight-window.dark.compact .search-header {
-    border-bottom-color: transparent;
-}
-
-
-window.spotlight-window.dark.compact .search-header {
-    background: transparent;
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
-}
-
-window.spotlight-window.dark .search-display {
-    color: #f5f5f7;
-}
-
-/* Dark Spotlight result text */
-window.spotlight-window.dark .result-title,
-window.spotlight-window.dark .result-title-grid {
-    color: #f5f5f7;
-}
-
-window.spotlight-window.dark .result-snippet {
-    color: rgba(235, 235, 245, 0.60);
-}
-
-/* Normal rows stay completely transparent */
-window.spotlight-window.dark listbox row .result-item-list,
-window.spotlight-window.dark flowbox flowboxchild .result-item-grid {
-    background: transparent;
-    border: none;
-    box-shadow: none;
-}
-
-/* Only hover gets a subtle Apple-style highlight */
-window.spotlight-window.dark listbox row:hover .result-item-list,
-window.spotlight-window.dark flowbox flowboxchild:hover .result-item-grid {
-    background-color: rgba(255, 255, 255, 0.08);
-}
-
-/* Selected result */
-window.spotlight-window.dark listbox row:selected .result-item-list,
-window.spotlight-window.dark flowbox flowboxchild:selected .result-item-grid {
-    background-color: rgba(10, 132, 255, 0.72);
-}
-
-window.spotlight-window.dark listbox row:selected .result-title,
-window.spotlight-window.dark listbox row:selected .result-snippet,
-window.spotlight-window.dark flowbox flowboxchild:selected .result-title-grid {
-    color: #ffffff;
-}
-
-/* Dark-mode result readability */
-window.spotlight-window.dark .result-title,
-window.spotlight-window.dark .result-title-grid {
-    color: #ffffff;
-}
-
-window.spotlight-window.dark .result-snippet {
-    color: rgba(255,255,255,0.62);
-}
-
-/* Dark-mode result readability */
-window.spotlight-window.dark .result-title,
-window.spotlight-window.dark .result-title-grid {
-    color: #ffffff;
-}
-
-window.spotlight-window.dark .result-snippet {
-    color: rgba(255,255,255,0.62);
-}
-
-/* Dark Apple-style interactive states */
-window.spotlight-window.dark .search-header.focused {
-    background-color: rgba(255,255,255,0.035);
-    box-shadow:
-        inset 0 1px rgba(255,255,255,0.18);
-}
-
-window.spotlight-window.dark .search-header.pressed {
-    background-color: rgba(255,255,255,0.065);
-}
-
-window.spotlight-window.dark list > row:hover .result-item-list,
-window.spotlight-window.dark flowbox > flowboxchild:hover .result-item-grid {
-    background-color: rgba(255,255,255,0.085);
-}
-
-window.spotlight-window.dark list > row:selected .result-item-list,
-window.spotlight-window.dark flowbox > flowboxchild:selected .result-item-grid {
-    background-color: rgba(10,132,255,0.68);
-    box-shadow:
-        inset 0 1px rgba(255,255,255,0.14);
-}
-
-window.spotlight-window.dark .category-btn {
-    color: rgba(255,255,255,0.72);
-    background-color: rgba(255,255,255,0.065);
-    border: 1px solid rgba(255,255,255,0.07);
-}
-
-window.spotlight-window.dark .category-btn:hover {
-    color: #ffffff;
-    background-color: rgba(255,255,255,0.12);
-}
-
-window.spotlight-window.dark .category-btn:checked {
-    color: #ffffff;
-    background-color: #0a84ff;
-    border-color: rgba(110,190,255,0.72);
-}
-
-window.spotlight-window.dark .view-toggle {
-    color: rgba(255,255,255,0.82);
-    background-color: rgba(255,255,255,0.075);
-    border: 1px solid rgba(255,255,255,0.08);
-}
-
-window.spotlight-window.dark .view-toggle:hover {
-    background-color: rgba(255,255,255,0.14);
+window.spotlight-window.dark .keycap {
+    background-color: rgba(255, 255, 255, 0.11);
 }

@@ -1,9 +1,10 @@
+use crate::core::root_search::{Row, RowKind};
 use crate::search::SearchResult;
-use crate::utils::{get_file_icon, open_file};
+use crate::utils::get_file_icon;
 use gtk4::gdk;
 use gtk4::glib;
 use gtk4::prelude::*;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
@@ -237,28 +238,8 @@ fn out_counter() -> u64 {
     COUNTER.fetch_add(1, Ordering::Relaxed)
 }
 
-fn select_ctx_button(buttons: &[gtk4::Button], idx: Option<usize>) {
-    let visible: Vec<&gtk4::Button> = buttons.iter().filter(|b| b.is_visible()).collect();
-    if visible.is_empty() {
-        return;
-    }
-    let idx = idx.unwrap_or(0).min(visible.len() - 1);
-    for b in &visible {
-        b.remove_css_class("ctx-menu-btn-selected");
-        b.set_opacity(0.5);
-    }
-    visible[idx].add_css_class("ctx-menu-btn-selected");
-    visible[idx].set_opacity(1.0);
-}
 
-fn select_ctx_button_to(buttons: &[gtk4::Button], target: &gtk4::Button) {
-    let visible: Vec<&gtk4::Button> = buttons.iter().filter(|b| b.is_visible()).collect();
-    if let Some(idx) = visible.iter().position(|b| std::ptr::eq(*b, target)) {
-        select_ctx_button(buttons, Some(idx));
-    }
-}
-
-fn app_icon(icon: &str, desktop_file: &str) -> gtk4::Image {
+pub fn app_icon(icon: &str, desktop_file: &str) -> gtk4::Image {
     // 1. Absolute path in the .desktop Icon= field
     if icon.starts_with('/') && std::path::Path::new(icon).exists() {
         return gtk4::Image::from_file(icon);
@@ -308,7 +289,7 @@ fn app_icon(icon: &str, desktop_file: &str) -> gtk4::Image {
     gtk4::Image::from_icon_name("application-x-executable")
 }
 
-fn result_icon(result: &SearchResult) -> gtk4::Image {
+pub fn result_icon(result: &SearchResult) -> gtk4::Image {
     if let Some(app) = &result.app {
         return app_icon(&app.icon, &app.filename);
     }
@@ -316,302 +297,536 @@ fn result_icon(result: &SearchResult) -> gtk4::Image {
     get_file_icon(&result.url, Some(&result.mime), is_dir)
 }
 
+
+// ---------------------------------------------------------------------
+// Sectioned result list
+// ---------------------------------------------------------------------
+
+/// One displayed row: the core row plus the backend result it came from
+/// (files, clipboard, calculator) so activation can reuse existing logic.
+#[derive(Clone, Debug)]
+pub struct RowData {
+    pub row: Row,
+    pub payload: Option<SearchResult>,
+    pub calc: Option<crate::calculator::CalcResult>,
+}
+
+#[derive(Clone, Debug)]
+pub enum Item {
+    Header(String),
+    Row(RowData),
+}
+
+pub fn kind_label(r: &RowData) -> &'static str {
+    match r.row.kind {
+        RowKind::App => "Application",
+        RowKind::Command => "Command",
+        RowKind::Clipboard => "Clipboard",
+        RowKind::Calc => "Calculator",
+        RowKind::Fallback => "",
+        RowKind::File => match &r.payload {
+            Some(p) if p.url.starts_with("http") => "Web",
+            Some(p) if p.mime == "inode/directory" || p.mime == "folder" => "Folder",
+            _ => "File",
+        },
+    }
+}
+
 pub struct ResultView {
-    stack: gtk4::Stack,
     list_box: gtk4::ListBox,
-    grid: gtk4::FlowBox,
-    results: Rc<RefCell<Vec<SearchResult>>>,
-    result_urls: Rc<RefCell<Vec<String>>>,
-    selected_index: Rc<RefCell<Option<usize>>>,
-    on_activate: Rc<dyn Fn(SearchResult)>,
-    on_uninstall_start: Rc<dyn Fn(String, String)>,
-    on_uninstall_done: Rc<dyn Fn(bool, String, String)>,
-    popover: gtk4::Popover,
-    context_menu_index: Rc<RefCell<Option<usize>>>,
-    ctx_menu_open: Rc<RefCell<bool>>,
-    ctx_menu_buttons: Vec<gtk4::Button>,
-    ctx_selected: Rc<RefCell<Option<usize>>>,
+    scroll: gtk4::ScrolledWindow,
+    items: Rc<RefCell<Vec<Item>>>,
+    selected: Rc<Cell<Option<usize>>>,
+    last_pointer: Rc<Cell<(f64, f64)>>,
     thumb_job_tx: RefCell<Option<mpsc::Sender<ThumbJob>>>,
-    thumb_pictures: RefCell<HashMap<String, Vec<gtk4::Stack>>>,
+    thumb_pictures: Rc<RefCell<HashMap<String, Vec<gtk4::Stack>>>>,
     thumb_poll: RefCell<Option<glib::SourceId>>,
 }
 
 impl ResultView {
-    pub fn new<F, U1, U2>(
-        on_activate: F,
-        on_uninstall_start: U1,
-        on_uninstall_done: U2,
-    ) -> Self
+    /// `on_activate` runs when a row is clicked; `on_context` on right click
+    /// (the row is selected first).
+    pub fn new<F, G, S>(on_activate: F, on_context: G, on_select: S) -> Self
     where
-        F: Fn(SearchResult) + 'static,
-        U1: Fn(String, String) + 'static,
-        U2: Fn(bool, String, String) + 'static,
+        F: Fn() + 'static,
+        G: Fn() + 'static,
+        S: Fn(Option<RowData>) + 'static,
     {
-        let stack = gtk4::Stack::builder()
-            .transition_type(gtk4::StackTransitionType::Crossfade)
-            .build();
-
         let list_box = gtk4::ListBox::builder()
             .selection_mode(gtk4::SelectionMode::Single)
+            .activate_on_single_click(true)
             .build();
+        list_box.add_css_class("results-list");
 
-        let grid = gtk4::FlowBox::builder()
-            .valign(gtk4::Align::Start)
-            .min_children_per_line(5)
-            .max_children_per_line(5)
-            .column_spacing(16)
-            .row_spacing(16)
-            .homogeneous(true)
-            .selection_mode(gtk4::SelectionMode::Single)
+        let scroll = gtk4::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk4::PolicyType::Never)
+            .vscrollbar_policy(gtk4::PolicyType::Automatic)
+            .vexpand(true)
             .build();
+        scroll.add_css_class("results-area");
+        scroll.set_child(Some(&list_box));
 
-        stack.add_named(&list_box, Some("list"));
-        stack.add_named(&grid, Some("grid"));
-
-        let results = Rc::new(RefCell::new(Vec::new()));
-        let result_urls = Rc::new(RefCell::new(Vec::new()));
-        let selected_index = Rc::new(RefCell::new(None));
-        let context_menu_index = Rc::new(RefCell::new(None));
-
-        let popover = gtk4::Popover::builder()
-            .has_arrow(false)
-            .position(gtk4::PositionType::Bottom)
-            .autohide(true)
-            .build();
-        popover.add_css_class("ctx-menu");
-
-        let ctx_selected = Rc::new(RefCell::new(None));
-        let ctx_menu_open = Rc::new(RefCell::new(false));
-
-        let mut view = Self {
-            stack,
+        let view = Self {
             list_box,
-            grid,
-            results,
-            result_urls,
-            selected_index,
-            on_activate: Rc::new(on_activate),
-            on_uninstall_start: Rc::new(on_uninstall_start),
-            on_uninstall_done: Rc::new(on_uninstall_done),
-            popover,
-            context_menu_index,
-            ctx_menu_open,
-            ctx_menu_buttons: Vec::new(),
-            ctx_selected,
+            scroll,
+            items: Rc::new(RefCell::new(Vec::new())),
+            selected: Rc::new(Cell::new(None)),
+            last_pointer: Rc::new(Cell::new((-1.0, -1.0))),
             thumb_job_tx: RefCell::new(None),
-            thumb_pictures: RefCell::new(HashMap::new()),
+            thumb_pictures: Rc::new(RefCell::new(HashMap::new())),
             thumb_poll: RefCell::new(None),
         };
 
-        view.setup_events();
-        view.setup_context_menu();
-
-        let open_c = view.ctx_menu_open.clone();
-        view.popover.connect_closed(move |_| {
-            *open_c.borrow_mut() = false;
+        let sel = view.selected.clone();
+        let items = view.items.clone();
+        view.list_box.connect_row_selected(move |_, row| {
+            let idx = row.map(|r| r.index() as usize);
+            sel.set(idx);
+            let data = idx.and_then(|i| match items.borrow().get(i) {
+                Some(Item::Row(r)) => Some(r.clone()),
+                _ => None,
+            });
+            on_select(data);
         });
+
+        view.list_box.connect_row_activated(move |_, _| on_activate());
+
+        let click = gtk4::GestureClick::builder().button(3).build();
+        let lb = view.list_box.clone();
+        click.connect_pressed(move |g, _, _, y| {
+            g.set_state(gtk4::EventSequenceState::Claimed);
+            if let Some(r) = lb.row_at_y(y as i32) {
+                if r.is_selectable() {
+                    lb.select_row(Some(&r));
+                    on_context();
+                }
+            }
+        });
+        view.list_box.add_controller(click);
+
+        // Hover selects only after real pointer motion: `motion` is not
+        // emitted when rows scroll or are rebuilt under a still pointer.
+        let motion = gtk4::EventControllerMotion::new();
+        let lb = view.list_box.clone();
+        let last = view.last_pointer.clone();
+        motion.connect_motion(move |_, x, y| {
+            let (lx, ly) = last.get();
+            if (lx - x).abs() < 1.0 && (ly - y).abs() < 1.0 {
+                return;
+            }
+            last.set((x, y));
+            if let Some(r) = lb.row_at_y(y as i32) {
+                if r.is_selectable() && !r.is_selected() {
+                    lb.select_row(Some(&r));
+                }
+            }
+        });
+        view.list_box.add_controller(motion);
 
         let (job_tx, result_rx) = spawn_thumbnail_pool();
         *view.thumb_job_tx.borrow_mut() = Some(job_tx);
         view.start_thumbnail_poll(result_rx);
-
         view
     }
 
-    pub fn widget(&self) -> &gtk4::Stack {
-        &self.stack
+    pub fn widget(&self) -> &gtk4::ScrolledWindow {
+        &self.scroll
     }
 
-    pub fn set_popover_parent<P: IsA<gtk4::Widget>>(&self, parent: &P) {
-        self.popover.set_parent(parent);
-    }
-
-    pub fn context_menu_is_open(&self) -> bool {
-        *self.ctx_menu_open.borrow()
-    }
-
-    pub fn context_menu_step(&self, down: bool) {
-        let visible: Vec<&gtk4::Button> = self
-            .ctx_menu_buttons
-            .iter()
-            .filter(|b| b.is_visible())
-            .collect();
-        if visible.is_empty() {
-            return;
+    pub fn selected_row(&self) -> Option<RowData> {
+        let idx = self.selected.get()?;
+        match self.items.borrow().get(idx) {
+            Some(Item::Row(r)) => Some(r.clone()),
+            _ => None,
         }
-        let cnt = visible.len();
-        let next = match *self.ctx_selected.borrow() {
-            Some(i) if down => (i + 1) % cnt,
-            Some(i) => (i + cnt - 1) % cnt,
-            None => 0,
+    }
+
+    /// Replace the list. With `keep_selection` the previously selected row id
+    /// stays selected when it is still present.
+    pub fn set_sections(&self, sections: Vec<(String, Vec<RowData>)>, keep_selection: bool) {
+        let prev_id = if keep_selection { self.selected_row().map(|r| r.row.id) } else { None };
+
+        let mut items = Vec::new();
+        for (title, rows) in sections {
+            if rows.is_empty() {
+                continue;
+            }
+            items.push(Item::Header(title));
+            items.extend(rows.into_iter().take(300).map(Item::Row));
+        }
+
+        let same = {
+            let old = self.items.borrow();
+            old.len() == items.len()
+                && old.iter().zip(items.iter()).all(|(a, b)| match (a, b) {
+                    (Item::Header(x), Item::Header(y)) => x == y,
+                    (Item::Row(x), Item::Row(y)) => x.row == y.row,
+                    _ => false,
+                })
         };
-        select_ctx_button(&self.ctx_menu_buttons, Some(next));
-        *self.ctx_selected.borrow_mut() = Some(next);
-        visible[next].grab_focus();
-    }
-
-    pub fn context_menu_activate(&self) {
-        let visible: Vec<&gtk4::Button> = self
-            .ctx_menu_buttons
-            .iter()
-            .filter(|b| b.is_visible())
-            .collect();
-        if let Some(i) = *self.ctx_selected.borrow() {
-            if i < visible.len() {
-                visible[i].emit_clicked();
-            }
-        }
-    }
-
-    pub fn context_menu_close(&self) {
-        self.popover.popdown();
-    }
-
-    pub fn set_results(&self, new_results: Vec<SearchResult>, as_grid: bool) {
-        let mut new_results = new_results;
-        new_results.truncate(200);
-
-        let new_urls: Vec<String> = new_results.iter().map(|r| r.url.clone()).collect();
-        let old_urls = self.result_urls.borrow();
-
-        // If the result set is identical (e.g. view mode toggled or duplicate search),
-        // update the active stack view and selection immediately without rebuilding widgets
-        if *old_urls == new_urls {
-            self.stack.set_visible_child_name(if as_grid { "grid" } else { "list" });
-            if !as_grid {
-                if let Some(first_row) = self.list_box.row_at_index(0) {
-                    self.list_box.select_row(Some(&first_row));
-                    *self.selected_index.borrow_mut() = Some(0);
-                }
-            } else {
-                if let Some(first_child) = self.grid.child_at_index(0) {
-                    self.grid.select_child(&first_child);
-                    *self.selected_index.borrow_mut() = Some(0);
-                }
-            }
+        if same {
             return;
         }
-        drop(old_urls);
 
-        // Rebind widgets to a fresh thumbnail map (in-flight loads are dropped)
         self.thumb_pictures.borrow_mut().clear();
-
-        *self.selected_index.borrow_mut() = None;
-
-        // Clear children
+        self.selected.set(None);
         while let Some(child) = self.list_box.first_child() {
             self.list_box.remove(&child);
         }
-        while let Some(child) = self.grid.first_child() {
-            self.grid.remove(&child);
-        }
 
-        let visible = new_results.clone();
-        *self.results.borrow_mut() = new_results;
-        *self.result_urls.borrow_mut() = new_urls;
-
-        for result in &visible {
-            let list_row = self.build_list_row(result);
-            self.list_box.append(&list_row);
-
-            let grid_child = self.build_grid_child(result);
-            self.grid.insert(&grid_child, -1);
-        }
-
-        self.stack.set_visible_child_name(if as_grid { "grid" } else { "list" });
-
-        if let Some(adj) = self.viewport_vadjustment() {
-            adj.set_value(0.0);
-        }
-
-        if !as_grid {
-            if let Some(first_row) = self.list_box.row_at_index(0) {
-                self.list_box.select_row(Some(&first_row));
-                *self.selected_index.borrow_mut() = Some(0);
+        let mut n = 0usize;
+        for it in &items {
+            match it {
+                Item::Header(t) => {
+                    let row = gtk4::ListBoxRow::new();
+                    row.set_selectable(false);
+                    row.set_activatable(false);
+                    row.add_css_class("section-row");
+                    let l = gtk4::Label::builder().label(t).xalign(0.0).build();
+                    l.add_css_class("section-header");
+                    row.set_child(Some(&l));
+                    self.list_box.append(&row);
+                }
+                Item::Row(r) => {
+                    let row = gtk4::ListBoxRow::new();
+                    row.set_child(Some(&self.build_row(r, n)));
+                    self.list_box.append(&row);
+                    n += 1;
+                }
             }
+        }
+        *self.items.borrow_mut() = items;
+
+        let target = prev_id
+            .and_then(|id| self.items.borrow().iter().position(|i| matches!(i, Item::Row(r) if r.row.id == id)))
+            .or_else(|| self.items.borrow().iter().position(|i| matches!(i, Item::Row(_))));
+        match target {
+            Some(i) => self.select_index(i),
+            None => self.scroll.vadjustment().set_value(0.0),
+        }
+        if !keep_selection {
+            self.scroll.vadjustment().set_value(0.0);
+        }
+    }
+
+    fn build_calc_card(&self, c: &crate::calculator::CalcResult, n: usize) -> gtk4::Box {
+        let b = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
+        b.add_css_class("result-row");
+        b.add_css_class("calc-card");
+        b.set_homogeneous(false);
+        let pane = |text: &str, caption: &str| {
+            let v = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
+            v.set_hexpand(true);
+            v.set_halign(gtk4::Align::Center);
+            v.set_valign(gtk4::Align::Center);
+            let big = gtk4::Label::builder().label(text).ellipsize(gtk4::pango::EllipsizeMode::End).build();
+            big.add_css_class("calc-big");
+            v.append(&big);
+            if !caption.is_empty() {
+                let cap = gtk4::Label::new(Some(caption));
+                cap.add_css_class("calc-cap");
+                v.append(&cap);
+            }
+            v
+        };
+        b.append(&pane(&c.question, &c.caption_question));
+        let arrow = gtk4::Label::new(Some("\u{2192}"));
+        arrow.add_css_class("calc-cap");
+        b.append(&arrow);
+        b.append(&pane(&c.answer, &c.caption_answer));
+        if n < 9 {
+            let acc = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
+            acc.set_valign(gtk4::Align::Center);
+            for k in crate::core::shortcuts::label(crate::core::shortcuts::Act::Quick(n)) {
+                let l = gtk4::Label::new(Some(&k));
+                l.add_css_class("keycap");
+                l.add_css_class("badge");
+                acc.append(&l);
+            }
+            b.append(&acc);
+        }
+        b
+    }
+
+    fn build_row(&self, r: &RowData, n: usize) -> gtk4::Box {
+        if let Some(c) = &r.calc {
+            return self.build_calc_card(c, n);
+        }
+        let row = &r.row;
+        let b = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
+        b.add_css_class("result-row");
+
+        // icon tile
+        let tile = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+        tile.add_css_class("icon-tile");
+        tile.set_valign(gtk4::Align::Center);
+        tile.set_halign(gtk4::Align::Start);
+        tile.set_hexpand(false);
+        tile.set_size_request(44, 44);
+        let theme = gtk4::IconTheme::for_display(&gdk::Display::default().expect("display"));
+        let themed = |name: &str, fallback: &str| {
+            gtk4::Image::from_icon_name(if theme.has_icon(name) { name } else { fallback })
+        };
+        match row.kind {
+            RowKind::App => {
+                let desktop = row.id.strip_prefix("app:").unwrap_or(&row.id);
+                let img = app_icon(&row.icon_name, desktop);
+                img.set_pixel_size(40);
+                img.add_css_class("result-icon");
+                img.set_halign(gtk4::Align::Center);
+                img.set_hexpand(true);
+                tile.append(&img);
+            }
+            RowKind::File if r.payload.as_ref().map_or(false, |p| has_thumbnail_support(&p.url)) => {
+                let url = &r.payload.as_ref().unwrap().url;
+                tile.append(&self.thumbnail_icon(url, 44));
+            }
+            RowKind::File => {
+                let img = match &r.payload {
+                    Some(p) => result_icon(p),
+                    None => themed(&row.icon_name, "text-x-generic"),
+                };
+                img.set_pixel_size(36);
+                img.set_halign(gtk4::Align::Center);
+                img.set_hexpand(true);
+                tile.append(&img);
+            }
+            kind => {
+                tile.add_css_class("tinted");
+                let (name, fb) = match kind {
+                    RowKind::Calc => ("accessories-calculator-symbolic", "accessories-calculator-symbolic"),
+                    RowKind::Clipboard => ("edit-paste-symbolic", "edit-copy-symbolic"),
+                    RowKind::Fallback if row.id.starts_with("history:") => ("document-open-recent-symbolic", "view-refresh-symbolic"),
+                    RowKind::Fallback => ("web-browser-symbolic", "web-browser-symbolic"),
+                    _ => (row.icon_name.as_str(), "system-run-symbolic"),
+                };
+                let img = themed(name, fb);
+                img.set_pixel_size(22);
+                img.set_halign(gtk4::Align::Center);
+                img.set_hexpand(true);
+                tile.append(&img);
+            }
+        }
+        b.append(&tile);
+
+        // title + subtitle
+        let text = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+        text.set_hexpand(true);
+        text.set_valign(gtk4::Align::Center);
+        let title = gtk4::Label::builder()
+            .label(&row.title)
+            .xalign(0.0)
+            .ellipsize(gtk4::pango::EllipsizeMode::End)
+            .build();
+        title.add_css_class("result-title");
+        text.append(&title);
+        let sub = if row.kind == RowKind::Fallback { String::new() } else { row.subtitle.clone() };
+        if !sub.is_empty() && sub != row.title {
+            let l = gtk4::Label::builder()
+                .label(&sub)
+                .xalign(0.0)
+                .ellipsize(if row.kind == RowKind::File {
+                    gtk4::pango::EllipsizeMode::Middle
+                } else {
+                    gtk4::pango::EllipsizeMode::End
+                })
+                .build();
+            l.add_css_class("result-subtitle");
+            text.append(&l);
+        }
+        b.append(&text);
+
+        // accessories
+        let acc = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+        acc.set_valign(gtk4::Align::Center);
+        if row.favorite {
+            let l = gtk4::Label::new(Some("\u{2605}"));
+            l.add_css_class("result-star");
+            acc.append(&l);
+        }
+        if let Some(a) = &row.alias {
+            let l = gtk4::Label::new(Some(a));
+            l.add_css_class("alias-chip");
+            acc.append(&l);
+        }
+        if row.checked == Some(true) {
+            let l = gtk4::Label::new(Some("\u{2713}"));
+            l.add_css_class("result-check");
+            acc.append(&l);
+        }
+        let kl = kind_label(r);
+        if !kl.is_empty() && !matches!(row.kind, RowKind::App | RowKind::Command) {
+            let l = gtk4::Label::new(Some(kl));
+            l.add_css_class("result-kind");
+            acc.append(&l);
+        }
+        // Primary-action hint, only visible on the selected row (see CSS).
+        let hint = gtk4::Label::new(Some(
+            crate::ui::window::primary_title(r).split_whitespace().next().unwrap_or("Open"),
+        ));
+        hint.add_css_class("row-hint");
+        acc.append(&hint);
+        if n < 9 {
+            let keys = crate::core::shortcuts::label(crate::core::shortcuts::Act::Quick(n));
+            for k in keys {
+                let l = gtk4::Label::new(Some(&k));
+                l.add_css_class("keycap");
+                l.add_css_class("badge");
+                acc.append(&l);
+            }
+        }
+        b.append(&acc);
+        b
+    }
+
+    fn select_index(&self, idx: usize) {
+        if let Some(row) = self.list_box.row_at_index(idx as i32) {
+            self.list_box.select_row(Some(&row));
+            self.ensure_visible(&row, idx);
+        }
+    }
+
+    fn ensure_visible(&self, row: &gtk4::ListBoxRow, idx: usize) {
+        let adj = self.scroll.vadjustment();
+        // First row of a section: keep its header in view.
+        let first_in_section = idx > 0 && matches!(self.items.borrow().get(idx - 1), Some(Item::Header(_)));
+        let alloc = row.allocation();
+        let mut top = alloc.y() as f64;
+        let bottom = top + alloc.height() as f64;
+        if first_in_section {
+            top = (top - 30.0).max(0.0);
+        }
+        let (value, page) = (adj.value(), adj.page_size());
+        if top < value {
+            adj.set_value(top);
+        } else if bottom > value + page {
+            adj.set_value(bottom - page);
+        }
+    }
+
+    fn row_positions(&self) -> Vec<usize> {
+        self.items
+            .borrow()
+            .iter()
+            .enumerate()
+            .filter(|(_, i)| matches!(i, Item::Row(_)))
+            .map(|(p, _)| p)
+            .collect()
+    }
+
+    /// Move the selection by `delta` rows (clamped). Returns false when it did not move.
+    pub fn step(&self, delta: i32) -> bool {
+        let pos = self.row_positions();
+        if pos.is_empty() {
+            return false;
+        }
+        let cur = self.selected.get().and_then(|s| pos.iter().position(|p| *p == s)).unwrap_or(0) as i32;
+        let next = (cur + delta).clamp(0, pos.len() as i32 - 1) as usize;
+        if next as i32 == cur {
+            return false;
+        }
+        self.select_index(pos[next]);
+        true
+    }
+
+    /// Jump to the first row of the previous / next section.
+    pub fn jump_section(&self, forward: bool) {
+        let items = self.items.borrow();
+        let starts: Vec<usize> = items
+            .iter()
+            .enumerate()
+            .filter(|(i, it)| matches!(it, Item::Row(_)) && *i > 0 && matches!(items[*i - 1], Item::Header(_)))
+            .map(|(i, _)| i)
+            .collect();
+        drop(items);
+        if starts.is_empty() {
+            return;
+        }
+        let cur = self.selected.get().unwrap_or(0);
+        let target = if forward {
+            starts.iter().find(|s| **s > cur).copied()
         } else {
-            if let Some(first_child) = self.grid.child_at_index(0) {
-                self.grid.select_child(&first_child);
-                *self.selected_index.borrow_mut() = Some(0);
+            starts.iter().rev().find(|s| **s < cur).copied()
+        };
+        if let Some(t) = target {
+            self.select_index(t);
+        }
+    }
+
+    pub fn select_nth_row(&self, n: usize) -> bool {
+        match self.row_positions().get(n) {
+            Some(p) => {
+                self.select_index(*p);
+                true
             }
+            None => false,
         }
     }
 
     fn start_thumbnail_poll(&self, result_rx: mpsc::Receiver<(String, Option<ThumbPixels>)>) {
         let pictures = self.thumb_pictures.clone();
-        let source_id = glib::timeout_add_local(Duration::from_millis(5), move || {
-            match result_rx.try_recv() {
-                Ok((cache_key, pixels)) => {
-                    let cache = THUMBNAIL_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-                    match pixels {
-                        Some(px) => {
-                            let pb = gdk_pixbuf::Pixbuf::from_mut_slice(
-                                px.bytes.to_vec(),
-                                gdk_pixbuf::Colorspace::Rgb,
-                                px.has_alpha,
-                                px.bits_per_sample,
-                                px.width,
-                                px.height,
-                                px.rowstride,
-                            );
-                            let texture = gdk::Texture::for_pixbuf(&pb);
-                            cache.lock().unwrap().insert(cache_key.clone(), Some(texture.clone()));
-                            if let Some(stacks) = pictures.borrow().get(&cache_key) {
-                                for stack in stacks {
-                                    stack.set_visible_child_name("thumb");
-                                    if let Some(widget) = stack.child_by_name("thumb") {
-                                        if let Ok(pic) = widget.downcast::<gtk4::Picture>() {
-                                            pic.set_paintable(Some(&texture));
-                                        }
+        let source_id = glib::timeout_add_local(Duration::from_millis(5), move || match result_rx.try_recv() {
+            Ok((cache_key, pixels)) => {
+                let cache = THUMBNAIL_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+                match pixels {
+                    Some(px) => {
+                        let pb = gdk_pixbuf::Pixbuf::from_mut_slice(
+                            px.bytes.to_vec(),
+                            gdk_pixbuf::Colorspace::Rgb,
+                            px.has_alpha,
+                            px.bits_per_sample,
+                            px.width,
+                            px.height,
+                            px.rowstride,
+                        );
+                        let texture = gdk::Texture::for_pixbuf(&pb);
+                        cache.lock().unwrap().insert(cache_key.clone(), Some(texture.clone()));
+                        if let Some(stacks) = pictures.borrow().get(&cache_key) {
+                            for stack in stacks {
+                                stack.set_visible_child_name("thumb");
+                                if let Some(widget) = stack.child_by_name("thumb") {
+                                    if let Ok(pic) = widget.downcast::<gtk4::Picture>() {
+                                        pic.set_paintable(Some(&texture));
                                     }
                                 }
                             }
                         }
-                        None => {
-                            cache.lock().unwrap().insert(cache_key, None);
-                        }
                     }
-                    glib::ControlFlow::Continue
+                    None => {
+                        cache.lock().unwrap().insert(cache_key, None);
+                    }
                 }
-                Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
-                Err(mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
+                glib::ControlFlow::Continue
             }
+            Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+            Err(mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
         });
         *self.thumb_poll.borrow_mut() = Some(source_id);
     }
 
-    // Builds a sized cell that shows a spinner until the thumbnail is ready,
-    // then swaps in the decoded texture. Always returns a widget (never blocks).
-    fn thumbnail_icon(&self, url: &str, pixel_size: i32, grid: bool) -> gtk4::Stack {
+    // Sized cell: spinner until the thumbnail is ready, then the decoded texture.
+    fn thumbnail_icon(&self, url: &str, pixel_size: i32) -> gtk4::Stack {
         let path = url.trim_start_matches("file://").to_string();
-        let css = if grid { "result-thumb-grid" } else { "result-thumb" };
-
         let stack = gtk4::Stack::new();
         stack.set_size_request(pixel_size, pixel_size);
-        stack.set_hexpand(false);
-        stack.set_halign(if grid { gtk4::Align::Center } else { gtk4::Align::Start });
+        stack.set_halign(gtk4::Align::Center);
         stack.set_valign(gtk4::Align::Center);
-        stack.add_css_class(css);
+        stack.add_css_class("result-thumb");
 
         let spinner = gtk4::Spinner::new();
-        spinner.set_halign(gtk4::Align::Center);
-        spinner.set_valign(gtk4::Align::Center);
-        spinner.set_size_request(24, 24);
+        spinner.set_size_request(16, 16);
         spinner.start();
         stack.add_named(&spinner, Some("loading"));
 
         let pic = gtk4::Picture::new();
         pic.set_size_request(pixel_size, pixel_size);
         pic.set_can_shrink(true);
-        pic.add_css_class(css);
-        pic.set_halign(gtk4::Align::Center);
-        pic.set_valign(gtk4::Align::Center);
+        pic.add_css_class("result-thumb");
         stack.add_named(&pic, Some("thumb"));
 
         let cache_key = format!("{}@{}", path, pixel_size);
         let disk_png = thumb_cache_dir().join(format!("{}.png", fnv1a64(&cache_key)));
 
-        // Already decoded this exact size this session: show it straight away
         let cache = THUMBNAIL_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
         if let Some(Some(texture)) = cache.lock().unwrap().get(&cache_key) {
             pic.set_paintable(Some(texture));
@@ -620,660 +835,11 @@ impl ResultView {
         }
 
         stack.set_visible_child_name("loading");
-        self.thumb_pictures
-            .borrow_mut()
-            .entry(cache_key.clone())
-            .or_default()
-            .push(stack.clone());
-
+        self.thumb_pictures.borrow_mut().entry(cache_key.clone()).or_default().push(stack.clone());
         if let Some(job_tx) = self.thumb_job_tx.borrow().as_ref() {
-            let _ = job_tx.send(ThumbJob {
-                url: url.to_string(),
-                cache_key,
-                size: pixel_size,
-                disk_png,
-            });
+            let _ = job_tx.send(ThumbJob { url: url.to_string(), cache_key, size: pixel_size, disk_png });
         }
         stack
-    }
-
-    fn build_list_row(&self, result: &SearchResult) -> gtk4::ListBoxRow {
-        let row = gtk4::ListBoxRow::new();
-        let box_widget = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
-        box_widget.add_css_class("result-item-list");
-
-        let is_file = result.app.is_none() && result.url.starts_with("file://");
-        if is_file && has_thumbnail_support(&result.url) {
-            box_widget.append(&self.thumbnail_icon(&result.url, 32, false));
-        } else {
-            let icon = result_icon(result);
-            icon.set_pixel_size(32);
-            icon.add_css_class("result-icon");
-            box_widget.append(&icon);
-        }
-
-        let text_box = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
-        text_box.set_hexpand(true);
-
-        let title_label = gtk4::Label::builder()
-            .label(&result.title)
-            .xalign(0.0)
-            .hexpand(true)
-            .ellipsize(gtk4::pango::EllipsizeMode::End)
-            .max_width_chars(45)
-            .build();
-        title_label.add_css_class("result-title");
-        text_box.append(&title_label);
-
-        let mut sub_text = result.snippet.clone();
-        if sub_text.is_empty() {
-            if result.url.starts_with("file://") {
-                sub_text = result.url.trim_start_matches("file://").to_string();
-            } else if result.url.starts_with("http://") || result.url.starts_with("https://") {
-                sub_text = result.url.clone();
-            }
-        }
-
-        if !sub_text.is_empty() {
-            let snippet_label = gtk4::Label::builder()
-                .label(&sub_text)
-                .xalign(0.0)
-                .hexpand(true)
-                .ellipsize(if result.url.starts_with("file://") {
-                    gtk4::pango::EllipsizeMode::Middle
-                } else {
-                    gtk4::pango::EllipsizeMode::End
-                })
-                .max_width_chars(50)
-                .build();
-            snippet_label.add_css_class("result-snippet");
-            text_box.append(&snippet_label);
-        }
-
-        box_widget.append(&text_box);
-        row.set_child(Some(&box_widget));
-
-        row
-    }
-
-    fn build_grid_child(&self, result: &SearchResult) -> gtk4::FlowBoxChild {
-        let child = gtk4::FlowBoxChild::new();
-        let box_widget = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
-        box_widget.add_css_class("result-item-grid");
-        box_widget.set_size_request(108, -1);
-
-        let is_file = result.app.is_none() && result.url.starts_with("file://");
-        if is_file && has_thumbnail_support(&result.url) {
-            box_widget.append(&self.thumbnail_icon(&result.url, 64, true));
-        } else {
-            let icon = result_icon(result);
-            icon.set_pixel_size(64);
-            icon.add_css_class("result-icon-grid");
-            box_widget.append(&icon);
-        }
-
-        let clean_raw = result.title.trim_start_matches("file://");
-        let clean_raw = clean_raw.trim_end_matches('/');
-        let last_seg = clean_raw.split('/').last().unwrap_or(clean_raw);
-        let decoded_title = match urlencoding::decode(last_seg) {
-            Ok(d) if !d.trim().is_empty() => d.into_owned(),
-            _ => last_seg.to_string(),
-        };
-
-        let title_label = gtk4::Label::builder()
-            .label(&decoded_title)
-            .wrap(true)
-            .wrap_mode(gtk4::pango::WrapMode::WordChar)
-            .lines(2)
-            .ellipsize(gtk4::pango::EllipsizeMode::End)
-            .justify(gtk4::Justification::Center)
-            .max_width_chars(13)
-            .halign(gtk4::Align::Center)
-            .build();
-        title_label.add_css_class("result-title-grid");
-
-        box_widget.append(&title_label);
-        child.set_child(Some(&box_widget));
-
-        child
-    }
-
-    fn setup_events(&self) {
-        let on_activate = self.on_activate.clone();
-        let results = self.results.clone();
-        let selected_index = self.selected_index.clone();
-
-        // List row activated
-        self.list_box.connect_row_activated(move |_, row| {
-            let idx = row.index() as usize;
-            if let Some(res) = results.borrow().get(idx) {
-                (*on_activate)(res.clone());
-            }
-        });
-
-        let results_c = self.results.clone();
-        let on_activate_c = self.on_activate.clone();
-        // Grid child activated
-        self.grid.connect_child_activated(move |_, child| {
-            let idx = child.index() as usize;
-            if let Some(res) = results_c.borrow().get(idx) {
-                (*on_activate_c)(res.clone());
-            }
-        });
-
-        // Track selected index
-        let sel_idx = selected_index.clone();
-        self.list_box.connect_row_selected(move |_, row| {
-            if let Some(r) = row {
-                *sel_idx.borrow_mut() = Some(r.index() as usize);
-            }
-        });
-
-        let sel_idx_c = selected_index.clone();
-        self.grid.connect_selected_children_changed(move |fb| {
-            let selected = fb.selected_children();
-            if let Some(c) = selected.first() {
-                *sel_idx_c.borrow_mut() = Some(c.index() as usize);
-            }
-        });
-
-        // Gesture click right button for ListBox
-        let list_click = gtk4::GestureClick::builder().button(3).build();
-        let list_box_c = self.list_box.clone();
-        let results_cc = self.results.clone();
-        let popover_c = self.popover.clone();
-        let ctx_menu_idx = self.context_menu_index.clone();
-        list_click.connect_pressed(move |gesture, _, x, y| {
-            gesture.set_state(gtk4::EventSequenceState::Claimed);
-            let row = list_box_c.row_at_y(y as i32);
-            if let Some(r) = row {
-                list_box_c.select_row(Some(&r));
-                let idx = r.index() as usize;
-                if results_cc.borrow().get(idx).is_some() {
-                    *ctx_menu_idx.borrow_mut() = Some(idx);
-                    if popover_c.parent().as_ref() != Some(r.upcast_ref()) {
-                        popover_c.set_parent(&r);
-                    }
-                    let rect = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
-                    popover_c.set_pointing_to(Some(&rect));
-                    popover_c.popup();
-                }
-            }
-        });
-        self.list_box.add_controller(list_click);
-
-        // Gesture click right button for Grid
-        let grid_click = gtk4::GestureClick::builder().button(3).build();
-        let grid_c = self.grid.clone();
-        let results_ccc = self.results.clone();
-        let popover_cc = self.popover.clone();
-        let ctx_menu_idx_c = self.context_menu_index.clone();
-        grid_click.connect_pressed(move |gesture, _, x, y| {
-            gesture.set_state(gtk4::EventSequenceState::Claimed);
-            let child = grid_c.child_at_pos(x as i32, y as i32);
-            if let Some(c) = child {
-                grid_c.select_child(&c);
-                let idx = c.index() as usize;
-                if results_ccc.borrow().get(idx).is_some() {
-                    *ctx_menu_idx_c.borrow_mut() = Some(idx);
-                    if popover_cc.parent().as_ref() != Some(c.upcast_ref()) {
-                        popover_cc.set_parent(&c);
-                    }
-                    let rect = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
-                    popover_cc.set_pointing_to(Some(&rect));
-                    popover_cc.popup();
-                }
-            }
-        });
-        self.grid.add_controller(grid_click);
-    }
-
-    fn setup_context_menu(&mut self) {
-        let outer = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        outer.add_css_class("ctx-menu-box");
-
-        // 1. Open
-        let btn_open = gtk4::Button::with_label("Open");
-        btn_open.add_css_class("ctx-menu-btn");
-        btn_open.set_halign(gtk4::Align::Fill);
-        outer.append(&btn_open);
-
-        // 2. Open Folder
-        let btn_open_dir = gtk4::Button::with_label("Open containing folder");
-        btn_open_dir.add_css_class("ctx-menu-btn");
-        btn_open_dir.set_halign(gtk4::Align::Fill);
-        outer.append(&btn_open_dir);
-
-        let sep1 = gtk4::Separator::new(gtk4::Orientation::Horizontal);
-        outer.append(&sep1);
-
-        // 3. Pin to Dock
-        let btn_pin = gtk4::Button::with_label("Pin to dock");
-        btn_pin.add_css_class("ctx-menu-btn");
-        btn_pin.set_halign(gtk4::Align::Fill);
-        outer.append(&btn_pin);
-
-        // 4. Uninstall
-        let btn_uninstall = gtk4::Button::with_label("Uninstall");
-        btn_uninstall.add_css_class("ctx-menu-btn");
-        btn_uninstall.add_css_class("ctx-menu-btn-danger");
-        btn_uninstall.set_halign(gtk4::Align::Fill);
-        outer.append(&btn_uninstall);
-
-        let sep2 = gtk4::Separator::new(gtk4::Orientation::Horizontal);
-        outer.append(&sep2);
-
-        // 5. Copy Name
-        let btn_copy_name = gtk4::Button::with_label("Copy name");
-        btn_copy_name.add_css_class("ctx-menu-btn");
-        btn_copy_name.set_halign(gtk4::Align::Fill);
-        outer.append(&btn_copy_name);
-
-        // 6. Copy Path
-        let btn_copy_path = gtk4::Button::with_label("Copy path");
-        btn_copy_path.add_css_class("ctx-menu-btn");
-        btn_copy_path.set_halign(gtk4::Align::Fill);
-        outer.append(&btn_copy_path);
-
-        self.popover.set_child(Some(&outer));
-
-        // Arrow key navigation within the context menu
-        let ctx_menu_buttons: Vec<gtk4::Button> = vec![
-            btn_open.clone(),
-            btn_open_dir.clone(),
-            btn_pin.clone(),
-            btn_uninstall.clone(),
-            btn_copy_name.clone(),
-            btn_copy_path.clone(),
-        ];
-        self.ctx_menu_buttons = ctx_menu_buttons.clone();
-        *self.ctx_selected.borrow_mut() = None;
-
-        // Mouse hover also moves the selection highlight
-        for b in &ctx_menu_buttons {
-            let b_c = b.clone();
-            let btns_c = ctx_menu_buttons.clone();
-            let motion = gtk4::EventControllerMotion::new();
-            motion.connect_enter(move |_, _, _| {
-                select_ctx_button_to(&btns_c, &b_c);
-            });
-            b.add_controller(motion);
-        }
-
-        let popover_key = gtk4::EventControllerKey::new();
-        let pop_c = self.popover.clone();
-        let btns_key = ctx_menu_buttons.clone();
-        let sel_key = self.ctx_selected.clone();
-        popover_key.connect_key_pressed(move |_, keyval, _, _| {
-            let visible_btns: Vec<&gtk4::Button> = btns_key
-                .iter()
-                .filter(|b| b.is_visible())
-                .collect();
-            if visible_btns.is_empty() {
-                return gtk4::glib::Propagation::Proceed;
-            }
-
-            match keyval {
-                gdk::Key::Down => {
-                    let cnt = visible_btns.len();
-                    let next = match *sel_key.borrow() {
-                        Some(i) => (i + 1) % cnt,
-                        None => 0,
-                    };
-                    select_ctx_button(&btns_key, Some(next));
-                    *sel_key.borrow_mut() = Some(next);
-                    visible_btns[next].grab_focus();
-                    gtk4::glib::Propagation::Stop
-                }
-                gdk::Key::Up => {
-                    let cnt = visible_btns.len();
-                    let prev = match *sel_key.borrow() {
-                        Some(0) | None => cnt - 1,
-                        Some(i) => i - 1,
-                    };
-                    select_ctx_button(&btns_key, Some(prev));
-                    *sel_key.borrow_mut() = Some(prev);
-                    visible_btns[prev].grab_focus();
-                    gtk4::glib::Propagation::Stop
-                }
-                gdk::Key::Escape => {
-                    pop_c.popdown();
-                    gtk4::glib::Propagation::Stop
-                }
-                _ => gtk4::glib::Propagation::Proceed,
-            }
-        });
-        self.popover.add_controller(popover_key);
-
-        // Connect popover opened to toggle buttons visibility
-        let results_c = self.results.clone();
-        let ctx_menu_idx = self.context_menu_index.clone();
-        let btn_open_c = btn_open.clone();
-        let btn_open_dir_c = btn_open_dir.clone();
-        let btn_copy_path_c = btn_copy_path.clone();
-        let btn_pin_c = btn_pin.clone();
-        let btn_uninstall_c = btn_uninstall.clone();
-        let btns_map = ctx_menu_buttons.clone();
-        let sel_map = self.ctx_selected.clone();
-        let map_open = self.ctx_menu_open.clone();
-
-        self.popover.connect_map(move |_| {
-            *map_open.borrow_mut() = true;
-            if let Some(idx) = *ctx_menu_idx.borrow() {
-                if let Some(res) = results_c.borrow().get(idx) {
-                    let is_app = res.app.is_some();
-                    btn_open_dir_c.set_visible(!is_app);
-                    btn_copy_path_c.set_visible(!is_app);
-                    btn_pin_c.set_visible(is_app);
-                    btn_uninstall_c.set_visible(is_app);
-
-                    if is_app {
-                        let app = res.app.as_ref().unwrap();
-                        let favs = get_favorites();
-                        let is_pinned = favs.contains(&app.filename);
-                        btn_pin_c.set_label(if is_pinned { "Unpin from dock" } else { "Pin to dock" });
-                    }
-
-                    select_ctx_button(&btns_map, Some(0));
-                    *sel_map.borrow_mut() = Some(0);
-                    btn_open_c.grab_focus();
-                }
-            }
-        });
-
-        // 1. Click Open
-        let on_activate = self.on_activate.clone();
-        let results_cc = self.results.clone();
-        let ctx_menu_idx_c = self.context_menu_index.clone();
-        let popover_c = self.popover.clone();
-        btn_open.connect_clicked(move |_| {
-            popover_c.popdown();
-            if let Some(idx) = *ctx_menu_idx_c.borrow() {
-                if let Some(res) = results_cc.borrow().get(idx) {
-                    (*on_activate)(res.clone());
-                }
-            }
-        });
-
-        // 2. Click Open Folder
-        let results_ccc = self.results.clone();
-        let ctx_menu_idx_cc = self.context_menu_index.clone();
-        let popover_cc = self.popover.clone();
-        btn_open_dir.connect_clicked(move |_| {
-            popover_cc.popdown();
-            if let Some(idx) = *ctx_menu_idx_cc.borrow() {
-                if let Some(res) = results_ccc.borrow().get(idx) {
-                    let clean_path = res.url.trim_start_matches("file://");
-                    if let Some(parent) = std::path::Path::new(clean_path).parent() {
-                        let parent_url = format!("file://{}", parent.display());
-                        open_file(&parent_url);
-                    }
-                }
-            }
-        });
-
-        // 3. Click Pin to Dock
-        let results_cccc = self.results.clone();
-        let ctx_menu_idx_ccc = self.context_menu_index.clone();
-        let popover_ccc = self.popover.clone();
-        btn_pin.connect_clicked(move |_| {
-            popover_ccc.popdown();
-            if let Some(idx) = *ctx_menu_idx_ccc.borrow() {
-                if let Some(res) = results_cccc.borrow().get(idx) {
-                    if let Some(app) = &res.app {
-                        let mut favs = get_favorites();
-                        if favs.contains(&app.filename) {
-                            favs.retain(|x| x != &app.filename);
-                        } else {
-                            favs.push(app.filename.clone());
-                        }
-                        set_favorites(&favs);
-                    }
-                }
-            }
-        });
-
-        // 4. Click Uninstall
-        let results_5 = self.results.clone();
-        let ctx_menu_idx_5 = self.context_menu_index.clone();
-        let popover_5 = self.popover.clone();
-        let on_un_start = self.on_uninstall_start.clone();
-        let on_un_done = self.on_uninstall_done.clone();
-        btn_uninstall.connect_clicked(move |_| {
-            popover_5.popdown();
-            if let Some(idx) = *ctx_menu_idx_5.borrow() {
-                if let Some(res) = results_5.borrow().get(idx) {
-                    if let Some(app) = &res.app {
-                        let desktop_id = app.filename.clone();
-                        let app_name = app.name.clone();
-                        (*on_un_start)(desktop_id.clone(), app_name.clone());
-
-                        let on_done = on_un_done.clone();
-                        let app_name_c = app_name.clone();
-
-                        let (sender, receiver) = std::sync::mpsc::channel::<(bool, String)>();
-                        gtk4::glib::timeout_add_local(std::time::Duration::from_millis(1), move || {
-                            match receiver.try_recv() {
-                                Ok((success, message)) => {
-                                    (*on_done)(success, message, app_name_c.clone());
-                                    gtk4::glib::ControlFlow::Break
-                                }
-                                Err(std::sync::mpsc::TryRecvError::Empty) => {
-                                    gtk4::glib::ControlFlow::Continue
-                                }
-                                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                                    gtk4::glib::ControlFlow::Break
-                                }
-                            }
-                        });
-
-                        std::thread::spawn(move || {
-                            let mut cmd = Command::new("pkm");
-                            cmd.args(&["--uninstall", &desktop_id]);
-                            cmd.env("APPINSTALL_SUDO", "pkexec");
-                            let output = cmd.output();
-                            let success = output.as_ref().map_or(false, |o| o.status.success());
-                            let message = output.map_or_else(
-                                |e| e.to_string(),
-                                |o| {
-                                    let merged = [o.stdout, o.stderr].concat();
-                                    String::from_utf8_lossy(&merged).into_owned()
-                                },
-                            );
-                            let _ = sender.send((success, message));
-                        });
-                    }
-                }
-            }
-        });
-
-        // 5. Click Copy Name
-        let results_6 = self.results.clone();
-        let ctx_menu_idx_6 = self.context_menu_index.clone();
-        let popover_6 = self.popover.clone();
-        btn_copy_name.connect_clicked(move |_| {
-            popover_6.popdown();
-            if let Some(idx) = *ctx_menu_idx_6.borrow() {
-                if let Some(res) = results_6.borrow().get(idx) {
-                    if let Some(display) = gdk::Display::default() {
-                        display.clipboard().set_text(&res.title);
-                    }
-                }
-            }
-        });
-
-        // 6. Click Copy Path
-        let results_7 = self.results.clone();
-        let ctx_menu_idx_7 = self.context_menu_index.clone();
-        let popover_7 = self.popover.clone();
-        btn_copy_path.connect_clicked(move |_| {
-            popover_7.popdown();
-            if let Some(idx) = *ctx_menu_idx_7.borrow() {
-                if let Some(res) = results_7.borrow().get(idx) {
-                    if let Some(display) = gdk::Display::default() {
-                        display.clipboard().set_text(&res.url);
-                    }
-                }
-            }
-        });
-    }
-
-    fn viewport_vadjustment(&self) -> Option<gtk4::Adjustment> {
-        self.stack
-            .ancestor(gtk4::ScrolledWindow::static_type())
-            .and_then(|w| w.downcast::<gtk4::ScrolledWindow>().ok())
-            .map(|sw| sw.vadjustment())
-    }
-
-    fn ensure_visible<W: IsA<gtk4::Widget>>(&self, widget: &W) {
-        let Some(adj) = self.viewport_vadjustment() else {
-            return;
-        };
-        let alloc = widget.allocation();
-        let top = alloc.y() as f64;
-        let bottom = top + alloc.height() as f64;
-        let value = adj.value();
-        let page = adj.page_size();
-        if top < value {
-            adj.set_value(top);
-        } else if bottom > value + page {
-            adj.set_value(bottom - page);
-        }
-    }
-
-    pub fn move_selection_up(&self) {
-        // Bind first: an `if let ... = *refcell.borrow()` scrutinee keeps the
-        // borrow alive across the whole block, and select_child/select_row
-        // emit signals whose handlers borrow again
-        let current = *self.selected_index.borrow();
-        if self.stack.visible_child_name().as_deref() == Some("list") {
-            if let Some(idx) = current {
-                if idx > 0 {
-                    if let Some(row) = self.list_box.row_at_index((idx - 1) as i32) {
-                        self.list_box.select_row(Some(&row));
-                        self.ensure_visible(&row);
-                    }
-                }
-            }
-        } else if let Some(idx) = current {
-            if idx >= 5 {
-                if let Some(child) = self.grid.child_at_index((idx - 5) as i32) {
-                    self.grid.select_child(&child);
-                    self.ensure_visible(&child);
-                }
-            }
-        }
-    }
-
-    pub fn move_selection_down(&self) {
-        let max_len = self.results.borrow().len();
-        let current = *self.selected_index.borrow();
-        if self.stack.visible_child_name().as_deref() == Some("list") {
-            let idx = current.unwrap_or(0);
-            if idx + 1 < max_len {
-                if let Some(row) = self.list_box.row_at_index((idx + 1) as i32) {
-                    self.list_box.select_row(Some(&row));
-                    self.ensure_visible(&row);
-                }
-            }
-        } else if let Some(idx) = current {
-            let next_idx = idx + 5;
-            if next_idx < max_len {
-                if let Some(child) = self.grid.child_at_index(next_idx as i32) {
-                    self.grid.select_child(&child);
-                    self.ensure_visible(&child);
-                }
-            }
-        }
-    }
-
-    pub fn move_selection_left(&self) {
-        if self.stack.visible_child_name().as_deref() == Some("grid") {
-            let current = *self.selected_index.borrow();
-            if let Some(idx) = current {
-                if idx > 0 {
-                    if let Some(child) = self.grid.child_at_index((idx - 1) as i32) {
-                        self.grid.select_child(&child);
-                        self.ensure_visible(&child);
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn move_selection_right(&self) {
-        if self.stack.visible_child_name().as_deref() == Some("grid") {
-            let max_len = self.results.borrow().len();
-            let current = *self.selected_index.borrow();
-            if let Some(idx) = current {
-                if idx + 1 < max_len {
-                    if let Some(child) = self.grid.child_at_index((idx + 1) as i32) {
-                        self.grid.select_child(&child);
-                        self.ensure_visible(&child);
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn show_context_menu_for_selected(&self) {
-        let idx = match *self.selected_index.borrow() {
-            Some(i) => i,
-            None => return,
-        };
-        if self.results.borrow().get(idx).is_none() {
-            return;
-        }
-
-        *self.context_menu_index.borrow_mut() = Some(idx);
-        *self.ctx_menu_open.borrow_mut() = true;
-
-        let is_list = self.stack.visible_child_name().as_deref() == Some("list");
-
-        if is_list {
-            if let Some(row) = self.list_box.row_at_index(idx as i32) {
-                if self.popover.parent().as_ref() != Some(row.upcast_ref()) {
-                    self.popover.set_parent(&row);
-                }
-                let alloc = row.allocation();
-                let rect = gdk::Rectangle::new(
-                    alloc.width() / 2,
-                    alloc.height() / 2,
-                    1,
-                    1,
-                );
-                self.popover.set_pointing_to(Some(&rect));
-                self.popover.popup();
-            }
-        } else if let Some(child) = self.grid.child_at_index(idx as i32) {
-            if self.popover.parent().as_ref() != Some(child.upcast_ref()) {
-                self.popover.set_parent(&child);
-            }
-            let alloc = child.allocation();
-            let rect = gdk::Rectangle::new(
-                alloc.width() / 2,
-                alloc.height() / 2,
-                1,
-                1,
-            );
-            self.popover.set_pointing_to(Some(&rect));
-            self.popover.popup();
-        }
-    }
-
-    pub fn activate_selected(&self) -> bool {
-        // Clone the result and drop the borrows before invoking the
-        // callback: activation may re-enter set_results()
-        let res = {
-            let results = self.results.borrow();
-            (*self.selected_index.borrow())
-                .and_then(|idx| results.get(idx).cloned())
-        };
-        if let Some(res) = res {
-            (*self.on_activate)(res);
-            return true;
-        }
-        false
     }
 }
 
@@ -1288,7 +854,7 @@ impl ResultView {
 //          pero las versiones nuevas de dconf (p.ej. la de Arch) eliminaron esos
 //          métodos y el pin/unpin no hacía nada. Usar `gsettings` funciona en
 //          cualquier GNOME/dconf.
-fn get_favorites() -> Vec<String> {
+pub fn get_favorites() -> Vec<String> {
     let out = match std::process::Command::new("gsettings")
         .args(["get", "org.gnome.shell", "favorite-apps"])
         .output()
@@ -1324,7 +890,7 @@ fn get_favorites() -> Vec<String> {
     list
 }
 
-fn set_favorites(favs: &[String]) {
+pub fn set_favorites(favs: &[String]) {
     let formatted = format!("[{}]", favs.iter().map(|s| format!("'{}'", s)).collect::<Vec<_>>().join(", "));
 
     let _ = std::process::Command::new("gsettings")
