@@ -655,7 +655,7 @@ impl ResultView {
             acc.append(&l);
         }
         let kl = kind_label(r);
-        if !kl.is_empty() {
+        if !kl.is_empty() && !matches!(row.kind, RowKind::App | RowKind::Command) {
             let l = gtk4::Label::new(Some(kl));
             l.add_css_class("result-kind");
             acc.append(&l);

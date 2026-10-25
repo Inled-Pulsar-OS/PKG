@@ -788,8 +788,12 @@ impl SpotlightWindow {
 
         // Window focus out -> hide
         let s = self.clone();
+        let keep_open = std::env::args().any(|a| a == "--keep-open");
         let focus_ctrl = gtk4::EventControllerFocus::new();
         focus_ctrl.connect_leave(move |_| {
+            if keep_open || !s.config.borrow().hide_on_focus_loss {
+                return;
+            }
             let s = s.clone();
             glib::timeout_add_local(Duration::from_millis(100), move || {
                 if s.window.is_visible() && !s.window.is_active() {
@@ -965,6 +969,9 @@ impl SpotlightWindow {
                             r.calc = calc.clone();
                         }
                     }
+                }
+                if calc.is_some() {
+                    secs.retain(|(t, _)| t != "Search the web");
                 }
                 if category == "actions" {
                     for (_, rows) in secs.iter_mut() {

@@ -136,7 +136,7 @@ fn main() -> gtk4::glib::ExitCode {
     });
 
     let clean_args: Vec<String> = std::env::args()
-        .filter(|arg| arg != "--hidden")
+        .filter(|arg| arg != "--hidden" && arg != "--keep-open")
         .collect();
 
     app.run_with_args(&clean_args)

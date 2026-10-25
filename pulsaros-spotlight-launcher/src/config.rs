@@ -12,6 +12,9 @@ pub struct SpotlightConfig {
     /// Fetch daily currency rates for the calculator (cache is still read when false).
     #[serde(default = "default_true")]
     pub currency_rates: bool,
+    /// Hide the launcher when it loses focus (`--keep-open` overrides at runtime).
+    #[serde(default = "default_true")]
+    pub hide_on_focus_loss: bool,
 }
 
 fn default_zoom() -> f64 {
@@ -30,6 +33,7 @@ impl Default for SpotlightConfig {
             clipboard_auto_paste: true,
             zoom: 1.0,
             currency_rates: true,
+            hide_on_focus_loss: true,
         }
     }
 }
