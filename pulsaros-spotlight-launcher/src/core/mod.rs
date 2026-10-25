@@ -25,14 +25,20 @@
 //!   (30s timeout via `run_with`, 1 MiB cap, `SystemRunner`; fake `Runner` in tests).
 //! - `quicklinks::Quicklinks`: `load/save(&Store)`, `add(alias,name,url)` (rejects duplicates), `remove`,
 //!   `resolve(input)->Option<Resolved{title,url}>` / `resolve_with_clipboard`, `open_argv(url)` = `xdg-open url`.
+//! - `snippets::{Snippets, render, Env}`: snippet CRUD/search (`db/snippets.json`) and the placeholder
+//!   engine (`{clipboard} {date[:fmt]} {time} {datetime} {uuid} {cursor} {argument name=".."}`); see module doc.
+//! - `emoji::{search, record_use, all}`: embedded `data/emoji.tsv` (made by `scripts/gen-emoji.py`),
+//!   ranked search, recents first on empty query, skin tones folded as `Emoji::variants`.
 #![allow(dead_code)]
 
 pub mod commands;
+pub mod emoji;
 pub mod frecency;
 pub mod quicklinks;
 pub mod ranker;
 pub mod root_search;
 pub mod script_commands;
 pub mod settings;
+pub mod snippets;
 pub mod shortcuts;
 pub mod store;
