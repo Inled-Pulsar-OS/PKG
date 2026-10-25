@@ -1,12 +1,18 @@
-use crate::config::SpotlightConfig;
-use crate::search::{SearchBackend, SearchResult, DEFAULT_LIMIT};
 use crate::clipboard::ClipboardManager;
-use crate::ui::results::ResultView;
+use crate::config::SpotlightConfig;
+use crate::core::commands::{self, Command};
+use crate::core::frecency::Frecency;
+use crate::core::root_search::{AppEntry, Ctx, Row, RowKind, RootSearch};
+use crate::core::settings::Settings;
+use crate::core::shortcuts::{self, Act, Mods};
+use crate::core::store::Store;
+use crate::search::{SearchBackend, SearchResult, DEFAULT_LIMIT};
+use crate::ui::results::{get_favorites, set_favorites, ResultView, RowData};
 use crate::utils::{get_icon_dir, get_local_icon_dir, open_file};
 use gtk4::gdk;
 use gtk4::glib;
 use gtk4::prelude::*;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -19,46 +25,206 @@ const CATEGORIES: &[(&str, &str)] = &[
     ("images", "Images"),
     ("audio", "Music"),
     ("video", "Video"),
-    ("clipboard", "Clip"),
+    ("clipboard", "Clipboard"),
     ("web", "Web"),
 ];
 
 const DEBOUNCE_MS: u64 = 80;
+const PLACEHOLDER: &str = "Search for apps and commands\u{2026}";
+const BASE_W: i32 = 750;
+const BASE_H: i32 = 480;
+const ZOOM_MIN: f64 = 0.8;
+const ZOOM_MAX: f64 = 1.6;
+
+type SectionList = Vec<(String, Vec<RowData>)>;
+
+/// One entry of the Ctrl+K panel.
+#[derive(Clone, Debug)]
+struct UiAction {
+    id: String,
+    title: String,
+    keys: Vec<String>,
+    danger: bool,
+    argv: Option<Vec<String>>,
+}
+
+struct Panel {
+    root: gtk4::Box,
+    list: gtk4::ListBox,
+    entry: gtk4::Entry,
+    all: RefCell<Vec<UiAction>>,
+    shown: RefCell<Vec<UiAction>>,
+    target: RefCell<Option<RowData>>,
+}
+
+struct Dialog {
+    root: gtk4::Box,
+    title: gtk4::Label,
+    body: gtk4::Label,
+    entry: gtk4::Entry,
+    ok: gtk4::Button,
+    on_ok: RefCell<Option<Box<dyn Fn(String)>>>,
+}
 
 pub struct SpotlightWindow {
     window: gtk4::ApplicationWindow,
     search_entry: gtk4::Entry,
-    view_toggle: gtk4::Button,
+    category_chip: gtk4::Label,
     result_view: Rc<ResultView>,
     config: Rc<RefCell<SpotlightConfig>>,
     backend: SearchBackend,
-    category: Rc<RefCell<String>>,
+    category: RefCell<String>,
     current_dir: Rc<RefCell<Option<String>>>,
     debounce_id: Rc<RefCell<Option<glib::SourceId>>>,
-    search_seq: Rc<RefCell<u64>>,
-    last_typed: Rc<RefCell<Option<std::time::Instant>>>,
-    category_buttons: HashMap<String, gtk4::ToggleButton>,
+    search_seq: Rc<Cell<u64>>,
+    history_mode: Cell<bool>,
+
+    // core state
+    store: Store,
+    settings: RefCell<Settings>,
+    frecency: RefCell<Frecency>,
+    commands: Vec<Command>,
+    states: RefCell<HashMap<String, bool>>,
+    last_probe: Cell<Option<std::time::Instant>>,
+    current: RefCell<SectionList>,
+
+    // ui pieces
+    panel: Panel,
+    dialog: Dialog,
+    loading_bar: gtk4::ProgressBar,
+    loading_count: Cell<u32>,
+    loading_timer: RefCell<Option<glib::SourceId>>,
+    footer_status: gtk4::Label,
+    toast_undo: gtk4::Button,
+    toast_cb: RefCell<Option<Rc<dyn Fn()>>>,
+    toast_timer: RefCell<Option<glib::SourceId>>,
+    zoom_provider: gtk4::CssProvider,
 
     indexing_revealer: gtk4::Revealer,
     indexing_label: gtk4::Label,
     indexing_pbar: gtk4::ProgressBar,
     indexing_timer_id: Rc<RefCell<Option<glib::SourceId>>>,
 
-    #[allow(dead_code)]
     progress_revealer: gtk4::Revealer,
-    #[allow(dead_code)]
     progress_spinner: gtk4::Spinner,
-    #[allow(dead_code)]
     progress_label: gtk4::Label,
 }
 
 fn pulsar_liquid_glass_enabled() -> bool {
+    let Some(src) = gtk4::gio::SettingsSchemaSource::default() else { return false };
+    if src.lookup("org.gnome.shell", true).is_none() {
+        return false;
+    }
     let settings = gtk4::gio::Settings::new("org.gnome.shell");
-
     settings
         .strv("enabled-extensions")
         .iter()
         .any(|uuid| uuid.as_str() == "liquid-glass@thinkingcoding1231.gmail.com")
+}
+
+fn now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+fn keycap(text: &str) -> gtk4::Label {
+    let l = gtk4::Label::new(Some(text));
+    l.add_css_class("keycap");
+    l
+}
+
+fn keycap_row(keys: &[String]) -> gtk4::Box {
+    let b = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
+    for k in keys {
+        b.append(&keycap(k));
+    }
+    b
+}
+
+/// Title of the primary action for the footer / panel.
+fn primary_title(r: &RowData) -> String {
+    match r.row.kind {
+        RowKind::App => "Open Application".into(),
+        RowKind::Command => "Run".into(),
+        RowKind::Clipboard => "Paste".into(),
+        RowKind::Calc => "Copy Result".into(),
+        RowKind::File => match &r.payload {
+            Some(p) if p.mime == "inode/directory" || p.mime == "folder" => "Open Folder".into(),
+            Some(p) if p.url.starts_with("http") => "Open in Browser".into(),
+            _ => "Open".into(),
+        },
+        RowKind::Fallback => {
+            if r.row.id.starts_with("history:") {
+                "Search Again".into()
+            } else {
+                r.row.actions.first().map(|a| a.title.clone()).unwrap_or_else(|| "Open".into())
+            }
+        }
+    }
+}
+
+fn row_from_result(res: &SearchResult) -> RowData {
+    let (kind, id, icon) = if let Some(v) = res.url.strip_prefix("calc://") {
+        (RowKind::Calc, format!("calc:{v}"), "accessories-calculator-symbolic")
+    } else if res.url.starts_with("clipboard://") {
+        (RowKind::Clipboard, res.url.clone(), "edit-paste-symbolic")
+    } else {
+        (RowKind::File, res.url.clone(), "text-x-generic")
+    };
+    let mut sub = res.snippet.clone();
+    if sub.is_empty() {
+        sub = res.url.trim_start_matches("file://").to_string();
+    }
+    RowData { row: Row::simple(kind, &id, &res.title, &sub, icon), payload: Some(res.clone()) }
+}
+
+fn app_entry(a: &crate::apps::DesktopApp) -> AppEntry {
+    AppEntry {
+        id: format!("app:{}", a.filename),
+        name: a.name.clone(),
+        comment: a.comment.clone(),
+        icon: a.icon.clone(),
+        keywords: a.keywords.split(';').filter(|k| !k.is_empty()).map(String::from).collect(),
+    }
+}
+
+fn clean_uninstall_message(message: &str, app_name: &str) -> String {
+    let mut clean = message.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect::<Vec<_>>().join(" ");
+    if clean.to_lowercase().contains("dependencias") || clean.to_lowercase().contains("dependencies") {
+        clean = format!("Cannot remove {}: required by other system packages", app_name);
+    } else if let Some(err_part) = clean.split("error:").nth(1) {
+        clean = err_part.trim().to_string();
+    }
+    clean
+}
+
+fn zoom_css(z: f64) -> String {
+    let p = |v: f64| (v * z).round();
+    format!(
+        "window.spotlight-window .spotlight-main {{ font-size: {}px; }}
+         window.spotlight-window entry, window.spotlight-window entry > text {{ font-size: {}px; }}
+         window.spotlight-window .result-row {{ min-height: {}px; }}
+         window.spotlight-window .result-title {{ font-size: {}px; }}
+         window.spotlight-window .result-subtitle, window.spotlight-window .result-kind {{ font-size: {}px; }}
+         window.spotlight-window .section-header {{ font-size: {}px; }}
+         window.spotlight-window .icon-tile {{ min-width: {}px; min-height: {}px; }}
+         window.spotlight-window .result-icon {{ -gtk-icon-size: {}px; }}
+         window.spotlight-window .search-header {{ min-height: {}px; }}
+         window.spotlight-window .footer-bar {{ min-height: {}px; }}",
+        p(13.0),
+        p(18.0),
+        p(40.0),
+        p(13.0),
+        p(12.0),
+        p(11.0),
+        p(28.0),
+        p(28.0),
+        p(26.0),
+        p(56.0),
+        p(40.0)
+    )
 }
 
 impl SpotlightWindow {
@@ -68,51 +234,50 @@ impl SpotlightWindow {
         backend: SearchBackend,
         clipboard_mgr: Option<ClipboardManager>,
     ) -> Rc<Self> {
+        let _ = clipboard_mgr; // the backend already owns the clipboard manager
+        let zoom = config.zoom.clamp(ZOOM_MIN, ZOOM_MAX);
         let config_rc = Rc::new(RefCell::new(config));
 
         let window = gtk4::ApplicationWindow::builder()
             .application(app)
             .title("Spotlight")
-            .default_width(680)
-            .default_height(520)
+            .default_width(BASE_W)
+            .default_height(BASE_H)
             .resizable(false)
             .decorated(false)
             .build();
-
-        window.set_size_request(680, 520);
+        window.set_size_request((BASE_W as f64 * zoom) as i32, (BASE_H as f64 * zoom) as i32);
         window.add_css_class("spotlight-window");
 
         if pulsar_liquid_glass_enabled() {
             window.add_css_class("liquid-glass");
         }
 
+        // Follow the libadwaita color scheme live (colors and accent come from
+        // libadwaita named colors; these classes only tune alpha values).
         let style_manager = adw::StyleManager::default();
-        let window_c = window.clone();
-        style_manager.connect_notify_local(Some("dark"), move |sm, _| {
-            let dark = sm.is_dark();
-            if dark {
-                window_c.remove_css_class("light");
-                window_c.add_css_class("dark");
-            } else {
-                window_c.remove_css_class("dark");
-                window_c.add_css_class("light");
+        let apply_scheme = {
+            let window = window.clone();
+            move |dark: bool| {
+                window.remove_css_class(if dark { "light" } else { "dark" });
+                window.add_css_class(if dark { "dark" } else { "light" });
             }
-        });
+        };
+        apply_scheme(style_manager.is_dark());
+        style_manager.connect_notify_local(Some("dark"), move |sm, _| apply_scheme(sm.is_dark()));
 
-        // Initialize theme class
-        if style_manager.is_dark() {
-            window.add_css_class("dark");
-        } else {
-            window.add_css_class("light");
+        let zoom_provider = gtk4::CssProvider::new();
+        zoom_provider.load_from_data(&zoom_css(zoom));
+        if let Some(display) = gdk::Display::default() {
+            gtk4::style_context_add_provider_for_display(&display, &zoom_provider, 1001);
         }
 
         let main_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        main_box.set_size_request(680, 520);
         main_box.add_css_class("spotlight-main");
         window.set_child(Some(&main_box));
 
-        // -- Search Header --
-        let search_container = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
+        // -- Search header --
+        let search_container = gtk4::Box::new(gtk4::Orientation::Horizontal, 10);
         search_container.add_css_class("search-header");
 
         let search_icon = {
@@ -129,229 +294,225 @@ impl SpotlightWindow {
         search_icon.add_css_class("search-icon");
 
         let search_entry = gtk4::Entry::builder()
-            .placeholder_text("Spotlight Search")
+            .placeholder_text(PLACEHOLDER)
             .hexpand(true)
             .has_frame(false)
+            .valign(gtk4::Align::Center)
             .build();
         search_entry.add_css_class("search-input");
 
-        let view_toggle = gtk4::Button::new();
-        view_toggle.add_css_class("view-toggle");
-        let is_grid = config_rc.borrow().is_grid_view;
-        view_toggle.set_icon_name(if is_grid { "view-list-symbolic" } else { "view-grid-symbolic" });
+        let category_chip = gtk4::Label::new(Some("All"));
+        category_chip.add_css_class("category-chip");
+        category_chip.set_valign(gtk4::Align::Center);
+        category_chip.set_tooltip_text(Some("Tab: change filter"));
 
         search_container.append(&search_icon);
         search_container.append(&search_entry);
-        search_container.append(&view_toggle);
+        search_container.append(&category_chip);
         main_box.append(&search_container);
 
-        // -- Category Bar --
-        let category_bar = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-        category_bar.add_css_class("category-bar");
-        let mut category_buttons = HashMap::new();
-        let current_category = Rc::new(RefCell::new("all".to_string()));
+        // -- Loading bar --
+        let loading_bar = gtk4::ProgressBar::new();
+        loading_bar.add_css_class("loading-bar");
+        loading_bar.set_opacity(0.0);
+        main_box.append(&loading_bar);
 
-        for &(cat_id, cat_label) in CATEGORIES {
-            let btn = gtk4::ToggleButton::builder()
-                .label(cat_label)
-                .active(cat_id == "all")
-                .build();
-            btn.add_css_class("category-btn");
-            category_bar.append(&btn);
-            category_buttons.insert(cat_id.to_string(), btn);
-        }
+        // -- Footer (built first: the result view's selection hook updates it) --
+        let footer = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+        footer.add_css_class("footer-bar");
+        let footer_icon = gtk4::Image::from_icon_name("system-search-symbolic");
+        footer_icon.add_css_class("footer-app-icon");
+        let footer_status = gtk4::Label::builder().label("Spotlight").xalign(0.0).build();
+        footer_status.add_css_class("footer-status");
+        footer_status.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+        let toast_undo = gtk4::Button::with_label("Undo");
+        toast_undo.add_css_class("toast-undo");
+        toast_undo.set_visible(false);
+        toast_undo.set_focusable(false);
+        let footer_primary = gtk4::Label::new(None);
+        footer_primary.add_css_class("footer-label");
+        let spacer = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+        spacer.set_hexpand(true);
+        let sep = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+        sep.add_css_class("footer-sep");
+        let actions_label = gtk4::Label::new(Some("Actions"));
+        actions_label.add_css_class("footer-label");
+        let primary_keys = keycap_row(&shortcuts::label(Act::Run(0)));
+        let panel_keys = keycap_row(&shortcuts::label(Act::ActionPanel));
+        footer.append(&footer_icon);
+        footer.append(&footer_status);
+        footer.append(&toast_undo);
+        footer.append(&spacer);
+        footer.append(&footer_primary);
+        footer.append(&primary_keys);
+        footer.append(&sep);
+        footer.append(&actions_label);
+        footer.append(&panel_keys);
 
-        let category_scroll = gtk4::ScrolledWindow::builder()
-            .hscrollbar_policy(gtk4::PolicyType::Automatic)
-            .vscrollbar_policy(gtk4::PolicyType::Never)
-            .propagate_natural_width(false)
-            .propagate_natural_height(false)
-            .hexpand(true)
-            .build();
-        category_scroll.add_css_class("category-scroll");
-        category_scroll.set_child(Some(&category_bar));
-        main_box.append(&category_scroll);
-
-        // -- Uninstall Progress Bar --
+        // -- Uninstall progress banner --
         let progress_revealer = gtk4::Revealer::builder()
             .transition_type(gtk4::RevealerTransitionType::SlideDown)
             .transition_duration(200)
             .reveal_child(false)
             .build();
-
         let progress_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 10);
         progress_box.add_css_class("uninstall-progress");
-
         let progress_spinner = gtk4::Spinner::new();
         let progress_label = gtk4::Label::builder()
             .hexpand(true)
             .xalign(0.0)
             .ellipsize(gtk4::pango::EllipsizeMode::End)
-            .max_width_chars(65)
             .build();
-
         progress_box.append(&progress_spinner);
         progress_box.append(&progress_label);
         progress_revealer.set_child(Some(&progress_box));
 
-        // -- Indexing Progress Bar --
+        // -- Indexing banner --
         let indexing_revealer = gtk4::Revealer::builder()
             .transition_type(gtk4::RevealerTransitionType::SlideDown)
             .transition_duration(200)
             .reveal_child(false)
             .build();
-
         let indexing_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
         indexing_box.add_css_class("indexing-status-bar");
-        indexing_box.set_margin_start(16);
-        indexing_box.set_margin_end(16);
-        indexing_box.set_margin_top(4);
-        indexing_box.set_margin_bottom(6);
-
         let indexing_spinner = gtk4::Spinner::new();
         indexing_spinner.start();
-
         let indexing_label = gtk4::Label::builder()
             .label("Indexing files in background...")
             .xalign(0.0)
             .hexpand(true)
             .build();
-        indexing_label.add_css_class("dim-label");
-
         let indexing_pbar = gtk4::ProgressBar::builder()
             .valign(gtk4::Align::Center)
             .width_request(100)
             .height_request(4)
             .build();
-
         indexing_box.append(&indexing_spinner);
         indexing_box.append(&indexing_label);
         indexing_box.append(&indexing_pbar);
         indexing_revealer.set_child(Some(&indexing_box));
 
-        // -- Result View Setup --
-        let current_dir = Rc::new(RefCell::new(None));
-        let current_dir_c = current_dir.clone();
-        let search_entry_c = search_entry.clone();
-        let clipboard_mgr_c = clipboard_mgr.clone();
-        let window_cc = window.clone();
+        // -- Action panel --
+        let panel_root = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+        panel_root.add_css_class("action-panel");
+        panel_root.set_halign(gtk4::Align::End);
+        panel_root.set_valign(gtk4::Align::End);
+        panel_root.set_visible(false);
+        let panel_list = gtk4::ListBox::builder().selection_mode(gtk4::SelectionMode::Single).build();
+        panel_list.add_css_class("action-list");
+        let filter_wrap = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+        filter_wrap.add_css_class("action-filter-wrap");
+        let panel_entry = gtk4::Entry::builder()
+            .placeholder_text("Search for actions\u{2026}")
+            .hexpand(true)
+            .has_frame(false)
+            .build();
+        panel_entry.add_css_class("action-filter");
+        filter_wrap.append(&panel_entry);
+        panel_root.append(&panel_list);
+        panel_root.append(&filter_wrap);
 
-        let on_activate = move |res: SearchResult| {
-            if res.url.starts_with("calc://") {
-                let val = res.url.trim_start_matches("calc://");
-                if let Some(display) = gdk::Display::default() {
-                    display.clipboard().set_text(val);
-                }
-                window_cc.set_visible(false);
-                return;
-            }
+        // -- Dialog card (confirm / alias editor) --
+        let dialog_root = gtk4::Box::new(gtk4::Orientation::Vertical, 10);
+        dialog_root.add_css_class("dialog-card");
+        dialog_root.set_halign(gtk4::Align::Center);
+        dialog_root.set_valign(gtk4::Align::Center);
+        dialog_root.set_visible(false);
+        let dialog_title = gtk4::Label::builder().xalign(0.0).wrap(true).build();
+        dialog_title.add_css_class("dialog-title");
+        let dialog_body = gtk4::Label::builder().xalign(0.0).wrap(true).build();
+        dialog_body.add_css_class("dialog-body");
+        let dialog_entry = gtk4::Entry::new();
+        let dialog_buttons = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+        dialog_buttons.set_halign(gtk4::Align::End);
+        let dialog_cancel = gtk4::Button::with_label("Cancel");
+        let dialog_ok = gtk4::Button::with_label("OK");
+        dialog_buttons.append(&dialog_cancel);
+        dialog_buttons.append(&dialog_ok);
+        dialog_root.append(&dialog_title);
+        dialog_root.append(&dialog_body);
+        dialog_root.append(&dialog_entry);
+        dialog_root.append(&dialog_buttons);
 
-            if res.url.starts_with("clipboard://") {
-                if let Some(mgr) = &clipboard_mgr_c {
-                    if let Some(idx_str) = res.url.split("://").nth(1) {
-                        if let Ok(idx) = idx_str.parse::<usize>() {
-                            if let Some(text) = mgr.get_clip_by_index(idx) {
-                                window_cc.set_visible(false);
-                                mgr.paste_clip(&text);
-                                return;
-                            }
-                        }
-                    }
-                }
-                window_cc.set_visible(false);
-                return;
-            }
-
-            let clean_path = res.url.trim_start_matches("file://");
-            if std::path::Path::new(clean_path).is_dir() && (res.mime == "inode/directory" || res.mime == "folder") {
-                *current_dir_c.borrow_mut() = Some(clean_path.to_string());
-                search_entry_c.set_text("");
-                search_entry_c.set_placeholder_text(Some(&format!("Browsing: {}", clean_path)));
-                // set_text only emits 'changed' when the text differs; emit it
-                // manually so browsing always refreshes even with an empty entry
-                search_entry_c.emit_by_name::<()>("changed", &[]);
-                return;
-            }
-
-            open_file(&res.url);
-            window_cc.set_visible(false);
-        };
-
-        let progress_spinner_c = progress_spinner.clone();
-        let progress_label_c = progress_label.clone();
-        let progress_revealer_c = progress_revealer.clone();
-        let on_un_start = move |_: String, app_name: String| {
-            progress_label_c.set_label(&format!("Uninstalling {}...", app_name));
-            progress_spinner_c.start();
-            progress_revealer_c.set_reveal_child(true);
-        };
-
-        let progress_spinner_cc = progress_spinner.clone();
-        let progress_label_cc = progress_label.clone();
-        let progress_revealer_cc = progress_revealer.clone();
-        let on_un_done = move |success: bool, message: String, app_name: String| {
-            progress_spinner_cc.stop();
-            if success {
-                progress_label_cc.set_label(&format!("✓ {} uninstalled successfully", app_name));
-                let pr_rev = progress_revealer_cc.clone();
-                glib::timeout_add_local(Duration::from_millis(1800), move || {
-                    pr_rev.set_reveal_child(false);
-                    glib::ControlFlow::Break
-                });
-            } else {
-                let mut clean_msg = message.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect::<Vec<_>>().join(" ");
-                if clean_msg.to_lowercase().contains("dependencias") || clean_msg.to_lowercase().contains("dependencies") {
-                    clean_msg = format!("Cannot remove {}: required by other system packages", app_name);
-                } else if let Some(err_part) = clean_msg.split("error:").nth(1) {
-                    clean_msg = err_part.trim().to_string();
-                }
-                progress_label_cc.set_label(&format!("✗ {}", clean_msg));
-                progress_label_cc.set_tooltip_text(Some(&message));
-                let pr_rev = progress_revealer_cc.clone();
-                glib::timeout_add_local(Duration::from_millis(4000), move || {
-                    pr_rev.set_reveal_child(false);
-                    glib::ControlFlow::Break
-                });
-            }
-        };
-
+        // -- Result view (selection hook updates the footer's primary action) --
+        let fp = footer_primary.clone();
+        let result_view_cell: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
+        let activate_cell = result_view_cell.clone();
+        let context_cell: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
+        let context_cell_c = context_cell.clone();
         let result_view = Rc::new(ResultView::new(
-            on_activate,
-            on_un_start,
-            on_un_done,
+            move || {
+                let cb = activate_cell.borrow().clone();
+                if let Some(cb) = cb {
+                    cb();
+                }
+            },
+            move || {
+                let cb = context_cell_c.borrow().clone();
+                if let Some(cb) = cb {
+                    cb();
+                }
+            },
+            move |row| fp.set_label(&row.map(|r| primary_title(&r)).unwrap_or_default()),
         ));
 
-        let scroll = gtk4::ScrolledWindow::builder()
-            .hscrollbar_policy(gtk4::PolicyType::Never)
-            .vscrollbar_policy(gtk4::PolicyType::Automatic)
-            .propagate_natural_width(false)
-            .propagate_natural_height(false)
-            .vexpand(true)
-            .min_content_height(300)
-            .max_content_height(480)
-            .build();
-        scroll.add_css_class("results-area");
-        scroll.set_child(Some(result_view.widget()));
-        main_box.append(&scroll);
-
+        let overlay = gtk4::Overlay::new();
+        overlay.set_vexpand(true);
+        overlay.set_child(Some(result_view.widget()));
+        overlay.add_overlay(&panel_root);
+        overlay.add_overlay(&dialog_root);
+        main_box.append(&overlay);
         main_box.append(&progress_revealer);
         main_box.append(&indexing_revealer);
+        main_box.append(&footer);
 
-        result_view.set_popover_parent(&window);
+        let store = Store::new(Store::default_dir());
+        let settings = Settings::load(&store);
+        let frecency = Frecency::load(&store);
 
         let spotlight = Rc::new(Self {
             window,
             search_entry,
-            view_toggle,
+            category_chip,
             result_view,
             config: config_rc,
             backend,
-            category: current_category,
-            current_dir,
+            category: RefCell::new("all".to_string()),
+            current_dir: Rc::new(RefCell::new(None)),
             debounce_id: Rc::new(RefCell::new(None)),
-            search_seq: Rc::new(RefCell::new(0)),
-            last_typed: Rc::new(RefCell::new(None)),
-            category_buttons,
+            search_seq: Rc::new(Cell::new(0)),
+            history_mode: Cell::new(false),
+            store,
+            settings: RefCell::new(settings),
+            frecency: RefCell::new(frecency),
+            commands: commands::builtin(),
+            states: RefCell::new(HashMap::new()),
+            last_probe: Cell::new(None),
+            current: RefCell::new(Vec::new()),
+            panel: Panel {
+                root: panel_root,
+                list: panel_list,
+                entry: panel_entry,
+                all: RefCell::new(Vec::new()),
+                shown: RefCell::new(Vec::new()),
+                target: RefCell::new(None),
+            },
+            dialog: Dialog {
+                root: dialog_root,
+                title: dialog_title,
+                body: dialog_body,
+                entry: dialog_entry,
+                ok: dialog_ok.clone(),
+                on_ok: RefCell::new(None),
+            },
+            loading_bar,
+            loading_count: Cell::new(0),
+            loading_timer: RefCell::new(None),
+            footer_status,
+            toast_undo,
+            toast_cb: RefCell::new(None),
+            toast_timer: RefCell::new(None),
+            zoom_provider,
             indexing_revealer,
             indexing_label,
             indexing_pbar,
@@ -361,8 +522,29 @@ impl SpotlightWindow {
             progress_label,
         });
 
-        spotlight.setup_ui_interactions();
+        // Late-bound callbacks that need the Rc<Self>.
+        let s = spotlight.clone();
+        *result_view_cell.borrow_mut() = Some(Rc::new(move || s.run_action_index(0)));
+        let s = spotlight.clone();
+        *context_cell.borrow_mut() = Some(Rc::new(move || s.open_panel()));
 
+        let s = spotlight.clone();
+        dialog_cancel.connect_clicked(move |_| s.close_dialog());
+        let s = spotlight.clone();
+        dialog_ok.connect_clicked(move |_| s.accept_dialog());
+        let s = spotlight.clone();
+        spotlight.dialog.entry.connect_activate(move |_| s.accept_dialog());
+        let s = spotlight.clone();
+        spotlight.toast_undo.connect_clicked(move |_| {
+            let cb = s.toast_cb.borrow_mut().take();
+            if let Some(cb) = cb {
+                cb();
+            }
+            s.reset_toast();
+        });
+
+        spotlight.setup_panel_events();
+        spotlight.setup_ui_interactions();
         spotlight
     }
 
@@ -374,15 +556,120 @@ impl SpotlightWindow {
             self.window.remove_css_class("liquid-glass");
         }
 
-        *self.current_dir.borrow_mut() = None;
-        self.search_entry.set_placeholder_text(Some("Search applications, files, or clipboard..."));
-        self.search_entry.set_text("");
-        self.do_search();
-
+        self.reset_to_root();
         self.window.present();
         self.search_entry.grab_focus();
         self.start_indexing_timer();
+        self.refresh_states();
     }
+
+    fn reset_to_root(self: &Rc<Self>) {
+        self.close_panel();
+        self.close_dialog();
+        *self.current_dir.borrow_mut() = None;
+        self.history_mode.set(false);
+        *self.category.borrow_mut() = "all".to_string();
+        self.category_chip.set_label("All");
+        self.search_entry.set_placeholder_text(Some(PLACEHOLDER));
+        self.search_entry.set_text("");
+        self.do_search(false);
+    }
+
+    // ---- loading bar / toast -------------------------------------------------
+
+    fn loading_begin(self: &Rc<Self>) {
+        let n = self.loading_count.get() + 1;
+        self.loading_count.set(n);
+        if n == 1 {
+            self.loading_bar.set_opacity(1.0);
+            let bar = self.loading_bar.clone();
+            let id = glib::timeout_add_local(Duration::from_millis(50), move || {
+                bar.pulse();
+                glib::ControlFlow::Continue
+            });
+            *self.loading_timer.borrow_mut() = Some(id);
+        }
+    }
+
+    fn loading_end(&self) {
+        let n = self.loading_count.get().saturating_sub(1);
+        self.loading_count.set(n);
+        if n == 0 {
+            if let Some(id) = self.loading_timer.borrow_mut().take() {
+                id.remove();
+            }
+            self.loading_bar.set_opacity(0.0);
+            self.loading_bar.set_fraction(0.0);
+        }
+    }
+
+    fn toast(self: &Rc<Self>, msg: &str, undo: Option<Rc<dyn Fn()>>) {
+        self.footer_status.set_label(msg);
+        self.toast_undo.set_visible(undo.is_some());
+        *self.toast_cb.borrow_mut() = undo;
+        if let Some(id) = self.toast_timer.borrow_mut().take() {
+            id.remove();
+        }
+        let s = self.clone();
+        let id = glib::timeout_add_local(Duration::from_millis(4000), move || {
+            *s.toast_timer.borrow_mut() = None;
+            s.reset_toast();
+            glib::ControlFlow::Break
+        });
+        *self.toast_timer.borrow_mut() = Some(id);
+    }
+
+    fn reset_toast(&self) {
+        self.footer_status.set_label("Spotlight");
+        self.toast_undo.set_visible(false);
+        *self.toast_cb.borrow_mut() = None;
+    }
+
+    // ---- state persistence ---------------------------------------------------
+
+    fn save_settings(self: &Rc<Self>) {
+        if let Err(e) = self.settings.borrow().save(&self.store) {
+            self.toast(&format!("Could not save settings: {e}"), None);
+        }
+    }
+
+    fn save_frecency(&self) {
+        let _ = self.frecency.borrow().save(&self.store);
+    }
+
+    /// Probe command states off the UI thread, then refresh the list.
+    fn refresh_states(self: &Rc<Self>) {
+        if let Some(t) = self.last_probe.get() {
+            if t.elapsed() < Duration::from_secs(5) {
+                return;
+            }
+        }
+        self.last_probe.set(Some(std::time::Instant::now()));
+        self.loading_begin();
+        let (tx, rx) = std::sync::mpsc::channel::<HashMap<String, bool>>();
+        let cmds = self.commands.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(commands::probe_states(&cmds, &commands::system_runner));
+        });
+        let s = self.clone();
+        glib::timeout_add_local(Duration::from_millis(30), move || match rx.try_recv() {
+            Ok(map) => {
+                *s.states.borrow_mut() = map;
+                s.loading_end();
+                if s.window.is_visible() {
+                    s.do_search(true);
+                }
+                glib::ControlFlow::Break
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+            Err(_) => {
+                s.loading_end();
+                glib::ControlFlow::Break
+            }
+        });
+    }
+
+    // ---- indexing banner -----------------------------------------------------
 
     fn start_indexing_timer(self: &Rc<Self>) {
         if self.indexing_timer_id.borrow().is_none() && self.window.is_visible() {
@@ -414,27 +701,25 @@ impl SpotlightWindow {
         let ind_label = self.indexing_label.clone();
         let ind_pbar = self.indexing_pbar.clone();
 
-        gtk4::glib::timeout_add_local(Duration::from_millis(5), move || {
-            match receiver.try_recv() {
-                Ok((is_indexing, _status, progress)) => {
-                    if is_indexing {
-                        let percent = (progress * 100.0) as i32;
-                        let label_text = if percent > 0 {
-                            format!("Indexing files in background... ({}%)", percent)
-                        } else {
-                            "Indexing files in background...".to_string()
-                        };
-                        ind_label.set_text(&label_text);
-                        ind_pbar.set_fraction(progress.max(0.0).min(1.0));
-                        ind_revealer.set_reveal_child(true);
+        glib::timeout_add_local(Duration::from_millis(5), move || match receiver.try_recv() {
+            Ok((is_indexing, _status, progress)) => {
+                if is_indexing {
+                    let percent = (progress * 100.0) as i32;
+                    let label_text = if percent > 0 {
+                        format!("Indexing files in background... ({}%)", percent)
                     } else {
-                        ind_revealer.set_reveal_child(false);
-                    }
-                    gtk4::glib::ControlFlow::Break
+                        "Indexing files in background...".to_string()
+                    };
+                    ind_label.set_text(&label_text);
+                    ind_pbar.set_fraction(progress.clamp(0.0, 1.0));
+                    ind_revealer.set_reveal_child(true);
+                } else {
+                    ind_revealer.set_reveal_child(false);
                 }
-                Err(std::sync::mpsc::TryRecvError::Empty) => gtk4::glib::ControlFlow::Continue,
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => gtk4::glib::ControlFlow::Break,
+                glib::ControlFlow::Break
             }
+            Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
         });
 
         std::thread::spawn(move || {
@@ -443,54 +728,17 @@ impl SpotlightWindow {
         });
     }
 
+    // ---- wiring ----------------------------------------------------------------
+
     fn setup_ui_interactions(self: &Rc<Self>) {
-        let self_c = self.clone();
-        self.search_entry.connect_changed(move |_| {
-            self_c.on_search_changed();
-        });
-
-        // View toggle (list/grid)
-        let self_c2 = self.clone();
-        self.view_toggle.connect_clicked(move |_| {
-            // Scope the mutable borrow: do_search() reads config again and
-            // borrowing across it would panic (RefCell already mutably borrowed)
-            let new_grid = {
-                let mut conf = self_c2.config.borrow_mut();
-                conf.is_grid_view = !conf.is_grid_view;
-                conf.save();
-                conf.is_grid_view
-            };
-            self_c2.view_toggle.set_icon_name(if new_grid { "view-list-symbolic" } else { "view-grid-symbolic" });
-            self_c2.do_search();
-        });
-
-        // Category button clicks
-        for (cat_id, btn) in &self.category_buttons {
-            let self_c3 = self.clone();
-            let cat_id_c = cat_id.clone();
-            let btn_c = btn.clone();
-            btn.connect_toggled(move |_| {
-                if btn_c.is_active() {
-                    *self_c3.category.borrow_mut() = cat_id_c.clone();
-                    *self_c3.current_dir.borrow_mut() = None;
-                    self_c3.search_entry.set_placeholder_text(Some("Search applications, files, or clipboard..."));
-
-                    // Deactivate others
-                    for (cid, b) in &self_c3.category_buttons {
-                        if cid != &cat_id_c && b.is_active() {
-                            b.set_active(false);
-                        }
-                    }
-                    self_c3.do_search();
-                }
-            });
-        }
+        let s = self.clone();
+        self.search_entry.connect_changed(move |_| s.on_search_changed());
 
         // Window focus out -> hide
-        let self_c4 = self.clone();
+        let s = self.clone();
         let focus_ctrl = gtk4::EventControllerFocus::new();
         focus_ctrl.connect_leave(move |_| {
-            let s = self_c4.clone();
+            let s = s.clone();
             glib::timeout_add_local(Duration::from_millis(100), move || {
                 if s.window.is_visible() && !s.window.is_active() {
                     s.window.set_visible(false);
@@ -501,30 +749,24 @@ impl SpotlightWindow {
         });
         self.window.add_controller(focus_ctrl);
 
-        // Key Press Events
-        let self_c5 = self.clone();
+        // Capture phase: see keys before the focused widget can consume them
+        let s = self.clone();
         let key_ctrl = gtk4::EventControllerKey::new();
-        // Capture phase: see keys before the focused widget (search entry
-        // cursor, FlowBox internal navigation) can consume them
         key_ctrl.set_propagation_phase(gtk4::PropagationPhase::Capture);
-        key_ctrl.connect_key_pressed(move |_, keyval, _, state| {
-            self_c5.on_key_pressed(keyval, state)
-        });
+        key_ctrl.connect_key_pressed(move |_, keyval, _, state| s.on_key_pressed(keyval, state));
         self.window.add_controller(key_ctrl);
 
-        // Apps changed monitor reload
-        let self_c6 = self.clone();
+        let s = self.clone();
         self.backend.set_on_apps_updated(move || {
-            let s = self_c6.clone();
+            let s = s.clone();
             glib::idle_add_local(move || {
                 if s.window.is_visible() {
-                    s.do_search();
+                    s.do_search(true);
                 }
                 glib::ControlFlow::Break
             });
         });
 
-        // Window close-request
         self.window.connect_close_request(move |win| {
             win.set_visible(false);
             glib::Propagation::Stop
@@ -532,289 +774,837 @@ impl SpotlightWindow {
     }
 
     fn on_search_changed(self: &Rc<Self>) {
-        *self.last_typed.borrow_mut() = Some(std::time::Instant::now());
-
+        self.history_mode.set(false);
         if let Some(id) = self.debounce_id.borrow_mut().take() {
             id.remove();
         }
-
-        let self_c = self.clone();
+        let s = self.clone();
         let id = glib::timeout_add_local(Duration::from_millis(DEBOUNCE_MS), move || {
             // The source has fired: drop the stale handle so a later
             // on_search_changed never removes an already-destroyed source
-            *self_c.debounce_id.borrow_mut() = None;
-            self_c.do_search();
+            *s.debounce_id.borrow_mut() = None;
+            s.do_search(false);
             glib::ControlFlow::Break
         });
         *self.debounce_id.borrow_mut() = Some(id);
     }
 
-    fn do_search(&self) {
-        let mut seq = self.search_seq.borrow_mut();
-        *seq += 1;
-        let current_seq = *seq;
+    // ---- searching ---------------------------------------------------------------
+
+    fn render(&self, keep: bool) {
+        let sections = self.current.borrow().clone();
+        self.result_view.set_sections(sections, keep);
+    }
+
+    /// Append backend rows to a named section (creating it) and re-render.
+    fn append_rows(&self, seq: u64, title: &str, rows: Vec<RowData>) {
+        if self.search_seq.get() != seq || rows.is_empty() {
+            return;
+        }
+        {
+            let mut cur = self.current.borrow_mut();
+            let have: std::collections::HashSet<String> =
+                cur.iter().flat_map(|(_, r)| r.iter().map(|x| x.row.id.clone())).collect();
+            let rows: Vec<RowData> = rows.into_iter().filter(|r| !have.contains(&r.row.id)).collect();
+            if rows.is_empty() {
+                return;
+            }
+            match cur.iter_mut().find(|(t, _)| t == title) {
+                Some((_, existing)) => existing.extend(rows),
+                None => cur.push((title.to_string(), rows)),
+            }
+        }
+        self.render(true);
+    }
+
+    fn core_sections(&self, query: &str, extra: &[Row]) -> SectionList {
+        let apps: Vec<AppEntry> = self.backend.apps_snapshot().iter().map(app_entry).collect();
+        let settings = self.settings.borrow();
+        let frecency = self.frecency.borrow();
+        let states = self.states.borrow();
+        let ctx = Ctx {
+            apps: &apps,
+            commands: &self.commands,
+            states: &states,
+            settings: &settings,
+            frecency: &frecency,
+            now: now_secs(),
+            extra,
+        };
+        RootSearch::sections(query, &ctx)
+            .into_iter()
+            .map(|s| (s.title, s.rows.into_iter().map(|row| RowData { row, payload: None }).collect()))
+            .collect()
+    }
+
+    fn do_search(self: &Rc<Self>, keep: bool) {
+        let seq = self.search_seq.get() + 1;
+        self.search_seq.set(seq);
 
         let query = self.search_entry.text().to_string();
         let category = self.category.borrow().clone();
 
         // If in documents and query empty and not browsing, start browsing $HOME
         if category == "documents" && query.trim().is_empty() && self.current_dir.borrow().is_none() {
-            let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/jaime"));
+            let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
             *self.current_dir.borrow_mut() = Some(home.display().to_string());
         }
 
-        // If browsing directory
         let browsing_dir = self.current_dir.borrow().clone();
         if let Some(dir_path) = browsing_dir.as_ref() {
-            let as_grid = self.config.borrow().is_grid_view;
-            let results = self.browse_directory(dir_path, query.trim());
-            self.result_view.set_results(results, as_grid);
+            let rows: Vec<RowData> =
+                browse_directory_plain(dir_path, query.trim()).iter().map(row_from_result).collect();
+            *self.current.borrow_mut() = vec![("Files".to_string(), rows)];
+            self.render(keep);
             return;
         }
 
-        // 1. Instant results
-        let instant_results = self.backend.search_instant(&query, &category, DEFAULT_LIMIT);
-        let as_grid = self.config.borrow().is_grid_view;
-        self.result_view.set_results(instant_results.clone(), as_grid);
-
-        // 2. Async file search
         let is_empty = query.trim().is_empty();
+        let sections: SectionList = match category.as_str() {
+            "all" | "applications" => {
+                let found: Vec<SearchResult> = if category == "all" && !is_empty {
+                    self.backend
+                        .search_instant(&query, "all", DEFAULT_LIMIT)
+                        .into_iter()
+                        .filter(|r| r.app.is_none() && (r.url.starts_with("calc://") || r.url.starts_with("clipboard://")))
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                let extra: Vec<Row> = found.iter().map(|r| row_from_result(r).row).collect();
+                let payloads: HashMap<String, SearchResult> =
+                    found.into_iter().map(|r| (row_from_result(&r).row.id, r)).collect();
+                let mut secs = self.core_sections(&query, &extra);
+                for (_, rows) in secs.iter_mut() {
+                    for r in rows.iter_mut() {
+                        r.payload = payloads.get(&r.row.id).cloned();
+                    }
+                }
+                if category == "applications" {
+                    for (_, rows) in secs.iter_mut() {
+                        rows.retain(|r| r.row.kind == RowKind::App);
+                    }
+                    secs.retain(|(t, rows)| !rows.is_empty() && t != "Favorites" && t != "Suggestions");
+                }
+                secs
+            }
+            "clipboard" => {
+                let rows: Vec<RowData> =
+                    self.backend.search_instant(&query, "clipboard", DEFAULT_LIMIT).iter().map(row_from_result).collect();
+                vec![("Clipboard".to_string(), rows)]
+            }
+            "web" => {
+                let rows: Vec<RowData> = self.backend.search_web(&query).iter().map(row_from_result).collect();
+                vec![("Web".to_string(), rows)]
+            }
+            _ => Vec::new(),
+        };
+        *self.current.borrow_mut() = sections;
+        self.render(keep);
+
+        // Async Tracker file search (appended to Results, or its own section)
         let needs_files = (!is_empty || ["documents", "images", "audio", "video"].contains(&category.as_str()))
-            && !["apps", "applications", "clipboard", "web"].contains(&category.as_str());
-
+            && !["applications", "clipboard", "web"].contains(&category.as_str());
+        let target = if category == "all" { "Results" } else { "Files" };
         if needs_files {
-            let result_view_c = self.result_view.clone();
-            let is_grid = self.config.borrow().is_grid_view;
-            let seq_c = self.search_seq.clone();
-            let seq_val = current_seq;
-            let instant_for_files = instant_results.clone();
-
+            self.loading_begin();
+            let s = self.clone();
             self.backend.search_async(&query, &category, DEFAULT_LIMIT, move |file_results| {
-                if *seq_c.borrow() == seq_val && !file_results.is_empty() {
-                    let mut combined = instant_for_files.clone();
-                    combined.extend(file_results);
-                    result_view_c.set_results(combined, is_grid);
-                }
+                s.loading_end();
+                let rows = file_results.iter().map(row_from_result).collect();
+                s.append_rows(seq, target, rows);
             });
         }
 
-        // 3. Async browser history (web category, or web results within "all")
-        //    Runs SQLite on a worker thread so a locked places.sqlite never
-        //    blocks the UI thread.
-        let wants_history = category == "web" || category == "all";
+        // Async browser history (web category, or web results within "all")
+        let wants_history = category == "web" || (category == "all" && !is_empty);
         if wants_history {
-            let history_limit = if category == "web" { 6 } else { 3 };
-            let result_view_c = self.result_view.clone();
-            let is_grid = self.config.borrow().is_grid_view;
-            let seq_c = self.search_seq.clone();
-            let seq_val = current_seq;
-
-            let base = instant_results.clone();
-
-            self.backend.search_browser_history_async(&query, history_limit, move |history_results| {
-                if *seq_c.borrow() == seq_val && !history_results.is_empty() {
-                    let mut combined = base.clone();
-                    combined.extend(history_results);
-                    result_view_c.set_results(combined, is_grid);
-                }
+            let limit = if category == "web" { 6 } else { 3 };
+            self.loading_begin();
+            let s = self.clone();
+            let title = if category == "web" { "Web" } else { "Results" };
+            self.backend.search_browser_history_async(&query, limit, move |hist| {
+                s.loading_end();
+                let rows = hist.iter().map(row_from_result).collect();
+                s.append_rows(seq, title, rows);
             });
         }
     }
 
-fn browse_directory(&self, path_str: &str, filter: &str) -> Vec<SearchResult> {
-        browse_directory_plain(path_str, filter)
+    fn show_history(self: &Rc<Self>) {
+        let rows: Vec<RowData> = self
+            .settings
+            .borrow()
+            .history()
+            .iter()
+            .map(|q| {
+                let r = Row::simple(RowKind::Fallback, &format!("history:{q}"), q, "", "document-open-recent-symbolic");
+                RowData { row: r, payload: None }
+            })
+            .collect();
+        if rows.is_empty() {
+            return;
+        }
+        self.history_mode.set(true);
+        *self.current.borrow_mut() = vec![("Recent searches".to_string(), rows)];
+        self.render(false);
     }
 
-    fn cycle_category(&self, step: i32) {
-        let mut current_idx = 0;
-        for (idx, &(cat_id, _)) in CATEGORIES.iter().enumerate() {
-            if cat_id == *self.category.borrow() {
-                current_idx = idx;
-                break;
-            }
-        }
+    fn cycle_category(self: &Rc<Self>, step: i32) {
+        let cur = self.category.borrow().clone();
+        let idx = CATEGORIES.iter().position(|(id, _)| *id == cur).unwrap_or(0) as i32;
+        let (id, label) = CATEGORIES[(idx + step).rem_euclid(CATEGORIES.len() as i32) as usize];
+        *self.category.borrow_mut() = id.to_string();
+        self.category_chip.set_label(label);
+        *self.current_dir.borrow_mut() = None;
+        self.search_entry.set_placeholder_text(Some(PLACEHOLDER));
+        self.history_mode.set(false);
+        self.do_search(false);
+    }
 
-        let next_idx = (current_idx as i32 + step).rem_euclid(CATEGORIES.len() as i32) as usize;
-        let next_cat = CATEGORIES[next_idx].0;
-        if let Some(btn) = self.category_buttons.get(next_cat) {
-            btn.set_active(true);
+    // ---- actions -------------------------------------------------------------------
+
+    fn actions_for(&self, rd: &RowData) -> Vec<UiAction> {
+        let mk = |id: &str, title: &str, keys: Vec<String>, danger: bool, argv: Option<Vec<String>>| UiAction {
+            id: id.into(),
+            title: title.into(),
+            keys,
+            danger,
+            argv,
+        };
+        let mut out = Vec::new();
+        let primary = rd.row.actions.first().cloned();
+        let primary_id = primary.as_ref().map(|a| a.id.clone()).unwrap_or_else(|| "open".into());
+        out.push(mk(
+            &primary_id,
+            &primary_title(rd),
+            shortcuts::label(Act::Run(0)),
+            false,
+            primary.and_then(|a| a.argv),
+        ));
+        match rd.row.kind {
+            RowKind::App | RowKind::Command => {
+                out.push(mk("copy_name", "Copy Name", shortcuts::label(Act::Run(1)), false, None));
+            }
+            RowKind::File => {
+                out.push(mk("copy_path", "Copy Path", shortcuts::label(Act::Run(1)), false, None));
+                if rd.payload.as_ref().map_or(false, |p| p.url.starts_with("file://")) {
+                    out.push(mk("open_folder", "Open Containing Folder", shortcuts::label(Act::Run(2)), false, None));
+                }
+            }
+            RowKind::Clipboard => {
+                out.push(mk("copy_name", "Copy Text", shortcuts::label(Act::Run(1)), false, None));
+            }
+            _ => {}
+        }
+        for a in rd.row.actions.iter().skip(1) {
+            let keys = match a.id.as_str() {
+                "favorite" => shortcuts::label(Act::Favorite),
+                "disable" => shortcuts::label(Act::Disable),
+                _ => Vec::new(),
+            };
+            out.push(mk(&a.id, &a.title, keys, false, a.argv.clone()));
+        }
+        if rd.row.kind == RowKind::App {
+            let desktop = rd.row.id.strip_prefix("app:").unwrap_or(&rd.row.id);
+            let pinned = get_favorites().iter().any(|f| f == desktop);
+            out.push(mk("pin", if pinned { "Unpin from Dock" } else { "Pin to Dock" }, Vec::new(), false, None));
+            out.push(mk("uninstall", "Uninstall", Vec::new(), true, None));
+        }
+        out
+    }
+
+    fn run_action_index(self: &Rc<Self>, n: usize) {
+        if self.history_mode.get() {
+            if let Some(rd) = self.result_view.selected_row() {
+                self.perform(rd, "open", None);
+            }
+            return;
+        }
+        let Some(rd) = self.result_view.selected_row() else { return };
+        if let Some(a) = self.actions_for(&rd).get(n).cloned() {
+            self.perform(rd, &a.id, a.argv);
         }
     }
 
-    fn on_key_pressed(&self, keyval: gdk::Key, state: gdk::ModifierType) -> glib::Propagation {
-        // While the context menu is open, route keys to it first. The window
-        // key controller runs in Capture phase, so without this the arrows
-        // would move the result selection behind the popover.
-        if self.result_view.context_menu_is_open() {
-            match keyval {
-                gdk::Key::Up => {
-                    self.result_view.context_menu_step(false);
-                    return glib::Propagation::Stop;
+    fn perform(self: &Rc<Self>, rd: RowData, action: &str, argv: Option<Vec<String>>) {
+        let id = rd.row.id.clone();
+        match action {
+            "open" | "run" | "open_url" => {
+                if let Some(q) = id.strip_prefix("history:") {
+                    self.history_mode.set(false);
+                    self.search_entry.set_text(q);
+                    self.search_entry.set_position(-1);
+                    return;
                 }
-                gdk::Key::Down => {
-                    self.result_view.context_menu_step(true);
-                    return glib::Propagation::Stop;
+                if rd.row.confirm {
+                    let s = self.clone();
+                    let title = rd.row.title.clone();
+                    self.show_dialog(
+                        &format!("{title}?"),
+                        "This action can interrupt your session. Continue?",
+                        None,
+                        "Run",
+                        true,
+                        Box::new(move |_| s.launch(rd.clone(), argv.clone())),
+                    );
+                } else {
+                    self.launch(rd, argv);
                 }
-                gdk::Key::Return | gdk::Key::KP_Enter => {
-                    self.result_view.context_menu_activate();
-                    return glib::Propagation::Stop;
+            }
+            "favorite" => {
+                let added = self.settings.borrow_mut().toggle_favorite(&id);
+                self.save_settings();
+                let s = self.clone();
+                let id2 = id.clone();
+                self.toast(
+                    &format!("{} {}", if added { "Added to Favorites:" } else { "Removed from Favorites:" }, rd.row.title),
+                    Some(Rc::new(move || {
+                        s.settings.borrow_mut().toggle_favorite(&id2);
+                        s.save_settings();
+                        s.do_search(true);
+                    })),
+                );
+                self.do_search(true);
+            }
+            "alias" => {
+                let current = self.settings.borrow().alias(&id).unwrap_or("").to_string();
+                let s = self.clone();
+                self.show_dialog(
+                    &format!("Alias for {}", rd.row.title),
+                    "Type the alias to put this item first. Leave empty to remove it.",
+                    Some(current),
+                    "Save",
+                    false,
+                    Box::new(move |text| {
+                        let res = s.settings.borrow_mut().set_alias(&id, &text);
+                        match res {
+                            Ok(()) => {
+                                s.save_settings();
+                                s.toast("Alias saved", None);
+                                s.do_search(true);
+                            }
+                            Err(e) => s.toast(&e, None),
+                        }
+                    }),
+                );
+            }
+            "disable" => {
+                self.settings.borrow_mut().disable(&id);
+                self.save_settings();
+                let s = self.clone();
+                let id2 = id.clone();
+                self.toast(
+                    &format!("Disabled {}", rd.row.title),
+                    Some(Rc::new(move || {
+                        s.settings.borrow_mut().enable(&id2);
+                        s.save_settings();
+                        s.do_search(true);
+                    })),
+                );
+                self.do_search(true);
+            }
+            "enable" => {
+                self.settings.borrow_mut().enable(&id);
+                self.save_settings();
+                self.do_search(true);
+            }
+            "copy_name" => {
+                self.copy(&rd.row.title);
+                self.toast("Copied", None);
+            }
+            "copy_path" => {
+                let text = rd.payload.as_ref().map(|p| p.url.trim_start_matches("file://").to_string()).unwrap_or_default();
+                self.copy(&text);
+                self.toast("Copied path", None);
+            }
+            "open_folder" => {
+                if let Some(p) = &rd.payload {
+                    let clean = p.url.trim_start_matches("file://");
+                    if let Some(parent) = Path::new(clean).parent() {
+                        open_file(&format!("file://{}", parent.display()));
+                    }
                 }
-                gdk::Key::Escape => {
-                    self.result_view.context_menu_close();
-                    return glib::Propagation::Stop;
+                self.window.set_visible(false);
+            }
+            "pin" => {
+                let desktop = id.strip_prefix("app:").unwrap_or(&id).to_string();
+                let mut favs = get_favorites();
+                let msg = if favs.contains(&desktop) {
+                    favs.retain(|x| x != &desktop);
+                    "Unpinned from dock"
+                } else {
+                    favs.push(desktop);
+                    "Pinned to dock"
+                };
+                set_favorites(&favs);
+                self.toast(msg, None);
+            }
+            "uninstall" => {
+                let s = self.clone();
+                let name = rd.row.title.clone();
+                self.show_dialog(
+                    &format!("Uninstall {name}?"),
+                    "The package will be removed from the system.",
+                    None,
+                    "Uninstall",
+                    true,
+                    Box::new(move |_| s.uninstall(id.strip_prefix("app:").unwrap_or(&id).to_string(), name.clone())),
+                );
+            }
+            _ => {}
+        }
+    }
+
+    fn copy(&self, text: &str) {
+        if let Some(display) = gdk::Display::default() {
+            display.clipboard().set_text(text);
+        }
+    }
+
+    /// Run the primary action: launch / open / paste / browse.
+    fn launch(self: &Rc<Self>, rd: RowData, argv: Option<Vec<String>>) {
+        let query = self.search_entry.text().to_string();
+        let mut hide = true;
+        let mut ok = true;
+        match rd.row.kind {
+            RowKind::App => {
+                let desktop = rd.row.id.strip_prefix("app:").unwrap_or(&rd.row.id);
+                ok = open_file(&format!("app://{desktop}"));
+            }
+            RowKind::Command | RowKind::Fallback => {
+                if let Some(argv) = argv.as_ref().filter(|a| !a.is_empty()) {
+                    match std::process::Command::new(&argv[0]).args(&argv[1..]).spawn() {
+                        Ok(mut child) => {
+                            std::thread::spawn(move || {
+                                let _ = child.wait();
+                            });
+                        }
+                        Err(e) => {
+                            self.toast(&format!("Could not run {}: {e}", argv[0]), None);
+                            return;
+                        }
+                    }
+                } else {
+                    ok = false;
                 }
-                _ => {}
+            }
+            RowKind::Calc | RowKind::Clipboard | RowKind::File => {
+                if let Some(res) = rd.payload.clone() {
+                    hide = self.open_result(&res);
+                }
             }
         }
-
-        if keyval == gdk::Key::Escape {
-            if self.current_dir.borrow().is_some() {
-                *self.current_dir.borrow_mut() = None;
-                self.search_entry.set_text("");
-                self.search_entry.set_placeholder_text(Some("Search applications, files, or clipboard..."));
-                self.do_search();
-                return glib::Propagation::Stop;
-            }
+        if !ok {
+            self.toast(&format!("Could not open {}", rd.row.title), None);
+            return;
+        }
+        if matches!(rd.row.kind, RowKind::App | RowKind::Command) {
+            self.frecency.borrow_mut().record_launch(&rd.row.id, &query, now_secs());
+            self.save_frecency();
+        }
+        if !query.trim().is_empty() && hide {
+            self.settings.borrow_mut().push_history(&query);
+            self.save_settings();
+        }
+        if hide {
             self.window.set_visible(false);
-            return glib::Propagation::Stop;
         }
+    }
 
-        if state.contains(gdk::ModifierType::CONTROL_MASK) && keyval == gdk::Key::q {
-            self.window.application().unwrap().quit();
-            return glib::Propagation::Stop;
+    /// Returns true when the window should hide afterwards.
+    fn open_result(self: &Rc<Self>, res: &SearchResult) -> bool {
+        if let Some(val) = res.url.strip_prefix("calc://") {
+            self.copy(val);
+            return true;
         }
-
-        // Tab navigation cycles categories
-        if keyval == gdk::Key::Tab {
-            if state.contains(gdk::ModifierType::SHIFT_MASK) {
-                self.cycle_category(-1);
-            } else {
-                self.cycle_category(1);
+        if let Some(idx_str) = res.url.strip_prefix("clipboard://") {
+            if let (Some(mgr), Ok(idx)) = (self.backend_clipboard(), idx_str.parse::<usize>()) {
+                if let Some(text) = mgr.get_clip_by_index(idx) {
+                    self.window.set_visible(false);
+                    mgr.paste_clip(&text);
+                }
             }
-            return glib::Propagation::Stop;
+            return true;
         }
-        if keyval == gdk::Key::ISO_Left_Tab {
-            self.cycle_category(-1);
-            return glib::Propagation::Stop;
+        let clean_path = res.url.trim_start_matches("file://");
+        if Path::new(clean_path).is_dir() && (res.mime == "inode/directory" || res.mime == "folder") {
+            *self.current_dir.borrow_mut() = Some(clean_path.to_string());
+            self.search_entry.set_text("");
+            self.search_entry.set_placeholder_text(Some(&format!("Browsing: {}", clean_path)));
+            // set_text only emits 'changed' when the text differs
+            self.search_entry.emit_by_name::<()>("changed", &[]);
+            return false;
         }
+        open_file(&res.url);
+        true
+    }
 
-        // Alt/Ctrl + Left/Right cycles categories
-        if state.contains(gdk::ModifierType::ALT_MASK) || state.contains(gdk::ModifierType::CONTROL_MASK) {
-            if keyval == gdk::Key::Left {
-                self.cycle_category(-1);
+    fn backend_clipboard(&self) -> Option<ClipboardManager> {
+        self.backend.clipboard()
+    }
+
+    fn uninstall(self: &Rc<Self>, desktop_id: String, app_name: String) {
+        self.progress_label.set_label(&format!("Uninstalling {}...", app_name));
+        self.progress_spinner.start();
+        self.progress_revealer.set_reveal_child(true);
+
+        let (sender, receiver) = std::sync::mpsc::channel::<(bool, String)>();
+        let s = self.clone();
+        glib::timeout_add_local(Duration::from_millis(50), move || match receiver.try_recv() {
+            Ok((success, message)) => {
+                s.progress_spinner.stop();
+                let (text, delay) = if success {
+                    (format!("\u{2713} {} uninstalled successfully", app_name), 1800)
+                } else {
+                    s.progress_label.set_tooltip_text(Some(&message));
+                    (format!("\u{2717} {}", clean_uninstall_message(&message, &app_name)), 4000)
+                };
+                s.progress_label.set_label(&text);
+                let rev = s.progress_revealer.clone();
+                glib::timeout_add_local(Duration::from_millis(delay), move || {
+                    rev.set_reveal_child(false);
+                    glib::ControlFlow::Break
+                });
+                glib::ControlFlow::Break
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+            Err(_) => glib::ControlFlow::Break,
+        });
+
+        std::thread::spawn(move || {
+            let mut cmd = std::process::Command::new("pkm");
+            cmd.args(["--uninstall", &desktop_id]);
+            cmd.env("APPINSTALL_SUDO", "pkexec");
+            let output = cmd.output();
+            let success = output.as_ref().map_or(false, |o| o.status.success());
+            let message = output.map_or_else(
+                |e| e.to_string(),
+                |o| String::from_utf8_lossy(&[o.stdout, o.stderr].concat()).into_owned(),
+            );
+            let _ = sender.send((success, message));
+        });
+    }
+
+    // ---- action panel ----------------------------------------------------------------
+
+    fn panel_open(&self) -> bool {
+        self.panel.root.is_visible()
+    }
+
+    fn open_panel(self: &Rc<Self>) {
+        let Some(rd) = self.result_view.selected_row() else { return };
+        if self.history_mode.get() {
+            return;
+        }
+        *self.panel.all.borrow_mut() = self.actions_for(&rd);
+        *self.panel.target.borrow_mut() = Some(rd);
+        self.panel.entry.set_text("");
+        self.fill_panel("");
+        self.panel.root.set_visible(true);
+        self.panel.entry.grab_focus();
+    }
+
+    fn close_panel(&self) {
+        if self.panel.root.is_visible() {
+            self.panel.root.set_visible(false);
+            self.search_entry.grab_focus();
+        }
+    }
+
+    fn fill_panel(&self, filter: &str) {
+        let f = filter.trim().to_lowercase();
+        while let Some(c) = self.panel.list.first_child() {
+            self.panel.list.remove(&c);
+        }
+        let shown: Vec<UiAction> =
+            self.panel.all.borrow().iter().filter(|a| f.is_empty() || a.title.to_lowercase().contains(&f)).cloned().collect();
+        for a in &shown {
+            let row = gtk4::ListBoxRow::new();
+            let b = gtk4::Box::new(gtk4::Orientation::Horizontal, 10);
+            b.add_css_class("action-item");
+            if a.danger {
+                b.add_css_class("danger");
+            }
+            let t = gtk4::Label::builder().label(&a.title).xalign(0.0).hexpand(true).build();
+            t.add_css_class("action-title");
+            b.append(&t);
+            if !a.keys.is_empty() {
+                b.append(&keycap_row(&a.keys));
+            }
+            row.set_child(Some(&b));
+            self.panel.list.append(&row);
+        }
+        *self.panel.shown.borrow_mut() = shown;
+        if let Some(first) = self.panel.list.row_at_index(0) {
+            self.panel.list.select_row(Some(&first));
+        }
+    }
+
+    fn panel_step(&self, delta: i32) {
+        let n = self.panel.shown.borrow().len() as i32;
+        if n == 0 {
+            return;
+        }
+        let cur = self.panel.list.selected_row().map(|r| r.index()).unwrap_or(0);
+        let next = (cur + delta).rem_euclid(n);
+        if let Some(r) = self.panel.list.row_at_index(next) {
+            self.panel.list.select_row(Some(&r));
+        }
+    }
+
+    fn panel_activate(self: &Rc<Self>) {
+        let idx = self.panel.list.selected_row().map(|r| r.index()).unwrap_or(-1);
+        let act = self.panel.shown.borrow().get(idx.max(0) as usize).cloned();
+        let target = self.panel.target.borrow().clone();
+        if let (Some(a), Some(rd)) = (act, target) {
+            self.close_panel();
+            self.perform(rd, &a.id, a.argv);
+        }
+    }
+
+    fn setup_panel_events(self: &Rc<Self>) {
+        let s = self.clone();
+        self.panel.entry.connect_changed(move |e| s.fill_panel(&e.text()));
+        let s = self.clone();
+        self.panel.list.connect_row_activated(move |_, _| s.panel_activate());
+    }
+
+    // ---- dialog --------------------------------------------------------------------
+
+    fn show_dialog(
+        self: &Rc<Self>,
+        title: &str,
+        body: &str,
+        entry: Option<String>,
+        ok_label: &str,
+        destructive: bool,
+        on_ok: Box<dyn Fn(String)>,
+    ) {
+        self.close_panel();
+        self.dialog.title.set_label(title);
+        self.dialog.body.set_label(body);
+        self.dialog.ok.set_label(ok_label);
+        if destructive {
+            self.dialog.ok.add_css_class("destructive");
+        } else {
+            self.dialog.ok.remove_css_class("destructive");
+        }
+        match entry {
+            Some(text) => {
+                self.dialog.entry.set_text(&text);
+                self.dialog.entry.set_visible(true);
+            }
+            None => self.dialog.entry.set_visible(false),
+        }
+        *self.dialog.on_ok.borrow_mut() = Some(on_ok);
+        self.dialog.root.set_visible(true);
+        if gtk4::prelude::WidgetExt::is_visible(&self.dialog.entry) {
+            self.dialog.entry.grab_focus();
+            self.dialog.entry.set_position(-1);
+        } else {
+            self.dialog.ok.grab_focus();
+        }
+    }
+
+    fn dialog_open(&self) -> bool {
+        self.dialog.root.is_visible()
+    }
+
+    fn close_dialog(&self) {
+        if self.dialog.root.is_visible() {
+            self.dialog.root.set_visible(false);
+            *self.dialog.on_ok.borrow_mut() = None;
+            self.search_entry.grab_focus();
+        }
+    }
+
+    fn accept_dialog(self: &Rc<Self>) {
+        let text = self.dialog.entry.text().to_string();
+        let cb = self.dialog.on_ok.borrow_mut().take();
+        self.close_dialog();
+        if let Some(cb) = cb {
+            cb(text);
+        }
+    }
+
+    // ---- zoom ------------------------------------------------------------------------
+
+    fn set_zoom(&self, z: f64) {
+        let z = ((z * 10.0).round() / 10.0).clamp(ZOOM_MIN, ZOOM_MAX);
+        self.zoom_provider.load_from_data(&zoom_css(z));
+        self.window.set_size_request((BASE_W as f64 * z) as i32, (BASE_H as f64 * z) as i32);
+        let mut c = self.config.borrow_mut();
+        c.zoom = z;
+        c.save();
+    }
+
+    // ---- keyboard --------------------------------------------------------------------
+
+    fn go_back(self: &Rc<Self>) {
+        if self.dialog_open() {
+            self.close_dialog();
+        } else if self.panel_open() {
+            self.close_panel();
+        } else if self.history_mode.get() {
+            self.history_mode.set(false);
+            self.do_search(false);
+        } else if self.current_dir.borrow().is_some() {
+            *self.current_dir.borrow_mut() = None;
+            self.search_entry.set_text("");
+            self.search_entry.set_placeholder_text(Some(PLACEHOLDER));
+            self.do_search(false);
+        } else if !self.search_entry.text().is_empty() {
+            self.search_entry.set_text("");
+        } else {
+            self.window.set_visible(false);
+        }
+    }
+
+    fn on_key_pressed(self: &Rc<Self>, keyval: gdk::Key, state: gdk::ModifierType) -> glib::Propagation {
+        let name = keyval.to_lower().name().map(|n| n.to_lowercase()).unwrap_or_default();
+        let mods = Mods {
+            ctrl: state.contains(gdk::ModifierType::CONTROL_MASK),
+            shift: state.contains(gdk::ModifierType::SHIFT_MASK),
+            alt: state.contains(gdk::ModifierType::ALT_MASK),
+        };
+        let act = shortcuts::lookup(&name, mods);
+
+        if self.dialog_open() {
+            if act == Some(Act::Back) {
+                self.close_dialog();
                 return glib::Propagation::Stop;
             }
-            if keyval == gdk::Key::Right {
-                self.cycle_category(1);
-                return glib::Propagation::Stop;
-            }
+            return glib::Propagation::Proceed;
         }
 
-        // Arrows select in results. Left/Right fall through to the entry's
-        // text cursor while there is a query to edit
-        let editing = self.search_entry.has_focus() && !self.search_entry.text().is_empty();
-        if keyval == gdk::Key::Up {
-            self.result_view.move_selection_up();
-            return glib::Propagation::Stop;
-        }
-        if keyval == gdk::Key::Down {
-            self.result_view.move_selection_down();
-            return glib::Propagation::Stop;
-        }
-        if keyval == gdk::Key::Left {
-            if editing {
-                return glib::Propagation::Proceed;
+        if self.panel_open() {
+            match act {
+                Some(Act::Up) => self.panel_step(-1),
+                Some(Act::Down) => self.panel_step(1),
+                Some(Act::Run(_)) => self.panel_activate(),
+                Some(Act::Back) | Some(Act::ActionPanel) => self.close_panel(),
+                _ => return glib::Propagation::Proceed,
             }
-            self.result_view.move_selection_left();
-            return glib::Propagation::Stop;
-        }
-        if keyval == gdk::Key::Right {
-            if editing {
-                return glib::Propagation::Proceed;
-            }
-            self.result_view.move_selection_right();
             return glib::Propagation::Stop;
         }
 
-        // Enter activates
-        if keyval == gdk::Key::Return || keyval == gdk::Key::KP_Enter {
-            if self.result_view.activate_selected() {
-                return glib::Propagation::Stop;
-            }
-        }
-
-        // Space opens context menu only when navigating results (not typing).
-        // When the search entry has focus, Space propagates normally as a character.
-        if keyval == gdk::Key::space {
-            if self.search_entry.has_focus() {
-                return glib::Propagation::Proceed;
-            }
-            // Grace period: right after typing, Space should keep adding to the
-            // query instead of jumping to the context menu (avoids accidental
-            // menus while building a multi-word search).
-            let recently_typed = self
-                .last_typed
-                .borrow()
-                .as_ref()
-                .map(|t| t.elapsed() < Duration::from_millis(2500))
-                .unwrap_or(false);
-            if recently_typed {
-                let mut text = self.search_entry.text().to_string();
-                text.push(' ');
-                self.search_entry.set_text(&text);
-                self.search_entry.set_position(text.chars().count() as i32);
-                self.search_entry.grab_focus();
-                return glib::Propagation::Stop;
-            }
-            self.result_view.show_context_menu_for_selected();
-            return glib::Propagation::Stop;
+        if let Some(act) = act {
+            return self.handle_act(act);
         }
 
         // Backspace on empty: ascend directory
         if keyval == gdk::Key::BackSpace && self.search_entry.text().is_empty() {
-            if let Some(dir_path) = self.current_dir.borrow().as_ref() {
-                if let Some(parent) = Path::new(dir_path).parent() {
-                    let parent_str = parent.display().to_string();
-                    if &parent_str != dir_path {
-                        *self.current_dir.borrow_mut() = Some(parent_str.clone());
-                        self.search_entry.set_placeholder_text(Some(&format!("Browsing: {}", parent_str)));
-                        let results = self.browse_directory(&parent_str, "");
-                        self.result_view.set_results(results, self.config.borrow().is_grid_view);
-                        return glib::Propagation::Stop;
-                    }
-                }
+            let parent = self
+                .current_dir
+                .borrow()
+                .as_ref()
+                .and_then(|d| Path::new(d).parent().map(|p| (p.display().to_string(), d.clone())))
+                .filter(|(p, d)| p != d);
+            if let Some((parent, _)) = parent {
+                self.search_entry.set_placeholder_text(Some(&format!("Browsing: {}", parent)));
+                *self.current_dir.borrow_mut() = Some(parent);
+                self.do_search(false);
+                return glib::Propagation::Stop;
             }
         }
 
-        // Grab focus to entry when user types alphanumeric characters
-        if !self.search_entry.has_focus()
-            && !state.contains(gdk::ModifierType::CONTROL_MASK)
-            && !state.contains(gdk::ModifierType::ALT_MASK)
-            && !state.contains(gdk::ModifierType::SUPER_MASK)
-        {
+        // Typing while a list row has focus: redirect into the search entry
+        if !self.search_entry.has_focus() && !mods.ctrl && !mods.alt && !state.contains(gdk::ModifierType::SUPER_MASK) {
             if let Some(ch) = keyval.to_unicode() {
-                if ch.is_alphanumeric() || ch.is_ascii_punctuation() {
+                if ch.is_alphanumeric() || ch.is_ascii_punctuation() || ch == ' ' {
                     self.search_entry.grab_focus();
-                    let current_text = self.search_entry.text();
-                    let new_text = format!("{}{}", current_text, ch);
-                    self.search_entry.set_text(&new_text);
+                    let mut text = self.search_entry.text().to_string();
+                    text.push(ch);
+                    self.search_entry.set_text(&text);
                     self.search_entry.set_position(-1);
                     return glib::Propagation::Stop;
                 }
             } else if keyval == gdk::Key::BackSpace {
                 self.search_entry.grab_focus();
-                let current_text = self.search_entry.text();
-                if !current_text.is_empty() {
-                    let mut chars = current_text.chars();
-                    chars.next_back();
-                    self.search_entry.set_text(chars.as_str());
-                    self.search_entry.set_position(-1);
-                }
+                let mut text = self.search_entry.text().to_string();
+                text.pop();
+                self.search_entry.set_text(&text);
+                self.search_entry.set_position(-1);
                 return glib::Propagation::Stop;
             }
         }
 
         glib::Propagation::Proceed
+    }
+
+    fn handle_act(self: &Rc<Self>, act: Act) -> glib::Propagation {
+        let stop = glib::Propagation::Stop;
+        match act {
+            Act::ActionPanel => self.open_panel(),
+            Act::Run(n) => {
+                if self.result_view.selected_row().is_none() {
+                    return glib::Propagation::Proceed;
+                }
+                self.run_action_index(n);
+            }
+            Act::Quick(n) => {
+                if self.result_view.select_nth_row(n) {
+                    self.run_action_index(0);
+                }
+            }
+            Act::Up => {
+                if !self.result_view.step(-1)
+                    && self.search_entry.text().is_empty()
+                    && !self.history_mode.get()
+                    && self.current_dir.borrow().is_none()
+                {
+                    self.show_history();
+                }
+            }
+            Act::Down => {
+                self.result_view.step(1);
+            }
+            Act::PageUp => {
+                self.result_view.step(-8);
+            }
+            Act::PageDown => {
+                self.result_view.step(8);
+            }
+            Act::SectionPrev => self.result_view.jump_section(false),
+            Act::SectionNext => self.result_view.jump_section(true),
+            Act::Back => self.go_back(),
+            Act::Root => {
+                self.reset_to_root();
+                self.search_entry.grab_focus();
+            }
+            Act::Favorite => self.perform_selected("favorite"),
+            Act::Disable => self.perform_selected("disable"),
+            Act::FavUp | Act::FavDown => {
+                if let Some(rd) = self.result_view.selected_row() {
+                    if rd.row.favorite {
+                        self.settings.borrow_mut().move_favorite(&rd.row.id, if act == Act::FavUp { -1 } else { 1 });
+                        self.save_settings();
+                        self.do_search(true);
+                    }
+                }
+            }
+            Act::ZoomIn => self.set_zoom(self.config.borrow().zoom + 0.1),
+            Act::ZoomOut => self.set_zoom(self.config.borrow().zoom - 0.1),
+            Act::ZoomReset => self.set_zoom(1.0),
+            Act::Quit => {
+                if let Some(app) = self.window.application() {
+                    app.quit();
+                }
+            }
+            Act::CatNext => self.cycle_category(1),
+            Act::CatPrev => self.cycle_category(-1),
+        }
+        stop
+    }
+
+    /// Run a named action on the selected row if it offers it.
+    fn perform_selected(self: &Rc<Self>, action: &str) {
+        if let Some(rd) = self.result_view.selected_row() {
+            if self.actions_for(&rd).iter().any(|a| a.id == action) {
+                self.perform(rd, action, None);
+            }
+        }
     }
 }
 
@@ -825,7 +1615,7 @@ fn browse_directory_plain(path_str: &str, filter: &str) -> Vec<SearchResult> {
         return results;
     }
 
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/jaime"));
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
     // Parent navigation
     if p != home && p.parent().is_some() {
         results.push(SearchResult {
@@ -851,11 +1641,10 @@ fn browse_directory_plain(path_str: &str, filter: &str) -> Vec<SearchResult> {
             }
 
             let is_dir = entry.file_type().map_or(false, |t| t.is_dir());
-            let url = format!("file://{}", entry.path().display());
             let mime = if is_dir { "inode/directory".to_string() } else { "application/octet-stream".to_string() };
 
             results.push(SearchResult {
-                url,
+                url: format!("file://{}", entry.path().display()),
                 title: name,
                 mime,
                 snippet: entry.path().display().to_string(),
@@ -865,4 +1654,33 @@ fn browse_directory_plain(path_str: &str, filter: &str) -> Vec<SearchResult> {
     }
 
     results
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn calc_result_becomes_calc_row() {
+        let r = row_from_result(&SearchResult {
+            url: "calc://4".into(),
+            title: "4".into(),
+            mime: "application/x-calculator".into(),
+            snippet: "2+2".into(),
+            app: None,
+        });
+        assert_eq!(r.row.kind, RowKind::Calc);
+        assert_eq!(primary_title(&r), "Copy Result");
+    }
+
+    #[test]
+    fn uninstall_message_is_cleaned() {
+        assert!(clean_uninstall_message("foo\nerror: bar baz", "X").contains("bar baz"));
+        assert!(clean_uninstall_message("unmet dependencies", "X").starts_with("Cannot remove X"));
+    }
+
+    #[test]
+    fn zoom_css_scales() {
+        assert!(zoom_css(1.5).contains("min-height: 60px"));
+    }
 }

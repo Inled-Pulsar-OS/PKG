@@ -1,28 +1,36 @@
-/* PulsarOS Spotlight — Apple/Tahoe layout */
+/* PulsarOS Spotlight - Raycast-style layout.
+   Colors come from libadwaita named colors, so the scheme and the accent
+   follow the system live. dark.css / light.css only tune alpha values. */
 
 window.spotlight-window,
 .spotlight-window {
-    border-radius: 30px;
     background: transparent;
     background-color: transparent;
+    box-shadow: none;
+    border: none;
 }
 
 .spotlight-main {
-    border-radius: 30px;
+    border-radius: 14px;
+    background-color: @window_bg_color;
+    color: @window_fg_color;
+    border: 1px solid alpha(@window_fg_color, 0.14);
+    font-size: 13px;
+}
+
+/* ---- search header ---- */
+.search-header {
+    min-height: 56px;
+    padding: 0 16px 0 18px;
+    border-bottom: 1px solid alpha(@window_fg_color, 0.10);
     background: transparent;
 }
 
-/* One large Apple-style top row */
-.search-header {
-    min-height: 72px;
-    padding: 10px 18px 9px 20px;
-    border-radius: 30px 30px 0 0;
-}
-
 .search-icon {
-    -gtk-icon-size: 31px;
-    margin-right: 3px;
-    opacity: 0.78;
+    -gtk-icon-size: 20px;
+    color: @accent_color;
+    opacity: 0.9;
+    margin-right: 4px;
 }
 
 window.spotlight-window entry,
@@ -30,677 +38,326 @@ window.spotlight-window entry:focus,
 window.spotlight-window entry:focus-within,
 window.spotlight-window entry:hover,
 window.spotlight-window entry > text,
-window.spotlight-window entry > text:focus,
-window.spotlight-window .search-input,
-window.spotlight-window .search-input * {
-    font-family: -apple-system, BlinkMacSystemFont,
-                 "SF Pro Display", "SF Pro Text",
-                 "Cantarell", sans-serif;
-    font-size: 26px;
+window.spotlight-window .search-input {
+    font-size: 18px;
     font-weight: 400;
     padding: 0 4px;
+    margin: 0;
+    min-height: 0;
     border: none;
     outline: none;
     background: transparent;
     background-color: transparent;
     background-image: none;
     box-shadow: none;
+    color: @window_fg_color;
+    caret-color: @accent_color;
 }
 
-/* Round browse-mode buttons like Apple's new Spotlight */
-.quick-filter {
-    min-width: 40px;
-    min-height: 40px;
-    padding: 0;
-    margin-left: 2px;
-    border-radius: 9999px;
-    box-shadow: none;
+window.spotlight-window .search-input placeholder {
+    color: alpha(@window_fg_color, 0.42);
 }
 
-.quick-filter image {
-    -gtk-icon-size: 20px;
+.category-chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 999px;
+    color: alpha(@window_fg_color, 0.62);
+    background-color: alpha(@window_fg_color, 0.08);
 }
 
-/* Results begin cleanly under the search row */
-.results-area,
-.results-area viewport,
-.results-area listbox,
-.results-area flowbox,
-listbox,
-listbox > row,
-flowbox,
-flowbox > flowboxchild {
-    background: transparent;
-    background-color: transparent;
+/* thin loading bar under the header */
+progressbar.loading-bar {
+    min-height: 2px;
+    margin: 0;
+}
+progressbar.loading-bar trough,
+progressbar.loading-bar progress {
+    min-height: 2px;
+    border-radius: 0;
     border: none;
-    box-shadow: none;
+    background-image: none;
+}
+progressbar.loading-bar trough {
+    background-color: transparent;
+}
+progressbar.loading-bar progress {
+    background-color: @accent_bg_color;
+}
+
+/* ---- results list ---- */
+.results-area,
+.results-area > viewport {
+    background: transparent;
+}
+
+.results-list,
+.results-list row {
+    background: transparent;
+}
+
+.results-list {
+    padding: 4px 8px 8px 8px;
+}
+
+.results-list row {
+    padding: 0;
+    margin: 0;
+    border-radius: 8px;
     outline: none;
 }
 
-.results-area {
-    padding: 7px 8px 12px 8px;
-}
-
-.result-item-list {
-    min-height: 48px;
-    padding: 8px 13px;
-    margin: 2px 8px;
-    border-radius: 12px;
+.results-list row.section-row,
+.results-list row.section-row:hover,
+.results-list row.section-row:selected {
     background: transparent;
 }
 
-.result-icon {
-    -gtk-icon-size: 36px;
+.section-header {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    color: alpha(@window_fg_color, 0.50);
+    padding: 12px 10px 4px 10px;
 }
 
-.result-title {
-    font-family: -apple-system, BlinkMacSystemFont,
-                 "SF Pro Text", "Cantarell", sans-serif;
-    font-size: 14px;
-    font-weight: 500;
+.results-list row:selected {
+    background-color: alpha(@window_fg_color, 0.10);
 }
 
-.result-snippet {
-    font-size: 12px;
-}
-
-.result-item-grid {
-    padding: 11px 7px;
-    margin: 2px;
-    border-radius: 15px;
-    background: transparent;
-}
-
-.result-icon-grid {
-    -gtk-icon-size: 62px;
-}
-
-.result-title-grid {
-    margin-top: 6px;
-    font-size: 12px;
-    font-weight: 500;
-}
-
-.result-thumb {
-    min-width: 36px;
-    min-height: 36px;
+.result-row {
+    min-height: 40px;
+    padding: 2px 10px;
     border-radius: 8px;
 }
 
-.result-thumb-grid {
-    min-width: 52px;
-    min-height: 52px;
-    border-radius: 10px;
+.icon-tile {
+    min-width: 28px;
+    min-height: 28px;
+    border-radius: 7px;
 }
 
-.ctx-menu {
-    padding: 5px;
-    border-radius: 14px;
+.icon-tile.tinted {
+    background-color: alpha(@accent_bg_color, 0.20);
+    color: @accent_color;
 }
 
-.ctx-menu-btn,
-.ctx-menu-btn-danger {
-    padding: 8px 12px;
-    border-radius: 9px;
-    border: none;
-    background: transparent;
-    box-shadow: none;
-}
-
-.uninstall-progress {
-    padding: 8px 16px;
-}
-
-.indexing-status-bar {
-    padding: 7px 14px;
-    margin: 0 18px 8px 18px;
-    border-radius: 10px;
-}
-
-.indexing-status-bar progressbar trough,
-.indexing-status-bar progressbar progress {
-    min-height: 4px;
-    border-radius: 9999px;
-}
-
-/* ============================================================
- * PulsarOS Spotlight — compact Apple Spotlight behaviour
- * ============================================================ */
-
-window.spotlight-window.compact {
-    border-radius: 30px;
-}
-
-window.spotlight-window.compact .search-header {
-    min-height: 60px;
-    border-radius: 30px;
-}
-
-window.spotlight-window.expanded {
-    border-radius: 30px;
-}
-
-window.spotlight-window.expanded .search-header {
-    border-radius: 30px 30px 0 0;
-}
-
-.spotlight-content {
-    background: transparent;
-}
-
-
-/* ============================================================
- * Spotlight: remove GTK Entry chrome
- * One single outer rounded pill only.
- * ============================================================ */
-
-window.spotlight-window .search-header entry.search-input,
-window.spotlight-window .search-header entry.search-input:hover,
-window.spotlight-window .search-header entry.search-input:focus,
-window.spotlight-window .search-header entry.search-input:focus-within,
-window.spotlight-window .search-header entry.search-input:active,
-window.spotlight-window .search-header entry.search-input > text,
-window.spotlight-window .search-header entry.search-input > text:hover,
-window.spotlight-window .search-header entry.search-input > text:focus {
-    background: transparent;
-    background-color: transparent;
-    background-image: none;
-
-    border: none;
-    border-width: 0;
-    border-radius: 0;
-
-    outline: none;
-    outline-width: 0;
-
-    box-shadow: none;
-
-    padding: 0 4px;
-}
-
-/* The OUTER pill owns the rounded shape */
-window.spotlight-window.compact .search-header {
-    border-radius: 30px;
-    border: none;
-    box-shadow: none;
-}
-
-
-/* ============================================================
- * FINAL Apple Spotlight search field cleanup
- * ============================================================ */
-
-/* Thinner outer Spotlight pill */
-window.spotlight-window.compact {
-    min-height: 58px;
-    border-radius: 24px;
-}
-
-window.spotlight-window.compact .search-header {
-    min-height: 44px;
-    padding: 5px 14px 5px 16px;
-    border-radius: 24px;
-    border-width: 0;
-    box-shadow: none;
-}
-
-/* Search icon slightly smaller */
-window.spotlight-window .search-icon {
-    -gtk-icon-size: 24px;
-    margin-right: 2px;
-}
-
-/* Kill ALL Gtk.Entry chrome/focus styling */
-window.spotlight-window entry.search-input,
-window.spotlight-window entry.search-input:hover,
-window.spotlight-window entry.search-input:focus,
-window.spotlight-window entry.search-input:focus-within,
-window.spotlight-window entry.search-input:active,
-window.spotlight-window entry.search-input:backdrop {
-    min-height: 0;
-
-    background: none;
-    background-color: transparent;
-    background-image: none;
-
-    border-style: none;
-    border-width: 0;
-    border-color: transparent;
-    border-radius: 0;
-
-    outline-style: none;
-    outline-width: 0;
-    outline-offset: 0;
-    outline-color: transparent;
-
-    box-shadow: none;
-
-    padding: 0 4px;
-    margin: 0;
-}
-
-/* GTK draws the editable text as a child node too */
-window.spotlight-window entry.search-input > text,
-window.spotlight-window entry.search-input > text:hover,
-window.spotlight-window entry.search-input > text:focus,
-window.spotlight-window entry.search-input > text:focus-within,
-window.spotlight-window entry.search-input > text:active,
-window.spotlight-window entry.search-input > text:backdrop {
-    background: none;
-    background-color: transparent;
-    background-image: none;
-
-    border-style: none;
-    border-width: 0;
-    border-color: transparent;
-    border-radius: 0;
-
-    outline-style: none;
-    outline-width: 0;
-    outline-color: transparent;
-
-    box-shadow: none;
-
-    padding: 0;
-    margin: 0;
-}
-
-/* Slightly smaller Apple-style search text */
-window.spotlight-window .search-input,
-window.spotlight-window .search-input > text {
-    font-size: 21px;
-}
-
-
-/* Raw GtkText — no inner entry rectangle */
-window.spotlight-window text.search-input,
-window.spotlight-window text.search-input:hover,
-window.spotlight-window text.search-input:focus,
-window.spotlight-window text.search-input:focus-within {
-    min-height: 0;
-
-    background: transparent;
-    background-color: transparent;
-    background-image: none;
-
-    border: none;
-    outline: none;
-    box-shadow: none;
-
-    padding: 0 4px;
-    margin: 0;
-
-    font-size: 20px;
-}
-
-window.spotlight-window.compact .search-header {
-    min-height: 38px;
-    padding: 4px 14px;
-    border-radius: 22px;
-}
-
-window.spotlight-window.compact {
-    border-radius: 22px;
-}
-
-window.spotlight-window .search-icon {
-    -gtk-icon-size: 22px;
-}
-
-/* FINAL: override MacTahoe/user GTK styling inside Spotlight */
-window.spotlight-window text.search-input,
-window.spotlight-window text.search-input:hover,
-window.spotlight-window text.search-input:focus,
-window.spotlight-window text.search-input:focus-within,
-window.spotlight-window text.search-input:active,
-window.spotlight-window text.search-input:backdrop {
-    min-height: 0;
-    min-width: 0;
-
-    background: transparent;
-    background-color: transparent;
-    background-image: none;
-
-    border: 0 none transparent;
-    border-radius: 0;
-
-    outline: 0 none transparent;
-    outline-offset: 0;
-
-    box-shadow: none;
-
-    padding: 0;
-    margin: 0;
-
-    font-size: 19px;
-}
-
-window.spotlight-window.compact,
-window.spotlight-window.compact .search-header {
-    min-height: 0;
-}
-
-window.spotlight-window.compact .search-header {
-    padding: 2px 13px;
-    border-radius: 23px;
-    border-bottom: none;
-    box-shadow: none;
-}
-
-window.spotlight-window.compact .search-icon {
+.icon-tile image {
     -gtk-icon-size: 20px;
-    margin: 0 4px 0 0;
 }
 
-/* Spotlight's private input node.
- * MacTahoe cannot style this through its normal `text` selectors.
- */
-pulsar-spotlight-input,
-pulsar-spotlight-input:hover,
-pulsar-spotlight-input:focus,
-pulsar-spotlight-input:focus-within,
-pulsar-spotlight-input:active,
-pulsar-spotlight-input:backdrop {
-    min-width: 0;
-    min-height: 0;
-
-    background: transparent;
-    background-color: transparent;
-    background-image: none;
-
-    border: none;
-    border-width: 0;
-    border-radius: 0;
-
-    outline: none;
-    outline-width: 0;
-
-    box-shadow: none;
-
-    margin: 0;
-    padding: 0 4px;
-
-    font-size: 19px;
+.result-icon {
+    -gtk-icon-size: 26px;
 }
 
-/* Actually thin compact Spotlight */
-window.spotlight-window.compact .search-header {
-    min-height: 38px;
-    padding: 3px 14px;
-    border-radius: 23px;
+.result-thumb,
+picture.result-thumb {
+    border-radius: 6px;
 }
 
-window.spotlight-window.compact {
-    border-radius: 23px;
+.result-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: @window_fg_color;
 }
 
-/* Real input is invisible. Only this plain label is painted. */
-window.spotlight-window .search-display {
-    font-family: -apple-system, BlinkMacSystemFont,
-                 "SF Pro Display", "SF Pro Text",
-                 "Cantarell", sans-serif;
-    font-size: 19px;
+.result-subtitle {
+    font-size: 12px;
     font-weight: 400;
-    padding: 0 4px;
-    margin: 0;
-    background: transparent;
-    border: none;
-    outline: none;
-    box-shadow: none;
+    color: alpha(@window_fg_color, 0.50);
 }
 
-window.spotlight-window .search-display.placeholder {
-    opacity: 0.48;
+.result-kind {
+    font-size: 12px;
+    color: alpha(@window_fg_color, 0.45);
 }
 
-window.spotlight-window.compact {
-    min-height: 44px;
-    border-radius: 22px;
+.result-check {
+    color: @accent_color;
+    font-weight: 700;
 }
 
-window.spotlight-window.compact .search-header {
-    min-height: 36px;
-    padding: 2px 13px;
-    border-radius: 22px;
-    background: transparent;
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
+.result-star {
+    color: @accent_color;
+    font-size: 11px;
 }
 
-window.spotlight-window.compact .search-icon {
-    -gtk-icon-size: 20px;
-    margin-right: 3px;
+.alias-chip {
+    font-size: 11px;
+    padding: 0 7px;
+    border-radius: 5px;
+    color: alpha(@window_fg_color, 0.70);
+    background-color: alpha(@window_fg_color, 0.10);
 }
 
-/* ============================================================
- * Spotlight results: no individual card backgrounds
- * ============================================================ */
-
-window.spotlight-window .results-area,
-window.spotlight-window .results-area viewport,
-window.spotlight-window listbox,
-window.spotlight-window listbox row,
-window.spotlight-window flowbox,
-window.spotlight-window flowbox flowboxchild,
-window.spotlight-window .result-item-list,
-window.spotlight-window .result-item-grid {
-    background: transparent;
-    background-color: transparent;
-    background-image: none;
-
-    border: none;
-    outline: none;
-    box-shadow: none;
+.keycap {
+    font-size: 11px;
+    font-weight: 600;
+    min-height: 18px;
+    min-width: 12px;
+    padding: 0 6px;
+    border-radius: 5px;
+    color: alpha(@window_fg_color, 0.72);
+    background-color: alpha(@window_fg_color, 0.10);
 }
 
-window.spotlight-window .result-item-list {
-    margin: 1px 8px;
-    border-radius: 10px;
+.keycap.badge {
+    font-size: 10px;
+    min-height: 16px;
+    padding: 0 5px;
+    color: alpha(@window_fg_color, 0.55);
 }
 
-window.spotlight-window .result-item-grid {
-    border-radius: 12px;
+.empty-state {
+    color: alpha(@window_fg_color, 0.45);
+    padding: 40px 0;
 }
 
-/* FINAL: remove ALL individual result-row backgrounds.
- * GtkListBox's GTK4 CSS node is `list`, not `listbox`.
- */
-
-window.spotlight-window list,
-window.spotlight-window list > row,
-window.spotlight-window list > row:hover,
-window.spotlight-window list > row:focus,
-window.spotlight-window list > row:active,
-window.spotlight-window list > row:selected,
-window.spotlight-window list > row:backdrop,
-window.spotlight-window list > row .result-item-list,
-window.spotlight-window list > row:hover .result-item-list,
-window.spotlight-window list > row:focus .result-item-list,
-window.spotlight-window list > row:active .result-item-list,
-window.spotlight-window list > row:selected .result-item-list {
-    background: transparent;
-    background-color: transparent;
-    background-image: none;
-
-    border: none;
-    outline: none;
-    box-shadow: none;
+/* ---- status banners ---- */
+.indexing-status-bar,
+.uninstall-progress {
+    font-size: 12px;
+    padding: 4px 16px;
+    color: alpha(@window_fg_color, 0.6);
 }
 
-/* Grid results too */
-window.spotlight-window flowbox,
-window.spotlight-window flowbox > flowboxchild,
-window.spotlight-window flowbox > flowboxchild:hover,
-window.spotlight-window flowbox > flowboxchild:focus,
-window.spotlight-window flowbox > flowboxchild:selected,
-window.spotlight-window .result-item-grid {
-    background: transparent;
-    background-color: transparent;
-    background-image: none;
-
-    border: none;
-    outline: none;
-    box-shadow: none;
+/* ---- footer ---- */
+.footer-bar {
+    min-height: 40px;
+    padding: 0 12px 0 14px;
+    border-top: 1px solid alpha(@window_fg_color, 0.10);
+    background-color: alpha(@window_fg_color, 0.03);
 }
 
-/* FINAL: remove ALL individual result-row backgrounds.
- * GtkListBox's GTK4 CSS node is `list`, not `listbox`.
- */
-
-window.spotlight-window list,
-window.spotlight-window list > row,
-window.spotlight-window list > row:hover,
-window.spotlight-window list > row:focus,
-window.spotlight-window list > row:active,
-window.spotlight-window list > row:selected,
-window.spotlight-window list > row:backdrop,
-window.spotlight-window list > row .result-item-list,
-window.spotlight-window list > row:hover .result-item-list,
-window.spotlight-window list > row:focus .result-item-list,
-window.spotlight-window list > row:active .result-item-list,
-window.spotlight-window list > row:selected .result-item-list {
-    background: transparent;
-    background-color: transparent;
-    background-image: none;
-
-    border: none;
-    outline: none;
-    box-shadow: none;
+.footer-app-icon {
+    -gtk-icon-size: 16px;
+    color: @accent_color;
 }
 
-/* Grid results too */
-window.spotlight-window flowbox,
-window.spotlight-window flowbox > flowboxchild,
-window.spotlight-window flowbox > flowboxchild:hover,
-window.spotlight-window flowbox > flowboxchild:focus,
-window.spotlight-window flowbox > flowboxchild:selected,
-window.spotlight-window .result-item-grid {
-    background: transparent;
-    background-color: transparent;
-    background-image: none;
-
-    border: none;
-    outline: none;
-    box-shadow: none;
+.footer-status {
+    font-size: 12px;
+    color: alpha(@window_fg_color, 0.55);
 }
 
-/* ============================================================
- * PulsarOS Spotlight — lightweight Apple-style motion
- * ============================================================ */
-
-/* Search pill */
-window.spotlight-window .search-header {
-    transition:
-        background-color 120ms ease-out,
-        box-shadow 120ms ease-out,
-        border-color 120ms ease-out,
-        opacity 90ms ease-out;
-}
-
-/* Focus gives the pill a very subtle inner highlight */
-window.spotlight-window .search-header.focused {
-    box-shadow:
-        inset 0 1px rgba(255,255,255,0.14);
-}
-
-/* Physical click feedback */
-window.spotlight-window .search-header.pressed {
-    opacity: 0.92;
-}
-
-/* Result rows animate instead of snapping */
-window.spotlight-window list > row .result-item-list,
-window.spotlight-window flowbox > flowboxchild .result-item-grid {
-    transition:
-        background-color 115ms ease-out,
-        box-shadow 115ms ease-out,
-        border-color 115ms ease-out,
-        opacity 100ms ease-out;
-}
-
-/* App/file icons get a tiny macOS-style hover grow */
-window.spotlight-window .result-icon,
-window.spotlight-window .result-icon-grid {
-    -gtk-icon-transform: scale(1);
-    transition:
-        -gtk-icon-transform 120ms ease-out,
-        opacity 120ms ease-out;
-}
-
-window.spotlight-window list > row:hover .result-icon {
-    -gtk-icon-transform: scale(1.06);
-}
-
-window.spotlight-window flowbox > flowboxchild:hover .result-icon-grid {
-    -gtk-icon-transform: scale(1.06);
-}
-
-/* Selected row remains responsive, not exaggerated */
-window.spotlight-window list > row:selected .result-icon,
-window.spotlight-window flowbox > flowboxchild:selected .result-icon-grid {
-    -gtk-icon-transform: scale(1.035);
-}
-
-/* Labels also fade subtly when state changes */
-window.spotlight-window .result-title,
-window.spotlight-window .result-title-grid,
-window.spotlight-window .result-snippet {
-    transition:
-        color 100ms ease-out,
-        opacity 100ms ease-out;
-}
-
-
-/* ============================================================
- * Spotlight controls — final themed category/grid controls
- * ============================================================ */
-
-window.spotlight-window .category-scroll,
-window.spotlight-window .category-scroll viewport {
-    background: transparent;
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
-}
-
-window.spotlight-window .category-bar {
-    padding: 4px 17px 9px 17px;
-    background: transparent;
-    border: none;
-}
-
-window.spotlight-window .category-btn {
-    min-height: 27px;
-    padding: 3px 13px;
-    border-radius: 9px;
-
+.footer-label {
     font-size: 12px;
     font-weight: 500;
+    color: alpha(@window_fg_color, 0.80);
+}
 
+.footer-sep {
+    min-width: 1px;
+    min-height: 16px;
+    background-color: alpha(@window_fg_color, 0.14);
+    margin: 0 4px;
+}
+
+button.toast-undo {
+    font-size: 12px;
+    font-weight: 600;
+    min-height: 0;
+    padding: 0 8px;
+    border-radius: 6px;
+    color: @accent_color;
+    background: alpha(@accent_bg_color, 0.16);
     box-shadow: none;
-
-    transition:
-        background-color 110ms ease-out,
-        border-color 110ms ease-out,
-        color 110ms ease-out;
 }
 
-window.spotlight-window .view-toggle {
-    min-width: 34px;
-    min-height: 34px;
-
-    padding: 0;
-    margin-left: 4px;
-
+/* ---- action panel + dialog card ---- */
+.action-panel,
+.dialog-card {
     border-radius: 10px;
-
-    transition:
-        background-color 110ms ease-out,
-        border-color 110ms ease-out,
-        opacity 100ms ease-out;
+    background-color: mix(@window_bg_color, @window_fg_color, 0.06);
+    border: 1px solid alpha(@window_fg_color, 0.16);
+    box-shadow: 0 8px 28px alpha(black, 0.35);
 }
 
-window.spotlight-window .view-toggle image {
-    -gtk-icon-size: 18px;
+.action-panel {
+    min-width: 330px;
+    margin: 0 12px 8px 12px;
+}
+
+.action-list,
+.action-list row {
+    background: transparent;
+}
+
+.action-list {
+    padding: 6px;
+}
+
+.action-list row {
+    border-radius: 7px;
+    padding: 0;
+}
+
+.action-list row:selected {
+    background-color: alpha(@window_fg_color, 0.12);
+}
+
+.action-item {
+    min-height: 34px;
+    padding: 0 10px;
+}
+
+.action-item.danger .action-title {
+    color: @error_color;
+}
+
+.action-title {
+    font-size: 13px;
+}
+
+.action-filter,
+window.spotlight-window .action-filter,
+window.spotlight-window .action-filter > text {
+    font-size: 13px;
+    min-height: 36px;
+    padding: 0 12px;
+    border: none;
+    box-shadow: none;
+    outline: none;
+    background: transparent;
+    color: @window_fg_color;
+    border-radius: 0;
+}
+
+.action-filter-wrap {
+    border-top: 1px solid alpha(@window_fg_color, 0.10);
+}
+
+.dialog-card {
+    padding: 16px;
+    min-width: 340px;
+}
+
+.dialog-title {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.dialog-body {
+    font-size: 12px;
+    color: alpha(@window_fg_color, 0.65);
+}
+
+.dialog-card entry {
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 7px;
+    border: 1px solid alpha(@window_fg_color, 0.18);
+    background-color: alpha(@window_fg_color, 0.06);
+    min-height: 30px;
+}
+
+.dialog-card button {
+    min-height: 28px;
+    padding: 0 14px;
+    border-radius: 7px;
+}
+
+.dialog-card button.destructive {
+    background-color: @error_bg_color;
+    color: @error_fg_color;
 }

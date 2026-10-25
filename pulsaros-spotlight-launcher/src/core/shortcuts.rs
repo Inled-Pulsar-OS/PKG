@@ -25,6 +25,8 @@ pub enum Act {
     Quit,
     CatNext,
     CatPrev,
+    Up,
+    Down,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
@@ -56,6 +58,8 @@ const fn b(key: &'static str, mods: Mods, act: Act) -> Binding {
 }
 
 pub static TABLE: &[Binding] = &[
+    b("up", NONE, Act::Up),
+    b("down", NONE, Act::Down),
     b("k", C, Act::ActionPanel),
     b("return", NONE, Act::Run(0)),
     b("kp_enter", NONE, Act::Run(0)),

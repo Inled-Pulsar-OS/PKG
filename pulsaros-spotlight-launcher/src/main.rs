@@ -25,6 +25,8 @@ fn load_css() {
     let css_paths = &[
         PathBuf::from("/usr/share/pulsaros-spotlight/index.css"),
         get_local_icon_dir().parent().unwrap().join("index.css"),
+        // development builds: run straight from the source tree
+        PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/data/index.css")),
     ];
 
     let mut css_file = None;

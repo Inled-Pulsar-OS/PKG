@@ -7,6 +7,12 @@ pub struct SpotlightConfig {
     pub is_grid_view: bool,
     pub clipboard_max_items: usize,
     pub clipboard_auto_paste: bool,
+    #[serde(default = "default_zoom")]
+    pub zoom: f64,
+}
+
+fn default_zoom() -> f64 {
+    1.0
 }
 
 impl Default for SpotlightConfig {
@@ -15,6 +21,7 @@ impl Default for SpotlightConfig {
             is_grid_view: false,
             clipboard_max_items: 50,
             clipboard_auto_paste: true,
+            zoom: 1.0,
         }
     }
 }
