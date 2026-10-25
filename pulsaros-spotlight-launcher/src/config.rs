@@ -7,6 +7,13 @@ pub struct SpotlightConfig {
     pub is_grid_view: bool,
     pub clipboard_max_items: usize,
     pub clipboard_auto_paste: bool,
+    /// Fetch daily currency rates for the calculator (cache is still read when false).
+    #[serde(default = "default_true")]
+    pub currency_rates: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for SpotlightConfig {
@@ -15,6 +22,7 @@ impl Default for SpotlightConfig {
             is_grid_view: false,
             clipboard_max_items: 50,
             clipboard_auto_paste: true,
+            currency_rates: true,
         }
     }
 }
