@@ -25,6 +25,8 @@ pub enum Act {
     Quit,
     CatNext,
     CatPrev,
+    /// Jump to mode N (1 Applications, 2 Files, 3 Actions, 4 Clipboard).
+    Mode(usize),
     Up,
     Down,
     /// Copy "question = answer" of the calculator row.
@@ -110,6 +112,10 @@ pub static TABLE: &[Binding] = &[
     b("left", C, Act::CatPrev),
     b("right", A, Act::CatNext),
     b("left", A, Act::CatPrev),
+    b("1", A, Act::Mode(1)),
+    b("2", A, Act::Mode(2)),
+    b("3", A, Act::Mode(3)),
+    b("4", A, Act::Mode(4)),
 ];
 
 pub fn lookup(key: &str, mods: Mods) -> Option<Act> {
@@ -166,6 +172,9 @@ mod tests {
         assert_eq!(lookup("d", C), Some(Act::DelItem));
         assert_eq!(lookup("d", CS), Some(Act::DelAll));
         assert_eq!(lookup("k", NONE), None);
+        assert_eq!(lookup("1", A), Some(Act::Mode(1)));
+        assert_eq!(lookup("4", A), Some(Act::Mode(4)));
+        assert_eq!(lookup("1", C), Some(Act::Quick(0)));
     }
 
     #[test]
