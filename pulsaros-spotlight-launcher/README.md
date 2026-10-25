@@ -230,7 +230,3 @@ with a blur extension.
 | Calculator | Basic math | Units, percentages, dates, time zones, currencies |
 | Extras | Clipboard history | Scripts, quicklinks, snippets, emoji, window switcher, dmenu |
 | Code | Rust plus a Python copy | Rust only, with a tested core |
-
-## License
-
-GPL-3.0-or-later.
