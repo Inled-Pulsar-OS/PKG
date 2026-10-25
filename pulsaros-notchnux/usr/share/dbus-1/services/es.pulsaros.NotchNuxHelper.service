@@ -1,3 +1,0 @@
-[D-BUS Service]
-Name=es.pulsaros.NotchNuxHelper
-Exec=/usr/bin/notchnux-drop-helper --invisible

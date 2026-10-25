@@ -1,21 +1,32 @@
 [org.gnome.shell]
 disable-user-extensions=false
-# liquid-glass@thinkingcoding1231.gmail.com is deliberately absent: it and
-# blur-my-shell@aunetx both draw glass backdrops and fight each other when both
-# are enabled. Blur My Shell is the default glass provider, so it must stay in
-# the list below. Keep this list in sync with
-# /etc/dconf/db/local.d/00-pulsaros-theme, which takes precedence.
-enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'pulsar-dock@inled.es', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'just-perfection-desktop@just-perfection', 'pulsaros-global-menu@inled.es', 'notchnux@adityasah.programs', 'pulsaros-spotlight-launcher@inled.es', 'pulsar-circle-to-search@inled.es', 'pulsaros-focus@inled.es', 'pulsaros-idle-guard@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'notification-position@drugo.dev', 'wiggle@mechtifs', 'gsconnect@andyholmes.github.io', 'no-overview@fthx', 'gnome-ui-tune@itstime.tech', 'macos-control-centre@pulsar.local', 'blur-my-shell@aunetx', 'flydrop@pulsaros.org']
-# The stock GNOME shell-extensions menu/places are intentionally disabled:
-# Pulsar OS ships its own macOS-style panels and dock.
-disabled-extensions=['ding@rastersoft.com', 'apps-menu@gnome-shell-extensions.gcampax.github.com', 'places-menu@gnome-shell-extensions.gcampax.github.com']
+enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'pulsar-dock@inled.es', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'pulsaros-ui-tweaks@inled.es', 'pulsaros-global-menu@inled.es', 'pulsar-notch@inled.es', 'pulsaros-spotlight-launcher@inled.es', 'pulsar-circle-to-search@inled.es', 'pulsaros-focus@inled.es', 'pulsaros-idle-guard@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'wiggle@mechtifs', 'no-overview@fthx', 'macos-control-centre-lg@pulsar.local', 'macos-notification-center@pulsar.local', 'liquid-glass@thinkingcoding1231.gmail.com', 'blur-my-shell@aunetx', 'flydrop@pulsaros.org']
+disabled-extensions=@as []
 favorite-apps=['org.gnome.Nautilus.desktop', 'pulsaros-recovery.desktop', 'pulsaros-spotlight.desktop', 'brave-browser.desktop', 'seafari.desktop', 'org.gnome.Terminal.desktop', 'org.gnome.Geary.desktop', 'org.gnome.Calendar.desktop', 'org.gnome.Calculator.desktop', 'com.github.xournalpp.xournalpp.desktop', 'org.gnome.Loupe.desktop', 'io.bassi.Amberol.desktop', 'org.gnome.clocks.desktop', 'org.gnome.Weather.desktop', 'es.inled.PulsarStore.desktop', 'es.inled.AppInstall.desktop']
 disable-extension-version-validation=true
 
-[org.gnome.shell.extensions.notification-position]
+[org.gnome.shell.extensions.pulsaros-ui-tweaks]
+activities-button=false
+clock-menu-position=1
+clock-menu-position-offset=12
+panel-size=32
+panel-button-padding-size=10
+panel-indicator-padding-size=10
+animation=1
+startup-status=0
+dash-icon-size=0
+osd-position=3
+notification-banner-position=2
+support-notifier-showed-version=36
+support-notifier-type=0
 position='top-right'
 show-indicator=false
 vertical-margin=10
+always-show-thumbnails=true
+hide-search=false
+increase-thumbnails-size='200%'
+overview-firefox-pip=true
+restore-thumbnails-background=true
 
 [org.gnome.desktop.background]
 picture-uri='file:///usr/share/backgrounds/pulsar-os-tahoe.png'
@@ -37,7 +48,6 @@ icon-theme='MacTahoe-blue-dark'
 color-scheme='prefer-dark'
 enable-animations=true
 
-
 [org.gnome.desktop.wm.preferences]
 button-layout='close,minimize,maximize:'
 
@@ -57,18 +67,6 @@ show-apps-at-top=false
 show-show-apps-button=false
 show-trash=true
 
-[org.gnome.shell.extensions.just-perfection]
-activities-button=false
-clock-menu-position=1
-clock-menu-position-offset=12
-panel-size=32
-panel-button-padding-size=10
-panel-indicator-padding-size=10
-animation=1
-startup-status=0
-dash-icon-size=0
-osd-position=3
-
 [org.gnome.shell.extensions.kiwimenu]
 activity-menu-visibility=false
 icon=10
@@ -84,17 +82,17 @@ popup-opacity=78
 brightness=0.6
 sigma=30
 
+[org.gnome.shell.extensions.blur-my-shell.popup]
+blur=false
+
 [org.gnome.shell.extensions.blur-my-shell.applications]
-blacklist=['Plank', 'Conky', 'gjs', 'Gjs', 'gjs-console', 'ding', 'DING', 'org.gnome.Shell.Extensions.DING', '*ding*', '*DING*', 'sayri', 'Sayri', 'es.inled.sayri', 'sayri-overlay', 'sayri-indicator', '*sayri*', '*Sayri*', 'sayri-tray', 'sayri-ui-clippy', 'sayri-companion', 'clippy', '*clippy*', 'Sayri Companion', 'flydrop', 'FlyDrop', 'es.pulsaros.FlyDrop', '*flydrop*', '*FlyDrop*', 'notchnux', 'NotchNux', '*notchnux*', '*NotchNux*']
+blacklist=['Plank', 'Conky', 'gjs', 'Gjs', 'gjs-console', 'sayri', 'Sayri', 'es.inled.sayri', 'sayri-overlay', 'sayri-indicator', '*sayri*', '*Sayri*', 'sayri-tray', 'sayri-ui-clippy', 'sayri-companion', 'clippy', '*clippy*', 'Sayri Companion', 'flydrop', 'FlyDrop', 'es.pulsaros.FlyDrop', '*flydrop*', '*FlyDrop*', 'notchnux', 'NotchNux', '*notchnux*', '*NotchNux*', 'pulsar-notch', '*pulsar-notch*']
 blur=true
 blur-on-overview=false
 corner-radius=18
 corner-when-maximized=false
 dynamic-opacity=false
 enable-all=true
-# Windows stay fully opaque: only the parts an app leaves transparent (rounded
-# corners, shadows) show any blur. Lowering this turns *every* window into a
-# uniform translucent sheet, which is not what we want.
 opacity=255
 pipeline='pipeline_default_rounded'
 sigma=23
@@ -115,6 +113,8 @@ blur=false
 brightness=0.6
 corner-radius=0
 force-light-text=false
+override-background=false
+pipeline='pipeline_default'
 sigma=30
 static-blur=false
 
@@ -122,94 +122,47 @@ static-blur=false
 brightness=0.6
 sigma=30
 
-[org.gnome.shell.extensions.liquid-glass@thinkingcoding1231.gmail.com]
-application-blur-radius=5
-application-content-opacity=0.85
-application-corner-radius=20.689655172413794
+[org.gnome.shell.extensions.liquid-glass]
+application-blur-radius=4
+application-content-opacity=1.0
+application-corner-radius=30.0
 application-glass-all-windows=true
+application-saturation=2.0
 application-tint-color='#000000'
-application-tint-strength=0.0
-dock-blur-radius=0
-dock-corner-radius=24.0
-dock-glass-expand=3
+application-tint-strength=0.2988505747126437
+application-window-whitelist=@as []
+blur-method=0
+blur-my-shell-popup-blur=false
+desktop-menu-corner-radius=14.0
+dock-blur-radius=3
+dock-brightness=1.0
+dock-contrast=0.99751243781094523
+dock-corner-radius=20.0
+dock-glass-displacement=330.0
+dock-glass-expand=0
+dock-glass-ior=0.0
+dock-glass-max-z=29.0
+dock-glass-shape-n=11.0
 dock-margin-bottom=5
-dock-tint-color='#000000'
-dock-tint-strength=0.1
+dock-saturation=1.0
+dock-tint-color='#241f31'
+dock-tint-strength=0.10112359550561797
 enable-application-glass=true
+enable-desktop-menu-glass=false
+enable-desktop-widgets=false
 enable-dock-glass=true
+enable-extra-menu-glass=true
+enable-glass-clock=true
+enable-launcher=true
 enable-menu-glass=true
 enable-notification-glass=true
 enable-osd-glass=true
 enable-quick-settings-glass=true
-glass-chroma-strength=0.1
-glass-displacement-scale=80.0
-glass-edge-smoothing=3.9
-glass-ior=1.83
-glass-max-z=28.0
-glass-profile-shape-n=4.0
-glass-rim-width=20.0
-glass-shininess=146.0
-menu-corner-radius=14.0
-menu-glass-expand=4
-notification-corner-radius=16.0
-osd-corner-radius=16.0
-quick-settings-corner-radius=18.0
-
-[org.gnome.settings-daemon.plugins.power]
-# Pulsar OS: auto-suspend S3 por inactividad ACTIVADO.
-# 15 min con corriente alterna, 10 min con batería.
-# La extensión pulsaros-idle-guard mantiene un inhibidor de idle+suspend
-# mientras la pantalla cambia de verdad (vídeo, animaciones, escritorio
-# remoto, juegos) y lo suelta en cuanto se queda estática; así gsd-power solo
-# suspende con la pantalla realmente quieta. gsd-power respeta además los
-# inhibidores de idle de otras apps (reproductores, videollamadas, etc.).
-# El bug de re-suspend tras hibernate se mitiga con el periodo de gracia de
-# pulsaros-hibernate (inhibidor de 'sleep' tras reanudar).
-# Configurable en Ajustes > Energía (1/2/5/10/15 min...).
-sleep-inactive-ac-type='suspend'
-sleep-inactive-ac-timeout=900
-sleep-inactive-battery-type='suspend'
-sleep-inactive-battery-timeout=600
-
-[org.gnome.desktop.session]
-# Apagado/bloqueo de pantalla tras 10 min sin actividad ni cambios en pantalla.
-idle-delay=uint32 600
-
-[org.gnome.shell.keybindings]
-toggle-overview=['<Super>s', '<Control>Up', '<Super>Up', '<Control><Alt>Up', '<Super><Alt>Up']
-toggle-application-view=['<Super>a']
-shift-overview-up=@as []
-shift-overview-down=@as []
-
-[org.gnome.shell.extensions.just-perfection]
-notification-banner-position=2
-
-[org.gnome.desktop.wm.keybindings]
-switch-input-source=['<Control>space']
-switch-input-source-backward=['<Shift><Control>space']
-# Ctrl+Alt+Up/Down are assigned to the App Grid (toggle-application-view).
-# Unbind GNOME's default vertical workspace switch so the accelerator is not
-# duplicated; that conflict was what froze the shell when opening the App Grid.
-switch-to-workspace-up=@as []
-switch-to-workspace-down=@as []
-
-[org.gnome.settings-daemon.plugins.media-keys]
-custom-keybindings=['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/']
-screensaver=['<Super>l', '<Control>l']
-[org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/]
-name='Spotlight'
-command='pulsaros-spotlight'
-binding='<Ctrl>space'
-
-[org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/]
-name='Spotlight'
-command='pulsaros-spotlight'
-binding='<Super>space'
-
-[org.gnome.shell.extensions.gnome-ui-tune]
-always-show-thumbnails=true
-hide-search=false
-increase-thumbnails-size='200%'
-overview-firefox-pip=true
-restore-thumbnails-background=true
-
+quick-settings-apply-to=1
+quick-settings-blur-radius=4
+quick-settings-corner-radius=35.632183908045981
+quick-settings-enable-adaptive-text-color=false
+quick-settings-glass-expand=0
+quick-settings-tint-color='#000000'
+quick-settings-tint-strength=0.10000000000000002
+quick-settings-toggle-corner-radius=32.5

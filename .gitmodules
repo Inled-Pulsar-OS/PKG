@@ -1,3 +1,36 @@
 [submodule "nautilus"]
 	path = nautilus
 	url = git@github.com:Inled-Pulsar-OS/finder.git
+[submodule "Pulsar-Liquid-Glass"]
+	path = Pulsar-Liquid-Glass
+	url = git@github.com:Inled-Pulsar-OS/Pulsar-Liquid-Glass.git
+[submodule "Pulsar-CC-27-Gnome"]
+	path = Pulsar-CC-27-Gnome
+	url = git@github.com:Inled-Pulsar-OS/Pulsar-CC-27-Gnome.git
+[submodule "Pulsar-Notification-Center"]
+	path = Pulsar-Notification-Center
+	url = git@github.com:Inled-Pulsar-OS/Pulsar-Notification-Center.git
+[submodule "Pulsar-Dock"]
+	path = Pulsar-Dock
+	url = git@github.com:Inled-Pulsar-OS/Pulsar-Dock.git
+[submodule "pulsar-notch"]
+	path = pulsar-notch
+	url = git@github.com:Inled-Pulsar-OS/pulsar-notch.git
+[submodule "gnome-shell-extension-appindicator"]
+	path = gnome-shell-extension-appindicator
+	url = git@github.com:Inled-Pulsar-OS/gnome-shell-extension-appindicator.git
+[submodule "compiz-alike-magic-lamp-effect"]
+	path = compiz-alike-magic-lamp-effect
+	url = git@github.com:Inled-Pulsar-OS/compiz-alike-magic-lamp-effect.git
+[submodule "pulsaros-ui-tweaks"]
+	path = pulsaros-ui-tweaks
+	url = git@github.com:Inled-Pulsar-OS/pulsaros-ui-tweaks.git
+[submodule "blur-my-shell"]
+	path = blur-my-shell
+	url = git@github.com:Inled-Pulsar-OS/blur-my-shell.git
+[submodule "no-overview"]
+	path = no-overview
+	url = git@github.com:Inled-Pulsar-OS/no-overview.git
+[submodule "wiggle"]
+	path = wiggle
+	url = git@github.com:Inled-Pulsar-OS/wiggle.git

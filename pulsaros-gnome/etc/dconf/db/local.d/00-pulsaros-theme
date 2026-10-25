@@ -5,7 +5,6 @@ icon-theme='MacTahoe-blue-dark'
 color-scheme='prefer-dark'
 enable-animations=true
 
-
 [org/gnome/desktop/background]
 picture-uri='file:///usr/share/backgrounds/pulsar-os-tahoe.png'
 picture-uri-dark='file:///usr/share/backgrounds/pulsar-os-tahoe.png'
@@ -24,12 +23,10 @@ name='MacTahoe-Dark-solid'
 
 [org/gnome/shell]
 # Keep in sync with /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override.
-enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'pulsar-dock@inled.es', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'just-perfection-desktop@just-perfection', 'pulsaros-global-menu@inled.es', 'notchnux@adityasah.programs', 'pulsaros-spotlight-launcher@inled.es', 'pulsar-circle-to-search@inled.es', 'pulsaros-focus@inled.es', 'pulsaros-idle-guard@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'notification-position@drugo.dev', 'wiggle@mechtifs', 'gsconnect@andyholmes.github.io', 'no-overview@fthx', 'gnome-ui-tune@itstime.tech', 'macos-control-centre@pulsar.local', 'blur-my-shell@aunetx', 'flydrop@pulsaros.org']
+enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'pulsar-dock@inled.es', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'pulsaros-ui-tweaks@inled.es', 'pulsaros-global-menu@inled.es', 'pulsar-notch@inled.es', 'pulsaros-spotlight-launcher@inled.es', 'pulsar-circle-to-search@inled.es', 'pulsaros-focus@inled.es', 'pulsaros-idle-guard@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'wiggle@mechtifs', 'no-overview@fthx', 'macos-control-centre-lg@pulsar.local', 'macos-notification-center@pulsar.local', 'liquid-glass@thinkingcoding1231.gmail.com', 'blur-my-shell@aunetx', 'flydrop@pulsaros.org']
 favorite-apps=['org.gnome.Nautilus.desktop', 'pulsaros-recovery.desktop', 'pulsaros-spotlight.desktop', 'brave-browser.desktop', 'seafari.desktop', 'org.gnome.Terminal.desktop', 'org.gnome.Geary.desktop', 'org.gnome.Calendar.desktop', 'org.gnome.Calculator.desktop', 'com.github.xournalpp.xournalpp.desktop', 'org.gnome.Loupe.desktop', 'io.bassi.Amberol.desktop', 'org.gnome.clocks.desktop', 'org.gnome.Weather.desktop', 'es.inled.PulsarStore.desktop', 'es.inled.AppInstall.desktop']
 disable-extension-version-validation=true
-# The stock GNOME shell-extensions menu/places are intentionally disabled:
-# Pulsar OS ships its own macOS-style panels and dock.
-disabled-extensions=['ding@rastersoft.com', 'apps-menu@gnome-shell-extensions.gcampax.github.com', 'places-menu@gnome-shell-extensions.gcampax.github.com']
+disabled-extensions=@as []
 
 [org/gnome/shell/extensions/dash-to-dock]
 dock-position='BOTTOM'
@@ -51,7 +48,7 @@ height-fraction=0.9
 preferred-monitor=-2
 preferred-monitor-by-connector='primary'
 
-[org/gnome/shell/extensions/just-perfection]
+[org/gnome/shell/extensions/pulsaros-ui-tweaks]
 activities-button=false
 clock-menu-position=1
 clock-menu-position-offset=12
@@ -65,11 +62,14 @@ osd-position=3
 notification-banner-position=2
 support-notifier-showed-version=36
 support-notifier-type=0
-
-[org/gnome/shell/extensions/notification-position]
 position='top-right'
 show-indicator=false
 vertical-margin=10
+always-show-thumbnails=true
+hide-search=false
+increase-thumbnails-size='200%'
+overview-firefox-pip=true
+restore-thumbnails-background=true
 
 [org/gnome/shell/extensions/kiwimenu]
 activity-menu-visibility=false
@@ -86,17 +86,17 @@ popup-opacity=78
 brightness=0.6
 sigma=30
 
+[org/gnome/shell/extensions/blur-my-shell/popup]
+blur=false
+
 [org/gnome/shell/extensions/blur-my-shell/applications]
-blacklist=['Plank', 'Conky', 'gjs', 'Gjs', 'gjs-console', 'ding', 'DING', 'org.gnome.Shell.Extensions.DING', '*ding*', '*DING*', 'sayri', 'Sayri', 'es.inled.sayri', 'sayri-overlay', 'sayri-indicator', '*sayri*', '*Sayri*', 'sayri-tray', 'sayri-ui-clippy', 'sayri-companion', 'clippy', '*clippy*', 'Sayri Companion', 'flydrop', 'FlyDrop', 'es.pulsaros.FlyDrop', '*flydrop*', '*FlyDrop*', 'notchnux', 'NotchNux', '*notchnux*', '*NotchNux*']
+blacklist=['Plank', 'Conky', 'gjs', 'Gjs', 'gjs-console', 'sayri', 'Sayri', 'es.inled.sayri', 'sayri-overlay', 'sayri-indicator', '*sayri*', '*Sayri*', 'sayri-tray', 'sayri-ui-clippy', 'sayri-companion', 'clippy', '*clippy*', 'Sayri Companion', 'flydrop', 'FlyDrop', 'es.pulsaros.FlyDrop', '*flydrop*', '*FlyDrop*', 'notchnux', 'NotchNux', '*notchnux*', '*NotchNux*', 'pulsar-notch', '*pulsar-notch*']
 blur=true
 blur-on-overview=false
 corner-radius=18
 corner-when-maximized=false
 dynamic-opacity=false
 enable-all=true
-# Windows stay fully opaque: only the parts an app leaves transparent (rounded
-# corners, shadows) show any blur. Lowering this turns *every* window into a
-# uniform translucent sheet, which is not what we want.
 opacity=255
 pipeline='pipeline_default_rounded'
 sigma=23
@@ -107,7 +107,6 @@ blur=true
 brightness=0.6
 override-background=true
 pipeline='pipeline_default_rounded'
-# sigma=0 built a zero-radius blur, which is no blur at all.
 sigma=30
 static-blur=true
 style-dash-to-dock=2
@@ -128,43 +127,53 @@ brightness=0.6
 sigma=30
 
 [org/gnome/settings-daemon/plugins/power]
-# Pulsar OS: auto-suspend S3 por inactividad ACTIVADO.
-# 15 min con corriente alterna, 10 min con batería.
-# La extensión pulsaros-idle-guard mantiene un inhibidor de idle+suspend
-# mientras la pantalla cambia de verdad (vídeo, animaciones, escritorio
-# remoto, juegos) y lo suelta en cuanto se queda estática; así gsd-power solo
-# suspende con la pantalla realmente quieta. gsd-power respeta además los
-# inhibidores de idle de otras apps (reproductores, videollamadas, etc.).
-# El bug de re-suspend tras hibernate se mitiga con el periodo de gracia de
-# pulsaros-hibernate (inhibidor de 'sleep' tras reanudar).
-# Configurable en Ajustes > Energía (1/2/5/10/15 min...).
 sleep-inactive-ac-type='suspend'
 sleep-inactive-ac-timeout=900
 sleep-inactive-battery-type='suspend'
 sleep-inactive-battery-timeout=600
 
 [org/gnome/desktop/session]
-# Apagado/bloqueo de pantalla tras 10 min sin actividad ni cambios en pantalla.
 idle-delay=uint32 600
 
 [org/gnome/shell/extensions/liquid-glass]
-# Default settings for Liquid Glass extension extracted from host
-# Configuración por defecto para la extensión Liquid Glass extraída del host
-application-blur-radius=5
+application-blur-radius=4
 application-content-opacity=1.0
-application-corner-radius=20.689655172413794
+application-corner-radius=30.0
 application-glass-all-windows=true
 application-saturation=2.0
 application-tint-color='#000000'
-application-tint-strength=0.0
+application-tint-strength=0.2988505747126437
 application-window-whitelist=@as []
 blur-method=0
-dock-corner-radius=24.0
-dock-glass-expand=3
-dock-tint-color='#000000'
+blur-my-shell-popup-blur=false
+desktop-menu-corner-radius=14.0
+dock-blur-radius=3
+dock-brightness=1.0
+dock-contrast=0.99751243781094523
+dock-corner-radius=20.0
+dock-glass-displacement=330.0
+dock-glass-expand=0
+dock-glass-ior=0.0
+dock-glass-max-z=29.0
+dock-glass-shape-n=11.0
+dock-margin-bottom=5
+dock-saturation=1.0
+dock-tint-color='#241f31'
+dock-tint-strength=0.10112359550561797
 enable-application-glass=true
-enable-menu-glass=false
+enable-desktop-menu-glass=false
+enable-desktop-widgets=false
+enable-dock-glass=true
+enable-extra-menu-glass=true
+enable-glass-clock=true
+enable-launcher=true
+enable-menu-glass=true
+enable-notification-glass=true
+enable-osd-glass=true
 enable-quick-settings-glass=true
+glass-ao-intensity=0.22058823529411764
+glass-ao-radius=7.5
+glass-blur-downscale=2
 glass-chroma-strength=0.0
 glass-displacement-scale=188.37209302325581
 glass-edge-smoothing=0.0
@@ -176,7 +185,6 @@ menu-corner-radius=14.0
 menu-glass-expand=4
 panel-menu-corner-radius=14.0
 panel-menu-glass-expand=4
-desktop-menu-corner-radius=14.0
 menu-tint-color='#000000'
 notification-corner-radius=16.0
 notification-tint-color='#000000'
@@ -184,8 +192,13 @@ osd-corner-radius=16.0
 osd-tint-color='#000000'
 output-logs=false
 quick-settings-apply-to=1
-quick-settings-corner-radius=18.0
+quick-settings-blur-radius=4
+quick-settings-corner-radius=35.632183908045981
 quick-settings-enable-adaptive-text-color=false
+quick-settings-glass-expand=0
+quick-settings-tint-color='#000000'
+quick-settings-tint-strength=0.10000000000000002
+quick-settings-toggle-corner-radius=32.5
 
 [org/gnome/desktop/input-sources]
 xkb-options=['ctrl:swap_lwin_lctl', 'ctrl:swap_rwin_rctl']
@@ -204,8 +217,6 @@ maximize=['<Primary>Up', '<Control>Up', '<Super>Up']
 unmaximize=['<Primary>Down', '<Control>Down', '<Super>Down', '<Alt>F5']
 switch-to-workspace-left=['<Super>Left']
 switch-to-workspace-right=['<Super>Right']
-# Ctrl+Alt+Up/Down belong to the App Grid (toggle-application-view); unbind the
-# default vertical workspace switch to avoid a duplicate accelerator.
 switch-to-workspace-up=@as []
 switch-to-workspace-down=@as []
 
@@ -251,12 +262,3 @@ new-window='<Primary>n'
 close-tab='<Primary>w'
 close-window='<Primary>q'
 find='<Primary>f'
-
-[org/gnome/shell/extensions/gnome-ui-tune]
-always-show-thumbnails=true
-hide-search=false
-increase-thumbnails-size='200%'
-overview-firefox-pip=true
-restore-thumbnails-background=true
-
-

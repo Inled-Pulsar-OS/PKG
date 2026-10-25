@@ -2,32 +2,8 @@
 # ==============================================================================
 # Pulsar OS - GNOME Shell extensions reconciler
 # ==============================================================================
-# English:
-#   Make sure the GNOME Shell extensions Pulsar ships as enabled are actually
-#   enabled for existing users, also after an update.
-#
-#   GNOME stores `enabled-extensions` in the *user* dconf database, and the user
-#   database takes precedence over the system database shipped by this package
-#   (/etc/dconf/db/local.d/00-pulsaros-theme). Once anything (an older Pulsar
-#   release, the Extensions app, a theme tool) has written that list into the
-#   user database, the system default is shadowed forever: any extension added
-#   to the default set by a later update never turns on. That is how the Control
-#   Centre, Notification Centre and Notch panels silently went missing after
-#   updating.
-#
-#   This script only *adds back* missing defaults. It never disables anything:
-#   extensions the user turned off explicitly live in `disabled-extensions` and
-#   are respected. The OOTB `disabled-extensions` set is left untouched too.
-#
-# Español:
-#   Se asegura de que las extensiones de GNOME Shell que Pulsar trae activadas
-#   sigan activadas para los usuarios ya existentes, también tras una
-#   actualización (la base de datos dconf del usuario tapa la del sistema).
-#   Solo vuelve a añadir los valores por defecto que falten; nunca desactiva
-#   nada y respeta lo que el usuario haya desactivado a mano.
-#
-# Uso / Usage:
-#   pulsaros-reconcile-extensions [--quiet] [--dry-run]
+# Se asegura de que las extensiones de GNOME Shell oficiales de Pulsar OS
+# estén activadas y purga extensiones obsoletas/descontinuadas.
 # ==============================================================================
 
 set -u
@@ -36,7 +12,6 @@ SCHEMA="org.gnome.shell"
 KEY_ENABLED="enabled-extensions"
 KEY_DISABLED="disabled-extensions"
 
-# Archivo de configuración dconf del sistema que este paquete instala.
 THEME_FILE="${PULSAR_THEME_FILE:-/etc/dconf/db/local.d/00-pulsaros-theme}"
 
 QUIET=0
@@ -54,11 +29,6 @@ done
 
 log() { [ "$QUIET" -eq 1 ] || echo "pulsaros-reconcile-extensions: $*"; }
 
-# ------------------------------------------------------------------------------
-# Helpers de listas GVariant
-# ------------------------------------------------------------------------------
-
-# "['a', 'b']" -> una entrada por línea (sin líneas vacías)
 parse_list() {
     printf '%s' "$1" \
         | sed -e 's/^@as //' -e 's/^\[//' -e 's/\]$//' \
@@ -68,7 +38,6 @@ parse_list() {
         | grep -v '^$' || true
 }
 
-# elementos... -> "['a', 'b']"
 build_list() {
     local out="[" first=1 e
     for e in "$@"; do
@@ -79,14 +48,36 @@ build_list() {
     echo "$out]"
 }
 
-# contiene <aguja> <lista-separada-por-saltos>
 contains() {
     [ -n "$2" ] && printf '%s\n' "$2" | grep -Fxq -- "$1"
 }
 
-# ------------------------------------------------------------------------------
-# Leer los valores por defecto que instala este paquete
-# ------------------------------------------------------------------------------
+DEPRECATED_EXTENSIONS=(
+    "macos-control-centre@pulsar.local"
+    "pulsar-island@inled.es"
+    "pulsaros-control-center-button@inled.es"
+    "gaze@gundulabs.com"
+    "ding@rastersoft.com"
+    "gsconnect@andyholmes.github.io"
+    "notchnux@adityasah.programs"
+    "just-perfection-desktop@just-perfection"
+    "notification-position@drugo.dev"
+    "gnome-ui-tune@itstime.tech"
+    "apps-menu@gnome-shell-extensions.gcampax.github.com"
+    "auto-move-windows@gnome-shell-extensions.gcampax.github.com"
+    "drive-menu@gnome-shell-extensions.gcampax.github.com"
+    "launch-new-instance@gnome-shell-extensions.gcampax.github.com"
+    "light-style@gnome-shell-extensions.gcampax.github.com"
+    "native-window-placement@gnome-shell-extensions.gcampax.github.com"
+    "screenshot-window-sizer@gnome-shell-extensions.gcampax.github.com"
+    "status-icons@gnome-shell-extensions.gcampax.github.com"
+    "system-monitor@gnome-shell-extensions.gcampax.github.com"
+    "windowsNavigator@gnome-shell-extensions.gcampax.github.com"
+    "workspace-indicator@gnome-shell-extensions.gcampax.github.com"
+    "places-menu@gnome-shell-extensions.gcampax.github.com"
+    "window-list@gnome-shell-extensions.gcampax.github.com"
+)
+
 if [ ! -r "$THEME_FILE" ]; then
     log "no se puede leer $THEME_FILE; nada que reconciliar."
     exit 0
@@ -103,48 +94,74 @@ if [ -z "$DEFAULT_ENABLED_RAW" ]; then
 fi
 
 DEFAULT_NL="$(parse_list "$DEFAULT_ENABLED_RAW")"
-
 CUR_ENABLED_RAW="$(gsettings get "$SCHEMA" "$KEY_ENABLED" 2>/dev/null || true)"
 CUR_DISABLED_RAW="$(gsettings get "$SCHEMA" "$KEY_DISABLED" 2>/dev/null || true)"
 CUR_ENABLED_NL="$(parse_list "$CUR_ENABLED_RAW")"
 CUR_DISABLED_NL="$(parse_list "$CUR_DISABLED_RAW")"
 
-# ------------------------------------------------------------------------------
-# Calcular la lista final (actual + los defaults que falten)
-# ------------------------------------------------------------------------------
+# 1. Filter out deprecated extensions from user's current enabled list
 NEW_ARR=()
+CHANGED=0
 while IFS= read -r u; do
-    [ -n "$u" ] && NEW_ARR+=("$u")
+    [ -n "$u" ] || continue
+    is_deprecated=0
+    for dep in "${DEPRECATED_EXTENSIONS[@]}"; do
+        if [ "$u" = "$dep" ]; then
+            is_deprecated=1
+            CHANGED=1
+            log "  · eliminando extensión obsoleta: $u"
+            break
+        fi
+    done
+    [ "$is_deprecated" -eq 0 ] && NEW_ARR+=("$u")
 done <<< "$CUR_ENABLED_NL"
 
-ADDED_ARR=()
+# 2. Add missing defaults
 while IFS= read -r uuid; do
     [ -n "$uuid" ] || continue
-    contains "$uuid" "$CUR_ENABLED_NL" && continue
-    if contains "$uuid" "$CUR_DISABLED_NL"; then
-        log "  · $uuid está en disabled-extensions (elección del usuario); se respeta."
-        continue
+    # If already in NEW_ARR, skip
+    found=0
+    for cur in "${NEW_ARR[@]}"; do
+        if [ "$cur" = "$uuid" ]; then
+            found=1
+            break
+        fi
+    done
+    if [ "$found" -eq 0 ]; then
+        log "  + agregando extensión requerida: $uuid"
+        NEW_ARR+=("$uuid")
+        CHANGED=1
     fi
-    NEW_ARR+=("$uuid")
-    ADDED_ARR+=("$uuid")
 done <<< "$DEFAULT_NL"
 
-if [ "${#ADDED_ARR[@]}" -eq 0 ]; then
-    exit 0
-fi
-
-log "reactivando ${#ADDED_ARR[@]} extensión(es) que faltaban: ${ADDED_ARR[*]}"
+# 3. Clean deprecated extensions from disabled-extensions too
+CLEAN_DISABLED=()
+while IFS= read -r u; do
+    [ -n "$u" ] || continue
+    is_deprecated=0
+    for dep in "${DEPRECATED_EXTENSIONS[@]}"; do
+        if [ "$u" = "$dep" ]; then
+            is_deprecated=1
+            break
+        fi
+    done
+    [ "$is_deprecated" -eq 0 ] && CLEAN_DISABLED+=("$u")
+done <<< "$CUR_DISABLED_NL"
 
 NEW_VARIANT="$(build_list "${NEW_ARR[@]}")"
+NEW_DISABLED_VARIANT="$(build_list "${CLEAN_DISABLED[@]}")"
 
-if [ "$DRY_RUN" -eq 1 ]; then
-    log "[dry-run] gsettings set $SCHEMA $KEY_ENABLED $NEW_VARIANT"
-    exit 0
+if [ "$CHANGED" -eq 1 ]; then
+    if [ "$DRY_RUN" -eq 1 ]; then
+        log "[dry-run] gsettings set $SCHEMA $KEY_ENABLED $NEW_VARIANT"
+    else
+        gsettings set "$SCHEMA" "$KEY_ENABLED" "$NEW_VARIANT" 2>/dev/null || true
+        gsettings set "$SCHEMA" "$KEY_DISABLED" "$NEW_DISABLED_VARIANT" 2>/dev/null || true
+        log "enabled-extensions y disabled-extensions reconciliados."
+    fi
 fi
 
-if gsettings set "$SCHEMA" "$KEY_ENABLED" "$NEW_VARIANT" 2>/dev/null; then
-    log "enabled-extensions actualizado."
-else
-    echo "pulsaros-reconcile-extensions: no se pudo escribir $KEY_ENABLED" >&2
-    exit 1
-fi
+# Ensure Blur My Shell popup blur is disabled so it doesn't draw a dark card behind CC & NC
+gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur false 2>/dev/null || true
+
+exit 0

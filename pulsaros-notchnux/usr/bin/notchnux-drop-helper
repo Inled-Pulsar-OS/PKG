@@ -1,2 +1,0 @@
-#!/bin/sh
-exec python3 /usr/share/notchnux/notchnux_drop_helper.py "$@"
