@@ -19,12 +19,18 @@
 //!   `Use "<q>" with <engine>` Fallback rows. `ActionDesc{id,title,argv}`: `argv` is `Some` when
 //!   the action is a plain process spawn (commands, URLs); `None` means the UI handles it by id
 //!   (`open`, `favorite`, `alias`, `disable`).
+//! - `snippets::{Snippets, render, Env}`: snippet CRUD/search (`db/snippets.json`) and the placeholder
+//!   engine (`{clipboard} {date[:fmt]} {time} {datetime} {uuid} {cursor} {argument name=".."}`); see module doc.
+//! - `emoji::{search, record_use, all}`: embedded `data/emoji.tsv` (made by `scripts/gen-emoji.py`),
+//!   ranked search, recents first on empty query, skin tones folded as `Emoji::variants`.
 #![allow(dead_code)]
 
 pub mod commands;
+pub mod emoji;
 pub mod frecency;
 pub mod ranker;
 pub mod root_search;
 pub mod settings;
+pub mod snippets;
 pub mod shortcuts;
 pub mod store;
