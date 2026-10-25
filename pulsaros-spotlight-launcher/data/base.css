@@ -472,3 +472,25 @@ textview.output-view text {
     font-size: 14px;
     color: alpha(@window_fg_color, 0.55);
 }
+
+/* dialog form fields: beat the big search-input rule above */
+window.spotlight-window .dialog-card entry,
+window.spotlight-window .dialog-card entry:focus,
+window.spotlight-window .dialog-card entry:focus-within,
+window.spotlight-window .dialog-card entry:hover {
+    font-size: 13px;
+    font-weight: 400;
+    padding: 0 8px;
+    min-height: 32px;
+    border-radius: 8px;
+    border: 1px solid alpha(@window_fg_color, 0.18);
+    background-color: alpha(@window_fg_color, 0.06);
+}
+
+window.spotlight-window .dialog-card entry > text {
+    font-size: 13px;
+    font-weight: 400;
+    padding: 0;
+    background: transparent;
+    border: none;
+}
