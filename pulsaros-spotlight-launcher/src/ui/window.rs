@@ -19,21 +19,19 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Duration;
 
-const CATEGORIES: &[(&str, &str)] = &[
-    ("all", "All"),
-    ("applications", "Apps"),
-    ("documents", "Docs"),
-    ("images", "Images"),
-    ("audio", "Music"),
-    ("video", "Video"),
-    ("clipboard", "Clipboard"),
-    ("web", "Web"),
+/// (category id, mode name). The name is the entry placeholder; the glyph is
+/// `data/icons/mode-<id>-symbolic.svg`. "documents" is the Files mode.
+const CATEGORIES: &[(&str, &str, &str)] = &[
+    ("all", "Spotlight", "spotlight"),
+    ("applications", "Applications", "applications"),
+    ("documents", "Files", "files"),
+    ("actions", "Actions", "actions"),
+    ("clipboard", "Clipboard", "clipboard"),
 ];
 
 const DEBOUNCE_MS: u64 = 80;
-const PLACEHOLDER: &str = "Search for apps and commands\u{2026}";
-const BASE_W: i32 = 750;
-const BASE_H: i32 = 480;
+const BASE_W: i32 = 712;
+const BASE_H: i32 = 640;
 const ZOOM_MIN: f64 = 0.8;
 const ZOOM_MAX: f64 = 1.6;
 
@@ -70,7 +68,7 @@ struct Dialog {
 pub struct SpotlightWindow {
     window: gtk4::ApplicationWindow,
     search_entry: gtk4::Entry,
-    category_chip: gtk4::Label,
+    mode_icon: gtk4::Image,
     result_view: Rc<ResultView>,
     config: Rc<RefCell<SpotlightConfig>>,
     backend: SearchBackend,
@@ -99,6 +97,7 @@ pub struct SpotlightWindow {
     loading_count: Cell<u32>,
     loading_timer: RefCell<Option<glib::SourceId>>,
     footer_status: gtk4::Label,
+    toast_pill: gtk4::Box,
     toast_undo: gtk4::Button,
     toast_cb: RefCell<Option<Rc<dyn Fn()>>>,
     toast_timer: RefCell<Option<glib::SourceId>>,
@@ -126,6 +125,21 @@ fn pulsar_liquid_glass_enabled() -> bool {
         .any(|uuid| uuid.as_str() == "liquid-glass@thinkingcoding1231.gmail.com")
 }
 
+/// Load `data/icons/<name>` from the install dirs, falling back to the source tree.
+fn icon_file(name: &str) -> Option<PathBuf> {
+    [get_local_icon_dir(), get_icon_dir(), PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/data/icons"))]
+        .into_iter()
+        .map(|d| d.join(name))
+        .find(|f| f.exists())
+}
+
+fn set_mode_icon(img: &gtk4::Image, glyph: &str) {
+    match icon_file(&format!("mode-{glyph}-symbolic.svg")) {
+        Some(f) => img.set_from_gicon(&gtk4::gio::FileIcon::new(&gtk4::gio::File::for_path(f))),
+        None => img.set_icon_name(Some(if glyph == "more" { "view-more-symbolic" } else { "system-search-symbolic" })),
+    }
+}
+
 fn now_secs() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -147,8 +161,8 @@ fn keycap_row(keys: &[String]) -> gtk4::Box {
     b
 }
 
-/// Title of the primary action for the footer / panel.
-fn primary_title(r: &RowData) -> String {
+/// Title of the primary action for the panel and the selected-row hint.
+pub(crate) fn primary_title(r: &RowData) -> String {
     match r.row.kind {
         RowKind::App => "Open Application".into(),
         RowKind::Command => "Run".into(),
@@ -223,19 +237,17 @@ fn zoom_css(z: f64) -> String {
          window.spotlight-window .section-header {{ font-size: {}px; }}
          window.spotlight-window .icon-tile {{ min-width: {}px; min-height: {}px; }}
          window.spotlight-window .result-icon {{ -gtk-icon-size: {}px; }}
-         window.spotlight-window .search-header {{ min-height: {}px; }}
-         window.spotlight-window .footer-bar {{ min-height: {}px; }}",
+         window.spotlight-window .search-header {{ min-height: {}px; }}",
         p(13.0),
-        p(18.0),
-        p(40.0),
+        p(30.0),
+        p(56.0),
+        p(17.0),
         p(13.0),
         p(12.0),
-        p(11.0),
-        p(28.0),
-        p(28.0),
-        p(26.0),
-        p(56.0),
-        p(40.0)
+        p(44.0),
+        p(44.0),
+        p(40.0),
+        p(76.0)
     )
 }
 
@@ -284,43 +296,46 @@ impl SpotlightWindow {
             gtk4::style_context_add_provider_for_display(&display, &zoom_provider, 1001);
         }
 
+        let root_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+        root_box.add_css_class("spotlight-root");
         let main_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         main_box.add_css_class("spotlight-main");
-        window.set_child(Some(&main_box));
+        main_box.set_vexpand(true);
+        // Clip children to the rounded corners (the CSS `overflow` property is not accepted by GTK).
+        main_box.set_overflow(gtk4::Overflow::Hidden);
+        root_box.append(&main_box);
+        window.set_child(Some(&root_box));
 
-        // -- Search header --
-        let search_container = gtk4::Box::new(gtk4::Orientation::Horizontal, 10);
+        // -- Search header: mode glyph, big light input, `...` disc --
+        let search_container = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
         search_container.add_css_class("search-header");
 
-        let search_icon = {
-            let mut img = None;
-            for base in &[get_local_icon_dir(), get_icon_dir()] {
-                let f = base.join("spotlight-symbolic.svg");
-                if f.exists() {
-                    img = Some(gtk4::Image::from_file(f));
-                    break;
-                }
-            }
-            img.unwrap_or_else(|| gtk4::Image::from_icon_name("system-search-symbolic"))
-        };
-        search_icon.add_css_class("search-icon");
+        let mode_icon = gtk4::Image::new();
+        mode_icon.set_pixel_size(28);
+        mode_icon.add_css_class("search-icon");
+        set_mode_icon(&mode_icon, "spotlight");
 
         let search_entry = gtk4::Entry::builder()
-            .placeholder_text(PLACEHOLDER)
+            .placeholder_text(CATEGORIES[0].1)
             .hexpand(true)
             .has_frame(false)
             .valign(gtk4::Align::Center)
             .build();
         search_entry.add_css_class("search-input");
 
-        let category_chip = gtk4::Label::new(Some("All"));
-        category_chip.add_css_class("category-chip");
-        category_chip.set_valign(gtk4::Align::Center);
-        category_chip.set_tooltip_text(Some("Tab: change filter"));
+        let more_button = gtk4::Button::new();
+        let more_img = gtk4::Image::new();
+        more_img.set_pixel_size(22);
+        set_mode_icon(&more_img, "more");
+        more_button.set_child(Some(&more_img));
+        more_button.add_css_class("disc-button");
+        more_button.set_valign(gtk4::Align::Center);
+        more_button.set_focusable(false);
+        more_button.set_tooltip_text(Some("Actions (Ctrl+K)"));
 
-        search_container.append(&search_icon);
+        search_container.append(&mode_icon);
         search_container.append(&search_entry);
-        search_container.append(&category_chip);
+        search_container.append(&more_button);
         main_box.append(&search_container);
 
         // -- Loading bar --
@@ -329,37 +344,25 @@ impl SpotlightWindow {
         loading_bar.set_opacity(0.0);
         main_box.append(&loading_bar);
 
-        // -- Footer (built first: the result view's selection hook updates it) --
-        let footer = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
-        footer.add_css_class("footer-bar");
-        let footer_icon = gtk4::Image::from_icon_name("system-search-symbolic");
-        footer_icon.add_css_class("footer-app-icon");
-        let footer_status = gtk4::Label::builder().label("Spotlight").xalign(0.0).build();
-        footer_status.add_css_class("footer-status");
+        // -- Toast: floating pill under the panel --
+        let toast_pill = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+        toast_pill.add_css_class("toast-pill");
+        toast_pill.set_halign(gtk4::Align::Center);
+        toast_pill.set_valign(gtk4::Align::Start);
+        toast_pill.set_visible(false);
+        let footer_status = gtk4::Label::builder().xalign(0.0).build();
         footer_status.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+        footer_status.set_max_width_chars(48);
         let toast_undo = gtk4::Button::with_label("Undo");
         toast_undo.add_css_class("toast-undo");
         toast_undo.set_visible(false);
         toast_undo.set_focusable(false);
-        let footer_primary = gtk4::Label::new(None);
-        footer_primary.add_css_class("footer-label");
-        let spacer = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
-        spacer.set_hexpand(true);
-        let sep = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        sep.add_css_class("footer-sep");
-        let actions_label = gtk4::Label::new(Some("Actions"));
-        actions_label.add_css_class("footer-label");
-        let primary_keys = keycap_row(&shortcuts::label(Act::Run(0)));
-        let panel_keys = keycap_row(&shortcuts::label(Act::ActionPanel));
-        footer.append(&footer_icon);
-        footer.append(&footer_status);
-        footer.append(&toast_undo);
-        footer.append(&spacer);
-        footer.append(&footer_primary);
-        footer.append(&primary_keys);
-        footer.append(&sep);
-        footer.append(&actions_label);
-        footer.append(&panel_keys);
+        toast_pill.append(&footer_status);
+        toast_pill.append(&toast_undo);
+        let toast_slot = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+        toast_slot.add_css_class("toast-slot");
+        toast_slot.append(&toast_pill);
+        root_box.append(&toast_slot);
 
         // -- Uninstall progress banner --
         let progress_revealer = gtk4::Revealer::builder()
@@ -446,8 +449,7 @@ impl SpotlightWindow {
         dialog_root.append(&dialog_entry);
         dialog_root.append(&dialog_buttons);
 
-        // -- Result view (selection hook updates the footer's primary action) --
-        let fp = footer_primary.clone();
+        // -- Result view --
         let result_view_cell: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
         let activate_cell = result_view_cell.clone();
         let context_cell: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
@@ -465,7 +467,7 @@ impl SpotlightWindow {
                     cb();
                 }
             },
-            move |row| fp.set_label(&row.map(|r| primary_title(&r)).unwrap_or_default()),
+            |_| {},
         ));
 
         let overlay = gtk4::Overlay::new();
@@ -476,7 +478,6 @@ impl SpotlightWindow {
         main_box.append(&overlay);
         main_box.append(&progress_revealer);
         main_box.append(&indexing_revealer);
-        main_box.append(&footer);
 
         let store = Store::new(Store::default_dir());
         let settings = Settings::load(&store);
@@ -485,7 +486,7 @@ impl SpotlightWindow {
         let spotlight = Rc::new(Self {
             window,
             search_entry,
-            category_chip,
+            mode_icon,
             result_view,
             config: config_rc,
             backend,
@@ -524,6 +525,7 @@ impl SpotlightWindow {
             loading_count: Cell::new(0),
             loading_timer: RefCell::new(None),
             footer_status,
+            toast_pill,
             toast_undo,
             toast_cb: RefCell::new(None),
             toast_timer: RefCell::new(None),
@@ -558,6 +560,9 @@ impl SpotlightWindow {
             s.reset_toast();
         });
 
+        let s = spotlight.clone();
+        more_button.connect_clicked(move |_| s.open_panel());
+
         spotlight.setup_panel_events();
         spotlight.setup_ui_interactions();
         spotlight
@@ -586,8 +591,7 @@ impl SpotlightWindow {
         self.history_mode.set(false);
         self.calc_hist_mode.set(false);
         *self.category.borrow_mut() = "all".to_string();
-        self.category_chip.set_label("All");
-        self.search_entry.set_placeholder_text(Some(PLACEHOLDER));
+        self.set_mode(0);
         self.search_entry.set_text("");
         self.do_search(false);
     }
@@ -622,6 +626,7 @@ impl SpotlightWindow {
 
     fn toast(self: &Rc<Self>, msg: &str, undo: Option<Rc<dyn Fn()>>) {
         self.footer_status.set_label(msg);
+        self.toast_pill.set_visible(true);
         self.toast_undo.set_visible(undo.is_some());
         *self.toast_cb.borrow_mut() = undo;
         if let Some(id) = self.toast_timer.borrow_mut().take() {
@@ -637,7 +642,7 @@ impl SpotlightWindow {
     }
 
     fn reset_toast(&self) {
-        self.footer_status.set_label("Spotlight");
+        self.toast_pill.set_visible(false);
         self.toast_undo.set_visible(false);
         *self.toast_cb.borrow_mut() = None;
     }
@@ -930,7 +935,7 @@ impl SpotlightWindow {
             return;
         }
         let sections: SectionList = match category.as_str() {
-            "all" | "applications" => {
+            "all" | "applications" | "actions" => {
                 let found: Vec<SearchResult> = if category == "all" && !is_empty {
                     self.backend
                         .search_instant(&query, "all", DEFAULT_LIMIT)
@@ -961,6 +966,12 @@ impl SpotlightWindow {
                         }
                     }
                 }
+                if category == "actions" {
+                    for (_, rows) in secs.iter_mut() {
+                        rows.retain(|r| r.row.kind == RowKind::Command);
+                    }
+                    secs.retain(|(t, rows)| !rows.is_empty() && t != "Favorites" && t != "Suggestions");
+                }
                 if category == "applications" {
                     for (_, rows) in secs.iter_mut() {
                         rows.retain(|r| r.row.kind == RowKind::App);
@@ -985,7 +996,7 @@ impl SpotlightWindow {
 
         // Async Tracker file search (appended to Results, or its own section)
         let needs_files = (!is_empty || ["documents", "images", "audio", "video"].contains(&category.as_str()))
-            && !["applications", "clipboard", "web"].contains(&category.as_str());
+            && !["applications", "actions", "clipboard", "web"].contains(&category.as_str());
         let target = if category == "all" { "Results" } else { "Files" };
         if needs_files {
             self.loading_begin();
@@ -1040,15 +1051,33 @@ impl SpotlightWindow {
         self.do_search(false);
     }
 
-    fn cycle_category(self: &Rc<Self>, step: i32) {
+    fn mode_index(&self) -> usize {
         let cur = self.category.borrow().clone();
-        let idx = CATEGORIES.iter().position(|(id, _)| *id == cur).unwrap_or(0) as i32;
-        let (id, label) = CATEGORIES[(idx + step).rem_euclid(CATEGORIES.len() as i32) as usize];
+        CATEGORIES.iter().position(|(id, _, _)| *id == cur).unwrap_or(0)
+    }
+
+    fn mode_name(&self) -> &'static str {
+        CATEGORIES[self.mode_index()].1
+    }
+
+    /// Switch mode: updates category, glyph and placeholder (no search).
+    fn set_mode(&self, idx: usize) {
+        let (id, name, glyph) = CATEGORIES[idx % CATEGORIES.len()];
         *self.category.borrow_mut() = id.to_string();
-        self.category_chip.set_label(label);
+        set_mode_icon(&self.mode_icon, glyph);
+        self.search_entry.set_placeholder_text(Some(name));
+    }
+
+    fn cycle_category(self: &Rc<Self>, step: i32) {
+        let n = CATEGORIES.len() as i32;
+        self.goto_mode((self.mode_index() as i32 + step).rem_euclid(n) as usize);
+    }
+
+    fn goto_mode(self: &Rc<Self>, idx: usize) {
+        self.set_mode(idx);
         *self.current_dir.borrow_mut() = None;
-        self.search_entry.set_placeholder_text(Some(PLACEHOLDER));
         self.history_mode.set(false);
+        self.calc_hist_mode.set(false);
         self.do_search(false);
     }
 
@@ -1599,7 +1628,7 @@ impl SpotlightWindow {
             self.close_panel();
         } else if self.calc_hist_mode.get() {
             self.calc_hist_mode.set(false);
-            self.search_entry.set_placeholder_text(Some(PLACEHOLDER));
+            self.search_entry.set_placeholder_text(Some(self.mode_name()));
             self.search_entry.set_text("");
             self.do_search(false);
         } else if self.history_mode.get() {
@@ -1608,7 +1637,7 @@ impl SpotlightWindow {
         } else if self.current_dir.borrow().is_some() {
             *self.current_dir.borrow_mut() = None;
             self.search_entry.set_text("");
-            self.search_entry.set_placeholder_text(Some(PLACEHOLDER));
+            self.search_entry.set_placeholder_text(Some(self.mode_name()));
             self.do_search(false);
         } else if !self.search_entry.text().is_empty() {
             self.search_entry.set_text("");
@@ -1754,6 +1783,7 @@ impl SpotlightWindow {
             }
             Act::CatNext => self.cycle_category(1),
             Act::CatPrev => self.cycle_category(-1),
+            Act::Mode(n) => self.goto_mode(n),
         }
         stop
     }
@@ -1841,6 +1871,6 @@ mod tests {
 
     #[test]
     fn zoom_css_scales() {
-        assert!(zoom_css(1.5).contains("min-height: 60px"));
+        assert!(zoom_css(1.5).contains("min-height: 84px"));
     }
 }

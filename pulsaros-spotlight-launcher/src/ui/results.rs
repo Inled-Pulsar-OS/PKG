@@ -562,7 +562,7 @@ impl ResultView {
         tile.set_valign(gtk4::Align::Center);
         tile.set_halign(gtk4::Align::Start);
         tile.set_hexpand(false);
-        tile.set_size_request(28, 28);
+        tile.set_size_request(44, 44);
         let theme = gtk4::IconTheme::for_display(&gdk::Display::default().expect("display"));
         let themed = |name: &str, fallback: &str| {
             gtk4::Image::from_icon_name(if theme.has_icon(name) { name } else { fallback })
@@ -571,7 +571,7 @@ impl ResultView {
             RowKind::App => {
                 let desktop = row.id.strip_prefix("app:").unwrap_or(&row.id);
                 let img = app_icon(&row.icon_name, desktop);
-                img.set_pixel_size(26);
+                img.set_pixel_size(40);
                 img.add_css_class("result-icon");
                 img.set_halign(gtk4::Align::Center);
                 img.set_hexpand(true);
@@ -579,14 +579,14 @@ impl ResultView {
             }
             RowKind::File if r.payload.as_ref().map_or(false, |p| has_thumbnail_support(&p.url)) => {
                 let url = &r.payload.as_ref().unwrap().url;
-                tile.append(&self.thumbnail_icon(url, 28));
+                tile.append(&self.thumbnail_icon(url, 44));
             }
             RowKind::File => {
                 let img = match &r.payload {
                     Some(p) => result_icon(p),
                     None => themed(&row.icon_name, "text-x-generic"),
                 };
-                img.set_pixel_size(24);
+                img.set_pixel_size(36);
                 img.set_halign(gtk4::Align::Center);
                 img.set_hexpand(true);
                 tile.append(&img);
@@ -601,7 +601,7 @@ impl ResultView {
                     _ => (row.icon_name.as_str(), "system-run-symbolic"),
                 };
                 let img = themed(name, fb);
-                img.set_pixel_size(18);
+                img.set_pixel_size(22);
                 img.set_halign(gtk4::Align::Center);
                 img.set_hexpand(true);
                 tile.append(&img);
@@ -610,7 +610,7 @@ impl ResultView {
         b.append(&tile);
 
         // title + subtitle
-        let text = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+        let text = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         text.set_hexpand(true);
         text.set_valign(gtk4::Align::Center);
         let title = gtk4::Label::builder()
@@ -625,7 +625,6 @@ impl ResultView {
             let l = gtk4::Label::builder()
                 .label(&sub)
                 .xalign(0.0)
-                .hexpand(true)
                 .ellipsize(if row.kind == RowKind::File {
                     gtk4::pango::EllipsizeMode::Middle
                 } else {
@@ -661,6 +660,12 @@ impl ResultView {
             l.add_css_class("result-kind");
             acc.append(&l);
         }
+        // Primary-action hint, only visible on the selected row (see CSS).
+        let hint = gtk4::Label::new(Some(
+            crate::ui::window::primary_title(r).split_whitespace().next().unwrap_or("Open"),
+        ));
+        hint.add_css_class("row-hint");
+        acc.append(&hint);
         if n < 9 {
             let keys = crate::core::shortcuts::label(crate::core::shortcuts::Act::Quick(n));
             for k in keys {
