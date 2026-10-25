@@ -5,6 +5,16 @@
  * and provides native Wayland keystroke injection (Paste) via Clutter VirtualInputDevice over D-Bus.
  * 
  * Compatible with GNOME 45-50 & Wayland.
+ *
+ * Window switcher D-Bus API (session bus):
+ *   bus name    es.inled.PulsarosSpotlight.Windows
+ *   object path /es/inled/PulsarosSpotlight/Windows
+ *   interface   es.inled.PulsarosSpotlight.Windows
+ *   ListWindows() -> a(ussss)  (id, title, wm_class, app_id, workspace); normal windows only,
+ *                              workspace is the 0-based index as a string ("-1" if sticky)
+ *   Activate(u id)             switch to the workspace and focus the window
+ *   Close(u id)                politely ask the window to close (Meta.Window.delete)
+ *   Unknown ids return the D-Bus error org.freedesktop.DBus.Error.InvalidArgs.
  */
 
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -29,6 +39,28 @@ const DBUS_NODE = Gio.DBusNodeInfo.new_for_xml(`
 </node>
 `);
 const DBUS_INFO = DBUS_NODE.lookup_interface(DBUS_NAME);
+
+const WIN_NAME = 'es.inled.PulsarosSpotlight.Windows';
+const WIN_PATH = '/es/inled/PulsarosSpotlight/Windows';
+const WIN_INFO = Gio.DBusNodeInfo.new_for_xml(`
+<node>
+  <interface name="${WIN_NAME}">
+    <method name="ListWindows"><arg type="a(ussss)" direction="out" name="windows"/></method>
+    <method name="Activate"><arg type="u" direction="in" name="id"/></method>
+    <method name="Close"><arg type="u" direction="in" name="id"/></method>
+  </interface>
+</node>
+`).lookup_interface(WIN_NAME);
+
+function _windowList() {
+    return global.get_window_actors()
+        .map(a => a.meta_window)
+        .filter(w => w && w.get_window_type() === Meta.WindowType.NORMAL && !w.skip_taskbar);
+}
+
+function _windowId(w) {
+    return Number(w.get_id());
+}
 
 /**
  * Returns the default Clutter seat across GNOME Shell versions.
@@ -103,6 +135,8 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
         this._virtualKeyboard = null;
         this._dbusRegistrationId = 0;
         this._nameId = 0;
+        this._winRegistrationId = 0;
+        this._winNameId = 0;
 
         // Initialize virtual keyboard device for injecting keystrokes into any Wayland window
         try {
@@ -144,6 +178,56 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
             console.error('[SpotlightLauncher] Failed to register D-Bus interface:', e);
         }
         
+        // Window switcher interface (separate name so clients can probe it independently)
+        try {
+            this._winRegistrationId = Gio.DBus.session.register_object(
+                WIN_PATH,
+                WIN_INFO,
+                (connection, sender, objectPath, interfaceName, methodName, parameters, invocation) => {
+                    try {
+                        if (methodName === 'ListWindows') {
+                            const rows = _windowList().map(w => [
+                                _windowId(w),
+                                w.get_title() || '',
+                                w.get_wm_class() || '',
+                                (w.get_gtk_application_id && w.get_gtk_application_id()) ||
+                                    (w.get_sandboxed_app_id && w.get_sandboxed_app_id()) || '',
+                                String(w.get_workspace() ? w.get_workspace().index() : -1),
+                            ]);
+                            invocation.return_value(new GLib.Variant('(a(ussss))', [rows]));
+                            return;
+                        }
+                        const [id] = parameters.deepUnpack();
+                        const win = _windowList().find(w => _windowId(w) === id);
+                        if (!win) {
+                            invocation.return_dbus_error('org.freedesktop.DBus.Error.InvalidArgs', `No window ${id}`);
+                            return;
+                        }
+                        if (methodName === 'Activate') {
+                            const ws = win.get_workspace();
+                            if (ws) ws.activate_with_focus(win, global.get_current_time());
+                            else win.activate(global.get_current_time());
+                        } else if (methodName === 'Close') {
+                            win.delete(global.get_current_time());
+                        } else {
+                            invocation.return_dbus_error('org.freedesktop.DBus.Error.UnknownMethod', methodName);
+                            return;
+                        }
+                        invocation.return_value(null);
+                    } catch (e) {
+                        console.error('[SpotlightLauncher] Windows API error:', e);
+                        invocation.return_dbus_error('org.freedesktop.DBus.Error.Failed', String(e));
+                    }
+                },
+                null,
+                null
+            );
+            this._winNameId = Gio.bus_own_name(
+                Gio.BusType.SESSION, WIN_NAME, Gio.BusNameOwnerFlags.NONE, null, null, null);
+        } catch (e) {
+            console.error('[SpotlightLauncher] Failed to register Windows D-Bus interface:', e);
+        }
+
         // Connect mouse button press event (left click)
         this._clickedId = this._button.connect('button-press-event', (actor, event) => {
             if (event.get_button() === 1) {
@@ -223,6 +307,15 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
         if (this._nameId) {
             Gio.bus_unown_name(this._nameId);
             this._nameId = 0;
+        }
+
+        if (this._winRegistrationId) {
+            Gio.DBus.session.unregister_object(this._winRegistrationId);
+            this._winRegistrationId = 0;
+        }
+        if (this._winNameId) {
+            Gio.bus_unown_name(this._winNameId);
+            this._winNameId = 0;
         }
 
         this._virtualKeyboard = null;

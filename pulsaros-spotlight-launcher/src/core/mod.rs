@@ -29,10 +29,15 @@
 //!   engine (`{clipboard} {date[:fmt]} {time} {datetime} {uuid} {cursor} {argument name=".."}`); see module doc.
 //! - `emoji::{search, record_use, all}`: embedded `data/emoji.tsv` (made by `scripts/gen-emoji.py`),
 //!   ranked search, recents first on empty query, skin tones folded as `Emoji::variants`.
+//! - `dmenu`: `Args::{wants_dmenu,parse}`, `read_items(reader)`, `filter(query,&items)` (fuzzy via ranker),
+//!   `Outcome::{Selected(s),Cancelled}` with `exit_code()` (0/1) and `stdout()`.
+//! - `windows`: `WindowEntry{id,title,wm_class,app_id,workspace}`, `rank(q,&wins,&frecency,now)`,
+//!   `to_row`/`rows(..)` give `Row`s with id `window:<id>` and actions `window_activate`/`window_close`.
 #![allow(dead_code)]
 
 pub mod commands;
 pub mod emoji;
+pub mod dmenu;
 pub mod frecency;
 pub mod quicklinks;
 pub mod ranker;
@@ -42,3 +47,4 @@ pub mod settings;
 pub mod snippets;
 pub mod shortcuts;
 pub mod store;
+pub mod windows;
