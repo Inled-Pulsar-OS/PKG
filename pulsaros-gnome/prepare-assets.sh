@@ -11,7 +11,19 @@ set -e
 STAGE_DIR="${1:-/tmp/pulsaros-stage}"
 STAGE_DIR="$(realpath -m "$STAGE_DIR")" 2>/dev/null || STAGE_DIR="/tmp/pulsaros-stage"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PKG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+if [ -n "$PKG_ROOT_OVERRIDE" ] && [ -d "$PKG_ROOT_OVERRIDE" ]; then
+    PKG_ROOT="$PKG_ROOT_OVERRIDE"
+elif [ -d "$SCRIPT_DIR/../Pulsar-CC-27-Gnome" ]; then
+    PKG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+elif [ -d "$SCRIPT_DIR/../../../../Pulsar-CC-27-Gnome" ]; then
+    PKG_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+elif [ -d "/home/jaime/Documentos/pulsar/PKG/Pulsar-CC-27-Gnome" ]; then
+    PKG_ROOT="/home/jaime/Documentos/pulsar/PKG"
+else
+    echo "❌ ERROR: No se encontró la raíz de PKG con los submódulos Git!" >&2
+    exit 1
+fi
+echo "ℹ️ Usando PKG_ROOT: $PKG_ROOT"
 
 EXT_DIR="$STAGE_DIR/usr/share/gnome-shell/extensions"
 SCHEMA_DIR="$STAGE_DIR/usr/share/glib-2.0/schemas"
@@ -159,7 +171,10 @@ fi
 
 # 11. Pulsar Idle Guard
 echo "📦 Instalando Pulsar Idle Guard..."
-IDLE_SRC="$SCRIPT_DIR/usr/share/gnome-shell/extensions/pulsaros-idle-guard@inled.es"
+IDLE_SRC="$PKG_ROOT/pulsaros-gnome/usr/share/gnome-shell/extensions/pulsaros-idle-guard@inled.es"
+if [ ! -d "$IDLE_SRC" ]; then
+    IDLE_SRC="$SCRIPT_DIR/usr/share/gnome-shell/extensions/pulsaros-idle-guard@inled.es"
+fi
 if [ -d "$IDLE_SRC" ]; then
     IDLE_DEST="$EXT_DIR/pulsaros-idle-guard@inled.es"
     rm -rf "$IDLE_DEST"
