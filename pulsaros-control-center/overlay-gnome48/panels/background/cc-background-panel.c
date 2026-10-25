@@ -753,7 +753,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
         {
           safe_set_boolean (dock_settings, dock_schema, "apply-custom-theme", TRUE);
           safe_set_string (dock_settings, dock_schema, "transparency-mode", "FIXED");
-          safe_set_double (dock_settings, dock_schema, "background-opacity", 0.15);
+          safe_set_double (dock_settings, dock_schema, "background-opacity", 0.0);
           safe_set_boolean (dock_settings, dock_schema, "customize-alphas", FALSE);
           safe_set_boolean (dock_settings, dock_schema, "custom-theme-shrink", TRUE);
           safe_set_double (dock_settings, dock_schema, "height-fraction", 0.9);
@@ -849,7 +849,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
         "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur false ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme true ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' ; "
-        "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 ; "
+        "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.0 ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock custom-theme-shrink true ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock customize-alphas false >/dev/null 2>&1 &\"",
         opacity, all_win_str, enable_app_str
@@ -901,7 +901,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
         "/bin/sh -c \""
         "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme false ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' ; "
-        "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 ; "
+        "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.0 ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock custom-theme-shrink true ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock customize-alphas false ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur true ; "
