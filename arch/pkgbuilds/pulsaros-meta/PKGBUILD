@@ -1,6 +1,6 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-meta
-pkgver=1.0.11
+pkgver=1.0.12
 pkgrel=1
 pkgdesc="Metapackage that pulls in every Pulsar OS package (delivers newly added packages to existing installations)"
 arch=(any)
@@ -12,10 +12,12 @@ depends=(
   gnome-macos-remap-wayland
   gnome-rounded-blur
   pulsar-pear-sound-theme
+  pulsar-store
   pulsaros-boot-icons
   pulsaros-bootsound
   pulsaros-branding
   pulsaros-circle-to-search
+  pulsaros-cloud
   pulsaros-emoji-fonts
   pulsaros-feedback
   pulsaros-flydrop
@@ -31,6 +33,7 @@ depends=(
   pulsaros-theme
   pulsaros-timemachine
   pulsaros-update
+  pulsaros-vpn
   pulsaros-welcome
   pulsaros-whatsnew
   sayri
