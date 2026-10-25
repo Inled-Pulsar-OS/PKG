@@ -1,18 +1,19 @@
-/* PulsarOS Spotlight - light tweaks (colors follow libadwaita) */
+/* PulsarOS Spotlight - light glass (the reference look: periwinkle) */
 
 window.spotlight-window.light .spotlight-main {
-    border-color: alpha(black, 0.12);
+    color: @glass_ink_light;
 }
 
 window.spotlight-window.light .results-list row:selected {
-    background-color: alpha(black, 0.07);
+    background-color: rgba(255, 255, 255, 0.42);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 window.spotlight-window.light .keycap {
-    background-color: alpha(black, 0.07);
+    background-color: alpha(black, 0.06);
 }
 
 window.spotlight-window.light .action-panel,
 window.spotlight-window.light .dialog-card {
-    box-shadow: 0 8px 28px alpha(black, 0.18);
+    box-shadow: 0 12px 36px rgba(20, 28, 80, 0.26);
 }

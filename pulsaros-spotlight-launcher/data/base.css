@@ -1,6 +1,15 @@
-/* PulsarOS Spotlight - Raycast-style layout.
-   Colors come from libadwaita named colors, so the scheme and the accent
-   follow the system live. dark.css / light.css only tune alpha values. */
+/* PulsarOS Spotlight - macOS Tahoe glass layout.
+   Shell tokens live here; light.css / dark.css set the tint per scheme and
+   liquid-glass.css lifts the alpha when a compositor blur is present.
+   Text colors come from libadwaita named colors. */
+
+/* ---- tokens ---- */
+@define-color glass_light_top rgba(206, 218, 255, 0.92);
+@define-color glass_light_bottom rgba(192, 208, 252, 0.90);
+@define-color glass_dark_top rgba(52, 55, 70, 0.88);
+@define-color glass_dark_bottom rgba(36, 38, 50, 0.88);
+@define-color glass_ink_light #1c2348;
+@define-color glass_ink_dark #f2f4fb;
 
 window.spotlight-window,
 .spotlight-window {
@@ -8,29 +17,37 @@ window.spotlight-window,
     background-color: transparent;
     box-shadow: none;
     border: none;
+    font-family: "SF Pro Display", "SF Pro Text", "Inter", "Cantarell", sans-serif;
+}
+
+.spotlight-root {
+    margin: 40px 36px 0 36px;
+    background: transparent;
 }
 
 .spotlight-main {
-    border-radius: 14px;
-    background-color: @window_bg_color;
+    border-radius: 30px;
+    background-color: @glass_light_top;
+    background-image: linear-gradient(to bottom, @glass_light_top, @glass_light_bottom);
     color: @window_fg_color;
-    border: 1px solid alpha(@window_fg_color, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.60);
+    box-shadow: 0 14px 34px -2px rgba(20, 28, 80, 0.34), 0 2px 8px rgba(20, 28, 80, 0.14);
     font-size: 13px;
 }
 
 /* ---- search header ---- */
 .search-header {
-    min-height: 56px;
-    padding: 0 16px 0 18px;
-    border-bottom: 1px solid alpha(@window_fg_color, 0.10);
+    min-height: 76px;
+    margin: 0 20px;
+    padding: 0 0 2px 0;
+    border-bottom: 1px solid alpha(@window_fg_color, 0.14);
     background: transparent;
 }
 
 .search-icon {
-    -gtk-icon-size: 20px;
-    color: @accent_color;
-    opacity: 0.9;
-    margin-right: 4px;
+    -gtk-icon-size: 28px;
+    color: alpha(@window_fg_color, 0.62);
+    margin: 0 4px 0 0;
 }
 
 window.spotlight-window entry,
@@ -39,8 +56,8 @@ window.spotlight-window entry:focus-within,
 window.spotlight-window entry:hover,
 window.spotlight-window entry > text,
 window.spotlight-window .search-input {
-    font-size: 18px;
-    font-weight: 400;
+    font-size: 30px;
+    font-weight: 300;
     padding: 0 4px;
     margin: 0;
     min-height: 0;
@@ -51,26 +68,32 @@ window.spotlight-window .search-input {
     background-image: none;
     box-shadow: none;
     color: @window_fg_color;
-    caret-color: @accent_color;
+    caret-color: @window_fg_color;
 }
 
 window.spotlight-window .search-input placeholder {
-    color: alpha(@window_fg_color, 0.42);
+    color: alpha(@window_fg_color, 0.50);
 }
 
-.category-chip {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 2px 9px;
+button.disc-button {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0;
     border-radius: 999px;
+    border: none;
+    background: transparent;
+    box-shadow: none;
     color: alpha(@window_fg_color, 0.62);
-    background-color: alpha(@window_fg_color, 0.08);
+    -gtk-icon-size: 22px;
+}
+button.disc-button:hover {
+    background-color: alpha(@window_fg_color, 0.10);
 }
 
 /* thin loading bar under the header */
 progressbar.loading-bar {
     min-height: 2px;
-    margin: 0;
+    margin: 0 20px;
 }
 progressbar.loading-bar trough,
 progressbar.loading-bar progress {
@@ -83,7 +106,7 @@ progressbar.loading-bar trough {
     background-color: transparent;
 }
 progressbar.loading-bar progress {
-    background-color: @accent_bg_color;
+    background-color: alpha(@window_fg_color, 0.45);
 }
 
 /* ---- results list ---- */
@@ -98,13 +121,13 @@ progressbar.loading-bar progress {
 }
 
 .results-list {
-    padding: 4px 8px 8px 8px;
+    padding: 6px 12px 14px 12px;
 }
 
 .results-list row {
     padding: 0;
     margin: 0;
-    border-radius: 8px;
+    border-radius: 18px;
     outline: none;
 }
 
@@ -115,80 +138,93 @@ progressbar.loading-bar progress {
 }
 
 .section-header {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.3px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
     color: alpha(@window_fg_color, 0.50);
-    padding: 12px 10px 4px 10px;
+    padding: 14px 12px 4px 12px;
 }
 
 .results-list row:selected {
-    background-color: alpha(@window_fg_color, 0.10);
+    background-color: alpha(@window_fg_color, 0.09);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .result-row {
-    min-height: 40px;
-    padding: 2px 10px;
-    border-radius: 8px;
+    min-height: 56px;
+    padding: 6px 12px;
+    border-radius: 18px;
 }
 
 .icon-tile {
-    min-width: 28px;
-    min-height: 28px;
-    border-radius: 7px;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 12px;
 }
 
 .icon-tile.tinted {
-    background-color: alpha(@accent_bg_color, 0.20);
-    color: @accent_color;
+    background-color: alpha(@window_fg_color, 0.08);
+    color: alpha(@window_fg_color, 0.75);
 }
 
 .icon-tile image {
-    -gtk-icon-size: 20px;
+    -gtk-icon-size: 22px;
 }
 
 .result-icon {
-    -gtk-icon-size: 26px;
+    -gtk-icon-size: 40px;
 }
 
 .result-thumb,
 picture.result-thumb {
-    border-radius: 6px;
+    border-radius: 10px;
 }
 
 .result-title {
-    font-weight: 600;
-    font-size: 13px;
+    font-weight: 400;
+    font-size: 17px;
     color: @window_fg_color;
 }
 
 .result-subtitle {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 400;
-    color: alpha(@window_fg_color, 0.50);
+    color: alpha(@window_fg_color, 0.52);
 }
 
 .result-kind {
-    font-size: 12px;
-    color: alpha(@window_fg_color, 0.45);
+    font-size: 13px;
+    color: alpha(@window_fg_color, 0.38);
+    margin-right: 6px;
+}
+
+/* primary-action hint: only on the selected row */
+.row-hint {
+    font-size: 13px;
+    font-weight: 500;
+    color: alpha(@window_fg_color, 0.62);
+    opacity: 0;
+}
+.results-list row:selected .row-hint {
+    opacity: 1;
 }
 
 .result-check {
-    color: @accent_color;
+    color: @window_fg_color;
     font-weight: 700;
 }
 
 .result-star {
-    color: @accent_color;
-    font-size: 11px;
+    color: alpha(@window_fg_color, 0.6);
+    font-size: 12px;
 }
 
 .alias-chip {
-    font-size: 11px;
-    padding: 0 7px;
-    border-radius: 5px;
+    font-size: 12px;
+    padding: 0 8px;
+    border-radius: 999px;
     color: alpha(@window_fg_color, 0.70);
-    background-color: alpha(@window_fg_color, 0.10);
+    background-color: alpha(@window_fg_color, 0.08);
 }
 
 .keycap {
@@ -197,16 +233,16 @@ picture.result-thumb {
     min-height: 18px;
     min-width: 12px;
     padding: 0 6px;
-    border-radius: 5px;
-    color: alpha(@window_fg_color, 0.72);
-    background-color: alpha(@window_fg_color, 0.10);
+    border-radius: 6px;
+    color: alpha(@window_fg_color, 0.62);
+    background-color: alpha(@window_fg_color, 0.07);
 }
 
 .keycap.badge {
     font-size: 10px;
     min-height: 16px;
     padding: 0 5px;
-    color: alpha(@window_fg_color, 0.55);
+    color: alpha(@window_fg_color, 0.45);
 }
 
 .empty-state {
@@ -218,64 +254,50 @@ picture.result-thumb {
 .indexing-status-bar,
 .uninstall-progress {
     font-size: 12px;
-    padding: 4px 16px;
+    padding: 4px 20px;
     color: alpha(@window_fg_color, 0.6);
 }
 
-/* ---- footer ---- */
-.footer-bar {
-    min-height: 40px;
-    padding: 0 12px 0 14px;
-    border-top: 1px solid alpha(@window_fg_color, 0.10);
-    background-color: alpha(@window_fg_color, 0.03);
+/* ---- toast: floating pill under the panel ---- */
+.toast-slot {
+    min-height: 64px;
 }
 
-.footer-app-icon {
-    -gtk-icon-size: 16px;
-    color: @accent_color;
-}
-
-.footer-status {
-    font-size: 12px;
-    color: alpha(@window_fg_color, 0.55);
-}
-
-.footer-label {
-    font-size: 12px;
+.toast-pill {
+    margin-top: 14px;
+    padding: 8px 18px;
+    border-radius: 999px;
+    font-size: 13px;
     font-weight: 500;
-    color: alpha(@window_fg_color, 0.80);
-}
-
-.footer-sep {
-    min-width: 1px;
-    min-height: 16px;
-    background-color: alpha(@window_fg_color, 0.14);
-    margin: 0 4px;
+    color: @window_fg_color;
+    background-color: @glass_light_top;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    box-shadow: 0 8px 24px rgba(20, 28, 80, 0.28);
 }
 
 button.toast-undo {
     font-size: 12px;
     font-weight: 600;
     min-height: 0;
-    padding: 0 8px;
-    border-radius: 6px;
-    color: @accent_color;
-    background: alpha(@accent_bg_color, 0.16);
+    padding: 0 10px;
+    border-radius: 999px;
+    color: @window_fg_color;
+    background: alpha(@window_fg_color, 0.10);
     box-shadow: none;
 }
 
 /* ---- action panel + dialog card ---- */
 .action-panel,
 .dialog-card {
-    border-radius: 10px;
-    background-color: mix(@window_bg_color, @window_fg_color, 0.06);
-    border: 1px solid alpha(@window_fg_color, 0.16);
-    box-shadow: 0 8px 28px alpha(black, 0.35);
+    border-radius: 22px;
+    background-color: @glass_light_top;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    box-shadow: 0 12px 36px rgba(20, 28, 80, 0.32);
 }
 
 .action-panel {
     min-width: 330px;
-    margin: 0 12px 8px 12px;
+    margin: 0 16px 16px 16px;
 }
 
 .action-list,
@@ -288,7 +310,7 @@ button.toast-undo {
 }
 
 .action-list row {
-    border-radius: 7px;
+    border-radius: 12px;
     padding: 0;
 }
 

@@ -1,21 +1,15 @@
-/* PulsarOS Spotlight - Pulsar Liquid Glass (translucent surfaces) */
+/* PulsarOS Spotlight - Pulsar Liquid Glass (more translucent; relies on compositor blur) */
 
 window.spotlight-window.liquid-glass.dark .spotlight-main {
-    background-color: rgba(15, 17, 23, 0.30);
+    background-color: rgba(30, 32, 44, 0.46);
+    background-image: none;
     border-color: rgba(255, 255, 255, 0.28);
 }
 
 window.spotlight-window.liquid-glass.light .spotlight-main {
-    background-color: rgba(245, 250, 255, 0.34);
+    background-color: rgba(214, 224, 255, 0.46);
+    background-image: none;
     border-color: rgba(255, 255, 255, 0.74);
-}
-
-window.spotlight-window.liquid-glass .search-header {
-    background-color: rgba(255, 255, 255, 0.06);
-}
-
-window.spotlight-window.liquid-glass .footer-bar {
-    background-color: rgba(255, 255, 255, 0.05);
 }
 
 window.spotlight-window.liquid-glass.dark .results-list row:selected {
