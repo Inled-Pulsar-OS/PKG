@@ -167,7 +167,6 @@ rm -rf "$EXT_DIR/ding@rastersoft.com" \
        "$EXT_DIR/pulsar-island@inled.es" \
        "$EXT_DIR/pulsaros-control-center-button@inled.es" \
        "$EXT_DIR/gaze@gundulabs.com" \
-       "$EXT_DIR/notchnux@adityasah.programs" \
        "$EXT_DIR"/apps-menu@* \
        "$EXT_DIR"/places-menu@* \
        "$EXT_DIR"/window-list@* \
