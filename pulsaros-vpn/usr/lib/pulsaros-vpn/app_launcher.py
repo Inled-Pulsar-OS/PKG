@@ -108,12 +108,15 @@ class AppLauncher:
             exe_bin = tokens[0]
             exe_name = os.path.basename(exe_bin)
 
-            # Exclude non-Broadway apps and integrated Android apps (DroidTux)
+            # Exclude non-Broadway apps and integrated Android apps (DroidTux / Pulsar Phone)
             # to guarantee that every listed app renders in Broadway and NEVER on the PC screen,
             # and that Android apps from the phone are NOT mirrored back into the phone app list
             if (app_id.startswith("droidtux-") or
                 app_id.startswith("dtapp-") or
+                app_id.startswith("pulsar-phone-") or
                 "X-Android" in categories or
+                "X-PulsarPhone" in categories or
+                "pulsar-phone-runner" in clean_exec or
                 "droidtux" in clean_exec or
                 "scrcpy" in clean_exec):
                 return None
