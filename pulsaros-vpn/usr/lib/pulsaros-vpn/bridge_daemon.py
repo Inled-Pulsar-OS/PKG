@@ -632,6 +632,65 @@ class ScrcpyManager:
             self.proc = None
             logger.info("Scrcpy phone stream stopped")
 
+    def get_adb_status(self) -> Dict[str, Any]:
+        try:
+            res = subprocess.run(["adb", "devices"], capture_output=True, text=True, timeout=2)
+            lines = [l.strip().split() for l in res.stdout.strip().splitlines()[1:] if l.strip()]
+            devices = []
+            for dev in lines:
+                if len(dev) >= 2:
+                    serial, state = dev[0], dev[1]
+                    is_wifi = ":5555" in serial
+                    devices.append({"serial": serial, "state": state, "type": "wifi" if is_wifi else "usb"})
+            return {"devices": devices}
+        except Exception as e:
+            return {"devices": [], "error": str(e)}
+
+    def enable_adb_tcpip(self) -> Dict[str, Any]:
+        status = self.get_adb_status()
+        devices = status.get("devices", [])
+        usb_devs = [d for d in devices if d["type"] == "usb" and d["state"] == "device"]
+
+        if not usb_devs:
+            wifi_devs = [d for d in devices if d["type"] == "wifi" and d["state"] == "device"]
+            if wifi_devs:
+                return {"success": True, "already_connected": True, "ip": wifi_devs[0]["serial"], "message": "Already connected over Wi-Fi"}
+            return {"success": False, "error": "No USB device connected"}
+
+        serial = usb_devs[0]["serial"]
+        phone_ip = None
+        try:
+            import re
+            ip_res = subprocess.run(["adb", "-s", serial, "shell", "ip route get 1.1.1.1"], capture_output=True, text=True, timeout=3)
+            m = re.search(r"src\s+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", ip_res.stdout)
+            if m:
+                phone_ip = m.group(1)
+            else:
+                ip_res2 = subprocess.run(["adb", "-s", serial, "shell", "ip -f inet addr show wlan0"], capture_output=True, text=True, timeout=3)
+                m2 = re.search(r"inet\s+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", ip_res2.stdout)
+                if m2:
+                    phone_ip = m2.group(1)
+        except Exception as e:
+            logger.warning(f"Failed to query phone IP via ADB: {e}")
+
+        try:
+            tcpip_res = subprocess.run(["adb", "-s", serial, "tcpip", "5555"], capture_output=True, text=True, timeout=5)
+            if tcpip_res.returncode != 0:
+                return {"success": False, "error": tcpip_res.stderr.strip() or "adb tcpip failed"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+        time.sleep(1.5)
+
+        if phone_ip:
+            try:
+                subprocess.run(["adb", "connect", f"{phone_ip}:5555"], capture_output=True, text=True, timeout=5)
+                return {"success": True, "ip": phone_ip, "message": f"Connected to {phone_ip}:5555"}
+            except Exception as e:
+                return {"success": True, "ip": phone_ip, "message": f"Port 5555 enabled. Connect manually: {e}"}
+
+        return {"success": True, "message": "Port 5555 enabled on device"}
+
 
 class SleepInhibitorManager:
     """Manages system sleep/idle inhibition using systemd-inhibit for 24/7 remote access."""
@@ -879,6 +938,8 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_json(200, {
                 "running": context.scrcpy_mgr.is_running()
             })
+        elif path == "/api/adb/status":
+            self.send_json(200, context.scrcpy_mgr.get_adb_status())
         elif path == "/api/system/inhibit-sleep":
             self.send_json(200, {
                 "enabled": context.sleep_inhibitor.is_inhibited()
@@ -966,6 +1027,19 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/stream/pc-to-phone/stop":
             context.desktop_streamer.stop()
             self.send_json(200, {"status": "stopped"})
+
+        elif path == "/api/adb/tcpip":
+            res = context.scrcpy_mgr.enable_adb_tcpip()
+            self.send_json(200, res)
+
+        elif path == "/api/phone/apps/sync":
+            try:
+                import app_sync
+                serial = req_data.get("serial")
+                ok, count, msg = app_sync.sync_phone_apps(serial)
+                self.send_json(200, {"success": ok, "count": count, "message": msg})
+            except Exception as e:
+                self.send_json(500, {"success": False, "error": str(e)})
 
         elif path == "/api/system/inhibit-sleep":
             enable = req_data.get("enabled", True)
@@ -1308,6 +1382,38 @@ class UDPDiscoveryResponder(threading.Thread):
                 pass
 
 
+class PhoneAppSyncWatcher(threading.Thread):
+    """Watches for connected ADB devices and automatically synchronizes phone apps to desktop menu."""
+    def __init__(self):
+        super().__init__(daemon=True, name="PhoneAppSyncWatcher")
+        self.last_synced_serial: Optional[str] = None
+        self.last_sync_time: float = 0.0
+
+    def run(self):
+        time.sleep(3)
+        while True:
+            try:
+                status = context.scrcpy_mgr.get_adb_status()
+                devs = [d["serial"] for d in status.get("devices", []) if d.get("state") == "device"]
+                if devs:
+                    current_serial = devs[0]
+                    now = time.time()
+                    if current_serial != self.last_synced_serial or (now - self.last_sync_time > 900):
+                        logger.info(f"Auto-syncing phone apps for device: {current_serial}")
+                        self.last_synced_serial = current_serial
+                        self.last_sync_time = now
+                        try:
+                            import app_sync
+                            app_sync.sync_phone_apps(serial=current_serial)
+                        except Exception as e:
+                            logger.error(f"Error during auto-sync: {e}")
+                else:
+                    self.last_synced_serial = None
+            except Exception as e:
+                logger.debug(f"Watcher loop error: {e}")
+            time.sleep(6)
+
+
 class ThreadedTCPBridgeServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
     daemon_threads = True
@@ -1320,6 +1426,10 @@ def run_bridge_server():
     # Start UDP discovery beacon responder
     udp_responder = UDPDiscoveryResponder(port)
     udp_responder.start()
+
+    # Start Phone App auto-sync watcher
+    app_sync_watcher = PhoneAppSyncWatcher()
+    app_sync_watcher.start()
 
     server_address = ("0.0.0.0", port)
     logger.info(f"Starting Pulsar Bridge on 0.0.0.0:{port} (Auth Token: {context.token[:6]}...)")

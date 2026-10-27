@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# Pulsar Phone Native App Runner
+# Launches an Android app in an isolated virtual display window with audio and touch redirection.
+
+PKG="$1"
+NAME="$2"
+
+if [ -z "$PKG" ]; then
+    echo "Usage: pulsar-phone-runner <package_name> [window_title]"
+    exit 1
+fi
+
+if [ -z "$NAME" ]; then
+    NAME="$PKG"
+fi
+
+# Detect device serial or auto-connect wireless
+SERIAL="${PULSAR_SERIAL:-}"
+
+resolve_device() {
+    # Check if a device is already online
+    local dev
+    dev=$(adb devices 2>/dev/null | awk 'NR>1 && $2=="device" {print $1; exit}')
+    if [ -n "$dev" ]; then
+        echo "$dev"
+        return 0
+    fi
+
+    # Attempt to reconnect via stored phone IP
+    for ip_file in "$HOME/.config/pulsaros/last_phone_ip.txt" "/tmp/pulsar_phone_ip"; do
+        if [ -f "$ip_file" ]; then
+            local phone_ip
+            phone_ip=$(cat "$ip_file" | tr -d '[:space:]')
+            if [ -n "$phone_ip" ]; then
+                adb connect "${phone_ip}:5555" >/dev/null 2>&1
+                dev=$(adb devices 2>/dev/null | awk -v ip="$phone_ip" 'NR>1 && $1 ~ ip && $2=="device" {print $1; exit}')
+                if [ -n "$dev" ]; then
+                    echo "$dev"
+                    return 0
+                fi
+            fi
+        fi
+    done
+
+    # Attempt mDNS discovery
+    local mdns_addr
+    mdns_addr=$(adb mdns services 2>/dev/null | awk '/_adb\._tcp/ {print $3; exit}')
+    if [ -n "$mdns_addr" ]; then
+        adb connect "$mdns_addr" >/dev/null 2>&1
+        dev=$(adb devices 2>/dev/null | awk -v ip="$mdns_addr" 'NR>1 && $1 ~ ip && $2=="device" {print $1; exit}')
+        if [ -n "$dev" ]; then
+            echo "$dev"
+            return 0
+        fi
+    fi
+
+    # Fallback check
+    dev=$(adb devices 2>/dev/null | awk 'NR>1 && $2=="device" {print $1; exit}')
+    [ -n "$dev" ] && echo "$dev"
+}
+
+if [ -z "$SERIAL" ]; then
+    SERIAL=$(resolve_device)
+fi
+
+if [ -z "$SERIAL" ]; then
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u normal -i phone "Pulsar Phone" "No se detectó ningún teléfono conectado.\nConecta el móvil por Wi-Fi o USB para abrir $NAME."
+    fi
+    exit 1
+fi
+
+# Multi-instance dynamic port range to avoid "Address already in use"
+PORT_BASE=$(( 27183 + (RANDOM % 150) ))
+PORT_RANGE="${PORT_BASE}:$((PORT_BASE + 9))"
+
+LOCK_FILE="/tmp/pulsar_scrcpy_startup.lock"
+(
+  exec 200>"$LOCK_FILE"
+  flock -x 200
+  sleep 0.4
+) 2>/dev/null &
+flock -x -w 3 "$LOCK_FILE" -c true 2>/dev/null || true
+
+# Launch scrcpy with dedicated virtual display, audio and full touch
+exec scrcpy \
+    -s "$SERIAL" \
+    --new-display="1152x648/220" \
+    --start-app="$PKG" \
+    --window-title="$NAME" \
+    --video-bit-rate="3M" \
+    --max-fps=45 \
+    -p "$PORT_RANGE" \
+    --audio-codec=opus \
+    --audio-bit-rate=96K \
+    --audio-buffer=150 \
+    --audio-output-buffer=50 \
+    --stay-awake

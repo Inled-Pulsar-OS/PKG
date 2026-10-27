@@ -78,17 +78,37 @@ TRANSLATIONS_ES = {
     "Pairing link copied to clipboard": "Enlace de vinculación copiado al portapapeles",
     "VPN IP: %s • Local IP: %s • Port: %s": "IP VPN: %s • IP Local: %s • Puerto: %s",
     "Inactive": "Inactivo",
-    "Android Apps on PC (DroidTux)": "Aplicaciones Android en el PC (DroidTux)",
+    "Phone Apps on PC": "Aplicaciones del Teléfono en el PC",
     "Run phone apps as native independent windows with redirected sound and clicks.": "Abre aplicaciones del móvil en ventanas independientes con sonido y clics redirigidos.",
     "Sync Phone Apps to Menu": "Sincronizar Apps al Menú",
     "Integrates all installed apps from phone into your desktop app grid": "Integra las aplicaciones de tu móvil en la cuadrícula de apps del PC",
     "Sync": "Sincronizar",
-    "Settings": "Ajustes",
     "Syncing apps...": "Sincronizando apps...",
+    "%d phone apps synced to desktop menu!": "¡%d aplicaciones del móvil sincronizadas al menú!",
+    "No device connected": "No se detectó ningún teléfono conectado",
     "Remote Access & Power": "Acceso Remoto y Energía",
     "Keep PC awake when idle or lid closed for 24/7 remote access": "Mantiene el PC encendido para permitir acceso remoto cuando estés fuera",
     "Prevent PC Sleep": "Impedir suspensión del PC",
-    "Prevents system sleep when idle or lid is closed so you can connect anytime": "Evita que el equipo se suspenda por inactividad o al cerrar la tapa"
+    "Prevents system sleep when idle or lid is closed so you can connect anytime": "Evita que el equipo se suspenda por inactividad o al cerrar la tapa",
+    "Wireless Mirroring (ADB TCP/IP)": "Modo Inalámbrico (ADB TCP/IP)",
+    "Enable Wi-Fi ADB": "Activar Wi-Fi",
+    "Enable Wireless Mode (ADB TCP/IP)": "Activar Modo Inalámbrico (ADB TCP/IP)",
+    "Enables wireless mirroring over Wi-Fi so you can disconnect the USB cable": "Habilita la proyección inalámbrica por Wi-Fi para poder desconectar el cable USB",
+    "Wi-Fi mirroring is active (Port 5555)": "Proyección por Wi-Fi activa (Puerto 5555)",
+    "Device detected via USB. Click to enable Wi-Fi mirroring": "Dispositivo detectado por USB. Haz clic para activar proyección por Wi-Fi",
+    "Connect phone via USB once and click here to enable wireless mode": "Conecta el móvil por cable USB una vez y pulsa aquí para activar el modo inalámbrico",
+    "Wireless mode enabled! You can now unplug the USB cable.": "¡Modo inalámbrico activado! Ya puedes desconectar el cable USB.",
+    "Failed to enable wireless mode. Make sure USB Debugging is allowed on phone.": "No se pudo activar el modo inalámbrico. Asegúrate de permitir la depuración USB en tu móvil.",
+    "Enabling TCP/IP mode...": "Activando modo TCP/IP...",
+    "Enabling...": "Activando...",
+    "Connected": "Conectado",
+    "Connected wirelessly: %s": "Conectado de forma inalámbrica: %s",
+    "USB device detected (%s). Ready to enable Wi-Fi.": "Dispositivo USB detectado (%s). Listo para activar Wi-Fi.",
+    "Connect phone via USB with USB debugging to enable Wi-Fi mode": "Conecta el móvil por USB con depuración activada para habilitar Wi-Fi",
+    "Wireless mode enabled on %s:5555! You can unplug the USB cable.": "¡Modo inalámbrico activado en %s:5555! Ya puedes desconectar el cable USB.",
+    "Port 5555 enabled! Wireless mode active.": "¡Puerto 5555 activado! Modo inalámbrico listo.",
+    "Connect phone with USB debugging enabled first.": "Conecta el teléfono por USB con depuración activada primero.",
+    "Failed to enable wireless mode": "No se pudo activar el modo inalámbrico",
 }
 
 
@@ -265,30 +285,37 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
         self.phone_to_pc_row.add_suffix(self.btn_stream_phone)
         stream_group.add(self.phone_to_pc_row)
 
-        # Section 4: DroidTux Native Android Apps
-        droidtux_group = Adw.PreferencesGroup()
-        droidtux_group.set_title(_("Android Apps on PC (DroidTux)"))
-        droidtux_group.set_description(_("Run phone apps as native independent windows with redirected sound and clicks."))
-        content_box.append(droidtux_group)
+        # Row 3: Enable Wireless ADB (TCP/IP)
+        self.adb_tcpip_row = Adw.ActionRow()
+        self.adb_tcpip_row.set_title(_("Wireless Mirroring (ADB TCP/IP)"))
+        self.adb_tcpip_row.set_subtitle(_("Enables wireless mirroring over Wi-Fi so you can disconnect the USB cable"))
+        self.adb_tcpip_row.add_prefix(Gtk.Image.new_from_icon_name("network-wireless-symbolic"))
 
-        self.droidtux_sync_row = Adw.ActionRow()
-        self.droidtux_sync_row.set_title(_("Sync Phone Apps to Menu"))
-        self.droidtux_sync_row.set_subtitle(_("Integrates all installed apps from phone into your desktop app grid"))
-        self.droidtux_sync_row.add_prefix(Gtk.Image.new_from_icon_name("software-properties-symbolic"))
+        self.btn_adb_tcpip = Gtk.Button(label=_("Enable Wi-Fi ADB"))
+        self.btn_adb_tcpip.set_valign(Gtk.Align.CENTER)
+        self.btn_adb_tcpip.add_css_class("suggested-action")
+        self.btn_adb_tcpip.connect("clicked", self._on_enable_adb_tcpip)
+        self.adb_tcpip_row.add_suffix(self.btn_adb_tcpip)
+        stream_group.add(self.adb_tcpip_row)
+
+        # Section 4: Native Phone Apps on PC
+        phone_apps_group = Adw.PreferencesGroup()
+        phone_apps_group.set_title(_("Phone Apps on PC"))
+        phone_apps_group.set_description(_("Run phone apps as native independent windows with redirected sound and clicks."))
+        content_box.append(phone_apps_group)
+
+        self.phone_apps_sync_row = Adw.ActionRow()
+        self.phone_apps_sync_row.set_title(_("Sync Phone Apps to Menu"))
+        self.phone_apps_sync_row.set_subtitle(_("Integrates all installed apps from phone into your desktop app grid"))
+        self.phone_apps_sync_row.add_prefix(Gtk.Image.new_from_icon_name("software-properties-symbolic"))
 
         self.btn_sync_apps = Gtk.Button(label=_("Sync"))
         self.btn_sync_apps.set_valign(Gtk.Align.CENTER)
         self.btn_sync_apps.add_css_class("suggested-action")
-        self.btn_sync_apps.connect("clicked", self._on_sync_droidtux_apps)
-        self.droidtux_sync_row.add_suffix(self.btn_sync_apps)
+        self.btn_sync_apps.connect("clicked", self._on_sync_phone_apps)
+        self.phone_apps_sync_row.add_suffix(self.btn_sync_apps)
 
-        btn_droidtux_settings = Gtk.Button(icon_name="preferences-system-symbolic")
-        btn_droidtux_settings.set_valign(Gtk.Align.CENTER)
-        btn_droidtux_settings.set_tooltip_text(_("Settings"))
-        btn_droidtux_settings.connect("clicked", lambda _: subprocess.Popen(["/usr/local/bin/droidtux-settings"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
-        self.droidtux_sync_row.add_suffix(btn_droidtux_settings)
-
-        droidtux_group.add(self.droidtux_sync_row)
+        phone_apps_group.add(self.phone_apps_sync_row)
 
         # Section 5: Remote Access & Power (Prevent Sleep)
         power_group = Adw.PreferencesGroup()
@@ -315,7 +342,14 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
         self.footer_label.add_css_class("dim-label")
         content_box.append(self.footer_label)
 
-        self.set_content(root_box)
+        self.toast_overlay = Adw.ToastOverlay()
+        self.toast_overlay.set_child(root_box)
+        self.set_content(self.toast_overlay)
+
+    def show_toast(self, message: str):
+        toast = Adw.Toast.new(message)
+        toast.set_timeout(4)
+        self.toast_overlay.add_toast(toast)
 
     def _refresh_status(self):
         if self.is_busy:
@@ -455,7 +489,85 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
             except Exception:
                 pass
 
+            try:
+                req = urllib.request.Request(
+                    f"{DAEMON_URL}/api/adb/status",
+                    headers={"X-Pulsar-Token": self.token}
+                )
+                with urllib.request.urlopen(req, timeout=1.0) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    devs = data.get("devices", [])
+                    GLib.idle_add(lambda: self._update_adb_status_ui(devs))
+            except Exception:
+                pass
+
         threading.Thread(target=query, daemon=True).start()
+
+    def _update_adb_status_ui(self, devices: list):
+        wifi_devs = [d for d in devices if d.get("type") == "wifi" and d.get("state") == "device"]
+        usb_devs = [d for d in devices if d.get("type") == "usb" and d.get("state") == "device"]
+
+        if wifi_devs:
+            ip = wifi_devs[0].get("serial")
+            self.adb_tcpip_row.set_subtitle(_("Connected wirelessly: %s") % ip)
+            self.btn_adb_tcpip.set_label(_("Connected"))
+            self.btn_adb_tcpip.remove_css_class("suggested-action")
+            self.btn_adb_tcpip.add_css_class("flat")
+            self.btn_adb_tcpip.set_sensitive(True)
+        elif usb_devs:
+            serial = usb_devs[0].get("serial")
+            self.adb_tcpip_row.set_subtitle(_("USB device detected (%s). Ready to enable Wi-Fi.") % serial)
+            self.btn_adb_tcpip.set_label(_("Enable Wi-Fi ADB"))
+            self.btn_adb_tcpip.remove_css_class("flat")
+            self.btn_adb_tcpip.add_css_class("suggested-action")
+            self.btn_adb_tcpip.set_sensitive(True)
+        else:
+            self.adb_tcpip_row.set_subtitle(_("Connect phone via USB with USB debugging to enable Wi-Fi mode"))
+            self.btn_adb_tcpip.set_label(_("Enable Wi-Fi ADB"))
+            self.btn_adb_tcpip.remove_css_class("flat")
+            self.btn_adb_tcpip.add_css_class("suggested-action")
+            self.btn_adb_tcpip.set_sensitive(True)
+
+    def _on_enable_adb_tcpip(self, btn):
+        btn.set_sensitive(False)
+        btn.set_label(_("Enabling..."))
+
+        def worker():
+            err_msg = None
+            success_msg = None
+            try:
+                req = urllib.request.Request(
+                    f"{DAEMON_URL}/api/adb/tcpip",
+                    data=b"{}",
+                    headers={"X-Pulsar-Token": self.token, "Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=10.0) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    if data.get("success"):
+                        ip = data.get("ip")
+                        if ip:
+                            success_msg = _("Wireless mode enabled on %s:5555! You can unplug the USB cable.") % ip
+                        else:
+                            success_msg = _("Port 5555 enabled! Wireless mode active.")
+                    else:
+                        err_msg = data.get("error", _("Failed to enable wireless mode"))
+            except Exception as e:
+                logger.error(f"Error calling /api/adb/tcpip: {e}")
+                err_msg = str(e)
+
+            def finish():
+                btn.set_sensitive(True)
+                if success_msg:
+                    self.show_toast(success_msg)
+                    subprocess.Popen(["notify-send", "-i", "network-wireless-symbolic", "Pulsar Bridge", success_msg])
+                elif err_msg:
+                    user_err = _("Connect phone with USB debugging enabled first.") if "No USB" in err_msg else err_msg
+                    self.show_toast(user_err)
+                self._refresh_streaming_status()
+
+            GLib.idle_add(finish)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _update_pc_stream_ui(self, active: bool):
         if active:
@@ -559,17 +671,34 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
         threading.Thread(target=worker, daemon=True).start()
         return False
 
-    def _on_sync_droidtux_apps(self, btn):
+    def _on_sync_phone_apps(self, btn):
         btn.set_sensitive(False)
         btn.set_label(_("Syncing apps..."))
 
         def worker():
+            synced_msg = None
+            err_msg = None
             try:
-                subprocess.run(["python3", "/usr/local/share/droidtux/app_integrator.py", "--add"], timeout=120)
-                subprocess.Popen(["notify-send", "-i", "phone", "Pulsar Phone", "¡Aplicaciones del teléfono sincronizadas al menú del PC!"])
+                import app_sync
+                ok, count, msg = app_sync.sync_phone_apps()
+                if ok:
+                    synced_msg = _("%d phone apps synced to desktop menu!") % count
+                else:
+                    err_msg = _(msg)
             except Exception as e:
-                logger.error(f"Error syncing droidtux apps: {e}")
-            GLib.idle_add(lambda: (btn.set_sensitive(True), btn.set_label(_("Sync"))))
+                logger.error(f"Error syncing phone apps: {e}")
+                err_msg = str(e)
+
+            def finish():
+                btn.set_sensitive(True)
+                btn.set_label(_("Sync"))
+                if synced_msg:
+                    self.show_toast(synced_msg)
+                    subprocess.Popen(["notify-send", "-i", "phone", "Pulsar Phone", synced_msg])
+                elif err_msg:
+                    self.show_toast(err_msg)
+
+            GLib.idle_add(finish)
 
         threading.Thread(target=worker, daemon=True).start()
 
