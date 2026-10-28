@@ -1,0 +1,30 @@
+[package]
+name = "pulsar-store"
+version = "2.0.0-dev"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Jaime <info@inled.es>"]
+license = "GPL-3.0-or-later"
+description = "Unified app store for Pulsar OS"
+
+[features]
+default = ["ui"]
+# GTK front end. Disable to build only `core` and the CLI binaries.
+ui = ["dep:gtk4", "dep:adw"]
+
+[dependencies]
+gtk4 = { version = "0.9", optional = true }
+adw = { version = "0.7", package = "libadwaita", optional = true }
+
+[[bin]]
+name = "pulsar-store"
+path = "src/main.rs"
+required-features = ["ui"]
+
+[[bin]]
+name = "pulsar-storectl"
+path = "src/bin/storectl.rs"
+
+[[bin]]
+name = "pulsar-store-updated"
+path = "src/bin/updated.rs"
