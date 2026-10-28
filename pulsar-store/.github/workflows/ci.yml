@@ -1,0 +1,28 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  rust:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GTK4 and libadwaita
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libadwaita-1-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Layer rules
+        run: scripts/check-layers.sh
+      - run: cargo fmt --check
+      - run: cargo build --all-targets
+      - run: cargo build --no-default-features
+      - run: cargo test
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --no-default-features -- -D warnings
+  deny:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
