@@ -1,0 +1,1 @@
+{ "packages": [ { "id": "org.example.App", "type": "flatpak" } ] }
