@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Launcher for Pulsar OS Firewall Watcher Daemon
+exec /usr/bin/python3 /usr/lib/pulsaros-firewall/watcher.py "$@"

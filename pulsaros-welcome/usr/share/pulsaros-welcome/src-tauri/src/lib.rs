@@ -94,6 +94,7 @@ pub fn run() {
             commands::software::launch_recovery,
             commands::software::run_cleanup,
             commands::software::launch_app,
+            commands::software::open_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

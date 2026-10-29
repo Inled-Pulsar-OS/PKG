@@ -1,0 +1,13 @@
+[Unit]
+Description=Pulsar OS Firewall Socket Watcher
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pulsar-firewall-watcher
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

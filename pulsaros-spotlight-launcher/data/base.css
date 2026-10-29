@@ -17,21 +17,24 @@ window.spotlight-window,
     background-color: transparent;
     box-shadow: none;
     border: none;
+    border-radius: 20px;
     font-family: "SF Pro Display", "SF Pro Text", "Inter", "Cantarell", sans-serif;
 }
 
 .spotlight-root {
-    margin: 40px 36px 0 36px;
+    margin: 0;
+    padding: 0;
     background: transparent;
+    border-radius: 20px;
 }
 
 .spotlight-main {
-    border-radius: 30px;
-    background-color: @glass_light_top;
-    background-image: linear-gradient(to bottom, @glass_light_top, @glass_light_bottom);
+    border-radius: 20px;
+    background-color: rgba(22, 24, 34, 0.40);
+    background-image: none;
     color: @window_fg_color;
-    border: 1px solid rgba(255, 255, 255, 0.60);
-    box-shadow: 0 14px 34px -2px rgba(20, 28, 80, 0.34), 0 2px 8px rgba(20, 28, 80, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 16px 40px -4px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.20);
     font-size: 13px;
 }
 
@@ -50,13 +53,10 @@ window.spotlight-window,
     margin: 0 4px 0 0;
 }
 
-window.spotlight-window entry,
-window.spotlight-window entry:focus,
-window.spotlight-window entry:focus-within,
-window.spotlight-window entry:hover,
-window.spotlight-window entry > text,
-window.spotlight-window .search-input {
-    font-size: 30px;
+/* search input: large light font */
+window.spotlight-window .search-input,
+window.spotlight-window .search-input > text {
+    font-size: 28px;
     font-weight: 300;
     padding: 0 4px;
     margin: 0;
@@ -122,19 +122,57 @@ progressbar.loading-bar progress {
 
 .results-list {
     padding: 6px 12px 14px 12px;
+    background: transparent;
 }
 
 .results-list row {
     padding: 0;
     margin: 0;
-    border-radius: 18px;
+    border-radius: 12px;
+    border: none;
     outline: none;
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+}
+
+.results-list row:hover,
+.results-list row:selected,
+.results-list row:selected:backdrop,
+.results-list row:focus,
+.results-list row:active {
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+.result-row {
+    min-height: 56px;
+    padding: 6px 14px;
+    margin: 2px 4px;
+    border-radius: 12px;
+    background-color: transparent;
+    transition: background-color 70ms ease-out;
+}
+
+.results-list row:hover:not(.section-row) .result-row,
+.results-list row:selected .result-row,
+.results-list row.active-selection .result-row,
+.result-row.active-selection {
+    background-color: rgba(255, 255, 255, 0.18) !important;
+    border-radius: 12px !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22) !important;
+    cursor: pointer;
 }
 
 .results-list row.section-row,
 .results-list row.section-row:hover,
-.results-list row.section-row:selected {
-    background: transparent;
+.results-list row.section-row:selected,
+.results-list row.section-row .result-row {
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
 }
 
 .section-header {
@@ -145,15 +183,33 @@ progressbar.loading-bar progress {
     padding: 14px 12px 4px 12px;
 }
 
-.results-list row:selected {
-    background-color: alpha(@window_fg_color, 0.09);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+.results-list row:selected .result-title,
+.results-list row.active-selection .result-title,
+.results-list row:hover:not(.section-row) .result-title {
+    color: #ffffff !important;
+    font-weight: 500;
 }
 
-.result-row {
-    min-height: 56px;
-    padding: 6px 12px;
-    border-radius: 18px;
+.results-list row:selected .result-subtitle,
+.results-list row.active-selection .result-subtitle,
+.results-list row:hover:not(.section-row) .result-subtitle {
+    color: rgba(255, 255, 255, 0.82) !important;
+}
+
+.results-list row:selected .result-kind,
+.results-list row:selected .row-hint,
+.results-list row.active-selection .result-kind,
+.results-list row.active-selection .row-hint,
+.results-list row:hover:not(.section-row) .result-kind,
+.results-list row:hover:not(.section-row) .row-hint {
+    color: rgba(255, 255, 255, 0.90) !important;
+}
+
+.results-list row:selected .icon-tile.tinted,
+.results-list row.active-selection .icon-tile.tinted,
+.results-list row:hover .icon-tile.tinted {
+    background-color: rgba(255, 255, 255, 0.22);
+    color: #ffffff;
 }
 
 .icon-tile {
@@ -258,21 +314,16 @@ picture.result-thumb {
     color: alpha(@window_fg_color, 0.6);
 }
 
-/* ---- toast: floating pill under the panel ---- */
-.toast-slot {
-    min-height: 64px;
-}
-
+/* ---- toast: floating pill over the list ---- */
 .toast-pill {
-    margin-top: 14px;
     padding: 8px 18px;
     border-radius: 999px;
     font-size: 13px;
     font-weight: 500;
-    color: @window_fg_color;
-    background-color: @glass_light_top;
-    border: 1px solid rgba(255, 255, 255, 0.55);
-    box-shadow: 0 8px 24px rgba(20, 28, 80, 0.28);
+    color: #ffffff;
+    background-color: rgba(30, 32, 44, 0.90);
+    border: 1px solid rgba(255, 255, 255, 0.20);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.40);
 }
 
 button.toast-undo {
@@ -286,18 +337,159 @@ button.toast-undo {
     box-shadow: none;
 }
 
-/* ---- action panel + dialog card ---- */
-.action-panel,
-.dialog-card {
-    border-radius: 22px;
-    background-color: @glass_light_top;
-    border: 1px solid rgba(255, 255, 255, 0.55);
-    box-shadow: 0 12px 36px rgba(20, 28, 80, 0.32);
+/* ---- category tabs bar (Apple segmented style) ---- */
+.category-scroll {
+    padding: 0 18px 6px 18px;
+    margin: 0;
 }
 
+.category-scroll scrollbar {
+    opacity: 0;
+    min-width: 0;
+    min-height: 0;
+}
+
+.category-bar {
+    padding: 2px 0 4px 0;
+}
+
+.category-btn {
+    min-height: 25px;
+    padding: 2px 10px;
+    border-radius: 7px;
+    font-size: 11.5px;
+    font-weight: 500;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.72);
+    box-shadow: none;
+    transition: all 100ms ease-out;
+    margin-right: 2px;
+}
+
+.category-btn:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.14);
+    cursor: pointer;
+}
+
+.category-btn:checked,
+.category-btn:active {
+    background-color: #0a84ff !important;
+    border-color: rgba(110, 190, 255, 0.70) !important;
+    color: #ffffff !important;
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgba(10, 132, 255, 0.40);
+}
+
+window.spotlight-window.light .category-btn {
+    color: rgba(0, 0, 0, 0.68);
+    background-color: rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+window.spotlight-window.light .category-btn:hover {
+    color: #000000;
+    background-color: rgba(0, 0, 0, 0.09);
+}
+
+window.spotlight-window.light .category-btn:checked,
+window.spotlight-window.light .category-btn:active {
+    background-color: #007aff !important;
+    border-color: rgba(0, 122, 255, 0.8) !important;
+    color: #ffffff !important;
+    box-shadow: 0 1px 4px rgba(0, 122, 255, 0.30);
+}
+
+/* ---- action panel ---- */
 .action-panel {
+    border-radius: 16px;
+    background-color: rgba(30, 33, 44, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.50);
     min-width: 330px;
     margin: 0 16px 16px 16px;
+}
+
+/* ---- dialog backdrop & card ---- */
+.dialog-backdrop {
+    background: transparent;
+    background-color: transparent;
+    border-radius: 28px;
+}
+
+.dialog-card {
+    border-radius: 18px;
+    padding: 22px 24px;
+    min-width: 420px;
+    max-width: 500px;
+    background: transparent;
+    background-color: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: none;
+    color: @window_fg_color;
+}
+
+window.spotlight-window.light .dialog-card {
+    background: transparent;
+    background-color: transparent;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    box-shadow: none;
+    color: #1a1e2b;
+}
+
+window.spotlight-window.light .action-panel {
+    background-color: rgba(255, 255, 255, 0.96);
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    box-shadow: 0 20px 48px rgba(20, 28, 80, 0.20), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    color: #1a1e2b;
+}
+
+/* ---- 3 dots popover menu ---- */
+popover.spotlight-popover contents {
+    border-radius: 12px;
+    padding: 6px;
+    background-color: rgba(30, 33, 44, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.50);
+    min-width: 220px;
+    color: #ffffff;
+}
+
+window.spotlight-window.light popover.spotlight-popover contents {
+    background-color: rgba(255, 255, 255, 0.96);
+    border-color: rgba(0, 0, 0, 0.10);
+    box-shadow: 0 12px 32px rgba(20, 28, 80, 0.18);
+    color: #1a1e2b;
+}
+
+popover.spotlight-popover button.popover-item {
+    min-height: 28px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.88);
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    transition: background-color 80ms ease;
+}
+
+window.spotlight-window.light popover.spotlight-popover button.popover-item {
+    color: rgba(0, 0, 0, 0.85);
+}
+
+popover.spotlight-popover button.popover-item:hover {
+    background-color: #0a84ff;
+    color: #ffffff;
+    cursor: pointer;
+}
+
+popover.spotlight-popover separator {
+    margin: 4px 6px;
+    background-color: rgba(255, 255, 255, 0.10);
 }
 
 .action-list,
@@ -349,34 +541,147 @@ window.spotlight-window .action-filter > text {
     border-top: 1px solid alpha(@window_fg_color, 0.10);
 }
 
-.dialog-card {
-    padding: 16px;
-    min-width: 340px;
-}
-
 .dialog-title {
-    font-size: 14px;
-    font-weight: 700;
+    font-size: 15px;
+    font-weight: 600;
+    color: @window_fg_color;
+    margin-bottom: 2px;
 }
 
 .dialog-body {
     font-size: 12px;
     color: alpha(@window_fg_color, 0.65);
+    margin-bottom: 8px;
+    line-height: 1.35;
 }
 
-.dialog-card entry {
-    font-size: 13px;
-    padding: 6px 10px;
-    border-radius: 7px;
-    border: 1px solid alpha(@window_fg_color, 0.18);
-    background-color: alpha(@window_fg_color, 0.06);
-    min-height: 30px;
+/* Reset all inner GTK widgets to prevent nested boxes */
+.dialog-card entry > text,
+.dialog-card entry > text:focus,
+.dialog-card entry > text:hover,
+.dialog-card textview,
+.dialog-card textview > text,
+.dialog-card textview.form-text,
+.dialog-card textview.form-text > text {
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: 13px !important;
+}
+
+/* Single outer clean container for entry and textview */
+.dialog-card entry,
+.dialog-card .form-text-wrap {
+    font-size: 13px !important;
+    font-weight: 400 !important;
+    min-height: 34px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    color: #ffffff;
+    box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.15);
+    outline: none;
+    transition: all 120ms ease;
+    margin-bottom: 6px;
+}
+
+.dialog-card entry:hover,
+.dialog-card .form-text-wrap:hover {
+    border-color: rgba(255, 255, 255, 0.18);
+    background-color: rgba(255, 255, 255, 0.09);
+}
+
+.dialog-card entry:focus-within,
+.dialog-card .form-text-wrap:focus-within {
+    border-color: #0a84ff !important;
+    background-color: rgba(255, 255, 255, 0.11);
+    box-shadow: 0 0 0 1px #0a84ff, inset 0 1px 1px rgba(0, 0, 0, 0.15);
+}
+
+.dialog-card entry placeholder {
+    font-size: 13px !important;
+    color: rgba(255, 255, 255, 0.40);
+}
+
+window.spotlight-window.light .dialog-card entry,
+window.spotlight-window.light .dialog-card .form-text-wrap {
+    background-color: rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    color: #1a1e2b;
+    box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.06);
+}
+
+window.spotlight-window.light .dialog-card entry:focus-within,
+window.spotlight-window.light .dialog-card .form-text-wrap:focus-within {
+    border-color: #007aff !important;
+    background-color: #ffffff;
+    box-shadow: 0 0 0 1px #007aff;
+}
+
+window.spotlight-window.light .dialog-card entry placeholder {
+    color: rgba(0, 0, 0, 0.38);
 }
 
 .dialog-card button {
     min-height: 28px;
-    padding: 0 14px;
+    padding: 0 16px;
     border-radius: 7px;
+    font-size: 12px;
+    font-weight: 500;
+    box-shadow: none;
+    transition: all 100ms ease;
+}
+
+.dialog-card button.dialog-cancel-btn {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dialog-card button.dialog-cancel-btn:hover {
+    background-color: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+    cursor: pointer;
+}
+
+.dialog-card button.dialog-ok-btn {
+    background-color: #0a84ff;
+    color: #ffffff;
+    border: 1px solid rgba(110, 190, 255, 0.50);
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(10, 132, 255, 0.35);
+}
+
+.dialog-card button.dialog-ok-btn:hover {
+    background-color: #0071e3;
+    cursor: pointer;
+}
+
+window.spotlight-window.light .dialog-card button.dialog-cancel-btn {
+    background-color: rgba(0, 0, 0, 0.06);
+    color: rgba(0, 0, 0, 0.80);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+window.spotlight-window.light .dialog-card button.dialog-cancel-btn:hover {
+    background-color: rgba(0, 0, 0, 0.10);
+    color: #000000;
+}
+
+window.spotlight-window.light .dialog-card button.dialog-ok-btn {
+    background-color: #007aff;
+    color: #ffffff;
+    border: 1px solid rgba(0, 122, 255, 0.80);
+}
+
+.dialog-card button.dialog-cancel-btn:hover {
+    background-color: alpha(@window_fg_color, 0.16);
+    cursor: pointer;
 }
 
 .dialog-card button.destructive {
@@ -473,24 +778,4 @@ textview.output-view text {
     color: alpha(@window_fg_color, 0.55);
 }
 
-/* dialog form fields: beat the big search-input rule above */
-window.spotlight-window .dialog-card entry,
-window.spotlight-window .dialog-card entry:focus,
-window.spotlight-window .dialog-card entry:focus-within,
-window.spotlight-window .dialog-card entry:hover {
-    font-size: 13px;
-    font-weight: 400;
-    padding: 0 8px;
-    min-height: 32px;
-    border-radius: 8px;
-    border: 1px solid alpha(@window_fg_color, 0.18);
-    background-color: alpha(@window_fg_color, 0.06);
-}
 
-window.spotlight-window .dialog-card entry > text {
-    font-size: 13px;
-    font-weight: 400;
-    padding: 0;
-    background: transparent;
-    border: none;
-}

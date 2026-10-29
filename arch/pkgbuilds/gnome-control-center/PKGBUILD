@@ -9,7 +9,7 @@ pkgname=(
 )
 epoch=1
 pkgver=51.1
-pkgrel=6
+pkgrel=7
 pkgdesc="GNOME Settings with Pulsar OS macOS customization and Live Wallpaper engine"
 url="https://inled.es"
 license=(GPL-2.0-or-later)

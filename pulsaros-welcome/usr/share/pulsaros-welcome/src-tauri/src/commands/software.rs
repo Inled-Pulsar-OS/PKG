@@ -6,6 +6,11 @@ pub fn launch_app(app: &str, fallback: Option<&str>) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn open_url(url: String) -> Result<(), String> {
+    software::open_url(url)
+}
+
+#[tauri::command]
 pub fn launch_display_settings() -> Result<(), String> {
     software::launch_display_settings()
 }

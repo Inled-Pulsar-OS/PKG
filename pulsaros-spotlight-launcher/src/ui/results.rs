@@ -379,7 +379,24 @@ impl ResultView {
 
         let sel = view.selected.clone();
         let items = view.items.clone();
+        let lb_clone = view.list_box.clone();
         view.list_box.connect_row_selected(move |_, row| {
+            let mut child = lb_clone.first_child();
+            while let Some(c) = child {
+                c.remove_css_class("active-selection");
+                if let Some(r) = c.downcast_ref::<gtk4::ListBoxRow>() {
+                    if let Some(inner) = r.child() {
+                        inner.remove_css_class("active-selection");
+                    }
+                }
+                child = c.next_sibling();
+            }
+            if let Some(r) = row {
+                r.add_css_class("active-selection");
+                if let Some(inner) = r.child() {
+                    inner.add_css_class("active-selection");
+                }
+            }
             let idx = row.map(|r| r.index() as usize);
             sel.set(idx);
             let data = idx.and_then(|i| match items.borrow().get(i) {
@@ -679,9 +696,27 @@ impl ResultView {
         b
     }
 
+    fn update_active_selection(&self, selected_row: &gtk4::ListBoxRow) {
+        let mut child = self.list_box.first_child();
+        while let Some(c) = child {
+            c.remove_css_class("active-selection");
+            if let Some(r) = c.downcast_ref::<gtk4::ListBoxRow>() {
+                if let Some(inner) = r.child() {
+                    inner.remove_css_class("active-selection");
+                }
+            }
+            child = c.next_sibling();
+        }
+        selected_row.add_css_class("active-selection");
+        if let Some(inner) = selected_row.child() {
+            inner.add_css_class("active-selection");
+        }
+    }
+
     fn select_index(&self, idx: usize) {
         if let Some(row) = self.list_box.row_at_index(idx as i32) {
             self.list_box.select_row(Some(&row));
+            self.update_active_selection(&row);
             self.ensure_visible(&row, idx);
         }
     }

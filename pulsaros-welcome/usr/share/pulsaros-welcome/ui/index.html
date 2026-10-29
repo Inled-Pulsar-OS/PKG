@@ -80,11 +80,11 @@
               </button>
             </div>
             <div class="card-grouped" style="display: flex; flex-direction: column; align-items: center; text-align: center;">
-              <img src="../public/logos/winboat.svg" alt="Winboat" style="height: 48px; width: 48px; margin-bottom: 8px; object-fit: contain;">
-              <div class="card-grouped-title">Winboat</div>
+              <img src="../public/logos/pulsar-windows.svg" alt="Pulsar Windows" style="height: 48px; width: 48px; margin-bottom: 8px; object-fit: contain;">
+              <div class="card-grouped-title">Pulsar Windows</div>
               <p class="card-grouped-desc">Run Windows applications natively with seamless DirectX and container acceleration.</p>
-              <button class="btn-primary" style="margin-top: 12px; font-size: 13px; padding: 6px 16px;" onclick="callBackend('launch_app', { app: 'winboat', fallback: '/opt/winboat/winboat' })">
-                Open Winboat
+              <button class="btn-primary" style="margin-top: 12px; font-size: 13px; padding: 6px 16px;" onclick="callBackend('launch_app', { app: 'pulsar-windows', fallback: '/opt/pulsar-windows/pulsar-windows' })">
+                Open Pulsar Windows
               </button>
             </div>
           </div>
@@ -93,11 +93,16 @@
           <div class="card-grouped" style="display: flex; align-items: center; gap: 18px; padding: 14px 20px;">
             <img src="../public/logos/pulsar-phone.svg" alt="Pulsar Phone" style="height: 64px; width: 64px; border-radius: 12px; padding: 6px; flex-shrink: 0; background: rgba(0, 113, 227, 0.1);">
             <div>
-              <div class="card-grouped-title">Pulsar Phone & Sayri</div>
-              <p class="card-grouped-desc">Pair your Android phone to stream your screen with zero audio delay, run phone apps natively on desktop, and control Sayri AI.</p>
-              <button class="btn-primary" style="margin-top: 10px; font-size: 12px; padding: 5px 14px;" onclick="callBackend('launch_app', { app: 'pulsar-vpn' })">
-                Open Pulsar Phone
-              </button>
+              <div class="card-grouped-title">Pulsar Phone &amp; Sayri</div>
+              <p class="card-grouped-desc">Pair your Android phone to stream your screen with zero audio delay, run phone apps natively on desktop, and control Sayri AI. The Android apps are available in the official Inled F-Droid repository.</p>
+              <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center;">
+                <button class="btn-primary" style="font-size: 12px; padding: 5px 14px;" onclick="callBackend('launch_app', { app: 'pulsar-vpn' })">
+                  Open Pulsar Phone
+                </button>
+                <button class="btn-secondary" style="font-size: 12px; padding: 5px 14px;" onclick="openAndroidOverlay()">
+                  Get the Android apps
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -283,6 +288,40 @@
       </button>
     </div>
   </div>
+
+  <!-- Android apps: embedded F-Droid repository + install instructions -->
+  <div id="android-overlay" style="display:none; position:fixed; inset:0; z-index:999; background:rgba(0,0,0,0.7); align-items:center; justify-content:center; padding:20px;">
+    <div style="width:100%; max-width:900px; height:88vh; background:#1e1e1e; border:1px solid #3a3a3c; border-radius:18px; display:flex; flex-direction:column; overflow:hidden;">
+      <header style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:20px 24px 12px;">
+        <div>
+          <h2 style="font-size:20px; font-weight:600; color:#f5f5f7; margin:0;">Get the Android apps</h2>
+          <p style="font-size:13px; color:#a1a1a6; margin:6px 0 0;">Official Inled F-Droid repository — install F-Droid or Droidify on your phone and add <code style="color:#f5f5f7;">https://fdroid.inled.es/repo</code></p>
+        </div>
+        <button class="btn-secondary" onclick="closeAndroidOverlay()">Close</button>
+      </header>
+      <ol style="font-size:13px; color:#a1a1a6; margin:0 24px 12px; padding-left:22px; line-height:1.6;">
+        <li>On your phone, install an F-Droid client: Droidify, F-Droid or IzzyOnDroid.</li>
+        <li>In the client open <b>Repositories</b> and add <code style="color:#f5f5f7;">https://fdroid.inled.es/repo</code>.</li>
+        <li>Search for <b>Pulsar Phone</b> and <b>Sayri Mobile</b> and install them.</li>
+        <li>Back on your PC use <b>Configure Pulsar Phone</b> to pair both devices.</li>
+      </ol>
+      <iframe src="https://fdroid.inled.es" title="Inled F-Droid repository" style="flex:1; margin:0 24px 12px; border:1px solid #3a3a3c; border-radius:12px; background:#fff;"></iframe>
+      <footer style="display:flex; align-items:center; justify-content:space-between; gap:12px; border-top:1px solid #3a3a3c; padding:12px 24px;">
+        <button class="btn-secondary" onclick="callBackend('open_url', { url: 'https://fdroid.inled.es' })">Open in browser</button>
+        <button class="btn-primary" onclick="closeAndroidOverlay()">Done</button>
+      </footer>
+    </div>
+  </div>
+  <script>
+    function openAndroidOverlay() {
+      var ov = document.getElementById('android-overlay');
+      if (ov) ov.style.display = 'flex';
+    }
+    function closeAndroidOverlay() {
+      var ov = document.getElementById('android-overlay');
+      if (ov) ov.style.display = 'none';
+    }
+  </script>
 
   <script src="app.js"></script>
 </body>

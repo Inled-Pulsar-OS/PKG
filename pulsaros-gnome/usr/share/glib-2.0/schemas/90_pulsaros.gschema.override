@@ -1,6 +1,6 @@
 [org.gnome.shell]
 disable-user-extensions=false
-enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'pulsar-dock@inled.es', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'pulsaros-ui-tweaks@inled.es', 'pulsaros-global-menu@inled.es', 'notchnux@adityasah.programs', 'pulsaros-spotlight-launcher@inled.es', 'pulsar-circle-to-search@inled.es', 'pulsaros-focus@inled.es', 'pulsaros-idle-guard@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'wiggle@mechtifs', 'no-overview@fthx', 'macos-control-centre-lg@pulsar.local', 'macos-notification-center@pulsar.local', 'liquid-glass@thinkingcoding1231.gmail.com', 'blur-my-shell@aunetx', 'flydrop@pulsaros.org']
+enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'pulsar-dock@inled.es', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'pulsaros-ui-tweaks@inled.es', 'pulsaros-global-menu@inled.es', 'notchnux@adityasah.programs', 'pulsaros-spotlight-launcher@inled.es', 'pulsar-circle-to-search@inled.es', 'pulsaros-focus@inled.es', 'pulsaros-idle-guard@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'wiggle@mechtifs', 'no-overview@fthx', 'macos-control-centre-lg@pulsar.local', 'macos-notification-center@pulsar.local', 'blur-my-shell@aunetx', 'flydrop@pulsaros.org']
 disabled-extensions=@as []
 favorite-apps=['org.gnome.Nautilus.desktop', 'pulsaros-recovery.desktop', 'pulsaros-spotlight.desktop', 'brave-browser.desktop', 'seafari.desktop', 'org.gnome.Terminal.desktop', 'org.gnome.Geary.desktop', 'org.gnome.Calendar.desktop', 'org.gnome.Calculator.desktop', 'com.github.xournalpp.xournalpp.desktop', 'org.gnome.Loupe.desktop', 'io.bassi.Amberol.desktop', 'org.gnome.clocks.desktop', 'org.gnome.Weather.desktop', 'es.inled.PulsarStore.desktop', 'es.inled.AppInstall.desktop']
 disable-extension-version-validation=true
@@ -42,11 +42,14 @@ lock-enabled=true
 disable-lock-screen=false
 
 [org.gnome.desktop.interface]
-gtk-theme='MacTahoe-Dark-solid'
+gtk-theme='MacTahoe-Dark'
 cursor-theme='MacTahoe-dark'
 icon-theme='MacTahoe-blue-dark'
 color-scheme='prefer-dark'
 enable-animations=true
+
+[org.gnome.shell.extensions.user-theme]
+name='MacTahoe-Dark'
 
 [org.gnome.desktop.wm.preferences]
 button-layout='close,minimize,maximize:'
@@ -57,11 +60,14 @@ extend-height=false
 dash-max-icon-size=48
 click-action='minimize-or-previews'
 running-indicator-style='DOTS'
-intellihide=true
+autohide=true
 dock-fixed=false
+intellihide=true
+require-pressure-to-show=false
+intellihide-mode='ALL_WINDOWS'
 apply-custom-theme=false
 transparency-mode='FIXED'
-background-opacity=0.0
+background-opacity=0.15
 custom-theme-shrink=true
 show-apps-at-top=false
 show-show-apps-button=false
@@ -83,7 +89,7 @@ brightness=0.6
 sigma=30
 
 [org.gnome.shell.extensions.blur-my-shell.popup]
-blur=false
+blur=true
 
 [org.gnome.shell.extensions.blur-my-shell.applications]
 blacklist=['Plank', 'Conky', 'gjs', 'Gjs', 'gjs-console', 'sayri', 'Sayri', 'es.inled.sayri', 'sayri-overlay', 'sayri-indicator', '*sayri*', '*Sayri*', 'sayri-tray', 'sayri-ui-clippy', 'sayri-companion', 'clippy', '*clippy*', 'Sayri Companion', 'flydrop', 'FlyDrop', 'es.pulsaros.FlyDrop', '*flydrop*', '*FlyDrop*', 'notchnux', 'NotchNux', '*notchnux*', '*NotchNux*', 'pulsar-notch', '*pulsar-notch*']
@@ -99,8 +105,8 @@ sigma=23
 static-blur=false
 
 [org.gnome.shell.extensions.blur-my-shell.dash-to-dock]
-blur=false
-brightness=0.6
+blur=true
+brightness=0.64
 override-background=true
 pipeline='pipeline_default_rounded'
 sigma=30

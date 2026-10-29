@@ -1,0 +1,11 @@
+Package: pulsaros-firewall
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: all
+Depends: python3, python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, ufw, iproute2, polkitd | policykit-1
+Maintainer: Jaime <jaime@inled.es>
+Description: Pulsar OS Firewall and Network Security Suite
+ Intuitive GTK4/Libadwaita firewall control center powered by UFW,
+ with real-time socket monitoring and interactive security prompts
+ when applications request incoming network access.

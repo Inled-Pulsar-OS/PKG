@@ -22,19 +22,25 @@ use std::time::Duration;
 mod extras;
 use extras::{Extras, View};
 
-/// (category id, mode name). The name is the entry placeholder; the glyph is
-/// `data/icons/mode-<id>-symbolic.svg`. "documents" is the Files mode.
+/// (category id, mode name, glyph icon).
 const CATEGORIES: &[(&str, &str, &str)] = &[
-    ("all", "Spotlight", "spotlight"),
-    ("applications", "Applications", "applications"),
-    ("documents", "Files", "files"),
+    ("all", "All", "spotlight"),
+    ("applications", "Apps", "applications"),
+    ("documents", "Docs", "files"),
+    ("images", "Images", "files"),
+    ("audio", "Music", "files"),
+    ("video", "Videos", "files"),
+    ("clipboard", "Clip", "clipboard"),
     ("actions", "Actions", "actions"),
-    ("clipboard", "Clipboard", "clipboard"),
+    ("windows", "Windows", "actions"),
+    ("snippets", "Snippets", "actions"),
+    ("calc", "Calc", "spotlight"),
+    ("web", "Web", "spotlight"),
 ];
 
 const DEBOUNCE_MS: u64 = 80;
 const BASE_W: i32 = 712;
-const BASE_H: i32 = 640;
+const BASE_H: i32 = 580;
 const ZOOM_MIN: f64 = 0.8;
 const ZOOM_MAX: f64 = 1.6;
 
@@ -97,6 +103,9 @@ pub struct SpotlightWindow {
     // ui pieces
     panel: Panel,
     dialog: Dialog,
+    dialog_backdrop: gtk4::Box,
+    more_popover: gtk4::Popover,
+    category_buttons: RefCell<HashMap<String, gtk4::ToggleButton>>,
     loading_bar: gtk4::ProgressBar,
     loading_count: Cell<u32>,
     loading_timer: RefCell<Option<glib::SourceId>>,
@@ -118,15 +127,19 @@ pub struct SpotlightWindow {
 }
 
 fn pulsar_liquid_glass_enabled() -> bool {
-    let Some(src) = gtk4::gio::SettingsSchemaSource::default() else { return false };
+    let Some(src) = gtk4::gio::SettingsSchemaSource::default() else { return true };
     if src.lookup("org.gnome.shell", true).is_none() {
-        return false;
+        return true;
     }
     let settings = gtk4::gio::Settings::new("org.gnome.shell");
-    settings
-        .strv("enabled-extensions")
-        .iter()
-        .any(|uuid| uuid.as_str() == "liquid-glass@thinkingcoding1231.gmail.com")
+    let exts = settings.strv("enabled-extensions");
+    exts.iter().any(|uuid| {
+        let u = uuid.as_str();
+        u == "liquid-glass@thinkingcoding1231.gmail.com"
+            || u == "blur-my-shell@aunetx"
+            || u.contains("blur")
+            || u.contains("glass")
+    }) || true
 }
 
 /// Load `data/icons/<name>` from the install dirs, falling back to the source tree.
@@ -308,15 +321,13 @@ impl SpotlightWindow {
         let store = Store::new(Store::default_dir());
         let x = Extras::new(&store, commands::builtin());
 
-        let root_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        root_box.add_css_class("spotlight-root");
         let main_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         main_box.add_css_class("spotlight-main");
         main_box.set_vexpand(true);
+        main_box.set_hexpand(true);
         // Clip children to the rounded corners (the CSS `overflow` property is not accepted by GTK).
         main_box.set_overflow(gtk4::Overflow::Hidden);
-        root_box.append(&main_box);
-        window.set_child(Some(&root_box));
+        window.set_child(Some(&main_box));
 
         // -- Search header: mode glyph, big light input, `...` disc --
         let search_container = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
@@ -351,17 +362,52 @@ impl SpotlightWindow {
         search_container.append(&more_button);
         main_box.append(&search_container);
 
+        // -- Category bar (tabs) --
+        let category_bar = gtk4::Box::new(gtk4::Orientation::Horizontal, 5);
+        category_bar.add_css_class("category-bar");
+        let mut cat_buttons = HashMap::new();
+
+        for &(cat_id, cat_label, _) in CATEGORIES {
+            let btn = gtk4::ToggleButton::builder()
+                .label(cat_label)
+                .active(cat_id == "all")
+                .focusable(false)
+                .build();
+            btn.add_css_class("category-btn");
+            category_bar.append(&btn);
+            cat_buttons.insert(cat_id.to_string(), btn);
+        }
+
+        let category_scroll = gtk4::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk4::PolicyType::External)
+            .vscrollbar_policy(gtk4::PolicyType::Never)
+            .propagate_natural_width(false)
+            .propagate_natural_height(false)
+            .hexpand(true)
+            .build();
+        category_scroll.add_css_class("category-scroll");
+        category_scroll.set_child(Some(&category_bar));
+        main_box.append(&category_scroll);
+
+        // -- More popover anchored to more_button --
+        let more_popover = gtk4::Popover::new();
+        more_popover.set_parent(&more_button);
+        more_popover.set_position(gtk4::PositionType::Bottom);
+        more_popover.set_has_arrow(true);
+        more_popover.add_css_class("spotlight-popover");
+
         // -- Loading bar --
         let loading_bar = gtk4::ProgressBar::new();
         loading_bar.add_css_class("loading-bar");
         loading_bar.set_opacity(0.0);
         main_box.append(&loading_bar);
 
-        // -- Toast: floating pill under the panel --
+        // -- Toast: floating pill over results list --
         let toast_pill = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
         toast_pill.add_css_class("toast-pill");
         toast_pill.set_halign(gtk4::Align::Center);
-        toast_pill.set_valign(gtk4::Align::Start);
+        toast_pill.set_valign(gtk4::Align::End);
+        toast_pill.set_margin_bottom(18);
         toast_pill.set_visible(false);
         let footer_status = gtk4::Label::builder().xalign(0.0).build();
         footer_status.set_ellipsize(gtk4::pango::EllipsizeMode::End);
@@ -372,10 +418,6 @@ impl SpotlightWindow {
         toast_undo.set_focusable(false);
         toast_pill.append(&footer_status);
         toast_pill.append(&toast_undo);
-        let toast_slot = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        toast_slot.add_css_class("toast-slot");
-        toast_slot.append(&toast_pill);
-        root_box.append(&toast_slot);
 
         // -- Uninstall progress banner --
         let progress_revealer = gtk4::Revealer::builder()
@@ -454,7 +496,10 @@ impl SpotlightWindow {
         let dialog_buttons = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
         dialog_buttons.set_halign(gtk4::Align::End);
         let dialog_cancel = gtk4::Button::with_label("Cancel");
+        dialog_cancel.add_css_class("dialog-cancel-btn");
         let dialog_ok = gtk4::Button::with_label("OK");
+        dialog_ok.add_css_class("dialog-ok-btn");
+        dialog_ok.add_css_class("suggested-action");
         dialog_buttons.append(&dialog_cancel);
         dialog_buttons.append(&dialog_ok);
         dialog_root.append(&dialog_title);
@@ -462,6 +507,15 @@ impl SpotlightWindow {
         dialog_root.append(&x.form);
         dialog_root.append(&dialog_entry);
         dialog_root.append(&dialog_buttons);
+
+        let dialog_backdrop = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+        dialog_backdrop.add_css_class("dialog-backdrop");
+        dialog_backdrop.set_hexpand(true);
+        dialog_backdrop.set_vexpand(true);
+        dialog_backdrop.set_visible(false);
+
+        let click_backdrop = gtk4::GestureClick::new();
+        dialog_backdrop.add_controller(click_backdrop.clone());
 
         // -- Result view --
         let result_view_cell: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
@@ -495,7 +549,9 @@ impl SpotlightWindow {
         let overlay = gtk4::Overlay::new();
         overlay.set_vexpand(true);
         overlay.set_child(Some(&x.stack));
+        overlay.add_overlay(&toast_pill);
         overlay.add_overlay(&panel_root);
+        overlay.add_overlay(&dialog_backdrop);
         overlay.add_overlay(&dialog_root);
         main_box.append(&overlay);
         main_box.append(&progress_revealer);
@@ -543,6 +599,9 @@ impl SpotlightWindow {
                 ok: dialog_ok.clone(),
                 on_ok: RefCell::new(None),
             },
+            dialog_backdrop,
+            more_popover,
+            category_buttons: RefCell::new(cat_buttons),
             loading_bar,
             loading_count: Cell::new(0),
             loading_timer: RefCell::new(None),
@@ -571,6 +630,9 @@ impl SpotlightWindow {
         *select_cell.borrow_mut() = Some(Rc::new(move |rd| s.on_row_selected(rd)));
 
         let s = spotlight.clone();
+        click_backdrop.connect_pressed(move |_, _, _, _| s.close_dialog());
+
+        let s = spotlight.clone();
         dialog_cancel.connect_clicked(move |_| s.close_dialog());
         let s = spotlight.clone();
         dialog_ok.connect_clicked(move |_| s.accept_dialog());
@@ -586,7 +648,23 @@ impl SpotlightWindow {
         });
 
         let s = spotlight.clone();
-        more_button.connect_clicked(move |_| s.open_panel());
+        more_button.connect_clicked(move |_| s.open_more_menu());
+
+        let s = spotlight.clone();
+        spotlight.search_entry.connect_activate(move |_| {
+            s.run_action_index(0);
+        });
+
+        for (cat_id, btn) in spotlight.category_buttons.borrow().iter() {
+            let s = spotlight.clone();
+            let cid = cat_id.clone();
+            let btn_c = btn.clone();
+            btn.connect_toggled(move |_| {
+                if btn_c.is_active() {
+                    s.set_category_by_id(&cid);
+                }
+            });
+        }
 
         spotlight.setup_panel_events();
         spotlight.setup_ui_interactions();
@@ -932,10 +1010,20 @@ impl SpotlightWindow {
             return;
         }
 
-        // If in documents and query empty and not browsing, start browsing $HOME
-        if category == "documents" && query.trim().is_empty() && self.current_dir.borrow().is_none() {
-            let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
-            *self.current_dir.borrow_mut() = Some(home.display().to_string());
+        // If in media/document category and query empty and not browsing, start browsing the category dir
+        if ["documents", "images", "audio", "video"].contains(&category.as_str()) && query.trim().is_empty() && self.current_dir.borrow().is_none() {
+            let target_dir = match category.as_str() {
+                "documents" => dirs::document_dir(),
+                "images" => dirs::picture_dir(),
+                "audio" => dirs::audio_dir(),
+                "video" => dirs::video_dir(),
+                _ => None,
+            }.or_else(|| dirs::home_dir());
+            if let Some(d) = target_dir {
+                if d.is_dir() {
+                    *self.current_dir.borrow_mut() = Some(d.display().to_string());
+                }
+            }
         }
 
         let browsing_dir = self.current_dir.borrow().clone();
@@ -1031,15 +1119,41 @@ impl SpotlightWindow {
                 let rows: Vec<RowData> = self.backend.search_web(&query).iter().map(row_from_result).collect();
                 vec![("Web".to_string(), rows)]
             }
+            "calc" => {
+                let mut rows = Vec::new();
+                if let Some(c) = Calculator::calculate(if is_empty { "1+1" } else { &query }) {
+                    rows.push(calc_row(&c, format!("calc:{}", c.answer)));
+                }
+                let hist_rows: Vec<RowData> = self.calc_history.borrow().search(&query).iter().map(|h| {
+                    calc_row(
+                        &CalcResult {
+                            question: h.question.clone(),
+                            answer: h.answer.clone(),
+                            caption_question: h.caption_question.clone(),
+                            caption_answer: h.caption_answer.clone(),
+                        },
+                        format!("calchist:{}", h.id),
+                    )
+                }).collect();
+                rows.extend(hist_rows);
+                vec![("Calculator".to_string(), rows)]
+            }
             _ => Vec::new(),
         };
         *self.current.borrow_mut() = sections;
         self.render(keep);
 
-        // Async Tracker file search (appended to Results, or its own section)
+        // Async Nautilus file search (appended to Results, or its own section)
         let needs_files = (!is_empty || ["documents", "images", "audio", "video"].contains(&category.as_str()))
-            && !["applications", "actions", "clipboard", "web"].contains(&category.as_str());
-        let target = if category == "all" { "Results" } else { "Files" };
+            && !["applications", "actions", "clipboard", "web", "calc", "windows", "snippets"].contains(&category.as_str());
+        let target = match category.as_str() {
+            "documents" => "Documents",
+            "images" => "Images",
+            "audio" => "Music",
+            "video" => "Videos",
+            "all" => "Results",
+            _ => "Files",
+        };
         if needs_files {
             self.loading_begin();
             let s = self.clone();
@@ -1107,7 +1221,37 @@ impl SpotlightWindow {
         let (id, name, glyph) = CATEGORIES[idx % CATEGORIES.len()];
         *self.category.borrow_mut() = id.to_string();
         set_mode_icon(&self.mode_icon, glyph);
-        self.search_entry.set_placeholder_text(Some(name));
+        let ph = match id {
+            "all" => "Spotlight Search...",
+            "applications" => "Search Applications...",
+            "documents" => "Search Documents...",
+            "images" => "Search Images...",
+            "audio" => "Search Music...",
+            "video" => "Search Videos...",
+            "clipboard" => "Search Clipboard...",
+            "actions" => "Search Commands & Settings...",
+            "windows" => "Filter Open Windows...",
+            "snippets" => "Search Snippets...",
+            "calc" => "Calculate (e.g. 24*15, $50 in EUR)...",
+            "web" => "Search the Web...",
+            _ => name,
+        };
+        self.search_entry.set_placeholder_text(Some(ph));
+
+        if let Ok(buttons) = self.category_buttons.try_borrow() {
+            for (cid, btn) in buttons.iter() {
+                let active = cid == id;
+                if btn.is_active() != active {
+                    btn.set_active(active);
+                }
+            }
+        }
+    }
+
+    fn set_category_by_id(self: &Rc<Self>, cid: &str) {
+        if let Some(pos) = CATEGORIES.iter().position(|(id, _, _)| *id == cid) {
+            self.goto_mode(pos);
+        }
     }
 
     fn cycle_category(self: &Rc<Self>, step: i32) {
@@ -1116,12 +1260,24 @@ impl SpotlightWindow {
     }
 
     fn goto_mode(self: &Rc<Self>, idx: usize) {
+        let (id, _, _) = CATEGORIES[idx % CATEGORIES.len()];
         self.leave_view();
         self.set_mode(idx);
         *self.current_dir.borrow_mut() = None;
         self.history_mode.set(false);
         self.calc_hist_mode.set(false);
-        self.do_search(false);
+        match id {
+            "windows" => {
+                self.push_view(View::Windows, "Filter open windows\u{2026}");
+            }
+            "snippets" => {
+                self.push_view(View::Snippets, "Search snippets\u{2026}");
+            }
+            _ => {
+                self.do_search(false);
+            }
+        }
+        self.search_entry.grab_focus();
     }
 
     // ---- actions -------------------------------------------------------------------
@@ -1521,6 +1677,86 @@ impl SpotlightWindow {
         self.panel.root.is_visible()
     }
 
+    fn open_more_menu(self: &Rc<Self>) {
+        let menu_box = gtk4::Box::new(gtk4::Orientation::Vertical, 3);
+        menu_box.add_css_class("popover-menu-box");
+
+        // 1. Actions for currently selected item (if any)
+        if let Some(rd) = self.result_view.selected_row() {
+            let actions = self.actions_for(&rd);
+            if !actions.is_empty() {
+                for act in actions.into_iter().take(4) {
+                    let btn = gtk4::Button::new();
+                    btn.add_css_class("popover-item");
+                    let row_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+                    let label = gtk4::Label::builder().label(&act.title).xalign(0.0).hexpand(true).build();
+                    row_box.append(&label);
+                    if !act.keys.is_empty() {
+                        let k = gtk4::Label::builder().label(&act.keys.join("+")).build();
+                        k.add_css_class("keycap");
+                        row_box.append(&k);
+                    }
+                    btn.set_child(Some(&row_box));
+                    let s = self.clone();
+                    let a_id = act.id.clone();
+                    let a_argv = act.argv.clone();
+                    let rd_c = rd.clone();
+                    btn.connect_clicked(move |_| {
+                        s.more_popover.popdown();
+                        s.perform(rd_c.clone(), &a_id, a_argv.clone());
+                    });
+                    menu_box.append(&btn);
+                }
+                let sep = gtk4::Separator::new(gtk4::Orientation::Horizontal);
+                menu_box.append(&sep);
+            }
+        }
+
+        // 2. Global tools & options
+        let tools: &[(&str, &str, &str)] = &[
+            ("ui:quicklink_create", "Create Quicklink", "list-add-symbolic"),
+            ("ui:quicklink_manage", "Manage Quicklinks", "emblem-system-symbolic"),
+            ("ui:snippet_create", "Create Snippet", "insert-text-symbolic"),
+            ("ui:snippets", "Snippets", "edit-paste-symbolic"),
+            ("ui:windows", "Open Windows", "preferences-system-windows-symbolic"),
+            ("ui:emoji", "Emoji & Symbols", "face-smile-symbolic"),
+            ("cmd:settings", "System Settings", "preferences-system-symbolic"),
+        ];
+
+        for &(id, label_text, icon_name) in tools {
+            let btn = gtk4::Button::new();
+            btn.add_css_class("popover-item");
+            let row_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+            let img = gtk4::Image::from_icon_name(icon_name);
+            img.set_pixel_size(16);
+            let label = gtk4::Label::builder().label(label_text).xalign(0.0).hexpand(true).build();
+            row_box.append(&img);
+            row_box.append(&label);
+            btn.set_child(Some(&row_box));
+
+            let s = self.clone();
+            btn.connect_clicked(move |_| {
+                s.more_popover.popdown();
+                match id {
+                    "ui:quicklink_create" => s.quicklink_form(),
+                    "ui:quicklink_manage" => s.quicklink_manage(),
+                    "ui:snippet_create" => s.snippet_form(),
+                    "ui:snippets" => s.push_view(View::Snippets, "Search snippets\u{2026}"),
+                    "ui:windows" => s.push_view(View::Windows, "Filter open windows\u{2026}"),
+                    "ui:emoji" => s.open_emoji_panel(),
+                    "cmd:settings" => {
+                        let _ = std::process::Command::new("gnome-control-center").spawn();
+                    }
+                    _ => {}
+                }
+            });
+            menu_box.append(&btn);
+        }
+
+        self.more_popover.set_child(Some(&menu_box));
+        self.more_popover.popup();
+    }
+
     fn open_panel(self: &Rc<Self>) {
         if self.x.view.get() == View::Emoji {
             self.open_emoji_panel();
@@ -1632,6 +1868,8 @@ impl SpotlightWindow {
             None => self.dialog.entry.set_visible(false),
         }
         *self.dialog.on_ok.borrow_mut() = Some(on_ok);
+        self.x.stack.set_visible(false);
+        self.dialog_backdrop.set_visible(true);
         self.dialog.root.set_visible(true);
         if gtk4::prelude::WidgetExt::is_visible(&self.dialog.entry) {
             self.dialog.entry.grab_focus();
@@ -1647,7 +1885,9 @@ impl SpotlightWindow {
 
     fn close_dialog(&self) {
         if self.dialog.root.is_visible() {
+            self.dialog_backdrop.set_visible(false);
             self.dialog.root.set_visible(false);
+            self.x.stack.set_visible(true);
             self.dialog_reset_form();
             *self.dialog.on_ok.borrow_mut() = None;
             self.search_entry.grab_focus();
@@ -1716,8 +1956,12 @@ impl SpotlightWindow {
         let act = shortcuts::lookup(&name, mods);
 
         if self.dialog_open() {
-            if act == Some(Act::Back) {
+            if act == Some(Act::Back) || keyval == gdk::Key::Escape {
                 self.close_dialog();
+                return glib::Propagation::Stop;
+            }
+            if (keyval == gdk::Key::Return || keyval == gdk::Key::KP_Enter) && !mods.ctrl && !mods.alt && !mods.shift {
+                self.accept_dialog();
                 return glib::Propagation::Stop;
             }
             return glib::Propagation::Proceed;
@@ -1739,6 +1983,43 @@ impl SpotlightWindow {
         }
         if let Some(p) = self.arg_key(&name, mods) {
             return p;
+        }
+
+        // Enter on result: immediately run action index 0
+        if (keyval == gdk::Key::Return || keyval == gdk::Key::KP_Enter || keyval == gdk::Key::ISO_Enter)
+            && !mods.ctrl && !mods.alt && !mods.shift
+        {
+            if self.result_view.selected_row().is_some() {
+                self.run_action_index(0);
+                return glib::Propagation::Stop;
+            }
+        }
+
+        // Down / Up arrows
+        if keyval == gdk::Key::Down && !mods.ctrl && !mods.alt && !mods.shift {
+            self.result_view.step(1);
+            return glib::Propagation::Stop;
+        }
+        if keyval == gdk::Key::Up && !mods.ctrl && !mods.alt && !mods.shift {
+            if !self.result_view.step(-1)
+                && self.search_entry.text().is_empty()
+                && !self.history_mode.get()
+                && !self.calc_hist_mode.get()
+                && self.current_dir.borrow().is_none()
+            {
+                self.show_history();
+            }
+            return glib::Propagation::Stop;
+        }
+
+        // Left / Right arrows when search entry is empty: cycle category tabs!
+        if keyval == gdk::Key::Left && self.search_entry.text().is_empty() && !mods.ctrl && !mods.alt {
+            self.cycle_category(-1);
+            return glib::Propagation::Stop;
+        }
+        if keyval == gdk::Key::Right && self.search_entry.text().is_empty() && !mods.ctrl && !mods.alt {
+            self.cycle_category(1);
+            return glib::Propagation::Stop;
         }
 
         if let Some(act) = act {
@@ -1788,7 +2069,7 @@ impl SpotlightWindow {
     fn handle_act(self: &Rc<Self>, act: Act) -> glib::Propagation {
         let stop = glib::Propagation::Stop;
         match act {
-            Act::ActionPanel => self.open_panel(),
+            Act::ActionPanel => self.open_more_menu(),
             Act::Run(n) => {
                 if self.result_view.selected_row().is_none() {
                     return glib::Propagation::Proceed;

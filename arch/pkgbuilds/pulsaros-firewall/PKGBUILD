@@ -1,0 +1,48 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsaros-firewall
+pkgver=1.0.0
+pkgrel=1
+
+pkgdesc="Pulsar OS Firewall and Network Security Suite"
+arch=(any)
+url="https://inled.es"
+license=(custom)
+depends=(python python-gobject gtk4 libadwaita ufw iproute2 polkit)
+optdepends=()
+source=()
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-firewall && pwd)"
+
+    mkdir -p "$pkgdir/usr/bin"
+    install -m 755 "$_src/usr/bin/pulsar-firewall" "$pkgdir/usr/bin/pulsar-firewall"
+    install -m 755 "$_src/usr/bin/pulsar-firewall-prompt" "$pkgdir/usr/bin/pulsar-firewall-prompt"
+    install -m 755 "$_src/usr/bin/pulsar-firewall-watcher" "$pkgdir/usr/bin/pulsar-firewall-watcher"
+
+    mkdir -p "$pkgdir/usr/lib/pulsaros-firewall"
+    install -m 755 "$_src/usr/lib/pulsaros-firewall/firewall-helper" "$pkgdir/usr/lib/pulsaros-firewall/firewall-helper"
+    install -m 755 "$_src/usr/lib/pulsaros-firewall/"*.py "$pkgdir/usr/lib/pulsaros-firewall/"
+
+    mkdir -p "$pkgdir/usr/lib/systemd/user"
+    install -m 644 "$_src/usr/lib/systemd/user/pulsar-firewall-watcher.service" \
+        "$pkgdir/usr/lib/systemd/user/pulsar-firewall-watcher.service"
+
+    mkdir -p "$pkgdir/usr/share/applications"
+    install -m 644 "$_src/usr/share/applications/es.pulsaros.Firewall.desktop" \
+        "$pkgdir/usr/share/applications/es.pulsaros.Firewall.desktop"
+
+    mkdir -p "$pkgdir/usr/share/polkit-1/actions"
+    install -m 644 "$_src/usr/share/polkit-1/actions/es.pulsaros.firewall.policy" \
+        "$pkgdir/usr/share/polkit-1/actions/es.pulsaros.firewall.policy"
+
+    mkdir -p "$pkgdir/usr/share/polkit-1/rules.d"
+    install -m 644 "$_src/etc/polkit-1/rules.d/60-pulsaros-firewall.rules" \
+        "$pkgdir/usr/share/polkit-1/rules.d/60-pulsaros-firewall.rules"
+
+    mkdir -p "$pkgdir/etc/polkit-1/rules.d"
+    install -m 644 "$_src/etc/polkit-1/rules.d/60-pulsaros-firewall.rules" \
+        "$pkgdir/etc/polkit-1/rules.d/60-pulsaros-firewall.rules"
+
+    mkdir -p "$pkgdir/usr/share/icons"
+    cp -rf "$_src/usr/share/icons/." "$pkgdir/usr/share/icons/"
+}

@@ -997,6 +997,28 @@ class UpdateCore:
         if shutil.which("update-desktop-database"):
             self.run_command(["update-desktop-database", "/usr/share/applications"], use_root=True)
 
+        # 5. Mask heavy localsearch / tracker indexing daemons
+        self.log("[Extras] Masking localsearch and tracker-miner-fs background indexing daemons...")
+        os.makedirs("/etc/systemd/user", exist_ok=True)
+        services = [
+            "localsearch-3.service",
+            "localsearch-control-3.service",
+            "localsearch-extractor-3.service",
+            "tracker-miner-fs-3.service",
+            "tracker-extract-3.service",
+        ]
+        for srv in services:
+            dst = f"/etc/systemd/user/{srv}"
+            try:
+                if not os.path.exists(dst) or not os.path.islink(dst):
+                    self.run_command(["ln", "-sf", "/dev/null", dst], use_root=True)
+            except Exception:
+                pass
+        self.run_command(["systemctl", "--global", "mask"] + services, use_root=True)
+        self.run_command(["pkill", "-f", "localsearch"])
+        self.run_command(["pkill", "-f", "tracker-miner"])
+        self.run_command(["pkill", "-f", "tracker-extract"])
+
         self.log("[Extras] System enhancements applied successfully.")
         return True
 

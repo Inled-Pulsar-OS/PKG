@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Launcher for Pulsar OS Firewall Prompt
+exec /usr/bin/python3 /usr/lib/pulsaros-firewall/prompt_dialog.py "$@"

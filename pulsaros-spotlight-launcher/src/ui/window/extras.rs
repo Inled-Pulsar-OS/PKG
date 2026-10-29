@@ -272,7 +272,7 @@ impl SpotlightWindow {
         self.clear_args();
     }
 
-    fn push_view(self: &Rc<Self>, v: View, placeholder: &str) {
+    pub(super) fn push_view(self: &Rc<Self>, v: View, placeholder: &str) {
         self.close_panel();
         self.clear_args();
         self.x.view.set(v);
@@ -675,7 +675,7 @@ impl SpotlightWindow {
         }
     }
 
-    fn snippet_form(self: &Rc<Self>) {
+    pub(super) fn snippet_form(self: &Rc<Self>) {
         let s = self.clone();
         self.show_form(
             "Create Snippet",
@@ -698,7 +698,7 @@ impl SpotlightWindow {
 
     // ---- quicklinks ------------------------------------------------------------------
 
-    fn quicklink_form(self: &Rc<Self>) {
+    pub(super) fn quicklink_form(self: &Rc<Self>) {
         let s = self.clone();
         self.show_form(
             "Create Quicklink",
@@ -718,7 +718,7 @@ impl SpotlightWindow {
         );
     }
 
-    fn quicklink_manage(self: &Rc<Self>) {
+    pub(super) fn quicklink_manage(self: &Rc<Self>) {
         let items: Vec<(String, String)> = self
             .x
             .quicklinks

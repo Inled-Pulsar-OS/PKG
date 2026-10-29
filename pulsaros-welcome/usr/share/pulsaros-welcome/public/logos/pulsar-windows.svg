@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <!-- Background Gradient with #8b5cf6 -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9d74f7"/>
+      <stop offset="50%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+
+    <!-- Drop Shadow for Icon Glyph -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Official Squircle Base -->
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#bg)"/>
+
+  <!-- Inner subtle specular highlight border -->
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.25"/>
+
+  <!-- Windows Logo Glyph in Solid White -->
+  <g filter="url(#shadow)" transform="translate(34, 34) scale(0.0123077)">
+    <path fill="#ffffff" d="M0 0h2311v2310H0zm2564 0h2311v2310H2564zM0 2564h2311v2311H0zm2564 0h2311v2311H2564"/>
+  </g>
+</svg>

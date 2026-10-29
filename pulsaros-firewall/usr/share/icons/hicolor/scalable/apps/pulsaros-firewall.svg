@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="pulsarFirewallGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e01b24"/>
+      <stop offset="50%" stop-color="#9141ac"/>
+      <stop offset="100%" stop-color="#3584e4"/>
+    </linearGradient>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#f0f0f0" stop-opacity="0.85"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+
+  <!-- Background Pulsar squircle -->
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#pulsarFirewallGrad)" filter="url(#shadow)"/>
+
+  <!-- Shield Outline & Interior -->
+  <g transform="translate(28, 24)" filter="url(#shadow)">
+    <!-- Outer Shield -->
+    <path d="M36 4 L64 16 C64 48, 52 68, 36 78 C20 68, 8 48, 8 16 Z" 
+          fill="none" 
+          stroke="#ffffff" 
+          stroke-width="5" 
+          stroke-linejoin="round" 
+          stroke-linecap="round"/>
+
+    <!-- Firewall / Grid Brick Motif inside Shield -->
+    <path d="M18 32 L54 32" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+    <path d="M14 46 L58 46" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+    <path d="M36 18 L36 32" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+    <path d="M26 32 L26 46" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+    <path d="M46 32 L46 46" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+    <path d="M36 46 L36 62" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+
+    <!-- Center Pulse / Flame Node -->
+    <circle cx="36" cy="46" r="4.5" fill="#ffffff"/>
+  </g>
+</svg>

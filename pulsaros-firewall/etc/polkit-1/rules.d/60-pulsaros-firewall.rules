@@ -1,0 +1,7 @@
+// Pulsar OS - Allow active users and wheel/sudo/live to manage firewall seamlessly
+polkit.addRule(function(action, subject) {
+    if (action.id === "es.pulsaros.firewall.manage" &&
+        (subject.isInGroup("wheel") || subject.isInGroup("sudo") || subject.user === "live")) {
+        return polkit.Result.YES;
+    }
+});

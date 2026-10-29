@@ -115,9 +115,30 @@ while IFS= read -r u; do
     [ "$is_deprecated" -eq 0 ] && NEW_ARR+=("$u")
 done <<< "$CUR_ENABLED_NL"
 
+# Optional extensions (user-toggled features that must not be forcibly re-enabled)
+OPTIONAL_DEFAULT_EXTENSIONS=(
+    "liquid-glass@thinkingcoding1231.gmail.com"
+    "blur-my-shell@aunetx"
+)
+
 # 2. Add missing defaults
 while IFS= read -r uuid; do
     [ -n "$uuid" ] || continue
+    # If optional default, only skip if the user explicitly turned it off
+    is_turned_off=0
+    for opt in "${OPTIONAL_DEFAULT_EXTENSIONS[@]}"; do
+        if [ "$uuid" = "$opt" ]; then
+            for dis in "${CLEAN_DISABLED[@]}"; do
+                if [ "$dis" = "$uuid" ]; then
+                    is_turned_off=1
+                    break
+                fi
+            done
+            break
+        fi
+    done
+    [ "$is_turned_off" -eq 1 ] && continue
+
     # If already in NEW_ARR, skip
     found=0
     for cur in "${NEW_ARR[@]}"; do
@@ -160,7 +181,66 @@ if [ "$CHANGED" -eq 1 ]; then
     fi
 fi
 
-# Ensure Blur My Shell popup blur is disabled so it doesn't draw a dark card behind CC & NC
-gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur false 2>/dev/null || true
+# 4. Sincronizar el estado de los efectos de escritorio (Liquid Glass vs Blur My Shell)
+# Mantiene el modo exacto que aplica gnome-control-center entre sesiones
+has_liquid_glass=0
+for ext in "${NEW_ARR[@]}"; do
+    if [ "$ext" = "liquid-glass@thinkingcoding1231.gmail.com" ]; then
+        has_liquid_glass=1
+        break
+    fi
+done
+
+if [ "$DRY_RUN" -eq 0 ]; then
+    # La top bar NUNCA debe tener blur en ningún modo
+    gsettings set org.gnome.shell.extensions.blur-my-shell.panel blur false 2>/dev/null || true
+
+    # Dock dinámico garantizado
+    gsettings set org.gnome.shell.extensions.dash-to-dock autohide true 2>/dev/null || true
+    gsettings set org.gnome.shell.extensions.dash-to-dock dock-fixed false 2>/dev/null || true
+    gsettings set org.gnome.shell.extensions.dash-to-dock intellihide true 2>/dev/null || true
+    gsettings set org.gnome.shell.extensions.dash-to-dock require-pressure-to-show false 2>/dev/null || true
+    gsettings set org.gnome.shell.extensions.dash-to-dock intellihide-mode 'ALL_WINDOWS' 2>/dev/null || true
+
+    if [ "$has_liquid_glass" -eq 1 ]; then
+        log "Modo Liquid Glass detectado: sincronizando ajustes..."
+        gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur false 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme true 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.0 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.dash-to-dock custom-theme-shrink true 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.dash-to-dock customize-alphas false 2>/dev/null || true
+    else
+        log "Modo Blur My Shell detectado: sincronizando ajustes..."
+        # Asegurar que blur-my-shell está habilitado
+        bms_found=0
+        for ext in "${NEW_ARR[@]}"; do
+            if [ "$ext" = "blur-my-shell@aunetx" ]; then
+                bms_found=1
+                break
+            fi
+        done
+        if [ "$bms_found" -eq 0 ]; then
+            NEW_ARR+=("blur-my-shell@aunetx")
+            NEW_VARIANT="$(build_list "${NEW_ARR[@]}")"
+            gsettings set "$SCHEMA" "$KEY_ENABLED" "$NEW_VARIANT" 2>/dev/null || true
+        fi
+
+        gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur true 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme false 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.dash-to-dock custom-theme-shrink true 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.dash-to-dock customize-alphas false 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur true 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock override-background true 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock style-dash-to-dock 2 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock sigma 30 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock brightness 0.64 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock pipeline 'pipeline_default_rounded' 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock unblur-in-overview true 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock static-blur true 2>/dev/null || true
+    fi
+fi
 
 exit 0

@@ -154,6 +154,18 @@ if [ -d "$IDLE_SRC" ]; then
     cp -r "$IDLE_SRC" "$IDLE_DEST"
 fi
 
+# 12. User Theme (GNOME Shell User Themes)
+echo "📦 Instalando User Theme..."
+UT_SRC="$PKG_ROOT/pulsaros-gnome/usr/share/gnome-shell/extensions/user-theme@gnome-shell-extensions.gcampax.github.com"
+if [ ! -d "$UT_SRC" ]; then
+    UT_SRC="$SCRIPT_DIR/usr/share/gnome-shell/extensions/user-theme@gnome-shell-extensions.gcampax.github.com"
+fi
+if [ -d "$UT_SRC" ]; then
+    UT_DEST="$EXT_DIR/user-theme@gnome-shell-extensions.gcampax.github.com"
+    rm -rf "$UT_DEST"
+    cp -r "$UT_SRC" "$UT_DEST"
+fi
+
 # ------------------------------------------------------------------------------
 # PURGAR EXTENSIONES OBSOLETAS Y DESCONTINUADAS DEL DESTINO
 # ------------------------------------------------------------------------------

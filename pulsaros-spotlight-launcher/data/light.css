@@ -1,19 +1,46 @@
 /* PulsarOS Spotlight - light glass (the reference look: periwinkle) */
 
 window.spotlight-window.light .spotlight-main {
+    background-color: rgba(245, 247, 255, 0.50) !important;
+    background-image: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.65) !important;
+    box-shadow: 0 16px 40px -4px rgba(20, 28, 80, 0.20), inset 0 1px 0 rgba(255, 255, 255, 0.90) !important;
     color: @glass_ink_light;
 }
 
-window.spotlight-window.light .results-list row:selected {
-    background-color: rgba(255, 255, 255, 0.42);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+window.spotlight-window.light .results-list row:hover:not(.section-row) .result-row,
+window.spotlight-window.light .results-list row:selected .result-row,
+window.spotlight-window.light .results-list row.active-selection .result-row,
+window.spotlight-window.light .result-row.active-selection {
+    background-color: rgba(0, 0, 0, 0.10) !important;
+    border-radius: 12px !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.60) !important;
+}
+
+window.spotlight-window.light .results-list row:selected .result-title,
+window.spotlight-window.light .results-list row.active-selection .result-title,
+window.spotlight-window.light .results-list row:hover:not(.section-row) .result-title {
+    color: #1a1e2b !important;
+}
+
+window.spotlight-window.light .results-list row:selected .result-subtitle,
+window.spotlight-window.light .results-list row.active-selection .result-subtitle,
+window.spotlight-window.light .results-list row:hover:not(.section-row) .result-subtitle {
+    color: rgba(0, 0, 0, 0.70) !important;
+}
+
+window.spotlight-window.light .dialog-card {
+    background: transparent;
+    background-color: transparent;
+    border-color: rgba(0, 0, 0, 0.12);
+    box-shadow: none;
+    color: #1a1e2b;
 }
 
 window.spotlight-window.light .keycap {
     background-color: alpha(black, 0.06);
 }
 
-window.spotlight-window.light .action-panel,
-window.spotlight-window.light .dialog-card {
+window.spotlight-window.light .action-panel {
     box-shadow: 0 12px 36px rgba(20, 28, 80, 0.26);
 }

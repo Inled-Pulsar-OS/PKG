@@ -632,6 +632,21 @@ def has_camera_hardware():
         return True
     return any(os.path.exists(f"/dev/video{i}") for i in range(4))
 
+
+def has_face_id_hardware():
+    """Face ID needs a webcam AND a CPU with AVX2 (the Gaze engine requires it)."""
+    if "TEST_MODE" in os.environ:
+        return True
+    if not has_camera_hardware():
+        return False
+    try:
+        with open("/proc/cpuinfo", "r") as f:
+            if " avx2" in f.read():
+                return True
+    except Exception:
+        pass
+    return False
+
 def get_num_enroll_stages():
     try:
         res = subprocess.run([
@@ -732,6 +747,12 @@ class OOTBWindow(Adw.ApplicationWindow):
         self.keymap_list = get_all_keymaps()
         self.timezone_list = get_all_timezones()
         self.face_images = get_system_face_images()
+
+        # Probe the biometric hardware once so every navigation path agrees on
+        # whether the Touch ID / Face ID / presence pages must be shown at all.
+        self.has_fingerprint = has_fingerprint_hardware()
+        self.has_face_id = has_face_id_hardware()
+        self.has_camera = has_camera_hardware()
 
         # Build pages
         self.build_country_page()
@@ -1572,10 +1593,19 @@ class OOTBWindow(Adw.ApplicationWindow):
                 self.touch_enroll_proc.terminate()
             except Exception:
                 pass
-        if has_camera_hardware():
+        if self.has_face_id:
             self.stack.set_visible_child_name("face_id")
-        else:
+        elif self.has_camera:
             self.stack.set_visible_child_name("presence_select")
+        else:
+            self.stack.set_visible_child_name("theme_select")
+
+    def _go_to_presence_or_theme(self):
+        """Presence auto-lock requires a camera; skip that page otherwise."""
+        if self.has_camera:
+            self.stack.set_visible_child_name("presence_select")
+        else:
+            self.stack.set_visible_child_name("theme_select")
 
     # ==========================================================================
     # Face ID Page
@@ -1703,7 +1733,7 @@ class OOTBWindow(Adw.ApplicationWindow):
         self.face_instruction_label.set_markup(f"<span color='#ff3b30'>{self.tr('Could not detect face clearly. Try with better lighting.', 'No se pudo detectar el rostro con claridad. Intenta con más iluminación.')}</span>")
 
     def on_skip_face_id_clicked(self, btn):
-        self.stack.set_visible_child_name("presence_select")
+        self._go_to_presence_or_theme()
 
     # ==========================================================================
     # Presence Detection Page
@@ -1984,23 +2014,25 @@ class OOTBWindow(Adw.ApplicationWindow):
             self.btn_next.set_sensitive(True)
             self.stack.set_visible_child_name("account")
         elif current_page == "face_id":
-            if has_fingerprint_hardware():
+            if self.has_fingerprint:
                 self.stack.set_visible_child_name("touch_id")
             else:
                 self.stack.set_visible_child_name("account")
         elif current_page == "presence_select":
-            if has_camera_hardware():
+            if self.has_face_id:
                 self.stack.set_visible_child_name("face_id")
-            elif has_fingerprint_hardware():
+            elif self.has_fingerprint:
                 self.stack.set_visible_child_name("touch_id")
             else:
                 self.stack.set_visible_child_name("account")
         elif current_page == "theme_select":
             self.btn_next.set_sensitive(True)
             self.btn_next.set_label("Continue")
-            if has_camera_hardware():
+            if self.has_camera:
                 self.stack.set_visible_child_name("presence_select")
-            elif has_fingerprint_hardware():
+            elif self.has_face_id:
+                self.stack.set_visible_child_name("face_id")
+            elif self.has_fingerprint:
                 self.stack.set_visible_child_name("touch_id")
             else:
                 self.stack.set_visible_child_name("account")
@@ -2109,21 +2141,25 @@ class OOTBWindow(Adw.ApplicationWindow):
             self.btn_next.set_sensitive(True)
             self.btn_next.set_label("Continue")
 
-            if has_fingerprint_hardware():
+            if self.has_fingerprint:
                 self.stack.set_visible_child_name("touch_id")
-            elif has_camera_hardware():
+            elif self.has_face_id:
                 self.stack.set_visible_child_name("face_id")
+            elif self.has_camera:
+                self.stack.set_visible_child_name("presence_select")
             else:
                 self.stack.set_visible_child_name("theme_select")
 
         elif current_page == "touch_id":
-            if has_camera_hardware():
+            if self.has_face_id:
                 self.stack.set_visible_child_name("face_id")
+            elif self.has_camera:
+                self.stack.set_visible_child_name("presence_select")
             else:
                 self.stack.set_visible_child_name("theme_select")
 
         elif current_page == "face_id":
-            self.stack.set_visible_child_name("presence_select")
+            self._go_to_presence_or_theme()
 
         elif current_page == "presence_select":
             self.stack.set_visible_child_name("theme_select")

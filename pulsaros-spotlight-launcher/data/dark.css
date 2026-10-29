@@ -1,22 +1,46 @@
-/* PulsarOS Spotlight - dark glass (tinted charcoal) */
+/* PulsarOS Spotlight - dark glass */
 
-window.spotlight-window.dark .spotlight-main,
 window.spotlight-window.dark .toast-pill,
-window.spotlight-window.dark .action-panel,
-window.spotlight-window.dark .dialog-card {
+window.spotlight-window.dark .action-panel {
     background-color: @glass_dark_top;
     border-color: rgba(255, 255, 255, 0.16);
     color: @glass_ink_dark;
 }
 
 window.spotlight-window.dark .spotlight-main {
-    background-image: linear-gradient(to bottom, @glass_dark_top, @glass_dark_bottom);
-    box-shadow: 0 14px 34px -2px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
+    background-color: rgba(22, 24, 34, 0.40) !important;
+    background-image: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    box-shadow: 0 16px 40px -4px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
 }
 
-window.spotlight-window.dark .results-list row:selected {
-    background-color: rgba(255, 255, 255, 0.12);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+window.spotlight-window.dark .results-list row:hover:not(.section-row) .result-row,
+window.spotlight-window.dark .results-list row:selected .result-row,
+window.spotlight-window.dark .results-list row.active-selection .result-row,
+window.spotlight-window.dark .result-row.active-selection {
+    background-color: rgba(255, 255, 255, 0.18) !important;
+    border-radius: 12px !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22) !important;
+}
+
+window.spotlight-window.dark .results-list row:selected .result-title,
+window.spotlight-window.dark .results-list row.active-selection .result-title,
+window.spotlight-window.dark .results-list row:hover:not(.section-row) .result-title {
+    color: #ffffff !important;
+}
+
+window.spotlight-window.dark .results-list row:selected .result-subtitle,
+window.spotlight-window.dark .results-list row.active-selection .result-subtitle,
+window.spotlight-window.dark .results-list row:hover:not(.section-row) .result-subtitle {
+    color: rgba(255, 255, 255, 0.82) !important;
+}
+
+window.spotlight-window.dark .dialog-card {
+    background: transparent;
+    background-color: transparent;
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: none;
+    color: #ffffff;
 }
 
 window.spotlight-window.dark .keycap {

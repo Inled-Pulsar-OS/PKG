@@ -56,7 +56,7 @@ sync_theme() {
 
     if [ "$scheme" = "prefer-dark" ]; then
         if [[ "$GTK_NOW" == MacTahoe* ]]; then
-            GTK_TGT="MacTahoe-Dark-solid"
+            GTK_TGT="MacTahoe-Dark"
         else
             GTK_TGT="$GTK_NOW"
         fi
@@ -68,7 +68,7 @@ sync_theme() {
             CUR_TGT="$CUR_NOW"
         fi
         gsettings set org.gnome.desktop.interface cursor-theme "$CUR_TGT" 2>/dev/null || true
-        # gsettings set org.gnome.shell.extensions.user-theme name "MacTahoe-Dark" 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.user-theme name "MacTahoe-Dark" 2>/dev/null || true
         sync_flatpak "$GTK_TGT"
 
         if [ -d "/usr/share/themes/${GTK_TGT}/gtk-4.0" ] && [[ "$GTK_NOW" == MacTahoe* ]]; then
@@ -96,7 +96,7 @@ EOF
 
     else
         if [[ "$GTK_NOW" == MacTahoe* ]]; then
-            GTK_TGT="MacTahoe-Light-solid"
+            GTK_TGT="MacTahoe-Light"
         else
             GTK_TGT="$GTK_NOW"
         fi
@@ -108,7 +108,7 @@ EOF
             CUR_TGT="$CUR_NOW"
         fi
         gsettings set org.gnome.desktop.interface cursor-theme "$CUR_TGT" 2>/dev/null || true
-        # gsettings set org.gnome.shell.extensions.user-theme name "MacTahoe-Light" 2>/dev/null || true
+        gsettings set org.gnome.shell.extensions.user-theme name "MacTahoe-Light" 2>/dev/null || true
         sync_flatpak "$GTK_TGT"
 
         if [ -d "/usr/share/themes/${GTK_TGT}/gtk-4.0" ] && [[ "$GTK_NOW" == MacTahoe* ]]; then

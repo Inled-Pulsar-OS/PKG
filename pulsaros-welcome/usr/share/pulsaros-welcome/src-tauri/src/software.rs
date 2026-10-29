@@ -37,6 +37,18 @@ fn which(cmd: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Opens an http(s) URL with the default browser (F-Droid repo, downloads…).
+pub fn open_url(url: String) -> Result<(), String> {
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err(format!("Only http(s) URLs can be opened: {}", url));
+    }
+    Command::new("xdg-open")
+        .arg(&url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("Failed to open {}: {}", url, e))
+}
+
 pub fn launch_display_settings() -> Result<(), String> {
     Command::new("gnome-control-center")
         .arg("display")

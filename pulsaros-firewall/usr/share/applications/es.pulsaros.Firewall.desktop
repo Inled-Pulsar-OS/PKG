@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=Firewall
+Name[es]=Cortafuegos
+Comment=Manage open ports and network security
+Comment[es]=Gestionar puertos abiertos y seguridad de red
+Exec=pulsar-firewall
+Icon=pulsaros-firewall
+Terminal=false
+Type=Application
+Categories=Settings;Security;System;GTK;
+Keywords=firewall;ufw;ports;security;network;sayri;puertos;seguridad;
+StartupNotify=true
+StartupWMClass=es.pulsaros.Firewall
+X-GNOME-UsesNotifications=true

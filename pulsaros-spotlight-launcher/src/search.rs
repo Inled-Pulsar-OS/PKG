@@ -271,8 +271,7 @@ impl SearchBackend {
             return results;
         }
 
-        let sparql = self.build_query(query, category, limit);
-        results.extend(self.execute_sparql(&sparql));
+        results.extend(search_nautilus(query, category, limit));
         results
     }
 
@@ -290,7 +289,6 @@ impl SearchBackend {
 
         let query = query.to_string();
         let category = category.to_string();
-        let sparql = self.build_query(&query, &category, limit);
 
         let (sender, receiver) = std::sync::mpsc::channel::<Vec<SearchResult>>();
 
@@ -310,53 +308,177 @@ impl SearchBackend {
         });
 
         thread::spawn(move || {
-            let results = execute_sparql_external(&sparql);
+            let results = search_nautilus(&query, &category, limit);
             let _ = sender.send(results);
         });
-    }
-
-    fn build_query(&self, query: &str, category: &str, limit: usize) -> String {
-        let home_scope = r#"FILTER(STRSTARTS(?url, "file:///home/") || STRSTARTS(?url, "file:///media/") || STRSTARTS(?url, "file:///run/media/"))"#;
-        let ignore_clutter = r#"FILTER(!CONTAINS(?url, "/node_modules/") && !CONTAINS(?url, "/.git/") && !CONTAINS(?url, "/.cache/"))"#;
-
-        let filter_clause = if !query.trim().is_empty() {
-            let q_clean = query.replace('"', "\\\"").to_lowercase();
-            format!("{}\n    {}\n    FILTER(CONTAINS(LCASE(?url), \"{}\"))", home_scope, ignore_clutter, q_clean)
-        } else {
-            format!("{}\n    {}", home_scope, ignore_clutter)
-        };
-
-        let category_filters = [
-            ("documents", r#"FILTER(REGEX(?url, "\\.(pdf|txt|md|doc|docx|odt|xls|xlsx|ods|ppt|pptx|odp|csv|rtf|epub|html|json|xml|yaml|yml|sh|py|c|cpp|h|rs|go|js|ts)$", "i"))"#),
-            ("images", r#"FILTER(REGEX(?url, "\\.(png|jpg|jpeg|svg|webp|gif|avif|ico|bmp|tiff)$", "i"))"#),
-            ("audio", r#"FILTER(REGEX(?url, "\\.(mp3|flac|wav|ogg|m4a|aac|opus|wma|oga)$", "i"))"#),
-            ("video", r#"FILTER(REGEX(?url, "\\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|3gp)$", "i"))"#),
-        ];
-
-        let mut cat_filter = "";
-        for &(cat_name, filter) in &category_filters {
-            if cat_name == category {
-                cat_filter = filter;
-                break;
-            }
-        }
-
-        if !cat_filter.is_empty() {
-            format!(
-                "SELECT DISTINCT ?url WHERE {{ ?u nie:url ?url . {} {} }} LIMIT {}",
-                cat_filter, filter_clause, limit
-            )
-        } else {
-            format!(
-                "SELECT DISTINCT ?url WHERE {{ ?u nie:url ?url . {} }} LIMIT {}",
-                filter_clause, limit
-            )
-        }
     }
 
     #[allow(dead_code)]
     fn execute_sparql(&self, sparql: &str) -> Vec<SearchResult> {
         execute_sparql_external(sparql)
+    }
+}
+
+pub fn matches_category(filename: &str, category: &str) -> bool {
+    if category.is_empty() || category == "all" || category == "files" {
+        return true;
+    }
+    let lower = filename.to_lowercase();
+    let ext = lower.split('.').last().unwrap_or("");
+    match category {
+        "documents" => matches!(
+            ext,
+            "pdf" | "txt" | "md" | "doc" | "docx" | "odt" | "xls" | "xlsx" | "ods"
+                | "ppt" | "pptx" | "odp" | "csv" | "rtf" | "epub" | "html" | "json"
+                | "xml" | "yaml" | "yml" | "sh" | "py" | "c" | "cpp" | "h" | "rs"
+                | "go" | "js" | "ts" | "toml" | "log" | "tex"
+        ),
+        "images" => matches!(
+            ext,
+            "png" | "jpg" | "jpeg" | "svg" | "webp" | "gif" | "avif" | "ico"
+                | "bmp" | "tiff" | "heic" | "psd" | "raw"
+        ),
+        "audio" => matches!(
+            ext,
+            "mp3" | "flac" | "wav" | "ogg" | "m4a" | "aac" | "opus" | "wma"
+                | "oga" | "mid" | "midi"
+        ),
+        "video" => matches!(
+            ext,
+            "mp4" | "mkv" | "avi" | "mov" | "webm" | "flv" | "wmv" | "m4v"
+                | "3gp" | "ts" | "mpg" | "mpeg"
+        ),
+        _ => true,
+    }
+}
+
+pub fn search_nautilus(query: &str, category: &str, limit: usize) -> Vec<SearchResult> {
+    let mut results = Vec::new();
+    let q_trimmed = query.trim();
+    if q_trimmed.is_empty() {
+        return results;
+    }
+
+    let terms: Vec<String> = q_trimmed.split_whitespace().map(|s| s.to_string()).collect();
+    if terms.is_empty() {
+        return results;
+    }
+
+    // Call Nautilus SearchProvider over D-Bus
+    let nautilus_uris = (|| -> Option<Vec<String>> {
+        let conn = ZbusConnection::session().ok()?;
+        let reply = conn.call_method(
+            Some("org.gnome.Nautilus"),
+            "/org/gnome/Nautilus/SearchProvider",
+            Some("org.gnome.Shell.SearchProvider2"),
+            "GetInitialResultSet",
+            &(terms,),
+        ).ok()?;
+        let (uris,): (Vec<String>,) = reply.body().deserialize().ok()?;
+        Some(uris)
+    })();
+
+    let uris = match nautilus_uris {
+        Some(u) if !u.is_empty() => u,
+        _ => fallback_file_search(q_trimmed, limit),
+    };
+
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for url in uris {
+        if seen.contains(&url) {
+            continue;
+        }
+        seen.insert(url.clone());
+
+        if url.contains("/.cache/") || url.contains("/.git/") || url.contains("/node_modules/") {
+            continue;
+        }
+
+        let clean_url = url.trim_end_matches('/');
+        let filename_part = clean_url.split('/').last().unwrap_or(clean_url);
+        let title = match urlencoding::decode(filename_part) {
+            Ok(decoded) if !decoded.trim().is_empty() => decoded.into_owned(),
+            _ => filename_part.to_string(),
+        };
+
+        if !matches_category(&title, category) {
+            continue;
+        }
+
+        let mime = mime_guess::from_path(&title)
+            .first_raw()
+            .unwrap_or("application/octet-stream")
+            .to_string();
+
+        let path_display = if clean_url.starts_with("file://") {
+            let p = &clean_url[7..];
+            urlencoding::decode(p).unwrap_or(std::borrow::Cow::Borrowed(p)).to_string()
+        } else {
+            clean_url.to_string()
+        };
+
+        results.push(SearchResult {
+            url,
+            title,
+            mime,
+            snippet: path_display,
+            app: None,
+        });
+
+        if results.len() >= limit {
+            break;
+        }
+    }
+
+    results.sort_unstable_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+    results
+}
+
+fn fallback_file_search(query: &str, limit: usize) -> Vec<String> {
+    let q_lower = query.to_lowercase();
+    let mut results = Vec::new();
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/jaime"));
+    let search_roots = [
+        dirs::document_dir().unwrap_or_else(|| home.join("Documents")),
+        dirs::download_dir().unwrap_or_else(|| home.join("Downloads")),
+        dirs::picture_dir().unwrap_or_else(|| home.join("Pictures")),
+        dirs::audio_dir().unwrap_or_else(|| home.join("Music")),
+        dirs::video_dir().unwrap_or_else(|| home.join("Videos")),
+        home.join("Desktop"),
+    ];
+
+    for root in &search_roots {
+        if !root.is_dir() {
+            continue;
+        }
+        walk_shallow(root, &q_lower, &mut results, limit, 0, 3);
+        if results.len() >= limit {
+            break;
+        }
+    }
+    results
+}
+
+fn walk_shallow(dir: &std::path::Path, query: &str, results: &mut Vec<String>, limit: usize, depth: usize, max_depth: usize) {
+    if depth > max_depth || results.len() >= limit {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else { return; };
+    for entry in entries.filter_map(Result::ok) {
+        if results.len() >= limit {
+            break;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') || name == "node_modules" || name == "target" {
+            continue;
+        }
+        if name.to_lowercase().contains(query) {
+            results.push(format!("file://{}", entry.path().display()));
+        }
+        let Ok(ft) = entry.file_type() else { continue; };
+        if ft.is_dir() {
+            walk_shallow(&entry.path(), query, results, limit, depth + 1, max_depth);
+        }
     }
 }
 
@@ -416,41 +538,8 @@ fn execute_sparql_external(sparql: &str) -> Vec<SearchResult> {
 }
 
 pub fn get_indexing_status_plain() -> (bool, String, f64) {
-    let targets = &[
-        ("org.freedesktop.LocalSearch3.Miner.Files", "/org/freedesktop/LocalSearch3/Miner/Files"),
-        ("org.freedesktop.Tracker3.Miner.Files", "/org/freedesktop/Tracker3/Miner/Files"),
-    ];
-
-    if let Ok(conn) = ZbusConnection::session() {
-        for &(bus_name, obj_path) in targets {
-            if let Ok(status_reply) = conn.call_method(
-                Some(bus_name),
-                obj_path,
-                Some("org.freedesktop.Tracker3.Miner"),
-                "GetStatus",
-                &(),
-            ) {
-                if let Ok((status,)) = status_reply.body().deserialize::<(String,)>() {
-                    let status_lower = status.to_lowercase();
-                    if !status_lower.contains("idle") && !status_lower.contains("inactivo") && !status_lower.contains("paused") {
-                        if let Ok(progress_reply) = conn.call_method(
-                            Some(bus_name),
-                            obj_path,
-                            Some("org.freedesktop.Tracker3.Miner"),
-                            "GetProgress",
-                            &(),
-                        ) {
-                            if let Ok((progress,)) = progress_reply.body().deserialize::<(f64,)>() {
-                                return (true, status, progress);
-                            }
-                        }
-                        return (true, status, 0.0);
-                    }
-                }
-            }
-        }
-    }
-
+    // Localsearch / Tracker daemon is disabled in Pulsar OS to save CPU/battery.
+    // Nautilus search engine handles file queries without background indexing.
     (false, "Idle".to_string(), 1.0)
 }
 
@@ -542,11 +631,13 @@ mod tests {
     }
 
     #[test]
-    fn build_query_contains_home_scope_and_query() {
-        let backend = SearchBackend::new(None);
-        let q = backend.build_query("myfile", "documents", 500);
-        assert!(q.contains("file:///home/"));
-        assert!(q.contains("CONTAINS(LCASE(?url), \"myfile\")"));
-        assert!(q.contains("LIMIT 500"));
+    fn matches_category_filters_correctly() {
+        assert!(matches_category("document.pdf", "documents"));
+        assert!(matches_category("notes.txt", "documents"));
+        assert!(!matches_category("photo.jpg", "documents"));
+        assert!(matches_category("photo.png", "images"));
+        assert!(matches_category("song.mp3", "audio"));
+        assert!(matches_category("clip.mp4", "video"));
+        assert!(matches_category("anything.xyz", "all"));
     }
 }

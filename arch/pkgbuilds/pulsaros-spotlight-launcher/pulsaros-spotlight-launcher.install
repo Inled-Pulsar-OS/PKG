@@ -1,0 +1,19 @@
+post_install() {
+    # Mask resource-heavy localsearch and tracker indexing daemons
+    mkdir -p /etc/systemd/user
+    for s in localsearch-3.service localsearch-control-3.service localsearch-extractor-3.service \
+             tracker-miner-fs-3.service tracker-extract-3.service tracker-miner-fs-control-3.service \
+             tracker-miner-rss-3.service; do
+        ln -sf /dev/null "/etc/systemd/user/$s" 2>/dev/null || true
+    done
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl --global mask localsearch-3.service localsearch-control-3.service localsearch-extractor-3.service tracker-miner-fs-3.service tracker-extract-3.service 2>/dev/null || true
+    fi
+    pkill -9 -f localsearch 2>/dev/null || true
+    pkill -9 -f tracker-miner-fs 2>/dev/null || true
+    pkill -9 -f tracker-extract 2>/dev/null || true
+}
+
+post_upgrade() {
+    post_install
+}

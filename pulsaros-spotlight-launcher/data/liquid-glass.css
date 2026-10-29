@@ -1,21 +1,33 @@
 /* PulsarOS Spotlight - Pulsar Liquid Glass (more translucent; relies on compositor blur) */
 
 window.spotlight-window.liquid-glass.dark .spotlight-main {
-    background-color: rgba(30, 32, 44, 0.46);
+    background-color: rgba(22, 24, 34, 0.40);
     background-image: none;
-    border-color: rgba(255, 255, 255, 0.28);
+    border-color: rgba(255, 255, 255, 0.18);
 }
 
 window.spotlight-window.liquid-glass.light .spotlight-main {
-    background-color: rgba(214, 224, 255, 0.46);
+    background-color: rgba(245, 247, 255, 0.50);
     background-image: none;
-    border-color: rgba(255, 255, 255, 0.74);
+    border-color: rgba(255, 255, 255, 0.65);
 }
 
-window.spotlight-window.liquid-glass.dark .results-list row:selected {
-    background-color: rgba(255, 255, 255, 0.14);
+window.spotlight-window.liquid-glass.dark .results-list row:hover:not(.section-row) .result-row,
+window.spotlight-window.liquid-glass.dark .results-list row:selected .result-row,
+window.spotlight-window.liquid-glass.dark .results-list row.active-selection .result-row,
+window.spotlight-window.liquid-glass.dark .result-row.active-selection {
+    background-color: rgba(255, 255, 255, 0.18) !important;
+    color: #ffffff !important;
+    border-radius: 12px !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22) !important;
 }
 
-window.spotlight-window.liquid-glass.light .results-list row:selected {
-    background-color: rgba(255, 255, 255, 0.45);
+window.spotlight-window.liquid-glass.light .results-list row:hover:not(.section-row) .result-row,
+window.spotlight-window.liquid-glass.light .results-list row:selected .result-row,
+window.spotlight-window.liquid-glass.light .results-list row.active-selection .result-row,
+window.spotlight-window.liquid-glass.light .result-row.active-selection {
+    background-color: rgba(0, 0, 0, 0.08) !important;
+    color: #1a1e2b !important;
+    border-radius: 12px !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.60) !important;
 }

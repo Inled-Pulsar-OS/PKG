@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Privileged execution wrapper for Pulsar Firewall helper
+exec /usr/bin/python3 /usr/lib/pulsaros-firewall/helper.py "$@"

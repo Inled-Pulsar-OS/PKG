@@ -1,0 +1,22 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=gaze
+pkgver=0.3.10
+# Versión upstream real del asset publicado por GunduLabs. Se separa de
+# pkgver para que el CI pueda reescribir pkgver (p.ej. 0.3.10.unstable) sin
+# romper la URL de descarga (daba 404 en el deploy de unstable).
+_upstream_ver=0.3.10
+pkgrel=1
+pkgdesc="Daemon, CLI, and PAM integration for Gaze face authentication"
+arch=(x86_64)
+url="https://gaze.gundulabs.com"
+license=('GPL-3.0-or-later')
+depends=('opencv>=5.0' 'opencv<5.1' 'pam' 'tpm2-tss' 'gst-plugins-base' 'gst-plugins-good' 'gst-plugin-pipewire')
+backup=('etc/dbus-1/system.d/com.gundulabs.Gaze.conf' 'etc/gaze/config.toml')
+install=gaze.install
+options=(!strip !debug)
+source=("https://github.com/GunduLabs/gaze/releases/download/v${_upstream_ver}/gaze-${_upstream_ver}-1-x86_64.pkg.tar.zst")
+sha256sums=('SKIP')
+
+package() {
+    cp -r etc usr "$pkgdir/"
+}

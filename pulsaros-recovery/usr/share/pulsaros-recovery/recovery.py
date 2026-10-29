@@ -25,7 +25,83 @@ gi.require_version('GdkPixbuf', '2.0')
 from gi.repository import Gtk, Gdk, GLib, Adw, Gio, GdkPixbuf
 
 # Granular catalogs for extra packages and hardware drivers (in English)
+#
+# The first block ("required") is the Pulsar OS extras: they are deliberately
+# NOT shipped on the live ISO, so pulsaros-recovery always installs them on the
+# target disk and their checkboxes are locked on in the selection UI.
 EXTRA_PACKAGES_ITEMS = [
+    {
+        "id": "pulsaros-hblock",
+        "name": "hblock (ad & tracker blocking)",
+        "desc": "Blocks ads and trackers system-wide via a curated hosts file.",
+        "required": True,
+        "arch_pkgs": ["pulsaros-hblock"],
+        "debian_pkgs": ["pulsaros-hblock"],
+    },
+    {
+        "id": "pulsaros-firewall",
+        "name": "Pulsar OS Firewall",
+        "desc": "Graphical firewall to control incoming and outgoing connections.",
+        "required": True,
+        "arch_pkgs": ["pulsaros-firewall"],
+        "debian_pkgs": ["pulsaros-firewall"],
+    },
+    {
+        "id": "pulsaros-vpn",
+        "name": "Pulsar OS VPN",
+        "desc": "Pulsar VPN service and phone bridge daemon.",
+        "required": True,
+        "arch_pkgs": ["pulsaros-vpn"],
+        "debian_pkgs": ["pulsaros-vpn"],
+    },
+    {
+        "id": "pulsaros-cloud",
+        "name": "Pulsar OS Cloud",
+        "desc": "Cloud sync for your Pulsar OS settings and files.",
+        "required": True,
+        "arch_pkgs": ["pulsaros-cloud"],
+        "debian_pkgs": ["pulsaros-cloud"],
+    },
+    {
+        "id": "pulsaros-timemachine",
+        "name": "Pulsar OS Time Machine",
+        "desc": "macOS-style incremental backups and restores.",
+        "required": True,
+        "arch_pkgs": ["pulsaros-timemachine"],
+        "debian_pkgs": ["pulsaros-timemachine"],
+    },
+    {
+        "id": "pulsaros-flydrop",
+        "name": "Pulsar OS Flydrop",
+        "desc": "AirDrop-style file sharing with nearby devices.",
+        "required": True,
+        "arch_pkgs": ["pulsaros-flydrop"],
+        "debian_pkgs": ["pulsaros-flydrop"],
+    },
+    {
+        "id": "pulsaros-feedback",
+        "name": "Pulsar OS Feedback",
+        "desc": "Report bugs and attach system logs in one click.",
+        "required": True,
+        "arch_pkgs": ["pulsaros-feedback"],
+        "debian_pkgs": ["pulsaros-feedback"],
+    },
+    {
+        "id": "pulsaros-whatsnew",
+        "name": "Pulsar OS What's New",
+        "desc": "Release notes and the highlights of each Pulsar OS version.",
+        "required": True,
+        "arch_pkgs": ["pulsaros-whatsnew"],
+        "debian_pkgs": ["pulsaros-whatsnew"],
+    },
+    {
+        "id": "driverman",
+        "name": "DriverMan",
+        "desc": "Detects and installs the hardware drivers your machine needs.",
+        "required": True,
+        "arch_pkgs": ["driverman"],
+        "debian_pkgs": ["driverman"],
+    },
     {
         "id": "onlyoffice",
         "name": "ONLYOFFICE Desktop Editors",
@@ -198,6 +274,10 @@ EXTRA_PACKAGES_ITEMS = [
         "debian_pkgs": ["gvfs-fuse", "gvfs-backends"],
     },
 ]
+
+# Pulsar OS extras are mandatory: never installable, always installed.
+REQUIRED_EXTRA_IDS = frozenset(i["id"] for i in EXTRA_PACKAGES_ITEMS if i.get("required"))
+HAS_REQUIRED_EXTRAS = bool(REQUIRED_EXTRA_IDS)
 
 DRIVER_ITEMS = [
     {
@@ -1488,15 +1568,16 @@ class RecoveryWindow(Adw.ApplicationWindow):
         """Show a confirmation dialog before installing extra packages."""
         dialog = Adw.MessageDialog(
             transient_for=self,
-            heading="Install Extra Packages",
-            body=(
-                "This will install the full set of packages that were excluded\n"
-                "from the minimal ISO:\n\n"
-                "• Docker\n• Full firmware (GPU, audio)\n• VM guest tools\n"
-                "• Multimedia apps (VLC, Totem)\n• NVIDIA drivers\n• GNOME apps\n\n"
-                "⚠️ <b>Internet connection required</b> (WiFi or Ethernet).\n"
-                "The system will be mounted and packages installed via pacman."
-            ),
+            heading="Install Extra Packages",                body=(
+                    "This will install the full set of packages that were excluded\n"
+                    "from the minimal ISO:\n\n"
+                    "• Pulsar OS components (always installed): hblock, Firewall, VPN,\n"
+                    "  Cloud, Time Machine, Flydrop, Feedback, What's New, DriverMan\n"
+                    "• Docker\n• Full firmware (GPU, audio)\n• VM guest tools\n"
+                    "• Multimedia apps (VLC, Totem)\n• NVIDIA drivers\n• GNOME apps\n\n"
+                    "⚠️ <b>Internet connection required</b> (WiFi or Ethernet).\n"
+                    "The system will be mounted and packages installed via pacman."
+                ),
         )
         dialog.set_body_use_markup(True)
         dialog.add_response("cancel", "Cancel")
@@ -1521,7 +1602,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
         for item in EXTRA_PACKAGES_ITEMS:
             item_id = item["id"]
-            if self.packages_selected.get(item_id, True):
+            if item_id in REQUIRED_EXTRA_IDS or self.packages_selected.get(item_id, True):
                 if item.get("is_flatpak_onlyoffice"):
                     install_onlyoffice = True
                 if item.get("is_localsend"):
@@ -2879,9 +2960,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
         active = chk.get_active()
         self.install_extra_packages = active
         for k in self.packages_selected:
-            self.packages_selected[k] = active
+            self.packages_selected[k] = active or (k in REQUIRED_EXTRA_IDS)
         self._updating_selection_ui = True
         for item_id, w in getattr(self, 'pkg_check_widgets', {}).items():
+            if item_id in REQUIRED_EXTRA_IDS:
+                w.set_active(True)
+                continue
             w.set_active(active)
         self._updating_selection_ui = False
         self._update_packages_summary_label()
@@ -2916,7 +3000,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
     def _sync_packages_selection(self):
         for item_id, chk in getattr(self, 'pkg_check_widgets', {}).items():
-            self.packages_selected[item_id] = chk.get_active()
+            self.packages_selected[item_id] = chk.get_active() or (item_id in REQUIRED_EXTRA_IDS)
         sel_count = sum(1 for v in self.packages_selected.values() if v)
         self.install_extra_packages = sel_count > 0
         if hasattr(self, 'chk_extra'):
@@ -2996,7 +3080,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
             r_box.append(txt_box)
 
             chk = Gtk.CheckButton()
-            chk.set_active(self.packages_selected.get(item['id'], True))
+            if item.get("required"):
+                # Pulsar OS extras are mandatory: always on and not toggable.
+                self.packages_selected[item['id']] = True
+                chk.set_active(True)
+                chk.set_sensitive(False)
+            else:
+                chk.set_active(self.packages_selected.get(item['id'], True))
             chk.set_valign(Gtk.Align.CENTER)
             chk.item_id = item['id']
             chk.connect("toggled", self._on_individual_pkg_toggled)
@@ -3125,6 +3215,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
     def _on_pkg_toggle_all_clicked(self, btn):
         any_unchecked = any(not chk.get_active() for chk in self.pkg_check_widgets.values())
         for chk in self.pkg_check_widgets.values():
+            if getattr(chk, 'item_id', None) in REQUIRED_EXTRA_IDS:
+                chk.set_active(True)
+                continue
             chk.set_active(any_unchecked)
         self.btn_pkg_toggle_all.set_label("Deselect All" if any_unchecked else "Select All")
         self._sync_packages_selection()
@@ -3140,7 +3233,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.packages_select_return_screen = return_screen
         self._updating_selection_ui = True
         for item_id, chk in self.pkg_check_widgets.items():
-            chk.set_active(self.packages_selected.get(item_id, True))
+            chk.set_active(self.packages_selected.get(item_id, True) or (item_id in REQUIRED_EXTRA_IDS))
         self._updating_selection_ui = False
         any_unchecked = any(not chk.get_active() for chk in self.pkg_check_widgets.values())
         self.btn_pkg_toggle_all.set_label("Select All" if any_unchecked else "Deselect All")
@@ -4560,11 +4653,15 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 if is_minimal:
                     log_msg("Minimal ISO detected — installing excluded packages...")
                 else:
-                    log_msg("Full ISO detected — no extra packages needed.")
+                    log_msg("Full ISO detected — installing mandatory Pulsar OS extras...")
+
+                # Pulsar OS extras are never shipped on the live ISO, so they are
+                # installed on the target even if the optional extras are unchecked.
+                want_extras = self.install_extra_packages or HAS_REQUIRED_EXTRAS
 
                 if is_arch:
                     # ── Arch: install via pacman from the [inled] + Arch repos ──
-                    if self.install_extra_packages:
+                    if want_extras:
                         pkg_info = self._get_selected_packages_info(is_arch=True)
                         extra_packages = pkg_info["pkgs"]
                         if extra_packages or pkg_info["install_onlyoffice"]:
@@ -4644,7 +4741,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
                 else:
                     # ── Debian: install via apt from Debian + Inled repositories ──
-                    if self.install_extra_packages:
+                    if want_extras:
                         pkg_info = self._get_selected_packages_info(is_arch=False)
                         extra_packages = pkg_info["pkgs"]
                         if extra_packages or pkg_info["install_onlyoffice"] or pkg_info["install_localsend"]:

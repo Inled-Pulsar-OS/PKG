@@ -746,10 +746,11 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
       if (bms_popup_settings && bms_popup_schema)
         safe_set_boolean (bms_popup_settings, bms_popup_schema, "blur", FALSE);
 
-      g_autoptr(GSettingsSchema) bms_dock_schema = NULL;
-      g_autoptr(GSettings) bms_dock_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.dash-to-dock", &bms_dock_schema);
-      if (bms_dock_settings && bms_dock_schema)
-        safe_set_boolean (bms_dock_settings, bms_dock_schema, "blur", FALSE);
+      /* The top bar must NEVER have blur in any mode. */
+      g_autoptr(GSettingsSchema) bms_panel_schema = NULL;
+      g_autoptr(GSettings) bms_panel_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.panel", &bms_panel_schema);
+      if (bms_panel_settings && bms_panel_schema)
+        safe_set_boolean (bms_panel_settings, bms_panel_schema, "blur", FALSE);
 
       /* 2. Configure Dash to Dock (Pulsar Dock) with shrink wrap enabled */
       g_autoptr(GSettingsSchema) dock_schema = NULL;
@@ -851,8 +852,8 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
         "dconf write /org/gnome/shell/extensions/liquid-glass/notification-tint-color \\\"'#000000'\\\" ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/osd-tint-color \\\"'#000000'\\\" ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/output-logs 'false' ; "
-        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur false ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur false ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.panel blur false ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme true ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.0 ; "
@@ -881,7 +882,16 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
           safe_set_double (dock_settings, dock_schema, "height-fraction", 0.9);
         }
 
-      /* 3. Restore Blur my Shell dock settings */
+      /* 3. Restore Blur my Shell dock & panel settings (top bar MUST NEVER have blur) */
+      g_autoptr(GSettingsSchema) bms_panel_schema = NULL;
+      g_autoptr(GSettings) bms_panel_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.panel", &bms_panel_schema);
+      if (bms_panel_settings && bms_panel_schema)
+        {
+          safe_set_boolean (bms_panel_settings, bms_panel_schema, "blur", FALSE);
+          safe_set_int (bms_panel_settings, bms_panel_schema, "sigma", 30);
+          safe_set_double (bms_panel_settings, bms_panel_schema, "brightness", 0.60);
+        }
+
       g_autoptr(GSettingsSchema) bms_dock_schema = NULL;
       g_autoptr(GSettings) bms_dock_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.dash-to-dock", &bms_dock_schema);
       if (bms_dock_settings && bms_dock_schema)
@@ -889,15 +899,13 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
           safe_set_boolean (bms_dock_settings, bms_dock_schema, "blur", TRUE);
           safe_set_boolean (bms_dock_settings, bms_dock_schema, "override-background", TRUE);
           safe_set_int (bms_dock_settings, bms_dock_schema, "style-dash-to-dock", 2);
-          safe_set_int (bms_dock_settings, bms_dock_schema, "sigma", 0);
+          safe_set_int (bms_dock_settings, bms_dock_schema, "sigma", 30);
           safe_set_double (bms_dock_settings, bms_dock_schema, "brightness", 0.64);
           safe_set_string (bms_dock_settings, bms_dock_schema, "pipeline", "pipeline_default_rounded");
           safe_set_boolean (bms_dock_settings, bms_dock_schema, "unblur-in-overview", TRUE);
           safe_set_boolean (bms_dock_settings, bms_dock_schema, "static-blur", TRUE);
         }
 
-      /* Enable Blur my Shell popup blur: Pulsar OS targets each floating pill individually
-       * with Dual Kawase blur without drawing an enclosing square card. */
       g_autoptr(GSettingsSchema) bms_popup_schema = NULL;
       g_autoptr(GSettings) bms_popup_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.popup", &bms_popup_schema);
       if (bms_popup_settings && bms_popup_schema)
@@ -907,17 +915,19 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
         "/bin/sh -c \""
         "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme false ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' ; "
-        "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.0 ; "
+        "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock custom-theme-shrink true ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock customize-alphas false ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur true ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock override-background true ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock style-dash-to-dock 2 ; "
-        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock sigma 0 ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock sigma 30 ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock brightness 0.64 ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock pipeline 'pipeline_default_rounded' ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock unblur-in-overview true ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock static-blur true ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.panel blur false ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.panel sigma 30 ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur true >/dev/null 2>&1 &\"";
       g_spawn_command_line_async (dock_script, NULL);
     }

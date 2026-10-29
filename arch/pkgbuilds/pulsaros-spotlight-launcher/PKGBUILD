@@ -1,12 +1,13 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-spotlight-launcher
-pkgver=2.0.34
-pkgrel=5
+pkgver=2.0.35
+pkgrel=1
 pkgdesc="Spotlight search for Pulsar OS"
 arch=(x86_64 aarch64)
 url="https://inled.es"
 license=(GPL-3.0-or-later)
-depends=(gtk4 libadwaita glib2 sqlite json-glib curl tinysparql localsearch wl-clipboard gnome-shell)
+install=pulsaros-spotlight-launcher.install
+depends=(gtk4 libadwaita glib2 sqlite json-glib curl wl-clipboard gnome-shell nautilus)
 makedepends=(cargo pkgconf)
 optdepends=(
     'ydotool: paste fallback when the Shell extension is unavailable'
@@ -35,7 +36,7 @@ check() {
     cd "$(_src)"
     export CARGO_TARGET_DIR="$srcdir/target"
     # thumb_generates_scaled_from_real_image needs a wallpaper that only exists on Pulsar OS
-    cargo test --release --locked -- --skip thumb_generates_scaled_from_real_image
+    cargo test --release --locked -- --test-threads=1 --skip thumb_generates_scaled_from_real_image
 }
 
 package() {

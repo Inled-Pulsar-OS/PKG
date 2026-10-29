@@ -1,17 +1,17 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-gnome
 pkgver=1.0.172
-pkgrel=2
+pkgrel=6
 pkgdesc="GNOME Shell extensions and configurations for Pulsar OS (macOS-like desktop)"
 arch=(any)
 url="https://inled.es"
 license=(custom)
 depends=(gnome-shell dconf)
 # Arch ships its own copy of the AppIndicator extension (gnome-shell-extension-appindicator)
-# while Pulsar bundles a pinned copy inside this package. Both own the same files, so
-# they cannot coexist: without this, `pacman -Syu` aborts with a file conflict.
-conflicts=('gnome-shell-extension-appindicator')
-replaces=('gnome-shell-extension-appindicator')
+# and gnome-shell-extensions while Pulsar bundles pinned copies inside this package.
+# Both own the same files, so they cannot coexist without conflicts/replaces.
+conflicts=('gnome-shell-extension-appindicator' 'gnome-shell-extensions')
+replaces=('gnome-shell-extension-appindicator' 'gnome-shell-extensions')
 makedepends=(git make sassc gettext glib2 jq unzip curl)
 options=(!strip)
 install=pulsaros-gnome.install
