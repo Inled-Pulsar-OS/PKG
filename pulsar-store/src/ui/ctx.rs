@@ -48,6 +48,7 @@ struct Inner {
     store: Arc<Store>,
     locales: Vec<String>,
     items: RefCell<Arc<Vec<Item>>>,
+    announcement: RefCell<Option<serde_json::Value>>,
     states: RefCell<HashMap<String, InstallState>>,
     ops: RefCell<HashMap<String, Op>>,
     /// Package managers lock their databases, so operations run one at a time.
@@ -69,6 +70,7 @@ impl Ctx {
             store,
             locales: i18n::locales(),
             items: RefCell::default(),
+            announcement: RefCell::default(),
             states: RefCell::default(),
             ops: RefCell::default(),
             queue: RefCell::default(),
@@ -117,6 +119,38 @@ impl Ctx {
 
     pub fn items(&self) -> Arc<Vec<Item>> {
         self.0.items.borrow().clone()
+    }
+
+    /// The catalog's announcement banner, if any.
+    pub fn announcement(&self) -> Option<serde_json::Value> {
+        self.0.announcement.borrow().clone()
+    }
+
+    /// Downloads an image in the background and calls `done` with its cached path.
+    pub fn load_image(&self, url: String, done: impl FnOnce(Option<std::path::PathBuf>) + 'static) {
+        let paths = self.0.store.paths.clone();
+        task::run(
+            move || {
+                crate::core::remote::fetch_image_cached(&paths, &crate::core::http::UreqFetch, &url)
+                    .ok()
+            },
+            done,
+        );
+    }
+
+    /// Downloads text in the background and calls `done` with it.
+    pub fn load_text(
+        &self,
+        url: String,
+        max_bytes: usize,
+        done: impl FnOnce(Option<String>) + 'static,
+    ) {
+        task::run(
+            move || {
+                crate::core::remote::fetch_text(&crate::core::http::UreqFetch, &url, max_bytes).ok()
+            },
+            done,
+        );
     }
 
     pub fn item(&self, id: &str) -> Option<Item> {
@@ -196,6 +230,7 @@ impl Ctx {
             move |result| {
                 if let Ok(catalog) = result {
                     *me.0.items.borrow_mut() = Arc::new(catalog.packages);
+                    *me.0.announcement.borrow_mut() = catalog.announcement;
                     me.emit(Change::Catalog);
                     me.refresh_states();
                     me.prefetch_icons();

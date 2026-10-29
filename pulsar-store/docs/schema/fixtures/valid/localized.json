@@ -5,15 +5,42 @@
       "id": "org.gimp.GIMP",
       "type": "desktop_app",
       "name": "GIMP",
-      "summary": { "en": "Image editor", "es": "Editor de imágenes", "es-DO": "Editor de imágenes (RD)" },
-      "description": { "de": "Bildbearbeitung" },
+      "summary": {
+        "en": "Image editor",
+        "es": "Editor de imágenes",
+        "es-DO": "Editor de imágenes (RD)"
+      },
+      "description": {
+        "de": "Bildbearbeitung"
+      },
       "category": "Graphics",
-      "tags": ["image", "photo"],
+      "tags": [
+        "image",
+        "photo"
+      ],
       "version": "2.10",
-      "formats": { "deb": "https://example.org/gimp.deb" },
-      "metadata": { "flatpakref_url": "https://example.org/gimp.flatpakref", "stars": 5 },
-      "future_field": { "anything": true }
+      "formats": {
+        "deb": "https://example.org/gimp.deb"
+      },
+      "metadata": {
+        "flatpakref_url": "https://example.org/gimp.flatpakref",
+        "stars": 5
+      },
+      "future_field": {
+        "anything": true
+      },
+      "featured": true,
+      "story": {
+        "en": "A story",
+        "es": "Una historia"
+      },
+      "hero_image": "https://example.org/hero.png",
+      "demo_urls": [
+        "https://example.org/1.png"
+      ]
     }
   ],
-  "announcement": { "title": "Welcome" }
+  "announcement": {
+    "title": "Welcome"
+  }
 }

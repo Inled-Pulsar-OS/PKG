@@ -37,7 +37,7 @@ fn is_valid_image(path: &Path) -> bool {
     std::fs::read(path).is_ok_and(|b| looks_like_image(&b))
 }
 
-fn looks_like_image(b: &[u8]) -> bool {
+pub(crate) fn looks_like_image(b: &[u8]) -> bool {
     if b.starts_with(&[0x89, b'P', b'N', b'G']) || b.starts_with(&[0xFF, 0xD8]) {
         return true;
     }

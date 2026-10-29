@@ -4,57 +4,145 @@
   "title": "Pulsar Store catalog, version 1",
   "type": "object",
   "anyOf": [
-    { "required": ["packages"] },
-    { "required": ["items"] }
+    {
+      "required": [
+        "packages"
+      ]
+    },
+    {
+      "required": [
+        "items"
+      ]
+    }
   ],
   "properties": {
-    "schema_version": { "const": 1 },
-    "packages": { "type": "array", "items": { "$ref": "#/$defs/item" } },
-    "items": { "type": "array", "items": { "$ref": "#/$defs/item" } },
-    "announcement": { "type": "object" }
+    "schema_version": {
+      "const": 1
+    },
+    "packages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "announcement": {
+      "type": "object"
+    }
   },
   "$defs": {
     "localizedText": {
       "description": "A string, or a map of BCP 47 tag to string. Fallback order: exact tag, language, en, first entry.",
       "oneOf": [
-        { "type": "string" },
+        {
+          "type": "string"
+        },
         {
           "type": "object",
           "minProperties": 1,
-          "propertyNames": { "pattern": "^[A-Za-z]{2,3}([-_][A-Za-z0-9]+)*$" },
-          "additionalProperties": { "type": "string" }
+          "propertyNames": {
+            "pattern": "^[A-Za-z]{2,3}([-_][A-Za-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       ]
     },
     "item": {
       "type": "object",
-      "required": ["id", "type"],
+      "required": [
+        "id",
+        "type"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
         "type": {
           "description": "Known values; unknown values are accepted and treated as unsupported.",
           "type": "string"
         },
-        "name": { "$ref": "#/$defs/localizedText" },
-        "summary": { "$ref": "#/$defs/localizedText" },
-        "description": { "$ref": "#/$defs/localizedText" },
-        "category": { "type": "string" },
-        "tags": { "type": "array", "items": { "type": "string" } },
-        "version": { "type": "string" },
-        "package_name": { "type": "string" },
-        "download_url": { "type": "string" },
+        "name": {
+          "$ref": "#/$defs/localizedText"
+        },
+        "summary": {
+          "$ref": "#/$defs/localizedText"
+        },
+        "description": {
+          "$ref": "#/$defs/localizedText"
+        },
+        "category": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "version": {
+          "type": "string"
+        },
+        "package_name": {
+          "type": "string"
+        },
+        "download_url": {
+          "type": "string"
+        },
         "formats": {
           "type": "object",
           "properties": {
-            "deb": { "type": "string" },
-            "arch": { "type": "string" },
-            "pacman": { "type": "string" },
-            "flatpak": { "type": "string" }
+            "deb": {
+              "type": "string"
+            },
+            "arch": {
+              "type": "string"
+            },
+            "pacman": {
+              "type": "string"
+            },
+            "flatpak": {
+              "type": "string"
+            }
           }
         },
         "metadata": {
           "type": "object",
-          "properties": { "flatpakref_url": { "type": "string" } }
+          "properties": {
+            "flatpakref_url": {
+              "type": "string"
+            }
+          }
+        },
+        "featured": {
+          "type": "boolean",
+          "description": "Show on the Discover page."
+        },
+        "story": {
+          "$ref": "#/$defs/localizedText",
+          "description": "Short editorial text for the hero card."
+        },
+        "hero_image": {
+          "type": "string",
+          "description": "Wide image URL for the hero card."
+        },
+        "demo_urls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Screenshot URLs."
+        },
+        "promo_url": {
+          "type": "string",
+          "description": "Promotional image URL."
         }
       },
       "additionalProperties": true

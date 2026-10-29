@@ -151,6 +151,43 @@ impl Item {
             .unwrap_or(&self.id)
     }
 
+    /// Editorial: the catalog marks this item for the Discover page.
+    pub fn is_featured(&self) -> bool {
+        self.extra
+            .get("featured")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
+
+    /// Editorial: a short story shown on the hero card instead of the summary.
+    pub fn story(&self) -> Option<LocalizedText> {
+        serde_json::from_value(self.extra.get("story")?.clone()).ok()
+    }
+
+    /// Editorial: a wide image for the hero card.
+    pub fn hero_image(&self) -> Option<&str> {
+        self.extra
+            .get("hero_image")
+            .and_then(Value::as_str)
+            .filter(|u| !u.is_empty())
+    }
+
+    /// Screenshot URLs: `demo_urls` plus `promo_url`, skipping blanks.
+    pub fn screenshots(&self) -> Vec<&str> {
+        let demos = self
+            .extra
+            .get("demo_urls")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str);
+        let promo = self.extra.get("promo_url").and_then(Value::as_str);
+        demos
+            .chain(promo)
+            .filter(|u| !u.trim().is_empty())
+            .collect()
+    }
+
     /// Native package name: `package_name`, else the item id.
     pub fn native_name(&self) -> &str {
         self.package_name.as_deref().unwrap_or(&self.id)
@@ -258,6 +295,23 @@ mod tests {
     fn unknown_type_does_not_fail_parsing() {
         let i: Item = serde_json::from_str(r#"{"id":"x","type":"hologram"}"#).unwrap();
         assert_eq!(i.kind, SourceKind::Unknown);
+    }
+
+    #[test]
+    fn editorial_and_media_fields() {
+        let i: Item = serde_json::from_str(
+            r#"{"id":"x","type":"flatpak","featured":true,"hero_image":"https://x/h.png",
+                "story":{"en":"A story"},"demo_urls":["https://x/1.png",""],"promo_url":"https://x/p.png"}"#,
+        )
+        .unwrap();
+        assert!(i.is_featured());
+        assert_eq!(i.hero_image(), Some("https://x/h.png"));
+        assert_eq!(i.story().unwrap().resolve(&["en"]), "A story");
+        assert_eq!(i.screenshots(), ["https://x/1.png", "https://x/p.png"]);
+        let plain: Item =
+            serde_json::from_str(r#"{"id":"y","type":"flatpak","demo_urls":[],"promo_url":""}"#)
+                .unwrap();
+        assert!(!plain.is_featured() && plain.screenshots().is_empty() && plain.story().is_none());
     }
 
     #[test]

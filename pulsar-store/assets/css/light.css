@@ -9,3 +9,4 @@
 @define-color store_glass_edge_dim alpha(black, 0.08);
 @define-color store_glass_shadow alpha(black, 0.16);
 @define-color store_hero_scrim alpha(black, 0.38);
+@define-color store_accent_text mix(@accent_bg_color, @window_fg_color, 0.5);

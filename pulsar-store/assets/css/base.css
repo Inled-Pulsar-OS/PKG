@@ -39,7 +39,7 @@
     min-height: 28px;
     font-weight: 700;
 }
-.store-pill.get { background-color: alpha(@accent_bg_color, 0.16); color: @accent_color; }
+.store-pill.get { background-color: alpha(@accent_bg_color, 0.16); color: @store_accent_text; }
 .store-pill.get:hover { background-color: alpha(@accent_bg_color, 0.26); }
 .store-pill.progress { background: none; padding: 0; min-width: 32px; }
 
@@ -58,5 +58,8 @@
 
 .store-screenshot { border-radius: 12px; box-shadow: inset 0 0 0 1px @store_hairline; }
 
-.store-ring { color: @accent_color; }
+.store-ring { color: @store_accent_text; }
 .store-ring-button { padding: 0; min-width: 32px; min-height: 32px; border-radius: 999px; }
+
+gridview.store-grid { background: none; }
+gridview.store-grid > child { padding: 0; border-radius: 14px; }

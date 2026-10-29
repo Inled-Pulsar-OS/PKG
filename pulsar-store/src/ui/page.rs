@@ -11,6 +11,24 @@ pub const TOOLBAR_CLEARANCE: i32 = 64;
 
 /// Builds a page. `fill` adds content to the column; it runs again whenever the catalog changes.
 pub fn page(ctx: &Ctx, max_width: i32, fill: impl Fn(&Ctx, &gtk::Box) + 'static) -> gtk::Widget {
+    build_page(ctx, max_width, false, fill)
+}
+
+/// Like `page`, but also rebuilds when install states change (for lists that depend on them).
+pub fn live_page(
+    ctx: &Ctx,
+    max_width: i32,
+    fill: impl Fn(&Ctx, &gtk::Box) + 'static,
+) -> gtk::Widget {
+    build_page(ctx, max_width, true, fill)
+}
+
+fn build_page(
+    ctx: &Ctx,
+    max_width: i32,
+    on_state: bool,
+    fill: impl Fn(&Ctx, &gtk::Box) + 'static,
+) -> gtk::Widget {
     let column = gtk::Box::new(gtk::Orientation::Vertical, SPACE_XL);
     column.set_margin_top(TOOLBAR_CLEARANCE + SPACE_L);
     column.set_margin_bottom(SPACE_XL);
@@ -31,7 +49,12 @@ pub fn page(ctx: &Ctx, max_width: i32, fill: impl Fn(&Ctx, &gtk::Box) + 'static)
     let (rebuild_ctx, rebuild_column) = (ctx.clone(), column.clone());
     let fill = std::rc::Rc::new(fill);
     ctx.subscribe(&scroll, move |c| {
-        if *c == Change::Catalog {
+        let rebuild = match c {
+            Change::Catalog => true,
+            Change::States | Change::State(_) => on_state,
+            _ => false,
+        };
+        if rebuild {
             while let Some(child) = rebuild_column.first_child() {
                 rebuild_column.remove(&child);
             }

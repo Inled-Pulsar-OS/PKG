@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 setters='set_label|set_title|set_subtitle|set_text|set_tooltip_text|set_placeholder_text|set_description|title|subtitle|label|tooltip_text|placeholder_text|heading|body'
-hits=$(grep -rnE --include='*.rs' "\.($setters)\((Some\()?&?\"" src \
+hits=$(grep -rnE --include='*.rs' "\.($setters)\((Some\()?&?\"[^\"]" src \
     | grep -v '^src/core/i18n.rs' || true)
 
 if [ -n "$hits" ]; then

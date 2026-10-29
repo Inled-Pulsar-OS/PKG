@@ -19,6 +19,25 @@ pub enum Ecosystem {
     Sayri,
 }
 
+impl Route {
+    /// Reads a route from a command line value such as `discover`, `apps`,
+    /// `extensions`, `sayri`, `installed`, `updates`, `search:firefox`, or `item:<id>`.
+    pub fn from_arg(arg: &str) -> Option<Route> {
+        let (head, rest) = arg.split_once(':').map_or((arg, ""), |(h, r)| (h, r));
+        match (head, rest) {
+            ("discover", "") => Some(Route::Discover),
+            ("apps" | "installed", "") => Some(Route::Category(head.to_string())),
+            ("extensions", "") => Some(Route::Ecosystem(Ecosystem::Extensions)),
+            ("sayri", "") => Some(Route::Ecosystem(Ecosystem::Sayri)),
+            ("updates", "") => Some(Route::Updates),
+            ("search", q) => Some(Route::Search(q.to_string())),
+            ("item", id) if !id.is_empty() => Some(Route::Item(id.to_string())),
+            ("category", c) if !c.is_empty() => Some(Route::Category(c.to_lowercase())),
+            _ => None,
+        }
+    }
+}
+
 /// A back stack of routes. Pure data; the shell turns changes into pages.
 #[derive(Debug, Default)]
 pub struct Router {
@@ -73,6 +92,29 @@ impl Router {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_command_line_routes() {
+        assert_eq!(Route::from_arg("discover"), Some(Route::Discover));
+        assert_eq!(
+            Route::from_arg("apps"),
+            Some(Route::Category("apps".into()))
+        );
+        assert_eq!(
+            Route::from_arg("sayri"),
+            Some(Route::Ecosystem(Ecosystem::Sayri))
+        );
+        assert_eq!(
+            Route::from_arg("search:fire fox"),
+            Some(Route::Search("fire fox".into()))
+        );
+        assert_eq!(
+            Route::from_arg("item:org.x.App"),
+            Some(Route::Item("org.x.App".into()))
+        );
+        assert_eq!(Route::from_arg("item:"), None);
+        assert_eq!(Route::from_arg("nope"), None);
+    }
 
     #[test]
     fn push_pop() {

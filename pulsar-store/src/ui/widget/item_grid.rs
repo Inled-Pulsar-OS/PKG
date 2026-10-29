@@ -60,6 +60,7 @@ pub fn item_grid(ctx: &Ctx, ids: &[String]) -> gtk::Widget {
 
     let grid = gtk::GridView::new(None::<gtk::NoSelection>, Some(factory));
     grid.set_model(Some(&gtk::NoSelection::new(Some(model))));
+    grid.add_css_class("store-grid");
     grid.set_min_columns(1);
     grid.set_max_columns(2);
     grid.set_enable_rubberband(false);

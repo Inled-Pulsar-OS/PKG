@@ -11,3 +11,12 @@
 Fixtures in `fixtures/valid` must validate and parse; fixtures in `fixtures/invalid` must be rejected. Both run in `tests/schema.rs`.
 
 To check a real catalog: `CATALOG_FILE=path/to/index.json cargo test --test schema -- --ignored`.
+
+## Editorial fields (optional, added within v1)
+
+- `featured` (boolean): show the item on Discover. Featured items lead the page.
+- `story` (localized text): short text shown on the hero card instead of the summary.
+- `hero_image` (URL): wide image behind the hero card.
+- `demo_urls` (array of URLs) and `promo_url` (URL): screenshots on the item page.
+
+Older stores ignore these fields, and older catalogs without them still work.

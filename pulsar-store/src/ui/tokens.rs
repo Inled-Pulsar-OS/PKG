@@ -29,7 +29,7 @@ pub fn concentric(outer: f32, inset: f32) -> f32 {
 pub const GLASS_BLUR: f64 = 24.0;
 
 /// Color names every theme file must define.
-pub const COLOR_TOKENS: [&str; 10] = [
+pub const COLOR_TOKENS: [&str; 11] = [
     "store_surface",
     "store_surface_hover",
     "store_hairline",
@@ -40,6 +40,7 @@ pub const COLOR_TOKENS: [&str; 10] = [
     "store_glass_edge_dim",
     "store_glass_shadow",
     "store_hero_scrim",
+    "store_accent_text",
 ];
 
 #[cfg(test)]

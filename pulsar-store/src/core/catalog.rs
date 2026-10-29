@@ -45,7 +45,7 @@ fn normalize_item(mut item: Item) -> Item {
         if let LocalizedText::Plain(desc) = &item.description {
             if !desc.is_empty() {
                 let first = desc.split(". ").next().unwrap_or(desc);
-                item.summary = LocalizedText::Plain(format!("{first}."));
+                item.summary = LocalizedText::Plain(format!("{}.", first.trim_end_matches('.')));
             }
         }
     }
@@ -193,6 +193,15 @@ mod tests {
         let c = parse_catalog(br#"{"packages":[1,{"id":"a","type":"flatpak","description":"Hi there. More."},{"type":"x"}]}"#).unwrap();
         assert_eq!(c.packages.len(), 1);
         assert_eq!(c.packages[0].summary.resolve(&[]), "Hi there.");
+    }
+
+    #[test]
+    fn derived_summary_has_one_trailing_period() {
+        let c = parse_catalog(
+            br#"{"packages":[{"id":"a","type":"flatpak","description":"Only one sentence."}]}"#,
+        )
+        .unwrap();
+        assert_eq!(c.packages[0].summary.resolve(&[]), "Only one sentence.");
     }
 
     #[test]
