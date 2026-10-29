@@ -51,6 +51,8 @@ struct Inner {
     items: RefCell<Arc<Vec<Item>>>,
     announcement: RefCell<Option<serde_json::Value>>,
     states: RefCell<HashMap<String, InstallState>>,
+    /// Items nothing on this system can install (Flatpak-only without Flatpak).
+    blocked: RefCell<std::collections::HashSet<String>>,
     ops: RefCell<HashMap<String, Op>>,
     /// Package managers lock their databases, so operations run one at a time.
     queue: RefCell<VecDeque<(Action, Item)>>,
@@ -74,6 +76,7 @@ impl Ctx {
             items: RefCell::default(),
             announcement: RefCell::default(),
             states: RefCell::default(),
+            blocked: RefCell::default(),
             ops: RefCell::default(),
             queue: RefCell::default(),
             running: Cell::new(false),
@@ -215,6 +218,11 @@ impl Ctx {
             .count()
     }
 
+    /// False when this system has no way to install the item.
+    pub fn can_install(&self, id: &str) -> bool {
+        !self.0.blocked.borrow().contains(id)
+    }
+
     pub fn op(&self, id: &str) -> Option<Op> {
         self.0.ops.borrow().get(id).cloned()
     }
@@ -292,8 +300,9 @@ impl Ctx {
         let me = self.clone();
         task::run(
             move || compute_states(&installer, &items),
-            move |states| {
+            move |(states, blocked)| {
                 *me.0.states.borrow_mut() = states;
+                *me.0.blocked.borrow_mut() = blocked;
                 me.emit(Change::States);
             },
         );
@@ -496,11 +505,24 @@ fn error_details(e: &crate::core::error::StoreError) -> String {
     }
 }
 
-fn compute_states(installer: &Installer, items: &[Item]) -> HashMap<String, InstallState> {
-    items
+/// Install state for every item, and the ids nothing here can install.
+fn compute_states(
+    installer: &Installer,
+    items: &[Item],
+) -> (
+    HashMap<String, InstallState>,
+    std::collections::HashSet<String>,
+) {
+    let states = items
         .iter()
         .filter_map(|i| installer.state(i).ok().map(|s| (i.id.clone(), s)))
-        .collect()
+        .collect();
+    let blocked = items
+        .iter()
+        .filter(|i| !installer.can_install(i))
+        .map(|i| i.id.clone())
+        .collect();
+    (states, blocked)
 }
 
 #[cfg(test)]

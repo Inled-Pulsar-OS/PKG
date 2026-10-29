@@ -15,6 +15,7 @@ To check a real catalog: `CATALOG_FILE=path/to/index.json cargo test --test sche
 ## Editorial fields (optional, added within v1)
 
 - `featured` (boolean): show the item on Discover. Featured items lead the page.
+- `tag` (localized text): the small label above a card or banner title, such as "Quick look" or "Life hack". When absent, the item's type is shown.
 - `story` (localized text): short text shown on the hero card instead of the summary.
 - `hero_image` (URL): wide image behind the hero card.
 - `demo_urls` (array of URLs) and `promo_url` (URL): screenshots on the item page.

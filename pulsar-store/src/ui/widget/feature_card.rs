@@ -7,7 +7,7 @@ use crate::ui::widget::{icon::item_icon, item_tile::make_openable};
 use gtk4 as gtk;
 use gtk4::prelude::*;
 
-const ART: i32 = 96;
+const ART: i32 = 72;
 
 pub fn feature_card(ctx: &Ctx, item: &Item, eyebrow: &str) -> gtk::Widget {
     let card = gtk::Box::new(gtk::Orientation::Horizontal, SPACE_L);
@@ -26,7 +26,7 @@ pub fn feature_card(ctx: &Ctx, item: &Item, eyebrow: &str) -> gtk::Widget {
     title.set_xalign(0.0);
     title.set_wrap(true);
     title.set_lines(2);
-    title.set_max_width_chars(22);
+    title.set_max_width_chars(20);
     title.set_ellipsize(gtk::pango::EllipsizeMode::End);
     text.append(&title);
     let summary = gtk::Label::new(Some(&ctx.summary(item)));
@@ -34,7 +34,7 @@ pub fn feature_card(ctx: &Ctx, item: &Item, eyebrow: &str) -> gtk::Widget {
     summary.set_xalign(0.0);
     summary.set_wrap(true);
     summary.set_lines(3);
-    summary.set_max_width_chars(30);
+    summary.set_max_width_chars(24);
     summary.set_ellipsize(gtk::pango::EllipsizeMode::End);
     text.append(&summary);
     card.append(&text);
@@ -69,6 +69,14 @@ pub fn kind_eyebrow(kind: crate::core::model::SourceKind) -> String {
     }
 }
 
+/// The label above a card or banner: the catalog's editorial `tag`, else the item's kind.
+pub fn eyebrow_for(ctx: &Ctx, item: &Item) -> String {
+    item.tag()
+        .map(|t| t.resolve(&ctx.locales()).to_string())
+        .filter(|t| !t.is_empty())
+        .unwrap_or_else(|| kind_eyebrow(item.kind))
+}
+
 /// Editorial cards side by side, wrapping onto more lines in a narrow window.
 pub fn feature_row(ctx: &Ctx, items: &[&Item]) -> gtk::Widget {
     let flow = gtk::FlowBox::new();
@@ -79,7 +87,7 @@ pub fn feature_row(ctx: &Ctx, items: &[&Item]) -> gtk::Widget {
     flow.set_column_spacing(SPACE_L as u32);
     flow.set_row_spacing(SPACE_L as u32);
     for item in items {
-        flow.append(&feature_card(ctx, item, &kind_eyebrow(item.kind)));
+        flow.append(&feature_card(ctx, item, &eyebrow_for(ctx, item)));
     }
     flow.upcast()
 }

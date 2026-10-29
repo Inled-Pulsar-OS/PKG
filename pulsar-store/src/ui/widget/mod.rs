@@ -1,5 +1,6 @@
 //! Reusable widgets: item tile, card, info grid, install button.
 
+pub mod app_cell;
 pub mod card;
 pub mod feature_card;
 pub mod hero;

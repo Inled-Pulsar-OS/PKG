@@ -4,16 +4,17 @@ use crate::tr;
 use crate::ui::page::{self, page};
 use crate::ui::tokens::{SPACE_L, SPACE_M};
 use crate::ui::widget::{
-    feature_card::{feature_row, kind_eyebrow},
+    app_cell::app_cell,
+    feature_card::{eyebrow_for, feature_row},
     hero::hero,
-    item_row::item_row,
     section::section_header,
 };
 use crate::ui::{Ctx, Ecosystem, Route};
 use gtk4 as gtk;
 use gtk4::prelude::*;
 
-const ROW_ITEMS: usize = 6;
+/// Two rows of up to five cells.
+const ROW_ITEMS: usize = 10;
 const FEATURE_CARDS: usize = 3;
 
 type Filter<'a> = &'a dyn Fn(&&Item) -> bool;
@@ -52,7 +53,7 @@ pub fn pick_features(items: &[Item]) -> (Option<&Item>, Vec<&Item>) {
 }
 
 pub fn build(ctx: &Ctx) -> gtk::Widget {
-    page(ctx, 1100, |ctx, column| {
+    page(ctx, 1480, |ctx, column| {
         let items = ctx.items();
         if items.is_empty() {
             column.append(&page::title(&tr!("Discover")));
@@ -66,7 +67,7 @@ pub fn build(ctx: &Ctx) -> gtk::Widget {
 
         let (banner, cards) = pick_features(&items);
         if let Some(item) = banner {
-            column.append(&hero(ctx, item, &kind_eyebrow(item.kind)));
+            column.append(&hero(ctx, item, &eyebrow_for(ctx, item)));
         }
         if !cards.is_empty() {
             column.append(&feature_row(ctx, &cards));
@@ -110,17 +111,17 @@ pub fn build(ctx: &Ctx) -> gtk::Widget {
     })
 }
 
-/// Compact rows in up to three columns.
+/// Cells in up to five columns; narrower windows get fewer.
 fn row_flow(ctx: &Ctx, items: &[&Item]) -> gtk::Widget {
     let flow = gtk::FlowBox::new();
     flow.set_selection_mode(gtk::SelectionMode::None);
     flow.set_homogeneous(true);
     flow.set_min_children_per_line(1);
-    flow.set_max_children_per_line(3);
+    flow.set_max_children_per_line(5);
     flow.set_row_spacing(SPACE_M as u32 / 2);
     flow.set_column_spacing(SPACE_L as u32);
     for item in items {
-        flow.append(&item_row(ctx, item));
+        flow.append(&app_cell(ctx, item));
     }
     flow.upcast()
 }

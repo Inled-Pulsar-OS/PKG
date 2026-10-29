@@ -238,6 +238,27 @@ impl Installer {
         self.sources.gnome_ext.is_active(item).ok().flatten()
     }
 
+    /// False when nothing on this system can install the item, such as a Flatpak-only
+    /// app on a machine without the `flatpak` command. The UI shows the button disabled
+    /// instead of letting the install fail.
+    pub fn can_install(&self, item: &Item) -> bool {
+        match item.kind {
+            SourceKind::Flatpak => {
+                let available = editions(item);
+                match best_edition(&available, self.distro) {
+                    Some(e) if e.key == EditionKey::Flatpak => self.sources.flatpak.is_available(),
+                    Some(e) => !e.url.is_empty(),
+                    None => false,
+                }
+            }
+            SourceKind::System => self.sources.system.is_available(),
+            SourceKind::GnomeExtension => self.sources.gnome_ext.is_available(),
+            SourceKind::SayriSkill => self.sources.sayri_skill.is_available(),
+            SourceKind::SayriPlugin => self.sources.sayri_plugin.is_available(),
+            SourceKind::Unknown => false,
+        }
+    }
+
     pub fn state(&self, item: &Item) -> Result<InstallState> {
         let Some(current) = self.installed_version(item)? else {
             return Ok(InstallState::NotInstalled);
@@ -459,6 +480,44 @@ mod tests {
 
     const FLAT: &str = r#"{"id":"org.x.App","type":"flatpak","version":"2.0"}"#;
     const BOTH: &str = r#"{"id":"mytool","type":"flatpak","version":"2.0","formats":{"arch":"https://x/mytool.pkg.tar.zst","flatpak":"f"}}"#;
+
+    fn rig_without_flatpak() -> Rig {
+        let mut r = rig();
+        let flatpak = Arc::new(FakeSource::unavailable(SourceKind::Flatpak));
+        r.installer = Arc::new(Installer::new(
+            Sources {
+                flatpak: flatpak.clone(),
+                system: r.system.clone(),
+                gnome_ext: Arc::new(FakeSource::new(SourceKind::GnomeExtension)),
+                sayri_skill: Arc::new(FakeSource::new(SourceKind::SayriSkill)),
+                sayri_plugin: Arc::new(FakeSource::new(SourceKind::SayriPlugin)),
+            },
+            r.ledger.clone(),
+            Distro::Arch,
+        ));
+        r.flatpak = flatpak;
+        r
+    }
+
+    #[test]
+    fn flatpak_only_items_cannot_install_without_flatpak() {
+        let with = rig();
+        let without = rig_without_flatpak();
+        let flatpak_only = item(FLAT);
+        assert!(with.installer.can_install(&flatpak_only));
+        assert!(!without.installer.can_install(&flatpak_only));
+    }
+
+    #[test]
+    fn items_with_a_native_edition_install_without_flatpak() {
+        let without = rig_without_flatpak();
+        assert!(without.installer.can_install(&item(BOTH)));
+        let ext = item(r#"{"id":"e@x","type":"gnome_extension"}"#);
+        assert!(without.installer.can_install(&ext));
+        assert!(!without
+            .installer
+            .can_install(&item(r#"{"id":"u","type":"hologram"}"#)));
+    }
 
     #[test]
     fn flatpak_install_records_ledger_and_state() {

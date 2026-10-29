@@ -51,7 +51,7 @@
 .store-hero-title { font-size: 28px; font-weight: 800; letter-spacing: -0.4px; }
 
 /* ---- editorial cards ---- */
-.store-feature { padding: 18px 20px; border-radius: 22px; }
+.store-feature { padding: 16px 18px; border-radius: 22px; }
 .store-circle-art {
     border-radius: 999px;
     background-image:

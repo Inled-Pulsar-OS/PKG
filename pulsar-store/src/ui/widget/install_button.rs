@@ -132,7 +132,11 @@ impl InstallButton {
                             &tr!("{action}: {name}"),
                             &[("action", &label), ("name", &ctx.name(&item))],
                         ))]);
-                        button.set_sensitive(other != ButtonState::Installed);
+                        let blocked = other == ButtonState::Get && !ctx.can_install(&item.id);
+                        button.set_sensitive(other != ButtonState::Installed && !blocked);
+                        button.set_tooltip_text(blocked.then(|| {
+                            tr!("This needs Flatpak, which is not installed on this system.")
+                        }).as_deref());
                         stack.set_visible_child_name("button");
                     }
                 }

@@ -185,6 +185,12 @@ impl Item {
         serde_json::from_value(self.extra.get("story")?.clone()).ok()
     }
 
+    /// Editorial: the small label above a card or banner title, such as "Quick look".
+    /// The UI falls back to the item's kind when the catalog gives none.
+    pub fn tag(&self) -> Option<LocalizedText> {
+        serde_json::from_value(self.extra.get("tag")?.clone()).ok()
+    }
+
     /// Editorial: a wide image for the hero card.
     pub fn hero_image(&self) -> Option<&str> {
         self.extra
@@ -326,6 +332,7 @@ mod tests {
         )
         .unwrap();
         assert!(i.is_featured());
+        assert!(i.tag().is_none());
         assert_eq!(i.hero_image(), Some("https://x/h.png"));
         assert_eq!(i.story().unwrap().resolve(&["en"]), "A story");
         assert_eq!(i.screenshots(), ["https://x/1.png", "https://x/p.png"]);

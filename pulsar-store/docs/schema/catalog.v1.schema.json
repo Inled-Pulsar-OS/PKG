@@ -143,6 +143,10 @@
         "promo_url": {
           "type": "string",
           "description": "Promotional image URL."
+        },
+        "tag": {
+          "$ref": "#/$defs/localizedText",
+          "description": "Small label above the title on an editorial card, such as \"Quick look\"."
         }
       },
       "additionalProperties": true

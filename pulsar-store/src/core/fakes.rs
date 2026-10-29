@@ -24,6 +24,8 @@ pub struct FakeSource {
     kind: SourceKind,
     installed: Mutex<HashMap<String, String>>,
     pub fail_with: Mutex<Option<String>>,
+    /// False simulates a missing tool (no `flatpak` command, for example).
+    pub available: std::sync::atomic::AtomicBool,
 }
 
 impl FakeSource {
@@ -32,7 +34,16 @@ impl FakeSource {
             kind,
             installed: Mutex::default(),
             fail_with: Mutex::default(),
+            available: std::sync::atomic::AtomicBool::new(true),
         }
+    }
+
+    /// A source whose tooling is missing.
+    pub fn unavailable(kind: SourceKind) -> Self {
+        let s = Self::new(kind);
+        s.available
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        s
     }
 
     fn check(&self, cancel: &CancelToken) -> Result<()> {
@@ -52,7 +63,7 @@ impl PackageSource for FakeSource {
     }
 
     fn is_available(&self) -> bool {
-        true
+        self.available.load(std::sync::atomic::Ordering::SeqCst)
     }
 
     fn installed_version(&self, item: &Item) -> Result<Option<String>> {

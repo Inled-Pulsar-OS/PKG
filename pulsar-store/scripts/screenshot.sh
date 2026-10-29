@@ -55,5 +55,13 @@ if [ "$active_pid" != "$pid" ]; then
     exit 1
 fi
 sleep "${SHOT_DELAY:-5}"   # let the catalog, states, and icons load
+
+# Check again right before capturing: another window may have taken the spot meanwhile.
+geometry=$(find_window)
+active_pid=$(hyprctl -j activewindow | python3 -c 'import json,sys; print(json.load(sys.stdin).get("pid", 0))')
+if [ -z "$geometry" ] || [ "$active_pid" != "$pid" ]; then
+    echo "window changed before capture (active pid $active_pid); refusing to capture the screen" >&2
+    exit 1
+fi
 grim -g "$geometry" "$out"
 echo "saved $out"
