@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pulsar-store\n"
 "Report-Msgid-Bugs-To: https://github.com/Victor1890/pulsaros-PKG/issues\n"
-"POT-Creation-Date: 2026-10-28 22:59-0400\n"
+"POT-Creation-Date: 2026-10-28 23:22-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -25,44 +25,44 @@ msgstr "Back"
 msgid "Share"
 msgstr "Share"
 
-#: src/app.rs:106 src/app.rs:528 src/modules/search/mod.rs:36
+#: src/app.rs:108 src/app.rs:544 src/modules/search/mod.rs:36
 msgid "Search"
 msgstr "Search"
 
-#: src/app.rs:108
+#: src/app.rs:110
 msgid "Search apps, extensions, Sayri AI…"
 msgstr "Search apps, extensions, Sayri AI…"
 
-#: src/app.rs:160 src/app.rs:226
+#: src/app.rs:165 src/app.rs:242
 msgid "Close"
 msgstr "Close"
 
-#: src/app.rs:161
+#: src/app.rs:166
 msgid "Minimize"
 msgstr "Minimize"
 
-#: src/app.rs:162
+#: src/app.rs:167
 msgid "Maximize"
 msgstr "Maximize"
 
-#: src/app.rs:213 src/app.rs:534
+#: src/app.rs:229 src/app.rs:550
 msgid "Pulsar Store"
 msgstr "Pulsar Store"
 
-#: src/app.rs:225
+#: src/app.rs:241
 msgid "Copy Details"
 msgstr "Copy Details"
 
-#: src/app.rs:510
+#: src/app.rs:526
 msgid "Link copied"
 msgstr "Link copied"
 
-#: src/app.rs:597
+#: src/app.rs:613
 #, rust-format
 msgid "Install {name}?"
 msgstr "Install {name}?"
 
-#: src/app.rs:599
+#: src/app.rs:615
 msgid ""
 "This install was requested by a link or command. Install only software you "
 "trust."
@@ -70,15 +70,15 @@ msgstr ""
 "This install was requested by a link or command. Install only software you "
 "trust."
 
-#: src/app.rs:602
+#: src/app.rs:618
 msgid "Cancel"
 msgstr "Cancel"
 
-#: src/app.rs:603
+#: src/app.rs:619
 msgid "Install"
 msgstr "Install"
 
-#: src/app.rs:651
+#: src/app.rs:667
 msgid "Pulsar OS"
 msgstr "Pulsar OS"
 
@@ -446,6 +446,14 @@ msgstr "{name} installed. Log out and back in to turn it on."
 #, rust-format
 msgid "Could not open {name}"
 msgstr "Could not open {name}"
+
+#: src/ui/ctx.rs:493
+msgid ""
+"Flatpak is not installed on this system. Install it (for example with “sudo "
+"pacman -S flatpak” or “sudo apt install flatpak”), then try again."
+msgstr ""
+"Flatpak is not installed on this system. Install it (for example with “sudo "
+"pacman -S flatpak” or “sudo apt install flatpak”), then try again."
 
 #: src/ui/widget/hero.rs:95
 #, rust-format

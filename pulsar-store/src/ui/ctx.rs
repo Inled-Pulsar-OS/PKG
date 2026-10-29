@@ -426,7 +426,7 @@ impl Ctx {
             }
             (Err(e), _) => {
                 let heading = i18n::format(&tr!("Could not complete {name}"), &[("name", &name)]);
-                self.show_error(heading, e.to_string());
+                self.show_error(heading, error_details(e));
                 return;
             }
         };
@@ -483,9 +483,41 @@ impl Ctx {
     }
 }
 
+/// What to tell the user about a failure. A missing package manager says how to get it,
+/// instead of the bare "not available" the error carries for logs.
+fn error_details(e: &crate::core::error::StoreError) -> String {
+    use crate::core::error::StoreError;
+    use crate::core::model::SourceKind;
+    match e {
+        StoreError::SourceUnavailable(SourceKind::Flatpak) => tr!(
+            "Flatpak is not installed on this system. Install it (for example with “sudo pacman -S flatpak” or “sudo apt install flatpak”), then try again."
+        ),
+        other => other.to_string(),
+    }
+}
+
 fn compute_states(installer: &Installer, items: &[Item]) -> HashMap<String, InstallState> {
     items
         .iter()
         .filter_map(|i| installer.state(i).ok().map(|s| (i.id.clone(), s)))
         .collect()
+}
+
+#[cfg(test)]
+mod error_text_tests {
+    use super::error_details;
+    use crate::core::error::StoreError;
+    use crate::core::model::SourceKind;
+
+    #[test]
+    fn missing_flatpak_says_how_to_install_it() {
+        let text = error_details(&StoreError::SourceUnavailable(SourceKind::Flatpak));
+        assert!(text.contains("pacman -S flatpak") && text.contains("apt install flatpak"));
+    }
+
+    #[test]
+    fn other_errors_keep_their_own_text() {
+        let e = StoreError::CommandFailed("boom".into());
+        assert_eq!(error_details(&e), e.to_string());
+    }
 }

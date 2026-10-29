@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pulsar-store\n"
 "Report-Msgid-Bugs-To: https://github.com/Victor1890/pulsaros-PKG/issues\n"
-"POT-Creation-Date: 2026-10-28 22:59-0400\n"
+"POT-Creation-Date: 2026-10-28 23:22-0400\n"
 "PO-Revision-Date: 2026-10-28 20:53-0400\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -25,44 +25,44 @@ msgstr "Atrás"
 msgid "Share"
 msgstr "Compartir"
 
-#: src/app.rs:106 src/app.rs:528 src/modules/search/mod.rs:36
+#: src/app.rs:108 src/app.rs:544 src/modules/search/mod.rs:36
 msgid "Search"
 msgstr "Buscar"
 
-#: src/app.rs:108
+#: src/app.rs:110
 msgid "Search apps, extensions, Sayri AI…"
 msgstr "Buscar apps, extensiones, Sayri AI…"
 
-#: src/app.rs:160 src/app.rs:226
+#: src/app.rs:165 src/app.rs:242
 msgid "Close"
 msgstr "Cerrar"
 
-#: src/app.rs:161
+#: src/app.rs:166
 msgid "Minimize"
 msgstr "Minimizar"
 
-#: src/app.rs:162
+#: src/app.rs:167
 msgid "Maximize"
 msgstr "Maximizar"
 
-#: src/app.rs:213 src/app.rs:534
+#: src/app.rs:229 src/app.rs:550
 msgid "Pulsar Store"
 msgstr "Pulsar Store"
 
-#: src/app.rs:225
+#: src/app.rs:241
 msgid "Copy Details"
 msgstr "Copiar detalles"
 
-#: src/app.rs:510
+#: src/app.rs:526
 msgid "Link copied"
 msgstr "Enlace copiado"
 
-#: src/app.rs:597
+#: src/app.rs:613
 #, rust-format
 msgid "Install {name}?"
 msgstr "¿Instalar {name}?"
 
-#: src/app.rs:599
+#: src/app.rs:615
 msgid ""
 "This install was requested by a link or command. Install only software you "
 "trust."
@@ -70,15 +70,15 @@ msgstr ""
 "Un enlace o comando solicitó esta instalación. Instala solo software de "
 "confianza."
 
-#: src/app.rs:602
+#: src/app.rs:618
 msgid "Cancel"
 msgstr "Cancelar"
 
-#: src/app.rs:603
+#: src/app.rs:619
 msgid "Install"
 msgstr "Instalar"
 
-#: src/app.rs:651
+#: src/app.rs:667
 msgid "Pulsar OS"
 msgstr "Pulsar OS"
 
@@ -446,6 +446,12 @@ msgstr "{name} instalado. Cierra sesión y vuelve a entrar para activarlo."
 #, rust-format
 msgid "Could not open {name}"
 msgstr "No se pudo abrir {name}"
+
+#: src/ui/ctx.rs:493
+msgid ""
+"Flatpak is not installed on this system. Install it (for example with “sudo "
+"pacman -S flatpak” or “sudo apt install flatpak”), then try again."
+msgstr ""
 
 #: src/ui/widget/hero.rs:95
 #, rust-format
