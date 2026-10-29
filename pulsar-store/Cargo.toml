@@ -3,6 +3,7 @@ name = "pulsar-store"
 version = "2.0.0"
 edition = "2021"
 rust-version = "1.80"
+default-run = "pulsar-store"
 authors = ["Jaime <info@inled.es>"]
 license = "GPL-3.0-or-later"
 description = "Unified app store for Pulsar OS"
