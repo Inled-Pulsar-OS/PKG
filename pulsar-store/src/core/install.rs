@@ -133,18 +133,27 @@ impl Installer {
     /// a scan of installed packages by name similarity (names of 4+ characters).
     fn find_installed_native(&self, item: &Item) -> Result<Option<String>> {
         let system = &self.sources.system;
-        for name in self.native_candidates(item) {
-            if system
-                .installed_version(&native_probe(item, &name))?
-                .is_some()
-            {
-                return Ok(Some(name));
+        let installed = system.list_installed()?;
+        let candidates = self.native_candidates(item);
+        if installed.is_empty() {
+            // The listing is unavailable; ask about each name instead.
+            for name in candidates {
+                if system
+                    .installed_version(&native_probe(item, &name))?
+                    .is_some()
+                {
+                    return Ok(Some(name));
+                }
             }
+            return Ok(None);
+        }
+        if let Some(name) = candidates.into_iter().find(|n| installed.contains(n)) {
+            return Ok(Some(name));
         }
         if item.id.is_empty() {
             return Ok(None);
         }
-        Ok(system.list_installed()?.into_iter().find(|pkg| {
+        Ok(installed.into_iter().find(|pkg| {
             pkg.len() >= 4
                 && (*pkg == item.id || item.id.contains(pkg.as_str()) || pkg.contains(&item.id))
         }))

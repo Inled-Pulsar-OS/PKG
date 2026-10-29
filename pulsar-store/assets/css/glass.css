@@ -1,0 +1,15 @@
+/* Liquid Glass surface (navigation layer only). The blur is drawn in code by
+   `GlassSurface`; this file adds the tint, the lit edge, and the shadow. */
+.store-glass {
+    background-color: @store_glass_tint;
+    box-shadow:
+        inset 0 1px 0 @store_glass_edge,
+        inset 0 -1px 0 @store_glass_edge_dim,
+        0 8px 24px -8px @store_glass_shadow;
+}
+
+/* Fallback when blur is unavailable or transparency is reduced. */
+.store-glass.flat {
+    background-color: @store_surface_flat;
+    box-shadow: inset 0 0 0 1px @store_hairline;
+}

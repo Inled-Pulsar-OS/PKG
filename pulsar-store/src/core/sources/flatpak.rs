@@ -1,11 +1,13 @@
 //! Flatpak applications, through the `flatpak` command.
 
+use crate::core::cache::TtlCache;
 use crate::core::error::{Result, StoreError};
 use crate::core::http::Downloader;
 use crate::core::model::{Edition, Item, Phase, Progress, SourceKind};
 use crate::core::ports::{CancelToken, InstallOutcome, PackageSource, ProgressSink};
 use crate::core::process::{argv, parse_percent, RunOutput, Runner};
 use std::sync::Arc;
+use std::time::Duration;
 
 const FLATHUB_REPO: &str = "https://dl.flathub.org/repo/flathub.flatpakrepo";
 
@@ -85,17 +87,27 @@ pub fn find_match<'a>(
 pub struct FlatpakSource {
     runner: Arc<dyn Runner>,
     downloader: Arc<dyn Downloader>,
+    /// `flatpak list` is slow, and the UI asks about every item.
+    installed: TtlCache<Vec<InstalledApp>>,
 }
 
 impl FlatpakSource {
     pub fn new(runner: Arc<dyn Runner>, downloader: Arc<dyn Downloader>) -> Self {
-        Self { runner, downloader }
+        Self {
+            runner,
+            downloader,
+            installed: TtlCache::new(Duration::from_secs(5)),
+        }
     }
 
     fn installed_apps(&self) -> Vec<InstalledApp> {
         if !self.is_available() {
             return Vec::new();
         }
+        self.installed.get_or_load(|| self.list_installed_apps())
+    }
+
+    fn list_installed_apps(&self) -> Vec<InstalledApp> {
         let cmd = argv([
             "flatpak",
             "list",
@@ -211,12 +223,14 @@ impl PackageSource for FlatpakSource {
             [base.clone(), argv(["flathub"]), vec![target.clone()]].concat()
         };
 
-        let mut out = self.run_logged(&cmd, progress, cancel)?;
-        if !out.success && with_remote {
+        let mut out = self.run_logged(&cmd, progress, cancel);
+        if matches!(&out, Ok(o) if !o.success) && with_remote {
             // Retry without naming the remote, letting flatpak pick one.
             let retry = [base, vec![target]].concat();
-            out = self.run_logged(&retry, progress, cancel)?;
+            out = self.run_logged(&retry, progress, cancel);
         }
+        self.installed.invalidate();
+        let out = out?;
         if !out.success {
             return Err(Self::failure(&out));
         }
@@ -241,6 +255,7 @@ impl PackageSource for FlatpakSource {
             &mut |_| {},
             &cancel,
         )?;
+        self.installed.invalidate();
         if out.success {
             return Ok(());
         }
@@ -249,6 +264,7 @@ impl PackageSource for FlatpakSource {
         let out = self
             .runner
             .run(&[sys, vec![real_id]].concat(), &mut |_| {}, &cancel)?;
+        self.installed.invalidate();
         if out.success {
             Ok(())
         } else {

@@ -2,6 +2,7 @@
 //! Everything that changes the system runs through `privilege::elevate`.
 
 use crate::core::archive::{safe_component, verify_sha256};
+use crate::core::cache::TtlCache;
 use crate::core::error::{Result, StoreError};
 use crate::core::host::Distro;
 use crate::core::http::Downloader;
@@ -11,6 +12,7 @@ use crate::core::privilege::elevate;
 use crate::core::process::{argv, parse_percent, RunOutput, Runner};
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 const ARCH_SUFFIXES: [&str; 4] = [".pkg.tar.zst", ".pkg.tar.xz", ".pkg.tar", ".pacman"];
 
@@ -61,6 +63,8 @@ pub struct SystemSource {
     runner: Arc<dyn Runner>,
     downloader: Arc<dyn Downloader>,
     distro: Distro,
+    /// Installed package names; listing them is slow and the UI asks often.
+    names: TtlCache<Vec<String>>,
 }
 
 impl SystemSource {
@@ -69,6 +73,7 @@ impl SystemSource {
             runner,
             downloader,
             distro,
+            names: TtlCache::new(Duration::from_secs(5)),
         }
     }
 
@@ -83,6 +88,8 @@ impl SystemSource {
         cancel: &CancelToken,
     ) -> Result<RunOutput> {
         let full = elevate(&*self.runner, cmd);
+        // Whatever this command does, the installed set may have changed.
+        self.names.invalidate();
         let out = self.runner.run(
             &full,
             &mut |line| {
@@ -298,17 +305,22 @@ impl PackageSource for SystemSource {
     }
 
     fn list_installed(&self) -> Result<Vec<String>> {
-        let cmd = match self.distro {
-            Distro::Arch => argv(["pacman", "-Qq"]),
-            Distro::Debian => argv(["dpkg-query", "-W", "-f=${binary:Package}\n"]),
-        };
-        let out = self.runner.capture(&cmd)?;
-        Ok(out
-            .stdout
-            .lines()
-            .filter(|l| !l.is_empty())
-            .map(str::to_string)
-            .collect())
+        Ok(self.names.get_or_load(|| {
+            let cmd = match self.distro {
+                Distro::Arch => argv(["pacman", "-Qq"]),
+                Distro::Debian => argv(["dpkg-query", "-W", "-f=${binary:Package}\n"]),
+            };
+            self.runner
+                .capture(&cmd)
+                .map(|out| {
+                    out.stdout
+                        .lines()
+                        .filter(|l| !l.is_empty())
+                        .map(str::to_string)
+                        .collect()
+                })
+                .unwrap_or_default()
+        }))
     }
 
     fn install(

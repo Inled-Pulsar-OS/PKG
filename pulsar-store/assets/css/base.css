@@ -1,0 +1,62 @@
+/* Pulsar Store components. Colors come from the theme tokens (light.css / dark.css);
+   radii and spacing mirror src/ui/tokens.rs. */
+
+.store-title { font-size: 28px; font-weight: 800; letter-spacing: -0.3px; }
+.store-section-title { font-size: 20px; font-weight: 700; }
+.store-subtitle { color: @store_text_dim; }
+.store-caption { font-size: 12px; color: @store_text_dim; }
+
+.store-tile {
+    padding: 12px;
+    border-radius: 14px;
+    background-color: @store_surface;
+    transition: background-color 150ms ease-out;
+}
+.store-tile:hover { background-color: @store_surface_hover; }
+
+.store-card {
+    border-radius: 18px;
+    background-color: @store_surface;
+    box-shadow: inset 0 0 0 1px @store_hairline;
+    transition: background-color 150ms ease-out;
+}
+.store-card:hover { background-color: @store_surface_hover; }
+
+.store-card-hero {
+    border-radius: 18px;
+    color: white;
+    background-image: linear-gradient(135deg, @accent_bg_color, shade(@accent_bg_color, 0.55));
+}
+.store-card-hero label { color: white; }
+.store-card-hero .store-caption { color: alpha(white, 0.75); }
+
+.store-icon { border-radius: 14px; }
+.store-icon-fallback { background-color: @store_surface_hover; border-radius: 14px; }
+
+.store-pill {
+    border-radius: 999px;
+    padding: 4px 18px;
+    min-height: 28px;
+    font-weight: 700;
+}
+.store-pill.get { background-color: alpha(@accent_bg_color, 0.16); color: @accent_color; }
+.store-pill.get:hover { background-color: alpha(@accent_bg_color, 0.26); }
+.store-pill.progress { background: none; padding: 0; min-width: 32px; }
+
+.store-info-cell { padding: 10px 14px; }
+.store-info-value { font-weight: 700; font-size: 15px; }
+.store-info-label { font-size: 11px; color: @store_text_dim; }
+
+.store-sidebar-row { border-radius: 10px; margin: 1px 6px; }
+
+.store-banner {
+    padding: 16px 20px;
+    border-radius: 16px;
+    background-color: alpha(@accent_bg_color, 0.12);
+    box-shadow: inset 0 0 0 1px alpha(@accent_bg_color, 0.30);
+}
+
+.store-screenshot { border-radius: 12px; box-shadow: inset 0 0 0 1px @store_hairline; }
+
+.store-ring { color: @accent_color; }
+.store-ring-button { padding: 0; min-width: 32px; min-height: 32px; border-radius: 999px; }
