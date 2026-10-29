@@ -34,6 +34,7 @@ Open a page directly: `pulsar-store --page apps` (also `discover`, `extensions`,
 - [Publish to the catalog](docs/catalog-submission.md)
 - [Translating](docs/translating.md)
 - [Accessibility](docs/accessibility.md)
+- [Running on GNOME](docs/gnome.md)
 - [Threat model](docs/threat-model.md)
 - [Performance budget](docs/performance-budget.md)
 - [Contributing](CONTRIBUTING.md) and the [ticket backlog](docs/tickets/)

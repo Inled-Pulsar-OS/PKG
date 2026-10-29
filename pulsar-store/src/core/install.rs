@@ -229,6 +229,15 @@ impl Installer {
         }
     }
 
+    /// Whether an installed GNOME extension is switched on in the running Shell.
+    /// `None` for other kinds, or when there is no GNOME Shell.
+    pub fn is_active(&self, item: &Item) -> Option<bool> {
+        if item.kind != SourceKind::GnomeExtension {
+            return None;
+        }
+        self.sources.gnome_ext.is_active(item).ok().flatten()
+    }
+
     pub fn state(&self, item: &Item) -> Result<InstallState> {
         let Some(current) = self.installed_version(item)? else {
             return Ok(InstallState::NotInstalled);

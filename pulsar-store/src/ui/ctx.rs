@@ -394,16 +394,14 @@ impl Ctx {
 
     fn report(&self, action: Action, item: &Item, result: crate::core::error::Result<()>) {
         let name = self.name(item);
+        if result.is_ok()
+            && matches!(action, Action::Install(_) | Action::Update)
+            && item.kind == crate::core::model::SourceKind::GnomeExtension
+        {
+            self.report_extension(item.clone(), name);
+            return;
+        }
         let msg = match (&result, action) {
-            (Ok(()), Action::Install(_))
-                if item.kind == crate::core::model::SourceKind::GnomeExtension =>
-            {
-                // GNOME Shell on Wayland only sees a new extension after the next login.
-                i18n::format(
-                    &tr!("{name} installed. If it does not appear, log out and back in."),
-                    &[("name", &name)],
-                )
-            }
             (Ok(()), Action::Install(_)) => {
                 i18n::format(&tr!("{name} installed"), &[("name", &name)])
             }
@@ -419,6 +417,30 @@ impl Ctx {
             }
         };
         self.toast(msg);
+    }
+
+    /// Tells the user whether GNOME Shell switched the new extension on. The Shell on
+    /// Wayland only sees extensions that were installed before it started, so a fresh
+    /// one usually needs the user to log out and back in.
+    fn report_extension(&self, item: Item, name: String) {
+        let installer = self.0.store.installer.clone();
+        let me = self.clone();
+        task::run(
+            move || installer.is_active(&item),
+            move |active| {
+                let msg = match active {
+                    Some(true) => {
+                        i18n::format(&tr!("{name} installed and enabled"), &[("name", &name)])
+                    }
+                    Some(false) => i18n::format(
+                        &tr!("{name} installed. Log out and back in to turn it on."),
+                        &[("name", &name)],
+                    ),
+                    None => i18n::format(&tr!("{name} installed"), &[("name", &name)]),
+                };
+                me.toast(msg);
+            },
+        );
     }
 
     /// Launches an installed app. Reports a toast when it cannot be found.

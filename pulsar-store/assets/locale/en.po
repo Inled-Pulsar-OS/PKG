@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pulsar-store\n"
 "Report-Msgid-Bugs-To: https://github.com/Victor1890/pulsaros-PKG/issues\n"
-"POT-Creation-Date: 2026-10-28 21:14-0400\n"
+"POT-Creation-Date: 2026-10-28 21:20-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -337,37 +337,42 @@ msgstr "{installed} → {available}"
 msgid "Could not refresh the catalog: {reason}"
 msgstr "Could not refresh the catalog: {reason}"
 
-#: src/ui/ctx.rs:403
-#, rust-format
-msgid "{name} installed. If it does not appear, log out and back in."
-msgstr "{name} installed. If it does not appear, log out and back in."
-
-#: src/ui/ctx.rs:408
+#: src/ui/ctx.rs:406 src/ui/ctx.rs:439
 #, rust-format
 msgid "{name} installed"
 msgstr "{name} installed"
 
-#: src/ui/ctx.rs:410
+#: src/ui/ctx.rs:408
 #, rust-format
 msgid "{name} removed"
 msgstr "{name} removed"
 
-#: src/ui/ctx.rs:411
+#: src/ui/ctx.rs:409
 #, rust-format
 msgid "{name} updated"
 msgstr "{name} updated"
 
-#: src/ui/ctx.rs:413
+#: src/ui/ctx.rs:411
 #, rust-format
 msgid "Cancelled {name}"
 msgstr "Cancelled {name}"
 
-#: src/ui/ctx.rs:416
+#: src/ui/ctx.rs:414
 #, rust-format
 msgid "Could not complete {name}"
 msgstr "Could not complete {name}"
 
-#: src/ui/ctx.rs:443
+#: src/ui/ctx.rs:433
+#, rust-format
+msgid "{name} installed and enabled"
+msgstr "{name} installed and enabled"
+
+#: src/ui/ctx.rs:436
+#, rust-format
+msgid "{name} installed. Log out and back in to turn it on."
+msgstr "{name} installed. Log out and back in to turn it on."
+
+#: src/ui/ctx.rs:465
 #, rust-format
 msgid "Could not open {name}"
 msgstr "Could not open {name}"

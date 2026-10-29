@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pulsar-store\n"
 "Report-Msgid-Bugs-To: https://github.com/Victor1890/pulsaros-PKG/issues\n"
-"POT-Creation-Date: 2026-10-28 21:14-0400\n"
+"POT-Creation-Date: 2026-10-28 21:20-0400\n"
 "PO-Revision-Date: 2026-10-28 20:53-0400\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -337,37 +337,42 @@ msgstr "{installed} → {available}"
 msgid "Could not refresh the catalog: {reason}"
 msgstr "No se pudo actualizar el catálogo: {reason}"
 
-#: src/ui/ctx.rs:403
-#, rust-format
-msgid "{name} installed. If it does not appear, log out and back in."
-msgstr "{name} instalado. Si no aparece, cierra sesión y vuelve a entrar."
-
-#: src/ui/ctx.rs:408
+#: src/ui/ctx.rs:406 src/ui/ctx.rs:439
 #, rust-format
 msgid "{name} installed"
 msgstr "{name} instalado"
 
-#: src/ui/ctx.rs:410
+#: src/ui/ctx.rs:408
 #, rust-format
 msgid "{name} removed"
 msgstr "{name} eliminado"
 
-#: src/ui/ctx.rs:411
+#: src/ui/ctx.rs:409
 #, rust-format
 msgid "{name} updated"
 msgstr "{name} actualizado"
 
-#: src/ui/ctx.rs:413
+#: src/ui/ctx.rs:411
 #, rust-format
 msgid "Cancelled {name}"
 msgstr "Cancelado: {name}"
 
-#: src/ui/ctx.rs:416
+#: src/ui/ctx.rs:414
 #, rust-format
 msgid "Could not complete {name}"
 msgstr "No se pudo completar: {name}"
 
-#: src/ui/ctx.rs:443
+#: src/ui/ctx.rs:433
+#, fuzzy, rust-format
+msgid "{name} installed and enabled"
+msgstr "{name} instalado"
+
+#: src/ui/ctx.rs:436
+#, fuzzy, rust-format
+msgid "{name} installed. Log out and back in to turn it on."
+msgstr "{name} instalado. Si no aparece, cierra sesión y vuelve a entrar."
+
+#: src/ui/ctx.rs:465
 #, rust-format
 msgid "Could not open {name}"
 msgstr "No se pudo abrir {name}"

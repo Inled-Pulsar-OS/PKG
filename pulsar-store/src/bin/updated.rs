@@ -6,6 +6,9 @@
 //! update through a desktop notification whose button opens the Updates page.
 //! Metered connections are skipped, unless a check is requested over D-Bus.
 //!
+//! `--test-notification` shows a sample notification, prints which action you press
+//! (or nothing after 30 seconds), and exits. Use it to check notifications on a desktop.
+//!
 //! D-Bus (session bus): name and path `es.inled.PulsarStore.Updater`,
 //! `/es/inled/PulsarStore/Updater`, interface `es.inled.PulsarStore.Updater`:
 //! method `CheckNow()`, property `UpdateCount` (u), signal `UpdatesChanged(u)`.
@@ -112,8 +115,54 @@ fn listen_for_actions(conn: Connection, last_id: Arc<AtomicU32>) {
     });
 }
 
+/// Shows a sample notification and reports the action the user picks.
+fn test_notification() -> ExitCode {
+    let conn = match Connection::session() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("pulsar-store-updated: cannot use the session bus: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let Some(id) = notify(&conn, 3) else {
+        eprintln!("pulsar-store-updated: the notification service did not accept the notification");
+        return ExitCode::FAILURE;
+    };
+    println!("shown, id {id}; press a button or click the notification (30 s)");
+    let (tx, rx) = mpsc::channel();
+    let listener = conn.clone();
+    std::thread::spawn(move || {
+        let rule = zbus::MatchRule::builder()
+            .msg_type(zbus::message::Type::Signal)
+            .interface("org.freedesktop.Notifications")
+            .and_then(|b| b.member("ActionInvoked"))
+            .map(|b| b.build());
+        let Ok(rule) = rule else { return };
+        let Ok(iter) = zbus::blocking::MessageIterator::for_match_rule(rule, &listener, None)
+        else {
+            return;
+        };
+        for msg in iter.flatten() {
+            if let Ok((got, key)) = msg.body().deserialize::<(u32, String)>() {
+                if got == id {
+                    let _ = tx.send(key);
+                    return;
+                }
+            }
+        }
+    });
+    match rx.recv_timeout(std::time::Duration::from_secs(30)) {
+        Ok(key) => println!("action: {key}"),
+        Err(_) => println!("no action"),
+    }
+    ExitCode::SUCCESS
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|a| a == "--test-notification") {
+        return test_notification();
+    }
     let interval = interval_from(
         &args,
         std::env::var("PULSAR_STORE_UPDATE_INTERVAL_HOURS")

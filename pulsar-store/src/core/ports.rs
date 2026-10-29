@@ -46,6 +46,11 @@ pub trait PackageSource: Send + Sync {
     fn is_installed(&self, item: &Item) -> Result<bool> {
         Ok(self.installed_version(item)?.is_some())
     }
+    /// Whether the installed item is switched on in its host (a GNOME extension in
+    /// the running Shell). `None` when that does not apply or cannot be determined.
+    fn is_active(&self, _item: &Item) -> Result<Option<bool>> {
+        Ok(None)
+    }
     /// Names of all installed native packages. Only the system source implements this.
     fn list_installed(&self) -> Result<Vec<String>> {
         Ok(Vec::new())
