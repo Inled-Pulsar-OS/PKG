@@ -267,6 +267,10 @@ impl Ctx {
 
     /// Fetches the catalog from the network and reloads it when it changed.
     pub fn refresh_remote(&self, force: bool) {
+        // For development and screenshots with a local catalog: never replace it.
+        if std::env::var_os("PULSAR_STORE_OFFLINE").is_some_and(|v| v != "0") {
+            return;
+        }
         let store = self.0.store.clone();
         let me = self.clone();
         task::run(

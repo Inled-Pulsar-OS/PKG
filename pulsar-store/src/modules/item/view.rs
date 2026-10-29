@@ -1,12 +1,17 @@
 use crate::core::editions::editions;
+use crate::core::i18n;
 use crate::core::install::Action;
 use crate::core::model::{EditionKey, InstallState, Item, SourceKind};
 use crate::core::package_files::{package_files, FileRole};
 use crate::core::remote::is_web_url;
 use crate::ui::ctx::Change;
-use crate::ui::page::{self, page};
-use crate::ui::tokens::{SPACE_L, SPACE_M, SPACE_S};
-use crate::ui::widget::{icon::item_icon, info_grid::info_grid, install_button::InstallButton};
+use crate::ui::page::{self, live_page};
+use crate::ui::tokens::{SPACE_L, SPACE_M, SPACE_S, SPACE_XL};
+use crate::ui::widget::{
+    icon::item_icon,
+    info_grid::{info_strip, InfoCell},
+    install_button::InstallButton,
+};
 use crate::ui::Ctx;
 use crate::{ptr, tr};
 use adw::prelude::*;
@@ -38,7 +43,8 @@ fn str_field<'a>(item: &'a Item, key: &str) -> &'a str {
 }
 
 pub fn build(ctx: &Ctx, id: String) -> gtk::Widget {
-    page(ctx, 860, move |ctx, column| {
+    // Live: the facts strip and the buttons depend on install state.
+    live_page(ctx, 860, move |ctx, column| {
         let Some(item) = ctx.item(&id) else {
             column.append(&page::empty(
                 "dialog-question-symbolic",
@@ -48,26 +54,17 @@ pub fn build(ctx: &Ctx, id: String) -> gtk::Widget {
             return;
         };
         column.append(&header(ctx, &item));
+        column.append(&rule());
+        column.append(&info_strip(&info_cells(
+            &item,
+            &ctx.state(&item.id),
+            &ctx.locales(),
+        )));
+        column.append(&rule());
         if let Some(shots) = screenshots(ctx, &item) {
             column.append(&shots);
         }
-        let version = match ctx.state(&item.id) {
-            InstallState::Installed { version: Some(v) } => v,
-            InstallState::UpdateAvailable { installed, .. } => installed,
-            _ => item.version.clone().unwrap_or_default(),
-        };
-        let score = item
-            .security_report()
-            .and_then(|r| r.score)
-            .map(|s| format!("{s}/100"))
-            .unwrap_or_default();
-        column.append(&info_grid(&[
-            (tr!("Version"), version),
-            (tr!("Author"), str_field(&item, "author").to_string()),
-            (tr!("Type"), kind_label(item.kind)),
-            (tr!("Category"), item.category.clone()),
-            (tr!("Security"), score),
-        ]));
+        column.append(&platform_line());
         if let Some(group) = editions_group(ctx, &item) {
             column.append(&group);
         }
@@ -86,31 +83,161 @@ pub fn build(ctx: &Ctx, id: String) -> gtk::Widget {
     })
 }
 
+/// A hairline between the header, the facts, and the screenshots.
+fn rule() -> gtk::Widget {
+    let line = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    line.add_css_class("store-rule");
+    line.set_hexpand(true);
+    line.upcast()
+}
+
+/// The "Linux" line under the screenshots, as the App Store shows "Mac".
+fn platform_line() -> gtk::Widget {
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, SPACE_S);
+    row.add_css_class("store-platform");
+    row.append(&gtk::Image::from_icon_name("computer-symbolic"));
+    row.append(&gtk::Label::new(Some(&tr!("Linux"))));
+    row.upcast()
+}
+
+/// Bytes as a value and unit, such as `1.6` and `GB`. Uses powers of 1000, like the App Store.
+pub fn format_size(bytes: u64) -> (String, &'static str) {
+    const UNITS: [&str; 5] = ["bytes", "KB", "MB", "GB", "TB"];
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1000.0 && unit < UNITS.len() - 1 {
+        value /= 1000.0;
+        unit += 1;
+    }
+    let text = if unit == 0 || value >= 100.0 {
+        format!("{value:.0}")
+    } else {
+        format!("{value:.1}")
+    };
+    // "43.0" reads as "43".
+    let text = text.strip_suffix(".0").map_or(text.clone(), str::to_string);
+    (text, UNITS[unit])
+}
+
+/// One short word for the big value in the facts strip.
+fn short_kind(kind: SourceKind) -> String {
+    match kind {
+        SourceKind::Flatpak => tr!("App"),
+        SourceKind::System => tr!("Package"),
+        SourceKind::GnomeExtension => tr!("Add-on"),
+        SourceKind::SayriSkill => tr!("Skill"),
+        SourceKind::SayriPlugin => tr!("Plugin"),
+        SourceKind::Unknown => String::new(),
+    }
+}
+
+/// Short name of how an item is delivered, shown under its type.
+fn delivery_label(kind: SourceKind) -> String {
+    match kind {
+        SourceKind::Flatpak => ptr!("edition", "Flatpak"),
+        SourceKind::System => tr!("Native"),
+        SourceKind::GnomeExtension => tr!("GNOME Shell"),
+        SourceKind::SayriSkill | SourceKind::SayriPlugin => tr!("Sayri AI"),
+        SourceKind::Unknown => String::new(),
+    }
+}
+
+/// The facts strip: security score, version, type, developer, language, and size.
+/// Each cell appears only when the catalog has the data.
+pub fn info_cells(item: &Item, state: &InstallState, locales: &[&str]) -> Vec<InfoCell> {
+    let mut cells = Vec::new();
+
+    if let Some(score) = item.security_report().and_then(|r| r.score) {
+        cells.push(InfoCell::text(
+            tr!("Security"),
+            score.to_string(),
+            tr!("out of 100"),
+        ));
+    }
+
+    let (version, status) = match state {
+        InstallState::Installed { version: Some(v) } => (v.clone(), tr!("Installed")),
+        InstallState::Installed { version: None } => {
+            (item.version.clone().unwrap_or_default(), tr!("Installed"))
+        }
+        InstallState::UpdateAvailable { installed, .. } => {
+            (installed.clone(), tr!("Update available"))
+        }
+        InstallState::NotInstalled => (item.version.clone().unwrap_or_default(), tr!("Available")),
+    };
+    cells.push(InfoCell::text(tr!("Version"), version, status));
+
+    cells.push(InfoCell::text(
+        tr!("Type"),
+        short_kind(item.kind),
+        delivery_label(item.kind),
+    ));
+
+    let author = str_field(item, "author");
+    cells.push(InfoCell::icon(
+        tr!("Developer"),
+        "avatar-default-symbolic",
+        author.to_string(),
+    ));
+
+    // Languages the catalog has text for.
+    if let crate::core::model::LocalizedText::Map(map) = &item.summary {
+        let first = map
+            .keys()
+            .find(|k| locales.iter().any(|l| l.eq_ignore_ascii_case(k)))
+            .or_else(|| map.keys().next());
+        if let Some(first) = first {
+            let more = map.len().saturating_sub(1);
+            let sub = if more > 0 {
+                i18n::format(&tr!("+ {count} more"), &[("count", &more.to_string())])
+            } else {
+                String::new()
+            };
+            let lang = first
+                .split(['-', '_'])
+                .next()
+                .unwrap_or(first)
+                .to_uppercase();
+            cells.push(InfoCell::text(tr!("Language"), lang, sub));
+        }
+    }
+
+    if let Some(bytes) = item.extra.get("size").and_then(|v| v.as_u64()) {
+        let (value, unit) = format_size(bytes);
+        cells.push(InfoCell::text(tr!("Size"), value, unit.to_string()));
+    }
+    cells
+}
+
 fn header(ctx: &Ctx, item: &Item) -> gtk::Widget {
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, SPACE_L);
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, SPACE_XL);
     row.append(&item_icon(ctx, item, 128));
 
     let meta = gtk::Box::new(gtk::Orientation::Vertical, SPACE_S);
     meta.set_hexpand(true);
     meta.set_valign(gtk::Align::Center);
     let name = gtk::Label::new(Some(&ctx.name(item)));
-    name.add_css_class("store-title");
+    name.add_css_class("store-product-title");
     name.set_xalign(0.0);
     name.set_wrap(true);
     name.set_accessible_role(gtk::AccessibleRole::Heading);
     meta.append(&name);
     let summary = gtk::Label::new(Some(&ctx.summary(item)));
-    summary.add_css_class("store-subtitle");
+    summary.add_css_class("store-product-subtitle");
     summary.set_xalign(0.0);
     summary.set_wrap(true);
+    summary.set_lines(2);
+    summary.set_ellipsize(gtk::pango::EllipsizeMode::End);
     meta.append(&summary);
-    row.append(&meta);
 
-    let actions = gtk::Box::new(gtk::Orientation::Vertical, SPACE_S);
-    actions.set_valign(gtk::Align::Center);
-    actions.append(InstallButton::new(ctx, item).widget());
+    // Get sits under the text, with Uninstall beside it once the item is installed.
+    let actions = gtk::Box::new(gtk::Orientation::Horizontal, SPACE_M);
+    actions.set_margin_top(SPACE_M);
+    actions.set_halign(gtk::Align::Start);
+    actions.append(InstallButton::prominent(ctx, item).widget());
 
     let remove = gtk::Button::with_label(&tr!("Uninstall"));
+    remove.add_css_class("flat");
     remove.add_css_class("destructive-action");
     remove.add_css_class("store-pill");
     let show = {
@@ -137,7 +264,8 @@ fn header(ctx: &Ctx, item: &Item) -> gtk::Widget {
         remove.connect_clicked(move |_| ctx.act(Action::Uninstall, item.clone()));
     }
     actions.append(&remove);
-    row.append(&actions);
+    meta.append(&actions);
+    row.append(&meta);
     row.upcast()
 }
 
@@ -151,15 +279,21 @@ fn screenshots(ctx: &Ctx, item: &Item) -> Option<gtk::Widget> {
     if urls.is_empty() {
         return None;
     }
-    let carousel = adw::Carousel::new();
-    carousel.set_allow_scroll_wheel(true);
-    carousel.set_height_request(260);
+    // Large rounded images side by side, scrolling sideways when they do not fit.
+    let strip = gtk::Box::new(gtk::Orientation::Horizontal, SPACE_XL);
+    strip.add_css_class("store-shots");
     for url in urls.iter().cloned() {
+        let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        frame.add_css_class("store-shot");
+        frame.set_overflow(gtk::Overflow::Hidden);
+        frame.set_size_request(SHOT_WIDTH, SHOT_HEIGHT);
         let picture = gtk::Picture::new();
-        picture.add_css_class("store-screenshot");
-        picture.set_content_fit(gtk::ContentFit::Contain);
+        picture.set_content_fit(gtk::ContentFit::Cover);
+        picture.set_hexpand(true);
+        picture.set_vexpand(true);
         picture.set_accessible_role(gtk::AccessibleRole::Img);
-        carousel.append(&picture);
+        frame.append(&picture);
+        strip.append(&frame);
         let weak = picture.downgrade();
         ctx.load_image(url, move |path| {
             if let (Some(p), Some(pic)) = (path, weak.upgrade()) {
@@ -168,34 +302,36 @@ fn screenshots(ctx: &Ctx, item: &Item) -> Option<gtk::Widget> {
         });
     }
 
-    // Arrow keys move between screenshots.
-    carousel.set_focusable(true);
+    let scroll = gtk::ScrolledWindow::new();
+    scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Never);
+    scroll.set_child(Some(&strip));
+    scroll.set_min_content_height(SHOT_HEIGHT + 16);
+
+    // Arrow keys scroll to the neighbouring screenshot.
+    scroll.set_focusable(true);
     let keys = gtk::EventControllerKey::new();
     {
-        let carousel = carousel.clone();
+        let scroll = scroll.clone();
         keys.connect_key_pressed(move |_, key, _, _| {
             let step = match key {
                 gtk::gdk::Key::Left => -1.0,
                 gtk::gdk::Key::Right => 1.0,
                 _ => return gtk::glib::Propagation::Proceed,
             };
-            let target = (carousel.position() + step)
-                .clamp(0.0, f64::from(carousel.n_pages().saturating_sub(1)));
-            carousel.scroll_to(&carousel.nth_page(target as u32), true);
+            let adj = scroll.hadjustment();
+            let page = f64::from(SHOT_WIDTH + SPACE_XL);
+            adj.set_value(
+                (adj.value() + step * page).clamp(adj.lower(), adj.upper() - adj.page_size()),
+            );
             gtk::glib::Propagation::Stop
         });
     }
-    carousel.add_controller(keys);
-
-    let col = gtk::Box::new(gtk::Orientation::Vertical, SPACE_S);
-    col.append(&carousel);
-    if urls.len() > 1 {
-        let dots = adw::CarouselIndicatorDots::new();
-        dots.set_carousel(Some(&carousel));
-        col.append(&dots);
-    }
-    Some(col.upcast())
+    scroll.add_controller(keys);
+    Some(scroll.upcast())
 }
+
+const SHOT_WIDTH: i32 = 410;
+const SHOT_HEIGHT: i32 = 256;
 
 /// Lets the user pick which edition to install when the item offers several.
 fn editions_group(ctx: &Ctx, item: &Item) -> Option<gtk::Widget> {
@@ -392,4 +528,57 @@ fn details_group(item: &Item) -> gtk::Widget {
         group.add(&row);
     }
     group.upcast()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sizes_use_powers_of_one_thousand() {
+        assert_eq!(format_size(1_600_000_000), ("1.6".to_string(), "GB"));
+        assert_eq!(format_size(512), ("512".to_string(), "bytes"));
+        assert_eq!(format_size(43_000_000), ("43".to_string(), "MB"));
+        assert_eq!(format_size(250_000_000), ("250".to_string(), "MB"));
+    }
+
+    fn item(json: &str) -> Item {
+        serde_json::from_str(json).unwrap()
+    }
+
+    #[test]
+    fn info_cells_only_include_what_the_catalog_knows() {
+        let bare = item(r#"{"id":"a","type":"flatpak","version":"1.0"}"#);
+        let labels = |cells: &[InfoCell]| cells.iter().map(|c| c.label.clone()).collect::<Vec<_>>();
+        let cells = info_cells(&bare, &InstallState::NotInstalled, &[]);
+        assert_eq!(labels(&cells), ["Version", "Type", "Developer"]);
+
+        let rich = item(
+            r#"{"id":"b","type":"sayri_plugin","version":"2.0","author":"Ana","size":1600000000,
+                "summary":{"en":"x","es":"y","fr":"z"},"security_report":{"score":90}}"#,
+        );
+        let cells = info_cells(
+            &rich,
+            &InstallState::Installed {
+                version: Some("2.0".into()),
+            },
+            &["es"],
+        );
+        assert_eq!(
+            labels(&cells),
+            [
+                "Security",
+                "Version",
+                "Type",
+                "Developer",
+                "Language",
+                "Size"
+            ]
+        );
+        let language = cells.iter().find(|c| c.label == "Language").unwrap();
+        assert!(
+            matches!(&language.value, crate::ui::widget::info_grid::InfoValue::Text(t) if t == "ES")
+        );
+        assert_eq!(language.sub, "+ 2 more");
+    }
 }

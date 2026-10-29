@@ -99,7 +99,8 @@
     transition: background-color 150ms ease-out;
 }
 .store-sidebar-row:selected { background-color: alpha(@window_fg_color, 0.12); }
-.store-sidebar-row image { color: @store_accent_text; }
+.store-sidebar-row image { color: alpha(@window_fg_color, 0.78); -gtk-icon-size: 20px; }
+.store-sidebar-row label { font-size: 15px; }
 .store-badge {
     border-radius: 999px;
     padding: 0 7px;
@@ -109,7 +110,7 @@
     background-color: alpha(@window_fg_color, 0.16);
 }
 .store-avatar {
-    min-width: 32px; min-height: 32px;
+    min-width: 40px; min-height: 40px;
     border-radius: 999px;
     font-weight: 700;
     background-image: linear-gradient(135deg, @accent_bg_color, shade(@accent_bg_color, 0.55));
@@ -145,3 +146,34 @@ gridview.store-grid > child { padding: 0; border-radius: 16px; }
 }
 .store-nav, .store-nav > * { background: none; }
 .store-sidebar-list, .store-sidebar-list row { background: none; }
+
+/* ---- product page (Tahoe App Store style) ---- */
+.store-pill.prominent {
+    background-color: @accent_bg_color;
+    color: @accent_fg_color;
+    font-size: 15px;
+    padding: 5px 24px;
+    min-height: 32px;
+}
+.store-pill.prominent:hover { background-color: shade(@accent_bg_color, 1.1); }
+
+.store-product-title { font-size: 28px; font-weight: 800; letter-spacing: -0.4px; }
+.store-product-subtitle { font-size: 17px; color: @store_text_dim; }
+
+.store-rule { background-color: @store_hairline; min-height: 1px; }
+
+.store-info-strip { padding: 14px 0; }
+.store-info-cell { padding: 0 10px; }
+.store-info-label { font-size: 11px; font-weight: 600; letter-spacing: 0.6px; color: @store_text_dim; }
+.store-info-value { font-size: 24px; font-weight: 700; color: alpha(@window_fg_color, 0.62); }
+.store-info-icon { color: alpha(@window_fg_color, 0.55); }
+.store-info-sub { font-size: 13px; color: @store_text_dim; }
+.store-info-divider { background-color: @store_hairline; min-width: 1px; margin: 4px 0; }
+
+.store-shots { padding: 4px 2px; }
+.store-shot { border-radius: 14px; box-shadow: inset 0 0 0 1px @store_hairline; }
+.store-platform { color: @store_text_dim; font-size: 14px; }
+
+/* ---- floating round controls ---- */
+.store-round-glass { border-radius: 999px; }
+.store-round-glass button { min-width: 40px; min-height: 40px; padding: 0; }

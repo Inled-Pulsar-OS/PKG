@@ -46,6 +46,15 @@ pub struct InstallButton {
 
 impl InstallButton {
     pub fn new(ctx: &Ctx, item: &Item) -> Self {
+        Self::build(ctx, item, false)
+    }
+
+    /// The large, solid-accent form used in a product header.
+    pub fn prominent(ctx: &Ctx, item: &Item) -> Self {
+        Self::build(ctx, item, true)
+    }
+
+    fn build(ctx: &Ctx, item: &Item, prominent: bool) -> Self {
         let stack = gtk::Stack::new();
         stack.set_transition_type(gtk::StackTransitionType::Crossfade);
         stack.set_transition_duration(motion::FAST_MS);
@@ -55,6 +64,9 @@ impl InstallButton {
         let button = gtk::Button::new();
         button.add_css_class("store-pill");
         button.add_css_class("get");
+        if prominent {
+            button.add_css_class("prominent");
+        }
         stack.add_named(&button, Some("button"));
 
         let ring = ProgressRing::new(28);

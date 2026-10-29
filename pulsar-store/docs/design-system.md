@@ -10,11 +10,12 @@ Pulsar Store takes inspiration from Apple's Liquid Glass design (see `apple-refe
 The layout follows the Mac App Store (reference screenshots from Apple's App Store, studied for structure only) in the Tahoe style.
 
 - **Floating glass sidebar** on the left, inset from the window edge with a large corner radius: search at the top, Discover, Applications, Extensions, Sayri AI, Installed, and Updates (with a count badge), and the user at the bottom. The selected row is a capsule.
-- **Floating glass toolbar** across the top of the content: back at the start, the page title centered, refresh and window controls at the end.
+- **Two round glass buttons** float over the content instead of a toolbar bar, as in the Tahoe App Store: back at the top left (only when there is somewhere to go back to), and at the top right either refresh or, on an item page, share (copies a `pulsar://install/<id>` link). Window buttons follow the desktop's layout beside them. The top edge is an invisible strip for dragging the window.
 - **Content scrolls underneath both**, so the glass has something to blur.
 - **Discover:** a wide hero banner (text on a dark fade at the left, artwork at the right), a row of three editorial cards with round artwork, then sections titled with a "See All" link, each a grid of compact app rows (icon, name, subtitle, Get capsule).
 - **Category pages** show a pair of editorial cards above the full list of rows.
-- **Item page:** large icon, name, summary, a Get/Open capsule, an info strip, then the sections.
+- **Item page** (the Tahoe product page): a large squircle icon at the left; beside it the name (28 px, bold), the summary in gray, and a solid accent **Get / Open** capsule with Uninstall as a quiet link. A hairline, then the facts strip, a hairline, large rounded screenshots side by side that scroll sideways, and a platform line ("Linux"). The sections (About, Security Audit, documentation, package files) follow.
+- **Facts strip:** cells separated by hairlines, each a small uppercase label, a large value, and a line of detail: Security (score out of 100), Version (and whether it is installed), Type (and how it is delivered), Developer (an icon and the name), Language (the first language and how many more the catalog has), and Size. A cell appears only when the catalog has the data.
 
 ## Layers
 

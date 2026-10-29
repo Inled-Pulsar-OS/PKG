@@ -33,8 +33,11 @@ struct Shell {
     sidebar_routes: Vec<Route>,
     sidebar_titles: Vec<String>,
     back: gtk::Button,
-    /// The page name in the middle of the toolbar.
-    title: gtk::Label,
+    /// The round glass around the back button, shown only when there is somewhere to go back to.
+    back_holder: GlassSurface,
+    /// Refresh on most pages, share on an item page.
+    action: gtk::Stack,
+    share: gtk::Button,
     /// Count of pending updates, shown on the Updates row.
     badge: gtk::Label,
     search: gtk::SearchEntry,
@@ -54,43 +57,53 @@ impl Shell {
         let nav = adw::NavigationView::new();
         nav.add_css_class("store-nav");
 
-        let back = gtk::Button::from_icon_name("go-previous-symbolic");
-        back.add_css_class("flat");
-        back.add_css_class("circular");
-        back.set_tooltip_text(Some(&tr!("Back")));
-        back.set_visible(false);
-        let refresh = gtk::Button::from_icon_name("view-refresh-symbolic");
-        refresh.add_css_class("flat");
-        refresh.add_css_class("circular");
-        refresh.set_tooltip_text(Some(&tr!("Refresh Store")));
-        let title = gtk::Label::new(None);
-        title.add_css_class("store-toolbar-title");
-        title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        // Two round glass buttons float over the content, as in the Tahoe App Store:
+        // back at the left, and at the right either refresh or (on an item page) share.
+        let round = |icon: &str, tooltip: &str| {
+            let button = gtk::Button::from_icon_name(icon);
+            button.add_css_class("flat");
+            button.add_css_class("circular");
+            button.set_tooltip_text(Some(tooltip));
+            button
+        };
+        let back = round("go-previous-symbolic", &tr!("Back"));
+        let refresh = round("view-refresh-symbolic", &tr!("Refresh Store"));
+        let share = round("emblem-shared-symbolic", &tr!("Share"));
+        let action = gtk::Stack::new();
+        action.set_transition_type(gtk::StackTransitionType::Crossfade);
+        action.add_named(&refresh, Some("refresh"));
+        action.add_named(&share, Some("share"));
 
-        // Toolbar: back at the start, the page title in the middle, refresh and
-        // (when the desktop puts them on the right, as GNOME does) window buttons at the end.
-        let bar = gtk::CenterBox::new();
-        bar.set_margin_start(SPACE_S);
-        bar.set_margin_end(SPACE_S);
-        bar.set_start_widget(Some(&back));
-        bar.set_center_widget(Some(&title));
-        let end = gtk::Box::new(gtk::Orientation::Horizontal, SPACE_S);
-        end.append(&refresh);
-        end.append(&gtk::WindowControls::new(gtk::PackType::End));
-        bar.set_end_widget(Some(&end));
-        let bar_handle = gtk::WindowHandle::new();
-        bar_handle.set_child(Some(&bar));
+        let wrap_round = |child: &gtk::Widget| {
+            let glass = GlassSurface::new();
+            glass.add_css_class("store-round-glass");
+            glass.set_corner_radius(TOOLBAR_HEIGHT as f32 / 2.0);
+            glass.set_child(Some(child));
+            glass.set_backdrop(Some(&nav));
+            glass
+        };
+        let back_holder = wrap_round(back.upcast_ref());
+        back_holder.set_halign(gtk::Align::Start);
+        back_holder.set_valign(gtk::Align::Start);
+        back_holder.set_margin_top(SIDEBAR_INSET);
+        back_holder.set_margin_start(SIDEBAR_CLEARANCE);
+        back_holder.set_visible(false);
 
-        let toolbar = GlassSurface::new();
-        toolbar.set_halign(gtk::Align::Fill);
-        toolbar.set_valign(gtk::Align::Start);
-        toolbar.set_size_request(-1, TOOLBAR_HEIGHT);
-        toolbar.set_margin_top(SIDEBAR_INSET);
-        toolbar.set_margin_end(SIDEBAR_INSET);
-        toolbar.set_margin_start(SIDEBAR_CLEARANCE);
-        toolbar.set_corner_radius(TOOLBAR_HEIGHT as f32 / 2.0);
-        toolbar.set_child(Some(&bar_handle));
-        toolbar.set_backdrop(Some(&nav));
+        let action_holder = wrap_round(action.upcast_ref());
+        let top_right = gtk::Box::new(gtk::Orientation::Horizontal, SPACE_S);
+        top_right.set_halign(gtk::Align::End);
+        top_right.set_valign(gtk::Align::Start);
+        top_right.set_margin_top(SIDEBAR_INSET);
+        top_right.set_margin_end(SIDEBAR_INSET);
+        top_right.append(&action_holder);
+        // Window buttons, when the desktop puts them on the right (GNOME does).
+        top_right.append(&gtk::WindowControls::new(gtk::PackType::End));
+
+        // An invisible strip along the top lets the window be dragged.
+        let drag = gtk::WindowHandle::new();
+        drag.set_halign(gtk::Align::Fill);
+        drag.set_valign(gtk::Align::Start);
+        drag.set_size_request(-1, TOOLBAR_HEIGHT + SIDEBAR_INSET);
 
         // ---- sidebar: search, destinations, and the user at the bottom ----
         let search = gtk::SearchEntry::new();
@@ -171,7 +184,9 @@ impl Shell {
         root.add_css_class("store-backdrop");
         root.set_child(Some(&nav));
         root.add_overlay(&sidebar_glass);
-        root.add_overlay(&toolbar);
+        root.add_overlay(&drag);
+        root.add_overlay(&back_holder);
+        root.add_overlay(&top_right);
         let toasts = adw::ToastOverlay::new();
         toasts.set_child(Some(&root));
 
@@ -223,7 +238,9 @@ impl Shell {
             sidebar_routes,
             sidebar_titles,
             back,
-            title,
+            back_holder,
+            action,
+            share,
             badge,
             search,
             syncing: Cell::new(false),
@@ -238,6 +255,14 @@ impl Shell {
 
     fn wire(self: &Rc<Self>, refresh: &gtk::Button) {
         let weak = Rc::downgrade(self);
+        self.share.connect_clicked({
+            let weak = weak.clone();
+            move |_| {
+                if let Some(s) = weak.upgrade() {
+                    s.share_current();
+                }
+            }
+        });
         self.ctx.set_navigator({
             let weak = weak.clone();
             move |route| {
@@ -419,11 +444,30 @@ impl Shell {
     }
 
     fn sync_chrome(&self) {
-        self.back.set_visible(self.router.borrow().can_go_back());
+        self.back_holder
+            .set_visible(self.router.borrow().can_go_back());
+        let on_item = matches!(self.router.borrow().current(), Some(Route::Item(_)));
+        self.action
+            .set_visible_child_name(if on_item { "share" } else { "refresh" });
+        // The page the user came to stays named for screen readers.
         let route = self.router.borrow().current().cloned();
         if let Some(route) = route {
-            self.title.set_text(&self.title_for(&route));
+            self.window.set_title(Some(&self.title_for(&route)));
         }
+    }
+
+    /// Copies a `pulsar://install/<id>` link for the open item.
+    fn share_current(&self) {
+        let id = match self.router.borrow().current() {
+            Some(Route::Item(id)) => id.clone(),
+            _ => return,
+        };
+        if let Some(display) = gtk::gdk::Display::default() {
+            display
+                .clipboard()
+                .set_text(&format!("pulsar://install/{id}"));
+        }
+        self.ctx.toast(tr!("Link copied"));
     }
 
     fn update_badge(&self) {

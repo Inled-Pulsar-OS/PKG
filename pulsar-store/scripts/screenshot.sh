@@ -17,6 +17,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# SHOT_CACHE_SEED: a folder copied into the cache first (for example a test catalog).
+# Pair it with PULSAR_STORE_OFFLINE=1 so the app keeps that catalog.
+if [ -n "${SHOT_CACHE_SEED:-}" ]; then
+    mkdir -p "$tmp/cache"
+    cp -r "$SHOT_CACHE_SEED"/. "$tmp/cache/"
+fi
+
 ADW_DEBUG_COLOR_SCHEME="prefer-$scheme" XDG_CACHE_HOME="$tmp/cache" XDG_CONFIG_HOME="$tmp/config" \
     LANG=${LANG_FOR_SHOT:-en_US.UTF-8} LC_ALL=${LANG_FOR_SHOT:-en_US.UTF-8} "$bin" ${SHOT_ARGS:---page "$page"} >"$tmp/log" 2>&1 &
 pid=$!

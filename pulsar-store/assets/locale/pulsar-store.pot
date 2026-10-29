@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pulsar-store\n"
 "Report-Msgid-Bugs-To: https://github.com/Victor1890/pulsaros-PKG/issues\n"
-"POT-Creation-Date: 2026-10-28 21:37-0400\n"
+"POT-Creation-Date: 2026-10-28 22:01-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,54 +17,62 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/app.rs:60
+#: src/app.rs:69
 msgid "Back"
 msgstr ""
 
-#: src/app.rs:65
+#: src/app.rs:70
 msgid "Refresh Store"
 msgstr ""
 
-#: src/app.rs:97 src/app.rs:444 src/modules/search/mod.rs:36
+#: src/app.rs:71
+msgid "Share"
+msgstr ""
+
+#: src/app.rs:110 src/app.rs:488 src/modules/search/mod.rs:36
 msgid "Search"
 msgstr ""
 
-#: src/app.rs:99
+#: src/app.rs:112
 msgid "Search apps, extensions, Sayri AI…"
 msgstr ""
 
-#: src/app.rs:186 src/app.rs:450
+#: src/app.rs:201 src/app.rs:494
 msgid "Pulsar Store"
 msgstr ""
 
-#: src/app.rs:198
+#: src/app.rs:213
 msgid "Copy Details"
 msgstr ""
 
-#: src/app.rs:199
+#: src/app.rs:214
 msgid "Close"
 msgstr ""
 
-#: src/app.rs:516
+#: src/app.rs:470
+msgid "Link copied"
+msgstr ""
+
+#: src/app.rs:560
 #, rust-format
 msgid "Install {name}?"
 msgstr ""
 
-#: src/app.rs:518
+#: src/app.rs:562
 msgid ""
 "This install was requested by a link or command. Install only software you "
 "trust."
 msgstr ""
 
-#: src/app.rs:521
+#: src/app.rs:565
 msgid "Cancel"
 msgstr ""
 
-#: src/app.rs:522
+#: src/app.rs:566
 msgid "Install"
 msgstr ""
 
-#: src/app.rs:570
+#: src/app.rs:614
 msgid "Pulsar OS"
 msgstr ""
 
@@ -73,6 +81,7 @@ msgid "Applications"
 msgstr ""
 
 #: src/modules/categories/mod.rs:26 src/modules/categories/view.rs:15
+#: src/modules/item/view.rs:159 src/modules/item/view.rs:161
 msgid "Installed"
 msgstr ""
 
@@ -106,6 +115,7 @@ msgid "Extensions"
 msgstr ""
 
 #: src/modules/discover/view.rs:89 src/modules/ecosystem/mod.rs:35
+#: src/modules/item/view.rs:140
 msgid "Sayri AI"
 msgstr ""
 
@@ -121,174 +131,223 @@ msgstr ""
 msgid "Sayri AI Ecosystem"
 msgstr ""
 
-#: src/modules/item/view.rs:19 src/ui/widget/feature_card.rs:63
+#: src/modules/item/view.rs:24 src/ui/widget/feature_card.rs:63
 msgid "Application"
 msgstr ""
 
-#: src/modules/item/view.rs:20 src/ui/widget/feature_card.rs:64
+#: src/modules/item/view.rs:25 src/ui/widget/feature_card.rs:64
 msgid "System package"
 msgstr ""
 
-#: src/modules/item/view.rs:21 src/ui/widget/feature_card.rs:65
+#: src/modules/item/view.rs:26 src/ui/widget/feature_card.rs:65
 msgid "Shell extension"
 msgstr ""
 
-#: src/modules/item/view.rs:22 src/ui/widget/feature_card.rs:66
+#: src/modules/item/view.rs:27 src/ui/widget/feature_card.rs:66
 msgid "Sayri skill"
 msgstr ""
 
-#: src/modules/item/view.rs:23 src/ui/widget/feature_card.rs:67
+#: src/modules/item/view.rs:28 src/ui/widget/feature_card.rs:67
 msgid "Sayri plugin"
 msgstr ""
 
-#: src/modules/item/view.rs:24 src/ui/widget/feature_card.rs:68
+#: src/modules/item/view.rs:29 src/ui/widget/feature_card.rs:68
 msgid "Other"
 msgstr ""
 
-#: src/modules/item/view.rs:30
+#: src/modules/item/view.rs:35
 msgid "Debian Edition"
 msgstr ""
 
-#: src/modules/item/view.rs:31
+#: src/modules/item/view.rs:36
 msgid "Arch Edition"
 msgstr ""
 
-#: src/modules/item/view.rs:32
+#: src/modules/item/view.rs:37 src/modules/item/view.rs:137
 msgctxt "edition"
 msgid "Flatpak"
 msgstr ""
 
-#: src/modules/item/view.rs:45
+#: src/modules/item/view.rs:51
 msgid "Item not found"
 msgstr ""
 
-#: src/modules/item/view.rs:46
+#: src/modules/item/view.rs:52
 msgid "This item is not in the catalog."
 msgstr ""
 
-#: src/modules/item/view.rs:65 src/modules/item/view.rs:382
-msgid "Version"
+#: src/modules/item/view.rs:99
+msgid "Linux"
 msgstr ""
 
-#: src/modules/item/view.rs:66
-msgid "Author"
+#: src/modules/item/view.rs:125
+msgid "App"
 msgstr ""
 
-#: src/modules/item/view.rs:67
-msgid "Type"
+#: src/modules/item/view.rs:126
+msgid "Package"
 msgstr ""
 
-#: src/modules/item/view.rs:68
-msgid "Category"
+#: src/modules/item/view.rs:127
+msgid "Add-on"
 msgstr ""
 
-#: src/modules/item/view.rs:69
+#: src/modules/item/view.rs:128
+msgid "Skill"
+msgstr ""
+
+#: src/modules/item/view.rs:129
+msgid "Plugin"
+msgstr ""
+
+#: src/modules/item/view.rs:138
+msgid "Native"
+msgstr ""
+
+#: src/modules/item/view.rs:139
+msgid "GNOME Shell"
+msgstr ""
+
+#: src/modules/item/view.rs:152
 msgid "Security"
 msgstr ""
 
-#: src/modules/item/view.rs:113
-msgid "Uninstall"
+#: src/modules/item/view.rs:154
+msgid "out of 100"
+msgstr ""
+
+#: src/modules/item/view.rs:164
+msgid "Update available"
+msgstr ""
+
+#: src/modules/item/view.rs:166
+msgid "Available"
+msgstr ""
+
+#: src/modules/item/view.rs:168 src/modules/item/view.rs:518
+msgid "Version"
+msgstr ""
+
+#: src/modules/item/view.rs:171
+msgid "Type"
+msgstr ""
+
+#: src/modules/item/view.rs:178 src/modules/item/view.rs:519
+msgid "Developer"
+msgstr ""
+
+#: src/modules/item/view.rs:192
+#, rust-format
+msgid "+ {count} more"
+msgstr ""
+
+#: src/modules/item/view.rs:201
+msgid "Language"
 msgstr ""
 
 #: src/modules/item/view.rs:207
+msgid "Size"
+msgstr ""
+
+#: src/modules/item/view.rs:239
+msgid "Uninstall"
+msgstr ""
+
+#: src/modules/item/view.rs:343
 msgid "Install as"
 msgstr ""
 
-#: src/modules/item/view.rs:211
+#: src/modules/item/view.rs:347
 msgctxt "button"
 msgid "Install"
 msgstr ""
 
-#: src/modules/item/view.rs:224
+#: src/modules/item/view.rs:360
 msgid "About"
 msgstr ""
 
-#: src/modules/item/view.rs:249
+#: src/modules/item/view.rs:385
 msgid "View source code"
 msgstr ""
 
-#: src/modules/item/view.rs:264
+#: src/modules/item/view.rs:400
 msgid "Security Audit"
 msgstr ""
 
-#: src/modules/item/view.rs:267
+#: src/modules/item/view.rs:403
 msgid "Audit Score"
 msgstr ""
 
-#: src/modules/item/view.rs:282
+#: src/modules/item/view.rs:418
 msgid "Audited By"
 msgstr ""
 
-#: src/modules/item/view.rs:322
+#: src/modules/item/view.rs:458
 msgid "Loading documentation…"
 msgstr ""
 
-#: src/modules/item/view.rs:327
+#: src/modules/item/view.rs:463
 msgid "Could not load the documentation."
 msgstr ""
 
-#: src/modules/item/view.rs:342
+#: src/modules/item/view.rs:478
 msgid "Documentation & Preview"
 msgstr ""
 
-#: src/modules/item/view.rs:349
+#: src/modules/item/view.rs:485
 msgid "Skill prompt, persona, and tool definitions"
 msgstr ""
 
-#: src/modules/item/view.rs:350
+#: src/modules/item/view.rs:486
 msgid "Plugin manifest and configuration"
 msgstr ""
 
-#: src/modules/item/view.rs:351
+#: src/modules/item/view.rs:487
 msgid "Plugin files"
 msgstr ""
 
-#: src/modules/item/view.rs:352
+#: src/modules/item/view.rs:488
 msgid "Extension metadata"
 msgstr ""
 
-#: src/modules/item/view.rs:353
+#: src/modules/item/view.rs:489
 msgid "Extension code"
 msgstr ""
 
-#: src/modules/item/view.rs:354
+#: src/modules/item/view.rs:490
 msgid "Extension stylesheet"
 msgstr ""
 
-#: src/modules/item/view.rs:355
+#: src/modules/item/view.rs:491
 msgid "Settings schemas"
 msgstr ""
 
-#: src/modules/item/view.rs:356
+#: src/modules/item/view.rs:492
 msgid "Application files and runtime"
 msgstr ""
 
-#: src/modules/item/view.rs:357
+#: src/modules/item/view.rs:493
 msgid "Desktop launch entry"
 msgstr ""
 
-#: src/modules/item/view.rs:358
+#: src/modules/item/view.rs:494
 msgid "Application executable"
 msgstr ""
 
-#: src/modules/item/view.rs:364
+#: src/modules/item/view.rs:500
 msgid "Package Files & Destination"
 msgstr ""
 
-#: src/modules/item/view.rs:378
+#: src/modules/item/view.rs:514
 msgid "Package Details"
 msgstr ""
 
-#: src/modules/item/view.rs:380
+#: src/modules/item/view.rs:516
 msgid "Package ID"
 msgstr ""
 
-#: src/modules/item/view.rs:381
+#: src/modules/item/view.rs:517
 msgid "Format"
-msgstr ""
-
-#: src/modules/item/view.rs:383
-msgid "Developer"
 msgstr ""
 
 #: src/modules/search/mod.rs:42
@@ -337,47 +396,47 @@ msgstr ""
 msgid "{installed} → {available}"
 msgstr ""
 
-#: src/ui/ctx.rs:278
+#: src/ui/ctx.rs:282
 #, rust-format
 msgid "Could not refresh the catalog: {reason}"
 msgstr ""
 
-#: src/ui/ctx.rs:416 src/ui/ctx.rs:449
+#: src/ui/ctx.rs:420 src/ui/ctx.rs:453
 #, rust-format
 msgid "{name} installed"
 msgstr ""
 
-#: src/ui/ctx.rs:418
+#: src/ui/ctx.rs:422
 #, rust-format
 msgid "{name} removed"
 msgstr ""
 
-#: src/ui/ctx.rs:419
+#: src/ui/ctx.rs:423
 #, rust-format
 msgid "{name} updated"
 msgstr ""
 
-#: src/ui/ctx.rs:421
+#: src/ui/ctx.rs:425
 #, rust-format
 msgid "Cancelled {name}"
 msgstr ""
 
-#: src/ui/ctx.rs:424
+#: src/ui/ctx.rs:428
 #, rust-format
 msgid "Could not complete {name}"
 msgstr ""
 
-#: src/ui/ctx.rs:443
+#: src/ui/ctx.rs:447
 #, rust-format
 msgid "{name} installed and enabled"
 msgstr ""
 
-#: src/ui/ctx.rs:446
+#: src/ui/ctx.rs:450
 #, rust-format
 msgid "{name} installed. Log out and back in to turn it on."
 msgstr ""
 
-#: src/ui/ctx.rs:475
+#: src/ui/ctx.rs:479
 #, rust-format
 msgid "Could not open {name}"
 msgstr ""
@@ -387,32 +446,32 @@ msgstr ""
 msgid "Version {version}"
 msgstr ""
 
-#: src/ui/widget/install_button.rs:65 src/ui/widget/install_button.rs:69
+#: src/ui/widget/install_button.rs:77 src/ui/widget/install_button.rs:81
 msgctxt "button"
 msgid "Cancel"
 msgstr ""
 
-#: src/ui/widget/install_button.rs:67 src/ui/widget/install_button.rs:120
+#: src/ui/widget/install_button.rs:79 src/ui/widget/install_button.rs:132
 #, rust-format
 msgid "{action}: {name}"
 msgstr ""
 
-#: src/ui/widget/install_button.rs:112
+#: src/ui/widget/install_button.rs:124
 msgctxt "button"
 msgid "Get"
 msgstr ""
 
-#: src/ui/widget/install_button.rs:113
+#: src/ui/widget/install_button.rs:125
 msgctxt "button"
 msgid "Open"
 msgstr ""
 
-#: src/ui/widget/install_button.rs:114
+#: src/ui/widget/install_button.rs:126
 msgctxt "button"
 msgid "Update"
 msgstr ""
 
-#: src/ui/widget/install_button.rs:115
+#: src/ui/widget/install_button.rs:127
 msgctxt "button"
 msgid "Installed"
 msgstr ""
