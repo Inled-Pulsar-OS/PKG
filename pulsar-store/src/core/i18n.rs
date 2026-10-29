@@ -136,9 +136,17 @@ pub fn parse_locale(value: &str) -> Vec<String> {
     }
 }
 
+/// The language of the source strings. Used when nothing else matches.
+pub const DEFAULT_LOCALE: &str = "en";
+
 /// The user's preferred locales, most preferred first: `LANGUAGE`, then
-/// `LC_ALL`, `LC_MESSAGES`, `LANG`.
+/// `LC_ALL`, `LC_MESSAGES`, `LANG`. English always comes last, so it is the
+/// default whenever the user's languages have no text.
 pub fn locales() -> Vec<String> {
+    locales_from(|key| std::env::var(key).ok())
+}
+
+fn locales_from(env: impl Fn(&str) -> Option<String>) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut push = |tags: Vec<String>| {
         for t in tags {
@@ -147,14 +155,15 @@ pub fn locales() -> Vec<String> {
             }
         }
     };
-    if let Ok(list) = std::env::var("LANGUAGE") {
+    if let Some(list) = env("LANGUAGE") {
         list.split(':').for_each(|l| push(parse_locale(l)));
     }
     for key in ["LC_ALL", "LC_MESSAGES", "LANG"] {
-        if let Ok(v) = std::env::var(key) {
+        if let Some(v) = env(key) {
             push(parse_locale(&v));
         }
     }
+    push(vec![DEFAULT_LOCALE.to_string()]);
     out
 }
 
@@ -216,6 +225,20 @@ mod tests {
         assert!(parse_locale("C").is_empty());
         assert!(parse_locale("POSIX").is_empty());
         assert!(parse_locale("").is_empty());
+    }
+
+    #[test]
+    fn english_is_the_default_and_comes_last() {
+        let none = |_: &str| None;
+        assert_eq!(locales_from(none), ["en"]);
+        let env = |k: &str| match k {
+            "LC_ALL" => Some("C.UTF-8".to_string()),
+            "LANG" => Some("es_DO.UTF-8".to_string()),
+            _ => None,
+        };
+        assert_eq!(locales_from(env), ["es-DO", "es", "en"]);
+        let with_en = |k: &str| (k == "LANGUAGE").then(|| "en:es".to_string());
+        assert_eq!(locales_from(with_en), ["en", "es"]);
     }
 
     #[test]

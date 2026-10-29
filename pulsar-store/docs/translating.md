@@ -1,6 +1,6 @@
 # Translating
 
-Pulsar Store uses gettext. Source strings are English. Translations live in `assets/locale/<lang>.po`; Spanish (`es.po`) is complete.
+Pulsar Store uses gettext. Source strings are English, and English is the default language: it is used when the user's language has no translation. `assets/locale/en.po` is generated from the template by `scripts/update-pot.sh`; do not edit it. Other translations live in `assets/locale/<lang>.po`; Spanish (`es.po`) is complete.
 
 ## Add a language
 
