@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pulsar-store\n"
 "Report-Msgid-Bugs-To: https://github.com/Victor1890/pulsaros-PKG/issues\n"
-"POT-Creation-Date: 2026-10-28 22:01-0400\n"
+"POT-Creation-Date: 2026-10-28 22:59-0400\n"
 "PO-Revision-Date: 2026-10-28 20:53-0400\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -17,48 +17,52 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: src/app.rs:69
+#: src/app.rs:73
 msgid "Back"
 msgstr "Atrás"
 
-#: src/app.rs:70
-msgid "Refresh Store"
-msgstr "Actualizar tienda"
-
-#: src/app.rs:71
+#: src/app.rs:74
 msgid "Share"
 msgstr "Compartir"
 
-#: src/app.rs:110 src/app.rs:488 src/modules/search/mod.rs:36
+#: src/app.rs:106 src/app.rs:528 src/modules/search/mod.rs:36
 msgid "Search"
 msgstr "Buscar"
 
-#: src/app.rs:112
+#: src/app.rs:108
 msgid "Search apps, extensions, Sayri AI…"
 msgstr "Buscar apps, extensiones, Sayri AI…"
 
-#: src/app.rs:201 src/app.rs:494
-msgid "Pulsar Store"
-msgstr "Pulsar Store"
-
-#: src/app.rs:213
-msgid "Copy Details"
-msgstr "Copiar detalles"
-
-#: src/app.rs:214
+#: src/app.rs:160 src/app.rs:226
 msgid "Close"
 msgstr "Cerrar"
 
-#: src/app.rs:470
+#: src/app.rs:161
+msgid "Minimize"
+msgstr "Minimizar"
+
+#: src/app.rs:162
+msgid "Maximize"
+msgstr "Maximizar"
+
+#: src/app.rs:213 src/app.rs:534
+msgid "Pulsar Store"
+msgstr "Pulsar Store"
+
+#: src/app.rs:225
+msgid "Copy Details"
+msgstr "Copiar detalles"
+
+#: src/app.rs:510
 msgid "Link copied"
 msgstr "Enlace copiado"
 
-#: src/app.rs:560
+#: src/app.rs:597
 #, rust-format
 msgid "Install {name}?"
 msgstr "¿Instalar {name}?"
 
-#: src/app.rs:562
+#: src/app.rs:599
 msgid ""
 "This install was requested by a link or command. Install only software you "
 "trust."
@@ -66,15 +70,15 @@ msgstr ""
 "Un enlace o comando solicitó esta instalación. Instala solo software de "
 "confianza."
 
-#: src/app.rs:565
+#: src/app.rs:602
 msgid "Cancel"
 msgstr "Cancelar"
 
-#: src/app.rs:566
+#: src/app.rs:603
 msgid "Install"
 msgstr "Instalar"
 
-#: src/app.rs:614
+#: src/app.rs:651
 msgid "Pulsar OS"
 msgstr "Pulsar OS"
 
@@ -477,6 +481,9 @@ msgstr "Actualizar"
 msgctxt "button"
 msgid "Installed"
 msgstr "Instalado"
+
+#~ msgid "Refresh Store"
+#~ msgstr "Actualizar tienda"
 
 #~ msgid "Author"
 #~ msgstr "Autor"

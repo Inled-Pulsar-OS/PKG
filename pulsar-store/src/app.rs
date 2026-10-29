@@ -13,8 +13,8 @@ use pulsar_store::modules::{self, Module};
 use pulsar_store::tr;
 use pulsar_store::ui::glass::GlassSurface;
 use pulsar_store::ui::tokens::{
-    RADIUS_WINDOW, SIDEBAR_CLEARANCE, SIDEBAR_INSET, SIDEBAR_WIDTH, SPACE_M, SPACE_S,
-    TOOLBAR_HEIGHT,
+    RADIUS_WINDOW, SIDEBAR_CLEARANCE, SIDEBAR_INSET, SIDEBAR_WIDTH, SPACE_L, SPACE_M, SPACE_S,
+    SPACE_XL, TOOLBAR_HEIGHT,
 };
 use pulsar_store::ui::{theme, Change, Ctx, Route, Router};
 use std::cell::{Cell, RefCell};
@@ -35,9 +35,11 @@ struct Shell {
     back: gtk::Button,
     /// The round glass around the back button, shown only when there is somewhere to go back to.
     back_holder: GlassSurface,
-    /// Refresh on most pages, share on an item page.
-    action: gtk::Stack,
+    /// The round glass around the share button, shown only on an item page.
+    share_holder: GlassSurface,
     share: gtk::Button,
+    /// The red, yellow, and green window buttons at the top of the sidebar.
+    traffic: [gtk::Button; 3],
     /// Count of pending updates, shown on the Updates row.
     badge: gtk::Label,
     search: gtk::SearchEntry,
@@ -58,7 +60,9 @@ impl Shell {
         nav.add_css_class("store-nav");
 
         // Two round glass buttons float over the content, as in the Tahoe App Store:
-        // back at the left, and at the right either refresh or (on an item page) share.
+        // back at the left, and share at the right. Both appear only on an item page
+        // (back also whenever there is somewhere to go back to). There is no toolbar,
+        // no title, and no refresh or close button here; refresh is Ctrl+R.
         let round = |icon: &str, tooltip: &str| {
             let button = gtk::Button::from_icon_name(icon);
             button.add_css_class("flat");
@@ -67,12 +71,7 @@ impl Shell {
             button
         };
         let back = round("go-previous-symbolic", &tr!("Back"));
-        let refresh = round("view-refresh-symbolic", &tr!("Refresh Store"));
         let share = round("emblem-shared-symbolic", &tr!("Share"));
-        let action = gtk::Stack::new();
-        action.set_transition_type(gtk::StackTransitionType::Crossfade);
-        action.add_named(&refresh, Some("refresh"));
-        action.add_named(&share, Some("share"));
 
         let wrap_round = |child: &gtk::Widget| {
             let glass = GlassSurface::new();
@@ -89,15 +88,12 @@ impl Shell {
         back_holder.set_margin_start(SIDEBAR_CLEARANCE);
         back_holder.set_visible(false);
 
-        let action_holder = wrap_round(action.upcast_ref());
-        let top_right = gtk::Box::new(gtk::Orientation::Horizontal, SPACE_S);
-        top_right.set_halign(gtk::Align::End);
-        top_right.set_valign(gtk::Align::Start);
-        top_right.set_margin_top(SIDEBAR_INSET);
-        top_right.set_margin_end(SIDEBAR_INSET);
-        top_right.append(&action_holder);
-        // Window buttons, when the desktop puts them on the right (GNOME does).
-        top_right.append(&gtk::WindowControls::new(gtk::PackType::End));
+        let share_holder = wrap_round(share.upcast_ref());
+        share_holder.set_halign(gtk::Align::End);
+        share_holder.set_valign(gtk::Align::Start);
+        share_holder.set_margin_top(SIDEBAR_INSET);
+        share_holder.set_margin_end(SIDEBAR_INSET);
+        share_holder.set_visible(false);
 
         // An invisible strip along the top lets the window be dragged.
         let drag = gtk::WindowHandle::new();
@@ -149,14 +145,30 @@ impl Shell {
         side_scroll.set_vexpand(true);
         side_scroll.set_hscrollbar_policy(gtk::PolicyType::Never);
 
-        // Window buttons sit here when the desktop puts them on the left.
-        let controls = gtk::WindowControls::new(gtk::PackType::Start);
-        controls.set_halign(gtk::Align::Start);
-        controls.set_margin_start(SPACE_S);
-        controls.set_margin_top(SPACE_S);
+        // Window buttons are red, yellow, and green circles at the top of the sidebar,
+        // as in the picture. Their actions are connected once the window exists.
+        let traffic_button = |class: &str, tooltip: String| {
+            let button = gtk::Button::new();
+            button.add_css_class("store-traffic");
+            button.add_css_class(class);
+            button.set_tooltip_text(Some(&tooltip));
+            button.update_property(&[gtk::accessible::Property::Label(&tooltip)]);
+            button.set_valign(gtk::Align::Center);
+            button
+        };
+        let traffic = [
+            traffic_button("close", tr!("Close")),
+            traffic_button("minimize", tr!("Minimize")),
+            traffic_button("maximize", tr!("Maximize")),
+        ];
+        let lights = gtk::Box::new(gtk::Orientation::Horizontal, SPACE_S);
+        lights.set_margin_start(SPACE_L);
+        lights.set_margin_top(SPACE_M);
+        lights.set_halign(gtk::Align::Start);
+        traffic.iter().for_each(|b| lights.append(b));
         let top_handle = gtk::WindowHandle::new();
-        top_handle.set_child(Some(&controls));
-        top_handle.set_size_request(-1, SPACE_M * 2);
+        top_handle.set_child(Some(&lights));
+        top_handle.set_size_request(-1, SPACE_XL + SPACE_M);
 
         let side = gtk::Box::new(gtk::Orientation::Vertical, SPACE_S);
         side.append(&top_handle);
@@ -186,7 +198,7 @@ impl Shell {
         root.add_overlay(&sidebar_glass);
         root.add_overlay(&drag);
         root.add_overlay(&back_holder);
-        root.add_overlay(&top_right);
+        root.add_overlay(&share_holder);
         let toasts = adw::ToastOverlay::new();
         toasts.set_child(Some(&root));
 
@@ -239,22 +251,45 @@ impl Shell {
             sidebar_titles,
             back,
             back_holder,
-            action,
+            share_holder,
             share,
+            traffic,
             badge,
             search,
             syncing: Cell::new(false),
             pending_install: RefCell::new(None),
         });
-        shell.wire(&refresh);
+        shell.wire();
         shell.go(Route::Discover, Nav::Root);
         shell.ctx.load_catalog();
         shell.ctx.refresh_remote(false);
         shell
     }
 
-    fn wire(self: &Rc<Self>, refresh: &gtk::Button) {
+    fn wire(self: &Rc<Self>) {
         let weak = Rc::downgrade(self);
+
+        // Window buttons.
+        let [close, minimize, maximize] = &self.traffic;
+        close.connect_clicked({
+            let w = self.window.clone();
+            move |_| w.close()
+        });
+        minimize.connect_clicked({
+            let w = self.window.clone();
+            move |_| w.minimize()
+        });
+        maximize.connect_clicked({
+            let w = self.window.clone();
+            move |_| {
+                if w.is_maximized() {
+                    w.unmaximize();
+                } else {
+                    w.maximize();
+                }
+            }
+        });
+
         self.share.connect_clicked({
             let weak = weak.clone();
             move |_| {
@@ -306,6 +341,10 @@ impl Shell {
             move |_, _| {
                 if let Some(s) = weak.upgrade() {
                     s.router.borrow_mut().pop();
+                    let current = s.router.borrow().current().cloned();
+                    if let Some(route) = current {
+                        s.select_sidebar(Some(&route));
+                    }
                     s.sync_chrome();
                 }
             }
@@ -343,16 +382,6 @@ impl Shell {
             move |_| {
                 if let Some(s) = weak.upgrade() {
                     s.clear_search();
-                }
-            }
-        });
-
-        refresh.connect_clicked({
-            let weak = weak.clone();
-            move |_| {
-                if let Some(s) = weak.upgrade() {
-                    s.ctx.refresh_remote(true);
-                    s.ctx.refresh_states();
                 }
             }
         });
@@ -437,6 +466,18 @@ impl Shell {
         });
     }
 
+    /// Highlights the sidebar row for `route`, or none when it is not a destination.
+    fn select_sidebar(&self, route: Option<&Route>) {
+        self.syncing.set(true);
+        match route.and_then(|r| self.sidebar_routes.iter().position(|x| x == r)) {
+            Some(i) => self
+                .sidebar
+                .select_row(self.sidebar.row_at_index(i as i32).as_ref()),
+            None => self.sidebar.unselect_all(),
+        }
+        self.syncing.set(false);
+    }
+
     fn clear_search(&self) {
         self.syncing.set(true);
         self.search.set_text("");
@@ -447,8 +488,7 @@ impl Shell {
         self.back_holder
             .set_visible(self.router.borrow().can_go_back());
         let on_item = matches!(self.router.borrow().current(), Some(Route::Item(_)));
-        self.action
-            .set_visible_child_name(if on_item { "share" } else { "refresh" });
+        self.share_holder.set_visible(on_item);
         // The page the user came to stays named for screen readers.
         let route = self.router.borrow().current().cloned();
         if let Some(route) = route {
@@ -511,14 +551,11 @@ impl Shell {
             Nav::Root => {
                 self.router.borrow_mut().reset(route.clone());
                 self.nav.replace(&[page]);
-                if let Some(i) = self.sidebar_routes.iter().position(|r| *r == route) {
-                    self.syncing.set(true);
-                    self.sidebar
-                        .select_row(self.sidebar.row_at_index(i as i32).as_ref());
-                    self.syncing.set(false);
-                }
+                self.select_sidebar(Some(&route));
             }
             Nav::Push => {
+                // A page that is not a sidebar destination leaves no row highlighted.
+                self.select_sidebar(None);
                 self.router.borrow_mut().push(route);
                 self.nav.push(&page);
             }

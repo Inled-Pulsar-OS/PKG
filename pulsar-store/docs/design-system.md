@@ -10,7 +10,8 @@ Pulsar Store takes inspiration from Apple's Liquid Glass design (see `apple-refe
 The layout follows the Mac App Store (reference screenshots from Apple's App Store, studied for structure only) in the Tahoe style.
 
 - **Floating glass sidebar** on the left, inset from the window edge with a large corner radius: search at the top, Discover, Applications, Extensions, Sayri AI, Installed, and Updates (with a count badge), and the user at the bottom. The selected row is a capsule.
-- **Two round glass buttons** float over the content instead of a toolbar bar, as in the Tahoe App Store: back at the top left (only when there is somewhere to go back to), and at the top right either refresh or, on an item page, share (copies a `pulsar://install/<id>` link). Window buttons follow the desktop's layout beside them. The top edge is an invisible strip for dragging the window.
+- **Two round glass buttons** float over the content instead of a toolbar bar, as in the Tahoe App Store: back at the top left (only when there is somewhere to go back to), and share at the top right on item pages (it copies a `pulsar://install/<id>` link). There is no title, refresh button, or close button in the content; refresh is Ctrl+R. The top edge is an invisible strip for dragging the window.
+- **Window buttons** are red, yellow, and green circles at the top of the sidebar (close, minimize, maximize), as in the picture. This differs from the GNOME convention of buttons on the right; it is deliberate.
 - **Content scrolls underneath both**, so the glass has something to blur.
 - **Discover:** a wide hero banner (text on a dark fade at the left, artwork at the right), a row of three editorial cards with round artwork, then sections titled with a "See All" link, each a grid of compact app rows (icon, name, subtitle, Get capsule).
 - **Category pages** show a pair of editorial cards above the full list of rows.
@@ -20,7 +21,7 @@ The layout follows the Mac App Store (reference screenshots from Apple's App Sto
 ## Layers
 
 - **Content layer:** pages, lists, cards. Flat, no glass.
-- **Navigation layer:** the floating toolbar at the top. This is the only glass surface. Never put glass on content, and never stack glass on glass.
+- **Navigation layer:** the floating sidebar and the round back and share buttons. These are the only glass surfaces. Never put glass on content, and never stack glass on glass.
 
 ## Tokens
 
