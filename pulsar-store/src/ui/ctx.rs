@@ -43,6 +43,7 @@ pub enum Change {
 type Listener = Rc<dyn Fn(&Change)>;
 type Navigator = Rc<dyn Fn(Route)>;
 type Toaster = Rc<dyn Fn(String)>;
+type ErrorPresenter = Rc<dyn Fn(String, String)>;
 
 struct Inner {
     store: Arc<Store>,
@@ -57,6 +58,7 @@ struct Inner {
     prefs: Arc<Prefs>,
     navigate: RefCell<Option<Navigator>>,
     toast: RefCell<Option<Toaster>>,
+    errors: RefCell<Option<ErrorPresenter>>,
     listeners: RefCell<Vec<(u64, Listener)>>,
     next_id: Cell<u64>,
 }
@@ -78,6 +80,7 @@ impl Ctx {
             prefs: Arc::new(Prefs::user()),
             navigate: RefCell::default(),
             toast: RefCell::default(),
+            errors: RefCell::default(),
             listeners: RefCell::default(),
             next_id: Cell::new(0),
         }))
@@ -99,6 +102,19 @@ impl Ctx {
 
     pub fn set_toaster(&self, f: impl Fn(String) + 'static) {
         *self.0.toast.borrow_mut() = Some(Rc::new(f));
+    }
+
+    /// Shows a failure with details the user can copy.
+    pub fn set_error_presenter(&self, f: impl Fn(String, String) + 'static) {
+        *self.0.errors.borrow_mut() = Some(Rc::new(f));
+    }
+
+    fn show_error(&self, heading: String, details: String) {
+        let f = self.0.errors.borrow().clone();
+        match f {
+            Some(f) => f(heading, details),
+            None => self.toast(heading),
+        }
     }
 
     // ---- what modules use ----
@@ -387,10 +403,11 @@ impl Ctx {
             (Err(crate::core::error::StoreError::Cancelled), _) => {
                 i18n::format(&tr!("Cancelled {name}"), &[("name", &name)])
             }
-            (Err(e), _) => i18n::format(
-                &tr!("Could not complete {name}: {reason}"),
-                &[("name", &name), ("reason", &e.to_string())],
-            ),
+            (Err(e), _) => {
+                let heading = i18n::format(&tr!("Could not complete {name}"), &[("name", &name)]);
+                self.show_error(heading, e.to_string());
+                return;
+            }
         };
         self.toast(msg);
     }

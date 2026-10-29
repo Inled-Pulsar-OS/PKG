@@ -17,6 +17,7 @@ pub mod icons;
 pub mod install;
 pub mod ledger;
 pub mod model;
+pub mod package_files;
 pub mod ports;
 pub mod prefs;
 pub mod privilege;

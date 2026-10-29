@@ -132,7 +132,28 @@ pub struct Item {
     pub extra: BTreeMap<String, Value>,
 }
 
+/// The security audit the catalog publishes for an item.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SecurityReport {
+    pub score: Option<u32>,
+    pub status: Option<String>,
+    pub audited_by: Option<String>,
+    pub summary: Option<String>,
+}
+
 impl Item {
+    pub fn security_report(&self) -> Option<SecurityReport> {
+        serde_json::from_value(self.extra.get("security_report")?.clone()).ok()
+    }
+
+    /// Embedded documentation: `raw_content`, else `skill_md`.
+    pub fn inline_docs(&self) -> Option<&str> {
+        ["raw_content", "skill_md"]
+            .iter()
+            .find_map(|k| self.extra.get(*k).and_then(Value::as_str))
+            .filter(|s| !s.trim().is_empty())
+    }
+
     /// Checksum the catalog declares for the download, if any.
     pub fn declared_sha256(&self) -> Option<&str> {
         self.extra
@@ -312,6 +333,21 @@ mod tests {
             serde_json::from_str(r#"{"id":"y","type":"flatpak","demo_urls":[],"promo_url":""}"#)
                 .unwrap();
         assert!(!plain.is_featured() && plain.screenshots().is_empty() && plain.story().is_none());
+    }
+
+    #[test]
+    fn security_report_and_docs() {
+        let i: Item = serde_json::from_str(
+            r##"{"id":"x","type":"sayri_skill","skill_md":"# Doc",
+                "security_report":{"score":90,"status":"PASSED","audited_by":"Bot","summary":"ok","virustotal_detections":0}}"##,
+        )
+        .unwrap();
+        let r = i.security_report().unwrap();
+        assert_eq!((r.score, r.status.as_deref()), (Some(90), Some("PASSED")));
+        assert_eq!(i.inline_docs(), Some("# Doc"));
+        let none: Item =
+            serde_json::from_str(r#"{"id":"y","type":"flatpak","raw_content":"  "}"#).unwrap();
+        assert!(none.security_report().is_none() && none.inline_docs().is_none());
     }
 
     #[test]

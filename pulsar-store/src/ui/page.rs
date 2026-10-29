@@ -2,6 +2,7 @@
 //! top for the floating toolbar, rebuilt when the catalog changes.
 
 use crate::ui::ctx::{Change, Ctx};
+use crate::ui::motion;
 use crate::ui::tokens::{SPACE_L, SPACE_XL};
 use adw::prelude::*;
 use gtk4 as gtk;
@@ -46,6 +47,8 @@ fn build_page(
     scroll.set_child(Some(&clamp));
 
     fill(ctx, &column);
+    // New pages ease in; the navigation view adds the slide.
+    motion::fade_in(&scroll, motion::BASE_MS);
     let (rebuild_ctx, rebuild_column) = (ctx.clone(), column.clone());
     let fill = std::rc::Rc::new(fill);
     ctx.subscribe(&scroll, move |c| {

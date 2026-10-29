@@ -129,6 +129,23 @@ impl Shell {
             .build();
 
         {
+            let window = window.clone();
+            ctx.set_error_presenter(move |heading, details| {
+                let dialog = adw::AlertDialog::new(Some(&heading), Some(&details));
+                dialog.add_response("copy", &tr!("Copy Details"));
+                dialog.add_response("close", &tr!("Close"));
+                dialog.set_default_response(Some("close"));
+                dialog.set_close_response("close");
+                let text = format!("{heading}\n{details}");
+                dialog.connect_response(Some("copy"), move |_, _| {
+                    if let Some(display) = gtk::gdk::Display::default() {
+                        display.clipboard().set_text(&text);
+                    }
+                });
+                dialog.present(Some(&window));
+            });
+        }
+        {
             let toasts = toasts.clone();
             ctx.set_toaster(move |msg| toasts.add_toast(adw::Toast::new(&msg)));
         }

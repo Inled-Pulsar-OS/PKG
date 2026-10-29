@@ -1,6 +1,7 @@
 use crate::core::editions::editions;
 use crate::core::install::Action;
 use crate::core::model::{EditionKey, InstallState, Item, SourceKind};
+use crate::core::package_files::{package_files, FileRole};
 use crate::core::remote::is_web_url;
 use crate::ui::ctx::Change;
 use crate::ui::page::{self, page};
@@ -50,16 +51,35 @@ pub fn build(ctx: &Ctx, id: String) -> gtk::Widget {
         if let Some(shots) = screenshots(ctx, &item) {
             column.append(&shots);
         }
+        let version = match ctx.state(&item.id) {
+            InstallState::Installed { version: Some(v) } => v,
+            InstallState::UpdateAvailable { installed, .. } => installed,
+            _ => item.version.clone().unwrap_or_default(),
+        };
+        let score = item
+            .security_report()
+            .and_then(|r| r.score)
+            .map(|s| format!("{s}/100"))
+            .unwrap_or_default();
         column.append(&info_grid(&[
-            (tr!("Version"), item.version.clone().unwrap_or_default()),
+            (tr!("Version"), version),
             (tr!("Author"), str_field(&item, "author").to_string()),
             (tr!("Type"), kind_label(item.kind)),
             (tr!("Category"), item.category.clone()),
+            (tr!("Security"), score),
         ]));
         if let Some(group) = editions_group(ctx, &item) {
             column.append(&group);
         }
         column.append(&about(ctx, &item));
+        if let Some(group) = security_group(&item) {
+            column.append(&group);
+        }
+        if let Some(group) = docs_group(ctx, &item) {
+            column.append(&group);
+        }
+        column.append(&files_group(&item));
+        column.append(&details_group(&item));
         if let Some(links) = links(&item) {
             column.append(&links);
         }
@@ -218,21 +238,6 @@ fn about(ctx: &Ctx, item: &Item) -> gtk::Widget {
     body.set_selectable(true);
     col.append(&body);
 
-    let readme = str_field(item, "readme_url");
-    if is_web_url(readme) {
-        let notes = gtk::Label::new(None);
-        notes.set_wrap(true);
-        notes.set_xalign(0.0);
-        notes.set_selectable(true);
-        notes.add_css_class("store-caption");
-        col.append(&notes);
-        let weak = notes.downgrade();
-        ctx.load_text(readme.to_string(), README_LIMIT, move |text| {
-            if let (Some(t), Some(label)) = (text, weak.upgrade()) {
-                label.set_text(&t);
-            }
-        });
-    }
     col.upcast()
 }
 
@@ -251,4 +256,140 @@ fn links(item: &Item) -> Option<gtk::Widget> {
             gtk::gio::AppInfo::launch_default_for_uri(&url, None::<&gtk::gio::AppLaunchContext>);
     });
     Some(button.upcast())
+}
+
+fn security_group(item: &Item) -> Option<gtk::Widget> {
+    let report = item.security_report()?;
+    let group = adw::PreferencesGroup::new();
+    group.set_title(&tr!("Security Audit"));
+
+    let score = adw::ActionRow::new();
+    score.set_title(&tr!("Audit Score"));
+    let text = match (report.score, report.status.as_deref()) {
+        (Some(s), Some(st)) => format!("{s}/100 ({st})"),
+        (Some(s), None) => format!("{s}/100"),
+        (None, Some(st)) => st.to_string(),
+        (None, None) => String::new(),
+    };
+    if !text.is_empty() {
+        let label = gtk::Label::new(Some(&text));
+        label.add_css_class("store-info-value");
+        score.add_suffix(&label);
+        group.add(&score);
+    }
+    if let Some(by) = report.audited_by.filter(|b| !b.is_empty()) {
+        let row = adw::ActionRow::new();
+        row.set_title(&tr!("Audited By"));
+        row.set_subtitle(&by);
+        group.add(&row);
+    }
+    if let Some(summary) = report.summary.filter(|s| !s.is_empty()) {
+        let row = adw::ActionRow::new();
+        let label = gtk::Label::new(Some(&summary));
+        label.set_wrap(true);
+        label.set_xalign(0.0);
+        label.set_selectable(true);
+        label.set_margin_top(SPACE_M);
+        label.set_margin_bottom(SPACE_M);
+        label.set_margin_start(SPACE_L);
+        label.set_margin_end(SPACE_L);
+        row.set_child(Some(&label));
+        group.add(&row);
+    }
+    Some(group.upcast())
+}
+
+/// The item's embedded docs, or its README downloaded from the repository.
+fn docs_group(ctx: &Ctx, item: &Item) -> Option<gtk::Widget> {
+    let readme = str_field(item, "readme_url");
+    let inline = item.inline_docs();
+    if inline.is_none() && !is_web_url(readme) {
+        return None;
+    }
+    let view = gtk::TextView::new();
+    view.set_editable(false);
+    view.set_cursor_visible(false);
+    view.set_monospace(true);
+    view.set_wrap_mode(gtk::WrapMode::WordChar);
+    view.set_top_margin(SPACE_M);
+    view.set_bottom_margin(SPACE_M);
+    view.set_left_margin(SPACE_L);
+    view.set_right_margin(SPACE_L);
+
+    match inline {
+        Some(text) => view.buffer().set_text(text),
+        None => {
+            view.buffer().set_text(&tr!("Loading documentation…"));
+            let weak = view.downgrade();
+            ctx.load_text(readme.to_string(), README_LIMIT, move |text| {
+                if let Some(v) = weak.upgrade() {
+                    v.buffer().set_text(
+                        &text.unwrap_or_else(|| tr!("Could not load the documentation.")),
+                    );
+                }
+            });
+        }
+    }
+
+    let scroll = gtk::ScrolledWindow::new();
+    scroll.set_min_content_height(140);
+    scroll.set_max_content_height(280);
+    scroll.set_propagate_natural_height(true);
+    scroll.set_child(Some(&view));
+    scroll.add_css_class("store-card");
+
+    let group = adw::PreferencesGroup::new();
+    group.set_title(&tr!("Documentation & Preview"));
+    group.add(&scroll);
+    Some(group.upcast())
+}
+
+fn role_label(role: FileRole) -> String {
+    match role {
+        FileRole::SkillPrompt => tr!("Skill prompt, persona, and tool definitions"),
+        FileRole::Manifest => tr!("Plugin manifest and configuration"),
+        FileRole::PluginFiles => tr!("Plugin files"),
+        FileRole::ExtensionMetadata => tr!("Extension metadata"),
+        FileRole::ExtensionCode => tr!("Extension code"),
+        FileRole::ExtensionStyle => tr!("Extension stylesheet"),
+        FileRole::ExtensionSchemas => tr!("Settings schemas"),
+        FileRole::AppFiles => tr!("Application files and runtime"),
+        FileRole::DesktopEntry => tr!("Desktop launch entry"),
+        FileRole::Binary => tr!("Application executable"),
+    }
+}
+
+fn files_group(item: &Item) -> gtk::Widget {
+    let group = adw::PreferencesGroup::new();
+    group.set_title(&tr!("Package Files & Destination"));
+    for f in package_files(item) {
+        let row = adw::ActionRow::new();
+        row.set_title(&f.path);
+        row.set_subtitle(&role_label(f.role));
+        row.set_title_selectable(true);
+        row.add_prefix(&gtk::Image::from_icon_name(f.role.icon()));
+        group.add(&row);
+    }
+    group.upcast()
+}
+
+fn details_group(item: &Item) -> gtk::Widget {
+    let group = adw::PreferencesGroup::new();
+    group.set_title(&tr!("Package Details"));
+    for (title, value) in [
+        (tr!("Package ID"), item.id.clone()),
+        (tr!("Format"), kind_label(item.kind)),
+        (tr!("Version"), item.version.clone().unwrap_or_default()),
+        (tr!("Developer"), str_field(item, "author").to_string()),
+    ] {
+        if value.is_empty() {
+            continue;
+        }
+        let row = adw::ActionRow::new();
+        row.set_title(&title);
+        row.set_subtitle(&value);
+        row.set_subtitle_selectable(true);
+        group.add(&row);
+    }
+    group.upcast()
 }

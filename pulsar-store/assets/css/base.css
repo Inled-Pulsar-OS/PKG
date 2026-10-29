@@ -47,7 +47,15 @@
 .store-info-value { font-weight: 700; font-size: 15px; }
 .store-info-label { font-size: 11px; color: @store_text_dim; }
 
-.store-sidebar-row { border-radius: 10px; margin: 1px 6px; }
+.store-sidebar-row {
+    border-radius: 10px;
+    margin: 1px 6px;
+    transition: background-color 150ms ease-out;
+}
+
+/* Press feedback. GTK turns CSS transitions off when animations are disabled. */
+.store-tile, .store-card, .store-card-hero { transition: background-color 150ms ease-out, opacity 100ms ease-out; }
+.store-tile:active, .store-card:active, .store-card-hero:active { opacity: 0.82; }
 
 .store-banner {
     padding: 16px 20px;

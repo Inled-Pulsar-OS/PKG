@@ -42,6 +42,16 @@ pub fn animate(
     anim.play();
 }
 
+/// Fades a widget in. With animations off it is simply shown.
+pub fn fade_in(widget: &(impl IsA<gtk::Widget> + Clone + 'static), ms: u32) {
+    if !animations_enabled() {
+        return;
+    }
+    widget.set_opacity(0.0);
+    let target = widget.clone();
+    animate(widget, 0.0, 1.0, ms, move |v| target.set_opacity(v));
+}
+
 /// Like `animate`, but with spring physics, which suits direct manipulation.
 pub fn animate_spring(
     widget: &impl IsA<gtk::Widget>,
