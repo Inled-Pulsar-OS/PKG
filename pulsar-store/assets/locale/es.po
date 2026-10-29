@@ -363,14 +363,14 @@ msgid "Could not complete {name}"
 msgstr "No se pudo completar: {name}"
 
 #: src/ui/ctx.rs:433
-#, fuzzy, rust-format
+#, rust-format
 msgid "{name} installed and enabled"
-msgstr "{name} instalado"
+msgstr "{name} instalado y activado"
 
 #: src/ui/ctx.rs:436
-#, fuzzy, rust-format
+#, rust-format
 msgid "{name} installed. Log out and back in to turn it on."
-msgstr "{name} instalado. Si no aparece, cierra sesión y vuelve a entrar."
+msgstr "{name} instalado. Cierra sesión y vuelve a entrar para activarlo."
 
 #: src/ui/ctx.rs:465
 #, rust-format
