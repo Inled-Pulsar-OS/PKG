@@ -120,6 +120,44 @@ pub fn wants_rtl() -> bool {
         .is_some_and(|v| is_rtl(&v))
 }
 
+/// BCP 47 tags for a POSIX locale string: `es_DO.UTF-8@euro` gives `["es-DO", "es"]`.
+/// `C` and `POSIX` give none.
+pub fn parse_locale(value: &str) -> Vec<String> {
+    let base = value.split(['.', '@']).next().unwrap_or("");
+    if base.is_empty() || base == "C" || base == "POSIX" {
+        return Vec::new();
+    }
+    let tag = base.replace('_', "-");
+    let lang = tag.split('-').next().unwrap_or("").to_string();
+    if lang == tag {
+        vec![tag]
+    } else {
+        vec![tag, lang]
+    }
+}
+
+/// The user's preferred locales, most preferred first: `LANGUAGE`, then
+/// `LC_ALL`, `LC_MESSAGES`, `LANG`.
+pub fn locales() -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut push = |tags: Vec<String>| {
+        for t in tags {
+            if !out.contains(&t) {
+                out.push(t);
+            }
+        }
+    };
+    if let Ok(list) = std::env::var("LANGUAGE") {
+        list.split(':').for_each(|l| push(parse_locale(l)));
+    }
+    for key in ["LC_ALL", "LC_MESSAGES", "LANG"] {
+        if let Ok(v) = std::env::var(key) {
+            push(parse_locale(&v));
+        }
+    }
+    out
+}
+
 /// Translates a string literal.
 #[macro_export]
 macro_rules! tr {
@@ -169,6 +207,15 @@ mod tests {
         assert!(
             pseudo("Updates available").chars().count() > "Updates available".chars().count() + 2
         );
+    }
+
+    #[test]
+    fn parses_posix_locales() {
+        assert_eq!(parse_locale("es_DO.UTF-8@euro"), ["es-DO", "es"]);
+        assert_eq!(parse_locale("en"), ["en"]);
+        assert!(parse_locale("C").is_empty());
+        assert!(parse_locale("POSIX").is_empty());
+        assert!(parse_locale("").is_empty());
     }
 
     #[test]

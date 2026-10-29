@@ -15,3 +15,6 @@ Port `core` first and expose it through `storectl`, a JSON CLI. The Python UI ca
 ## Rejected
 - Big-bang rewrite.
 - PyO3 bindings: adds Python/Rust packaging complexity for a temporary bridge.
+
+## Amendment (2026-10-28)
+The interim bridge (Python UI calling `storectl`, ticket 9.2) was not built. The core is ported and tested headlessly, and the Rust UI follows in the same release train, so the bridge would have been code that is deleted before it ships. The Python tree is still removed only after every module reaches parity (ticket 10.4).

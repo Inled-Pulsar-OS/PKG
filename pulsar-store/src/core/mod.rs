@@ -21,3 +21,4 @@ pub mod process;
 pub mod search;
 pub mod sources;
 pub mod store;
+pub mod version;

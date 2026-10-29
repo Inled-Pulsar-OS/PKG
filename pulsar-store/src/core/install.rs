@@ -8,6 +8,7 @@ use crate::core::model::{
     Edition, EditionKey, InstallState, Item, LedgerEntry, Progress, SourceKind,
 };
 use crate::core::ports::{CancelToken, InstallOutcome, Ledger, PackageSource, ProgressSink};
+use crate::core::version;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
@@ -224,7 +225,9 @@ impl Installer {
             return Ok(InstallState::NotInstalled);
         };
         match item.version.as_deref() {
-            Some(available) if current != "installed" && current != available => {
+            Some(available)
+                if current != "installed" && version::is_update(&current, available) =>
+            {
                 Ok(InstallState::UpdateAvailable {
                     installed: current,
                     available: available.to_string(),
