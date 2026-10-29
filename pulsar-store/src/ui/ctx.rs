@@ -395,6 +395,15 @@ impl Ctx {
     fn report(&self, action: Action, item: &Item, result: crate::core::error::Result<()>) {
         let name = self.name(item);
         let msg = match (&result, action) {
+            (Ok(()), Action::Install(_))
+                if item.kind == crate::core::model::SourceKind::GnomeExtension =>
+            {
+                // GNOME Shell on Wayland only sees a new extension after the next login.
+                i18n::format(
+                    &tr!("{name} installed. If it does not appear, log out and back in."),
+                    &[("name", &name)],
+                )
+            }
             (Ok(()), Action::Install(_)) => {
                 i18n::format(&tr!("{name} installed"), &[("name", &name)])
             }

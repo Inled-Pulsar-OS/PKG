@@ -62,7 +62,9 @@ fn notify(conn: &Connection, count: usize) -> Option<u32> {
     } else {
         format!("{count} updates are available.")
     };
-    let hints: HashMap<&str, Value> = HashMap::new();
+    // GNOME Shell groups the notification under the app and lets a click on the body trigger "default".
+    let mut hints: HashMap<&str, Value> = HashMap::new();
+    hints.insert("desktop-entry", Value::from("es.inled.PulsarStore"));
     let reply = conn
         .call_method(
             Some("org.freedesktop.Notifications"),
@@ -75,7 +77,7 @@ fn notify(conn: &Connection, count: usize) -> Option<u32> {
                 "pulsar-store",
                 "Updates available",
                 body,
-                vec!["open", "Open Updates"],
+                vec!["default", "Open Updates", "open", "Open Updates"],
                 hints,
                 -1i32,
             ),
@@ -100,7 +102,7 @@ fn listen_for_actions(conn: Connection, last_id: Arc<AtomicU32>) {
         };
         for msg in iter.flatten() {
             if let Ok((id, key)) = msg.body().deserialize::<(u32, String)>() {
-                if id == last_id.load(Ordering::SeqCst) && key == "open" {
+                if id == last_id.load(Ordering::SeqCst) && (key == "open" || key == "default") {
                     let _ = Command::new("pulsar-store")
                         .args(["--page", "updates"])
                         .spawn();
