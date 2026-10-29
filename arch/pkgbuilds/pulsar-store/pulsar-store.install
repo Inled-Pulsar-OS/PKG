@@ -10,6 +10,8 @@ post_install() {
 }
 
 post_upgrade() {
+    # Python 1.x leftovers: bytecode caches were never owned by the package.
+    rm -rf /usr/share/pulsar-store/__pycache__ /usr/share/pulsar-store/backends 2>/dev/null || true
     post_install
 }
 

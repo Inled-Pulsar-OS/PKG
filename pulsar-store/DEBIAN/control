@@ -5,7 +5,7 @@ Priority: optional
 Architecture: amd64
 Maintainer: Jaime <info@inled.es>
 Depends: libgtk-4-1 (>= 4.14), libadwaita-1-0 (>= 1.5), flatpak, policykit-1 | polkitd | pkexec, xdg-utils
-Recommends: gnome-shell, sayri, libnotify-bin
+Recommends: gnome-shell, sayri
 Replaces: pulsar-store (<< 2.0.0)
 Breaks: pulsar-store (<< 2.0.0)
 Description: Unified App Store and Ecosystem Center for Pulsar OS.

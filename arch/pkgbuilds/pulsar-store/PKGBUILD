@@ -11,7 +11,6 @@ makedepends=(cargo pkgconf gettext)
 optdepends=(
     'gnome-shell: GNOME Shell extensions management'
     'sayri: Sayri AI ecosystem integration'
-    'libnotify: update notifications'
 )
 install=pulsar-store.install
 # ring (TLS) builds C objects that break under makepkg LTO.
@@ -19,16 +18,26 @@ options=(!debug !lto)
 
 _src() { cd "$startdir"/../../../pulsar-store && pwd; }
 
+prepare() {
+    cd "$(_src)"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR="$srcdir/target"
+    # Download crates once, up front; the build itself then needs no network.
+    cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
+}
+
 build() {
     cd "$(_src)"
+    export RUSTUP_TOOLCHAIN=stable
     export CARGO_TARGET_DIR="$srcdir/target"
-    cargo build --release --locked
+    cargo build --release --frozen
 }
 
 check() {
     cd "$(_src)"
+    export RUSTUP_TOOLCHAIN=stable
     export CARGO_TARGET_DIR="$srcdir/target"
-    cargo test --release --locked
+    cargo test --release --frozen
 }
 
 package() {
