@@ -56,7 +56,16 @@ impl PackageSource for FakeSource {
     }
 
     fn installed_version(&self, item: &Item) -> Result<Option<String>> {
-        Ok(self.installed.lock().unwrap().get(&item.id).cloned())
+        Ok(self
+            .installed
+            .lock()
+            .unwrap()
+            .get(item.native_name())
+            .cloned())
+    }
+
+    fn list_installed(&self) -> Result<Vec<String>> {
+        Ok(self.installed.lock().unwrap().keys().cloned().collect())
     }
 
     fn install(
@@ -79,12 +88,14 @@ impl PackageSource for FakeSource {
         self.installed
             .lock()
             .unwrap()
-            .insert(item.id.clone(), version);
-        Ok(InstallOutcome::default())
+            .insert(item.native_name().to_string(), version);
+        Ok(InstallOutcome {
+            package_name: (self.kind == SourceKind::System).then(|| item.native_name().to_string()),
+        })
     }
 
     fn uninstall(&self, item: &Item) -> Result<()> {
-        match self.installed.lock().unwrap().remove(&item.id) {
+        match self.installed.lock().unwrap().remove(item.native_name()) {
             Some(_) => Ok(()),
             None => Err(StoreError::NotFound(item.id.clone())),
         }
