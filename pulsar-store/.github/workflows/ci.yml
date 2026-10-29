@@ -15,6 +15,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Layer rules
         run: scripts/check-layers.sh
+      - name: Untranslated strings
+        run: scripts/check-i18n.sh
       - run: cargo fmt --check
       - run: cargo build --all-targets
       - run: cargo build --no-default-features
