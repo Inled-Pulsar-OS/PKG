@@ -1,12 +1,15 @@
 //! In-memory implementations of the ports, for tests and for the source contract suite.
 
 use crate::core::error::{Result, StoreError};
+use crate::core::http::Downloader;
 use crate::core::model::{Catalog, Edition, Item, LedgerEntry, Phase, Progress, SourceKind};
 use crate::core::ports::{
     CancelToken, CatalogProvider, InstallOutcome, Ledger, PackageSource, ProgressSink,
 };
+use crate::core::process::{Captured, RunOutput, Runner};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 pub struct VecSink(pub Mutex<Vec<Progress>>);
@@ -122,6 +125,135 @@ impl CatalogProvider for StaticCatalog {
     }
     fn refresh(&self, _force: bool) -> Result<bool> {
         Ok(false)
+    }
+}
+
+/// What a scripted command returns.
+pub struct Reply {
+    pub success: bool,
+    pub stdout: String,
+}
+
+impl Reply {
+    pub fn ok(stdout: &str) -> Self {
+        Self {
+            success: true,
+            stdout: stdout.into(),
+        }
+    }
+    pub fn fail(stdout: &str) -> Self {
+        Self {
+            success: false,
+            stdout: stdout.into(),
+        }
+    }
+}
+
+type Handler = Box<dyn Fn(&[String]) -> Reply + Send + Sync>;
+
+/// A `Runner` that answers from a closure and records every command.
+/// The closure can keep state, so tests can model "installed after install".
+pub struct FakeRunner {
+    pub calls: Mutex<Vec<Vec<String>>>,
+    handler: Handler,
+    available: Vec<String>,
+}
+
+impl FakeRunner {
+    pub fn new(
+        available: &[&str],
+        handler: impl Fn(&[String]) -> Reply + Send + Sync + 'static,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            calls: Mutex::default(),
+            handler: Box::new(handler),
+            available: available.iter().map(|s| s.to_string()).collect(),
+        })
+    }
+
+    /// True when some recorded command contains `fragment` once joined with spaces.
+    pub fn called(&self, fragment: &str) -> bool {
+        self.calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|c| c.join(" ").contains(fragment))
+    }
+
+    fn reply(&self, argv: &[String]) -> Reply {
+        self.calls.lock().unwrap().push(argv.to_vec());
+        (self.handler)(argv)
+    }
+}
+
+impl Runner for FakeRunner {
+    fn run(
+        &self,
+        argv: &[String],
+        on_line: &mut dyn FnMut(&str),
+        cancel: &CancelToken,
+    ) -> Result<RunOutput> {
+        if cancel.is_cancelled() {
+            return Err(StoreError::Cancelled);
+        }
+        let reply = self.reply(argv);
+        let tail: Vec<String> = reply.stdout.lines().map(str::to_string).collect();
+        tail.iter().for_each(|l| on_line(l));
+        Ok(RunOutput {
+            success: reply.success,
+            tail,
+        })
+    }
+
+    fn capture(&self, argv: &[String]) -> Result<Captured> {
+        let reply = self.reply(argv);
+        Ok(Captured {
+            success: reply.success,
+            stdout: reply.stdout,
+            stderr: String::new(),
+        })
+    }
+
+    fn which(&self, name: &str) -> bool {
+        self.available.iter().any(|a| a == name)
+    }
+}
+
+/// A `Downloader` that writes fixed bytes and records the URLs.
+pub struct FakeDownloader {
+    pub urls: Mutex<Vec<String>>,
+    pub body: Vec<u8>,
+    pub fail: bool,
+}
+
+impl FakeDownloader {
+    pub fn new(body: &[u8]) -> Arc<Self> {
+        Arc::new(Self {
+            urls: Mutex::default(),
+            body: body.to_vec(),
+            fail: false,
+        })
+    }
+}
+
+impl Downloader for FakeDownloader {
+    fn download(
+        &self,
+        url: &str,
+        dest: &Path,
+        cancel: &CancelToken,
+        on_progress: &mut dyn FnMut(Option<f32>),
+    ) -> Result<()> {
+        if cancel.is_cancelled() {
+            return Err(StoreError::Cancelled);
+        }
+        self.urls.lock().unwrap().push(url.to_string());
+        if self.fail {
+            return Err(StoreError::Network("fake download failed".into()));
+        }
+        std::fs::write(dest, &self.body)?;
+        on_progress(Some(1.0));
+        Ok(())
     }
 }
 

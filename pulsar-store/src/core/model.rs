@@ -132,6 +132,31 @@ pub struct Item {
     pub extra: BTreeMap<String, Value>,
 }
 
+impl Item {
+    /// Checksum the catalog declares for the download, if any.
+    pub fn declared_sha256(&self) -> Option<&str> {
+        self.extra
+            .get("sha256")
+            .or_else(|| self.metadata.extra.get("sha256"))
+            .and_then(Value::as_str)
+    }
+
+    /// GNOME extension UUID: `metadata.uuid`, then `uuid`, then the item id.
+    pub fn extension_uuid(&self) -> &str {
+        self.metadata
+            .extra
+            .get("uuid")
+            .or_else(|| self.extra.get("uuid"))
+            .and_then(Value::as_str)
+            .unwrap_or(&self.id)
+    }
+
+    /// Native package name: `package_name`, else the item id.
+    pub fn native_name(&self) -> &str {
+        self.package_name.as_deref().unwrap_or(&self.id)
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Catalog {
     #[serde(default, alias = "items")]

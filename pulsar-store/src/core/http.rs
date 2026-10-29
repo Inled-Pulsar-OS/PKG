@@ -48,6 +48,41 @@ impl Fetch for UreqFetch {
     }
 }
 
+/// Downloads a URL into a file. Faked in tests.
+pub trait Downloader: Send + Sync {
+    fn download(
+        &self,
+        url: &str,
+        dest: &Path,
+        cancel: &CancelToken,
+        on_progress: &mut dyn FnMut(Option<f32>),
+    ) -> Result<()>;
+}
+
+pub struct UreqDownloader {
+    pub timeout: Duration,
+}
+
+impl Default for UreqDownloader {
+    fn default() -> Self {
+        Self {
+            timeout: Duration::from_secs(120),
+        }
+    }
+}
+
+impl Downloader for UreqDownloader {
+    fn download(
+        &self,
+        url: &str,
+        dest: &Path,
+        cancel: &CancelToken,
+        on_progress: &mut dyn FnMut(Option<f32>),
+    ) -> Result<()> {
+        download(url, dest, self.timeout, cancel, on_progress)
+    }
+}
+
 /// Streams `url` into `dest`. Reports a 0..1 fraction when the size is known.
 pub fn download(
     url: &str,
