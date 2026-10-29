@@ -44,6 +44,8 @@ fn build_page(
 
     let scroll = gtk::ScrolledWindow::new();
     scroll.set_hscrollbar_policy(gtk::PolicyType::Never);
+    scroll.set_focusable(true);
+    scroll.set_focus_on_click(false);
     scroll.set_child(Some(&clamp));
 
     fill(ctx, &column);
@@ -63,6 +65,15 @@ fn build_page(
             // so remember the position and put it back.
             let adjustment = rebuild_scroll.vadjustment();
             let at = adjustment.value();
+            // Move focus to the scroll area first, so removing a focused widget does not
+            // send focus (and the view) to some other part of the page.
+            let focused_inside = rebuild_scroll
+                .root()
+                .and_then(|r| r.focus())
+                .is_some_and(|f| f.is_ancestor(&rebuild_column));
+            if focused_inside {
+                rebuild_scroll.grab_focus();
+            }
             while let Some(child) = rebuild_column.first_child() {
                 rebuild_column.remove(&child);
             }

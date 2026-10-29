@@ -24,6 +24,12 @@ if [ -n "${SHOT_CACHE_SEED:-}" ]; then
     cp -r "$SHOT_CACHE_SEED"/. "$tmp/cache/"
 fi
 
+# SHOT_DECORATION_LAYOUT=":minimize,maximize,close" tries a window-button layout.
+if [ -n "${SHOT_DECORATION_LAYOUT:-}" ]; then
+    mkdir -p "$tmp/config/gtk-4.0"
+    printf '[Settings]\ngtk-decoration-layout=%s\n' "$SHOT_DECORATION_LAYOUT" >"$tmp/config/gtk-4.0/settings.ini"
+fi
+
 ADW_DEBUG_COLOR_SCHEME="prefer-$scheme" XDG_CACHE_HOME="$tmp/cache" XDG_CONFIG_HOME="$tmp/config" \
     LANG=${LANG_FOR_SHOT:-en_US.UTF-8} LC_ALL=${LANG_FOR_SHOT:-en_US.UTF-8} "$bin" ${SHOT_ARGS:---page "$page"} >"$tmp/log" 2>&1 &
 pid=$!

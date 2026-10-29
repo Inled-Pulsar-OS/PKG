@@ -189,6 +189,9 @@ gridview.store-grid > child { padding: 0; border-radius: 16px; }
 .store-traffic.minimize { background-color: #febc2e; }
 .store-traffic.maximize { background-color: #28c840; }
 .store-traffic:hover { filter: brightness(0.88); }
+/* The glyphs (x, minus, plus) show only while the pointer is over the group, as on macOS. */
+.store-traffic image { opacity: 0; color: alpha(black, 0.65); transition: opacity 120ms ease-out; }
+.store-lights.glyphs .store-traffic image { opacity: 1; }
 .store-traffic:backdrop { background-color: alpha(@window_fg_color, 0.2); }
 
 /* The sidebar search is a capsule. */

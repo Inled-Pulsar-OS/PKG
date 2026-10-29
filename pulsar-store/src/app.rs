@@ -146,26 +146,47 @@ impl Shell {
         side_scroll.set_hscrollbar_policy(gtk::PolicyType::Never);
 
         // Window buttons are red, yellow, and green circles at the top of the sidebar,
-        // as in the picture. Their actions are connected once the window exists.
-        let traffic_button = |class: &str, tooltip: String| {
+        // as in the picture. Which ones show follows the desktop's decoration layout
+        // (GNOME's default is close only); a glyph appears when the pointer is over them.
+        let traffic_button = |class: &str, glyph: &str, tooltip: String| {
             let button = gtk::Button::new();
             button.add_css_class("store-traffic");
             button.add_css_class(class);
+            let image = gtk::Image::from_icon_name(glyph);
+            image.set_pixel_size(8);
+            button.set_child(Some(&image));
             button.set_tooltip_text(Some(&tooltip));
             button.update_property(&[gtk::accessible::Property::Label(&tooltip)]);
             button.set_valign(gtk::Align::Center);
             button
         };
         let traffic = [
-            traffic_button("close", tr!("Close")),
-            traffic_button("minimize", tr!("Minimize")),
-            traffic_button("maximize", tr!("Maximize")),
+            traffic_button("close", "window-close-symbolic", tr!("Close")),
+            traffic_button("minimize", "list-remove-symbolic", tr!("Minimize")),
+            traffic_button("maximize", "list-add-symbolic", tr!("Maximize")),
         ];
         let lights = gtk::Box::new(gtk::Orientation::Horizontal, SPACE_S);
+        lights.add_css_class("store-lights");
         lights.set_margin_start(SPACE_L);
         lights.set_margin_top(SPACE_M);
         lights.set_halign(gtk::Align::Start);
         traffic.iter().for_each(|b| lights.append(b));
+        let hover = gtk::EventControllerMotion::new();
+        {
+            let lights = lights.clone();
+            hover.connect_enter(move |_, _, _| lights.add_css_class("glyphs"));
+        }
+        {
+            let lights = lights.clone();
+            hover.connect_leave(move |_| lights.remove_css_class("glyphs"));
+        }
+        lights.add_controller(hover);
+        if let Some(settings) = gtk::Settings::default() {
+            show_window_buttons(&traffic, &settings);
+            let traffic = traffic.clone();
+            settings
+                .connect_gtk_decoration_layout_notify(move |s| show_window_buttons(&traffic, s));
+        }
         let top_handle = gtk::WindowHandle::new();
         top_handle.set_child(Some(&lights));
         top_handle.set_size_request(-1, SPACE_XL + SPACE_M);
@@ -615,6 +636,27 @@ impl Shell {
 /// Opens a page directly: `--page <route>` or `pulsar://page/<route>`.
 fn page_request(args: &[String]) -> Option<Route> {
     pulsar_store::core::deeplink::page_request(args).and_then(|v| Route::from_arg(&v))
+}
+
+/// Shows the window buttons the desktop's decoration layout asks for, and hides the rest.
+fn show_window_buttons(buttons: &[gtk::Button; 3], settings: &gtk::Settings) {
+    use pulsar_store::ui::chrome::{buttons_from_layout, WindowButton};
+    // The environment variable wins, to try a layout without changing desktop settings.
+    let layout = std::env::var("PULSAR_STORE_DECORATION_LAYOUT").unwrap_or_else(|_| {
+        settings
+            .gtk_decoration_layout()
+            .map(|l| l.to_string())
+            .unwrap_or_default()
+    });
+    let wanted = buttons_from_layout(&layout);
+    let order = [
+        WindowButton::Close,
+        WindowButton::Minimize,
+        WindowButton::Maximize,
+    ];
+    for (button, kind) in buttons.iter().zip(order) {
+        button.set_visible(wanted.contains(&kind));
+    }
 }
 
 /// The signed-in user at the bottom of the sidebar: an initial in a circle and the name.
