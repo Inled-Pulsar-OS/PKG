@@ -452,6 +452,8 @@ msgid ""
 "Flatpak is not installed on this system. Install it (for example with “sudo "
 "pacman -S flatpak” or “sudo apt install flatpak”), then try again."
 msgstr ""
+"Flatpak no está instalado en este sistema. Instálalo (por ejemplo con «sudo "
+"pacman -S flatpak» o «sudo apt install flatpak») y vuelve a intentarlo."
 
 #: src/ui/widget/hero.rs:95
 #, rust-format
