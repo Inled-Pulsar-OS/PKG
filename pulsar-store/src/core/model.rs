@@ -19,6 +19,21 @@ impl Default for LocalizedText {
 }
 
 impl LocalizedText {
+    /// Every translation, for matching searches across languages.
+    pub fn texts(&self) -> Vec<&str> {
+        match self {
+            Self::Plain(s) => vec![s.as_str()],
+            Self::Map(m) => m.values().map(String::as_str).collect(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Plain(s) => s.is_empty(),
+            Self::Map(m) => m.values().all(String::is_empty),
+        }
+    }
+
     /// Picks text for the first matching locale in `locales` (BCP 47 tags such
     /// as `es-DO`), trying the tag, then its language, then `en`, then any
     /// entry. Returns an empty string when there is no text.

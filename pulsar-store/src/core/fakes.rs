@@ -2,7 +2,9 @@
 
 use crate::core::error::{Result, StoreError};
 use crate::core::model::{Catalog, Edition, Item, LedgerEntry, Phase, Progress, SourceKind};
-use crate::core::ports::{CancelToken, CatalogProvider, Ledger, PackageSource, ProgressSink};
+use crate::core::ports::{
+    CancelToken, CatalogProvider, InstallOutcome, Ledger, PackageSource, ProgressSink,
+};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -60,7 +62,7 @@ impl PackageSource for FakeSource {
         _edition: Option<&Edition>,
         progress: &dyn ProgressSink,
         cancel: &CancelToken,
-    ) -> Result<()> {
+    ) -> Result<InstallOutcome> {
         progress.report(Progress {
             phase: Phase::Preparing,
             fraction: None,
@@ -75,7 +77,7 @@ impl PackageSource for FakeSource {
             .lock()
             .unwrap()
             .insert(item.id.clone(), version);
-        Ok(())
+        Ok(InstallOutcome::default())
     }
 
     fn uninstall(&self, item: &Item) -> Result<()> {
@@ -85,7 +87,12 @@ impl PackageSource for FakeSource {
         }
     }
 
-    fn update(&self, item: &Item, progress: &dyn ProgressSink, cancel: &CancelToken) -> Result<()> {
+    fn update(
+        &self,
+        item: &Item,
+        progress: &dyn ProgressSink,
+        cancel: &CancelToken,
+    ) -> Result<InstallOutcome> {
         self.install(item, None, progress, cancel)
     }
 }

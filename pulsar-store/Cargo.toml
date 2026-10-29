@@ -19,6 +19,13 @@ thiserror = "1.0"
 gtk4 = { version = "0.9", optional = true }
 adw = { version = "0.7", package = "libadwaita", optional = true }
 gettext-rs = "0.8.0"
+ureq = "2"
+dirs = "5"
+unicode-normalization = "0.1"
+sha2 = "0.10"
+libc = "0.2"
+tempfile = "3"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [[bin]]
 name = "pulsar-store"

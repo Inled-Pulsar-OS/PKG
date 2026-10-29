@@ -28,22 +28,42 @@ impl CancelToken {
     }
 }
 
+/// What a successful install reports back, so the ledger can record it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InstallOutcome {
+    /// Native package name, when the source knows it.
+    pub package_name: Option<String>,
+}
+
 /// One way to install things: Flatpak, system packages, GNOME extensions, Sayri.
 /// Methods block, so call them from a worker thread.
 pub trait PackageSource: Send + Sync {
     fn kind(&self) -> SourceKind;
     /// False when the tooling this source needs is missing on the host.
     fn is_available(&self) -> bool;
+    /// `Some` when installed; `"installed"` when the version is unknown.
     fn installed_version(&self, item: &Item) -> Result<Option<String>>;
+    fn is_installed(&self, item: &Item) -> Result<bool> {
+        Ok(self.installed_version(item)?.is_some())
+    }
+    /// Names of all installed native packages. Only the system source implements this.
+    fn list_installed(&self) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
     fn install(
         &self,
         item: &Item,
         edition: Option<&Edition>,
         progress: &dyn ProgressSink,
         cancel: &CancelToken,
-    ) -> Result<()>;
+    ) -> Result<InstallOutcome>;
     fn uninstall(&self, item: &Item) -> Result<()>;
-    fn update(&self, item: &Item, progress: &dyn ProgressSink, cancel: &CancelToken) -> Result<()>;
+    fn update(
+        &self,
+        item: &Item,
+        progress: &dyn ProgressSink,
+        cancel: &CancelToken,
+    ) -> Result<InstallOutcome>;
 }
 
 /// Loads the catalog from cache, network, or the bundled copy.
