@@ -1,7 +1,6 @@
 //! Shared design system: tokens, glass surface, motion, router, widgets.
 //! Imports `core` only.
 
-pub mod chrome;
 pub mod ctx;
 pub mod glass;
 pub mod motion;
