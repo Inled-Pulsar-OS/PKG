@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pulsar-store\n"
 "Report-Msgid-Bugs-To: https://github.com/Victor1890/pulsaros-PKG/issues\n"
-"POT-Creation-Date: 2026-10-28 20:53-0400\n"
+"POT-Creation-Date: 2026-10-28 20:59-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -43,6 +43,25 @@ msgstr ""
 
 #: src/app.rs:137
 msgid "Close"
+msgstr ""
+
+#: src/app.rs:418
+#, rust-format
+msgid "Install {name}?"
+msgstr ""
+
+#: src/app.rs:420
+msgid ""
+"This install was requested by a link or command. Install only software you "
+"trust."
+msgstr ""
+
+#: src/app.rs:423
+msgid "Cancel"
+msgstr ""
+
+#: src/app.rs:424
+msgid "Install"
 msgstr ""
 
 #: src/modules/categories/mod.rs:20 src/modules/categories/view.rs:14

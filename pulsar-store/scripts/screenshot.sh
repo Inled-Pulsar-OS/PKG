@@ -18,7 +18,7 @@ cleanup() {
 trap cleanup EXIT
 
 ADW_DEBUG_COLOR_SCHEME="prefer-$scheme" XDG_CACHE_HOME="$tmp/cache" XDG_CONFIG_HOME="$tmp/config" \
-    LANG=${LANG_FOR_SHOT:-en_US.UTF-8} LC_ALL=${LANG_FOR_SHOT:-en_US.UTF-8} "$bin" --page "$page" >"$tmp/log" 2>&1 &
+    LANG=${LANG_FOR_SHOT:-en_US.UTF-8} LC_ALL=${LANG_FOR_SHOT:-en_US.UTF-8} "$bin" ${SHOT_ARGS:---page "$page"} >"$tmp/log" 2>&1 &
 pid=$!
 
 find_window() {

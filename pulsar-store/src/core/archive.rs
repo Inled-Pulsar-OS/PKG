@@ -22,11 +22,31 @@ pub fn safe_component(id: &str) -> Result<&str> {
     Ok(id)
 }
 
-/// Extracts a zip into `dest`, refusing entries that would escape it.
+/// Most data one extraction may write, and most entries it may create.
+pub const MAX_EXTRACTED_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+pub const MAX_EXTRACTED_ENTRIES: usize = 20_000;
+
+/// Extracts a zip into `dest`, refusing entries that would escape it and
+/// archives that expand beyond sane limits (zip bombs).
 pub fn extract_zip(zip_path: &Path, dest: &Path) -> Result<()> {
+    extract_zip_limited(zip_path, dest, MAX_EXTRACTED_BYTES, MAX_EXTRACTED_ENTRIES)
+}
+
+pub fn extract_zip_limited(
+    zip_path: &Path,
+    dest: &Path,
+    max_bytes: u64,
+    max_entries: usize,
+) -> Result<()> {
     let mut archive = zip::ZipArchive::new(File::open(zip_path)?)
         .map_err(|e| StoreError::Parse(format!("bad zip: {e}")))?;
+    if archive.len() > max_entries {
+        return Err(StoreError::Unsupported(
+            "archive has too many entries".into(),
+        ));
+    }
     fs::create_dir_all(dest)?;
+    let mut written = 0u64;
     for i in 0..archive.len() {
         let mut entry = archive
             .by_index(i)
@@ -44,7 +64,15 @@ pub fn extract_zip(zip_path: &Path, dest: &Path) -> Result<()> {
             if let Some(parent) = out.parent() {
                 fs::create_dir_all(parent)?;
             }
-            io::copy(&mut entry, &mut File::create(&out)?)?;
+            // Count real bytes written, not the size the archive claims.
+            let budget = max_bytes.saturating_sub(written);
+            let copied = io::copy(&mut (&mut entry).take(budget + 1), &mut File::create(&out)?)?;
+            written += copied;
+            if written > max_bytes {
+                return Err(StoreError::Unsupported(
+                    "archive expands to too much data".into(),
+                ));
+            }
         }
     }
     Ok(())
@@ -156,6 +184,16 @@ mod tests {
         extract_zip(&z, &out).unwrap();
         assert_eq!(find_dir_with(&out, "manifest.json"), Some(out.join("pkg")));
         assert_eq!(find_dir_with(&out, "nope"), None);
+    }
+
+    #[test]
+    fn rejects_zip_bombs_by_size_and_count() {
+        let dir = tempfile::tempdir().unwrap();
+        let z = dir.path().join("big.zip");
+        make_zip(&z, &[("a", &"x".repeat(1000)), ("b", "y")]);
+        assert!(extract_zip_limited(&z, &dir.path().join("o1"), 500, 10).is_err());
+        assert!(extract_zip_limited(&z, &dir.path().join("o2"), 10_000, 1).is_err());
+        assert!(extract_zip_limited(&z, &dir.path().join("o3"), 10_000, 10).is_ok());
     }
 
     #[test]

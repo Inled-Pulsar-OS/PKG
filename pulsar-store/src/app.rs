@@ -407,8 +407,29 @@ impl Shell {
         if let Some(item) = item {
             self.pending_install.borrow_mut().take();
             self.go(Route::Item(id), Nav::Push);
-            self.ctx.act(Action::Install(None), item);
+            self.confirm_install(item);
         }
+    }
+
+    /// A link or command line can ask for an install, so the user must agree first.
+    fn confirm_install(&self, item: Item) {
+        let name = self.ctx.name(&item);
+        let dialog = adw::AlertDialog::new(
+            Some(&i18n::format(&tr!("Install {name}?"), &[("name", &name)])),
+            Some(&tr!(
+                "This install was requested by a link or command. Install only software you trust."
+            )),
+        );
+        dialog.add_response("cancel", &tr!("Cancel"));
+        dialog.add_response("install", &tr!("Install"));
+        dialog.set_response_appearance("install", adw::ResponseAppearance::Suggested);
+        dialog.set_default_response(Some("cancel"));
+        dialog.set_close_response("cancel");
+        let ctx = self.ctx.clone();
+        dialog.connect_response(Some("install"), move |_, _| {
+            ctx.act(Action::Install(None), item.clone());
+        });
+        dialog.present(Some(&self.window));
     }
 }
 

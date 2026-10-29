@@ -63,7 +63,9 @@ fn storectl_peak_rss_mb(json: &[u8]) -> f64 {
 #[test]
 #[ignore = "timing test; run with --release"]
 fn five_thousand_items_meet_the_budget() {
-    assert!(!cfg!(debug_assertions), "run this test with --release");
+    if cfg!(debug_assertions) {
+        panic!("run this test with --release");
+    }
     let json = big_catalog_json(ITEMS);
 
     let mut loads = Vec::new();
