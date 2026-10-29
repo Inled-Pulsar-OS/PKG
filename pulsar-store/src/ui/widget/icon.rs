@@ -21,6 +21,7 @@ pub fn item_icon(ctx: &Ctx, item: &Item, size: i32) -> gtk::Widget {
     let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);
     frame.set_size_request(size, size);
     frame.set_overflow(gtk::Overflow::Hidden);
+    frame.add_css_class(&format!("store-icon-{size}"));
     frame.set_valign(gtk::Align::Center);
     frame.set_halign(gtk::Align::Center);
     frame.append(&image);

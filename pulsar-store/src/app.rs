@@ -12,7 +12,10 @@ use pulsar_store::core::{i18n, model::Item};
 use pulsar_store::modules::{self, Module};
 use pulsar_store::tr;
 use pulsar_store::ui::glass::GlassSurface;
-use pulsar_store::ui::tokens::{self, INSET_TOOLBAR, RADIUS_WINDOW, SPACE_M, SPACE_S};
+use pulsar_store::ui::tokens::{
+    RADIUS_WINDOW, SIDEBAR_CLEARANCE, SIDEBAR_INSET, SIDEBAR_WIDTH, SPACE_M, SPACE_S,
+    TOOLBAR_HEIGHT,
+};
 use pulsar_store::ui::{theme, Change, Ctx, Route, Router};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -28,7 +31,12 @@ struct Shell {
     nav: adw::NavigationView,
     sidebar: gtk::ListBox,
     sidebar_routes: Vec<Route>,
+    sidebar_titles: Vec<String>,
     back: gtk::Button,
+    /// The page name in the middle of the toolbar.
+    title: gtk::Label,
+    /// Count of pending updates, shown on the Updates row.
+    badge: gtk::Label,
     search: gtk::SearchEntry,
     /// True while the code (not the user) changes the sidebar selection or search text.
     syncing: Cell<bool>,
@@ -42,49 +50,66 @@ impl Shell {
         let modules = modules::all();
         let entries = modules::sidebar_entries(&modules);
 
-        // ---- content: pages under a floating glass toolbar ----
+        // ---- content: pages, with the sidebar and toolbar floating above ----
         let nav = adw::NavigationView::new();
+        nav.add_css_class("store-nav");
+
         let back = gtk::Button::from_icon_name("go-previous-symbolic");
+        back.add_css_class("flat");
+        back.add_css_class("circular");
         back.set_tooltip_text(Some(&tr!("Back")));
         back.set_visible(false);
-        let search = gtk::SearchEntry::new();
-        search.set_placeholder_text(Some(&tr!("Search apps, extensions, Sayri AI…")));
-        search.update_property(&[gtk::accessible::Property::Label(&tr!("Search"))]);
-        search.set_hexpand(true);
-        search.set_max_width_chars(36);
         let refresh = gtk::Button::from_icon_name("view-refresh-symbolic");
+        refresh.add_css_class("flat");
+        refresh.add_css_class("circular");
         refresh.set_tooltip_text(Some(&tr!("Refresh Store")));
+        let title = gtk::Label::new(None);
+        title.add_css_class("store-toolbar-title");
+        title.set_ellipsize(gtk::pango::EllipsizeMode::End);
 
-        let header = adw::HeaderBar::new();
-        header.add_css_class("flat");
-        header.pack_start(&back);
-        header.pack_end(&refresh);
-        header.set_title_widget(Some(&search));
+        // Toolbar: back at the start, the page title in the middle, refresh and
+        // (when the desktop puts them on the right, as GNOME does) window buttons at the end.
+        let bar = gtk::CenterBox::new();
+        bar.set_margin_start(SPACE_S);
+        bar.set_margin_end(SPACE_S);
+        bar.set_start_widget(Some(&back));
+        bar.set_center_widget(Some(&title));
+        let end = gtk::Box::new(gtk::Orientation::Horizontal, SPACE_S);
+        end.append(&refresh);
+        end.append(&gtk::WindowControls::new(gtk::PackType::End));
+        bar.set_end_widget(Some(&end));
+        let bar_handle = gtk::WindowHandle::new();
+        bar_handle.set_child(Some(&bar));
 
-        let glass = GlassSurface::new();
-        glass.set_halign(gtk::Align::Fill);
-        glass.set_valign(gtk::Align::Start);
-        for set in [
-            gtk::Widget::set_margin_top,
-            gtk::Widget::set_margin_start,
-            gtk::Widget::set_margin_end,
-        ] {
-            set(glass.upcast_ref(), INSET_TOOLBAR as i32);
-        }
-        glass.set_corner_radius(tokens::concentric(RADIUS_WINDOW, 0.0) + 4.0);
-        glass.set_child(Some(&header));
-        glass.set_backdrop(Some(&nav));
+        let toolbar = GlassSurface::new();
+        toolbar.set_halign(gtk::Align::Fill);
+        toolbar.set_valign(gtk::Align::Start);
+        toolbar.set_size_request(-1, TOOLBAR_HEIGHT);
+        toolbar.set_margin_top(SIDEBAR_INSET);
+        toolbar.set_margin_end(SIDEBAR_INSET);
+        toolbar.set_margin_start(SIDEBAR_CLEARANCE);
+        toolbar.set_corner_radius(TOOLBAR_HEIGHT as f32 / 2.0);
+        toolbar.set_child(Some(&bar_handle));
+        toolbar.set_backdrop(Some(&nav));
 
-        let overlay = gtk::Overlay::new();
-        overlay.set_child(Some(&nav));
-        overlay.add_overlay(&glass);
-        let content_page = adw::NavigationPage::new(&overlay, &tr!("Pulsar Store"));
+        // ---- sidebar: search, destinations, and the user at the bottom ----
+        let search = gtk::SearchEntry::new();
+        search.set_placeholder_text(Some(&tr!("Search")));
+        search.update_property(&[gtk::accessible::Property::Label(&tr!(
+            "Search apps, extensions, Sayri AI…"
+        ))]);
+        search.set_margin_start(SPACE_M);
+        search.set_margin_end(SPACE_M);
 
-        // ---- sidebar ----
         let sidebar = gtk::ListBox::new();
         sidebar.add_css_class("navigation-sidebar");
+        sidebar.add_css_class("store-sidebar-list");
         sidebar.set_selection_mode(gtk::SelectionMode::Single);
+        let badge = gtk::Label::new(None);
+        badge.add_css_class("store-badge");
+        badge.set_visible(false);
         let mut sidebar_routes = Vec::new();
+        let mut sidebar_titles = Vec::new();
         for entry in &entries {
             let row = gtk::ListBoxRow::new();
             row.add_css_class("store-sidebar-row");
@@ -92,27 +117,63 @@ impl Shell {
             line.set_margin_top(SPACE_S);
             line.set_margin_bottom(SPACE_S);
             line.set_margin_start(SPACE_S);
+            line.set_margin_end(SPACE_S);
             line.append(&gtk::Image::from_icon_name(entry.icon));
             let label = gtk::Label::new(Some(&entry.title));
             label.set_xalign(0.0);
+            label.set_hexpand(true);
             line.append(&label);
+            if entry.route == Route::Updates {
+                line.append(&badge);
+            }
             row.set_child(Some(&line));
             sidebar.append(&row);
             sidebar_routes.push(entry.route.clone());
+            sidebar_titles.push(entry.title.clone());
         }
         let side_scroll = gtk::ScrolledWindow::new();
         side_scroll.set_child(Some(&sidebar));
         side_scroll.set_vexpand(true);
-        let side_view = adw::ToolbarView::new();
-        side_view.add_top_bar(&adw::HeaderBar::new());
-        side_view.set_content(Some(&side_scroll));
-        let sidebar_page = adw::NavigationPage::new(&side_view, &tr!("Pulsar Store"));
+        side_scroll.set_hscrollbar_policy(gtk::PolicyType::Never);
 
-        let split = adw::NavigationSplitView::new();
-        split.set_sidebar(Some(&sidebar_page));
-        split.set_content(Some(&content_page));
+        // Window buttons sit here when the desktop puts them on the left.
+        let controls = gtk::WindowControls::new(gtk::PackType::Start);
+        controls.set_halign(gtk::Align::Start);
+        controls.set_margin_start(SPACE_S);
+        controls.set_margin_top(SPACE_S);
+        let top_handle = gtk::WindowHandle::new();
+        top_handle.set_child(Some(&controls));
+        top_handle.set_size_request(-1, SPACE_M * 2);
+
+        let side = gtk::Box::new(gtk::Orientation::Vertical, SPACE_S);
+        side.append(&top_handle);
+        side.append(&search);
+        side.append(&side_scroll);
+        side.append(&user_footer());
+
+        let sidebar_glass = GlassSurface::new();
+        sidebar_glass.add_css_class("store-sidebar-glass");
+        sidebar_glass.set_halign(gtk::Align::Start);
+        sidebar_glass.set_valign(gtk::Align::Fill);
+        sidebar_glass.set_size_request(SIDEBAR_WIDTH, -1);
+        for set in [
+            gtk::Widget::set_margin_top,
+            gtk::Widget::set_margin_bottom,
+            gtk::Widget::set_margin_start,
+        ] {
+            set(sidebar_glass.upcast_ref(), SIDEBAR_INSET);
+        }
+        sidebar_glass.set_corner_radius(RADIUS_WINDOW);
+        sidebar_glass.set_child(Some(&side));
+        sidebar_glass.set_backdrop(Some(&nav));
+
+        let root = gtk::Overlay::new();
+        root.add_css_class("store-backdrop");
+        root.set_child(Some(&nav));
+        root.add_overlay(&sidebar_glass);
+        root.add_overlay(&toolbar);
         let toasts = adw::ToastOverlay::new();
-        toasts.set_child(Some(&split));
+        toasts.set_child(Some(&root));
 
         let prefs = ctx.prefs().clone();
         let size = prefs.window().unwrap_or(WindowState {
@@ -128,6 +189,7 @@ impl Shell {
             .maximized(size.maximized)
             .content(&toasts)
             .build();
+        window.set_size_request(760, 480);
 
         {
             let window = window.clone();
@@ -159,7 +221,10 @@ impl Shell {
             nav,
             sidebar,
             sidebar_routes,
+            sidebar_titles,
             back,
+            title,
+            badge,
             search,
             syncing: Cell::new(false),
             pending_install: RefCell::new(None),
@@ -322,6 +387,20 @@ impl Shell {
             }
         });
 
+        // Keep the Updates badge in step with install states.
+        self.ctx.subscribe(&self.window, {
+            let weak = weak.clone();
+            move |c| {
+                if matches!(c, Change::States | Change::State(_) | Change::Catalog) {
+                    if let Some(s) = weak.upgrade() {
+                        s.update_badge();
+                        // An item page opened before the catalog loaded shows the id until now.
+                        s.sync_chrome();
+                    }
+                }
+            }
+        });
+
         // Run a queued deep-link install once its item is in the catalog.
         self.ctx.subscribe(&self.window, {
             let weak = weak.clone();
@@ -341,14 +420,33 @@ impl Shell {
 
     fn sync_chrome(&self) {
         self.back.set_visible(self.router.borrow().can_go_back());
+        let route = self.router.borrow().current().cloned();
+        if let Some(route) = route {
+            self.title.set_text(&self.title_for(&route));
+        }
+    }
+
+    fn update_badge(&self) {
+        let n = self.ctx.update_count();
+        self.badge.set_text(&n.to_string());
+        self.badge.set_visible(n > 0);
     }
 
     fn title_for(&self, route: &Route) -> String {
+        if let Some(i) = self.sidebar_routes.iter().position(|r| r == route) {
+            return self.sidebar_titles[i].clone();
+        }
         match route {
             Route::Item(id) => self
                 .ctx
                 .item(id)
                 .map_or_else(|| id.clone(), |i| self.ctx.name(&i)),
+            Route::Search(_) => tr!("Search"),
+            Route::Category(key) => {
+                let mut c = key.chars();
+                c.next()
+                    .map_or_else(String::new, |f| f.to_uppercase().chain(c).collect())
+            }
             _ => tr!("Pulsar Store"),
         }
     }
@@ -436,6 +534,45 @@ impl Shell {
 /// Opens a page directly: `--page <route>` or `pulsar://page/<route>`.
 fn page_request(args: &[String]) -> Option<Route> {
     pulsar_store::core::deeplink::page_request(args).and_then(|v| Route::from_arg(&v))
+}
+
+/// The signed-in user at the bottom of the sidebar: an initial in a circle and the name.
+fn user_footer() -> gtk::Widget {
+    let name = {
+        let real = gtk::glib::real_name().to_string_lossy().into_owned();
+        if real.is_empty() || real == "Unknown" {
+            gtk::glib::user_name().to_string_lossy().into_owned()
+        } else {
+            real
+        }
+    };
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, SPACE_M);
+    row.set_margin_start(SPACE_M);
+    row.set_margin_end(SPACE_M);
+    row.set_margin_bottom(SPACE_M);
+    row.set_margin_top(SPACE_S);
+
+    let initial = name
+        .chars()
+        .next()
+        .map_or(String::new(), |c| c.to_uppercase().collect());
+    let avatar = gtk::Label::new(Some(&initial));
+    avatar.add_css_class("store-avatar");
+    avatar.set_accessible_role(gtk::AccessibleRole::Presentation);
+    row.append(&avatar);
+
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    text.set_valign(gtk::Align::Center);
+    let who = gtk::Label::new(Some(&name));
+    who.set_xalign(0.0);
+    who.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    text.append(&who);
+    let os = gtk::Label::new(Some(&tr!("Pulsar OS")));
+    os.add_css_class("store-caption");
+    os.set_xalign(0.0);
+    text.append(&os);
+    row.append(&text);
+    row.upcast()
 }
 
 type ShellAction = Box<dyn Fn(&Rc<Shell>)>;

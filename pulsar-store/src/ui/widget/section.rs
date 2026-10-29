@@ -20,6 +20,7 @@ pub fn section_header(title: &str, action: Option<SectionAction>) -> gtk::Widget
     if let Some((text, on_click)) = action {
         let button = gtk::Button::with_label(text);
         button.add_css_class("flat");
+        button.add_css_class("store-see-all");
         button.connect_clicked(move |_| on_click());
         row.append(&button);
     }

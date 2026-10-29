@@ -88,7 +88,7 @@ pub fn build(ctx: &Ctx, id: String) -> gtk::Widget {
 
 fn header(ctx: &Ctx, item: &Item) -> gtk::Widget {
     let row = gtk::Box::new(gtk::Orientation::Horizontal, SPACE_L);
-    row.append(&item_icon(ctx, item, 96));
+    row.append(&item_icon(ctx, item, 128));
 
     let meta = gtk::Box::new(gtk::Orientation::Vertical, SPACE_S);
     meta.set_hexpand(true);

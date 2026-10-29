@@ -41,6 +41,12 @@ for _ in $(seq 1 40); do
     [ -n "$geometry" ] && break
 done
 [ -n "$geometry" ] || { echo "window did not appear" >&2; cat "$tmp/log" >&2; exit 1; }
+# Only capture when our window is the focused one, so nothing else on screen is included.
+active_pid=$(hyprctl -j activewindow | python3 -c 'import json,sys; print(json.load(sys.stdin).get("pid", 0))')
+if [ "$active_pid" != "$pid" ]; then
+    echo "window is not in front (active pid $active_pid); refusing to capture the screen" >&2
+    exit 1
+fi
 sleep "${SHOT_DELAY:-5}"   # let the catalog, states, and icons load
 grim -g "$geometry" "$out"
 echo "saved $out"

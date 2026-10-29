@@ -205,6 +205,16 @@ impl Ctx {
             .unwrap_or(InstallState::NotInstalled)
     }
 
+    /// How many items have a newer version in the catalog.
+    pub fn update_count(&self) -> usize {
+        self.0
+            .states
+            .borrow()
+            .values()
+            .filter(|s| matches!(s, InstallState::UpdateAvailable { .. }))
+            .count()
+    }
+
     pub fn op(&self, id: &str) -> Option<Op> {
         self.0.ops.borrow().get(id).cloned()
     }

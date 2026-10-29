@@ -5,6 +5,17 @@ Pulsar Store takes inspiration from Apple's Liquid Glass design (see `apple-refe
 ![Discover, dark](screenshots/discover-dark.png)
 ![Discover, light](screenshots/discover-light.png)
 
+## Layout
+
+The layout follows the Mac App Store (reference screenshots from Apple's App Store, studied for structure only) in the Tahoe style.
+
+- **Floating glass sidebar** on the left, inset from the window edge with a large corner radius: search at the top, Discover, Applications, Extensions, Sayri AI, Installed, and Updates (with a count badge), and the user at the bottom. The selected row is a capsule.
+- **Floating glass toolbar** across the top of the content: back at the start, the page title centered, refresh and window controls at the end.
+- **Content scrolls underneath both**, so the glass has something to blur.
+- **Discover:** a wide hero banner (text on a dark fade at the left, artwork at the right), a row of three editorial cards with round artwork, then sections titled with a "See All" link, each a grid of compact app rows (icon, name, subtitle, Get capsule).
+- **Category pages** show a pair of editorial cards above the full list of rows.
+- **Item page:** large icon, name, summary, a Get/Open capsule, an info strip, then the sections.
+
 ## Layers
 
 - **Content layer:** pages, lists, cards. Flat, no glass.
@@ -17,7 +28,7 @@ Numeric tokens live in `src/ui/tokens.rs`. Colors live in `assets/css/light.css`
 | Group | Names |
 |---|---|
 | Spacing | `SPACE_XS` 4, `SPACE_S` 8, `SPACE_M` 12, `SPACE_L` 16, `SPACE_XL` 24, `SPACE_XXL` 32 |
-| Radii | window 18, card 18, tile 14, icon 14, pill 999 |
+| Radii | window 26, card 22, tile 16, pill 999; app icons use 22.5% of their side |
 | Colors | `store_surface`, `store_surface_hover`, `store_hairline`, `store_text_dim`, `store_surface_flat`, `store_glass_tint`, `store_glass_edge`, `store_glass_edge_dim`, `store_glass_shadow`, `store_hero_scrim`, `store_accent_text` |
 
 Controls inside a rounded surface use concentric radii: `concentric(outer, inset)` returns `outer - inset`.
@@ -34,7 +45,10 @@ The app uses the system font (libadwaita's default, Inter on most Pulsar OS inst
 
 | Widget | File | Notes |
 |---|---|---|
-| Item tile | `ui/widget/item_tile.rs` | Icon, name, summary, install button. Click or Enter opens the item. |
+| App row | `ui/widget/item_row.rs` | Compact: icon, name, subtitle, install button. Used in lists. |
+| Hero banner | `ui/widget/hero.rs` | Wide banner for the featured item. |
+| Editorial card | `ui/widget/feature_card.rs` | Label, title, description, round artwork. |
+| Item tile | `ui/widget/item_tile.rs` | Boxed variant of the row; also provides `make_openable`. |
 | Card | `ui/widget/card.rs` | Larger; the hero variant uses the accent gradient. |
 | Install button | `ui/widget/install_button.rs` | Get, progress ring, Open, Update. Tap the ring to cancel. |
 | Progress ring | `ui/widget/progress_ring.rs` | Determinate, or spinning when unknown. |

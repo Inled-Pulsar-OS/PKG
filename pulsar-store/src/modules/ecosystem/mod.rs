@@ -4,7 +4,7 @@ use crate::core::model::SourceKind;
 use crate::modules::{Module, SidebarEntry};
 use crate::tr;
 use crate::ui::page::{self, page};
-use crate::ui::widget::item_grid::item_grid;
+use crate::ui::widget::{feature_card::feature_row, item_grid::item_grid};
 use crate::ui::{Ctx, Ecosystem as Which, Route};
 use gtk4 as gtk;
 use gtk4::prelude::*;
@@ -54,12 +54,13 @@ impl Module for Ecosystem {
                 Which::Sayri => tr!("Sayri AI Ecosystem"),
             };
             column.append(&page::title(&heading));
-            let ids: Vec<String> = ctx
-                .items()
-                .iter()
-                .filter(|i| includes(which, i.kind))
-                .map(|i| i.id.clone())
-                .collect();
+            let items = ctx.items();
+            let shown: Vec<&crate::core::model::Item> =
+                items.iter().filter(|i| includes(which, i.kind)).collect();
+            let ids: Vec<String> = shown.iter().map(|i| i.id.clone()).collect();
+            if shown.len() >= 4 {
+                column.append(&feature_row(ctx, &shown[..2]));
+            }
             if ids.is_empty() {
                 column.append(&page::empty(
                     "emblem-default-symbolic",

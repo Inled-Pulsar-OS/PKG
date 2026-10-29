@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pulsar-store\n"
 "Report-Msgid-Bugs-To: https://github.com/Victor1890/pulsaros-PKG/issues\n"
-"POT-Creation-Date: 2026-10-28 21:20-0400\n"
+"POT-Creation-Date: 2026-10-28 21:37-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,55 +17,58 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/app.rs:48
+#: src/app.rs:60
 msgid "Back"
 msgstr ""
 
-#: src/app.rs:51
-msgid "Search apps, extensions, Sayri AI…"
-msgstr ""
-
-#: src/app.rs:52 src/modules/search/mod.rs:36
-msgid "Search"
-msgstr ""
-
-#: src/app.rs:56
+#: src/app.rs:65
 msgid "Refresh Store"
 msgstr ""
 
-#: src/app.rs:81 src/app.rs:109 src/app.rs:125 src/app.rs:352
+#: src/app.rs:97 src/app.rs:444 src/modules/search/mod.rs:36
+msgid "Search"
+msgstr ""
+
+#: src/app.rs:99
+msgid "Search apps, extensions, Sayri AI…"
+msgstr ""
+
+#: src/app.rs:186 src/app.rs:450
 msgid "Pulsar Store"
 msgstr ""
 
-#: src/app.rs:136
+#: src/app.rs:198
 msgid "Copy Details"
 msgstr ""
 
-#: src/app.rs:137
+#: src/app.rs:199
 msgid "Close"
 msgstr ""
 
-#: src/app.rs:418
+#: src/app.rs:516
 #, rust-format
 msgid "Install {name}?"
 msgstr ""
 
-#: src/app.rs:420
+#: src/app.rs:518
 msgid ""
 "This install was requested by a link or command. Install only software you "
 "trust."
 msgstr ""
 
-#: src/app.rs:423
+#: src/app.rs:521
 msgid "Cancel"
 msgstr ""
 
-#: src/app.rs:424
+#: src/app.rs:522
 msgid "Install"
 msgstr ""
 
+#: src/app.rs:570
+msgid "Pulsar OS"
+msgstr ""
+
 #: src/modules/categories/mod.rs:20 src/modules/categories/view.rs:14
-#: src/modules/discover/view.rs:41
 msgid "Applications"
 msgstr ""
 
@@ -77,32 +80,36 @@ msgstr ""
 msgid "All"
 msgstr ""
 
-#: src/modules/categories/view.rs:58 src/modules/discover/view.rs:22
-#: src/modules/ecosystem/mod.rs:66
+#: src/modules/categories/view.rs:59 src/modules/discover/view.rs:61
+#: src/modules/ecosystem/mod.rs:67
 msgid "No packages available"
 msgstr ""
 
-#: src/modules/categories/view.rs:59 src/modules/ecosystem/mod.rs:67
+#: src/modules/categories/view.rs:60 src/modules/ecosystem/mod.rs:68
 msgid "No items found in this section."
 msgstr ""
 
-#: src/modules/discover/mod.rs:19 src/modules/discover/view.rs:17
+#: src/modules/discover/mod.rs:19 src/modules/discover/view.rs:58
 msgid "Discover"
 msgstr ""
 
-#: src/modules/discover/view.rs:23
+#: src/modules/discover/view.rs:62
 msgid "No items found in the catalog yet."
 msgstr ""
 
-#: src/modules/discover/view.rs:43 src/modules/ecosystem/mod.rs:29
+#: src/modules/discover/view.rs:80
+msgid "Great Apps and Updates"
+msgstr ""
+
+#: src/modules/discover/view.rs:85 src/modules/ecosystem/mod.rs:29
 msgid "Extensions"
 msgstr ""
 
-#: src/modules/discover/view.rs:47 src/modules/ecosystem/mod.rs:35
+#: src/modules/discover/view.rs:89 src/modules/ecosystem/mod.rs:35
 msgid "Sayri AI"
 msgstr ""
 
-#: src/modules/discover/view.rs:58
+#: src/modules/discover/view.rs:100
 msgid "See All"
 msgstr ""
 
@@ -114,27 +121,27 @@ msgstr ""
 msgid "Sayri AI Ecosystem"
 msgstr ""
 
-#: src/modules/item/view.rs:19
+#: src/modules/item/view.rs:19 src/ui/widget/feature_card.rs:63
 msgid "Application"
 msgstr ""
 
-#: src/modules/item/view.rs:20
+#: src/modules/item/view.rs:20 src/ui/widget/feature_card.rs:64
 msgid "System package"
 msgstr ""
 
-#: src/modules/item/view.rs:21
+#: src/modules/item/view.rs:21 src/ui/widget/feature_card.rs:65
 msgid "Shell extension"
 msgstr ""
 
-#: src/modules/item/view.rs:22
+#: src/modules/item/view.rs:22 src/ui/widget/feature_card.rs:66
 msgid "Sayri skill"
 msgstr ""
 
-#: src/modules/item/view.rs:23
+#: src/modules/item/view.rs:23 src/ui/widget/feature_card.rs:67
 msgid "Sayri plugin"
 msgstr ""
 
-#: src/modules/item/view.rs:24
+#: src/modules/item/view.rs:24 src/ui/widget/feature_card.rs:68
 msgid "Other"
 msgstr ""
 
@@ -330,49 +337,54 @@ msgstr ""
 msgid "{installed} → {available}"
 msgstr ""
 
-#: src/ui/ctx.rs:268
+#: src/ui/ctx.rs:278
 #, rust-format
 msgid "Could not refresh the catalog: {reason}"
 msgstr ""
 
-#: src/ui/ctx.rs:406 src/ui/ctx.rs:439
+#: src/ui/ctx.rs:416 src/ui/ctx.rs:449
 #, rust-format
 msgid "{name} installed"
 msgstr ""
 
-#: src/ui/ctx.rs:408
+#: src/ui/ctx.rs:418
 #, rust-format
 msgid "{name} removed"
 msgstr ""
 
-#: src/ui/ctx.rs:409
+#: src/ui/ctx.rs:419
 #, rust-format
 msgid "{name} updated"
 msgstr ""
 
-#: src/ui/ctx.rs:411
+#: src/ui/ctx.rs:421
 #, rust-format
 msgid "Cancelled {name}"
 msgstr ""
 
-#: src/ui/ctx.rs:414
+#: src/ui/ctx.rs:424
 #, rust-format
 msgid "Could not complete {name}"
 msgstr ""
 
-#: src/ui/ctx.rs:433
+#: src/ui/ctx.rs:443
 #, rust-format
 msgid "{name} installed and enabled"
 msgstr ""
 
-#: src/ui/ctx.rs:436
+#: src/ui/ctx.rs:446
 #, rust-format
 msgid "{name} installed. Log out and back in to turn it on."
 msgstr ""
 
-#: src/ui/ctx.rs:465
+#: src/ui/ctx.rs:475
 #, rust-format
 msgid "Could not open {name}"
+msgstr ""
+
+#: src/ui/widget/hero.rs:95
+#, rust-format
+msgid "Version {version}"
 msgstr ""
 
 #: src/ui/widget/install_button.rs:65 src/ui/widget/install_button.rs:69

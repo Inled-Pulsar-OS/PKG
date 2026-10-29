@@ -2,7 +2,7 @@
 //! so a catalog of thousands of items opens without a stall.
 
 use crate::ui::ctx::Ctx;
-use crate::ui::widget::item_tile::item_tile;
+use crate::ui::widget::item_row::item_row;
 use gtk4 as gtk;
 use gtk4::prelude::*;
 
@@ -40,7 +40,7 @@ pub fn item_grid(ctx: &Ctx, ids: &[String]) -> gtk::Widget {
             return;
         };
         if let Some(item) = bind_ctx.item(&id.string()) {
-            slot.append(&item_tile(&bind_ctx, &item));
+            slot.append(&item_row(&bind_ctx, &item));
         }
     });
 
@@ -62,7 +62,7 @@ pub fn item_grid(ctx: &Ctx, ids: &[String]) -> gtk::Widget {
     grid.set_model(Some(&gtk::NoSelection::new(Some(model))));
     grid.add_css_class("store-grid");
     grid.set_min_columns(1);
-    grid.set_max_columns(2);
+    grid.set_max_columns(3);
     grid.set_enable_rubberband(false);
     grid.set_vexpand(true);
     grid.set_focusable(true);

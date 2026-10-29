@@ -3,7 +3,7 @@ use crate::core::search::by_category;
 use crate::tr;
 use crate::ui::page::{self, live_page};
 use crate::ui::tokens::SPACE_S;
-use crate::ui::widget::item_grid::item_grid;
+use crate::ui::widget::{feature_card::feature_row, item_grid::item_grid};
 use crate::ui::{Ctx, Route};
 use gtk4 as gtk;
 use gtk4::prelude::*;
@@ -48,10 +48,11 @@ pub fn build(ctx: &Ctx, key: String) -> gtk::Widget {
         }
 
         let installed = |i: &Item| !matches!(ctx.state(&i.id), InstallState::NotInstalled);
-        let ids: Vec<String> = by_category(&items, &key, &installed)
-            .iter()
-            .map(|i| i.id.clone())
-            .collect();
+        let shown = by_category(&items, &key, &installed);
+        let ids: Vec<String> = shown.iter().map(|i| i.id.clone()).collect();
+        if shown.len() >= 4 {
+            column.append(&feature_row(ctx, &shown[..2]));
+        }
         if ids.is_empty() {
             column.append(&page::empty(
                 "emblem-default-symbolic",

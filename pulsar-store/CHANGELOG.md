@@ -14,6 +14,7 @@ Pulsar Store is rewritten in Rust. The Python version is gone.
 
 - A faster app: it opens its window in about 0.6 s instead of 1 s, and 5,000-item search takes 0.1 ms.
 - A new look inspired by Liquid Glass: floating glass toolbar, cards, a Get / progress ring / Open button, light and dark themes.
+- A Tahoe-style layout: floating glass sidebar and toolbar, a hero banner with editorial cards, and compact app rows.
 - Pages: Discover, Applications, Extensions, Sayri AI, Installed, Updates, Search, and item pages with screenshots, security audit, documentation, and package files.
 - `pulsar-storectl`: search, install, update, and more from the command line, with JSON output.
 - `pulsar-store-updated`: checks for updates in the background and notifies you.

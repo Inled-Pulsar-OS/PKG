@@ -11,14 +11,26 @@ pub const SPACE_XXL: i32 = 32;
 
 /// Corner radii, in pixels. Inner radii are derived so they stay concentric
 /// with the surface that contains them.
-pub const RADIUS_WINDOW: f32 = 18.0;
-pub const RADIUS_CARD: f32 = 18.0;
-pub const RADIUS_TILE: f32 = 14.0;
-pub const RADIUS_ICON: f32 = 14.0;
+pub const RADIUS_WINDOW: f32 = 26.0;
+pub const RADIUS_CARD: f32 = 22.0;
+pub const RADIUS_TILE: f32 = 16.0;
 pub const RADIUS_PILL: f32 = 999.0;
 
+/// App icons use a rounded square whose radius is 22.5% of its side.
+pub fn icon_radius(size: i32) -> i32 {
+    (size as f32 * 0.225).round() as i32
+}
+
+/// The floating sidebar: its width, and the gap around it.
+pub const SIDEBAR_WIDTH: i32 = 236;
+pub const SIDEBAR_INSET: i32 = 10;
+/// Space pages leave on the left so content starts beside the sidebar but scrolls beneath it.
+pub const SIDEBAR_CLEARANCE: i32 = SIDEBAR_WIDTH + SIDEBAR_INSET * 2;
+/// Height of the floating toolbar, and the gap above it.
+pub const TOOLBAR_HEIGHT: i32 = 52;
+
 /// Gap between a surface's edge and the control nested inside it.
-pub const INSET_TOOLBAR: f32 = 8.0;
+pub const INSET_TOOLBAR: f32 = 10.0;
 
 /// Radius for a shape nested `inset` pixels inside a shape of radius `outer`.
 pub fn concentric(outer: f32, inset: f32) -> f32 {
@@ -89,6 +101,13 @@ mod tests {
             let extra: Vec<_> = used(&css(file)).difference(&want).cloned().collect();
             assert!(extra.is_empty(), "{file} uses undefined tokens: {extra:?}");
         }
+    }
+
+    #[test]
+    fn icon_radii_scale_with_size() {
+        assert_eq!(icon_radius(48), 11);
+        assert_eq!(icon_radius(128), 29);
+        assert!(icon_radius(32) < icon_radius(96));
     }
 
     #[test]

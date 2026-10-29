@@ -3,12 +3,12 @@
 
 use crate::ui::ctx::{Change, Ctx};
 use crate::ui::motion;
-use crate::ui::tokens::{SPACE_L, SPACE_XL};
+use crate::ui::tokens::{SIDEBAR_CLEARANCE, SPACE_L, SPACE_XL, TOOLBAR_HEIGHT};
 use adw::prelude::*;
 use gtk4 as gtk;
 
 /// Height reserved at the top for the floating glass toolbar.
-pub const TOOLBAR_CLEARANCE: i32 = 64;
+pub const TOOLBAR_CLEARANCE: i32 = TOOLBAR_HEIGHT + 20;
 
 /// Builds a page. `fill` adds content to the column; it runs again whenever the catalog changes.
 pub fn page(ctx: &Ctx, max_width: i32, fill: impl Fn(&Ctx, &gtk::Box) + 'static) -> gtk::Widget {
@@ -33,7 +33,7 @@ fn build_page(
     let column = gtk::Box::new(gtk::Orientation::Vertical, SPACE_XL);
     column.set_margin_top(TOOLBAR_CLEARANCE + SPACE_L);
     column.set_margin_bottom(SPACE_XL);
-    column.set_margin_start(SPACE_XL);
+    column.set_margin_start(SIDEBAR_CLEARANCE);
     column.set_margin_end(SPACE_XL);
     column.set_valign(gtk::Align::Start);
 
@@ -49,7 +49,8 @@ fn build_page(
     fill(ctx, &column);
     // New pages ease in; the navigation view adds the slide.
     motion::fade_in(&scroll, motion::BASE_MS);
-    let (rebuild_ctx, rebuild_column) = (ctx.clone(), column.clone());
+    let (rebuild_ctx, rebuild_column, rebuild_scroll) =
+        (ctx.clone(), column.clone(), scroll.clone());
     let fill = std::rc::Rc::new(fill);
     ctx.subscribe(&scroll, move |c| {
         let rebuild = match c {
@@ -58,10 +59,15 @@ fn build_page(
             _ => false,
         };
         if rebuild {
+            // Removing the focused widget makes GTK scroll to wherever focus lands next,
+            // so remember the position and put it back.
+            let adjustment = rebuild_scroll.vadjustment();
+            let at = adjustment.value();
             while let Some(child) = rebuild_column.first_child() {
                 rebuild_column.remove(&child);
             }
             fill(&rebuild_ctx, &rebuild_column);
+            gtk::glib::idle_add_local_once(move || adjustment.set_value(at));
         }
     });
     scroll.upcast()
