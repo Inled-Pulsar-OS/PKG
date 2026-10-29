@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    if which systemctl >/dev/null 2>&1; then
+        systemctl --global disable pulsar-store-updated.service >/dev/null 2>&1 || true
+    fi
+fi

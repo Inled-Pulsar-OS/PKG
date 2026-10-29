@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# NOTE: the Python store was removed from the tree after the Rust rewrite.
+# To run this script, restore it first: git checkout 68f5b074 -- usr/share/pulsar-store
 """Regenerate tests/fixtures/search_golden.json from the Python store's search.
 
 The Rust search must return the same ids in the same order (tests/search_golden.rs).

@@ -1,11 +1,15 @@
 Package: pulsar-store
-Version: 1.0.18
+Version: 2.0.0
 Section: utils
 Priority: optional
-Architecture: all
+Architecture: amd64
 Maintainer: Jaime <info@inled.es>
-Depends: python3, python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, flatpak, policykit-1 | polkitd | pkexec, xdg-utils
-Recommends: gnome-shell, sayri
+Depends: libgtk-4-1 (>= 4.14), libadwaita-1-0 (>= 1.5), flatpak, policykit-1 | polkitd | pkexec, xdg-utils
+Recommends: gnome-shell, sayri, libnotify-bin
+Replaces: pulsar-store (<< 2.0.0)
+Breaks: pulsar-store (<< 2.0.0)
 Description: Unified App Store and Ecosystem Center for Pulsar OS.
  Discover, install, and manage Flatpak apps, native Debian packages,
  GNOME Shell extensions, and Sayri AI ecosystem plugins and skills.
+ Includes a command line tool (pulsar-storectl) and a background
+ update checker.

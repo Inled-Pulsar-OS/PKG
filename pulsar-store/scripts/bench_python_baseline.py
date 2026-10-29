@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# NOTE: the Python store was removed from the tree after the Rust rewrite.
+# To run this script, restore it first: git checkout 68f5b074 -- usr/share/pulsar-store
 """Baseline for the Python store core (no GTK, no network).
 
 Measures import time, catalog load time, search latency, and peak RSS using
