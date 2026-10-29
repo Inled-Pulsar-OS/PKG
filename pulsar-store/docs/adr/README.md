@@ -11,3 +11,5 @@ Each ADR records one decision: context, decision, consequences, and rejected opt
 | [0005](0005-catalog-schema-contract.md) | Catalog schema is a public, versioned contract | Accepted |
 | [0006](0006-i18n-gettext.md) | Internationalization with gettext | Accepted |
 | [0007](0007-async-and-http.md) | Async model: glib main context, worker threads, `ureq` | Accepted |
+| [0008](0008-system-font.md) | Use the system font | Accepted |
+| [0009](0009-no-flatpak-packaging.md) | Do not package the store as a Flatpak | Accepted |

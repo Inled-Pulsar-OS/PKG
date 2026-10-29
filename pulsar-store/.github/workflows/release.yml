@@ -1,0 +1,36 @@
+name: release
+# Pushing a tag like v2.0.0 builds the binaries and publishes a GitHub release
+# with the matching CHANGELOG section. This workflow has not been run yet.
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libadwaita-1-dev pkg-config gettext
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Check the tag matches Cargo.toml
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          grep -q "^version = \"$version\"" Cargo.toml || { echo "tag $GITHUB_REF_NAME does not match Cargo.toml"; exit 1; }
+      - run: cargo test --locked
+      - run: cargo build --release --locked
+      - name: Stage and archive
+        run: |
+          ./prepare-assets.sh "$PWD/stage"
+          tar -C stage -czf "pulsar-store-${GITHUB_REF_NAME#v}-x86_64.tar.gz" .
+      - name: Extract release notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '$0 ~ "^## " v "$" {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+          test -s notes.md
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" pulsar-store-*.tar.gz --notes-file notes.md --title "Pulsar Store ${GITHUB_REF_NAME#v}"

@@ -460,13 +460,17 @@ enum Nav {
 
 pub fn run() -> gtk::glib::ExitCode {
     i18n::init();
-    if i18n::wants_rtl() {
-        gtk::Widget::set_default_direction(gtk::TextDirection::Rtl);
-    }
     let app = adw::Application::builder()
         .application_id(APP_ID)
         .flags(gio::ApplicationFlags::HANDLES_COMMAND_LINE)
         .build();
+
+    // GTK is initialized once the application starts, so the layout direction is set here.
+    app.connect_startup(|_| {
+        if i18n::wants_rtl() {
+            gtk::Widget::set_default_direction(gtk::TextDirection::Rtl);
+        }
+    });
 
     let shell: Rc<RefCell<Option<Rc<Shell>>>> = Rc::default();
     {
