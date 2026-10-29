@@ -20,6 +20,28 @@ pub fn install_request<S: AsRef<str>>(args: &[S]) -> Option<String> {
     None
 }
 
+/// The page requested by `args`, as the text `Route::from_arg` understands.
+/// Accepted forms: `--page <page>`, `--page=<page>`, and `pulsar://page/<page>`.
+/// The update notification uses the link form, so the desktop (not the
+/// background service) starts the app.
+pub fn page_request<S: AsRef<str>>(args: &[S]) -> Option<String> {
+    let mut it = args.iter().map(AsRef::as_ref);
+    while let Some(arg) = it.next() {
+        let page = if arg == "--page" {
+            it.next()
+        } else if let Some(rest) = arg.strip_prefix("--page=") {
+            Some(rest)
+        } else {
+            arg.strip_prefix("pulsar://page/")
+        };
+        if let Some(page) = page {
+            let page = page.trim().trim_end_matches('/');
+            return (!page.is_empty() && !page.contains(['\0', '\n'])).then(|| page.to_string());
+        }
+    }
+    None
+}
+
 fn valid_id(id: &str) -> bool {
     !id.is_empty()
         && id.len() <= 256
@@ -49,6 +71,29 @@ mod tests {
             install_request(&["store", "pulsar://install/x/"]).as_deref(),
             Some("x")
         );
+    }
+
+    #[test]
+    fn parses_page_requests() {
+        assert_eq!(
+            page_request(&["store", "--page", "updates"]).as_deref(),
+            Some("updates")
+        );
+        assert_eq!(
+            page_request(&["store", "--page=apps"]).as_deref(),
+            Some("apps")
+        );
+        assert_eq!(
+            page_request(&["pulsar://page/updates"]).as_deref(),
+            Some("updates")
+        );
+        assert_eq!(
+            page_request(&["pulsar://page/search:fire fox/"]).as_deref(),
+            Some("search:fire fox")
+        );
+        assert_eq!(page_request(&["store"]), None);
+        assert_eq!(page_request(&["--page"]), None);
+        assert_eq!(page_request(&["pulsar://page/"]), None);
     }
 
     #[test]

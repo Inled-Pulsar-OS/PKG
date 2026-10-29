@@ -58,8 +58,9 @@ fn metered(conn: &Connection) -> bool {
     .is_some_and(is_metered)
 }
 
-/// Shows the notification and returns its id.
-fn notify(conn: &Connection, count: usize) -> Option<u32> {
+/// Shows the notification and returns its id. A nonzero `replaces` updates that
+/// notification in place instead of stacking a new one.
+fn notify(conn: &Connection, count: usize, replaces: u32) -> Option<u32> {
     let body = if count == 1 {
         "1 update is available.".to_string()
     } else {
@@ -76,7 +77,7 @@ fn notify(conn: &Connection, count: usize) -> Option<u32> {
             "Notify",
             &(
                 "Pulsar Store",
-                0u32,
+                replaces,
                 "pulsar-store",
                 "Updates available",
                 body,
@@ -87,6 +88,21 @@ fn notify(conn: &Connection, count: usize) -> Option<u32> {
         )
         .ok()?;
     reply.body().deserialize::<u32>().ok()
+}
+
+/// Opens the Updates page through the desktop's link handler, so the desktop
+/// session starts the app (not this background service, whose child processes
+/// would be stopped with it). Falls back to starting the app directly.
+fn open_updates() {
+    let opened = Command::new("xdg-open")
+        .arg("pulsar://page/updates")
+        .spawn()
+        .is_ok();
+    if !opened {
+        let _ = Command::new("pulsar-store")
+            .args(["--page", "updates"])
+            .spawn();
+    }
 }
 
 /// Opens the Updates page when the notification's button is pressed.
@@ -106,9 +122,7 @@ fn listen_for_actions(conn: Connection, last_id: Arc<AtomicU32>) {
         for msg in iter.flatten() {
             if let Ok((id, key)) = msg.body().deserialize::<(u32, String)>() {
                 if id == last_id.load(Ordering::SeqCst) && (key == "open" || key == "default") {
-                    let _ = Command::new("pulsar-store")
-                        .args(["--page", "updates"])
-                        .spawn();
+                    open_updates();
                 }
             }
         }
@@ -124,7 +138,7 @@ fn test_notification() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let Some(id) = notify(&conn, 3) else {
+    let Some(id) = notify(&conn, 3, 0) else {
         eprintln!("pulsar-store-updated: the notification service did not accept the notification");
         return ExitCode::FAILURE;
     };
@@ -215,7 +229,9 @@ fn main() -> ExitCode {
                     );
                 }
                 if tracker.observe(&ids) {
-                    if let Some(id) = notify(&conn, ids.len()) {
+                    if let Some(id) =
+                        notify(&conn, ids.len(), last_notification.load(Ordering::SeqCst))
+                    {
                         last_notification.store(id, Ordering::SeqCst);
                     }
                 }

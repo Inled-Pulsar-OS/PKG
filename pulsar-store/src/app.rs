@@ -433,18 +433,9 @@ impl Shell {
     }
 }
 
-/// `--page <route>` opens a page directly (used for screenshots and links).
+/// Opens a page directly: `--page <route>` or `pulsar://page/<route>`.
 fn page_request(args: &[String]) -> Option<Route> {
-    let mut it = args.iter();
-    while let Some(a) = it.next() {
-        if a == "--page" {
-            return it.next().and_then(|v| Route::from_arg(v));
-        }
-        if let Some(v) = a.strip_prefix("--page=") {
-            return Route::from_arg(v);
-        }
-    }
-    None
+    pulsar_store::core::deeplink::page_request(args).and_then(|v| Route::from_arg(&v))
 }
 
 type ShellAction = Box<dyn Fn(&Rc<Shell>)>;
