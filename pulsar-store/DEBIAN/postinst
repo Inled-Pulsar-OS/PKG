@@ -15,8 +15,12 @@ if [ "$1" = "configure" ]; then
     if which xdg-mime >/dev/null 2>&1; then
         xdg-mime default es.inled.PulsarStore.desktop x-scheme-handler/pulsar || true
     fi
-    # Remove legacy CLI binary (replaced by the visual GTK app)
+    # Start the update checker for every user's graphical session.
+    if which systemctl >/dev/null 2>&1; then
+        systemctl --global enable pulsar-store-updated.service >/dev/null 2>&1 || true
+    fi
+    # Leftovers from the Python version: bytecode caches are not owned by the old package.
+    rm -rf /usr/share/pulsar-store/__pycache__ /usr/share/pulsar-store/backends 2>/dev/null || true
+    # Remove legacy CLI binary (replaced by pulsar-storectl)
     rm -f /usr/bin/pulsar-store-cli
 fi
-
-exit 0

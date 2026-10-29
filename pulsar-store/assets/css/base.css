@@ -1,0 +1,198 @@
+/* Pulsar Store components, in the Tahoe style: large radii, translucent surfaces,
+   capsule controls. Colors come from the theme tokens (light.css / dark.css);
+   radii and spacing mirror src/ui/tokens.rs. */
+
+/* ---- type ---- */
+.store-title { font-size: 30px; font-weight: 800; letter-spacing: -0.4px; }
+.store-section-title { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; }
+.store-subtitle { color: @store_text_dim; }
+.store-caption { font-size: 12px; color: @store_text_dim; }
+.store-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 0.8px; color: @store_text_dim; }
+
+/* ---- surfaces ---- */
+.store-tile {
+    padding: 12px;
+    border-radius: 16px;
+    background-color: @store_surface;
+    transition: background-color 150ms ease-out;
+}
+.store-tile:hover { background-color: @store_surface_hover; }
+
+.store-card {
+    border-radius: 22px;
+    background-color: @store_surface;
+    box-shadow: inset 0 0 0 1px @store_hairline;
+    transition: background-color 150ms ease-out;
+}
+.store-card:hover { background-color: @store_surface_hover; }
+
+/* Flat app row: the compact form used in the lists on Discover and category pages. */
+.store-row {
+    padding: 8px 10px;
+    border-radius: 16px;
+    transition: background-color 150ms ease-out;
+}
+.store-row:hover { background-color: @store_surface; }
+.store-row .name { font-weight: 600; }
+
+/* ---- hero banner ---- */
+.store-hero { border-radius: 26px; box-shadow: inset 0 0 0 1px @store_hairline; }
+.store-hero-art {
+    background-image:
+        radial-gradient(circle at 78% 30%, alpha(white, 0.28), alpha(white, 0) 55%),
+        linear-gradient(135deg, @accent_bg_color, shade(@accent_bg_color, 0.45));
+}
+.store-hero-text {
+    padding: 28px;
+    background-image: linear-gradient(90deg, alpha(black, 0.62), alpha(black, 0.0));
+}
+.store-hero-text label { color: white; }
+.store-hero-text .store-eyebrow, .store-hero-text .store-caption { color: alpha(white, 0.78); }
+.store-hero-title { font-size: 28px; font-weight: 800; letter-spacing: -0.4px; }
+
+/* ---- editorial cards ---- */
+.store-feature { padding: 16px 18px; border-radius: 22px; }
+.store-circle-art {
+    border-radius: 999px;
+    background-image:
+        radial-gradient(circle at 30% 25%, alpha(white, 0.35), alpha(white, 0) 60%),
+        linear-gradient(135deg, @accent_bg_color, shade(@accent_bg_color, 0.5));
+    box-shadow: 0 6px 18px -6px @store_glass_shadow;
+}
+
+/* ---- icons: radius is 22.5% of the side ---- */
+.store-icon, .store-icon-fallback { background-color: @store_surface_hover; }
+.store-icon-32 { border-radius: 7px; }
+.store-icon-48 { border-radius: 11px; }
+.store-icon-72 { border-radius: 16px; }
+.store-icon-96 { border-radius: 22px; }
+.store-icon-128 { border-radius: 29px; }
+.store-icon, .store-icon-fallback { box-shadow: 0 2px 8px -2px @store_glass_shadow; }
+
+/* ---- capsule button ---- */
+.store-pill {
+    border-radius: 999px;
+    padding: 3px 16px;
+    min-height: 26px;
+    font-weight: 700;
+    font-size: 13px;
+}
+.store-pill.get { background-color: alpha(@accent_bg_color, 0.16); color: @store_accent_text; }
+.store-pill.get:hover { background-color: alpha(@accent_bg_color, 0.28); }
+.store-pill.progress { background: none; padding: 0; min-width: 32px; }
+
+/* Link-style action beside a section title. */
+.store-see-all { color: @store_accent_text; font-weight: 600; padding: 2px 8px; }
+.store-see-all:hover { background-color: alpha(@accent_bg_color, 0.12); }
+
+/* ---- info cells ---- */
+.store-info-cell { padding: 10px 14px; }
+.store-info-value { font-weight: 700; font-size: 15px; }
+.store-info-label { font-size: 11px; color: @store_text_dim; }
+
+/* ---- floating sidebar ---- */
+.store-sidebar-glass { border-radius: 26px; }
+.store-sidebar-row {
+    border-radius: 999px;
+    margin: 1px 8px;
+    padding: 0 4px;
+    transition: background-color 150ms ease-out;
+}
+.store-sidebar-row:selected { background-color: alpha(@window_fg_color, 0.12); }
+.store-sidebar-row image { color: alpha(@window_fg_color, 0.78); -gtk-icon-size: 20px; }
+.store-sidebar-row label { font-size: 15px; }
+.store-badge {
+    border-radius: 999px;
+    padding: 0 7px;
+    min-width: 18px;
+    font-size: 11px;
+    font-weight: 700;
+    background-color: alpha(@window_fg_color, 0.16);
+}
+.store-avatar {
+    min-width: 40px; min-height: 40px;
+    border-radius: 999px;
+    font-weight: 700;
+    background-image: linear-gradient(135deg, @accent_bg_color, shade(@accent_bg_color, 0.55));
+    color: white;
+}
+
+/* Floating toolbar title. */
+.store-toolbar-title { font-weight: 700; }
+
+/* ---- misc ---- */
+.store-banner {
+    padding: 16px 20px;
+    border-radius: 22px;
+    background-color: alpha(@accent_bg_color, 0.12);
+    box-shadow: inset 0 0 0 1px alpha(@accent_bg_color, 0.30);
+}
+.store-screenshot { border-radius: 14px; box-shadow: inset 0 0 0 1px @store_hairline; }
+.store-ring { color: @store_accent_text; }
+.store-ring-button { padding: 0; min-width: 32px; min-height: 32px; border-radius: 999px; }
+
+/* Press feedback. GTK turns CSS transitions off when animations are disabled. */
+.store-tile, .store-card, .store-hero, .store-row { transition: background-color 150ms ease-out, opacity 100ms ease-out; }
+.store-tile:active, .store-card:active, .store-hero:active, .store-row:active { opacity: 0.82; }
+
+gridview.store-grid { background: none; }
+gridview.store-grid > child { padding: 0; border-radius: 16px; }
+
+/* ---- window backdrop: a soft glow gives the glass something to blur ---- */
+.store-backdrop {
+    background-image:
+        radial-gradient(circle at 12% 8%, alpha(@accent_bg_color, 0.20), alpha(@accent_bg_color, 0) 42%),
+        radial-gradient(circle at 88% 85%, alpha(@accent_bg_color, 0.12), alpha(@accent_bg_color, 0) 40%);
+}
+.store-nav, .store-nav > * { background: none; }
+.store-sidebar-list, .store-sidebar-list row { background: none; }
+
+/* ---- product page (Tahoe App Store style) ---- */
+.store-pill.prominent {
+    background-color: @accent_bg_color;
+    color: @accent_fg_color;
+    font-size: 15px;
+    padding: 5px 24px;
+    min-height: 32px;
+}
+.store-pill.prominent:hover { background-color: shade(@accent_bg_color, 1.1); }
+
+.store-product-title { font-size: 28px; font-weight: 800; letter-spacing: -0.4px; }
+.store-product-subtitle { font-size: 17px; color: @store_text_dim; }
+
+.store-rule { background-color: @store_hairline; min-height: 1px; }
+
+.store-info-strip { padding: 14px 0; }
+.store-info-cell { padding: 0 10px; }
+.store-info-label { font-size: 11px; font-weight: 600; letter-spacing: 0.6px; color: @store_text_dim; }
+.store-info-value { font-size: 24px; font-weight: 700; color: alpha(@window_fg_color, 0.62); }
+.store-info-icon { color: alpha(@window_fg_color, 0.55); }
+.store-info-sub { font-size: 13px; color: @store_text_dim; }
+.store-info-divider { background-color: @store_hairline; min-width: 1px; margin: 4px 0; }
+
+.store-shots { padding: 4px 2px; }
+.store-shot { border-radius: 14px; box-shadow: inset 0 0 0 1px @store_hairline; }
+.store-platform { color: @store_text_dim; font-size: 14px; }
+
+/* ---- floating round controls ---- */
+.store-round-glass { border-radius: 999px; }
+.store-round-glass button { min-width: 40px; min-height: 40px; padding: 0; }
+
+/* ---- window buttons: red, yellow, green circles at the top of the sidebar ---- */
+.store-traffic {
+    min-width: 12px; min-height: 12px; padding: 0;
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 1px alpha(black, 0.18);
+    transition: filter 120ms ease-out;
+}
+.store-traffic.close { background-color: #ff5f57; }
+.store-traffic.minimize { background-color: #febc2e; }
+.store-traffic.maximize { background-color: #28c840; }
+.store-traffic:hover { filter: brightness(0.88); }
+/* The glyphs (x, minus, plus) show only while the pointer is over the group, as on macOS. */
+.store-traffic image { opacity: 0; color: alpha(black, 0.65); transition: opacity 120ms ease-out; }
+.store-lights.glyphs .store-traffic image { opacity: 1; }
+.store-traffic:backdrop { background-color: alpha(@window_fg_color, 0.2); }
+
+/* The sidebar search is a capsule. */
+.store-sidebar-glass searchentry { border-radius: 999px; }

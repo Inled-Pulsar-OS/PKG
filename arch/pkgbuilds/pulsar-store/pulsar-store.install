@@ -3,14 +3,24 @@ post_install() {
     gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
     update-mime-database /usr/share/mime &>/dev/null || true
     xdg-mime default es.inled.PulsarStore.desktop x-scheme-handler/pulsar || true
-    # Remove legacy CLI binary (replaced by the visual GTK app)
+    # Start the update checker for every user's graphical session.
+    systemctl --global enable pulsar-store-updated.service &>/dev/null || true
+    # Remove legacy CLI binary (replaced by pulsar-storectl)
     rm -f /usr/bin/pulsar-store-cli
 }
 
 post_upgrade() {
+    # Python 1.x leftovers: bytecode caches were never owned by the package.
+    rm -rf /usr/share/pulsar-store/__pycache__ /usr/share/pulsar-store/backends 2>/dev/null || true
     post_install
 }
 
+pre_remove() {
+    systemctl --global disable pulsar-store-updated.service &>/dev/null || true
+}
+
 post_remove() {
-    post_install
+    update-desktop-database -q /usr/share/applications || true
+    gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
+    update-mime-database /usr/share/mime &>/dev/null || true
 }

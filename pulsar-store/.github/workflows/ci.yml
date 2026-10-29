@@ -1,0 +1,34 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  rust:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GTK4 and libadwaita
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libadwaita-1-dev pkg-config gettext
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Layer rules
+        run: scripts/check-layers.sh
+      - name: Untranslated strings
+        run: scripts/check-i18n.sh
+      - name: Translations compile
+        run: for po in assets/locale/*.po; do msgfmt --check -o /dev/null "$po"; done
+      - run: cargo fmt --check
+      - run: cargo build --all-targets
+      - run: cargo build --no-default-features
+      - run: cargo test
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --no-default-features -- -D warnings
+      - name: Performance budget
+        run: cargo test --release --test perf -- --ignored --nocapture
+  deny:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2

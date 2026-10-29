@@ -1,0 +1,12 @@
+/* Dark theme colors. Every name here must also exist in light.css (checked by a test). */
+@define-color store_surface alpha(@window_fg_color, 0.05);
+@define-color store_surface_hover alpha(@window_fg_color, 0.10);
+@define-color store_hairline alpha(@window_fg_color, 0.12);
+@define-color store_text_dim alpha(@window_fg_color, 0.62);
+@define-color store_surface_flat mix(@window_bg_color, @window_fg_color, 0.08);
+@define-color store_glass_tint alpha(@window_bg_color, 0.55);
+@define-color store_glass_edge alpha(white, 0.30);
+@define-color store_glass_edge_dim alpha(white, 0.06);
+@define-color store_glass_shadow alpha(black, 0.40);
+@define-color store_hero_scrim alpha(black, 0.50);
+@define-color store_accent_text mix(@accent_bg_color, @window_fg_color, 0.5);

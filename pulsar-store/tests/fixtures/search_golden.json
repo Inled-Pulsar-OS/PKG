@@ -1,0 +1,91 @@
+{
+  "": [
+    "sayri-gateway-telegram",
+    "sayri-gateway-discord",
+    "org.mozilla.firefox",
+    "md.obsidian.Obsidian",
+    "blur-my-shell@aunetx",
+    "appindicatorsupport@rgcjonas.gmail.com",
+    "daily_summary",
+    "code_review_assistant",
+    "com.ios-notes.app",
+    "sayri-prismml"
+  ],
+  " ": [
+    "sayri-gateway-telegram",
+    "sayri-gateway-discord",
+    "org.mozilla.firefox",
+    "md.obsidian.Obsidian",
+    "blur-my-shell@aunetx",
+    "appindicatorsupport@rgcjonas.gmail.com",
+    "daily_summary",
+    "code_review_assistant",
+    "com.ios-notes.app",
+    "sayri-prismml"
+  ],
+  "a": [
+    "sayri-gateway-telegram",
+    "sayri-gateway-discord",
+    "org.mozilla.firefox",
+    "md.obsidian.Obsidian",
+    "blur-my-shell@aunetx",
+    "appindicatorsupport@rgcjonas.gmail.com",
+    "daily_summary",
+    "code_review_assistant",
+    "com.ios-notes.app",
+    "sayri-prismml"
+  ],
+  "e": [
+    "sayri-gateway-telegram",
+    "sayri-gateway-discord",
+    "org.mozilla.firefox",
+    "md.obsidian.Obsidian",
+    "blur-my-shell@aunetx",
+    "appindicatorsupport@rgcjonas.gmail.com",
+    "daily_summary",
+    "code_review_assistant",
+    "com.ios-notes.app",
+    "sayri-prismml"
+  ],
+  "gimp": [],
+  "GIMP": [],
+  "plugin": [],
+  "skill": [
+    "daily_summary",
+    "code_review_assistant"
+  ],
+  "sayri": [
+    "sayri-gateway-telegram",
+    "sayri-gateway-discord",
+    "daily_summary",
+    "code_review_assistant",
+    "sayri-prismml"
+  ],
+  "extension": [],
+  "browser": [
+    "org.mozilla.firefox"
+  ],
+  "image": [],
+  "code": [
+    "sayri-gateway-telegram",
+    "code_review_assistant"
+  ],
+  "notes": [
+    "com.ios-notes.app"
+  ],
+  "pulsar": [
+    "daily_summary"
+  ],
+  "gnome": [
+    "blur-my-shell@aunetx",
+    "appindicatorsupport@rgcjonas.gmail.com"
+  ],
+  "ai": [
+    "sayri-gateway-telegram",
+    "sayri-gateway-discord",
+    "appindicatorsupport@rgcjonas.gmail.com",
+    "daily_summary",
+    "code_review_assistant"
+  ],
+  "zzzz-no-match": []
+}

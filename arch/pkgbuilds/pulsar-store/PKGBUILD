@@ -1,45 +1,73 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsar-store
-pkgver=1.0.15
-pkgrel=5
+pkgver=2.0.0
+pkgrel=1
 pkgdesc="Unified App Store and Ecosystem Center for Pulsar OS"
-arch=(any)
+arch=(x86_64 aarch64)
 url="https://inled.es"
-license=(GPL3)
-depends=(python python-gobject gtk4 libadwaita flatpak polkit xdg-utils)
+license=(GPL-3.0-or-later)
+depends=(gtk4 libadwaita flatpak polkit xdg-utils)
+makedepends=(cargo pkgconf gettext)
 optdepends=(
     'gnome-shell: GNOME Shell extensions management'
     'sayri: Sayri AI ecosystem integration'
 )
 install=pulsar-store.install
-options=(!strip)
+# ring (TLS) builds C objects that break under makepkg LTO.
+options=(!debug !lto)
+
+_src() { cd "$startdir"/../../../pulsar-store && pwd; }
+
+prepare() {
+    cd "$(_src)"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR="$srcdir/target"
+    # Download crates once, up front; the build itself then needs no network.
+    cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
+}
+
+build() {
+    cd "$(_src)"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR="$srcdir/target"
+    cargo build --release --frozen
+}
+
+check() {
+    cd "$(_src)"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR="$srcdir/target"
+    cargo test --release --frozen
+}
 
 package() {
-    _src="$(cd "$startdir"/../../../pulsar-store && pwd)"
-    cd "$_src"
+    cd "$(_src)"
 
-    mkdir -p "$pkgdir/usr/bin"
-    cp -r usr/bin/* "$pkgdir/usr/bin/"
-    chmod 755 "$pkgdir"/usr/bin/*
+    install -Dm755 "$srcdir/target/release/pulsar-store" "$pkgdir/usr/bin/pulsar-store"
+    install -Dm755 "$srcdir/target/release/pulsar-storectl" "$pkgdir/usr/bin/pulsar-storectl"
+    install -Dm755 "$srcdir/target/release/pulsar-store-updated" "$pkgdir/usr/bin/pulsar-store-updated"
 
-    mkdir -p "$pkgdir/usr/share/pulsar-store"
-    cp -r usr/share/pulsar-store/* "$pkgdir/usr/share/pulsar-store/"
+    install -Dm644 assets/catalog/catalog.json "$pkgdir/usr/share/pulsar-store/catalog/catalog.json"
 
-    mkdir -p "$pkgdir/usr/share/applications"
-    install -Dm644 usr/share/applications/es.inled.PulsarStore.desktop "$pkgdir/usr/share/applications/es.inled.PulsarStore.desktop"
-    install -Dm644 usr/share/applications/pulsar-store.desktop "$pkgdir/usr/share/applications/pulsar-store.desktop"
-    install -Dm644 usr/share/applications/pulsar-store-handler.desktop "$pkgdir/usr/share/applications/pulsar-store-handler.desktop"
+    local _desktop
+    for _desktop in assets/desktop/*.desktop; do
+        install -Dm644 "$_desktop" "$pkgdir/usr/share/applications/$(basename "$_desktop")"
+    done
+    install -Dm644 assets/mime/pulsar-store.xml "$pkgdir/usr/share/mime/packages/pulsar-store.xml"
 
-    mkdir -p "$pkgdir/usr/share/mime/packages"
-    install -Dm644 usr/share/mime/packages/pulsar-store.xml "$pkgdir/usr/share/mime/packages/pulsar-store.xml"
+    local _icon
+    for _icon in assets/icons/*.svg; do
+        install -Dm644 "$_icon" "$pkgdir/usr/share/icons/hicolor/scalable/apps/$(basename "$_icon")"
+    done
 
-    mkdir -p "$pkgdir/usr/share/icons/hicolor/scalable/apps"
-    install -Dm644 usr/share/icons/hicolor/scalable/apps/pulsar-store.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/pulsar-store.svg"
-    install -Dm644 usr/share/icons/hicolor/scalable/apps/es.inled.PulsarStore.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/es.inled.PulsarStore.svg"
+    install -Dm644 assets/systemd/pulsar-store-updated.service \
+        "$pkgdir/usr/lib/systemd/user/pulsar-store-updated.service"
 
-    chmod -R a+rX "$pkgdir/usr"
-    find "$pkgdir/usr" -type d -exec chmod 755 {} +
-    find "$pkgdir/usr/share/pulsar-store" -type f -exec chmod 644 {} +
-    find "$pkgdir/usr/share/pulsar-store/backends" -type f -exec chmod 644 {} +
-    chmod 755 "$pkgdir/usr/share/pulsar-store/main.py"
+    local _po _lang
+    for _po in assets/locale/*.po; do
+        [ -e "$_po" ] || continue
+        _lang="$(basename "$_po" .po)"
+        install -d "$pkgdir/usr/share/locale/$_lang/LC_MESSAGES"
+        msgfmt --check -o "$pkgdir/usr/share/locale/$_lang/LC_MESSAGES/pulsar-store.mo" "$_po"
+    done
 }

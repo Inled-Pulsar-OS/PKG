@@ -1,0 +1,1 @@
+{ "packages": [ { "id": "x", "type": "flatpak", "tags": "image" } ] }

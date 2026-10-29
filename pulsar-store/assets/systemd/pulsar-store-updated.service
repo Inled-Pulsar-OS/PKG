@@ -1,0 +1,17 @@
+[Unit]
+Description=Pulsar Store update checker
+Documentation=https://github.com/Victor1890/pulsaros-PKG
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pulsar-store-updated
+Restart=on-failure
+RestartSec=60
+# Be gentle: this runs in the background all day.
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=graphical-session.target

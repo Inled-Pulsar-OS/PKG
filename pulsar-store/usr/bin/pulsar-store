@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-# Pulsar Store Launcher
-exec /usr/bin/python3 /usr/share/pulsar-store/main.py "$@"
