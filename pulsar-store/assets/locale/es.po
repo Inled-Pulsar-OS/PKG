@@ -1,0 +1,377 @@
+# Spanish translations for pulsar-store package.
+# Copyright (C) 2026 Pulsar Store contributors
+# This file is distributed under the same license as the pulsar-store package.
+# Automatically generated, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: pulsar-store\n"
+"Report-Msgid-Bugs-To: https://github.com/Victor1890/pulsaros-PKG/issues\n"
+"POT-Creation-Date: 2026-10-28 20:53-0400\n"
+"PO-Revision-Date: 2026-10-28 20:53-0400\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/app.rs:48
+msgid "Back"
+msgstr "Atrás"
+
+#: src/app.rs:51
+msgid "Search apps, extensions, Sayri AI…"
+msgstr "Buscar apps, extensiones, Sayri AI…"
+
+#: src/app.rs:52 src/modules/search/mod.rs:36
+msgid "Search"
+msgstr "Buscar"
+
+#: src/app.rs:56
+msgid "Refresh Store"
+msgstr "Actualizar tienda"
+
+#: src/app.rs:81 src/app.rs:109 src/app.rs:125 src/app.rs:352
+msgid "Pulsar Store"
+msgstr "Pulsar Store"
+
+#: src/app.rs:136
+msgid "Copy Details"
+msgstr "Copiar detalles"
+
+#: src/app.rs:137
+msgid "Close"
+msgstr "Cerrar"
+
+#: src/modules/categories/mod.rs:20 src/modules/categories/view.rs:14
+#: src/modules/discover/view.rs:41
+msgid "Applications"
+msgstr "Aplicaciones"
+
+#: src/modules/categories/mod.rs:26 src/modules/categories/view.rs:15
+msgid "Installed"
+msgstr "Instalado"
+
+#: src/modules/categories/view.rs:16
+msgid "All"
+msgstr "Todo"
+
+#: src/modules/categories/view.rs:58 src/modules/discover/view.rs:22
+#: src/modules/ecosystem/mod.rs:66
+msgid "No packages available"
+msgstr "No hay paquetes disponibles"
+
+#: src/modules/categories/view.rs:59 src/modules/ecosystem/mod.rs:67
+msgid "No items found in this section."
+msgstr "No se encontraron elementos en esta sección."
+
+#: src/modules/discover/mod.rs:19 src/modules/discover/view.rs:17
+msgid "Discover"
+msgstr "Descubrir"
+
+#: src/modules/discover/view.rs:23
+msgid "No items found in the catalog yet."
+msgstr "Aún no hay elementos en el catálogo."
+
+#: src/modules/discover/view.rs:43 src/modules/ecosystem/mod.rs:29
+msgid "Extensions"
+msgstr "Extensiones"
+
+#: src/modules/discover/view.rs:47 src/modules/ecosystem/mod.rs:35
+msgid "Sayri AI"
+msgstr "Sayri AI"
+
+#: src/modules/discover/view.rs:58
+msgid "See All"
+msgstr "Ver todo"
+
+#: src/modules/ecosystem/mod.rs:53
+msgid "GNOME Shell Extensions"
+msgstr "Extensiones de GNOME Shell"
+
+#: src/modules/ecosystem/mod.rs:54
+msgid "Sayri AI Ecosystem"
+msgstr "Ecosistema Sayri AI"
+
+#: src/modules/item/view.rs:19
+msgid "Application"
+msgstr "Aplicación"
+
+#: src/modules/item/view.rs:20
+msgid "System package"
+msgstr "Paquete del sistema"
+
+#: src/modules/item/view.rs:21
+msgid "Shell extension"
+msgstr "Extensión de Shell"
+
+#: src/modules/item/view.rs:22
+msgid "Sayri skill"
+msgstr "Skill de Sayri"
+
+#: src/modules/item/view.rs:23
+msgid "Sayri plugin"
+msgstr "Plugin de Sayri"
+
+#: src/modules/item/view.rs:24
+msgid "Other"
+msgstr "Otro"
+
+#: src/modules/item/view.rs:30
+msgid "Debian Edition"
+msgstr "Edición Debian"
+
+#: src/modules/item/view.rs:31
+msgid "Arch Edition"
+msgstr "Edición Arch"
+
+#: src/modules/item/view.rs:32
+msgctxt "edition"
+msgid "Flatpak"
+msgstr "Flatpak"
+
+#: src/modules/item/view.rs:45
+msgid "Item not found"
+msgstr "Elemento no encontrado"
+
+#: src/modules/item/view.rs:46
+msgid "This item is not in the catalog."
+msgstr "Este elemento no está en el catálogo."
+
+#: src/modules/item/view.rs:65 src/modules/item/view.rs:382
+msgid "Version"
+msgstr "Versión"
+
+#: src/modules/item/view.rs:66
+msgid "Author"
+msgstr "Autor"
+
+#: src/modules/item/view.rs:67
+msgid "Type"
+msgstr "Tipo"
+
+#: src/modules/item/view.rs:68
+msgid "Category"
+msgstr "Categoría"
+
+#: src/modules/item/view.rs:69
+msgid "Security"
+msgstr "Seguridad"
+
+#: src/modules/item/view.rs:113
+msgid "Uninstall"
+msgstr "Desinstalar"
+
+#: src/modules/item/view.rs:207
+msgid "Install as"
+msgstr "Instalar como"
+
+#: src/modules/item/view.rs:211
+msgctxt "button"
+msgid "Install"
+msgstr "Instalar"
+
+#: src/modules/item/view.rs:224
+msgid "About"
+msgstr "Acerca de"
+
+#: src/modules/item/view.rs:249
+msgid "View source code"
+msgstr "Ver código fuente"
+
+#: src/modules/item/view.rs:264
+msgid "Security Audit"
+msgstr "Auditoría de seguridad"
+
+#: src/modules/item/view.rs:267
+msgid "Audit Score"
+msgstr "Puntuación de la auditoría"
+
+#: src/modules/item/view.rs:282
+msgid "Audited By"
+msgstr "Auditado por"
+
+#: src/modules/item/view.rs:322
+msgid "Loading documentation…"
+msgstr "Cargando documentación…"
+
+#: src/modules/item/view.rs:327
+msgid "Could not load the documentation."
+msgstr "No se pudo cargar la documentación."
+
+#: src/modules/item/view.rs:342
+msgid "Documentation & Preview"
+msgstr "Documentación y vista previa"
+
+#: src/modules/item/view.rs:349
+msgid "Skill prompt, persona, and tool definitions"
+msgstr "Prompt, personalidad y herramientas de la skill"
+
+#: src/modules/item/view.rs:350
+msgid "Plugin manifest and configuration"
+msgstr "Manifiesto y configuración del plugin"
+
+#: src/modules/item/view.rs:351
+msgid "Plugin files"
+msgstr "Archivos del plugin"
+
+#: src/modules/item/view.rs:352
+msgid "Extension metadata"
+msgstr "Metadatos de la extensión"
+
+#: src/modules/item/view.rs:353
+msgid "Extension code"
+msgstr "Código de la extensión"
+
+#: src/modules/item/view.rs:354
+msgid "Extension stylesheet"
+msgstr "Hoja de estilos de la extensión"
+
+#: src/modules/item/view.rs:355
+msgid "Settings schemas"
+msgstr "Esquemas de ajustes"
+
+#: src/modules/item/view.rs:356
+msgid "Application files and runtime"
+msgstr "Archivos y entorno de la aplicación"
+
+#: src/modules/item/view.rs:357
+msgid "Desktop launch entry"
+msgstr "Entrada de lanzamiento del escritorio"
+
+#: src/modules/item/view.rs:358
+msgid "Application executable"
+msgstr "Ejecutable de la aplicación"
+
+#: src/modules/item/view.rs:364
+msgid "Package Files & Destination"
+msgstr "Archivos del paquete y destino"
+
+#: src/modules/item/view.rs:378
+msgid "Package Details"
+msgstr "Detalles del paquete"
+
+#: src/modules/item/view.rs:380
+msgid "Package ID"
+msgstr "ID del paquete"
+
+#: src/modules/item/view.rs:381
+msgid "Format"
+msgstr "Formato"
+
+#: src/modules/item/view.rs:383
+msgid "Developer"
+msgstr "Desarrollador"
+
+#: src/modules/search/mod.rs:42
+#, rust-format
+msgid "Results for “{query}”"
+msgstr "Resultados para «{query}»"
+
+#: src/modules/search/mod.rs:47
+msgid "No results"
+msgstr "Sin resultados"
+
+#: src/modules/search/mod.rs:48
+msgid "Try a different name, or search by category or tag."
+msgstr "Prueba otro nombre, o busca por categoría o etiqueta."
+
+#: src/modules/search/mod.rs:64
+msgid "Search apps, extensions, and Sayri AI."
+msgstr "Busca apps, extensiones y Sayri AI."
+
+#: src/modules/search/mod.rs:72
+msgid "Recent searches"
+msgstr "Búsquedas recientes"
+
+#: src/modules/search/mod.rs:77
+msgid "Clear"
+msgstr "Borrar"
+
+#: src/modules/updates/mod.rs:38 src/modules/updates/mod.rs:54
+msgid "Updates"
+msgstr "Actualizaciones"
+
+#: src/modules/updates/mod.rs:57
+msgid "Update All"
+msgstr "Actualizar todo"
+
+#: src/modules/updates/mod.rs:78
+msgid "Up to Date"
+msgstr "Todo al día"
+
+#: src/modules/updates/mod.rs:79
+msgid "All packages, extensions, and AI plugins are up to date."
+msgstr "Todos los paquetes, extensiones y plugins de IA están al día."
+
+#: src/modules/updates/mod.rs:89
+#, rust-format
+msgid "{installed} → {available}"
+msgstr "{installed} → {available}"
+
+#: src/ui/ctx.rs:268
+#, rust-format
+msgid "Could not refresh the catalog: {reason}"
+msgstr "No se pudo actualizar el catálogo: {reason}"
+
+#: src/ui/ctx.rs:399
+#, rust-format
+msgid "{name} installed"
+msgstr "{name} instalado"
+
+#: src/ui/ctx.rs:401
+#, rust-format
+msgid "{name} removed"
+msgstr "{name} eliminado"
+
+#: src/ui/ctx.rs:402
+#, rust-format
+msgid "{name} updated"
+msgstr "{name} actualizado"
+
+#: src/ui/ctx.rs:404
+#, rust-format
+msgid "Cancelled {name}"
+msgstr "Cancelado: {name}"
+
+#: src/ui/ctx.rs:407
+#, rust-format
+msgid "Could not complete {name}"
+msgstr "No se pudo completar: {name}"
+
+#: src/ui/ctx.rs:434
+#, rust-format
+msgid "Could not open {name}"
+msgstr "No se pudo abrir {name}"
+
+#: src/ui/widget/install_button.rs:65 src/ui/widget/install_button.rs:69
+msgctxt "button"
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: src/ui/widget/install_button.rs:67 src/ui/widget/install_button.rs:120
+#, rust-format
+msgid "{action}: {name}"
+msgstr "{action}: {name}"
+
+#: src/ui/widget/install_button.rs:112
+msgctxt "button"
+msgid "Get"
+msgstr "Obtener"
+
+#: src/ui/widget/install_button.rs:113
+msgctxt "button"
+msgid "Open"
+msgstr "Abrir"
+
+#: src/ui/widget/install_button.rs:114
+msgctxt "button"
+msgid "Update"
+msgstr "Actualizar"
+
+#: src/ui/widget/install_button.rs:115
+msgctxt "button"
+msgid "Installed"
+msgstr "Instalado"

@@ -8,15 +8,370 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pulsar-store\n"
 "Report-Msgid-Bugs-To: https://github.com/Victor1890/pulsaros-PKG/issues\n"
-"POT-Creation-Date: 2026-10-28 20:03-0400\n"
+"POT-Creation-Date: 2026-10-28 20:53-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "Language: \n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/app.rs:18
+#: src/app.rs:48
+msgid "Back"
+msgstr ""
+
+#: src/app.rs:51
+msgid "Search apps, extensions, Sayri AI…"
+msgstr ""
+
+#: src/app.rs:52 src/modules/search/mod.rs:36
+msgid "Search"
+msgstr ""
+
+#: src/app.rs:56
+msgid "Refresh Store"
+msgstr ""
+
+#: src/app.rs:81 src/app.rs:109 src/app.rs:125 src/app.rs:352
 msgid "Pulsar Store"
+msgstr ""
+
+#: src/app.rs:136
+msgid "Copy Details"
+msgstr ""
+
+#: src/app.rs:137
+msgid "Close"
+msgstr ""
+
+#: src/modules/categories/mod.rs:20 src/modules/categories/view.rs:14
+#: src/modules/discover/view.rs:41
+msgid "Applications"
+msgstr ""
+
+#: src/modules/categories/mod.rs:26 src/modules/categories/view.rs:15
+msgid "Installed"
+msgstr ""
+
+#: src/modules/categories/view.rs:16
+msgid "All"
+msgstr ""
+
+#: src/modules/categories/view.rs:58 src/modules/discover/view.rs:22
+#: src/modules/ecosystem/mod.rs:66
+msgid "No packages available"
+msgstr ""
+
+#: src/modules/categories/view.rs:59 src/modules/ecosystem/mod.rs:67
+msgid "No items found in this section."
+msgstr ""
+
+#: src/modules/discover/mod.rs:19 src/modules/discover/view.rs:17
+msgid "Discover"
+msgstr ""
+
+#: src/modules/discover/view.rs:23
+msgid "No items found in the catalog yet."
+msgstr ""
+
+#: src/modules/discover/view.rs:43 src/modules/ecosystem/mod.rs:29
+msgid "Extensions"
+msgstr ""
+
+#: src/modules/discover/view.rs:47 src/modules/ecosystem/mod.rs:35
+msgid "Sayri AI"
+msgstr ""
+
+#: src/modules/discover/view.rs:58
+msgid "See All"
+msgstr ""
+
+#: src/modules/ecosystem/mod.rs:53
+msgid "GNOME Shell Extensions"
+msgstr ""
+
+#: src/modules/ecosystem/mod.rs:54
+msgid "Sayri AI Ecosystem"
+msgstr ""
+
+#: src/modules/item/view.rs:19
+msgid "Application"
+msgstr ""
+
+#: src/modules/item/view.rs:20
+msgid "System package"
+msgstr ""
+
+#: src/modules/item/view.rs:21
+msgid "Shell extension"
+msgstr ""
+
+#: src/modules/item/view.rs:22
+msgid "Sayri skill"
+msgstr ""
+
+#: src/modules/item/view.rs:23
+msgid "Sayri plugin"
+msgstr ""
+
+#: src/modules/item/view.rs:24
+msgid "Other"
+msgstr ""
+
+#: src/modules/item/view.rs:30
+msgid "Debian Edition"
+msgstr ""
+
+#: src/modules/item/view.rs:31
+msgid "Arch Edition"
+msgstr ""
+
+#: src/modules/item/view.rs:32
+msgctxt "edition"
+msgid "Flatpak"
+msgstr ""
+
+#: src/modules/item/view.rs:45
+msgid "Item not found"
+msgstr ""
+
+#: src/modules/item/view.rs:46
+msgid "This item is not in the catalog."
+msgstr ""
+
+#: src/modules/item/view.rs:65 src/modules/item/view.rs:382
+msgid "Version"
+msgstr ""
+
+#: src/modules/item/view.rs:66
+msgid "Author"
+msgstr ""
+
+#: src/modules/item/view.rs:67
+msgid "Type"
+msgstr ""
+
+#: src/modules/item/view.rs:68
+msgid "Category"
+msgstr ""
+
+#: src/modules/item/view.rs:69
+msgid "Security"
+msgstr ""
+
+#: src/modules/item/view.rs:113
+msgid "Uninstall"
+msgstr ""
+
+#: src/modules/item/view.rs:207
+msgid "Install as"
+msgstr ""
+
+#: src/modules/item/view.rs:211
+msgctxt "button"
+msgid "Install"
+msgstr ""
+
+#: src/modules/item/view.rs:224
+msgid "About"
+msgstr ""
+
+#: src/modules/item/view.rs:249
+msgid "View source code"
+msgstr ""
+
+#: src/modules/item/view.rs:264
+msgid "Security Audit"
+msgstr ""
+
+#: src/modules/item/view.rs:267
+msgid "Audit Score"
+msgstr ""
+
+#: src/modules/item/view.rs:282
+msgid "Audited By"
+msgstr ""
+
+#: src/modules/item/view.rs:322
+msgid "Loading documentation…"
+msgstr ""
+
+#: src/modules/item/view.rs:327
+msgid "Could not load the documentation."
+msgstr ""
+
+#: src/modules/item/view.rs:342
+msgid "Documentation & Preview"
+msgstr ""
+
+#: src/modules/item/view.rs:349
+msgid "Skill prompt, persona, and tool definitions"
+msgstr ""
+
+#: src/modules/item/view.rs:350
+msgid "Plugin manifest and configuration"
+msgstr ""
+
+#: src/modules/item/view.rs:351
+msgid "Plugin files"
+msgstr ""
+
+#: src/modules/item/view.rs:352
+msgid "Extension metadata"
+msgstr ""
+
+#: src/modules/item/view.rs:353
+msgid "Extension code"
+msgstr ""
+
+#: src/modules/item/view.rs:354
+msgid "Extension stylesheet"
+msgstr ""
+
+#: src/modules/item/view.rs:355
+msgid "Settings schemas"
+msgstr ""
+
+#: src/modules/item/view.rs:356
+msgid "Application files and runtime"
+msgstr ""
+
+#: src/modules/item/view.rs:357
+msgid "Desktop launch entry"
+msgstr ""
+
+#: src/modules/item/view.rs:358
+msgid "Application executable"
+msgstr ""
+
+#: src/modules/item/view.rs:364
+msgid "Package Files & Destination"
+msgstr ""
+
+#: src/modules/item/view.rs:378
+msgid "Package Details"
+msgstr ""
+
+#: src/modules/item/view.rs:380
+msgid "Package ID"
+msgstr ""
+
+#: src/modules/item/view.rs:381
+msgid "Format"
+msgstr ""
+
+#: src/modules/item/view.rs:383
+msgid "Developer"
+msgstr ""
+
+#: src/modules/search/mod.rs:42
+#, rust-format
+msgid "Results for “{query}”"
+msgstr ""
+
+#: src/modules/search/mod.rs:47
+msgid "No results"
+msgstr ""
+
+#: src/modules/search/mod.rs:48
+msgid "Try a different name, or search by category or tag."
+msgstr ""
+
+#: src/modules/search/mod.rs:64
+msgid "Search apps, extensions, and Sayri AI."
+msgstr ""
+
+#: src/modules/search/mod.rs:72
+msgid "Recent searches"
+msgstr ""
+
+#: src/modules/search/mod.rs:77
+msgid "Clear"
+msgstr ""
+
+#: src/modules/updates/mod.rs:38 src/modules/updates/mod.rs:54
+msgid "Updates"
+msgstr ""
+
+#: src/modules/updates/mod.rs:57
+msgid "Update All"
+msgstr ""
+
+#: src/modules/updates/mod.rs:78
+msgid "Up to Date"
+msgstr ""
+
+#: src/modules/updates/mod.rs:79
+msgid "All packages, extensions, and AI plugins are up to date."
+msgstr ""
+
+#: src/modules/updates/mod.rs:89
+#, rust-format
+msgid "{installed} → {available}"
+msgstr ""
+
+#: src/ui/ctx.rs:268
+#, rust-format
+msgid "Could not refresh the catalog: {reason}"
+msgstr ""
+
+#: src/ui/ctx.rs:399
+#, rust-format
+msgid "{name} installed"
+msgstr ""
+
+#: src/ui/ctx.rs:401
+#, rust-format
+msgid "{name} removed"
+msgstr ""
+
+#: src/ui/ctx.rs:402
+#, rust-format
+msgid "{name} updated"
+msgstr ""
+
+#: src/ui/ctx.rs:404
+#, rust-format
+msgid "Cancelled {name}"
+msgstr ""
+
+#: src/ui/ctx.rs:407
+#, rust-format
+msgid "Could not complete {name}"
+msgstr ""
+
+#: src/ui/ctx.rs:434
+#, rust-format
+msgid "Could not open {name}"
+msgstr ""
+
+#: src/ui/widget/install_button.rs:65 src/ui/widget/install_button.rs:69
+msgctxt "button"
+msgid "Cancel"
+msgstr ""
+
+#: src/ui/widget/install_button.rs:67 src/ui/widget/install_button.rs:120
+#, rust-format
+msgid "{action}: {name}"
+msgstr ""
+
+#: src/ui/widget/install_button.rs:112
+msgctxt "button"
+msgid "Get"
+msgstr ""
+
+#: src/ui/widget/install_button.rs:113
+msgctxt "button"
+msgid "Open"
+msgstr ""
+
+#: src/ui/widget/install_button.rs:114
+msgctxt "button"
+msgid "Update"
+msgstr ""
+
+#: src/ui/widget/install_button.rs:115
+msgctxt "button"
+msgid "Installed"
 msgstr ""

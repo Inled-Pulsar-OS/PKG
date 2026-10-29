@@ -3,12 +3,13 @@
 //! One pill that changes in place: Get becomes a ring while installing
 //! (tap it to cancel), then Open. Updates show Update.
 
+use crate::core::i18n;
 use crate::core::install::Action;
 use crate::core::model::{InstallState, Item, SourceKind};
-use crate::ptr;
 use crate::ui::ctx::{Change, Ctx, Op};
 use crate::ui::motion;
 use crate::ui::widget::progress_ring::ProgressRing;
+use crate::{ptr, tr};
 use gtk4 as gtk;
 use gtk4::prelude::*;
 
@@ -62,7 +63,13 @@ impl InstallButton {
         ring_button.add_css_class("store-ring-button");
         ring_button.set_child(Some(ring.widget()));
         ring_button.set_tooltip_text(Some(&ptr!("button", "Cancel")));
-        ring_button.update_property(&[gtk::accessible::Property::Label(&ptr!("button", "Cancel"))]);
+        ring_button.update_property(&[gtk::accessible::Property::Label(&i18n::format(
+            &tr!("{action}: {name}"),
+            &[
+                ("action", &ptr!("button", "Cancel")),
+                ("name", &ctx.name(item)),
+            ],
+        ))]);
         stack.add_named(&ring_button, Some("ring"));
 
         let id = item.id.clone();
@@ -108,6 +115,11 @@ impl InstallButton {
                             _ => ptr!("button", "Installed"),
                         };
                         button.set_label(&label);
+                        // Screen readers hear which item the button acts on.
+                        button.update_property(&[gtk::accessible::Property::Label(&i18n::format(
+                            &tr!("{action}: {name}"),
+                            &[("action", &label), ("name", &ctx.name(&item))],
+                        ))]);
                         button.set_sensitive(other != ButtonState::Installed);
                         stack.set_visible_child_name("button");
                     }

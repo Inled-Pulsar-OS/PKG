@@ -7,6 +7,8 @@ use crate::core::error::{Result, StoreError};
 use crate::core::http::{Fetch, Fetched, UreqFetch};
 use crate::core::model::{Catalog, Item, LocalizedText};
 use crate::core::ports::CatalogProvider;
+use serde::Deserialize;
+use serde_json::value::RawValue;
 use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -17,25 +19,26 @@ const FETCH_TIMEOUT: Duration = Duration::from_secs(6);
 /// Parses catalog JSON. Entries that are not valid items are skipped, so one
 /// bad entry never hides the rest. The top level must be an object.
 pub fn parse_catalog(bytes: &[u8]) -> Result<Catalog> {
-    let root: Value = serde_json::from_slice(bytes)?;
-    let Value::Object(obj) = root else {
-        return Err(StoreError::Parse("catalog is not a JSON object".into()));
-    };
-    let list = obj
-        .get("packages")
-        .or_else(|| obj.get("items"))
-        .and_then(Value::as_array);
-    let packages = list
-        .map(|a| {
-            a.iter()
-                .filter_map(|v| serde_json::from_value::<Item>(v.clone()).ok())
-                .map(normalize_item)
-                .collect()
-        })
-        .unwrap_or_default();
+    /// Items stay as raw text until parsed one by one, so a bad item is skipped
+    /// without building a generic JSON tree for the whole catalog first.
+    #[derive(Deserialize)]
+    struct Raw<'a> {
+        #[serde(borrow, default, alias = "items")]
+        packages: Vec<&'a RawValue>,
+        announcement: Option<Value>,
+    }
+
+    // A non-object top level (or invalid JSON) is an error, not an empty catalog.
+    let raw: Raw = serde_json::from_slice(bytes)?;
+    let packages = raw
+        .packages
+        .into_iter()
+        .filter_map(|v| serde_json::from_str::<Item>(v.get()).ok())
+        .map(normalize_item)
+        .collect();
     Ok(Catalog {
         packages,
-        announcement: obj.get("announcement").cloned(),
+        announcement: raw.announcement,
     })
 }
 

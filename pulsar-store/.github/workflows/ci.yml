@@ -23,6 +23,8 @@ jobs:
       - run: cargo test
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo clippy --no-default-features -- -D warnings
+      - name: Performance budget
+        run: cargo test --release --test perf -- --ignored --nocapture
   deny:
     runs-on: ubuntu-24.04
     steps:

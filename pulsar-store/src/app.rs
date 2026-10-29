@@ -49,6 +49,7 @@ impl Shell {
         back.set_visible(false);
         let search = gtk::SearchEntry::new();
         search.set_placeholder_text(Some(&tr!("Search apps, extensions, Sayri AI…")));
+        search.update_property(&[gtk::accessible::Property::Label(&tr!("Search"))]);
         search.set_hexpand(true);
         search.set_max_width_chars(36);
         let refresh = gtk::Button::from_icon_name("view-refresh-symbolic");
