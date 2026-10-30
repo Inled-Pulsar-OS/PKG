@@ -67,6 +67,36 @@ def get_local_ip() -> str:
         return "127.0.0.1"
 
 
+def ask_remote_desktop_consent(requester_hostname: str, requester_ip: str) -> bool:
+    """Prompts local desktop user with a modal confirmation dialog to allow remote control."""
+    try:
+        env = dict(os.environ)
+        if "DISPLAY" not in env:
+            env["DISPLAY"] = ":1" if os.path.exists("/tmp/.X11-unix/X1") else ":0"
+        if "WAYLAND_DISPLAY" not in env and os.path.exists(f"/run/user/{os.getuid()}/wayland-0"):
+            env["WAYLAND_DISPLAY"] = "wayland-0"
+
+        msg = (
+            f"El equipo <b>{requester_hostname}</b> ({requester_ip}) de tu red privada "
+            f"solicita ver tu pantalla, escuchar el audio y controlar tu ratón y teclado.\n\n"
+            f"¿Deseas permitir el acceso remoto?"
+        )
+        cmd = [
+            "zenity", "--question",
+            "--title=Pulsar OS • Acceso Remoto",
+            f"--text={msg}",
+            "--ok-label=Permitir Acceso",
+            "--cancel-label=Rechazar",
+            "--timeout=30",
+            "--width=420"
+        ]
+        res = subprocess.run(cmd, env=env, timeout=32)
+        return res.returncode == 0
+    except Exception as e:
+        logger.error(f"Error asking remote desktop consent: {e}")
+        return False
+
+
 def get_connected_monitors() -> List[Dict[str, Any]]:
     """Queries connected displays from Mutter DisplayConfig via D-Bus."""
     monitors_list = []
@@ -811,6 +841,10 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def check_auth(self) -> bool:
+        parsed_path = urllib.parse.urlparse(self.path).path
+        if parsed_path == "/api/remote-desktop/request":
+            return True
+
         auth_token = self.headers.get("X-Pulsar-Token")
         if not auth_token:
             # Check query param as fallback
@@ -917,8 +951,9 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
             self._serve_audio_mp3()
         elif path == "/api/stream/pc-to-phone/view":
             target_mon = params.get("monitor", [None])[0]
-            no_audio = params.get("noaudio", ["0"])[0] == "1"
-            self._serve_stream_view(target_mon, no_audio=no_audio)
+            no_audio = params.get("noaudio", ["0"])[0] in ("1", "true")
+            control = params.get("control", ["0"])[0] in ("1", "true")
+            self._serve_stream_view(target_mon, no_audio=no_audio, control=control)
         elif path == "/api/stream/pc-to-phone/live.ts":
             target_mon = params.get("monitor", [None])[0]
             self._serve_live_mjpeg(target_mon)
@@ -1048,6 +1083,105 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
                 "enabled": context.sleep_inhibitor.is_inhibited(),
                 "success": ok
             })
+
+        elif path == "/api/shell/exec":
+            command = req_data.get("command", "").strip()
+            cwd = req_data.get("cwd") or os.path.expanduser("~")
+            if not command:
+                self.send_json(400, {"success": False, "error": "Missing command"})
+                return
+            try:
+                logger.info(f"Executing remote shell command: {command[:60]} (cwd={cwd})")
+                proc = subprocess.run(
+                    ["/bin/bash", "-c", command],
+                    cwd=cwd,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    env=dict(os.environ, TERM="xterm-256color")
+                )
+                self.send_json(200, {
+                    "success": True,
+                    "exit_code": proc.returncode,
+                    "stdout": proc.stdout,
+                    "stderr": proc.stderr,
+                    "cwd": cwd
+                })
+            except subprocess.TimeoutExpired:
+                self.send_json(200, {
+                    "success": False,
+                    "exit_code": 124,
+                    "stdout": "",
+                    "stderr": "Command execution timed out after 30s",
+                    "cwd": cwd
+                })
+            except Exception as e:
+                logger.error(f"Error executing shell command: {e}")
+                self.send_json(500, {"success": False, "error": str(e)})
+
+        elif path == "/api/remote-desktop/request":
+            req_host = req_data.get("requester_hostname", "Equipo remoto")
+            req_ip = req_data.get("requester_ip", self.client_address[0])
+            logger.info(f"Received remote desktop request from {req_host} ({req_ip})")
+            allowed = ask_remote_desktop_consent(req_host, req_ip)
+            if allowed:
+                logger.info(f"Remote desktop access granted to {req_host} ({req_ip})")
+                context.desktop_streamer.start_if_needed()
+                self.send_json(200, {
+                    "allowed": True,
+                    "token": context.token,
+                    "viewUrl": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/view?token={context.token}&control=1",
+                    "mjpegUrl": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/live.mjpeg?token={context.token}",
+                    "audioUrl": f"http://{context.get_preferred_ip()}:{context.port}/api/stream/pc-to-phone/audio.mp3?token={context.token}"
+                })
+            else:
+                logger.warning(f"Remote desktop access denied to {req_host} ({req_ip})")
+                self.send_json(403, {
+                    "allowed": False,
+                    "reason": "Acceso rechazado por el usuario del equipo remoto"
+                })
+
+        elif path == "/api/remote-desktop/input":
+            action = req_data.get("action", "")
+            try:
+                if action == "click":
+                    x = req_data.get("x")
+                    y = req_data.get("y")
+                    btn = req_data.get("button", 0)  # 0: left, 2: right
+                    btn_hex = "0xC1" if btn == 2 else "0xC0"
+                    if x is not None and y is not None:
+                        subprocess.run(["ydotool", "mousemove", "-a", "-x", str(x), "-y", str(y)], timeout=2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.run(["ydotool", "click", btn_hex], timeout=2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    self.send_json(200, {"status": "ok"})
+                elif action == "move":
+                    x = req_data.get("x")
+                    y = req_data.get("y")
+                    if x is not None and y is not None:
+                        subprocess.run(["ydotool", "mousemove", "-a", "-x", str(x), "-y", str(y)], timeout=2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    self.send_json(200, {"status": "ok"})
+                elif action == "type":
+                    text = req_data.get("text", "")
+                    if text:
+                        subprocess.run(["ydotool", "type", text], timeout=2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    self.send_json(200, {"status": "ok"})
+                elif action == "key":
+                    key = req_data.get("key", "")
+                    if key == "Enter":
+                        subprocess.run(["ydotool", "key", "28:1", "28:0"], timeout=2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    elif key == "Backspace":
+                        subprocess.run(["ydotool", "key", "14:1", "14:0"], timeout=2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    elif key == "Escape":
+                        subprocess.run(["ydotool", "key", "1:1", "1:0"], timeout=2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    elif key in ("Space", " "):
+                        subprocess.run(["ydotool", "key", "57:1", "57:0"], timeout=2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    elif len(key) == 1:
+                        subprocess.run(["ydotool", "type", key], timeout=2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    self.send_json(200, {"status": "ok"})
+                else:
+                    self.send_json(400, {"error": f"Unknown action: {action}"})
+            except Exception as e:
+                logger.error(f"Error handling remote input: {e}")
+                self.send_json(500, {"error": str(e)})
         else:
             self.send_json(404, {"error": "Not found"})
 
@@ -1195,7 +1329,7 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
         finally:
             context.desktop_streamer.unregister_audio_client(client_q)
 
-    def _serve_stream_view(self, monitor: Optional[str] = None, no_audio: bool = False):
+    def _serve_stream_view(self, monitor: Optional[str] = None, no_audio: bool = False, control: bool = False):
         mon_param = f"&monitor={monitor}" if monitor else ""
         audio_markup = ""
         if not no_audio:
@@ -1210,6 +1344,35 @@ if (audio) {{
 }}
 </script>"""
 
+        control_badge = ""
+        control_script = ""
+        if control:
+            control_badge = """<div id="controlBadge" style="position:fixed; top:12px; left:50%; transform:translateX(-50%); background:rgba(20,20,25,0.85); backdrop-filter:blur(8px); color:#22c55e; padding:6px 16px; border-radius:20px; font-family:sans-serif; font-size:13px; font-weight:600; border:1px solid rgba(34,197,94,0.4); z-index:9999; pointer-events:none; box-shadow:0 4px 16px rgba(0,0,0,0.5);">🟢 Control Remoto Activo • Clic y Teclado Habilitados</div>"""
+            control_script = f"""
+const token = "{context.token}";
+img.addEventListener('contextmenu', e => e.preventDefault());
+img.addEventListener('mousedown', (e) => {{
+    const rect = img.getBoundingClientRect();
+    const scaleX = (img.naturalWidth || 1920) / rect.width;
+    const scaleY = (img.naturalHeight || 1080) / rect.height;
+    const x = Math.round((e.clientX - rect.left) * scaleX);
+    const y = Math.round((e.clientY - rect.top) * scaleY);
+    fetch('/api/remote-desktop/input?token=' + encodeURIComponent(token), {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{action: 'click', x: x, y: y, button: e.button}})
+    }}).catch(console.error);
+}});
+window.addEventListener('keydown', (e) => {{
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    fetch('/api/remote-desktop/input?token=' + encodeURIComponent(token), {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{action: 'key', key: e.key}})
+    }}).catch(console.error);
+}});
+"""
+
         html = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -1223,11 +1386,12 @@ html, body {{
     user-select: none; -webkit-user-select: none;
 }}
 img {{
-    width: 100%; height: 100%; object-fit: contain; pointer-events: auto;
+    width: 100%; height: 100%; object-fit: contain; pointer-events: auto; cursor: crosshair;
 }}
 </style>
 </head>
 <body>
+{control_badge}
 <img id="streamImg" src="/api/stream/pc-to-phone/live.mjpeg?token={context.token}{mon_param}" />
 {audio_markup}
 <script>
@@ -1237,6 +1401,7 @@ img.onerror = () => {{
         img.src = '/api/stream/pc-to-phone/live.mjpeg?token={context.token}{mon_param}&t=' + Date.now();
     }}, 1500);
 }};
+{control_script}
 </script>
 </body>
 </html>"""

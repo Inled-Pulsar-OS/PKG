@@ -109,6 +109,19 @@ TRANSLATIONS_ES = {
     "Port 5555 enabled! Wireless mode active.": "¡Puerto 5555 activado! Modo inalámbrico listo.",
     "Connect phone with USB debugging enabled first.": "Conecta el teléfono por USB con depuración activada primero.",
     "Failed to enable wireless mode": "No se pudo activar el modo inalámbrico",
+    "Tailnet Computers (Remote Access)": "Equipos en la Tailnet (Acceso Remoto)",
+    "Connect via SSH or control screen and audio of other PCs on your private network": "Conéctate por SSH o controla pantalla y audio de otros PCs en tu red privada",
+    "SSH": "SSH",
+    "Remote Desktop": "Escritorio",
+    "Requesting remote desktop access...": "Solicitando acceso al escritorio remoto...",
+    "Connecting to %s...": "Conectando a %s...",
+    "Remote desktop request was denied by %s": "La solicitud de escritorio remoto fue rechazada por %s",
+    "Failed to connect to %s: %s": "No se pudo conectar a %s: %s",
+    "No other computers found on Tailnet": "No se encontraron otros equipos en la Tailnet",
+    "Online": "En línea",
+    "Offline": "Desconectado",
+    "SSH terminal opened to %s": "Terminal SSH abierta hacia %s",
+    "No terminal emulator found": "No se encontró ningún emulador de terminal",
 }
 
 
@@ -335,6 +348,18 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
         self.inhibit_sleep_row.set_activatable_widget(self.inhibit_sleep_switch)
         power_group.add(self.inhibit_sleep_row)
 
+        # Section 6: Tailnet Computers (Remote Access)
+        self.tailnet_pcs_group = Adw.PreferencesGroup()
+        self.tailnet_pcs_group.set_title(_("Tailnet Computers (Remote Access)"))
+        self.tailnet_pcs_group.set_description(_("Connect via SSH or control screen and audio of other PCs on your private network"))
+        content_box.append(self.tailnet_pcs_group)
+
+        self.tailnet_empty_row = Adw.ActionRow()
+        self.tailnet_empty_row.set_title(_("No other computers found on Tailnet"))
+        self.tailnet_empty_row.add_prefix(Gtk.Image.new_from_icon_name("network-server-symbolic"))
+        self.tailnet_pcs_group.add(self.tailnet_empty_row)
+        self.peer_rows = {}
+
         # IP details footer
         self.footer_label = Gtk.Label()
         self.footer_label.set_halign(Gtk.Align.CENTER)
@@ -399,8 +424,136 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
         # Check streaming status from bridge daemon
         self._refresh_streaming_status()
         self._refresh_inhibit_sleep_status()
+        self._refresh_tailnet_peers(status.get("peers", []))
 
         return True
+
+    def _refresh_tailnet_peers(self, peers: list):
+        # Filter for computer peers (linux, windows, darwin, etc.)
+        pc_peers = []
+        for p in peers:
+            h = p.get("hostname", "")
+            os_name = (p.get("os") or "").lower()
+            if h and h != self.hostname:
+                pc_peers.append(p)
+
+        if not pc_peers:
+            self.tailnet_empty_row.set_visible(True)
+            for row in self.peer_rows.values():
+                self.tailnet_pcs_group.remove(row)
+            self.peer_rows.clear()
+            return
+
+        self.tailnet_empty_row.set_visible(False)
+        current_ids = set()
+
+        for peer in pc_peers:
+            pid = peer.get("id") or peer.get("hostname")
+            current_ids.add(pid)
+            hostname = peer.get("hostname", "Unknown PC")
+            ip = peer.get("ip", "")
+            os_type = peer.get("os", "Linux").capitalize()
+            online = peer.get("online", False)
+            state_str = _("Online") if online else _("Offline")
+
+            if pid in self.peer_rows:
+                row = self.peer_rows[pid]
+                row.set_subtitle(f"{ip} • {os_type} • {state_str}")
+            else:
+                row = Adw.ActionRow()
+                row.set_title(hostname)
+                row.set_subtitle(f"{ip} • {os_type} • {state_str}")
+
+                icon_name = "computer-symbolic" if os_type.lower() != "darwin" else "laptop-symbolic"
+                row.add_prefix(Gtk.Image.new_from_icon_name(icon_name))
+
+                btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+                btn_box.set_valign(Gtk.Align.CENTER)
+
+                # SSH Terminal Button
+                btn_ssh = Gtk.Button(label=_("SSH"))
+                btn_ssh.set_tooltip_text(_("SSH Terminal"))
+                btn_ssh.add_css_class("flat")
+                btn_ssh.connect("clicked", lambda _, target_ip=ip: self._launch_ssh(target_ip))
+                btn_box.append(btn_ssh)
+
+                # Remote Desktop Button
+                btn_remote = Gtk.Button(label=_("Remote Desktop"))
+                btn_remote.set_tooltip_text(_("Remote Desktop"))
+                btn_remote.add_css_class("suggested-action")
+                btn_remote.connect("clicked", lambda _, h=hostname, target_ip=ip: self._request_remote_desktop(h, target_ip))
+                btn_box.append(btn_remote)
+
+                row.add_suffix(btn_box)
+                self.tailnet_pcs_group.add(row)
+                self.peer_rows[pid] = row
+
+        # Remove stale rows
+        stale_ids = [k for k in self.peer_rows.keys() if k not in current_ids]
+        for sid in stale_ids:
+            self.tailnet_pcs_group.remove(self.peer_rows[sid])
+            del self.peer_rows[sid]
+
+    def _launch_ssh(self, peer_ip: str):
+        if not peer_ip:
+            return
+        terminals = ["gnome-terminal", "ptyxis", "kgx", "alacritty", "kitty", "x-terminal-emulator", "xterm"]
+        found_term = None
+        for t in terminals:
+            if shutil.which(t):
+                found_term = t
+                break
+
+        if not found_term:
+            self.show_toast(_("No terminal emulator found"))
+            return
+
+        user = os.environ.get("USER", "jaime")
+        cmd = [found_term, "--", "ssh", "-o", "StrictHostKeyChecking=accept-new", f"{user}@{peer_ip}"]
+        try:
+            subprocess.Popen(cmd)
+            self.show_toast(_("SSH terminal opened to %s") % peer_ip)
+        except Exception as e:
+            logger.error(f"Failed to launch terminal: {e}")
+            self.show_toast(str(e))
+
+    def _request_remote_desktop(self, peer_hostname: str, peer_ip: str):
+        if not peer_ip:
+            return
+        self.show_toast(_("Requesting remote desktop access..."))
+
+        def worker():
+            try:
+                active_ip = self.tailscale.get_status().get("ip") or get_local_ip()
+                payload = json.dumps({
+                    "requester_hostname": self.hostname,
+                    "requester_ip": active_ip
+                }).encode("utf-8")
+                url = f"http://{peer_ip}:{DEFAULT_PORT}/api/remote-desktop/request"
+                req = urllib.request.Request(
+                    url,
+                    data=payload,
+                    headers={"Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=35.0) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    if data.get("allowed"):
+                        view_url = data.get("viewUrl")
+                        GLib.idle_add(lambda: Gio.AppInfo.launch_default_for_uri(view_url, None))
+                        GLib.idle_add(lambda: self.show_toast(_("Connecting to %s...") % peer_hostname))
+                    else:
+                        reason = data.get("reason", "Acceso denegado")
+                        GLib.idle_add(lambda: self.show_toast(reason))
+            except urllib.error.HTTPError as e:
+                if e.code == 403:
+                    GLib.idle_add(lambda: self.show_toast(_("Remote desktop request was denied by %s") % peer_hostname))
+                else:
+                    GLib.idle_add(lambda: self.show_toast(_("Failed to connect to %s: %s") % (peer_hostname, e)))
+            except Exception as e:
+                logger.error(f"Error requesting remote desktop from {peer_ip}: {e}")
+                GLib.idle_add(lambda: self.show_toast(_("Failed to connect to %s: %s") % (peer_hostname, e)))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _generate_qr(self, ip_address: str, is_vpn: bool):
         pair_uri = f"pulsar://pair?ip={ip_address}&port={DEFAULT_PORT}&token={self.token}&alias={urllib.parse.quote(self.hostname)}"
