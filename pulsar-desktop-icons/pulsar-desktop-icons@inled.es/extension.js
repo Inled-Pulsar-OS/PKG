@@ -88,6 +88,13 @@ export default class PulsarDesktopIconsExtension extends Extension {
     }
 
     disable() {
+        if (this._menu) {
+            this._menu.close();
+            try { this._menu.destroy(); } catch (e) {}
+            this._menu = null;
+        }
+        this._menuManager = null;
+
         if (this._monitor) {
             this._monitor.cancel();
             this._monitor = null;
@@ -341,13 +348,17 @@ export default class PulsarDesktopIconsExtension extends Extension {
     _showContextMenu(item, event) {
         if (this._menu) {
             this._menu.close();
-            this._menu.destroy();
+            try { this._menu.destroy(); } catch (e) {}
             this._menu = null;
         }
 
         const menu = new PopupMenu.PopupMenu(item.actor, 0.5, St.Side.BOTTOM);
         Main.uiGroup.add_child(menu.actor);
         this._menu = menu;
+
+        if (!this._menuManager)
+            this._menuManager = new PopupMenu.PopupMenuManager(this._container);
+        this._menuManager.addMenu(menu);
 
         menu.addAction('Abrir', () => this._launch(item));
         menu.addAction('Mostrar en Archivos', () => {
@@ -360,17 +371,45 @@ export default class PulsarDesktopIconsExtension extends Extension {
 
         menu.addAction('Mover a la papelera', () => this._trash(item));
 
+        // Close menu if clicking anywhere outside or pressing Escape
+        let stageHandlerId = global.stage.connect('captured-event', (_stage, stageEv) => {
+            const type = stageEv.type();
+            if (type === Clutter.EventType.BUTTON_PRESS || type === Clutter.EventType.TOUCH_BEGIN) {
+                const targetActor = global.stage.get_event_actor(stageEv);
+                if (!menu.actor.contains(targetActor)) {
+                    menu.close();
+                    return Clutter.EVENT_PROPAGATE;
+                }
+            } else if (type === Clutter.EventType.KEY_PRESS) {
+                if (stageEv.get_key_symbol() === Clutter.KEY_Escape) {
+                    menu.close();
+                    return Clutter.EVENT_STOP;
+                }
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
+
+        const cleanup = () => {
+            if (stageHandlerId) {
+                try { global.stage.disconnect(stageHandlerId); } catch (e) {}
+                stageHandlerId = 0;
+            }
+        };
+
         menu.connect('open-state-changed', (_m, open) => {
             if (!open) {
+                cleanup();
                 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
                     if (this._menu === menu) {
-                        menu.destroy();
+                        try { menu.destroy(); } catch (e) {}
                         this._menu = null;
                     }
                     return GLib.SOURCE_REMOVE;
                 });
             }
         });
+
+        menu.connect('destroy', () => cleanup());
 
         menu.open(true);
     }

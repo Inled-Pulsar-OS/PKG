@@ -1,11 +1,17 @@
 {
     "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+    "display": {
+        "color": {
+            "keys": "38;2;245;78;184",
+            "title": "38;2;245;78;184"
+        }
+    },
     "logo": {
         "type": "file",
         "source": "/etc/fastfetch/pulsar-logo.txt",
         "color": {
-            "1": "38;2;245;78;184",
-            "2": "38;2;85;107;247"
+            "1": "38;2;255;120;210",
+            "2": "38;2;245;78;184"
         },
         "padding": {
             "right": 3
