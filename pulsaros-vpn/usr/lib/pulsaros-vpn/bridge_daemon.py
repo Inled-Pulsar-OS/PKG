@@ -801,7 +801,7 @@ class TerminalManager:
                 "-p", str(self.port),
                 "-W",
                 "-t", "disableReconnect=true",
-                "-t", "fontSize=14",
+                "-t", "fontSize=18",
                 "-t", "theme={\"background\":\"#0d1117\",\"cursor\":\"#58a6ff\"}",
                 "-w", os.path.expanduser("~"),
                 "bash"
