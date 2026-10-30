@@ -25,5 +25,9 @@ package() {
     if [ -d "$_src/var" ]; then
         cp -r "$_src/var" "$pkgdir/"
     fi
-    find "$pkgdir/usr/bin" -type f -exec chmod 755 {} +
+    if [ -d "$pkgdir/usr/bin" ]; then
+        find "$pkgdir/usr/bin" -type f -exec chmod 755 {} +
+    else
+        echo "WARNING: $_src/usr/bin is missing - run $_src/prepare-assets.sh before building" >&2
+    fi
 }
