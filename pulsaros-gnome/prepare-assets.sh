@@ -166,6 +166,15 @@ if [ -d "$UT_SRC" ]; then
     cp -r "$UT_SRC" "$UT_DEST"
 fi
 
+# 13. Pulsar Desktop Icons (Native wallpaper widget)
+echo "📦 Instalando Pulsar Desktop Icons..."
+DESK_SRC="$PKG_ROOT/pulsar-desktop-icons/pulsar-desktop-icons@inled.es"
+if [ -d "$DESK_SRC" ]; then
+    DESK_DEST="$EXT_DIR/pulsar-desktop-icons@inled.es"
+    rm -rf "$DESK_DEST"
+    cp -r "$DESK_SRC" "$DESK_DEST"
+fi
+
 # ------------------------------------------------------------------------------
 # PURGAR EXTENSIONES OBSOLETAS Y DESCONTINUADAS DEL DESTINO
 # ------------------------------------------------------------------------------

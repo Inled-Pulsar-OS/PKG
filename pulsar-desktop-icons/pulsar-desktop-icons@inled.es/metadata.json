@@ -1,0 +1,14 @@
+{
+  "name": "Pulsar Desktop Icons",
+  "description": "Native desktop icons widget integrated directly onto the wallpaper layer for Pulsar OS.",
+  "uuid": "pulsar-desktop-icons@inled.es",
+  "shell-version": [
+    "46",
+    "47",
+    "48",
+    "49",
+    "50",
+    "51"
+  ],
+  "url": "https://inled.es"
+}

@@ -1,0 +1,49 @@
+/* Pulsar Desktop Icons - Native wallpaper widget */
+
+.pulsar-desktop-container {
+    background-color: transparent;
+}
+
+.pulsar-desktop-item {
+    border-radius: 8px;
+    padding: 6px 4px;
+    spacing: 4px;
+    width: 88px;
+    height: 96px;
+    text-align: center;
+    color: #ffffff;
+    transition-duration: 150ms;
+}
+
+.pulsar-desktop-item:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.pulsar-desktop-item.selected {
+    background-color: rgba(0, 122, 255, 0.35);
+    border: 1px solid rgba(0, 122, 255, 0.65);
+}
+
+.pulsar-desktop-icon {
+    icon-size: 48px;
+    width: 48px;
+    height: 48px;
+}
+
+.pulsar-desktop-label-box {
+    border-radius: 4px;
+    padding: 1px 4px;
+}
+
+.pulsar-desktop-item.selected .pulsar-desktop-label-box {
+    background-color: #007aff;
+}
+
+.pulsar-desktop-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: #ffffff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 2px 6px rgba(0, 0, 0, 0.65);
+    text-align: center;
+    line-height: 1.2;
+}
