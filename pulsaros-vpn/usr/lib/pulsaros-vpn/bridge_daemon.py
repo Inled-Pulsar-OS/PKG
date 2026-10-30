@@ -799,7 +799,6 @@ class TerminalManager:
             cmd = [
                 ttyd_bin,
                 "-p", str(self.port),
-                "-i", "0.0.0.0",
                 "-W",
                 "-t", "disableReconnect=true",
                 "-t", "fontSize=14",
