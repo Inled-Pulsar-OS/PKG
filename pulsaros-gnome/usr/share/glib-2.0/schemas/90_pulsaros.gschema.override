@@ -172,3 +172,26 @@ quick-settings-glass-expand=0
 quick-settings-tint-color='#000000'
 quick-settings-tint-strength=0.10000000000000002
 quick-settings-toggle-corner-radius=32.5
+
+[org.gnome.settings-daemon.plugins.media-keys]
+custom-keybindings=['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom3/']
+
+[org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/]
+name='Spotlight'
+command='pulsaros-spotlight'
+binding='<Ctrl>space'
+
+[org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/]
+name='Spotlight'
+command='pulsaros-spotlight'
+binding='<Super>space'
+
+[org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/]
+name='Terminal'
+command='pulsaros-terminal'
+binding='<Primary><Alt>t'
+
+[org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom3/]
+name='Terminal (Super+Return)'
+command='pulsaros-terminal'
+binding='<Super>Return'

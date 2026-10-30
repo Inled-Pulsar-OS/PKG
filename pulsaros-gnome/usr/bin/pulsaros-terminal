@@ -1,0 +1,21 @@
+#!/bin/sh
+# Pulsar OS Terminal Launcher
+# Launches the best available terminal emulator in Pulsar OS
+
+if command -v ghostty >/dev/null 2>&1; then
+    exec ghostty "$@"
+elif command -v gnome-terminal >/dev/null 2>&1; then
+    exec gnome-terminal "$@"
+elif command -v ptyxis >/dev/null 2>&1; then
+    exec ptyxis "$@"
+elif command -v kgx >/dev/null 2>&1; then
+    exec kgx "$@"
+elif command -v x-terminal-emulator >/dev/null 2>&1; then
+    exec x-terminal-emulator "$@"
+elif command -v alacritty >/dev/null 2>&1; then
+    exec alacritty "$@"
+elif command -v kitty >/dev/null 2>&1; then
+    exec kitty "$@"
+else
+    exec xterm "$@"
+fi

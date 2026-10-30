@@ -241,7 +241,7 @@ toggle-tiled-right=['<Primary>Right', '<Control>Right']
 restore-shortcuts=@as []
 
 [org/gnome/settings-daemon/plugins/media-keys]
-custom-keybindings=['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/']
+custom-keybindings=['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom3/']
 screensaver=['<Super>l', '<Control>l']
 
 [org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0]
@@ -253,6 +253,16 @@ binding='<Ctrl>space'
 name='Spotlight'
 command='pulsaros-spotlight'
 binding='<Super>space'
+
+[org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2]
+name='Terminal'
+command='pulsaros-terminal'
+binding='<Primary><Alt>t'
+
+[org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom3]
+name='Terminal (Super+Return)'
+command='pulsaros-terminal'
+binding='<Super>Return'
 
 [org/gnome/mutter]
 overlay-key='Super_R'
