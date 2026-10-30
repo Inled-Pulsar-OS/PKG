@@ -57,6 +57,7 @@ def main():
         # Pulsar & Sayri standard service ports
         run_ufw(["allow", "8765/tcp", "comment", "Sayri API"])
         run_ufw(["allow", "8989/tcp", "comment", "Pulsar Bridge"])
+        run_ufw(["allow", "7681/tcp", "comment", "Pulsar Terminal (ttyd)"])
         run_ufw(["allow", "8085/tcp", "comment", "Pulsar Broadway"])
         run_ufw(["allow", "5353/udp", "comment", "mDNS Avahi"])
         run_ufw(["allow", "53317/tcp", "comment", "FlyDrop"])
