@@ -772,6 +772,71 @@ class SleepInhibitorManager:
                 return True
 
 
+class TerminalManager:
+    """Manages an interactive xterm.js terminal session via ttyd for Pulsar Phone."""
+    def __init__(self, port: int = 7681):
+        self.port = port
+        self.lock = threading.RLock()
+        self.proc: Optional[subprocess.Popen] = None
+
+    def is_running(self) -> bool:
+        with self.lock:
+            return self.proc is not None and self.proc.poll() is None
+
+    def start(self) -> bool:
+        with self.lock:
+            if self.is_running():
+                return True
+            ttyd_bin = shutil.which("ttyd")
+            if not ttyd_bin:
+                logger.error("ttyd binary not found on system")
+                return False
+
+            env = os.environ.copy()
+            env["TERM"] = "xterm-256color"
+            env["COLORTERM"] = "truecolor"
+
+            cmd = [
+                ttyd_bin,
+                "-p", str(self.port),
+                "-i", "0.0.0.0",
+                "-W",
+                "-t", "disableReconnect=true",
+                "-t", "fontSize=14",
+                "-t", "theme={\"background\":\"#0d1117\",\"cursor\":\"#58a6ff\"}",
+                "-w", os.path.expanduser("~"),
+                "bash"
+            ]
+            try:
+                self.proc = subprocess.Popen(
+                    cmd,
+                    env=env,
+                    cwd=os.path.expanduser("~"),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                logger.info(f"Started interactive terminal (ttyd) on port {self.port} (PID {self.proc.pid})")
+                time.sleep(0.3)
+                return self.is_running()
+            except Exception as e:
+                logger.error(f"Failed to start ttyd terminal: {e}")
+                return False
+
+    def stop(self):
+        with self.lock:
+            if self.proc:
+                try:
+                    self.proc.terminate()
+                    self.proc.wait(timeout=1.0)
+                except Exception:
+                    try:
+                        self.proc.kill()
+                    except Exception:
+                        pass
+                self.proc = None
+                logger.info("Interactive terminal session stopped")
+
+
 class BridgeContext:
     def __init__(self):
         self.token = get_or_create_token()
@@ -785,6 +850,7 @@ class BridgeContext:
         self.launcher = AppLauncher(bind_ip="0.0.0.0", port=self.broadway_port)
         self.desktop_streamer = DesktopStreamManager()
         self.scrcpy_mgr = ScrcpyManager()
+        self.terminal_mgr = TerminalManager(port=7681)
         self.refresh_ip()
 
     def refresh_ip(self):
@@ -975,6 +1041,12 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
             })
         elif path == "/api/adb/status":
             self.send_json(200, context.scrcpy_mgr.get_adb_status())
+        elif path == "/api/terminal/status":
+            self.send_json(200, {
+                "running": context.terminal_mgr.is_running(),
+                "port": context.terminal_mgr.port,
+                "url": f"http://{context.get_preferred_ip()}:{context.terminal_mgr.port}"
+            })
         elif path == "/api/system/inhibit-sleep":
             self.send_json(200, {
                 "enabled": context.sleep_inhibitor.is_inhibited()
@@ -1076,6 +1148,12 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json(500, {"success": False, "error": str(e)})
 
+        elif path == "/api/terminal/status":
+            self.send_json(200, {
+                "running": context.terminal_mgr.is_running(),
+                "port": context.terminal_mgr.port,
+                "url": f"http://{context.get_preferred_ip()}:{context.terminal_mgr.port}"
+            })
         elif path == "/api/system/inhibit-sleep":
             enable = req_data.get("enabled", True)
             ok = context.sleep_inhibitor.set_inhibit(enable)
@@ -1118,6 +1196,18 @@ class BridgeRequestHandler(http.server.BaseHTTPRequestHandler):
             except Exception as e:
                 logger.error(f"Error executing shell command: {e}")
                 self.send_json(500, {"success": False, "error": str(e)})
+
+        elif path == "/api/terminal/start":
+            ok = context.terminal_mgr.start()
+            self.send_json(200 if ok else 500, {
+                "running": context.terminal_mgr.is_running(),
+                "port": context.terminal_mgr.port,
+                "url": f"http://{context.get_preferred_ip()}:{context.terminal_mgr.port}"
+            })
+
+        elif path == "/api/terminal/stop":
+            context.terminal_mgr.stop()
+            self.send_json(200, {"running": False})
 
         elif path == "/api/remote-desktop/request":
             req_host = req_data.get("requester_hostname", "Equipo remoto")
