@@ -190,6 +190,9 @@ def _acquire_lock():
 
 
 def main():
+    if common.is_live_or_pre_setup():
+        return 0
+
     try:
         from gi.repository import GLib  # noqa: F401
     except Exception as exc:  # pragma: no cover

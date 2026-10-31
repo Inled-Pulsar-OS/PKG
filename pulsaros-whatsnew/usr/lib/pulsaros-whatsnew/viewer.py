@@ -365,6 +365,9 @@ class Viewer:
 
 
 def main():
+    if common.is_live_or_pre_setup():
+        return 0
+
     parser = argparse.ArgumentParser(description="Pulsar OS What's New viewer")
     parser.add_argument("--ids", help="Comma-separated note ids to show")
     parser.add_argument("--all", action="store_true", help="Show the whole history")

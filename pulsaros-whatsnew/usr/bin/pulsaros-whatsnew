@@ -1,3 +1,7 @@
 #!/bin/bash
 # Pulsar OS - What's New viewer launcher
+# Never launch in live ISO / live installer environments or before initial OOTB setup is complete
+if [ -f /etc/pulsar-need-setup ] || [ -d /run/archiso ] || [ -d /run/live ] || [ -d /live ] || grep -qE 'archiso|pulsar-live|boot=live' /proc/cmdline 2>/dev/null || [ "$USER" = "live" ]; then
+    exit 0
+fi
 exec /usr/bin/python3 /usr/lib/pulsaros-whatsnew/viewer.py "$@"

@@ -4301,6 +4301,16 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 subprocess.Popen(["systemctl", "reboot"])
                 self.close()
         else:
+            def _async_cancel_cleanup():
+                try:
+                    subprocess.run(["swapoff", "-a"], capture_output=True)
+                    subprocess.run(["fuser", "-k", "-9", "-M", "/mnt"], capture_output=True)
+                    subprocess.run(["umount", "-f", "-l", "-R", "/mnt"], capture_output=True)
+                    subprocess.run(["cryptsetup", "close", "pulsar_cryptroot"], capture_output=True)
+                    subprocess.run(["systemctl", "start", "udisks2.service"], capture_output=True)
+                except Exception:
+                    pass
+            threading.Thread(target=_async_cancel_cleanup, daemon=True).start()
             self.stack.set_visible_child_name("install_disk_select")
 
     def update_progress(self, fraction, text):
@@ -4655,10 +4665,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 
             def cleanup_mounts(is_efi_boot):
                 if "TEST_MODE" not in os.environ:
-                    # 1. Kill any processes holding files open inside /mnt (chroot and host) surgically using fuser
+                    # 1. Deactivate any active swap
+                    subprocess.run(["swapoff", "-a"], capture_output=True)
+
+                    # 2. Kill any processes holding files open inside /mnt (chroot and host) surgically using fuser
                     subprocess.run(["fuser", "-k", "-9", "-M", "/mnt"], capture_output=True)
                     
-                    # 2. Unmount nested virtual filesystems first, then root, in strict reverse order of mounting
+                    # 3. Unmount nested virtual filesystems first, then root, in strict reverse order of mounting
                     for mount_path in [
                         "/mnt/etc/resolv.conf",
                         "/mnt/run",
@@ -4674,35 +4687,39 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         if os.path.exists(mount_path):
                             res = subprocess.run(["umount", "-f", mount_path], capture_output=True)
                             if res.returncode != 0:
-                                subprocess.run(["umount", "-l", mount_path])
+                                subprocess.run(["umount", "-l", mount_path], capture_output=True)
                     
                     if is_efi_boot:
                         res = subprocess.run(["umount", "-f", "/mnt/boot/efi"], capture_output=True)
                         if res.returncode != 0:
-                            subprocess.run(["umount", "-l", "/mnt/boot/efi"])
+                            subprocess.run(["umount", "-l", "/mnt/boot/efi"], capture_output=True)
                                 
                     res = subprocess.run(["umount", "-f", "/mnt"], capture_output=True)
                     if res.returncode != 0:
-                        subprocess.run(["umount", "-l", "/mnt"])
+                        subprocess.run(["umount", "-l", "/mnt"], capture_output=True)
                         
-                    # 3. Final recursive lazy unmount sweep to ensure absolutely nothing remains bound in the VFS
+                    # 4. Final recursive lazy unmount sweep to ensure absolutely nothing remains bound in the VFS
                     subprocess.run(["umount", "-f", "-l", "-R", "/mnt"], capture_output=True)
 
-                    # 4. Lazy-unmount any gvfs/udisks automounts of the install
-                    #    targets (e.g. /media/live/PULSAR_OS) that may have appeared
-                    #    before the hide rule took effect, so the post-install
-                    #    shutdown never trips over "device busy" unmount failures.
+                    # 5. Lazy-unmount any gvfs/udisks automounts of the install
+                    #    targets or partitions belonging to the target disk
                     try:
                         with open("/proc/mounts", "r") as mf:
+                            mounts_to_clean = []
                             for line in mf:
                                 parts = line.split()
-                                if len(parts) >= 2 and "/media/" in parts[1] and "PULSAR" in parts[1]:
-                                    subprocess.run(["umount", "-l", parts[1]], capture_output=True)
+                                if len(parts) >= 2:
+                                    dev_src, mnt_dst = parts[0], parts[1]
+                                    if (disk_path and dev_src.startswith(disk_path)) or ("/media/" in mnt_dst and "PULSAR" in mnt_dst) or mnt_dst.startswith("/mnt"):
+                                        mounts_to_clean.append(mnt_dst)
+                            for mnt_dst in reversed(mounts_to_clean):
+                                subprocess.run(["umount", "-l", mnt_dst], capture_output=True)
                     except Exception:
                         pass
 
-                    # 5. Close LUKS encryption container if mapped
+                    # 6. Close LUKS encryption container if mapped
                     subprocess.run(["cryptsetup", "close", "pulsar_cryptroot"], capture_output=True)
+                    subprocess.run(["udevadm", "settle"], capture_output=True)
                 
             def mount_vfs():
                 if "TEST_MODE" not in os.environ:
@@ -4789,18 +4806,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 os.makedirs("/mnt/home", exist_ok=True)
                 exec_cmd(["mount", "-t", "btrfs", "-o", "subvol=@home,compress=zstd:1", root_part_dev, "/mnt/home"])
 
-            # Unmount any active mounts on the selected disk first to prevent device busy errors
-            if "TEST_MODE" not in os.environ:
-                try:
-                    with open("/proc/mounts", "r") as f:
-                        for line in f:
-                            parts = line.split()
-                            if len(parts) >= 2 and parts[0].startswith(disk_path):
-                                print(f"Unmounting busy partition: {parts[0]} from {parts[1]}")
-                                subprocess.run(["umount", "-l", parts[1]], capture_output=True)
-                except Exception as umount_err:
-                    print(f"Warning during unmount prep: {umount_err}")
-                subprocess.run(["swapoff", "-a"], capture_output=True)
+            # Clean up all mounts, swap, and containers on the system and target disk before partitioning
+            log_msg(f"Preparing disk {disk_path} and cleaning previous mount states...")
+            cleanup_mounts(is_efi)
 
             if self.install_mode == "dualboot":
                 root_part = self.target_partition
@@ -5136,74 +5144,140 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 want_extras = self.install_extra_packages or HAS_REQUIRED_EXTRAS
 
                 if is_arch:
-                    # ── Arch: install via pacman from the [inled] + Arch repos ──
+                    # ── Arch: install via pacman (local bundled packages first, then online sync) ──
                     if want_extras:
                         pkg_info = self._get_selected_packages_info(is_arch=True)
-                        extra_packages = pkg_info["pkgs"]
+                        extra_packages = list(pkg_info["pkgs"])
                         if extra_packages or pkg_info["install_onlyoffice"]:
                             GLib.idle_add(self.update_progress, 0.80, "Installing selected packages and apps...")
-                            log_msg(f"Post-install: installing {len(extra_packages)} selected extra packages...")
+                            log_msg(f"Post-install: preparing {len(extra_packages)} selected extra packages...")
                             try:
-                                # Initialize pacman keyring inside the chroot so
-                                # signature verification works (avoids GPGME errors),
-                                # then import the Inled repository GPG key.
-                                GLib.idle_add(self.update_progress, 0.81, "Setting up package manager...")
-                                log_msg("Initializing pacman keyring and Inled repo key...")
-                                exec_cmd(["chroot", "/mnt", "bash", "-c",
-                                           "mkdir -p /etc/pacman.d/gnupg && "
-                                           "pacman-key --init && "
-                                           "pacman-key --populate archlinux && "
-                                           "curl -s https://apt.inled.es/archive.key | pacman-key -a - && "
-                                           "pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F"])
-                                GLib.idle_add(self.update_progress, 0.82, "Syncing package databases...")
-                                try:
-                                    exec_cmd(["chroot", "/mnt", "sed", "-i", "s/^#*ParallelDownloads.*/ParallelDownloads = 10/", "/etc/pacman.conf"])
-                                except Exception:
-                                    pass
-                                exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
+                                # 1. Check for local pre-built packages bundled on ISO or rootfs
+                                candidate_dirs = [
+                                    "/run/archiso/bootmnt/packages",
+                                    "/opt/pulsar-pkgs",
+                                    "/live/image/packages",
+                                    "/tmp/packages",
+                                    "/var/cache/pacman/pkg",
+                                ]
+                                local_pkg_files = []
+                                for cdir in candidate_dirs:
+                                    if os.path.isdir(cdir):
+                                        for f in glob.glob(f"{cdir}/*.pkg.tar.zst"):
+                                            if not os.path.basename(f).startswith("calamares") and "-debug-" not in f:
+                                                local_pkg_files.append(f)
 
-                                if extra_packages:
-                                    GLib.idle_add(self.update_progress, 0.83, f"Installing {len(extra_packages)} extra packages...")
-                                    # ── Streaming pacman install (parse download progress) ──
-                                    pacman_cmd = [
-                                        "chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
-                                        *extra_packages
-                                    ]
-                                    pacman_proc = subprocess.Popen(
-                                        pacman_cmd,
-                                        stdout=subprocess.PIPE,
-                                        stderr=subprocess.STDOUT,
-                                        text=True,
-                                        bufsize=1,
-                                    )
-                                    _pbuf = ""
-                                    while True:
-                                        ch = pacman_proc.stdout.read(1)
-                                        if not ch:
+                                local_to_install = []
+                                for pkg_file in local_pkg_files:
+                                    bname = os.path.basename(pkg_file)
+                                    for epkg in list(extra_packages):
+                                        # Match package name prefix, e.g. gaze-0.3... matches gaze
+                                        if bname.startswith(f"{epkg}-") or bname == f"{epkg}.pkg.tar.zst":
+                                            if pkg_file not in local_to_install:
+                                                local_to_install.append(pkg_file)
+                                            if epkg in extra_packages:
+                                                extra_packages.remove(epkg)
                                             break
-                                        if ch in ('\r', '\n'):
-                                            line = _pbuf.strip()
-                                            _buf = ""
-                                            if not line:
-                                                continue
-                                            log_msg(f"  pacman: {line}")
-                                            m_dl = re.search(r"(\d+)%", line)
-                                            if m_dl and '[#' in line:
-                                                pct = int(m_dl.group(1))
-                                                frac = 0.83 + (pct / 100.0) * 0.07
-                                                GLib.idle_add(self.update_progress, frac, f"Downloading packages: {pct}%")
-                                            m_inst = re.search(r"\((\d+)/(\d+)\)\s+installing\s+", line)
-                                            if m_inst:
-                                                cur, total = int(m_inst.group(1)), int(m_inst.group(2))
-                                                frac = 0.90 + (cur / total) * 0.02
-                                                GLib.idle_add(self.update_progress, frac, f"Installing package {cur}/{total}: {line.split('installing ')[-1]}")
+
+                                if local_to_install:
+                                    GLib.idle_add(self.update_progress, 0.81, f"Installing {len(local_to_install)} offline local packages...")
+                                    log_msg(f"Installing {len(local_to_install)} local packages from installation media...")
+                                    chroot_local_dir = "/mnt/tmp/pulsar-local-pkgs"
+                                    os.makedirs(chroot_local_dir, exist_ok=True)
+                                    staged_paths = []
+                                    for lpkg in local_to_install:
+                                        dst_path = os.path.join(chroot_local_dir, os.path.basename(lpkg))
+                                        try:
+                                            shutil.copy2(lpkg, dst_path)
+                                            staged_paths.append(f"/tmp/pulsar-local-pkgs/{os.path.basename(lpkg)}")
+                                        except Exception as cp_err:
+                                            log_msg(f"Warning copying {lpkg}: {cp_err}")
+
+                                    if staged_paths:
+                                        res_local = subprocess.run(
+                                            ["chroot", "/mnt", "pacman", "-U", "--noconfirm", "--needed", "--overwrite", "*"] + staged_paths,
+                                            capture_output=True,
+                                            text=True
+                                        )
+                                        if res_local.returncode == 0:
+                                            log_msg(f"✅ Successfully installed {len(staged_paths)} local Pulsar OS packages.")
                                         else:
-                                            _pbuf += ch
-                                    pacman_proc.wait()
-                                    if pacman_proc.returncode != 0:
-                                        raise Exception(f"pacman -S failed (code {pacman_proc.returncode})")
-                                    log_msg("Post-install: extra packages installed successfully.")
-                                    extra_packages_installed = True
+                                            log_msg(f"Notice: Some local packages gave warnings/errors:\n{res_local.stderr[:300]}")
+                                    shutil.rmtree(chroot_local_dir, ignore_errors=True)
+
+                                # 2. Sync online repositories if network is available
+                                has_network = False
+                                try:
+                                    GLib.idle_add(self.update_progress, 0.82, "Setting up package manager...")
+                                    log_msg("Initializing pacman keyring and Inled repo key...")
+                                    exec_cmd(["chroot", "/mnt", "bash", "-c",
+                                               "mkdir -p /etc/pacman.d/gnupg && "
+                                               "pacman-key --init && "
+                                               "pacman-key --populate archlinux 2>/dev/null || true && "
+                                               "curl -s --connect-timeout 4 https://apt.inled.es/archive.key | pacman-key -a - 2>/dev/null || true && "
+                                               "pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F 2>/dev/null || true"])
+                                    try:
+                                        exec_cmd(["chroot", "/mnt", "sed", "-i", "s/^#*ParallelDownloads.*/ParallelDownloads = 10/", "/etc/pacman.conf"])
+                                    except Exception:
+                                        pass
+                                    GLib.idle_add(self.update_progress, 0.83, "Syncing package databases...")
+                                    exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
+                                    has_network = True
+                                except Exception as net_err:
+                                    log_msg(f"Notice: Network sync skipped (offline or unreachable): {net_err}")
+
+                                # 3. Install remaining extra packages via pacman -S if online
+                                if extra_packages:
+                                    if has_network:
+                                        GLib.idle_add(self.update_progress, 0.84, f"Installing {len(extra_packages)} extra packages...")
+                                        pacman_cmd = [
+                                            "chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
+                                            *extra_packages
+                                        ]
+                                        pacman_proc = subprocess.Popen(
+                                            pacman_cmd,
+                                            stdout=subprocess.PIPE,
+                                            stderr=subprocess.STDOUT,
+                                            text=True,
+                                            bufsize=1,
+                                        )
+                                        _pbuf = ""
+                                        while True:
+                                            ch = pacman_proc.stdout.read(1)
+                                            if not ch:
+                                                break
+                                            if ch in ('\r', '\n'):
+                                                line = _pbuf.strip()
+                                                _pbuf = ""
+                                                if not line:
+                                                    continue
+                                                log_msg(f"  pacman: {line}")
+                                                m_dl = re.search(r"(\d+)%", line)
+                                                if m_dl and '[#' in line:
+                                                    pct = int(m_dl.group(1))
+                                                    frac = 0.84 + (pct / 100.0) * 0.06
+                                                    GLib.idle_add(self.update_progress, frac, f"Downloading packages: {pct}%")
+                                                m_inst = re.search(r"\((\d+)/(\d+)\)\s+installing\s+", line)
+                                                if m_inst:
+                                                    cur, total = int(m_inst.group(1)), int(m_inst.group(2))
+                                                    frac = 0.90 + (cur / total) * 0.02
+                                                    GLib.idle_add(self.update_progress, frac, f"Installing package {cur}/{total}: {line.split('installing ')[-1]}")
+                                            else:
+                                                _pbuf += ch
+                                        pacman_proc.wait()
+                                        if pacman_proc.returncode != 0:
+                                            log_msg(f"Notice: Batch pacman -S exited with code {pacman_proc.returncode}. Attempting individual package installation...")
+                                            for pkg in extra_packages:
+                                                res_single = subprocess.run(["chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed", pkg], capture_output=True, text=True)
+                                                if res_single.returncode == 0:
+                                                    log_msg(f"  pacman: Installed {pkg}")
+                                                else:
+                                                    log_msg(f"  pacman: Skipping {pkg} (not available: {res_single.stderr.strip()[:100]})")
+                                        else:
+                                            log_msg("Post-install: extra packages installed successfully.")
+                                            extra_packages_installed = True
+                                    else:
+                                        log_msg(f"Notice: Offline mode active. Skipping {len(extra_packages)} online packages (can be installed post-setup).")
 
                                 # Enable the CUPS print service on the installed system if selected.
                                 if pkg_info["install_cups"]:
@@ -5231,70 +5305,119 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                             bf.write("[Desktop Entry]\nName=Touch ID & Face ID\nName[es]=Touch ID y Face ID\nComment=Configure facial recognition, fingerprint login, and presence detection\nComment[es]=Configura el reconocimiento facial, lector de huellas y detección de presencia\nExec=pulsaros-biometrics-settings\nIcon=system-users\nTerminal=false\nType=Application\nCategories=GNOME;GTK;Settings;Security;System;\nKeywords=fingerprint;touchid;faceid;face;auth;biometrics;presencia;lock;huella;\nStartupNotify=true\n")
                                     except Exception:
                                         pass
-
-                                # Restore biometrics desktop entry on target disk if gaze/biometrics was installed
-                                if "gaze" in pkg_info.get("pkgs", []):
-                                    try:
-                                        bio_desktop = "/mnt/usr/share/applications/pulsaros-biometrics.desktop"
-                                        with open(bio_desktop, "w") as bf:
-                                            bf.write("[Desktop Entry]\nName=Touch ID & Face ID\nName[es]=Touch ID y Face ID\nComment=Configure facial recognition, fingerprint login, and presence detection\nComment[es]=Configura el reconocimiento facial, lector de huellas y detección de presencia\nExec=pulsaros-biometrics-settings\nIcon=system-users\nTerminal=false\nType=Application\nCategories=GNOME;GTK;Settings;Security;System;\nKeywords=fingerprint;touchid;faceid;face;auth;biometrics;presencia;lock;huella;\nStartupNotify=true\n")
-                                    except Exception:
-                                        pass
                             except Exception as post_err:
                                 log_msg(f"Post-install package installation: {post_err}")
 
                 else:
-                    # ── Debian: install via apt from Debian + Inled repositories ──
+                    # ── Debian: install via apt (local bundled packages first, then online sync) ──
                     if want_extras:
                         pkg_info = self._get_selected_packages_info(is_arch=False)
-                        extra_packages = pkg_info["pkgs"]
+                        extra_packages = list(pkg_info["pkgs"])
                         if extra_packages or pkg_info["install_onlyoffice"] or pkg_info["install_localsend"]:
                             GLib.idle_add(self.update_progress, 0.80, "Installing selected packages and apps...")
-                            log_msg(f"Post-install: installing {len(extra_packages)} selected packages via apt...")
+                            log_msg(f"Post-install: preparing {len(extra_packages)} selected packages via apt...")
                             try:
+                                # 1. Check for local pre-built .deb packages bundled on ISO or rootfs
+                                candidate_deb_dirs = [
+                                    "/run/live/medium/packages",
+                                    "/live/image/packages",
+                                    "/opt/pulsar-pkgs",
+                                    "/tmp/packages",
+                                    "/var/cache/apt/archives",
+                                ]
+                                local_deb_files = []
+                                for cdir in candidate_deb_dirs:
+                                    if os.path.isdir(cdir):
+                                        for f in glob.glob(f"{cdir}/*.deb"):
+                                            if not os.path.basename(f).startswith("calamares") and "-debug" not in f:
+                                                local_deb_files.append(f)
+
+                                local_debs_to_install = []
+                                for deb_file in local_deb_files:
+                                    bname = os.path.basename(deb_file)
+                                    for epkg in list(extra_packages):
+                                        if bname.startswith(f"{epkg}_") or bname == f"{epkg}.deb":
+                                            if deb_file not in local_debs_to_install:
+                                                local_debs_to_install.append(deb_file)
+                                            if epkg in extra_packages:
+                                                extra_packages.remove(epkg)
+                                            break
+
+                                if local_debs_to_install:
+                                    GLib.idle_add(self.update_progress, 0.81, f"Installing {len(local_debs_to_install)} offline local packages...")
+                                    chroot_deb_dir = "/mnt/tmp/pulsar-local-debs"
+                                    os.makedirs(chroot_deb_dir, exist_ok=True)
+                                    staged_deb_paths = []
+                                    for ldeb in local_debs_to_install:
+                                        dst_path = os.path.join(chroot_deb_dir, os.path.basename(ldeb))
+                                        try:
+                                            shutil.copy2(ldeb, dst_path)
+                                            staged_deb_paths.append(f"/tmp/pulsar-local-debs/{os.path.basename(ldeb)}")
+                                        except Exception as cp_err:
+                                            log_msg(f"Warning copying {ldeb}: {cp_err}")
+                                    if staged_deb_paths:
+                                        subprocess.run(["chroot", "/mnt", "dpkg", "-i"] + staged_deb_paths, capture_output=True)
+                                        subprocess.run(["chroot", "/mnt", "apt-get", "install", "-f", "-y"], capture_output=True)
+                                        log_msg(f"✅ Successfully installed {len(staged_deb_paths)} local Debian packages.")
+                                    shutil.rmtree(chroot_deb_dir, ignore_errors=True)
+
+                                # 2. Sync online repositories if network is available
+                                has_network_deb = False
                                 try:
                                     os.makedirs("/mnt/etc/apt/apt.conf.d", exist_ok=True)
                                     with open("/mnt/etc/apt/apt.conf.d/99pulsar-fast", "w") as f_apt:
                                         f_apt.write('Acquire::Queue-Mode "host";\nAcquire::http::Pipeline-Depth "5";\nAPT::Acquire::Retries "3";\n')
-                                except Exception:
-                                    pass
-                                exec_cmd(["chroot", "/mnt", "apt-get", "update"])
+                                    exec_cmd(["chroot", "/mnt", "apt-get", "update"])
+                                    has_network_deb = True
+                                except Exception as deb_net_err:
+                                    log_msg(f"Notice: Debian repository update skipped: {deb_net_err}")
+
                                 if extra_packages:
-                                    apt_cmd = [
-                                        "chroot", "/mnt", "apt-get", "install", "-y",
-                                        "--no-install-recommends",
-                                        *extra_packages,
-                                    ]
-                                    apt_proc = subprocess.Popen(
-                                        apt_cmd,
-                                        stdout=subprocess.PIPE,
-                                        stderr=subprocess.STDOUT,
-                                        text=True,
-                                        bufsize=1,
-                                    )
-                                    _abuf = ""
-                                    while True:
-                                        ch = apt_proc.stdout.read(1)
-                                        if not ch:
-                                            break
-                                        if ch in ('\r', '\n'):
-                                            line = _abuf.strip()
-                                            _abuf = ""
-                                            if not line:
-                                                continue
-                                            log_msg(f"  apt: {line}")
-                                            m_inst = re.search(r"(\d+)/(\d+)", line)
-                                            if m_inst:
-                                                cur, total = int(m_inst.group(1)), int(m_inst.group(2))
-                                                frac = 0.83 + (cur / total) * 0.07
-                                                GLib.idle_add(self.update_progress, frac, f"Installing package {cur}/{total}")
+                                    if has_network_deb:
+                                        apt_cmd = [
+                                            "chroot", "/mnt", "apt-get", "install", "-y",
+                                            "--no-install-recommends",
+                                            *extra_packages,
+                                        ]
+                                        apt_proc = subprocess.Popen(
+                                            apt_cmd,
+                                            stdout=subprocess.PIPE,
+                                            stderr=subprocess.STDOUT,
+                                            text=True,
+                                            bufsize=1,
+                                        )
+                                        _abuf = ""
+                                        while True:
+                                            ch = apt_proc.stdout.read(1)
+                                            if not ch:
+                                                break
+                                            if ch in ('\r', '\n'):
+                                                line = _abuf.strip()
+                                                _abuf = ""
+                                                if not line:
+                                                    continue
+                                                log_msg(f"  apt: {line}")
+                                                m_inst = re.search(r"(\d+)/(\d+)", line)
+                                                if m_inst:
+                                                    cur, total = int(m_inst.group(1)), int(m_inst.group(2))
+                                                    frac = 0.83 + (cur / total) * 0.07
+                                                    GLib.idle_add(self.update_progress, frac, f"Installing package {cur}/{total}")
+                                            else:
+                                                _abuf += ch
+                                        apt_proc.wait()
+                                        if apt_proc.returncode != 0:
+                                            log_msg(f"Notice: Batch apt-get install exited with code {apt_proc.returncode}. Attempting individual installs...")
+                                            for dpkg in extra_packages:
+                                                res_d = subprocess.run(["chroot", "/mnt", "apt-get", "install", "-y", "--no-install-recommends", dpkg], capture_output=True, text=True)
+                                                if res_d.returncode == 0:
+                                                    log_msg(f"  apt: Installed {dpkg}")
+                                                else:
+                                                    log_msg(f"  apt: Skipping {dpkg}")
                                         else:
-                                            _abuf += ch
-                                    apt_proc.wait()
-                                    if apt_proc.returncode != 0:
-                                        raise Exception(f"apt-get install failed (code {apt_proc.returncode})")
-                                    log_msg("Post-install: extra packages installed successfully (apt).")
-                                    extra_packages_installed = True
+                                            log_msg("Post-install: extra packages installed successfully (apt).")
+                                            extra_packages_installed = True
+                                    else:
+                                        log_msg(f"Notice: Offline mode active. Skipping {len(extra_packages)} online packages.")
 
                                 # Enable the CUPS print service on the installed system if selected.
                                 if pkg_info["install_cups"]:
@@ -6185,23 +6308,12 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                         except Exception as _rm_err:
                             log_msg(f"Warning: could not remove {_stray}: {_rm_err}")
 
-                # Run update-grub or grub-mkconfig. grub-mkconfig/grub-probe need
-                # /proc, /sys and /dev inside the chroot or the generated grub.cfg
-                # can end up partially written (missing resume= parameters,
-                # broken root= probing). Bind them first and always clean up.
-                vfs_mounted = False
-                try:
-                    vfs_pairs = [("/dev", "/mnt/dev"), ("/proc", "/mnt/proc"), ("/sys", "/mnt/sys")]
-                    for src, dst in vfs_pairs:
-                        os.makedirs(dst, exist_ok=True)
-                        if not os.path.ismount(dst):
-                            exec_cmd(["mount", "--bind", src, dst])
-                    vfs_mounted = True
-                except Exception as vfs_err:
-                    log_msg(f"Warning: could not bind /dev,/proc,/sys for grub-mkconfig: {vfs_err}")
+                # Ensure VFS is mounted for grub-probe / grub-mkconfig
+                mount_vfs()
 
                 GLib.idle_add(self.update_progress, 0.94, "Generating GRUB multi-boot configuration...")
                 try:
+                    os.makedirs("/mnt/boot/grub", exist_ok=True)
                     if is_arch:
                         exec_cmd(["chroot", "/mnt", "grub-mkconfig", "-o", "/boot/grub/grub.cfg"])
                     else:
@@ -6212,13 +6324,6 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                     log_msg("GRUB configuration updated with dual-boot (os-prober) and recovery support.")
                 except Exception as g_cfg_err:
                     log_msg(f"Warning: GRUB config generation error: {g_cfg_err}")
-                finally:
-                    if vfs_mounted:
-                        for _, dst in reversed(vfs_pairs):
-                            try:
-                                exec_cmd(["umount", "-l", dst])
-                            except Exception:
-                                pass
 
             GLib.idle_add(self.update_progress, 0.90, "Installing bootloader...")
             mount_vfs()
@@ -6713,7 +6818,8 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                         zf.write("zram\n")
                     exec_cmd(["chroot", "/mnt", "systemctl", "enable", "pulsaros-optimizer.service"])
                     try:
-                        exec_cmd(["chroot", "/mnt", "systemctl", "enable", "ufw.service"])
+                        if os.path.exists("/mnt/usr/lib/systemd/system/ufw.service") or os.path.exists("/mnt/etc/systemd/system/ufw.service"):
+                            exec_cmd(["chroot", "/mnt", "systemctl", "enable", "ufw.service"])
                     except Exception:
                         pass
                     log_msg("✅ Enabled pulsaros-optimizer.service, ufw.service and zram module in target system.")

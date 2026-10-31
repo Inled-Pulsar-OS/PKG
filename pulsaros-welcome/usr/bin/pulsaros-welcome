@@ -4,21 +4,22 @@
 # Tauri binary first, Python+WebKitGTK fallback
 # ==============================================================================
 
-# 1. Do not launch in live ISO / live installer environments
-if [ -d /run/archiso/bootmnt ] || [ -d /run/live ] || [ -d /live ] || grep -qE 'archiso|pulsar-live|boot=live' /proc/cmdline 2>/dev/null || [ "$USER" = "live" ]; then
-    exit 0
-fi
-
-# 2. If initial OOTB setup wizard is pending, launch OOTB
+# 1. If initial OOTB setup wizard is pending, launch OOTB
 if [ -f /etc/pulsar-need-setup ]; then
     if [ -x /usr/bin/pulsaros-ootb ]; then
         exec /usr/bin/pulsaros-ootb
     elif [ -f /usr/share/pulsaros/welcome_ootb.py ]; then
         if command -v xhost >/dev/null 2>&1; then
+            xhost +local:root 2>/dev/null || true
             xhost +SI:localuser:root 2>/dev/null || true
         fi
-        exec sudo -E /usr/bin/python3 /usr/share/pulsaros/welcome_ootb.py
+        exec sudo env DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" WAYLAND_DISPLAY="$WAYLAND_DISPLAY" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" /usr/bin/python3 /usr/share/pulsaros/welcome_ootb.py
     fi
+    exit 0
+fi
+
+# 2. Do not launch in live ISO / live installer environments
+if [ -d /run/archiso/bootmnt ] || [ -d /run/live ] || [ -d /live ] || grep -qE 'archiso|pulsar-live|boot=live' /proc/cmdline 2>/dev/null || [ "$USER" = "live" ]; then
     exit 0
 fi
 

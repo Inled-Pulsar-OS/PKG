@@ -45,6 +45,24 @@ def user_state_path():
     return os.path.join(user_state_dir(), "state.json")
 
 
+def is_live_or_pre_setup():
+    """Returns True if running in a live ISO session or before OOTB setup completes."""
+    if os.path.exists("/etc/pulsar-need-setup"):
+        return True
+    if os.path.exists("/run/archiso") or os.path.exists("/run/live") or os.path.exists("/live"):
+        return True
+    try:
+        with open("/proc/cmdline", "r") as f:
+            cmd = f.read()
+            if any(k in cmd for k in ("archiso", "pulsar-live", "boot=live")):
+                return True
+    except OSError:
+        pass
+    if os.environ.get("USER") == "live":
+        return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------

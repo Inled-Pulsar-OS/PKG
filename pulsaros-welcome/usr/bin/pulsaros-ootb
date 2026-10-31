@@ -6,9 +6,21 @@ set -e
 
 if [ -f /usr/share/pulsaros/welcome_ootb.py ]; then
     if command -v xhost >/dev/null 2>&1; then
+        xhost +local:root 2>/dev/null || true
         xhost +SI:localuser:root 2>/dev/null || true
     fi
-    exec sudo -E /usr/bin/python3 /usr/share/pulsaros/welcome_ootb.py "$@"
+
+    if [ "$(id -u)" -eq 0 ]; then
+        exec /usr/bin/python3 /usr/share/pulsaros/welcome_ootb.py "$@"
+    fi
+
+    if command -v pkexec >/dev/null 2>&1; then
+        if pkexec env DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" WAYLAND_DISPLAY="$WAYLAND_DISPLAY" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" /usr/bin/python3 /usr/share/pulsaros/welcome_ootb.py "$@"; then
+            exit 0
+        fi
+    fi
+
+    exec sudo env DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" WAYLAND_DISPLAY="$WAYLAND_DISPLAY" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" /usr/bin/python3 /usr/share/pulsaros/welcome_ootb.py "$@"
 fi
 
 echo "Error: /usr/share/pulsaros/welcome_ootb.py not found" >&2
