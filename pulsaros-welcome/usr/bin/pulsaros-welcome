@@ -5,31 +5,23 @@
 # ==============================================================================
 
 # 1. Do not launch in live ISO / live installer environments
-if [ -d /run/archiso/bootmnt ] || [ -d /run/live ] || [ -d /live ] || grep -qE 'archiso|pulsar-live|boot=live' /proc/cmdline 2>/dev/null; then
+if [ -d /run/archiso/bootmnt ] || [ -d /run/live ] || [ -d /live ] || grep -qE 'archiso|pulsar-live|boot=live' /proc/cmdline 2>/dev/null || [ "$USER" = "live" ]; then
     exit 0
 fi
 
-# 2. If launched via session autostart, restrict to 3rd boot onwards
+# 2. Do not launch while initial OOTB setup wizard is still pending
+if [ -f /etc/pulsar-need-setup ]; then
+    exit 0
+fi
+
+# 3. If launched via session autostart, show once after OOTB setup when the real user logs in
 if [ "$1" = "--autostart" ]; then
     CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/pulsar"
-    BOOT_COUNT_FILE="$CONFIG_DIR/welcome-boot-count"
     SHOWN_FILE="$CONFIG_DIR/welcome-shown"
     mkdir -p "$CONFIG_DIR" 2>/dev/null || true
 
+    # Only show once per user
     if [ -f "$SHOWN_FILE" ]; then
-        exit 0
-    fi
-
-    COUNT=0
-    if [ -f "$BOOT_COUNT_FILE" ]; then
-        COUNT=$(cat "$BOOT_COUNT_FILE" 2>/dev/null || echo 0)
-    fi
-    COUNT=$((COUNT + 1))
-    echo "$COUNT" > "$BOOT_COUNT_FILE" 2>/dev/null || true
-
-    # First boot runs OOTB wizard, second boot is user familiarization,
-    # third boot shows the full welcome feature guide.
-    if [ "$COUNT" -lt 3 ]; then
         exit 0
     fi
 
