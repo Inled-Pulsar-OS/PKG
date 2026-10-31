@@ -31,6 +31,86 @@ from gi.repository import Gtk, Gdk, GLib, Adw, Gio, GdkPixbuf
 # target disk and their checkboxes are locked on in the selection UI.
 EXTRA_PACKAGES_ITEMS = [
     {
+        "id": "gnome-apps",
+        "name": "GNOME System Applications",
+        "desc": "Terminal, Text Editor, System Monitor, Disk Utility, Archive Manager, Partition Editor.",
+        "required": True,
+        "arch_pkgs": ["gnome-terminal", "gnome-text-editor", "gnome-system-monitor", "gnome-disk-utility", "file-roller", "gparted"],
+        "debian_pkgs": ["gnome-terminal", "gnome-text-editor", "gnome-system-monitor", "gnome-disk-utility", "file-roller", "gparted"],
+    },
+    {
+        "id": "gnome-tweaks",
+        "name": "GNOME Tweaks",
+        "desc": "Advanced desktop customization tool.",
+        "required": True,
+        "arch_pkgs": ["gnome-tweaks"],
+        "debian_pkgs": ["gnome-tweaks"],
+    },
+    {
+        "id": "hidamari",
+        "name": "Hidamari (Dynamic Wallpapers)",
+        "desc": "Video and animated dynamic wallpaper engine.",
+        "required": True,
+        "is_flatpak_hidamari": True,
+        "arch_pkgs": ["flatpak"],
+        "debian_pkgs": ["flatpak"],
+    },
+    {
+        "id": "scrcpy",
+        "name": "Scrcpy (Android Screen Mirroring)",
+        "desc": "Display and control Android devices over USB or Wi-Fi.",
+        "required": True,
+        "arch_pkgs": ["scrcpy"],
+        "debian_pkgs": ["scrcpy"],
+    },
+    {
+        "id": "install-macos",
+        "name": "Install macOS (KVM)",
+        "desc": "macOS virtual machine creator and installer.",
+        "required": True,
+        "is_install_macos": True,
+    },
+    {
+        "id": "biometrics",
+        "name": "Touch ID & Face ID Biometrics",
+        "desc": "Gaze facial recognition and fprintd fingerprint authentication.",
+        "required": True,
+        "arch_pkgs": ["gaze", "fprintd"],
+        "debian_pkgs": ["gaze", "fprintd"],
+    },
+    {
+        "id": "sayri",
+        "name": "Sayri AI Assistant",
+        "desc": "Intelligent desktop voice and conversational assistant.",
+        "required": True,
+        "arch_pkgs": ["sayri"],
+        "debian_pkgs": ["sayri"],
+    },
+    {
+        "id": "pulsar-windows",
+        "name": "Pulsar Windows (App Support)",
+        "desc": "Run Windows applications seamlessly on Pulsar OS.",
+        "required": True,
+        "arch_pkgs": ["winboat-bin"],
+        "debian_pkgs": ["winboat"],
+    },
+    {
+        "id": "pulsar-store",
+        "name": "Pulsar App Store",
+        "desc": "App store and package discovery tool.",
+        "required": True,
+        "arch_pkgs": ["pulsar-store"],
+        "debian_pkgs": ["pulsar-store"],
+    },
+    {
+        "id": "pulsaros-update",
+        "name": "Pulsar OS Update Assistant",
+        "desc": "System and software update manager.",
+        "required": True,
+        "arch_pkgs": ["pulsaros-update"],
+        "debian_pkgs": ["pulsaros-update"],
+    },
+    {
         "id": "pulsaros-hblock",
         "name": "hblock (ad & tracker blocking)",
         "desc": "Blocks ads and trackers system-wide via a curated hosts file.",
@@ -1438,6 +1518,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
         
         self.add_utility_row(self.listbox, "install", "Install Pulsar OS", 
                              "Install a fresh copy of Pulsar OS onto your computer.", "logo")
+        self.add_utility_row(self.listbox, "try_live", "Try Pulsar OS (Live Session)", 
+                             "Explore the live desktop environment without installing anything.", "logo")
         self.add_utility_row(self.listbox, "safari", "Seafari", 
                              "Browse the web to get help with your computer.", "safari")
         self.add_utility_row(self.listbox, "disk", "Disk Utility", 
@@ -1544,6 +1626,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
             
         if self.selected_action == "backup":
             subprocess.Popen("pulsaros-timemachine gui || pulsaros-timemachine || python3 /usr/share/pulsaros-timemachine/cli.py gui", shell=True)
+        elif self.selected_action == "try_live":
+            self.on_try_live_clicked(btn)
         elif self.selected_action == "install":
             if self._is_uefi_grub_incompatible():
                 self.stack.set_visible_child_name("install_uefi_incompatible")
@@ -1597,6 +1681,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
         pkgs = []
         aur_pkgs = []
         install_onlyoffice = False
+        install_hidamari = False
+        install_macos = False
         install_localsend = False
         install_cups = False
 
@@ -1605,6 +1691,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
             if item_id in REQUIRED_EXTRA_IDS or self.packages_selected.get(item_id, True):
                 if item.get("is_flatpak_onlyoffice"):
                     install_onlyoffice = True
+                if item.get("is_flatpak_hidamari"):
+                    install_hidamari = True
+                if item.get("is_install_macos"):
+                    install_macos = True
                 if item.get("is_localsend"):
                     install_localsend = True
                 if item.get("is_cups"):
@@ -1626,6 +1716,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
             "pkgs": pkgs,
             "aur_pkgs": aur_pkgs,
             "install_onlyoffice": install_onlyoffice,
+            "install_hidamari": install_hidamari,
+            "install_macos": install_macos,
             "install_localsend": install_localsend,
             "install_cups": install_cups,
         }
@@ -2010,6 +2102,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
             if pkg_info["install_onlyoffice"]:
                 self._install_onlyoffice_flatpak(log_msg, chroot_target=None)
+            if pkg_info.get("install_hidamari"):
+                self._install_hidamari_flatpak(log_msg, chroot_target=None)
+            if pkg_info.get("install_macos"):
+                self._install_macos_kvm(log_msg, chroot_target=None)
 
             GLib.idle_add(self.update_progress, 1.0, "Selected packages installed successfully!")
             log_msg("Done! All selected packages have been installed.")
@@ -2134,6 +2230,71 @@ class RecoveryWindow(Adw.ApplicationWindow):
             except Exception as deb_err:
                 log_msg(f"WARNING: could not install ONLYOFFICE standalone deb: {deb_err}")
 
+    def _install_hidamari_flatpak(self, log_msg, chroot_target=None):
+        """Install Hidamari dynamic wallpaper engine from Flathub via Flatpak."""
+        mounts_to_clean = []
+        if chroot_target:
+            prefix = ["chroot", chroot_target]
+            for src, tgt in [
+                ("/proc", f"{chroot_target}/proc"),
+                ("/sys", f"{chroot_target}/sys"),
+                ("/dev", f"{chroot_target}/dev"),
+                ("/dev/pts", f"{chroot_target}/dev/pts"),
+                ("/etc/resolv.conf", f"{chroot_target}/etc/resolv.conf"),
+            ]:
+                if os.path.exists(src) and os.path.exists(tgt):
+                    try:
+                        res = subprocess.run(["mountpoint", "-q", tgt])
+                        if res.returncode != 0:
+                            subprocess.run(["mount", "--bind", src, tgt], check=True)
+                            mounts_to_clean.append(tgt)
+                    except Exception as m_err:
+                        log_msg(f"Notice: bind mount {tgt}: {m_err}")
+        else:
+            prefix = [] if os.geteuid() == 0 else ["pkexec"]
+
+        try:
+            log_msg("Configuring Flathub and installing Hidamari dynamic wallpapers...")
+            GLib.idle_add(self.update_progress, 0.93, "Installing Hidamari Flatpak...")
+            subprocess.run(
+                prefix + ["flatpak", "remote-add", "--if-not-exists", "--system", "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo"],
+                capture_output=True, text=True, timeout=60,
+            )
+            res = subprocess.run(
+                prefix + ["flatpak", "install", "-y", "--noninteractive", "--system", "flathub", "io.github.jeffshee.Hidamari"],
+                capture_output=True, text=True, timeout=600,
+            )
+            if res.returncode == 0:
+                log_msg("Hidamari installed successfully via Flathub.")
+            else:
+                log_msg(f"Notice: Hidamari install output: {res.stderr or res.stdout}")
+        except Exception as e:
+            log_msg(f"Notice: could not install Hidamari: {e}")
+        finally:
+            for tgt in reversed(mounts_to_clean):
+                try:
+                    subprocess.run(["umount", "-l", tgt], capture_output=True)
+                except Exception:
+                    pass
+
+    def _install_macos_kvm(self, log_msg, chroot_target=None):
+        """Install macOS virtual machine helper into /opt/.ultimate-macOS-KVM."""
+        base_dir = f"{chroot_target}/opt/.ultimate-macOS-KVM" if chroot_target else "/opt/.ultimate-macOS-KVM"
+        try:
+            log_msg("Installing macOS virtual machine support (ultimate-macOS-KVM)...")
+            GLib.idle_add(self.update_progress, 0.95, "Setting up macOS VM environment...")
+            os.makedirs(os.path.dirname(base_dir), exist_ok=True)
+            if not os.path.exists(f"{base_dir}/main.py"):
+                shutil.rmtree(base_dir, ignore_errors=True)
+                subprocess.run(
+                    ["git", "clone", "--depth=1", "https://github.com/Coopydood/ultimate-macOS-KVM", base_dir],
+                    capture_output=True, timeout=180,
+                )
+            subprocess.run(["chmod", "-R", "777", base_dir], capture_output=True)
+            log_msg("ultimate-macOS-KVM setup completed.")
+        except Exception as e:
+            log_msg(f"Notice: could not setup ultimate-macOS-KVM: {e}")
+
     def _install_localsend_debian(self, log_msg, apt_prefix, deb_install_path, deb_host_path=None):
         """Install LocalSend from its official x86-64 .deb (best-effort).
 
@@ -2224,11 +2385,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
         btn_back.add_css_class("secondary-action")
         btn_back.connect("clicked", lambda x: self.stack.set_visible_child_name("utilities"))
         nav_box.append(btn_back)
-
-        btn_live = Gtk.Button(label="Try Live Session")
-        btn_live.add_css_class("secondary-action")
-        btn_live.connect("clicked", self.on_try_live_clicked)
-        nav_box.append(btn_live)
         
         btn_continue = Gtk.Button(label="Continue")
         btn_continue.add_css_class("suggested-action")
@@ -3764,7 +3920,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
         self.btn_offline = Gtk.Button(label="Install Offline (Not Recommended)")
         self.btn_offline.add_css_class("flat")
-        self.btn_offline.set_visible(False)
+        self.btn_offline.set_visible(True)
         self.btn_offline.connect("clicked", self._on_offline_install_clicked)
         nav_box.append(self.btn_offline)
 
@@ -3786,7 +3942,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
         def on_response(d, response):
             if response == "proceed":
                 self.install_extra_packages = False
-                self.stack.set_visible_child_name("install_options")
+                self.install_broadcom = False
+                if self.selected_action in ("packages", "drivers"):
+                    self.stack.set_visible_child_name("utilities")
+                else:
+                    self._proceed_to_confirm_screen()
 
         dialog.connect("response", on_response)
         dialog.present()
@@ -3813,7 +3973,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.btn_open_network.set_visible(False)
         self.btn_enable_warp.set_visible(False)
         self.btn_net_continue.set_sensitive(False)
-        self.btn_offline.set_visible(False)
+        self.btn_offline.set_visible(True)
         self.stack.set_visible_child_name("network_check")
         self._set_net_spinner(True)
 
@@ -3847,27 +4007,38 @@ class RecoveryWindow(Adw.ApplicationWindow):
         try:
             out = subprocess.run(
                 ["nmcli", "-t", "-f", "STATE", "general"],
-                capture_output=True, text=True, timeout=8,
+                capture_output=True, text=True, timeout=5,
             )
             online = "connected" in out.stdout
         except Exception:
             pass
 
-        # Fallback: try to reach a well-known host even if nmcli is unavailable
+        # Fallback: try to reach well-known hosts even if nmcli is unavailable
+        if not online:
+            for host, port in [("1.1.1.1", 53), ("8.8.8.8", 53), ("1.1.1.1", 443), ("8.8.8.8", 443)]:
+                try:
+                    socket.setdefaulttimeout(3)
+                    s = socket.create_connection((host, port), timeout=3)
+                    s.close()
+                    online = True
+                    break
+                except Exception:
+                    pass
+
         if not online:
             try:
-                socket.setdefaulttimeout(5)
-                socket.create_connection(("1.1.1.1", 443), timeout=5)
-                online = True
+                res = subprocess.run(["curl", "-skI", "--max-time", "3", "https://archlinux.org"], capture_output=True, timeout=4)
+                if res.returncode == 0:
+                    online = True
             except Exception:
-                online = False
+                pass
 
         if not online:
             self._set_net_spinner(False)
             set_status("error", "⚠️ No Internet connection detected.")
             set_detail(
                 "Connect to a Wi-Fi or Ethernet network and tap \"Open Network Settings\" to configure it.\n\n"
-                "Once connected we will automatically retry the connection to the Inled repository."
+                "Once connected we will automatically retry the connection to the Inled repository, or you can choose to Install Offline."
             )
             GLib.idle_add(lambda: self.btn_open_network.set_visible(True))
             GLib.idle_add(lambda: self.btn_offline.set_visible(True))
@@ -3888,14 +4059,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
             )
             GLib.idle_add(lambda: self.btn_net_continue.set_sensitive(True))
         else:
-            set_status("warn", "⚠️ Internet OK, but the repository seems blocked.")
+            set_status("warn", "⚠️ Internet OK, but the repository seems slow or blocked.")
             set_detail(
                 "You appear to be online, but the Pulsar OS repository (apt.inled.es) "
-                "could not be reached. This is common in regions where Cloudflare is censored.\n\n"
-                "Enable the bundled Cloudflare WARP VPN to route around the block, or "
-                "check your network settings if you believe the connection is wrong."
+                "could not be reached directly. You can enable Cloudflare WARP or continue anyway."
             )
             GLib.idle_add(lambda: self.btn_enable_warp.set_visible(True))
+            GLib.idle_add(lambda: self.btn_net_continue.set_sensitive(True))
             # Keep polling so Continue unlocks if connectivity is restored
             self._poll_until_inled_reachable()
 
@@ -4874,6 +5044,18 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 # Install ONLYOFFICE via Flatpak from Flathub if selected
                                 if pkg_info["install_onlyoffice"]:
                                     self._install_onlyoffice_flatpak(log_msg, chroot_target="/mnt")
+
+                                if pkg_info.get("install_hidamari"):
+                                    self._install_hidamari_flatpak(log_msg, chroot_target="/mnt")
+
+                                if pkg_info.get("install_macos"):
+                                    self._install_macos_kvm(log_msg, chroot_target="/mnt")
+
+                                if pkg_info.get("install_hidamari"):
+                                    self._install_hidamari_flatpak(log_msg, chroot_target="/mnt")
+
+                                if pkg_info.get("install_macos"):
+                                    self._install_macos_kvm(log_msg, chroot_target="/mnt")
                             except Exception as post_err:
                                 log_msg(f"Post-install package installation: {post_err}")
 
@@ -4948,6 +5130,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
                                 if pkg_info["install_onlyoffice"]:
                                     self._install_onlyoffice_flatpak(log_msg, chroot_target="/mnt")
+
+                                if pkg_info.get("install_hidamari"):
+                                    self._install_hidamari_flatpak(log_msg, chroot_target="/mnt")
+
+                                if pkg_info.get("install_macos"):
+                                    self._install_macos_kvm(log_msg, chroot_target="/mnt")
                             except Exception as post_err:
                                 log_msg(f"Post-install apt installation: {post_err}")
 
