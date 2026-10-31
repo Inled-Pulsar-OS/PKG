@@ -10,11 +10,49 @@ cd "$SRC_DIR"
 
 # Install native Rust binary as the main launcher
 mkdir -p "$STAGE_DIR/usr/bin"
-if [ ! -f target/release/pulsaros-spotlight ] || [ src/main.rs -nt target/release/pulsaros-spotlight ]; then
-    echo "🦀 Building pulsaros-spotlight (release)..."
-    cargo build --release
+is_debian_target=false
+if [ -n "$DEBIAN_VERSION" ] || [ -f "$STAGE_DIR/DEBIAN/control" ]; then
+    is_debian_target=true
 fi
-install -m 755 target/release/pulsaros-spotlight "$STAGE_DIR/usr/bin/pulsaros-spotlight"
+
+needs_debian_rebuild=false
+if $is_debian_target && [ -f target/release/pulsaros-spotlight ]; then
+    if strings target/release/pulsaros-spotlight | grep -q 'GLIBC_2\.4[2-9]\|GLIBC_2\.[5-9]'; then
+        needs_debian_rebuild=true
+    fi
+fi
+
+if $is_debian_target && [ "$needs_debian_rebuild" = true ]; then
+    if [ -f target/debian/release/pulsaros-spotlight ] && ! strings target/debian/release/pulsaros-spotlight | grep -q 'GLIBC_2\.4[2-9]\|GLIBC_2\.[5-9]'; then
+        echo "⚡ Reusing Debian-compatible binary from target/debian/release..."
+        install -m 755 target/debian/release/pulsaros-spotlight "$STAGE_DIR/usr/bin/pulsaros-spotlight"
+    elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+        echo "🐳 Compiling pulsaros-spotlight inside debian:trixie for GLIBC <= 2.41 compatibility..."
+        mkdir -p target/debian
+        docker run --rm \
+            -v "$SRC_DIR:/workspace" \
+            -w /workspace \
+            debian:trixie bash -c "
+                set -e
+                export DEBIAN_FRONTEND=noninteractive
+                apt-get update
+                apt-get install -y --no-install-recommends build-essential pkg-config libgtk-4-dev libadwaita-1-dev curl
+                curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+                export PATH=\"/root/.cargo/bin:\$PATH\"
+                cargo build --release --target-dir target/debian
+            "
+        install -m 755 target/debian/release/pulsaros-spotlight "$STAGE_DIR/usr/bin/pulsaros-spotlight"
+    else
+        echo "⚠️ Warning: Spotlight binary requires GLIBC_2.44 and docker is not available to cross-compile for Debian. Use GitHub Actions for Debian release."
+        install -m 755 target/release/pulsaros-spotlight "$STAGE_DIR/usr/bin/pulsaros-spotlight"
+    fi
+else
+    if [ ! -f target/release/pulsaros-spotlight ] || [ src/main.rs -nt target/release/pulsaros-spotlight ]; then
+        echo "🦀 Building pulsaros-spotlight (release)..."
+        cargo build --release
+    fi
+    install -m 755 target/release/pulsaros-spotlight "$STAGE_DIR/usr/bin/pulsaros-spotlight"
+fi
 
 # Install helper CLI scripts
 install -m 755 cli/pulsaros-toggle-remap "$STAGE_DIR/usr/bin/pulsaros-toggle-remap" 2>/dev/null || true
