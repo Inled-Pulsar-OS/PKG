@@ -50,7 +50,7 @@ try:
 except Exception:
     HAS_WEBKIT = False
 
-from gi.repository import Gtk, Gdk, GLib, Adw, Gio
+from gi.repository import Gtk, Gdk, GLib, Adw, Gio, Pango
 
 # ── Animated Fingerprint Widget (Native GTK4 Animated Symbolic Fingerprint) ──
 class NativeAnimatedFingerprint(Gtk.Box):
