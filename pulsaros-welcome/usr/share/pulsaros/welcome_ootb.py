@@ -2368,8 +2368,7 @@ class OOTBWindow(Adw.ApplicationWindow):
                 log_msg(f"Locking live user account...")
                 run_cmd(["usermod", "-L", "-s", "/usr/sbin/nologin", "live"], check=False)
 
-                # ── Create real user with useradd ─────────────────
-                log_msg(f"Creating user '{username}' via useradd...")
+                # ── Create or configure real user ─────────────────
                 user_home = f"/home/{username}"
                 # Some groups are distro/package specific (plugdev exists on
                 # Debian but not Arch; docker only if docker is installed), so
@@ -2377,24 +2376,31 @@ class OOTBWindow(Adw.ApplicationWindow):
                 desired_groups = ["sudo", "wheel", "audio", "video", "plugdev", "docker"]
                 existing_groups = get_existing_groups()
                 extra_groups = ",".join(g for g in desired_groups if g in existing_groups)
-                u_res = run_cmd([
-                    "useradd", "-m",
-                    "-d", user_home,
-                    "-s", "/bin/bash",
-                    "-G", extra_groups,
-                    "-c", fullname,
-                    username
-                ], check=False)
 
-                if u_res.returncode == 9 or f"{username}:" in open("/etc/passwd").read():
-                    log_msg(f"User '{username}' already exists; updating user configuration...")
+                user_check = subprocess.run(["id", username], capture_output=True, text=True)
+                if user_check.returncode == 0:
+                    log_msg(f"User '{username}' was pre-created during biometric setup, updating profile and groups...")
                     if extra_groups:
                         run_cmd(["usermod", "-aG", extra_groups, username], check=False)
                     run_cmd(["usermod", "-s", "/bin/bash", "-c", fullname, username], check=False)
                     os.makedirs(user_home, exist_ok=True)
                     run_cmd(["chown", "-R", f"{username}:{username}", user_home], check=False)
-                elif u_res.returncode != 0:
-                    raise Exception(f"useradd failed with code {u_res.returncode}: {u_res.stderr}")
+                else:
+                    log_msg(f"Creating user '{username}' via useradd...")
+                    u_cmd = ["useradd", "-m", "-d", user_home, "-s", "/bin/bash", "-c", fullname]
+                    if extra_groups:
+                        u_cmd.extend(["-G", extra_groups])
+                    u_cmd.append(username)
+                    u_res = run_cmd(u_cmd, check=False)
+                    if u_res.returncode == 9:
+                        log_msg(f"User '{username}' already exists; updating user configuration...")
+                        if extra_groups:
+                            run_cmd(["usermod", "-aG", extra_groups, username], check=False)
+                        run_cmd(["usermod", "-s", "/bin/bash", "-c", fullname, username], check=False)
+                        os.makedirs(user_home, exist_ok=True)
+                        run_cmd(["chown", "-R", f"{username}:{username}", user_home], check=False)
+                    elif u_res.returncode != 0:
+                        raise Exception(f"useradd failed with code {u_res.returncode}: {u_res.stderr}")
 
                 # Verify user was created in /etc/passwd
                 res = run_cmd(["grep", f"^{username}:", "/etc/passwd"])
