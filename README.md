@@ -1,4 +1,7 @@
-# Pulsar OS – PKG (Package Sources)
+# Pulsar OS – PKG (Package Sources)  
+
+> **IMPORNANT!**
+> If you're going to develop changes for Puslar OS, be aware that there are deprecated packages on this repo not marked as deprecated. Also, we're working on a 2.0 release so there are a lot of changes and is recommended to wait for the updates. (Thanks to Victor for reporting this, we will remove the deprecated packages soon.)
 
 This repository holds the package sources that make up **Pulsar OS** and its
 NAS-oriented sibling **Tube OS**. Every folder with a `DEBIAN/control` file is a
