@@ -1,7 +1,33 @@
 # Pulsar OS – PKG (Package Sources)  
 
-> **IMPORNANT!**
-> If you're going to develop changes for Puslar OS, be aware that there are deprecated packages on this repo not marked as deprecated. Also, we're working on a 2.0 release so there are a lot of changes and is recommended to wait for the updates. (Thanks to Victor for reporting this, we will remove the deprecated packages soon.)
+> [!IMPORTANT]
+> **Pulsar OS 2.0 Package Status & Deprecations**  
+> Este repositorio contiene el código fuente de los paquetes para **Pulsar OS** (Bitten Fruit) y su versión para servidores NAS **Tube OS**. A continuación se detallan los paquetes actuales del sistema, los nuevos componentes introducidos en la versión 2.0 y los paquetes formalmente **deprecados / descontinuados** que ya no deben incluirse en nuevas imágenes ni instalaciones.
+
+Este repositorio almacena el código de los paquetes de Pulsar OS, los cuales son desarrollados tanto para Debian como Arch.  
+Estos paquetes incluyen un archivo de `prepare-assets.sh` cuya tarea es colocar los assets en el staging para que luego se empaqueten para sistema Arch o Debian. Los paquetes se pueden compilar e instalar en local (para el proceso de desarrollo) pero para desplegarse a los usuarios siempre se empaquetan desde GH Actions, garantizando la reproducibilidad y confianza. Los paquetes son desplegados al repositorio [APT Inled](https://apt.inled.es) (llamado apt pero realmente es un repositorio pacman, dnf y apt). Estos paquetes son luego utilizados para la creación de la ISO (también desde GH Actions) así como para proveer de las nuevas funcionalidades a los usuarios que tienen el sistema ya instalado.  
+
+Este repositorio contiene todos los paquetes para todas las distribuciones de Pulsar OS, las cuales actualmente son Bittenfruit y Tube OS.  
+
+Posiblemente quiera [consultar el repositorio ISO](https://github.com/Inled-Pulsar-OS/ISO) para conocer cómo se construye la imagen ISO.  
+
+---
+
+## ⚠️ Deprecated & Discontinued Packages / Paquetes obsoletos
+
+Los siguientes paquetes están marcados como **obsoletos** o han sido completamente **descontinuados** en Pulsar OS 2.0:
+
+| Package | Status | Razón / Reemplazo |
+|---|---|---|
+| `pulsar-store` | **Descontinuado / Eliminado** | La tienda anterior de Pulsar Store ha sido retirada y no se incluye en la ISO ni en la instalación. La gestión de paquetes y software se realiza mediante las herramientas nativas del sistema, Flatpak y AppInstall. |
+| `dockermigrate` | **Obsoleto** | Herramienta experimental previa para migración de contenedores Docker en Tube OS; descontinuada en favor de las herramientas nativas de copia y restauración de volúmenes de CasaOS/Docker. |
+| `pulsaros-control-center-button` | **Obsoleto** | Sustituido por la integración nativa en GNOME Shell a través de `pulsaros-control-center`, `Pulsar-CC-27-Gnome` y `Pulsar-Notification-Center`. |
+| `gnome-macos-remap-wayland` | **Obsoleto** | Reasignación basada en xremap descontinuada. En Pulsar OS 2.0 la reasignación de teclas (Ctrl↔Super/Command, accesos de teclado macOS) se gestiona de forma nativa a través de GNOME Mutter y las opciones de XKB en dconf. |
+| `driverman` | **Obsoleto** | Asistente de controladores antiguo de Debian; sustituido por la detección automática en el entorno de instalación y recuperación de `pulsaros-recovery` y los repositorios oficiales. |
+| `scrcpy` | **Obsoleto (Empaquetado)** | Empaquetado interno legado; se utiliza directamente el paquete upstream oficial provisto por los repositorios de Arch / Debian. |
+| `hblock` | **Obsoleto** | Paquete binario redistribuido reemplazado por la solución integrada moderna `pulsaros-hblock` y el cortafuegos `pulsaros-firewall`. |
+
+---
 
 This repository holds the package sources that make up **Pulsar OS** and its
 NAS-oriented sibling **Tube OS**. Every folder with a `DEBIAN/control` file is a
@@ -27,7 +53,7 @@ repository and consumed by the [ISO build](https://github.com/Inled-Pulsar-OS/IS
 | `pulsar-pear-sound-theme` | macOS-like **system sound theme**: alerts, notifications, volume changes, device connection, trash and dialog sounds for Linux desktop environments. |
 | `pulsaros-bootsound` | Plays the official **startup sound** at boot with `aplay` through a systemd service. |
 | `pulsar-boot-icons` | High-resolution **bootloader icons** (live and installed boot entries) used by the rEFInd and GRUB themes. |
-| `pulsaros-essential` | System glue for the desktop & live environment: ships the **`pulsar-store`** CLI and the **Fildem HUD** global-menu framework, configures locales, network interfaces, the official wallpapers (registered in GNOME), passwordless sudo/polkit for the `live` user, NVIDIA VRAM-preservation modprobe options, systemd sleep configuration for hibernation and the default `mimeapps` (Seafari, AppInstall…). |
+| `pulsaros-essential` | System glue for the desktop & live environment: ships default locales, network interfaces, official wallpapers (registered in GNOME), passwordless sudo/polkit for the `live` user, NVIDIA VRAM-preservation modprobe options, systemd sleep configuration for hibernation and default MIME associations. |
 
 ### Boot & login
 
@@ -35,7 +61,7 @@ repository and consumed by the [ISO build](https://github.com/Inled-Pulsar-OS/IS
 |---|---|
 | `pulsaros-plymouth` | macOS-like **Plymouth boot splash**, replacing the default Debian/Arch boot logos. |
 | `pulsaros-grub` | macOS-like **GRUB theme** (bootloader menu), packaged and configured for BIOS/EFI installs. |
-| `pulsaros-refind` | **rEFInd** configuration with a macOS-style theme, packaged from the Inled rEFInd theme repository. |
+| `pulsaros-refind` | **rEFInd** configuration with a macOS-style theme, packaged from the Inled rEFInd theme repository with single-label clean icons. |
 | `pulsaros-sddm` | Makes **SDDM** the default display manager using the **Apple Tahoe** login theme (macOS Tahoe look, video-wallpaper capable). Keeps the gdm3 libraries so GNOME screen locking keeps working. |
 | `pulsaros-hibernate` | Hibernation UX: shows a **Plymouth progress splash** during hibernation (covering the NVIDIA VRAM save and the kernel-image write) and a **resume-offset guardian** that verifies at every boot that the rEFInd `resume_offset` matches the real `/swapfile` geometry, repairing it automatically if the swapfile is recreated or moved. |
 
@@ -44,49 +70,58 @@ repository and consumed by the [ISO build](https://github.com/Inled-Pulsar-OS/IS
 | Package | What it does |
 |---|---|
 | `pulsaros-theme` | **MacTahoe GTK theme** (GTK3/GTK4) and **MacTahoe icon theme**, compiled and applied system-wide and to new users via `/etc/skel`. |
-| `pulsaros-gnome` | The Pulsar desktop extension layer: downloads and preinstalls a curated stack of GNOME Shell extensions, compiles and installs **Pulsar Dock** (the Inled Dash-to-Dock fork) and **Liquid Glass**, and injects GSchema overrides + dconf databases that produce the macOS-like desktop out of the box. Replaces `gnome-shell-extension-dashtodock`. |
-| `pulsaros-global-menu` | Large in-house GNOME Shell extension (GNOME 45–50, Wayland): **Mac-style global application menus** in the top bar (Apple menu, File/Edit/View…, power-off/restart dialogs with a 60 s countdown) plus a full-screen **custom lock screen** that can play the live video wallpaper. |
-| `pulsaros-notchnux` | **macOS-style dynamic notch and Control Center** for GNOME Shell, customized for Pulsar OS with multi-monitor support, AMOLED-black styling, media controls, system information, notifications and connected-device integration. |
-| `pulsaros-control-center` | Custom compile of **GNOME Control Center** (48.x) with Pulsar OS patches: Appearance panel with the Live Wallpaper engine, Liquid Glass effect, macOS-style accent colors and custom layout. Provides/replaces the stock `gnome-control-center`. |
-| `pulsaros-control-center-button` | Small GNOME Shell extension that adds a **macOS-style Control Center button** to the Quick Settings / system menu, opening GNOME Control Center. |
-| `gnome-macos-remap-wayland` | **macOS keyboard remapping for GNOME on Wayland** built on `xremap`: ships the remap config and offline `xremap` binaries (GNOME/X11), patched so the macOS shortcut scheme composes with the XKB Ctrl↔Super swap that Pulsar OS applies via dconf. |
-| `pulsaros-spotlight-launcher` | **Spotlight-like search**: a native Rust/GTK4 search window with full-text file & application search powered by GNOME Tracker/TinySPARQL (`localsearch`), helper CLIs (`pulsaros-toggle-remap`, `pulsaros-toggle-launcher`) and a GNOME Shell extension adding the Spotlight icon to the top bar. Replaces the older `spotlight-gtk` / `spotlight-python` packages. |
-| `nautilus` | **Finder**, the Pulsar OS file manager: a custom build of GNOME Files with a macOS-inspired layout, real-time **folder color tagging** and a per-color filter in the sidebar. Compiled from the Inled Finder fork (a git submodule) and ABI-compatible with stock Nautilus. |
-| `pulsaros-live-wallpaper` | **Animated / video wallpaper engine and daemon**: plays MP4, WebM, GIF, MKV and WebP wallpapers natively through the Hidamari engine, and synchronizes a poster frame plus the same wallpaper across the GNOME desktop background, the lock screen and the SDDM login screen. |
-| `pulsaros-cloud` | **Cloud drives in the Finder sidebar**: a wrapper around `rclone` that adds, mounts and removes cloud accounts (Google Drive, OneDrive, iCloud or any rclone backend) under `~/Cloud/<name>`, with a systemd user mount unit. |
+| `pulsaros-gnome` | The Pulsar desktop extension layer: downloads and preinstalls a curated stack of GNOME Shell extensions, compiles and installs **Pulsar Dock** and **Liquid Glass**, and injects GSchema overrides + dconf databases that produce the macOS-like desktop out of the box. |
+| `Pulsar-Dock` | Inled fork of Dash-to-Dock maintained for Pulsar OS with smart dynamic autohide, macOS bottom placement, and subtle indicators. |
+| `Pulsar-Liquid-Glass` | Translucent glass effects engine for GNOME Shell, producing frosted glass visuals for dock, panels, and system popups. |
+| `Pulsar-CC-27-Gnome` | Modular macOS-style **Control Center** for GNOME Shell with quick toggles for Wi-Fi, Bluetooth, AirDrop/FlyDrop, Display Brightness, and Sound. |
+| `Pulsar-Notification-Center` | Native macOS-styled **Notification Center** for GNOME Shell with grouped alerts, widgets, and clean dismissal. |
+| `pulsaros-global-menu` | Large in-house GNOME Shell extension (Wayland): **Mac-style global application menus** in the top bar (Apple menu, File/Edit/View…, power-off/restart dialogs with countdown) plus a full-screen **custom lock screen**. |
+| `pulsaros-notchnux` | **macOS-style dynamic notch** for GNOME Shell, customized for Pulsar OS with multi-monitor support, AMOLED-black styling, media controls, system information, and interactive notifications. |
+| `pulsaros-control-center` | Custom compile of **GNOME Control Center** with Pulsar OS patches: Appearance panel with Live Wallpaper engine, Liquid Glass effects, macOS-style accent colors and custom layout. |
+| `pulsar-desktop-icons` | Fluid, minimalist desktop icon manager designed specifically for Pulsar OS. |
+| `no-overview` | Lightweight GNOME extension that prevents the Activities Overview from launching at login, booting directly with the desktop focused. |
+| `pulsaros-ui-tweaks` | Fine-grained shell configuration suite: startup behavior, icon sizes, panel margins, and fluid animations. |
+| `wiggle` | Cursor shake effect: shakes and briefly enlarges the mouse pointer when moved rapidly, making it effortless to locate on large or multiple monitors. |
+| `pulsaros-spotlight-launcher` | **Spotlight-like search**: native Rust/GTK4 search window with full-text file & application search powered by GNOME Tracker/TinySPARQL (`localsearch`). |
+| `nautilus` | **Finder**, the Pulsar OS file manager: custom build of GNOME Files with macOS layout, real-time **folder color tagging** and per-color filters in the sidebar. |
+| `pulsaros-live-wallpaper` | **Animated / video wallpaper engine and daemon**: plays MP4, WebM, GIF, MKV and WebP wallpapers natively through the Hidamari engine, synchronized across desktop, lock screen, and SDDM login screen. |
+| `pulsaros-cloud` | **Cloud drives in Finder sidebar**: wrapper around `rclone` that mounts cloud accounts (Google Drive, OneDrive, iCloud) under `~/Cloud/<name>`. |
 
 ### Apps, assistants & utilities
 
 | Package | What it does |
 |---|---|
-| `pulsaros-welcome` | First-boot **Welcome / OOTB** application: a native Tauri (Rust + React) app that detects live / first-boot / installed systems, shows the Apple-like "hello" animation, a feature slideshow, app-compatibility info, settings, and shortcuts to Sayri and Recovery, then closes by itself. Ships the OOTB and user-cleanup helpers (`pulsaros-ootb`, `pulsar-cleanup-user`). |
-| `pulsaros-recovery` | **Recovery & installer UI** in the style of macOS Recovery: a full-screen GTK4/Libadwaita flow with Recovery Utilities (Install Pulsar OS, Seafari browser, Disk Utility/GParted, Time Machine, extra packages), disk/partition pickers, clean-install and dual-boot installers writing Btrfs with rEFInd/GRUB, plus a native Rust helper (`pulsar-recovery-assistant`) for privileged operations. |
-| `pulsaros-timemachine` | **Continuous backup suite**: local **Btrfs snapshots** that are synced with **restic** to USB drives, Samba/NAS shares and rclone cloud storage. Ships a GTK4/Libadwaita UI, a scheduler service and a CLI. |
-| `pulsaros-circle-to-search` | **Circle to Search** for the Linux desktop: shake the mouse or press a shortcut, select a screen region, and get real-time **OCR** (Tesseract), an optional AI query answered by **Sayri**, and instant visual Google search. GNOME Shell extension + Python helper. |
-| `pulsaros-flydrop` | **FlyDrop: AirDrop-style local file sharing.** A self-contained Python daemon that speaks the open **LocalSend v2** protocol on the LAN — UDP multicast discovery on `224.0.0.167:53317` plus HTTP/HTTPS transfers with a self-signed TLS client cert — so Pulsar OS can exchange files with any LocalSend app (Android, iOS, Windows, macOS, other distros) **without installing LocalSend itself** (`localsend` stays an optional `Suggests:`). Ships a GTK4 send/transfer UI with circular progress and per-file retry, a **"Dynamic Shelf" GNOME Shell extension** (`flydrop@pulsaros.org`) whose island stages whatever is in the clipboard so you can drag it straight into an open window, a **"Send with FlyDrop"** Nautilus right-click action, and a user systemd service + autostart entry that keeps the daemon up. `flydrop` CLI wraps the same daemon for terminal use. |
-| `sayri` | **Siri-like AI assistant**: an always-available orb pinned to the top of the screen (GTK4 layer-shell). Speech-to-text with **whisper.cpp**, text-to-speech with **Piper**, and any OpenAI-compatible provider (OpenAI, Ollama, LM Studio…). Runs in agent mode with 5 sandbox levels, wake word, skills, plugins and gateway instances (Discord, Telegram…). |
-| `driverman` | **GPU driver manager**: detects the installed GPU and manages its driver packages through `apt`, with a CLI (`driverman`) and a dark GTK front-end (`driverman-gui`). If a package install hits a dependency conflict the user keeps control of a terminal to resolve it. |
-| `scrcpy` | The **scrcpy** Android screen mirroring & control utility, packaged for Pulsar OS (uses `adb`). |
+| `pulsaros-welcome` | First-boot **Welcome / OOTB** application: native onboarding with Apple-like "hello" animation, real-time configuration progress bar, live log viewer, and user setup. |
+| `pulsaros-recovery` | **Recovery & installer UI** in the style of macOS Recovery: full-screen GTK4/Libadwaita interface with Recovery Utilities (Install Pulsar OS, Seafari browser, Disk Utility/GParted, Time Machine), Btrfs repair, and multi-boot installers. |
+| `pulsaros-firewall` | Modern desktop firewall interface built on UFW: simple toggles, connection profiles, and port management without terminal commands. |
+| `pulsaros-vpn` | Integrated VPN manager for WireGuard and OpenVPN configurations with instant top-bar status and connection control. |
+| `pulsaros-feedback` | User feedback and bug reporting assistant for submitting diagnostics and improvement suggestions. |
+| `pulsaros-whatsnew` | Interactive release notes and update showcase dialog displayed automatically after system upgrades. |
+| `pulsaros-hblock` | System-wide ad, tracking, and malware blocker with interactive GTK4 management interface. |
+| `pulsaros-timemachine` | **Continuous backup suite**: local Btrfs snapshots synced with restic to USB drives, Samba/NAS shares, and cloud storage. |
+| `pulsaros-circle-to-search` | **Circle to Search**: shake mouse or press shortcut, select a screen region for real-time OCR (Tesseract), AI analysis with Sayri, or Google visual search. |
+| `pulsaros-flydrop` | **FlyDrop: AirDrop-style local file sharing.** Self-contained Python daemon speaking the LocalSend v2 protocol on LAN with GTK4 UI, dynamic shelf GNOME extension, and Nautilus right-click integration. |
+| `sayri` | **Siri-like AI assistant**: floating orb (GTK4 layer-shell), local speech-to-text with whisper.cpp, Piper TTS, and agentic integrations. |
+| `pulsaros-update` | Graphical system update assistant for scheduled and on-demand maintenance of Arch and Debian packages. |
 
 ### Tube OS (NAS / home-server line)
 
 | Package | What it does |
 |---|---|
-| `tube-os-dash` | **Tube OS Dashboard**: the elegant web dashboard and app orchestrator of Tube OS — Docker app store/management, storage (mergerfs, Samba, NTFS…), disks/health (smartmontools) and cloud mounts (rclone). |
-| `dockermigrate` | **Docker migration tool with a web UI**: export and import Docker containers, volumes and compose projects between machines; web interface on port 8070 for selecting containers and managing backups (systemd service included). |
-| `tubeos-installer` | **Headless web installer / OOTB setup** for Tube OS: a browser-accessible (FastAPI) installer at `http://tubeos.local` that installs Tube OS to disk and configures timezone, keyboard and user. No HDMI needed — just ethernet + a browser. |
-| `tubeos-branding` | Logos, icons and branding assets for the Tube OS distribution. |
-| `tubeos-plymouth` | Animated **Plymouth boot splash** for Tube OS using the Tube OS logo. |
+| `tube-os-dash` | **Tube OS Dashboard**: web dashboard and app orchestrator for Tube OS — Docker app management, storage, disk health, and cloud mounts. |
+| `tubeos-installer` | **Headless web installer / OOTB setup** for Tube OS: browser-accessible installer at `http://tubeos.local` for complete disk install and setup without HDMI. |
+| `tubeos-branding` | Logos, icons, and branding assets for Tube OS. |
+| `tubeos-plymouth` | Animated Plymouth boot splash for Tube OS. |
+| `tubeos-ui` | Specialized system utilities and management interfaces for Tube OS. |
 
 ### Support folders & scripts
 
 | Path | What it is |
 |---|---|
-| `arch/` | `PKGBUILD`s that package the same Pulsar OS components for the **Arch Linux** edition of the ISO. |
-| `apple-hello/` | Source of the Apple-style "hello" **boot animation** used by the Welcome app (a CodePen original by *steef*). |
-| `pulsaros-control-center-button/` | Standalone sources of the "Control Center Button" GNOME Shell extension. |
-| `.github/workflows/` | CI that compiles the packages (`build-packages.yml`) and deploys them to the Inled APT repository. |
-| `package-and-deploy.sh` | Builds one, several or all packages into `.deb`s and (optionally) uploads + dispatches them to the central APT repo. |
+| `arch/` | `PKGBUILD`s packaging all Pulsar OS components for the **Arch Linux** edition of the ISO. |
+| `apple-hello/` | Source of the Apple-style "hello" boot animation used by the Welcome app. |
+| `.github/workflows/` | CI that compiles the packages (`build-packages.yml`) and deploys them to the Inled central repository. |
+| `package-and-deploy.sh` | Builds packages into `.deb` / `.pkg.tar.zst` and deploys them to local and central repositories. |
 | `install-local.sh` / `install-spotlight-local.sh` | Local-development installers (global menu / Spotlight extension). |
 | `test-*.sh`, `check-repo-versions.sh`, `test-installer-mounts.py` | Testing and repo-health helpers. |
 | `build/` | Local build staging (`.deb` output), not source. |

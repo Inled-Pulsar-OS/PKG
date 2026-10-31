@@ -419,6 +419,30 @@ window .theme-preview-dark {
     background-color: rgba(255, 59, 48, 0.15);
     color: #d70015;
 }
+.progress-bar-thin trough {
+    min-height: 4px;
+    border-radius: 2px;
+    background-color: rgba(128, 128, 128, 0.2);
+}
+.progress-bar-thin progress {
+    min-height: 4px;
+    border-radius: 2px;
+    background-color: #0071e3;
+}
+.progress-text {
+    font-size: 12px;
+    color: #86868b;
+}
+.live-log-view-flat {
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
+    border: 1px solid rgba(128, 128, 128, 0.2);
+}
+.live-log-text {
+    font-family: monospace;
+    font-size: 11px;
+    padding: 8px;
+}
 """
 
 
@@ -1905,27 +1929,109 @@ class OOTBWindow(Adw.ApplicationWindow):
             Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_LIGHT)
             self.selected_theme = "light"
     def build_progress_page(self):
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
-        box.set_valign(Gtk.Align.CENTER)
-        box.set_halign(Gtk.Align.CENTER)
+        self.progress_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        self.progress_box.set_valign(Gtk.Align.CENTER)
+        self.progress_box.set_halign(Gtk.Align.CENTER)
+        self.progress_box.set_size_request(520, -1)
 
-        # Large beautiful loading spinner
-        self.progress_spinner = Gtk.Spinner()
-        self.progress_spinner.set_size_request(64, 64)
-        self.progress_spinner.add_css_class("suggested-action")
-        box.append(self.progress_spinner)
+        # Header Icon
+        self.progress_icon = Gtk.Image.new_from_icon_name("system-run-symbolic")
+        self.progress_icon.set_pixel_size(56)
+        self.progress_icon.add_css_class("suggested-action")
+        self.progress_box.append(self.progress_icon)
 
         # Title
         self.progress_title = Gtk.Label(label="Configuring your system...")
         self.progress_title.add_css_class("welcome-title")
-        box.append(self.progress_title)
+        self.progress_box.append(self.progress_title)
 
         # Subtitle
-        sub_label = Gtk.Label(label="Please wait while Pulsar OS sets up your user account and system files.")
-        sub_label.add_css_class("welcome-subtitle")
-        box.append(sub_label)
+        self.progress_subtitle = Gtk.Label(label="Please wait while Pulsar OS sets up your user account and system files.")
+        self.progress_subtitle.add_css_class("welcome-subtitle")
+        self.progress_box.append(self.progress_subtitle)
 
-        self.stack.add_named(box, "setup_progress")
+        # Persistent Progress bar
+        self.progress_bar = Gtk.ProgressBar()
+        self.progress_bar.add_css_class("progress-bar-thin")
+        self.progress_bar.set_size_request(420, -1)
+        self.progress_bar.set_halign(Gtk.Align.CENTER)
+        self.progress_box.append(self.progress_bar)
+
+        # Real-time progress row: latest log message on left, live log view button on right
+        info_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        info_row.set_halign(Gtk.Align.CENTER)
+        info_row.set_size_request(420, -1)
+
+        self.progress_label = Gtk.Label(label="Starting configuration...")
+        self.progress_label.add_css_class("progress-text")
+        self.progress_label.set_hexpand(True)
+        self.progress_label.set_halign(Gtk.Align.START)
+        self.progress_label.set_ellipsize(Pango.EllipsizeMode.END)
+        self.progress_label.set_max_width_chars(42)
+        info_row.append(self.progress_label)
+
+        self.btn_log = Gtk.Button()
+        self.btn_log.set_icon_name("utilities-terminal-symbolic")
+        self.btn_log.set_tooltip_text("Show Configuration Log")
+        self.btn_log.add_css_class("flat")
+        self.btn_log.connect("clicked", self.on_toggle_live_log_clicked)
+        info_row.append(self.btn_log)
+
+        self.progress_box.append(info_row)
+
+        # Live log viewer panel (collapsible)
+        self.log_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.log_panel.set_visible(False)
+        self.log_panel.set_halign(Gtk.Align.CENTER)
+
+        log_scrolled = Gtk.ScrolledWindow()
+        log_scrolled.set_size_request(480, 160)
+        log_scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        log_scrolled.add_css_class("live-log-view-flat")
+
+        self.log_buffer = Gtk.TextBuffer()
+        self.log_text_view = Gtk.TextView(buffer=self.log_buffer)
+        self.log_text_view.set_editable(False)
+        self.log_text_view.set_monospace(True)
+        self.log_text_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self.log_text_view.add_css_class("live-log-text")
+
+        log_scrolled.set_child(self.log_text_view)
+        self.log_panel.append(log_scrolled)
+        self.progress_box.append(self.log_panel)
+
+        # Compatibility dummy spinner
+        self.progress_spinner = Gtk.Spinner()
+        self.progress_spinner.set_visible(False)
+
+        self.stack.add_named(self.progress_box, "setup_progress")
+
+    def on_toggle_live_log_clicked(self, btn):
+        visible = self.log_panel.get_visible()
+        self.log_panel.set_visible(not visible)
+        self.btn_log.set_tooltip_text("Hide Configuration Log" if not visible else "Show Configuration Log")
+        if not visible and hasattr(self, 'log_buffer') and hasattr(self, 'log_text_view'):
+            mark = self.log_buffer.create_mark(None, self.log_buffer.get_end_iter(), False)
+            self.log_text_view.scroll_to_mark(mark, 0.0, True, 0.0, 1.0)
+
+    def append_log_line(self, msg, fraction=None):
+        def _update():
+            if hasattr(self, 'log_buffer') and self.log_buffer:
+                iter_end = self.log_buffer.get_end_iter()
+                self.log_buffer.insert(iter_end, msg + "\n")
+                if hasattr(self, 'log_panel') and self.log_panel.get_visible() and hasattr(self, 'log_text_view'):
+                    mark = self.log_buffer.create_mark(None, self.log_buffer.get_end_iter(), False)
+                    self.log_text_view.scroll_to_mark(mark, 0.0, True, 0.0, 1.0)
+            if hasattr(self, 'progress_label') and self.progress_label:
+                clean = msg.strip()
+                if clean.startswith("Executing: "):
+                    clean = clean[len("Executing: "):]
+                if not clean.startswith("  exit="):
+                    self.progress_label.set_text(clean)
+            if fraction is not None and hasattr(self, 'progress_bar') and self.progress_bar:
+                self.progress_bar.set_fraction(fraction)
+            return False
+        GLib.idle_add(_update)
 
     def build_finished_page(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
@@ -1946,8 +2052,9 @@ class OOTBWindow(Adw.ApplicationWindow):
         desc.add_css_class("welcome-subtitle")
         box.append(desc)
 
-        # Monospace Scrollable Text Log Area
-        self.log_buffer = Gtk.TextBuffer()
+        # Monospace Scrollable Text Log Area (uses self.log_buffer if already created)
+        if not hasattr(self, 'log_buffer') or not self.log_buffer:
+            self.log_buffer = Gtk.TextBuffer()
         self.log_view = Gtk.TextView(buffer=self.log_buffer)
         self.log_view.set_editable(False)
         self.log_view.set_cursor_visible(False)
@@ -2170,9 +2277,12 @@ class OOTBWindow(Adw.ApplicationWindow):
             self.btn_back.set_sensitive(False)
             self.btn_header_back.set_sensitive(False)
 
-            # Show progress page and start spinner
+            # Show progress page
             self.stack.set_visible_child_name("setup_progress")
-            self.progress_spinner.start()
+            if hasattr(self, 'progress_bar') and self.progress_bar:
+                self.progress_bar.set_fraction(0.0)
+            if hasattr(self, 'progress_label') and self.progress_label:
+                self.progress_label.set_text("Starting configuration...")
 
             # Start configuration in a background thread
             threading.Thread(
@@ -2205,25 +2315,32 @@ class OOTBWindow(Adw.ApplicationWindow):
                 except Exception:
                     pass
 
-            def log_msg(msg):
+            def log_msg(msg, fraction=None):
                 for fpath in (main_log_file, tmp_log_file):
                     try:
                         with open(fpath, "a") as log:
                             log.write(f"{msg}\n")
                     except Exception:
                         pass
+                self.append_log_line(msg, fraction)
 
-            def run_cmd(cmd, check=True):
+            def run_cmd(cmd, check=True, timeout=25):
                 cmd_str = ' '.join(cmd) if isinstance(cmd, list) else cmd
                 log_msg(f"Executing: {cmd_str}")
                 if "TEST_MODE" in os.environ:
                     log_msg("[TEST_MODE] Bypassed.")
                     return subprocess.CompletedProcess(cmd, 0, "", "")
-                res = subprocess.run(cmd, capture_output=True, text=True)
-                log_msg(f"  exit={res.returncode} stdout={res.stdout.strip()} stderr={res.stderr.strip()}")
-                if check and res.returncode != 0:
-                    raise Exception(f"Command failed (exit {res.returncode}): {cmd_str}\n{res.stderr.strip()}")
-                return res
+                try:
+                    res = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+                    log_msg(f"  exit={res.returncode} stdout={res.stdout.strip()} stderr={res.stderr.strip()}")
+                    if check and res.returncode != 0:
+                        raise Exception(f"Command failed (exit {res.returncode}): {cmd_str}\n{res.stderr.strip()}")
+                    return res
+                except subprocess.TimeoutExpired:
+                    log_msg(f"  TIMEOUT ({timeout}s) exceeded for: {cmd_str}")
+                    if check:
+                        raise Exception(f"Command timed out after {timeout}s: {cmd_str}")
+                    return subprocess.CompletedProcess(cmd, 124, "", f"Timeout after {timeout}s")
 
             def write_temp_and_move(content, dest):
                 if "TEST_MODE" in os.environ:
@@ -2237,6 +2354,7 @@ class OOTBWindow(Adw.ApplicationWindow):
             if "TEST_MODE" in os.environ:
                 log_msg("[TEST_MODE] Running in simulated mode. No system changes will be made.")
                 time.sleep(2.5)
+                log_msg("Pulsar OS setup completed successfully!", fraction=1.0)
                 GLib.idle_add(self.on_setup_completed)
                 return
 
@@ -2245,6 +2363,7 @@ class OOTBWindow(Adw.ApplicationWindow):
             # encoding suffix to prevent double suffixes like es_ES.UTF-8.UTF-8.
             locale_code = self.selected_language.replace(".UTF-8", "").replace(".utf8", "")
             locale_full = f"{locale_code}.UTF-8"
+            log_msg(f"Configuring system locale to {locale_full}...", fraction=0.10)
             # Make sure the locale is enabled in /etc/locale.gen and generated.
             # Both Debian and Arch read /etc/locale.gen (locale-gen takes no args).
             try:
@@ -2319,27 +2438,28 @@ class OOTBWindow(Adw.ApplicationWindow):
                 }
                 lang_prefix = locale_code.split("_")[0].lower() if "_" in locale_code else locale_code.lower()
                 tess_pkg = TESS_MAP.get(lang_prefix, "eng")
-                log_msg(f"Configuring Tesseract OCR data for language: {tess_pkg} (locale: {locale_code})")
+                log_msg(f"Configuring Tesseract OCR data for language: {tess_pkg} (locale: {locale_code})", fraction=0.25)
                 active_net = get_active_network()
                 if active_net:
                     log_msg("Network connected, installing OCR data package...")
                     if os.path.exists("/etc/debian_version"):
-                        run_cmd(["apt-get", "install", "-y", f"tesseract-ocr-{tess_pkg}"], check=False)
+                        run_cmd(["apt-get", "install", "-y", f"tesseract-ocr-{tess_pkg}"], check=False, timeout=30)
                     else:
-                        run_cmd(["pacman", "-S", "--noconfirm", "--needed", f"tesseract-data-{tess_pkg}"], check=False)
+                        run_cmd(["pacman", "-S", "--noconfirm", "--needed", f"tesseract-data-{tess_pkg}"], check=False, timeout=30)
                 else:
                     log_msg("Offline mode: skipping remote package installation for tesseract data.")
             except Exception as e:
                 log_msg(f"Warning: failed to install tesseract language pack: {e}")
 
             # ── Keyboard ──────────────────────────────────────────
+            log_msg(f"Configuring keyboard layout: {self.selected_keymap}...", fraction=0.40)
             # console-setup / keyboard-configuration only exist on Debian.
             # On Arch, localectl set-keymap works out of the box and kbd is
             # already part of the base system, so we skip the package install.
             if os.path.exists("/etc/debian_version"):
-                run_cmd(["apt-get", "install", "-y", "console-setup", "keyboard-configuration", "kbd"], check=False)
+                run_cmd(["apt-get", "install", "-y", "console-setup", "keyboard-configuration", "kbd"], check=False, timeout=30)
             try:
-                run_cmd(["localectl", "set-keymap", self.selected_keymap])
+                run_cmd(["localectl", "set-keymap", self.selected_keymap], timeout=15)
             except Exception:
                 log_msg("Fallback: writing /etc/default/keyboard directly")
                 kb_content = (
@@ -2352,8 +2472,9 @@ class OOTBWindow(Adw.ApplicationWindow):
                 write_temp_and_move(kb_content, "/etc/default/keyboard")
 
             # ── Timezone ──────────────────────────────────────────
+            log_msg(f"Configuring timezone: {self.selected_timezone}...", fraction=0.50)
             try:
-                run_cmd(["timedatectl", "set-timezone", self.selected_timezone])
+                run_cmd(["timedatectl", "set-timezone", self.selected_timezone], timeout=15)
             except Exception:
                 log_msg("Fallback: manual timezone symlink")
                 run_cmd(["ln", "-sf", f"/usr/share/zoneinfo/{self.selected_timezone}", "/etc/localtime"], check=False)
@@ -2441,23 +2562,32 @@ class OOTBWindow(Adw.ApplicationWindow):
                     log_msg(f"Warning: Failed to update /etc/hosts: {e}")
 
                 # ── Set passwords ─────────────────────────────────
-                res = subprocess.run(
-                    ["chpasswd"],
-                    input=f"{username}:{password}\n",
-                    capture_output=True, text=True
-                )
-                if res.returncode != 0:
-                    raise Exception(f"Failed to set user password: {res.stderr}")
-                log_msg("User password set successfully")
+                log_msg("Configuring user and system passwords...", fraction=0.75)
+                try:
+                    res = subprocess.run(
+                        ["chpasswd"],
+                        input=f"{username}:{password}\n",
+                        capture_output=True, text=True,
+                        timeout=15
+                    )
+                    if res.returncode != 0:
+                        raise Exception(f"Failed to set user password: {res.stderr}")
+                    log_msg("User password set successfully")
+                except subprocess.TimeoutExpired:
+                    log_msg("Warning: chpasswd for user timed out after 15s")
 
-                res = subprocess.run(
-                    ["chpasswd"],
-                    input=f"root:{password}\n",
-                    capture_output=True, text=True
-                )
-                if res.returncode != 0:
-                    raise Exception(f"Failed to set root password: {res.stderr}")
-                log_msg("Root password set successfully")
+                try:
+                    res = subprocess.run(
+                        ["chpasswd"],
+                        input=f"root:{password}\n",
+                        capture_output=True, text=True,
+                        timeout=15
+                    )
+                    if res.returncode != 0:
+                        raise Exception(f"Failed to set root password: {res.stderr}")
+                    log_msg("Root password set successfully")
+                except subprocess.TimeoutExpired:
+                    log_msg("Warning: chpasswd for root timed out after 15s")
 
                 # ── Avatar ────────────────────────────────────────
                 as_icon_dest = ""
@@ -2474,6 +2604,7 @@ class OOTBWindow(Adw.ApplicationWindow):
                     run_cmd(["chown", "root:root", as_icon_dest])
 
                 # ── AccountsService ───────────────────────────────
+                log_msg("Configuring AccountsService & user session...", fraction=0.85)
                 as_user_file = f"/var/lib/AccountsService/users/{username}"
                 as_content = (
                     f"[User]\n"
@@ -2492,10 +2623,10 @@ class OOTBWindow(Adw.ApplicationWindow):
                 log_msg(f"AccountsService config written to {as_user_file}")
 
                 # Restart accounts-daemon so it picks up the new user
-                res = run_cmd(["systemctl", "restart", "accounts-daemon.service"], check=False)
+                res = run_cmd(["systemctl", "restart", "--no-block", "accounts-daemon.service"], check=False, timeout=10)
                 if res.returncode != 0:
-                    log_msg("accounts-daemon not available, trying accounts-daemon")
-                    run_cmd(["systemctl", "restart", "accounts-daemon"], check=False)
+                    log_msg("accounts-daemon.service not available, trying accounts-daemon")
+                    run_cmd(["systemctl", "restart", "--no-block", "accounts-daemon"], check=False, timeout=10)
 
                 # ── GNOME keymap for the new user ─────────────────
                 run_cmd([
@@ -2567,6 +2698,7 @@ class OOTBWindow(Adw.ApplicationWindow):
                     ], check=False)
 
                 # ── Apply chosen appearance theme for user ───────
+                log_msg("Applying theme and desktop settings...", fraction=0.95)
                 is_dark = (getattr(self, 'selected_theme', 'light') == 'dark')
                 theme_scheme = "'prefer-dark'" if is_dark else "'prefer-light'"
                 gtk_theme_name = "'MacTahoe-Dark'" if is_dark else "'MacTahoe-Light'"
@@ -2641,27 +2773,38 @@ class OOTBWindow(Adw.ApplicationWindow):
                 except Exception as ex_p:
                     log_msg(f"Notice: presence config write error: {ex_p}")
 
+            log_msg("Pulsar OS setup completed successfully!", fraction=1.0)
             GLib.idle_add(self.on_setup_completed)
 
         except Exception as err:
             GLib.idle_add(self.on_setup_failed, str(err))
 
     def on_setup_completed(self):
-        self.progress_spinner.stop()
+        if hasattr(self, 'progress_spinner') and self.progress_spinner:
+            self.progress_spinner.stop()
+        if hasattr(self, 'progress_bar') and self.progress_bar:
+            self.progress_bar.set_fraction(1.0)
+        if hasattr(self, 'progress_label') and self.progress_label:
+            self.progress_label.set_text("Configuration complete!")
         self.load_log_to_view()
         self.stack.set_visible_child_name("finished")
         self.btn_next.set_label("Start using Pulsar OS")
+        self.btn_next.set_visible(True)
         self.btn_back.set_visible(False)
         self.btn_header_back.set_visible(False)
         self.btn_next.set_sensitive(True)
 
     def on_setup_failed(self, error_message):
-        self.progress_spinner.stop()
+        if hasattr(self, 'progress_spinner') and self.progress_spinner:
+            self.progress_spinner.stop()
+        if hasattr(self, 'progress_label') and self.progress_label:
+            self.progress_label.set_text(f"Error: {error_message}")
         self.show_error(error_message)
         self.stack.set_visible_child_name("account")
+        self.btn_next.set_visible(True)
         self.btn_next.set_sensitive(True)
-        self.btn_back.set_sensitive(True)
-        self.btn_header_back.set_sensitive(True)
+        self.btn_back.set_visible(True)
+        self.btn_header_back.set_visible(True)
 
     def run_final_cleanup(self):
         try:

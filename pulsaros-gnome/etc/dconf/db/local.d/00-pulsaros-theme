@@ -29,6 +29,7 @@ disable-extension-version-validation=true
 disabled-extensions=@as []
 
 [org/gnome/shell/extensions/dash-to-dock]
+disable-overview-on-startup=true
 dock-position='BOTTOM'
 extend-height=false
 dash-max-icon-size=48

@@ -195,7 +195,9 @@ if [ "$DRY_RUN" -eq 0 ]; then
     # La top bar NUNCA debe tener blur en ningún modo
     gsettings set org.gnome.shell.extensions.blur-my-shell.panel blur false 2>/dev/null || true
 
-    # Dock dinámico garantizado
+    # Dock dinámico garantizado y sin overview en inicio
+    gsettings set org.gnome.shell.extensions.dash-to-dock disable-overview-on-startup true 2>/dev/null || true
+    gsettings set org.gnome.shell.extensions.pulsaros-ui-tweaks startup-status 0 2>/dev/null || true
     gsettings set org.gnome.shell.extensions.dash-to-dock autohide true 2>/dev/null || true
     gsettings set org.gnome.shell.extensions.dash-to-dock dock-fixed false 2>/dev/null || true
     gsettings set org.gnome.shell.extensions.dash-to-dock intellihide true 2>/dev/null || true
