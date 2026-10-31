@@ -6079,7 +6079,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             "# además auto-escanea en busca de otros sistemas.\n"
                             f"{scanfor_mode}\n"
                             "default_selection 1\n"
-                            "hideui singleuser,hints,label\n"
+                            "hideui singleuser,hints\n"
                             "\n"
                             f"{pulsar_entry}"
                             "\n"
@@ -6106,9 +6106,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 with open(theme_conf_path, "r") as tf:
                                     tdata = tf.read()
                                 if "hideui" in tdata:
-                                    tdata = re.sub(r'hideui.*', 'hideui singleuser,hints,label', tdata)
+                                    tdata = re.sub(r'hideui.*', 'hideui singleuser,hints', tdata)
                                 else:
-                                    tdata += "\nhideui singleuser,hints,label\n"
+                                    tdata += "\nhideui singleuser,hints\n"
                                 with open(theme_conf_path, "w") as tf:
                                     tf.write(tdata)
                             except Exception:

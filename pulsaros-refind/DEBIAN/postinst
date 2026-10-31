@@ -68,7 +68,7 @@ sanitize_refind_conf() {
         printf 'dont_scan_volumes PULSAR_OS,PULSAR_RECOVERY\n'
         printf 'dont_scan_dirs EFI/recovery,recovery,EFI/BOOT/recovery,live,@,@/boot,themes,drivers_x64\n'
         printf 'dont_scan_files vmlinuz,vmlinuz.efi,vmlinuz-recovery,vmlinuz-recovery.efi,vmlinuz-linux\n'
-        printf 'hideui singleuser,hints,label\n'
+        printf 'hideui singleuser,hints\n'
     } > "$rc"
     rm -f "$tmp"
 }
