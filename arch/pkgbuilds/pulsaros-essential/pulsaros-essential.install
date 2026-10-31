@@ -66,20 +66,26 @@ post_install() {
     systemctl enable pulsaros-optimizer.service 2>/dev/null || true
     systemctl start pulsaros-optimizer.service 2>/dev/null || true
 
-    # Biometrics (fprintd, gazed, pulsaros-biometrics)
-    systemctl enable fprintd.service 2>/dev/null || true
-    systemctl enable gazed.service 2>/dev/null || true
-    systemctl start gazed.service 2>/dev/null || true
-    systemctl enable pulsaros-biometrics.service 2>/dev/null || true
-    systemctl start pulsaros-biometrics.service 2>/dev/null || true
+    # Biometrics (fprintd, gazed, pulsaros-biometrics) if installed
+    if command -v fprintd-enroll >/dev/null 2>&1; then
+        systemctl enable fprintd.service 2>/dev/null || true
+    fi
+    if command -v gazed >/dev/null 2>&1; then
+        systemctl enable gazed.service 2>/dev/null || true
+        systemctl start gazed.service 2>/dev/null || true
+    fi
+    if [ -f /usr/lib/systemd/system/pulsaros-biometrics.service ]; then
+        systemctl enable pulsaros-biometrics.service 2>/dev/null || true
+        systemctl start pulsaros-biometrics.service 2>/dev/null || true
+    fi
 
     # Configure PAM for sudo and polkit-1
     for pam_file in /etc/pam.d/sudo /etc/pam.d/polkit-1; do
         if [ -f "$pam_file" ]; then
-            if ! grep -q "pam_gaze.so" "$pam_file"; then
+            if [ -f /usr/lib/security/pam_gaze.so ] && ! grep -q "pam_gaze.so" "$pam_file"; then
                 sed -i '1s|^|auth        sufficient    pam_gaze.so\n|' "$pam_file" 2>/dev/null || true
             fi
-            if ! grep -q "pam_fprintd.so" "$pam_file"; then
+            if [ -f /usr/lib/security/pam_fprintd.so ] && ! grep -q "pam_fprintd.so" "$pam_file"; then
                 sed -i '/pam_gaze.so/a auth        sufficient    pam_fprintd.so' "$pam_file" 2>/dev/null || true
             fi
         fi

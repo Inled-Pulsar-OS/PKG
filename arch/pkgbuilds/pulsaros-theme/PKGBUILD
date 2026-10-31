@@ -1,6 +1,6 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-theme
-pkgver=1.0.125.unstable
+pkgver=1.0.125
 pkgrel=2
 pkgdesc="MacTahoe GTK and icon theme for Pulsar OS"
 arch=(any)
