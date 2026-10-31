@@ -1,15 +1,19 @@
 Features 2.0:
-- Sayri AI, el asistente de IA mejor que openclaw, más seguro y listo para usar en Pulsar OS
-- Pulsar Phone, tu aplicación para que la experiencia llegue hasta el telefono
-- Pulsar VPN: conectate a tu dispositivo aún que no estes en casa
-- Pulsar Ad Block: Acaba con los malditos anuncios a nivel de sistema
-- Pulsar Firewall: El único firewall en linux que es facil de configurar y te ayuda en todo
-- Pulsar Windows: Ejecuta aplicaciones de Windows como si fueran nativas de pulsar os, pero con un windows por debajo
-- Face ID y Touch ID: ya no tendrás que poner tu contraseña si no quieres
-- Bloqueo automatico cuando dejas el PC solo
-- Notch, como en amcos, pero mil veces mas funcional
-- Nuevo control y notifications center, mas estilo macos, mejores
-- Nuevo spotlight, más cómodo, mas útil, más inteligente
-- Circle to search, lo mejor de Android lo hemos copiado
-- Experiencia sin terminal, todo desde la App Store
-- Confiable, abierto, sin slop: tú decides.
+- Sayri AI: The intelligent AI assistant built for Pulsar OS — smarter, safer, and ready out of the box.
+- Pulsar Phone: Seamless continuity connecting your desktop experience directly to your mobile device.
+- Pulsar VPN: Securely access your desktop from anywhere in the world, even when you're away from home.
+- Pulsar AdBlock: System-wide ad and tracker blocker that eliminates intrusive ads at the core.
+- Pulsar Firewall: The only Linux firewall designed to be effortless to configure while keeping you fully protected.
+- Pulsar Optimizer: Intelligent system tuning that unlocks maximum performance to make your hardware fly.
+- Pulsar Windows: Run Windows applications with native feel and performance, powered by real virtualization.
+- Face ID & Touch ID: Instant biometric authentication so you never have to type your password again.
+- Smart Auto-Lock: Intelligent automatic locking the moment you step away from your computer.
+- Dynamic Notch: macOS-inspired notch, redesigned to be infinitely more functional and interactive.
+- Control & Notification Center: Refined control panel and notifications, crafted with sleek, intuitive macOS aesthetics.
+- Next-Gen Spotlight: Supercharged search: launch apps, find files, and solve calculations at lightning speed.
+- Circle to Search: The best convenience of modern mobile search, effortlessly brought to your desktop.
+- Terminal-Free Experience: Zero terminal required — explore, install, and update everything right from the App Store.
+- Trustworthy & Open: Pure open-source craftsmanship with no telemetry or slop: you are in complete control.
+- Community-Driven: Built with and for the community. You call the shots — join our Discord and Telegram.
+- Global Menus: macOS-style top bar menus seamlessly integrated for native desktop productivity.
+- Session Restore: Instantly pick up right where you left off after restarts and system updates.

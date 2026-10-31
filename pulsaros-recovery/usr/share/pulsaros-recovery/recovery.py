@@ -3636,18 +3636,26 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.progress_box.set_halign(Gtk.Align.CENTER)
         box = self.progress_box
         
+        # ── Collapsible Hero Header (slides up and disappears after 3 seconds) ──
+        self.hero_revealer = Gtk.Revealer()
+        self.hero_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_UP)
+        self.hero_revealer.set_transition_duration(800)
+        
+        hero_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        hero_box.set_halign(Gtk.Align.CENTER)
+        
         self.image = self.get_logo_image(90, is_installer=True)
-        box.append(self.image)
+        hero_box.append(self.image)
         
         self.title_label = Gtk.Label()
         self.title_label.set_markup("<span font_weight='bold' size='18000'>Pulsar OS</span>")
-        box.append(self.title_label)
+        hero_box.append(self.title_label)
         
         self.progress_subtitle = Gtk.Label(label="Pulsar OS will be installed on the selected disk.")
         self.progress_subtitle.add_css_class("progress-text")
-        box.append(self.progress_subtitle)
+        hero_box.append(self.progress_subtitle)
         
-        # Target disk visual box (Apple-style disk icon + disk name between description and progress bar)
+        # Target disk visual box (Apple-style disk icon + disk name)
         self.target_disk_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
         self.target_disk_box.add_css_class("target-disk-box")
         self.target_disk_box.set_halign(Gtk.Align.CENTER)
@@ -3659,58 +3667,87 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.target_disk_name_lbl = Gtk.Label(label="Target Disk")
         self.target_disk_name_lbl.add_css_class("target-disk-name")
         self.target_disk_box.append(self.target_disk_name_lbl)
+        hero_box.append(self.target_disk_box)
         
-        box.append(self.target_disk_box)
+        self.hero_revealer.set_child(hero_box)
+        self.hero_revealer.set_reveal_child(True)
+        box.append(self.hero_revealer)
+        
+        # ── Persistent Progress Status (stays pinned at top after header collapses) ──
+        self.progress_info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.progress_info_box.set_halign(Gtk.Align.CENTER)
+        self.progress_info_box.set_margin_top(4)
+        self.progress_info_box.set_margin_bottom(8)
         
         self.progress_bar = Gtk.ProgressBar()
         self.progress_bar.add_css_class("progress-bar-thin")
-        self.progress_bar.set_size_request(280, -1)
-        box.append(self.progress_bar)
+        self.progress_bar.set_size_request(380, -1)
+        self.progress_info_box.append(self.progress_bar)
         
         self.progress_label = Gtk.Label(label="Preparing installation...")
         self.progress_label.add_css_class("progress-text")
-        box.append(self.progress_label)
+        self.progress_info_box.append(self.progress_label)
+        box.append(self.progress_info_box)
 
-        # Feature Showcase Slide Carousel
+        # ── Feature Showcase Slide Carousel (Center stage, English, No Icons) ──
         self.feature_stack = Gtk.Stack()
         self.feature_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
         self.feature_stack.set_transition_duration(600)
-        self.feature_stack.set_size_request(520, 85)
+        self.feature_stack.set_size_request(560, 110)
         self.feature_stack.set_halign(Gtk.Align.CENTER)
-        self.feature_stack.set_margin_top(10)
-        self.feature_stack.set_margin_bottom(6)
+        self.feature_stack.set_valign(Gtk.Align.CENTER)
+        self.feature_stack.set_margin_top(14)
+        self.feature_stack.set_margin_bottom(10)
 
         features = [
-            ("preferences-desktop-display-symbolic", "Liquid Glass & Top Bar", 
-             "Experiencia visual translúcida inspirada en macOS con efectos dinámicos en tiempo real."),
-            ("emblem-system-symbolic", "Centro de Control Unificado", 
-             "Ajustes rápidos de Wi-Fi, Bluetooth, Modo Oscuro y volumen accesibles al instante."),
-            ("system-search-symbolic", "Spotlight & Circle to Search", 
-             "Presiona Control+Espacio para buscar archivos, apps y realizar cálculos con fluidez."),
-            ("document-send-symbolic", "Pulsar Flydrop", 
-             "Comparte fotos, archivos y enlaces entre ordenadores y dispositivos en tu red local."),
-            ("drive-harddisk-symbolic", "Time Machine & Btrfs", 
-             "Instantáneas del sistema y copias de seguridad incrementales automáticas sin ocupar espacio."),
-            ("system-software-install-symbolic", "Pulsar Store & AppInstall", 
-             "Miles de aplicaciones seleccionadas listas para instalar en un clic con soporte Flatpak.")
+            ("Sayri AI",
+             "The intelligent AI assistant built for Pulsar OS — smarter, safer, and ready out of the box."),
+            ("Pulsar Phone",
+             "Seamless continuity connecting your desktop experience directly to your mobile device."),
+            ("Pulsar VPN",
+             "Securely access your desktop from anywhere in the world, even when you're away from home."),
+            ("Pulsar AdBlock",
+             "System-wide ad and tracker blocker that eliminates intrusive ads at the core."),
+            ("Pulsar Firewall",
+             "The only Linux firewall designed to be effortless to configure while keeping you fully protected."),
+            ("Pulsar Optimizer",
+             "Intelligent system tuning that unlocks maximum performance to make your hardware fly."),
+            ("Pulsar Windows",
+             "Run Windows applications with native feel and performance, powered by real virtualization."),
+            ("Face ID & Touch ID",
+             "Instant biometric authentication so you never have to type your password again."),
+            ("Smart Auto-Lock",
+             "Intelligent automatic locking the moment you step away from your computer."),
+            ("Dynamic Notch",
+             "macOS-inspired notch, redesigned to be infinitely more functional and interactive."),
+            ("Control & Notification Center",
+             "Refined control panel and notifications, crafted with sleek, intuitive macOS aesthetics."),
+            ("Next-Gen Spotlight",
+             "Supercharged search: launch apps, find files, and solve calculations at lightning speed."),
+            ("Circle to Search",
+             "The best convenience of modern mobile search, effortlessly brought to your desktop."),
+            ("Terminal-Free Experience",
+             "Zero terminal required — explore, install, and update everything right from the App Store."),
+            ("Trustworthy & Open",
+             "Pure open-source craftsmanship with no telemetry or slop: you are in complete control."),
+            ("Community-Driven",
+             "Built with and for the community. You call the shots — join our Discord and Telegram."),
+            ("Global Menus",
+             "macOS-style top bar menus seamlessly integrated for native desktop productivity."),
+            ("Session Restore",
+             "Instantly pick up right where you left off after restarts and system updates.")
         ]
 
         self.feature_slide_names = []
-        for i, (icon_name, f_title, f_desc) in enumerate(features):
-            slide_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        for i, (f_title, f_desc) in enumerate(features):
+            slide_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
             slide_box.set_halign(Gtk.Align.CENTER)
             slide_box.set_valign(Gtk.Align.CENTER)
 
-            header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-            header_box.set_halign(Gtk.Align.CENTER)
-            icon = Gtk.Image.new_from_icon_name(icon_name)
-            icon.set_pixel_size(20)
-            header_box.append(icon)
-
             lbl_t = Gtk.Label()
-            lbl_t.set_markup(f"<span font_weight='bold' size='12500'>{f_title}</span>")
-            header_box.append(lbl_t)
-            slide_box.append(header_box)
+            lbl_t.set_markup(f"<span font_weight='bold' size='14500' color='#ffffff'>{f_title}</span>")
+            lbl_t.set_halign(Gtk.Align.CENTER)
+            slide_box.append(lbl_t)
 
             lbl_d = Gtk.Label(label=f_desc)
             lbl_d.add_css_class("progress-text")
@@ -3728,6 +3765,52 @@ class RecoveryWindow(Adw.ApplicationWindow):
         # ── Inline log panel (hidden by default, toggled by terminal button) ──
         self.log_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.log_panel.set_vexpand(True)
+        self.log_panel.set_hexpand(True)
+        self.log_panel.set_visible(False)
+
+        log_scrolled = Gtk.ScrolledWindow()
+        log_scrolled.set_hexpand(True)
+        log_scrolled.set_vexpand(True)
+        log_scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        log_scrolled.add_css_class("live-log-view-flat")
+
+        self.log_text_view = Gtk.TextView()
+        self.log_text_view.set_editable(False)
+        self.log_text_view.set_monospace(True)
+        self.log_text_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self.log_text_view.add_css_class("live-log-text")
+        self.log_buffer = self.log_text_view.get_buffer()
+        log_scrolled.set_child(self.log_text_view)
+        self.log_panel.append(log_scrolled)
+        box.append(self.log_panel)
+
+        # Bottom controls row (Cancel button centered, flat terminal log button on bottom right)
+        bottom_row = Gtk.CenterBox()
+        bottom_row.set_margin_top(8)
+        bottom_row.set_size_request(340, -1)
+        
+        self.btn_install_action = Gtk.Button(label="Cancel")
+        self.btn_install_action.add_css_class("secondary-action")
+        self.btn_install_action.set_size_request(130, -1)
+        self.btn_install_action.connect("clicked", self.on_progress_cancel_clicked)
+        bottom_row.set_center_widget(self.btn_install_action)
+        
+        self.btn_log = Gtk.Button()
+        self.btn_log.set_icon_name("utilities-terminal-symbolic")
+        self.btn_log.set_tooltip_text("Show Installer Log")
+        self.btn_log.add_css_class("terminal-btn")
+        self.btn_log.connect("clicked", self.on_show_live_log_clicked)
+        bottom_row.set_end_widget(self.btn_log)
+        
+        box.append(bottom_row)
+        
+        self.stack.add_named(self.progress_box, "install_progress")
+
+    def _collapse_hero_header(self):
+        self._collapse_timer_id = 0
+        if hasattr(self, 'hero_revealer') and self.hero_revealer:
+            self.hero_revealer.set_reveal_child(False)
+        return GLib.SOURCE_REMOVE
         self.log_panel.set_hexpand(True)
         self.log_panel.set_visible(False)
 
@@ -4200,6 +4283,16 @@ class RecoveryWindow(Adw.ApplicationWindow):
             self._proceed_to_confirm_screen()
 
     def on_progress_cancel_clicked(self, btn):
+        if hasattr(self, '_collapse_timer_id') and self._collapse_timer_id:
+            try:
+                GLib.source_remove(self._collapse_timer_id)
+            except Exception:
+                pass
+            self._collapse_timer_id = 0
+        if hasattr(self, 'hero_revealer') and self.hero_revealer:
+            self.hero_revealer.set_reveal_child(True)
+        self._stop_feature_carousel()
+
         if btn.get_label() == "Restart System":
             if "TEST_MODE" in os.environ:
                 print("[TEST_MODE] Simulating systemctl reboot...")
@@ -4283,14 +4376,21 @@ class RecoveryWindow(Adw.ApplicationWindow):
             self.progress_subtitle.set_label("Pulsar OS will be installed on the selected disk.")
             
         self.target_disk_name_lbl.set_label(display_name)
-        self.image.set_visible(True)
-        self.title_label.set_visible(True)
-        self.target_disk_box.set_visible(True)
+        if hasattr(self, 'hero_revealer') and self.hero_revealer:
+            self.hero_revealer.set_reveal_child(True)
         self.progress_label.set_visible(True)
         self.log_panel.set_visible(False)
         self.btn_log.set_tooltip_text("Show Installer Log")
         self.stack.set_visible_child_name("install_progress")
         self._start_feature_carousel()
+
+        # Start 3-second timer to collapse hero header (logo, title, disk info) smoothly
+        if hasattr(self, '_collapse_timer_id') and self._collapse_timer_id:
+            try:
+                GLib.source_remove(self._collapse_timer_id)
+            except Exception:
+                pass
+        self._collapse_timer_id = GLib.timeout_add_seconds(3, self._collapse_hero_header)
 
         # ── DEMO MODE: never touch the real system ──────────────────────
         if "DEMO_MODE" in os.environ:
@@ -4837,10 +4937,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 os.makedirs("/mnt/recovery", exist_ok=True)
                 exec_cmd(["mount", "-t", "ext4", recovery_part, "/mnt/recovery"])
             
-            GLib.idle_add(self.update_progress, 0.25, "Replicating system files... (this may take a while)")
+            GLib.idle_add(self.update_progress, 0.20, "Preparing system installation...")
             
             if "TEST_MODE" in os.environ:
-                for progress_fraction in range(26, 81):
+                for progress_fraction in range(21, 81):
                     if "SIMULATE_INSTALL_ERROR" in os.environ and progress_fraction >= 45:
                         log_msg("ERROR: Simulated disk read/write error at sector 0x4f32a7b8.")
                         log_msg("ERROR: System replication failed: failed to copy /usr/lib/libgtk-4.so.")
@@ -4852,55 +4952,123 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     )
                     time.sleep(0.08)
             else:
-                rsync_cmd = [
-                    "rsync", "-aAXxW",
-                    "--inplace",
-                    "--numeric-ids",
-                    "--no-compress",
-                    "--info=progress2",
-                    "--exclude=/dev/*",
-                    "--exclude=/proc/*",
-                    "--exclude=/sys/*",
-                    "--exclude=/tmp/*",
-                    "--exclude=/run/*",
-                    "--exclude=/mnt/*",
-                    "--exclude=/media/*",
-                    "--exclude=/lost+found",
-                    "--exclude=/var/tmp/*",
-                    "--exclude=/var/log/*",
-                    "--exclude=/home/*/.local/share/gvfs-metadata/*",
-                    "--exclude=/home/*/.cache/*",
-                    "--exclude=/root/.cache/*",
-                    "--exclude=/recovery/*",
-                    "--exclude=/live/*",
-                    "/", "/mnt"
+                # ── Fast multi-threaded installation via unsquashfs (Omarchy/Calamares method) ──
+                squash_candidates = [
+                    # Arch live ISO paths
+                    "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
+                    "/run/archiso/bootmnt/arch/x86_64/airootfs.sfs",
+                    # Debian live ISO paths
+                    "/run/live/medium/live/filesystem.squashfs",
+                    "/lib/live/mount/medium/live/filesystem.squashfs",
+                    "/live/filesystem.squashfs",
+                    # Generic / fallback paths
+                    "/run/archiso/bootmnt/images/pulsaros-base.squashfs",
+                    "/run/live/medium/images/pulsaros-base.squashfs",
+                    "/images/pulsaros-base.squashfs",
+                    "/recovery/images/pulsaros-base.squashfs",
+                    "/run/archiso/airootfs",
                 ]
-                proc = subprocess.Popen(rsync_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-                buffer = ""
-                while True:
-                    char = proc.stdout.read(1)
-                    if not char:
-                        break
-                    if char in ('\r', '\n'):
-                        line = buffer.strip()
-                        buffer = ""
-                        m = re.search(r"(\d+)%\s+([\d\.]+[KMGT]?B/s)", line)
-                        if m:
-                            pct = int(m.group(1))
-                            speed = m.group(2)
-                            frac = 0.25 + (pct / 100.0) * 0.55
-                            GLib.idle_add(
-                                self.update_progress, 
-                                frac, 
-                                f"Copying files: {pct}% at {speed}"
-                            )
-                    else:
-                        buffer += char
+                found_squash = next((p for p in squash_candidates if os.path.isfile(p) and os.path.getsize(p) > 100 * 1024 * 1024), None)
+                if not found_squash:
+                    for base_dir in ("/run/archiso/bootmnt", "/run/live/medium", "/lib/live/mount/medium"):
+                        if os.path.isdir(base_dir):
+                            for root_d, _, files in os.walk(base_dir):
+                                for f in files:
+                                    if (f.endswith(".sfs") or f.endswith(".squashfs")) and "recovery" not in f.lower():
+                                        full_p = os.path.join(root_d, f)
+                                        try:
+                                            if os.path.getsize(full_p) > 200 * 1024 * 1024:
+                                                found_squash = full_p
+                                                break
+                                        except Exception:
+                                            pass
+                                if found_squash:
+                                    break
+                        if found_squash:
+                            break
 
-                proc.wait()
-                # Exit code 24 = vanished source files during transfer (normal for running live system)
-                if proc.returncode not in (0, 24):
-                    raise Exception(f"System replication failed (code {proc.returncode})")
+                unsquash_bin = shutil.which("unsquashfs") or "/usr/bin/unsquashfs"
+                if found_squash and unsquash_bin and os.path.isfile(unsquash_bin):
+                    log_msg(f"⚡ Fast multi-threaded extraction from {found_squash} to /mnt...")
+                    GLib.idle_add(self.update_progress, 0.20, "Extracting system files: 0%")
+                    unsquash_cmd = [unsquash_bin, "-f", "-d", "/mnt", "-percentage", found_squash]
+                    proc = subprocess.Popen(
+                        unsquash_cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1
+                    )
+                    last_pct = -1
+                    for line in proc.stdout:
+                        l = line.strip()
+                        if l.isdigit():
+                            pct = int(l)
+                            if pct != last_pct:
+                                last_pct = pct
+                                frac = 0.20 + (pct / 100.0) * 0.60
+                                GLib.idle_add(
+                                    self.update_progress,
+                                    frac,
+                                    f"Extracting system files: {pct}%"
+                                )
+                    proc.wait()
+                    if proc.returncode != 0:
+                        raise Exception(f"Fast system extraction failed (unsquashfs exited with code {proc.returncode})")
+                    log_msg("✅ Fast system extraction completed successfully.")
+                else:
+                    log_msg("Notice: base squashfs not found directly; falling back to rsync replication...")
+                    rsync_cmd = [
+                        "rsync", "-aAXxW",
+                        "--inplace",
+                        "--numeric-ids",
+                        "--no-compress",
+                        "--info=progress2",
+                        "--exclude=/dev/*",
+                        "--exclude=/proc/*",
+                        "--exclude=/sys/*",
+                        "--exclude=/tmp/*",
+                        "--exclude=/run/*",
+                        "--exclude=/mnt/*",
+                        "--exclude=/media/*",
+                        "--exclude=/lost+found",
+                        "--exclude=/var/tmp/*",
+                        "--exclude=/var/log/*",
+                        "--exclude=/home/*/.local/share/gvfs-metadata/*",
+                        "--exclude=/home/*/.cache/*",
+                        "--exclude=/root/.cache/*",
+                        "--exclude=/recovery/*",
+                        "--exclude=/live/*",
+                        "/", "/mnt"
+                    ]
+                    proc = subprocess.Popen(rsync_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                    buf = ""
+                    last_pct = -1
+                    while True:
+                        ch = proc.stdout.read(1)
+                        if not ch:
+                            break
+                        if ch in ('\r', '\n'):
+                            line = buf.strip()
+                            buf = ""
+                            m = re.search(r"(\d+)%\s+([\d\.,]+[KMGTkmgt]?[Bb]/s)?", line)
+                            if m:
+                                pct = int(m.group(1))
+                                speed = m.group(2) or ""
+                                if pct != last_pct:
+                                    last_pct = pct
+                                    frac = 0.20 + (pct / 100.0) * 0.60
+                                    status_txt = f"Copying files: {pct}%"
+                                    if speed:
+                                        status_txt += f" ({speed})"
+                                    GLib.idle_add(self.update_progress, frac, status_txt)
+                        else:
+                            buf += ch
+
+                    proc.wait()
+                    # Exit code 24 = vanished source files during transfer (normal for running live system)
+                    if proc.returncode not in (0, 24):
+                        raise Exception(f"System replication failed (code {proc.returncode})")
 
                 # ── Remove live-only systemd state copied by the rsync ──────────
                 # The live session masks plymouth-quit(.wait) via
@@ -5219,7 +5387,20 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 if found_base_squash and "TEST_MODE" not in os.environ:
                     base_dst = "/mnt/recovery/images/pulsaros-base.squashfs"
                     if not os.path.isfile(base_dst) or os.path.getsize(base_dst) == 0:
-                        shutil.copy2(found_base_squash, base_dst)
+                        total_sz = os.path.getsize(found_base_squash)
+                        copied_sz = 0
+                        chunk_sz = 8 * 1024 * 1024
+                        GLib.idle_add(self.update_progress, 0.83, "Deploying recovery base image: 0%")
+                        with open(found_base_squash, "rb") as fsrc, open(base_dst, "wb") as fdst:
+                            while True:
+                                chunk = fsrc.read(chunk_sz)
+                                if not chunk:
+                                    break
+                                fdst.write(chunk)
+                                copied_sz += len(chunk)
+                                pct = int((copied_sz / total_sz) * 100)
+                                frac = 0.83 + (copied_sz / total_sz) * 0.02
+                                GLib.idle_add(self.update_progress, frac, f"Deploying recovery base image: {pct}%")
                         log_msg(f"Pulsar OS Base Image deployed from {found_base_squash} -> {base_dst}")
 
                     alias_arch = "/mnt/recovery/images/x86_64/airootfs.sfs"
