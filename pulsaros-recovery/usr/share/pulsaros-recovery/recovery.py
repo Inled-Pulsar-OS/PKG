@@ -6712,7 +6712,11 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                     with open("/mnt/etc/modules-load.d/zram.conf", "w") as zf:
                         zf.write("zram\n")
                     exec_cmd(["chroot", "/mnt", "systemctl", "enable", "pulsaros-optimizer.service"])
-                    log_msg("✅ Enabled pulsaros-optimizer.service and zram module in target system.")
+                    try:
+                        exec_cmd(["chroot", "/mnt", "systemctl", "enable", "ufw.service"])
+                    except Exception:
+                        pass
+                    log_msg("✅ Enabled pulsaros-optimizer.service, ufw.service and zram module in target system.")
                 except Exception as opt_err:
                     log_msg(f"Notice: optimizer service setup: {opt_err}")
             except Exception as dconf_err:

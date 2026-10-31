@@ -9,8 +9,16 @@ if [ -d /run/archiso/bootmnt ] || [ -d /run/live ] || [ -d /live ] || grep -qE '
     exit 0
 fi
 
-# 2. Do not launch while initial OOTB setup wizard is still pending
+# 2. If initial OOTB setup wizard is pending, launch OOTB
 if [ -f /etc/pulsar-need-setup ]; then
+    if [ -x /usr/bin/pulsaros-ootb ]; then
+        exec /usr/bin/pulsaros-ootb
+    elif [ -f /usr/share/pulsaros/welcome_ootb.py ]; then
+        if command -v xhost >/dev/null 2>&1; then
+            xhost +SI:localuser:root 2>/dev/null || true
+        fi
+        exec sudo -E /usr/bin/python3 /usr/share/pulsaros/welcome_ootb.py
+    fi
     exit 0
 fi
 
