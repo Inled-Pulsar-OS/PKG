@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Pulsar OS Recovery Live Launcher
+Comment=Launches the recovery and installer immediately on live boot
+Exec=bash -c 'if [ -d /run/archiso/bootmnt ] || [ -d /run/live ] || [ -d /live ] || grep -qE "archiso|pulsar-live|boot=live" /proc/cmdline 2>/dev/null; then sleep 2 && /usr/bin/pulsaros-recovery; fi'
+OnlyShowIn=GNOME;
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

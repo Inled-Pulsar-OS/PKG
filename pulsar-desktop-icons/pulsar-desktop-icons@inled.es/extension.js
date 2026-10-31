@@ -72,11 +72,14 @@ export default class PulsarDesktopIconsExtension extends Extension {
 
         // Background click to deselect
         if (global.stage) {
-            this._stageClickId = global.stage.connect('button-press-event', (_stage, event) => {
-                if (event.get_button() === Clutter.BUTTON_PRIMARY) {
-                    const actor = global.stage.get_event_actor(event);
-                    if (actor === global.stage || actor === Main.layoutManager?._backgroundGroup) {
-                        this._deselectAll();
+            this._stageClickId = global.stage.connect('captured-event', (_stage, event) => {
+                const type = event.type();
+                if (type === Clutter.EventType.BUTTON_PRESS || type === Clutter.EventType.TOUCH_BEGIN) {
+                    if (this._selectedItem) {
+                        const actor = global.stage.get_event_actor(event);
+                        if (!this._selectedItem.actor.contains(actor)) {
+                            this._deselectAll();
+                        }
                     }
                 }
                 return Clutter.EVENT_PROPAGATE;
@@ -198,6 +201,39 @@ export default class PulsarDesktopIconsExtension extends Extension {
         this._items.clear();
     }
 
+    _getDesktopItemMetadata(filename, fileInfo) {
+        let displayName = fileInfo ? (fileInfo.get_display_name() || filename) : filename;
+        let gicon = fileInfo ? fileInfo.get_icon() : null;
+        const filePath = GLib.build_filenamev([this._desktopDir, filename]);
+
+        if (filename.endsWith('.desktop')) {
+            try {
+                const appInfo = Gio.DesktopAppInfo.new_from_filename(filePath);
+                if (appInfo) {
+                    const name = appInfo.get_name();
+                    if (name) displayName = name;
+                    const icon = appInfo.get_icon();
+                    if (icon) gicon = icon;
+                } else {
+                    const kf = new GLib.KeyFile();
+                    if (kf.load_from_file(filePath, GLib.KeyFileFlags.NONE)) {
+                        const name = kf.get_locale_string('Desktop Entry', 'Name', null);
+                        if (name) displayName = name;
+                        const iconName = kf.get_string('Desktop Entry', 'Icon');
+                        if (iconName) {
+                            if (iconName.startsWith('/')) {
+                                gicon = Gio.FileIcon.new(Gio.File.new_for_path(iconName));
+                            } else {
+                                gicon = Gio.ThemedIcon.new_with_default_fallbacks(iconName);
+                            }
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+        return { displayName, gicon, filePath };
+    }
+
     _createItem(filename, fileInfo) {
         const actor = new St.BoxLayout({
             orientation: Clutter.Orientation.VERTICAL,
@@ -209,8 +245,9 @@ export default class PulsarDesktopIconsExtension extends Extension {
             y_align: Clutter.ActorAlign.START,
         });
 
+        const { displayName, gicon, filePath } = this._getDesktopItemMetadata(filename, fileInfo);
+
         // 1. Icon
-        let gicon = fileInfo.get_icon();
         const iconActor = new St.Icon({
             gicon: gicon,
             style_class: 'pulsar-desktop-icon',
@@ -225,7 +262,7 @@ export default class PulsarDesktopIconsExtension extends Extension {
             x_align: Clutter.ActorAlign.CENTER,
         });
         const label = new St.Label({
-            text: fileInfo.get_display_name() || filename,
+            text: displayName,
             style_class: 'pulsar-desktop-label',
         });
         label.clutter_text.line_wrap = true;
@@ -239,7 +276,7 @@ export default class PulsarDesktopIconsExtension extends Extension {
             actor,
             iconActor,
             label,
-            filePath: GLib.build_filenamev([this._desktopDir, filename]),
+            filePath,
             lastClickTime: 0,
         };
 
@@ -249,8 +286,9 @@ export default class PulsarDesktopIconsExtension extends Extension {
 
     _updateItem(item, fileInfo) {
         if (!item || !item.actor) return;
-        item.label.text = fileInfo.get_display_name() || item.id;
-        item.iconActor.gicon = fileInfo.get_icon();
+        const { displayName, gicon } = this._getDesktopItemMetadata(item.id, fileInfo);
+        item.label.text = displayName;
+        if (gicon) item.iconActor.gicon = gicon;
     }
 
     _wireInteraction(item) {

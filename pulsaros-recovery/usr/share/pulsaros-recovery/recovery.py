@@ -2224,6 +2224,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
         btn_back.add_css_class("secondary-action")
         btn_back.connect("clicked", lambda x: self.stack.set_visible_child_name("utilities"))
         nav_box.append(btn_back)
+
+        btn_live = Gtk.Button(label="Try Live Session")
+        btn_live.add_css_class("secondary-action")
+        btn_live.connect("clicked", self.on_try_live_clicked)
+        nav_box.append(btn_live)
         
         btn_continue = Gtk.Button(label="Continue")
         btn_continue.add_css_class("suggested-action")
@@ -2232,6 +2237,25 @@ class RecoveryWindow(Adw.ApplicationWindow):
         
         box.append(nav_box)
         self.stack.add_named(box, "install_welcome")
+
+    def on_try_live_clicked(self, btn):
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Explore Live Session?",
+            body="This Live session is a minimal environment for testing and installation. Most default applications and productivity tools are not bundled here—they will be fully installed onto your disk during installation.\n\nDo you want to exit the installer to test the live desktop?"
+        )
+        dialog.add_response("cancel", "Stay in Installer")
+        dialog.add_response("exit", "Explore Live Session")
+        dialog.set_response_appearance("exit", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+
+        def on_response(d, response):
+            if response == "exit":
+                self.close()
+
+        dialog.connect("response", on_response)
+        dialog.present()
 
     def _is_uefi_grub_incompatible(self):
         """GRUB install on UEFI is fully supported (tested on HP Tiger Lake UEFI).
@@ -3486,6 +3510,60 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.progress_label = Gtk.Label(label="Preparing installation...")
         self.progress_label.add_css_class("progress-text")
         box.append(self.progress_label)
+
+        # Feature Showcase Slide Carousel
+        self.feature_stack = Gtk.Stack()
+        self.feature_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.feature_stack.set_transition_duration(600)
+        self.feature_stack.set_size_request(520, 85)
+        self.feature_stack.set_halign(Gtk.Align.CENTER)
+        self.feature_stack.set_margin_top(10)
+        self.feature_stack.set_margin_bottom(6)
+
+        features = [
+            ("preferences-desktop-display-symbolic", "Liquid Glass & Top Bar", 
+             "Experiencia visual translúcida inspirada en macOS con efectos dinámicos en tiempo real."),
+            ("emblem-system-symbolic", "Centro de Control Unificado", 
+             "Ajustes rápidos de Wi-Fi, Bluetooth, Modo Oscuro y volumen accesibles al instante."),
+            ("system-search-symbolic", "Spotlight & Circle to Search", 
+             "Presiona Control+Espacio para buscar archivos, apps y realizar cálculos con fluidez."),
+            ("document-send-symbolic", "Pulsar Flydrop", 
+             "Comparte fotos, archivos y enlaces entre ordenadores y dispositivos en tu red local."),
+            ("drive-harddisk-symbolic", "Time Machine & Btrfs", 
+             "Instantáneas del sistema y copias de seguridad incrementales automáticas sin ocupar espacio."),
+            ("system-software-install-symbolic", "Pulsar Store & AppInstall", 
+             "Miles de aplicaciones seleccionadas listas para instalar en un clic con soporte Flatpak.")
+        ]
+
+        self.feature_slide_names = []
+        for i, (icon_name, f_title, f_desc) in enumerate(features):
+            slide_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+            slide_box.set_halign(Gtk.Align.CENTER)
+            slide_box.set_valign(Gtk.Align.CENTER)
+
+            header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            header_box.set_halign(Gtk.Align.CENTER)
+            icon = Gtk.Image.new_from_icon_name(icon_name)
+            icon.set_pixel_size(20)
+            header_box.append(icon)
+
+            lbl_t = Gtk.Label()
+            lbl_t.set_markup(f"<span font_weight='bold' size='12500'>{f_title}</span>")
+            header_box.append(lbl_t)
+            slide_box.append(header_box)
+
+            lbl_d = Gtk.Label(label=f_desc)
+            lbl_d.add_css_class("progress-text")
+            lbl_d.set_wrap(True)
+            lbl_d.set_max_width_chars(54)
+            lbl_d.set_justify(Gtk.Justification.CENTER)
+            slide_box.append(lbl_d)
+
+            slide_name = f"slide_{i}"
+            self.feature_stack.add_named(slide_box, slide_name)
+            self.feature_slide_names.append(slide_name)
+
+        box.append(self.feature_stack)
         
         # ── Inline log panel (hidden by default, toggled by terminal button) ──
         self.log_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -3530,6 +3608,30 @@ class RecoveryWindow(Adw.ApplicationWindow):
         box.append(bottom_row)
         
         self.stack.add_named(self.progress_box, "install_progress")
+
+    def _start_feature_carousel(self):
+        self._current_slide_idx = 0
+        if hasattr(self, '_carousel_timer_id') and self._carousel_timer_id:
+            try:
+                GLib.source_remove(self._carousel_timer_id)
+            except Exception:
+                pass
+        self._carousel_timer_id = GLib.timeout_add_seconds(6, self._advance_feature_slide)
+
+    def _advance_feature_slide(self):
+        if not hasattr(self, 'feature_slide_names') or not self.feature_slide_names:
+            return GLib.SOURCE_REMOVE
+        self._current_slide_idx = (self._current_slide_idx + 1) % len(self.feature_slide_names)
+        self.feature_stack.set_visible_child_name(self.feature_slide_names[self._current_slide_idx])
+        return GLib.SOURCE_CONTINUE
+
+    def _stop_feature_carousel(self):
+        if hasattr(self, '_carousel_timer_id') and self._carousel_timer_id:
+            try:
+                GLib.source_remove(self._carousel_timer_id)
+            except Exception:
+                pass
+            self._carousel_timer_id = 0
 
     def build_install_error_screen(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -3660,8 +3762,34 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.btn_net_continue.connect("clicked", self._net_continue_clicked)
         nav_box.append(self.btn_net_continue)
 
+        self.btn_offline = Gtk.Button(label="Install Offline (Not Recommended)")
+        self.btn_offline.add_css_class("flat")
+        self.btn_offline.set_visible(False)
+        self.btn_offline.connect("clicked", self._on_offline_install_clicked)
+        nav_box.append(self.btn_offline)
+
         self.net_check_box.append(nav_box)
         self.stack.add_named(self.net_check_box, "network_check")
+
+    def _on_offline_install_clicked(self, btn):
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Install without Internet?",
+            body="An Internet connection is strongly recommended. Without Internet, hardware drivers, firmware updates, and extra applications cannot be downloaded during setup.\n\nOnly the minimal offline base system will be installed. Do you want to proceed anyway?"
+        )
+        dialog.add_response("cancel", "Back to Network Setup")
+        dialog.add_response("proceed", "Proceed Offline")
+        dialog.set_response_appearance("proceed", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+
+        def on_response(d, response):
+            if response == "proceed":
+                self.install_extra_packages = False
+                self.stack.set_visible_child_name("install_options")
+
+        dialog.connect("response", on_response)
+        dialog.present()
 
     def _set_net_spinner(self, running):
         """Toggle the connectivity spinner (safe to call from worker threads)."""
@@ -3685,6 +3813,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.btn_open_network.set_visible(False)
         self.btn_enable_warp.set_visible(False)
         self.btn_net_continue.set_sensitive(False)
+        self.btn_offline.set_visible(False)
         self.stack.set_visible_child_name("network_check")
         self._set_net_spinner(True)
 
@@ -3741,6 +3870,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 "Once connected we will automatically retry the connection to the Inled repository."
             )
             GLib.idle_add(lambda: self.btn_open_network.set_visible(True))
+            GLib.idle_add(lambda: self.btn_offline.set_visible(True))
             # Keep polling so the Continue button unlocks as soon as the user connects
             self._poll_until_inled_reachable()
             return
@@ -3986,6 +4116,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.log_panel.set_visible(False)
         self.btn_log.set_tooltip_text("Show Installer Log")
         self.stack.set_visible_child_name("install_progress")
+        self._start_feature_carousel()
 
         # ── DEMO MODE: never touch the real system ──────────────────────
         if "DEMO_MODE" in os.environ:
@@ -4548,7 +4679,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     time.sleep(0.08)
             else:
                 rsync_cmd = [
-                    "rsync", "-aAXx",
+                    "rsync", "-aAXxW",
+                    "--inplace",
+                    "--numeric-ids",
+                    "--no-compress",
                     "--info=progress2",
                     "--exclude=/dev/*",
                     "--exclude=/proc/*",
@@ -4680,6 +4814,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                            "curl -s https://apt.inled.es/archive.key | pacman-key -a - && "
                                            "pacman-key --lsign-key 89F828A9675B63CD0077CE9965AA57CF36E2018F"])
                                 GLib.idle_add(self.update_progress, 0.82, "Syncing package databases...")
+                                try:
+                                    exec_cmd(["chroot", "/mnt", "sed", "-i", "s/^#*ParallelDownloads.*/ParallelDownloads = 10/", "/etc/pacman.conf"])
+                                except Exception:
+                                    pass
                                 exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
 
                                 if extra_packages:
@@ -4748,6 +4886,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             GLib.idle_add(self.update_progress, 0.80, "Installing selected packages and apps...")
                             log_msg(f"Post-install: installing {len(extra_packages)} selected packages via apt...")
                             try:
+                                try:
+                                    os.makedirs("/mnt/etc/apt/apt.conf.d", exist_ok=True)
+                                    with open("/mnt/etc/apt/apt.conf.d/99pulsar-fast", "w") as f_apt:
+                                        f_apt.write('Acquire::Queue-Mode "host";\nAcquire::http::Pipeline-Depth "5";\nAPT::Acquire::Retries "3";\n')
+                                except Exception:
+                                    pass
                                 exec_cmd(["chroot", "/mnt", "apt-get", "update"])
                                 if extra_packages:
                                     apt_cmd = [
@@ -6333,12 +6477,14 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                 subprocess.run(["systemctl", "start", "udisks2.service"], capture_output=True)
 
     def on_installation_completed(self):
+        self._stop_feature_carousel()
         self.update_progress(1.0, "Pulsar OS has been successfully installed!")
         self.btn_install_action.set_label("Restart System")
         self.btn_install_action.add_css_class("suggested-action")
         self.btn_install_action.remove_css_class("secondary-action")
 
     def on_installation_failed(self, error):
+        self._stop_feature_carousel()
         self.update_progress(0.0, "Installation failed.")
         
         # Read the log file to display inside the textview
