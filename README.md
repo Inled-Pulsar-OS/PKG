@@ -2,43 +2,30 @@
 
 > [!IMPORTANT]
 > **Pulsar OS 2.0 Package Status & Deprecations**  
-> Este repositorio contiene el código fuente de los paquetes para **Pulsar OS** (Bitten Fruit) y su versión para servidores NAS **Tube OS**. A continuación se detallan los paquetes actuales del sistema, los nuevos componentes introducidos en la versión 2.0 y los paquetes formalmente **deprecados / descontinuados** que ya no deben incluirse en nuevas imágenes ni instalaciones.
+> This repository contains the source code of the packages for **Pulsar OS** (Bitten Fruit) and its version for NAS servers **Tube OS**. Below are the current system packages, new components introduced in version 2.0, and formally **deprecated/discontinued** packages that should no longer be included in new images or installations.
 
-Este repositorio almacena el código de los paquetes de Pulsar OS, los cuales son desarrollados tanto para Debian como Arch.  
-Estos paquetes incluyen un archivo de `prepare-assets.sh` cuya tarea es colocar los assets en el staging para que luego se empaqueten para sistema Arch o Debian. Los paquetes se pueden compilar e instalar en local (para el proceso de desarrollo) pero para desplegarse a los usuarios siempre se empaquetan desde GH Actions, garantizando la reproducibilidad y confianza. Los paquetes son desplegados al repositorio [APT Inled](https://apt.inled.es) (llamado apt pero realmente es un repositorio pacman, dnf y apt). Estos paquetes son luego utilizados para la creación de la ISO (también desde GH Actions) así como para proveer de las nuevas funcionalidades a los usuarios que tienen el sistema ya instalado.  
+This repository stores the code of the Pulsar OS packages, which are developed for both Debian and Arch.  
+These packages include a `prepare-assets.sh` file whose task is to place the assets in the staging so that they are then packaged for the Arch or Debian system. Packages can be compiled and installed locally (for the development process) but to be deployed to users they are always packaged from GH Actions, guaranteeing reproducibility and trust. The packages are deployed to the [APT Inled](https://apt.inled.es) repository (called apt but it is really a pacman, dnf and apt repository). These packages are then used to create the ISO (also from GH Actions) as well as to provide new functionalities to users who have the system already installed.  
 
-Este repositorio contiene todos los paquetes para todas las distribuciones de Pulsar OS, las cuales actualmente son Bittenfruit y Tube OS.  
+This repository contains all packages for all Pulsar OS distributions, which are currently Bittenfruit and Tube OS.  
 
-Posiblemente quiera [consultar el repositorio ISO](https://github.com/Inled-Pulsar-OS/ISO) para conocer cómo se construye la imagen ISO.  
+You may want to [check the ISO repository](https://github.com/Inled-Pulsar-OS/ISO) to learn how the ISO image is built.
 
 ---
 
-## ⚠️ Deprecated & Discontinued Packages / Paquetes obsoletos
+## Outdated packages
 
-Los siguientes paquetes están marcados como **obsoletos** o han sido completamente **descontinuados** en Pulsar OS 2.0:
+The following packages are marked as **deprecated** or have been completely **deprecated** in Pulsar OS 2.0:
 
-| Package | Status | Razón / Reemplazo |
+| Package | Status | Reason/Replacement |
 |---|---|---|
-| `pulsar-store` | **Descontinuado / Eliminado** | La tienda anterior de Pulsar Store ha sido retirada y no se incluye en la ISO ni en la instalación. La gestión de paquetes y software se realiza mediante las herramientas nativas del sistema, Flatpak y AppInstall. |
-| `dockermigrate` | **Obsoleto** | Herramienta experimental previa para migración de contenedores Docker en Tube OS; descontinuada en favor de las herramientas nativas de copia y restauración de volúmenes de CasaOS/Docker. |
-| `pulsaros-control-center-button` | **Obsoleto** | Sustituido por la integración nativa en GNOME Shell a través de `pulsaros-control-center`, `Pulsar-CC-27-Gnome` y `Pulsar-Notification-Center`. |
-| `gnome-macos-remap-wayland` | **Obsoleto** | Reasignación basada en xremap descontinuada. En Pulsar OS 2.0 la reasignación de teclas (Ctrl↔Super/Command, accesos de teclado macOS) se gestiona de forma nativa a través de GNOME Mutter y las opciones de XKB en dconf. |
-| `driverman` | **Obsoleto** | Asistente de controladores antiguo de Debian; sustituido por la detección automática en el entorno de instalación y recuperación de `pulsaros-recovery` y los repositorios oficiales. |
-| `scrcpy` | **Obsoleto (Empaquetado)** | Empaquetado interno legado; se utiliza directamente el paquete upstream oficial provisto por los repositorios de Arch / Debian. |
-| `hblock` | **Obsoleto** | Paquete binario redistribuido reemplazado por la solución integrada moderna `pulsaros-hblock` y el cortafuegos `pulsaros-firewall`. |
-
----
-
-This repository holds the package sources that make up **Pulsar OS** and its
-NAS-oriented sibling **Tube OS**. Every folder with a `DEBIAN/control` file is a
-Debian package; `arch/` additionally carries the Arch Linux `PKGBUILD`s for the
-same components. Packages are compiled with `package-and-deploy.sh` (locally or
-in GitHub Actions) into `.deb` files that are published to the Inled central APT
-repository and consumed by the [ISO build](https://github.com/Inled-Pulsar-OS/ISO).
-
-> `pulsaros-meta` is a metapackage that depends on every Pulsar OS package.
-> Installing it on an existing installation pulls in anything new that has been
-> added since the system was installed.
+| `pulsar-store` | **Discontinued / Removed** | The previous Pulsar Store has been retired and is not included in the ISO or installation. Package and software management is done using the system's native tools, Flatpak and AppInstall. |
+| `dockermigrate` | **Obsolete** | Previous experimental tool for migrating Docker containers on Tube OS; discontinued in favor of the native CasaOS/Docker volume copy and restore tools. |
+| `pulsaros-control-center-button` | **Obsolete** | Replaced by native integration in GNOME Shell via `pulsaros-control-center`, `Pulsar-CC-27-Gnome` and `Pulsar-Notification-Center`. |
+| `gnome-macos-remap-wayland` | **Obsolete** | Discontinued xremap based remapping. In Pulsar OS 2.0 key remapping (Ctrl↔Super/Command, macOS keyboard shortcuts) is managed natively via GNOME Mutter and the XKB options in dconf. |
+| `driverman` | **Obsolete** | Old Debian Driver Wizard; replaced by automatic detection in the `pulsaros-recovery` installation and recovery environment and the official repositories. |
+| `scrcpy` | **Obsolete (Packaged)** | Legacy internal packaging; It directly uses the official upstream package provided by the Arch/Debian repositories. |
+| `hblock` | **Obsolete** | Redistributed binary package replaced by modern integrated solution `pulsaros-hblock` and firewall `pulsaros-firewall`. |
 
 ---
 
@@ -196,4 +183,6 @@ of their upstream, as required by it. Notable examples:
   original Inled code, **MIT-INLED**.
 
 When in doubt, read the `LICENSE` / `DEBIAN/copyright` files shipped inside each
-package folder.
+package folder.  
+
+> This README has been written by a human, translated with Google Translator, but some parts are written by AI.
