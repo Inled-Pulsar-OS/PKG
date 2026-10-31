@@ -28,6 +28,8 @@ cp -r "$TEMP_BUILD/theme"/* "$DEST_DIR/"
 # English: Strip out hardcoded test menuentries from theme.conf to prevent broken options
 # Español: Eliminar menuentries de prueba cableados de theme.conf para evitar opciones rotas
 sed -i '/#MENUENTRIES/q' "$DEST_DIR/theme.conf"
+sed -i 's/^hideui .*/hideui singleuser,hints,label/' "$DEST_DIR/theme.conf"
+grep -q "hideui.*label" "$DEST_DIR/theme.conf" || echo "hideui singleuser,hints,label" >> "$DEST_DIR/theme.conf"
 
 # Instalar iconos específicos de arranque de Pulsar OS Live
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"

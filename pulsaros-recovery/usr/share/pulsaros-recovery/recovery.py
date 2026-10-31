@@ -95,14 +95,6 @@ EXTRA_PACKAGES_ITEMS = [
         "debian_pkgs": ["pulsar-windows"],
     },
     {
-        "id": "pulsar-store",
-        "name": "Pulsar App Store",
-        "desc": "App store and package discovery tool.",
-        "required": True,
-        "arch_pkgs": ["pulsar-store"],
-        "debian_pkgs": ["pulsar-store"],
-    },
-    {
         "id": "pulsaros-update",
         "name": "Pulsar OS Update Assistant",
         "desc": "System and software update manager.",
@@ -5773,15 +5765,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     os.makedirs("/mnt/recovery/boot", exist_ok=True)
                     os.makedirs("/mnt/recovery", exist_ok=True)
                     shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-recovery")
-                    shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-linux")
                     shutil.copy2(found_k, "/mnt/recovery/vmlinuz-recovery")
                     if is_efi:
                         esp_root = "/mnt/boot/efi"
                         os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
                         shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery.efi")
-                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery")
-                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz.efi")
-                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz")
                     
                     rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash"
                     
@@ -5981,8 +5969,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         if not has_dual_boot:
                             try:
                                 prober_res = subprocess.check_output(["os-prober"], stderr=subprocess.DEVNULL, universal_newlines=True).strip()
-                                if prober_res:
+                                for pline in prober_res.splitlines():
+                                    pline = pline.strip()
+                                    if not pline:
+                                        continue
+                                    pdev = pline.split(":")[0]
+                                    if "PULSAR" in pline.upper():
+                                        continue
+                                    if getattr(self, "selected_disk", None) and pdev.startswith(str(self.selected_disk)):
+                                        continue
                                     has_dual_boot = True
+                                    break
                             except Exception:
                                 pass
 
@@ -5997,19 +5994,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         # only Pulsar entries. scanfor only scans internal and
                         # external disks (no 'bios'/'biosexternal'/'optical'),
                         # avoiding the legacy/CSM notice and "Hit any key" pause.
-                        # En dual boot rEFInd debe auto-escaneo de otros sistemas,
-                        # pero con nuestras entradas FIJAS: se excluyen nuestro
-                        # volumen raíz (PULSAR_OS) y las copias del kernel de
-                        # recovery del auto-escaneo, de modo que las entradas
-                        # curadas siguientes (únicas con los parámetros resume=)
-                        # son las únicas de Pulsar. scanfor solo escanea discos
-                        # internos y externos (sin 'bios'/'biosexternal'/'optical'),
-                        # evitando el aviso de legacy/CSM y la pausa "Hit any key".
                         if has_dual_boot:
                             scanfor_mode = (
                                 "scanfor manual,internal,external\n"
-                                "dont_scan_volumes PULSAR_OS\n"
-                                "dont_scan_files vmlinuz,vmlinuz.efi,vmlinuz-recovery,vmlinuz-recovery.efi"
+                                "dont_scan_volumes PULSAR_OS,PULSAR_RECOVERY\n"
+                                "dont_scan_dirs EFI/recovery,recovery,EFI/BOOT/recovery,live,@,@/boot,themes,drivers_x64\n"
+                                "dont_scan_files vmlinuz,vmlinuz.efi,vmlinuz-recovery,vmlinuz-recovery.efi,vmlinuz-linux,initramfs*,initrd*"
                             )
                         else:
                             scanfor_mode = "scanfor manual\ndont_scan_dirs EFI,boot,recovery,live,@,@/boot,themes,drivers_x64\ndont_scan_files *"
@@ -6089,10 +6079,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             "# además auto-escanea en busca de otros sistemas.\n"
                             f"{scanfor_mode}\n"
                             "default_selection 1\n"
+                            "hideui singleuser,hints,label\n"
                             "\n"
                             f"{pulsar_entry}"
                             "\n"
-                            'menuentry "Pulsar OS Recovery" {\n'
+                            'menuentry "Recovery" {\n'
                             f"    icon {icon_rec}\n"
                             f"{rec_volume_line}"
                             f"    loader {rec_loader}\n"
@@ -6109,7 +6100,20 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 content = f.read()
                         content = content.replace("#enable_mouse", "enable_mouse")
                         content = content.replace("enable_mouse", "enable_mouse", 1)
-                        if os.path.isfile(f"{rd}/themes/rEFInd-Regular-Dark/theme.conf") \
+                        theme_conf_path = f"{rd}/themes/rEFInd-Regular-Dark/theme.conf"
+                        if os.path.isfile(theme_conf_path):
+                            try:
+                                with open(theme_conf_path, "r") as tf:
+                                    tdata = tf.read()
+                                if "hideui" in tdata:
+                                    tdata = re.sub(r'hideui.*', 'hideui singleuser,hints,label', tdata)
+                                else:
+                                    tdata += "\nhideui singleuser,hints,label\n"
+                                with open(theme_conf_path, "w") as tf:
+                                    tf.write(tdata)
+                            except Exception:
+                                pass
+                        if os.path.isfile(theme_conf_path) \
                                 and "include themes/rEFInd-Regular-Dark/theme.conf" not in content:
                             content += "\ninclude themes/rEFInd-Regular-Dark/theme.conf\n"
                         content = re.sub(
