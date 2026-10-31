@@ -1,0 +1,15 @@
+Features 2.0:
+- Sayri AI, el asistente de IA mejor que openclaw, más seguro y listo para usar en Pulsar OS
+- Pulsar Phone, tu aplicación para que la experiencia llegue hasta el telefono
+- Pulsar VPN: conectate a tu dispositivo aún que no estes en casa
+- Pulsar Ad Block: Acaba con los malditos anuncios a nivel de sistema
+- Pulsar Firewall: El único firewall en linux que es facil de configurar y te ayuda en todo
+- Pulsar Windows: Ejecuta aplicaciones de Windows como si fueran nativas de pulsar os, pero con un windows por debajo
+- Face ID y Touch ID: ya no tendrás que poner tu contraseña si no quieres
+- Bloqueo automatico cuando dejas el PC solo
+- Notch, como en amcos, pero mil veces mas funcional
+- Nuevo control y notifications center, mas estilo macos, mejores
+- Nuevo spotlight, más cómodo, mas útil, más inteligente
+- Circle to search, lo mejor de Android lo hemos copiado
+- Experiencia sin terminal, todo desde la App Store
+- Confiable, abierto, sin slop: tú decides.

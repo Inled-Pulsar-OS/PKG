@@ -2291,6 +2291,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     capture_output=True, timeout=180,
                 )
             subprocess.run(["chmod", "-R", "777", base_dir], capture_output=True)
+            apps_dir = f"{chroot_target}/usr/share/applications" if chroot_target else "/usr/share/applications"
+            os.makedirs(apps_dir, exist_ok=True)
+            with open(f"{apps_dir}/install-macos.desktop", "w") as f:
+                f.write("[Desktop Entry]\nName=Install macOS\nGenericName=macOS KVM Installer\nComment=Install and manage macOS Virtual Machines on KVM\nExec=gnome-terminal -- /usr/bin/install-macos\nIcon=install-macos\nTerminal=false\nType=Application\nCategories=System;Utility;Virtualization;\nKeywords=macos;kvm;qemu;virtual machine;apple;installer;mac;\nStartupNotify=true\n")
             log_msg("ultimate-macOS-KVM setup completed.")
         except Exception as e:
             log_msg(f"Notice: could not setup ultimate-macOS-KVM: {e}")
@@ -5051,11 +5055,23 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 if pkg_info.get("install_macos"):
                                     self._install_macos_kvm(log_msg, chroot_target="/mnt")
 
-                                if pkg_info.get("install_hidamari"):
-                                    self._install_hidamari_flatpak(log_msg, chroot_target="/mnt")
+                                # Restore biometrics desktop entry on target disk if gaze/biometrics was installed
+                                if "gaze" in pkg_info.get("pkgs", []):
+                                    try:
+                                        bio_desktop = "/mnt/usr/share/applications/pulsaros-biometrics.desktop"
+                                        with open(bio_desktop, "w") as bf:
+                                            bf.write("[Desktop Entry]\nName=Touch ID & Face ID\nName[es]=Touch ID y Face ID\nComment=Configure facial recognition, fingerprint login, and presence detection\nComment[es]=Configura el reconocimiento facial, lector de huellas y detección de presencia\nExec=pulsaros-biometrics-settings\nIcon=system-users\nTerminal=false\nType=Application\nCategories=GNOME;GTK;Settings;Security;System;\nKeywords=fingerprint;touchid;faceid;face;auth;biometrics;presencia;lock;huella;\nStartupNotify=true\n")
+                                    except Exception:
+                                        pass
 
-                                if pkg_info.get("install_macos"):
-                                    self._install_macos_kvm(log_msg, chroot_target="/mnt")
+                                # Restore biometrics desktop entry on target disk if gaze/biometrics was installed
+                                if "gaze" in pkg_info.get("pkgs", []):
+                                    try:
+                                        bio_desktop = "/mnt/usr/share/applications/pulsaros-biometrics.desktop"
+                                        with open(bio_desktop, "w") as bf:
+                                            bf.write("[Desktop Entry]\nName=Touch ID & Face ID\nName[es]=Touch ID y Face ID\nComment=Configure facial recognition, fingerprint login, and presence detection\nComment[es]=Configura el reconocimiento facial, lector de huellas y detección de presencia\nExec=pulsaros-biometrics-settings\nIcon=system-users\nTerminal=false\nType=Application\nCategories=GNOME;GTK;Settings;Security;System;\nKeywords=fingerprint;touchid;faceid;face;auth;biometrics;presencia;lock;huella;\nStartupNotify=true\n")
+                                    except Exception:
+                                        pass
                             except Exception as post_err:
                                 log_msg(f"Post-install package installation: {post_err}")
 
@@ -5136,6 +5152,15 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
                                 if pkg_info.get("install_macos"):
                                     self._install_macos_kvm(log_msg, chroot_target="/mnt")
+
+                                # Restore biometrics desktop entry on target disk if gaze/biometrics was installed
+                                if "gaze" in pkg_info.get("pkgs", []):
+                                    try:
+                                        bio_desktop = "/mnt/usr/share/applications/pulsaros-biometrics.desktop"
+                                        with open(bio_desktop, "w") as bf:
+                                            bf.write("[Desktop Entry]\nName=Touch ID & Face ID\nName[es]=Touch ID y Face ID\nComment=Configure facial recognition, fingerprint login, and presence detection\nComment[es]=Configura el reconocimiento facial, lector de huellas y detección de presencia\nExec=pulsaros-biometrics-settings\nIcon=system-users\nTerminal=false\nType=Application\nCategories=GNOME;GTK;Settings;Security;System;\nKeywords=fingerprint;touchid;faceid;face;auth;biometrics;presencia;lock;huella;\nStartupNotify=true\n")
+                                    except Exception:
+                                        pass
                             except Exception as post_err:
                                 log_msg(f"Post-install apt installation: {post_err}")
 
