@@ -91,8 +91,8 @@ EXTRA_PACKAGES_ITEMS = [
         "name": "Pulsar Windows (App Support)",
         "desc": "Run Windows applications seamlessly on Pulsar OS.",
         "required": True,
-        "arch_pkgs": ["winboat-bin"],
-        "debian_pkgs": ["winboat"],
+        "arch_pkgs": ["pulsar-windows"],
+        "debian_pkgs": ["pulsar-windows"],
     },
     {
         "id": "pulsar-store",

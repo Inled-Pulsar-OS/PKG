@@ -2241,9 +2241,9 @@ class OOTBWindow(Adw.ApplicationWindow):
                 return
 
             # ── Locale ─────────────────────────────────────────────
-            # selected_language is like "es_ES"; the generated locale name
-            # needs the encoding suffix (es_ES.UTF-8) to be valid.
-            locale_code = self.selected_language
+            # selected_language is like "es_ES" or "es_ES.UTF-8"; normalize
+            # encoding suffix to prevent double suffixes like es_ES.UTF-8.UTF-8.
+            locale_code = self.selected_language.replace(".UTF-8", "").replace(".utf8", "")
             locale_full = f"{locale_code}.UTF-8"
             # Make sure the locale is enabled in /etc/locale.gen and generated.
             # Both Debian and Arch read /etc/locale.gen (locale-gen takes no args).
@@ -2377,14 +2377,24 @@ class OOTBWindow(Adw.ApplicationWindow):
                 desired_groups = ["sudo", "wheel", "audio", "video", "plugdev", "docker"]
                 existing_groups = get_existing_groups()
                 extra_groups = ",".join(g for g in desired_groups if g in existing_groups)
-                run_cmd([
+                u_res = run_cmd([
                     "useradd", "-m",
                     "-d", user_home,
                     "-s", "/bin/bash",
                     "-G", extra_groups,
                     "-c", fullname,
                     username
-                ])
+                ], check=False)
+
+                if u_res.returncode == 9 or f"{username}:" in open("/etc/passwd").read():
+                    log_msg(f"User '{username}' already exists; updating user configuration...")
+                    if extra_groups:
+                        run_cmd(["usermod", "-aG", extra_groups, username], check=False)
+                    run_cmd(["usermod", "-s", "/bin/bash", "-c", fullname, username], check=False)
+                    os.makedirs(user_home, exist_ok=True)
+                    run_cmd(["chown", "-R", f"{username}:{username}", user_home], check=False)
+                elif u_res.returncode != 0:
+                    raise Exception(f"useradd failed with code {u_res.returncode}: {u_res.stderr}")
 
                 # Verify user was created in /etc/passwd
                 res = run_cmd(["grep", f"^{username}:", "/etc/passwd"])
