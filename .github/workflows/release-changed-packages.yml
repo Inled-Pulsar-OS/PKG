@@ -63,14 +63,18 @@ jobs:
             FILES=$(git diff --name-only "$BEFORE..$AFTER" 2>/dev/null || true)
           else
             # workflow_dispatch
+            DETECTED_BRANCH="${{ github.event.inputs.branch || 'unstable' }}"
+            [ -z "$DETECTED_BRANCH" ] && DETECTED_BRANCH="unstable"
             PKG_INPUT="${{ github.event.inputs.package_name }}"
             if [ "$PKG_INPUT" = "all" ] || [ "$PKG_INPUT" = "auto" ] || [ -z "$PKG_INPUT" ]; then
               echo "should_build=true" >> "$GITHUB_OUTPUT"
+              echo "branch=$DETECTED_BRANCH" >> "$GITHUB_OUTPUT"
               echo "debian_packages=all" >> "$GITHUB_OUTPUT"
               echo "arch_packages=all" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "branch=$DETECTED_BRANCH" >> "$GITHUB_OUTPUT"
             echo "debian_packages=$PKG_INPUT" >> "$GITHUB_OUTPUT"
             echo "arch_packages=$PKG_INPUT" >> "$GITHUB_OUTPUT"
             exit 0
@@ -181,7 +185,7 @@ jobs:
               export PATH=\"/root/.cargo/bin:\$PATH\"
 
               chmod +x /workspace/package-and-deploy.sh
-              ./package-and-deploy.sh '$PKGS' --branch '$TARGET_BRANCH'
+              ./package-and-deploy.sh '$PKGS' --branch "${TARGET_BRANCH:-stable}"
 
               chmod -R a+rwX /workspace/build 2>/dev/null || true
             "
