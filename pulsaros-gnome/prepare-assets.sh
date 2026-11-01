@@ -52,7 +52,7 @@ fi
 # 3. Pulsar Liquid Glass (Agnelo / Inled)
 echo "📦 Instalando Pulsar Liquid Glass..."
 LG_SRC="$PKG_ROOT/Pulsar-Liquid-Glass"
-if [ -d "$LG_SRC" ]; then
+if [ -d "$LG_SRC" ] && [ -f "$LG_SRC/extension.js" ]; then
     LG_DEST="$EXT_DIR/liquid-glass@thinkingcoding1231.gmail.com"
     rm -rf "$LG_DEST"
     mkdir -p "$LG_DEST"
@@ -63,7 +63,7 @@ fi
 # 4. Pulsar Dock (Dash to Dock forked by Inled/Agnelo)
 echo "📦 Instalando Pulsar Dock..."
 DOCK_SRC="$PKG_ROOT/Pulsar-Dock"
-if [ -d "$DOCK_SRC" ]; then
+if [ -d "$DOCK_SRC" ] && [ -f "$DOCK_SRC/extension.js" ]; then
     DOCK_DEST="$EXT_DIR/pulsar-dock@inled.es"
     rm -rf "$DOCK_DEST"
     mkdir -p "$DOCK_DEST"
