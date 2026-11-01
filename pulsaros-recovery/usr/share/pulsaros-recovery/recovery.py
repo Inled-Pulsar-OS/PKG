@@ -73,10 +73,10 @@ EXTRA_PACKAGES_ITEMS = [
     {
         "id": "biometrics",
         "name": "Touch ID & Face ID Biometrics",
-        "desc": "Gaze facial recognition and fprintd fingerprint authentication.",
+        "desc": "Fingerprint and presence authentication.",
         "required": True,
-        "arch_pkgs": ["gaze", "fprintd"],
-        "debian_pkgs": ["gaze", "fprintd"],
+        "arch_pkgs": ["fprintd"],
+        "debian_pkgs": ["fprintd"],
     },
     {
         "id": "sayri",
@@ -91,6 +91,7 @@ EXTRA_PACKAGES_ITEMS = [
         "name": "Pulsar Windows (App Support)",
         "desc": "Run Windows applications seamlessly on Pulsar OS.",
         "required": True,
+        "is_pulsar_windows": True,
         "arch_pkgs": ["pulsar-windows"],
         "debian_pkgs": ["pulsar-windows"],
     },
@@ -1728,6 +1729,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         install_macos = False
         install_localsend = False
         install_cups = False
+        install_pulsar_windows = False
 
         for item in EXTRA_PACKAGES_ITEMS:
             item_id = item["id"]
@@ -1742,6 +1744,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     install_localsend = True
                 if item.get("is_cups"):
                     install_cups = True
+                if item.get("is_pulsar_windows"):
+                    install_pulsar_windows = True
 
                 if is_arch:
                     for p in item.get("arch_pkgs", []):
@@ -1763,6 +1767,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             "install_macos": install_macos,
             "install_localsend": install_localsend,
             "install_cups": install_cups,
+            "install_pulsar_windows": install_pulsar_windows,
         }
 
     def _get_selected_drivers_info(self, is_arch=True):
@@ -2132,6 +2137,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         "/tmp/LocalSend-latest-linux-x86-64.deb",
                     )
 
+                if pkg_info.get("install_pulsar_windows") and not os.path.isfile("/usr/bin/pulsar-windows"):
+                    self._install_pulsar_windows_debian(
+                        log_msg,
+                        ["pkexec", "apt-get"],
+                        "/tmp/pulsar-windows.deb",
+                    )
+
             if pkg_info["install_cups"]:
                 GLib.idle_add(self.update_progress, 0.95, "Enabling print service (CUPS)...")
                 try:
@@ -2395,6 +2407,41 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 log_msg("LocalSend installed successfully.")
         except Exception as loc_err:
             log_msg(f"WARNING: could not install LocalSend: {loc_err}")
+
+    def _install_pulsar_windows_debian(self, log_msg, apt_prefix, deb_install_path, deb_host_path=None):
+        """Install Pulsar Windows from its official x86-64 .deb (best-effort)."""
+        import urllib.request
+        if deb_host_path is None:
+            deb_host_path = deb_install_path
+        deb_url = "https://github.com/Inled-Pulsar-OS/pulsar-windows/releases/download/v1.0.0/pulsar-windows-1.0.0-amd64.deb"
+        try:
+            os.makedirs(os.path.dirname(deb_host_path) or "/tmp", exist_ok=True)
+            log_msg("Downloading Pulsar Windows (Windows container support) .deb from GitHub...")
+            req = urllib.request.Request(
+                deb_url,
+                headers={"User-Agent": "PulsarOS-Recovery/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=180) as resp, open(deb_host_path, "wb") as f_out:
+                shutil.copyfileobj(resp, f_out)
+            if not os.path.isfile(deb_host_path) or os.path.getsize(deb_host_path) == 0:
+                raise RuntimeError("Downloaded pulsar-windows .deb is missing or empty")
+            log_msg("Installing Pulsar Windows...")
+            res = subprocess.run(
+                apt_prefix + ["install", "-y", "./" + deb_install_path],
+                capture_output=True, text=True,
+            )
+            if res.returncode != 0:
+                log_msg(f"WARNING: Pulsar Windows install failed: {res.stderr.strip()}")
+            else:
+                log_msg("Pulsar Windows installed successfully.")
+        except Exception as pw_err:
+            log_msg(f"WARNING: could not install Pulsar Windows: {pw_err}")
+        finally:
+            if os.path.exists(deb_host_path):
+                try:
+                    os.remove(deb_host_path)
+                except Exception:
+                    pass
 
     def build_install_welcome_screen(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -4810,7 +4857,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     else:
                         subprocess.run(["cryptsetup", "close", "pulsar_cryptroot"], capture_output=True)
                         res_fmt = subprocess.run(
-                            ["cryptsetup", "luksFormat", "-q", "--type", "luks2", "--pbkdf", "argon2id", raw_part, "-"],
+                            ["cryptsetup", "luksFormat", "-q", "--type", "luks2", "--pbkdf", "pbkdf2", raw_part, "-"],
                             input=self.encryption_passphrase.encode("utf-8"),
                             capture_output=True
                         )
@@ -5423,8 +5470,21 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
                                 if extra_packages:
                                     if has_network_deb:
+                                        # Verify extra_packages exist in apt cache to prevent batch error code 100
+                                        try:
+                                            res_avail = subprocess.run(["chroot", "/mnt", "apt-cache", "pkgnames"], capture_output=True, text=True)
+                                            if res_avail.returncode == 0:
+                                                avail_pkgs = set(res_avail.stdout.split())
+                                                valid_extra = [p for p in extra_packages if p in avail_pkgs]
+                                                missing_extra = [p for p in extra_packages if p not in avail_pkgs]
+                                                if missing_extra:
+                                                    log_msg(f"Notice: Excluding packages not in Debian repos: {', '.join(missing_extra)}")
+                                                extra_packages = valid_extra
+                                        except Exception as chk_e:
+                                            log_msg(f"Warning checking Debian package availability: {chk_e}")
+
                                         apt_cmd = [
-                                            "chroot", "/mnt", "apt-get", "install", "-y",
+                                            "chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y",
                                             "--no-install-recommends",
                                             *extra_packages,
                                         ]
@@ -5456,12 +5516,19 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                         apt_proc.wait()
                                         if apt_proc.returncode != 0:
                                             log_msg(f"Notice: Batch apt-get install exited with code {apt_proc.returncode}. Attempting individual installs...")
+                                            subprocess.run(["fuser", "-k", "-9", "/mnt/var/lib/dpkg/lock-frontend", "/mnt/var/lib/dpkg/lock", "/mnt/var/lib/apt/lists/lock"], capture_output=True)
+                                            subprocess.run(["chroot", "/mnt", "dpkg", "--configure", "-a"], capture_output=True)
                                             for dpkg in extra_packages:
-                                                res_d = subprocess.run(["chroot", "/mnt", "apt-get", "install", "-y", "--no-install-recommends", dpkg], capture_output=True, text=True)
+                                                res_d = subprocess.run(
+                                                    ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "--no-install-recommends", dpkg],
+                                                    capture_output=True,
+                                                    text=True
+                                                )
                                                 if res_d.returncode == 0:
                                                     log_msg(f"  apt: Installed {dpkg}")
                                                 else:
-                                                    log_msg(f"  apt: Skipping {dpkg}")
+                                                    err_line = res_d.stderr.strip().splitlines()[-1] if res_d.stderr.strip() else "error"
+                                                    log_msg(f"  apt: Skipping {dpkg} ({err_line})")
                                         else:
                                             log_msg("Post-install: extra packages installed successfully (apt).")
                                             extra_packages_installed = True
@@ -5482,6 +5549,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                         ["chroot", "/mnt", "apt-get"],
                                         "/tmp/LocalSend-latest-linux-x86-64.deb",
                                         "/mnt/tmp/LocalSend-latest-linux-x86-64.deb",
+                                    )
+
+                                if pkg_info.get("install_pulsar_windows") and not os.path.isfile("/mnt/usr/bin/pulsar-windows"):
+                                    self._install_pulsar_windows_debian(
+                                        log_msg,
+                                        ["chroot", "/mnt", "apt-get"],
+                                        "/tmp/pulsar-windows.deb",
+                                        "/mnt/tmp/pulsar-windows.deb",
                                     )
 
                                 if pkg_info["install_onlyoffice"]:
@@ -6199,8 +6274,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     except Exception as cfg_err:
                         log_msg(f"ERROR configuring {conf_path}: {cfg_err}")
 
-            def configure_grub_menus():
-                """Configure GRUB default parameters, os-prober for Dual Boot, theme, and recovery entry."""
+            def configure_grub_default():
+                """Configure GRUB default parameters (/etc/default/grub), including cryptodisk if encrypted."""
                 if "TEST_MODE" in os.environ:
                     return
 
@@ -6260,6 +6335,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 os.makedirs(os.path.dirname(grub_default), exist_ok=True)
                 with open(grub_default, "w") as f:
                     f.write(content)
+                log_msg(f"✅ Configured {grub_default} (cryptodisk={self.install_encryption})")
+
+            def configure_grub_menus():
+                """Configure GRUB default parameters, os-prober for Dual Boot, theme, and recovery entry."""
+                if "TEST_MODE" in os.environ:
+                    return
+
+                configure_grub_default()
 
                 # Deploy Recovery Entry to /etc/grub.d/15_pulsar_recovery
                 grub_d = "/mnt/etc/grub.d"
@@ -6386,6 +6469,9 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                 except Exception as g_cfg_err:
                     log_msg(f"Warning: GRUB config generation error: {g_cfg_err}")
 
+            # Early write /etc/default/grub with GRUB_ENABLE_CRYPTODISK=y before grub-install runs
+            configure_grub_default()
+
             GLib.idle_add(self.update_progress, 0.90, "Installing bootloader...")
             mount_vfs()
 
@@ -6442,7 +6528,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                             pass
                         exec_cmd(["chroot", "/mnt", "grub-install", "--target=x86_64-efi", "--efi-directory=/boot/efi", "--removable", "--recheck"])
                     else:
-                        exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", "--force", disk_path])
+                        exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", "--recheck", "--force", disk_path])
                 else:
                     GLib.idle_add(self.update_progress, 0.92, "Configuring rEFInd...")
                     esp_root = "/mnt/boot/efi"
@@ -6656,7 +6742,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
             else:
                 GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader (BIOS/MBR)...")
                 log_msg(f"Installing BIOS/MBR GRUB onto {disk_path}...")
-                exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", "--force", disk_path])
+                exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", "--recheck", "--force", disk_path])
                 
             esp_root = "/mnt/boot/efi"
 
