@@ -779,7 +779,7 @@ impl<'a> Parser<'a> {
                     return Ok(Val::num(match k.as_str() {
                         "pi" => std::f64::consts::PI,
                         "tau" => std::f64::consts::TAU,
-                        "phi" => std::f64::consts::GOLDEN_RATIO,
+                        "phi" => 1.618033988749895_f64,
                         _ => std::f64::consts::E,
                     }));
                 }

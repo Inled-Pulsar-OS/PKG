@@ -29,16 +29,16 @@ if $is_debian_target && [ "$needs_debian_rebuild" = true ]; then
     elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
         echo "🐳 Compiling pulsaros-spotlight inside debian:trixie for GLIBC <= 2.41 compatibility..."
         mkdir -p target/debian
+        mkdir -p "$HOME/.cache/pulsaros-cargo-debian"
         docker run --rm \
             -v "$SRC_DIR:/workspace" \
+            -v "$HOME/.cache/pulsaros-cargo-debian:/root/.cargo" \
             -w /workspace \
             debian:trixie bash -c "
                 set -e
                 export DEBIAN_FRONTEND=noninteractive
                 apt-get update
-                apt-get install -y --no-install-recommends build-essential pkg-config libgtk-4-dev libadwaita-1-dev curl
-                curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
-                export PATH=\"/root/.cargo/bin:\$PATH\"
+                apt-get install -y --no-install-recommends build-essential pkg-config libgtk-4-dev libadwaita-1-dev libsqlite3-dev cargo ca-certificates
                 cargo build --release --target-dir target/debian
             "
         install -m 755 target/debian/release/pulsaros-spotlight "$STAGE_DIR/usr/bin/pulsaros-spotlight"

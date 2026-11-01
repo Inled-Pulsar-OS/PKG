@@ -19,11 +19,8 @@ The following packages are marked as **deprecated** or have been completely **de
 
 | Package | Status | Reason/Replacement |
 |---|---|---|
-| `pulsar-store` | **Discontinued / Removed** | The previous Pulsar Store has been retired and is not included in the ISO or installation. Package and software management is done using the system's native tools, Flatpak and AppInstall. |
-| `dockermigrate` | **Obsolete** | Previous experimental tool for migrating Docker containers on Tube OS; discontinued in favor of the native CasaOS/Docker volume copy and restore tools. |
+| `pulsar-store` | **Discontinued / Removed** | The previous Pulsar Store has been retired and is not included in the ISO or installation. Package and software management is done using the system's native tools, Flatpak and AppInstall. ||
 | `pulsaros-control-center-button` | **Obsolete** | Replaced by native integration in GNOME Shell via `pulsaros-control-center`, `Pulsar-CC-27-Gnome` and `Pulsar-Notification-Center`. |
-| `gnome-macos-remap-wayland` | **Obsolete** | Discontinued xremap based remapping. In Pulsar OS 2.0 key remapping (Ctrl↔Super/Command, macOS keyboard shortcuts) is managed natively via GNOME Mutter and the XKB options in dconf. |
-| `driverman` | **Obsolete** | Old Debian Driver Wizard; replaced by automatic detection in the `pulsaros-recovery` installation and recovery environment and the official repositories. |
 | `scrcpy` | **Obsolete (Packaged)** | Legacy internal packaging; It directly uses the official upstream package provided by the Arch/Debian repositories. |
 | `hblock` | **Obsolete** | Redistributed binary package replaced by modern integrated solution `pulsaros-hblock` and firewall `pulsaros-firewall`. |
 
