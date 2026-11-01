@@ -32,13 +32,58 @@ const DRAG_THRESHOLD = 6;
 const DOUBLE_CLICK_TIME_MS = 400;
 
 export default class PulsarDesktopIconsExtension extends Extension {
+    _resolveDesktopDir() {
+        let dir = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DESKTOP);
+        if (!dir || !GLib.file_test(dir, GLib.FileTest.IS_DIR)) {
+            const configPath = GLib.build_filenamev([GLib.get_user_config_dir(), 'user-dirs.dirs']);
+            if (GLib.file_test(configPath, GLib.FileTest.EXISTS)) {
+                try {
+                    const [ok, content] = GLib.file_get_contents(configPath);
+                    if (ok) {
+                        const text = new TextDecoder().decode(content);
+                        const match = text.match(/XDG_DESKTOP_DIR="?\$HOME\/([^"\n]+)"?/);
+                        if (match && match[1]) {
+                            const p = GLib.build_filenamev([GLib.get_home_dir(), match[1]]);
+                            if (GLib.file_test(p, GLib.FileTest.IS_DIR)) {
+                                dir = p;
+                            }
+                        }
+                    }
+                } catch (e) {}
+            }
+        }
+        if (!dir || !GLib.file_test(dir, GLib.FileTest.IS_DIR)) {
+            const home = GLib.get_home_dir();
+            for (const cand of ['Escritorio', 'Desktop', 'Bureau', 'Schreibtisch', 'Área de Trabalho']) {
+                const p = GLib.build_filenamev([home, cand]);
+                if (GLib.file_test(p, GLib.FileTest.IS_DIR)) {
+                    dir = p;
+                    break;
+                }
+            }
+        }
+        if (!dir) {
+            dir = GLib.build_filenamev([GLib.get_home_dir(), 'Desktop']);
+        }
+
+        // If localized desktop exists and ~/Desktop is not already a symlink, link it
+        const defaultDesk = GLib.build_filenamev([GLib.get_home_dir(), 'Desktop']);
+        if (dir !== defaultDesk && !GLib.file_test(defaultDesk, GLib.FileTest.EXISTS)) {
+            try {
+                const linkFile = Gio.File.new_for_path(defaultDesk);
+                linkFile.make_symbolic_link(dir, null);
+            } catch (e) {}
+        }
+
+        return dir;
+    }
+
     enable() {
         this._items = new Map();
         this._selectedItem = null;
         this._signals = [];
         this._positions = this._loadPositions();
-        this._desktopDir = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DESKTOP) ||
-                           GLib.build_filenamev([GLib.get_home_dir(), 'Desktop']);
+        this._desktopDir = this._resolveDesktopDir();
 
         // Create container on wallpaper background group
         this._container = new St.Widget({
@@ -51,6 +96,7 @@ export default class PulsarDesktopIconsExtension extends Extension {
 
         if (Main.layoutManager?._backgroundGroup) {
             Main.layoutManager._backgroundGroup.add_child(this._container);
+            Main.layoutManager._backgroundGroup.set_child_above_sibling(this._container, null);
         }
 
         // Watch desktop folder changes
@@ -497,6 +543,10 @@ export default class PulsarDesktopIconsExtension extends Extension {
     }
 
     _relayout() {
+        if (this._container && this._container.get_parent()) {
+            this._container.get_parent().set_child_above_sibling(this._container, null);
+        }
+
         const monitor = Main.layoutManager.primaryMonitor || { x: 0, y: 0, width: 1920, height: 1080 };
         const startX = monitor.x + 24;
         const startY = monitor.y + 40;

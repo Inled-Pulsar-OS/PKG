@@ -222,6 +222,16 @@ else
     fi
 fi
 
+# Ensure all .blp files in the source tree are compiled to .ui for GNOME versions using .ui in gresources
+if command -v blueprint-compiler >/dev/null 2>&1; then
+    echo "🔨 [ES] Compilando archivos .blp a .ui..."
+    echo "🔨 [EN] Compiling .blp files to .ui..."
+    find "$SRC_DIR" -name "*.blp" | while read -r blp_file; do
+        ui_file="${blp_file%.blp}.ui"
+        blueprint-compiler compile "$blp_file" --output "$ui_file" 2>/dev/null || true
+    done
+fi
+
 # Merge Spanish translations if available and compatible
 PO_DIR="$OVERLAY_DIR/po"
 if [ -f "$PO_DIR/pulsar-es.po" ] && [ -f "$SRC_DIR/po/es.po" ]; then

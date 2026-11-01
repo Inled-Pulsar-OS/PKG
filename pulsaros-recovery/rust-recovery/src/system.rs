@@ -724,10 +724,41 @@ pub(crate) fn open_system_logs(part_path: Option<&str>) {
         }
     }
 
-    let fm_cmd = "nautilus /var/log/pulsaros || thunar /var/log/pulsaros || pcmanfm /var/log/pulsaros || xdg-open /var/log/pulsaros || gnome-text-editor /var/log/pulsaros/installer.log";
-    let spawned = Command::new("sh")
+    let fm_cmd = "nautilus /var/log/pulsaros || gio open /var/log/pulsaros || thunar /var/log/pulsaros || pcmanfm /var/log/pulsaros || xdg-open /var/log/pulsaros || gnome-text-editor /var/log/pulsaros/installer.log";
+    let user_run_cmd = r#"
+        REAL_USER="${SUDO_USER:-${PKEXEC_UID}}"
+        if [ -n "$REAL_USER" ] && [ "$REAL_USER" != "root" ] && ! id -u "$REAL_USER" >/dev/null 2>&1; then
+            REAL_USER=$(id -un "$REAL_USER" 2>/dev/null || echo "")
+        fi
+        if [ -z "$REAL_USER" ] || [ "$REAL_USER" = "root" ]; then
+            for u_dir in /run/user/[1-9]*; do
+                if [ -d "$u_dir" ]; then
+                    u_uid=$(basename "$u_dir")
+                    REAL_USER=$(id -un "$u_uid" 2>/dev/null || echo "")
+                    [ -n "$REAL_USER" ] && break
+                fi
+            done
+        fi
+        [ -z "$REAL_USER" ] && [ -d /home/live ] && REAL_USER="live"
+        xhost +local: >/dev/null 2>&1 || true
+        chmod -R 755 /var/log/pulsaros 2>/dev/null || true
+        if [ -n "$REAL_USER" ] && [ "$REAL_USER" != "root" ]; then
+            U_UID=$(id -u "$REAL_USER" 2>/dev/null || echo "1000")
+            U_HOME=$(eval echo "~$REAL_USER")
+            export HOME="$U_HOME"
+            export USER="$REAL_USER"
+            export LOGNAME="$REAL_USER"
+            [ -d "/run/user/$U_UID" ] && export XDG_RUNTIME_DIR="/run/user/$U_UID"
+            [ -S "/run/user/$U_UID/bus" ] && export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$U_UID/bus"
+            sudo -u "$REAL_USER" env HOME="$HOME" USER="$USER" LOGNAME="$LOGNAME" DISPLAY="${DISPLAY:-:0}" WAYLAND_DISPLAY="$WAYLAND_DISPLAY" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" bash -c "__FM_CMD__"
+        else
+            bash -c "__FM_CMD__"
+        fi
+    "#;
+    let full_script = user_run_cmd.replace("__FM_CMD__", fm_cmd);
+    let spawned = Command::new("bash")
         .arg("-c")
-        .arg(format!("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; xhost +SI:localuser:root >/dev/null 2>&1 || xhost +local: >/dev/null 2>&1 || true; ({})", fm_cmd))
+        .arg(full_script)
         .spawn();
 
     if spawned.is_err() {

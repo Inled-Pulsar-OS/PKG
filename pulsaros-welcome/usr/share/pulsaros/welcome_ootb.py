@@ -2561,6 +2561,42 @@ class OOTBWindow(Adw.ApplicationWindow):
                 except Exception as e:
                     log_msg(f"Warning: Failed to update /etc/hosts: {e}")
 
+                # ── Initialize XDG user directories & Desktop ─────
+                try:
+                    run_cmd(["sudo", "-u", username, "xdg-user-dirs-update", "--force"], check=False)
+                    user_desktop = os.path.join(user_home, "Desktop")
+                    os.makedirs(user_desktop, exist_ok=True)
+
+                    dirs_conf = os.path.join(user_home, ".config", "user-dirs.dirs")
+                    if os.path.isfile(dirs_conf):
+                        with open(dirs_conf) as f_ud:
+                            for ud_line in f_ud:
+                                if ud_line.startswith("XDG_DESKTOP_DIR="):
+                                    loc_name = ud_line.split("=")[1].strip().strip('"').replace("$HOME/", "")
+                                    if loc_name and loc_name != "Desktop":
+                                        loc_desktop = os.path.join(user_home, loc_name)
+                                        os.makedirs(loc_desktop, exist_ok=True)
+                                        if not os.path.islink(user_desktop):
+                                            for itm in os.listdir(user_desktop):
+                                                src_i = os.path.join(user_desktop, itm)
+                                                dst_i = os.path.join(loc_desktop, itm)
+                                                if not os.path.exists(dst_i):
+                                                    shutil.move(src_i, dst_i)
+                                            shutil.rmtree(user_desktop, ignore_errors=True)
+                                            os.symlink(loc_desktop, user_desktop)
+                                        user_desktop = loc_desktop
+                                    break
+
+                    # Place default desktop shortcut
+                    if os.path.isfile("/usr/share/applications/pulsaros-recovery.desktop"):
+                        shutil.copy2("/usr/share/applications/pulsaros-recovery.desktop", os.path.join(user_desktop, "pulsaros-recovery.desktop"))
+                        os.chmod(os.path.join(user_desktop, "pulsaros-recovery.desktop"), 0o755)
+
+                    run_cmd(["chown", "-R", f"{username}:{username}", user_home], check=False)
+                    log_msg(f"Initialized user directories and desktop at {user_desktop}")
+                except Exception as ex_dirs:
+                    log_msg(f"Notice: xdg user directories setup: {ex_dirs}")
+
                 # ── Set passwords ─────────────────────────────────
                 log_msg("Configuring user and system passwords...", fraction=0.75)
                 try:

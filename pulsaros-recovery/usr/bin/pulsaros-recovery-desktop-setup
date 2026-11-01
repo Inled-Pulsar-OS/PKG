@@ -7,17 +7,41 @@
 # Esperar a que la sesión y el gestor de escritorio carguen por completo
 sleep 6
 
-DESKTOP_DIR="$HOME/Desktop"
+DESKTOP_DIR=""
+if command -v xdg-user-dir >/dev/null 2>&1; then
+    DESKTOP_DIR="$(xdg-user-dir DESKTOP 2>/dev/null)"
+fi
+
+if [ -z "$DESKTOP_DIR" ] || [ ! -d "$DESKTOP_DIR" ]; then
+    for cand in "$HOME/Desktop" "$HOME/Escritorio" "$HOME/Bureau" "$HOME/Schreibtisch"; do
+        if [ -d "$cand" ]; then
+            DESKTOP_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+[ -z "$DESKTOP_DIR" ] && DESKTOP_DIR="$HOME/Desktop"
 mkdir -p "$DESKTOP_DIR"
+
+# Ensure ~/Desktop symlink points to localized desktop folder if localized
+if [ "$DESKTOP_DIR" != "$HOME/Desktop" ] && [ ! -e "$HOME/Desktop" ]; then
+    ln -sfn "$DESKTOP_DIR" "$HOME/Desktop" 2>/dev/null || true
+fi
 
 # Place the Install Pulsar OS shortcut on desktop for live session
 if [ -f "/usr/share/applications/pulsaros-recovery.desktop" ]; then
     cp -f "/usr/share/applications/pulsaros-recovery.desktop" "$DESKTOP_DIR/pulsaros-recovery.desktop"
     chmod +x "$DESKTOP_DIR/pulsaros-recovery.desktop"
     gio set "$DESKTOP_DIR/pulsaros-recovery.desktop" metadata::trusted true 2>/dev/null || true
+    if [ "$DESKTOP_DIR" != "$HOME/Desktop" ] && [ -d "$HOME/Desktop" ] && [ ! -L "$HOME/Desktop" ]; then
+        cp -f "/usr/share/applications/pulsaros-recovery.desktop" "$HOME/Desktop/pulsaros-recovery.desktop" 2>/dev/null || true
+    fi
 fi
 
 # Clean up default Calamares icons if they were generated
 rm -f "$DESKTOP_DIR/calamares-install-debian.desktop"
 rm -f "$DESKTOP_DIR/calamares.desktop"
+rm -f "$HOME/Desktop/calamares-install-debian.desktop" 2>/dev/null || true
+rm -f "$HOME/Desktop/calamares.desktop" 2>/dev/null || true
 

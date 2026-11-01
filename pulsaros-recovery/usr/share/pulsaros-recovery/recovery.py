@@ -1559,7 +1559,19 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 elif val != "root":
                     return val
 
-        # 2. Walk /proc to find the first non-root, non-this-process UID
+        # 2. Check active systemd runtime sessions (/run/user/<uid>)
+        if os.path.exists("/run/user"):
+            try:
+                for entry in sorted(os.listdir("/run/user")):
+                    if entry.isdigit() and int(entry) >= 1000:
+                        try:
+                            return pwd.getpwuid(int(entry)).pw_name
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        # 3. Walk /proc to find the first non-root, non-this-process UID
         my_pid = os.getpid()
         my_uid = os.getuid()
         try:
@@ -1579,35 +1591,74 @@ class RecoveryWindow(Adw.ApplicationWindow):
         except FileNotFoundError:
             pass
 
-        # 3. Fallback: owner of the XDG_RUNTIME_DIR
+        # 4. Fallback: owner of the XDG_RUNTIME_DIR
         xdg = os.environ.get("XDG_RUNTIME_DIR", "")
         if xdg and xdg.startswith("/run/user/"):
             try:
                 uid = int(xdg.split("/")[3])
-                return pwd.getpwuid(uid).pw_name
+                if uid >= 1000:
+                    return pwd.getpwuid(uid).pw_name
             except (KeyError, ValueError, IndexError):
                 pass
+
+        # 5. Fallback: check /home for users
+        try:
+            for u in ("live", "pulsar", "pepe"):
+                if os.path.isdir(f"/home/{u}"):
+                    return u
+        except Exception:
+            pass
 
         return None
 
     def _popen_as_user(self, cmd):
         user = self._get_real_user()
         if user:
-            home = f"/home/{user}"
-            display = os.environ.get("DISPLAY", "")
+            import pwd
+            try:
+                user_info = pwd.getpwnam(user)
+                uid = user_info.pw_uid
+                gid = user_info.pw_gid
+                home = user_info.pw_dir
+            except Exception:
+                uid = 1000
+                gid = 1000
+                home = f"/home/{user}"
+
+            user_runtime = f"/run/user/{uid}"
+            display = os.environ.get("DISPLAY", ":0")
             wayland = os.environ.get("WAYLAND_DISPLAY", "")
             xauth = os.environ.get("XAUTHORITY", "")
-            xdg = os.environ.get("XDG_RUNTIME_DIR", "")
-            env_parts = []
-            if home:       env_parts.append(f"HOME={home}")
-            if display:    env_parts.append(f"DISPLAY={display}")
-            if wayland:    env_parts.append(f"WAYLAND_DISPLAY={wayland}")
-            if xauth:      env_parts.append(f"XAUTHORITY={xauth}")
-            if xdg:        env_parts.append(f"XDG_RUNTIME_DIR={xdg}")
+
+            env_parts = [
+                f"HOME={home}",
+                f"USER={user}",
+                f"LOGNAME={user}",
+                f"DISPLAY={display}",
+            ]
+            if os.path.exists(user_runtime):
+                env_parts.append(f"XDG_RUNTIME_DIR={user_runtime}")
+                bus_path = f"{user_runtime}/bus"
+                if os.path.exists(bus_path):
+                    env_parts.append(f"DBUS_SESSION_BUS_ADDRESS=unix:path={bus_path}")
+            elif os.environ.get("XDG_RUNTIME_DIR"):
+                env_parts.append(f"XDG_RUNTIME_DIR={os.environ.get('XDG_RUNTIME_DIR')}")
+
+            if wayland:
+                env_parts.append(f"WAYLAND_DISPLAY={wayland}")
+            if xauth:
+                env_parts.append(f"XAUTHORITY={xauth}")
+
+            # Allow local connections in X11/XWayland
+            try:
+                subprocess.run(["xhost", f"+SI:localuser:{user}"], capture_output=True, timeout=1)
+                subprocess.run(["xhost", "+local:"], capture_output=True, timeout=1)
+            except Exception:
+                pass
+
             env_str = " ".join(env_parts)
-            # sudo -u <user>: run as real user (passwordless via sudoers)
-            # env: pass display/session vars so the app can render
-            full_cmd = f"sudo -u {user} env {env_str} {cmd}"
+            escaped_cmd = cmd.replace("'", "'\\''")
+            full_cmd = f"sudo -u {user} env {env_str} bash -c '{escaped_cmd}'"
             subprocess.Popen(full_cmd, shell=True)
         else:
             subprocess.Popen(cmd, shell=True)
@@ -3461,9 +3512,15 @@ class RecoveryWindow(Adw.ApplicationWindow):
         os.makedirs(log_dir, exist_ok=True)
         try:
             os.chmod(log_dir, 0o755)
+            for root_d, dirs, files in os.walk(log_dir):
+                for f in files:
+                    try:
+                        os.chmod(os.path.join(root_d, f), 0o644)
+                    except Exception:
+                        pass
         except Exception:
             pass
-        self._popen_as_user(f"nautilus {log_dir} || xdg-open {log_dir} || gnome-text-editor {log_dir}/installer.log || xterm -title 'Pulsar OS Logs' -e less {log_dir}/installer.log")
+        self._popen_as_user(f"nautilus {log_dir} || gio open {log_dir} || xdg-open {log_dir} || gnome-text-editor {log_dir}/installer.log || xterm -title 'Pulsar OS Logs' -e less {log_dir}/installer.log")
 
     def _show_options_screen(self):
         self._update_packages_summary_label()
