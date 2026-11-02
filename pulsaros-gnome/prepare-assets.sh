@@ -111,7 +111,13 @@ if [ -d "$BMS_SRC" ]; then
     BMS_DEST="$EXT_DIR/blur-my-shell@aunetx"
     rm -rf "$BMS_DEST"
     mkdir -p "$BMS_DEST"
-    make -C "$BMS_SRC" build >/dev/null 2>&1 || true
+    if [ ! -f "$BMS_SRC/build/blur-my-shell@aunetx.shell-extension.zip" ]; then
+        if [ -n "$SUDO_USER" ]; then
+            su - "$SUDO_USER" -c "make -C '$BMS_SRC' build" >/dev/null 2>&1 || make -C "$BMS_SRC" build >/dev/null 2>&1 || true
+        else
+            make -C "$BMS_SRC" build >/dev/null 2>&1 || true
+        fi
+    fi
     if [ -f "$BMS_SRC/build/blur-my-shell@aunetx.shell-extension.zip" ]; then
         unzip -q -o "$BMS_SRC/build/blur-my-shell@aunetx.shell-extension.zip" -d "$BMS_DEST/"
     else
