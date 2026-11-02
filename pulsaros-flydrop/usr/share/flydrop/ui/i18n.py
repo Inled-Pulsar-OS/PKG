@@ -53,7 +53,21 @@ STRINGS = {
         "receive_without_asking": "Receive without asking",
         "settings": "Settings...",
         "quit": "Quit",
-        "dynamic_shelf_hint": "Drop files here to send via FlyDrop"
+        "dynamic_shelf_hint": "Drop files here to send via FlyDrop",
+        "send": "Send...",
+        "clipboard": "Clipboard",
+        "clipboard_content": "Clipboard Content",
+        "copy_clipboard": "Copy to clipboard",
+        "copied": "Copied!",
+        "text_received": "Text Received",
+        "text_from": "Received from",
+        "pick_files": "Choose files...",
+        "choose_content": "Select content to send:",
+        "use_clipboard": "Use clipboard",
+        "empty_clipboard": "Clipboard is empty",
+        "save_file": "Save as file",
+        "file_saved": "File saved",
+        "close": "Close"
     },
     "es": {
         "app_name": "FlyDrop",
@@ -91,7 +105,21 @@ STRINGS = {
         "receive_without_asking": "Recibir sin preguntar",
         "settings": "Ajustes...",
         "quit": "Salir",
-        "dynamic_shelf_hint": "Suelta archivos aquí para enviar con FlyDrop"
+        "dynamic_shelf_hint": "Suelta archivos aquí para enviar con FlyDrop",
+        "send": "Enviar...",
+        "clipboard": "Portapapeles",
+        "clipboard_content": "Contenido del portapapeles",
+        "copy_clipboard": "Copiar al portapapeles",
+        "copied": "¡Copiado!",
+        "text_received": "Texto recibido",
+        "text_from": "Recibido de",
+        "pick_files": "Elegir archivos...",
+        "choose_content": "Selecciona qué enviar:",
+        "use_clipboard": "Usar portapapeles",
+        "empty_clipboard": "El portapapeles está vacío",
+        "save_file": "Guardar como archivo",
+        "file_saved": "Archivo guardado",
+        "close": "Cerrar"
     }
 }
 

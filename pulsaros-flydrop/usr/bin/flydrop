@@ -39,9 +39,9 @@ def main():
     parser = argparse.ArgumentParser(description="FlyDrop - LocalSend & AirDrop para Pulsar OS")
     subparsers = parser.add_subparsers(dest="command")
 
-    # Send files
-    send_p = subparsers.add_parser("send", help="Enviar archivos")
-    send_p.add_argument("files", nargs="+", help="Rutas de archivos a enviar")
+    # Send files or open send dialog
+    send_p = subparsers.add_parser("send", help="Enviar archivos o portapapeles")
+    send_p.add_argument("files", nargs="*", default=[], help="Rutas de archivos a enviar (opcional)")
     send_p.add_argument("--to", help="IP o ID del destinatario (opcional)")
 
     # Send text
@@ -83,6 +83,17 @@ def main():
         return
 
     if args.command == "send":
+        if not args.files:
+            iface = get_dbus_iface()
+            if iface:
+                iface.OpenSendDialog("")
+            else:
+                ui_script = os.path.join(pkg_root, "ui", "send_dialog.py")
+                if not os.path.exists(ui_script):
+                    ui_script = "/usr/share/flydrop/ui/send_dialog.py"
+                subprocess.Popen([sys.executable, ui_script])
+            return
+
         valid_files = [os.path.abspath(f) for f in args.files if os.path.exists(f)]
         if not valid_files:
             print("Error: Ningún archivo especificado existe.")

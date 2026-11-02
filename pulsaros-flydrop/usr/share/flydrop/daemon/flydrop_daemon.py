@@ -195,11 +195,18 @@ class FlyDropDBusService(dbus.service.Object):
         if not os.path.exists(ui_script):
             ui_script = "/usr/share/flydrop/ui/send_dialog.py"
         try:
-            subprocess.Popen([sys.executable, ui_script, "--files", file_paths_json], env=get_gui_env())
+            cmd = [sys.executable, ui_script]
+            if file_paths_json and file_paths_json.strip() and file_paths_json != "[]":
+                cmd.extend(["--files", file_paths_json])
+            subprocess.Popen(cmd, env=get_gui_env())
             return True
         except Exception as e:
             logger.error(f"Error opening Send Dialog: {e}")
             return False
+
+    @dbus.service.method(DBUS_INTERFACE_NAME, out_signature="b")
+    def OpenSend(self):
+        return self.OpenSendDialog("")
 
     @dbus.service.method(DBUS_INTERFACE_NAME, out_signature="b")
     def OpenSettingsDialog(self):
@@ -301,6 +308,13 @@ class FlyDropDaemon:
 
             menu = Gtk.Menu()
 
+            # 0. Send
+            send_item = Gtk.MenuItem(label=_("send"))
+            send_item.connect("activate", lambda w: self._open_send())
+            menu.append(send_item)
+
+            menu.append(Gtk.SeparatorMenuItem())
+
             # 1. Receive without asking (checkbox)
             self.indicator_auto_accept_item = Gtk.CheckMenuItem(label=_("receive_without_asking"))
             self.indicator_auto_accept_item.set_active(self.config.auto_accept)
@@ -351,6 +365,15 @@ class FlyDropDaemon:
         new_val = widget.get_active()
         self.config.set_value("auto_accept", new_val)
         logger.info(f"Auto-accept changed via indicator: {new_val}")
+
+    def _open_send(self):
+        ui_script = os.path.join(BASE_DIR, "ui", "send_dialog.py")
+        if not os.path.exists(ui_script):
+            ui_script = "/usr/share/flydrop/ui/send_dialog.py"
+        try:
+            subprocess.Popen([sys.executable, ui_script], env=get_gui_env())
+        except Exception as e:
+            logger.error(f"Error opening Send dialog: {e}")
 
     def _open_downloads(self):
         dest = self.config.download_dir
@@ -509,10 +532,32 @@ class FlyDropDaemon:
             )
 
         # If incoming transfer was successful, auto-open the received file
-        # (unless the user disabled it in Settings)
+        # or show the text dialog if the transfer was text
         if success and session.is_incoming and session.saved_files:
             last_file = session.saved_files[-1]
-            if self.config.auto_open:
+            first_meta = next(iter(session.files_dict.values()), {})
+            mime_type = first_meta.get("fileType", "")
+            fname = first_meta.get("fileName", "")
+            is_text = len(session.files_dict) == 1 and (
+                mime_type in ("text", "text/plain") or
+                fname in ("texto.txt", "text.txt") or
+                first_meta.get("preview") is not None
+            )
+
+            if is_text:
+                text_script = os.path.join(BASE_DIR, "ui", "text_dialog.py")
+                if not os.path.exists(text_script):
+                    text_script = "/usr/share/flydrop/ui/text_dialog.py"
+                try:
+                    sender = session.sender_info.get("alias", "Dispositivo")
+                    subprocess.Popen([
+                        sys.executable, text_script,
+                        "--file", last_file,
+                        "--sender", sender
+                    ], env=get_gui_env())
+                except Exception as e:
+                    logger.error(f"Error launching text dialog: {e}")
+            elif self.config.auto_open:
                 try:
                     subprocess.Popen(["xdg-open", last_file], env=get_gui_env())
                 except Exception as e:

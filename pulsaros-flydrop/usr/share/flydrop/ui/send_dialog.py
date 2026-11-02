@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
 FlyDrop Send Target Selector (GTK4 / Libadwaita)
-Allows user to pick a discovered LocalSend peer to send selected files or text.
+Allows user to send clipboard content or pick files and select a nearby device.
 """
 
 import sys
 import os
 import json
 import argparse
+import subprocess
 
 # Add project root to sys.path
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -17,7 +18,7 @@ if BASE_DIR not in sys.path:
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Gtk, Adw, GLib, Gio
+from gi.repository import Gtk, Adw, GLib, Gio, Gdk
 
 import dbus
 import dbus.mainloop.glib
@@ -26,44 +27,133 @@ dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 from ui.i18n import _
 
 
+def get_clipboard_text_fallback():
+    """Helper to retrieve text from clipboard using wl-paste or xclip"""
+    try:
+        out = subprocess.check_output(["wl-paste", "-n"], stderr=subprocess.DEVNULL, timeout=0.6)
+        text = out.decode("utf-8", errors="replace").strip()
+        if text:
+            return text
+    except Exception:
+        pass
+    try:
+        out = subprocess.check_output(["xclip", "-selection", "clipboard", "-o"], stderr=subprocess.DEVNULL, timeout=0.6)
+        text = out.decode("utf-8", errors="replace").strip()
+        if text:
+            return text
+    except Exception:
+        pass
+    return ""
+
+
 class SendDialogWindow(Adw.Window):
+    MODE_CLIPBOARD = "clipboard"
+    MODE_FILES = "files"
+
     def __init__(self, app, files_list=None, text_content=""):
         super().__init__(application=app)
         self.files_list = files_list or []
-        self.text_content = text_content
+        self.text_content = text_content or ""
+        self.current_mode = self.MODE_FILES if self.files_list else self.MODE_CLIPBOARD
 
-        self.set_title(_("app_name"))
-        self.set_default_size(440, 480)
+        self.set_title(_("send"))
+        self.set_default_size(480, 560)
         self.set_resizable(False)
 
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        main_box.set_margin_top(24)
-        main_box.set_margin_bottom(24)
-        main_box.set_margin_start(24)
-        main_box.set_margin_end(24)
+        # If no text was passed and no files, read clipboard
+        if not self.files_list and not self.text_content:
+            self.text_content = get_clipboard_text_fallback()
+            if not self.text_content:
+                self.current_mode = self.MODE_FILES
 
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        main_box.set_margin_top(18)
+        main_box.set_margin_bottom(18)
+        main_box.set_margin_start(20)
+        main_box.set_margin_end(20)
+
+        # Header Title
         header_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         title = Gtk.Label()
-        title.set_markup(f"<span size='large' weight='bold'>{_('nearby_devices')}</span>")
+        title.set_markup(f"<span size='large' weight='bold'>{_('send')}</span>")
         header_box.append(title)
 
-        summary_text = ""
-        if self.files_list:
-            cnt = len(self.files_list)
-            first = os.path.basename(self.files_list[0])
-            summary_text = f"{first}" if cnt == 1 else f"{first} (+{cnt-1} {_('file_plural')})"
-        elif self.text_content:
-            summary_text = f"Text ({len(self.text_content)} chars)"
-
-        subtitle = Gtk.Label(label=summary_text or _("nearby_devices_subtitle"))
-        subtitle.add_css_class("dim-label")
-        header_box.append(subtitle)
-        self.subtitle = subtitle
+        self.subtitle = Gtk.Label(label=_("nearby_devices_subtitle"))
+        self.subtitle.add_css_class("dim-label")
+        header_box.append(self.subtitle)
         main_box.append(header_box)
 
+        # Mode Selector Buttons (Segmented)
+        mode_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        mode_box.set_halign(Gtk.Align.CENTER)
+        mode_box.add_css_class("linked")
+
+        self.btn_mode_clipboard = Gtk.ToggleButton(label=f"📋 {_('clipboard')}")
+        self.btn_mode_clipboard.connect("toggled", self.on_mode_toggled, self.MODE_CLIPBOARD)
+        mode_box.append(self.btn_mode_clipboard)
+
+        self.btn_mode_files = Gtk.ToggleButton(label=f"📁 {_('file_plural').capitalize()}")
+        self.btn_mode_files.connect("toggled", self.on_mode_toggled, self.MODE_FILES)
+        mode_box.append(self.btn_mode_files)
+
+        main_box.append(mode_box)
+
+        # Content Card Stack
+        self.stack = Gtk.Stack()
+        self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+
+        # Page 1: Clipboard Card
+        clip_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.clip_card = Adw.PreferencesGroup()
+        self.clip_card.set_title(_("clipboard_content"))
+
+        self.clip_preview_row = Adw.ActionRow()
+        self.clip_preview_row.set_subtitle_lines(3)
+        self.clip_card.add(self.clip_preview_row)
+
+        clip_actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        clip_actions.set_halign(Gtk.Align.END)
+        btn_refresh_clip = Gtk.Button(label="↻ Refrescar")
+        btn_refresh_clip.add_css_class("flat")
+        btn_refresh_clip.connect("clicked", lambda b: self.refresh_clipboard())
+        clip_actions.append(btn_refresh_clip)
+        self.clip_card.add(clip_actions)
+
+        clip_page.append(self.clip_card)
+        self.stack.add_named(clip_page, self.MODE_CLIPBOARD)
+
+        # Page 2: Files Card
+        files_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.files_card = Adw.PreferencesGroup()
+        self.files_card.set_title(_("file_plural").capitalize())
+
+        self.files_summary_row = Adw.ActionRow()
+        self.files_card.add(self.files_summary_row)
+
+        files_actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        files_actions.set_halign(Gtk.Align.END)
+        self.pick_btn = Gtk.Button(label=_("pick_files"))
+        self.pick_btn.add_css_class("suggested-action")
+        self.pick_btn.add_css_class("pill")
+        self.pick_btn.connect("clicked", self.on_pick_files_clicked)
+        files_actions.append(self.pick_btn)
+        self.files_card.add(files_actions)
+
+        files_page.append(self.files_card)
+        self.stack.add_named(files_page, self.MODE_FILES)
+
+        main_box.append(self.stack)
+
+        # Discovered Devices Header
+        dev_header = Gtk.Label()
+        dev_header.set_markup(f"<b>{_('nearby_devices')}</b>")
+        dev_header.set_halign(Gtk.Align.START)
+        main_box.append(dev_header)
+
+        # Scrolled List of Devices
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_vexpand(True)
-        scrolled.set_min_content_height(260)
+        scrolled.set_min_content_height(190)
 
         self.list_box = Gtk.ListBox()
         self.list_box.add_css_class("boxed-list")
@@ -71,22 +161,28 @@ class SendDialogWindow(Adw.Window):
         scrolled.set_child(self.list_box)
         main_box.append(scrolled)
 
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        btn_box.set_halign(Gtk.Align.CENTER)
-
-        self.pick_btn = Gtk.Button(label=_("add_files"))
-        self.pick_btn.add_css_class("pill")
-        self.pick_btn.add_css_class("suggested-action")
-        self.pick_btn.connect("clicked", self.on_pick_files_clicked)
-        btn_box.append(self.pick_btn)
+        # Bottom Scan Button
+        bottom_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        bottom_box.set_halign(Gtk.Align.CENTER)
 
         self.scan_btn = Gtk.Button(label=_("scanning"))
         self.scan_btn.add_css_class("pill")
         self.scan_btn.connect("clicked", self.on_rescan_clicked)
-        btn_box.append(self.scan_btn)
+        bottom_box.append(self.scan_btn)
 
-        main_box.append(btn_box)
+        main_box.append(bottom_box)
         self.set_content(main_box)
+
+        # Initialize Mode UI
+        if self.current_mode == self.MODE_FILES:
+            self.btn_mode_files.set_active(True)
+        else:
+            self.btn_mode_clipboard.set_active(True)
+
+        self.update_content_views()
+
+        # Try GTK native clipboard async in case wl-paste was slow
+        self.read_gtk_clipboard_async()
 
         self.devices_data = []
         self._load_devices()
@@ -94,6 +190,64 @@ class SendDialogWindow(Adw.Window):
         # Rescan and poll
         self._trigger_scan()
         GLib.timeout_add_seconds(2, self._load_devices_timer)
+
+    def read_gtk_clipboard_async(self):
+        try:
+            clipboard = Gdk.Display.get_default().get_clipboard()
+            clipboard.read_text_async(None, self._on_gtk_clipboard_read)
+        except Exception:
+            pass
+
+    def _on_gtk_clipboard_read(self, clipboard, result):
+        try:
+            text = clipboard.read_text_finish(result)
+            if text and text.strip():
+                self.text_content = text.strip()
+                self.update_content_views()
+        except Exception:
+            pass
+
+    def refresh_clipboard(self):
+        text = get_clipboard_text_fallback()
+        if text:
+            self.text_content = text
+        self.read_gtk_clipboard_async()
+        self.update_content_views()
+
+    def on_mode_toggled(self, button, mode):
+        if not button.get_active():
+            return
+        self.current_mode = mode
+        if mode == self.MODE_CLIPBOARD:
+            self.btn_mode_files.set_active(False)
+            self.stack.set_visible_child_name(self.MODE_CLIPBOARD)
+        else:
+            self.btn_mode_clipboard.set_active(False)
+            self.stack.set_visible_child_name(self.MODE_FILES)
+        self.update_content_views()
+
+    def update_content_views(self):
+        # Update Clipboard Card
+        if self.text_content:
+            preview = self.text_content.replace("\n", " ")
+            if len(preview) > 100:
+                preview = preview[:97] + "..."
+            self.clip_preview_row.set_title(preview)
+            self.clip_preview_row.set_subtitle(f"{len(self.text_content)} caracteres")
+        else:
+            self.clip_preview_row.set_title(_("empty_clipboard"))
+            self.clip_preview_row.set_subtitle("Copia cualquier texto en tu equipo para enviarlo")
+
+        # Update Files Card
+        if self.files_list:
+            cnt = len(self.files_list)
+            first = os.path.basename(self.files_list[0])
+            summary = f"{first}" if cnt == 1 else f"{first} (+{cnt-1} {_('file_plural')})"
+            self.files_summary_row.set_title(summary)
+            self.files_summary_row.set_subtitle(f"{cnt} archivo(s) preparado(s)")
+        else:
+            self.files_summary_row.set_title("Ningún archivo seleccionado")
+            self.files_summary_row.set_subtitle("Pulsa 'Elegir archivos' para buscar en el sistema")
 
     def _trigger_scan(self):
         try:
@@ -173,10 +327,8 @@ class SendDialogWindow(Adw.Window):
         if not paths:
             return
         self.files_list = paths
-        self.text_content = ""
-        cnt = len(paths)
-        first = os.path.basename(paths[0])
-        self.subtitle.set_text(f"{first}" if cnt == 1 else f"{first} (+{cnt-1} {_('file_plural')})")
+        self.btn_mode_files.set_active(True)
+        self.update_content_views()
 
     def on_device_selected(self, list_box, row):
         idx = row.get_index()
@@ -185,24 +337,39 @@ class SendDialogWindow(Adw.Window):
         target = self.devices_data[idx]
         target_ip = target.get("ip")
 
-        try:
-            bus = dbus.SessionBus()
-            proxy = bus.get_object("es.pulsaros.FlyDrop", "/es/pulsaros/FlyDrop")
-            iface = dbus.Interface(proxy, "es.pulsaros.FlyDrop")
-
-            if self.files_list:
-                iface.SendFiles(target_ip, json.dumps(self.files_list))
-            elif self.text_content:
+        # Determine what to send according to active mode
+        if self.current_mode == self.MODE_CLIPBOARD:
+            if not self.text_content:
+                dialog = Adw.MessageDialog.new(self, _("empty_clipboard"), "Copia texto al portapapeles o cambia a la pestaña de Archivos.")
+                dialog.add_response("ok", "Entendido")
+                dialog.present()
+                return
+            try:
+                bus = dbus.SessionBus()
+                proxy = bus.get_object("es.pulsaros.FlyDrop", "/es/pulsaros/FlyDrop")
+                iface = dbus.Interface(proxy, "es.pulsaros.FlyDrop")
                 iface.SendText(target_ip, self.text_content)
-        except Exception as e:
-            print(f"Error initiating send via D-Bus: {e}", file=sys.stderr)
+            except Exception as e:
+                print(f"Error SendText via D-Bus: {e}", file=sys.stderr)
+            self.close()
 
-        self.close()
+        else: # MODE_FILES
+            if not self.files_list:
+                self.on_pick_files_clicked(self.pick_btn)
+                return
+            try:
+                bus = dbus.SessionBus()
+                proxy = bus.get_object("es.pulsaros.FlyDrop", "/es/pulsaros/FlyDrop")
+                iface = dbus.Interface(proxy, "es.pulsaros.FlyDrop")
+                iface.SendFiles(target_ip, json.dumps(self.files_list))
+            except Exception as e:
+                print(f"Error SendFiles via D-Bus: {e}", file=sys.stderr)
+            self.close()
 
 
 class SendApp(Adw.Application):
     def __init__(self, files, text):
-        super().__init__(application_id="es.pulsaros.FlyDrop.SendSelector")
+        super().__init__(application_id=f"es.pulsaros.FlyDrop.SendSelector.{os.getpid()}")
         self.files = files
         self.text = text
 
