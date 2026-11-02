@@ -88,11 +88,11 @@ class SendDialogWindow(Adw.Window):
         mode_box.set_halign(Gtk.Align.CENTER)
         mode_box.add_css_class("linked")
 
-        self.btn_mode_clipboard = Gtk.ToggleButton(label=f"📋 {_('clipboard')}")
+        self.btn_mode_clipboard = Gtk.ToggleButton(label=_("clipboard"))
         self.btn_mode_clipboard.connect("toggled", self.on_mode_toggled, self.MODE_CLIPBOARD)
         mode_box.append(self.btn_mode_clipboard)
 
-        self.btn_mode_files = Gtk.ToggleButton(label=f"📁 {_('file_plural').capitalize()}")
+        self.btn_mode_files = Gtk.ToggleButton(label=_("file_plural").capitalize())
         self.btn_mode_files.connect("toggled", self.on_mode_toggled, self.MODE_FILES)
         mode_box.append(self.btn_mode_files)
 
@@ -113,7 +113,7 @@ class SendDialogWindow(Adw.Window):
 
         clip_actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         clip_actions.set_halign(Gtk.Align.END)
-        btn_refresh_clip = Gtk.Button(label="↻ Refrescar")
+        btn_refresh_clip = Gtk.Button(label=_("refresh"))
         btn_refresh_clip.add_css_class("flat")
         btn_refresh_clip.connect("clicked", lambda b: self.refresh_clipboard())
         clip_actions.append(btn_refresh_clip)
@@ -233,10 +233,10 @@ class SendDialogWindow(Adw.Window):
             if len(preview) > 100:
                 preview = preview[:97] + "..."
             self.clip_preview_row.set_title(preview)
-            self.clip_preview_row.set_subtitle(f"{len(self.text_content)} caracteres")
+            self.clip_preview_row.set_subtitle(f"{len(self.text_content)} {_('characters')}")
         else:
             self.clip_preview_row.set_title(_("empty_clipboard"))
-            self.clip_preview_row.set_subtitle("Copia cualquier texto en tu equipo para enviarlo")
+            self.clip_preview_row.set_subtitle(_("empty_clipboard_hint"))
 
         # Update Files Card
         if self.files_list:
@@ -244,10 +244,10 @@ class SendDialogWindow(Adw.Window):
             first = os.path.basename(self.files_list[0])
             summary = f"{first}" if cnt == 1 else f"{first} (+{cnt-1} {_('file_plural')})"
             self.files_summary_row.set_title(summary)
-            self.files_summary_row.set_subtitle(f"{cnt} archivo(s) preparado(s)")
+            self.files_summary_row.set_subtitle(f"{cnt} {_('files_prepared')}")
         else:
-            self.files_summary_row.set_title("Ningún archivo seleccionado")
-            self.files_summary_row.set_subtitle("Pulsa 'Elegir archivos' para buscar en el sistema")
+            self.files_summary_row.set_title(_("no_files_selected"))
+            self.files_summary_row.set_subtitle(_("no_files_hint"))
 
     def _trigger_scan(self):
         try:
@@ -340,8 +340,8 @@ class SendDialogWindow(Adw.Window):
         # Determine what to send according to active mode
         if self.current_mode == self.MODE_CLIPBOARD:
             if not self.text_content:
-                dialog = Adw.MessageDialog.new(self, _("empty_clipboard"), "Copia texto al portapapeles o cambia a la pestaña de Archivos.")
-                dialog.add_response("ok", "Entendido")
+                dialog = Adw.MessageDialog.new(self, _("empty_clipboard"), _("empty_clipboard_alert"))
+                dialog.add_response("ok", _("understood"))
                 dialog.present()
                 return
             try:

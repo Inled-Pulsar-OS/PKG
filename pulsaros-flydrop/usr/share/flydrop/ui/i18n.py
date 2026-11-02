@@ -67,7 +67,15 @@ STRINGS = {
         "empty_clipboard": "Clipboard is empty",
         "save_file": "Save as file",
         "file_saved": "File saved",
-        "close": "Close"
+        "close": "Close",
+        "refresh": "Refresh",
+        "characters": "characters",
+        "empty_clipboard_hint": "Copy any text on your computer to send it",
+        "no_files_selected": "No files selected",
+        "no_files_hint": "Click 'Choose files' to select from your system",
+        "files_prepared": "file(s) selected",
+        "understood": "Understood",
+        "empty_clipboard_alert": "Copy text to clipboard or switch to the Files tab."
     },
     "es": {
         "app_name": "FlyDrop",
@@ -119,7 +127,15 @@ STRINGS = {
         "empty_clipboard": "El portapapeles está vacío",
         "save_file": "Guardar como archivo",
         "file_saved": "Archivo guardado",
-        "close": "Cerrar"
+        "close": "Cerrar",
+        "refresh": "Actualizar",
+        "characters": "caracteres",
+        "empty_clipboard_hint": "Copia cualquier texto en tu equipo para enviarlo",
+        "no_files_selected": "Ningún archivo seleccionado",
+        "no_files_hint": "Pulsa 'Elegir archivos' para buscar en el sistema",
+        "files_prepared": "archivo(s) seleccionado(s)",
+        "understood": "Entendido",
+        "empty_clipboard_alert": "Copia texto al portapapeles o cambia a la pestaña de Archivos."
     }
 }
 
