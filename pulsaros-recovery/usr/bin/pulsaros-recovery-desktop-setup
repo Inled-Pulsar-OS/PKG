@@ -22,6 +22,14 @@ if [ -z "$DESKTOP_DIR" ] || [ ! -d "$DESKTOP_DIR" ]; then
 fi
 
 [ -z "$DESKTOP_DIR" ] && DESKTOP_DIR="$HOME/Desktop"
+
+# Only run in live session or during OOTB setup!
+if [ ! -d "/run/live" ] && [ ! -d "/run/archiso" ] && [ ! -f "/etc/pulsar-need-setup" ] && [ "$(id -un 2>/dev/null)" != "live" ]; then
+    # On an already installed system, remove any existing installer shortcut from desktop and exit
+    rm -f "$DESKTOP_DIR/pulsaros-recovery.desktop" "$HOME/Desktop/pulsaros-recovery.desktop" 2>/dev/null || true
+    exit 0
+fi
+
 mkdir -p "$DESKTOP_DIR"
 
 # Ensure ~/Desktop symlink points to localized desktop folder if localized

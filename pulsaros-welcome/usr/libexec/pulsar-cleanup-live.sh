@@ -19,4 +19,15 @@ rm -f /var/lib/AccountsService/icons/live
 systemctl restart accounts-daemon 2>/dev/null || true
 rm -f /etc/pulsar-need-cleanup
 rm -f /etc/sudoers.d/pulsar-ootb-live /etc/sudoers.d/live /etc/sudoers.d/jaime /etc/sudoers.d/pulsar-cleanup-live 2>/dev/null || true
+
+# Remove "Install Pulsar OS" desktop shortcuts from all desktops and skel
+rm -f /home/*/Desktop/pulsaros-recovery.desktop /home/*/*/pulsaros-recovery.desktop /etc/skel/Desktop/pulsaros-recovery.desktop 2>/dev/null || true
+rm -f /etc/xdg/autostart/pulsaros-recovery-desktop-setup.desktop 2>/dev/null || true
+
+# Hide installer icon from application grid on installed system
+if [ -f /usr/share/applications/pulsaros-recovery.desktop ]; then
+    sed -i '/^NoDisplay=/d' /usr/share/applications/pulsaros-recovery.desktop 2>/dev/null || true
+    echo "NoDisplay=true" >> /usr/share/applications/pulsaros-recovery.desktop 2>/dev/null || true
+fi
+
 exit 0

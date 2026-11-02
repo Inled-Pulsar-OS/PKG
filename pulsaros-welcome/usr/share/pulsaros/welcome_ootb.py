@@ -2611,10 +2611,13 @@ class OOTBWindow(Adw.ApplicationWindow):
                                         user_desktop = loc_desktop
                                     break
 
-                    # Place default desktop shortcut
-                    if os.path.isfile("/usr/share/applications/pulsaros-recovery.desktop"):
-                        shutil.copy2("/usr/share/applications/pulsaros-recovery.desktop", os.path.join(user_desktop, "pulsaros-recovery.desktop"))
-                        os.chmod(os.path.join(user_desktop, "pulsaros-recovery.desktop"), 0o755)
+                    # Clean up any installer shortcuts from the installed user's desktop
+                    inst_desktop = os.path.join(user_desktop, "pulsaros-recovery.desktop")
+                    if os.path.exists(inst_desktop):
+                        try:
+                            os.remove(inst_desktop)
+                        except Exception:
+                            pass
 
                     run_cmd(["chown", "-R", f"{username}:{username}", user_home], check=False)
                     log_msg(f"Initialized user directories and desktop at {user_desktop}")

@@ -5450,6 +5450,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                             bf.write("[Desktop Entry]\nName=Touch ID & Face ID\nName[es]=Touch ID y Face ID\nComment=Configure facial recognition, fingerprint login, and presence detection\nComment[es]=Configura el reconocimiento facial, lector de huellas y detección de presencia\nExec=pulsaros-biometrics-settings\nIcon=system-users\nTerminal=false\nType=Application\nCategories=GNOME;GTK;Settings;Security;System;\nKeywords=fingerprint;touchid;faceid;face;auth;biometrics;presencia;lock;huella;\nStartupNotify=true\n")
                                     except Exception:
                                         pass
+                                # Hide installer launcher from application menu on target system
+                                target_rec_desktop = "/mnt/usr/share/applications/pulsaros-recovery.desktop"
+                                if os.path.exists(target_rec_desktop):
+                                    try:
+                                        with open(target_rec_desktop, "r") as rf:
+                                            lines = [l for l in rf.read().splitlines() if not l.startswith("NoDisplay=")]
+                                        lines.append("NoDisplay=true")
+                                        with open(target_rec_desktop, "w") as wf:
+                                            wf.write("\n".join(lines) + "\n")
+                                    except Exception:
+                                        pass
                             except Exception as post_err:
                                 log_msg(f"Post-install package installation: {post_err}")
 
@@ -5485,11 +5496,23 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
                                     os.makedirs("/mnt/etc/apt/apt.conf.d", exist_ok=True)
                                     with open("/mnt/etc/apt/apt.conf.d/99pulsar-fast", "w") as f_apt:
-                                        f_apt.write('Acquire::Queue-Mode "host";\nAcquire::http::Pipeline-Depth "5";\nAPT::Acquire::Retries "3";\n')
+                                        f_apt.write('Acquire::Queue-Mode "host";\n'
+                                                    'Acquire::http::Pipeline-Depth "5";\n'
+                                                    'APT::Acquire::Retries "3";\n'
+                                                    'APT::Get::allow-downgrades "true";\n'
+                                                    'APT::Get::Assume-Yes "true";\n'
+                                                    'APT::Get::Fix-Broken "true";\n'
+                                                    'Dpkg::Options { "--force-confdef"; "--force-confold"; };\n')
+
+                                    # Ensure inled pinning priority does not cause downgrades to abort APT transactions
+                                    os.makedirs("/mnt/etc/apt/preferences.d", exist_ok=True)
+                                    with open("/mnt/etc/apt/preferences.d/99inled", "w") as f_pin:
+                                        f_pin.write('Package: *\nPin: origin "apt.inled.es"\nPin-Priority: 990\n')
+
                                     exec_cmd(["chroot", "/mnt", "apt-get", "update"])
                                     has_network_deb = True
                                     # Fix any broken dependencies from squashfs before installing new packages
-                                    subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y"], capture_output=True)
+                                    subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades"], capture_output=True)
                                 except Exception as deb_net_err:
                                     log_msg(f"Notice: Debian repository update skipped: {deb_net_err}")
 
@@ -5541,7 +5564,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                         else:
                                             subprocess.run(["chroot", "/mnt", "dpkg", "-i"] + staged_deb_paths, capture_output=True)
                                             res_fix = subprocess.run(
-                                                ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y"],
+                                                ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades"],
                                                 capture_output=True, text=True
                                             )
                                             if res_fix.returncode == 0:
@@ -5551,7 +5574,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                     shutil.rmtree(chroot_deb_dir, ignore_errors=True)
 
                                 # Always ensure dpkg has no broken dependencies before batch installs
-                                subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y"], capture_output=True)
+                                subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades"], capture_output=True)
 
                                 if extra_packages:
                                     if has_network_deb:
@@ -5569,7 +5592,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                             log_msg(f"Warning checking Debian package availability: {chk_e}")
 
                                         apt_cmd = [
-                                            "chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y",
+                                            "chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "--allow-downgrades",
                                             *extra_packages,
                                         ]
                                         apt_proc = subprocess.Popen(
@@ -5602,10 +5625,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                             log_msg(f"Notice: Batch apt-get install exited with code {apt_proc.returncode}. Attempting individual installs...")
                                             subprocess.run(["fuser", "-k", "-9", "/mnt/var/lib/dpkg/lock-frontend", "/mnt/var/lib/dpkg/lock", "/mnt/var/lib/apt/lists/lock"], capture_output=True)
                                             subprocess.run(["chroot", "/mnt", "dpkg", "--configure", "-a"], capture_output=True)
-                                            subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y"], capture_output=True)
+                                            subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades"], capture_output=True)
                                             for dpkg in extra_packages:
                                                 res_d = subprocess.run(
-                                                    ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", dpkg],
+                                                    ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "--allow-downgrades", dpkg],
                                                     capture_output=True,
                                                     text=True
                                                 )
@@ -5614,8 +5637,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                                 else:
                                                     err_line = res_d.stderr.strip().splitlines()[-1] if res_d.stderr.strip() else "error"
                                                     log_msg(f"  apt: Skipping {dpkg} ({err_line})")
-                                                    subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y"], capture_output=True)
-                                            subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y"], capture_output=True)
+                                                    subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades"], capture_output=True)
+                                            subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades"], capture_output=True)
                                         else:
                                             log_msg("Post-install: extra packages installed successfully (apt).")
                                             extra_packages_installed = True
@@ -5663,6 +5686,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                         bio_desktop = "/mnt/usr/share/applications/pulsaros-biometrics.desktop"
                                         with open(bio_desktop, "w") as bf:
                                             bf.write("[Desktop Entry]\nName=Touch ID & Face ID\nName[es]=Touch ID y Face ID\nComment=Configure facial recognition, fingerprint login, and presence detection\nComment[es]=Configura el reconocimiento facial, lector de huellas y detección de presencia\nExec=pulsaros-biometrics-settings\nIcon=system-users\nTerminal=false\nType=Application\nCategories=GNOME;GTK;Settings;Security;System;\nKeywords=fingerprint;touchid;faceid;face;auth;biometrics;presencia;lock;huella;\nStartupNotify=true\n")
+                                    except Exception:
+                                        pass
+                                # Hide installer launcher from application menu on target system
+                                target_rec_desktop = "/mnt/usr/share/applications/pulsaros-recovery.desktop"
+                                if os.path.exists(target_rec_desktop):
+                                    try:
+                                        with open(target_rec_desktop, "r") as rf:
+                                            lines = [l for l in rf.read().splitlines() if not l.startswith("NoDisplay=")]
+                                        lines.append("NoDisplay=true")
+                                        with open(target_rec_desktop, "w") as wf:
+                                            wf.write("\n".join(lines) + "\n")
                                     except Exception:
                                         pass
                             except Exception as post_err:
