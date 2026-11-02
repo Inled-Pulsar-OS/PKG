@@ -333,16 +333,18 @@ def main():
     needs_ootb = is_ootb_pending()
 
     # If live user cleanup is pending or live user still exists, launch the cleanup spinner app first
-    live_exists = False
-    try:
-        live_exists = subprocess.run(["id", "-u", "live"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
-    except Exception:
-        pass
-    current_u = os.environ.get("USER", "")
-    if (os.path.exists("/etc/pulsar-need-cleanup") or live_exists) and current_u != "live":
-        if os.path.exists("/usr/bin/pulsar-cleanup-user"):
-            subprocess.Popen(["/usr/bin/pulsar-cleanup-user"])
-            sys.exit(0)
+    # CRITICAL: Only if OOTB is NOT pending and not in live environment!
+    if not needs_ootb and not is_live:
+        live_exists = False
+        try:
+            live_exists = subprocess.run(["id", "-u", "live"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+        except Exception:
+            pass
+        current_u = os.environ.get("USER", "")
+        if (os.path.exists("/etc/pulsar-need-cleanup") or live_exists) and current_u != "live":
+            if os.path.exists("/usr/bin/pulsar-cleanup-user"):
+                subprocess.Popen(["/usr/bin/pulsar-cleanup-user"])
+                sys.exit(0)
 
     # If already done and not live/ootb/forced, exit silently
     if not is_live and not needs_ootb and check_sentinel() and not force:

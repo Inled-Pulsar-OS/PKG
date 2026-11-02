@@ -9,19 +9,15 @@ echo "Configurando servicio de primer arranque (OOTB)..."
 # Ensure /etc/sudoers.d directory exists (needed for OOTB live user grant)
 mkdir -p /etc/sudoers.d
 
-# Enable pulsar-ootb and pulsar-cleanup-live services
+# Enable pulsar-ootb service
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload || true
     systemctl enable pulsar-ootb.service || true
-    systemctl enable pulsar-cleanup-live.service || true
 else
     # Offline installation / chroot ISO building context
     mkdir -p /etc/systemd/system/graphical.target.wants
     ln -sf /etc/systemd/system/pulsar-ootb.service \
         /etc/systemd/system/graphical.target.wants/pulsar-ootb.service || true
-    mkdir -p /etc/systemd/system/multi-user.target.wants
-    ln -sf /etc/systemd/system/pulsar-cleanup-live.service \
-        /etc/systemd/system/multi-user.target.wants/pulsar-cleanup-live.service || true
 fi
 
 exit 0

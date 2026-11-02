@@ -2914,14 +2914,10 @@ class OOTBWindow(Adw.ApplicationWindow):
                     os.remove("/etc/pulsar-need-setup")
                     log_msg("Removed /etc/pulsar-need-setup")
 
-                # 5. Create cleanup sentinel and enable boot cleanup service
+                # 5. Create cleanup sentinel (will be picked up on first login)
                 with open("/etc/pulsar-need-cleanup", "w") as f:
                     f.write(username)
                 log_msg("Created /etc/pulsar-need-cleanup")
-                subprocess.run(
-                    ["systemctl", "enable", "pulsar-cleanup-live.service"],
-                    capture_output=True
-                )
 
                 # 6. Disable pulsar-ootb service (no longer needed)
                 subprocess.run(

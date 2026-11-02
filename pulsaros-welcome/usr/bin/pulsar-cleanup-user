@@ -5,6 +5,14 @@ import os
 import subprocess
 import threading
 
+# CRITICAL SAFETY: Never run if OOTB setup is still pending or if running as live user
+if os.path.exists("/etc/pulsar-need-setup") and "TEST_MODE" not in os.environ:
+    sys.exit(0)
+
+current_u = os.environ.get("USER", "")
+if current_u == "live" and "TEST_MODE" not in os.environ:
+    sys.exit(0)
+
 CLEANUP_SENTINEL = "/etc/pulsar-need-cleanup"
 
 def live_user_exists():
