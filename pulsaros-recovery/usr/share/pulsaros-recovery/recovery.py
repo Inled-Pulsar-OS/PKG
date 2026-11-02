@@ -5465,11 +5465,31 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 # 1. Sync online repositories if network is available
                                 has_network_deb = False
                                 try:
+                                    # Ensure /mnt/etc/apt/sources.list has all components (main contrib non-free non-free-firmware)
+                                    sources_file = "/mnt/etc/apt/sources.list"
+                                    dist_name = "trixie"
+                                    if os.path.exists("/mnt/etc/os-release"):
+                                        with open("/mnt/etc/os-release") as f_os:
+                                            for os_l in f_os:
+                                                if os_l.startswith("VERSION_CODENAME="):
+                                                    dist_name = os_l.split("=")[1].strip().strip('"')
+                                                    break
+                                    clean_sources = (
+                                        f"deb http://deb.debian.org/debian {dist_name} main contrib non-free non-free-firmware\n"
+                                        f"deb http://deb.debian.org/debian {dist_name}-updates main contrib non-free non-free-firmware\n"
+                                        f"deb http://security.debian.org/debian-security {dist_name}-security main contrib non-free non-free-firmware\n"
+                                    )
+                                    with open(sources_file, "w") as sf:
+                                        sf.write(clean_sources)
+                                    log_msg(f"Configured Debian APT repositories for {dist_name}")
+
                                     os.makedirs("/mnt/etc/apt/apt.conf.d", exist_ok=True)
                                     with open("/mnt/etc/apt/apt.conf.d/99pulsar-fast", "w") as f_apt:
                                         f_apt.write('Acquire::Queue-Mode "host";\nAcquire::http::Pipeline-Depth "5";\nAPT::Acquire::Retries "3";\n')
                                     exec_cmd(["chroot", "/mnt", "apt-get", "update"])
                                     has_network_deb = True
+                                    # Fix any broken dependencies from squashfs before installing new packages
+                                    subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y"], capture_output=True)
                                 except Exception as deb_net_err:
                                     log_msg(f"Notice: Debian repository update skipped: {deb_net_err}")
 
@@ -5512,13 +5532,26 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                         except Exception as cp_err:
                                             log_msg(f"Warning copying {ldeb}: {cp_err}")
                                     if staged_deb_paths:
-                                        subprocess.run(["chroot", "/mnt", "dpkg", "-i"] + staged_deb_paths, capture_output=True)
-                                        subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-f", "-y"], capture_output=True)
-                                        log_msg(f"✅ Successfully installed {len(staged_deb_paths)} local Debian packages.")
+                                        res_inst_local = subprocess.run(
+                                            ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "--allow-downgrades"] + staged_deb_paths,
+                                            capture_output=True, text=True
+                                        )
+                                        if res_inst_local.returncode == 0:
+                                            log_msg(f"✅ Successfully installed {len(staged_deb_paths)} local Debian packages.")
+                                        else:
+                                            subprocess.run(["chroot", "/mnt", "dpkg", "-i"] + staged_deb_paths, capture_output=True)
+                                            res_fix = subprocess.run(
+                                                ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y"],
+                                                capture_output=True, text=True
+                                            )
+                                            if res_fix.returncode == 0:
+                                                log_msg(f"✅ Successfully installed {len(staged_deb_paths)} local Debian packages (dependencies resolved).")
+                                            else:
+                                                log_msg(f"Notice: local packages dependency resolution: {res_fix.stderr.strip()[:200]}")
                                     shutil.rmtree(chroot_deb_dir, ignore_errors=True)
 
                                 # Always ensure dpkg has no broken dependencies before batch installs
-                                subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-f", "-y"], capture_output=True)
+                                subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y"], capture_output=True)
 
                                 if extra_packages:
                                     if has_network_deb:
@@ -5569,7 +5602,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                             log_msg(f"Notice: Batch apt-get install exited with code {apt_proc.returncode}. Attempting individual installs...")
                                             subprocess.run(["fuser", "-k", "-9", "/mnt/var/lib/dpkg/lock-frontend", "/mnt/var/lib/dpkg/lock", "/mnt/var/lib/apt/lists/lock"], capture_output=True)
                                             subprocess.run(["chroot", "/mnt", "dpkg", "--configure", "-a"], capture_output=True)
-                                            subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-f", "-y"], capture_output=True)
+                                            subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y"], capture_output=True)
                                             for dpkg in extra_packages:
                                                 res_d = subprocess.run(
                                                     ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", dpkg],
@@ -5581,7 +5614,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                                 else:
                                                     err_line = res_d.stderr.strip().splitlines()[-1] if res_d.stderr.strip() else "error"
                                                     log_msg(f"  apt: Skipping {dpkg} ({err_line})")
-                                            subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-f", "-y"], capture_output=True)
+                                                    subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y"], capture_output=True)
+                                            subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y"], capture_output=True)
                                         else:
                                             log_msg("Post-install: extra packages installed successfully (apt).")
                                             extra_packages_installed = True
@@ -5591,7 +5625,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 # Enable the CUPS print service on the installed system if selected.
                                 if pkg_info["install_cups"]:
                                     try:
-                                        exec_cmd(["chroot", "/mnt", "systemctl", "enable", "cups.service"])
+                                        res_cups = subprocess.run(["chroot", "/mnt", "systemctl", "enable", "cups.service"], capture_output=True, text=True)
+                                        if res_cups.returncode != 0:
+                                            subprocess.run(["chroot", "/mnt", "systemctl", "enable", "cups.socket"], capture_output=True)
                                         log_msg("CUPS print service enabled on installed system.")
                                     except Exception as cups_err:
                                         log_msg(f"Notice: could not enable CUPS: {cups_err}")

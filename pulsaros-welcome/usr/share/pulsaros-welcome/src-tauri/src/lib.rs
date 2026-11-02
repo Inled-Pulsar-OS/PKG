@@ -26,7 +26,9 @@ fn preflight() {
 
     // 2. Live user cleanup pending: hand over to the cleanup spinner app, which
     //    deletes the live user, removes the sentinel, then relaunches us.
-    if Path::new("/etc/pulsar-need-cleanup").exists() {
+    let live_exists = Command::new("id").arg("-u").arg("live").output().map(|o| o.status.success()).unwrap_or(false);
+    let current_user = std::env::var("USER").unwrap_or_default();
+    if (Path::new("/etc/pulsar-need-cleanup").exists() || live_exists) && current_user != "live" {
         let _ = Command::new("/usr/bin/pulsar-cleanup-user").spawn();
         std::process::exit(0);
     }

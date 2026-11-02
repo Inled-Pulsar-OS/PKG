@@ -2557,6 +2557,15 @@ class OOTBWindow(Adw.ApplicationWindow):
                 run_cmd(["chmod", "0440", sudoers_user_file])
                 log_msg(f"Granted sudo to '{username}' via {sudoers_user_file}")
 
+                # Allow passwordless execution of the post-login cleanup script for the live user
+                try:
+                    cleanup_sudoers = "/etc/sudoers.d/pulsar-cleanup-live"
+                    write_temp_and_move("ALL ALL=(ALL) NOPASSWD: /usr/libexec/pulsar-cleanup-live.sh\n", cleanup_sudoers)
+                    run_cmd(["chown", "root:root", cleanup_sudoers])
+                    run_cmd(["chmod", "0440", cleanup_sudoers])
+                except Exception as ex_cs:
+                    log_msg(f"Notice: creating cleanup sudoers: {ex_cs}")
+
                 log_msg(f"User '{username}' verified in /etc/passwd, home={user_home}")
 
                 # ── Update /etc/hosts ─────────────────────────────
@@ -2914,15 +2923,6 @@ class OOTBWindow(Adw.ApplicationWindow):
                     capture_output=True
                 )
 
-                # Attempt immediate removal of live user before reboot
-                try:
-                    subprocess.run(["pkill", "-u", "live"], capture_output=True)
-                    subprocess.run(["userdel", "-r", "-f", "live"], capture_output=True)
-                    subprocess.run(["rm", "-rf", "/home/live", "/var/lib/AccountsService/users/live", "/var/lib/AccountsService/icons/live"], capture_output=True)
-                    log_msg("Cleaned up live user accounts and home directory")
-                except Exception as udel_err:
-                    log_msg(f"Notice: Deferred live user removal to boot service: {udel_err}")
-
                 # 6. Disable pulsar-ootb service (no longer needed)
                 subprocess.run(
                     ["systemctl", "disable", "pulsar-ootb.service"],
@@ -2930,19 +2930,14 @@ class OOTBWindow(Adw.ApplicationWindow):
                 )
                 log_msg("Disabled pulsar-ootb.service")
 
-                # 6. Restart SDDM so it re-reads AccountsService and shows the new user
-                log_msg("Restarting SDDM to pick up new user...")
+                # 7. Restart SDDM / Display Manager so it logs into the new user
+                log_msg("Restarting display manager to enter user session...")
                 res = subprocess.run(
                     ["systemctl", "restart", "sddm"],
                     capture_output=True, text=True
                 )
                 if res.returncode != 0:
-                    log_msg(f"SDDM restart returned non-zero: {res.stderr.strip()}")
-
-                log_msg("Setup complete. Rebooting in 3 seconds...")
-                time.sleep(3)
-
-                subprocess.Popen(["systemctl", "reboot"], start_new_session=True)
+                    subprocess.run(["systemctl", "restart", "display-manager"], capture_output=True)
 
                 self.close()
                 sys.exit(0)
