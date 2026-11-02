@@ -1,0 +1,14 @@
+[Unit]
+Description=Pulsar OS - Cleanup Live User After OOTB Setup
+ConditionPathExists=/etc/pulsar-need-cleanup
+Before=display-manager.service sddm.service gdm.service
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/pulsar-cleanup-live.sh
+RemainAfterExit=no
+TimeoutSec=30
+
+[Install]
+WantedBy=multi-user.target

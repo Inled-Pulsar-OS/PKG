@@ -1,6 +1,9 @@
 #!/bin/bash
-# Pulsar OS — live user cleanup (runs via pkexec, already root)
-userdel -r live 2>/dev/null || true
+# Pulsar OS — live user cleanup (runs as root before display manager or on login)
+pkill -9 -u live 2>/dev/null || true
+sleep 1
+userdel -r -f live 2>/dev/null || true
+rm -rf /home/live
 rm -f /var/lib/AccountsService/users/live
 rm -f /var/lib/AccountsService/icons/live
 systemctl restart accounts-daemon 2>/dev/null || true

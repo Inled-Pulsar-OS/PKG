@@ -4778,6 +4778,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         "/mnt/dev",
                         "/mnt/recovery",
                         "/mnt/boot/efi",
+                        "/mnt/boot",
                         "/mnt/home",
                     ]:
                         if os.path.exists(mount_path):
@@ -4789,6 +4790,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         res = subprocess.run(["umount", "-f", "/mnt/boot/efi"], capture_output=True)
                         if res.returncode != 0:
                             subprocess.run(["umount", "-l", "/mnt/boot/efi"], capture_output=True)
+                    res = subprocess.run(["umount", "-f", "/mnt/boot"], capture_output=True)
+                    if res.returncode != 0:
+                        subprocess.run(["umount", "-l", "/mnt/boot"], capture_output=True)
                                 
                     res = subprocess.run(["umount", "-f", "/mnt"], capture_output=True)
                     if res.returncode != 0:
@@ -4817,10 +4821,22 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     subprocess.run(["cryptsetup", "close", "pulsar_cryptroot"], capture_output=True)
                     subprocess.run(["udevadm", "settle"], capture_output=True)
                 
+            is_efi = os.path.exists("/sys/firmware/efi")
+            is_arch = os.path.exists("/etc/pacman.conf")
+            esp_root = "/mnt/boot/efi"
+            root_part_dev = None
+            luks_raw_part = None
+            boot_part = None
+
             def mount_vfs():
                 if "TEST_MODE" not in os.environ:
                     for p in ("/mnt/dev", "/mnt/dev/pts", "/mnt/proc", "/mnt/sys", "/mnt/run", "/mnt/etc"):
                         os.makedirs(p, exist_ok=True)
+                    if boot_part and not os.path.ismount("/mnt/boot"):
+                        try:
+                            exec_cmd(["mount", "-t", "ext4", boot_part, "/mnt/boot"])
+                        except Exception:
+                            pass
                     if not os.path.ismount("/mnt/dev"):
                         exec_cmd(["mount", "--bind", "/dev", "/mnt/dev"])
                     if not os.path.ismount("/mnt/dev/pts"):
@@ -4837,12 +4853,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         exec_cmd(["mount", "-t", "tmpfs", "tmpfs", "/mnt/run"])
                     if not os.path.ismount("/mnt/etc/resolv.conf"):
                         exec_cmd(["mount", "--bind", "/etc/resolv.conf", "/mnt/etc/resolv.conf"])
-
-            is_efi = os.path.exists("/sys/firmware/efi")
-            is_arch = os.path.exists("/etc/pacman.conf")
-            esp_root = "/mnt/boot/efi"
-            root_part_dev = None
-            luks_raw_part = None
             
             def setup_and_mount_root(raw_part):
                 nonlocal root_part_dev, luks_raw_part
@@ -4946,9 +4956,18 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 exec_cmd(["wipefs", "-a", "-f", disk_path])
                 exec_cmd(["sgdisk", "--zap-all", disk_path])
                 exec_cmd(["sgdisk", "--clear", disk_path])
-                exec_cmd(["sgdisk", "--new=1:0:+512M", "--typecode=1:ef00", "--change-name=1:EFI", disk_path])
-                exec_cmd(["sgdisk", "--new=2:0:+8G", "--typecode=2:8300", "--change-name=2:PulsarRecovery", disk_path])
-                exec_cmd(["sgdisk", "--new=3:0:0", "--typecode=3:8300", "--change-name=3:PulsarOS", disk_path])
+                if self.install_encryption:
+                    # When LUKS encryption is selected, a dedicated unencrypted 1024MB ext4 /boot
+                    # partition is created so GRUB / rEFInd can load kernel & initrd without prompt,
+                    # leaving Plymouth splash as the single, graphical unlock interface.
+                    exec_cmd(["sgdisk", "--new=1:0:+512M", "--typecode=1:ef00", "--change-name=1:EFI", disk_path])
+                    exec_cmd(["sgdisk", "--new=2:0:+1024M", "--typecode=2:8300", "--change-name=2:PulsarBoot", disk_path])
+                    exec_cmd(["sgdisk", "--new=3:0:+8G", "--typecode=3:8300", "--change-name=3:PulsarRecovery", disk_path])
+                    exec_cmd(["sgdisk", "--new=4:0:0", "--typecode=4:8300", "--change-name=4:PulsarOS", disk_path])
+                else:
+                    exec_cmd(["sgdisk", "--new=1:0:+512M", "--typecode=1:ef00", "--change-name=1:EFI", disk_path])
+                    exec_cmd(["sgdisk", "--new=2:0:+8G", "--typecode=2:8300", "--change-name=2:PulsarRecovery", disk_path])
+                    exec_cmd(["sgdisk", "--new=3:0:0", "--typecode=3:8300", "--change-name=3:PulsarOS", disk_path])
                 exec_cmd(["sync"])
                 exec_cmd(["udevadm", "settle"])
                 try:
@@ -4961,14 +4980,18 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 exec_cmd(["udevadm", "settle"])
                 time.sleep(1)
                 
-                if "nvme" in disk_path or "mmcblk" in disk_path or "loop" in disk_path:
-                    efi_part = f"{disk_path}p1"
-                    recovery_part = f"{disk_path}p2"
-                    root_part = f"{disk_path}p3"
+                is_nvme_like = ("nvme" in disk_path or "mmcblk" in disk_path or "loop" in disk_path)
+                p_sep = "p" if is_nvme_like else ""
+                if self.install_encryption:
+                    efi_part = f"{disk_path}{p_sep}1"
+                    boot_part = f"{disk_path}{p_sep}2"
+                    recovery_part = f"{disk_path}{p_sep}3"
+                    root_part = f"{disk_path}{p_sep}4"
+                    exec_cmd(["wipefs", "-a", "-f", boot_part])
                 else:
-                    efi_part = f"{disk_path}1"
-                    recovery_part = f"{disk_path}2"
-                    root_part = f"{disk_path}3"
+                    efi_part = f"{disk_path}{p_sep}1"
+                    recovery_part = f"{disk_path}{p_sep}2"
+                    root_part = f"{disk_path}{p_sep}3"
                     
                 exec_cmd(["wipefs", "-a", "-f", efi_part])
                 exec_cmd(["wipefs", "-a", "-f", recovery_part])
@@ -4976,6 +4999,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 
                 GLib.idle_add(self.update_progress, 0.10, "Formatting partitions (EFI, Recovery, Btrfs)...")
                 exec_cmd(["mkfs.vfat", "-F32", "-n", "EFI", efi_part])
+                if boot_part:
+                    exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PULSAR_BOOT", boot_part])
                 exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PULSAR_RECOVERY", recovery_part])
                 
                 setup_and_mount_root(root_part)
@@ -4983,6 +5008,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 subprocess.run(["modprobe", "ext4"], capture_output=True)
                 subprocess.run(["modprobe", "vfat"], capture_output=True)
                 
+                if boot_part:
+                    os.makedirs("/mnt/boot", exist_ok=True)
+                    exec_cmd(["mount", "-t", "ext4", boot_part, "/mnt/boot"])
+
                 os.makedirs("/mnt/boot/efi", exist_ok=True)
                 exec_cmd(["mount", "-t", "vfat", efi_part, "/mnt/boot/efi"])
                 os.makedirs("/mnt/recovery", exist_ok=True)
@@ -4995,7 +5024,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 # (~3.5-4GB) plus the Debian recovery environment (374MB) and kernel.
                 sfdisk_bin = shutil.which("sfdisk")
                 if sfdisk_bin:
-                    sfdisk_script = "label: dos\nsize=8192M, type=83\nsize=+, type=83, bootable\n"
+                    if self.install_encryption:
+                        # Dedicated unencrypted /boot partition (1024MB) on MBR partition 1 so GRUB
+                        # loads without prompt, leaving the single decryption prompt to Plymouth.
+                        sfdisk_script = "label: dos\nsize=1024M, type=83, bootable\nsize=8192M, type=83\nsize=+, type=83\n"
+                    else:
+                        sfdisk_script = "label: dos\nsize=8192M, type=83\nsize=+, type=83, bootable\n"
                     if "TEST_MODE" in os.environ:
                         print(f"[TEST_MODE] Simulating sfdisk partitioning script:\n{sfdisk_script}")
                     else:
@@ -5005,12 +5039,18 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     exec_cmd(["sync"])
                     exec_cmd(["udevadm", "settle"])
                     if "TEST_MODE" not in os.environ:
-                        subprocess.run([sfdisk_bin, "--activate", disk_path, "2"], capture_output=True)
+                        subprocess.run([sfdisk_bin, "--activate", disk_path, "1" if self.install_encryption else "2"], capture_output=True)
                 else:
                     exec_cmd(["parted", "-s", disk_path, "mklabel", "msdos"])
-                    exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "ext4", "1MiB", "8193MiB"])
-                    exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "btrfs", "8193MiB", "100%"])
-                    exec_cmd(["parted", "-s", disk_path, "set", "2", "boot", "on"])
+                    if self.install_encryption:
+                        exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "ext4", "1MiB", "1025MiB"])
+                        exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "ext4", "1025MiB", "9217MiB"])
+                        exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "btrfs", "9217MiB", "100%"])
+                        exec_cmd(["parted", "-s", disk_path, "set", "1", "boot", "on"])
+                    else:
+                        exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "ext4", "1MiB", "8193MiB"])
+                        exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "btrfs", "8193MiB", "100%"])
+                        exec_cmd(["parted", "-s", disk_path, "set", "2", "boot", "on"])
                     exec_cmd(["sync"])
                     exec_cmd(["udevadm", "settle"])
                 try:
@@ -5023,21 +5063,30 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 exec_cmd(["udevadm", "settle"])
                 time.sleep(1)
                 
-                if "nvme" in disk_path or "mmcblk" in disk_path or "loop" in disk_path:
-                    recovery_part = f"{disk_path}p1"
-                    root_part = f"{disk_path}p2"
+                is_nvme_like = ("nvme" in disk_path or "mmcblk" in disk_path or "loop" in disk_path)
+                p_sep = "p" if is_nvme_like else ""
+                if self.install_encryption:
+                    boot_part = f"{disk_path}{p_sep}1"
+                    recovery_part = f"{disk_path}{p_sep}2"
+                    root_part = f"{disk_path}{p_sep}3"
+                    exec_cmd(["wipefs", "-a", "-f", boot_part])
                 else:
-                    recovery_part = f"{disk_path}1"
-                    root_part = f"{disk_path}2"
+                    recovery_part = f"{disk_path}{p_sep}1"
+                    root_part = f"{disk_path}{p_sep}2"
                     
                 exec_cmd(["wipefs", "-a", "-f", recovery_part])
                 exec_cmd(["wipefs", "-a", "-f", root_part])
                 GLib.idle_add(self.update_progress, 0.10, "Formatting Recovery and Btrfs partitions...")
+                if boot_part:
+                    exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PULSAR_BOOT", boot_part])
                 exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PULSAR_RECOVERY", recovery_part])
                 
                 setup_and_mount_root(root_part)
                 
                 subprocess.run(["modprobe", "ext4"], capture_output=True)
+                if boot_part:
+                    os.makedirs("/mnt/boot", exist_ok=True)
+                    exec_cmd(["mount", "-t", "ext4", boot_part, "/mnt/boot"])
                 os.makedirs("/mnt/recovery", exist_ok=True)
                 exec_cmd(["mount", "-t", "ext4", recovery_part, "/mnt/recovery"])
             
@@ -5413,7 +5462,18 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             GLib.idle_add(self.update_progress, 0.80, "Installing selected packages and apps...")
                             log_msg(f"Post-install: preparing {len(extra_packages)} selected packages via apt...")
                             try:
-                                # 1. Check for local pre-built .deb packages bundled on ISO or rootfs
+                                # 1. Sync online repositories if network is available
+                                has_network_deb = False
+                                try:
+                                    os.makedirs("/mnt/etc/apt/apt.conf.d", exist_ok=True)
+                                    with open("/mnt/etc/apt/apt.conf.d/99pulsar-fast", "w") as f_apt:
+                                        f_apt.write('Acquire::Queue-Mode "host";\nAcquire::http::Pipeline-Depth "5";\nAPT::Acquire::Retries "3";\n')
+                                    exec_cmd(["chroot", "/mnt", "apt-get", "update"])
+                                    has_network_deb = True
+                                except Exception as deb_net_err:
+                                    log_msg(f"Notice: Debian repository update skipped: {deb_net_err}")
+
+                                # 2. Check for local pre-built .deb packages bundled on ISO or rootfs
                                 candidate_deb_dirs = [
                                     "/run/live/medium/packages",
                                     "/live/image/packages",
@@ -5453,20 +5513,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                             log_msg(f"Warning copying {ldeb}: {cp_err}")
                                     if staged_deb_paths:
                                         subprocess.run(["chroot", "/mnt", "dpkg", "-i"] + staged_deb_paths, capture_output=True)
-                                        subprocess.run(["chroot", "/mnt", "apt-get", "install", "-f", "-y"], capture_output=True)
+                                        subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-f", "-y"], capture_output=True)
                                         log_msg(f"✅ Successfully installed {len(staged_deb_paths)} local Debian packages.")
                                     shutil.rmtree(chroot_deb_dir, ignore_errors=True)
 
-                                # 2. Sync online repositories if network is available
-                                has_network_deb = False
-                                try:
-                                    os.makedirs("/mnt/etc/apt/apt.conf.d", exist_ok=True)
-                                    with open("/mnt/etc/apt/apt.conf.d/99pulsar-fast", "w") as f_apt:
-                                        f_apt.write('Acquire::Queue-Mode "host";\nAcquire::http::Pipeline-Depth "5";\nAPT::Acquire::Retries "3";\n')
-                                    exec_cmd(["chroot", "/mnt", "apt-get", "update"])
-                                    has_network_deb = True
-                                except Exception as deb_net_err:
-                                    log_msg(f"Notice: Debian repository update skipped: {deb_net_err}")
+                                # Always ensure dpkg has no broken dependencies before batch installs
+                                subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-f", "-y"], capture_output=True)
 
                                 if extra_packages:
                                     if has_network_deb:
@@ -5485,7 +5537,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
                                         apt_cmd = [
                                             "chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y",
-                                            "--no-install-recommends",
                                             *extra_packages,
                                         ]
                                         apt_proc = subprocess.Popen(
@@ -5518,9 +5569,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                             log_msg(f"Notice: Batch apt-get install exited with code {apt_proc.returncode}. Attempting individual installs...")
                                             subprocess.run(["fuser", "-k", "-9", "/mnt/var/lib/dpkg/lock-frontend", "/mnt/var/lib/dpkg/lock", "/mnt/var/lib/apt/lists/lock"], capture_output=True)
                                             subprocess.run(["chroot", "/mnt", "dpkg", "--configure", "-a"], capture_output=True)
+                                            subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-f", "-y"], capture_output=True)
                                             for dpkg in extra_packages:
                                                 res_d = subprocess.run(
-                                                    ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "--no-install-recommends", dpkg],
+                                                    ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", dpkg],
                                                     capture_output=True,
                                                     text=True
                                                 )
@@ -5529,6 +5581,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                                 else:
                                                     err_line = res_d.stderr.strip().splitlines()[-1] if res_d.stderr.strip() else "error"
                                                     log_msg(f"  apt: Skipping {dpkg} ({err_line})")
+                                            subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-f", "-y"], capture_output=True)
                                         else:
                                             log_msg("Post-install: extra packages installed successfully (apt).")
                                             extra_packages_installed = True
@@ -5731,6 +5784,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
             root_uuid = get_partition_uuid(root_part_dev if root_part_dev else root_part)
             luks_uuid = get_partition_uuid(luks_raw_part) if self.install_encryption and luks_raw_part else None
+            boot_uuid = get_partition_uuid(boot_part) if boot_part else None
             rec_uuid = get_partition_uuid(recovery_part) if recovery_part else None
             target_swap_gb = compute_swap_size_gb()
             
@@ -5742,6 +5796,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     f"UUID={root_uuid}            /               btrfs   subvol=@,compress=zstd:1,space_cache=v2         0       0",
                     f"UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1,space_cache=v2     0       0",
                 ]
+                if boot_uuid:
+                    fstab_lines.append(f"UUID={boot_uuid}            /boot           ext4    defaults,noatime                                0       2")
                 if efi_uuid:
                     fstab_lines.append(f"UUID={efi_uuid}             /boot/efi       vfat    defaults,nofail,x-systemd.device-timeout=5,dmask=0077,fmask=0077 0       2")
                 if rec_uuid:
@@ -5764,7 +5820,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             cf.write(f"pulsar_cryptroot UUID={luks_uuid} none luks,discard,initramfs\n")
                         log_msg(f"✅ Configured /etc/crypttab: pulsar_cryptroot UUID={luks_uuid}")
                     with open("/mnt/etc/udev/rules.d/99-pulsaros-hide-recovery.rules", "w") as f:
-                        f.write('# Hide PULSAR_RECOVERY partition from file managers and desktop\nENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n')
+                        f.write('# Hide PULSAR_RECOVERY and PULSAR_BOOT partitions from file managers and desktop\nENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\nENV{ID_FS_LABEL}=="PULSAR_BOOT", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n')
                     
                     # Create non-COW swapfile for hibernation support on Btrfs
                     create_target_swapfile()
@@ -5775,6 +5831,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     f"UUID={root_uuid}            /               btrfs   subvol=@,compress=zstd:1,space_cache=v2         0       0",
                     f"UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1,space_cache=v2     0       0",
                 ]
+                if boot_uuid:
+                    fstab_lines.append(f"UUID={boot_uuid}            /boot           ext4    defaults,noatime                                0       2")
                 if rec_uuid:
                     fstab_lines.append(f"UUID={rec_uuid}            /recovery       ext4    defaults,noatime,nofail,x-systemd.device-timeout=5 0       2")
                 if getattr(self, "install_hibernation", True) and target_swap_gb >= 2:
@@ -5795,7 +5853,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             cf.write(f"pulsar_cryptroot UUID={luks_uuid} none luks,discard,initramfs\n")
                         log_msg(f"✅ Configured /etc/crypttab: pulsar_cryptroot UUID={luks_uuid}")
                     with open("/mnt/etc/udev/rules.d/99-pulsaros-hide-recovery.rules", "w") as f:
-                        f.write('# Hide PULSAR_RECOVERY partition from file managers and desktop\nENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n')
+                        f.write('# Hide PULSAR_RECOVERY and PULSAR_BOOT partitions from file managers and desktop\nENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\nENV{ID_FS_LABEL}=="PULSAR_BOOT", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n')
 
                     create_target_swapfile()
                 
@@ -6307,7 +6365,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     "GRUB_CMDLINE_LINUX": grub_cmdline,
                     "GRUB_CMDLINE_LINUX_DEFAULT": f'"rw quiet splash{rl_resume_opts}"',
                 }
-                if self.install_encryption:
+                if self.install_encryption and not boot_part:
                     grub_params["GRUB_ENABLE_CRYPTODISK"] = "y"
 
                 # Check if GRUB theme exists
@@ -6325,6 +6383,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     with open(grub_default, "r") as f:
                         content = f.read()
 
+                if not (self.install_encryption and not boot_part):
+                    # Ensure cryptodisk is disabled when /boot is on a separate unencrypted partition,
+                    # so GRUB does not prompt for passphrase and leaves unlock solely to Plymouth.
+                    content = re.sub(r"^#?\s*GRUB_ENABLE_CRYPTODISK=.*$", "# GRUB_ENABLE_CRYPTODISK=y", content, flags=re.MULTILINE)
+
                 for key, val in grub_params.items():
                     pattern = rf"^#?\s*{re.escape(key)}=.*$"
                     if re.search(pattern, content, flags=re.MULTILINE):
@@ -6335,7 +6398,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 os.makedirs(os.path.dirname(grub_default), exist_ok=True)
                 with open(grub_default, "w") as f:
                     f.write(content)
-                log_msg(f"✅ Configured {grub_default} (cryptodisk={self.install_encryption})")
+                log_msg(f"✅ Configured {grub_default} (cryptodisk={self.install_encryption and not boot_part})")
 
             def configure_grub_menus():
                 """Configure GRUB default parameters, os-prober for Dual Boot, theme, and recovery entry."""
@@ -6474,6 +6537,13 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
 
             GLib.idle_add(self.update_progress, 0.90, "Installing bootloader...")
             mount_vfs()
+
+            if boot_part and not os.path.ismount("/mnt/boot"):
+                try:
+                    exec_cmd(["mount", "-t", "ext4", boot_part, "/mnt/boot"])
+                    log_msg(f"Verified boot partition mounted at /mnt/boot: {boot_part}")
+                except Exception as mb_err:
+                    log_msg(f"Warning: Re-mounting boot partition failed: {mb_err}")
 
             if is_efi:
                 os.makedirs("/mnt/boot/efi", exist_ok=True)
@@ -7054,9 +7124,15 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
 
                             # Run apt update to fetch package indices and install broadcom-sta-dkms
                             GLib.idle_add(self.update_progress, 0.93, "Installing Broadcom drivers...")
-                            exec_cmd(["chroot", "/mnt", "apt-get", "update"])
-                            exec_cmd(["chroot", "/mnt", "apt-get", "install", "-y",
-                                      "broadcom-sta-dkms", "linux-headers-amd64"])
+                            subprocess.run(["chroot", "/mnt", "apt-get", "update"], capture_output=True)
+                            res_bcm = subprocess.run([
+                                "chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y",
+                                "broadcom-sta-dkms", "linux-headers-amd64"
+                            ], capture_output=True, text=True)
+                            if res_bcm.returncode != 0:
+                                log_msg(f"Notice: Broadcom STA dkms install returned non-zero ({res_bcm.stderr.strip()[:100] if res_bcm.stderr else 'ignored'})")
+                            else:
+                                log_msg("✅ Broadcom STA dkms driver installed successfully.")
 
                             blacklist = (
                                 "blacklist b43\n"

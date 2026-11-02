@@ -2048,38 +2048,53 @@ class OOTBWindow(Adw.ApplicationWindow):
         title.add_css_class("welcome-title")
         box.append(title)
 
-        desc = Gtk.Label(label="Your computer is ready to use. Below is the configuration log.")
+        desc = Gtk.Label(label="Your computer is ready to use.")
         desc.add_css_class("welcome-subtitle")
         box.append(desc)
 
-        # Monospace Scrollable Text Log Area (uses self.log_buffer if already created)
+        # Buffer retained in memory for copying
         if not hasattr(self, 'log_buffer') or not self.log_buffer:
             self.log_buffer = Gtk.TextBuffer()
-        self.log_view = Gtk.TextView(buffer=self.log_buffer)
-        self.log_view.set_editable(False)
-        self.log_view.set_cursor_visible(False)
-        self.log_view.set_monospace(True)
-        self.log_view.set_wrap_mode(Gtk.WrapMode.WORD)
 
-        log_scroll = Gtk.ScrolledWindow()
-        log_scroll.set_size_request(480, 140)
-        log_scroll.set_child(self.log_view)
-        log_scroll.add_css_class("country-scroll")
-        box.append(log_scroll)
-
-        # Copy Log Button
+        # Copy Log Button (no visible log box in UI)
         copy_btn = Gtk.Button(label="Copy Setup Log")
         copy_btn.add_css_class("secondary-action")
         copy_btn.connect("clicked", self.on_copy_log_clicked)
         copy_btn.set_halign(Gtk.Align.CENTER)
+        copy_btn.set_margin_top(12)
         box.append(copy_btn)
 
         self.stack.add_named(box, "finished")
 
     def on_copy_log_clicked(self, btn):
-        clipboard = self.get_clipboard()
-        text = self.log_buffer.get_text(self.log_buffer.get_start_iter(), self.log_buffer.get_end_iter(), True)
-        clipboard.set_text(text)
+        content = ""
+        for log_path in ("/var/log/pulsaros/ootb.log", "/tmp/pulsar-ootb.log"):
+            if os.path.exists(log_path):
+                try:
+                    with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                        content = f.read()
+                    if content:
+                        break
+                except Exception:
+                    pass
+        if not content and hasattr(self, 'log_buffer') and self.log_buffer:
+            content = self.log_buffer.get_text(self.log_buffer.get_start_iter(), self.log_buffer.get_end_iter(), True)
+
+        if content:
+            try:
+                clipboard = self.get_clipboard()
+                clipboard.set_text(content)
+            except Exception:
+                pass
+            try:
+                subprocess.run(["wl-copy"], input=content.encode("utf-8"), capture_output=True)
+            except Exception:
+                pass
+            btn.set_label("Copied!")
+            GLib.timeout_add(2500, lambda: btn.set_label("Copy Setup Log"))
+        else:
+            btn.set_label("No logs found")
+            GLib.timeout_add(2500, lambda: btn.set_label("Copy Setup Log"))
 
     def load_log_to_view(self):
         log_path = "/var/log/pulsaros/ootb.log"
@@ -2890,10 +2905,23 @@ class OOTBWindow(Adw.ApplicationWindow):
                     os.remove("/etc/pulsar-need-setup")
                     log_msg("Removed /etc/pulsar-need-setup")
 
-                # 5. Create cleanup sentinel (will be picked up on first login)
+                # 5. Create cleanup sentinel and enable boot cleanup service
                 with open("/etc/pulsar-need-cleanup", "w") as f:
                     f.write(username)
                 log_msg("Created /etc/pulsar-need-cleanup")
+                subprocess.run(
+                    ["systemctl", "enable", "pulsar-cleanup-live.service"],
+                    capture_output=True
+                )
+
+                # Attempt immediate removal of live user before reboot
+                try:
+                    subprocess.run(["pkill", "-u", "live"], capture_output=True)
+                    subprocess.run(["userdel", "-r", "-f", "live"], capture_output=True)
+                    subprocess.run(["rm", "-rf", "/home/live", "/var/lib/AccountsService/users/live", "/var/lib/AccountsService/icons/live"], capture_output=True)
+                    log_msg("Cleaned up live user accounts and home directory")
+                except Exception as udel_err:
+                    log_msg(f"Notice: Deferred live user removal to boot service: {udel_err}")
 
                 # 6. Disable pulsar-ootb service (no longer needed)
                 subprocess.run(
