@@ -123,4 +123,8 @@ fi
 purge_stage
 purge_source
 
+if [ -n "$SUDO_USER" ] && [ "$EUID" -eq 0 ]; then
+    chown -R "$SUDO_USER:$(id -gn "$SUDO_USER")" "$PKG_ROOT" 2>/dev/null || true
+fi
+
 echo "✅ pulsaros-welcome: assets preparados (RELEASE, sin artefactos dev)"
