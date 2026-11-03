@@ -1,0 +1,14 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: pulsaros-airpods
+Upstream-Contact: Victor Rosario <hello@victorrosario.dev>
+Source: https://github.com/Inled-Pulsar-OS/PKG
+
+Files: *
+Copyright: 2026 Victor Rosario <hello@victorrosario.dev>
+License: MIT-INLED
+
+Files: usr/share/pulsaros-airpods/pulsaros_airpods/protocol.py usr/share/pulsaros-airpods/pulsaros_airpods/state.py
+Copyright: 2021-2022 SpriteOvO (AirPodsDesktop protocol notes and merge logic)
+License: GPL-3+
+Comment: Re-implementation in Python of the packet layout and state-merge rules
+ documented in AirPodsDesktop (https://github.com/SpriteOvO/AirPodsDesktop).

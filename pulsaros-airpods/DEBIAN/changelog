@@ -1,0 +1,7 @@
+pulsaros-airpods (0.1.0) unstable; urgency=medium
+
+  * Initial release: BlueZ daemon + GNOME Shell extension (48, 51)
+  * Top-bar AirPods icon with battery, in-ear state, lid-open popup
+  * Ear detection through MPRIS
+
+ -- Victor Rosario <hello@victorrosario.dev>  Mon, 03 Nov 2026 00:00:00 +0000

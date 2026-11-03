@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+"""Pulsar OS AirPods daemon launcher."""
+
+import os
+import sys
+
+root = os.environ.get("PULSAROS_AIRPODS_ROOT", "/usr/share/pulsaros-airpods")
+sys.path.insert(0, root)
+
+from pulsaros_airpods.daemon import main  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(main())

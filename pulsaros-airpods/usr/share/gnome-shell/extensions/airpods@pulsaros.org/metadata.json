@@ -1,0 +1,11 @@
+{
+  "uuid": "airpods@pulsaros.org",
+  "name": "AirPods",
+  "description": "Shows connected AirPods in the top bar with battery and ear state, like macOS.",
+  "shell-version": [
+    "48",
+    "51"
+  ],
+  "url": "https://github.com/Inled-Pulsar-OS/PKG",
+  "version": 1
+}

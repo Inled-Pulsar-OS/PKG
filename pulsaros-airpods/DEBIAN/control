@@ -1,0 +1,13 @@
+Package: pulsaros-airpods
+Version: 0.1.0
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: Victor Rosario <hello@victorrosario.dev>
+Depends: python3, python3-dbus, python3-gi, bluez, gnome-shell
+Description: AirPods battery and state in the GNOME top bar for Pulsar OS.
+ Shows an AirPods icon in the top bar while AirPods are connected, like macOS,
+ with left/right/case battery, in-ear state, a popup when the case opens, and
+ pause/resume of media players when the earbuds are removed. A background
+ daemon reads Apple Continuity advertisements through BlueZ; a GNOME Shell
+ extension (airpods@pulsaros.org) renders them. Supports GNOME Shell 48 and 51.

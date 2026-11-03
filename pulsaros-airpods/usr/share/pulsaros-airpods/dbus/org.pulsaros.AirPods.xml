@@ -1,0 +1,52 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<!--
+  Session-bus contract between pulsaros-airpods-daemon and the GNOME Shell extension.
+
+  Bus name:    org.pulsaros.AirPods
+  Object path: /org/pulsaros/AirPods
+
+  Conventions
+  - Battery values are percentages 0..100 in steps of 10 (the protocol reports 0..10).
+    -1 means "unavailable". Never 0 for unavailable.
+  - Properties other than Connected are meaningful only while Connected is true.
+    While not connected: strings are empty, integers are -1, booleans are false.
+  - Interface changes are additive. Breaking changes bump the interface name (AirPods2).
+-->
+<node>
+  <interface name="org.pulsaros.AirPods">
+    <!-- True while the bound AirPods are connected over classic Bluetooth (BlueZ Device1). -->
+    <property name="Connected" type="b" access="read"/>
+    <!-- Name from BlueZ (user-chosen, e.g. "Victor's AirPods Pro"). -->
+    <property name="Name" type="s" access="read"/>
+    <!-- Classic Bluetooth address of the bound device, e.g. "AA:BB:CC:DD:EE:FF". -->
+    <property name="Address" type="s" access="read"/>
+    <!-- Stable slug for artwork lookup: airpods_pro_2, airpods_max, ... or "unknown". -->
+    <property name="ModelId" type="s" access="read"/>
+    <!-- Human readable model name, e.g. "AirPods Pro 2". Empty when unknown. -->
+    <property name="Model" type="s" access="read"/>
+    <!-- True for over-ear headphones (no case, no per-bud data). -->
+    <property name="IsHeadphones" type="b" access="read"/>
+    <!-- True while a recent BLE advertisement backs the fields below. -->
+    <property name="HasAdvertisement" type="b" access="read"/>
+    <property name="Left" type="i" access="read"/>
+    <property name="Right" type="i" access="read"/>
+    <property name="Case" type="i" access="read"/>
+    <property name="LeftCharging" type="b" access="read"/>
+    <property name="RightCharging" type="b" access="read"/>
+    <property name="CaseCharging" type="b" access="read"/>
+    <property name="LeftInEar" type="b" access="read"/>
+    <property name="RightInEar" type="b" access="read"/>
+    <property name="BothPodsInCase" type="b" access="read"/>
+    <property name="CaseLidOpened" type="b" access="read"/>
+    <!-- Single combined level from BlueZ Battery1, or -1. Show it labelled as such
+         when HasAdvertisement is false. -->
+    <property name="FallbackBattery" type="i" access="read"/>
+    <!-- Pause/play the active MPRIS player when the buds leave/enter the ears. -->
+    <property name="EarDetection" type="b" access="readwrite"/>
+    <!-- Show the popup when the case lid opens or the AirPods connect. -->
+    <property name="LidPopup" type="b" access="readwrite"/>
+    <!-- Emitted when the case lid goes from closed to open while connected. -->
+    <signal name="LidOpened"/>
+  </interface>
+</node>

@@ -1,0 +1,12 @@
+.airpods-title { font-weight: bold; font-size: 1.1em; }
+.airpods-subtitle { color: rgba(255, 255, 255, 0.6); font-size: 0.9em; }
+.airpods-rows { spacing: 10px; min-width: 260px; padding: 4px 0; }
+.airpods-row { spacing: 10px; }
+.airpods-row-title { font-weight: 500; }
+.airpods-row-state { font-size: 0.85em; color: rgba(255, 255, 255, 0.6); }
+.airpods-row-percent { min-width: 40px; text-align: right; }
+.airpods-bar { width: 56px; height: 8px; border-radius: 4px; background-color: rgba(255, 255, 255, 0.2); }
+.airpods-bar-fill { height: 8px; border-radius: 4px; background-color: #ffffff; }
+.airpods-bar-fill.airpods-charging { background-color: #57e389; }
+.airpods-bar-fill.airpods-low { background-color: #ff7b63; }
+.airpods-note { font-size: 0.85em; color: rgba(255, 255, 255, 0.6); }

@@ -1,0 +1,7 @@
+post_install() {
+    echo "==> pulsaros-airpods: enable the extension with: gnome-extensions enable airpods@pulsaros.org"
+}
+
+post_upgrade() {
+    post_install
+}

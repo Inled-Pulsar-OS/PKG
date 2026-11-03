@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    chmod +x /usr/bin/pulsaros-airpods-daemon 2>/dev/null || true
+    echo "pulsaros-airpods: enable the extension with: gnome-extensions enable airpods@pulsaros.org" >&2
+fi
+
+exit 0

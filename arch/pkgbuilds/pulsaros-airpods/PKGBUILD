@@ -1,0 +1,34 @@
+# Maintainer: Victor Rosario <hello@victorrosario.dev>
+pkgname=pulsaros-airpods
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="AirPods battery and state in the GNOME top bar for Pulsar OS"
+arch=(any)
+url="https://inled.es"
+license=(MIT)
+depends=(python python-dbus python-gobject bluez gnome-shell)
+install=pulsaros-airpods.install
+options=(!strip)
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsaros-airpods && pwd)"
+    cd "$_src"
+
+    install -Dm755 usr/bin/pulsaros-airpods-daemon "$pkgdir/usr/bin/pulsaros-airpods-daemon"
+
+    mkdir -p "$pkgdir/usr/share/pulsaros-airpods"
+    cp -r usr/share/pulsaros-airpods/. "$pkgdir/usr/share/pulsaros-airpods/"
+    find "$pkgdir/usr/share/pulsaros-airpods" -name '__pycache__' -type d -prune -exec rm -r -f {} +
+
+    mkdir -p "$pkgdir/usr/share/gnome-shell/extensions"
+    cp -r usr/share/gnome-shell/extensions/airpods@pulsaros.org "$pkgdir/usr/share/gnome-shell/extensions/"
+
+    install -Dm644 usr/lib/systemd/user/pulsaros-airpods.service \
+        "$pkgdir/usr/lib/systemd/user/pulsaros-airpods.service"
+    install -d "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants"
+    ln -s ../pulsaros-airpods.service \
+        "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants/pulsaros-airpods.service"
+
+    chmod -R a+rX "$pkgdir/usr"
+    chmod 755 "$pkgdir/usr/bin/pulsaros-airpods-daemon"
+}
