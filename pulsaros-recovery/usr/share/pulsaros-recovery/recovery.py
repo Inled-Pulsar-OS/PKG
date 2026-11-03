@@ -4543,9 +4543,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
             log_msg(f"Target partition: {self.target_partition} (NOT TOUCHED)")
             log_msg(f"Preserving EFI partition: {self.target_efi_partition}")
             if self.install_encryption:
-                GLib.idle_add(self.update_progress, 0.05, f"[DEMO] Setting up LUKS encryption on {self.target_partition}...")
-                log_msg(f"[DEMO] cryptsetup luksFormat --type luks2 --pbkdf argon2id {self.target_partition}")
-                log_msg(f"[DEMO] cryptsetup open {self.target_partition} pulsar_cryptroot")
+                GLib.idle_add(self.update_progress, 0.05, f"[DEMO] Splitting {self.target_partition} into dedicated /boot (1024MB ext4) and LUKS2 root...")
+                log_msg(f"[DEMO] parted -s {disk_path} unit s mkpart PulsarBoot ext4 ...")
+                log_msg(f"[DEMO] parted -s {disk_path} unit s mkpart PulsarOS btrfs ...")
+                log_msg("[DEMO] mkfs.ext4 -F -F -L PULSAR_BOOT ...")
+                log_msg("[DEMO] cryptsetup luksFormat --type luks2 --pbkdf pbkdf2 ...")
+                log_msg("[DEMO] cryptsetup open ... pulsar_cryptroot")
                 log_msg("[DEMO] mkfs.btrfs -f -L PULSAR_OS /dev/mapper/pulsar_cryptroot")
             else:
                 GLib.idle_add(self.update_progress, 0.05, f"[DEMO] Formatting target partition {self.target_partition} as Btrfs...")
@@ -4692,6 +4695,172 @@ class RecoveryWindow(Adw.ApplicationWindow):
         except Exception:
             pass
 
+    def _split_target_partition_for_boot(self, disk_path, target_partition, log_msg):
+        """
+        In Dual Boot with encryption enabled, split target_partition into:
+        1. A 1024MB unencrypted ext4 partition for /boot (PULSAR_BOOT) so GRUB loads
+           its boot menu and kernel without prompting for a password, leaving the single
+           graphical unlock prompt to Plymouth splash.
+        2. The remaining space as the root partition for LUKS2 + Btrfs.
+        Returns (boot_part_path, root_part_path). If splitting cannot be safely
+        performed (e.g. partition too small or MBR table limit), returns (None, target_partition).
+        """
+        import re
+
+        if not disk_path:
+            try:
+                out_pk = subprocess.check_output(["lsblk", "-no", "PKNAME", target_partition], text=True).strip()
+                if out_pk:
+                    disk_path = f"/dev/{out_pk}"
+            except Exception:
+                pass
+
+        if not disk_path or not os.path.exists(disk_path):
+            log_msg(f"Could not determine parent disk path for {target_partition}")
+            return None, target_partition
+
+        m = re.search(r'(\d+)$', target_partition)
+        if not m:
+            log_msg(f"Could not extract partition number from {target_partition}")
+            return None, target_partition
+        partn = int(m.group(1))
+
+        # Query partition table info from parted (unit in sectors)
+        try:
+            out = subprocess.check_output(["parted", "-m", disk_path, "unit", "s", "print"], text=True, stderr=subprocess.DEVNULL)
+        except Exception as pe:
+            log_msg(f"parted -m failed on {disk_path}: {pe}")
+            return None, target_partition
+
+        lines = [line.strip() for line in out.strip().split("\n") if line.strip()]
+        sec_size = 512
+        pttype = "gpt"
+        if len(lines) >= 2:
+            disk_fields = lines[1].split(":")
+            if len(disk_fields) >= 6:
+                try:
+                    sec_size = int(disk_fields[3])
+                except Exception:
+                    sec_size = 512
+                pttype = (disk_fields[5] or "gpt").lower()
+
+        target_info = None
+        for line in lines[2:]:
+            p = line.split(":")
+            if p[0] == str(partn) and len(p) >= 4:
+                try:
+                    start_s = int(p[1].rstrip("s"))
+                    end_s = int(p[2].rstrip("s"))
+                    size_s = int(p[3].rstrip("s"))
+                    target_info = {
+                        "start": start_s,
+                        "end": end_s,
+                        "size_sec": size_s,
+                        "size_bytes": size_s * sec_size
+                    }
+                except Exception:
+                    pass
+                break
+
+        if not target_info:
+            log_msg(f"Could not find partition {partn} in parted output on {disk_path}")
+            return None, target_partition
+
+        # Minimum size check: must have at least 8GB (8 * 1024^3 bytes) to split 1GB for /boot
+        if target_info["size_bytes"] < 8 * 1024 * 1024 * 1024:
+            log_msg(f"Partition {target_partition} size ({target_info['size_bytes'] // (1024*1024)} MB) is under 8GB minimum; skipping boot partition split.")
+            return None, target_partition
+
+        start_sec = target_info["start"]
+        end_sec = target_info["end"]
+        boot_sec = (1024 * 1024 * 1024) // sec_size  # 1GiB in sectors
+        boot_end_sec = start_sec + boot_sec - 1
+        root_start_sec = boot_end_sec + 1
+
+        log_msg(f"Splitting partition {partn} on {disk_path} ({pttype}):")
+        log_msg(f"  PulsarBoot sectors: {start_sec}..{boot_end_sec} (1024 MB)")
+        log_msg(f"  PulsarOS sectors:   {root_start_sec}..{end_sec} ({(end_sec - root_start_sec + 1) * sec_size // (1024*1024)} MB)")
+
+        # Ensure target partition is not mounted and unmap any leftover cryptroot
+        subprocess.run(["umount", "-l", target_partition], capture_output=True)
+        subprocess.run(["cryptsetup", "close", "pulsar_cryptroot"], capture_output=True)
+        subprocess.run(["wipefs", "-a", "-f", target_partition], capture_output=True)
+
+        # Remove existing partition
+        res_rm = subprocess.run(["parted", "-s", disk_path, "rm", str(partn)], capture_output=True, text=True)
+        if res_rm.returncode != 0:
+            log_msg(f"parted rm {partn} failed: {res_rm.stderr}")
+            return None, target_partition
+
+        # Recreate partitions
+        if pttype in ("dos", "msdos"):
+            part_type = "logical" if partn >= 5 else "primary"
+            res_b = subprocess.run(["parted", "-s", "-a", "none", disk_path, "unit", "s", "mkpart", part_type, "ext4", f"{start_sec}s", f"{boot_end_sec}s"], capture_output=True, text=True)
+            if res_b.returncode != 0:
+                log_msg(f"parted mkpart boot failed: {res_b.stderr}")
+                return None, target_partition
+            res_r = subprocess.run(["parted", "-s", "-a", "none", disk_path, "unit", "s", "mkpart", part_type, "btrfs", f"{root_start_sec}s", f"{end_sec}s"], capture_output=True, text=True)
+            if res_r.returncode != 0:
+                log_msg(f"parted mkpart root failed: {res_r.stderr}")
+                return None, target_partition
+        else:
+            # GPT
+            res_b = subprocess.run(["parted", "-s", "-a", "none", disk_path, "unit", "s", "mkpart", "PulsarBoot", "ext4", f"{start_sec}s", f"{boot_end_sec}s"], capture_output=True, text=True)
+            if res_b.returncode != 0:
+                log_msg(f"parted mkpart boot failed: {res_b.stderr}")
+                return None, target_partition
+            res_r = subprocess.run(["parted", "-s", "-a", "none", disk_path, "unit", "s", "mkpart", "PulsarOS", "btrfs", f"{root_start_sec}s", f"{end_sec}s"], capture_output=True, text=True)
+            if res_r.returncode != 0:
+                log_msg(f"parted mkpart root failed: {res_r.stderr}")
+                return None, target_partition
+
+        subprocess.run(["sync"])
+        subprocess.run(["udevadm", "settle"])
+        try:
+            subprocess.run(["partprobe", disk_path], capture_output=True)
+        except Exception:
+            try:
+                subprocess.run(["blockdev", "--rereadpt", disk_path], capture_output=True)
+            except Exception:
+                pass
+        subprocess.run(["udevadm", "settle"])
+        time.sleep(1)
+
+        # Detect new partition numbers by scanning parted -m
+        out_after = subprocess.check_output(["parted", "-m", disk_path, "unit", "s", "print"], text=True)
+        lines_after = [line.strip() for line in out_after.strip().split("\n") if line.strip()]
+        boot_partn = None
+        root_partn = None
+        for line in lines_after[2:]:
+            p = line.split(":")
+            if len(p) >= 4 and p[0].isdigit():
+                cur_num = int(p[0])
+                try:
+                    cur_start = int(p[1].rstrip("s"))
+                    if abs(cur_start - start_sec) < 4096:
+                        boot_partn = cur_num
+                    elif abs(cur_start - root_start_sec) < 4096:
+                        root_partn = cur_num
+                except Exception:
+                    pass
+
+        p_sep = "p" if ("nvme" in disk_path or "mmcblk" in disk_path or "loop" in disk_path) else ""
+        new_boot_part = f"{disk_path}{p_sep}{boot_partn}" if boot_partn else None
+        new_root_part = f"{disk_path}{p_sep}{root_partn}" if root_partn else None
+
+        if not new_boot_part or not new_root_part:
+            log_msg(f"Could not resolve new partition device nodes (boot={boot_partn}, root={root_partn})")
+            return None, target_partition
+
+        # Wait for device nodes to appear in /dev
+        for _ in range(10):
+            if os.path.exists(new_boot_part) and os.path.exists(new_root_part):
+                break
+            subprocess.run(["udevadm", "settle"], capture_output=True)
+            time.sleep(0.5)
+
+        return new_boot_part, new_root_part
+
     def installation_backend(self, disk_path):
         import datetime
         os.makedirs("/var/log/pulsaros", exist_ok=True)
@@ -4726,6 +4895,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             "# Pulsar OS installer: hide install targets from udisks2/gvfs\n"
                             'ENV{ID_FS_LABEL}=="PULSAR_OS", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n'
                             'ENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n'
+                            'ENV{ID_FS_LABEL}=="PULSAR_BOOT", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n'
                         )
                     subprocess.run(["udevadm", "control", "--reload"], capture_output=True)
                 except Exception as rule_err:
@@ -4929,8 +5099,44 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 except Exception:
                     pass
 
+                if self.install_encryption:
+                    # When LUKS encryption is selected in Dual Boot, split self.target_partition into:
+                    # 1. Dedicated unencrypted 1024MB ext4 /boot partition (PULSAR_BOOT) so GRUB
+                    #    loads its boot menu and kernel without prompting for password, leaving Plymouth as the
+                    #    single, graphical unlock interface.
+                    # 2. Remainder of self.target_partition for the LUKS2 encrypted Btrfs root.
+                    GLib.idle_add(self.update_progress, 0.05, "Configuring partitions for Dual Boot encryption...")
+                    log_msg(f"Dual Boot with Encryption: Splitting {self.target_partition} to create dedicated unencrypted /boot partition...")
+                    if "TEST_MODE" in os.environ:
+                        p_sep = "p" if ("nvme" in disk_path or "mmcblk" in disk_path or "loop" in disk_path) else ""
+                        boot_part = f"{disk_path}{p_sep}98"
+                        root_part = f"{disk_path}{p_sep}99"
+                        self.target_partition = root_part
+                        log_msg(f"[TEST_MODE] Simulating split of {self.target_partition} into boot={boot_part} and root={root_part}")
+                    else:
+                        try:
+                            split_boot, split_root = self._split_target_partition_for_boot(disk_path, self.target_partition, log_msg)
+                            if split_boot and split_root:
+                                boot_part = split_boot
+                                root_part = split_root
+                                self.target_partition = root_part
+                                log_msg(f"Dual Boot partition split successful: boot={boot_part}, root={root_part}")
+                            else:
+                                log_msg(f"Dual Boot partition split not possible; proceeding with single partition {root_part}")
+                        except Exception as split_err:
+                            log_msg(f"Warning: Failed to split partition for unencrypted /boot: {split_err}. Proceeding with single encrypted partition.")
+
+                if boot_part:
+                    exec_cmd(["wipefs", "-a", "-f", boot_part])
+                    exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PULSAR_BOOT", boot_part])
+
                 exec_cmd(["wipefs", "-a", "-f", root_part])
                 setup_and_mount_root(root_part)
+
+                if boot_part:
+                    os.makedirs("/mnt/boot", exist_ok=True)
+                    exec_cmd(["mount", "-t", "ext4", boot_part, "/mnt/boot"])
+                    log_msg(f"Dual Boot: Mounted dedicated unencrypted boot partition {boot_part} at /mnt/boot")
 
                 if is_efi:
                     subprocess.run(["modprobe", "vfat"], capture_output=True)
