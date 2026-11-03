@@ -55,15 +55,32 @@ class DbusPlayers:
 
         return dbus.Interface(self._bus.get_object(name, MPRIS_PATH), iface)
 
+    def _pid(self, name: str):
+        import dbus
+
+        daemon = dbus.Interface(
+            self._bus.get_object("org.freedesktop.DBus", "/org/freedesktop/DBus"), "org.freedesktop.DBus"
+        )
+        try:
+            return int(daemon.GetConnectionUnixProcessID(name))
+        except dbus.DBusException:
+            return name  # cannot tell: treat the name as its own player
+
     def playing(self) -> List[str]:
         import dbus
 
-        result = []
+        result, seen_owners = [], set()
         for name in self._names():
             try:
+                # One process can own several MPRIS names on separate connections
+                # (VLC: ...vlc and ...vlc.instance<pid>): count it once, by process id.
+                owner = self._pid(name)
+                if owner in seen_owners:
+                    continue
                 props = self._iface(name, "org.freedesktop.DBus.Properties")
                 if str(props.Get(PLAYER_IFACE, "PlaybackStatus", timeout=1)) == "Playing":
                     result.append(name)
+                    seen_owners.add(owner)
             except dbus.DBusException as e:
                 log.debug("mpris %s: %s", name, e)
         return result
