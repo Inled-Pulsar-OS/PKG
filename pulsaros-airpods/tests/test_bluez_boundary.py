@@ -103,6 +103,42 @@ class BluezBoundaryTests(unittest.TestCase):
         settle(1.5)
         self.assertEqual(self.bluez.count("StartDiscovery"), 1)  # still just the first one
 
+    def call(self, method, address):
+        results = []
+        getattr(self.backend, method)(address, results.append)
+        return results
+
+    def test_connect_calls_device1_connect_and_reports_success(self):
+        pump(lambda: self.devices)
+        self.bluez.send(op="device", props={"Connected": False})
+        pump(lambda: self.last_props() and self.last_props()["Connected"] is False)
+        results = self.call("connect_device", "AA:BB:CC:DD:EE:01")
+        self.assertTrue(pump(lambda: results == [None]))
+        self.assertEqual(self.bluez.count("Connect AA:BB:CC:DD:EE:01"), 1)
+        self.assertTrue(pump(lambda: self.last_props()["Connected"] is True))
+
+    def test_disconnect_calls_device1_disconnect(self):
+        pump(lambda: self.devices)
+        results = self.call("disconnect_device", "AA:BB:CC:DD:EE:01")
+        self.assertTrue(pump(lambda: results == [None]))
+        self.assertEqual(self.bluez.count("Disconnect AA:BB:CC:DD:EE:01"), 1)
+
+    def test_connect_failure_is_reported_as_text(self):
+        pump(lambda: self.devices)
+        self.bluez.send(op="fail", connect=True)
+        settle(0.3)
+        results = self.call("connect_device", "AA:BB:CC:DD:EE:01")
+        self.assertTrue(pump(lambda: len(results) == 1))
+        self.assertIsInstance(results[0], str)
+        self.assertIn("page timeout", results[0])
+
+    def test_unknown_address_fails_without_calling_bluez(self):
+        pump(lambda: self.devices)
+        results = self.call("connect_device", "11:22:33:44:55:66")
+        self.assertTrue(pump(lambda: len(results) == 1))
+        self.assertIsInstance(results[0], str)
+        self.assertEqual(self.bluez.count("Connect"), 0)
+
     def test_battery_change_is_reported(self):
         pump(lambda: self.devices)
         self.bluez.send(op="battery", percentage=30)

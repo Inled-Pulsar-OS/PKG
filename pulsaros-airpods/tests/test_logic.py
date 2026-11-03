@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "usr", "share", "pulsaros-airpods"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.dirname(__file__))
 
 from pulsaros_airpods.config import Config  # noqa: E402
@@ -61,13 +61,13 @@ class TrackerTests(unittest.TestCase):
         t.update("/p/1", {"Connected": False})
         self.assertIsNone(t.active)
 
-    def test_bound_device_wins_over_other_pair(self):
+    def test_other_pair_connecting_rebinds_when_bound_pair_is_away(self):
         other = dict(PRO2, Address="AA:BB:CC:DD:EE:99")
-        t = Tracker(PRO2["Address"])
+        bound = []
+        t = Tracker(PRO2["Address"], bound.append)
         t.update("/p/2", other)
-        self.assertIsNone(t.active)  # bound pair not connected: ignore the other pair
-        t.update("/p/1", PRO2)
-        self.assertEqual(t.active.address, PRO2["Address"])
+        self.assertEqual(t.active.address, other["Address"])
+        self.assertEqual(bound, [other["Address"]])
 
 
 def device(model=Model.AIRPODS_PRO_2, battery=None):

@@ -7,7 +7,7 @@ Apple's vendor id and the model id (the same 0x20xx id as in the BLE packet).
 
 import re
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from .protocol import Model, model_from_id
 
@@ -58,16 +58,30 @@ class Tracker:
     def __init__(
         self,
         bound_address: Optional[str] = None,
-        on_bind: Optional[Callable[[str], None]] = None,
+        on_bind: Optional[Callable[[Optional[str]], None]] = None,
     ):
-        self._bound = bound_address
+        self._bound = bound_address  # the last active pair; None after forget()
         self._on_bind = on_bind
         self._devices: Dict[str, dict] = {}  # path -> merged props
         self._batteries: Dict[str, int] = {}
+        self._connected_at: Dict[str, int] = {}  # path -> order of the latest connection
+        self._counter = 0
+        self._forgotten: Set[str] = set()  # addresses hidden until they disconnect
 
     def update(self, path: str, props: dict) -> None:
         merged = self._devices.setdefault(path, {})
+        was_connected = bool(merged.get("Connected"))
         merged.update(props)
+        if merged.get("Connected"):
+            if not was_connected:
+                self._counter += 1
+                self._connected_at[path] = self._counter
+        elif was_connected:
+            self._disconnected(path, merged)
+
+    def _disconnected(self, path: str, device: dict) -> None:
+        self._connected_at.pop(path, None)
+        self._forgotten.discard(str(device.get("Address", "")))
 
     def update_battery(self, path: str, percentage: Optional[int]) -> None:
         if percentage is None:
@@ -76,36 +90,56 @@ class Tracker:
             self._batteries[path] = int(percentage)
 
     def remove(self, path: str) -> None:
-        self._devices.pop(path, None)
+        device = self._devices.pop(path, None)
+        if device is not None:
+            self._disconnected(path, device)
         self._batteries.pop(path, None)
 
     def clear(self) -> None:
         self._devices.clear()
         self._batteries.clear()
+        self._connected_at.clear()
+        self._forgotten.clear()
+
+    def forget(self) -> None:
+        """Stop showing the active pair until it disconnects and connects again."""
+        device = self.active
+        if device is None:
+            return
+        self._forgotten.add(device.address)
+        self._bind(None)
+
+    def paired(self) -> List[Tuple[str, str, bool]]:
+        """Every paired (or connected) AirPods as (address, name, connected), sorted by name."""
+        rows = [
+            (str(d["Address"]), str(d.get("Alias") or d.get("Name") or ""), bool(d.get("Connected")))
+            for d in self._devices.values()
+            if d.get("Address") and is_airpods(d) and (d.get("Paired") or d.get("Connected"))
+        ]
+        return sorted(rows, key=lambda r: (r[1].lower(), r[0]))
+
+    def _bind(self, address: Optional[str]) -> None:
+        if address != self._bound:
+            self._bound = address
+            if self._on_bind:
+                self._on_bind(address)
 
     @property
     def active(self) -> Optional[DeviceInfo]:
-        """The bound device if connected, else the first connected AirPods (and bind it)."""
+        """The most recently connected AirPods. A change of pair is persisted as the binding."""
         connected = [
             (p, d)
             for p, d in self._devices.items()
-            if d.get("Connected") and is_airpods(d) and d.get("Address")
+            if d.get("Connected")
+            and is_airpods(d)
+            and d.get("Address")
+            and str(d["Address"]) not in self._forgotten
         ]
         if not connected:
             return None
 
-        chosen = None
-        if self._bound:
-            chosen = next((pd for pd in connected if str(pd[1]["Address"]) == self._bound), None)
-            if chosen is None:
-                return None  # a bound pair exists but another pair is connected: ignore it
-        else:
-            chosen = connected[0]
-            self._bound = str(chosen[1]["Address"])
-            if self._on_bind:
-                self._on_bind(self._bound)
-
-        path, d = chosen
+        path, d = max(connected, key=lambda pd: self._connected_at.get(pd[0], 0))
+        self._bind(str(d["Address"]))
         return DeviceInfo(
             address=str(d["Address"]),
             name=str(d.get("Alias") or d.get("Name") or ""),

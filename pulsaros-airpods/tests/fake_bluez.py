@@ -5,6 +5,9 @@ Reads one JSON command per line from stdin:
   {"op": "device", "props": {...}}          update Device1 properties (emits PropertiesChanged)
   {"op": "battery", "percentage": 60}       update Battery1.Percentage
   {"op": "adapter", "props": {"Powered": false}}
+  {"op": "add_device", "props": {"Address": "...", "Alias": "...", ...}}   a second paired device
+  {"op": "fail", "connect": true}           make Device1.Connect fail until switched off
+Device1.Connect / Disconnect print "Connect <address>" / "Disconnect <address>".
 """
 
 import json
@@ -27,6 +30,7 @@ class Props(dbus.service.Object):
 
     def __init__(self, bus, path, ifaces):
         super().__init__(bus, path)
+        self.path = path
         self.ifaces = ifaces  # iface -> dict
 
     @dbus.service.method(PROPS, in_signature="s", out_signature="a{sv}")
@@ -44,6 +48,25 @@ class Props(dbus.service.Object):
     def change(self, iface, changes):
         self.ifaces[iface].update(changes)
         self.PropertiesChanged(iface, changes, [])
+
+
+FAIL = {"connect": False}
+DEVICE_IFACE = "org.bluez.Device1"
+
+
+class Device(Props):
+    @dbus.service.method(DEVICE_IFACE)
+    def Connect(self):
+        address = str(self.ifaces[DEVICE_IFACE]["Address"])
+        print("Connect " + address, flush=True)
+        if FAIL["connect"]:
+            raise dbus.exceptions.DBusException("page timeout", name="org.bluez.Error.Failed")
+        self.change(DEVICE_IFACE, {"Connected": dbus.Boolean(True)})
+
+    @dbus.service.method(DEVICE_IFACE)
+    def Disconnect(self):
+        print("Disconnect " + str(self.ifaces[DEVICE_IFACE]["Address"]), flush=True)
+        self.change(DEVICE_IFACE, {"Connected": dbus.Boolean(False)})
 
 
 class Adapter(Props):
@@ -69,13 +92,22 @@ class Adapter(Props):
 class Manager(dbus.service.Object):
     def __init__(self, bus, adapter, device):
         super().__init__(bus, "/")
-        self.adapter, self.device = adapter, device
+        self.adapter = adapter
+        self.devices = {DEVICE_PATH: device}
+
+    @dbus.service.signal(OBJMGR, signature="oa{sa{sv}}")
+    def InterfacesAdded(self, path, ifaces):
+        pass
+
+    def add(self, device):
+        self.devices[device.path] = device
+        self.InterfacesAdded(device.path, device.ifaces)
 
     @dbus.service.method(OBJMGR, out_signature="a{oa{sa{sv}}}")
     def GetManagedObjects(self):
         return {
             ADAPTER_PATH: self.adapter.ifaces,
-            DEVICE_PATH: self.device.ifaces,
+            **{path: d.ifaces for path, d in self.devices.items()},
         }
 
 
@@ -84,17 +116,18 @@ def main():
     bus = dbus.SessionBus()
     name = dbus.service.BusName("org.bluez", bus)  # noqa: F841 (keep reference)
     adapter = Adapter(bus)
-    device = Props(bus, DEVICE_PATH, {
+    device = Device(bus, DEVICE_PATH, {
         "org.bluez.Device1": {
             "Address": "AA:BB:CC:DD:EE:01",
             "Alias": "Test AirPods Pro",
             "Connected": dbus.Boolean(True),
+            "Paired": dbus.Boolean(True),
             "Modalias": "bluetooth:v004Cp2014d0A00",
             "Icon": "audio-headphones",
         },
         "org.bluez.Battery1": {"Percentage": dbus.Byte(60)},
     })
-    Manager(bus, adapter, device)
+    manager = Manager(bus, adapter, device)
     print("ready", flush=True)
 
     def on_stdin(fd, cond):
@@ -118,6 +151,12 @@ def main():
                     v = dbus.Boolean(v)
                 changes[k] = v
             device.change("org.bluez.Device1", changes)
+        elif cmd["op"] == "add_device":
+            props = {k: (dbus.Boolean(v) if isinstance(v, bool) else v) for k, v in cmd["props"].items()}
+            path = "/org/bluez/hci0/dev_" + props["Address"].replace(":", "_")
+            manager.add(Device(bus, path, {DEVICE_IFACE: props}))
+        elif cmd["op"] == "fail":
+            FAIL["connect"] = bool(cmd["connect"])
         elif cmd["op"] == "battery":
             device.change("org.bluez.Battery1", {"Percentage": dbus.Byte(cmd["percentage"])})
         elif cmd["op"] == "adapter":

@@ -2,7 +2,7 @@
 // Verifies that the extension's proxy wrapper (interface.js) can read the daemon's properties.
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
-import {AirPodsProxy, BUS_NAME, OBJECT_PATH} from '../usr/share/gnome-shell/extensions/airpods@pulsaros.org/interface.js';
+import {AirPodsProxy, BUS_NAME, OBJECT_PATH} from '../gnome-shell-extension/interface.js';
 
 const loop = new GLib.MainLoop(null, false);
 const failures = [];

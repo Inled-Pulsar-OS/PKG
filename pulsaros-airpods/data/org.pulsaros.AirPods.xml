@@ -46,7 +46,37 @@
     <property name="EarDetection" type="b" access="readwrite"/>
     <!-- Show the popup when the case lid opens or the AirPods connect. -->
     <property name="LidPopup" type="b" access="readwrite"/>
+    <!-- Notify when a bud, the case or the headphones fall to 20, 10 or 0-5 percent. -->
+    <property name="LowBatteryAlerts" type="b" access="readwrite"/>
+    <!-- Every paired AirPods as (address, name, connected), sorted by name. Valid even while
+         Connected is false: this is what the quick-connect list shows. -->
+    <property name="PairedDevices" type="a(ssb)" access="read"/>
+    <!-- Keep the panel icon visible, as a connect menu, while a paired AirPods is idle. -->
+    <property name="ShowWhenDisconnected" type="b" access="readwrite"/>
+    <!-- Connect / disconnect a paired AirPods through BlueZ. Returns when BlueZ answers; fails with
+         org.pulsaros.AirPods.Error.Failed and the BlueZ reason (can take up to 30 s). -->
+    <method name="Connect">
+      <arg type="s" name="address" direction="in"/>
+    </method>
+    <method name="Disconnect">
+      <arg type="s" name="address" direction="in"/>
+    </method>
+    <!-- Weakest signal (dBm, -100..-40) at which advertisements are accepted. The panel offers
+         Near (-60), Normal (-80) and Far (-90). Writes outside the range fail. -->
+    <property name="RssiMin" type="i" access="readwrite"/>
+    <!-- What the panel icon shows next to it: off, lowest (lowest bud) or both. -->
+    <property name="PanelBattery" type="s" access="readwrite"/>
+    <!-- Stop showing the current AirPods until they disconnect and connect again, and clear
+         the saved binding. Harmless when nothing is connected. -->
+    <method name="Forget"/>
     <!-- Emitted when the case lid goes from closed to open while connected. -->
     <signal name="LidOpened"/>
+    <!-- Emitted once per threshold crossing (20 / 10 / 5 percent). which is one of
+         left, right, case, headphones; level is the current percentage. Never emitted
+         while charging. -->
+    <signal name="LowBattery">
+      <arg type="s" name="which"/>
+      <arg type="i" name="level"/>
+    </signal>
   </interface>
 </node>

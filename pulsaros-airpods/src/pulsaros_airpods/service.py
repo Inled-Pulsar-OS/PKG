@@ -2,7 +2,7 @@
 
 import logging
 import os
-from typing import Callable, Dict
+from typing import Callable, Dict, Optional
 
 from gi.repository import Gio, GLib
 
@@ -14,6 +14,10 @@ BUS_NAME = "org.pulsaros.AirPods"
 OBJECT_PATH = "/org/pulsaros/AirPods"
 IFACE = "org.pulsaros.AirPods"
 PROPERTIES_IFACE = "org.freedesktop.DBus.Properties"
+ERROR_FAILED = "org.pulsaros.AirPods.Error.Failed"
+
+Done = Callable[[Optional[str]], None]
+AddressAction = Callable[[str, Done], None]
 
 # D-Bus property name -> (Snapshot attribute, GVariant type)
 SNAPSHOT_PROPERTIES = {
@@ -35,13 +39,30 @@ SNAPSHOT_PROPERTIES = {
     "BothPodsInCase": ("both_pods_in_case", "b"),
     "CaseLidOpened": ("case_lid_opened", "b"),
     "FallbackBattery": ("fallback_battery", "i"),
+    "PairedDevices": ("paired_devices", "a(ssb)"),
 }
-SETTINGS = {"EarDetection": "ear_detection", "LidPopup": "lid_popup"}
+# D-Bus property name -> (config key, GVariant type)
+SETTINGS = {
+    "EarDetection": ("ear_detection", "b"),
+    "LidPopup": ("lid_popup", "b"),
+    "LowBatteryAlerts": ("low_battery_alerts", "b"),
+    "ShowWhenDisconnected": ("show_when_disconnected", "b"),
+    "RssiMin": ("rssi_min", "i"),
+    "PanelBattery": ("panel_battery", "s"),
+}
+# Settings that accept only some values. A rejected write is an error for the caller.
+VALID = {
+    "RssiMin": lambda v: -100 <= v <= -40,
+    "PanelBattery": lambda v: v in ("off", "lowest", "both"),
+}
 
 
 def default_xml_path() -> str:
+    """The contract file: installed next to the package, or in data/ of a source checkout."""
     here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(here, "..", "dbus", "org.pulsaros.AirPods.xml")
+    installed = os.path.join(here, "..", "dbus", "org.pulsaros.AirPods.xml")
+    source = os.path.join(here, "..", "..", "data", "org.pulsaros.AirPods.xml")
+    return installed if os.path.exists(installed) else source
 
 
 def snapshot_properties(snap: Snapshot) -> Dict[str, GLib.Variant]:
@@ -53,14 +74,22 @@ def snapshot_properties(snap: Snapshot) -> Dict[str, GLib.Variant]:
 class Service:
     def __init__(
         self,
-        get_setting: Callable[[str], bool],
-        set_setting: Callable[[str, bool], None],
+        get_setting: Callable[[str], object],
+        set_setting: Callable[[str, object], None],
         xml_path: str = "",
+        on_forget: Callable[[], None] = lambda: None,
+        on_connect: AddressAction = lambda address, done: done("not supported"),
+        on_disconnect: AddressAction = lambda address, done: done("not supported"),
+        on_setting: Callable[[str, object], None] = lambda key, value: None,
     ):
         with open(xml_path or default_xml_path(), encoding="utf-8") as f:
             self._info = Gio.DBusNodeInfo.new_for_xml(f.read()).interfaces[0]
         self._get_setting = get_setting
         self._set_setting = set_setting
+        self._on_forget = on_forget
+        self._on_connect = on_connect
+        self._on_disconnect = on_disconnect
+        self._on_setting = on_setting
         self._snapshot = Snapshot()
         self._conn = None
         self._reg_id = 0
@@ -93,11 +122,18 @@ class Service:
         self._emit_changed(changed)
 
     def publish_setting(self, dbus_name: str) -> None:
-        self._emit_changed({dbus_name: GLib.Variant("b", self._get_setting(SETTINGS[dbus_name]))})
+        key, sig = SETTINGS[dbus_name]
+        self._emit_changed({dbus_name: GLib.Variant(sig, self._get_setting(key))})
 
     def emit_lid_opened(self) -> None:
         if self._conn is not None:
             self._conn.emit_signal(None, OBJECT_PATH, IFACE, "LidOpened", None)
+
+    def emit_low_battery(self, which: str, level: int) -> None:
+        if self._conn is not None:
+            self._conn.emit_signal(
+                None, OBJECT_PATH, IFACE, "LowBattery", GLib.Variant("(si)", (which, level))
+            )
 
     def _emit_changed(self, changed: Dict[str, GLib.Variant]) -> None:
         if not changed or self._conn is None:
@@ -122,6 +158,22 @@ class Service:
         log.error("cannot own %s (is another instance running?)", name)
 
     def _on_method_call(self, conn, sender, path, iface, method, params, invocation) -> None:
+        if method == "Forget":
+            self._on_forget()
+            invocation.return_value(None)
+            return
+        if method in ("Connect", "Disconnect"):
+            (address,) = params.unpack()
+            action = self._on_connect if method == "Connect" else self._on_disconnect
+
+            def done(error: Optional[str]) -> None:
+                if error is None:
+                    invocation.return_value(None)
+                else:
+                    invocation.return_dbus_error(ERROR_FAILED, error)
+
+            action(address, done)
+            return
         invocation.return_error_literal(
             Gio.dbus_error_quark(), Gio.DBusError.UNKNOWN_METHOD, f"no method {method}"
         )
@@ -131,12 +183,20 @@ class Service:
             attr, sig = SNAPSHOT_PROPERTIES[name]
             return GLib.Variant(sig, getattr(self._snapshot, attr))
         if name in SETTINGS:
-            return GLib.Variant("b", self._get_setting(SETTINGS[name]))
+            key, sig = SETTINGS[name]
+            return GLib.Variant(sig, self._get_setting(key))
         return None
 
     def _on_set_property(self, conn, sender, path, iface, name, value) -> bool:
         if name not in SETTINGS:
             return False
-        self._set_setting(SETTINGS[name], bool(value.get_boolean()))
+        key, sig = SETTINGS[name]
+        if value.get_type_string() != sig:
+            return False
+        new = value.unpack()
+        if name in VALID and not VALID[name](new):
+            return False
+        self._set_setting(key, new)
+        self._on_setting(key, new)
         self.publish_setting(name)
         return True

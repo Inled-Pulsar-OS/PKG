@@ -11,6 +11,9 @@ log = logging.getLogger(__name__)
 DEFAULTS = {
     "ear_detection": True,
     "lid_popup": True,
+    "low_battery_alerts": True,
+    "show_when_disconnected": False,
+    "panel_battery": "off",
     "rssi_min": -80,
     "bound_address": None,
 }

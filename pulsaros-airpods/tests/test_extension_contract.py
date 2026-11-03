@@ -4,9 +4,9 @@ import os
 import re
 import unittest
 
-ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "usr", "share")
-XML = os.path.join(ROOT, "pulsaros-airpods", "dbus", "org.pulsaros.AirPods.xml")
-JS = os.path.join(ROOT, "gnome-shell", "extensions", "airpods@pulsaros.org", "interface.js")
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+XML = os.path.join(ROOT, "data", "org.pulsaros.AirPods.xml")
+JS = os.path.join(ROOT, "gnome-shell-extension", "interface.js")
 
 
 def members(text):

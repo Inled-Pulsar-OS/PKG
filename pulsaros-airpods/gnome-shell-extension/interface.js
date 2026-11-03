@@ -27,7 +27,23 @@ export const INTERFACE_XML = `<node>
     <property name="FallbackBattery" type="i" access="read"/>
     <property name="EarDetection" type="b" access="readwrite"/>
     <property name="LidPopup" type="b" access="readwrite"/>
+    <property name="LowBatteryAlerts" type="b" access="readwrite"/>
+    <property name="PairedDevices" type="a(ssb)" access="read"/>
+    <property name="ShowWhenDisconnected" type="b" access="readwrite"/>
+    <property name="RssiMin" type="i" access="readwrite"/>
+    <property name="PanelBattery" type="s" access="readwrite"/>
+    <method name="Connect">
+      <arg type="s" name="address" direction="in"/>
+    </method>
+    <method name="Disconnect">
+      <arg type="s" name="address" direction="in"/>
+    </method>
+    <method name="Forget"/>
     <signal name="LidOpened"/>
+    <signal name="LowBattery">
+      <arg type="s" name="which"/>
+      <arg type="i" name="level"/>
+    </signal>
   </interface>
 </node>`;
 

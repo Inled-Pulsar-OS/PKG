@@ -10,3 +10,8 @@
 .airpods-bar-fill.airpods-charging { background-color: #57e389; }
 .airpods-bar-fill.airpods-low { background-color: #ff7b63; }
 .airpods-note { font-size: 0.85em; color: rgba(255, 255, 255, 0.6); }
+
+.airpods-panel-label {
+    font-size: 0.9em;
+    padding-left: 4px;
+}

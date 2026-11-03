@@ -17,7 +17,7 @@ import unittest
 import dbus
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.join(HERE, "..", "usr", "share", "pulsaros-airpods")
+ROOT = os.path.join(HERE, "..", "src")
 sys.path.insert(0, HERE)
 from test_protocol_state import make_packet  # noqa: E402
 from pulsaros_airpods.protocol import Side  # noqa: E402

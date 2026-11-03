@@ -24,6 +24,7 @@ BATTERY = "org.bluez.Battery1"
 PROPS = "org.freedesktop.DBus.Properties"
 OBJMGR = "org.freedesktop.DBus.ObjectManager"
 RETRY_SECONDS = 3
+CALL_TIMEOUT_SECONDS = 30  # pairing-level connects can take a while
 
 # on_adv(address, rssi, payload)
 # on_device(path, props, battery): props None = device removed; battery None = unchanged
@@ -99,6 +100,27 @@ class BluezBackend:
         self._matches = []
         self._name_watch.cancel()
         self._detach()
+
+    # -- commands ----------------------------------------------------------------------
+
+    def connect_device(self, address: str, done: Callable[[Optional[str]], None]) -> None:
+        self._device_call(address, "Connect", done)
+
+    def disconnect_device(self, address: str, done: Callable[[Optional[str]], None]) -> None:
+        self._device_call(address, "Disconnect", done)
+
+    def _device_call(self, address: str, method: str, done: Callable[[Optional[str]], None]) -> None:
+        """Call Device1.<method> without blocking. done(None) on success, done(reason) on failure."""
+        path = next((p for p, d in self._devices.items() if d.get("Address") == address), None)
+        if path is None or self._bus is None:
+            done(f"unknown device {address}")
+            return
+        iface = dbus.Interface(self._bus.get_object(BLUEZ, path, introspect=False), DEVICE)
+        getattr(iface, method)(
+            reply_handler=lambda: done(None),
+            error_handler=lambda e: done(e.get_dbus_message() or str(e)),
+            timeout=CALL_TIMEOUT_SECONDS,
+        )
 
     # -- attach / detach ---------------------------------------------------------------
 

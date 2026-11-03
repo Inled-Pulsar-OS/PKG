@@ -5,7 +5,7 @@ Pure logic (no D-Bus, no GLib) so it is unit-testable. The daemon owns the I/O.
 
 import logging
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable, Optional, Sequence, Tuple
 
 from . import protocol
 from .protocol import HEADPHONE_MODELS, MODEL_NAMES, Model
@@ -37,15 +37,20 @@ class Snapshot:
     both_pods_in_case: bool = False
     case_lid_opened: bool = False
     fallback_battery: int = -1
+    # (address, name, connected) of every paired AirPods. Valid even when not connected.
+    paired_devices: Tuple[Tuple[str, str, bool], ...] = ()
 
 
 def _pct(value: Optional[int]) -> int:
     return -1 if value is None else value
 
 
-def build_snapshot(device: Optional[DeviceInfo], state: Optional[State]) -> Snapshot:
+def build_snapshot(
+    device: Optional[DeviceInfo], state: Optional[State], paired: Sequence = ()
+) -> Snapshot:
+    paired = tuple(tuple(row) for row in paired)
     if device is None:
-        return Snapshot()
+        return Snapshot(paired_devices=paired)
 
     model = device.model
     if state is not None and state.model is not Model.UNKNOWN:
@@ -59,6 +64,7 @@ def build_snapshot(device: Optional[DeviceInfo], state: Optional[State]) -> Snap
         model=MODEL_NAMES[model] if model is not Model.UNKNOWN else "",
         is_headphones=model in HEADPHONE_MODELS,
         fallback_battery=_pct(device.battery),
+        paired_devices=paired,
     )
     if state is None:
         return Snapshot(**base)
@@ -96,11 +102,17 @@ class Controller:
         self._on_lid_opened = on_lid_opened
         self._on_both_in_ear = on_both_in_ear
         self._device: Optional[DeviceInfo] = None
+        self._paired: Tuple = ()
         self._snapshot = Snapshot()
 
     @property
     def snapshot(self) -> Snapshot:
         return self._snapshot
+
+    def set_paired(self, paired: Sequence) -> None:
+        """The paired AirPods list changed (or may have)."""
+        self._paired = tuple(tuple(row) for row in paired)
+        self._publish()
 
     def set_device(self, device: Optional[DeviceInfo]) -> None:
         """Called whenever the tracker's active device may have changed."""
@@ -151,7 +163,7 @@ class Controller:
         self._publish()
 
     def _publish(self) -> None:
-        snap = build_snapshot(self._device, self._mgr.state if self._device else None)
+        snap = build_snapshot(self._device, self._mgr.state if self._device else None, self._paired)
         if snap != self._snapshot:
             self._snapshot = snap
             self._on_snapshot(snap)
