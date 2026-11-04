@@ -1,7 +1,16 @@
+pulsaros-airpods (0.2.0) unstable; urgency=medium
+
+  * The extension now reads the state of the pulsaros-librepods daemon (Apple
+    Accessory Protocol): listening modes, adaptive level, Conversation Awareness,
+    One-Bud ANC, ear detection, AirPods Pro 3 and Max 2
+  * Low-battery notifications at 20, 10 and 5 percent
+  * The Python daemon and its D-Bus service are removed; the package is the
+    extension only and depends on pulsaros-librepods
+
+ -- Victor Rosario <hello@victorrosario.dev>  Wed, 04 Nov 2026 00:00:00 +0000
+
 pulsaros-airpods (0.1.0) unstable; urgency=medium
 
   * Initial release: BlueZ daemon + GNOME Shell extension (48, 51)
-  * Top-bar AirPods icon with battery, in-ear state, lid-open popup
-  * Ear detection through MPRIS
 
  -- Victor Rosario <hello@victorrosario.dev>  Mon, 03 Nov 2026 00:00:00 +0000

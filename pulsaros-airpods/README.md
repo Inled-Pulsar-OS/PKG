@@ -1,88 +1,80 @@
 # pulsaros-airpods
 
-AirPods icon and battery card in the GNOME top bar, like macOS. A Python daemon reads Apple
-Continuity advertisements through BlueZ and publishes state on the session bus; a Shell
-extension renders it. Targets GNOME Shell 48 (Debian trixie) and 51 (Arch rolling).
+AirPods in the GNOME top bar, like macOS: an icon while they are connected, and a popover with the
+battery of each earbud and the case, the listening mode, Conversation Awareness, One-Bud ANC and ear
+detection. Targets GNOME Shell 48 (Debian trixie) and 51 (Arch).
 
-Design and decisions: `Docs/pulsaros-airpods-plan.md` in Victor1890/AirPodsDesktop.
-Model ids last synced with upstream `AppleCP.cpp` on 2026-11-03 (through AirPods 5, `tests/test_models.py`).
-Protocol reference: that repo's `Source/Core/AppleCP.*`, `AirPodsAdvertisement.cpp`,
-`AirPodsStateManager.cpp`.
+This package is only the **GNOME Shell extension** (`airpods@pulsaros.org`). The Bluetooth work is done
+by the daemon in the `pulsaros-librepods` package (GPL-3.0, a modified copy of the omarchy-pods daemon,
+itself a fork of librepods by Kavish Devar), which this package depends on.
+
+## How it works
+
+```
+AirPods --Bluetooth (AAP + BLE)--> librepods (systemd user service)
+                                       |  writes $XDG_STATE_HOME/librepods/status.json on every change
+                                       v
+              airpods@pulsaros.org  --watches the file (Gio.FileMonitor, no polling)
+                                       |  on a click: librepods-ctl <one whitelisted verb>
+                                       v
+                                    daemon
+```
+
+The extension never talks to Bluetooth. A missing file means the daemon is not running and the icon is
+hidden. The popover only shows what the model has: AirPods Pro 3 has no Off mode, AirPods Max has one
+battery and no case, AirPods 1 to 3 have no listening modes at all.
 
 ## Layout
 
-Same shape as `pulsaros-spotlight-launcher`: sources by kind, installed to `/usr` by `prepare-assets.sh`
-(and by the PKGBUILD on Arch).
-
-| Path | What | Installed to |
-|------|------|--------------|
-| `src/pulsaros_airpods/protocol.py` | 27-byte ProximityPairing parser (pure) | `/usr/share/pulsaros-airpods/pulsaros_airpods/` |
-| `.../state.py` | merges the two earbuds' advertisements, RSSI floor, lost/reset timers (pure) | same |
-| `.../tracker.py` | which BlueZ device is our AirPods, the paired list, forget | same |
-| `.../controller.py` | combines device + advertisements into the published snapshot | same |
-| `.../alerts.py` | low-battery thresholds (pure) | same |
-| `.../bluez.py` | org.bluez scan, device events, connect/disconnect, self-healing | same |
-| `.../service.py` | `org.pulsaros.AirPods` on the session bus (GDBus) | same |
-| `.../mpris.py` | ear detection: pause/resume MPRIS players | same |
-| `data/org.pulsaros.AirPods.xml` | the D-Bus contract (source of truth) | `/usr/share/pulsaros-airpods/dbus/` |
-| `data/pulsaros-airpods.service` | systemd user unit | `/usr/lib/systemd/user/` |
-| `cli/pulsaros-airpods-daemon` | launcher | `/usr/bin/` |
-| `gnome-shell-extension/` | the extension; `interface.js` embeds the contract | `/usr/share/gnome-shell/extensions/airpods@pulsaros.org/` |
-| `gnome-shell-extension/i18n/` | translation catalogs, one JSON file per language | with the extension |
-| `scripts/` | hardware spike tools | not installed |
-| `tests/` | the test suite | not installed |
+| Path | What |
+|------|------|
+| `gnome-shell-extension/model.js` | parses status.json, lists the modes a model has, builds control verbs (pure) |
+| `.../status-source.js` | watches the status file, including a directory that does not exist yet |
+| `.../optimistic.js` | holds a click against stale reads until the daemon agrees (pure) |
+| `.../alerts.js` | low-battery thresholds 20 / 10 / 5 percent (pure) |
+| `.../ctl.js` | runs `librepods-ctl` with one validated verb, no shell |
+| `.../indicator.js` | the panel button and popover |
+| `.../compat.js` | GNOME Shell 48 / 51 differences |
+| `.../i18n.js`, `.../i18n/*.json` | translations (see below) |
+| `tests/` | the test suite (not installed) |
+| `scripts/` | hardware tools (not installed) |
 
 ## Tests
 
 ```sh
-python3 -m unittest discover -s tests          # pure tests; bus tests are skipped (103)
-PULSAROS_TEST_BUS=1 dbus-run-session -- python3 -m unittest discover -s tests   # all 149
+python3 -m unittest discover -s tests
 ```
 
-Tests sit at four seams and avoid private details:
+The JavaScript is specified by `gjs` scripts in `tests/*_check.js`, run by `tests/test_*.py`. They skip
+when `gjs` is not installed. `tests/fixtures/` holds hand-written status files for AirPods 4 (ANC),
+Pro 3, Max 2 and a pair in the case; replace them with captures from real hardware when you have them.
 
-| File | Seam |
-|------|------|
-| `test_protocol_state.py`, `test_logic.py`, `test_domain_edges.py`, `test_models.py`, `test_alerts.py`, `test_tracker_rebind.py`, `test_paired_devices.py` | domain: protocol, state manager, tracker, controller, config |
-| `test_bluez_boundary.py` | `BluezBackend` against `fake_bluez.py` (a fake `org.bluez`) |
-| `test_wire_contract.py`, `test_integration.py` | the real daemon, observed only over D-Bus |
-| `test_mpris_and_extension.py`, `test_i18n.py`, `i18n_check.js` | MPRIS backend vs `fake_player.py`; extension vs contract drift; every visible string translatable and translated; the JS loader (needs `gjs`) |
+## Try it without AirPods
 
-Bus tests need a private session bus (`dbus-run-session`) and are skipped otherwise, so they never
-touch your real session.
-
-## Try it by hand
+Write a fixture where the daemon would, then enable the extension:
 
 ```sh
-# terminal 1 (private bus so nothing touches the real session)
-dbus-run-session -- bash
-python3 tests/fake_bluez.py                      # then type JSON commands, see its docstring
-# terminal 2, same bus
-PYTHONPATH=src python3 -m pulsaros_airpods.daemon --bluez-bus session --debug
-busctl --user introspect org.pulsaros.AirPods /org/pulsaros/AirPods
+mkdir -p ~/.local/state/librepods
+cp tests/fixtures/pro3.json ~/.local/state/librepods/status.json
+gnome-extensions enable airpods@pulsaros.org
 ```
 
-Real hardware: `python3 scripts/scan_spike.py 30` prints the Apple payloads BlueZ delivers.
-
-## Extension
-
-Enable per user: `gnome-extensions enable airpods@pulsaros.org`. To iterate on the UI use a
-nested shell with a mock service (`fake_bluez.py` plus the daemon above).
-
-## Known limits
-
-- AirPods use random BLE addresses; matching advertisements to the connected pair is heuristic
-  (model, battery drift, RSSI drift). Two pairs of the same model in range can mix.
-- Noise-control modes need Apple's AAP protocol and are not implemented.
-- Translations: Spanish only. See "Translations" below.
+Controls call `librepods-ctl`, which fails when the daemon is not running; the popover then undoes the
+click and shows an error.
 
 ## Translations
 
-Catalogs are plain JSON in `gnome-shell-extension/i18n/<lang>.json`: the English text is the key,
-the translation the value. `i18n.js` picks the first catalog that matches the session language
-(`es_ES.UTF-8` tries `es_ES`, then `es`) and falls back to English for a missing file or string.
-No gettext, no build step.
+Catalogs are plain JSON in `gnome-shell-extension/i18n/<lang>.json`: the English text is the key and the
+translation the value. `i18n.js` picks the first catalog that matches the session language (`es_ES.UTF-8`
+tries `es_ES`, then `es`) and falls back to English. To add a language, copy `es.json`, translate the
+values and keep `{name}` and `{level}` placeholders. Wrap new UI strings in `_('...')` in `indicator.js`;
+`tests/test_i18n.py` fails when a catalog and the source disagree.
 
-To add a language, copy `es.json` to `<lang>.json` and translate the values. Keep the `{name}` and
-`{level}` placeholders. Wrap new UI strings in `_('...')` in `indicator.js`: `tests/test_i18n.py`
-fails when a catalog lacks a string, has an extra one, or a placeholder differs.
+## Known limits
+
+- The extension has never run in a real GNOME Shell yet. The slider and segmented control are the parts
+  most likely to need a fix on 48 and 51.
+- Low-battery alerts cannot be switched off (no settings store yet).
+- Spatial Audio, microphone mode and audio routing are not AirPods controls on Linux and are left to the
+  stock Sound panel.
+- AAP is reverse engineered; see `docs/aap-noise-control-research.md`.

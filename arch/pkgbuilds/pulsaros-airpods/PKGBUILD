@@ -1,37 +1,19 @@
 # Maintainer: Victor Rosario <hello@victorrosario.dev>
 pkgname=pulsaros-airpods
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
-pkgdesc="AirPods battery and state in the GNOME top bar for Pulsar OS"
+pkgdesc="AirPods in the GNOME top bar for Pulsar OS (Shell extension)"
 arch=(any)
 url="https://inled.es"
 license=(MIT)
-depends=(python python-dbus python-gobject bluez gnome-shell)
+depends=(gnome-shell pulsaros-librepods)
 install=pulsaros-airpods.install
-options=(!strip)
 
 _src() { cd "$startdir"/../../../pulsaros-airpods && pwd; }
 
 package() {
     cd "$(_src)"
-
-    install -Dm755 cli/pulsaros-airpods-daemon "$pkgdir/usr/bin/pulsaros-airpods-daemon"
-
-    install -d "$pkgdir/usr/share/pulsaros-airpods"
-    cp -r src/pulsaros_airpods "$pkgdir/usr/share/pulsaros-airpods/"
-    install -Dm644 data/org.pulsaros.AirPods.xml \
-        "$pkgdir/usr/share/pulsaros-airpods/dbus/org.pulsaros.AirPods.xml"
-    find "$pkgdir/usr/share/pulsaros-airpods" -name '__pycache__' -type d -prune -exec rm -r -f {} +
-
     install -d "$pkgdir/usr/share/gnome-shell/extensions/airpods@pulsaros.org"
     cp -r gnome-shell-extension/. "$pkgdir/usr/share/gnome-shell/extensions/airpods@pulsaros.org/"
-
-    install -Dm644 data/pulsaros-airpods.service \
-        "$pkgdir/usr/lib/systemd/user/pulsaros-airpods.service"
-    install -d "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants"
-    ln -s ../pulsaros-airpods.service \
-        "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants/pulsaros-airpods.service"
-
     chmod -R a+rX "$pkgdir/usr"
-    chmod 755 "$pkgdir/usr/bin/pulsaros-airpods-daemon"
 }
