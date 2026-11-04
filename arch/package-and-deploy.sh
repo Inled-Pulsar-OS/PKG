@@ -424,7 +424,8 @@ build_single_package() {
 
     local make_cmd=""
     if [ "$EUID" -eq 0 ] && [ -n "$BUILD_USER" ] && [ "$BUILD_USER" != "root" ]; then
-        chown -R "$BUILD_USER":"$BUILD_USER" "$BUILD_DIR" "$pkgbuild_dir" 2>/dev/null || true
+        local pkg_repo_root="$(cd "$PKG_DIR/.." && pwd)"
+        chown -R "$BUILD_USER":"$BUILD_USER" "$BUILD_DIR" "$pkgbuild_dir" "$pkg_repo_root/$name" 2>/dev/null || true
         if command -v runuser >/dev/null 2>&1; then
             make_cmd="runuser -u \"$BUILD_USER\" -- env PULSAR_VERSION=\"$PULSAR_VERSION\" PKGDEST=\"$OUTPUT_DIR\" makepkg -cfd --noconfirm --nosign"
         else
