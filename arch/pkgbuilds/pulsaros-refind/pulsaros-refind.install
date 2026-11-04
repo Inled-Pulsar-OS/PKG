@@ -64,12 +64,15 @@ post_install() {
     # Sync the macOS theme into an already-installed rEFInd.
     # Sincroniza el tema macOS hacia un rEFInd ya instalado.
     local theme_src="/usr/share/refind/themes/rEFInd-Regular-Dark"
-    local theme_dst="/boot/efi/EFI/refind/themes/rEFInd-Regular-Dark"
-    if [ -d "/boot/efi/EFI/refind" ] && [ -d "$theme_src" ]; then
-        mkdir -p "/boot/efi/EFI/refind/themes"
-        rm -rf "$theme_dst"
-        cp -r "$theme_src" "$theme_dst"
-        echo "pulsaros-refind: tema macOS actualizado en /boot/efi/EFI/refind/themes."
+    if [ -d "$theme_src" ]; then
+        for ed in /boot/efi/EFI/refind /boot/efi/EFI/BOOT; do
+            if [ -d "$ed" ]; then
+                mkdir -p "$ed/themes"
+                rm -rf "$ed/themes/rEFInd-Regular-Dark"
+                cp -r "$theme_src" "$ed/themes/rEFInd-Regular-Dark"
+                echo "pulsaros-refind: tema macOS actualizado en $ed/themes."
+            fi
+        done
     fi
 
     # Keep our fixed Pulsar/dual-boot settings. Auto-scan internal/external
@@ -79,6 +82,9 @@ post_install() {
     # Mantiene las entradas fijas de Pulsar y el auto-escaneo internal/external.
     for rc in /boot/efi/EFI/refind/refind.conf /boot/efi/EFI/BOOT/refind.conf; do
         if [ -f "$rc" ]; then
+            sed -i 's/^enable_mouse.*/enable_mouse/' "$rc"
+            grep -q "^enable_mouse" "$rc" || echo "enable_mouse" >> "$rc"
+            grep -q "include themes/rEFInd-Regular-Dark/theme.conf" "$rc" || echo "include themes/rEFInd-Regular-Dark/theme.conf" >> "$rc"
             sanitize_refind_conf "$rc"
             echo "pulsaros-refind: refind.conf saneado ($rc)."
         fi
