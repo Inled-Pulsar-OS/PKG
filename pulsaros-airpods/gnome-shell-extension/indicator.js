@@ -11,6 +11,7 @@ import {Slider} from 'resource:///org/gnome/shell/ui/slider.js';
 
 import {bannersEnabled, closeMenuAnimated, openMenuAnimated} from './compat.js';
 import {loadTranslator} from './i18n.js';
+import {BatteryAlerts} from './alerts.js';
 import {runControl} from './ctl.js';
 import {availableModes, parseStatus} from './model.js';
 import {Pending} from './optimistic.js';
@@ -92,6 +93,7 @@ class AirPodsIndicator extends PanelMenu.Button {
         this._raw = parseStatus(null);            // what the daemon last said
         this._status = this._raw;                  // what we show: clicks held on top (optimistic.js)
         this._pending = new Pending(() => GLib.get_monotonic_time() / 1000);
+        this._alerts = new BatteryAlerts();
         this._refreshId = 0;
         this._modeKey = '';
         this._syncing = false;
@@ -270,6 +272,22 @@ class AirPodsIndicator extends PanelMenu.Button {
         this._raw = status;
         this._status = this._pending.overlay(status);
         this._sync();
+        this._announceLowBattery(status);
+    }
+
+    // Shell notifications already honour Do Not Disturb.
+    _announceLowBattery(status) {
+        for (const {which, level} of this._alerts.update(status)) {
+            const name = {
+                left: _('Left AirPod'),
+                right: _('Right AirPod'),
+                case: _('AirPods case'),
+                headphones: status.modelName || BRAND,
+            }[which];
+            Main.notify(
+                _('{name} battery low').replace('{name}', name),
+                _('{level}% remaining. Charge soon.').replace('{level}', level));
+        }
     }
 
     _sync() {

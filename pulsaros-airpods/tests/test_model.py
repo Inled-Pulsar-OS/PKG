@@ -33,6 +33,9 @@ class ModelParserTests(unittest.TestCase):
     def test_control_runner_spawns_only_whitelisted_verbs(self):
         self.run_gjs("ctl_check.js")
 
+    def test_low_battery_alerts_fire_once_per_threshold(self):
+        self.run_gjs("alerts_check.js")
+
 
 if __name__ == "__main__":
     unittest.main()
