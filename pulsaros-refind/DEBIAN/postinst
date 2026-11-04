@@ -61,13 +61,14 @@ sanitize_refind_conf() {
     local rc="$1" tmp
     [ -f "$rc" ] || return 0
     tmp="$(mktemp)"
-    grep -vE '^[[:space:]]*(#)?[[:space:]]*(scanfor|dont_scan_dirs|dont_scan_files|dont_scan_volumes)([[:space:]]|$)' "$rc" > "$tmp" || true
+    grep -vE '^[[:space:]]*(#)?[[:space:]]*(scanfor|dont_scan_dirs|dont_scan_files|dont_scan_volumes|default_selection)([[:space:]]|$)' "$rc" > "$tmp" || true
     {
         cat "$tmp"
         printf '\nscanfor manual,internal,external\n'
-        printf 'dont_scan_volumes PULSAR_OS,PULSAR_RECOVERY\n'
-        printf 'dont_scan_dirs EFI/recovery,recovery,EFI/BOOT/recovery,live,@,@/boot,themes,drivers_x64\n'
-        printf 'dont_scan_files vmlinuz,vmlinuz.efi,vmlinuz-recovery,vmlinuz-recovery.efi,vmlinuz-linux\n'
+        printf 'dont_scan_volumes PULSAR_OS,PULSAR_RECOVERY,PULSAR_BOOT,PULSAR_LIVE,PULSAROS_LIVE,CDROM\n'
+        printf 'dont_scan_dirs EFI/recovery,recovery,EFI/BOOT/recovery,live,@,@/boot,themes,drivers_x64,EFI/PulsarOS\n'
+        printf 'dont_scan_files vmlinuz*,vmlinuz*.efi,vmlinuz-recovery*,initramfs*,initrd*\n'
+        printf 'default_selection "Pulsar OS,+,1"\n'
         printf 'hideui singleuser,hints\n'
     } > "$rc"
     rm -f "$tmp"
@@ -79,7 +80,7 @@ THEMES_DIR="/boot/efi/EFI/refind/themes"
 THEME_SRC="/usr/share/refind/themes/rEFInd-Regular-Dark"
 THEME_DEST="$THEMES_DIR/rEFInd-Regular-Dark"
 
-if [ -d "/boot/efi/EFI/refind" ]; then
+if [ -d "/boot/efi/EFI/refind" ] || [ -d "/boot/efi/EFI/BOOT" ]; then
     echo "📥 Instalando tema macOS para rEFInd..."
     mkdir -p "$THEMES_DIR"
     rm -rf "$THEME_DEST"
@@ -91,15 +92,17 @@ if [ -d "/boot/efi/EFI/refind" ]; then
     fi
 
     # Configure refind.conf / Configurar refind.conf
-    REFIND_CONF="/boot/efi/EFI/refind/refind.conf"
-    if [ -f "$REFIND_CONF" ]; then
-        echo "⚙️ Saneando refind.conf (scanfor / dont_scan idempotente)..."
-        sed -i 's/^enable_mouse.*/enable_mouse/' "$REFIND_CONF"
-        grep -q "^enable_mouse" "$REFIND_CONF" || echo "enable_mouse" >> "$REFIND_CONF"
-        sanitize_refind_conf "$REFIND_CONF"
-    fi
+    for REFIND_CONF in /boot/efi/EFI/refind/refind.conf /boot/efi/EFI/BOOT/refind.conf; do
+        if [ -f "$REFIND_CONF" ]; then
+            echo "⚙️ Saneando refind.conf ($REFIND_CONF)..."
+            sed -i 's/^enable_mouse.*/enable_mouse/' "$REFIND_CONF"
+            grep -q "^enable_mouse" "$REFIND_CONF" || echo "enable_mouse" >> "$REFIND_CONF"
+            grep -q "include themes/rEFInd-Regular-Dark/theme.conf" "$REFIND_CONF" || echo "include themes/rEFInd-Regular-Dark/theme.conf" >> "$REFIND_CONF"
+            sanitize_refind_conf "$REFIND_CONF"
+        fi
+    done
 else
-    echo "⚠️ Directorio /boot/efi/EFI/refind no encontrado. No hay rEFInd instalado que configurar."
+    echo "⚠️ Directorios EFI de rEFInd no encontrados. No hay rEFInd instalado que configurar."
 fi
 
 exit 0

@@ -6418,9 +6418,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             except Exception:
                                 pass
 
-                        # Check if dual boot is present (Windows Boot Manager, other EFI entries, or detected via os-prober)
+                        # Check if dual boot is present (Windows Boot Manager, other EFI entries, or detected via os-prober / install mode)
                         other_os_entries = []
-                        has_dual_boot = False
+                        has_dual_boot = (self.install_mode == "dualboot" or getattr(self, "selected_install_mode", "") == "dualboot")
                         win_loader = f"{esp_root}/EFI/Microsoft/Boot/bootmgfw.efi"
                         if os.path.isfile(win_loader):
                             has_dual_boot = True
@@ -6463,12 +6463,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         if has_dual_boot:
                             scanfor_mode = (
                                 "scanfor manual,internal,external\n"
-                                "dont_scan_volumes PULSAR_OS,PULSAR_RECOVERY\n"
-                                "dont_scan_dirs EFI/recovery,recovery,EFI/BOOT/recovery,live,@,@/boot,themes,drivers_x64\n"
-                                "dont_scan_files vmlinuz,vmlinuz.efi,vmlinuz-recovery,vmlinuz-recovery.efi,vmlinuz-linux,initramfs*,initrd*"
+                                "dont_scan_volumes PULSAR_OS,PULSAR_RECOVERY,PULSAR_BOOT,PULSAR_LIVE,PULSAROS_LIVE,CDROM\n"
+                                "dont_scan_dirs EFI/recovery,recovery,EFI/BOOT/recovery,live,@,@/boot,themes,drivers_x64,EFI/PulsarOS\n"
+                                "dont_scan_files vmlinuz*,vmlinuz*.efi,vmlinuz-recovery*,initramfs*,initrd*"
                             )
                         else:
-                            scanfor_mode = "scanfor manual\ndont_scan_dirs EFI,boot,recovery,live,@,@/boot,themes,drivers_x64\ndont_scan_files *"
+                            scanfor_mode = (
+                                "scanfor manual\n"
+                                "dont_scan_volumes PULSAR_OS,PULSAR_RECOVERY,PULSAR_BOOT,PULSAR_LIVE,PULSAROS_LIVE,CDROM\n"
+                                "dont_scan_dirs EFI,boot,recovery,live,@,@/boot,themes,drivers_x64,EFI/PulsarOS\n"
+                                "dont_scan_files *"
+                            )
                         extra_entries_str = ("\n" + "\n".join(other_os_entries)) if other_os_entries else ""
 
                         # El kernel de recovery NO vive en /boot del rootfs
@@ -6493,16 +6498,53 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                     f"(ESP/EFI/recovery, PULSAR_RECOVERY/boot o /@/boot); "
                                     f"la entrada de recovery quedará rota: loader={rec_loader} "
                                     "— revisa que la ISO incluya /recovery/vmlinuz-recovery")
-                        if self.install_encryption and is_efi and esp_root:
-                            # Deploy kernel and initramfs to ESP EFI/PulsarOS so rEFInd loads them unencrypted
-                            os.makedirs(f"{esp_root}/EFI/PulsarOS", exist_ok=True)
-                            if installed_k_file and os.path.isfile(installed_k_file):
-                                shutil.copy2(installed_k_file, f"{esp_root}/EFI/PulsarOS/{k_name}")
-                            if installed_initrd_file and os.path.isfile(installed_initrd_file):
-                                shutil.copy2(installed_initrd_file, f"{esp_root}/EFI/PulsarOS/{initrd_name}")
-                            for uc in ("amd-ucode.img", "intel-ucode.img"):
-                                if os.path.exists(f"/mnt/boot/{uc}"):
-                                    shutil.copy2(f"/mnt/boot/{uc}", f"{esp_root}/EFI/PulsarOS/{uc}")
+
+                        if boot_part:
+                            # Dedicated unencrypted ext4 /boot partition (PULSAR_BOOT).
+                            # rEFInd loads kernel and initrd directly using ext4_x64.efi driver.
+                            # No ESP copying needed (prevents ESP space exhaustion and truncation).
+                            boot_ucode_lines = "".join(
+                                f"    initrd /{uc}\n"
+                                for uc in ("amd-ucode.img", "intel-ucode.img")
+                                if os.path.exists(f"/mnt/boot/{uc}")
+                            )
+                            if self.install_encryption and luks_uuid:
+                                boot_opts = f"rd.luks.name={luks_uuid}=pulsar_cryptroot cryptdevice=UUID={luks_uuid}:pulsar_cryptroot root=/dev/mapper/pulsar_cryptroot rootflags=subvol=@ rw quiet splash{resume_opts}"
+                            else:
+                                boot_opts = f"root=UUID={root_uuid} rootflags=subvol=@ rw quiet splash{resume_opts}"
+                            pulsar_entry = (
+                                'menuentry "Pulsar OS" {\n'
+                                f"    icon {icon_os}\n"
+                                "    volume PULSAR_BOOT\n"
+                                f"    loader /{k_name}\n"
+                                f"{boot_ucode_lines}"
+                                f"    initrd /{initrd_name}\n"
+                                f'    options "{boot_opts}"\n'
+                                '    submenuentry "Boot to single-user mode" {\n'
+                                f'        options "{boot_opts.replace("quiet splash", "single")}"\n'
+                                "    }\n"
+                                "}\n"
+                            )
+                        elif self.install_encryption and is_efi and esp_root:
+                            # Fallback when encrypted but no dedicated /boot partition:
+                            # Deploy kernel and initramfs to ESP EFI/PulsarOS if space allows
+                            try:
+                                free_bytes = shutil.disk_usage(esp_root).free
+                                k_sz = os.path.getsize(installed_k_file) if installed_k_file and os.path.isfile(installed_k_file) else 0
+                                initrd_sz = os.path.getsize(installed_initrd_file) if installed_initrd_file and os.path.isfile(installed_initrd_file) else 0
+                                if free_bytes > (k_sz + initrd_sz + 15 * 1024 * 1024):
+                                    os.makedirs(f"{esp_root}/EFI/PulsarOS", exist_ok=True)
+                                    if installed_k_file and os.path.isfile(installed_k_file):
+                                        shutil.copy2(installed_k_file, f"{esp_root}/EFI/PulsarOS/{k_name}")
+                                    if installed_initrd_file and os.path.isfile(installed_initrd_file):
+                                        shutil.copy2(installed_initrd_file, f"{esp_root}/EFI/PulsarOS/{initrd_name}")
+                                    for uc in ("amd-ucode.img", "intel-ucode.img"):
+                                        if os.path.exists(f"/mnt/boot/{uc}"):
+                                            shutil.copy2(f"/mnt/boot/{uc}", f"{esp_root}/EFI/PulsarOS/{uc}")
+                                else:
+                                    log_msg(f"Notice: Not enough ESP space to stage {initrd_name} ({free_bytes // 1048576}MB free)")
+                            except Exception as esp_copy_err:
+                                log_msg(f"Warning: ESP kernel/initrd staging: {esp_copy_err}")
 
                             esp_ucode_lines = "".join(
                                 f"    initrd /EFI/PulsarOS/{uc}\n"
@@ -6544,7 +6586,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             "# Solo se muestran las entradas curadas; en dual boot rEFInd\n"
                             "# además auto-escanea en busca de otros sistemas.\n"
                             f"{scanfor_mode}\n"
-                            "default_selection 1\n"
+                            'default_selection "Pulsar OS,+,1"\n'
                             "hideui singleuser,hints\n"
                             "\n"
                             f"{pulsar_entry}"
@@ -6579,8 +6621,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                     tf.write(tdata)
                             except Exception:
                                 pass
-                        if os.path.isfile(theme_conf_path) \
-                                and "include themes/rEFInd-Regular-Dark/theme.conf" not in content:
+                        if "include themes/rEFInd-Regular-Dark/theme.conf" not in content:
                             content += "\ninclude themes/rEFInd-Regular-Dark/theme.conf\n"
                         content = re.sub(
                             re.escape(MENU_BEGIN) + r".*?" + re.escape(MENU_END) + r"\n?",
@@ -6956,16 +6997,39 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                         boot_fb = f"{esp_root}/EFI/BOOT"
                         debian_fb = f"{esp_root}/EFI/debian"
                         pulsaros_fb = f"{esp_root}/EFI/PulsarOS"
-                        theme_src = "/mnt/usr/share/refind/themes/rEFInd-Regular-Dark"
+                        theme_src_cands = [
+                            "/mnt/usr/share/refind/themes/rEFInd-Regular-Dark",
+                            "/usr/share/refind/themes/rEFInd-Regular-Dark",
+                            "/run/live/medium/EFI/BOOT/themes/rEFInd-Regular-Dark",
+                            "/run/live/medium/themes/rEFInd-Regular-Dark",
+                            "/run/archiso/bootmnt/EFI/BOOT/themes/rEFInd-Regular-Dark",
+                            "/run/archiso/bootmnt/themes/rEFInd-Regular-Dark",
+                            f"{esp_root}/EFI/BOOT/themes/rEFInd-Regular-Dark",
+                        ]
+                        theme_src = next((p for p in theme_src_cands if os.path.isdir(p) and os.path.isfile(f"{p}/theme.conf")), None)
+                        if not theme_src:
+                            for s_base in ("/mnt/usr/share", "/usr/share", "/run/live/medium", "/run/archiso/bootmnt"):
+                                if os.path.isdir(s_base):
+                                    m_themes = glob.glob(f"{s_base}/**/rEFInd-Regular-Dark/theme.conf", recursive=True)
+                                    if m_themes:
+                                        theme_src = os.path.dirname(m_themes[0])
+                                        break
 
-                        if "TEST_MODE" not in os.environ:
-                            for efidir in (refind_root, boot_fb, debian_fb, pulsaros_fb):
-                                os.makedirs(f"{efidir}/themes/rEFInd-Regular-Dark", exist_ok=True)
-                                if os.path.isdir(theme_src):
-                                    subprocess.run(
-                                        ["cp", "-r", f"{theme_src}/.", f"{efidir}/themes/rEFInd-Regular-Dark"],
-                                        capture_output=True,
-                                    )
+                        if "TEST_MODE" not in os.environ and theme_src:
+                            for efidir in (refind_root, boot_fb, debian_fb, pulsaros_fb, esp_root):
+                                t_target = f"{efidir}/themes/rEFInd-Regular-Dark"
+                                os.makedirs(t_target, exist_ok=True)
+                                subprocess.run(
+                                    ["cp", "-r", f"{theme_src}/.", t_target],
+                                    capture_output=True,
+                                )
+
+                        # If dedicated /boot partition is used, ensure /mnt/boot/boot symlink exists
+                        if boot_part and os.path.isdir("/mnt/boot") and not os.path.exists("/mnt/boot/boot"):
+                            try:
+                                subprocess.run(["ln", "-sfn", ".", "/mnt/boot/boot"], capture_output=True)
+                            except Exception:
+                                pass
 
                             rec_icon_cands = [
                                 "/mnt/usr/share/pulsar-boot-icons/os_recovery.png",
@@ -7044,8 +7108,10 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                                         pass
 
                             drv_search_dirs = [
+                                "/mnt/usr/share/refind/refind/drivers_x64",
                                 "/mnt/usr/share/refind/drivers_x64",
                                 "/mnt/usr/lib/refind/drivers_x64",
+                                "/usr/share/refind/refind/drivers_x64",
                                 "/usr/share/refind/drivers_x64",
                                 "/usr/lib/refind/drivers_x64",
                                 "/run/archiso/bootmnt/EFI/BOOT/drivers_x64",
@@ -7055,6 +7121,13 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                             ]
                             for drv_name in ["ext4_x64.efi", "btrfs_x64.efi", "iso9660_x64.efi"]:
                                 drv_src = next((f"{d}/{drv_name}" for d in drv_search_dirs if os.path.isfile(f"{d}/{drv_name}")), None)
+                                if not drv_src:
+                                    for s_base in ("/mnt/usr/share", "/usr/share", "/run/live/medium", "/run/archiso/bootmnt"):
+                                        if os.path.isdir(s_base):
+                                            m_drvs = glob.glob(f"{s_base}/**/{drv_name}", recursive=True)
+                                            if m_drvs:
+                                                drv_src = m_drvs[0]
+                                                break
                                 if drv_src:
                                     for target_dir in (
                                         f"{refind_root}/drivers_x64",

@@ -30,13 +30,14 @@ sanitize_refind_conf() {
     local rc="$1" tmp
     [ -f "$rc" ] || return 0
     tmp="$(mktemp)"
-    grep -vE '^[[:space:]]*(#)?[[:space:]]*(scanfor|dont_scan_dirs|dont_scan_files|dont_scan_volumes)([[:space:]]|$)' "$rc" > "$tmp" || true
+    grep -vE '^[[:space:]]*(#)?[[:space:]]*(scanfor|dont_scan_dirs|dont_scan_files|dont_scan_volumes|default_selection)([[:space:]]|$)' "$rc" > "$tmp" || true
     {
         cat "$tmp"
         printf '\nscanfor manual,internal,external\n'
-        printf 'dont_scan_volumes PULSAR_OS,PULSAR_RECOVERY\n'
-        printf 'dont_scan_dirs EFI/recovery,recovery,EFI/BOOT/recovery,live,@,@/boot,themes,drivers_x64\n'
-        printf 'dont_scan_files vmlinuz,vmlinuz.efi,vmlinuz-recovery,vmlinuz-recovery.efi,vmlinuz-linux\n'
+        printf 'dont_scan_volumes PULSAR_OS,PULSAR_RECOVERY,PULSAR_BOOT,PULSAR_LIVE,PULSAROS_LIVE,CDROM\n'
+        printf 'dont_scan_dirs EFI/recovery,recovery,EFI/BOOT/recovery,live,@,@/boot,themes,drivers_x64,EFI/PulsarOS\n'
+        printf 'dont_scan_files vmlinuz*,vmlinuz*.efi,vmlinuz-recovery*,initramfs*,initrd*\n'
+        printf 'default_selection "Pulsar OS,+,1"\n'
         printf 'hideui singleuser,hints\n'
     } > "$rc"
     rm -f "$tmp"
