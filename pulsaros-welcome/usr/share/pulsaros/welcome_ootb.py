@@ -383,6 +383,12 @@ window label.theme-card-title {
     margin-top: 8px;
     color: var(--text-color);
 }
+window label.theme-card-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: #0071e3;
+    margin-top: 2px;
+}
 window .theme-preview-light {
     min-width: 140px;
     min-height: 90px;
@@ -396,6 +402,14 @@ window .theme-preview-dark {
     border-radius: 8px;
     background-color: #1e1e1f;
     border: 1px solid #424242;
+}
+window .theme-preview-glass {
+    min-width: 140px;
+    min-height: 90px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(45, 45, 58, 0.88) 0%, rgba(20, 20, 26, 0.95) 100%);
+    border: 1.5px solid rgba(255, 255, 255, 0.35);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 /* ── Misc ─────────────────────────────────────────────────────────── */
 .search-box    { margin-bottom: 6px; }
@@ -810,7 +824,7 @@ class OOTBWindow(Adw.ApplicationWindow):
         self.selected_keymap = None
         self.selected_timezone = None
         self.selected_avatar_path = self.face_images[0] if self.face_images else None
-        self.selected_theme = "light"
+        self.selected_theme = "dark"
 
     def apply_css(self):
         # Force light palette so Adw never overrides our white/blue colours
@@ -897,16 +911,16 @@ class OOTBWindow(Adw.ApplicationWindow):
         theme_box.set_margin_bottom(8)
         theme_box.add_css_class("linked")
 
-        self.btn_light = Gtk.ToggleButton(label="Light Mode")
-        self.btn_light.set_active(True)
-        self.btn_light.connect("toggled", self.on_theme_toggled, False)
-        theme_box.append(self.btn_light)
-
-        self.btn_dark = Gtk.ToggleButton(label="Dark Mode")
+        self.btn_dark = Gtk.ToggleButton(label="Dark Mode (Recommended)")
+        self.btn_dark.set_active(True)
         self.btn_dark.connect("toggled", self.on_theme_toggled, True)
         theme_box.append(self.btn_dark)
 
-        self.btn_dark.set_group(self.btn_light)
+        self.btn_light = Gtk.ToggleButton(label="Light Mode")
+        self.btn_light.connect("toggled", self.on_theme_toggled, False)
+        theme_box.append(self.btn_light)
+
+        self.btn_light.set_group(self.btn_dark)
         box.append(theme_box)
 
         # Search Entry for filtering countries
@@ -1863,36 +1877,17 @@ class OOTBWindow(Adw.ApplicationWindow):
         desc.add_css_class("welcome-subtitle")
         box.append(desc)
 
-        # Horizontal Box for Light / Dark options
-        cards_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=24)
+        # Horizontal Box for Dark (Recommended) / Liquid Glass / Light options
+        cards_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
         cards_box.set_halign(Gtk.Align.CENTER)
         box.append(cards_box)
 
-        # Light Theme Card
-        self.light_card = Gtk.Button()
-        self.light_card.add_css_class("theme-card")
-        self.light_card.add_css_class("selected") # default
-        
-        light_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        light_vbox.set_halign(Gtk.Align.CENTER)
-        
-        light_preview = Gtk.Frame()
-        light_preview.add_css_class("theme-preview-light")
-        light_vbox.append(light_preview)
-        
-        light_lbl = Gtk.Label(label="Light")
-        light_lbl.add_css_class("theme-card-title")
-        light_vbox.append(light_lbl)
-        
-        self.light_card.set_child(light_vbox)
-        self.light_card.connect("clicked", self.on_light_theme_selected)
-        cards_box.append(self.light_card)
-
-        # Dark Theme Card
+        # 1. Dark Theme Card (RECOMMENDED - default)
         self.dark_card = Gtk.Button()
         self.dark_card.add_css_class("theme-card")
+        self.dark_card.add_css_class("selected") # default recommended
         
-        dark_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        dark_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         dark_vbox.set_halign(Gtk.Align.CENTER)
         
         dark_preview = Gtk.Frame()
@@ -1902,32 +1897,92 @@ class OOTBWindow(Adw.ApplicationWindow):
         dark_lbl = Gtk.Label(label="Dark")
         dark_lbl.add_css_class("theme-card-title")
         dark_vbox.append(dark_lbl)
+
+        dark_badge = Gtk.Label(label="(Recommended)")
+        dark_badge.add_css_class("theme-card-badge")
+        dark_vbox.append(dark_badge)
         
         self.dark_card.set_child(dark_vbox)
         self.dark_card.connect("clicked", self.on_dark_theme_selected)
         cards_box.append(self.dark_card)
 
+        # 2. Liquid Glass Theme Card (Dark + Liquid Glass)
+        self.glass_card = Gtk.Button()
+        self.glass_card.add_css_class("theme-card")
+        
+        glass_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        glass_vbox.set_halign(Gtk.Align.CENTER)
+        
+        glass_preview = Gtk.Frame()
+        glass_preview.add_css_class("theme-preview-glass")
+        glass_vbox.append(glass_preview)
+        
+        glass_lbl = Gtk.Label(label="Liquid Glass")
+        glass_lbl.add_css_class("theme-card-title")
+        glass_vbox.append(glass_lbl)
+
+        glass_badge = Gtk.Label(label="(Dark + Glass)")
+        glass_badge.add_css_class("theme-card-badge")
+        glass_vbox.append(glass_badge)
+        
+        self.glass_card.set_child(glass_vbox)
+        self.glass_card.connect("clicked", self.on_glass_theme_selected)
+        cards_box.append(self.glass_card)
+
+        # 3. Light Theme Card
+        self.light_card = Gtk.Button()
+        self.light_card.add_css_class("theme-card")
+        
+        light_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        light_vbox.set_halign(Gtk.Align.CENTER)
+        
+        light_preview = Gtk.Frame()
+        light_preview.add_css_class("theme-preview-light")
+        light_vbox.append(light_preview)
+        
+        light_lbl = Gtk.Label(label="Light")
+        light_lbl.add_css_class("theme-card-title")
+        light_vbox.append(light_lbl)
+
+        light_spacer = Gtk.Label(label="")
+        light_spacer.add_css_class("theme-card-badge")
+        light_vbox.append(light_spacer)
+        
+        self.light_card.set_child(light_vbox)
+        self.light_card.connect("clicked", self.on_light_theme_selected)
+        cards_box.append(self.light_card)
+
         self.stack.add_named(box, "theme_select")
+
+    def on_dark_theme_selected(self, btn):
+        self.dark_card.add_css_class("selected")
+        self.glass_card.remove_css_class("selected")
+        self.light_card.remove_css_class("selected")
+        self.set_theme_mode("dark")
+
+    def on_glass_theme_selected(self, btn):
+        self.glass_card.add_css_class("selected")
+        self.dark_card.remove_css_class("selected")
+        self.light_card.remove_css_class("selected")
+        self.set_theme_mode("liquid_glass")
 
     def on_light_theme_selected(self, btn):
         self.light_card.add_css_class("selected")
         self.dark_card.remove_css_class("selected")
-        self.set_theme_dark(False)
+        self.glass_card.remove_css_class("selected")
+        self.set_theme_mode("light")
 
-    def on_dark_theme_selected(self, btn):
-        self.dark_card.add_css_class("selected")
-        self.light_card.remove_css_class("selected")
-        self.set_theme_dark(True)
-
-    def set_theme_dark(self, is_dark):
-        if is_dark:
+    def set_theme_mode(self, mode):
+        self.selected_theme = mode
+        if mode in ["dark", "liquid_glass"]:
             self.add_css_class("dark-theme")
             Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_DARK)
-            self.selected_theme = "dark"
         else:
             self.remove_css_class("dark-theme")
             Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_LIGHT)
-            self.selected_theme = "light"
+
+    def set_theme_dark(self, is_dark):
+        self.set_theme_mode("dark" if is_dark else "light")
     def build_progress_page(self):
         self.progress_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         self.progress_box.set_valign(Gtk.Align.CENTER)
@@ -2762,7 +2817,8 @@ class OOTBWindow(Adw.ApplicationWindow):
 
                 # ── Apply chosen appearance theme for user ───────
                 log_msg("Applying theme and desktop settings...", fraction=0.95)
-                is_dark = (getattr(self, 'selected_theme', 'light') == 'dark')
+                is_dark = (getattr(self, 'selected_theme', 'dark') in ['dark', 'liquid_glass'])
+                is_liquid_glass = (getattr(self, 'selected_theme', 'dark') == 'liquid_glass')
                 theme_scheme = "'prefer-dark'" if is_dark else "'prefer-light'"
                 gtk_theme_name = "'MacTahoe-Dark'" if is_dark else "'MacTahoe-Light'"
                 icon_theme_name = "'MacTahoe-blue-dark'" if is_dark else "'MacTahoe-blue-light'"
@@ -2778,6 +2834,22 @@ class OOTBWindow(Adw.ApplicationWindow):
                     run_cmd([
                         "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
                         schema, key, value
+                    ], check=False)
+
+                if is_liquid_glass:
+                    run_cmd([
+                        "sudo", "-u", username, "dbus-run-session", "gnome-extensions", "enable",
+                        "liquid-glass@thinkingcoding1231.gmail.com"
+                    ], check=False)
+                    run_cmd([
+                        "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
+                        "org.gnome.shell.extensions.liquid-glass@thinkingcoding1231.gmail.com",
+                        "enable-application-glass", "true"
+                    ], check=False)
+                else:
+                    run_cmd([
+                        "sudo", "-u", username, "dbus-run-session", "gnome-extensions", "disable",
+                        "liquid-glass@thinkingcoding1231.gmail.com"
                     ], check=False)
 
                 # Physically copy correct theme files to the newly created user's .config
