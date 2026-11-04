@@ -289,7 +289,7 @@ clean_orphan_packages() {
     for d in "$PKGBUILDS_DIR"/*/; do
         [ -f "$d/PKGBUILD" ] && active_names+=("$(basename "$d")")
     done
-    local extra_allowed=("pamtester" "xremap-gnome-bin" "autokey-gtk" "autokey" "winboat-bin" "cloudflare-warp-bin" "localsend-bin")
+    local extra_allowed=("pamtester" "xremap-gnome-bin" "autokey-gtk" "autokey-common" "autokey" "winboat-bin" "cloudflare-warp-bin" "localsend-bin")
 
     for f in "$OUTPUT_DIR"/*.pkg.tar.zst; do
         [ -f "$f" ] || continue
@@ -421,6 +421,12 @@ build_single_package() {
 
     local log_file="$BUILD_DIR/makepkg-${name}.log"
     rm -f "$log_file"
+
+    # Host umask 027 makes packaged files unreadable by non-root users (e.g. the
+    # sddm theme). Build with 022 and repair any unreadable source files.
+    umask 022
+    find "$(cd "$pkgbuild_dir/../../.." && pwd)" -path '*/.git' -prune -o \
+        \( -type f -o -type d \) ! -perm -o=r -exec chmod go+rX {} + 2>/dev/null || true
 
     local make_cmd=""
     if [ "$EUID" -eq 0 ] && [ -n "$BUILD_USER" ] && [ "$BUILD_USER" != "root" ]; then

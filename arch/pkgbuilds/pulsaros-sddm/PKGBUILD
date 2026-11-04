@@ -31,4 +31,6 @@ package() {
     elif [ -d "$srcdir/usr" ]; then
         cp -r "$srcdir/usr" "$pkgdir/"
     fi
+    # Source tree may be 750 (umask 027); sddm user must read the theme.
+    chmod -R go+rX,go-w "$pkgdir"
 }
