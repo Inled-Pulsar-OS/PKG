@@ -1,0 +1,6 @@
+pulsaros-librepods (0.1.0) unstable; urgency=medium
+
+  * Initial packaging of the omarchy-pods daemon (commit fff7fec, 2026-08-26)
+  * Headless systemd user unit enabled with the graphical session
+
+ -- Victor Rosario <hello@victorrosario.dev>  Wed, 04 Nov 2026 00:00:00 +0000

@@ -1,0 +1,7 @@
+post_install() {
+    echo "==> pulsaros-librepods: the daemon starts with your next graphical login, or now with: systemctl --user start librepods"
+}
+
+post_upgrade() {
+    post_install
+}

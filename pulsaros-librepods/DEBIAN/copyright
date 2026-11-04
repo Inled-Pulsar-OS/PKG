@@ -1,0 +1,21 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: librepods
+Upstream-Contact: Kavish Devar (https://github.com/kavishdevar/librepods)
+Source: https://github.com/thisisgm/omarchy-pods
+Comment: Modified copy of the daemon/ directory of omarchy-pods (GM), which is a fork of librepods
+ (Kavish Devar). See UPSTREAM.md for the chain, the commits and what Pulsar OS changed.
+
+Files: *
+Copyright: Kavish Devar, GM, and the librepods contributors
+License: GPL-3
+
+Files: DEBIAN/* packaging/* prepare-assets.sh
+Copyright: 2026 Victor Rosario <hello@victorrosario.dev>
+License: GPL-3
+
+License: GPL-3
+ This program is free software: you can redistribute it and/or modify it under the
+ terms of the GNU General Public License version 3 as published by the Free
+ Software Foundation.
+ .
+ On Debian systems the full text is in /usr/share/common-licenses/GPL-3.
