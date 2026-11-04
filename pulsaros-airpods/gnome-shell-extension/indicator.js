@@ -4,12 +4,16 @@ import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import {Slider} from 'resource:///org/gnome/shell/ui/slider.js';
 
 import {bannersEnabled, closeMenuAnimated, openMenuAnimated} from './compat.js';
 import {loadTranslator} from './i18n.js';
-import {parseStatus} from './model.js';
+import {runControl} from './ctl.js';
+import {availableModes, parseStatus} from './model.js';
+import {Pending} from './optimistic.js';
 import {StatusSource, defaultStatusPath} from './status-source.js';
 
 const TRANSIENT_SECONDS = 5;
@@ -17,6 +21,8 @@ const LOW_BATTERY = 20;
 const LID_OPEN = 0;
 const LID_CLOSED = 1;
 const BRAND = 'AirPods'; // product name, never translated
+const CTL = 'librepods-ctl'; // looked up on PATH; installed by pulsaros-librepods
+const PENDING_REFRESH_MS = 4100; // just after the optimistic hold expires (optimistic.js)
 
 // Set once per indicator, before any string is built (see _init).
 let _ = text => text;
@@ -49,6 +55,16 @@ function makeRow(iconFile, title) {
     return {box, icon, name, state, fill, percent};
 }
 
+function modeLabel(id) {
+    switch (id) {
+    case 0: return _('Off');
+    case 1: return _('Noise Cancellation');
+    case 2: return _('Transparency');
+    case 3: return _('Adaptive');
+    default: return '';
+    }
+}
+
 function updateRow(row, level, charging, stateText) {
     const available = level >= 0;
     row.box.visible = true;
@@ -73,7 +89,12 @@ class AirPodsIndicator extends PanelMenu.Button {
         this._wasConnected = false;
         this._lastLid = -1;
         this._transientId = 0;
-        this._status = parseStatus(null);
+        this._raw = parseStatus(null);            // what the daemon last said
+        this._status = this._raw;                  // what we show: clicks held on top (optimistic.js)
+        this._pending = new Pending(() => GLib.get_monotonic_time() / 1000);
+        this._refreshId = 0;
+        this._modeKey = '';
+        this._syncing = false;
 
         this._icon = new St.Icon({style_class: 'system-status-icon', icon_size: 16});
         this.add_child(this._icon);
@@ -120,13 +141,134 @@ class AirPodsIndicator extends PanelMenu.Button {
         this._note = new PopupMenu.PopupMenuItem('', {reactive: false, can_focus: false});
         this._note.label.add_style_class_name('airpods-note');
         this.menu.addMenuItem(this._note);
+
+        this._buildControls();
+    }
+
+    // Controls appear only where the model has them (capability keys from the daemon).
+    _buildControls() {
+        this._separator = new PopupMenu.PopupSeparatorMenuItem();
+        this.menu.addMenuItem(this._separator);
+
+        this._modeItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        this._modeBox = new St.BoxLayout({style_class: 'airpods-segmented', x_expand: true});
+        this._modeItem.add_child(this._modeBox);
+        this._modeButtons = new Map();
+        this.menu.addMenuItem(this._modeItem);
+
+        this._levelItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        this._levelItem.add_child(new St.Label({
+            text: _('Noise level'), style_class: 'airpods-row-state', y_align: Clutter.ActorAlign.CENTER,
+        }));
+        this._levelSlider = new Slider(0.5);
+        this._levelSlider.x_expand = true;
+        this._levelSlider.connect('drag-end', () =>
+            this._change('adaptive', 'adaptiveNoiseLevel', Math.round(this._levelSlider.value * 100)));
+        this._levelItem.add_child(this._levelSlider);
+        this.menu.addMenuItem(this._levelItem);
+
+        this._caSwitch = new PopupMenu.PopupSwitchMenuItem(_('Conversation Awareness'), false);
+        this._caSwitch.connect('toggled', (_item, state) => {
+            if (!this._syncing)
+                this._change('ca', 'conversationalAwareness', state);
+        });
+        this.menu.addMenuItem(this._caSwitch);
+
+        this._oneBudSwitch = new PopupMenu.PopupSwitchMenuItem(_('One-Bud ANC'), false);
+        this._oneBudSwitch.connect('toggled', (_item, state) => {
+            if (!this._syncing)
+                this._change('onebud', 'oneBudAnc', state);
+        });
+        this.menu.addMenuItem(this._oneBudSwitch);
+
+        this._earMenu = new PopupMenu.PopupSubMenuMenuItem(_('Ear detection'));
+        this._earItems = [
+            _('Pause when one earbud is removed'),
+            _('Pause when both earbuds are removed'),
+            _('Never pause'),
+        ].map((label, value) => {
+            const item = new PopupMenu.PopupMenuItem(label);
+            item.connect('activate', () => this._change('ear', 'earDetection', value));
+            this._earMenu.menu.addMenuItem(item);
+            return item;
+        });
+        this.menu.addMenuItem(this._earMenu);
+    }
+
+    // A click: show it now, hold it against stale reads, send it, and undo if the daemon cannot be reached.
+    _change(kind, field, value) {
+        this._pending.set(field, value);
+        this._refresh();
+        runControl(CTL, kind, value, ok => {
+            if (!this._source)
+                return; // destroyed while the command ran
+            if (!ok) {
+                this._pending.clear(field);
+                Main.notifyError(BRAND, _('Could not reach the AirPods daemon.'));
+            }
+            this._refresh();
+        });
+        if (this._refreshId)
+            GLib.source_remove(this._refreshId);
+        this._refreshId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, PENDING_REFRESH_MS, () => {
+            this._refreshId = 0;
+            this._refresh();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _refresh() {
+        this._status = this._pending.overlay(this._raw);
+        this._sync();
+    }
+
+    _syncControls(s) {
+        this._syncing = true;
+        const modes = availableModes(s);
+        const key = modes.map(m => m.id).join(',');
+        if (key !== this._modeKey) {
+            this._modeKey = key;
+            this._modeBox.destroy_all_children();
+            this._modeButtons.clear();
+            for (const mode of modes) {
+                const button = new St.Button({
+                    label: modeLabel(mode.id), style_class: 'airpods-segment', can_focus: true, x_expand: true,
+                });
+                button.connect('clicked', () => this._change('noise', 'noiseMode', mode.id));
+                this._modeBox.add_child(button);
+                this._modeButtons.set(mode.id, button);
+            }
+        }
+        this._modeItem.visible = modes.length > 0;
+        for (const [id, button] of this._modeButtons) {
+            if (id === s.noiseMode)
+                button.add_style_pseudo_class('active');
+            else
+                button.remove_style_pseudo_class('active');
+        }
+
+        this._levelItem.visible = s.supportsAdaptive && s.noiseMode === 3;
+        if (!this._levelSlider._dragging)
+            this._levelSlider.value = s.adaptiveNoiseLevel / 100;
+
+        this._caSwitch.visible = s.supportsConversationalAwareness;
+        this._caSwitch.setToggleState(s.conversationalAwareness);
+        this._oneBudSwitch.visible = s.supportsOneBudAnc;
+        this._oneBudSwitch.setToggleState(s.oneBudAnc);
+
+        this._earMenu.visible = !s.isHeadset;
+        this._earItems.forEach((item, value) =>
+            item.setOrnament(s.earDetection === value ? PopupMenu.Ornament.DOT : PopupMenu.Ornament.NONE));
+        this._separator.visible = modes.length > 0 || s.supportsConversationalAwareness || !s.isHeadset;
+        this._syncing = false;
     }
 
     // The daemon is not running or its file is unreadable: nothing to show, like macOS without AirPods.
     _onStatus(status) {
         if (status.state === 'newer-schema' && this._status.state !== 'newer-schema')
             console.warn('[AirPods] status.json has a newer schema than this extension reads; update the extension');
-        this._status = status;
+        this._raw = status;
+        this._status = this._pending.overlay(status);
         this._sync();
     }
 
@@ -163,6 +305,8 @@ class AirPodsIndicator extends PanelMenu.Button {
         }
         if (this._note.visible)
             this._note.label.text = _('Battery level not available yet.');
+
+        this._syncControls(s);
 
         if (!this._wasConnected)
             this._onConnected();
@@ -211,6 +355,10 @@ class AirPodsIndicator extends PanelMenu.Button {
 
     destroy() {
         this._cancelTransient();
+        if (this._refreshId) {
+            GLib.source_remove(this._refreshId);
+            this._refreshId = 0;
+        }
         this._source?.stop();
         this._source = null;
         super.destroy();

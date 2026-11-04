@@ -22,5 +22,17 @@ class ModelParserTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
+    def run_gjs(self, script):
+        result = subprocess.run(["gjs", "-m", os.path.join(HERE, script)],
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_optimistic_state_holds_a_click_until_the_daemon_agrees(self):
+        self.run_gjs("optimistic_check.js")
+
+    def test_control_runner_spawns_only_whitelisted_verbs(self):
+        self.run_gjs("ctl_check.js")
+
+
 if __name__ == "__main__":
     unittest.main()

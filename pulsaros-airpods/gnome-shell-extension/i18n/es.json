@@ -1,11 +1,23 @@
 {
+  "Adaptive": "Adaptativo",
   "Battery": "Batería",
   "Battery level not available yet.": "El nivel de batería aún no está disponible.",
   "Case": "Estuche",
   "Charging": "Cargando",
   "Closed": "Cerrado",
+  "Conversation Awareness": "Detección de conversación",
+  "Could not reach the AirPods daemon.": "No se pudo contactar con el servicio de los AirPods.",
+  "Ear detection": "Detección de oído",
   "In ear": "En el oído",
   "Left": "Izquierdo",
+  "Never pause": "No pausar nunca",
+  "Noise Cancellation": "Cancelación de ruido",
+  "Noise level": "Nivel de ruido",
+  "Off": "Desactivado",
+  "One-Bud ANC": "Cancelación con un auricular",
   "Open": "Abierto",
-  "Right": "Derecho"
+  "Pause when both earbuds are removed": "Pausar al quitar ambos auriculares",
+  "Pause when one earbud is removed": "Pausar al quitar un auricular",
+  "Right": "Derecho",
+  "Transparency": "Transparencia"
 }
