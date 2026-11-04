@@ -2,13 +2,18 @@ Package: pulsaros-airpods
 Version: 0.2.0
 Section: utils
 Priority: optional
-Architecture: all
+Architecture: amd64
 Maintainer: Victor Rosario <hello@victorrosario.dev>
-Depends: gnome-shell, pulsaros-librepods
+Depends: gnome-shell, bluez, libqt6bluetooth6, libqt6core6t64, libqt6dbus6, libqt6gui6, libqt6network6, libqt6qml6, libqt6quick6, libqt6quickcontrols2-6, libqt6widgets6, libpulse0, libssl3t64, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-templates, qml6-module-qtquick-window
+Recommends: pipewire-pulse
 Description: AirPods in the GNOME top bar for Pulsar OS.
- A GNOME Shell extension (airpods@pulsaros.org) that shows an AirPods icon while
- they are connected, like macOS, with the battery of each earbud and the case,
- the listening mode (Noise Cancellation, Transparency, Adaptive, Off where the
- model has it), Conversation Awareness, One-Bud ANC and ear detection. It reads
- the state published by the pulsaros-librepods daemon. Supports GNOME Shell 48
- and 51.
+ Shows an AirPods icon while they are connected, like macOS, with the battery
+ of each earbud and the case, the listening mode (Noise Cancellation,
+ Transparency, Adaptive, Off where the model has it), Conversation Awareness,
+ One-Bud ANC and ear detection.
+ .
+ Two parts in one package: a GNOME Shell extension (airpods@pulsaros.org, Shell
+ 48 and 51) and a headless daemon (librepods) that talks to the AirPods over
+ Bluetooth and publishes their state. The daemon is a modified copy of the
+ omarchy-pods daemon, itself a fork of librepods by Kavish Devar, licensed
+ GPL-3.0; see /usr/share/doc/pulsaros-airpods/librepods.

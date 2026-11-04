@@ -1,6 +1,6 @@
 [Unit]
 Description=librepods AirPods daemon (battery, listening modes, ear detection)
-Documentation=file:///usr/share/doc/pulsaros-librepods/UPSTREAM.md
+Documentation=file:///usr/share/doc/pulsaros-airpods/librepods/UPSTREAM.md
 # The AAP link needs BlueZ and a session bus, both of which arrive with the graphical session.
 After=graphical-session.target
 PartOf=graphical-session.target

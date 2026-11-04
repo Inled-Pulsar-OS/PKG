@@ -4,9 +4,16 @@ AirPods in the GNOME top bar, like macOS: an icon while they are connected, and 
 battery of each earbud and the case, the listening mode, Conversation Awareness, One-Bud ANC and ear
 detection. Targets GNOME Shell 48 (Debian trixie) and 51 (Arch).
 
-This package is only the **GNOME Shell extension** (`airpods@pulsaros.org`). The Bluetooth work is done
-by the daemon in the `pulsaros-librepods` package (GPL-3.0, a modified copy of the omarchy-pods daemon,
-itself a fork of librepods by Kavish Devar), which this package depends on.
+One package, two parts:
+
+- **`gnome-shell-extension/`**: the GNOME Shell extension (`airpods@pulsaros.org`), our code (MIT).
+- **`daemon/`**: the backend, a headless daemon that talks to the AirPods over Bluetooth (Apple Accessory
+  Protocol and BLE). It is a modified copy of the omarchy-pods daemon, itself a fork of librepods by Kavish
+  Devar, so it stays GPL-3.0. See `daemon/UPSTREAM.md` for the chain, what we changed and how to re-sync.
+  It is built from source (C++/Qt 6) and installed as `/usr/bin/librepods` and `/usr/bin/librepods-ctl`.
+
+The two only share a JSON file and a command line, so the backend can be replaced later (for example by
+a Python daemon) without touching the extension.
 
 ## How it works
 
@@ -36,13 +43,17 @@ battery and no case, AirPods 1 to 3 have no listening modes at all.
 | `.../indicator.js` | the panel button and popover |
 | `.../compat.js` | GNOME Shell 48 / 51 differences |
 | `.../i18n.js`, `.../i18n/*.json` | translations (see below) |
-| `tests/` | the test suite (not installed) |
-| `scripts/` | hardware tools (not installed) |
+| `daemon/` | the librepods daemon (C++/Qt 6, GPL-3.0), its own tests in `daemon/tests` |
+| `daemon/packaging/` | the packaged systemd unit and the trixie container build script |
+| `docs/` | research notes (AAP protocol feasibility) |
+| `tests/` | the extension test suite (not installed) |
 
 ## Tests
 
 ```sh
-python3 -m unittest discover -s tests
+python3 -m unittest discover -s tests                      # the extension
+cmake -S daemon -B build -G Ninja && cmake --build build   # the daemon (needs Qt 6 dev packages)
+LC_ALL=C.UTF-8 QT_QPA_PLATFORM=offscreen ctest --test-dir build
 ```
 
 The JavaScript is specified by `gjs` scripts in `tests/*_check.js`, run by `tests/test_*.py`. They skip
