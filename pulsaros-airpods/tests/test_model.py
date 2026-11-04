@@ -16,5 +16,11 @@ class ModelParserTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
+    def test_status_source_follows_the_file(self):
+        result = subprocess.run(["gjs", "-m", os.path.join(HERE, "status_source_check.js")],
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -55,7 +55,7 @@ class CatalogTests(unittest.TestCase):
 
     def test_every_catalog_translates_exactly_the_source_strings(self):
         source = source_msgids()
-        self.assertGreater(len(source), 20)
+        self.assertGreater(len(source), 5)  # the regex found the _() calls
         for path in CATALOGS:
             with self.subTest(catalog=os.path.basename(path)):
                 with open(path, encoding="utf-8") as f:

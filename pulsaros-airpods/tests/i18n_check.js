@@ -10,7 +10,7 @@ const failures = [];
 const expect = (what, got, want) => { if (got !== want) failures.push(`${what}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`); };
 
 expect('es_ES.UTF-8 uses es.json', loadTranslator(extension, ['es_ES.UTF-8', 'es_ES', 'es', 'C'])('Left'), 'Izquierdo');
-expect('plain es', loadTranslator(extension, ['es'])('Connect'), 'Conectar');
+expect('plain es', loadTranslator(extension, ['es'])('Charging'), 'Cargando');
 expect('modifier is ignored', loadTranslator(extension, ['es_ES@euro'])('Left'), 'Izquierdo');
 expect('unknown language is English', loadTranslator(extension, ['fr_FR.UTF-8', 'fr', 'C'])('Left'), 'Left');
 expect('C is English', loadTranslator(extension, ['C'])('Left'), 'Left');

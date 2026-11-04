@@ -91,34 +91,23 @@ class MprisBackendTests(unittest.TestCase):
 
 
 class ExtensionContractTests(unittest.TestCase):
-    """The extension reads properties by name; a typo only shows up inside the Shell."""
-
-    def setUp(self):
-        with open(XML, encoding="utf-8") as f:
-            self.xml = f.read()
-        self.props = set(re.findall(r'<property name="(\w+)"', self.xml))
-        self.signals = set(re.findall(r'<signal name="(\w+)"', self.xml))
-        self.methods = set(re.findall(r'<method name="(\w+)"', self.xml))
+    """Guards that only show up inside the Shell: a missing import or a stale metadata file."""
 
     def js(self, name):
         with open(os.path.join(EXT, name), encoding="utf-8") as f:
             return f.read()
 
-    def test_every_property_used_by_the_indicator_exists(self):
-        used = set(re.findall(r"\b(?:p|proxy|_proxy)\??\.([A-Z]\w+)", self.js("indicator.js")))
-        self.assertTrue(used, "regex found no property use")
-        calls = {m + suffix for m in self.methods for suffix in ("Remote", "Sync", "Async")}
-        self.assertEqual(sorted(used - calls - self.props), [])
+    def test_every_local_import_resolves_to_a_file(self):
+        for name in sorted(n for n in os.listdir(EXT) if n.endswith(".js")):
+            for target in re.findall(r"from '\./([\w.-]+)'", self.js(name)):
+                with self.subTest(importer=name, target=target):
+                    self.assertTrue(os.path.exists(os.path.join(EXT, target)), target)
 
-    def test_every_method_the_indicator_calls_exists(self):
-        called = set(re.findall(r"\b_proxy\??\.([A-Z]\w+?)(?:Remote|Sync|Async)\(", self.js("indicator.js")))
-        self.assertEqual(called, {"Forget", "Connect", "Disconnect"})
-        self.assertTrue(called <= self.methods)
-
-    def test_every_signal_the_indicator_listens_to_exists(self):
-        used = set(re.findall(r"connectSignal\('(\w+)'", self.js("indicator.js")))
-        self.assertEqual(used, {"LidOpened", "LowBattery"})
-        self.assertTrue(used <= self.signals)
+    def test_indicator_no_longer_uses_the_v1_dbus_service(self):
+        source = self.js("indicator.js")
+        self.assertNotIn("interface.js", source)
+        self.assertNotIn("org.pulsaros", source)
+        self.assertIn("StatusSource", source)
 
     def test_metadata_targets_48_and_51_and_matches_directory_name(self):
         import json
