@@ -71,6 +71,7 @@ struct _CcBackgroundPanel {
   AdwSwitchRow *macos_fullscreen_switch_row;
   AdwSwitchRow *liquid_glass_switch_row;
   AdwComboRow *liquid_glass_mode_row;
+  AdwComboRow *icon_theme_row;
   AdwSwitchRow *notch_switch_row;
   AdwSwitchRow *cc_switch_row;
   AdwActionRow *download_wallpapers_row;
@@ -781,7 +782,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
           safe_set_double (glass_settings, glass_schema, "application-tint-strength", 0.0);
           const gchar *empty_list[] = { NULL };
           safe_set_strv (glass_settings, glass_schema, "application-window-whitelist", empty_list);
-          safe_set_double (glass_settings, glass_schema, "dock-corner-radius", 24.0);
+          safe_set_double (glass_settings, glass_schema, "dock-corner-radius", 16.0);
           safe_set_int (glass_settings, glass_schema, "dock-glass-expand", 3);
           safe_set_string (glass_settings, glass_schema, "dock-tint-color", "#000000");
           safe_set_double (glass_settings, glass_schema, "dock-tint-strength", 0.12);
@@ -823,7 +824,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
         "dconf write /org/gnome/shell/extensions/liquid-glass/application-tint-color \\\"'#000000'\\\" ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/application-tint-strength '0.0' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/application-window-whitelist '@as []' ; "
-        "dconf write /org/gnome/shell/extensions/liquid-glass/dock-corner-radius '24.0' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/dock-corner-radius '16.0' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/dock-glass-expand '3' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/dock-tint-color \\\"'#000000'\\\" ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/enable-dock-glass 'true' ; "
@@ -965,6 +966,30 @@ on_liquid_glass_mode_selected_cb (CcBackgroundPanel *self)
 
   if (active)
     apply_desktop_effects_mode (TRUE, (LiquidGlassWindowMode) mode);
+}
+
+static void
+on_icon_theme_selected_cb (CcBackgroundPanel *self)
+{
+  guint selected;
+  g_autoptr(GSettings) iface_settings = NULL;
+
+  if (!self->icon_theme_row)
+    return;
+
+  selected = adw_combo_row_get_selected (self->icon_theme_row);
+  iface_settings = g_settings_new ("org.gnome.desktop.interface");
+
+  if (selected == 1)
+    g_settings_set_string (iface_settings, "icon-theme", "macOS-27-Icons");
+  else
+    {
+      g_autofree gchar *scheme = g_settings_get_string (iface_settings, "color-scheme");
+      if (g_strcmp0 (scheme, "prefer-light") == 0 || g_strcmp0 (scheme, "default") == 0)
+        g_settings_set_string (iface_settings, "icon-theme", "MacTahoe-blue-light");
+      else
+        g_settings_set_string (iface_settings, "icon-theme", "MacTahoe-blue-dark");
+    }
 }
 
 static void
@@ -1234,6 +1259,7 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_fullscreen_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, liquid_glass_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, liquid_glass_mode_row);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, icon_theme_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, notch_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, cc_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, download_wallpapers_row);
@@ -1250,6 +1276,7 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_callback (widget_class, on_apply_cursor_adwaita_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_liquid_glass_active_changed_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_liquid_glass_mode_selected_cb);
+  gtk_widget_class_bind_template_callback (widget_class, on_icon_theme_selected_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_activate_spotlight_python_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_activate_gnome_overview_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_macos_remap_active_changed_cb);
@@ -1351,6 +1378,19 @@ cc_background_panel_init (CcBackgroundPanel *self)
       g_signal_handlers_block_by_func (self->liquid_glass_mode_row, on_liquid_glass_mode_selected_cb, self);
       adw_combo_row_set_selected (self->liquid_glass_mode_row, initial_mode);
       g_signal_handlers_unblock_by_func (self->liquid_glass_mode_row, on_liquid_glass_mode_selected_cb, self);
+    }
+
+  if (self->icon_theme_row)
+    {
+      g_autoptr(GSettings) iface_settings = g_settings_new ("org.gnome.desktop.interface");
+      g_autofree gchar *current_icon = g_settings_get_string (iface_settings, "icon-theme");
+      guint initial_idx = 0;
+      if (current_icon && (g_str_has_prefix (current_icon, "macOS-27") || g_strcmp0 (current_icon, "macOS-27-Icons") == 0))
+        initial_idx = 1;
+
+      g_signal_handlers_block_by_func (self->icon_theme_row, on_icon_theme_selected_cb, self);
+      adw_combo_row_set_selected (self->icon_theme_row, initial_idx);
+      g_signal_handlers_unblock_by_func (self->icon_theme_row, on_icon_theme_selected_cb, self);
     }
 
   if (self->notch_switch_row)

@@ -1,0 +1,52 @@
+/* Pulsar OS - semaforo macOS 27 (Seafari/Firefox) */
+
+#titlebar-close {
+  -moz-appearance: none !important;
+  background-color: transparent !important;
+  background-image: url("file://@HOME@/.local/share/pulsar-dots/close.png") !important;
+  background-size: 15px 15px !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  border: none !important;
+  box-shadow: none !important;
+  margin: 0 4px !important;
+  min-width: 15px !important;
+}
+#titlebar-close > .toolbarbutton-icon, #titlebar-close > image { opacity: 0 !important; }
+#titlebar-close:hover { background-image: url("file://@HOME@/.local/share/pulsar-dots/close-hover.png") !important; }
+#titlebar-close:active { background-size: 17px 17px !important; background-image: url("file://@HOME@/.local/share/pulsar-dots/close-hover.png") !important; }
+#titlebar-close:-moz-window-inactive { background-image: url("file://@HOME@/.local/share/pulsar-dots/close-backdrop.png") !important; }
+
+#titlebar-minimize {
+  -moz-appearance: none !important;
+  background-color: transparent !important;
+  background-image: url("file://@HOME@/.local/share/pulsar-dots/minimize.png") !important;
+  background-size: 15px 15px !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  border: none !important;
+  box-shadow: none !important;
+  margin: 0 4px !important;
+  min-width: 15px !important;
+}
+#titlebar-minimize > .toolbarbutton-icon, #titlebar-minimize > image { opacity: 0 !important; }
+#titlebar-minimize:hover { background-image: url("file://@HOME@/.local/share/pulsar-dots/minimize-hover.png") !important; }
+#titlebar-minimize:active { background-size: 17px 17px !important; background-image: url("file://@HOME@/.local/share/pulsar-dots/minimize-hover.png") !important; }
+#titlebar-minimize:-moz-window-inactive { background-image: url("file://@HOME@/.local/share/pulsar-dots/minimize-backdrop.png") !important; }
+
+#titlebar-maximize, #titlebar-restore {
+  -moz-appearance: none !important;
+  background-color: transparent !important;
+  background-image: url("file://@HOME@/.local/share/pulsar-dots/maximize.png") !important;
+  background-size: 15px 15px !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  border: none !important;
+  box-shadow: none !important;
+  margin: 0 4px !important;
+  min-width: 15px !important;
+}
+#titlebar-maximize > .toolbarbutton-icon, #titlebar-maximize > image { opacity: 0 !important; }
+#titlebar-maximize, #titlebar-restore:hover { background-image: url("file://@HOME@/.local/share/pulsar-dots/maximize-hover.png") !important; }
+#titlebar-maximize, #titlebar-restore:active { background-size: 17px 17px !important; background-image: url("file://@HOME@/.local/share/pulsar-dots/maximize-hover.png") !important; }
+#titlebar-maximize, #titlebar-restore:-moz-window-inactive { background-image: url("file://@HOME@/.local/share/pulsar-dots/maximize-backdrop.png") !important; }

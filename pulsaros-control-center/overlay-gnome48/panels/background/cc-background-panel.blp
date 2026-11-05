@@ -166,6 +166,19 @@ template $CcBackgroundPanel: $CcPanel {
                 valign: center;
               }
             }
+
+            Adw.ComboRow icon_theme_row {
+              title: _("Icon Theme");
+              subtitle: _("Choose between macOS Tahoe (Default) and macOS 27");
+              notify::selected => $on_icon_theme_selected_cb(template);
+
+              model: StringList {
+                strings [
+                  _("macOS Tahoe (Predeterminado)"),
+                  _("macOS 27 (Nuevo)"),
+                ]
+              };
+            }
           }
 
           Adw.PreferencesGroup {

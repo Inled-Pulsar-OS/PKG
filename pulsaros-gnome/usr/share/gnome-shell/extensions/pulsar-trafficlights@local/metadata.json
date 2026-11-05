@@ -1,0 +1,8 @@
+{
+  "uuid": "pulsar-trafficlights@local",
+  "name": "Pulsar Traffic Lights",
+  "description": "Rimette il semaforo macOS 27 (pallini delle finestre) quando un cambio tema o un aggiornamento lo cancella. Gira dentro la shell: nessun processo in piu' e nessun controllo a orologio.",
+  "shell-version": ["45", "46", "47", "48", "49", "50", "51"],
+  "version-name": "1.0",
+  "url": "https://github.com/Agnell02010/pulsar-trafficlights"
+}
