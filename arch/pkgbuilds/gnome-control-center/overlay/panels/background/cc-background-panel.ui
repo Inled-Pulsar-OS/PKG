@@ -177,6 +177,21 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                             </child>
                           </object>
                         </child>
+                        <child>
+                          <object class="AdwComboRow" id="icon_theme_row">
+                            <property name="title" translatable="yes">Icon Theme</property>
+                            <property name="subtitle" translatable="yes">Choose between macOS Tahoe (Default) and macOS 27</property>
+                            <signal name="notify::selected" handler="on_icon_theme_selected_cb" object="CcBackgroundPanel"/>
+                            <property name="model">
+                              <object class="GtkStringList">
+                                <items>
+                                  <item translatable="yes">macOS Tahoe (Predeterminado)</item>
+                                  <item translatable="yes">macOS 27 (Nuevo)</item>
+                                </items>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
                       </object>
                     </child>
                     <child>
