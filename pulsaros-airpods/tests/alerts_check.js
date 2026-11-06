@@ -87,7 +87,8 @@ const fresh = () => new BatteryAlerts();
 }
 
 { // connect notice: one per connection, with model and battery levels, from the real fixtures
-    const fx = n => parseStatus(new TextDecoder().decode(imports.gi.GLib.file_get_contents(`tests/fixtures/${n}.json`)[1]));
+    const here = imports.gi.GLib.path_get_dirname(imports.gi.Gio.File.new_for_uri(import.meta.url).get_path());
+    const fx = n => parseStatus(new TextDecoder().decode(imports.gi.GLib.file_get_contents(`${here}/fixtures/${n}.json`)[1]));
     const off = snap({connected: false});
     const pro = fx('pro3');
     const n = new ConnectNotice();
