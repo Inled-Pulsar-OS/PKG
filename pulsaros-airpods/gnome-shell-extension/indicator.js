@@ -11,7 +11,7 @@ import {Slider} from 'resource:///org/gnome/shell/ui/slider.js';
 
 import {bannersEnabled, closeMenuAnimated, openMenuAnimated} from './compat.js';
 import {loadTranslator} from './i18n.js';
-import {BatteryAlerts} from './alerts.js';
+import {BatteryAlerts, ConnectNotice} from './alerts.js';
 import {runControl} from './ctl.js';
 import {availableModes, parseStatus} from './model.js';
 import {Pending} from './optimistic.js';
@@ -94,6 +94,7 @@ class AirPodsIndicator extends PanelMenu.Button {
         this._status = this._raw;                  // what we show: clicks held on top (optimistic.js)
         this._pending = new Pending(() => GLib.get_monotonic_time() / 1000);
         this._alerts = new BatteryAlerts();
+        this._connectNotice = new ConnectNotice();
         this._refreshId = 0;
         this._modeKey = '';
         this._syncing = false;
@@ -272,7 +273,17 @@ class AirPodsIndicator extends PanelMenu.Button {
         this._raw = status;
         this._status = this._pending.overlay(status);
         this._sync();
+        this._announceConnected(status);
         this._announceLowBattery(status);
+    }
+
+    _announceConnected(status) {
+        const notice = this._connectNotice.update(status);
+        if (!notice)
+            return;
+        const label = {left: _('Left'), right: _('Right'), case: _('Case'), headphones: _('Battery')};
+        const body = notice.levels.map(([which, level]) => `${label[which]} ${level}%`).join(' · ');
+        Main.notify(_('{name} connected').replace('{name}', notice.name || BRAND), body || _('Battery level not available yet.'));
     }
 
     // Shell notifications already honour Do Not Disturb.

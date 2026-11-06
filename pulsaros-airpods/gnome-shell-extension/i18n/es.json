@@ -24,5 +24,6 @@
   "Right AirPod": "AirPod derecho",
   "Transparency": "Transparencia",
   "{level}% remaining. Charge soon.": "Queda el {level}%. Carga pronto.",
-  "{name} battery low": "Batería baja: {name}"
+  "{name} battery low": "Batería baja: {name}",
+  "{name} connected": "{name} conectado"
 }
