@@ -2,9 +2,9 @@
 # Installs the pulsaros-airpods .deb in a clean debian:trixie container and checks each acceptance criterion.
 # Usage: pulsaros-airpods/verify-install-debian.sh [path/to/pulsaros-airpods_*.deb]   (default: newest in build/packages)
 # Prints a PASS/FAIL table; exit 1 if any check fails.
-set -e
+set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-deb="${1:-$(ls -t "$repo"/build/packages/pulsaros-airpods_*.deb | head -1)}"
+deb="${1:-$(ls -t "$repo"/build/packages/pulsaros-airpods_*.deb 2>/dev/null | head -1 || true)}"
 [ -f "$deb" ] || { echo "no .deb found; run pulsaros-airpods/build-local.sh debian stable" >&2; exit 2; }
 
 docker run --rm -v "$(realpath "$deb"):/pkg.deb:ro" -e DEBIAN_FRONTEND=noninteractive debian:trixie bash -c '
