@@ -1040,22 +1040,32 @@ def resolve_recovery_boot_paths(esp_root="/mnt/boot/efi", target="/mnt",
     EFI/BOOT/).
 
     Orden de preferencia (el primero que exista en el host gana):
-      1. ESP: /EFI/recovery/vmlinuz-recovery — MISMO volumen que refind.conf,
+      1. ESP: /EFI/recovery/vmlinuz-recovery (o .efi) — MISMO volumen que refind.conf,
          por lo que no depende de resolver otro volumen (rEFInd con
          "scanfor manual" no registra de forma fiable la partición ext4
          PULSAR_RECOVERY y "volume PULSAR_RECOVERY" acaba buscando el archivo
          en la ESP → "Not Found while loading vmlinuz-recovery") ni de que
          cargue el driver ext4_x64.efi. Es además el mismo criterio que usa la
          ISO en /EFI/BOOT/vmlinuz-recovery.
-      2. partición PULSAR_RECOVERY: /boot/vmlinuz-recovery (mismo criterio que
-         la entrada GRUB de emergencia /etc/grub.d/15_pulsar_recovery)
-      3. partición PULSAR_RECOVERY: /vmlinuz-recovery (raíz de la partición)
+      2. partición PULSAR_RECOVERY (o /@/recovery si dual boot sin partición dedicada):
+         /boot/vmlinuz-recovery (o /@/recovery/boot/vmlinuz-recovery)
+      3. partición PULSAR_RECOVERY (o /@/recovery si dual boot): raíz /vmlinuz-recovery
       4. rootfs instalado: /@/boot/vmlinuz-recovery (instalaciones antiguas)
 
-    Nota: la ruta de refind.conf y la ruta real en el host no son iguales
-    ("/@/boot/..." es la raíz del volumen en rEFInd, no un subdirectorio), por
-    eso cada candidato lleva sus propias rutas de verificación en el host.
+    Nota: si target/recovery NO es un punto de montaje separado (caso dual boot),
+    el volumen rEFInd debe ser os_label ("PULSAR_OS") con prefijo "/@", porque
+    la etiqueta PULSAR_RECOVERY no existe en el disco.
     """
+    rec_is_mounted = False
+    try:
+        rec_dir = os.path.join(target, "recovery")
+        rec_is_mounted = os.path.ismount(rec_dir)
+    except Exception:
+        rec_is_mounted = False
+
+    rec_vol = rec_label if rec_is_mounted else os_label
+    rec_prefix = "" if rec_is_mounted else "/@"
+
     # (volume, loader en refind.conf, initrd en refind.conf, kernel en host, initrd en host)
     candidates = [
         # volume None = mismo volumen que el refind.conf que se está escribiendo
@@ -1063,10 +1073,15 @@ def resolve_recovery_boot_paths(esp_root="/mnt/boot/efi", target="/mnt",
         (None, "/EFI/recovery/vmlinuz-recovery", "/EFI/recovery/initramfs-recovery.img",
          os.path.join(esp_root, "EFI", "recovery", "vmlinuz-recovery"),
          os.path.join(esp_root, "EFI", "recovery", "initramfs-recovery.img")),
-        (rec_label, "/boot/vmlinuz-recovery", "/boot/initramfs-recovery.img",
+        (None, "/EFI/recovery/vmlinuz-recovery.efi", "/EFI/recovery/initramfs-recovery.img",
+         os.path.join(esp_root, "EFI", "recovery", "vmlinuz-recovery.efi"),
+         os.path.join(esp_root, "EFI", "recovery", "initramfs-recovery.img")),
+        (rec_vol, f"{rec_prefix}/recovery/boot/vmlinuz-recovery" if not rec_is_mounted else "/boot/vmlinuz-recovery",
+         f"{rec_prefix}/recovery/boot/initramfs-recovery.img" if not rec_is_mounted else "/boot/initramfs-recovery.img",
          os.path.join(target, "recovery", "boot", "vmlinuz-recovery"),
          os.path.join(target, "recovery", "boot", "initramfs-recovery.img")),
-        (rec_label, "/vmlinuz-recovery", "/initramfs-recovery.img",
+        (rec_vol, f"{rec_prefix}/recovery/vmlinuz-recovery" if not rec_is_mounted else "/vmlinuz-recovery",
+         f"{rec_prefix}/recovery/initramfs-recovery.img" if not rec_is_mounted else "/initramfs-recovery.img",
          os.path.join(target, "recovery", "vmlinuz-recovery"),
          os.path.join(target, "recovery", "initramfs-recovery.img")),
         (os_label, "/@/boot/vmlinuz-recovery", "/@/boot/initramfs-recovery.img",
@@ -1334,6 +1349,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.install_hibernation = True
         self.install_encryption = False
         self.encryption_passphrase = ""
+        self.is_offline_install = False
         self.selected_action = None
         self.selected_disk_card = None
         self.selected_install_mode = None
@@ -1722,6 +1738,18 @@ class RecoveryWindow(Adw.ApplicationWindow):
         dialog.present()
 
     def _get_selected_packages_info(self, is_arch=True):
+        if getattr(self, "is_offline_install", False):
+            return {
+                "pkgs": [],
+                "aur_pkgs": [],
+                "install_onlyoffice": False,
+                "install_hidamari": False,
+                "install_macos": False,
+                "install_localsend": False,
+                "install_cups": False,
+                "install_pulsar_windows": False,
+            }
+
         pkgs = []
         aur_pkgs = []
         install_onlyoffice = False
@@ -1733,7 +1761,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
         for item in EXTRA_PACKAGES_ITEMS:
             item_id = item["id"]
-            if item_id in REQUIRED_EXTRA_IDS or self.packages_selected.get(item_id, True):
+            if self.packages_selected.get(item_id, False):
                 if item.get("is_flatpak_onlyoffice"):
                     install_onlyoffice = True
                 if item.get("is_flatpak_hidamari"):
@@ -2688,6 +2716,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         disk_name = disk_path.replace("/dev/", "")
         self.pending_disk_path = disk_path
         self.pending_disk_name = disk_name
+        self.is_offline_install = False
         self.install_broadcom = False
         self.install_extra_packages = False
         self.install_hibernation = True
@@ -3234,12 +3263,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
         active = chk.get_active()
         self.install_extra_packages = active
         for k in self.packages_selected:
-            self.packages_selected[k] = active or (k in REQUIRED_EXTRA_IDS)
+            self.packages_selected[k] = active
         self._updating_selection_ui = True
         for item_id, w in getattr(self, 'pkg_check_widgets', {}).items():
-            if item_id in REQUIRED_EXTRA_IDS:
-                w.set_active(True)
-                continue
             w.set_active(active)
         self._updating_selection_ui = False
         self._update_packages_summary_label()
@@ -3274,7 +3300,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
     def _sync_packages_selection(self):
         for item_id, chk in getattr(self, 'pkg_check_widgets', {}).items():
-            self.packages_selected[item_id] = chk.get_active() or (item_id in REQUIRED_EXTRA_IDS)
+            self.packages_selected[item_id] = chk.get_active()
         sel_count = sum(1 for v in self.packages_selected.values() if v)
         self.install_extra_packages = sel_count > 0
         if hasattr(self, 'chk_extra'):
@@ -3354,13 +3380,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             r_box.append(txt_box)
 
             chk = Gtk.CheckButton()
-            if item.get("required"):
-                # Pulsar OS extras are mandatory: always on and not toggable.
-                self.packages_selected[item['id']] = True
-                chk.set_active(True)
-                chk.set_sensitive(False)
-            else:
-                chk.set_active(self.packages_selected.get(item['id'], True))
+            chk.set_active(self.packages_selected.get(item['id'], True))
             chk.set_valign(Gtk.Align.CENTER)
             chk.item_id = item['id']
             chk.connect("toggled", self._on_individual_pkg_toggled)
@@ -3489,9 +3509,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
     def _on_pkg_toggle_all_clicked(self, btn):
         any_unchecked = any(not chk.get_active() for chk in self.pkg_check_widgets.values())
         for chk in self.pkg_check_widgets.values():
-            if getattr(chk, 'item_id', None) in REQUIRED_EXTRA_IDS:
-                chk.set_active(True)
-                continue
             chk.set_active(any_unchecked)
         self.btn_pkg_toggle_all.set_label("Deselect All" if any_unchecked else "Select All")
         self._sync_packages_selection()
@@ -3507,7 +3524,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.packages_select_return_screen = return_screen
         self._updating_selection_ui = True
         for item_id, chk in self.pkg_check_widgets.items():
-            chk.set_active(self.packages_selected.get(item_id, True) or (item_id in REQUIRED_EXTRA_IDS))
+            chk.set_active(self.packages_selected.get(item_id, True))
         self._updating_selection_ui = False
         any_unchecked = any(not chk.get_active() for chk in self.pkg_check_widgets.values())
         self.btn_pkg_toggle_all.set_label("Select All" if any_unchecked else "Deselect All")
@@ -3628,10 +3645,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
         else:
             self.selected_bootloader = "grub"
 
-        if self.install_extra_packages or self.install_broadcom:
-            self._show_network_check_screen()
-        else:
-            self._proceed_to_confirm_screen()
+        # Always show the network check screen so user can verify connectivity and select offline installation
+        self._show_network_check_screen()
 
     def build_install_confirm_screen(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -3689,7 +3704,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
         btn_back = Gtk.Button(label="Back")
         btn_back.add_css_class("secondary-action")
-        btn_back.connect("clicked", lambda x: self.stack.set_visible_child_name("install_options"))
+        btn_back.connect("clicked", lambda x: self.stack.set_visible_child_name("network_check"))
         nav_box.append(btn_back)
 
         btn_install = Gtk.Button(label="Install Pulsar OS")
@@ -3712,10 +3727,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
             self.confirm_warning_lbl.set_markup("⚠️ <b>Notice:</b> All existing data on this drive will be replaced with Pulsar OS.")
 
         features = []
-        if self.install_broadcom:
-            features.append("Hardware Drivers")
-        if self.install_extra_packages:
-            features.append("Essential System Apps & Utilities")
+        if getattr(self, "is_offline_install", False):
+            features.append("Offline Installation (100% Offline Minimal Base)")
+        else:
+            if self.install_broadcom:
+                features.append("Hardware Drivers")
+            if self.install_extra_packages:
+                features.append("Essential System Apps & Utilities")
         if self.install_hibernation:
             features.append("Hibernation (RAM Swapfile)")
         if self.install_encryption:
@@ -4124,8 +4142,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
         def on_response(d, response):
             if response == "proceed":
+                self.is_offline_install = True
                 self.install_extra_packages = False
                 self.install_broadcom = False
+                for k in self.packages_selected:
+                    self.packages_selected[k] = False
                 if self.selected_action in ("packages", "drivers"):
                     self.stack.set_visible_child_name("utilities")
                 else:
@@ -4371,6 +4392,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             self.stack.set_visible_child_name("install_options")
 
     def _net_continue_clicked(self, btn):
+        self.is_offline_install = False
         if self.selected_action == "packages":
             self._start_package_installation()
         elif self.selected_action == "drivers":
@@ -5490,9 +5512,15 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 else:
                     log_msg("Full ISO detected — installing mandatory Pulsar OS extras...")
 
-                # Pulsar OS extras are never shipped on the live ISO, so they are
-                # installed on the target even if the optional extras are unchecked.
-                want_extras = self.install_extra_packages or HAS_REQUIRED_EXTRAS
+                is_offline = getattr(self, "is_offline_install", False)
+                if is_offline or not self.install_extra_packages:
+                    want_extras = False
+                    if is_offline:
+                        log_msg("Offline mode active: 100% offline installation — skipping all online packages, mandatory extras, and repository updates.")
+                    else:
+                        log_msg("Extra packages deselected by user — skipping optional and online packages.")
+                else:
+                    want_extras = True
 
                 if is_arch:
                     # ── Arch: install via pacman (local bundled packages first, then online sync) ──
@@ -5936,8 +5964,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         shutil.copy2(found_rec_squash, primary_rec_dst)
                         log_msg(f"Recovery Environment SquashFS deployed from {found_rec_squash} -> {primary_rec_dst}")
 
-                    for alias in ["/mnt/recovery/filesystem.squashfs", "/mnt/recovery/recovery/filesystem.squashfs"]:
+                    for alias in ["/mnt/recovery/filesystem.squashfs", "/mnt/recovery/recovery/filesystem.squashfs", "/mnt/live/filesystem.squashfs"]:
                         try:
+                            os.makedirs(os.path.dirname(alias), exist_ok=True)
                             if not os.path.isfile(alias):
                                 os.link(primary_rec_dst, alias)
                         except Exception:
@@ -6236,6 +6265,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         esp_root = "/mnt/boot/efi"
                         os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
                         shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery.efi")
+                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery")
                     
                     rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash"
                     
@@ -6596,7 +6626,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             f"{rec_volume_line}"
                             f"    loader {rec_loader}\n"
                             f"    initrd {rec_initrd}\n"
-                            f'    options "{rec_opts_rec}"\n'
+                            f'    options "{rec_opts_auto}"\n'
                             "}\n"
                             f"{extra_entries_str}"
                             f"{MENU_END}\n"
