@@ -1,7 +1,7 @@
 // Run with: gjs -m tests/alerts_check.js
 // Specification of gnome-shell-extension/alerts.js: macOS-like low-battery thresholds (20 / 10 / 5 percent)
 // over parsed status objects. Ported from the v1 Python tests, which pinned the same rules.
-import {BatteryAlerts} from '../gnome-shell-extension/alerts.js';
+import {BatteryAlerts, ConnectNotice} from '../gnome-shell-extension/alerts.js';
 import {parseStatus} from '../gnome-shell-extension/model.js';
 
 const failures = [];
@@ -84,6 +84,22 @@ const fresh = () => new BatteryAlerts();
 }
 { // first reading below the threshold alerts (connecting with a low battery)
     same('connect low', fresh().update(lr(15, 90)), [{which: 'left', level: 15}]);
+}
+
+{ // connect notice: one per connection, with model and battery levels, from the real fixtures
+    const here = imports.gi.GLib.path_get_dirname(imports.gi.Gio.File.new_for_uri(import.meta.url).get_path());
+    const fx = n => parseStatus(new TextDecoder().decode(imports.gi.GLib.file_get_contents(`${here}/fixtures/${n}.json`)[1]));
+    const off = snap({connected: false});
+    const pro = fx('pro3');
+    const n = new ConnectNotice();
+    same('disconnected', n.update(off), null);
+    same('connect', n.update(pro), {name: 'AirPods Pro 3', levels: [['left', 80], ['right', 70], ['case', 50]]});
+    same('repeat', n.update(pro), null);
+    same('repeat 2', n.update(snap({left: pod(79), right: pod(70)})), null);
+    n.update(off);
+    same('reconnect', n.update(pro)?.name, 'AirPods Pro 3');
+    same('daemon down re-arms', [n.update(parseStatus(null)), n.update(pro)?.name], [null, 'AirPods Pro 3']);
+    same('headset', new ConnectNotice().update(fx('max2')).levels.map(l => l[0]), ['headphones']);
 }
 
 if (failures.length > 0) {
