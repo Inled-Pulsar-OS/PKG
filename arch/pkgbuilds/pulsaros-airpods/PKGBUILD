@@ -3,7 +3,7 @@ pkgname=pulsaros-airpods
 pkgver=0.2.0
 pkgrel=1
 pkgdesc="AirPods in the GNOME top bar for Pulsar OS (Shell extension + daemon)"
-arch=(x86_64 aarch64)
+arch=(x86_64)
 url="https://inled.es"
 # The extension is MIT; daemon/ is a modified copy of omarchy-pods / librepods, GPL-3.0.
 license=(MIT GPL-3.0-or-later)

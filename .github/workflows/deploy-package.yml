@@ -193,6 +193,7 @@ jobs:
           PULSAR_VERSION: "${{ steps.parse-package.outputs.pulsar_version }}"
         run: |
           TARGET_BRANCH="${{ steps.parse-package.outputs.branch }}"
+          DEBIAN_IMAGE="$(./ci-image.sh debian "$TARGET_BRANCH")"
           docker run --rm \
             -v "$PWD:/workspace" \
             -w /workspace \
@@ -202,7 +203,7 @@ jobs:
             -e CI="true" \
             -e USER=root \
             -e HOME=/root \
-            debian:trixie bash -c "
+            "$DEBIAN_IMAGE" bash -c "
               set -eo pipefail
               apt-get update
               apt-get install -y --no-install-recommends \
@@ -230,6 +231,8 @@ jobs:
                 libgexiv2-dev libcloudproviders-dev libgraphene-1.0-dev \
                 libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base desktop-file-utils \
                 nodejs npm
+
+              /workspace/install-build-deps.sh debian '${{ steps.parse-package.outputs.package_name }}'
 
               curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
               export PATH="/root/.cargo/bin:$PATH"
@@ -263,6 +266,8 @@ jobs:
               pacman-key --init
               pacman-key --populate archlinux
               pacman -Syu --noconfirm base-devel git sudo jq curl wget gtk-update-icon-cache cmake meson ninja blueprint-compiler glib2-devel docbook-xsl rust webkit2gtk-4.1
+
+              /workspace/install-build-deps.sh arch '${{ steps.parse-package.outputs.package_name }}'
 
               useradd -m builder
               echo 'builder ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers

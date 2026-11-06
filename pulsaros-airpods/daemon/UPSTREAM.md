@@ -90,7 +90,7 @@ Keep this list current. Anything not listed here is identical to the omarchy-pod
   `/usr/lib/systemd/user/` and enabled for `graphical-session.target`.
 - The package ships neither the tray launcher entry (`me.kavishdevar.librepods.desktop`) nor the unit that CMake
   installs under `/usr/share/systemd/user`.
-- Debian builds run in `debian:trixie` (`packaging/build-in-container.sh`) so the binary needs only trixie's glibc and Qt 6.8.
+- Debian builds run in the CI image for the branch (`ci-image.sh`: trixie by default), so the binary needs only that release's glibc and Qt 6; build deps are in `build-deps.txt`.
 - No source file of the daemon is modified. Known gap: its `Notifier` talks to the `omarchy` CLI and notifies nobody
   on GNOME, so low-battery alerts are done by the `pulsaros-airpods` extension instead.
 
