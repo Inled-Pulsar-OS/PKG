@@ -28,7 +28,7 @@ class BuildPathTests(unittest.TestCase):
 
     def test_scripts_parse(self):
         for rel in ("pulsaros-airpods/prepare-assets.sh", "pulsaros-airpods/build-local.sh",
-                    "install-build-deps.sh", "ci-image.sh"):
+                    "pulsaros-airpods/verify-install-arch.sh", "install-build-deps.sh", "ci-image.sh"):
             with self.subTest(script=rel):
                 subprocess.run(["bash", "-n", os.path.join(ROOT, rel)], check=True)
 
