@@ -42,3 +42,30 @@ export class BatteryAlerts {
         return alerts;
     }
 }
+
+// One "connected" notice per connection, with the model and every battery that has a reading.
+export class ConnectNotice {
+    constructor() {
+        this._connected = false;
+    }
+
+    /** Feed every status. Returns {name, levels: [[which, level]]} on the transition to connected, else null. */
+    update(status) {
+        // A transient bad read ('invalid', 'newer-schema') must not re-arm the notice.
+        if (status.state !== 'ok' && status.state !== 'daemon-down')
+            return null;
+        const connected = status.state === 'ok' && status.connected;
+        const fresh = connected && !this._connected;
+        this._connected = connected;
+        if (!fresh)
+            return null;
+
+        const readings = status.isHeadset
+            ? [['headphones', status.headsetLevel]]
+            : [['left', status.left.level], ['right', status.right.level], ['case', status.case.level]];
+        return {
+            name: status.modelName || status.deviceName || '',
+            levels: readings.filter(([, level]) => level >= 0),
+        };
+    }
+}

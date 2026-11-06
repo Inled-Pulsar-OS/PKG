@@ -2,7 +2,7 @@
 # Pulsar OS package hook: builds the AirPods daemon (daemon/) and installs it, together with the
 # GNOME Shell extension (gnome-shell-extension/), into the staging dir.
 #
-# Debian builds happen in a debian:trixie container so the binary only needs trixie's glibc and Qt 6.8.
+# The build environment (image, Qt 6 and cmake) comes from the caller, never from this script.
 # Arch packages are built by arch/pkgbuilds/pulsaros-airpods/PKGBUILD instead.
 set -e
 
@@ -15,24 +15,17 @@ cd "$SRC_DIR"
 mkdir -p "$STAGE_DIR"
 
 # -- daemon -------------------------------------------------------------------------------------
-if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-    echo "Building the daemon inside debian:trixie..."
-    docker run --rm \
-        -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
-        -v "$DAEMON_DIR:/src:ro" \
-        -v "$STAGE_DIR:/stage" \
-        -v "$DAEMON_DIR/packaging/build-in-container.sh:/build.sh:ro" \
-        debian:trixie bash /build.sh
-elif pkg-config --exists Qt6Core Qt6Bluetooth libpulse; then
-    echo "Docker is not available: building the daemon with the local Qt 6 toolchain..."
-    BUILD_DIR="$(mktemp -d)"
-    cmake -S "$DAEMON_DIR" -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
-    cmake --build "$BUILD_DIR"
-    DESTDIR="$STAGE_DIR" cmake --install "$BUILD_DIR" --prefix /usr
-else
-    echo "Error: pulsaros-airpods needs docker (to build the daemon in debian:trixie) or the Qt 6 development packages." >&2
+# Always built with the local toolchain: the caller (CI job or pulsaros-airpods/build-local.sh) supplies the
+# build environment and installs pulsaros-airpods/build-deps.txt first.
+if ! pkg-config --exists Qt6Core Qt6Bluetooth libpulse; then
+    echo "Error: pulsaros-airpods needs the build dependencies in pulsaros-airpods/build-deps.txt (install-build-deps.sh), or run pulsaros-airpods/build-local.sh." >&2
     exit 1
 fi
+BUILD_DIR="$(mktemp -d)"
+cmake -S "$DAEMON_DIR" -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+cmake --build "$BUILD_DIR"
+DESTDIR="$STAGE_DIR" cmake --install "$BUILD_DIR" --prefix /usr
+rm -r "$BUILD_DIR"
 
 # Headless service only: no launcher entry for the tray app, and no unit in the XDG data dirs.
 rm -f "$STAGE_DIR/usr/share/applications/me.kavishdevar.librepods.desktop"
