@@ -5096,6 +5096,16 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 exec_cmd(["mount", "-t", "btrfs", root_part_dev, "/mnt"])
                 exec_cmd(["btrfs", "subvolume", "create", "/mnt/@"])
                 exec_cmd(["btrfs", "subvolume", "create", "/mnt/@home"])
+                # Live-boot finder link on Btrfs:
+                # Debian live-boot mounts Btrfs partitions at /live/findiso (top-level subvolume 5)
+                # and scans for /live/filesystem.squashfs.
+                try:
+                    os.makedirs("/mnt/@/recovery/live", exist_ok=True)
+                    os.makedirs("/mnt/@/live", exist_ok=True)
+                    if not os.path.lexists("/mnt/live"):
+                        os.symlink("@/recovery/live", "/mnt/live")
+                except Exception:
+                    pass
                 exec_cmd(["umount", "/mnt"])
 
                 GLib.idle_add(self.update_progress, 0.18, "Mounting Btrfs subvolumes...")
@@ -5953,9 +5963,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 # 1. Recovery Boot Environment sources (lightweight Openbox + assistant environment)
                 rec_sources = [
                     "/recovery/filesystem.squashfs",
+                    "/recovery/live/filesystem.squashfs",
+                    "/run/live/medium/recovery/filesystem.squashfs",
+                    "/run/live/medium/recovery/live/filesystem.squashfs",
+                    "/run/live/medium/live/filesystem.squashfs",
+                    "/lib/live/mount/medium/recovery/filesystem.squashfs",
+                    "/lib/live/mount/medium/recovery/live/filesystem.squashfs",
+                    "/lib/live/mount/medium/live/filesystem.squashfs",
                     "/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
                     "/mnt/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
                     "/run/archiso/bootmnt/recovery/filesystem.squashfs",
+                    "/run/archiso/bootmnt/recovery/live/filesystem.squashfs",
                 ]
                 found_rec_squash = next((p for p in rec_sources if os.path.isfile(p) and os.path.getsize(p) > 50 * 1024 * 1024), None)
                 if found_rec_squash and "TEST_MODE" not in os.environ:
@@ -5974,6 +5992,22 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 shutil.copy2(primary_rec_dst, alias)
                             except Exception:
                                 pass
+
+                    # If /mnt is a Btrfs subvolume (@), ensure top-level subvolume 5 also has finder symlinks for live-boot
+                    try:
+                        if root_part_dev and not recovery_part:
+                            os.makedirs("/tmp/btrfs_top_rec_mount", exist_ok=True)
+                            res_m = subprocess.run(["mount", "-t", "btrfs", "-o", "subvolid=5", root_part_dev, "/tmp/btrfs_top_rec_mount"], capture_output=True)
+                            if res_m.returncode == 0:
+                                os.makedirs("/tmp/btrfs_top_rec_mount/@/recovery/live", exist_ok=True)
+                                if not os.path.lexists("/tmp/btrfs_top_rec_mount/live"):
+                                    os.symlink("@/recovery/live", "/tmp/btrfs_top_rec_mount/live")
+                                if not os.path.lexists("/tmp/btrfs_top_rec_mount/recovery"):
+                                    os.symlink("@/recovery", "/tmp/btrfs_top_rec_mount/recovery")
+                                subprocess.run(["umount", "/tmp/btrfs_top_rec_mount"], capture_output=True)
+                                log_msg("Btrfs top-level subvolume 5 symlinks configured for recovery live-boot.")
+                    except Exception as btrfs_top_err:
+                        log_msg(f"Notice: Btrfs top-level symlink setup: {btrfs_top_err}")
 
                 # 2. Pulsar OS Full Desktop Image sources (for system restoration / reinstall)
                 base_os_sources = [
@@ -6267,7 +6301,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery.efi")
                         shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery")
                     
-                    rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash"
+                    rec_opts_base = "boot=live components username=live autologin cow_spacesize=4G live-media-path=live ahci.mobile_lpm_policy=1 fsck.mode=skip quiet splash"
+                    rec_opts = f"boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live ahci.mobile_lpm_policy=1 fsck.mode=skip quiet splash" if recovery_part else rec_opts_base
                     
                     with open("/mnt/recovery/boot/refind_linux.conf", "w") as f:
                         f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
@@ -6278,7 +6313,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         with open(f"{esp_root}/EFI/recovery/refind_linux.conf", "w") as f:
                             # live-media=any rompe find_livefs (ver Bug #2); sin
                             # live-media, live-boot escanea los dispositivos de bloque.
-                            f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts.replace("live-media=/dev/disk/by-label/PULSAR_RECOVERY ", "")}"\n')
+                            f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts_base}"\n')
 
                     subprocess.run(["sync"])
                     log_msg(f"Recovery kernel deployed to PULSAR_OS, PULSAR_RECOVERY, and ESP from {found_k}")
@@ -6389,8 +6424,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     if os.path.exists(f"/mnt/boot/{uc}")
                 )
 
-                rec_opts_rec = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash"
-                rec_opts_auto = "boot=live components username=live autologin cow_spacesize=4G live-media-path=live fsck.mode=skip quiet splash"
+                rec_opts_rec = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live ahci.mobile_lpm_policy=1 fsck.mode=skip quiet splash"
+                rec_opts_auto = "boot=live components username=live autologin cow_spacesize=4G live-media-path=live ahci.mobile_lpm_policy=1 fsck.mode=skip quiet splash"
                 rec_net_opts = "boot=live components username=live autologin cow_spacesize=4G internet_recovery=1 quiet splash"
 
                 refind_dirs = [
@@ -6627,6 +6662,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             f"    loader {rec_loader}\n"
                             f"    initrd {rec_initrd}\n"
                             f'    options "{rec_opts_auto}"\n'
+                            '    submenuentry "Boot Recovery (Debug Mode)" {\n'
+                            f'        options "{rec_opts_auto.replace("quiet splash", "loglevel=7 live-debug")}"\n'
+                            "    }\n"
+                            '    submenuentry "Boot Recovery (Safe Graphics)" {\n'
+                            f'        options "{rec_opts_auto.replace("quiet splash", "nomodeset")}"\n'
+                            "    }\n"
                             "}\n"
                             f"{extra_entries_str}"
                             f"{MENU_END}\n"

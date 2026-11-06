@@ -827,8 +827,13 @@ class OOTBWindow(Adw.ApplicationWindow):
         self.selected_theme = "dark"
 
     def apply_css(self):
-        # Force light palette so Adw never overrides our white/blue colours
-        Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_LIGHT)
+        # Apply dark theme by default matching self.selected_theme
+        if getattr(self, "selected_theme", "dark") in ["dark", "liquid_glass"]:
+            self.add_css_class("dark-theme")
+            Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_DARK)
+        else:
+            self.remove_css_class("dark-theme")
+            Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_LIGHT)
         display = Gdk.Display.get_default()
         if not display:
             return
@@ -2837,15 +2842,69 @@ class OOTBWindow(Adw.ApplicationWindow):
                     ], check=False)
 
                 if is_liquid_glass:
+                    # Enable Liquid Glass GNOME Shell extension
                     run_cmd([
                         "sudo", "-u", username, "dbus-run-session", "gnome-extensions", "enable",
                         "liquid-glass@thinkingcoding1231.gmail.com"
                     ], check=False)
-                    run_cmd([
-                        "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
-                        "org.gnome.shell.extensions.liquid-glass@thinkingcoding1231.gmail.com",
-                        "enable-application-glass", "true"
-                    ], check=False)
+                    # Turn off blur-my-shell on dock and popups so it does not conflict with liquid glass
+                    for bms_schema, bms_key, bms_val in [
+                        ("org.gnome.shell.extensions.blur-my-shell.dash-to-dock", "blur", "false"),
+                        ("org.gnome.shell.extensions.blur-my-shell.popup", "blur", "false"),
+                        ("org.gnome.shell.extensions.blur-my-shell.panel", "blur", "false"),
+                    ]:
+                        run_cmd([
+                            "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
+                            bms_schema, bms_key, bms_val
+                        ], check=False)
+                    # Configure Dash to Dock transparency and shrink wrap
+                    for d2d_key, d2d_val in [
+                        ("apply-custom-theme", "true"),
+                        ("transparency-mode", "'FIXED'"),
+                        ("background-opacity", "0.0"),
+                        ("customize-alphas", "false"),
+                        ("custom-theme-shrink", "true"),
+                        ("height-fraction", "0.9"),
+                    ]:
+                        run_cmd([
+                            "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
+                            "org.gnome.shell.extensions.dash-to-dock", d2d_key, d2d_val
+                        ], check=False)
+                    # Write full Liquid Glass dconf settings with macOS appearance & drop animations
+                    lg_dconf = (
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-dock-glass 'true' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/dock-corner-radius '16.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/dock-glass-expand '3' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/dock-tint-color \"'#000000'\" ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-application-glass 'true' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/application-glass-all-windows 'true' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/application-content-opacity '0.85' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-menu-glass 'true' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-notification-glass 'true' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-osd-glass 'true' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-quick-settings-glass 'true' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/menu-corner-radius '14.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/menu-glass-expand '4' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/panel-menu-corner-radius '14.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/panel-menu-glass-expand '4' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/desktop-menu-corner-radius '14.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/notification-corner-radius '16.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/osd-corner-radius '16.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/quick-settings-corner-radius '18.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-chroma-strength '0.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-displacement-scale '188.37209302325581' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-edge-smoothing '0.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-ior '2.0175438596491229' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-max-z '16.981132075471699' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-profile-shape-n '20.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-rim-width '4.8' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-specular-intensity '0.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/menu-tint-color \"'#000000'\" ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/notification-tint-color \"'#000000'\" ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/osd-tint-color \"'#000000'\" ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/output-logs 'false'"
+                    )
+                    run_cmd(["sudo", "-u", username, "dbus-run-session", "bash", "-c", lg_dconf], check=False)
                 else:
                     run_cmd([
                         "sudo", "-u", username, "dbus-run-session", "gnome-extensions", "disable",
@@ -2989,12 +3048,20 @@ class OOTBWindow(Adw.ApplicationWindow):
                     os.remove("/etc/pulsar-need-setup")
                     log_msg("Removed /etc/pulsar-need-setup")
 
-                # 5. Create cleanup sentinel (will be picked up on first login)
+                # 5. Run live user and installer shortcut cleanup immediately
+                if os.path.exists("/usr/libexec/pulsar-cleanup-live.sh"):
+                    try:
+                        subprocess.run(["/usr/libexec/pulsar-cleanup-live.sh"], check=False)
+                        log_msg("Executed /usr/libexec/pulsar-cleanup-live.sh")
+                    except Exception as ex_cl:
+                        log_msg(f"Notice running cleanup-live.sh: {ex_cl}")
+
+                # 6. Create cleanup sentinel (if needed as fallback on next login)
                 with open("/etc/pulsar-need-cleanup", "w") as f:
                     f.write(username)
                 log_msg("Created /etc/pulsar-need-cleanup")
 
-                # 6. Disable pulsar-ootb service (no longer needed)
+                # 7. Disable pulsar-ootb service (no longer needed)
                 subprocess.run(
                     ["systemctl", "disable", "pulsar-ootb.service"],
                     capture_output=True

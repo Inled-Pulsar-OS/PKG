@@ -19,7 +19,7 @@ if [ -f /etc/pulsar-need-setup ]; then
 fi
 
 # 2. Do not launch in live ISO / live installer environments
-if [ -d /run/archiso/bootmnt ] || [ -d /run/live ] || [ -d /live ] || grep -qE 'archiso|pulsar-live|boot=live' /proc/cmdline 2>/dev/null || [ "$USER" = "live" ]; then
+if [ -d /run/archiso/bootmnt ] || [ -d /run/live ] || grep -qE 'archiso|pulsar-live|boot=live' /proc/cmdline 2>/dev/null || [ "$USER" = "live" ]; then
     exit 0
 fi
 
