@@ -10,7 +10,9 @@
 // LIVE (vía pulsar-live-nopasswd.service) y se elimina en el sistema
 // instalado, por lo que nunca otorga privilegios fuera de la sesión live.
 polkit.addRule(function (action, subject) {
-    if (subject.user === "live") {
+    if (subject.user === "live" || subject.user === "arch" || subject.user === "omarchy" ||
+        subject.isInGroup("wheel") || subject.isInGroup("sudo") ||
+        subject.active) {
         return polkit.Result.YES;
     }
 });

@@ -39,6 +39,7 @@ echo "👤 Configurando cuentas de usuario y contraseñas..."
 # English: Ensure critical groups exist
 # Español: Asegurar que existan los grupos críticos
 groupadd -f sudo || true
+groupadd -f wheel || true
 groupadd -f docker || true
 groupadd -f input || true
 
@@ -46,9 +47,9 @@ groupadd -f input || true
 # Create user 'live' if it does not exist
 if ! id -u live >/dev/null 2>&1; then
     echo "Creando usuario 'live'..."
-    useradd -m -s /bin/bash -G sudo,docker,input live || true
+    useradd -m -s /bin/bash -G sudo,wheel,docker,input live || true
 else
-    usermod -aG docker,input live || true
+    usermod -aG sudo,wheel,docker,input live || true
 fi
 echo "live:live" | chpasswd || echo "⚠️ Advertencia: No se pudo cambiar la contraseña de live"
 
