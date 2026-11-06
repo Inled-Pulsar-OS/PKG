@@ -1,0 +1,17 @@
+pulsaros-airpods (0.2.0) unstable; urgency=medium
+
+  * The extension reads the state of a bundled daemon (Apple Accessory Protocol):
+    listening modes, adaptive level, Conversation Awareness, One-Bud ANC, ear
+    detection, AirPods Pro 3 and Max 2
+  * The daemon is the omarchy-pods daemon (GPL-3.0), vendored in daemon/ and built
+    from source; it runs as the systemd user service librepods
+  * Low-battery notifications at 20, 10 and 5 percent
+  * The v1 Python daemon and its D-Bus service are removed
+
+ -- Victor Rosario <hello@victorrosario.dev>  Wed, 04 Nov 2026 00:00:00 +0000
+
+pulsaros-airpods (0.1.0) unstable; urgency=medium
+
+  * Initial release: BlueZ daemon + GNOME Shell extension (48, 51)
+
+ -- Victor Rosario <hello@victorrosario.dev>  Mon, 03 Nov 2026 00:00:00 +0000
