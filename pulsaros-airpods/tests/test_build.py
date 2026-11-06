@@ -45,17 +45,25 @@ class BuildPathTests(unittest.TestCase):
                 self.assertIn("install-build-deps.sh", read(rel))
         self.assertIn("build-deps.txt", read("install-build-deps.sh"))
 
-    def test_debian_image_follows_the_branch(self):
+    def test_one_debian_image_for_every_branch(self):
         wf = read(".github/workflows/deploy-package.yml")
         self.assertNotIn("debian:trixie", wf)
         self.assertIn("ci-image.sh", wf)
         self.assertIn("ci-image.sh", read("pulsaros-airpods/build-local.sh"))
-        for branch, image in (("stable", "debian:trixie"), ("unstable", "debian:trixie"),
-                              ("forky", "debian:forky"), ("rolling", "debian:testing")):
-            with self.subTest(branch=branch):
-                out = subprocess.run(["bash", os.path.join(ROOT, "ci-image.sh"), "debian", branch],
-                                     check=True, capture_output=True, text=True).stdout.strip()
-                self.assertEqual(out, image)
+        out = subprocess.run(["bash", os.path.join(ROOT, "ci-image.sh"), "debian"],
+                             check=True, capture_output=True, text=True).stdout.strip()
+        self.assertEqual(out, "debian:trixie")
+
+    def test_workflow_build_steps_do_not_splice_outputs_into_shell(self):
+        wf = read(".github/workflows/deploy-package.yml")
+        build = wf[wf.index("name: Build Debian Packages"):wf.index("name: Deploy All Packages")]
+        # only the two env: lines may reference the parsed package name
+        self.assertEqual(build.count("outputs.package_name"), 2)
+
+    def test_deb_control_and_pkgbuild_versions_match(self):
+        control = re.search(r"(?m)^Version: (\S+)$", read("pulsaros-airpods", "DEBIAN", "control")).group(1)
+        pkgver = re.search(r"(?m)^pkgver=(\S+)$", read("arch", "pkgbuilds", "pulsaros-airpods", "PKGBUILD")).group(1)
+        self.assertEqual(control, pkgver)
 
     def test_architecture_scope_is_amd64_only_everywhere(self):
         pkgbuild = read("arch", "pkgbuilds", "pulsaros-airpods", "PKGBUILD")

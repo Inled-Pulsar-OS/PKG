@@ -99,6 +99,7 @@ const fresh = () => new BatteryAlerts();
     n.update(off);
     same('reconnect', n.update(pro)?.name, 'AirPods Pro 3');
     same('daemon down re-arms', [n.update(parseStatus(null)), n.update(pro)?.name], [null, 'AirPods Pro 3']);
+    same('transient invalid does not re-notify', [n.update(parseStatus('')), n.update(pro)], [null, null]);
     same('headset', new ConnectNotice().update(fx('max2')).levels.map(l => l[0]), ['headphones']);
 }
 

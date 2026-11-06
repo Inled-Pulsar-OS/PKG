@@ -278,10 +278,10 @@ class AirPodsIndicator extends PanelMenu.Button {
     }
 
     _announceConnected(status) {
+        const label = this._connectLabels ??= {left: _('Left'), right: _('Right'), case: _('Case'), headphones: _('Battery')};
         const notice = this._connectNotice.update(status);
         if (!notice)
             return;
-        const label = {left: _('Left'), right: _('Right'), case: _('Case'), headphones: _('Battery')};
         const body = notice.levels.map(([which, level]) => `${label[which]} ${level}%`).join(' · ');
         Main.notify(_('{name} connected').replace('{name}', notice.name || BRAND), body || _('Battery level not available yet.'));
     }

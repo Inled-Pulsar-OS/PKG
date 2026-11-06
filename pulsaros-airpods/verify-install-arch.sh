@@ -2,9 +2,9 @@
 # Installs the built pulsaros-airpods package in a clean archlinux container and prints a PASS/FAIL table.
 # Usage: pulsaros-airpods/verify-install-arch.sh [path/to/pulsaros-airpods-*.pkg.tar.zst]
 # Default: newest arch/build/packages/pulsaros-airpods-*.pkg.tar.zst (see build-local.sh arch). Exit 1 on any FAIL.
-set -e
+set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-pkg="${1:-$(ls -t "$repo"/arch/build/packages/pulsaros-airpods-*.pkg.tar.zst 2>/dev/null | head -1)}"
+pkg="${1:-$(ls -t "$repo"/arch/build/packages/pulsaros-airpods-*.pkg.tar.zst 2>/dev/null | head -1 || true)}"
 [ -f "$pkg" ] || { echo "no package found; run pulsaros-airpods/build-local.sh arch" >&2; exit 2; }
 pkg="$(realpath "$pkg")"
 
