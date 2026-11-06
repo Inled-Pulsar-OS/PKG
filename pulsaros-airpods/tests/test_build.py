@@ -27,7 +27,7 @@ class BuildPathTests(unittest.TestCase):
         self.assertNotIn("docker run", read("pulsaros-airpods", "prepare-assets.sh"))
 
     def test_scripts_parse(self):
-        for rel in ("pulsaros-airpods/prepare-assets.sh", "pulsaros-airpods/build-local.sh",
+        for rel in ("pulsaros-airpods/prepare-assets.sh", "pulsaros-airpods/build-local.sh", "pulsaros-airpods/verify-install-debian.sh",
                     "install-build-deps.sh", "ci-image.sh"):
             with self.subTest(script=rel):
                 subprocess.run(["bash", "-n", os.path.join(ROOT, rel)], check=True)
