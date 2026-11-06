@@ -44,7 +44,7 @@ battery and no case, AirPods 1 to 3 have no listening modes at all.
 | `.../compat.js` | GNOME Shell 48 / 51 differences |
 | `.../i18n.js`, `.../i18n/*.json` | translations (see below) |
 | `daemon/` | the librepods daemon (C++/Qt 6, GPL-3.0), its own tests in `daemon/tests` |
-| `daemon/packaging/` | the packaged systemd unit and the trixie container build script |
+| `daemon/packaging/` | the packaged systemd unit |
 | `docs/` | research notes (AAP protocol feasibility) |
 | `tests/` | the extension test suite (not installed) |
 
@@ -89,3 +89,11 @@ values and keep `{name}` and `{level}` placeholders. Wrap new UI strings in `_('
 - Spatial Audio, microphone mode and audio routing are not AirPods controls on Linux and are left to the
   stock Sound panel.
 - AAP is reverse engineered; see `docs/aap-noise-control-research.md`.
+
+## Building
+
+Architecture scope: `amd64` / `x86_64` only (PKGBUILD and `DEBIAN/control` agree; aarch64 was never validated).
+Build dependencies live in `build-deps.txt`. CI and the local wrapper use the same container image
+(`ci-image.sh`), `install-build-deps.sh` and `package-and-deploy.sh`; `prepare-assets.sh` only uses the
+toolchain it finds. Locally: `pulsaros-airpods/build-local.sh [debian|arch|both] [branch]`, output in
+`build/packages/` and `arch/build/packages/`. Use a clean chroot (devtools) for Arch releases.
