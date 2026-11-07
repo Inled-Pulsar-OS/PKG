@@ -82,6 +82,22 @@ for prof in "$H"/.mozilla/*seafari*/; do
     fi
 done
 
+# 4) Metacity / Mutter Server-Side Decorations (SSD for non-native / X11 / un-themed apps)
+theme_cur="$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d "'" || true)"
+[ -z "$theme_cur" ] && theme_cur="MacTahoe-Dark"
+gsettings set org.gnome.desktop.wm.preferences theme "$theme_cur" 2>/dev/null || true
+gsettings set org.gnome.desktop.wm.preferences button-layout 'close,minimize,maximize:' 2>/dev/null || true
+
+# 5) VS Code / Electron titlebar style
+if [ -d "$H/.config/Code/User" ]; then
+    vsc_conf="$H/.config/Code/User/settings.json"
+    if [ ! -f "$vsc_conf" ]; then
+        echo '{"window.titleBarStyle": "native"}' > "$vsc_conf"
+    elif ! grep -q '"window.titleBarStyle"' "$vsc_conf" 2>/dev/null; then
+        sed -i 's/^{\s*/{\n  "window.titleBarStyle": "native",\n/' "$vsc_conf" 2>/dev/null || true
+    fi
+fi
+
 if [ "$n" -eq 0 ]; then
     exit 0
 fi
