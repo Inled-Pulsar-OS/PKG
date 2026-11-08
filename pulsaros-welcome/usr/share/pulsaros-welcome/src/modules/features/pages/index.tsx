@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import fallbackFeatures from "@/assets/site.json";
 import type { FeatureItem } from "../types";
@@ -21,6 +21,140 @@ function isVideoFile(url?: string): boolean {
   return /\.(mp4|webm|mov|m4v|ogg)(\?.*)?$/i.test(url);
 }
 
+interface MediaViewerProps {
+  mediaUrl: string;
+  posterUrl: string;
+  isVideo: boolean;
+  title: string;
+  children?: React.ReactNode;
+}
+
+function MediaViewer({ mediaUrl, posterUrl, isVideo, title, children }: MediaViewerProps) {
+  const [progress, setProgress] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    setIsLoading(true);
+    setProgress(5);
+
+    if (!isVideo) {
+      let active = true;
+      const fetchImage = async () => {
+        try {
+          const response = await fetch(mediaUrl);
+          if (!response.ok || !response.body) {
+            if (active) {
+              setProgress(100);
+              setIsLoading(false);
+            }
+            return;
+          }
+          const contentLength = response.headers.get("content-length");
+          const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
+          let loadedBytes = 0;
+
+          const reader = response.body.getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            loadedBytes += value ? value.length : 0;
+            if (totalBytes > 0 && active) {
+              const pct = Math.min(99, Math.round((loadedBytes / totalBytes) * 100));
+              setProgress(pct);
+            }
+          }
+          if (active) {
+            setProgress(100);
+            setIsLoading(false);
+          }
+        } catch {
+          if (active) {
+            setProgress(100);
+            setIsLoading(false);
+          }
+        }
+      };
+
+      fetchImage();
+      return () => {
+        active = false;
+      };
+    }
+  }, [mediaUrl, isVideo]);
+
+  const updateVideoProgress = () => {
+    const v = videoRef.current;
+    if (v && v.duration > 0 && v.buffered.length > 0) {
+      const bufferedEnd = v.buffered.end(v.buffered.length - 1);
+      const pct = Math.min(100, Math.round((bufferedEnd / v.duration) * 100));
+      setProgress(Math.max(10, pct));
+      if (pct >= 90 || v.readyState >= 3) {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  return (
+    <div className="relative flex h-full max-h-[420px] w-full max-w-[680px] items-center justify-center overflow-hidden rounded-2xl border border-black/10 bg-black/5 shadow-md">
+      {isVideo ? (
+        <video
+          ref={videoRef}
+          key={mediaUrl}
+          src={mediaUrl}
+          poster={posterUrl || undefined}
+          autoPlay
+          loop
+          muted
+          playsInline
+          onProgress={updateVideoProgress}
+          onLoadedMetadata={updateVideoProgress}
+          onLoadedData={updateVideoProgress}
+          onCanPlay={() => {
+            setProgress(100);
+            setIsLoading(false);
+          }}
+          onPlaying={() => setIsLoading(false)}
+          onWaiting={() => setIsLoading(true)}
+          className="h-full w-full object-contain"
+        />
+      ) : (
+        <img
+          key={mediaUrl}
+          src={mediaUrl}
+          alt={title}
+          onLoad={() => {
+            setProgress(100);
+            setIsLoading(false);
+          }}
+          draggable={false}
+          className="h-full w-full object-contain"
+        />
+      )}
+
+      {/* Real Progress Bar Overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity duration-200">
+          <div className="flex flex-col items-center gap-2.5 rounded-2xl bg-black/65 px-6 py-4 shadow-2xl border border-white/10">
+            <div className="flex items-center gap-2 text-white text-xs font-semibold tracking-wide">
+              <span>Cargando {isVideo ? "vídeo" : "imagen"}</span>
+              <span className="text-accent">{progress}%</span>
+            </div>
+            <div className="h-2 w-48 overflow-hidden rounded-full bg-white/20">
+              <div
+                className="h-full rounded-full bg-accent transition-all duration-150 ease-out"
+                style={{ width: `${Math.max(5, progress)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {children}
+    </div>
+  );
+}
+
 export function FeaturesPage({ onBack, onFinish }: FeaturesPageProps) {
   const [features, setFeatures] = useState<FeatureItem[]>(fallbackFeatures as FeatureItem[]);
   const [index, setIndex] = useState(0);
@@ -29,7 +163,6 @@ export function FeaturesPage({ onBack, onFinish }: FeaturesPageProps) {
     let isMounted = true;
     const fetchFeatures = async () => {
       try {
-        // Try fetching freshest site.json from bittenfruit.inled.es
         const res = await fetch("https://bittenfruit.inled.es/site.json", { cache: "no-cache" });
         if (res.ok) {
           const data = await res.json();
@@ -39,7 +172,6 @@ export function FeaturesPage({ onBack, onFinish }: FeaturesPageProps) {
           }
         }
       } catch {
-        // Fallback to local ./site.json in public
         try {
           const localRes = await fetch("./site.json");
           if (localRes.ok) {
@@ -49,7 +181,7 @@ export function FeaturesPage({ onBack, onFinish }: FeaturesPageProps) {
             }
           }
         } catch {
-          // Keep bundled fallbackFeatures
+          // fallbackFeatures remains active
         }
       }
     };
@@ -123,28 +255,12 @@ export function FeaturesPage({ onBack, onFinish }: FeaturesPageProps) {
 
         {/* Media display area with chevrons */}
         <main className="relative flex min-h-0 flex-1 items-center justify-center px-6 py-2">
-          <div className="relative flex h-full max-h-[420px] w-full max-w-[680px] items-center justify-center overflow-hidden rounded-2xl border border-black/10 bg-black/5 shadow-md">
-            {isVideo ? (
-              <video
-                key={mediaUrl}
-                src={mediaUrl}
-                poster={posterUrl || undefined}
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="h-full w-full object-contain"
-              />
-            ) : (
-              <img
-                key={mediaUrl}
-                src={mediaUrl}
-                alt={current.title}
-                draggable={false}
-                className="h-full w-full object-contain"
-              />
-            )}
-
+          <MediaViewer
+            mediaUrl={mediaUrl}
+            posterUrl={posterUrl}
+            isVideo={isVideo}
+            title={current.title}
+          >
             {/* Left Chevron */}
             <button
               aria-label="Previous slide"
@@ -162,7 +278,7 @@ export function FeaturesPage({ onBack, onFinish }: FeaturesPageProps) {
             >
               <ChevronRight className="h-6 w-6" />
             </button>
-          </div>
+          </MediaViewer>
         </main>
 
         {/* Footer with action buttons */}
