@@ -7,6 +7,7 @@ export interface FeatureItem {
 
 export interface Contributor {
   name: string;
+  role?: string;
   avatar: string;
   discord: string;
   discordUser: string;

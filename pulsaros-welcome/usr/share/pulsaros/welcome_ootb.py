@@ -2834,6 +2834,8 @@ class OOTBWindow(Adw.ApplicationWindow):
                     ("org.gnome.desktop.interface", "gtk-theme", gtk_theme_name),
                     ("org.gnome.desktop.interface", "icon-theme", icon_theme_name),
                     ("org.gnome.shell.extensions.user-theme", "name", shell_theme_name),
+                    ("org.gnome.desktop.wm.preferences", "theme", gtk_theme_name),
+                    ("org.gnome.desktop.wm.preferences", "button-layout", "'close,minimize,maximize:'"),
                 ]
                 for schema, key, value in theme_settings:
                     run_cmd([
@@ -3007,78 +3009,83 @@ class OOTBWindow(Adw.ApplicationWindow):
                 self.close()
                 sys.exit(0)
             else:
-                username = self.username_entry.get_text().strip()
+                username = getattr(self, "saved_username", None) or self.username_entry.get_text().strip()
+                if not username:
+                    try:
+                        out = subprocess.check_output(
+                            ["awk", "-F:", "$3 >= 1000 && $3 != 65534 && $1 != \"live\" {print $1; exit}", "/etc/passwd"],
+                            universal_newlines=True
+                        ).strip()
+                        if out:
+                            username = out
+                    except Exception:
+                        username = "pulsar"
+
                 log_path = "/tmp/pulsar-ootb.log"
 
                 def log_msg(msg):
-                    with open(log_path, "a") as log:
-                        log.write(f"{msg}\n")
-
-                # 1. Remove temporary sudoers grants for live user
-                log_msg("Cleaning up temporary sudoers for live user...")
-                for live_grant in (
-                    "/etc/sudoers.d/pulsar-ootb-live",
-                    "/etc/sudoers.d/pulsar-live-nopasswd",
-                    "/etc/polkit-1/rules.d/50-pulsar-live-nopasswd.rules",
-                ):
                     try:
-                        os.remove(live_grant)
-                    except FileNotFoundError:
+                        with open(log_path, "a") as log:
+                            log.write(f"{msg}\n")
+                    except Exception:
                         pass
 
-                # 2. Remove residual display manager config files
-                try:
-                    subprocess.run(
-                        "rm -f /etc/sddm.conf /etc/sddm.conf.d/live"
-                        " /etc/lightdm/lightdm.conf.d/* 2>/dev/null",
-                        shell=True
-                    )
-                except Exception:
-                    pass
-
-                # 3. Configure SDDM autologin for the new real user
+                # 1. Configure SDDM autologin for the new real user
                 os.makedirs("/etc/sddm.conf.d", exist_ok=True)
                 with open("/etc/sddm.conf.d/autologin.conf", "w") as f:
                     f.write(f"[Autologin]\nUser={username}\nSession=gnome\nRelogin=false\n")
                 os.chmod("/etc/sddm.conf.d/autologin.conf", 0o644)
                 log_msg(f"SDDM autologin configured for '{username}'")
 
-                # 4. Delete OOTB witness file
+                # 2. Update SDDM state so the greeter also defaults to the new user
+                try:
+                    os.makedirs("/var/lib/sddm", exist_ok=True)
+                    with open("/var/lib/sddm/state.conf", "w") as sf:
+                        sf.write(f"[Last]\nSession=/usr/share/wayland-sessions/gnome.desktop\nUser={username}\n")
+                    subprocess.run(["chown", "-R", "sddm:sddm", "/var/lib/sddm"], check=False)
+                except Exception as ex_sddm_st:
+                    log_msg(f"Notice writing sddm state: {ex_sddm_st}")
+
+                # 3. Delete OOTB witness file
                 if os.path.exists("/etc/pulsar-need-setup"):
-                    os.remove("/etc/pulsar-need-setup")
-                    log_msg("Removed /etc/pulsar-need-setup")
-
-                # 5. Run live user and installer shortcut cleanup immediately
-                if os.path.exists("/usr/libexec/pulsar-cleanup-live.sh"):
                     try:
-                        subprocess.run(["/usr/libexec/pulsar-cleanup-live.sh"], check=False)
-                        log_msg("Executed /usr/libexec/pulsar-cleanup-live.sh")
-                    except Exception as ex_cl:
-                        log_msg(f"Notice running cleanup-live.sh: {ex_cl}")
+                        os.remove("/etc/pulsar-need-setup")
+                        log_msg("Removed /etc/pulsar-need-setup")
+                    except Exception:
+                        pass
 
-                # 6. Create cleanup sentinel (if needed as fallback on next login)
-                with open("/etc/pulsar-need-cleanup", "w") as f:
-                    f.write(username)
-                log_msg("Created /etc/pulsar-need-cleanup")
+                # 4. Create cleanup sentinel for first login of the created user
+                try:
+                    with open("/etc/pulsar-need-cleanup", "w") as f:
+                        f.write(username)
+                    log_msg("Created /etc/pulsar-need-cleanup")
+                except Exception as ex_sc:
+                    log_msg(f"Notice creating cleanup sentinel: {ex_sc}")
 
-                # 7. Disable pulsar-ootb service (no longer needed)
+                # 5. Disable pulsar-ootb service (no longer needed)
                 subprocess.run(
-                    ["systemctl", "disable", "pulsar-ootb.service"],
-                    capture_output=True
+                    ["sudo", "systemctl", "disable", "pulsar-ootb.service"],
+                    capture_output=True, check=False
                 )
                 log_msg("Disabled pulsar-ootb.service")
 
-                # 7. Restart SDDM / Display Manager so it logs into the new user
+                # 6. Restart SDDM so it immediately autologs into the new user session
+                # NOTE: pulsar-cleanup-live.sh is triggered on first login of the new user by
+                # pulsar-cleanup-user (avoiding pkill -u live killing this script prematurely)
                 log_msg("Restarting display manager to enter user session...")
                 res = subprocess.run(
-                    ["systemctl", "restart", "sddm"],
+                    ["sudo", "systemctl", "restart", "sddm"],
                     capture_output=True, text=True
                 )
                 if res.returncode != 0:
-                    subprocess.run(["systemctl", "restart", "display-manager"], capture_output=True)
+                    subprocess.run(["sudo", "systemctl", "restart", "display-manager"], capture_output=True)
 
                 self.close()
                 sys.exit(0)
+        except Exception as e:
+            with open("/tmp/pulsar-ootb.log", "a") as log:
+                log.write(f"Exception during final cleanup: {e}\n")
+            self.show_error(f"Error during cleanup:\n{e}")
         except Exception as e:
             with open("/tmp/pulsar-ootb.log", "a") as log:
                 log.write(f"Exception during final cleanup: {e}\n")

@@ -232,9 +232,16 @@ function ContributorsView({ contributors }: ContributorsViewProps) {
                   (e.currentTarget as HTMLImageElement).src = "/logo.png";
                 }}
               />
-              <span className="text-[15px] font-medium text-text-primary truncate">
-                {person.name}
-              </span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[14px] sm:text-[15px] font-medium text-text-primary truncate">
+                  {person.name}
+                </span>
+                {person.role && (
+                  <span className="text-[12px] text-text-secondary truncate">
+                    {person.role}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Right: Socials (Discord, GitHub) */}
@@ -256,7 +263,7 @@ function ContributorsView({ contributors }: ContributorsViewProps) {
                 <button
                   type="button"
                   onClick={() => openExternalUrl(person.github)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-black/80 dark:bg-white/15 text-white shadow-sm hover:opacity-90 active:scale-95 transition-all cursor-pointer"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-[#24292e] text-white shadow-sm hover:opacity-90 active:scale-95 transition-all cursor-pointer"
                   title={`GitHub: ${person.name}`}
                   aria-label="GitHub"
                 >

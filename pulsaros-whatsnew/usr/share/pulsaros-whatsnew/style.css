@@ -190,7 +190,7 @@ del { color: var(--muted); }
   border: 1px solid var(--rule);
   border-radius: 16px;
   padding: 16px 14px 14px;
-  width: 140px;
+  width: 155px;
   box-sizing: border-box;
   text-align: center;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -226,7 +226,7 @@ del { color: var(--muted); }
 .contributor-name {
   font-size: 0.85em;
   font-weight: 600;
-  margin-bottom: 10px;
+  margin-bottom: 4px;
   line-height: 1.25;
   color: var(--ink);
   overflow: hidden;
@@ -234,13 +234,26 @@ del { color: var(--muted); }
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  min-height: 2.5em;
+}
+
+.contributor-role {
+  font-size: 0.75em;
+  color: var(--muted);
+  margin-bottom: 10px;
+  line-height: 1.2;
+  min-height: 2.4em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .contributor-socials {
   display: flex;
   gap: 8px;
   justify-content: center;
+  margin-top: auto;
 }
 
 .social-btn {
@@ -269,5 +282,5 @@ del { color: var(--muted); }
 }
 
 :root.dark .github-btn {
-  background-color: #3b4252;
+  background-color: #24292e;
 }
