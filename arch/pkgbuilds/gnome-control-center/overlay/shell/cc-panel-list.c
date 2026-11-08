@@ -408,54 +408,46 @@ filter_func (GtkListBoxRow *row, gpointer user_data)
     return retval;
 }
 
+/* Pulsar groups (#52). "separator" marks a group boundary: spacing only. */
 static const gchar * const panel_order[] = {
-  /* 1. Conectividad y Redes */
+  /* 1. Connectivity */
   "wifi",
   "bluetooth",
   "network",
   "wwan",
   "mobile-broadband",
-
-  "separator",
-
-  /* 2. Notificaciones y Sonido */
-  "notifications",
-  "sound",
-  "multitasking",
   "power",
-
   "separator",
 
-  /* 3. General y Sistema */
+  /* 2. General and looks */
   "system",
-  "about",
-  "sharing",
-
-  "separator",
-
-  /* 4. Apariencia y Pantallas */
+  "universal-access",
   "background",
   "display",
   "color",
-  "universal-access",
-
+  "multitasking",
+  "search",
+  "applications",
+  "sharing",
   "separator",
 
-  /* 5. Cuentas y Privacidad */
-  "online-accounts",
+  /* 3. Alerts */
+  "notifications",
+  "sound",
+  "wellbeing",
+  "separator",
+
+  /* 4. Security and accounts */
   "privacy",
   "users",
-  "applications",
-  "search",
-
+  "online-accounts",
   "separator",
 
-  /* 6. Periféricos y Hardware */
+  /* 5. Hardware */
   "keyboard",
   "mouse",
   "printers",
   "wacom",
-  "wellbeing",
   "reset-settings",
 };
 
@@ -530,22 +522,31 @@ search_sort_function (GtkListBoxRow *a, GtkListBoxRow *b, gpointer user_data)
     return a_distance - b_distance;
 }
 
+/* Group = number of "separator" markers before the panel's slot */
+static guint
+get_panel_group (const gchar *panel_id)
+{
+    guint i, group = 0, idx = get_panel_id_index (panel_id);
+
+    for (i = 0; i < idx; i++) {
+        if (g_str_equal (panel_order[i], "separator"))
+            group++;
+    }
+
+    return group;
+}
+
 static void
 header_func (GtkListBoxRow *row, GtkListBoxRow *before, gpointer user_data)
 {
-    guint pid;
+    if (before &&
+        get_panel_group (get_panel_id_from_row (user_data, row)) !=
+        get_panel_group (get_panel_id_from_row (user_data, before))) {
+        /* Spacing only: an empty header, sized by .pulsar-group-gap */
+        GtkWidget *gap = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
 
-    if (!before)
-        return;
-
-    pid = get_panel_id_index (get_panel_id_from_row (user_data, row));
-    if (pid > 0 && g_str_equal (panel_order[pid - 1], "separator")) {
-        GtkWidget *separator;
-
-        separator = gtk_separator_new (GTK_ORIENTATION_HORIZONTAL);
-        gtk_widget_set_hexpand (separator, TRUE);
-
-        gtk_list_box_row_set_header (row, separator);
+        gtk_widget_add_css_class (gap, "pulsar-group-gap");
+        gtk_list_box_row_set_header (row, gap);
     } else {
         gtk_list_box_row_set_header (row, NULL);
     }
@@ -746,6 +747,8 @@ cc_panel_list_init (CcPanelList *self)
 {
     gtk_widget_init_template (GTK_WIDGET (self));
 
+    gtk_widget_add_css_class (self->main_listbox, "cc-sidebar");
+
     self->id_to_data = g_hash_table_new (g_str_hash, g_str_equal);
     self->id_to_search_data = g_hash_table_new (g_str_hash, g_str_equal);
     self->view = CC_PANEL_LIST_MAIN;
@@ -874,6 +877,16 @@ cc_panel_list_add_panel (CcPanelList *self, CcPanelCategory category, const gcha
     /* Add the panel to the proper listbox */
     data = row_data_new (category, id, title, description, keywords, icon, visibility);
     gtk_widget_set_visible (data->row, visibility == CC_PANEL_VISIBLE);
+
+    /* Sidebar metrics (decision #53): 32px row (24px icon + 4px margins), 10px icon gap.
+     * Main list only; search rows keep the stock metrics. */
+    {
+        GtkWidget *grid = gtk_list_box_row_get_child (GTK_LIST_BOX_ROW (data->row));
+
+        gtk_widget_set_margin_top (grid, 4);
+        gtk_widget_set_margin_bottom (grid, 4);
+        gtk_grid_set_column_spacing (GTK_GRID (grid), 10);
+    }
 
     gtk_list_box_append (GTK_LIST_BOX (self->main_listbox), data->row);
 

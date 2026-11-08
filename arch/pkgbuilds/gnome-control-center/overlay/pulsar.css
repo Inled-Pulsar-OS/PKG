@@ -28,6 +28,58 @@
   }
 }
 
+/* Sidebar group boundary: spacing only, no title or line */
+.pulsar-group-gap {
+  min-height: 18px;
+}
+
+/* Sidebar top: search pill and profile row (#57) */
+entry.pulsar-search-pill {
+  border-radius: 999px;
+  min-height: 28px;
+}
+
+button.pulsar-profile-row {
+  border-radius: 10px;
+}
+
+/* Sidebar (decision #53, issue #59). Scoped to the main list (.cc-sidebar);
+ * the search list keeps stock libadwaita styling. */
+.cc-sidebar-pane,
+.cc-sidebar-pane headerbar,
+.cc-sidebar-pane scrolledwindow,
+.cc-sidebar-pane list.navigation-sidebar.cc-sidebar {
+  background-color: var(--sidebar-bg-color);
+  background-image: none;
+  box-shadow: none;
+}
+
+list.navigation-sidebar.cc-sidebar > row {
+  min-height: 32px;
+  margin: 0 8px;
+  padding: 0;
+  border-radius: 8px;
+}
+
+list.navigation-sidebar.cc-sidebar > row:hover {
+  background-color: alpha(currentColor, 0.07);
+}
+
+list.navigation-sidebar.cc-sidebar > row:active {
+  background-color: alpha(currentColor, 0.12);
+}
+
+list.navigation-sidebar.cc-sidebar > row:selected,
+list.navigation-sidebar.cc-sidebar > row:selected:hover,
+list.navigation-sidebar.cc-sidebar > row:selected:active {
+  background-color: var(--accent-bg-color);
+  color: #ffffff;
+}
+
+list.navigation-sidebar.cc-sidebar > row:selected label {
+  color: #ffffff;
+}
+
 /* Content page and inset cards (decision #53, #60): white page, light-grey
  * cards, inverted from libadwaita's card-on-grey. Scoped to the content pane
  * so the sidebar keeps its own surface. */
