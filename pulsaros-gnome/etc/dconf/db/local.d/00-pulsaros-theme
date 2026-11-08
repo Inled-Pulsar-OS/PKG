@@ -24,7 +24,7 @@ name='MacTahoe-Dark'
 
 [org/gnome/shell]
 # Keep in sync with /usr/share/glib-2.0/schemas/90_pulsaros.gschema.override.
-enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'pulsar-dock@inled.es', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'pulsaros-ui-tweaks@inled.es', 'pulsaros-global-menu@inled.es', 'notchnux@adityasah.programs', 'pulsaros-spotlight-launcher@inled.es', 'pulsar-circle-to-search@inled.es', 'pulsaros-focus@inled.es', 'pulsaros-idle-guard@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'wiggle@mechtifs', 'no-overview@fthx', 'macos-control-centre-lg@pulsar.local', 'macos-notification-center@pulsar.local', 'blur-my-shell@aunetx', 'flydrop@pulsaros.org', 'pulsar-desktop-icons@inled.es', 'pulsar-trafficlights@local']
+enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'pulsar-dock@inled.es', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'pulsaros-ui-tweaks@inled.es', 'pulsaros-global-menu@inled.es', 'notchnux@adityasah.programs', 'pulsaros-spotlight-launcher@inled.es', 'pulsar-circle-to-search@inled.es', 'pulsaros-focus@inled.es', 'pulsaros-idle-guard@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'wiggle@mechtifs', 'no-overview@fthx', 'macos-control-centre-lg@pulsar.local', 'macos-notification-center@pulsar.local', 'liquid-glass@thinkingcoding1231.gmail.com', 'pulsar-menu-bar@inled.es', 'flydrop@pulsaros.org', 'pulsar-desktop-icons@inled.es', 'pulsar-trafficlights@local']
 favorite-apps=['org.gnome.Nautilus.desktop', 'pulsaros-recovery.desktop', 'pulsaros-spotlight.desktop', 'brave-browser.desktop', 'seafari.desktop', 'org.gnome.Terminal.desktop', 'org.gnome.Geary.desktop', 'org.gnome.Calendar.desktop', 'org.gnome.Calculator.desktop', 'com.github.xournalpp.xournalpp.desktop', 'org.gnome.Loupe.desktop', 'io.bassi.Amberol.desktop', 'org.gnome.clocks.desktop', 'org.gnome.Weather.desktop', 'es.inled.PulsarStore.desktop', 'es.inled.AppInstall.desktop']
 disable-extension-version-validation=true
 disabled-extensions=@as []
@@ -144,10 +144,10 @@ idle-delay=uint32 600
 application-blur-radius=5
 application-content-opacity=1.0
 application-corner-radius=20.0
-application-glass-all-windows=false
+application-glass-all-windows=true
 application-saturation=2.0
 application-tint-color='#000000'
-application-tint-strength=0.0
+application-tint-strength=0.10
 application-window-whitelist=@as []
 blur-method=0
 blur-my-shell-popup-blur=false
@@ -165,7 +165,7 @@ dock-margin-bottom=5
 dock-saturation=1.0
 dock-tint-color='#000000'
 dock-tint-strength=0.12
-enable-application-glass=false
+enable-application-glass=true
 enable-desktop-menu-glass=false
 enable-desktop-widgets=false
 enable-dock-glass=true
@@ -288,6 +288,14 @@ binding='<Primary><Alt>t'
 name='Terminal (Super+Return)'
 command='pulsaros-terminal'
 binding='<Super>Return'
+
+[org/freedesktop/tracker3/miner/files]
+crawling-interval=-2
+enable-monitors=false
+index-recursive-directories=@as []
+index-single-directories=@as []
+index-on-battery=false
+index-on-battery-first-time=false
 
 [org/gnome/mutter]
 overlay-key='Super_R'

@@ -1,0 +1,218 @@
+/* Pulsar OS - Tahoe menu bar status items.
+ *
+ * Scoped to the three buttons added by this extension and to their popups.
+ * The left side of the panel, the clock and the stock Quick Settings popup
+ * keep the theme's own styling.
+ */
+
+/* ── Panel buttons ───────────────────────────────────────────────────────
+ *
+ * Hover pill ONLY on buttons created by this extension.
+ * Use explicit selectors to avoid leaking to other panel-button actors. */
+#panel .panel-button.pulsar-bar-button {
+    border: 2px solid transparent !important;
+    border-radius: 999px !important;
+    -natural-hpadding: 12px;
+    -minimum-hpadding: 9px;
+    margin: 0 1px;
+    padding: 0;
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    transition-duration: 120ms;
+}
+
+#panel .panel-button.pulsar-bar-button:hover,
+#panel .panel-button.pulsar-bar-button:focus {
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: inset 0 0 0 1000px rgba(255, 255, 255, 0.12) !important;
+}
+
+#panel .panel-button.pulsar-bar-button:active,
+#panel .panel-button.pulsar-bar-button:checked,
+#panel .panel-button.pulsar-bar-button.pulsar-cc-open {
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: inset 0 0 0 1000px rgba(255, 255, 255, 0.20) !important;
+}
+
+/* Prevent accidental pill on unrelated right-side buttons */
+#panel .panel-button:not(.pulsar-bar-button):hover {
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+}
+
+#panel .panel-button.pulsar-bar-button .system-status-icon {
+    icon-size: 16px;
+    padding: 0;
+    margin: 0;
+}
+
+.pulsar-cc-icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* ── Status menus: dark Tahoe glass ───────────────────────────────────── */
+
+.pulsar-status-menu {
+    -arrow-background-color: transparent;
+    -arrow-border-color: transparent;
+    -arrow-border-width: 0;
+    -arrow-base: 0;
+    -arrow-rise: 0;
+    -boxpointer-gap: 5px;
+}
+
+.pulsar-status-menu-content {
+    width: 288px;
+    padding: 6px;
+    color: #f2f2f7;
+    background-color: rgba(28, 28, 32, 0.72);
+    background-gradient-direction: vertical;
+    background-gradient-start: rgba(40, 40, 46, 0.72);
+    background-gradient-end: rgba(22, 22, 26, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 18px;
+    box-shadow: 0 18px 48px 0 rgba(0, 0, 0, 0.16);
+    font-family: "Adwaita Sans", "SF UI Text", sans-serif;
+    font-size: 10.5pt;
+    font-weight: 400;
+}
+
+.pulsar-status-menu-content .popup-menu-item {
+    min-height: 26px;
+    padding: 3px 9px;
+    spacing: 8px;
+    color: #f2f2f7;
+    background-color: transparent;
+    border: 0 solid transparent;
+    border-radius: 8px !important;
+    box-shadow: none;
+}
+
+.pulsar-status-menu-content .popup-menu-item:hover,
+.pulsar-status-menu-content .popup-menu-item:focus,
+.pulsar-status-menu-content .popup-menu-item:selected {
+    color: #ffffff !important;
+    background-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+.pulsar-status-menu-content .popup-menu-item:active {
+    color: #ffffff !important;
+    background-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+.pulsar-status-menu-content .popup-menu-item:insensitive {
+    color: rgba(242, 242, 247, 0.42);
+    background-color: transparent !important;
+}
+
+.pulsar-status-menu-content .popup-menu-icon {
+    icon-size: 15px;
+    min-width: 15px;
+    color: #e8e8ed;
+}
+
+.pulsar-status-menu-content .popup-menu-ornament {
+    icon-size: 13px;
+    color: rgba(242, 242, 247, 0.55);
+}
+
+.pulsar-status-menu-content .pulsar-wifi-active,
+.pulsar-status-menu-content .pulsar-bt-connected {
+    font-weight: 600;
+}
+
+.pulsar-status-menu-content .pulsar-wifi-active .popup-menu-ornament,
+.pulsar-status-menu-content .pulsar-bt-connected .popup-menu-ornament {
+    color: #0a84ff;
+}
+
+.pulsar-lock-icon {
+    icon-size: 11px;
+    color: rgba(242, 242, 247, 0.46);
+    margin-left: 2px;
+}
+
+.pulsar-status-note {
+    color: rgba(242, 242, 247, 0.55);
+    font-size: 9pt;
+    font-weight: 500;
+    font-feature-settings: "tnum";
+}
+
+/* Section headings are deliberately quiet: they organise the list without
+ * competing with the network names, the way Tahoe's status menus do. */
+.pulsar-status-menu-content .popup-menu-item.pulsar-status-heading {
+    min-height: 0;
+    padding: 9px 9px 3px 9px;
+    color: rgba(235, 235, 245, 0.54);
+    font-size: 8.5pt;
+    font-weight: 600;
+    background-color: transparent;
+}
+
+.pulsar-status-menu-content .popup-menu-item.pulsar-status-empty {
+    min-height: 26px;
+    padding: 5px 9px;
+    color: rgba(235, 235, 245, 0.48);
+    font-size: 10pt;
+    background-color: transparent;
+}
+
+.pulsar-status-menu-content .pulsar-status-toggle {
+    min-height: 30px;
+    font-weight: 600;
+}
+
+.pulsar-status-menu-content .pulsar-status-toggle .popup-status-menu-item {
+    color: rgba(242, 242, 247, 0.52);
+    font-size: 9pt;
+}
+
+.pulsar-status-menu-content .popup-separator-menu-item {
+    height: 13px;
+    padding: 0 8px;
+    background-color: transparent !important;
+    border-radius: 0;
+}
+
+.pulsar-status-menu-content
+    .popup-separator-menu-item
+    .popup-separator-menu-item-separator {
+    height: 1px;
+    background-color: rgba(255, 255, 255, 0.10);
+}
+
+/* ── Toggles inside the status menus ──────────────────────────────────── */
+
+.pulsar-status-menu-content .toggle-switch {
+    width: 38px;
+    height: 22px;
+    border-radius: 999px;
+    background-color: rgba(120, 120, 128, 0.32);
+}
+
+.pulsar-status-menu-content .toggle-switch:hover {
+    background-color: rgba(120, 120, 128, 0.44);
+}
+
+.pulsar-status-menu-content .toggle-switch:checked {
+    background-color: #0a84ff;
+}
+
+.pulsar-status-menu-content .toggle-switch:checked:hover {
+    background-color: #2b95ff;
+}
+
+.pulsar-status-menu-content .toggle-switch .handle {
+    width: 18px;
+    margin: 2px;
+    border-radius: 999px;
+    background-color: #ffffff;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.28);
+    transition-duration: 180ms;
+}

@@ -708,23 +708,13 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
 
       if (mode == LIQUID_GLASS_MODE_OPAQUE)
         {
-          enable_app_glass = FALSE;
-          all_windows = FALSE;
+          enable_app_glass = TRUE;
+          all_windows = TRUE;
           opacity = 1.0;
 
-          /* Liquid Glass handles dock/panel/menus, Blur my Shell handles window sidebars */
+          /* Liquid Glass handles everything including window glass backgrounds. NO BMS. */
           set_extension_enabled ("liquid-glass@thinkingcoding1231.gmail.com", TRUE);
-          set_extension_enabled ("blur-my-shell@aunetx", TRUE);
-
-          g_autoptr(GSettingsSchema) bms_apps_schema = NULL;
-          g_autoptr(GSettings) bms_apps_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.applications", &bms_apps_schema);
-          if (bms_apps_settings && bms_apps_schema)
-            safe_set_boolean (bms_apps_settings, bms_apps_schema, "blur", TRUE);
-
-          g_autoptr(GSettingsSchema) bms_dash_schema = NULL;
-          g_autoptr(GSettings) bms_dash_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.dash-to-dock", &bms_dash_schema);
-          if (bms_dash_settings && bms_dash_schema)
-            safe_set_boolean (bms_dash_settings, bms_dash_schema, "blur", FALSE);
+          set_extension_enabled ("blur-my-shell@aunetx", FALSE);
         }
       else
         {

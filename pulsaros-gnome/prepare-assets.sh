@@ -49,6 +49,17 @@ if [ -d "$NC_SRC" ]; then
     cp -r "$NC_SRC" "$EXT_DIR/macos-notification-center@pulsar.local"
 fi
 
+# 2b. Pulsar Menu Bar Icons (Wi-Fi, Bluetooth, Control Center)
+echo "📦 Instalando Pulsar Menu Bar..."
+MB_SRC="$PKG_ROOT/pulsar-menu-bar/pulsar-menu-bar@inled.es"
+if [ -d "$MB_SRC" ]; then
+    MB_DEST="$EXT_DIR/pulsar-menu-bar@inled.es"
+    rm -rf "$MB_DEST"
+    mkdir -p "$MB_DEST"
+    cp -r "$MB_SRC"/* "$MB_DEST/"
+    rm -rf "$MB_DEST/.git" "$MB_DEST/.github" "$MB_DEST/dynamic-island" "$MB_DEST"/*.bak*
+fi
+
 # 3. Pulsar Liquid Glass (Agnelo / Inled)
 echo "📦 Instalando Pulsar Liquid Glass..."
 LG_SRC="$PKG_ROOT/Pulsar-Liquid-Glass"
@@ -104,28 +115,8 @@ if [ -d "$TWEAKS_SRC" ]; then
     rm -rf "$TWEAKS_DEST/.git"
 fi
 
-# 8. Blur My Shell
-echo "📦 Instalando Blur My Shell..."
-BMS_SRC="$PKG_ROOT/blur-my-shell"
-if [ -d "$BMS_SRC" ]; then
-    BMS_DEST="$EXT_DIR/blur-my-shell@aunetx"
-    rm -rf "$BMS_DEST"
-    mkdir -p "$BMS_DEST"
-    if [ ! -f "$BMS_SRC/build/blur-my-shell@aunetx.shell-extension.zip" ]; then
-        if [ -n "$SUDO_USER" ]; then
-            su - "$SUDO_USER" -c "make -C '$BMS_SRC' build" >/dev/null 2>&1 || make -C "$BMS_SRC" build >/dev/null 2>&1 || true
-        else
-            make -C "$BMS_SRC" build >/dev/null 2>&1 || true
-        fi
-    fi
-    if [ -f "$BMS_SRC/build/blur-my-shell@aunetx.shell-extension.zip" ]; then
-        unzip -q -o "$BMS_SRC/build/blur-my-shell@aunetx.shell-extension.zip" -d "$BMS_DEST/"
-    else
-        # Fallback direct copy
-        cp -r "$BMS_SRC/src"/* "$BMS_DEST/" 2>/dev/null || true
-        cp "$BMS_SRC/metadata.json" "$BMS_DEST/" 2>/dev/null || true
-    fi
-fi
+# 8. Blur My Shell (Desactivado: Liquid Glass asume el motor gráfico unificado)
+# echo "📦 Omitiendo Blur My Shell en favor de Liquid Glass..."
 
 # 9. No Overview
 echo "📦 Instalando No Overview..."
@@ -185,7 +176,8 @@ fi
 # PURGAR EXTENSIONES OBSOLETAS Y DESCONTINUADAS DEL DESTINO
 # ------------------------------------------------------------------------------
 echo "🧹 Purgando extensiones obsoletas de la imagen..."
-rm -rf "$EXT_DIR/ding@rastersoft.com" \
+rm -rf "$EXT_DIR/blur-my-shell@aunetx" \
+       "$EXT_DIR/ding@rastersoft.com" \
        "$EXT_DIR/gsconnect@andyholmes.github.io" \
        "$EXT_DIR/macos-control-centre@pulsar.local" \
        "$EXT_DIR/just-perfection-desktop@just-perfection" \

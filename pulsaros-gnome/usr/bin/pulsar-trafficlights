@@ -98,6 +98,27 @@ if [ -d "$H/.config/Code/User" ]; then
     fi
 fi
 
+# 6) Chrome / Chromium: force native system titlebar & borders for traffic lights
+for c_pref in "$H"/.config/google-chrome*/**/Preferences "$H"/.config/chromium/**/Preferences; do
+    [ -f "$c_pref" ] || continue
+    if ! grep -q '"custom_chrome_frame":\s*false' "$c_pref" 2>/dev/null; then
+        python3 -c "
+import json, sys
+p = sys.argv[1]
+try:
+    with open(p, 'r') as f:
+        d = json.load(f)
+    if 'browser' not in d:
+        d['browser'] = {}
+    d['browser']['custom_chrome_frame'] = False
+    with open(p, 'w') as f:
+        json.dump(d, f)
+except Exception:
+    pass
+" "$c_pref" 2>/dev/null || true
+    fi
+done
+
 if [ "$n" -eq 0 ]; then
     exit 0
 fi
