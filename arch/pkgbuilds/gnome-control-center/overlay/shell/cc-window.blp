@@ -14,12 +14,18 @@ template $CcWindow: Adw.ApplicationWindow {
   }
 
   content: Adw.NavigationSplitView split_view {
+    min-sidebar-width: 270;
+    max-sidebar-width: 270;
     notify::collapsed => $on_split_view_collapsed_changed_cb(template);
 
     sidebar: Adw.NavigationPage {
       title: _("Settings");
 
       child: Adw.ToolbarView {
+        styles [
+          "cc-sidebar-pane",
+        ]
+
         [top]
         Adw.HeaderBar {
           ToggleButton search_button {

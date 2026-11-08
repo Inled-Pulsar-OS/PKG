@@ -27,3 +27,40 @@
     --card-bg-color: #333333;
   }
 }
+
+/* Sidebar (decision #53, issue #59). Scoped to the main list (.cc-sidebar);
+ * the search list keeps stock libadwaita styling. */
+.cc-sidebar-pane,
+.cc-sidebar-pane headerbar,
+.cc-sidebar-pane scrolledwindow,
+.cc-sidebar-pane list.navigation-sidebar.cc-sidebar {
+  background-color: var(--sidebar-bg-color);
+  background-image: none;
+  box-shadow: none;
+}
+
+list.navigation-sidebar.cc-sidebar > row {
+  min-height: 32px;
+  margin: 0 8px;
+  padding: 0;
+  border-radius: 8px;
+}
+
+list.navigation-sidebar.cc-sidebar > row:hover {
+  background-color: alpha(currentColor, 0.07);
+}
+
+list.navigation-sidebar.cc-sidebar > row:active {
+  background-color: alpha(currentColor, 0.12);
+}
+
+list.navigation-sidebar.cc-sidebar > row:selected,
+list.navigation-sidebar.cc-sidebar > row:selected:hover,
+list.navigation-sidebar.cc-sidebar > row:selected:active {
+  background-color: var(--accent-bg-color);
+  color: #ffffff;
+}
+
+list.navigation-sidebar.cc-sidebar > row:selected label {
+  color: #ffffff;
+}
