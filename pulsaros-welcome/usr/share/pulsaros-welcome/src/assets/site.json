@@ -1,0 +1,116 @@
+[
+  {
+    "title": "Touch & Face ID",
+    "description": "Touch ID and Face ID, with protection against identity theft",
+    "video": "https://hosted.inled.es/cdn/pulsar-demo-touch-face-id.mp4",
+    "poster": "https://hosted.inled.es/cdn/pulsar-demo-touch-face-id.mp4"
+  },
+  {
+    "title": "Live Wallpapers",
+    "description": "Live wallpapers on the desktop and login screen. Lock screen support in progress.",
+    "video": "https://hosted.inled.es/cdn/pulsar-live-wallpaper-supra-demo.mp4",
+    "poster": "https://hosted.inled.es/cdn/pulsar-live-wallpaper-supra-demo.mp4"
+  },
+  {
+    "title": "Liquid Glass",
+    "description": "A gorgeous, translucent material design that flows across the UI. Depth, light, and refinement in every surface. Made by our contributor Angelo, expert in UI",
+    "video": "https://hosted.inled.es/cdn/pulsar-liquid-glass-pulsar-demos.mp4",
+    "poster": "https://hosted.inled.es/cdn/pulsar-liquid-glass-pulsar-demos.mp4"
+  },
+  {
+    "title": "Notch",
+    "description": "What you always wanted from the notch on your MacOS, and you had to install a thousand plugins, here it is all in one.",
+    "video": "https://hosted.inled.es/cdn/pulsaros-notch-pulsar-demos.mp4",
+    "poster": "https://hosted.inled.es/cdn/pulsaros-notch-pulsar-demos.mp4"
+  },
+  {
+    "title": "Circle to Search",
+    "description": "Shake the cursor, circle anything on your screen and search it on Google, ask Sayri about it, or grab the text with OCR.",
+    "video": "/videos/circle-to-search.mp4",
+    "poster": "/assets/desktop.png"
+  },
+  {
+    "title": "Pulsar Firewall",
+    "description": "Pulsaros has UFW by default. The only firewall interfaze that's actually easy to configure. When an app tries to listen on a port, Pulsar asks you so you dont have to fight with firewall settings",
+    "video": "https://hosted.inled.es/cdn/pulsar-firewall-pulsar-demos.mp4",
+    "poster": "https://hosted.inled.es/cdn/pulsar-firewall-pulsar-demos.mp4"
+  },
+  {
+    "title": "Real Global Menu",
+    "description": "No Linux distro has this on GNOME. A true global menu bar at the top of the screen, just like macOS, for every app.",
+    "video": "https://hosted.inled.es/cdn/pulsar-global-menu-pulsar-demos.mp4",
+    "poster": "https://hosted.inled.es/cdn/pulsar-global-menu-pulsar-demos.mp4"
+  },
+  {
+    "title": "Pulsar VPN",
+    "description": "Forget the headache of Wireguard: Pulsar OS comes with a simple interface for Tailscale, just log in and go",
+    "video": "https://hosted.inled.es/cdn/pulsar-vpn-static-pulsar-demos.png",
+    "poster": "https://hosted.inled.es/cdn/pulsar-vpn-static-pulsar-demos.png"
+  },
+  {
+    "title": "Pulsar Windows",
+    "description": "Windows apps as native apps on desktop. Below, a real Windows consuming as little as possible. You don't need to activate Windows to use it.",
+    "video": "https://hosted.inled.es/cdn/pulsar-windows-pulsar-demos.mp4",
+    "poster": "https://hosted.inled.es/cdn/pulsar-windows-pulsar-demos.mp4"
+  },
+  {
+    "title": "File vault (encryption)",
+    "description": "Encrypt your drive and protect your data, so that if your computer is stolen, they don't steal the most important thing: its content.",
+    "video": "https://hosted.inled.es/cdn/pulsar-demo-encryption-pulsaros.mp4",
+    "poster": "https://hosted.inled.es/cdn/pulsar-demo-encryption-pulsaros.mp4"
+  },
+  {
+    "title": "The Best Spotlight",
+    "description": "Say goodbye to the shitty spotlight that Apple created for the latest macOS. This spotlight is smart and can do a lot more things than the macOS one.",
+    "video": "https://hosted.inled.es/cdn/pulsar-spotlight-pulsaros-demos.mp4",
+    "poster": "https://hosted.inled.es/cdn/pulsar-spotlight-pulsaros-demos.mp4"
+  },
+  {
+    "title": "Session Restore",
+    "description": "Reboot or power on, and every app, window, and document reopens on its own. Pick up right where you left off. No Linux distro does this",
+    "video": "/videos/session-restore.mp4",
+    "poster": "/assets/desktop.png"
+  },
+  {
+    "title": "Sayri AI Assistant",
+    "description": "The safe, less expensive and functional alternative to Openclaw! try it now",
+    "video": "/videos/sayri.mp4",
+    "poster": "/assets/spotlight.png"
+  },
+  {
+    "title": "Window Management",
+    "description": "Split view, Mission Control gestures, full screen on dynamic workspaces, and fluid window snapping built for power users.",
+    "video": "/videos/window-mode.mp4",
+    "poster": "/assets/desktop.png"
+  },
+  {
+    "title": "Finder, Rebuilt",
+    "description": "The file manager you already know: Mac-style navigation, previews, tags, and Google Drive, Dropbox, OneDrive, Nextcloud and 50+ cloud providers right where your files live.",
+    "video": "/videos/nautilus-providers.mp4",
+    "poster": "/assets/finder.png"
+  },
+  {
+    "title": "App Store",
+    "description": "Install any package (pkg, deb, aur, gnome extension, pulsar store), ask AI for security of an app and ask it what is the best app you need.",
+    "video": "https://hosted.inled.es/cdn/appinstall-pulsar-pulsaros-demo-OK.mp4",
+    "poster": "https://hosted.inled.es/cdn/appinstall-pulsar-pulsaros-demo-OK.mp4"
+  },
+  {
+    "title": "Time Machine",
+    "description": "Copies of your whole system, stored wherever you like: a network server, one of the 50 cloud providers, or a USB stick. If your computer ever breaks, put everything back.",
+    "video": "/videos/time-machine.mp4",
+    "poster": "/assets/desktop.png"
+  },
+  {
+    "title": "Recovery, Built In",
+    "description": "The only Linux distribution with an isolated recovery system, specifically designed for the most extreme cases, so you can recover your computer, your data and your system without losing files",
+    "video": "/videos/recovery.mp4",
+    "poster": "/assets/select-disk.png"
+  },
+  {
+    "title": "Keyboard Remap",
+    "description": "Are you more of a Mac universe or do you prefer to keep the Linux and Windows commands? No problem: change all shortcuts from Mac to Linux and vice versa.",
+    "video": "/videos/remap-live-wallpaper.mp4",
+    "poster": "/assets/quick-setting.png"
+  }
+]
