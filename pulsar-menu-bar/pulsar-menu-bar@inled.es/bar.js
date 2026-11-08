@@ -738,6 +738,17 @@ class BluetoothService {
     }
 }
 
+function getDirectChild(actor, targetBox) {
+    if (!actor || !targetBox) return null;
+    let cur = actor;
+    while (cur) {
+        if (cur.get_parent() === targetBox)
+            return cur;
+        cur = cur.get_parent();
+    }
+    return null;
+}
+
 function normalizeBluetoothIcon(icon) {
     if (!icon || icon === 'bluetooth')
         return 'bluetooth-active-symbolic';
@@ -932,18 +943,27 @@ class MenuBarIcons {
         this._add(this._ccButton, 'pulsar-control-center', 2);
 
         this._repositionButtons();
-        later(100, () => this._repositionButtons());
-        later(500, () => this._repositionButtons());
+        later(50, () => this._repositionButtons());
+        later(150, () => this._repositionButtons());
+        later(400, () => this._repositionButtons());
+        later(1000, () => this._repositionButtons());
 
         try {
-            const dateMenu = Main.panel.statusArea.dateMenu;
-            const dateActor = dateMenu?.container ?? dateMenu;
-            const parent = dateActor?.get_parent();
-            if (parent) {
-                const addId = parent.connect('actor-added', () => later(40, () => this._repositionButtons()));
-                const rmId = parent.connect('actor-removed', () => later(40, () => this._repositionButtons()));
-                this._ids.push([parent, addId]);
-                this._ids.push([parent, rmId]);
+            const box = Main.panel._rightBox;
+            if (box) {
+                const onLayoutChange = () => {
+                    if (this._repositionTimer) return;
+                    this._repositionTimer = later(40, () => {
+                        this._repositionTimer = 0;
+                        this._repositionButtons();
+                    });
+                };
+                for (const sig of ['child-added', 'child-removed', 'actor-added', 'actor-removed']) {
+                    try {
+                        const id = box.connect(sig, onLayoutChange);
+                        this._ids.push([box, id]);
+                    } catch (e) {}
+                }
             }
         } catch (e) {}
 
@@ -1058,67 +1078,52 @@ class MenuBarIcons {
     _repositionButtons() {
         if (!this._alive) return;
         try {
+            const box = Main.panel._rightBox;
+            if (!box) return;
+
             const dateMenu = Main.panel.statusArea.dateMenu;
-            const dateActor = dateMenu?.container ?? dateMenu;
-            const ccActor = this._ccButton?.container ?? this._ccButton;
-            if (!dateActor || !ccActor) return;
+            const dateDirectChild = getDirectChild(dateMenu, box);
+            const ccDirectChild = getDirectChild(this._ccButton, box);
 
-            const parent = dateActor.get_parent();
-            if (!parent) return;
+            if (!dateDirectChild || !ccDirectChild) return;
 
-            // Ensure CC is in the same box as dateActor
-            if (ccActor.get_parent() !== parent) {
-                if (ccActor.get_parent())
-                    ccActor.get_parent().remove_child(ccActor);
-                parent.add_child(ccActor);
-            }
+            // 1. Move Control Center immediately before Date
+            let children = box.get_children();
+            let dateIdx = children.indexOf(dateDirectChild);
+            let ccIdx = children.indexOf(ccDirectChild);
 
-            let children = parent.get_children();
-            let dateIdx = children.indexOf(dateActor);
-            let ccIdx = children.indexOf(ccActor);
-
-            if (dateIdx >= 0) {
+            if (dateIdx >= 0 && ccIdx >= 0) {
                 const targetCcIdx = ccIdx < dateIdx ? dateIdx - 1 : dateIdx;
                 if (ccIdx !== targetCcIdx && targetCcIdx >= 0) {
-                    parent.set_child_at_index(ccActor, targetCcIdx);
+                    box.set_child_at_index(ccDirectChild, targetCcIdx);
                 }
             }
 
-            // Place Bluetooth immediately to the left of Control Center
-            const btActor = this._btButton?.container ?? this._btButton;
-            if (btActor) {
-                if (btActor.get_parent() !== parent) {
-                    if (btActor.get_parent())
-                        btActor.get_parent().remove_child(btActor);
-                    parent.add_child(btActor);
-                }
-                children = parent.get_children();
-                ccIdx = children.indexOf(ccActor);
-                let btIdx = children.indexOf(btActor);
-                if (ccIdx > 0) {
-                    const targetBtIdx = btIdx < ccIdx ? ccIdx - 1 : ccIdx;
+            // 2. Move Bluetooth immediately before Control Center
+            const btDirectChild = getDirectChild(this._btButton, box);
+            if (btDirectChild) {
+                children = box.get_children();
+                const currentCcIdx = children.indexOf(ccDirectChild);
+                const btIdx = children.indexOf(btDirectChild);
+                if (btIdx >= 0 && currentCcIdx > 0) {
+                    const targetBtIdx = btIdx < currentCcIdx ? currentCcIdx - 1 : currentCcIdx;
                     if (btIdx !== targetBtIdx && targetBtIdx >= 0) {
-                        parent.set_child_at_index(btActor, targetBtIdx);
+                        box.set_child_at_index(btDirectChild, targetBtIdx);
                     }
                 }
             }
 
-            // Place Wi-Fi immediately to the left of Bluetooth
-            const wifiActor = this._wifiButton?.container ?? this._wifiButton;
-            if (wifiActor) {
-                if (wifiActor.get_parent() !== parent) {
-                    if (wifiActor.get_parent())
-                        wifiActor.get_parent().remove_child(wifiActor);
-                    parent.add_child(wifiActor);
-                }
-                children = parent.get_children();
-                const anchorActor = (btActor && btActor.get_parent() === parent) ? btActor : ccActor;
-                const anchorIdx = children.indexOf(anchorActor);
-                let wifiIdx = children.indexOf(wifiActor);
-                if (anchorIdx > 0) {
+            // 3. Move Wi-Fi immediately before Bluetooth
+            const wifiDirectChild = getDirectChild(this._wifiButton, box);
+            if (wifiDirectChild) {
+                children = box.get_children();
+                const anchorChild = btDirectChild || ccDirectChild;
+                const anchorIdx = children.indexOf(anchorChild);
+                const wifiIdx = children.indexOf(wifiDirectChild);
+                if (wifiIdx >= 0 && anchorIdx > 0) {
                     const targetWifiIdx = wifiIdx < anchorIdx ? anchorIdx - 1 : anchorIdx;
                     if (wifiIdx !== targetWifiIdx && targetWifiIdx >= 0) {
-                        parent.set_child_at_index(wifiActor, targetWifiIdx);
+                        box.set_child_at_index(wifiDirectChild, targetWifiIdx);
                     }
                 }
             }

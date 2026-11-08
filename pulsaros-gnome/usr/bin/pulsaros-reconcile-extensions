@@ -271,6 +271,20 @@ if [ "$DRY_RUN" -eq 0 ]; then
 
     # 3. Desactivar daemons en segundo plano de Evolution
     systemctl --user mask evolution-calendar-factory.service evolution-addressbook-factory.service evolution-source-registry.service evolution-alarm-notify.service evolution-user-prompter.service 2>/dev/null || true
+
+    # 4. Desactivar IBus en entornos con teclado latino/europeo (libera 6 procesos y ~170MB de RAM)
+    gsettings set org.gnome.desktop.interface enable-ibus false 2>/dev/null || true
+    systemctl --user mask org.freedesktop.IBus.session.GNOME.service 2>/dev/null || true
+    systemctl --user stop org.freedesktop.IBus.session.GNOME.service 2>/dev/null || true
+    pkill -9 -f ibus- 2>/dev/null || true
+
+    # 5. Desactivar daemons auxiliares no utilizados de GNOME SettingsDaemon
+    systemctl --user mask org.gnome.SettingsDaemon.Smartcard.service \
+                           org.gnome.SettingsDaemon.Wwan.service \
+                           org.gnome.SettingsDaemon.PrintNotifications.service 2>/dev/null || true
+    systemctl --user stop org.gnome.SettingsDaemon.Smartcard.service \
+                          org.gnome.SettingsDaemon.Wwan.service \
+                          org.gnome.SettingsDaemon.PrintNotifications.service 2>/dev/null || true
 fi
 
 exit 0
