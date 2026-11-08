@@ -66,11 +66,44 @@ template $CcBackgroundPanel: $CcPanel {
                   }
 
                   Label default_label {
-                    label: _("Light");
+                    label: _("Auto");
                     mnemonic-widget: default_toggle;
 
                     layout {
                       column: 0;
+                      row: 1;
+                    }
+                  }
+
+                  ToggleButton light_toggle {
+                    group: default_toggle;
+
+                    accessibility {
+                      labelled-by: [
+                        light_label,
+                      ];
+                    }
+
+                    notify::active => $on_color_scheme_toggle_active_cb(template);
+
+                    $CcBackgroundPreview light_preview {}
+
+                    styles [
+                      "background-preview-button",
+                    ]
+
+                    layout {
+                      column: 1;
+                      row: 0;
+                    }
+                  }
+
+                  Label light_label {
+                    label: _("Light");
+                    mnemonic-widget: light_toggle;
+
+                    layout {
+                      column: 1;
                       row: 1;
                     }
                   }
@@ -95,7 +128,7 @@ template $CcBackgroundPanel: $CcPanel {
                     ]
 
                     layout {
-                      column: 1;
+                      column: 2;
                       row: 0;
                     }
                   }
@@ -105,7 +138,7 @@ template $CcBackgroundPanel: $CcPanel {
                     mnemonic-widget: dark_toggle;
 
                     layout {
-                      column: 1;
+                      column: 2;
                       row: 1;
                     }
                   }
