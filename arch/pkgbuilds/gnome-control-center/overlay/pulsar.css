@@ -27,3 +27,8 @@
     --card-bg-color: #333333;
   }
 }
+
+/* Sidebar group boundary: spacing only, no title or line */
+.pulsar-group-gap {
+  min-height: 18px;
+}
