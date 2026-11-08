@@ -1986,6 +1986,71 @@ class OOTBWindow(Adw.ApplicationWindow):
             self.remove_css_class("dark-theme")
             Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_LIGHT)
 
+        # Apply live effect immediately if running in an active GNOME user session
+        try:
+            if mode == "liquid_glass":
+                subprocess.Popen(
+                    ["/bin/sh", "-c",
+                     "gnome-extensions enable liquid-glass@thinkingcoding1231.gmail.com 2>/dev/null; "
+                     "gnome-extensions disable blur-my-shell@aunetx 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.applications blur false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.overview blur false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.panel blur false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme true 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.0 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock custom-theme-shrink true 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface gtk-theme 'MacTahoe-Dark' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface icon-theme 'MacTahoe-blue-dark' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.user-theme name 'MacTahoe-Dark' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-application-glass 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/application-glass-all-windows 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/application-content-opacity '0.85' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-dock-glass 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-menu-glass 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-notification-glass 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-osd-glass 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-quick-settings-glass 'true' 2>/dev/null"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+            elif mode == "dark":
+                subprocess.Popen(
+                    ["/bin/sh", "-c",
+                     "gnome-extensions disable liquid-glass@thinkingcoding1231.gmail.com 2>/dev/null; "
+                     "gnome-extensions enable blur-my-shell@aunetx 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur true 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur true 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface gtk-theme 'MacTahoe-Dark' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface icon-theme 'MacTahoe-blue-dark' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.user-theme name 'MacTahoe-Dark' 2>/dev/null"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+            elif mode == "light":
+                subprocess.Popen(
+                    ["/bin/sh", "-c",
+                     "gnome-extensions disable liquid-glass@thinkingcoding1231.gmail.com 2>/dev/null; "
+                     "gnome-extensions enable blur-my-shell@aunetx 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur true 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur true 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface color-scheme 'prefer-light' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface gtk-theme 'MacTahoe-Light' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface icon-theme 'MacTahoe-blue-light' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.user-theme name 'MacTahoe-Light' 2>/dev/null"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+        except Exception:
+            pass
+
     def set_theme_dark(self, is_dark):
         self.set_theme_mode("dark" if is_dark else "light")
     def build_progress_page(self):
@@ -2849,8 +2914,14 @@ class OOTBWindow(Adw.ApplicationWindow):
                         "sudo", "-u", username, "dbus-run-session", "gnome-extensions", "enable",
                         "liquid-glass@thinkingcoding1231.gmail.com"
                     ], check=False)
-                    # Turn off blur-my-shell on dock and popups so it does not conflict with liquid glass
+                    # Turn off blur-my-shell completely: disable extension and disable blur on all components
+                    run_cmd([
+                        "sudo", "-u", username, "dbus-run-session", "gnome-extensions", "disable",
+                        "blur-my-shell@aunetx"
+                    ], check=False)
                     for bms_schema, bms_key, bms_val in [
+                        ("org.gnome.shell.extensions.blur-my-shell.applications", "blur", "false"),
+                        ("org.gnome.shell.extensions.blur-my-shell.overview", "blur", "false"),
                         ("org.gnome.shell.extensions.blur-my-shell.dash-to-dock", "blur", "false"),
                         ("org.gnome.shell.extensions.blur-my-shell.popup", "blur", "false"),
                         ("org.gnome.shell.extensions.blur-my-shell.panel", "blur", "false"),
@@ -2912,6 +2983,18 @@ class OOTBWindow(Adw.ApplicationWindow):
                         "sudo", "-u", username, "dbus-run-session", "gnome-extensions", "disable",
                         "liquid-glass@thinkingcoding1231.gmail.com"
                     ], check=False)
+                    run_cmd([
+                        "sudo", "-u", username, "dbus-run-session", "gnome-extensions", "enable",
+                        "blur-my-shell@aunetx"
+                    ], check=False)
+                    for bms_schema, bms_key, bms_val in [
+                        ("org.gnome.shell.extensions.blur-my-shell.dash-to-dock", "blur", "true"),
+                        ("org.gnome.shell.extensions.blur-my-shell.popup", "blur", "true"),
+                    ]:
+                        run_cmd([
+                            "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
+                            bms_schema, bms_key, bms_val
+                        ], check=False)
 
                 # Physically copy correct theme files to the newly created user's .config
                 user_home = f"/home/{username}"

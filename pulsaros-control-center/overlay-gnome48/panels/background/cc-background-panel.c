@@ -708,23 +708,13 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
 
       if (mode == LIQUID_GLASS_MODE_OPAQUE)
         {
-          enable_app_glass = FALSE;
-          all_windows = FALSE;
+          enable_app_glass = TRUE;
+          all_windows = TRUE;
           opacity = 1.0;
 
-          /* Liquid Glass handles dock/panel/menus, Blur my Shell handles window sidebars */
+          /* Liquid Glass handles everything including window glass backgrounds. NO BMS. */
           set_extension_enabled ("liquid-glass@thinkingcoding1231.gmail.com", TRUE);
-          set_extension_enabled ("blur-my-shell@aunetx", TRUE);
-
-          g_autoptr(GSettingsSchema) bms_apps_schema = NULL;
-          g_autoptr(GSettings) bms_apps_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.applications", &bms_apps_schema);
-          if (bms_apps_settings && bms_apps_schema)
-            safe_set_boolean (bms_apps_settings, bms_apps_schema, "blur", TRUE);
-
-          g_autoptr(GSettingsSchema) bms_dash_schema = NULL;
-          g_autoptr(GSettings) bms_dash_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.dash-to-dock", &bms_dash_schema);
-          if (bms_dash_settings && bms_dash_schema)
-            safe_set_boolean (bms_dash_settings, bms_dash_schema, "blur", FALSE);
+          set_extension_enabled ("blur-my-shell@aunetx", FALSE);
         }
       else
         {
@@ -752,6 +742,22 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
       g_autoptr(GSettings) bms_panel_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.panel", &bms_panel_schema);
       if (bms_panel_settings && bms_panel_schema)
         safe_set_boolean (bms_panel_settings, bms_panel_schema, "blur", FALSE);
+
+      /* In Liquid Glass mode, Blur My Shell MUST NOT blur applications/windows or overview */
+      g_autoptr(GSettingsSchema) bms_apps_schema = NULL;
+      g_autoptr(GSettings) bms_apps_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.applications", &bms_apps_schema);
+      if (bms_apps_settings && bms_apps_schema)
+        safe_set_boolean (bms_apps_settings, bms_apps_schema, "blur", FALSE);
+
+      g_autoptr(GSettingsSchema) bms_overview_schema = NULL;
+      g_autoptr(GSettings) bms_overview_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.overview", &bms_overview_schema);
+      if (bms_overview_settings && bms_overview_schema)
+        safe_set_boolean (bms_overview_settings, bms_overview_schema, "blur", FALSE);
+
+      g_autoptr(GSettingsSchema) bms_dash_schema = NULL;
+      g_autoptr(GSettings) bms_dash_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.dash-to-dock", &bms_dash_schema);
+      if (bms_dash_settings && bms_dash_schema)
+        safe_set_boolean (bms_dash_settings, bms_dash_schema, "blur", FALSE);
 
       /* 2. Configure Dash to Dock (Pulsar Dock) with shrink wrap enabled */
       g_autoptr(GSettingsSchema) dock_schema = NULL;
@@ -853,8 +859,13 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
         "dconf write /org/gnome/shell/extensions/liquid-glass/notification-tint-color \\\"'#000000'\\\" ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/osd-tint-color \\\"'#000000'\\\" ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/output-logs 'false' ; "
-        "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur false ; "
-        "gsettings set org.gnome.shell.extensions.blur-my-shell.panel blur false ; "
+        "gnome-extensions disable blur-my-shell@aunetx 2>/dev/null ; "
+        "gnome-extensions enable liquid-glass@thinkingcoding1231.gmail.com 2>/dev/null ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.applications blur false 2>/dev/null ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.overview blur false 2>/dev/null ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur false 2>/dev/null ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur false 2>/dev/null ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.panel blur false 2>/dev/null ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme true ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.0 ; "
@@ -914,6 +925,8 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
 
       const gchar *dock_script =
         "/bin/sh -c \""
+        "gnome-extensions disable liquid-glass@thinkingcoding1231.gmail.com 2>/dev/null ; "
+        "gnome-extensions enable blur-my-shell@aunetx 2>/dev/null ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme false ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 ; "
