@@ -119,10 +119,16 @@ def build_html(notes, assets_dir, dark=False):
     # Avoid an accidental </script> terminator inside the JSON payload.
     payload = payload.replace("<", "\\u003c")
 
+    contributors_raw = _read_asset(assets_dir, "contributors.json", "[]").strip()
+    if not contributors_raw:
+        contributors_raw = "[]"
+    contributors_raw = contributors_raw.replace("<", "\\u003c")
+
     return (
         template.replace("/*__CSS__*/", css)
         .replace("/*__JS__*/", js)
         .replace("__PAYLOAD__", payload)
+        .replace("__CONTRIBUTORS_PAYLOAD__", contributors_raw)
     )
 
 
@@ -264,13 +270,24 @@ class Viewer:
         common.save_state(state)
 
     def _on_about(self, *_args):
-        self.adw.AboutDialog(
+        devs = []
+        try:
+            raw = _read_asset(self.assets_dir, "contributors.json", "[]")
+            items = json.loads(raw)
+            devs = [c["name"] for c in items if isinstance(c, dict) and "name" in c]
+        except Exception:
+            pass
+
+        about = self.adw.AboutDialog(
             application_name="What's New in Pulsar OS",
             application_icon="pulsaros-whatsnew",
             version="1.0",
-            comments="Pulsar OS changelog.",
+            comments="Pulsar OS changelog & community.",
             website="https://inled.es",
-        ).present(self.app.props.active_window)
+        )
+        if devs:
+            about.set_developers(devs)
+        about.present(self.app.props.active_window)
 
     def _on_selected(self, dropdown, _param):
         idx = dropdown.get_selected()

@@ -5,6 +5,14 @@ export interface FeatureItem {
   poster?: string;
 }
 
+export interface Contributor {
+  name: string;
+  avatar: string;
+  discord: string;
+  discordUser: string;
+  github: string;
+}
+
 export interface ProviderLog {
   name: string;
   src: string;
