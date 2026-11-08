@@ -92,3 +92,55 @@ navigation-split-view > .content-pane .card {
   background-color: var(--card-bg-color);
   border-radius: 12px;
 }
+
+/* Sidebar icon squircles (#61): fixed per-panel colors, white glyph. */
+.pulsar-squircle {
+  border-radius: 6px;
+  color: #ffffff;
+  background-color: #8C8C8C;
+}
+
+.pulsar-icon-wifi,
+.pulsar-icon-bluetooth,
+.pulsar-icon-network,
+.pulsar-icon-wwan,
+.pulsar-icon-mobile-broadband,
+.pulsar-icon-universal-access,
+.pulsar-icon-display,
+.pulsar-icon-color,
+.pulsar-icon-search,
+.pulsar-icon-users,
+.pulsar-icon-online-accounts {
+  background-color: #0088FF;
+}
+
+.pulsar-icon-power {
+  background-color: #79B757;
+}
+
+.pulsar-icon-system,
+.pulsar-icon-applications,
+.pulsar-icon-sharing,
+.pulsar-icon-keyboard,
+.pulsar-icon-mouse,
+.pulsar-icon-printers,
+.pulsar-icon-wacom,
+.pulsar-icon-reset-settings,
+.pulsar-icon-about {
+  background-color: #8C8C8C;
+}
+
+.pulsar-icon-background,
+.pulsar-icon-multitasking,
+.pulsar-icon-privacy {
+  background-color: #1c1c1e;
+}
+
+.pulsar-icon-notifications,
+.pulsar-icon-sound {
+  background-color: #ED5F5D;
+}
+
+.pulsar-icon-wellbeing {
+  background-color: #9A57A3;
+}
