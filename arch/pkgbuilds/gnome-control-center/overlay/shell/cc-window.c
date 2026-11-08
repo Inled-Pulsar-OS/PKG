@@ -63,6 +63,10 @@ struct _CcWindow {
   GtkWidget  *current_panel;
   char       *current_panel_id;
   GQueue     *previous_panels;
+  GQueue     *next_panels;
+  GtkWidget  *content_header;
+  GtkWidget  *back_button;
+  GtkWidget  *forward_button;
   gboolean    single_panel_mode;
 
     GtkWidget *custom_titlebar;
@@ -172,7 +176,16 @@ add_current_panel_to_history (CcWindow *self, const char *start_id)
         return;
 
     g_queue_push_head (self->previous_panels, g_strdup (self->current_panel_id));
+    /* A new user navigation drops the forward history */
+    g_queue_clear_full (self->next_panels, g_free);
     g_debug ("Added '%s' to the previous panels", self->current_panel_id);
+}
+
+static void
+update_nav_buttons (CcWindow *self)
+{
+    gtk_widget_set_sensitive (self->back_button, !g_queue_is_empty (self->previous_panels));
+    gtk_widget_set_sensitive (self->forward_button, !g_queue_is_empty (self->next_panels));
 }
 
 static gboolean
@@ -360,6 +373,8 @@ set_active_panel_from_id (CcWindow *self, const gchar *start_id, GVariant *param
 
     CC_TRACE_MSG ("Current panel id: %s", start_id);
 
+    update_nav_buttons (self);
+
     /* Don't activate the panel list in single panel mode. */
     if (!self->single_panel_mode)
         cc_panel_list_set_active_panel (self->panel_list, start_id);
@@ -402,6 +417,8 @@ switch_to_previous_panel (CcWindow *self)
         CC_RETURN ();
 
     previous_panel_id = g_queue_pop_head (self->previous_panels);
+    if (self->current_panel_id)
+        g_queue_push_head (self->next_panels, g_strdup (self->current_panel_id));
 
     g_debug ("Going to previous panel (%s)", previous_panel_id);
 
@@ -410,7 +427,34 @@ switch_to_previous_panel (CcWindow *self)
     CC_EXIT;
 }
 
+static void
+switch_to_next_panel (CcWindow *self)
+{
+    g_autofree gchar *next_panel_id = NULL;
+
+    if (g_queue_is_empty (self->next_panels))
+        return;
+
+    next_panel_id = g_queue_pop_head (self->next_panels);
+    if (self->current_panel_id)
+        g_queue_push_head (self->previous_panels, g_strdup (self->current_panel_id));
+
+    set_active_panel_from_id (self, next_panel_id, NULL, FALSE, FALSE, NULL);
+}
+
 /* Callbacks */
+
+static void
+on_back_button_clicked_cb (CcWindow *self)
+{
+    switch_to_previous_panel (self);
+}
+
+static void
+on_forward_button_clicked_cb (CcWindow *self)
+{
+    switch_to_next_panel (self);
+}
 
 static void
 on_split_view_collapsed_changed_cb (CcWindow *self)
@@ -667,6 +711,11 @@ cc_window_finalize (GObject *object)
         self->previous_panels = NULL;
     }
 
+    if (self->next_panels) {
+        g_queue_free_full (self->next_panels, g_free);
+        self->next_panels = NULL;
+    }
+
     g_clear_object (&self->settings);
 
     G_OBJECT_CLASS (cc_window_parent_class)->finalize (object);
@@ -803,6 +852,9 @@ cc_window_class_init (CcWindowClass *klass)
 
     gtk_widget_class_bind_template_child (widget_class, CcWindow, break_point);
     gtk_widget_class_bind_template_child (widget_class, CcWindow, navigation);
+    gtk_widget_class_bind_template_child (widget_class, CcWindow, content_header);
+    gtk_widget_class_bind_template_child (widget_class, CcWindow, back_button);
+    gtk_widget_class_bind_template_child (widget_class, CcWindow, forward_button);
     gtk_widget_class_bind_template_child (widget_class, CcWindow, split_view);
     gtk_widget_class_bind_template_child (widget_class, CcWindow, panel_list);
     gtk_widget_class_bind_template_child (widget_class, CcWindow, search_entry);
@@ -813,6 +865,8 @@ cc_window_class_init (CcWindowClass *klass)
 
     gtk_widget_class_bind_template_callback (widget_class, on_split_view_collapsed_changed_cb);
     gtk_widget_class_bind_template_callback (widget_class, search_entry_activate_cb);
+    gtk_widget_class_bind_template_callback (widget_class, on_back_button_clicked_cb);
+    gtk_widget_class_bind_template_callback (widget_class, on_forward_button_clicked_cb);
     gtk_widget_class_bind_template_callback (widget_class, show_panel_cb);
     gtk_widget_class_bind_template_callback (widget_class, search_entry_key_pressed_cb);
     gtk_widget_class_bind_template_callback (widget_class, on_user_account_banner_clicked_cb);
@@ -837,6 +891,7 @@ cc_window_init (CcWindow *self)
 
     self->settings = g_settings_new ("org.gnome.Settings");
     self->previous_panels = g_queue_new ();
+    self->next_panels = g_queue_new ();
     self->previous_list_view = cc_panel_list_get_view (self->panel_list);
 
     gtk_search_entry_set_key_capture_widget (self->search_entry, GTK_WIDGET (self));
