@@ -289,7 +289,7 @@ clean_orphan_packages() {
     for d in "$PKGBUILDS_DIR"/*/; do
         [ -f "$d/PKGBUILD" ] && active_names+=("$(basename "$d")")
     done
-    local extra_allowed=("pamtester" "xremap-gnome-bin" "autokey-gtk" "autokey" "winboat-bin" "cloudflare-warp-bin" "localsend-bin")
+    local extra_allowed=("pamtester" "xremap-gnome-bin" "autokey-gtk" "autokey-common" "autokey" "winboat-bin" "cloudflare-warp-bin" "localsend-bin")
 
     for f in "$OUTPUT_DIR"/*.pkg.tar.zst; do
         [ -f "$f" ] || continue
