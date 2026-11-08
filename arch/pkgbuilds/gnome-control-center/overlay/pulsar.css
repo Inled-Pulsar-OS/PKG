@@ -1,0 +1,29 @@
+/* Pulsar OS Settings: tokens only. Appended to shell/style.css by prepare().
+ * Accents: decision #54. Surfaces: decision #53. */
+
+:root {
+  /* Accent palette (GSettings accent-color keys) */
+  --pulsar-accent-blue: #0088FF;
+  --pulsar-accent-purple: #9A57A3;
+  --pulsar-accent-pink: #E55E9C;
+  --pulsar-accent-red: #ED5F5D;
+  --pulsar-accent-orange: #E9873A;
+  --pulsar-accent-yellow: #F3BA4B;
+  --pulsar-accent-green: #79B757;
+  --pulsar-accent-slate: #8C8C8C;
+  --pulsar-accent-teal: #2190a4;
+
+  /* Surfaces, light */
+  --sidebar-bg-color: #ebebed;
+  --view-bg-color: #ffffff;
+  --card-bg-color: #f5f5f5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Surfaces, dark */
+    --sidebar-bg-color: #2e2e32;
+    --view-bg-color: #1f1f1f;
+    --card-bg-color: #333333;
+  }
+}
