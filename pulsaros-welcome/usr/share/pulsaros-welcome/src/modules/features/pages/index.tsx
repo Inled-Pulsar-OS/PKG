@@ -31,50 +31,30 @@ interface MediaViewerProps {
 function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) {
   const [progress, setProgress] = useState(15);
   const [showLoader, setShowLoader] = useState(true);
-  const [videoFailed, setVideoFailed] = useState(false);
   const hasLoadedRef = useRef(false);
   const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // VIDEO LIFECYCLE & CLEANUP
+  // Stop video gracefully on unmount or slide change
   useEffect(() => {
-    if (!isVideo) return;
-
     hasLoadedRef.current = false;
     setShowLoader(true);
     setProgress(15);
-    setVideoFailed(false);
 
     if (stallTimerRef.current) {
       clearTimeout(stallTimerRef.current);
       stallTimerRef.current = null;
     }
 
-    const video = videoRef.current;
-    if (video) {
-      // Explicitly tear down previous GStreamer pipeline before loading new URL
-      try {
-        video.pause();
-        video.removeAttribute("src");
-        video.load();
-      } catch {}
-
-      video.src = mediaUrl;
-      video.load();
-      const playPromise = video.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {});
-      }
-    }
-
-    // Safety fallback: if media buffering or network hangs, dismiss loader after 3.5s
-    const safetyTimeout = setTimeout(() => {
+    // Safety fallback: if media buffering takes > 3.5s, dismiss loader
+    const fallbackTimeout = setTimeout(() => {
       setShowLoader(false);
       hasLoadedRef.current = true;
     }, 3500);
 
+    const video = videoRef.current;
     return () => {
-      clearTimeout(safetyTimeout);
+      clearTimeout(fallbackTimeout);
       if (stallTimerRef.current) {
         clearTimeout(stallTimerRef.current);
         stallTimerRef.current = null;
@@ -82,78 +62,19 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
       if (video) {
         try {
           video.pause();
-          video.removeAttribute("src");
-          video.load();
         } catch {}
       }
     };
-  }, [mediaUrl, isVideo]);
+  }, [mediaUrl]);
 
-  // IMAGE PROGRESS & LIFECYCLE
-  useEffect(() => {
-    if (isVideo) return;
-
-    hasLoadedRef.current = false;
-    setShowLoader(true);
-    setProgress(20);
-    setVideoFailed(false);
-
-    const controller = new AbortController();
-
-    const fetchImg = async () => {
-      try {
-        const res = await fetch(mediaUrl, { signal: controller.signal });
-        if (!res.ok || !res.body) {
-          setProgress(100);
-          setShowLoader(false);
-          hasLoadedRef.current = true;
-          return;
-        }
-
-        const len = res.headers.get("content-length");
-        const total = len ? parseInt(len, 10) : 0;
-        let loaded = 0;
-        const reader = res.body.getReader();
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          loaded += value ? value.length : 0;
-          if (total > 0) {
-            const pct = Math.min(99, Math.round((loaded / total) * 100));
-            setProgress((prev) => Math.max(prev, pct));
-          }
-        }
-        setProgress(100);
-        setShowLoader(false);
-        hasLoadedRef.current = true;
-      } catch {
-        setProgress(100);
-        setShowLoader(false);
-        hasLoadedRef.current = true;
-      }
-    };
-
-    const safety = setTimeout(() => {
-      setShowLoader(false);
-      hasLoadedRef.current = true;
-    }, 3000);
-
-    fetchImg();
-
-    return () => {
-      clearTimeout(safety);
-      controller.abort();
-    };
-  }, [mediaUrl, isVideo]);
-
-  const updateVideoProgress = () => {
-    const v = videoRef.current;
-    if (v && v.duration > 0 && v.buffered.length > 0) {
+  // Real progress calculation for video
+  const handleVideoProgress = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    const v = e.currentTarget;
+    if (v.duration > 0 && v.buffered.length > 0) {
       const bufferedEnd = v.buffered.end(v.buffered.length - 1);
       const pct = Math.min(100, Math.round((bufferedEnd / v.duration) * 100));
       setProgress((prev) => Math.max(prev, pct));
-      if (pct >= 80 || v.readyState >= 3) {
+      if (pct >= 50 || v.readyState >= 3) {
         if (!hasLoadedRef.current) {
           hasLoadedRef.current = true;
           setShowLoader(false);
@@ -162,7 +83,7 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
     }
   };
 
-  const handleReady = () => {
+  const handleCanPlay = () => {
     if (stallTimerRef.current) {
       clearTimeout(stallTimerRef.current);
       stallTimerRef.current = null;
@@ -193,7 +114,7 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
   };
 
   const handleWaiting = () => {
-    // If it already loaded once, only show loader if stalled for > 5 seconds
+    // Only show loader if already loaded once AND stall lasts > 5 seconds
     if (hasLoadedRef.current) {
       if (!stallTimerRef.current) {
         stallTimerRef.current = setTimeout(() => {
@@ -205,40 +126,36 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
     }
   };
 
-  const handleError = () => {
-    if (stallTimerRef.current) {
-      clearTimeout(stallTimerRef.current);
-      stallTimerRef.current = null;
-    }
-    setShowLoader(false);
-    hasLoadedRef.current = true;
-    setVideoFailed(true);
-  };
-
   return (
     <div className="relative flex h-full max-h-[420px] w-full max-w-[680px] items-center justify-center overflow-hidden rounded-2xl border border-black/10 bg-black/5 shadow-md">
-      {isVideo && !videoFailed ? (
+      {isVideo ? (
         <video
           ref={videoRef}
+          key={mediaUrl}
+          src={mediaUrl}
           poster={posterUrl || undefined}
           autoPlay
           loop
           muted
           playsInline
-          preload="auto"
-          onProgress={updateVideoProgress}
-          onLoadedMetadata={updateVideoProgress}
-          onLoadedData={handleReady}
-          onCanPlay={handleReady}
+          preload="metadata"
+          onProgress={handleVideoProgress}
+          onLoadedMetadata={handleVideoProgress}
+          onLoadedData={handleCanPlay}
+          onCanPlay={handleCanPlay}
           onPlaying={handlePlaying}
           onTimeUpdate={handleTimeUpdate}
           onWaiting={handleWaiting}
-          onError={handleError}
+          onError={() => {
+            setShowLoader(false);
+            hasLoadedRef.current = true;
+          }}
           className="h-full w-full object-contain"
         />
       ) : (
         <img
-          src={videoFailed ? (posterUrl || "/logo.png") : mediaUrl}
+          key={mediaUrl}
+          src={mediaUrl}
           alt={title}
           onLoad={() => {
             setProgress(100);
