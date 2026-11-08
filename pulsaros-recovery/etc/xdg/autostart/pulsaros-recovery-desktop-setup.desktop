@@ -3,7 +3,7 @@ Type=Application
 Name=Pulsar OS Desktop Recovery Icon Setup
 Comment=Ensures the installer and recovery icon is present on the desktop
 
-Exec=/usr/bin/pulsaros-recovery-desktop-setup
+Exec=bash -c 'if [ -d /run/archiso ] || [ -d /run/live ] || [ -f /etc/pulsar-need-setup ] || [ "$(id -un 2>/dev/null)" = "live" ]; then /usr/bin/pulsaros-recovery-desktop-setup; fi'
 OnlyShowIn=GNOME;
 NoDisplay=true
 X-GNOME-Autostart-enabled=true

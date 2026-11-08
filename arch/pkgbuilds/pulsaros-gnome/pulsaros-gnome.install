@@ -16,7 +16,9 @@ post_install() {
                evolution-source-registry.service evolution-alarm-notify.service evolution-user-prompter.service \
                org.freedesktop.IBus.session.GNOME.service \
                org.gnome.SettingsDaemon.Smartcard.service org.gnome.SettingsDaemon.Wwan.service \
-               org.gnome.SettingsDaemon.PrintNotifications.service; do
+               org.gnome.SettingsDaemon.PrintNotifications.service \
+               org.gnome.SettingsDaemon.Sharing.service org.gnome.SettingsDaemon.Sound.service \
+               org.gnome.SettingsDaemon.UsbProtection.service at-spi-dbus-bus.service; do
         ln -sf /dev/null "/etc/systemd/user/$srv" 2>/dev/null || true
     done
     if command -v systemctl >/dev/null 2>&1; then
@@ -26,10 +28,21 @@ post_install() {
                                evolution-source-registry.service evolution-alarm-notify.service evolution-user-prompter.service \
                                org.freedesktop.IBus.session.GNOME.service \
                                org.gnome.SettingsDaemon.Smartcard.service org.gnome.SettingsDaemon.Wwan.service \
-                               org.gnome.SettingsDaemon.PrintNotifications.service 2>/dev/null || true
-        # Activar CUPS bajo demanda (socket-activation) en lugar de demonio fijo
-        systemctl disable cups.service 2>/dev/null || true
-        systemctl enable cups.socket 2>/dev/null || true
+                               org.gnome.SettingsDaemon.PrintNotifications.service \
+                               org.gnome.SettingsDaemon.Sharing.service org.gnome.SettingsDaemon.Sound.service \
+                               org.gnome.SettingsDaemon.UsbProtection.service at-spi-dbus-bus.service 2>/dev/null || true
+        # Innecesarios de sistema: enmascarar o activar bajo demanda
+        systemctl mask iio-sensor-proxy.service bolt.service gazed.service colord.service 2>/dev/null || true
+        systemctl disable warp-svc.service tailscaled.service 2>/dev/null || true
+        # Activar CUPS y Docker bajo demanda (socket-activation) en lugar de demonio residente
+        systemctl disable cups.service docker.service containerd.service 2>/dev/null || true
+        systemctl enable cups.socket docker.socket 2>/dev/null || true
+    fi
+    # Limpiar autostarts innecesarios o residuales
+    rm -f /etc/xdg/autostart/autokey.desktop /etc/xdg/autostart/appinstall-daemon.desktop 2>/dev/null || true
+    if [ -f /etc/xdg/autostart/localsearch-3.desktop ]; then
+        sed -i 's/^X-GNOME-Autostart-enabled=true/X-GNOME-Autostart-enabled=false/' /etc/xdg/autostart/localsearch-3.desktop 2>/dev/null || true
+        grep -q "Hidden=true" /etc/xdg/autostart/localsearch-3.desktop || echo "Hidden=true" >> /etc/xdg/autostart/localsearch-3.desktop
     fi
 }
 
