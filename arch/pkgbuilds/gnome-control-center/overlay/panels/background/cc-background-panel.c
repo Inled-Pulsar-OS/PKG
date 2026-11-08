@@ -65,7 +65,9 @@ struct _CcBackgroundPanel {
   AdwToastOverlay *toast_overlay;
   CcBackgroundPreview *default_preview;
   CcBackgroundPreview *dark_preview;
+  CcBackgroundPreview *light_preview;
   GtkToggleButton *default_toggle;
+  GtkToggleButton *light_toggle;
   GtkToggleButton *dark_toggle;
   AdwSwitchRow *macos_remap_switch_row;
   AdwSwitchRow *macos_fullscreen_switch_row;
@@ -114,16 +116,15 @@ load_custom_css (CcBackgroundPanel *self)
     "  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6), 0 4px 10px rgba(0, 0, 0, 0.4);\n"
     "  transform: scale(1.15);\n"
     "}\n"
-    "button.accent-button.blue { background-image: none; background-color: #3584e4; }\n"
+    "button.accent-button.blue { background-image: none; background-color: #0088FF; }\n"
     "button.accent-button.teal { background-image: none; background-color: #2190a4; }\n"
-    "button.accent-button.green { background-image: none; background-color: #3a944a; }\n"
-    "button.accent-button.yellow { background-image: none; background-color: #e5a50a; }\n"
-    "button.accent-button.orange { background-image: none; background-color: #e66100; }\n"
-    "button.accent-button.red { background-image: none; background-color: #e01b24; }\n"
-    "button.accent-button.pink { background-image: none; background-color: #d56199; }\n"
-    "button.accent-button.purple { background-image: none; background-color: #9141ac; }\n"
-    "button.accent-button.slate { background-image: none; background-color: #6f8396; }\n"
-    "button.accent-button.maia { background-image: none; background-color: #16a085; }\n";
+    "button.accent-button.green { background-image: none; background-color: #79B757; }\n"
+    "button.accent-button.yellow { background-image: none; background-color: #F3BA4B; }\n"
+    "button.accent-button.orange { background-image: none; background-color: #E9873A; }\n"
+    "button.accent-button.red { background-image: none; background-color: #ED5F5D; }\n"
+    "button.accent-button.pink { background-image: none; background-color: #E55E9C; }\n"
+    "button.accent-button.purple { background-image: none; background-color: #9A57A3; }\n"
+    "button.accent-button.slate { background-image: none; background-color: #8C8C8C; }\n";
 
   provider = gtk_css_provider_new ();
   gtk_css_provider_load_from_string (provider, custom_css);
@@ -269,11 +270,10 @@ reload_color_scheme (CcBackgroundPanel *self)
 
     if (scheme == G_DESKTOP_COLOR_SCHEME_DEFAULT) {
         gtk_toggle_button_set_active (self->default_toggle, TRUE);
+    } else if (scheme == G_DESKTOP_COLOR_SCHEME_PREFER_LIGHT) {
+        gtk_toggle_button_set_active (self->light_toggle, TRUE);
     } else if (scheme == G_DESKTOP_COLOR_SCHEME_PREFER_DARK) {
         gtk_toggle_button_set_active (self->dark_toggle, TRUE);
-    } else {
-        gtk_toggle_button_set_active (self->default_toggle, FALSE);
-        gtk_toggle_button_set_active (self->dark_toggle, FALSE);
     }
 }
 
@@ -301,6 +301,8 @@ on_color_scheme_toggle_active_cb (CcBackgroundPanel *self)
 {
     if (gtk_toggle_button_get_active (self->default_toggle))
         set_color_scheme (self, G_DESKTOP_COLOR_SCHEME_DEFAULT);
+    else if (gtk_toggle_button_get_active (self->light_toggle))
+        set_color_scheme (self, G_DESKTOP_COLOR_SCHEME_PREFER_LIGHT);
     else if (gtk_toggle_button_get_active (self->dark_toggle))
         set_color_scheme (self, G_DESKTOP_COLOR_SCHEME_PREFER_DARK);
 }
@@ -328,6 +330,7 @@ update_preview (CcBackgroundPanel *self)
 
     current_background = self->current_background;
     cc_background_preview_set_item (self->default_preview, current_background);
+    cc_background_preview_set_item (self->light_preview, current_background);
     cc_background_preview_set_item (self->dark_preview, current_background);
 }
 
@@ -1252,9 +1255,11 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, toast_overlay);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, default_preview);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, dark_preview);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, light_preview);
 
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, default_toggle);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, dark_toggle);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, light_toggle);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_remap_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_fullscreen_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, liquid_glass_switch_row);
