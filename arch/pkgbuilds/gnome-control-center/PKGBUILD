@@ -105,6 +105,9 @@ prepare() {
     patch -Np1 -i "$srcdir/pulsar-macos-style.patch" || true
   fi
 
+  # Pulsar stylesheet: appended, upstream rules stay untouched
+  cat "$startdir/overlay/pulsar.css" >> shell/style.css
+
   if [ -f "po/pulsar-es.po" ] && [ -f "po/es.po" ]; then
     msgcat --use-first po/pulsar-es.po po/es.po > po/es.po.merged && mv po/es.po.merged po/es.po
   fi
