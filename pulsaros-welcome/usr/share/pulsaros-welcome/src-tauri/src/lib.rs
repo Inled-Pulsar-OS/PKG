@@ -41,9 +41,11 @@ fn preflight() {
         }
     }
 
-    // 4. Already done and not forced: exit silently (autostart on later boots).
+    // 4. Sentinel check: ONLY exit silently if launched via session autostart.
+    // If the user launches pulsaros-welcome manually from app launcher or terminal, ALWAYS run.
+    let is_autostart = std::env::args().any(|a| a == "--autostart");
     let force = std::env::args().any(|a| a == "--force" || a == "-f");
-    if core::check_sentinel() && !force {
+    if is_autostart && core::check_sentinel() && !force {
         std::process::exit(0);
     }
 }

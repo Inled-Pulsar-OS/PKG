@@ -23,8 +23,10 @@ if [ -d /run/archiso/bootmnt ] || [ -d /run/live ] || grep -qE 'archiso|pulsar-l
     exit 0
 fi
 
+IS_AUTOSTART=0
 # 3. If launched via session autostart, show once after OOTB setup when the real user logs in
 if [ "$1" = "--autostart" ]; then
+    IS_AUTOSTART=1
     CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/pulsar"
     SHOWN_FILE="$CONFIG_DIR/welcome-shown"
     mkdir -p "$CONFIG_DIR" 2>/dev/null || true
@@ -50,7 +52,11 @@ export WEBKIT_DISABLE_DMABUF_RENDERER=1
 export WEBKIT_DISABLE_COMPOSITING_MODE=1
 
 if [ -x "$TAURI_BIN" ]; then
-    exec "$TAURI_BIN" "$@"
+    if [ "$IS_AUTOSTART" = "1" ]; then
+        exec "$TAURI_BIN" --autostart "$@"
+    else
+        exec "$TAURI_BIN" --force "$@"
+    fi
 fi
 
 exec /usr/bin/python3 "$PYTHON_APP" "$@"
