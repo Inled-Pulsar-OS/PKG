@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import fallbackFeatures from "@/assets/site.json";
 import type { FeatureItem } from "../types";
@@ -26,61 +26,125 @@ interface MediaViewerProps {
   posterUrl: string;
   isVideo: boolean;
   title: string;
-  children?: React.ReactNode;
 }
 
-function MediaViewer({ mediaUrl, posterUrl, isVideo, title, children }: MediaViewerProps) {
-  const [progress, setProgress] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) {
+  const [progress, setProgress] = useState(15);
+  const [showLoader, setShowLoader] = useState(true);
+  const [videoFailed, setVideoFailed] = useState(false);
+  const hasLoadedRef = useRef(false);
+  const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  // VIDEO LIFECYCLE & CLEANUP
   useEffect(() => {
-    setIsLoading(true);
-    setProgress(5);
+    if (!isVideo) return;
 
-    if (!isVideo) {
-      let active = true;
-      const fetchImage = async () => {
+    hasLoadedRef.current = false;
+    setShowLoader(true);
+    setProgress(15);
+    setVideoFailed(false);
+
+    if (stallTimerRef.current) {
+      clearTimeout(stallTimerRef.current);
+      stallTimerRef.current = null;
+    }
+
+    const video = videoRef.current;
+    if (video) {
+      // Explicitly tear down previous GStreamer pipeline before loading new URL
+      try {
+        video.pause();
+        video.removeAttribute("src");
+        video.load();
+      } catch {}
+
+      video.src = mediaUrl;
+      video.load();
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {});
+      }
+    }
+
+    // Safety fallback: if media buffering or network hangs, dismiss loader after 3.5s
+    const safetyTimeout = setTimeout(() => {
+      setShowLoader(false);
+      hasLoadedRef.current = true;
+    }, 3500);
+
+    return () => {
+      clearTimeout(safetyTimeout);
+      if (stallTimerRef.current) {
+        clearTimeout(stallTimerRef.current);
+        stallTimerRef.current = null;
+      }
+      if (video) {
         try {
-          const response = await fetch(mediaUrl);
-          if (!response.ok || !response.body) {
-            if (active) {
-              setProgress(100);
-              setIsLoading(false);
-            }
-            return;
-          }
-          const contentLength = response.headers.get("content-length");
-          const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
-          let loadedBytes = 0;
+          video.pause();
+          video.removeAttribute("src");
+          video.load();
+        } catch {}
+      }
+    };
+  }, [mediaUrl, isVideo]);
 
-          const reader = response.body.getReader();
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            loadedBytes += value ? value.length : 0;
-            if (totalBytes > 0 && active) {
-              const pct = Math.min(99, Math.round((loadedBytes / totalBytes) * 100));
-              setProgress(pct);
-            }
-          }
-          if (active) {
-            setProgress(100);
-            setIsLoading(false);
-          }
-        } catch {
-          if (active) {
-            setProgress(100);
-            setIsLoading(false);
+  // IMAGE PROGRESS & LIFECYCLE
+  useEffect(() => {
+    if (isVideo) return;
+
+    hasLoadedRef.current = false;
+    setShowLoader(true);
+    setProgress(20);
+    setVideoFailed(false);
+
+    const controller = new AbortController();
+
+    const fetchImg = async () => {
+      try {
+        const res = await fetch(mediaUrl, { signal: controller.signal });
+        if (!res.ok || !res.body) {
+          setProgress(100);
+          setShowLoader(false);
+          hasLoadedRef.current = true;
+          return;
+        }
+
+        const len = res.headers.get("content-length");
+        const total = len ? parseInt(len, 10) : 0;
+        let loaded = 0;
+        const reader = res.body.getReader();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          loaded += value ? value.length : 0;
+          if (total > 0) {
+            const pct = Math.min(99, Math.round((loaded / total) * 100));
+            setProgress((prev) => Math.max(prev, pct));
           }
         }
-      };
+        setProgress(100);
+        setShowLoader(false);
+        hasLoadedRef.current = true;
+      } catch {
+        setProgress(100);
+        setShowLoader(false);
+        hasLoadedRef.current = true;
+      }
+    };
 
-      fetchImage();
-      return () => {
-        active = false;
-      };
-    }
+    const safety = setTimeout(() => {
+      setShowLoader(false);
+      hasLoadedRef.current = true;
+    }, 3000);
+
+    fetchImg();
+
+    return () => {
+      clearTimeout(safety);
+      controller.abort();
+    };
   }, [mediaUrl, isVideo]);
 
   const updateVideoProgress = () => {
@@ -88,69 +152,130 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title, children }: MediaVie
     if (v && v.duration > 0 && v.buffered.length > 0) {
       const bufferedEnd = v.buffered.end(v.buffered.length - 1);
       const pct = Math.min(100, Math.round((bufferedEnd / v.duration) * 100));
-      setProgress(Math.max(10, pct));
-      if (pct >= 90 || v.readyState >= 3) {
-        setIsLoading(false);
+      setProgress((prev) => Math.max(prev, pct));
+      if (pct >= 80 || v.readyState >= 3) {
+        if (!hasLoadedRef.current) {
+          hasLoadedRef.current = true;
+          setShowLoader(false);
+        }
       }
     }
   };
 
+  const handleReady = () => {
+    if (stallTimerRef.current) {
+      clearTimeout(stallTimerRef.current);
+      stallTimerRef.current = null;
+    }
+    setProgress(100);
+    hasLoadedRef.current = true;
+    setShowLoader(false);
+  };
+
+  const handlePlaying = () => {
+    if (stallTimerRef.current) {
+      clearTimeout(stallTimerRef.current);
+      stallTimerRef.current = null;
+    }
+    hasLoadedRef.current = true;
+    setShowLoader(false);
+  };
+
+  const handleTimeUpdate = () => {
+    if (stallTimerRef.current) {
+      clearTimeout(stallTimerRef.current);
+      stallTimerRef.current = null;
+    }
+    if (showLoader) {
+      setShowLoader(false);
+      hasLoadedRef.current = true;
+    }
+  };
+
+  const handleWaiting = () => {
+    // If it already loaded once, only show loader if stalled for > 5 seconds
+    if (hasLoadedRef.current) {
+      if (!stallTimerRef.current) {
+        stallTimerRef.current = setTimeout(() => {
+          setShowLoader(true);
+        }, 5000);
+      }
+    } else {
+      setShowLoader(true);
+    }
+  };
+
+  const handleError = () => {
+    if (stallTimerRef.current) {
+      clearTimeout(stallTimerRef.current);
+      stallTimerRef.current = null;
+    }
+    setShowLoader(false);
+    hasLoadedRef.current = true;
+    setVideoFailed(true);
+  };
+
   return (
     <div className="relative flex h-full max-h-[420px] w-full max-w-[680px] items-center justify-center overflow-hidden rounded-2xl border border-black/10 bg-black/5 shadow-md">
-      {isVideo ? (
+      {isVideo && !videoFailed ? (
         <video
           ref={videoRef}
-          key={mediaUrl}
-          src={mediaUrl}
           poster={posterUrl || undefined}
           autoPlay
           loop
           muted
           playsInline
+          preload="auto"
           onProgress={updateVideoProgress}
           onLoadedMetadata={updateVideoProgress}
-          onLoadedData={updateVideoProgress}
-          onCanPlay={() => {
-            setProgress(100);
-            setIsLoading(false);
-          }}
-          onPlaying={() => setIsLoading(false)}
-          onWaiting={() => setIsLoading(true)}
+          onLoadedData={handleReady}
+          onCanPlay={handleReady}
+          onPlaying={handlePlaying}
+          onTimeUpdate={handleTimeUpdate}
+          onWaiting={handleWaiting}
+          onError={handleError}
           className="h-full w-full object-contain"
         />
       ) : (
         <img
-          key={mediaUrl}
-          src={mediaUrl}
+          src={videoFailed ? (posterUrl || "/logo.png") : mediaUrl}
           alt={title}
           onLoad={() => {
             setProgress(100);
-            setIsLoading(false);
+            hasLoadedRef.current = true;
+            setShowLoader(false);
+          }}
+          onError={() => {
+            setShowLoader(false);
+            hasLoadedRef.current = true;
           }}
           draggable={false}
           className="h-full w-full object-contain"
         />
       )}
 
-      {/* Real Progress Bar Overlay */}
-      {isLoading && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity duration-200">
-          <div className="flex flex-col items-center gap-2.5 rounded-2xl bg-black/65 px-6 py-4 shadow-2xl border border-white/10">
-            <div className="flex items-center gap-2 text-white text-xs font-semibold tracking-wide">
-              <span>Cargando {isVideo ? "vídeo" : "imagen"}</span>
-              <span className="text-accent">{progress}%</span>
-            </div>
-            <div className="h-2 w-48 overflow-hidden rounded-full bg-white/20">
-              <div
-                className="h-full rounded-full bg-accent transition-all duration-150 ease-out"
-                style={{ width: `${Math.max(5, progress)}%` }}
-              />
+      {/* Progress Bar & Spinner Overlay */}
+      {showLoader && (
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-black/35 backdrop-blur-[2px] transition-opacity duration-200">
+          <div className="flex flex-col items-center gap-3 rounded-2xl bg-black/75 px-7 py-5 shadow-2xl border border-white/10">
+            {/* Minimalist Spinner */}
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-accent" />
+
+            {/* Real Progress Bar */}
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="h-1.5 w-44 overflow-hidden rounded-full bg-white/20">
+                <div
+                  className="h-full rounded-full bg-accent transition-all duration-150 ease-out"
+                  style={{ width: `${Math.max(8, progress)}%` }}
+                />
+              </div>
+              <span className="text-[11px] font-semibold text-white/80 tabular-nums">
+                {progress}%
+              </span>
             </div>
           </div>
         </div>
       )}
-
-      {children}
     </div>
   );
 }
@@ -195,20 +320,20 @@ export function FeaturesPage({ onBack, onFinish }: FeaturesPageProps) {
   const current = features[index] || features[0];
 
   const next = useCallback(() => {
-    if (index < total - 1) {
-      setIndex((i) => i + 1);
-    } else {
+    setIndex((i) => {
+      if (i < total - 1) return i + 1;
       onFinish();
-    }
-  }, [index, total, onFinish]);
+      return i;
+    });
+  }, [total, onFinish]);
 
   const prev = useCallback(() => {
-    if (index > 0) {
-      setIndex((i) => i - 1);
-    } else {
+    setIndex((i) => {
+      if (i > 0) return i - 1;
       onBack();
-    }
-  }, [index, onBack]);
+      return i;
+    });
+  }, [onBack]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -236,6 +361,7 @@ export function FeaturesPage({ onBack, onFinish }: FeaturesPageProps) {
           {features.map((f, i) => (
             <button
               key={`${f.title}-${i}`}
+              type="button"
               aria-label={`Slide ${i + 1}`}
               onClick={() => setIndex(i)}
               className={`slide-dot cursor-pointer ${i === index ? "active" : ""}`}
@@ -254,42 +380,44 @@ export function FeaturesPage({ onBack, onFinish }: FeaturesPageProps) {
         </div>
 
         {/* Media display area with chevrons */}
-        <main className="relative flex min-h-0 flex-1 items-center justify-center px-6 py-2">
+        <main className="relative flex min-h-0 flex-1 items-center justify-center px-4 sm:px-8 py-2">
+          {/* Left Chevron */}
+          <button
+            type="button"
+            aria-label="Previous slide"
+            onClick={prev}
+            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-30 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-black/50 text-white backdrop-blur shadow-lg transition-all hover:bg-black/75 hover:scale-105 active:scale-95"
+          >
+            <ChevronLeft className="h-6 w-6" />
+          </button>
+
           <MediaViewer
             mediaUrl={mediaUrl}
             posterUrl={posterUrl}
             isVideo={isVideo}
             title={current.title}
-          >
-            {/* Left Chevron */}
-            <button
-              aria-label="Previous slide"
-              onClick={prev}
-              className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-all hover:bg-black/60 active:scale-95"
-            >
-              <ChevronLeft className="h-6 w-6" />
-            </button>
+          />
 
-            {/* Right Chevron */}
-            <button
-              aria-label="Next slide"
-              onClick={next}
-              className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-all hover:bg-black/60 active:scale-95"
-            >
-              <ChevronRight className="h-6 w-6" />
-            </button>
-          </MediaViewer>
+          {/* Right Chevron */}
+          <button
+            type="button"
+            aria-label="Next slide"
+            onClick={next}
+            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-30 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-black/50 text-white backdrop-blur shadow-lg transition-all hover:bg-black/75 hover:scale-105 active:scale-95"
+          >
+            <ChevronRight className="h-6 w-6" />
+          </button>
         </main>
 
         {/* Footer with action buttons */}
         <footer className="flex shrink-0 items-center justify-between border-t border-separator px-6 py-3.5 sm:px-8">
-          <button className="btn-secondary" onClick={prev}>
+          <button type="button" className="btn-secondary" onClick={prev}>
             {index === 0 ? "Back" : "Previous"}
           </button>
           <span className="text-xs font-medium text-text-tertiary">
             {index + 1} / {total}
           </span>
-          <button className="btn-primary" onClick={next}>
+          <button type="button" className="btn-primary" onClick={next}>
             {isLast ? "Get Started" : "Continue"}
           </button>
         </footer>
