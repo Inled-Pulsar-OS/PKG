@@ -18,6 +18,23 @@ import gi
 
 os.environ["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:" + os.environ.get("PATH", "")
 
+# Ensure reliable rendering across all environments (Debian, Arch, VMs, live sessions):
+# When running under X11 in minimal WMs (Fluxbox/Openbox) or via sudo, Mesa OpenGL/NGL
+# fails to attach to user X11 SHM ("MESA: error: Failed to attach to x11 shm"), causing
+# GTK4 windows to render transparent or black. Forcing Cairo ensures pixel-perfect,
+# rock-solid rendering without requiring composite managers or GPU hardware acceleration.
+if "GSK_RENDERER" not in os.environ:
+    os.environ["GSK_RENDERER"] = "cairo"
+
+# If running as root, clean up mismatched XDG_RUNTIME_DIR from the invoking user
+# to prevent D-Bus session bus authentication rejections ("The connection is closed").
+if os.getuid() == 0 and "XDG_RUNTIME_DIR" in os.environ:
+    try:
+        if os.stat(os.environ["XDG_RUNTIME_DIR"]).st_uid != 0:
+            del os.environ["XDG_RUNTIME_DIR"]
+    except Exception:
+        del os.environ["XDG_RUNTIME_DIR"]
+
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 gi.require_version('GdkPixbuf', '2.0')
@@ -3367,7 +3384,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             txt_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
             txt_box.set_hexpand(True)
             lbl_title = Gtk.Label()
-            lbl_title.set_markup(f"<b>{item['name']}</b>")
+            lbl_title.set_markup(f"<b>{GLib.markup_escape_text(item['name'])}</b>")
             lbl_title.set_halign(Gtk.Align.START)
             txt_box.append(lbl_title)
 
@@ -3457,7 +3474,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             txt_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
             txt_box.set_hexpand(True)
             lbl_title = Gtk.Label()
-            lbl_title.set_markup(f"<b>{item['name']}</b>")
+            lbl_title.set_markup(f"<b>{GLib.markup_escape_text(item['name'])}</b>")
             lbl_title.set_halign(Gtk.Align.START)
             txt_box.append(lbl_title)
 
@@ -3738,7 +3755,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             features.append("Hibernation (RAM Swapfile)")
         if self.install_encryption:
             features.append("LUKS Encryption")
-        feat_str = ", ".join(features) if features else "Minimal Base"
+        feat_str = GLib.markup_escape_text(", ".join(features)) if features else "Minimal Base"
         self.confirm_options_lbl.set_markup(f"<b>Features:</b> {feat_str}")
 
         self.stack.set_visible_child_name("install_confirm")
@@ -3859,7 +3876,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             slide_box.set_valign(Gtk.Align.CENTER)
 
             lbl_t = Gtk.Label()
-            lbl_t.set_markup(f"<span font_weight='bold' size='14500' color='#ffffff'>{f_title}</span>")
+            lbl_t.set_markup(f"<span font_weight='bold' size='14500' color='#ffffff'>{GLib.markup_escape_text(f_title)}</span>")
             lbl_t.set_halign(Gtk.Align.CENTER)
             slide_box.append(lbl_t)
 
@@ -4795,12 +4812,21 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
         start_sec = target_info["start"]
         end_sec = target_info["end"]
-        boot_sec = (1024 * 1024 * 1024) // sec_size  # 1GiB in sectors
+        # Determine boot partition size:
+        # Default to 1536MB (1.5GiB) so there is ample room for /boot kernels (~200MB)
+        # plus the dedicated recovery SquashFS (~570MB). If target partition >= 25GB, use 2048MB.
+        if target_info["size_bytes"] >= 25 * 1024 * 1024 * 1024:
+            boot_bytes = 2048 * 1024 * 1024
+        elif target_info["size_bytes"] >= 12 * 1024 * 1024 * 1024:
+            boot_bytes = 1536 * 1024 * 1024
+        else:
+            boot_bytes = 1024 * 1024 * 1024
+        boot_sec = boot_bytes // sec_size
         boot_end_sec = start_sec + boot_sec - 1
         root_start_sec = boot_end_sec + 1
 
         log_msg(f"Splitting partition {partn} on {disk_path} ({pttype}):")
-        log_msg(f"  PulsarBoot sectors: {start_sec}..{boot_end_sec} (1024 MB)")
+        log_msg(f"  PulsarBoot sectors: {start_sec}..{boot_end_sec} ({boot_bytes // (1024*1024)} MB)")
         log_msg(f"  PulsarOS sectors:   {root_start_sec}..{end_sec} ({(end_sec - root_start_sec + 1) * sec_size // (1024*1024)} MB)")
 
         # Ensure target partition is not mounted and unmap any leftover cryptroot
@@ -4953,13 +4979,33 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 
             def cleanup_mounts(is_efi_boot):
                 if "TEST_MODE" not in os.environ:
-                    # 1. Deactivate any active swap
+                    # 1. Sync pending data to disk before unmounting or killing processes
+                    log_msg("Sincronizando escrituras pendientes a disco (sync)...")
+                    subprocess.run(["sync"])
+                    if os.path.ismount("/mnt"):
+                        try:
+                            subprocess.run(["btrfs", "filesystem", "sync", "/mnt"], capture_output=True, timeout=10)
+                        except Exception:
+                            pass
+                    if os.path.ismount("/mnt/boot"):
+                        try:
+                            subprocess.run(["sync", "-f", "/mnt/boot"], capture_output=True, timeout=5)
+                        except Exception:
+                            pass
+
+                    # 2. Deactivate any active swap
                     subprocess.run(["swapoff", "-a"], capture_output=True)
 
-                    # 2. Kill any processes holding files open inside /mnt (chroot and host) surgically using fuser
+                    # 3. Gracefully terminate processes holding files open inside /mnt (SIGTERM first, then SIGKILL)
+                    try:
+                        subprocess.run(["fuser", "-k", "-15", "-M", "/mnt"], capture_output=True)
+                        time.sleep(1)
+                    except Exception:
+                        pass
                     subprocess.run(["fuser", "-k", "-9", "-M", "/mnt"], capture_output=True)
+                    time.sleep(0.5)
                     
-                    # 3. Unmount nested virtual filesystems first, then root, in strict reverse order of mounting
+                    # 4. Unmount nested virtual filesystems first, then root, in strict reverse order of mounting
                     for mount_path in [
                         "/mnt/etc/resolv.conf",
                         "/mnt/run",
@@ -4973,27 +5019,40 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         "/mnt/boot",
                         "/mnt/home",
                     ]:
-                        if os.path.exists(mount_path):
-                            res = subprocess.run(["umount", "-f", mount_path], capture_output=True)
+                        if os.path.ismount(mount_path) or os.path.exists(mount_path):
+                            res = subprocess.run(["umount", mount_path], capture_output=True)
                             if res.returncode != 0:
-                                subprocess.run(["umount", "-l", mount_path], capture_output=True)
+                                res = subprocess.run(["umount", "-f", mount_path], capture_output=True)
+                                if res.returncode != 0:
+                                    subprocess.run(["umount", "-l", mount_path], capture_output=True)
                     
                     if is_efi_boot:
-                        res = subprocess.run(["umount", "-f", "/mnt/boot/efi"], capture_output=True)
+                        res = subprocess.run(["umount", "/mnt/boot/efi"], capture_output=True)
                         if res.returncode != 0:
-                            subprocess.run(["umount", "-l", "/mnt/boot/efi"], capture_output=True)
-                    res = subprocess.run(["umount", "-f", "/mnt/boot"], capture_output=True)
+                            res = subprocess.run(["umount", "-f", "/mnt/boot/efi"], capture_output=True)
+                            if res.returncode != 0:
+                                subprocess.run(["umount", "-l", "/mnt/boot/efi"], capture_output=True)
+                    res = subprocess.run(["umount", "/mnt/boot"], capture_output=True)
                     if res.returncode != 0:
-                        subprocess.run(["umount", "-l", "/mnt/boot"], capture_output=True)
+                        res = subprocess.run(["umount", "-f", "/mnt/boot"], capture_output=True)
+                        if res.returncode != 0:
+                            subprocess.run(["umount", "-l", "/mnt/boot"], capture_output=True)
                                 
-                    res = subprocess.run(["umount", "-f", "/mnt"], capture_output=True)
+                    res = subprocess.run(["umount", "/mnt"], capture_output=True)
                     if res.returncode != 0:
-                        subprocess.run(["umount", "-l", "/mnt"], capture_output=True)
+                        res = subprocess.run(["umount", "-f", "/mnt"], capture_output=True)
+                        if res.returncode != 0:
+                            subprocess.run(["umount", "-l", "/mnt"], capture_output=True)
                         
-                    # 4. Final recursive lazy unmount sweep to ensure absolutely nothing remains bound in the VFS
-                    subprocess.run(["umount", "-f", "-l", "-R", "/mnt"], capture_output=True)
+                    # 5. Final recursive unmount sweep to ensure absolutely nothing remains bound in the VFS
+                    if os.path.ismount("/mnt"):
+                        subprocess.run(["umount", "-f", "-l", "-R", "/mnt"], capture_output=True)
 
-                    # 5. Lazy-unmount any gvfs/udisks automounts of the install
+                    # 6. Flush filesystem superblocks and settle udev
+                    subprocess.run(["sync"])
+                    subprocess.run(["udevadm", "settle"], capture_output=True)
+
+                    # 7. Lazy-unmount any gvfs/udisks automounts of the install
                     #    targets or partitions belonging to the target disk
                     try:
                         with open("/proc/mounts", "r") as mf:
@@ -5009,8 +5068,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     except Exception:
                         pass
 
-                    # 6. Close LUKS encryption container if mapped
+                    # 8. Close LUKS encryption container if mapped
                     subprocess.run(["cryptsetup", "close", "pulsar_cryptroot"], capture_output=True)
+                    subprocess.run(["sync"])
                     subprocess.run(["udevadm", "settle"], capture_output=True)
                 
             is_efi = os.path.exists("/sys/firmware/efi")
@@ -5993,6 +6053,27 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             except Exception:
                                 pass
 
+                    # If an unencrypted boot partition exists (e.g. Dual Boot with encryption),
+                    # deploy the recovery SquashFS onto the unencrypted /boot partition so Debian
+                    # live-boot can discover and boot it without needing to unlock LUKS first.
+                    try:
+                        if boot_part and os.path.ismount("/mnt/boot"):
+                            os.makedirs("/mnt/boot/live", exist_ok=True)
+                            os.makedirs("/mnt/boot/recovery/live", exist_ok=True)
+                            boot_rec_dst = "/mnt/boot/live/filesystem.squashfs"
+                            if not os.path.isfile(boot_rec_dst) or os.path.getsize(boot_rec_dst) == 0:
+                                shutil.copy2(primary_rec_dst, boot_rec_dst)
+                                log_msg(f"Recovery Environment SquashFS deployed to unencrypted /boot ({boot_part}) -> {boot_rec_dst}")
+                            for b_alias in ["/mnt/boot/recovery/live/filesystem.squashfs", "/mnt/boot/recovery/filesystem.squashfs", "/mnt/boot/filesystem.squashfs"]:
+                                try:
+                                    os.makedirs(os.path.dirname(b_alias), exist_ok=True)
+                                    if not os.path.isfile(b_alias):
+                                        os.link(boot_rec_dst, b_alias)
+                                except Exception:
+                                    pass
+                    except Exception as b_rec_err:
+                        log_msg(f"Notice: /boot recovery SquashFS setup: {b_rec_err}")
+
                     # If /mnt is a Btrfs subvolume (@), ensure top-level subvolume 5 also has finder symlinks for live-boot
                     try:
                         if root_part_dev and not recovery_part:
@@ -6243,6 +6324,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         os.makedirs("/mnt/recovery", exist_ok=True)
                         shutil.copy2(src, "/mnt/recovery/boot/initramfs-recovery.img")
                         shutil.copy2(src, "/mnt/recovery/initramfs-recovery.img")
+                        if boot_part and os.path.ismount("/mnt/boot"):
+                            os.makedirs("/mnt/boot/recovery", exist_ok=True)
+                            shutil.copy2(src, "/mnt/boot/recovery/initramfs-recovery.img")
                         if is_efi:
                             esp_root = "/mnt/boot/efi"
                             os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
@@ -6295,14 +6379,22 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     os.makedirs("/mnt/recovery", exist_ok=True)
                     shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-recovery")
                     shutil.copy2(found_k, "/mnt/recovery/vmlinuz-recovery")
+                    if boot_part and os.path.ismount("/mnt/boot"):
+                        os.makedirs("/mnt/boot/recovery", exist_ok=True)
+                        shutil.copy2(found_k, "/mnt/boot/recovery/vmlinuz-recovery")
                     if is_efi:
                         esp_root = "/mnt/boot/efi"
                         os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
                         shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery.efi")
                         shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery")
                     
-                    rec_opts_base = "boot=live components username=live autologin cow_spacesize=4G live-media-path=live ahci.mobile_lpm_policy=1 fsck.mode=skip quiet splash"
-                    rec_opts = f"boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live ahci.mobile_lpm_policy=1 fsck.mode=skip quiet splash" if recovery_part else rec_opts_base
+                    rec_opts_base = "boot=live components username=live autologin cow_spacesize=4G live-media-path=live fsck.mode=skip quiet splash"
+                    if recovery_part:
+                        rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash"
+                    elif boot_part:
+                        rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_BOOT live-media-path=live fsck.mode=skip quiet splash"
+                    else:
+                        rec_opts = rec_opts_base
                     
                     with open("/mnt/recovery/boot/refind_linux.conf", "w") as f:
                         f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
@@ -6311,9 +6403,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     if is_efi:
                         esp_root = "/mnt/boot/efi"
                         with open(f"{esp_root}/EFI/recovery/refind_linux.conf", "w") as f:
-                            # live-media=any rompe find_livefs (ver Bug #2); sin
-                            # live-media, live-boot escanea los dispositivos de bloque.
-                            f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts_base}"\n')
+                            # live-media=any rompe find_livefs (ver Bug #2);
+                            # live-boot busca en el volumen indicado o escanea dispositivos.
+                            f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
 
                     subprocess.run(["sync"])
                     log_msg(f"Recovery kernel deployed to PULSAR_OS, PULSAR_RECOVERY, and ESP from {found_k}")
@@ -6418,15 +6510,30 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 )
                 initrd_name = os.path.basename(installed_initrd_file) if installed_initrd_file else ("initramfs-linux.img" if is_arch else "initrd.img")
 
-                ucode_lines = "".join(
-                    f"    initrd /@/boot/{uc}\n"
-                    for uc in ("amd-ucode.img", "intel-ucode.img")
-                    if os.path.exists(f"/mnt/boot/{uc}")
-                )
+                # In Arch Linux mkinitcpio 38+, the 'microcode' hook bundles AMD & Intel
+                # early microcode directly into initramfs-linux.img. Adding separate
+                # initrd lines in rEFInd confuses the bootloader (rEFInd only supports
+                # a single initrd line per stanza).
+                if is_arch:
+                    ucode_lines = ""
+                else:
+                    ucode_lines = "".join(
+                        f"    initrd /@/boot/{uc}\n"
+                        for uc in ("amd-ucode.img", "intel-ucode.img")
+                        if os.path.exists(f"/mnt/boot/{uc}")
+                    )
 
-                rec_opts_rec = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live ahci.mobile_lpm_policy=1 fsck.mode=skip quiet splash"
-                rec_opts_auto = "boot=live components username=live autologin cow_spacesize=4G live-media-path=live ahci.mobile_lpm_policy=1 fsck.mode=skip quiet splash"
+                rec_opts_rec = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash"
+                rec_opts_boot = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_BOOT live-media-path=live fsck.mode=skip quiet splash"
+                rec_opts_auto = "boot=live components username=live autologin cow_spacesize=4G live-media-path=live fsck.mode=skip quiet splash"
                 rec_net_opts = "boot=live components username=live autologin cow_spacesize=4G internet_recovery=1 quiet splash"
+
+                if recovery_part:
+                    rec_active_opts = rec_opts_rec
+                elif boot_part:
+                    rec_active_opts = rec_opts_boot
+                else:
+                    rec_active_opts = rec_opts_auto
 
                 refind_dirs = [
                     f"{esp_root}/EFI/refind",
@@ -6568,11 +6675,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             # Dedicated unencrypted ext4 /boot partition (PULSAR_BOOT).
                             # rEFInd loads kernel and initrd directly using ext4_x64.efi driver.
                             # No ESP copying needed (prevents ESP space exhaustion and truncation).
-                            boot_ucode_lines = "".join(
-                                f"    initrd /{uc}\n"
-                                for uc in ("amd-ucode.img", "intel-ucode.img")
-                                if os.path.exists(f"/mnt/boot/{uc}")
-                            )
+                            if is_arch:
+                                boot_ucode_lines = ""
+                            else:
+                                boot_ucode_lines = "".join(
+                                    f"    initrd /{uc}\n"
+                                    for uc in ("amd-ucode.img", "intel-ucode.img")
+                                    if os.path.exists(f"/mnt/boot/{uc}")
+                                )
                             if self.install_encryption and luks_uuid:
                                 boot_opts = f"rd.luks.name={luks_uuid}=pulsar_cryptroot cryptdevice=UUID={luks_uuid}:pulsar_cryptroot root=/dev/mapper/pulsar_cryptroot rootflags=subvol=@ rw quiet splash{resume_opts}"
                             else:
@@ -6611,11 +6721,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             except Exception as esp_copy_err:
                                 log_msg(f"Warning: ESP kernel/initrd staging: {esp_copy_err}")
 
-                            esp_ucode_lines = "".join(
-                                f"    initrd /EFI/PulsarOS/{uc}\n"
-                                for uc in ("amd-ucode.img", "intel-ucode.img")
-                                if os.path.exists(f"{esp_root}/EFI/PulsarOS/{uc}")
-                            )
+                            if is_arch:
+                                esp_ucode_lines = ""
+                            else:
+                                esp_ucode_lines = "".join(
+                                    f"    initrd /EFI/PulsarOS/{uc}\n"
+                                    for uc in ("amd-ucode.img", "intel-ucode.img")
+                                    if os.path.exists(f"{esp_root}/EFI/PulsarOS/{uc}")
+                                )
                             enc_boot_opts = f"rd.luks.name={luks_uuid}=pulsar_cryptroot cryptdevice=UUID={luks_uuid}:pulsar_cryptroot root=/dev/mapper/pulsar_cryptroot rootflags=subvol=@ rw quiet splash{resume_opts}"
                             pulsar_entry = (
                                 'menuentry "Pulsar OS" {\n'
@@ -6661,12 +6774,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             f"{rec_volume_line}"
                             f"    loader {rec_loader}\n"
                             f"    initrd {rec_initrd}\n"
-                            f'    options "{rec_opts_auto}"\n'
+                            f'    options "{rec_active_opts}"\n'
                             '    submenuentry "Boot Recovery (Debug Mode)" {\n'
-                            f'        options "{rec_opts_auto.replace("quiet splash", "loglevel=7 live-debug")}"\n'
+                            f'        options "{rec_active_opts.replace("quiet splash", "loglevel=7 live-debug")}"\n'
                             "    }\n"
                             '    submenuentry "Boot Recovery (Safe Graphics)" {\n'
-                            f'        options "{rec_opts_auto.replace("quiet splash", "nomodeset")}"\n'
+                            f'        options "{rec_active_opts.replace("quiet splash", "nomodeset")}"\n'
                             "    }\n"
                             "}\n"
                             f"{extra_entries_str}"
@@ -6798,12 +6911,60 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 # Deploy Recovery Entry to /etc/grub.d/15_pulsar_recovery
                 grub_d = "/mnt/etc/grub.d"
                 os.makedirs(grub_d, exist_ok=True)
+
+                if boot_part and boot_uuid:
+                    primary_rec_search = f"""    # 1. Dedicated unencrypted /boot partition (PULSAR_BOOT)
+    if search --no-floppy --fs-uuid --set=root {boot_uuid}; then
+        if [ -f /recovery/vmlinuz-recovery ]; then
+            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_BOOT live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd /recovery/initramfs-recovery.img
+            set rec_found=1
+        elif [ -f /vmlinuz-recovery ]; then
+            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_BOOT live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd /initramfs-recovery.img
+            set rec_found=1
+        fi
+    fi"""
+                elif recovery_part and rec_uuid:
+                    primary_rec_search = f"""    # 1. Dedicated PULSAR_RECOVERY partition
+    if search --no-floppy --fs-uuid --set=root {rec_uuid}; then
+        if [ -f /boot/vmlinuz-recovery ]; then
+            linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd /boot/initramfs-recovery.img
+            set rec_found=1
+        elif [ -f /recovery/vmlinuz-recovery ]; then
+            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd /recovery/initramfs-recovery.img
+            set rec_found=1
+        fi
+    fi"""
+                elif root_uuid and not self.install_encryption:
+                    primary_rec_search = f"""    # 1. Root system partition (@ subvolume or flat)
+    if search --no-floppy --fs-uuid --set=root {root_uuid}; then
+        if [ -f /@/recovery/boot/vmlinuz-recovery ]; then
+            linux /@/recovery/boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd /@/recovery/boot/initramfs-recovery.img
+            set rec_found=1
+        elif [ -f /@/boot/vmlinuz-recovery ]; then
+            linux /@/boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd /@/boot/initramfs-recovery.img
+            set rec_found=1
+        elif [ -f /recovery/vmlinuz-recovery ]; then
+            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd /recovery/initramfs-recovery.img
+            set rec_found=1
+        fi
+    fi"""
+                else:
+                    primary_rec_search = ""
+
                 rec_script = f"""#!/bin/sh
 exec tail -n +3 $0
 # Pulsar OS Recovery Mode Menu Entry
 menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery --class pulsaros-recovery --class os {{
     insmod btrfs
     insmod ext2
+    insmod fat
     insmod part_gpt
     insmod part_msdos
     insmod search
@@ -6815,59 +6976,21 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
 
     set rec_found=0
 
-    # 1. Check dedicated PULSAR_RECOVERY partition
-    if search --no-floppy --label --set=root PULSAR_RECOVERY; then
-        if [ -f /boot/vmlinuz-recovery ]; then
-            linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-            initrd /boot/initramfs-recovery.img
-            set rec_found=1
-        elif [ -f /recovery/vmlinuz-recovery ]; then
-            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+{primary_rec_search}
+
+    # 2. Fallback device search by file
+    if [ "$rec_found" = "0" ]; then
+        if search --no-floppy --file --set=root /recovery/vmlinuz-recovery; then
+            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /recovery/initramfs-recovery.img
             set rec_found=1
-        elif [ -f /vmlinuz-recovery ]; then
-            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-            initrd /initramfs-recovery.img
+        elif search --no-floppy --file --set=root /EFI/recovery/vmlinuz-recovery; then
+            linux /EFI/recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd /EFI/recovery/initramfs-recovery.img
             set rec_found=1
-        fi
-    fi
-
-    # 2. Check root system partition (@ subvolume or flat)
-    if [ "$rec_found" = "0" ]; then
-        if search --no-floppy --fs-uuid --set=root {root_uuid}; then
-            if [ -f /@/boot/vmlinuz-recovery ]; then
-                linux /@/boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-                initrd /@/boot/initramfs-recovery.img
-                set rec_found=1
-            elif [ -f /@/recovery/vmlinuz-recovery ]; then
-                linux /@/recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-                initrd /@/recovery/initramfs-recovery.img
-                set rec_found=1
-            elif [ -f /boot/vmlinuz-recovery ]; then
-                linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-                initrd /boot/initramfs-recovery.img
-                set rec_found=1
-            elif [ -f /recovery/vmlinuz-recovery ]; then
-                linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-                initrd /recovery/initramfs-recovery.img
-                set rec_found=1
-            fi
-        fi
-    fi
-
-    # 3. Global device search by file
-    if [ "$rec_found" = "0" ]; then
-        if search --no-floppy --file --set=root /boot/vmlinuz-recovery; then
-            linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-            initrd /boot/initramfs-recovery.img
-            set rec_found=1
-        elif search --no-floppy --file --set=root /recovery/vmlinuz-recovery; then
-            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-            initrd /recovery/initramfs-recovery.img
-            set rec_found=1
-        elif search --no-floppy --file --set=root /vmlinuz-recovery; then
-            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=any live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-            initrd /initramfs-recovery.img
+        elif search --no-floppy --file --set=root /@/recovery/boot/vmlinuz-recovery; then
+            linux /@/recovery/boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd /@/recovery/boot/initramfs-recovery.img
             set rec_found=1
         fi
     fi
@@ -7236,6 +7359,122 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                 
             esp_root = "/mnt/boot/efi"
 
+            # ── Driver installation (Executed BEFORE mkinitcpio / initramfs generation) ───
+            # Any DKMS modules (e.g. broadcom-wl-dkms) and header dependencies must be
+            # installed and compiled before the final mkinitcpio -P / update-initramfs runs,
+            # so the produced initramfs image includes all necessary drivers and is never
+            # truncated or overwritten after bootloader configuration.
+            if self.install_broadcom and self._is_apple_hardware():
+                # On Apple hardware the open-source brcmfmac driver is the one
+                # that works; the Broadcom STA driver + brcmfmac blacklist would
+                # kill Wi-Fi, so the STA install path is skipped entirely.
+                print("Apple hardware detected — skipping Broadcom STA driver to keep brcmfmac Wi-Fi working.")
+            if self.install_broadcom and not self._is_apple_hardware():
+                policy_file = "/mnt/usr/sbin/policy-rc.d"
+                try:
+                    # Check network connectivity
+                    has_net = subprocess.run(
+                        ["ping", "-c", "1", "-W", "3", "1.1.1.1"],
+                        capture_output=True
+                    ).returncode == 0 or subprocess.run(
+                        ["curl", "-s", "-I", "-m", "3", "https://archlinux.org"],
+                        capture_output=True
+                    ).returncode == 0
+
+                    if not has_net:
+                        print("Notice: No active Internet connection. Broadcom driver installation skipped. Install later with Driver Manager.")
+                    elif is_arch:
+                        # Arch Linux path
+                        GLib.idle_add(self.update_progress, 0.91, "Installing Broadcom drivers...")
+                        try:
+                            exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
+                            exec_cmd(["chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
+                                      "broadcom-wl-dkms", "linux-headers"])
+                        except Exception as arch_net_err:
+                            print(f"Notice: Broadcom install error: {arch_net_err}")
+
+                        # blacklist conflicting open-source drivers
+                        blacklist = (
+                            "blacklist b43\n"
+                            "blacklist b43legacy\n"
+                            "blacklist ssb\n"
+                            "blacklist bcm43xx\n"
+                            "blacklist brcm80211\n"
+                            "blacklist brcmfmac\n"
+                            "blacklist brcmsmac\n"
+                        )
+                        if "TEST_MODE" not in os.environ:
+                            os.makedirs("/mnt/etc/modprobe.d", exist_ok=True)
+                            with open("/mnt/etc/modprobe.d/broadcom-sta-blacklist.conf", "w") as f:
+                                f.write(blacklist)
+                    else:
+                        # Debian path
+                        try:
+                            # Create policy-rc.d to prevent service start in chroot
+                            if "TEST_MODE" not in os.environ:
+                                os.makedirs(os.path.dirname(policy_file), exist_ok=True)
+                                with open(policy_file, "w") as f:
+                                    f.write("#!/bin/sh\nexit 101\n")
+                                os.chmod(policy_file, 0o755)
+
+                            # Enable non-free repositories on target sources.list
+                            sources_file = "/mnt/etc/apt/sources.list"
+                            if "TEST_MODE" not in os.environ and os.path.exists(sources_file):
+                                try:
+                                    with open(sources_file, "r") as f:
+                                        content = f.read()
+                                    modified = False
+                                    lines = []
+                                    for line in content.splitlines():
+                                        s_line = line.strip()
+                                        if s_line and not s_line.startswith("#") and "main" in s_line:
+                                            for comp in ["contrib", "non-free", "non-free-firmware"]:
+                                                if comp not in s_line:
+                                                    line += f" {comp}"
+                                                    modified = True
+                                        lines.append(line)
+                                    if modified:
+                                        with open(sources_file, "w") as f:
+                                            f.write("\n".join(lines) + "\n")
+                                except Exception as list_err:
+                                    print(f"Warning: Failed to update sources.list: {list_err}")
+
+                            # Run apt update to fetch package indices and install broadcom-sta-dkms
+                            GLib.idle_add(self.update_progress, 0.91, "Installing Broadcom drivers...")
+                            subprocess.run(["chroot", "/mnt", "apt-get", "update"], capture_output=True)
+                            res_bcm = subprocess.run([
+                                "chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y",
+                                "broadcom-sta-dkms", "linux-headers-amd64"
+                            ], capture_output=True, text=True)
+                            if res_bcm.returncode != 0:
+                                log_msg(f"Notice: Broadcom STA dkms install returned non-zero ({res_bcm.stderr.strip()[:100] if res_bcm.stderr else 'ignored'})")
+                            else:
+                                log_msg("✅ Broadcom STA dkms driver installed successfully.")
+
+                            blacklist = (
+                                "blacklist b43\n"
+                                "blacklist b43legacy\n"
+                                "blacklist ssb\n"
+                                "blacklist bcm43xx\n"
+                                "blacklist brcm80211\n"
+                                "blacklist brcmfmac\n"
+                                "blacklist brcmsmac\n"
+                            )
+                            if "TEST_MODE" not in os.environ:
+                                os.makedirs("/mnt/etc/modprobe.d", exist_ok=True)
+                                with open("/mnt/etc/modprobe.d/broadcom-sta-blacklist.conf", "w") as f:
+                                    f.write(blacklist)
+                        except Exception as deb_err:
+                            print(f"Warning: Non-fatal driver step: {deb_err}")
+                        finally:
+                            if "TEST_MODE" not in os.environ and os.path.exists(policy_file):
+                                try:
+                                    os.remove(policy_file)
+                                except Exception:
+                                    pass
+                except Exception as drv_err:
+                    print(f"Notice: Driver configuration step completed: {drv_err}")
+
             if is_arch:
                 for f_live in [
                     "/mnt/etc/mkinitcpio.conf.d/archiso.conf",
@@ -7266,8 +7505,12 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                             "HOOKS=(base systemd autodetect microcode modconf kms "
                             "keyboard sd-vconsole plymouth block filesystems btrfs)"
                         )
+                    # NOTE: Do NOT hardcode physical GPU modules (amdgpu/radeon/nouveau/i915)
+                    # in MODULES. Modern mkinitcpio 42+ includes early firmware for all modules
+                    # explicitly listed in MODULES, inflating initramfs by >150MB.
+                    # With 'kms' in HOOKS, autodetect includes the active GPU driver dynamically.
                     canonical_modules = (
-                        "MODULES=(i915 amdgpu radeon nouveau virtio_gpu bochs vboxvideo vmwgfx "
+                        "MODULES=(virtio_gpu bochs vboxvideo vmwgfx "
                         "9p 9pnet 9pnet_virtio virtio_pci virtio_blk)"
                     )
                     mk_content = re.sub(r'^HOOKS=\(.*?\)', canonical_hooks, mk_content, flags=re.MULTILINE)
@@ -7280,6 +7523,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
 
                 try:
                     exec_cmd(["chroot", "/mnt", "mkinitcpio", "-P"])
+                    subprocess.run(["sync"])
                 except Exception as mki_err:
                     log_msg(f"Warning: mkinitcpio -P failed (non-fatal): {mki_err}")
 
@@ -7335,6 +7579,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                 # 4. Update initramfs on Debian so resume and cryptsetup are included
                 try:
                     exec_cmd(["chroot", "/mnt", "update-initramfs", "-u", "-k", "all"])
+                    subprocess.run(["sync"])
                     log_msg("✅ initramfs actualizado en Debian con soporte de hibernación/resume y cryptsetup.")
                 except Exception as deb_init_err:
                     log_msg(f"Warning: update-initramfs -u -k all failed (non-fatal): {deb_init_err}")
@@ -7465,119 +7710,6 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
             except Exception as dconf_err:
                 print(f"Warning: dconf/schema update failed (non-fatal): {dconf_err}")
 
-            # ── Driver installation (Best effort, non-fatal for offline installs) ───
-            # ── Broadcom Driver installation (Optional, requires Internet) ───
-            if self.install_broadcom and self._is_apple_hardware():
-                # On Apple hardware the open-source brcmfmac driver is the one
-                # that works; the Broadcom STA driver + brcmfmac blacklist would
-                # kill Wi-Fi, so the STA install path is skipped entirely.
-                print("Apple hardware detected — skipping Broadcom STA driver to keep brcmfmac Wi-Fi working.")
-            if self.install_broadcom and not self._is_apple_hardware():
-                policy_file = "/mnt/usr/sbin/policy-rc.d"
-                try:
-                    # Check network connectivity
-                    has_net = subprocess.run(
-                        ["ping", "-c", "1", "-W", "3", "1.1.1.1"],
-                        capture_output=True
-                    ).returncode == 0 or subprocess.run(
-                        ["curl", "-s", "-I", "-m", "3", "https://archlinux.org"],
-                        capture_output=True
-                    ).returncode == 0
-
-                    if not has_net:
-                        print("Notice: No active Internet connection. Broadcom driver installation skipped. Install later with Driver Manager.")
-                    elif is_arch:
-                        # Arch Linux path
-                        GLib.idle_add(self.update_progress, 0.93, "Installing Broadcom drivers...")
-                        try:
-                            exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
-                            exec_cmd(["chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
-                                      "broadcom-wl-dkms", "linux-headers"])
-                        except Exception as arch_net_err:
-                            print(f"Notice: Broadcom install error: {arch_net_err}")
-
-                        # blacklist conflicting open-source drivers
-                        blacklist = (
-                            "blacklist b43\n"
-                            "blacklist b43legacy\n"
-                            "blacklist ssb\n"
-                            "blacklist bcm43xx\n"
-                            "blacklist brcm80211\n"
-                            "blacklist brcmfmac\n"
-                            "blacklist brcmsmac\n"
-                        )
-                        if "TEST_MODE" not in os.environ:
-                            os.makedirs("/mnt/etc/modprobe.d", exist_ok=True)
-                            with open("/mnt/etc/modprobe.d/broadcom-sta-blacklist.conf", "w") as f:
-                                f.write(blacklist)
-                    else:
-                        # Debian path
-                        try:
-                            # Create policy-rc.d to prevent service start in chroot
-                            if "TEST_MODE" not in os.environ:
-                                os.makedirs(os.path.dirname(policy_file), exist_ok=True)
-                                with open(policy_file, "w") as f:
-                                    f.write("#!/bin/sh\nexit 101\n")
-                                os.chmod(policy_file, 0o755)
-
-                            # Enable non-free repositories on target sources.list
-                            sources_file = "/mnt/etc/apt/sources.list"
-                            if "TEST_MODE" not in os.environ and os.path.exists(sources_file):
-                                try:
-                                    with open(sources_file, "r") as f:
-                                        content = f.read()
-                                    modified = False
-                                    lines = []
-                                    for line in content.splitlines():
-                                        s_line = line.strip()
-                                        if s_line and not s_line.startswith("#") and "main" in s_line:
-                                            for comp in ["contrib", "non-free", "non-free-firmware"]:
-                                                if comp not in s_line:
-                                                    line += f" {comp}"
-                                                    modified = True
-                                        lines.append(line)
-                                    if modified:
-                                        with open(sources_file, "w") as f:
-                                            f.write("\n".join(lines) + "\n")
-                                except Exception as list_err:
-                                    print(f"Warning: Failed to update sources.list: {list_err}")
-
-                            # Run apt update to fetch package indices and install broadcom-sta-dkms
-                            GLib.idle_add(self.update_progress, 0.93, "Installing Broadcom drivers...")
-                            subprocess.run(["chroot", "/mnt", "apt-get", "update"], capture_output=True)
-                            res_bcm = subprocess.run([
-                                "chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y",
-                                "broadcom-sta-dkms", "linux-headers-amd64"
-                            ], capture_output=True, text=True)
-                            if res_bcm.returncode != 0:
-                                log_msg(f"Notice: Broadcom STA dkms install returned non-zero ({res_bcm.stderr.strip()[:100] if res_bcm.stderr else 'ignored'})")
-                            else:
-                                log_msg("✅ Broadcom STA dkms driver installed successfully.")
-
-                            blacklist = (
-                                "blacklist b43\n"
-                                "blacklist b43legacy\n"
-                                "blacklist ssb\n"
-                                "blacklist bcm43xx\n"
-                                "blacklist brcm80211\n"
-                                "blacklist brcmfmac\n"
-                                "blacklist brcmsmac\n"
-                            )
-                            if "TEST_MODE" not in os.environ:
-                                os.makedirs("/mnt/etc/modprobe.d", exist_ok=True)
-                                with open("/mnt/etc/modprobe.d/broadcom-sta-blacklist.conf", "w") as f:
-                                    f.write(blacklist)
-                        except Exception as deb_err:
-                            print(f"Warning: Non-fatal driver step: {deb_err}")
-                        finally:
-                            if "TEST_MODE" not in os.environ and os.path.exists(policy_file):
-                                try:
-                                    os.remove(policy_file)
-                                except Exception:
-                                    pass
-                except Exception as drv_err:
-                    print(f"Notice: Driver configuration step completed: {drv_err}")
-
             # ──────────────────────────────────────────────────────────
             
             # 1. Touch the setup flag file first while everything is still mounted cleanly
@@ -7668,7 +7800,7 @@ class RecoveryApp(Adw.Application):
     def __init__(self):
         super().__init__(
             application_id="es.inled.pulsaros.recovery",
-            flags=Gio.ApplicationFlags.FLAGS_NONE
+            flags=Gio.ApplicationFlags.NON_UNIQUE
         )
 
     def do_activate(self):
