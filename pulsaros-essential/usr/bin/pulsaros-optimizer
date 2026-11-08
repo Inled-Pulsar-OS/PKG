@@ -1452,18 +1452,10 @@ def setup_zram_and_sysctl():
         log(f"Detected physical RAM: {total_mb} MB ({total_mb/1024:.1f} GB)")
 
         # Hardware-adaptive swappiness:
-        # <= 4GB RAM: 180 (Aggressively compress cold memory into zRAM, zero disk thrashing)
-        # 4GB - 16GB RAM: 150 (Optimal multi-tasking balance for developer/office workloads)
-        # > 16GB RAM: 100 (High performance for massive workloads)
-        if total_mb <= 4096:
-            target_swappiness = "180"
-            zram_target_size = int(total_kb * 1024)  # 100% of RAM
-        elif total_mb <= 16384:
-            target_swappiness = "150"
-            zram_target_size = min(int(total_kb * 1024), 8 * 1024 * 1024 * 1024)  # up to 8GB
-        else:
-            target_swappiness = "100"
-            zram_target_size = min(int((total_kb * 1024) // 2), 16 * 1024 * 1024 * 1024)  # 50% of RAM up to 16GB
+        # Aggressively compress cold memory into zRAM with zstd, zero disk thrashing.
+        # Swappiness of 180 ensures Linux proactively compresses idle/anonymous memory into zRAM.
+        target_swappiness = "180"
+        zram_target_size = int(total_kb * 1024)  # 100% of RAM capacity for maximum compression without disk usage
 
         # 1. Kernel sysctl optimizations for maximum desktop fluidity
         sysctls = {
@@ -1487,6 +1479,18 @@ def setup_zram_and_sysctl():
         # 2. Ensure zram module is loaded
         try:
             subprocess.run(["modprobe", "zram"], capture_output=True)
+        except Exception:
+            pass
+
+        # Ensure any disk swap is deactivated (Pulsar OS is pure in-memory zRAM)
+        try:
+            with open("/proc/swaps", "r") as f:
+                for line in f:
+                    parts = line.strip().split()
+                    if parts and not parts[0].startswith("Filename") and "zram" not in parts[0]:
+                        disk_swap = parts[0]
+                        log(f"Disabling non-zram disk swap: {disk_swap}")
+                        subprocess.run(["swapoff", disk_swap], capture_output=True)
         except Exception:
             pass
 
