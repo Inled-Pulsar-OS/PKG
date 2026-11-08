@@ -22,19 +22,24 @@ template $CcWindow: Adw.ApplicationWindow {
       child: Adw.ToolbarView {
         [top]
         Adw.HeaderBar {
-          ToggleButton search_button {
-            icon-name: "edit-find-symbolic";
+          show-title: false;
+        }
 
-            /* Translators: this is a verb. */
-            tooltip-text: _("Search");
-          }
+        [top]
+        SearchEntry search_entry {
+          styles [
+            "pulsar-search-pill",
+          ]
+          hexpand: true;
+          margin-start: 12;
+          margin-end: 12;
+          margin-top: 6;
+          margin-bottom: 6;
+          placeholder-text: _("Search");
+          activate => $search_entry_activate_cb(template);
 
-          [end]
-          MenuButton {
-            icon-name: "open-menu-symbolic";
-            menu-model: primary_menu;
-            primary: true;
-            tooltip-text: _("Main Menu");
+          EventControllerKey {
+            key-pressed => $search_entry_key_pressed_cb(template);
           }
         }
 
@@ -42,6 +47,7 @@ template $CcWindow: Adw.ApplicationWindow {
         Button user_account_banner {
           styles [
             "flat",
+            "pulsar-profile-row",
           ]
           margin-start: 8;
           margin-end: 8;
@@ -69,8 +75,7 @@ template $CcWindow: Adw.ApplicationWindow {
               spacing: 2;
 
               Label user_name_label {
-                label: _("Apple ID &amp; Accounts");
-                use-markup: true;
+                label: _("User");
                 halign: start;
                 styles [
                   "heading",
@@ -89,26 +94,10 @@ template $CcWindow: Adw.ApplicationWindow {
           };
         }
 
-        [top]
-        SearchBar search_bar {
-          search-mode-enabled: bind search_button.active bidirectional;
-
-          SearchEntry search_entry {
-            hexpand: true;
-            placeholder-text: _("Search settings");
-            activate => $search_entry_activate_cb(template);
-
-            EventControllerKey {
-              key-pressed => $search_entry_key_pressed_cb(template);
-            }
-          }
-        }
-
         content: ScrolledWindow {
           hscrollbar-policy: never;
 
           $CcPanelList panel_list {
-            search-mode: bind search_bar.search-mode-enabled no-sync-create bidirectional;
             search-query: bind search_entry.text no-sync-create;
             show-panel => $show_panel_cb(template);
           }
@@ -117,7 +106,20 @@ template $CcWindow: Adw.ApplicationWindow {
     };
 
     content: Adw.NavigationPage {
-      child: Adw.NavigationView navigation {
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+          [end]
+          MenuButton {
+            icon-name: "open-menu-symbolic";
+            menu-model: primary_menu;
+            primary: true;
+            tooltip-text: _("Main Menu");
+          }
+        }
+
+        content: Adw.NavigationView navigation {
+        };
       };
     };
   };
