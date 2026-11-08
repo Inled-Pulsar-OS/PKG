@@ -27,3 +27,16 @@
     --card-bg-color: #333333;
   }
 }
+
+/* Content page and inset cards (decision #53, #60): white page, light-grey
+ * cards, inverted from libadwaita's card-on-grey. Scoped to the content pane
+ * so the sidebar keeps its own surface. */
+navigation-split-view > .content-pane {
+  background-color: var(--view-bg-color);
+}
+
+navigation-split-view > .content-pane .boxed-list,
+navigation-split-view > .content-pane .card {
+  background-color: var(--card-bg-color);
+  border-radius: 12px;
+}
