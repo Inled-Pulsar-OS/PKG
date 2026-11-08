@@ -9,7 +9,7 @@ pkgname=(
 )
 epoch=1
 pkgver=51.1
-pkgrel=19
+pkgrel=20
 pkgdesc="GNOME Settings with Pulsar OS macOS customization and Live Wallpaper engine"
 url="https://inled.es"
 license=(GPL-2.0-or-later)
@@ -145,14 +145,6 @@ package_gnome-control-center() {
   groups=(gnome)
 
   meson install -C build --destdir "$pkgdir"
-
-  # Install pearOS macOS icons for Settings panels
-  install -dm755 "$pkgdir/usr/share/icons/hicolor/scalable/apps"
-  if [ -d "$startdir/overlay/icons" ]; then
-    cp -rf "$startdir/overlay/icons/"* "$pkgdir/usr/share/icons/hicolor/scalable/apps/"
-  elif [ -d "$startdir/icons" ]; then
-    cp -rf "$startdir/icons/"* "$pkgdir/usr/share/icons/hicolor/scalable/apps/"
-  fi
 
   cd "$pkgdir"
   _pick gkb usr/share/gettext/its/gnome-keybindings.*
