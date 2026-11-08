@@ -10,6 +10,7 @@ template $CcWindow: Adw.ApplicationWindow {
 
     setters {
       split_view.collapsed: true;
+      content_header.decoration-layout: ":close";
     }
   }
 
@@ -29,6 +30,7 @@ template $CcWindow: Adw.ApplicationWindow {
         [top]
         Adw.HeaderBar {
           show-title: false;
+          decoration-layout: "close,minimize,maximize:";
         }
 
         [top]
@@ -114,7 +116,39 @@ template $CcWindow: Adw.ApplicationWindow {
     content: Adw.NavigationPage {
       child: Adw.ToolbarView {
         [top]
-        Adw.HeaderBar {
+        Adw.HeaderBar content_header {
+          decoration-layout: ":";
+
+          [start]
+          Box {
+            visible: bind split_view.collapsed inverted;
+            valign: center;
+            styles [
+              "linked",
+              "pulsar-nav-capsule",
+            ]
+
+            Button back_button {
+              icon-name: "go-previous-symbolic";
+              tooltip-text: _("Back");
+              sensitive: false;
+              clicked => $on_back_button_clicked_cb(template);
+              styles [
+                "flat",
+              ]
+            }
+
+            Button forward_button {
+              icon-name: "go-next-symbolic";
+              tooltip-text: _("Forward");
+              sensitive: false;
+              clicked => $on_forward_button_clicked_cb(template);
+              styles [
+                "flat",
+              ]
+            }
+          }
+
           [end]
           MenuButton {
             icon-name: "open-menu-symbolic";
