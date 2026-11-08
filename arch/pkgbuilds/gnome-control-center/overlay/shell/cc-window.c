@@ -53,7 +53,6 @@ struct _CcWindow {
     AdwNavigationView *navigation;
     AdwNavigationSplitView *split_view;
     CcPanelList *panel_list;
-    GtkSearchBar *search_bar;
     GtkSearchEntry *search_entry;
 
   AdwAvatar         *user_avatar;
@@ -454,14 +453,10 @@ show_panel_cb (CcWindow *self, const gchar *panel_id, const gchar *parent_id)
 static void
 search_entry_activate_cb (CcWindow *self)
 {
-    gboolean changed;
-
     if (cc_panel_list_get_view (self->panel_list) != CC_PANEL_LIST_SEARCH)
         return;
 
-    changed = cc_panel_list_activate (self->panel_list);
-
-    gtk_search_bar_set_search_mode (self->search_bar, !changed);
+    cc_panel_list_activate (self->panel_list);
 }
 
 static gboolean
@@ -486,7 +481,6 @@ search_shortcut_cb (GtkWidget *widget, GVariant *args, gpointer user_data)
     if (view != CC_PANEL_LIST_MAIN && view != CC_PANEL_LIST_SEARCH)
         return GDK_EVENT_PROPAGATE;
 
-    gtk_search_bar_set_search_mode (self->search_bar, TRUE);
     gtk_widget_grab_focus (GTK_WIDGET (self->search_entry));
 
     return GDK_EVENT_STOP;
@@ -725,9 +719,7 @@ setup_user_account_banner (CcWindow *self)
 {
   const gchar *real_name;
   const gchar *user_name;
-  g_autofree gchar *email = NULL;
   g_autofree gchar *face_path = NULL;
-  g_autoptr(GKeyFile) keyfile = NULL;
 
   if (!self->user_avatar || !self->user_name_label || !self->user_email_label)
     return;
@@ -738,33 +730,13 @@ setup_user_account_banner (CcWindow *self)
   if (!real_name || real_name[0] == '\0' || g_strcmp0 (real_name, "Unknown") == 0)
     real_name = user_name;
 
-  /* Check GOA online accounts config for email */
-  keyfile = g_key_file_new ();
-  {
-    g_autofree gchar *goa_conf = g_build_filename (g_get_user_config_dir (), "goa-1.0", "accounts.conf", NULL);
-    if (g_key_file_load_from_file (keyfile, goa_conf, G_KEY_FILE_NONE, NULL))
-      {
-        g_auto(GStrv) groups = g_key_file_get_groups (keyfile, NULL);
-        if (groups && groups[0])
-          {
-            email = g_key_file_get_string (keyfile, groups[0], "PresentationIdentity", NULL);
-            if (!email || email[0] == '\0')
-              email = g_key_file_get_string (keyfile, groups[0], "Identity", NULL);
-          }
-      }
-  }
-
   /* Set Name */
   if (real_name && real_name[0] != '\0')
     gtk_label_set_text (self->user_name_label, real_name);
   else
-    gtk_label_set_text (self->user_name_label, "Apple ID & Cuentas");
+    gtk_label_set_text (self->user_name_label, user_name);
 
-  /* Set Email or Apple ID subtitle */
-  if (email && email[0] != '\0')
-    gtk_label_set_text (self->user_email_label, email);
-  else
-    gtk_label_set_text (self->user_email_label, _("Local Account"));
+  gtk_label_set_text (self->user_email_label, _("Local Account"));
 
   /* Set Avatar initials */
   adw_avatar_set_text (self->user_avatar, real_name ? real_name : "Pulsar OS");
@@ -794,7 +766,7 @@ setup_user_account_banner (CcWindow *self)
 static void
 on_user_account_banner_clicked_cb (CcWindow *self)
 {
-  set_active_panel_from_id (self, "online-accounts", NULL, TRUE, TRUE, NULL);
+  set_active_panel_from_id (self, "users", NULL, TRUE, TRUE, NULL);
 }
 
 static void
@@ -833,7 +805,6 @@ cc_window_class_init (CcWindowClass *klass)
     gtk_widget_class_bind_template_child (widget_class, CcWindow, navigation);
     gtk_widget_class_bind_template_child (widget_class, CcWindow, split_view);
     gtk_widget_class_bind_template_child (widget_class, CcWindow, panel_list);
-    gtk_widget_class_bind_template_child (widget_class, CcWindow, search_bar);
     gtk_widget_class_bind_template_child (widget_class, CcWindow, search_entry);
 
     gtk_widget_class_bind_template_child (widget_class, CcWindow, user_avatar);
@@ -868,7 +839,7 @@ cc_window_init (CcWindow *self)
     self->previous_panels = g_queue_new ();
     self->previous_list_view = cc_panel_list_get_view (self->panel_list);
 
-    gtk_search_bar_set_key_capture_widget (self->search_bar, GTK_WIDGET (self));
+    gtk_search_entry_set_key_capture_widget (self->search_entry, GTK_WIDGET (self));
 }
 
 CcWindow *
@@ -884,7 +855,6 @@ cc_window_new (GtkApplication *application, CcShellModel *model)
 void
 cc_window_set_search_item (CcWindow *window, const char *search)
 {
-    gtk_search_bar_set_search_mode (window->search_bar, TRUE);
     gtk_editable_set_text (GTK_EDITABLE (window->search_entry), search);
     gtk_editable_set_position (GTK_EDITABLE (window->search_entry), -1);
 }

@@ -28,6 +28,21 @@
   }
 }
 
+/* Sidebar group boundary: spacing only, no title or line */
+.pulsar-group-gap {
+  min-height: 18px;
+}
+
+/* Sidebar top: search pill and profile row (#57) */
+entry.pulsar-search-pill {
+  border-radius: 999px;
+  min-height: 28px;
+}
+
+button.pulsar-profile-row {
+  border-radius: 10px;
+}
+
 /* Sidebar (decision #53, issue #59). Scoped to the main list (.cc-sidebar);
  * the search list keeps stock libadwaita styling. */
 .cc-sidebar-pane,
