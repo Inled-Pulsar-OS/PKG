@@ -28,6 +28,11 @@
   }
 }
 
+/* Sidebar group boundary: spacing only, no title or line */
+.pulsar-group-gap {
+  min-height: 18px;
+}
+
 /* Sidebar top: search pill and profile row (#57) */
 entry.pulsar-search-pill {
   border-radius: 999px;
