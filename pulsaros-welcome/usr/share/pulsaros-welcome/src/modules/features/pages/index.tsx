@@ -214,40 +214,40 @@ interface ContributorsViewProps {
 
 function ContributorsView({ contributors }: ContributorsViewProps) {
   return (
-    <div className="relative flex h-full max-h-[420px] w-full max-w-[720px] flex-col items-center justify-center overflow-hidden rounded-2xl border border-black/10 bg-black/5 shadow-md backdrop-blur p-4 sm:p-6">
-      <div className="flex h-full w-full flex-wrap items-center justify-center gap-4 sm:gap-6 overflow-y-auto py-2">
+    <div className="flex h-full max-h-[420px] w-full max-w-[580px] flex-col overflow-y-auto px-4 py-1">
+      <div className="flex flex-col divide-y divide-black/10 dark:divide-white/10">
         {contributors.map((person) => (
           <div
             key={person.name}
-            className="flex flex-col items-center gap-2.5 rounded-2xl bg-white/75 dark:bg-black/50 p-4 border border-black/5 dark:border-white/10 shadow-sm transition-all hover:scale-105 hover:shadow-md w-[140px] sm:w-[155px]"
+            className="flex items-center justify-between py-3 px-2 transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.04] rounded-lg"
           >
-            <div className="relative h-16 w-16 sm:h-20 sm:w-20 overflow-hidden rounded-full border-2 border-accent/40 shadow-sm bg-neutral-200">
+            {/* Left: Avatar & Name */}
+            <div className="flex items-center gap-3.5 min-w-0 pr-3">
               <img
                 src={person.avatar}
                 alt={person.name}
-                className="h-full w-full object-cover"
+                className="h-11 w-11 shrink-0 rounded-full object-cover border border-black/10 dark:border-white/15 bg-neutral-200"
                 loading="lazy"
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).src = "/logo.png";
                 }}
               />
+              <span className="text-[15px] font-medium text-text-primary truncate">
+                {person.name}
+              </span>
             </div>
-            <span
-              className="text-center text-[13px] sm:text-[14px] font-semibold tracking-tight text-text-primary leading-snug line-clamp-2 min-h-[2.5em] flex items-center justify-center"
-              title={person.name}
-            >
-              {person.name}
-            </span>
-            <div className="flex items-center gap-2 pt-0.5">
+
+            {/* Right: Socials (Discord, GitHub) */}
+            <div className="flex shrink-0 items-center gap-2">
               {person.discord && (
                 <button
                   type="button"
                   onClick={() => openExternalUrl(person.discord)}
-                  className="flex h-7 w-7 items-center justify-center rounded-full bg-[#5865F2] text-white shadow-sm hover:opacity-90 active:scale-95 transition-all cursor-pointer"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-[#5865F2] text-white shadow-sm hover:opacity-90 active:scale-95 transition-all cursor-pointer"
                   title={`Discord: @${person.discordUser || person.name}`}
                   aria-label="Discord"
                 >
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
                     <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
                   </svg>
                 </button>
@@ -256,11 +256,11 @@ function ContributorsView({ contributors }: ContributorsViewProps) {
                 <button
                   type="button"
                   onClick={() => openExternalUrl(person.github)}
-                  className="flex h-7 w-7 items-center justify-center rounded-full bg-black/80 dark:bg-white/15 text-white shadow-sm hover:opacity-90 active:scale-95 transition-all cursor-pointer"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-black/80 dark:bg-white/15 text-white shadow-sm hover:opacity-90 active:scale-95 transition-all cursor-pointer"
                   title={`GitHub: ${person.name}`}
                   aria-label="GitHub"
                 >
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
                     <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
                   </svg>
                 </button>

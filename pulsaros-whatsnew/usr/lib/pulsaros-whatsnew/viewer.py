@@ -382,14 +382,19 @@ class Viewer:
 
 
 def main():
-    if common.is_live_or_pre_setup():
-        return 0
-
     parser = argparse.ArgumentParser(description="Pulsar OS What's New viewer")
     parser.add_argument("--ids", help="Comma-separated note ids to show")
     parser.add_argument("--all", action="store_true", help="Show the whole history")
     parser.add_argument("--list", action="store_true", help="List installed note ids")
+    parser.add_argument("--autostart", action="store_true", help="Launched from session autostart")
+    parser.add_argument("--force", "-f", action="store_true", help="Force launch")
     args = parser.parse_args()
+
+    # If launched by session autostart, suppress in live / pre-setup environments unless forced
+    if args.autostart and not args.force:
+        is_live = getattr(common, "is_live_or_pre_setup", lambda: False)
+        if is_live():
+            return 0
 
     notes = common.load_notes()
 
