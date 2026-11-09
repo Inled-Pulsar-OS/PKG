@@ -5251,6 +5251,20 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     os.makedirs("/mnt/recovery", exist_ok=True)
             elif is_efi:
                 GLib.idle_add(self.update_progress, 0.05, "Cleaning and partitioning (GPT for UEFI: EFI, Recovery, Btrfs)...")
+                # Dynamically calculate recovery partition size based on target disk capacity.
+                # In VMs or smaller disks (< 35GB), an 8GB recovery leaves the root filesystem starved (<1GB).
+                # Sizing recovery to 3.5GB (+3584M) on small disks gives the OS 4.5GB more headroom.
+                disk_sz_bytes = 0
+                try:
+                    _sz_str = subprocess.check_output(["lsblk", "-bdno", "SIZE", disk_path], text=True).strip().splitlines()[0]
+                    disk_sz_bytes = int(_sz_str)
+                except Exception:
+                    disk_sz_bytes = 0
+
+                is_small_disk = (disk_sz_bytes > 0 and disk_sz_bytes < 35 * 1024 * 1024 * 1024)
+                rec_size_gpt = "+3584M" if is_small_disk else "+8G"
+                log_msg(f"Target disk capacity: {disk_sz_bytes / (1024**3):.1f} GB -> Recovery partition size: {rec_size_gpt}")
+
                 exec_cmd(["wipefs", "-a", "-f", disk_path])
                 exec_cmd(["sgdisk", "--zap-all", disk_path])
                 exec_cmd(["sgdisk", "--clear", disk_path])
@@ -5260,11 +5274,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     # leaving Plymouth splash as the single, graphical unlock interface.
                     exec_cmd(["sgdisk", "--new=1:0:+512M", "--typecode=1:ef00", "--change-name=1:EFI", disk_path])
                     exec_cmd(["sgdisk", "--new=2:0:+1024M", "--typecode=2:8300", "--change-name=2:PulsarBoot", disk_path])
-                    exec_cmd(["sgdisk", "--new=3:0:+8G", "--typecode=3:8300", "--change-name=3:PulsarRecovery", disk_path])
+                    exec_cmd(["sgdisk", f"--new=3:0:{rec_size_gpt}", "--typecode=3:8300", "--change-name=3:PulsarRecovery", disk_path])
                     exec_cmd(["sgdisk", "--new=4:0:0", "--typecode=4:8300", "--change-name=4:PulsarOS", disk_path])
                 else:
                     exec_cmd(["sgdisk", "--new=1:0:+512M", "--typecode=1:ef00", "--change-name=1:EFI", disk_path])
-                    exec_cmd(["sgdisk", "--new=2:0:+8G", "--typecode=2:8300", "--change-name=2:PulsarRecovery", disk_path])
+                    exec_cmd(["sgdisk", f"--new=2:0:{rec_size_gpt}", "--typecode=2:8300", "--change-name=2:PulsarRecovery", disk_path])
                     exec_cmd(["sgdisk", "--new=3:0:0", "--typecode=3:8300", "--change-name=3:PulsarOS", disk_path])
                 exec_cmd(["sync"])
                 exec_cmd(["udevadm", "settle"])
@@ -5316,6 +5330,18 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 exec_cmd(["mount", "-t", "ext4", recovery_part, "/mnt/recovery"])
             else:
                 GLib.idle_add(self.update_progress, 0.05, "Cleaning and partitioning (MBR for BIOS: Recovery, Btrfs)...")
+                # Dynamically calculate recovery partition size based on target disk capacity
+                disk_sz_bytes = 0
+                try:
+                    _sz_str = subprocess.check_output(["lsblk", "-bdno", "SIZE", disk_path], text=True).strip().splitlines()[0]
+                    disk_sz_bytes = int(_sz_str)
+                except Exception:
+                    disk_sz_bytes = 0
+
+                is_small_disk = (disk_sz_bytes > 0 and disk_sz_bytes < 35 * 1024 * 1024 * 1024)
+                rec_size_mbr_mb = 3584 if is_small_disk else 8192
+                log_msg(f"Target disk capacity (MBR): {disk_sz_bytes / (1024**3):.1f} GB -> Recovery size: {rec_size_mbr_mb} MB")
+
                 exec_cmd(["wipefs", "-a", "-f", disk_path])
                 exec_cmd(["dd", "if=/dev/zero", f"of={disk_path}", "bs=512", "count=2048"])
                 # Recovery partition sized to hold the regenerated base SquashFS
@@ -5325,9 +5351,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     if self.install_encryption:
                         # Dedicated unencrypted /boot partition (1024MB) on MBR partition 1 so GRUB
                         # loads without prompt, leaving the single decryption prompt to Plymouth.
-                        sfdisk_script = "label: dos\nsize=1024M, type=83, bootable\nsize=8192M, type=83\nsize=+, type=83\n"
+                        sfdisk_script = f"label: dos\nsize=1024M, type=83, bootable\nsize={rec_size_mbr_mb}M, type=83\nsize=+, type=83\n"
                     else:
-                        sfdisk_script = "label: dos\nsize=8192M, type=83\nsize=+, type=83, bootable\n"
+                        sfdisk_script = f"label: dos\nsize={rec_size_mbr_mb}M, type=83\nsize=+, type=83, bootable\n"
                     if "TEST_MODE" in os.environ:
                         print(f"[TEST_MODE] Simulating sfdisk partitioning script:\n{sfdisk_script}")
                     else:
@@ -5342,12 +5368,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     exec_cmd(["parted", "-s", disk_path, "mklabel", "msdos"])
                     if self.install_encryption:
                         exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "ext4", "1MiB", "1025MiB"])
-                        exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "ext4", "1025MiB", "9217MiB"])
-                        exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "btrfs", "9217MiB", "100%"])
+                        exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "ext4", "1025MiB", f"{1025 + rec_size_mbr_mb}MiB"])
+                        exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "btrfs", f"{1025 + rec_size_mbr_mb}MiB", "100%"])
                         exec_cmd(["parted", "-s", disk_path, "set", "1", "boot", "on"])
                     else:
-                        exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "ext4", "1MiB", "8193MiB"])
-                        exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "btrfs", "8193MiB", "100%"])
+                        exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "ext4", "1MiB", f"{rec_size_mbr_mb + 1}MiB"])
+                        exec_cmd(["parted", "-s", "-a", "optimal", disk_path, "mkpart", "primary", "btrfs", f"{rec_size_mbr_mb + 1}MiB", "100%"])
                         exec_cmd(["parted", "-s", disk_path, "set", "2", "boot", "on"])
                     exec_cmd(["sync"])
                     exec_cmd(["udevadm", "settle"])
@@ -7740,6 +7766,45 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                     log_msg("Installation logs saved to /mnt/var/log/pulsaros/")
                 except Exception as log_copy_err:
                     print(f"Notice: Failed to copy installation logs to target: {log_copy_err}")
+
+            # 2b. Purge package manager caches to free gigabytes of space on target filesystem
+            if "TEST_MODE" not in os.environ:
+                GLib.idle_add(self.update_progress, 0.98, "Cleaning package caches to free disk space...")
+                log_msg("Purging downloaded package cache on target disk...")
+                try:
+                    if is_arch:
+                        subprocess.run(["chroot", "/mnt", "pacman", "-Scc", "--noconfirm"], capture_output=True)
+                        for pkg_f in glob.glob("/mnt/var/cache/pacman/pkg/*.pkg.tar.*"):
+                            try:
+                                os.remove(pkg_f)
+                            except Exception:
+                                pass
+                    else:
+                        subprocess.run(["chroot", "/mnt", "apt-get", "clean"], capture_output=True)
+                        for deb_f in glob.glob("/mnt/var/cache/apt/archives/*.deb"):
+                            try:
+                                os.remove(deb_f)
+                            except Exception:
+                                pass
+                    for tfile in glob.glob("/mnt/tmp/*"):
+                        try:
+                            if os.path.isdir(tfile):
+                                shutil.rmtree(tfile, ignore_errors=True)
+                            else:
+                                os.remove(tfile)
+                        except Exception:
+                            pass
+                    for vtfile in glob.glob("/mnt/var/tmp/*"):
+                        try:
+                            if os.path.isdir(vtfile):
+                                shutil.rmtree(vtfile, ignore_errors=True)
+                            else:
+                                os.remove(vtfile)
+                        except Exception:
+                            pass
+                    log_msg("✅ Package cache successfully purged on target.")
+                except Exception as purge_err:
+                    log_msg(f"Notice: Package cache purge skipped: {purge_err}")
 
             # 3. Cleanup and unmount all filesystems
             cleanup_mounts(is_efi)
