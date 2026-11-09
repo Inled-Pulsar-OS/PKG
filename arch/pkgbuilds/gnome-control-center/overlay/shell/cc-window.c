@@ -67,6 +67,15 @@ struct _CcWindow {
   GtkWidget  *content_header;
   GtkWidget  *back_button;
   GtkWidget  *forward_button;
+  GtkWidget  *capsule;
+  GtkWidget  *main_menu_button;
+
+  /* Header bar of the visible page that currently hosts the capsule, the menu
+   * and the title (weak pointers, the bar can go away with its panel). */
+  GtkWidget  *adopted_bar;
+  GtkWidget  *adopted_title;
+  GBinding   *adopted_layout_binding;
+  gboolean    adopted_show_title;
   gboolean    single_panel_mode;
 
     GtkWidget *custom_titlebar;
@@ -456,6 +465,125 @@ on_forward_button_clicked_cb (CcWindow *self)
     switch_to_next_panel (self);
 }
 
+/* One header row (#76): the panel's own AdwHeaderBar hosts the capsule, a
+ * left-aligned title and the main menu; the shell bar is hidden meanwhile. */
+static GtkWidget *
+find_header_bar (GtkWidget *widget)
+{
+    GtkWidget *child;
+
+    if (ADW_IS_HEADER_BAR (widget))
+        return gtk_widget_get_visible (widget) ? widget : NULL;
+
+    for (child = gtk_widget_get_first_child (widget); child; child = gtk_widget_get_next_sibling (child)) {
+        GtkWidget *found = find_header_bar (child);
+
+        if (found)
+            return found;
+    }
+
+    return NULL;
+}
+
+static void
+move_to_header_bar (GtkWidget *widget, GtkWidget *bar, gboolean at_end)
+{
+    GtkWidget *old = gtk_widget_get_ancestor (widget, ADW_TYPE_HEADER_BAR);
+
+    if (old == bar)
+        return;
+    if (old)
+        adw_header_bar_remove (ADW_HEADER_BAR (old), widget);
+
+    if (at_end)
+        adw_header_bar_pack_end (ADW_HEADER_BAR (bar), widget);
+    else
+        adw_header_bar_pack_start (ADW_HEADER_BAR (bar), widget);
+}
+
+static void
+release_header (CcWindow *self)
+{
+    if (self->adopted_layout_binding) {
+        g_binding_unbind (self->adopted_layout_binding);
+        g_clear_object (&self->adopted_layout_binding);
+    }
+
+    if (self->adopted_title) {
+        GtkWidget *bar = gtk_widget_get_ancestor (self->adopted_title, ADW_TYPE_HEADER_BAR);
+
+        if (bar)
+            adw_header_bar_remove (ADW_HEADER_BAR (bar), self->adopted_title);
+        g_object_remove_weak_pointer (G_OBJECT (self->adopted_title), (gpointer *) &self->adopted_title);
+        self->adopted_title = NULL;
+    }
+
+    if (self->adopted_bar) {
+        adw_header_bar_set_show_title (ADW_HEADER_BAR (self->adopted_bar), self->adopted_show_title);
+        g_object_remove_weak_pointer (G_OBJECT (self->adopted_bar), (gpointer *) &self->adopted_bar);
+        self->adopted_bar = NULL;
+    }
+
+    /* Back to the shell bar, which is the fallback when no panel bar exists */
+    move_to_header_bar (self->capsule, self->content_header, FALSE);
+    move_to_header_bar (self->main_menu_button, self->content_header, TRUE);
+    gtk_widget_set_visible (self->content_header, TRUE);
+}
+
+static void
+update_header (CcWindow *self)
+{
+    AdwNavigationPage *page;
+    GtkWidget *bar;
+    gboolean is_subpage;
+
+    release_header (self);
+
+    page = adw_navigation_view_get_visible_page (self->navigation);
+    if (!page)
+        return;
+
+    bar = find_header_bar (GTK_WIDGET (page));
+    if (!bar)
+        return;
+
+    is_subpage = adw_navigation_view_get_previous_page (self->navigation, page) != NULL;
+
+    self->adopted_bar = bar;
+    g_object_add_weak_pointer (G_OBJECT (bar), (gpointer *) &self->adopted_bar);
+    self->adopted_show_title = adw_header_bar_get_show_title (ADW_HEADER_BAR (bar));
+
+    /* Subpages keep their native back button, so they only get title and menu */
+    if (!is_subpage)
+        move_to_header_bar (self->capsule, bar, FALSE);
+
+    /* Panels with a switcher or custom title keep it */
+    if (!adw_header_bar_get_title_widget (ADW_HEADER_BAR (bar))) {
+        self->adopted_title = gtk_label_new (NULL);
+        g_object_add_weak_pointer (G_OBJECT (self->adopted_title), (gpointer *) &self->adopted_title);
+        gtk_widget_add_css_class (self->adopted_title, "pulsar-page-title");
+        gtk_widget_set_halign (self->adopted_title, GTK_ALIGN_START);
+        gtk_label_set_xalign (GTK_LABEL (self->adopted_title), 0.0);
+        gtk_label_set_ellipsize (GTK_LABEL (self->adopted_title), PANGO_ELLIPSIZE_END);
+        g_object_bind_property (page, "title", self->adopted_title, "label", G_BINDING_SYNC_CREATE);
+        adw_header_bar_pack_start (ADW_HEADER_BAR (bar), self->adopted_title);
+        adw_header_bar_set_show_title (ADW_HEADER_BAR (bar), FALSE);
+    }
+
+    move_to_header_bar (self->main_menu_button, bar, TRUE);
+
+    /* Window buttons follow the shell bar (none, or close when collapsed) */
+    self->adopted_layout_binding = g_object_ref (g_object_bind_property (self->content_header, "decoration-layout", bar,
+                                                                          "decoration-layout", G_BINDING_SYNC_CREATE));
+    gtk_widget_set_visible (self->content_header, FALSE);
+}
+
+static void
+on_visible_page_changed_cb (CcWindow *self)
+{
+    update_header (self);
+}
+
 static void
 on_split_view_collapsed_changed_cb (CcWindow *self)
 {
@@ -694,6 +822,12 @@ cc_window_dispose (GObject *object)
 {
     CcWindow *self = CC_WINDOW (object);
 
+    if (self->capsule) {
+        release_header (self);
+        g_clear_object (&self->capsule);
+        g_clear_object (&self->main_menu_button);
+    }
+
     g_clear_pointer (&self->current_panel_id, g_free);
     g_clear_object (&self->store);
     g_clear_object (&self->active_panel);
@@ -855,6 +989,8 @@ cc_window_class_init (CcWindowClass *klass)
     gtk_widget_class_bind_template_child (widget_class, CcWindow, content_header);
     gtk_widget_class_bind_template_child (widget_class, CcWindow, back_button);
     gtk_widget_class_bind_template_child (widget_class, CcWindow, forward_button);
+    gtk_widget_class_bind_template_child (widget_class, CcWindow, capsule);
+    gtk_widget_class_bind_template_child (widget_class, CcWindow, main_menu_button);
     gtk_widget_class_bind_template_child (widget_class, CcWindow, split_view);
     gtk_widget_class_bind_template_child (widget_class, CcWindow, panel_list);
     gtk_widget_class_bind_template_child (widget_class, CcWindow, search_entry);
@@ -864,6 +1000,7 @@ cc_window_class_init (CcWindowClass *klass)
     gtk_widget_class_bind_template_child (widget_class, CcWindow, user_email_label);
 
     gtk_widget_class_bind_template_callback (widget_class, on_split_view_collapsed_changed_cb);
+    gtk_widget_class_bind_template_callback (widget_class, on_visible_page_changed_cb);
     gtk_widget_class_bind_template_callback (widget_class, search_entry_activate_cb);
     gtk_widget_class_bind_template_callback (widget_class, on_back_button_clicked_cb);
     gtk_widget_class_bind_template_callback (widget_class, on_forward_button_clicked_cb);
@@ -886,6 +1023,10 @@ static void
 cc_window_init (CcWindow *self)
 {
     gtk_widget_init_template (GTK_WIDGET (self));
+
+    /* Own refs: these move between header bars and must outlive panel bars */
+    g_object_ref (self->capsule);
+    g_object_ref (self->main_menu_button);
 
     setup_user_account_banner (self);
 

@@ -120,7 +120,7 @@ template $CcWindow: Adw.ApplicationWindow {
           decoration-layout: ":";
 
           [start]
-          Box {
+          Box capsule {
             visible: bind split_view.collapsed inverted;
             valign: center;
             styles [
@@ -150,7 +150,7 @@ template $CcWindow: Adw.ApplicationWindow {
           }
 
           [end]
-          MenuButton {
+          MenuButton main_menu_button {
             icon-name: "open-menu-symbolic";
             menu-model: primary_menu;
             primary: true;
@@ -159,6 +159,7 @@ template $CcWindow: Adw.ApplicationWindow {
         }
 
         content: Adw.NavigationView navigation {
+          notify::visible-page => $on_visible_page_changed_cb(template);
         };
       };
     };
