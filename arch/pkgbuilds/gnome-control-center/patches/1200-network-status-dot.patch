@@ -1,0 +1,98 @@
+diff -ru a/panels/network/net-device-ethernet.c b/panels/network/net-device-ethernet.c
+--- a/panels/network/net-device-ethernet.c
++++ b/panels/network/net-device-ethernet.c
+@@ -218,7 +218,10 @@
+         }
+     }
+     status = panel_device_status_to_localized_string (self->device, speed_text);
+-    adw_preferences_row_set_title (ADW_PREFERENCES_ROW (self->details_row), status);
++    adw_preferences_row_set_title (ADW_PREFERENCES_ROW (self->details_row), _("Wired"));
++    adw_action_row_set_subtitle (ADW_ACTION_ROW (self->details_row), status);
++    panel_set_status_dot (GTK_WIDGET (self->details_row),
++                          state == NM_DEVICE_STATE_ACTIVATED ? "on" : device_state_to_off_switch (state) ? "idle" : "off");
+ 
+     populate_ui (self);
+ }
+diff -ru a/panels/network/net-vpn.c b/panels/network/net-vpn.c
+--- a/panels/network/net-vpn.c
++++ b/panels/network/net-vpn.c
+@@ -100,6 +100,9 @@
+         }
+     }
+ 
++    adw_action_row_set_subtitle (ADW_ACTION_ROW (self), disconnected ? _("Not connected") : _("Connected"));
++    panel_set_status_dot (GTK_WIDGET (self), disconnected ? "off" : "on");
++
+     self->updating_device = TRUE;
+     gtk_switch_set_active (self->device_off_switch, !disconnected);
+     self->updating_device = FALSE;
+diff -ru a/panels/network/network-ethernet.blp b/panels/network/network-ethernet.blp
+--- a/panels/network/network-ethernet.blp
++++ b/panels/network/network-ethernet.blp
+@@ -62,6 +62,11 @@
+       Adw.ActionRow details_row {
+         activatable-widget: device_off_switch;
+ 
++        [prefix]
++        Image {
++          icon-name: "network-wired-symbolic";
++        }
++
+         Switch device_off_switch {
+           valign: center;
+           notify::active => $device_off_switch_changed_cb(template);
+diff -ru a/panels/network/network-vpn.blp b/panels/network/network-vpn.blp
+--- a/panels/network/network-vpn.blp
++++ b/panels/network/network-vpn.blp
+@@ -4,6 +4,11 @@
+ template $NetVpn: Adw.ActionRow {
+   activatable-widget: device_off_switch;
+ 
++  [prefix]
++  Image {
++    icon-name: "network-vpn-symbolic";
++  }
++
+   [suffix]
+   Switch device_off_switch {
+     valign: center;
+diff -ru a/panels/network/panel-common.c b/panels/network/panel-common.c
+--- a/panels/network/panel-common.c
++++ b/panels/network/panel-common.c
+@@ -352,6 +352,20 @@
+     return g_string_free_and_steal (string);
+ }
+ 
++/* Colored status dot (CSS) on a row: state is "on", "off" or "idle". */
++void
++panel_set_status_dot (GtkWidget *widget, const gchar *state)
++{
++    gtk_widget_add_css_class (widget, "pulsar-status-dot");
++    gtk_widget_remove_css_class (widget, "pulsar-status-on");
++    gtk_widget_remove_css_class (widget, "pulsar-status-off");
++    gtk_widget_remove_css_class (widget, "pulsar-status-idle");
++    if (state) {
++        g_autofree gchar *cls = g_strconcat ("pulsar-status-", state, NULL);
++        gtk_widget_add_css_class (widget, cls);
++    }
++}
++
+ NMConnection *
+ net_device_get_find_connection (NMClient *client, NMDevice *device)
+ {
+diff -ru a/panels/network/panel-common.h b/panels/network/panel-common.h
+--- a/panels/network/panel-common.h
++++ b/panels/network/panel-common.h
+@@ -22,10 +22,12 @@
+ #pragma once
+ 
+ #include <NetworkManager.h>
++#include <gtk/gtk.h>
+ 
+ G_BEGIN_DECLS
+ 
+ gchar *panel_device_status_to_localized_string (NMDevice *nm_device, const gchar *speed);
++void   panel_set_status_dot (GtkWidget *widget, const gchar *state);
+ 
+ NMConnection *net_device_get_find_connection (NMClient *client, NMDevice *device);
+ 
