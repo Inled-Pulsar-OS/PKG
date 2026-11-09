@@ -73,6 +73,8 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
       if (video) {
         try {
           video.pause();
+          video.removeAttribute("src");
+          video.load();
         } catch {}
       }
     };
