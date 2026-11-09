@@ -1,0 +1,30 @@
+/* Sound panel (#80): volume rows as in the macOS Sound reference. The speaker
+ * button at the slider start is a plain gray glyph; the shared tick-slider
+ * look (pulsar.css) styles the scale. */
+navigation-split-view > .content-pane ccvolumeslider {
+  min-width: 260px;
+}
+
+navigation-split-view > .content-pane ccvolumeslider > button.flat {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  margin-right: 6px;
+  background: none;
+  box-shadow: none;
+  color: alpha(currentColor, 0.55);
+}
+
+navigation-split-view > .content-pane ccvolumeslider > button.flat:hover {
+  color: currentColor;
+}
+
+navigation-split-view > .content-pane ccvolumeslider > scale {
+  min-height: 30px;
+}
+
+/* Device and profile popup rows keep the shared round chevron badge; the
+ * selected value reads as gray trailing text. */
+navigation-split-view > .content-pane row.combo > box.header > box.suffixes > box > label {
+  color: alpha(currentColor, 0.6);
+}
