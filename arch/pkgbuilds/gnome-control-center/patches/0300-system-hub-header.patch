@@ -1,0 +1,37 @@
+--- a/panels/system/cc-system-panel.blp
++++ b/panels/system/cc-system-panel.blp
+@@ -10,6 +10,16 @@
+ 
+     content: Adw.PreferencesPage {
+       Adw.PreferencesGroup {
++        $CcHubHeader {
++          hero: true;
++          icon-name: "org.gnome.Settings-system-symbolic";
++          icon-color: "#8C8C8C";
++          title: _("General");
++          description: _("Manage your overall setup and preferences for your computer, such as software updates, device language, and more.");
++        }
++      }
++
++      Adw.PreferencesGroup {
+         $CcListRow region_row {
+           title: _("_Region &amp; Language");
+           subtitle: _("System language and localization");
+--- a/panels/system/cc-system-panel.c
++++ b/panels/system/cc-system-panel.c
+@@ -28,6 +28,7 @@
+ #include "cc-system-resources.h"
+ #include "cc-systemd-service.h"
+ 
++#include "shell/cc-hub-header.h"
+ #include "about/cc-about-page.h"
+ #include "datetime/cc-datetime-page.h"
+ #include "region/cc-region-page.h"
+@@ -143,6 +144,7 @@
+ 
+     g_type_ensure (CC_TYPE_ABOUT_PAGE);
+     g_type_ensure (CC_TYPE_DATE_TIME_PAGE);
++    g_type_ensure (CC_TYPE_HUB_HEADER);
+     g_type_ensure (CC_TYPE_LIST_ROW);
+     g_type_ensure (CC_TYPE_REGION_PAGE);
+     g_type_ensure (CC_TYPE_REMOTE_DESKTOP_PAGE);
