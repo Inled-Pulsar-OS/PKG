@@ -1,0 +1,36 @@
+/* Network panel (#88): connection rows with a 32px icon tile and a colored
+ * status dot before the state text (green Connected, gray Inactive, red
+ * Not connected). The dot is a radial gradient on the subtitle label; the
+ * state class comes from panel_set_status_dot() in panel-common.c. */
+navigation-split-view > .content-pane row.pulsar-status-dot > box.prefixes image {
+  -gtk-icon-size: 18px;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 8px;
+  color: white;
+  background-color: #8e8e93;
+}
+
+navigation-split-view > .content-pane row.pulsar-status-dot.pulsar-status-on > box.prefixes image {
+  background-color: #0a84ff;
+}
+
+navigation-split-view > .content-pane row.pulsar-status-dot > box.header > box.title label.subtitle {
+  padding-left: 16px;
+  background-repeat: no-repeat;
+  background-size: 10px 10px;
+  background-position: 0 center;
+  color: alpha(currentColor, 0.6);
+}
+
+navigation-split-view > .content-pane row.pulsar-status-on > box.header > box.title label.subtitle {
+  background-image: radial-gradient(circle closest-side, #34c759 0, #34c759 100%, transparent 100%);
+}
+
+navigation-split-view > .content-pane row.pulsar-status-off > box.header > box.title label.subtitle {
+  background-image: radial-gradient(circle closest-side, #ff3b30 0, #ff3b30 100%, transparent 100%);
+}
+
+navigation-split-view > .content-pane row.pulsar-status-idle > box.header > box.title label.subtitle {
+  background-image: radial-gradient(circle closest-side, #8e8e93 0, #8e8e93 100%, transparent 100%);
+}
