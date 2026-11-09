@@ -6079,25 +6079,43 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             except Exception:
                                 pass
 
-                    # If an unencrypted boot partition exists (e.g. Dual Boot with encryption),
-                    # deploy the recovery SquashFS onto the unencrypted /boot partition so Debian
-                    # live-boot can discover and boot it without needing to unlock LUKS first.
+                    # If an unencrypted boot partition exists AND there is NO dedicated recovery partition
+                    # (e.g. Dual Boot with encryption), deploy the recovery SquashFS onto the unencrypted /boot
+                    # partition ONLY if sufficient free space exists, leaving ample room for kernels & GRUB.
+                    boot_rec_dst = "/mnt/boot/live/filesystem.squashfs"
                     try:
-                        if boot_part and os.path.ismount("/mnt/boot"):
-                            os.makedirs("/mnt/boot/live", exist_ok=True)
-                            os.makedirs("/mnt/boot/recovery/live", exist_ok=True)
-                            boot_rec_dst = "/mnt/boot/live/filesystem.squashfs"
-                            if not os.path.isfile(boot_rec_dst) or os.path.getsize(boot_rec_dst) == 0:
-                                shutil.copy2(primary_rec_dst, boot_rec_dst)
-                                log_msg(f"Recovery Environment SquashFS deployed to unencrypted /boot ({boot_part}) -> {boot_rec_dst}")
-                            for b_alias in ["/mnt/boot/recovery/live/filesystem.squashfs", "/mnt/boot/recovery/filesystem.squashfs", "/mnt/boot/filesystem.squashfs"]:
+                        if not recovery_part and boot_part and os.path.ismount("/mnt/boot"):
+                            stat_b = os.statvfs("/mnt/boot")
+                            avail_b = stat_b.f_bavail * stat_b.f_frsize
+                            rec_sz = os.path.getsize(primary_rec_dst)
+                            if avail_b > (rec_sz + 350 * 1024 * 1024):
+                                os.makedirs("/mnt/boot/live", exist_ok=True)
+                                os.makedirs("/mnt/boot/recovery/live", exist_ok=True)
+                                if not os.path.isfile(boot_rec_dst) or os.path.getsize(boot_rec_dst) == 0:
+                                    shutil.copy2(primary_rec_dst, boot_rec_dst)
+                                    log_msg(f"Recovery Environment SquashFS deployed to unencrypted /boot ({boot_part}) -> {boot_rec_dst}")
+                                for b_alias in ["/mnt/boot/recovery/live/filesystem.squashfs", "/mnt/boot/recovery/filesystem.squashfs", "/mnt/boot/filesystem.squashfs"]:
+                                    try:
+                                        os.makedirs(os.path.dirname(b_alias), exist_ok=True)
+                                        if not os.path.isfile(b_alias):
+                                            os.link(boot_rec_dst, b_alias)
+                                    except Exception:
+                                        pass
+                            else:
+                                log_msg(f"Notice: /boot has only {avail_b / (1024*1024):.1f} MB free; skipping recovery SquashFS copy to /boot to prevent partition overflow.")
+                        elif recovery_part and os.path.ismount("/mnt/boot"):
+                            # Dedicated recovery partition exists; ensure /boot does not hold redundant squashfs files
+                            for sq_f in glob.glob("/mnt/boot/**/*.squashfs", recursive=True):
                                 try:
-                                    os.makedirs(os.path.dirname(b_alias), exist_ok=True)
-                                    if not os.path.isfile(b_alias):
-                                        os.link(boot_rec_dst, b_alias)
+                                    os.remove(sq_f)
                                 except Exception:
                                     pass
                     except Exception as b_rec_err:
+                        try:
+                            if os.path.isfile(boot_rec_dst):
+                                os.remove(boot_rec_dst)
+                        except Exception:
+                            pass
                         log_msg(f"Notice: /boot recovery SquashFS setup: {b_rec_err}")
 
                     # If /mnt is a Btrfs subvolume (@), ensure top-level subvolume 5 also has finder symlinks for live-boot
@@ -6350,7 +6368,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         os.makedirs("/mnt/recovery", exist_ok=True)
                         shutil.copy2(src, "/mnt/recovery/boot/initramfs-recovery.img")
                         shutil.copy2(src, "/mnt/recovery/initramfs-recovery.img")
-                        if boot_part and os.path.ismount("/mnt/boot"):
+                        if not recovery_part and boot_part and os.path.ismount("/mnt/boot"):
                             os.makedirs("/mnt/boot/recovery", exist_ok=True)
                             shutil.copy2(src, "/mnt/boot/recovery/initramfs-recovery.img")
                         if is_efi:
@@ -6405,7 +6423,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     os.makedirs("/mnt/recovery", exist_ok=True)
                     shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-recovery")
                     shutil.copy2(found_k, "/mnt/recovery/vmlinuz-recovery")
-                    if boot_part and os.path.ismount("/mnt/boot"):
+                    if not recovery_part and boot_part and os.path.ismount("/mnt/boot"):
                         os.makedirs("/mnt/boot/recovery", exist_ok=True)
                         shutil.copy2(found_k, "/mnt/boot/recovery/vmlinuz-recovery")
                     if is_efi:
@@ -7381,6 +7399,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
             else:
                 GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader (BIOS/MBR)...")
                 log_msg(f"Installing BIOS/MBR GRUB onto {disk_path}...")
+                os.makedirs("/mnt/boot/grub", exist_ok=True)
                 exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", "--recheck", "--force", disk_path])
                 
             esp_root = "/mnt/boot/efi"
