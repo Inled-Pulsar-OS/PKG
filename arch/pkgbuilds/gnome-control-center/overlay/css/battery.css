@@ -1,0 +1,33 @@
+/* Battery panel (#89): card rows, gray help text, popup-like rows. */
+
+/* Battery bar card: gray status line under the name. */
+.pulsar-power list.boxed-list > row label.dim-label {
+  color: alpha(currentColor, 0.6);
+}
+
+/* Power mode and charging rows: radio on the left, gray subtitle. */
+.pulsar-power row.activatable > box.header > box.prefixes > checkbutton {
+  margin-right: 4px;
+}
+
+.pulsar-power row > box.header > box.title label.subtitle {
+  color: alpha(currentColor, 0.6);
+  font-size: 12px;
+}
+
+/* Power mode info and the suspend notice read as gray help text. */
+.pulsar-power preferencesgroup > box > box.header label.heading {
+  font-weight: 700;
+}
+
+.pulsar-power row.action label.title.wrap,
+.pulsar-power row.action label.title.wrap + label {
+  color: alpha(currentColor, 0.6);
+  font-size: 12px;
+}
+
+/* Number rows (delay, power button) end in the round chevron badge. */
+.pulsar-power row.combo > box.header > box.suffixes > label.dim-label,
+.pulsar-power row > box.header > box.suffixes > label.value {
+  color: alpha(currentColor, 0.6);
+}
