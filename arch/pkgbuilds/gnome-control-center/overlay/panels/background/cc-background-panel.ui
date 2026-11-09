@@ -72,6 +72,7 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                                       <object class="GtkLabel" id="default_label">
                                         <property name="label" translatable="yes">Auto</property>
                                         <property name="mnemonic-widget">default_toggle</property>
+                                        <style><class name="caption"/></style>
                                         <layout>
                                           <property name="column">0</property>
                                           <property name="row">1</property>
@@ -101,6 +102,7 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                                       <object class="GtkLabel" id="light_label">
                                         <property name="label" translatable="yes">Light</property>
                                         <property name="mnemonic-widget">light_toggle</property>
+                                        <style><class name="caption"/></style>
                                         <layout>
                                           <property name="column">1</property>
                                           <property name="row">1</property>
@@ -132,6 +134,7 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                                       <object class="GtkLabel" id="dark_label">
                                         <property name="label" translatable="yes">Dark</property>
                                         <property name="mnemonic-widget">dark_toggle</property>
+                                        <style><class name="caption"/></style>
                                         <layout>
                                           <property name="column">2</property>
                                           <property name="row">1</property>
