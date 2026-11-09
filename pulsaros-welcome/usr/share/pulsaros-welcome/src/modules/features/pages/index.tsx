@@ -297,8 +297,31 @@ function ContributorsView({ contributors }: ContributorsViewProps) {
   );
 }
 
+function sanitizeFeatures(items: FeatureItem[]): FeatureItem[] {
+  return items.map((item) => {
+    let video = item.video || "";
+    if (video.endsWith(".mp4")) {
+      if (video.includes("pulsar-spotlight-pulsaros-demos.mp4")) {
+        video = "https://hosted.inled.es/cdn/spotlight.webp";
+      } else if (video.includes("appinstall-pulsar-pulsaros-demo-OK.mp4")) {
+        video = "https://hosted.inled.es/cdn/app-store.webp";
+      } else if (video.startsWith("/videos/")) {
+        const basename = video.split("/").pop()?.replace(".mp4", ".webp");
+        video = `https://hosted.inled.es/cdn/${basename}`;
+      } else {
+        video = video.replace(/\.mp4$/i, ".webp");
+      }
+    }
+    return {
+      ...item,
+      video,
+      poster: item.poster && !isVideoFile(item.poster) ? item.poster : "",
+    };
+  });
+}
+
 export function FeaturesPage({ onBack, onFinish }: FeaturesPageProps) {
-  const [features, setFeatures] = useState<FeatureItem[]>(fallbackFeatures as FeatureItem[]);
+  const [features, setFeatures] = useState<FeatureItem[]>(() => sanitizeFeatures(fallbackFeatures as FeatureItem[]));
   const [contributors, setContributors] = useState<Contributor[]>(fallbackContributors as Contributor[]);
   const [index, setIndex] = useState(0);
 
@@ -311,7 +334,7 @@ export function FeaturesPage({ onBack, onFinish }: FeaturesPageProps) {
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0 && isMounted) {
-            setFeatures(data);
+            setFeatures(sanitizeFeatures(data));
           }
         }
       } catch {
@@ -320,7 +343,7 @@ export function FeaturesPage({ onBack, onFinish }: FeaturesPageProps) {
           if (localRes.ok) {
             const localData = await localRes.json();
             if (Array.isArray(localData) && localData.length > 0 && isMounted) {
-              setFeatures(localData);
+              setFeatures(sanitizeFeatures(localData));
             }
           }
         } catch {}
