@@ -5262,7 +5262,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     disk_sz_bytes = 0
 
                 is_small_disk = (disk_sz_bytes > 0 and disk_sz_bytes < 35 * 1024 * 1024 * 1024)
-                rec_size_gpt = "+3584M" if is_small_disk else "+8G"
+                rec_size_gpt = "+4400M" if is_small_disk else "+8G"
                 log_msg(f"Target disk capacity: {disk_sz_bytes / (1024**3):.1f} GB -> Recovery partition size: {rec_size_gpt}")
 
                 exec_cmd(["wipefs", "-a", "-f", disk_path])
@@ -5339,7 +5339,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     disk_sz_bytes = 0
 
                 is_small_disk = (disk_sz_bytes > 0 and disk_sz_bytes < 35 * 1024 * 1024 * 1024)
-                rec_size_mbr_mb = 3584 if is_small_disk else 8192
+                rec_size_mbr_mb = 4400 if is_small_disk else 8192
                 log_msg(f"Target disk capacity (MBR): {disk_sz_bytes / (1024**3):.1f} GB -> Recovery size: {rec_size_mbr_mb} MB")
 
                 exec_cmd(["wipefs", "-a", "-f", disk_path])
@@ -6264,8 +6264,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     fstab_lines.append(f"UUID={boot_uuid}            /boot           ext4    defaults,noatime                                0       2")
                 if efi_uuid:
                     fstab_lines.append(f"UUID={efi_uuid}             /boot/efi       vfat    defaults,nofail,x-systemd.device-timeout=5,dmask=0077,fmask=0077 0       2")
-                if rec_uuid:
-                    fstab_lines.append(f"UUID={rec_uuid}            /recovery       ext4    defaults,noatime,nofail,x-systemd.device-timeout=5 0       2")
+                # PULSAR_RECOVERY is intentionally NOT mounted at boot to keep the recovery image offline,
+                # protected from modifications, and prevent GNOME from monitoring it for low disk space.
                 if getattr(self, "install_hibernation", True) and target_swap_gb >= 2:
                     fstab_lines.append("/swapfile                   none            swap    defaults,nofail                                 0       0")
                 fstab_content = "\n".join(fstab_lines) + "\n"
@@ -6297,8 +6297,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 ]
                 if boot_uuid:
                     fstab_lines.append(f"UUID={boot_uuid}            /boot           ext4    defaults,noatime                                0       2")
-                if rec_uuid:
-                    fstab_lines.append(f"UUID={rec_uuid}            /recovery       ext4    defaults,noatime,nofail,x-systemd.device-timeout=5 0       2")
+                # PULSAR_RECOVERY is intentionally NOT mounted at boot to keep the recovery image offline,
+                # protected from modifications, and prevent GNOME from monitoring it for low disk space.
                 if getattr(self, "install_hibernation", True) and target_swap_gb >= 2:
                     fstab_lines.append("/swapfile                   none            swap    defaults,nofail                                 0       0")
                 fstab_content = "\n".join(fstab_lines) + "\n"
