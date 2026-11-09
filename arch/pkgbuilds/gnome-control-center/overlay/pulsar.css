@@ -272,3 +272,52 @@ navigation-split-view > .content-pane row.combo > box.header > box.suffixes > bo
 navigation-split-view > .content-pane row.combo > box.header > box.title label.subtitle {
   color: alpha(currentColor, 0.6);
 }
+
+/* Hub header card (#77, decision #73): squircle icon, bold title, gray
+ * description, blue link. The hero variant is centered with a 100px icon. */
+.pulsar-hub-header {
+  background-color: var(--card-bg-color);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.pulsar-hub-header .pulsar-hub-icon {
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 9px;
+}
+
+.pulsar-hub-header .pulsar-hub-title {
+  font-weight: 700;
+}
+
+.pulsar-hub-header .pulsar-hub-description {
+  color: alpha(currentColor, 0.6);
+  font-size: 12px;
+}
+
+.pulsar-hub-header .pulsar-hub-link,
+.pulsar-hub-header .pulsar-hub-link label {
+  color: #0088FF;
+  font-size: 12px;
+  padding: 0;
+  min-height: 0;
+}
+
+.pulsar-hub-header.hero {
+  padding: 24px 16px;
+}
+
+.pulsar-hub-header.hero .pulsar-hub-icon {
+  min-width: 100px;
+  min-height: 100px;
+  border-radius: 22px;
+}
+
+.pulsar-hub-header.hero .pulsar-hub-title {
+  font-size: 22px;
+}
+
+.pulsar-hub-header.hero .pulsar-hub-description {
+  font-size: 13px;
+}
