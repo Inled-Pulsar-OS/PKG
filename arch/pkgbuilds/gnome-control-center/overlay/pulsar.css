@@ -159,6 +159,59 @@ navigation-split-view > .content-pane .card {
   background-color: #9A57A3;
 }
 
+/* Shared card, row and heading metrics (#75, decision #73). Scoped to the
+ * content pane so the sidebar keeps its own metrics. */
+
+/* About 20px between cards (libadwaita: 24px). */
+navigation-split-view > .content-pane preferencespage > scrolledwindow > viewport > clamp > box {
+  border-spacing: 20px;
+}
+
+/* Rows about 38px, about 43px with a subtitle (libadwaita: 50px header, 6px
+ * title margins). Rows with a subtitle grow past the minimum on their own. */
+navigation-split-view > .content-pane row > box.header {
+  min-height: 38px;
+}
+
+navigation-split-view > .content-pane row > box.header > box.title {
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+/* Hairline separators inset 20px at both ends: the full-width border is
+ * replaced by a 1px gradient layer. The last row of a card has none. */
+navigation-split-view > .content-pane list.boxed-list > row,
+navigation-split-view > .content-pane list.boxed-list > row.expander row.header,
+navigation-split-view > .content-pane row.expander list.nested > row {
+  border-bottom-width: 0;
+  background-image: linear-gradient(var(--card-shade-color), var(--card-shade-color));
+  background-size: calc(100% - 40px) 1px;
+  background-position: 20px 100%;
+  background-repeat: no-repeat;
+}
+
+navigation-split-view > .content-pane list.boxed-list > row:last-child,
+navigation-split-view > .content-pane list.boxed-list > row:last-child.expander:not(:checked) row.header,
+navigation-split-view > .content-pane row.expander list.nested > row:last-child {
+  background-image: none;
+}
+
+/* Section headings: bold about 21px, about 55px above (20px page gap plus
+ * 35px margin) and 20px below (6px box spacing plus 14px margin). */
+navigation-split-view > .content-pane preferencesgroup > box > box.header {
+  margin-top: 35px;
+  margin-bottom: 14px;
+}
+
+navigation-split-view > .content-pane preferencesgroup:first-child > box > box.header {
+  margin-top: 0;
+}
+
+navigation-split-view > .content-pane preferencesgroup > box > box.header label.heading {
+  font-size: 21px;
+  font-weight: 700;
+}
+
 /* One header row (#76): bold ~28px left-aligned page title in the header bar. */
 .pulsar-page-title {
   font-size: 28px;
