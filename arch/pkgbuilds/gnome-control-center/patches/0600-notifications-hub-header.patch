@@ -1,0 +1,60 @@
+--- a/panels/notifications/cc-notifications-panel.blp
++++ b/panels/notifications/cc-notifications-panel.blp
+@@ -10,6 +10,20 @@
+ 
+     content: Adw.PreferencesPage {
+       Adw.PreferencesGroup {
++        $CcHubHeader {
++          icon-name: "org.gnome.Settings-notifications-symbolic";
++          icon-color: "#ED5F5D";
++          title: _("Notifications");
++          description: _("Customize when and how notifications appear, and which apps can send them.");
++          link-label: _("Learn more…");
++          link-uri: "help:gnome-help/shell-notifications";
++        }
++      }
++
++      Adw.PreferencesGroup {
++        title: _("Notification Center");
++        description: _("Notification Center shows your notifications at the top of the screen.");
++
+         Adw.SwitchRow dnd_row {
+           title: _("_Do Not Disturb");
+           use-underline: true;
+@@ -24,7 +38,7 @@
+ 
+       Adw.PreferencesGroup app_group {
+         /* Translators: List of apps. */
+-        title: _("App Notifications");
++        title: _("Application Notifications");
+ 
+         ListBox app_listbox {
+           selection-mode: none;
+--- a/panels/notifications/cc-notifications-panel.c
++++ b/panels/notifications/cc-notifications-panel.c
+@@ -31,6 +31,7 @@
+ #include "cc-notifications-panel.h"
+ #include "cc-notifications-resources.h"
+ #include "cc-ui-util.h"
++#include "shell/cc-hub-header.h"
+ 
+ #define MASTER_SCHEMA "org.gnome.desktop.notifications"
+ #define APP_SCHEMA MASTER_SCHEMA ".application"
+@@ -156,6 +157,8 @@
+     object_class->dispose = cc_notifications_panel_dispose;
+     object_class->finalize = cc_notifications_panel_finalize;
+ 
++    g_type_ensure (CC_TYPE_HUB_HEADER);
++
+     gtk_widget_class_set_template_from_resource (widget_class,
+                                                  "/org/gnome/control-center/notifications/cc-notifications-panel.ui");
+ 
+@@ -231,7 +234,7 @@
+     gtk_image_set_icon_size (GTK_IMAGE (w), GTK_ICON_SIZE_LARGE);
+     adw_action_row_add_prefix (ADW_ACTION_ROW (row), w);
+ 
+-    g_settings_bind_with_mapping (app->settings, "enable", row, "secondary-label",
++    g_settings_bind_with_mapping (app->settings, "enable", row, "subtitle",
+                                   G_SETTINGS_BIND_GET | G_SETTINGS_BIND_NO_SENSITIVITY, on_off_label_mapping_get, NULL,
+                                   NULL, NULL);
+ 
