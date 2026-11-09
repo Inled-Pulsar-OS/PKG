@@ -1,0 +1,5 @@
+/* Screen Time panel (#90): gray subtitles on the limit and break rows,
+ * as in the macOS reference. */
+navigation-split-view > .content-pane list.boxed-list > row > box.header > box.title label.subtitle {
+  color: alpha(currentColor, 0.6);
+}
