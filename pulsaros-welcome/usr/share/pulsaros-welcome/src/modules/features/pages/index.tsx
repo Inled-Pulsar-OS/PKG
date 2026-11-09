@@ -46,7 +46,7 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
   const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Stop previous playback and load next video smoothly
+  // Stop previous playback and load next media smoothly
   useEffect(() => {
     hasLoadedRef.current = false;
     setShowLoader(true);
@@ -59,12 +59,6 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
 
     const video = videoRef.current;
     if (video && isVideo) {
-      try {
-        video.pause();
-        video.removeAttribute("src");
-        video.load();
-      } catch {}
-
       if (mediaUrl) {
         video.src = mediaUrl;
         video.load();
@@ -73,6 +67,10 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
           playPromise.catch(() => {});
         }
       }
+    } else if (video) {
+      try {
+        video.pause();
+      } catch {}
     }
 
     // Safety fallback: if media buffering takes > 3.5s, dismiss loader
@@ -87,11 +85,9 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
         clearTimeout(stallTimerRef.current);
         stallTimerRef.current = null;
       }
-      if (video) {
+      if (video && isVideo) {
         try {
           video.pause();
-          video.removeAttribute("src");
-          video.load();
         } catch {}
       }
     };
@@ -158,27 +154,31 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
 
   return (
     <div className="relative flex h-full max-h-[420px] w-full max-w-[680px] items-center justify-center overflow-hidden rounded-2xl border border-black/10 bg-black/5 shadow-md">
-      <video
-        ref={videoRef}
-        poster={posterUrl || undefined}
-        autoPlay
-        loop
-        muted
-        playsInline
-        preload="auto"
-        onProgress={handleVideoProgress}
-        onLoadedMetadata={handleVideoProgress}
-        onLoadedData={handleCanPlay}
-        onCanPlay={handleCanPlay}
-        onPlaying={handlePlaying}
-        onTimeUpdate={handleTimeUpdate}
-        onWaiting={handleWaiting}
-        onError={() => {
-          setShowLoader(false);
-          hasLoadedRef.current = true;
-        }}
-        className={`h-full w-full object-contain ${isVideo ? "block" : "hidden"}`}
-      />
+      {isVideo && (
+        <video
+          ref={videoRef}
+          key={mediaUrl}
+          src={mediaUrl}
+          poster={posterUrl || undefined}
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
+          onProgress={handleVideoProgress}
+          onLoadedMetadata={handleVideoProgress}
+          onLoadedData={handleCanPlay}
+          onCanPlay={handleCanPlay}
+          onPlaying={handlePlaying}
+          onTimeUpdate={handleTimeUpdate}
+          onWaiting={handleWaiting}
+          onError={() => {
+            setShowLoader(false);
+            hasLoadedRef.current = true;
+          }}
+          className="h-full w-full object-contain"
+        />
+      )}
 
       {!isVideo && mediaUrl && (
         <img
