@@ -219,6 +219,60 @@ navigation-split-view > .content-pane preferencesgroup > box > box.header label.
   margin-left: 6px;
 }
 
+/* Sliders (#78): blue filled track, large white round thumb, tick marks and
+ * end labels (Slow/Fast, Small/Large) as in the macOS references. */
+navigation-split-view > .content-pane scale trough {
+  min-height: 6px;
+  min-width: 6px;
+  border-radius: 3px;
+  background-color: alpha(currentColor, 0.15);
+}
+
+navigation-split-view > .content-pane scale trough highlight {
+  background-color: @accent_bg_color;
+  border-radius: 3px;
+}
+
+navigation-split-view > .content-pane scale slider {
+  min-width: 24px;
+  min-height: 24px;
+  margin: -9px;
+  border-radius: 12px;
+  background-color: #ffffff;
+  background-image: none;
+  border: 1px solid alpha(black, 0.12);
+  box-shadow: 0 1px 4px alpha(black, 0.3);
+}
+
+navigation-split-view > .content-pane scale marks mark indicator {
+  min-width: 2px;
+  min-height: 6px;
+  margin-top: 6px;
+  background-color: alpha(currentColor, 0.3);
+  border-radius: 1px;
+}
+
+navigation-split-view > .content-pane scale marks mark label {
+  font-size: 12px;
+  color: alpha(currentColor, 0.6);
+}
+
+/* Popup rows (#78): the AdwComboRow arrow becomes a ~36px round gray badge
+ * with up/down chevrons (inline SVG, fixed gray so it reads on light and dark). */
+navigation-split-view > .content-pane row.combo > box.header > box.suffixes > box > image.dropdown-arrow {
+  min-width: 36px;
+  min-height: 36px;
+  margin-left: 8px;
+  border-radius: 18px;
+  background-color: alpha(currentColor, 0.1);
+  -gtk-icon-source: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M4.5 6.5 8 3l3.5 3.5M4.5 9.5 8 13l3.5-3.5' fill='none' stroke='%238e8e93' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  -gtk-icon-size: 16px;
+}
+
+navigation-split-view > .content-pane row.combo > box.header > box.title label.subtitle {
+  color: alpha(currentColor, 0.6);
+}
+
 /* Hub header card (#77, decision #73): squircle icon, bold title, gray
  * description, blue link. The hero variant is centered with a 100px icon. */
 .pulsar-hub-header {
