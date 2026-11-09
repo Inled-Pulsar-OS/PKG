@@ -1,0 +1,39 @@
+--- a/panels/wellbeing/cc-wellbeing-panel.blp
++++ b/panels/wellbeing/cc-wellbeing-panel.blp
+@@ -20,7 +20,18 @@
+ 
+       Adw.PreferencesPage {
+         Adw.PreferencesGroup {
+-          title: _("Screen Time");
++          $CcHubHeader {
++            icon-name: "org.gnome.Settings-screen-time-symbolic";
++            icon-color: "#9A57A3";
++            title: _("Screen Time");
++            description: _("See how much time you spend on your screen, set daily limits, and get reminders to take breaks.");
++            link-label: _("Learn more…");
++            link-uri: "help:gnome-help/wellbeing";
++          }
++        }
++
++        Adw.PreferencesGroup {
++          title: _("Usage");
+ 
+           [header-suffix]
+           MenuButton screen_time_statistics_info_button {
+--- a/panels/wellbeing/cc-wellbeing-panel.c
++++ b/panels/wellbeing/cc-wellbeing-panel.c
+@@ -37,6 +37,7 @@
+ #include "cc-screen-time-statistics-row.h"
+ #include "cc-wellbeing-panel.h"
+ #include "cc-wellbeing-resources.h"
++#include "shell/cc-hub-header.h"
+ 
+ /* All in seconds */
+ static const struct {
+@@ -732,5 +733,6 @@
+ 
+     g_type_ensure (CC_TYPE_BREAK_SCHEDULE_ROW);
+     g_type_ensure (CC_TYPE_DURATION_ROW);
++    g_type_ensure (CC_TYPE_HUB_HEADER);
+     g_type_ensure (CC_TYPE_SCREEN_TIME_STATISTICS_ROW);
+ }
