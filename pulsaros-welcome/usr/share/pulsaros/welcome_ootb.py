@@ -414,8 +414,10 @@ window .theme-preview-glass {
 /* ── Misc ─────────────────────────────────────────────────────────── */
 .search-box    { margin-bottom: 6px; }
 .symbolic-blue { color: #0071e3; }
-.input-label   { font-size: 13px; font-weight: 600; color: #1d1d1f; }
-.input-subtext { font-size: 11px; color: #86868b; }
+.input-label   { font-size: 13px; font-weight: 600; color: var(--text-color, #1d1d1f); }
+.dark-theme .input-label { color: #f5f5f7; }
+.input-subtext { font-size: 11px; color: var(--text-secondary, #86868b); }
+.dark-theme .input-subtext { color: #a1a1a6; }
 .error-text    { font-size: 11px; font-weight: bold; margin-top: 2px; }
 .wifi-badge {
     background-color: rgba(0, 113, 227, 0.08);

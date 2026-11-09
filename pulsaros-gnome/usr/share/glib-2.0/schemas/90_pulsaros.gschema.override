@@ -139,6 +139,7 @@ application-saturation=2.0
 application-tint-color='#000000'
 application-tint-strength=0.10
 application-window-whitelist=@as []
+application-window-blacklist=['es.pulsaros.NotchNuxHelper', 'notchnux-drop-helper', 'notchnux', 'NotchNux']
 blur-method=0
 blur-my-shell-popup-blur=false
 desktop-menu-corner-radius=14.0
