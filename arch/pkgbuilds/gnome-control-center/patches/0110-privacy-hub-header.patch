@@ -1,0 +1,38 @@
+--- a/panels/privacy/cc-privacy-panel.blp
++++ b/panels/privacy/cc-privacy-panel.blp
+@@ -10,6 +10,17 @@
+ 
+     content: Adw.PreferencesPage {
+       Adw.PreferencesGroup {
++        $CcHubHeader {
++          icon-name: "org.gnome.Settings-privacy-symbolic";
++          icon-color: "#1c1c1e";
++          title: _("Privacy & Security");
++          description: _("Control which apps can access your information, and use security features to keep your computer safe.");
++          link-label: _("Learn more…");
++          link-uri: "help:gnome-help/privacy";
++        }
++      }
++
++      Adw.PreferencesGroup {
+         title: _("System");
+ 
+         $CcListRow {
+--- a/panels/privacy/cc-privacy-panel.c
++++ b/panels/privacy/cc-privacy-panel.c
+@@ -21,6 +21,7 @@
+ 
+ #include "cc-privacy-panel.h"
+ #include "shell/cc-window.h"
++#include "shell/cc-hub-header.h"
+ 
+ #ifdef BUILD_THUNDERBOLT
+ #include "bolt/cc-bolt-page.h"
+@@ -88,6 +89,7 @@
+     g_type_ensure (CC_TYPE_CAMERA_PAGE);
+     g_type_ensure (CC_TYPE_DIAGNOSTICS_PAGE);
+     g_type_ensure (CC_TYPE_FIRMWARE_SECURITY_PAGE);
++    g_type_ensure (CC_TYPE_HUB_HEADER);
+     g_type_ensure (CC_TYPE_LOCATION_PAGE);
+     g_type_ensure (CC_TYPE_SCREEN_PAGE);
+     g_type_ensure (CC_TYPE_USAGE_PAGE);
