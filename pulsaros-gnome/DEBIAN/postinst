@@ -46,7 +46,9 @@ if command -v systemctl >/dev/null 2>&1; then
                            org.gnome.SettingsDaemon.PrintNotifications.service \
                            org.gnome.SettingsDaemon.Sharing.service org.gnome.SettingsDaemon.Sound.service \
                            org.gnome.SettingsDaemon.UsbProtection.service at-spi-dbus-bus.service 2>/dev/null || true
-    systemctl mask iio-sensor-proxy.service bolt.service gazed.service colord.service 2>/dev/null || true
+    systemctl mask iio-sensor-proxy.service bolt.service colord.service 2>/dev/null || true
+    systemctl unmask gazed.service 2>/dev/null || true
+    systemctl disable gazed.service 2>/dev/null || true
     systemctl disable tailscaled.service 2>/dev/null || true
     systemctl disable cups.service docker.service containerd.service 2>/dev/null || true
     systemctl enable cups.socket docker.socket 2>/dev/null || true

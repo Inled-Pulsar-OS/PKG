@@ -123,20 +123,6 @@ template $CcBackgroundPanel: $CcPanel {
               subtitle: _("Apply translucent blurs and reflective borders to active windows in macOS style");
               notify::active => $on_liquid_glass_active_changed_cb(template);
             }
-
-            Adw.ComboRow liquid_glass_mode_row {
-              title: _("Window Transparency Mode");
-              subtitle: _("Appearance and opacity of application windows");
-              sensitive: bind liquid_glass_switch_row.active;
-              notify::selected => $on_liquid_glass_mode_selected_cb(template);
-
-              model: StringList {
-                strings [
-                  _("Cristal Transparente (Fondos y Barras)"),
-                  _("Ventanas Opacas (Solo Desenfoque de Barras)"),
-                ]
-              };
-            }
           }
 
           Adw.PreferencesGroup {
@@ -396,6 +382,26 @@ template $CcBackgroundPanel: $CcPanel {
                 valign: center;
                 label: _("Open…");
                 clicked => $on_notch_prefs_clicked_cb(template);
+              }
+            }
+          }
+
+          Adw.PreferencesGroup {
+            title: _("Shell Layout & Desktop");
+            description: _("Restore default Pulsar OS desktop layout, clock position and notifications");
+
+            Adw.ActionRow {
+              title: _("Restore Default Shell Layout");
+              subtitle: _("Realigns clock to right, notifications to top-right and reloads top bar items");
+
+              [suffix]
+              Button {
+                valign: center;
+                label: _("Restore");
+                clicked => $on_restore_shell_layout_clicked_cb(template);
+                styles [
+                  "suggested-action",
+                ]
               }
             }
           }

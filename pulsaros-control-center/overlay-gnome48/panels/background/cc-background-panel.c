@@ -70,7 +70,6 @@ struct _CcBackgroundPanel {
   AdwSwitchRow *macos_remap_switch_row;
   AdwSwitchRow *macos_fullscreen_switch_row;
   AdwSwitchRow *liquid_glass_switch_row;
-  AdwComboRow *liquid_glass_mode_row;
   AdwComboRow *icon_theme_row;
   AdwSwitchRow *notch_switch_row;
   AdwSwitchRow *cc_switch_row;
@@ -654,6 +653,27 @@ set_extension_enabled (const gchar *uuid, gboolean enable)
       g_settings_set_strv (shell_settings, "enabled-extensions", (const gchar * const *) new_list->pdata);
     }
 
+  if (shell_settings && schema && g_settings_schema_has_key (schema, "disabled-extensions"))
+    {
+      g_auto(GStrv) disabled_exts = g_settings_get_strv (shell_settings, "disabled-extensions");
+      g_autoptr(GPtrArray) new_disabled = g_ptr_array_new_with_free_func (g_free);
+
+      if (disabled_exts)
+        {
+          for (guint i = 0; disabled_exts[i] != NULL; i++)
+            {
+              if (!g_str_equal (disabled_exts[i], uuid))
+                g_ptr_array_add (new_disabled, g_strdup (disabled_exts[i]));
+            }
+        }
+
+      if (!enable)
+        g_ptr_array_add (new_disabled, g_strdup (uuid));
+
+      g_ptr_array_add (new_disabled, NULL);
+      g_settings_set_strv (shell_settings, "disabled-extensions", (const gchar * const *) new_disabled->pdata);
+    }
+
   if (enable)
     {
       g_autofree gchar *cmd = g_strdup_printf ("/bin/sh -c 'gnome-extensions enable \"%s\" >/dev/null 2>&1 &'", uuid);
@@ -692,40 +712,14 @@ is_extension_enabled (const gchar *uuid)
   return found;
 }
 
-typedef enum {
-  LIQUID_GLASS_MODE_TRANSPARENT = 0,
-  LIQUID_GLASS_MODE_OPAQUE = 1,
-} LiquidGlassWindowMode;
-
 static void
-apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mode)
+apply_desktop_effects_mode (gboolean use_liquid_glass)
 {
   if (use_liquid_glass)
     {
-      gboolean enable_app_glass = TRUE;
-      gboolean all_windows = TRUE;
-      gdouble opacity = 1.0;
-
-      if (mode == LIQUID_GLASS_MODE_OPAQUE)
-        {
-          enable_app_glass = TRUE;
-          all_windows = TRUE;
-          opacity = 1.0;
-
-          /* Liquid Glass handles everything including window glass backgrounds. NO BMS. */
-          set_extension_enabled ("liquid-glass@thinkingcoding1231.gmail.com", TRUE);
-          set_extension_enabled ("blur-my-shell@aunetx", FALSE);
-        }
-      else
-        {
-          /* LIQUID_GLASS_MODE_TRANSPARENT */
-          enable_app_glass = TRUE;
-          all_windows = TRUE;
-          opacity = 0.85; /* Translucent glass effect visible across windows */
-
-          set_extension_enabled ("blur-my-shell@aunetx", FALSE);
-          set_extension_enabled ("liquid-glass@thinkingcoding1231.gmail.com", TRUE);
-        }
+      /* Liquid Glass handles everything: windows, dock, panel and menus. NO BMS. */
+      set_extension_enabled ("liquid-glass@thinkingcoding1231.gmail.com", TRUE);
+      set_extension_enabled ("blur-my-shell@aunetx", FALSE);
 
       /* Liquid Glass draws its own OSD/menu/notification glass. Blur my Shell
        * folds the volume/brightness popups ("osd-window") into its "popup"
@@ -772,7 +766,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
           safe_set_double (dock_settings, dock_schema, "height-fraction", 0.9);
         }
 
-      /* 3. Configure Liquid Glass presets safely */
+      /* 3. Configure Liquid Glass presets safely using our tuned configuration */
       g_autoptr(GSettingsSchema) glass_schema = NULL;
       g_autoptr(GSettings) glass_settings = safe_settings_new ("org.gnome.shell.extensions.liquid-glass", &glass_schema);
       if (!glass_settings)
@@ -781,11 +775,11 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
       if (glass_settings && glass_schema)
         {
           safe_set_int (glass_settings, glass_schema, "application-blur-radius", 5);
-          safe_set_double (glass_settings, glass_schema, "application-content-opacity", opacity);
-          safe_set_double (glass_settings, glass_schema, "application-corner-radius", 20.689655172413794);
-          safe_set_boolean (glass_settings, glass_schema, "application-glass-all-windows", all_windows);
+          safe_set_double (glass_settings, glass_schema, "application-content-opacity", 1.0);
+          safe_set_double (glass_settings, glass_schema, "application-corner-radius", 20.0);
+          safe_set_boolean (glass_settings, glass_schema, "application-glass-all-windows", TRUE);
           safe_set_string (glass_settings, glass_schema, "application-tint-color", "#000000");
-          safe_set_double (glass_settings, glass_schema, "application-tint-strength", 0.0);
+          safe_set_double (glass_settings, glass_schema, "application-tint-strength", 0.10);
           const gchar *empty_list[] = { NULL };
           safe_set_strv (glass_settings, glass_schema, "application-window-whitelist", empty_list);
           safe_set_double (glass_settings, glass_schema, "dock-corner-radius", 16.0);
@@ -794,7 +788,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
           safe_set_double (glass_settings, glass_schema, "dock-tint-strength", 0.12);
           safe_set_int (glass_settings, glass_schema, "dock-blur-radius", 5);
           safe_set_boolean (glass_settings, glass_schema, "enable-dock-glass", TRUE);
-          safe_set_boolean (glass_settings, glass_schema, "enable-application-glass", enable_app_glass);
+          safe_set_boolean (glass_settings, glass_schema, "enable-application-glass", TRUE);
           safe_set_boolean (glass_settings, glass_schema, "enable-menu-glass", TRUE);
           safe_set_boolean (glass_settings, glass_schema, "enable-notification-glass", TRUE);
           safe_set_boolean (glass_settings, glass_schema, "enable-osd-glass", TRUE);
@@ -805,7 +799,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
           safe_set_double (glass_settings, glass_schema, "glass-ior", 2.0175438596491229);
           safe_set_double (glass_settings, glass_schema, "glass-max-z", 16.981132075471699);
           safe_set_double (glass_settings, glass_schema, "glass-profile-shape-n", 20.0);
-          safe_set_double (glass_settings, glass_schema, "glass-rim-width", 4.8000000000000007);
+          safe_set_double (glass_settings, glass_schema, "glass-rim-width", 4.8);
           safe_set_double (glass_settings, glass_schema, "glass-specular-intensity", 0.0);
           safe_set_double (glass_settings, glass_schema, "menu-corner-radius", 14.0);
           safe_set_int (glass_settings, glass_schema, "menu-glass-expand", 4);
@@ -819,22 +813,20 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
         }
 
       /* Execute dconf writes in background as non-blocking safe helper */
-      const gchar *enable_app_str = enable_app_glass ? "true" : "false";
-      const gchar *all_win_str = all_windows ? "true" : "false";
-      g_autofree gchar *dconf_script = g_strdup_printf (
+      g_autofree gchar *dconf_script = g_strdup (
         "/bin/sh -c \""
         "dconf write /org/gnome/shell/extensions/liquid-glass/application-blur-radius '5' ; "
-        "dconf write /org/gnome/shell/extensions/liquid-glass/application-content-opacity '%.2f' ; "
-        "dconf write /org/gnome/shell/extensions/liquid-glass/application-corner-radius '20.689655172413794' ; "
-        "dconf write /org/gnome/shell/extensions/liquid-glass/application-glass-all-windows '%s' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/application-content-opacity '1.0' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/application-corner-radius '20.0' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/application-glass-all-windows 'true' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/application-tint-color \\\"'#000000'\\\" ; "
-        "dconf write /org/gnome/shell/extensions/liquid-glass/application-tint-strength '0.0' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/application-tint-strength '0.10' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/application-window-whitelist '@as []' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/dock-corner-radius '16.0' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/dock-glass-expand '3' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/dock-tint-color \\\"'#000000'\\\" ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/enable-dock-glass 'true' ; "
-        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-application-glass '%s' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-application-glass 'true' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/enable-menu-glass 'true' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/enable-notification-glass 'true' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/enable-osd-glass 'true' ; "
@@ -853,7 +845,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
         "dconf write /org/gnome/shell/extensions/liquid-glass/glass-ior '2.0175438596491229' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/glass-max-z '16.981132075471699' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/glass-profile-shape-n '20.0' ; "
-        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-rim-width '4.8000000000000007' ; "
+        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-rim-width '4.8' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/glass-specular-intensity '0.0' ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/menu-tint-color \\\"'#000000'\\\" ; "
         "dconf write /org/gnome/shell/extensions/liquid-glass/notification-tint-color \\\"'#000000'\\\" ; "
@@ -870,8 +862,7 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
         "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.0 ; "
         "gsettings set org.gnome.shell.extensions.dash-to-dock custom-theme-shrink true ; "
-        "gsettings set org.gnome.shell.extensions.dash-to-dock customize-alphas false >/dev/null 2>&1 &\"",
-        opacity, all_win_str, enable_app_str
+        "gsettings set org.gnome.shell.extensions.dash-to-dock customize-alphas false >/dev/null 2>&1 &\""
       );
       g_spawn_command_line_async (dconf_script, NULL);
     }
@@ -923,6 +914,11 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
       if (bms_popup_settings && bms_popup_schema)
         safe_set_boolean (bms_popup_settings, bms_popup_schema, "blur", TRUE);
 
+      g_autoptr(GSettingsSchema) bms_overview_schema = NULL;
+      g_autoptr(GSettings) bms_overview_settings = safe_settings_new ("org.gnome.shell.extensions.blur-my-shell.overview", &bms_overview_schema);
+      if (bms_overview_settings && bms_overview_schema)
+        safe_set_boolean (bms_overview_settings, bms_overview_schema, "blur", TRUE);
+
       const gchar *dock_script =
         "/bin/sh -c \""
         "gnome-extensions disable liquid-glass@thinkingcoding1231.gmail.com 2>/dev/null ; "
@@ -942,7 +938,8 @@ apply_desktop_effects_mode (gboolean use_liquid_glass, LiquidGlassWindowMode mod
         "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock static-blur true ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.panel blur false ; "
         "gsettings set org.gnome.shell.extensions.blur-my-shell.panel sigma 30 ; "
-        "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur true >/dev/null 2>&1 &\"";
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur true ; "
+        "gsettings set org.gnome.shell.extensions.blur-my-shell.overview blur true >/dev/null 2>&1 &\"";
       g_spawn_command_line_async (dock_script, NULL);
     }
 }
@@ -951,34 +948,12 @@ static void
 on_liquid_glass_active_changed_cb (CcBackgroundPanel *self)
 {
   gboolean active;
-  guint mode = LIQUID_GLASS_MODE_TRANSPARENT;
 
   if (!self->liquid_glass_switch_row)
     return;
 
   active = adw_switch_row_get_active (self->liquid_glass_switch_row);
-  if (self->liquid_glass_mode_row)
-    mode = adw_combo_row_get_selected (self->liquid_glass_mode_row);
-
-  apply_desktop_effects_mode (active, (LiquidGlassWindowMode) mode);
-}
-
-static void
-on_liquid_glass_mode_selected_cb (CcBackgroundPanel *self)
-{
-  gboolean active = TRUE;
-  guint mode;
-
-  if (!self->liquid_glass_mode_row)
-    return;
-
-  if (self->liquid_glass_switch_row)
-    active = adw_switch_row_get_active (self->liquid_glass_switch_row);
-
-  mode = adw_combo_row_get_selected (self->liquid_glass_mode_row);
-
-  if (active)
-    apply_desktop_effects_mode (TRUE, (LiquidGlassWindowMode) mode);
+  apply_desktop_effects_mode (active);
 }
 
 static void
@@ -1069,6 +1044,15 @@ on_cc_active_changed_cb (CcBackgroundPanel *self)
     return;
 
   set_extension_enabled (CC_UUID, adw_switch_row_get_active (self->cc_switch_row));
+}
+
+static void
+on_restore_shell_layout_clicked_cb (CcBackgroundPanel *self)
+{
+  g_spawn_command_line_async ("/bin/sh -c '/usr/bin/pulsaros-restore-shell-layout'", NULL);
+  if (self->toast_overlay)
+    adw_toast_overlay_add_toast (self->toast_overlay,
+                                 adw_toast_new (_("Restaurando diseño de la shell…")));
 }
 
 static void read_downloader_output_async (CcBackgroundPanel *self, GDataInputStream *data_stream);
@@ -1271,7 +1255,6 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_remap_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_fullscreen_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, liquid_glass_switch_row);
-  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, liquid_glass_mode_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, icon_theme_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, notch_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, cc_switch_row);
@@ -1288,7 +1271,6 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_callback (widget_class, on_apply_cursor_tahoe_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_apply_cursor_adwaita_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_liquid_glass_active_changed_cb);
-  gtk_widget_class_bind_template_callback (widget_class, on_liquid_glass_mode_selected_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_icon_theme_selected_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_activate_spotlight_python_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_activate_gnome_overview_clicked_cb);
@@ -1297,6 +1279,7 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_callback (widget_class, on_notch_active_changed_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_notch_prefs_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_cc_active_changed_cb);
+  gtk_widget_class_bind_template_callback (widget_class, on_restore_shell_layout_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_download_wallpapers_clicked_cb);
 }
 
@@ -1366,31 +1349,6 @@ cc_background_panel_init (CcBackgroundPanel *self)
       g_signal_handlers_block_by_func (self->liquid_glass_switch_row, on_liquid_glass_active_changed_cb, self);
       adw_switch_row_set_active (self->liquid_glass_switch_row, lg_active);
       g_signal_handlers_unblock_by_func (self->liquid_glass_switch_row, on_liquid_glass_active_changed_cb, self);
-    }
-
-  if (self->liquid_glass_mode_row)
-    {
-      guint initial_mode = LIQUID_GLASS_MODE_TRANSPARENT;
-      g_autoptr(GSettingsSchema) glass_schema = NULL;
-      g_autoptr(GSettings) glass_settings = safe_settings_new ("org.gnome.shell.extensions.liquid-glass", &glass_schema);
-      if (!glass_settings)
-        glass_settings = safe_settings_new ("org.gnome.shell.extensions.liquid-glass@thinkingcoding1231.gmail.com", &glass_schema);
-
-      if (glass_settings && glass_schema)
-        {
-          gboolean app_glass = TRUE;
-          if (g_settings_schema_has_key (glass_schema, "enable-application-glass"))
-            app_glass = g_settings_get_boolean (glass_settings, "enable-application-glass");
-
-          if (!app_glass)
-            initial_mode = LIQUID_GLASS_MODE_OPAQUE;
-          else
-            initial_mode = LIQUID_GLASS_MODE_TRANSPARENT;
-        }
-
-      g_signal_handlers_block_by_func (self->liquid_glass_mode_row, on_liquid_glass_mode_selected_cb, self);
-      adw_combo_row_set_selected (self->liquid_glass_mode_row, initial_mode);
-      g_signal_handlers_unblock_by_func (self->liquid_glass_mode_row, on_liquid_glass_mode_selected_cb, self);
     }
 
   if (self->icon_theme_row)

@@ -1,0 +1,41 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar OS - Shell Layout & Desktop Restorer
+# ==============================================================================
+# Restaura el diseño predeterminado de GNOME Shell (reloj a la derecha,
+# notificaciones en la esquina superior derecha, dock estilo macOS y reordenación
+# de extensiones).
+# ==============================================================================
+
+set -uo pipefail
+
+# 1. Aplicar configuración de Just Perfection / Pulsar UI Tweaks
+gsettings set org.gnome.shell.extensions.pulsaros-ui-tweaks activities-button false 2>/dev/null || true
+gsettings set org.gnome.shell.extensions.pulsaros-ui-tweaks clock-menu-position 1 2>/dev/null || true
+gsettings set org.gnome.shell.extensions.pulsaros-ui-tweaks clock-menu-position-offset 12 2>/dev/null || true
+gsettings set org.gnome.shell.extensions.pulsaros-ui-tweaks notification-banner-position 2 2>/dev/null || true
+gsettings set org.gnome.shell.extensions.pulsaros-ui-tweaks position 'top-right' 2>/dev/null || true
+gsettings set org.gnome.shell.extensions.pulsaros-ui-tweaks vertical-margin 10 2>/dev/null || true
+gsettings set org.gnome.shell.extensions.pulsaros-ui-tweaks show-indicator false 2>/dev/null || true
+
+# 2. Reconciliar extensiones de GNOME Shell oficiales
+if [ -x /usr/bin/pulsaros-reconcile-extensions ]; then
+    /usr/bin/pulsaros-reconcile-extensions --quiet 2>/dev/null || true
+fi
+
+# 3. Recargar pulsar-menu-bar y macos-notification-center para reenganchar el panel
+gnome-extensions disable pulsar-menu-bar@inled.es 2>/dev/null || true
+sleep 0.3
+gnome-extensions enable pulsar-menu-bar@inled.es 2>/dev/null || true
+
+gnome-extensions disable macos-notification-center@pulsar.local 2>/dev/null || true
+sleep 0.3
+gnome-extensions enable macos-notification-center@pulsar.local 2>/dev/null || true
+
+# 4. Notificar al usuario si notify-send está disponible
+if command -v notify-send >/dev/null 2>&1; then
+    notify-send -a "Pulsar OS" -i "preferences-desktop-display-symbolic" \
+        "Diseño de la Shell" "Se ha restaurado la distribución estándar de la barra superior y notificaciones." 2>/dev/null || true
+fi
+
+exit 0

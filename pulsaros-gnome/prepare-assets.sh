@@ -172,12 +172,21 @@ if [ -d "$DESK_SRC" ]; then
     cp -r "$DESK_SRC" "$DESK_DEST"
 fi
 
+# 14. Blur My Shell (Fallback / Default blur when Liquid Glass is off)
+echo "📦 Instalando Blur My Shell..."
+BMS_ZIP="$PKG_ROOT/blur-my-shell/build/blur-my-shell@aunetx.shell-extension.zip"
+if [ -f "$BMS_ZIP" ]; then
+    BMS_DEST="$EXT_DIR/blur-my-shell@aunetx"
+    rm -rf "$BMS_DEST"
+    mkdir -p "$BMS_DEST"
+    bsdtar -xf "$BMS_ZIP" -C "$BMS_DEST"
+fi
+
 # ------------------------------------------------------------------------------
 # PURGAR EXTENSIONES OBSOLETAS Y DESCONTINUADAS DEL DESTINO
 # ------------------------------------------------------------------------------
 echo "🧹 Purgando extensiones obsoletas de la imagen..."
-rm -rf "$EXT_DIR/blur-my-shell@aunetx" \
-       "$EXT_DIR/ding@rastersoft.com" \
+rm -rf "$EXT_DIR/ding@rastersoft.com" \
        "$EXT_DIR/gsconnect@andyholmes.github.io" \
        "$EXT_DIR/macos-control-centre@pulsar.local" \
        "$EXT_DIR/just-perfection-desktop@just-perfection" \
@@ -210,6 +219,7 @@ find "$EXT_DIR" -type f -exec chmod 644 {} \; 2>/dev/null || true
 find "$SCHEMA_DIR" -type f -exec chmod 644 {} \; 2>/dev/null || true
 
 [ -f "$STAGE_DIR/usr/bin/pulsaros-reconcile-extensions" ] && chmod 755 "$STAGE_DIR/usr/bin/pulsaros-reconcile-extensions"
+[ -f "$STAGE_DIR/usr/bin/pulsaros-restore-shell-layout" ] && chmod 755 "$STAGE_DIR/usr/bin/pulsaros-restore-shell-layout"
 [ -f "$STAGE_DIR/usr/bin/pulsaros-hide-overview" ] && chmod 755 "$STAGE_DIR/usr/bin/pulsaros-hide-overview"
 [ -f "$STAGE_DIR/usr/bin/pulsar-sync-accent" ] && chmod 755 "$STAGE_DIR/usr/bin/pulsar-sync-accent"
 

@@ -1081,15 +1081,47 @@ class MenuBarIcons {
             const box = Main.panel._rightBox;
             if (!box) return;
 
+            // Ensure dateMenu is located in rightBox at the right end (macOS layout)
             const dateMenu = Main.panel.statusArea.dateMenu;
+            if (dateMenu) {
+                const centerBox = Main.panel._centerBox;
+                if (centerBox) {
+                    const directCenterChild = getDirectChild(dateMenu, centerBox);
+                    if (directCenterChild) {
+                        centerBox.remove_child(directCenterChild);
+                        box.add_child(directCenterChild);
+                    }
+                }
+            }
+
+            // Align notification banners to the top-right corner
+            try {
+                if (Main.messageTray) {
+                    Main.messageTray.bannerAlignment = Clutter.ActorAlign.END;
+                    const bannerBin = Main.messageTray._bannerBin;
+                    if (bannerBin) {
+                        bannerBin.margin_left = 20;
+                        bannerBin.margin_right = 20;
+                        bannerBin.margin_top = 10;
+                    }
+                }
+            } catch (ne) {}
+
             const dateDirectChild = getDirectChild(dateMenu, box);
             const ccDirectChild = getDirectChild(this._ccButton, box);
 
             if (!dateDirectChild || !ccDirectChild) return;
 
-            // 1. Move Control Center immediately before Date
+            // 0. Ensure Date is at the very end of rightBox
             let children = box.get_children();
             let dateIdx = children.indexOf(dateDirectChild);
+            if (dateIdx >= 0 && dateIdx !== children.length - 1) {
+                box.set_child_at_index(dateDirectChild, children.length - 1);
+            }
+
+            // 1. Move Control Center immediately before Date
+            children = box.get_children();
+            dateIdx = children.indexOf(dateDirectChild);
             let ccIdx = children.indexOf(ccDirectChild);
 
             if (dateIdx >= 0 && ccIdx >= 0) {
