@@ -1,0 +1,51 @@
+--- a/panels/search/cc-search-panel.blp
++++ b/panels/search/cc-search-panel.blp
+@@ -10,6 +10,21 @@
+     Adw.HeaderBar {}
+ 
+     content: Adw.PreferencesPage {
++      styles [
++        "pulsar-spotlight",
++      ]
++
++      Adw.PreferencesGroup {
++        $CcHubHeader {
++          icon-name: "system-search-symbolic";
++          icon-color: "#0088FF";
++          title: _("Search");
++          description: _("Search helps you quickly find apps, files and other things on your computer, and shows results from the apps you choose.");
++          link-label: _("Learn more…");
++          link-uri: "help:gnome-help/shell-apps-open";
++        }
++      }
++
+       Adw.PreferencesGroup {
+         Adw.SwitchRow app_search_row {
+           title: _("_App Search");
+@@ -27,7 +42,7 @@
+       }
+ 
+       Adw.PreferencesGroup search_group {
+-        title: _("Search Results");
++        title: _("Results from Apps");
+         description: _("Results are displayed according to the list order");
+ 
+         ListBox list_box {
+--- a/panels/search/cc-search-panel.c
++++ b/panels/search/cc-search-panel.c
+@@ -24,6 +24,7 @@
+ #include "cc-search-panel-row.h"
+ #include "cc-search-resources.h"
+ #include "cc-ui-util.h"
++#include "shell/cc-hub-header.h"
+ 
+ #include <gio/gdesktopappinfo.h>
+ #include <glib/gi18n.h>
+@@ -562,6 +563,7 @@
+ 
+     oclass->finalize = cc_search_panel_finalize;
+ 
++    g_type_ensure (CC_TYPE_HUB_HEADER);
+     g_type_ensure (CC_TYPE_LIST_ROW);
+ 
+     gtk_widget_class_set_template_from_resource (widget_class, "/org/gnome/control-center/search/cc-search-panel.ui");
