@@ -46,7 +46,7 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
   const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Reset loading state on slide/media change
+  // Stop previous playback and load next media smoothly
   useEffect(() => {
     hasLoadedRef.current = false;
     setShowLoader(true);
@@ -55,6 +55,22 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
     if (stallTimerRef.current) {
       clearTimeout(stallTimerRef.current);
       stallTimerRef.current = null;
+    }
+
+    const video = videoRef.current;
+    if (video && isVideo) {
+      if (mediaUrl) {
+        video.src = mediaUrl;
+        video.load();
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(() => {});
+        }
+      }
+    } else if (video) {
+      try {
+        video.pause();
+      } catch {}
     }
 
     // Safety fallback: if media buffering takes > 3.5s, dismiss loader
@@ -68,6 +84,11 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
       if (stallTimerRef.current) {
         clearTimeout(stallTimerRef.current);
         stallTimerRef.current = null;
+      }
+      if (video && isVideo) {
+        try {
+          video.pause();
+        } catch {}
       }
     };
   }, [mediaUrl, isVideo]);
@@ -88,10 +109,7 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
     }
   };
 
-  const handleCanPlay = (e?: React.SyntheticEvent<HTMLVideoElement>) => {
-    if (e?.currentTarget) {
-      e.currentTarget.playbackRate = 1.0;
-    }
+  const handleCanPlay = () => {
     if (stallTimerRef.current) {
       clearTimeout(stallTimerRef.current);
       stallTimerRef.current = null;
@@ -101,10 +119,7 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
     setShowLoader(false);
   };
 
-  const handlePlaying = (e?: React.SyntheticEvent<HTMLVideoElement>) => {
-    if (e?.currentTarget) {
-      e.currentTarget.playbackRate = 1.0;
-    }
+  const handlePlaying = () => {
     if (stallTimerRef.current) {
       clearTimeout(stallTimerRef.current);
       stallTimerRef.current = null;
@@ -151,10 +166,7 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
           playsInline
           preload="auto"
           onProgress={handleVideoProgress}
-          onLoadedMetadata={(e) => {
-            e.currentTarget.playbackRate = 1.0;
-            handleVideoProgress(e);
-          }}
+          onLoadedMetadata={handleVideoProgress}
           onLoadedData={handleCanPlay}
           onCanPlay={handleCanPlay}
           onPlaying={handlePlaying}
@@ -288,29 +300,16 @@ function ContributorsView({ contributors }: ContributorsViewProps) {
 function sanitizeFeatures(items: FeatureItem[]): FeatureItem[] {
   return items.map((item) => {
     let video = item.video || "";
-    if (video.endsWith(".webp")) {
-      if (video.includes("spotlight.webp")) {
-        video = "https://hosted.inled.es/cdn/pulsar-spotlight-pulsaros-demos.mp4";
-      } else if (video.includes("app-store.webp")) {
-        video = "https://hosted.inled.es/cdn/appinstall-pulsar-pulsaros-demo-OK.mp4";
-      } else if (video.includes("circle-to-search.webp")) {
-        video = "https://bittenfruit.inled.es/videos/circle-to-search.mp4";
-      } else if (video.includes("session-restore.webp")) {
-        video = "https://bittenfruit.inled.es/videos/session-restore.mp4";
-      } else if (video.includes("sayri.webp")) {
-        video = "https://bittenfruit.inled.es/videos/sayri.mp4";
-      } else if (video.includes("window-mode.webp")) {
-        video = "https://bittenfruit.inled.es/videos/window-mode.mp4";
-      } else if (video.includes("nautilus-providers.webp")) {
-        video = "https://bittenfruit.inled.es/videos/nautilus-providers.mp4";
-      } else if (video.includes("time-machine.webp")) {
-        video = "https://bittenfruit.inled.es/videos/time-machine.mp4";
-      } else if (video.includes("recovery.webp")) {
-        video = "https://bittenfruit.inled.es/videos/recovery.mp4";
-      } else if (video.includes("remap-live-wallpaper.webp")) {
-        video = "https://bittenfruit.inled.es/videos/remap-live-wallpaper.mp4";
+    if (video.endsWith(".mp4")) {
+      if (video.includes("pulsar-spotlight-pulsaros-demos.mp4")) {
+        video = "https://hosted.inled.es/cdn/spotlight.webp";
+      } else if (video.includes("appinstall-pulsar-pulsaros-demo-OK.mp4")) {
+        video = "https://hosted.inled.es/cdn/app-store.webp";
+      } else if (video.startsWith("/videos/")) {
+        const basename = video.split("/").pop()?.replace(".mp4", ".webp");
+        video = `https://hosted.inled.es/cdn/${basename}`;
       } else {
-        video = video.replace(/\.webp$/i, ".mp4");
+        video = video.replace(/\.mp4$/i, ".webp");
       }
     }
     return {
