@@ -1,0 +1,58 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $CcHubHeader: Adw.Bin {
+  styles [
+    "pulsar-hub-header",
+  ]
+
+  child: Box content {
+    orientation: horizontal;
+    spacing: 14;
+
+    Image icon_image {
+      valign: start;
+      halign: center;
+      pixel-size: 22;
+
+      styles [
+        "pulsar-squircle",
+        "pulsar-hub-icon",
+      ]
+    }
+
+    Box text_box {
+      orientation: vertical;
+      spacing: 2;
+      hexpand: true;
+      valign: center;
+
+      Label title_label {
+        xalign: 0;
+        wrap: true;
+
+        styles [
+          "pulsar-hub-title",
+        ]
+      }
+
+      Label description_label {
+        xalign: 0;
+        wrap: true;
+        wrap-mode: word_char;
+
+        styles [
+          "pulsar-hub-description",
+        ]
+      }
+
+      LinkButton link_button {
+        halign: start;
+
+        styles [
+          "pulsar-hub-link",
+        ]
+      }
+    }
+  };
+}
