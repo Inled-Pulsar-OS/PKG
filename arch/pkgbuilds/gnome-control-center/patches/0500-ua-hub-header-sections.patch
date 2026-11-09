@@ -1,0 +1,124 @@
+--- a/panels/universal-access/cc-ua-panel.blp
++++ b/panels/universal-access/cc-ua-panel.blp
+@@ -10,6 +10,17 @@
+ 
+     content: Adw.PreferencesPage {
+       Adw.PreferencesGroup {
++        $CcHubHeader {
++          icon-name: "org.gnome.Settings-accessibility-symbolic";
++          icon-color: "#0088FF";
++          title: _("Accessibility");
++          description: _("Personalize your computer in ways that work best for you with accessibility features for seeing, hearing, typing and pointing.");
++          link-label: _("Learn more…");
++          link-uri: "help:gnome-help/a11y";
++        }
++      }
++
++      Adw.PreferencesGroup {
+         Adw.SwitchRow show_ua_menu_row {
+           title: _("_Always Show Accessibility Menu");
+           subtitle: _("Display the accessibility menu in the top bar");
+@@ -18,13 +29,37 @@
+       }
+ 
+       Adw.PreferencesGroup {
++        title: _("Vision");
++
+         $CcListRow seeing_row {
+           title: _("_Seeing");
+           icon-name: "org.gnome.Settings-accessibility-seeing-symbolic";
+           show-arrow: true;
+           action-name: "navigation.push";
+           action-target: "'seeing'";
++
++          styles [
++            "pulsar-ua-row",
++            "pulsar-ua-dark",
++          ]
++        }
++
++        $CcListRow zoom_row {
++          title: _("_Zoom");
++          icon-name: "org.gnome.Settings-accessibility-zoom-symbolic";
++          show-arrow: true;
++          action-name: "navigation.push";
++          action-target: "'zoom'";
++
++          styles [
++            "pulsar-ua-row",
++            "pulsar-ua-dark",
++          ]
+         }
++      }
++
++      Adw.PreferencesGroup {
++        title: _("Hearing");
+ 
+         $CcListRow hearing_row {
+           title: _("_Hearing");
+@@ -32,7 +67,16 @@
+           show-arrow: true;
+           action-name: "navigation.push";
+           action-target: "'hearing'";
++
++          styles [
++            "pulsar-ua-row",
++            "pulsar-ua-red",
++          ]
+         }
++      }
++
++      Adw.PreferencesGroup {
++        title: _("Motor");
+ 
+         $CcListRow typing_row {
+           title: _("_Typing");
+@@ -40,6 +84,11 @@
+           show-arrow: true;
+           action-name: "navigation.push";
+           action-target: "'typing'";
++
++          styles [
++            "pulsar-ua-row",
++            "pulsar-ua-blue",
++          ]
+         }
+ 
+         $CcListRow mouse_row {
+@@ -48,14 +97,11 @@
+           show-arrow: true;
+           action-name: "navigation.push";
+           action-target: "'mouse'";
+-        }
+ 
+-        $CcListRow zoom_row {
+-          title: _("_Zoom");
+-          icon-name: "org.gnome.Settings-accessibility-zoom-symbolic";
+-          show-arrow: true;
+-          action-name: "navigation.push";
+-          action-target: "'zoom'";
++          styles [
++            "pulsar-ua-row",
++            "pulsar-ua-blue",
++          ]
+         }
+       }
+     };
+--- a/panels/universal-access/cc-ua-panel.c
++++ b/panels/universal-access/cc-ua-panel.c
+@@ -33,6 +33,7 @@
+ #include <math.h>
+ 
+ #include "cc-list-row.h"
++#include "shell/cc-hub-header.h"
+ #include "cc-ua-hearing-page.h"
+ #include "cc-ua-macros.h"
+ #include "cc-ua-mouse-page.h"
+@@ -84,6 +85,7 @@
+ 
+     object_class->dispose = cc_ua_panel_dispose;
+ 
++    g_type_ensure (CC_TYPE_HUB_HEADER);
+     g_type_ensure (CC_TYPE_LIST_ROW);
+ 
+     gtk_widget_class_set_template_from_resource (widget_class,

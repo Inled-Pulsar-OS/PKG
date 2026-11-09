@@ -1,0 +1,18 @@
+/* Accessibility panel (#81): icon rows as colored squircles, white glyph. */
+row.pulsar-ua-row image.icon,
+row.pulsar-ua-row .prefixes image {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  margin-right: 6px;
+  border-radius: 7px;
+  color: #ffffff;
+  -gtk-icon-size: 16px;
+}
+
+row.pulsar-ua-dark image.icon,
+row.pulsar-ua-dark .prefixes image { background-color: #1c1c1e; }
+row.pulsar-ua-red image.icon,
+row.pulsar-ua-red .prefixes image { background-color: #ff375f; }
+row.pulsar-ua-blue image.icon,
+row.pulsar-ua-blue .prefixes image { background-color: #0088ff; }
