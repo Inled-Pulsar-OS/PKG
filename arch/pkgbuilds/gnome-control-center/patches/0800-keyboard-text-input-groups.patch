@@ -1,0 +1,40 @@
+--- a/panels/keyboard/cc-keyboard-panel.blp
++++ b/panels/keyboard/cc-keyboard-panel.blp
+@@ -10,7 +10,17 @@
+ 
+     content: Adw.PreferencesPage {
+       Adw.PreferencesGroup {
+-        title: _("Input Sources");
++        title: _("Keyboard Shortcuts");
++
++        $CcListRow common_shortcuts_row {
++          title: _("_View and Customize Shortcuts");
++          show-arrow: true;
++          activated => $keyboard_shortcuts_activated(template);
++        }
++      }
++
++      Adw.PreferencesGroup {
++        title: _("Text Input");
+         description: _("Includes keyboard layouts and input methods");
+ 
+         $CcInputListBox input_list {
+@@ -64,15 +74,9 @@
+         }
+       }
+ 
+-      Adw.PreferencesGroup {
+-        title: _("Keyboard Shortcuts");
+-
+-        $CcListRow common_shortcuts_row {
+-          title: _("_View and Customize Shortcuts");
+-          show-arrow: true;
+-          activated => $keyboard_shortcuts_activated(template);
+-        }
+-      }
++      styles [
++        "pulsar-keyboard",
++      ]
+     };
+   };
+ }
