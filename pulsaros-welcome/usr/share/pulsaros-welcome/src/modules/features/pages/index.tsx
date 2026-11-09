@@ -46,7 +46,7 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
   const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Stop video gracefully on unmount or slide change
+  // Stop previous playback and load next video smoothly
   useEffect(() => {
     hasLoadedRef.current = false;
     setShowLoader(true);
@@ -57,13 +57,30 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
       stallTimerRef.current = null;
     }
 
+    const video = videoRef.current;
+    if (video && isVideo) {
+      try {
+        video.pause();
+        video.removeAttribute("src");
+        video.load();
+      } catch {}
+
+      if (mediaUrl) {
+        video.src = mediaUrl;
+        video.load();
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(() => {});
+        }
+      }
+    }
+
     // Safety fallback: if media buffering takes > 3.5s, dismiss loader
     const fallbackTimeout = setTimeout(() => {
       setShowLoader(false);
       hasLoadedRef.current = true;
     }, 3500);
 
-    const video = videoRef.current;
     return () => {
       clearTimeout(fallbackTimeout);
       if (stallTimerRef.current) {
@@ -78,7 +95,7 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
         } catch {}
       }
     };
-  }, [mediaUrl]);
+  }, [mediaUrl, isVideo]);
 
   // Real progress calculation for video
   const handleVideoProgress = (e: React.SyntheticEvent<HTMLVideoElement>) => {
@@ -141,31 +158,29 @@ function MediaViewer({ mediaUrl, posterUrl, isVideo, title }: MediaViewerProps) 
 
   return (
     <div className="relative flex h-full max-h-[420px] w-full max-w-[680px] items-center justify-center overflow-hidden rounded-2xl border border-black/10 bg-black/5 shadow-md">
-      {isVideo ? (
-        <video
-          ref={videoRef}
-          key={mediaUrl}
-          src={mediaUrl}
-          poster={posterUrl || undefined}
-          autoPlay
-          loop
-          muted
-          playsInline
-          preload="metadata"
-          onProgress={handleVideoProgress}
-          onLoadedMetadata={handleVideoProgress}
-          onLoadedData={handleCanPlay}
-          onCanPlay={handleCanPlay}
-          onPlaying={handlePlaying}
-          onTimeUpdate={handleTimeUpdate}
-          onWaiting={handleWaiting}
-          onError={() => {
-            setShowLoader(false);
-            hasLoadedRef.current = true;
-          }}
-          className="h-full w-full object-contain"
-        />
-      ) : (
+      <video
+        ref={videoRef}
+        poster={posterUrl || undefined}
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+        onProgress={handleVideoProgress}
+        onLoadedMetadata={handleVideoProgress}
+        onLoadedData={handleCanPlay}
+        onCanPlay={handleCanPlay}
+        onPlaying={handlePlaying}
+        onTimeUpdate={handleTimeUpdate}
+        onWaiting={handleWaiting}
+        onError={() => {
+          setShowLoader(false);
+          hasLoadedRef.current = true;
+        }}
+        className={`h-full w-full object-contain ${isVideo ? "block" : "hidden"}`}
+      />
+
+      {!isVideo && mediaUrl && (
         <img
           key={mediaUrl}
           src={mediaUrl}
@@ -370,7 +385,8 @@ export function FeaturesPage({ onBack, onFinish }: FeaturesPageProps) {
   }, [next, prev]);
 
   const mediaUrl = isContributorsSlide ? "" : resolveMediaUrl(current.video);
-  const posterUrl = isContributorsSlide ? "" : resolveMediaUrl(current.poster);
+  const rawPoster = isContributorsSlide ? "" : resolveMediaUrl(current.poster);
+  const posterUrl = rawPoster && !isVideoFile(rawPoster) ? rawPoster : "";
   const isVideo = isContributorsSlide ? false : isVideoFile(mediaUrl);
 
   const displayTitle = isContributorsSlide

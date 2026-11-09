@@ -3,25 +3,25 @@
     "title": "Touch & Face ID",
     "description": "Touch ID and Face ID, with protection against identity theft",
     "video": "https://hosted.inled.es/cdn/pulsar-demo-touch-face-id.mp4",
-    "poster": "https://hosted.inled.es/cdn/pulsar-demo-touch-face-id.mp4"
+    "poster": ""
   },
   {
     "title": "Live Wallpapers",
     "description": "Live wallpapers on the desktop and login screen. Lock screen support in progress.",
     "video": "https://hosted.inled.es/cdn/pulsar-live-wallpaper-supra-demo.mp4",
-    "poster": "https://hosted.inled.es/cdn/pulsar-live-wallpaper-supra-demo.mp4"
+    "poster": ""
   },
   {
     "title": "Liquid Glass",
     "description": "A gorgeous, translucent material design that flows across the UI. Depth, light, and refinement in every surface. Made by our contributor Angelo, expert in UI",
     "video": "https://hosted.inled.es/cdn/pulsar-liquid-glass-pulsar-demos.mp4",
-    "poster": "https://hosted.inled.es/cdn/pulsar-liquid-glass-pulsar-demos.mp4"
+    "poster": ""
   },
   {
     "title": "Notch",
     "description": "What you always wanted from the notch on your MacOS, and you had to install a thousand plugins, here it is all in one.",
     "video": "https://hosted.inled.es/cdn/pulsaros-notch-pulsar-demos.mp4",
-    "poster": "https://hosted.inled.es/cdn/pulsaros-notch-pulsar-demos.mp4"
+    "poster": ""
   },
   {
     "title": "Circle to Search",
@@ -33,13 +33,13 @@
     "title": "Pulsar Firewall",
     "description": "Pulsaros has UFW by default. The only firewall interfaze that's actually easy to configure. When an app tries to listen on a port, Pulsar asks you so you dont have to fight with firewall settings",
     "video": "https://hosted.inled.es/cdn/pulsar-firewall-pulsar-demos.mp4",
-    "poster": "https://hosted.inled.es/cdn/pulsar-firewall-pulsar-demos.mp4"
+    "poster": ""
   },
   {
     "title": "Real Global Menu",
     "description": "No Linux distro has this on GNOME. A true global menu bar at the top of the screen, just like macOS, for every app.",
     "video": "https://hosted.inled.es/cdn/pulsar-global-menu-pulsar-demos.mp4",
-    "poster": "https://hosted.inled.es/cdn/pulsar-global-menu-pulsar-demos.mp4"
+    "poster": ""
   },
   {
     "title": "Pulsar VPN",
@@ -51,19 +51,19 @@
     "title": "Pulsar Windows",
     "description": "Windows apps as native apps on desktop. Below, a real Windows consuming as little as possible. You don't need to activate Windows to use it.",
     "video": "https://hosted.inled.es/cdn/pulsar-windows-pulsar-demos.mp4",
-    "poster": "https://hosted.inled.es/cdn/pulsar-windows-pulsar-demos.mp4"
+    "poster": ""
   },
   {
     "title": "File vault (encryption)",
     "description": "Encrypt your drive and protect your data, so that if your computer is stolen, they don't steal the most important thing: its content.",
     "video": "https://hosted.inled.es/cdn/pulsar-demo-encryption-pulsaros.mp4",
-    "poster": "https://hosted.inled.es/cdn/pulsar-demo-encryption-pulsaros.mp4"
+    "poster": ""
   },
   {
     "title": "The Best Spotlight",
     "description": "Say goodbye to the shitty spotlight that Apple created for the latest macOS. This spotlight is smart and can do a lot more things than the macOS one.",
     "video": "https://hosted.inled.es/cdn/pulsar-spotlight-pulsaros-demos.mp4",
-    "poster": "https://hosted.inled.es/cdn/pulsar-spotlight-pulsaros-demos.mp4"
+    "poster": ""
   },
   {
     "title": "Session Restore",
@@ -93,7 +93,7 @@
     "title": "App Store",
     "description": "Install any package (pkg, deb, aur, gnome extension, pulsar store), ask AI for security of an app and ask it what is the best app you need.",
     "video": "https://hosted.inled.es/cdn/appinstall-pulsar-pulsaros-demo-OK.mp4",
-    "poster": "https://hosted.inled.es/cdn/appinstall-pulsar-pulsaros-demo-OK.mp4"
+    "poster": ""
   },
   {
     "title": "Time Machine",
