@@ -158,3 +158,10 @@ navigation-split-view > .content-pane .card {
 .pulsar-icon-wellbeing {
   background-color: #9A57A3;
 }
+
+/* One header row (#76): bold ~28px left-aligned page title in the header bar. */
+.pulsar-page-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin-left: 6px;
+}
