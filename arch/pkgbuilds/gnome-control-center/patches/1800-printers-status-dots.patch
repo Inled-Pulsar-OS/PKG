@@ -1,0 +1,50 @@
+--- a/panels/printers/pp-printer-entry.c
++++ b/panels/printers/pp-printer-entry.c
+@@ -372,6 +372,20 @@
+     gtk_window_present (GTK_WINDOW (dialog));
+ }
+ 
++/* macOS look: default-printer card and status dot (overlay/css/printers.css). */
++static void
++update_pulsar_style (PpPrinterEntry *self)
++{
++    const gchar *dot = self->printer_state == PRINTER_STOPPED ? "pulsar-status-off"
++                     : self->printer_state == PRINTER_PROCESSING ? "pulsar-status-idle" : "pulsar-status-on";
++
++    gtk_widget_set_css_classes (GTK_WIDGET (self->printer_status), (const gchar *[]) { "pulsar-printer-status", dot, NULL });
++    if (self->is_default)
++        gtk_widget_add_css_class (GTK_WIDGET (self), "pulsar-default-printer");
++    else
++        gtk_widget_remove_css_class (GTK_WIDGET (self), "pulsar-default-printer");
++}
++
+ static void
+ set_as_default_printer (PpPrinterEntry *self)
+ {
+@@ -381,6 +395,7 @@
+     printer_set_default (self->printer_name);
+ 
+     self->is_default = TRUE;
++    update_pulsar_style (self);
+ 
+     g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_DEFAULT]);
+ 
+@@ -784,6 +799,7 @@
+     gtk_label_set_text (self->printer_status, printer_status);
+     gtk_label_set_text (self->printer_name_label, instance);
+     self->is_default = printer.is_default;
++    update_pulsar_style (self);
+     g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_DEFAULT]);
+ 
+     self->printer_make_and_model = sanitize_printer_model (printer_make_and_model);
+--- a/panels/printers/cc-printers-panel.blp
++++ b/panels/printers/cc-printers-panel.blp
+@@ -35,7 +35,7 @@
+           clicked => $printer_add_cb(template);
+ 
+           styles [
+-            "suggested-action",
++            "pulsar-pill",
+           ]
+         }
+       }
