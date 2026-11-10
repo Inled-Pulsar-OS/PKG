@@ -199,3 +199,10 @@ msgstr "¡Fondos de pantalla de macOS descargados y listos en Ajustes!"
 
 msgid "macOS wallpapers are property of Apple Inc. and are downloaded optionally on-demand from GitHub."
 msgstr "Los fondos de pantalla de macOS son propiedad de Apple Inc. y se descargan de forma opcional bajo demanda desde GitHub."
+
+msgid "Disable Circle to Search with Mouse"
+msgstr "Desactivar Circle to Search con ratón"
+
+msgid "Prevents accidental triggers when moving an external mouse"
+msgstr "Evita activaciones accidentales al mover un ratón físico"
+

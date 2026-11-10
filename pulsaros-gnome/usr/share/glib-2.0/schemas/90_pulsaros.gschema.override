@@ -210,3 +210,19 @@ index-recursive-directories=@as []
 index-single-directories=@as []
 index-on-battery=false
 index-on-battery-first-time=false
+
+[org.gnome.shell.extensions.shotzy]
+disable-shake-with-mouse=true
+
+[org.gnome.desktop.peripherals.mouse]
+accel-profile='adaptive'
+speed=-0.2
+natural-scroll=false
+
+[org.gnome.desktop.peripherals.touchpad]
+tap-to-click=true
+natural-scroll=true
+two-finger-scrolling-enabled=true
+click-method='fingers'
+speed=0.0
+
