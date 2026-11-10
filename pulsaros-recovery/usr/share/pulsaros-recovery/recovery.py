@@ -1041,37 +1041,31 @@ def detect_efi_partition(disk_path=None):
 
 def resolve_recovery_boot_paths(esp_root="/mnt/boot/efi", target="/mnt",
                                 rec_label="PULSAR_RECOVERY",
-                                os_label="PULSAR_OS"):
+                                os_label="PULSAR_OS",
+                                boot_label="PULSAR_BOOT"):
     """Localiza el kernel/initramfs de recovery realmente desplegado y devuelve
     (volume, loader, initrd, found) para escribir la entrada de recovery en
     refind.conf. `found` es False si no se encontró ningún kernel desplegado
     (entonces la entrada será inválida y el instalador lo avisa en el log).
 
     POR QUÉ: el instalador copia el kernel de recovery a la partición
-    PULSAR_RECOVERY y a ESP/EFI/recovery, y deliberadamente NO a /boot del
-    rootfs instalado (deploy_kernel_to_recovery, para que grub-mkconfig/10_linux
-    no lo tome como kernel por defecto — Bug #1). Por tanto una entrada rEFInd
-    hardcodeada a /@/boot/vmlinuz-recovery apunta a un archivo inexistente y
-    rEFInd aborta con "Invalid loader file! / Not Found while loading
+    PULSAR_RECOVERY, a PULSAR_BOOT (/recovery/) o a ESP/EFI/recovery, y deliberadamente
+    NO a /boot del rootfs instalado (deploy_kernel_to_recovery, para que
+    grub-mkconfig/10_linux no lo tome como kernel por defecto — Bug #1). Por tanto
+    una entrada rEFInd hardcodeada a /@/boot/vmlinuz-recovery apunta a un archivo
+    inexistente y rEFInd aborta con "Invalid loader file! / Not Found while loading
     vmlinuz-recovery" (la ISO live sí funciona porque allí el kernel SÍ está en
     EFI/BOOT/).
 
     Orden de preferencia (el primero que exista en el host gana):
       1. ESP: /EFI/recovery/vmlinuz-recovery (o .efi) — MISMO volumen que refind.conf,
-         por lo que no depende de resolver otro volumen (rEFInd con
-         "scanfor manual" no registra de forma fiable la partición ext4
-         PULSAR_RECOVERY y "volume PULSAR_RECOVERY" acaba buscando el archivo
-         en la ESP → "Not Found while loading vmlinuz-recovery") ni de que
-         cargue el driver ext4_x64.efi. Es además el mismo criterio que usa la
-         ISO en /EFI/BOOT/vmlinuz-recovery.
-      2. partición PULSAR_RECOVERY (o /@/recovery si dual boot sin partición dedicada):
+         por lo que no depende de resolver otro volumen.
+      2. partición PULSAR_BOOT (/recovery/vmlinuz-recovery): en dual-boot con cifrado
+         o partición /boot separada, rEFInd usa el driver ext4_x64.efi en PULSAR_BOOT.
+      3. partición PULSAR_RECOVERY (o /@/recovery si dual boot sin partición dedicada):
          /boot/vmlinuz-recovery (o /@/recovery/boot/vmlinuz-recovery)
-      3. partición PULSAR_RECOVERY (o /@/recovery si dual boot): raíz /vmlinuz-recovery
-      4. rootfs instalado: /@/boot/vmlinuz-recovery (instalaciones antiguas)
-
-    Nota: si target/recovery NO es un punto de montaje separado (caso dual boot),
-    el volumen rEFInd debe ser os_label ("PULSAR_OS") con prefijo "/@", porque
-    la etiqueta PULSAR_RECOVERY no existe en el disco.
+      4. partición PULSAR_RECOVERY (o /@/recovery si dual boot): raíz /vmlinuz-recovery
+      5. rootfs instalado: /@/boot/vmlinuz-recovery (instalaciones antiguas)
     """
     rec_is_mounted = False
     try:
@@ -1080,19 +1074,36 @@ def resolve_recovery_boot_paths(esp_root="/mnt/boot/efi", target="/mnt",
     except Exception:
         rec_is_mounted = False
 
+    boot_is_mounted = False
+    try:
+        boot_dir = os.path.join(target, "boot")
+        boot_is_mounted = os.path.ismount(boot_dir)
+    except Exception:
+        boot_is_mounted = False
+
     rec_vol = rec_label if rec_is_mounted else os_label
     rec_prefix = "" if rec_is_mounted else "/@"
 
     # (volume, loader en refind.conf, initrd en refind.conf, kernel en host, initrd en host)
-    candidates = [
-        # volume None = mismo volumen que el refind.conf que se está escribiendo
-        # (la ESP), igual que hace la ISO con /EFI/BOOT/vmlinuz-recovery.
+    candidates = []
+    # 1. En dual-boot o con /boot separado (PULSAR_BOOT), rEFInd carga mediante ext4_x64.efi
+    if boot_is_mounted:
+        candidates.append(
+            (boot_label, "/recovery/vmlinuz-recovery", "/recovery/initramfs-recovery.img",
+             os.path.join(target, "boot", "recovery", "vmlinuz-recovery"),
+             os.path.join(target, "boot", "recovery", "initramfs-recovery.img"))
+        )
+
+    # 2. volume None = mismo volumen que el refind.conf que se está escribiendo (la ESP)
+    candidates.extend([
         (None, "/EFI/recovery/vmlinuz-recovery", "/EFI/recovery/initramfs-recovery.img",
          os.path.join(esp_root, "EFI", "recovery", "vmlinuz-recovery"),
          os.path.join(esp_root, "EFI", "recovery", "initramfs-recovery.img")),
         (None, "/EFI/recovery/vmlinuz-recovery.efi", "/EFI/recovery/initramfs-recovery.img",
          os.path.join(esp_root, "EFI", "recovery", "vmlinuz-recovery.efi"),
          os.path.join(esp_root, "EFI", "recovery", "initramfs-recovery.img")),
+
+        # 3. Partición PULSAR_RECOVERY (o /@/recovery si dual boot sin partición boot)
         (rec_vol, f"{rec_prefix}/recovery/boot/vmlinuz-recovery" if not rec_is_mounted else "/boot/vmlinuz-recovery",
          f"{rec_prefix}/recovery/boot/initramfs-recovery.img" if not rec_is_mounted else "/boot/initramfs-recovery.img",
          os.path.join(target, "recovery", "boot", "vmlinuz-recovery"),
@@ -1104,11 +1115,11 @@ def resolve_recovery_boot_paths(esp_root="/mnt/boot/efi", target="/mnt",
         (os_label, "/@/boot/vmlinuz-recovery", "/@/boot/initramfs-recovery.img",
          os.path.join(target, "boot", "vmlinuz-recovery"),
          os.path.join(target, "boot", "initramfs-recovery.img")),
-    ]
+    ])
     for volume, loader, initrd, host_k, host_i in candidates:
         try:
-            k_ok = os.path.isfile(host_k)
-            i_ok = os.path.isfile(host_i)
+            k_ok = os.path.isfile(host_k) and os.path.getsize(host_k) > 1024 * 1024
+            i_ok = os.path.isfile(host_i) and os.path.getsize(host_i) > 1024 * 1024
         except Exception:
             k_ok = i_ok = False
         if k_ok and i_ok:
@@ -4993,16 +5004,22 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         except Exception:
                             pass
 
+                    # 1b. Terminate lingering daemons (pacman gpg-agent, dirmngr) in target before unmounting
+                    try:
+                        subprocess.run(["chroot", "/mnt", "gpgconf", "--kill", "all"], capture_output=True, timeout=5)
+                    except Exception:
+                        pass
+
                     # 2. Deactivate any active swap
                     subprocess.run(["swapoff", "-a"], capture_output=True)
 
                     # 3. Gracefully terminate processes holding files open inside /mnt (SIGTERM first, then SIGKILL)
                     try:
-                        subprocess.run(["fuser", "-k", "-15", "-M", "/mnt"], capture_output=True)
+                        subprocess.run(["fuser", "-k", "-15", "-m", "/mnt"], capture_output=True)
                         time.sleep(1)
                     except Exception:
                         pass
-                    subprocess.run(["fuser", "-k", "-9", "-M", "/mnt"], capture_output=True)
+                    subprocess.run(["fuser", "-k", "-9", "-m", "/mnt"], capture_output=True)
                     time.sleep(0.5)
                     
                     # 4. Unmount nested virtual filesystems first, then root, in strict reverse order of mounting
@@ -6047,17 +6064,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 os.makedirs("/mnt/recovery/recovery", exist_ok=True)
 
                 # 1. Recovery Boot Environment sources (lightweight Openbox + assistant environment)
+                # NOTE: Only true recovery squashfs files are listed here. The full live desktop
+                # rootfs (*/medium/live/filesystem.squashfs) MUST NEVER be used as recovery image.
                 rec_sources = [
+                    "/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
+                    "/mnt/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
                     "/recovery/filesystem.squashfs",
                     "/recovery/live/filesystem.squashfs",
                     "/run/live/medium/recovery/filesystem.squashfs",
                     "/run/live/medium/recovery/live/filesystem.squashfs",
-                    "/run/live/medium/live/filesystem.squashfs",
                     "/lib/live/mount/medium/recovery/filesystem.squashfs",
                     "/lib/live/mount/medium/recovery/live/filesystem.squashfs",
-                    "/lib/live/mount/medium/live/filesystem.squashfs",
-                    "/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
-                    "/mnt/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
                     "/run/archiso/bootmnt/recovery/filesystem.squashfs",
                     "/run/archiso/bootmnt/recovery/live/filesystem.squashfs",
                 ]
@@ -6261,7 +6278,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     f"UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1,space_cache=v2     0       0",
                 ]
                 if boot_uuid:
-                    fstab_lines.append(f"UUID={boot_uuid}            /boot           ext4    defaults,noatime                                0       2")
+                    fstab_lines.append(f"UUID={boot_uuid}            /boot           ext4    defaults,noatime,nofail,x-systemd.device-timeout=10 0       2")
                 if efi_uuid:
                     fstab_lines.append(f"UUID={efi_uuid}             /boot/efi       vfat    defaults,nofail,x-systemd.device-timeout=5,dmask=0077,fmask=0077 0       2")
                 # PULSAR_RECOVERY is intentionally NOT mounted at boot to keep the recovery image offline,
@@ -6285,6 +6302,15 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         log_msg(f"✅ Configured /etc/crypttab: pulsar_cryptroot UUID={luks_uuid}")
                     with open("/mnt/etc/udev/rules.d/99-pulsaros-hide-recovery.rules", "w") as f:
                         f.write('# Hide PULSAR_RECOVERY and PULSAR_BOOT partitions from file managers and desktop\nENV{ID_FS_LABEL}=="PULSAR_RECOVERY", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\nENV{ID_FS_LABEL}=="PULSAR_BOOT", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"\n')
+                    try:
+                        os.makedirs("/mnt/etc/systemd/system/emergency.service.d", exist_ok=True)
+                        with open("/mnt/etc/systemd/system/emergency.service.d/override.conf", "w") as f_em:
+                            f_em.write("[Service]\nEnvironment=SYSTEMD_SULOGIN_FORCE=1\n")
+                        os.makedirs("/mnt/etc/systemd/system/rescue.service.d", exist_ok=True)
+                        with open("/mnt/etc/systemd/system/rescue.service.d/override.conf", "w") as f_res:
+                            f_res.write("[Service]\nEnvironment=SYSTEMD_SULOGIN_FORCE=1\n")
+                    except Exception:
+                        pass
                     
                     # Create non-COW swapfile for hibernation support on Btrfs
                     create_target_swapfile()
@@ -6296,7 +6322,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     f"UUID={root_uuid}            /home           btrfs   subvol=@home,compress=zstd:1,space_cache=v2     0       0",
                 ]
                 if boot_uuid:
-                    fstab_lines.append(f"UUID={boot_uuid}            /boot           ext4    defaults,noatime                                0       2")
+                    fstab_lines.append(f"UUID={boot_uuid}            /boot           ext4    defaults,noatime,nofail,x-systemd.device-timeout=10 0       2")
                 # PULSAR_RECOVERY is intentionally NOT mounted at boot to keep the recovery image offline,
                 # protected from modifications, and prevent GNOME from monitoring it for low disk space.
                 if getattr(self, "install_hibernation", True) and target_swap_gb >= 2:
@@ -6373,9 +6399,16 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             shutil.copy2(src, "/mnt/boot/recovery/initramfs-recovery.img")
                         if is_efi:
                             esp_root = "/mnt/boot/efi"
-                            os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
-                            shutil.copy2(src, f"{esp_root}/EFI/recovery/initramfs-recovery.img")
-                            shutil.copy2(src, f"{esp_root}/EFI/recovery/initrd.img")
+                            try:
+                                esp_stat = shutil.disk_usage(esp_root)
+                                initrd_sz = os.path.getsize(src) if os.path.isfile(src) else 0
+                                if esp_stat.free > (initrd_sz + 25 * 1024 * 1024):
+                                    os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
+                                    shutil.copy2(src, f"{esp_root}/EFI/recovery/initramfs-recovery.img")
+                                else:
+                                    log_msg(f"Notice: ESP free space ({esp_stat.free // (1024*1024)}MB) insufficient for recovery initramfs staging.")
+                            except Exception as esp_i_err:
+                                log_msg(f"Notice: ESP recovery initramfs staging skipped: {esp_i_err}")
                         subprocess.run(["sync"])
                         log_msg(f"Recovery initramfs deployed to PULSAR_OS, PULSAR_RECOVERY, and ESP from {src}")
                 except Exception as p_err:
@@ -6428,9 +6461,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         shutil.copy2(found_k, "/mnt/boot/recovery/vmlinuz-recovery")
                     if is_efi:
                         esp_root = "/mnt/boot/efi"
-                        os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
-                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery.efi")
-                        shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery")
+                        try:
+                            esp_stat = shutil.disk_usage(esp_root)
+                            k_sz = os.path.getsize(found_k) if os.path.isfile(found_k) else 0
+                            if esp_stat.free > (k_sz + 15 * 1024 * 1024):
+                                os.makedirs(f"{esp_root}/EFI/recovery", exist_ok=True)
+                                shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery.efi")
+                                shutil.copy2(found_k, f"{esp_root}/EFI/recovery/vmlinuz-recovery")
+                            else:
+                                log_msg(f"Notice: ESP free space ({esp_stat.free // (1024*1024)}MB) insufficient for recovery kernel staging.")
+                        except Exception as esp_k_err:
+                            log_msg(f"Notice: ESP recovery kernel staging skipped: {esp_k_err}")
                     
                     rec_opts_base = "boot=live components username=live autologin cow_spacesize=4G live-media-path=live fsck.mode=skip quiet splash"
                     if recovery_part:
