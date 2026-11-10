@@ -109,6 +109,8 @@ The following packages are marked as **deprecated** or have been completely **de
 | `install-local.sh` / `install-spotlight-local.sh` | Local-development installers (global menu / Spotlight extension). |
 | `test-*.sh`, `check-repo-versions.sh`, `test-installer-mounts.py` | Testing and repo-health helpers. |
 | `build/` | Local build staging (`.deb` output), not source. |
+| `scripts/render-settings-trixie.sh` | Builds `pulsaros-control-center` in `debian:trixie`, installs the `.deb`, renders the Settings window under Xvfb and writes a PNG (`scripts/render-settings-trixie.sh out.png`). Needs docker, local only. See `docs/debian-gnome48-baseline.md`. |
+| `scripts/probe-selectors.py` | Reports which CSS selectors match in that rendered window (baseline of Arch selectors on GNOME 48). |
 
 ---
 
