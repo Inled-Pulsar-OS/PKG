@@ -7,7 +7,7 @@ Evidence for #136 (spec #134). Date: 2026-11-10. Container `debian:trixie`.
 | libadwaita | 1.7.6-1~deb13u1 |
 | GTK | 4.18.6+ds-2 |
 | gnome-control-center built | **48.7** (`prepare-assets.sh` picks the newest `48.*` tag from the GNOME GitLab API; Debian itself ships 48.4. The ticket says 48.4, the build is 48.7) |
-| Package | `pulsaros-control-center_1.0.43_amd64.deb` (`DEBIAN/control` says 1.0.42, `package-and-deploy.sh` bumps it in the container copy) |
+| Package | `pulsaros-control-center_1.0.42_amd64.deb` (`DEBIAN/control` says 1.0.41, `package-and-deploy.sh` bumps it in the container copy) |
 
 ## Commands
 
@@ -30,13 +30,14 @@ Things the headless rig needed (all in the script, none in the package):
   copied from `pulsaros-global-menu/`. Appearance and Multitasking abort (GLib ERROR, core dump) without them.
 - `chmod -R u=rwX,go=rX` on the copy: with umask 027 `dpkg-deb` stops with "control directory has bad permissions 750".
 
-## Build blocker fixed
+## Depends gap (not changed here)
 
-The `.deb` built (exit 0) but `gnome-control-center` did not start in a clean trixie: `libibus-1.0.so.5` not found.
-`ldd` listed 8 libraries that `Depends` did not pull in. Added to `pulsaros-control-center/DEBIAN/control`
-(Version 1.0.41 to 1.0.42): `libibus-1.0-5`, `libgnome-bg-4-2t64`, `libgnome-rr-4-2t64`, `libgoa-backend-1.0-2`,
-`libsmbclient0`, `libgsound0t64`, `libnma-gtk4-0`, `libgnome-bluetooth-ui-3.0-13`. After that the `.deb` installs
-with `apt-get install --no-install-recommends` and `gnome-control-center --version` prints `48.7`.
+The `.deb` builds (exit 0) and installs, but `gnome-control-center` does not start in a clean trixie:
+`libibus-1.0.so.5` not found. `ldd` lists 8 libraries that the shipped `DEBIAN/control` `Depends` do not pull in:
+`libibus-1.0-5`, `libgnome-bg-4-2t64`, `libgnome-rr-4-2t64`, `libgoa-backend-1.0-2`, `libsmbclient0`,
+`libgsound0t64`, `libnma-gtk4-0`, `libgnome-bluetooth-ui-3.0-13`. This is a pre-existing gap and this ticket
+does not change the package, so the harness installs them itself with apt in the test container before
+starting the app. A follow-up should add them to `Depends`.
 
 ## Method for the selector table
 

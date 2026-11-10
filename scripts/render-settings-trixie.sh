@@ -40,9 +40,12 @@ if [ "${1:-}" = "--render" ]; then
     export DEBIAN_FRONTEND=noninteractive
     OUT="$2"
     apt-get update -qq
-    # The .deb must pull its own runtime libraries; the rest is the headless rig.
+    # Pre-existing gap, not changed here: the shipped package's Depends miss these 8 runtime
+    # libraries (the binary does not start without them), so the harness installs them itself.
     apt-get install -y --no-install-recommends /out/pulsaros-control-center_*.deb >/tmp/install.log 2>&1 \
         || { tail -20 /tmp/install.log; exit 1; }
+    apt-get install -y -qq --no-install-recommends libibus-1.0-5 libgnome-bg-4-2t64 libgnome-rr-4-2t64 \
+        libgoa-backend-1.0-2 libsmbclient0 libgsound0t64 libnma-gtk4-0 libgnome-bluetooth-ui-3.0-13 >/dev/null
     apt-get install -y -qq --no-install-recommends xvfb xauth xdotool imagemagick dbus-x11 \
         adwaita-icon-theme mutter-common gnome-shell-common librsvg2-common fonts-dejavu-core libgl1-mesa-dri libglib2.0-bin >/dev/null
     gnome-control-center --version
