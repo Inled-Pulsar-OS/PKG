@@ -1,0 +1,38 @@
+--- a/panels/system/users/cc-users-page.c
++++ b/panels/system/users/cc-users-page.c
+@@ -139,19 +139,32 @@
+ create_user_row (gpointer item, gpointer user_data)
+ {
+     ActUser *user;
+-    GtkWidget *row, *user_image;
++    GtkWidget *row, *user_image, *info_button;
+ 
+-    row = g_object_new (CC_TYPE_LIST_ROW, "show-arrow", TRUE, NULL);
++    row = g_object_new (CC_TYPE_LIST_ROW, "show-arrow", FALSE, NULL);
++    gtk_widget_add_css_class (row, "pulsar-user-row");
+     gtk_list_box_row_set_activatable (GTK_LIST_BOX_ROW (row), TRUE);
+     adw_preferences_row_set_use_underline (ADW_PREFERENCES_ROW (row), FALSE);
+ 
+     user = item;
+     g_object_set_data (G_OBJECT (row), "uid", GINT_TO_POINTER (act_user_get_uid (user)));
+     adw_preferences_row_set_title (ADW_PREFERENCES_ROW (row), get_real_or_user_name (user));
+-    user_image = adw_avatar_new (32, NULL, TRUE);
++    adw_action_row_set_subtitle (ADW_ACTION_ROW (row),
++                                 act_user_get_account_type (user) == ACT_USER_ACCOUNT_TYPE_ADMINISTRATOR ?
++                                 _("Administrator") : _("Standard"));
++    user_image = adw_avatar_new (40, NULL, TRUE);
+     setup_avatar_for_user (ADW_AVATAR (user_image), user);
+     adw_action_row_add_prefix (ADW_ACTION_ROW (row), user_image);
+ 
++    /* Info button at the right of the row; opens the same page as the row */
++    info_button = gtk_button_new_from_icon_name ("dialog-information-symbolic");
++    gtk_widget_set_valign (info_button, GTK_ALIGN_CENTER);
++    gtk_widget_add_css_class (info_button, "flat");
++    gtk_widget_add_css_class (info_button, "circular");
++    gtk_widget_set_tooltip_text (info_button, _("Account Details"));
++    g_signal_connect_swapped (info_button, "clicked", G_CALLBACK (gtk_widget_activate), row);
++    adw_action_row_add_suffix (ADW_ACTION_ROW (row), info_button);
++
+     return row;
+ }
+ 
