@@ -1,10 +1,10 @@
 Package: pulsaros-control-center
-Version: 1.0.41
+Version: 1.0.42
 Section: gnome
 Priority: optional
 Architecture: amd64
 Maintainer: Jaime <info@inled.es>
-Depends: libgtk-4-1, libadwaita-1-0, libglib2.0-0t64 | libglib2.0-0, libgnome-desktop-4-2t64 | libgnome-desktop-4-2, libcolord-gtk4-1t64 | libcolord-gtk4-1, libgoa-1.0-0b | libgoa-1.0-0, gnome-settings-daemon, accountsservice, libaccountsservice0, libxml2, libmalcontent-0-0, libgtop-2.0-11, libpwquality1, libnm0, libsecret-1-0, libpolkit-gobject-1-0, libudisks2-0 | udisks2
+Depends: libgtk-4-1, libadwaita-1-0, libglib2.0-0t64 | libglib2.0-0, libgnome-desktop-4-2t64 | libgnome-desktop-4-2, libcolord-gtk4-1t64 | libcolord-gtk4-1, libgoa-1.0-0b | libgoa-1.0-0, gnome-settings-daemon, accountsservice, libaccountsservice0, libxml2, libmalcontent-0-0, libgtop-2.0-11, libpwquality1, libnm0, libsecret-1-0, libpolkit-gobject-1-0, libudisks2-0 | udisks2, libibus-1.0-5, libgnome-bg-4-2t64 | libgnome-bg-4-2, libgnome-rr-4-2t64 | libgnome-rr-4-2, libgoa-backend-1.0-2, libsmbclient0, libgsound0t64 | libgsound0, libnma-gtk4-0, libgnome-bluetooth-ui-3.0-13
 Provides: gnome-control-center (= 1:50.0-1)
 Replaces: gnome-control-center
 Conflicts: gnome-control-center
