@@ -396,6 +396,11 @@ fi
 # ==============================================================================
 # Nothing to strip — we ship everything in one .deb for Debian simplicity.
 
+# Make Provides match the upstream version actually built (e.g. 1:51.1-1)
+if [ -f "$STAGE_DIR/DEBIAN/control" ]; then
+    sed -i "s/^Provides: gnome-control-center.*/Provides: gnome-control-center (= 1:${FULL_TAG}-1)/" "$STAGE_DIR/DEBIAN/control"
+fi
+
 # ==============================================================================
 # 7. Cleanup build artifacts
 # ==============================================================================
