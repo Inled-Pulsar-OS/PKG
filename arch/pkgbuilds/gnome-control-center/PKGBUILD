@@ -10,7 +10,7 @@ pkgname=(
 )
 epoch=1
 pkgver=51.1
-pkgrel=29
+pkgrel=31
 pkgdesc="GNOME Settings with Pulsar OS macOS customization and Live Wallpaper engine"
 url="https://inled.es"
 license=(GPL-2.0-or-later)
@@ -92,7 +92,11 @@ sha256sums=('SKIP'
             'SKIP'
             'SKIP')
 
+# Shared macOS-look overlay and patches live beside the Debian package
+_src() { cd "$startdir"/../../../pulsaros-control-center && pwd; }
+
 prepare() {
+  local _shared; _shared="$(_src)"
   cd "$pkgbase"
 
   git submodule init
@@ -100,22 +104,22 @@ prepare() {
   git -c protocol.file.allow=always -c protocol.allow=never submodule update
 
   echo "🎨 Applying Pulsar OS macOS style, PearOS squircle icons, and Live Wallpaper..."
-  if [ -d "$startdir/overlay" ]; then
-    cp -rf "$startdir/overlay/"* .
+  if [ -d "$_shared/overlay" ]; then
+    cp -rf "$_shared/overlay/"* .
   else
     patch -Np1 -i "$srcdir/pulsar-macos-style.patch" || true
   fi
 
   # Pulsar stylesheet: appended, upstream rules stay untouched
-  cat "$startdir/overlay/pulsar.css" >> shell/style.css
+  cat "$_shared/overlay/pulsar.css" >> shell/style.css
   # Per-panel stylesheets live in overlay/css/
-  for c in "$startdir"/overlay/css/*.css; do
+  for c in "$_shared"/overlay/css/*.css; do
     [ -e "$c" ] || continue
     cat "$c" >> shell/style.css
   done
 
   # Panel patches: small hunks applied on top of the overlay
-  for p in "$startdir"/patches/*.patch; do
+  for p in "$_shared"/patches/*.patch; do
     [ -e "$p" ] || continue
     patch -Np1 -i "$p"
   done
