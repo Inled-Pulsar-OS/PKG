@@ -1,8 +1,25 @@
 --- a/panels/printers/pp-printer-entry.c
 +++ b/panels/printers/pp-printer-entry.c
-@@ -372,6 +372,20 @@
-     gtk_window_present (GTK_WINDOW (dialog));
- }
+@@ -108,6 +108,8 @@
+ 
+ static GParamSpec *properties[N_PROPS];
+ 
++static void update_pulsar_style (PpPrinterEntry *self);
++
+ static InkLevelData *
+ ink_level_data_new (void)
+ {
+@@ -381,6 +383,7 @@
+     printer_set_default (self->printer_name);
+ 
+     self->is_default = TRUE;
++    update_pulsar_style (self);
+ 
+     g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_DEFAULT]);
+ 
+@@ -538,6 +541,20 @@
+     PRINTER_STOPPED
+ };
  
 +/* macOS look: default-printer card and status dot (overlay/css/printers.css). */
 +static void
@@ -19,17 +36,9 @@
 +}
 +
  static void
- set_as_default_printer (PpPrinterEntry *self)
+ restart_printer (GtkButton *button, PpPrinterEntry *self)
  {
-@@ -381,6 +395,7 @@
-     printer_set_default (self->printer_name);
- 
-     self->is_default = TRUE;
-+    update_pulsar_style (self);
- 
-     g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_DEFAULT]);
- 
-@@ -784,6 +799,7 @@
+@@ -784,6 +801,7 @@
      gtk_label_set_text (self->printer_status, printer_status);
      gtk_label_set_text (self->printer_name_label, instance);
      self->is_default = printer.is_default;
