@@ -67,7 +67,7 @@ Tickets:
 Research findings:
 
 - Sidebar is a `GtkListBox`; style it with a `pulsar.css` appended to `shell/style.css` in `prepare()`.
-- Shared overlay path is `pulsaros-control-center/overlay` (Arch `PKGBUILD` builds from it via `_src()`).
+- Arch overlay path is `arch/pkgbuilds/gnome-control-center/overlay`.
 - GNOME 51 has `accent-color` with nine values and no multicolor; `color-scheme` has no time-based Auto.
 - Three palettes conflict: libadwaita, older GNOME hex values in the overlay, MacTahoe.
 - Findings branches: `research/cc-sidebar-hooks`, `research/cc-accent-theme` (no PRs).
