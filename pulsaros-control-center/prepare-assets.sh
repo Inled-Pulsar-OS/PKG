@@ -48,7 +48,7 @@ do
         ver_str=$(grep -A 10 "^Package: gnome-control-center$" "$status_file" \
                   | grep "^Version:" | head -n1 | awk '{print $2}' || true)
         if [ -n "$ver_str" ]; then
-            GNOME_CC_VER=$(echo "$ver_str" | sed 's/^[0-9]*://' | cut -d'.' -f1 | cut -d'-' -f1)
+            GNOME_CC_VER=$(echo "$ver_str" | cut -d'.' -f1 | cut -d'-' -f1)
             echo "🔍 [ES] Versión de gnome-control-center detectada en dpkg ($status_file): $ver_str → compilando $GNOME_CC_VER.x"
             echo "🔍 [EN] gnome-control-center version detected in dpkg ($status_file): $ver_str → building $GNOME_CC_VER.x"
             break
@@ -62,8 +62,8 @@ if [ -z "$GNOME_CC_VER" ]; then
     case "$SUITE" in
         bookworm)  GNOME_CC_VER="43" ;;
         trixie)    GNOME_CC_VER="48" ;;
-        forky)     GNOME_CC_VER="51" ;;
-        sid|unstable|rolling) GNOME_CC_VER="51" ;;
+        forky)     GNOME_CC_VER="48" ;;
+        sid|unstable) GNOME_CC_VER="48" ;;
         *)         GNOME_CC_VER="48" ;;
     esac
     echo "🔍 [ES] Suite Debian '$SUITE' → usando versión $GNOME_CC_VER.x"
@@ -73,17 +73,7 @@ fi
 # Now resolve the full upstream tag (e.g. "48.0", "48.1", …).
 # Query the GNOME GitLab tags API to find the latest tag matching our major.
 FULL_TAG=""
-ARCH_PKGBUILD="$SCRIPT_DIR/../arch/pkgbuilds/gnome-control-center/PKGBUILD"
-# GNOME 50+: pin the tag the Arch PKGBUILD builds (_upstream_ver); the API grep
-# would match 51.rc.1 / 51.beta first.
-if [ "$GNOME_CC_VER" -ge 50 ] 2>/dev/null; then
-    PIN_TAG=$(sed -n 's/^_upstream_ver=//p' "$ARCH_PKGBUILD" 2>/dev/null | head -n1)
-    case "$PIN_TAG" in
-        "$GNOME_CC_VER".*) FULL_TAG="$PIN_TAG" ;;
-        *) echo "❌ No pinned tag for GNOME $GNOME_CC_VER in $ARCH_PKGBUILD (got '$PIN_TAG')" >&2; exit 1 ;;
-    esac
-fi
-if [ -z "$FULL_TAG" ] && command -v curl >/dev/null 2>&1; then
+if command -v curl >/dev/null 2>&1; then
     echo "🌐 [ES] Consultando tags de GNOME GitLab para la versión $GNOME_CC_VER..."
     echo "🌐 [EN] Querying GNOME GitLab tags for version $GNOME_CC_VER..."
     # GitLab REST API — paginated, first page is enough for recent tags
@@ -190,10 +180,6 @@ git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 \
     clone --depth=1 --branch "$GCC_TAG" \
     "https://gitlab.gnome.org/GNOME/gnome-control-center.git" \
     "$SRC_DIR" 2>/dev/null || {
-    if [ "$GNOME_CC_VER" -ge 50 ] 2>/dev/null; then
-        echo "❌ Cannot clone gnome-control-center tag $GCC_TAG; the overlay needs that exact tag" >&2
-        exit 1
-    fi
     # Fallback: clone without --branch and checkout the tag
     echo "⚠️ [ES] Fallback: clonando sin tag específico..."
     echo "⚠️ [EN] Fallback: cloning without specific tag..."
@@ -209,33 +195,20 @@ git submodule update --init --depth=1 2>/dev/null || true
 # ==============================================================================
 # 3. Apply Pulsar OS overlay and assets
 # ==============================================================================
-OVERLAY_DIR="$SCRIPT_DIR/overlay"
-PATCHES_DIR="$SCRIPT_DIR/patches"
+OVERLAY_DIR="$SCRIPT_DIR/../arch/pkgbuilds/gnome-control-center/overlay"
+PATCH_FILE="$SCRIPT_DIR/../arch/pkgbuilds/gnome-control-center/pulsar-macos-style.patch"
 
 # Check if target version matches the overlay (overlay is tailored for GNOME 50+)
 if [ "$GNOME_CC_VER" -ge 50 ] 2>/dev/null; then
-    if [ ! -d "$OVERLAY_DIR" ]; then
-        echo "❌ Overlay not found: $OVERLAY_DIR" >&2
-        exit 1
+    if [ -d "$OVERLAY_DIR" ]; then
+        echo "🎨 [ES] Aplicando overlay de Pulsar OS (GNOME 50+)..."
+        echo "🎨 [EN] Applying Pulsar OS overlay (GNOME 50+)..."
+        cp -rf "$OVERLAY_DIR/." "$SRC_DIR/"
+    elif [ -f "$PATCH_FILE" ]; then
+        echo "🎨 [ES] Aplicando parche de Pulsar OS (GNOME 50+)..."
+        echo "🎨 [EN] Applying Pulsar OS patch (GNOME 50+)..."
+        patch -Np1 -i "$PATCH_FILE" -d "$SRC_DIR" || true
     fi
-    echo "🎨 [ES] Aplicando overlay de Pulsar OS (GNOME 50+)..."
-    echo "🎨 [EN] Applying Pulsar OS overlay (GNOME 50+)..."
-    cp -rf "$OVERLAY_DIR/." "$SRC_DIR/"
-
-    # Same order as arch/pkgbuilds/gnome-control-center/PKGBUILD prepare():
-    # pulsar.css, then css/*.css, appended to shell/style.css
-    cat "$OVERLAY_DIR/pulsar.css" >> "$SRC_DIR/shell/style.css"
-    for c in "$OVERLAY_DIR"/css/*.css; do
-        [ -e "$c" ] || continue
-        cat "$c" >> "$SRC_DIR/shell/style.css"
-    done
-
-    # Panel patches, in order; any failure stops the build
-    for p in "$PATCHES_DIR"/*.patch; do
-        [ -e "$p" ] || continue
-        echo "🩹 [EN] Applying $(basename "$p")"
-        patch -Np1 -d "$SRC_DIR" -i "$p" || { echo "❌ Patch failed: $p" >&2; exit 1; }
-    done
 else
     OVERLAY_48="$SCRIPT_DIR/overlay-gnome48"
     if [ -d "$OVERLAY_48" ]; then
@@ -250,15 +223,7 @@ else
 fi
 
 # Ensure all .blp files in the source tree are compiled to .ui for GNOME versions using .ui in gresources
-if [ "$GNOME_CC_VER" -ge 50 ] 2>/dev/null; then
-    # GNOME 50+: blueprint-compiler is required and any .blp error is fatal
-    command -v blueprint-compiler >/dev/null 2>&1 || { echo "❌ blueprint-compiler not found" >&2; exit 1; }
-    echo "🔨 [EN] Compiling .blp files to .ui (strict)..."
-    while IFS= read -r blp_file; do
-        blueprint-compiler compile "$blp_file" --output "${blp_file%.blp}.ui" \
-            || { echo "❌ blueprint-compiler failed: $blp_file" >&2; exit 1; }
-    done < <(find "$SRC_DIR" -name "*.blp")
-elif command -v blueprint-compiler >/dev/null 2>&1; then
+if command -v blueprint-compiler >/dev/null 2>&1; then
     echo "🔨 [ES] Compilando archivos .blp a .ui..."
     echo "🔨 [EN] Compiling .blp files to .ui..."
     find "$SRC_DIR" -name "*.blp" | while read -r blp_file; do
