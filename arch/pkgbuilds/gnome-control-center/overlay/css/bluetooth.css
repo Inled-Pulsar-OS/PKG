@@ -1,0 +1,9 @@
+/* Bluetooth panel (#92): device rows from libgnome-bluetooth in the macOS
+ * look: taller rows and gray status text. */
+navigation-split-view > .content-pane list.boxed-list > row.activatable {
+  min-height: 56px;
+}
+
+navigation-split-view > .content-pane list.boxed-list > row label.dim-label {
+  color: alpha(currentColor, 0.6);
+}
