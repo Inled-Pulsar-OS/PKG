@@ -1,0 +1,97 @@
+--- a/panels/display/cc-display-settings.blp
++++ b/panels/display/cc-display-settings.blp
+@@ -5,6 +5,10 @@
+   spacing: 18;
+   orientation: vertical;
+ 
++  styles [
++    "pulsar-display",
++  ]
++
+   ListBox enabled_listbox {
+     hexpand: true;
+     selection-mode: none;
+@@ -26,20 +30,6 @@
+       "boxed-list",
+     ]
+ 
+-    Adw.SwitchRow auto_orientation_row {
+-      width-request: 100;
+-      title: C_("display setting", "_Auto Rotate");
+-      use-underline: true;
+-      notify::active => $on_auto_orientation_changed_cb(template);
+-    }
+-
+-    Adw.ComboRow orientation_row {
+-      width-request: 100;
+-      title: C_("display setting", "_Orientation");
+-      use-underline: true;
+-      notify::selected-item => $on_orientation_selection_changed_cb(template);
+-    }
+-
+     Adw.ComboRow resolution_row {
+       width-request: 100;
+       title: C_("display setting", "_Resolution");
+@@ -77,20 +67,6 @@
+       }
+     }
+ 
+-    Adw.SwitchRow hdr_row {
+-      width-request: 100;
+-      title: _("_HDR (High Dynamic Range)");
+-      use-underline: true;
+-      notify::active => $on_hdr_row_active_changed_cb(template);
+-    }
+-
+-    Adw.SwitchRow underscanning_row {
+-      width-request: 100;
+-      title: _("Adjust for _TV");
+-      use-underline: true;
+-      notify::active => $on_underscanning_row_active_changed_cb(template);
+-    }
+-
+     Adw.ActionRow scale_buttons_row {
+       width-request: 100;
+       title: C_("display setting", "_Scale");
+@@ -110,4 +86,41 @@
+       notify::selected-item => $on_scale_selection_changed_cb(template);
+     }
+   }
++
++  ListBox other_listbox {
++    hexpand: true;
++    selection-mode: none;
++
++    styles [
++      "boxed-list",
++    ]
++
++    Adw.SwitchRow auto_orientation_row {
++      width-request: 100;
++      title: C_("display setting", "_Auto Rotate");
++      use-underline: true;
++      notify::active => $on_auto_orientation_changed_cb(template);
++    }
++
++    Adw.ComboRow orientation_row {
++      width-request: 100;
++      title: C_("display setting", "_Orientation");
++      use-underline: true;
++      notify::selected-item => $on_orientation_selection_changed_cb(template);
++    }
++
++    Adw.SwitchRow hdr_row {
++      width-request: 100;
++      title: _("_HDR (High Dynamic Range)");
++      use-underline: true;
++      notify::active => $on_hdr_row_active_changed_cb(template);
++    }
++
++    Adw.SwitchRow underscanning_row {
++      width-request: 100;
++      title: _("Adjust for _TV");
++      use-underline: true;
++      notify::active => $on_underscanning_row_active_changed_cb(template);
++    }
++  }
+ }
