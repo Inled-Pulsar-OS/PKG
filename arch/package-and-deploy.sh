@@ -401,6 +401,14 @@ build_single_package() {
             if [ "$EUID" -ne 0 ]; then
                 command -v sudo >/dev/null 2>&1 && auth_cmd="sudo" || auth_cmd="pkexec"
             fi
+            # A cached builder image has stale sync databases: mirrors drop old package
+            # files and every `pacman -S` below fails with 404. Refresh once per run, but
+            # only in a throwaway container (root or sudo user), never a full upgrade of the host.
+            if [ -f /.dockerenv ] && [ -z "${PULSAR_DB_REFRESHED:-}" ]; then
+                echo "🔄 Container detected: refreshing pacman databases (pacman -Syu)..."
+                $auth_cmd pacman -Syu --noconfirm >/dev/null 2>&1 || echo "⚠️  pacman -Syu failed; dependency install may fail with 404 errors."
+                PULSAR_DB_REFRESHED=1
+            fi
             if [ "$BUILD_VERBOSE" = "1" ]; then
                 $auth_cmd pacman -S --needed --noconfirm "${to_install[@]}" 2>/dev/null || {
                     for d in "${to_install[@]}"; do
@@ -415,6 +423,14 @@ build_single_package() {
                     done
                 fi
                 rm -f "$dep_log"
+            fi
+            # makepkg runs with -d, so a missing dependency only shows up later as an
+            # obscure meson error. Say it here.
+            local missing_deps
+            missing_deps=$(pacman -T "${to_install[@]}" 2>/dev/null | tr '\n' ' ')
+            if [ -n "$missing_deps" ]; then
+                echo "⚠️  Build dependencies not installed for $name: $missing_deps" >&2
+                echo "    Run with BUILD_VERBOSE=1 to see the pacman error (stale databases give 404 errors)." >&2
             fi
         fi
     fi
