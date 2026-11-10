@@ -16,10 +16,10 @@ navigation-split-view > .content-pane row.pulsar-status-dot.pulsar-status-on > b
 }
 
 navigation-split-view > .content-pane row.pulsar-status-dot > box.header > box.title label.subtitle {
-  padding-left: 16px;
+  padding-left: 24px;
   background-repeat: no-repeat;
   background-size: 10px 10px;
-  background-position: 0 center;
+  background-position: 2px center;
   color: alpha(currentColor, 0.6);
 }
 
