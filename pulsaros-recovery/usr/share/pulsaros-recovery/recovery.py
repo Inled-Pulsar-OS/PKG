@@ -4450,8 +4450,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
             def _async_cancel_cleanup():
                 try:
                     subprocess.run(["swapoff", "-a"], capture_output=True)
-                    subprocess.run(["fuser", "-k", "-9", "-M", "/mnt"], capture_output=True)
-                    subprocess.run(["umount", "-f", "-l", "-R", "/mnt"], capture_output=True)
+                    if os.path.ismount("/mnt"):
+                        subprocess.run(["fuser", "-k", "-9", "-M", "/mnt"], capture_output=True)
+                        subprocess.run(["umount", "-f", "-l", "-R", "/mnt"], capture_output=True)
                     subprocess.run(["cryptsetup", "close", "pulsar_cryptroot"], capture_output=True)
                     subprocess.run(["systemctl", "start", "udisks2.service"], capture_output=True)
                 except Exception:
@@ -5004,23 +5005,32 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         except Exception:
                             pass
 
-                    # 1b. Terminate lingering daemons (pacman gpg-agent, dirmngr) in target before unmounting
-                    try:
-                        subprocess.run(["chroot", "/mnt", "gpgconf", "--kill", "all"], capture_output=True, timeout=5)
-                    except Exception:
-                        pass
+                    # 1b. Terminate lingering daemons (pacman gpg-agent, dirmngr) in target before unmounting (only if /mnt is mounted)
+                    if os.path.ismount("/mnt"):
+                        try:
+                            subprocess.run(["chroot", "/mnt", "gpgconf", "--kill", "all"], capture_output=True, timeout=5)
+                        except Exception:
+                            pass
 
                     # 2. Deactivate any active swap
                     subprocess.run(["swapoff", "-a"], capture_output=True)
 
                     # 3. Gracefully terminate processes holding files open inside /mnt (SIGTERM first, then SIGKILL)
-                    try:
-                        subprocess.run(["fuser", "-k", "-15", "-m", "/mnt"], capture_output=True)
-                        time.sleep(1)
-                    except Exception:
-                        pass
-                    subprocess.run(["fuser", "-k", "-9", "-m", "/mnt"], capture_output=True)
-                    time.sleep(0.5)
+                    # CRITICAL: MUST use -M (ismountpoint) and ONLY run if /mnt is actually mounted!
+                    # Running 'fuser -m /mnt' when /mnt is unmounted matches '/', killing all desktop & system processes!
+                    if os.path.ismount("/mnt/boot"):
+                        try:
+                            subprocess.run(["fuser", "-k", "-9", "-M", "/mnt/boot"], capture_output=True)
+                        except Exception:
+                            pass
+                    if os.path.ismount("/mnt"):
+                        try:
+                            subprocess.run(["fuser", "-k", "-15", "-M", "/mnt"], capture_output=True)
+                            time.sleep(0.5)
+                        except Exception:
+                            pass
+                        subprocess.run(["fuser", "-k", "-9", "-M", "/mnt"], capture_output=True)
+                        time.sleep(0.3)
                     
                     # 4. Unmount nested virtual filesystems first, then root, in strict reverse order of mounting
                     for mount_path in [
