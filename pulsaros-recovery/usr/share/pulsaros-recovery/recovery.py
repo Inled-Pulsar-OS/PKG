@@ -6483,13 +6483,18 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         except Exception as esp_k_err:
                             log_msg(f"Notice: ESP recovery kernel staging skipped: {esp_k_err}")
                     
-                    rec_opts_base = "boot=live components username=live autologin cow_spacesize=4G live-media-path=live fsck.mode=skip quiet splash"
-                    if recovery_part:
-                        rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash"
+                    if recovery_part and rec_uuid:
+                        rec_media = f"live-media=/dev/disk/by-uuid/{rec_uuid}"
+                    elif recovery_part:
+                        rec_media = "live-media=/dev/disk/by-label/PULSAR_RECOVERY"
                     elif boot_part:
-                        rec_opts = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_BOOT live-media-path=live fsck.mode=skip quiet splash"
+                        rec_media = "live-media=/dev/disk/by-label/PULSAR_BOOT"
+                    elif root_uuid:
+                        rec_media = f"live-media=/dev/disk/by-uuid/{root_uuid}"
                     else:
-                        rec_opts = rec_opts_base
+                        rec_media = "live-media=/dev/disk/by-label/PULSAR_OS"
+
+                    rec_opts = f"boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G {rec_media} live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt"
                     
                     with open("/mnt/recovery/boot/refind_linux.conf", "w") as f:
                         f.write(f'"Boot Pulsar OS Recovery"  "{rec_opts}"\n')
@@ -6618,17 +6623,22 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         if os.path.exists(f"/mnt/boot/{uc}")
                     )
 
-                rec_opts_rec = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live fsck.mode=skip quiet splash"
-                rec_opts_boot = "boot=live components username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_BOOT live-media-path=live fsck.mode=skip quiet splash"
-                rec_opts_auto = "boot=live components username=live autologin cow_spacesize=4G live-media-path=live fsck.mode=skip quiet splash"
-                rec_net_opts = "boot=live components username=live autologin cow_spacesize=4G internet_recovery=1 quiet splash"
-
-                if recovery_part:
-                    rec_active_opts = rec_opts_rec
+                if recovery_part and rec_uuid:
+                    rec_media_opt = f"live-media=/dev/disk/by-uuid/{rec_uuid}"
+                elif recovery_part:
+                    rec_media_opt = "live-media=/dev/disk/by-label/PULSAR_RECOVERY"
                 elif boot_part:
-                    rec_active_opts = rec_opts_boot
+                    rec_media_opt = "live-media=/dev/disk/by-label/PULSAR_BOOT"
+                elif root_uuid:
+                    rec_media_opt = f"live-media=/dev/disk/by-uuid/{root_uuid}"
                 else:
-                    rec_active_opts = rec_opts_auto
+                    rec_media_opt = "live-media=/dev/disk/by-label/PULSAR_OS"
+
+                rec_active_opts = (
+                    f"boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G "
+                    f"{rec_media_opt} live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt"
+                )
+                rec_net_opts = "boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G internet_recovery=1 quiet splash"
 
                 refind_dirs = [
                     f"{esp_root}/EFI/refind",
@@ -7011,11 +7021,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     primary_rec_search = f"""    # 1. Dedicated unencrypted /boot partition (PULSAR_BOOT)
     if search --no-floppy --fs-uuid --set=root {boot_uuid}; then
         if [ -f /recovery/vmlinuz-recovery ]; then
-            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_BOOT live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_BOOT live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /recovery/initramfs-recovery.img
             set rec_found=1
         elif [ -f /vmlinuz-recovery ]; then
-            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_BOOT live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_BOOT live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /initramfs-recovery.img
             set rec_found=1
         fi
@@ -7024,11 +7034,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     primary_rec_search = f"""    # 1. Dedicated PULSAR_RECOVERY partition
     if search --no-floppy --fs-uuid --set=root {rec_uuid}; then
         if [ -f /boot/vmlinuz-recovery ]; then
-            linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-uuid/{rec_uuid} live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /boot/initramfs-recovery.img
             set rec_found=1
         elif [ -f /recovery/vmlinuz-recovery ]; then
-            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_RECOVERY live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-uuid/{rec_uuid} live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /recovery/initramfs-recovery.img
             set rec_found=1
         fi
@@ -7037,15 +7047,15 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     primary_rec_search = f"""    # 1. Root system partition (@ subvolume or flat)
     if search --no-floppy --fs-uuid --set=root {root_uuid}; then
         if [ -f /@/recovery/boot/vmlinuz-recovery ]; then
-            linux /@/recovery/boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            linux /@/recovery/boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-uuid/{root_uuid} live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /@/recovery/boot/initramfs-recovery.img
             set rec_found=1
         elif [ -f /@/boot/vmlinuz-recovery ]; then
-            linux /@/boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            linux /@/boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-uuid/{root_uuid} live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /@/boot/initramfs-recovery.img
             set rec_found=1
         elif [ -f /recovery/vmlinuz-recovery ]; then
-            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-uuid/{root_uuid} live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /recovery/initramfs-recovery.img
             set rec_found=1
         fi
@@ -7076,28 +7086,23 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
     # 2. Fallback device search by file
     if [ "$rec_found" = "0" ]; then
         if search --no-floppy --file --set=root /recovery/vmlinuz-recovery; then
-            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /recovery/initramfs-recovery.img
             set rec_found=1
         elif search --no-floppy --file --set=root /EFI/recovery/vmlinuz-recovery; then
-            linux /EFI/recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            linux /EFI/recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /EFI/recovery/initramfs-recovery.img
             set rec_found=1
         elif search --no-floppy --file --set=root /@/recovery/boot/vmlinuz-recovery; then
-            linux /@/recovery/boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=live module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            linux /@/recovery/boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /@/recovery/boot/initramfs-recovery.img
             set rec_found=1
         fi
     fi
 }}
 """
-                # live-media=any rompe live-boot: find_livefs aborta antes del
-                # escaneo de bloques (el `continue` de check_dev, fuera de bucle,
-                # termina el subshell) y nunca encuentra el medio — panic
-                # "Unable to find a medium containing a live file system" (Bug #2).
-                # Sin el parámetro live-media, live-boot escanea los dispositivos y
-                # encuentra PULSAR_RECOVERY / PULSAR_ISO / la partición raíz.
-                rec_script = rec_script.replace(" live-media=any live-media-path=live", " live-media-path=live")
+                rec_script = rec_script.replace(" live-media=any live-media-path=live", " live-media-path=recovery")
+                rec_script = rec_script.replace(" live-media=any", "")
                 rec_script_path = f"{grub_d}/15_pulsar_recovery"
                 with open(rec_script_path, "w") as f:
                     f.write(rec_script)
@@ -7320,121 +7325,121 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                             except Exception:
                                 pass
 
-                            rec_icon_cands = [
-                                "/mnt/usr/share/pulsar-boot-icons/os_recovery.png",
-                                "/mnt/usr/share/pulsar-boot-icons/recovery.png",
-                                "/usr/share/pulsar-boot-icons/os_recovery.png",
-                                "/usr/share/pulsar-boot-icons/recovery.png",
-                                "/mnt/usr/share/pulsaros-recovery/os_recovery.png",
-                                "/usr/share/pulsaros-recovery/os_recovery.png",
-                            ]
-                            rec_icon_src = next((p for p in rec_icon_cands if os.path.isfile(p)), None)
-                            if rec_icon_src:
-                                for idir in (
-                                    f"{refind_root}/themes/rEFInd-Regular-Dark/icons",
-                                    f"{boot_fb}/themes/rEFInd-Regular-Dark/icons",
-                                    f"{debian_fb}/themes/rEFInd-Regular-Dark/icons",
-                                    f"{pulsaros_fb}/themes/rEFInd-Regular-Dark/icons",
-                                    f"{refind_root}/icons",
-                                    refind_root,
-                                    f"{boot_fb}/icons",
-                                    boot_fb,
-                                    f"{debian_fb}/icons",
-                                    debian_fb,
-                                    f"{pulsaros_fb}/icons",
-                                    pulsaros_fb,
-                                    f"{esp_root}/EFI/recovery",
-                                    "/mnt/recovery",
-                                    "/mnt/recovery/boot",
+                        rec_icon_cands = [
+                            "/mnt/usr/share/pulsar-boot-icons/os_recovery.png",
+                            "/mnt/usr/share/pulsar-boot-icons/recovery.png",
+                            "/usr/share/pulsar-boot-icons/os_recovery.png",
+                            "/usr/share/pulsar-boot-icons/recovery.png",
+                            "/mnt/usr/share/pulsaros-recovery/os_recovery.png",
+                            "/usr/share/pulsaros-recovery/os_recovery.png",
+                        ]
+                        rec_icon_src = next((p for p in rec_icon_cands if os.path.isfile(p)), None)
+                        if rec_icon_src:
+                            for idir in (
+                                f"{refind_root}/themes/rEFInd-Regular-Dark/icons",
+                                f"{boot_fb}/themes/rEFInd-Regular-Dark/icons",
+                                f"{debian_fb}/themes/rEFInd-Regular-Dark/icons",
+                                f"{pulsaros_fb}/themes/rEFInd-Regular-Dark/icons",
+                                f"{refind_root}/icons",
+                                refind_root,
+                                f"{boot_fb}/icons",
+                                boot_fb,
+                                f"{debian_fb}/icons",
+                                debian_fb,
+                                f"{pulsaros_fb}/icons",
+                                pulsaros_fb,
+                                f"{esp_root}/EFI/recovery",
+                                "/mnt/recovery",
+                                "/mnt/recovery/boot",
+                            ):
+                                try:
+                                    os.makedirs(idir, exist_ok=True)
+                                    shutil.copy2(rec_icon_src, f"{idir}/os_recovery.png")
+                                    shutil.copy2(rec_icon_src, f"{idir}/os_recovery-big.png")
+                                    shutil.copy2(rec_icon_src, f"{idir}/os_pulsaros_recovery.png")
+                                    shutil.copy2(rec_icon_src, f"{idir}/.VolumeIcon.png")
+                                except Exception:
+                                    pass
+
+                        main_icon_cands = [
+                            "/mnt/usr/share/pulsar-boot-icons/os_pulsaros_normal.png",
+                            "/mnt/usr/share/pulsar-boot-icons/normal.png",
+                            "/usr/share/pulsar-boot-icons/os_pulsaros_normal.png",
+                            "/usr/share/pulsar-boot-icons/normal.png",
+                            f"{refind_root}/themes/rEFInd-Regular-Dark/icons/os_pulsaros_normal.png",
+                            f"{refind_root}/themes/rEFInd-Regular-Dark/icons/os_pulsaros.png",
+                            "/mnt/usr/share/icons/hicolor/128x128/apps/pulsar-logo.png",
+                            "/mnt/usr/share/icons/hicolor/128x128/apps/pulsaros-logo.png",
+                            "/usr/share/icons/hicolor/128x128/apps/pulsar-logo.png",
+                            "/usr/share/icons/hicolor/128x128/apps/pulsaros-logo.png",
+                            "/mnt/usr/share/pulsaros-recovery/logo.png",
+                            "/usr/share/pulsaros-recovery/logo.png",
+                        ]
+                        main_icon_src = next((p for p in main_icon_cands if os.path.isfile(p)), None)
+                        if main_icon_src:
+                            for idir in (
+                                f"{refind_root}/themes/rEFInd-Regular-Dark/icons",
+                                f"{boot_fb}/themes/rEFInd-Regular-Dark/icons",
+                                f"{debian_fb}/themes/rEFInd-Regular-Dark/icons",
+                                f"{pulsaros_fb}/themes/rEFInd-Regular-Dark/icons",
+                                f"{refind_root}/icons",
+                                refind_root,
+                                f"{boot_fb}/icons",
+                                boot_fb,
+                                f"{debian_fb}/icons",
+                                debian_fb,
+                                f"{pulsaros_fb}/icons",
+                                pulsaros_fb,
+                                "/mnt/@/boot",
+                                "/mnt/@",
+                            ):
+                                try:
+                                    os.makedirs(idir, exist_ok=True)
+                                    shutil.copy2(main_icon_src, f"{idir}/os_pulsaros_normal.png")
+                                    shutil.copy2(main_icon_src, f"{idir}/os_pulsaros.png")
+                                    shutil.copy2(main_icon_src, f"{idir}/.VolumeIcon.png")
+                                except Exception:
+                                    pass
+
+                        drv_search_dirs = [
+                            "/mnt/usr/share/refind/refind/drivers_x64",
+                            "/mnt/usr/share/refind/drivers_x64",
+                            "/mnt/usr/lib/refind/drivers_x64",
+                            "/usr/share/refind/refind/drivers_x64",
+                            "/usr/share/refind/drivers_x64",
+                            "/usr/lib/refind/drivers_x64",
+                            "/run/archiso/bootmnt/EFI/BOOT/drivers_x64",
+                            "/run/archiso/bootmnt/EFI/refind/drivers_x64",
+                            "/run/live/medium/EFI/BOOT/drivers_x64",
+                            "/run/live/medium/EFI/refind/drivers_x64",
+                        ]
+                        for drv_name in ["ext4_x64.efi", "btrfs_x64.efi", "iso9660_x64.efi"]:
+                            drv_src = next((f"{d}/{drv_name}" for d in drv_search_dirs if os.path.isfile(f"{d}/{drv_name}")), None)
+                            if not drv_src:
+                                for s_base in ("/mnt/usr/share", "/usr/share", "/run/live/medium", "/run/archiso/bootmnt"):
+                                    if os.path.isdir(s_base):
+                                        m_drvs = glob.glob(f"{s_base}/**/{drv_name}", recursive=True)
+                                        if m_drvs:
+                                            drv_src = m_drvs[0]
+                                            break
+                            if drv_src:
+                                for target_dir in (
+                                    f"{refind_root}/drivers_x64",
+                                    f"{refind_root}/drivers",
+                                    f"{boot_fb}/drivers_x64",
+                                    f"{boot_fb}/drivers",
+                                    f"{debian_fb}/drivers_x64",
+                                    f"{debian_fb}/drivers",
+                                    f"{pulsaros_fb}/drivers_x64",
+                                    f"{pulsaros_fb}/drivers",
+                                    f"{esp_root}/drivers_x64",
+                                    f"{esp_root}/drivers",
                                 ):
                                     try:
-                                        os.makedirs(idir, exist_ok=True)
-                                        shutil.copy2(rec_icon_src, f"{idir}/os_recovery.png")
-                                        shutil.copy2(rec_icon_src, f"{idir}/os_recovery-big.png")
-                                        shutil.copy2(rec_icon_src, f"{idir}/os_pulsaros_recovery.png")
-                                        shutil.copy2(rec_icon_src, f"{idir}/.VolumeIcon.png")
+                                        os.makedirs(target_dir, exist_ok=True)
+                                        shutil.copy2(drv_src, f"{target_dir}/{drv_name}")
                                     except Exception:
                                         pass
-
-                            main_icon_cands = [
-                                "/mnt/usr/share/pulsar-boot-icons/os_pulsaros_normal.png",
-                                "/mnt/usr/share/pulsar-boot-icons/normal.png",
-                                "/usr/share/pulsar-boot-icons/os_pulsaros_normal.png",
-                                "/usr/share/pulsar-boot-icons/normal.png",
-                                f"{refind_root}/themes/rEFInd-Regular-Dark/icons/os_pulsaros_normal.png",
-                                f"{refind_root}/themes/rEFInd-Regular-Dark/icons/os_pulsaros.png",
-                                "/mnt/usr/share/icons/hicolor/128x128/apps/pulsar-logo.png",
-                                "/mnt/usr/share/icons/hicolor/128x128/apps/pulsaros-logo.png",
-                                "/usr/share/icons/hicolor/128x128/apps/pulsar-logo.png",
-                                "/usr/share/icons/hicolor/128x128/apps/pulsaros-logo.png",
-                                "/mnt/usr/share/pulsaros-recovery/logo.png",
-                                "/usr/share/pulsaros-recovery/logo.png",
-                            ]
-                            main_icon_src = next((p for p in main_icon_cands if os.path.isfile(p)), None)
-                            if main_icon_src:
-                                for idir in (
-                                    f"{refind_root}/themes/rEFInd-Regular-Dark/icons",
-                                    f"{boot_fb}/themes/rEFInd-Regular-Dark/icons",
-                                    f"{debian_fb}/themes/rEFInd-Regular-Dark/icons",
-                                    f"{pulsaros_fb}/themes/rEFInd-Regular-Dark/icons",
-                                    f"{refind_root}/icons",
-                                    refind_root,
-                                    f"{boot_fb}/icons",
-                                    boot_fb,
-                                    f"{debian_fb}/icons",
-                                    debian_fb,
-                                    f"{pulsaros_fb}/icons",
-                                    pulsaros_fb,
-                                    "/mnt/@/boot",
-                                    "/mnt/@",
-                                ):
-                                    try:
-                                        os.makedirs(idir, exist_ok=True)
-                                        shutil.copy2(main_icon_src, f"{idir}/os_pulsaros_normal.png")
-                                        shutil.copy2(main_icon_src, f"{idir}/os_pulsaros.png")
-                                        shutil.copy2(main_icon_src, f"{idir}/.VolumeIcon.png")
-                                    except Exception:
-                                        pass
-
-                            drv_search_dirs = [
-                                "/mnt/usr/share/refind/refind/drivers_x64",
-                                "/mnt/usr/share/refind/drivers_x64",
-                                "/mnt/usr/lib/refind/drivers_x64",
-                                "/usr/share/refind/refind/drivers_x64",
-                                "/usr/share/refind/drivers_x64",
-                                "/usr/lib/refind/drivers_x64",
-                                "/run/archiso/bootmnt/EFI/BOOT/drivers_x64",
-                                "/run/archiso/bootmnt/EFI/refind/drivers_x64",
-                                "/run/live/medium/EFI/BOOT/drivers_x64",
-                                "/run/live/medium/EFI/refind/drivers_x64",
-                            ]
-                            for drv_name in ["ext4_x64.efi", "btrfs_x64.efi", "iso9660_x64.efi"]:
-                                drv_src = next((f"{d}/{drv_name}" for d in drv_search_dirs if os.path.isfile(f"{d}/{drv_name}")), None)
-                                if not drv_src:
-                                    for s_base in ("/mnt/usr/share", "/usr/share", "/run/live/medium", "/run/archiso/bootmnt"):
-                                        if os.path.isdir(s_base):
-                                            m_drvs = glob.glob(f"{s_base}/**/{drv_name}", recursive=True)
-                                            if m_drvs:
-                                                drv_src = m_drvs[0]
-                                                break
-                                if drv_src:
-                                    for target_dir in (
-                                        f"{refind_root}/drivers_x64",
-                                        f"{refind_root}/drivers",
-                                        f"{boot_fb}/drivers_x64",
-                                        f"{boot_fb}/drivers",
-                                        f"{debian_fb}/drivers_x64",
-                                        f"{debian_fb}/drivers",
-                                        f"{pulsaros_fb}/drivers_x64",
-                                        f"{pulsaros_fb}/drivers",
-                                        f"{esp_root}/drivers_x64",
-                                        f"{esp_root}/drivers",
-                                    ):
-                                        try:
-                                            os.makedirs(target_dir, exist_ok=True)
-                                            shutil.copy2(drv_src, f"{target_dir}/{drv_name}")
-                                        except Exception:
-                                            pass
                     except Exception as theme_err:
                         print(f"Warning: rEFInd theme configuration failed: {theme_err}")
             elif is_efi and efi_part:
