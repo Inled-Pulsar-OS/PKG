@@ -1,0 +1,36 @@
+/* Displays panel (#93). Scoped by the pulsar-display class added in
+ * patches/1700 to the settings box. Card, row, slider and popup badge metrics
+ * are shared (#75, #78); only what is specific to this panel lives here. */
+
+/* Resolution, scale and other settings read as separate cards. */
+.pulsar-display list.boxed-list {
+  margin-bottom: 2px;
+}
+
+/* Gray help text and values under and beside the rows. */
+.pulsar-display row > box.header > box.title label.subtitle,
+.pulsar-display row > box.header > box.suffixes > label.dim-label {
+  color: alpha(currentColor, 0.6);
+}
+
+/* Toggles: wide pill, accent when on, white knob. */
+.pulsar-display switch {
+  min-width: 46px;
+  min-height: 28px;
+  border-radius: 14px;
+  background-color: alpha(currentColor, 0.12);
+  border: none;
+}
+
+.pulsar-display switch:checked {
+  background-color: @accent_bg_color;
+}
+
+.pulsar-display switch slider {
+  min-width: 24px;
+  min-height: 24px;
+  margin: 2px;
+  border-radius: 12px;
+  background-color: #ffffff;
+  border: none;
+}
