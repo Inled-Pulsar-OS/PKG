@@ -216,6 +216,40 @@ else
         echo "🎨 [EN] Applying native Pulsar OS overlay for GNOME 48 (Debian)..."
         cp -rf "$OVERLAY_48/." "$SRC_DIR/"
         OVERLAY_DIR="$OVERLAY_48"
+
+        # macOS shell (hub header, capsule, grouped sidebar): register the new
+        # CcHubHeader class and append the shared Pulsar stylesheets. The CSS is
+        # the Arch one (single source of truth); selectors for widgets GNOME 48
+        # does not have are inert.
+        ARCH_OVERLAY="$SCRIPT_DIR/../arch/pkgbuilds/gnome-control-center/overlay"
+        sed -i 's|<file preprocess="xml-stripblanks">cc-panel.ui</file>|<file preprocess="xml-stripblanks">cc-hub-header.ui</file>\n    &|' \
+            "$SRC_DIR/shell/gnome-control-center.gresource.xml.in"
+        sed -i "s|  'cc-application.c',|  'cc-application.c',\n  'cc-hub-header.c',|" "$SRC_DIR/shell/meson.build"
+        if [ -f "$ARCH_OVERLAY/pulsar.css" ]; then
+            # GTK 4.18 (Trixie) has no @media (prefers-color-scheme): it drops the
+            # block and the dark tokens never apply. Move the block body into
+            # style-dark.css, which libadwaita loads in dark mode.
+            awk -v dark="$SRC_DIR/shell/style-dark.css" '
+                /^@media \(prefers-color-scheme: dark\) *\{/ { inblk = 1; depth = 1; next }
+                inblk {
+                    n = gsub(/\{/, "{"); m = gsub(/\}/, "}"); depth += n - m
+                    if (depth <= 0) { inblk = 0; next }
+                    print >> dark; next
+                }
+                { print }
+            ' "$ARCH_OVERLAY/pulsar.css" >> "$SRC_DIR/shell/style.css"
+            for c in "$ARCH_OVERLAY"/css/*.css; do
+                [ -e "$c" ] && cat "$c" >> "$SRC_DIR/shell/style.css"
+            done
+        fi
+
+        # Panel patches (hub headers, groups, status dots), ported from the Arch
+        # GNOME 51 patches to GNOME 48 .ui files. Applied on top of the overlay.
+        for p in "$SCRIPT_DIR"/patches-gnome48/*.patch; do
+            [ -e "$p" ] || continue
+            echo "🩹 [EN] Applying $(basename "$p")"
+            patch -Np1 -i "$p" -d "$SRC_DIR"
+        done
     else
         echo "ℹ️ [ES] GNOME Control Center $GNOME_CC_VER detectado (Debian). Usando compilación limpia con branding Pulsar OS..."
         echo "ℹ️ [EN] GNOME Control Center $GNOME_CC_VER detected (Debian). Using clean build with Pulsar OS branding..."

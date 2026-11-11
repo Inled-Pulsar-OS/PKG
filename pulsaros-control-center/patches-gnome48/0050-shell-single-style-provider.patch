@@ -1,0 +1,17 @@
+--- a/shell/cc-application.c
++++ b/shell/cc-application.c
+@@ -328,11 +328,9 @@
+   self->model = cc_shell_model_new ();
+   self->window = cc_window_new (GTK_APPLICATION (application), self->model);
+ 
+-  provider = gtk_css_provider_new ();
+-  gtk_css_provider_load_from_resource (provider, "/org/gnome/Settings/gtk/style.css");
+-  gtk_style_context_add_provider_for_display (gdk_display_get_default (),
+-                                              GTK_STYLE_PROVIDER (provider),
+-                                              GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
++  /* libadwaita already loads style.css and style-dark.css from the app resource
++   * path. A second explicit provider for the same sheet would be added last and
++   * override the dark tokens of style-dark.css. */
+ }
+ 
+ static void

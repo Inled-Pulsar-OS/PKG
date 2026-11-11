@@ -11,6 +11,8 @@
     </child>
     <property name="content">
       <object class="AdwNavigationSplitView" id="split_view">
+        <property name="min-sidebar-width">270</property>
+        <property name="max-sidebar-width">270</property>
         <signal name="notify::collapsed" handler="on_split_view_collapsed_changed_cb" object="CcWindow" swapped="yes" />
 
         <property name="sidebar">
@@ -18,20 +20,31 @@
             <property name="title" translatable="yes">Settings</property>
             <property name="child">
               <object class="AdwToolbarView">
+                <style>
+                  <class name="cc-sidebar-pane"/>
+                </style>
                 <child type="top">
                   <object class="AdwHeaderBar">
+                    <property name="show-title">False</property>
+                    <property name="decoration-layout">close,minimize,maximize:</property>
+                  </object>
+                </child>
+
+                <child type="top">
+                  <object class="GtkSearchEntry" id="search_entry">
+                    <style>
+                      <class name="pulsar-search-pill"/>
+                    </style>
+                    <property name="hexpand">True</property>
+                    <property name="margin-start">12</property>
+                    <property name="margin-end">12</property>
+                    <property name="margin-top">6</property>
+                    <property name="margin-bottom">6</property>
+                    <property name="placeholder-text" translatable="yes">Search</property>
+                    <signal name="activate" handler="search_entry_activate_cb" object="CcWindow" swapped="yes" />
                     <child>
-                      <object class="GtkToggleButton" id="search_button">
-                        <property name="icon-name">edit-find-symbolic</property>
-                        <property name="tooltip-text" translatable="yes" comments="Translators: this is a verb.">Search</property>
-                      </object>
-                    </child>
-                    <child type="end">
-                      <object class="GtkMenuButton">
-                        <property name="icon-name">open-menu-symbolic</property>
-                        <property name="menu-model">primary_menu</property>
-                        <property name="primary">True</property>
-                        <property name="tooltip-text" translatable="yes">Main Menu</property>
+                      <object class="GtkEventControllerKey">
+                        <signal name="key-pressed" handler="search_entry_key_pressed_cb" object="CcWindow" swapped="yes" />
                       </object>
                     </child>
                   </object>
@@ -46,6 +59,7 @@
                     <signal name="clicked" handler="on_user_account_banner_clicked_cb" object="CcWindow" swapped="yes"/>
                     <style>
                       <class name="flat"/>
+                      <class name="pulsar-profile-row"/>
                     </style>
                     <property name="child">
                       <object class="GtkBox">
@@ -69,7 +83,7 @@
                             <property name="spacing">2</property>
                             <child>
                               <object class="GtkLabel" id="user_name_label">
-                                <property name="label" translatable="yes">Apple ID &amp; Accounts</property>
+                                <property name="label" translatable="yes">User</property>
                                 <property name="halign">start</property>
                                 <style>
                                   <class name="heading"/>
@@ -93,29 +107,11 @@
                   </object>
                 </child>
 
-                <child type="top">
-                  <object class="GtkSearchBar" id="search_bar">
-                    <property name="search-mode-enabled" bind-source="search_button" bind-property="active" bind-flags="sync-create|bidirectional" />
-                    <child>
-                      <object class="GtkSearchEntry" id="search_entry">
-                        <property name="hexpand">True</property>
-                        <property name="placeholder-text" translatable="yes">Search settings</property>
-                        <signal name="activate" handler="search_entry_activate_cb" object="CcWindow" swapped="yes" />
-                        <child>
-                          <object class="GtkEventControllerKey">
-                            <signal name="key-pressed" handler="search_entry_key_pressed_cb" object="CcWindow" swapped="yes" />
-                          </object>
-                        </child>
-                      </object>
-                    </child>
-                  </object>
-                </child>
                 <property name="content">
                   <object class="GtkScrolledWindow">
                     <property name="hscrollbar-policy">never</property>
                     <child>
                       <object class="CcPanelList" id="panel_list">
-                        <property name="search-mode" bind-source="search_bar" bind-property="search-mode-enabled" bind-flags="bidirectional" />
                         <property name="search-query" bind-source="search_entry" bind-property="text" bind-flags="default" />
                         <signal name="show-panel" handler="show_panel_cb" object="CcWindow" swapped="yes" />
                       </object>

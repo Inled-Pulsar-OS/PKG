@@ -1,0 +1,59 @@
+--- a/panels/printers/cc-printers-panel.ui
++++ b/panels/printers/cc-printers-panel.ui
+@@ -30,7 +30,7 @@
+                     <property name="label" translatable="yes" comments="Translators: This button adds new printer.">_Add Printer…</property>
+                     <signal name="clicked" handler="printer_add_cb" swapped="yes"/>
+                     <style>
+-                      <class name="suggested-action"/>
++                      <class name="pulsar-pill"/>
+                     </style>
+                   </object>
+                 </child>
+--- a/panels/printers/pp-printer-entry.c
++++ b/panels/printers/pp-printer-entry.c
+@@ -93,6 +93,8 @@
+ 
+ G_DEFINE_TYPE (PpPrinterEntry, pp_printer_entry, GTK_TYPE_LIST_BOX_ROW)
+ 
++static void update_pulsar_style (PpPrinterEntry *self);
++
+ enum {
+   IS_DEFAULT_PRINTER,
+   PRINTER_DELETE,
+@@ -430,6 +432,7 @@
+   printer_set_default (self->printer_name);
+ 
+   self->is_default = TRUE;
++  update_pulsar_style (self);
+ 
+   g_object_notify (G_OBJECT (self), "default");
+ 
+@@ -614,6 +617,20 @@
+   PRINTER_PROCESSING,
+   PRINTER_STOPPED
+ };
++
++/* macOS look: default-printer card and status dot (overlay/css/printers.css). */
++static void
++update_pulsar_style (PpPrinterEntry *self)
++{
++  const gchar *dot = self->printer_state == PRINTER_STOPPED ? "pulsar-status-off"
++                   : self->printer_state == PRINTER_PROCESSING ? "pulsar-status-idle" : "pulsar-status-on";
++
++  gtk_widget_set_css_classes (GTK_WIDGET (self->printer_status), (const gchar *[]) { "pulsar-printer-status", dot, NULL });
++  if (self->is_default)
++    gtk_widget_add_css_class (GTK_WIDGET (self), "pulsar-default-printer");
++  else
++    gtk_widget_remove_css_class (GTK_WIDGET (self), "pulsar-default-printer");
++}
+ 
+ static void
+ restart_printer (GtkButton      *button,
+@@ -904,6 +921,7 @@
+   gtk_label_set_text (self->printer_status, printer_status);
+   gtk_label_set_text (self->printer_name_label, instance);
+   self->is_default = printer.is_default;
++  update_pulsar_style (self);
+   g_object_notify (G_OBJECT (self), "default");
+ 
+   self->printer_make_and_model = sanitize_printer_model (printer_make_and_model);

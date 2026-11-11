@@ -1,0 +1,25 @@
+--- a/panels/universal-access/cc-ua-typing-page.ui
++++ b/panels/universal-access/cc-ua-typing-page.ui
+@@ -108,7 +108,10 @@
+                             <marks>
+                               <mark value="-0.5" translatable="yes">Fast</mark>
+                               <!-- Default -->
+-                              <mark value="-30"/>
++                              <mark value="-88"/>
++<mark value="-66"/>
++<mark value="-44"/>
++<mark value="-22"/>
+                               <mark value="-110.0" translatable="yes">Slow</mark>
+                             </marks>
+                             <property name="adjustment">
+@@ -133,7 +136,9 @@
+                             <marks>
+                               <mark value="100" translatable="yes">Short</mark>
+                               <!-- Default -->
+-                              <mark value="500"/>
++                              <mark value="575"/>
++<mark value="1050"/>
++<mark value="1525"/>
+                               <mark value="2000" translatable="yes">Long</mark>
+                             </marks>
+                             <property name="adjustment">
