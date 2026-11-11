@@ -1,11 +1,9 @@
-# Session summary: Control Center macOS look and super-board setup
+# Session summary: Control Center macOS look
 
 Date: 2026-11-06 to 2026-11-08. Repo: `Victor1890/pulsaros-PKG`.
 
 ## Origin
 
-- Starting point: `/super-board onboard` on the PKG repo.
-- Prior state: a saved onboard answers file (stopped at AGENTS.md) and an existing config `pulsaros-pkg`.
 - Follow-up: `/setup-matt-pocock-skills`, then `/wayfinder` with a loose idea.
 - The idea: make `pulsaros-control-center` look and feel like macOS System Settings.
 - Scope named by the owner: layout, behavior, color scheme and feel.
@@ -17,29 +15,6 @@ Date: 2026-11-06 to 2026-11-08. Repo: `Victor1890/pulsaros-PKG`.
 - The dev machine runs Omarchy, which cannot run the patched Settings app.
 - Testing therefore uses a QEMU VM booted from the Pulsar OS Arch ISO.
 - The ISO is built from the local PKG packages, so changes can be seen end to end.
-
-## super-board
-
-- Autonomous GitHub Project pipeline with five verbs: `onboard`, `lint`, `status`, `run`, `stop`.
-- Columns: Backlog, Ready, Building, QA, Review, Blocked, Done.
-- Labels: `qa` skips Building; `bug`, `feature` and unlabeled cards are built first.
-- Board: `Pulsar OS board` (project #3, owner Victor1890).
-
-Onboard result:
-
-- Config: `.claude/super-board/configs/pulsaros-pkg.json`, base branch `main`, worker backend `workflow`.
-- Merge policy: human merges everything; money, auth and schema changes always go to a human.
-- Bug sources: GitHub issues and past PRs.
-- Permissions: 34 allow rules added to `.claude/settings.json`.
-- Docs written: `AGENTS.md`, `CLAUDE.md` (`@AGENTS.md` pointer), `docs/agents/issue-tracker.md`, `docs/super-board/PROJECT.md`.
-- Open gap: the push guard for `main` is not wired into `.claude/settings.json`.
-
-Matt Pocock skills setup:
-
-- Tracker: GitHub Issues via `gh`.
-- Triage labels: default five roles, all already existed on GitHub.
-- Domain docs: single-context layout.
-- Files: `docs/agents/triage-labels.md`, `docs/agents/domain.md`, an `## Agent skills` block in `AGENTS.md`.
 
 ## Wayfinder map
 
