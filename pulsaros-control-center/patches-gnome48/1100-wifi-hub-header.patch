@@ -1,0 +1,78 @@
+--- a/panels/network/cc-wifi-connection-row.ui
++++ b/panels/network/cc-wifi-connection-row.ui
+@@ -13,21 +13,20 @@
+             <property name="margin_end">6</property>
+           </object>
+         </child>
+-        <child>
+-          <object class="GtkImage" id="strength_icon">
+-            <property name="icon_name">network-wireless-signal-excellent-symbolic</property>
+-            <property name="icon_size">1</property>
+-          </object>
+-        </child>
+-        <child>
+-          <object class="GtkImage" id="encrypted_icon">
+-            <property name="valign">end</property>
+-            <property name="pixel-size">8</property>
+-          </object>
+-        </child>
+       </object>
+     </child>
+ 
++    <child type="suffix">
++      <object class="GtkImage" id="encrypted_icon">
++        <property name="pixel-size">16</property>
++      </object>
++    </child>
++    <child type="suffix">
++      <object class="GtkImage" id="strength_icon">
++        <property name="icon_name">network-wireless-signal-excellent-symbolic</property>
++        <property name="icon_size">1</property>
++      </object>
++    </child>
+     <child type="suffix">
+       <object class="GtkLabel" id="active_label">
+         <property name="margin_end">6</property>
+--- a/panels/network/cc-wifi-panel.c
++++ b/panels/network/cc-wifi-panel.c
+@@ -27,6 +27,7 @@
+ #include "shell/cc-application.h"
+ #include "shell/cc-log.h"
+ #include "shell/cc-object-storage.h"
++#include "shell/cc-hub-header.h"
+ 
+ #include <glib/gi18n.h>
+ #include <NetworkManager.h>
+@@ -833,6 +834,9 @@
+   object_class->get_property = cc_wifi_panel_get_property;
+   object_class->set_property = cc_wifi_panel_set_property;
+ 
++  g_type_ensure (CC_TYPE_HUB_HEADER);
++
++
+   gtk_widget_class_set_template_from_resource (widget_class, "/org/gnome/control-center/network/cc-wifi-panel.ui");
+ 
+   gtk_widget_class_bind_template_child (widget_class, CcWifiPanel, center_stack);
+--- a/panels/network/cc-wifi-panel.ui
++++ b/panels/network/cc-wifi-panel.ui
+@@ -28,6 +28,20 @@
+ 
+         <property name="content">
+           <object class="AdwPreferencesPage">
++            <child>
++              <object class="AdwPreferencesGroup">
++                <child>
++                  <object class="CcHubHeader">
++                    <property name="icon-name">network-wireless-symbolic</property>
++                    <property name="icon-color">#0088FF</property>
++                    <property name="title" translatable="yes">Wi-Fi</property>
++                    <property name="description" translatable="yes">Set up Wi-Fi to wirelessly connect your computer to the internet. Turn on Wi-Fi, then choose a network to join.</property>
++                    <property name="link-label" translatable="yes">Learn more…</property>
++                    <property name="link-uri">help:gnome-help/net-wireless</property>
++                  </object>
++                </child>
++              </object>
++            </child>
+             <child>
+               <object class="AdwPreferencesGroup">
+                 <child>

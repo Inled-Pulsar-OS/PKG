@@ -1,0 +1,42 @@
+--- a/panels/system/cc-system-panel.c
++++ b/panels/system/cc-system-panel.c
+@@ -19,6 +19,7 @@
+  * SPDX-License-Identifier: GPL-3.0-or-later
+  */
+ 
++#include "shell/cc-hub-header.h"
+ #include <config.h>
+ 
+ #include <glib/gi18n-lib.h>
+@@ -136,6 +137,9 @@
+ {
+   GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
+ 
++  g_type_ensure (CC_TYPE_HUB_HEADER);
++
++
+   gtk_widget_class_set_template_from_resource (widget_class, "/org/gnome/control-center/system/cc-system-panel.ui");
+ 
+   gtk_widget_class_bind_template_child (widget_class, CcSystemPanel, about_row);
+--- a/panels/system/cc-system-panel.ui
++++ b/panels/system/cc-system-panel.ui
+@@ -12,6 +12,19 @@
+ 
+             <property name="content">
+               <object class="AdwPreferencesPage">
++                <child>
++                  <object class="AdwPreferencesGroup">
++                    <child>
++                      <object class="CcHubHeader">
++                        <property name="hero">True</property>
++                        <property name="icon-name">org.gnome.Settings-system-symbolic</property>
++                        <property name="icon-color">#8C8C8C</property>
++                        <property name="title" translatable="yes">General</property>
++                        <property name="description" translatable="yes">Manage your overall setup and preferences for your computer, such as software updates, device language, and more.</property>
++                      </object>
++                    </child>
++                  </object>
++                </child>
+                 <child>
+                   <object class="AdwPreferencesGroup">
+ 

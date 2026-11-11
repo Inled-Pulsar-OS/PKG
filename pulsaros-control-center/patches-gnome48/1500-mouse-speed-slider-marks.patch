@@ -1,0 +1,32 @@
+--- a/panels/mouse/cc-mouse-panel.ui
++++ b/panels/mouse/cc-mouse-panel.ui
+@@ -115,7 +115,13 @@
+                                     <property name="hexpand">True</property>
+                                     <marks>
+                                       <mark value="-1" translatable="yes">Slow</mark>
+-                                      <mark value="0"/>
++                                      <mark value="-0.75"/>
++<mark value="-0.5"/>
++<mark value="-0.25"/>
++<mark value="0"/>
++<mark value="0.25"/>
++<mark value="0.5"/>
++<mark value="0.75"/>
+                                       <mark value="1" translatable="yes">Fast</mark>
+                                     </marks>
+                                     <property name="adjustment">
+@@ -217,7 +223,13 @@
+                                     <property name="hexpand">True</property>
+                                     <marks>
+                                       <mark value="-1" translatable="yes">Slow</mark>
+-                                      <mark value="0"/>
++                                      <mark value="-0.75"/>
++<mark value="-0.5"/>
++<mark value="-0.25"/>
++<mark value="0"/>
++<mark value="0.25"/>
++<mark value="0.5"/>
++<mark value="0.75"/>
+                                       <mark value="1" translatable="yes">Fast</mark>
+                                     </marks>
+                                     <property name="adjustment">

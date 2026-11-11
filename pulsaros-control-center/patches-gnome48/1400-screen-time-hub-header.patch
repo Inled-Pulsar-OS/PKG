@@ -1,0 +1,45 @@
+--- a/panels/wellbeing/cc-wellbeing-panel.c
++++ b/panels/wellbeing/cc-wellbeing-panel.c
+@@ -22,6 +22,7 @@
+  * SPDX-License-Identifier: GPL-3.0-or-later
+  */
+ 
++#include "shell/cc-hub-header.h"
+ #include "config.h"
+ 
+ #include <adwaita.h>
+@@ -644,6 +645,9 @@
+ 
+   panel_class->get_help_uri = cc_wellbeing_panel_get_help_uri;
+ 
++  g_type_ensure (CC_TYPE_HUB_HEADER);
++
++
+   gtk_widget_class_set_template_from_resource (widget_class, "/org/gnome/control-center/wellbeing/cc-wellbeing-panel.ui");
+ 
+   gtk_widget_class_bind_template_child (widget_class, CcWellbeingPanel, screen_time_statistics_info_button);
+--- a/panels/wellbeing/cc-wellbeing-panel.ui
++++ b/panels/wellbeing/cc-wellbeing-panel.ui
+@@ -15,7 +15,21 @@
+           <object class="AdwPreferencesPage">
+             <child>
+               <object class="AdwPreferencesGroup">
+-                <property name="title" translatable="yes">Screen Time</property>
++                <child>
++                  <object class="CcHubHeader">
++                    <property name="icon-name">org.gnome.Settings-screen-time-symbolic</property>
++                    <property name="icon-color">#9A57A3</property>
++                    <property name="title" translatable="yes">Screen Time</property>
++                    <property name="description" translatable="yes">See how much time you spend on your screen, set daily limits, and get reminders to take breaks.</property>
++                    <property name="link-label" translatable="yes">Learn more…</property>
++                    <property name="link-uri">help:gnome-help/wellbeing</property>
++                  </object>
++                </child>
++              </object>
++            </child>
++            <child>
++              <object class="AdwPreferencesGroup">
++                <property name="title" translatable="yes">Usage</property>
+                 <child type="header-suffix">
+                   <object class="GtkMenuButton" id="screen_time_statistics_info_button">
+                     <property name="tooltip-text" translatable="yes">More Information</property>
