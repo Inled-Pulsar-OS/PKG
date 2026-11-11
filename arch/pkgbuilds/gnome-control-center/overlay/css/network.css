@@ -16,7 +16,10 @@ navigation-split-view > .content-pane row.pulsar-status-dot.pulsar-status-on > b
 }
 
 navigation-split-view > .content-pane row.pulsar-status-dot > box.header > box.title label.subtitle {
-  padding-left: 24px;
+  /* A border, not padding: the user theme (gtk.css) resets padding on
+   * row subtitles at a higher priority and the dot would overlap the text. */
+  border-left: 24px solid transparent;
+  background-origin: border-box;
   background-repeat: no-repeat;
   background-size: 10px 10px;
   background-position: 2px center;
