@@ -1,0 +1,8 @@
+{
+  "uuid": "pulsar-menu-bar@inled.es",
+  "name": "Pulsar OS - Menu Bar Icons",
+  "description": "Separate Wi-Fi, Bluetooth and Control Center icons in the top bar, each opening its own panel.",
+  "shell-version": ["45", "46", "47", "48", "49", "50", "51"],
+  "url": "https://os.inled.es",
+  "version": 1
+}

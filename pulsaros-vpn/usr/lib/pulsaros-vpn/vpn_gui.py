@@ -556,7 +556,13 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
         threading.Thread(target=worker, daemon=True).start()
 
     def _generate_qr(self, ip_address: str, is_vpn: bool):
-        pair_uri = f"pulsar://pair?ip={ip_address}&port={DEFAULT_PORT}&token={self.token}&alias={urllib.parse.quote(self.hostname)}"
+        status = self.tailscale.get_status()
+        vpn_ip = status.get("ip") or ""
+        lan_ip = get_local_ip()
+        primary_ip = ip_address if ip_address else (vpn_ip if is_vpn else lan_ip)
+
+        vpn_param = f"&vpn_ip={vpn_ip}" if vpn_ip else ""
+        pair_uri = f"pulsar://pair?ip={lan_ip}{vpn_param}&port={DEFAULT_PORT}&token={self.token}&alias={urllib.parse.quote(self.hostname)}"
         self.current_pair_uri = pair_uri
 
         if shutil.which("qrencode"):
@@ -570,8 +576,11 @@ class PulsarVpnWindow(Adw.ApplicationWindow):
                 if os.path.exists(QR_CACHE_PATH):
                     self.qr_image.set_filename(QR_CACHE_PATH)
                     net_type = _("Tailscale Private Network") if is_vpn else _("Local Wi-Fi Network")
+                    ip_display = f"{primary_ip}"
+                    if vpn_ip and lan_ip and vpn_ip != lan_ip:
+                        ip_display = f"Local: {lan_ip} • VPN: {vpn_ip}"
                     self.qr_details_label.set_markup(
-                        f"<b>{self.hostname}</b> ({ip_address})\n"
+                        f"<b>{self.hostname}</b> ({ip_display})\n"
                         f"<small>{net_type} • {_('End-to-end encrypted')}</small>"
                     )
                     return

@@ -35,6 +35,22 @@ if [ ! -d /run/systemd/system ]; then
     exit 0
 fi
 
+# Pulsar OS uses zRAM exclusively for in-memory compressed swap (zero disk thrashing).
+# We do not automatically create disk swapfiles unless --force-disk-swap is passed.
+if [ "$1" != "--force-disk-swap" ]; then
+    if [ -f /swapfile ]; then
+        echo "ℹ️ Pulsar OS utiliza zRAM comprimido en memoria. Desactivando y eliminando /swapfile de disco..."
+        swapoff /swapfile 2>/dev/null || true
+        rm -f /swapfile
+        if [ -f /etc/fstab ]; then
+            sed -i '\|^/swapfile|d' /etc/fstab 2>/dev/null || true
+        fi
+    fi
+    # Proceed to GPU fixes and schema compilation without touching disk swap
+    SKIP_DISK_SWAP=1
+fi
+
+if [ -z "$SKIP_DISK_SWAP" ]; then
 # Detectar memoria RAM total en GiB
 TOTAL_RAM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
 TOTAL_RAM_GB=$(( (TOTAL_RAM_KB + 1048575) / 1048576 ))
@@ -265,6 +281,7 @@ if [ "$INITRAMFS_CHANGED" -eq 1 ]; then
     elif command -v dracut >/dev/null 2>&1; then
         dracut --force 2>/dev/null || true
     fi
+fi
 fi
 
 # 6. Fixes específicos por GPU — solo se aplican si el hardware está presente

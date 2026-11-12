@@ -23,8 +23,10 @@ if [ -d /run/archiso/bootmnt ] || [ -d /run/live ] || grep -qE 'archiso|pulsar-l
     exit 0
 fi
 
+IS_AUTOSTART=0
 # 3. If launched via session autostart, show once after OOTB setup when the real user logs in
 if [ "$1" = "--autostart" ]; then
+    IS_AUTOSTART=1
     CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/pulsar"
     SHOWN_FILE="$CONFIG_DIR/welcome-shown"
     mkdir -p "$CONFIG_DIR" 2>/dev/null || true
@@ -41,16 +43,17 @@ fi
 TAURI_BIN="/usr/lib/pulsaros-welcome/pulsaros-welcome"
 PYTHON_APP="/usr/share/pulsaros-welcome/welcome.py"
 
-# Fix: videos appear black in WebKit on Linux due to DMA-BUF/VA-API issues.
-# Disabling the DMA-BUF renderer forces WebKit to use software-based video
-# decoding, which is universally compatible across all GPU configurations.
+# Disable bubblewrap sandbox for GStreamer media decoders in WebKit
+export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
+# Fix: transparent window black background on Linux DMABUF
 export WEBKIT_DISABLE_DMABUF_RENDERER=1
-# Also disable accelerated compositing to prevent black-frame rendering bugs
-# in some WebKit/GStreamer combinations on Wayland and X11.
-export WEBKIT_DISABLE_COMPOSITING_MODE=1
 
 if [ -x "$TAURI_BIN" ]; then
-    exec "$TAURI_BIN" "$@"
+    if [ "$IS_AUTOSTART" = "1" ]; then
+        exec "$TAURI_BIN" --autostart "$@"
+    else
+        exec "$TAURI_BIN" --force "$@"
+    fi
 fi
 
 exec /usr/bin/python3 "$PYTHON_APP" "$@"

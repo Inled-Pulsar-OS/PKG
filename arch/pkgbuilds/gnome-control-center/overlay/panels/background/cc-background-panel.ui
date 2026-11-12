@@ -160,22 +160,6 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                             <signal name="notify::active" handler="on_liquid_glass_active_changed_cb" object="CcBackgroundPanel"/>
                           </object>
                         </child>
-                        <child>
-                          <object class="AdwComboRow" id="liquid_glass_mode_row">
-                            <property name="title" translatable="yes">Window Transparency Mode</property>
-                            <property name="subtitle" translatable="yes">Appearance and opacity of application windows</property>
-                            <property name="sensitive" bind-source="liquid_glass_switch_row" bind-property="active" bind-flags="sync-create"/>
-                            <signal name="notify::selected" handler="on_liquid_glass_mode_selected_cb" object="CcBackgroundPanel"/>
-                            <property name="model">
-                              <object class="GtkStringList">
-                                <items>
-                                  <item translatable="yes">Cristal Transparente (Fondos y Barras)</item>
-                                  <item translatable="yes">Ventanas Opacas (Solo Desenfoque de Barras)</item>
-                                </items>
-                              </object>
-                            </property>
-                          </object>
-                        </child>
                       </object>
                     </child>
                     <child>
@@ -462,6 +446,28 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                                 <property name="valign">3</property>
                                 <property name="label" translatable="yes">Open…</property>
                                 <signal name="clicked" handler="on_notch_prefs_clicked_cb" object="CcBackgroundPanel"/>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">Shell Layout &amp; Desktop</property>
+                        <property name="description" translatable="yes">Restore default Pulsar OS desktop layout, clock position and notifications</property>
+                        <child>
+                          <object class="AdwActionRow">
+                            <property name="title" translatable="yes">Restore Default Shell Layout</property>
+                            <property name="subtitle" translatable="yes">Realigns clock to right, notifications to top-right and reloads top bar items</property>
+                            <child type="suffix">
+                              <object class="GtkButton">
+                                <property name="valign">3</property>
+                                <property name="label" translatable="yes">Restore</property>
+                                <signal name="clicked" handler="on_restore_shell_layout_clicked_cb" object="CcBackgroundPanel"/>
+                                <style>
+                                  <class name="suggested-action"/>
+                                </style>
                               </object>
                             </child>
                           </object>

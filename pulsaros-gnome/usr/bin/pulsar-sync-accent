@@ -87,6 +87,10 @@ gtk-decoration-layout=close,minimize,maximize:
 INI_EOF
     done
 
+    # 4b. Ensure Mutter Server-Side Decorations use MacTahoe traffic lights on the left
+    gsettings set org.gnome.desktop.wm.preferences theme "${theme_name}" 2>/dev/null || true
+    gsettings set org.gnome.desktop.wm.preferences button-layout 'close,minimize,maximize:' 2>/dev/null || true
+
     # 5. Inject dynamic accent color variables into all user stylesheets
     for css_f in "$gtk3_dir/gtk.css" "$gtk4_dir/gtk.css" "$gtk4_dir/gtk-dark.css"; do
         if [ -f "$css_f" ]; then

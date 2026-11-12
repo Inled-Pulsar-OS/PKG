@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/modules/ui/utils";
-import { FeatureSlide } from "../types";
+import { FeatureSlide, ProviderLog } from "../types";
 
 interface SliceCardProps {
   slide: FeatureSlide;
@@ -84,7 +84,7 @@ function FlyDropSlice() {
 function PictureSlice({ slide }: { slide: FeatureSlide }) {
   return (
     <div className="flex w-full flex-wrap items-center justify-center gap-3 sm:gap-4">
-      {slide?.providers?.map((p) => (
+      {slide?.providers?.map((p: ProviderLog) => (
         <div
           key={p.name}
           className="flex h-16 w-16 flex-col items-center justify-center rounded-2xl bg-white/80 p-2 shadow-md ring-1 ring-black/5"

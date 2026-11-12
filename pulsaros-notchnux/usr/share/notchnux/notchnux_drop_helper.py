@@ -107,17 +107,30 @@ def _exclude_from_blur():
     try:
         schema_id = "org.gnome.shell.extensions.blur-my-shell.applications"
         source = Gio.SettingsSchemaSource.get_default()
-        if source is None or not source.lookup(schema_id, True):
-            return
-        settings = Gio.Settings.new(schema_id)
-        current = list(settings.get_strv("blacklist"))
-        wanted = ["es.pulsaros.NotchNuxHelper", "notchnux-drop-helper",
-                  "*NotchNux*", "*notchnux*"]
-        missing = [entry for entry in wanted if entry not in current]
-        if not missing:
-            return
-        settings.set_strv("blacklist", current + missing)
-        Gio.Settings.sync()
+        if source and source.lookup(schema_id, True):
+            settings = Gio.Settings.new(schema_id)
+            current = list(settings.get_strv("blacklist"))
+            wanted = ["es.pulsaros.NotchNuxHelper", "notchnux-drop-helper",
+                      "*NotchNux*", "*notchnux*"]
+            missing = [entry for entry in wanted if entry not in current]
+            if missing:
+                settings.set_strv("blacklist", current + missing)
+                Gio.Settings.sync()
+    except Exception:
+        pass
+
+    try:
+        lg_schema_id = "org.gnome.shell.extensions.liquid-glass@thinkingcoding1231.gmail.com"
+        source = Gio.SettingsSchemaSource.get_default()
+        if source and source.lookup(lg_schema_id, True):
+            settings = Gio.Settings.new(lg_schema_id)
+            current = list(settings.get_strv("application-window-blacklist"))
+            wanted = ["es.pulsaros.NotchNuxHelper", "notchnux-drop-helper",
+                      "notchnux", "NotchNux"]
+            missing = [entry for entry in wanted if entry not in current]
+            if missing:
+                settings.set_strv("application-window-blacklist", current + missing)
+                Gio.Settings.sync()
     except Exception:
         pass
 

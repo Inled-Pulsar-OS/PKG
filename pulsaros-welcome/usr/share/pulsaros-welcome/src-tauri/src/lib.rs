@@ -41,9 +41,11 @@ fn preflight() {
         }
     }
 
-    // 4. Already done and not forced: exit silently (autostart on later boots).
+    // 4. Sentinel check: ONLY exit silently if launched via session autostart.
+    // If the user launches pulsaros-welcome manually from app launcher or terminal, ALWAYS run.
+    let is_autostart = std::env::args().any(|a| a == "--autostart");
     let force = std::env::args().any(|a| a == "--force" || a == "-f");
-    if core::check_sentinel() && !force {
+    if is_autostart && core::check_sentinel() && !force {
         std::process::exit(0);
     }
 }
@@ -52,9 +54,8 @@ fn preflight() {
 pub fn run() {
     #[cfg(target_os = "linux")]
     {
-        std::env::set_var("WEBKIT_FORCE_SANDBOX", "0");
+        std::env::set_var("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS", "1");
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-        std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
     }
 
     // Skip the wrapper preflight in development builds so `tauri dev` always

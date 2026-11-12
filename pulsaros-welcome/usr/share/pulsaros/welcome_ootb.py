@@ -414,8 +414,10 @@ window .theme-preview-glass {
 /* ── Misc ─────────────────────────────────────────────────────────── */
 .search-box    { margin-bottom: 6px; }
 .symbolic-blue { color: #0071e3; }
-.input-label   { font-size: 13px; font-weight: 600; color: #1d1d1f; }
-.input-subtext { font-size: 11px; color: #86868b; }
+.input-label   { font-size: 13px; font-weight: 600; color: var(--text-color, #1d1d1f); }
+.dark-theme .input-label { color: #f5f5f7; }
+.input-subtext { font-size: 11px; color: var(--text-secondary, #86868b); }
+.dark-theme .input-subtext { color: #a1a1a6; }
 .error-text    { font-size: 11px; font-weight: bold; margin-top: 2px; }
 .wifi-badge {
     background-color: rgba(0, 113, 227, 0.08);
@@ -1986,6 +1988,71 @@ class OOTBWindow(Adw.ApplicationWindow):
             self.remove_css_class("dark-theme")
             Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_LIGHT)
 
+        # Apply live effect immediately if running in an active GNOME user session
+        try:
+            if mode == "liquid_glass":
+                subprocess.Popen(
+                    ["/bin/sh", "-c",
+                     "gnome-extensions enable liquid-glass@thinkingcoding1231.gmail.com 2>/dev/null; "
+                     "gnome-extensions disable blur-my-shell@aunetx 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.applications blur false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.overview blur false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.panel blur false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme true 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.0 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock custom-theme-shrink true 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface gtk-theme 'MacTahoe-Dark' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface icon-theme 'MacTahoe-blue-dark' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.user-theme name 'MacTahoe-Dark' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-application-glass 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/application-glass-all-windows 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/application-content-opacity '0.85' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-dock-glass 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-menu-glass 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-notification-glass 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-osd-glass 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-quick-settings-glass 'true' 2>/dev/null"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+            elif mode == "dark":
+                subprocess.Popen(
+                    ["/bin/sh", "-c",
+                     "gnome-extensions disable liquid-glass@thinkingcoding1231.gmail.com 2>/dev/null; "
+                     "gnome-extensions enable blur-my-shell@aunetx 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur true 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur true 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface gtk-theme 'MacTahoe-Dark' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface icon-theme 'MacTahoe-blue-dark' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.user-theme name 'MacTahoe-Dark' 2>/dev/null"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+            elif mode == "light":
+                subprocess.Popen(
+                    ["/bin/sh", "-c",
+                     "gnome-extensions disable liquid-glass@thinkingcoding1231.gmail.com 2>/dev/null; "
+                     "gnome-extensions enable blur-my-shell@aunetx 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur true 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur true 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface color-scheme 'prefer-light' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface gtk-theme 'MacTahoe-Light' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface icon-theme 'MacTahoe-blue-light' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.user-theme name 'MacTahoe-Light' 2>/dev/null"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+        except Exception:
+            pass
+
     def set_theme_dark(self, is_dark):
         self.set_theme_mode("dark" if is_dark else "light")
     def build_progress_page(self):
@@ -2834,6 +2901,8 @@ class OOTBWindow(Adw.ApplicationWindow):
                     ("org.gnome.desktop.interface", "gtk-theme", gtk_theme_name),
                     ("org.gnome.desktop.interface", "icon-theme", icon_theme_name),
                     ("org.gnome.shell.extensions.user-theme", "name", shell_theme_name),
+                    ("org.gnome.desktop.wm.preferences", "theme", gtk_theme_name),
+                    ("org.gnome.desktop.wm.preferences", "button-layout", "'close,minimize,maximize:'"),
                 ]
                 for schema, key, value in theme_settings:
                     run_cmd([
@@ -2847,8 +2916,14 @@ class OOTBWindow(Adw.ApplicationWindow):
                         "sudo", "-u", username, "dbus-run-session", "gnome-extensions", "enable",
                         "liquid-glass@thinkingcoding1231.gmail.com"
                     ], check=False)
-                    # Turn off blur-my-shell on dock and popups so it does not conflict with liquid glass
+                    # Turn off blur-my-shell completely: disable extension and disable blur on all components
+                    run_cmd([
+                        "sudo", "-u", username, "dbus-run-session", "gnome-extensions", "disable",
+                        "blur-my-shell@aunetx"
+                    ], check=False)
                     for bms_schema, bms_key, bms_val in [
+                        ("org.gnome.shell.extensions.blur-my-shell.applications", "blur", "false"),
+                        ("org.gnome.shell.extensions.blur-my-shell.overview", "blur", "false"),
                         ("org.gnome.shell.extensions.blur-my-shell.dash-to-dock", "blur", "false"),
                         ("org.gnome.shell.extensions.blur-my-shell.popup", "blur", "false"),
                         ("org.gnome.shell.extensions.blur-my-shell.panel", "blur", "false"),
@@ -2910,6 +2985,18 @@ class OOTBWindow(Adw.ApplicationWindow):
                         "sudo", "-u", username, "dbus-run-session", "gnome-extensions", "disable",
                         "liquid-glass@thinkingcoding1231.gmail.com"
                     ], check=False)
+                    run_cmd([
+                        "sudo", "-u", username, "dbus-run-session", "gnome-extensions", "enable",
+                        "blur-my-shell@aunetx"
+                    ], check=False)
+                    for bms_schema, bms_key, bms_val in [
+                        ("org.gnome.shell.extensions.blur-my-shell.dash-to-dock", "blur", "true"),
+                        ("org.gnome.shell.extensions.blur-my-shell.popup", "blur", "true"),
+                    ]:
+                        run_cmd([
+                            "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
+                            bms_schema, bms_key, bms_val
+                        ], check=False)
 
                 # Physically copy correct theme files to the newly created user's .config
                 user_home = f"/home/{username}"
@@ -3007,78 +3094,83 @@ class OOTBWindow(Adw.ApplicationWindow):
                 self.close()
                 sys.exit(0)
             else:
-                username = self.username_entry.get_text().strip()
+                username = getattr(self, "saved_username", None) or self.username_entry.get_text().strip()
+                if not username:
+                    try:
+                        out = subprocess.check_output(
+                            ["awk", "-F:", "$3 >= 1000 && $3 != 65534 && $1 != \"live\" {print $1; exit}", "/etc/passwd"],
+                            universal_newlines=True
+                        ).strip()
+                        if out:
+                            username = out
+                    except Exception:
+                        username = "pulsar"
+
                 log_path = "/tmp/pulsar-ootb.log"
 
                 def log_msg(msg):
-                    with open(log_path, "a") as log:
-                        log.write(f"{msg}\n")
-
-                # 1. Remove temporary sudoers grants for live user
-                log_msg("Cleaning up temporary sudoers for live user...")
-                for live_grant in (
-                    "/etc/sudoers.d/pulsar-ootb-live",
-                    "/etc/sudoers.d/pulsar-live-nopasswd",
-                    "/etc/polkit-1/rules.d/50-pulsar-live-nopasswd.rules",
-                ):
                     try:
-                        os.remove(live_grant)
-                    except FileNotFoundError:
+                        with open(log_path, "a") as log:
+                            log.write(f"{msg}\n")
+                    except Exception:
                         pass
 
-                # 2. Remove residual display manager config files
-                try:
-                    subprocess.run(
-                        "rm -f /etc/sddm.conf /etc/sddm.conf.d/live"
-                        " /etc/lightdm/lightdm.conf.d/* 2>/dev/null",
-                        shell=True
-                    )
-                except Exception:
-                    pass
-
-                # 3. Configure SDDM autologin for the new real user
+                # 1. Configure SDDM autologin for the new real user
                 os.makedirs("/etc/sddm.conf.d", exist_ok=True)
                 with open("/etc/sddm.conf.d/autologin.conf", "w") as f:
                     f.write(f"[Autologin]\nUser={username}\nSession=gnome\nRelogin=false\n")
                 os.chmod("/etc/sddm.conf.d/autologin.conf", 0o644)
                 log_msg(f"SDDM autologin configured for '{username}'")
 
-                # 4. Delete OOTB witness file
+                # 2. Update SDDM state so the greeter also defaults to the new user
+                try:
+                    os.makedirs("/var/lib/sddm", exist_ok=True)
+                    with open("/var/lib/sddm/state.conf", "w") as sf:
+                        sf.write(f"[Last]\nSession=/usr/share/wayland-sessions/gnome.desktop\nUser={username}\n")
+                    subprocess.run(["chown", "-R", "sddm:sddm", "/var/lib/sddm"], check=False)
+                except Exception as ex_sddm_st:
+                    log_msg(f"Notice writing sddm state: {ex_sddm_st}")
+
+                # 3. Delete OOTB witness file
                 if os.path.exists("/etc/pulsar-need-setup"):
-                    os.remove("/etc/pulsar-need-setup")
-                    log_msg("Removed /etc/pulsar-need-setup")
-
-                # 5. Run live user and installer shortcut cleanup immediately
-                if os.path.exists("/usr/libexec/pulsar-cleanup-live.sh"):
                     try:
-                        subprocess.run(["/usr/libexec/pulsar-cleanup-live.sh"], check=False)
-                        log_msg("Executed /usr/libexec/pulsar-cleanup-live.sh")
-                    except Exception as ex_cl:
-                        log_msg(f"Notice running cleanup-live.sh: {ex_cl}")
+                        os.remove("/etc/pulsar-need-setup")
+                        log_msg("Removed /etc/pulsar-need-setup")
+                    except Exception:
+                        pass
 
-                # 6. Create cleanup sentinel (if needed as fallback on next login)
-                with open("/etc/pulsar-need-cleanup", "w") as f:
-                    f.write(username)
-                log_msg("Created /etc/pulsar-need-cleanup")
+                # 4. Create cleanup sentinel for first login of the created user
+                try:
+                    with open("/etc/pulsar-need-cleanup", "w") as f:
+                        f.write(username)
+                    log_msg("Created /etc/pulsar-need-cleanup")
+                except Exception as ex_sc:
+                    log_msg(f"Notice creating cleanup sentinel: {ex_sc}")
 
-                # 7. Disable pulsar-ootb service (no longer needed)
+                # 5. Disable pulsar-ootb service (no longer needed)
                 subprocess.run(
-                    ["systemctl", "disable", "pulsar-ootb.service"],
-                    capture_output=True
+                    ["sudo", "systemctl", "disable", "pulsar-ootb.service"],
+                    capture_output=True, check=False
                 )
                 log_msg("Disabled pulsar-ootb.service")
 
-                # 7. Restart SDDM / Display Manager so it logs into the new user
+                # 6. Restart SDDM so it immediately autologs into the new user session
+                # NOTE: pulsar-cleanup-live.sh is triggered on first login of the new user by
+                # pulsar-cleanup-user (avoiding pkill -u live killing this script prematurely)
                 log_msg("Restarting display manager to enter user session...")
                 res = subprocess.run(
-                    ["systemctl", "restart", "sddm"],
+                    ["sudo", "systemctl", "restart", "sddm"],
                     capture_output=True, text=True
                 )
                 if res.returncode != 0:
-                    subprocess.run(["systemctl", "restart", "display-manager"], capture_output=True)
+                    subprocess.run(["sudo", "systemctl", "restart", "display-manager"], capture_output=True)
 
                 self.close()
                 sys.exit(0)
+        except Exception as e:
+            with open("/tmp/pulsar-ootb.log", "a") as log:
+                log.write(f"Exception during final cleanup: {e}\n")
+            self.show_error(f"Error during cleanup:\n{e}")
         except Exception as e:
             with open("/tmp/pulsar-ootb.log", "a") as log:
                 log.write(f"Exception during final cleanup: {e}\n")

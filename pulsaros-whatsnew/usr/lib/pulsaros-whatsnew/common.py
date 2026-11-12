@@ -49,7 +49,7 @@ def is_live_or_pre_setup():
     """Returns True if running in a live ISO session or before OOTB setup completes."""
     if os.path.exists("/etc/pulsar-need-setup"):
         return True
-    if os.path.exists("/run/archiso") or os.path.exists("/run/live") or os.path.exists("/live"):
+    if os.path.exists("/run/archiso") or os.path.ismount("/run/live") or os.path.ismount("/live"):
         return True
     try:
         with open("/proc/cmdline", "r") as f:

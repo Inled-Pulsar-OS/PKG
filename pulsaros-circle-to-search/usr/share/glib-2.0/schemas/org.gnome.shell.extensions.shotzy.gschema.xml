@@ -83,5 +83,10 @@
       <summary>Shake sensitivity</summary>
       <description>How small a mouse shake opens the overlay. Higher values trigger with smaller movements (10 = very light shake, 1 = must shake very hard).</description>
     </key>
+    <key name="disable-shake-with-mouse" type="b">
+      <default>true</default>
+      <summary>Disable shake to search when using an external mouse</summary>
+      <description>Disable shake to search when using a physical mouse or peripheral instead of a touchpad to prevent accidental triggers.</description>
+    </key>
   </schema>
 </schemalist>

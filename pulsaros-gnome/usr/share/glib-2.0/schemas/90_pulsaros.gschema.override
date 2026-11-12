@@ -1,6 +1,6 @@
 [org.gnome.shell]
 disable-user-extensions=false
-enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'pulsar-dock@inled.es', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'pulsaros-ui-tweaks@inled.es', 'pulsaros-global-menu@inled.es', 'notchnux@adityasah.programs', 'pulsaros-spotlight-launcher@inled.es', 'pulsar-circle-to-search@inled.es', 'pulsaros-focus@inled.es', 'pulsaros-idle-guard@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'wiggle@mechtifs', 'no-overview@fthx', 'macos-control-centre-lg@pulsar.local', 'macos-notification-center@pulsar.local', 'blur-my-shell@aunetx', 'flydrop@pulsaros.org', 'pulsar-desktop-icons@inled.es', 'pulsar-trafficlights@local']
+enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'pulsar-dock@inled.es', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'pulsaros-ui-tweaks@inled.es', 'pulsaros-global-menu@inled.es', 'notchnux@adityasah.programs', 'pulsaros-spotlight-launcher@inled.es', 'pulsar-circle-to-search@inled.es', 'pulsaros-focus@inled.es', 'pulsaros-idle-guard@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'wiggle@mechtifs', 'no-overview@fthx', 'macos-control-centre-lg@pulsar.local', 'macos-notification-center@pulsar.local', 'liquid-glass@thinkingcoding1231.gmail.com', 'pulsar-menu-bar@inled.es', 'flydrop@pulsaros.org', 'pulsar-desktop-icons@inled.es', 'pulsar-trafficlights@local']
 disabled-extensions=@as []
 favorite-apps=['org.gnome.Nautilus.desktop', 'pulsaros-recovery.desktop', 'pulsaros-spotlight.desktop', 'brave-browser.desktop', 'seafari.desktop', 'org.gnome.Terminal.desktop', 'org.gnome.Geary.desktop', 'org.gnome.Calendar.desktop', 'org.gnome.Calculator.desktop', 'com.github.xournalpp.xournalpp.desktop', 'org.gnome.Loupe.desktop', 'io.bassi.Amberol.desktop', 'org.gnome.clocks.desktop', 'org.gnome.Weather.desktop', 'es.inled.PulsarStore.desktop', 'es.inled.AppInstall.desktop']
 disable-extension-version-validation=true
@@ -52,6 +52,7 @@ enable-animations=true
 name='MacTahoe-Dark'
 
 [org.gnome.desktop.wm.preferences]
+theme='MacTahoe-Dark'
 button-layout='close,minimize,maximize:'
 
 [org.gnome.shell.extensions.dash-to-dock]
@@ -129,31 +130,32 @@ static-blur=false
 brightness=0.6
 sigma=30
 
-[org.gnome.shell.extensions.liquid-glass]
-application-blur-radius=4
+[org.gnome.shell.extensions.liquid-glass@thinkingcoding1231.gmail.com]
+application-blur-radius=5
 application-content-opacity=1.0
-application-corner-radius=30.0
+application-corner-radius=20.0
 application-glass-all-windows=true
 application-saturation=2.0
 application-tint-color='#000000'
-application-tint-strength=0.2988505747126437
+application-tint-strength=0.10
 application-window-whitelist=@as []
+application-window-blacklist=['es.pulsaros.NotchNuxHelper', 'notchnux-drop-helper', 'notchnux', 'NotchNux']
 blur-method=0
 blur-my-shell-popup-blur=false
 desktop-menu-corner-radius=14.0
-dock-blur-radius=3
+dock-blur-radius=5
 dock-brightness=1.0
 dock-contrast=0.99751243781094523
 dock-corner-radius=16.0
 dock-glass-displacement=330.0
-dock-glass-expand=0
+dock-glass-expand=3
 dock-glass-ior=0.0
 dock-glass-max-z=29.0
 dock-glass-shape-n=11.0
 dock-margin-bottom=5
 dock-saturation=1.0
-dock-tint-color='#241f31'
-dock-tint-strength=0.10112359550561797
+dock-tint-color='#000000'
+dock-tint-strength=0.12
 enable-application-glass=true
 enable-desktop-menu-glass=false
 enable-desktop-widgets=false
@@ -162,16 +164,20 @@ enable-extra-menu-glass=true
 enable-glass-clock=true
 enable-launcher=true
 enable-menu-glass=true
+enable-menu-animation=true
+enable-panel-menu-animation=true
+menu-grow-from-button=true
+panel-menu-grow-from-button=true
 enable-notification-glass=true
 enable-osd-glass=true
 enable-quick-settings-glass=true
 quick-settings-apply-to=1
 quick-settings-blur-radius=4
-quick-settings-corner-radius=35.632183908045981
+quick-settings-corner-radius=18.0
 quick-settings-enable-adaptive-text-color=false
 quick-settings-glass-expand=0
 quick-settings-tint-color='#000000'
-quick-settings-tint-strength=0.10000000000000002
+quick-settings-tint-strength=0.10
 quick-settings-toggle-corner-radius=32.5
 
 [org.gnome.settings-daemon.plugins.media-keys]
@@ -196,3 +202,27 @@ binding='<Primary><Alt>t'
 name='Terminal (Super+Return)'
 command='pulsaros-terminal'
 binding='<Super>Return'
+
+[org.freedesktop.Tracker3.Miner.Files]
+crawling-interval=-2
+enable-monitors=false
+index-recursive-directories=@as []
+index-single-directories=@as []
+index-on-battery=false
+index-on-battery-first-time=false
+
+[org.gnome.shell.extensions.shotzy]
+disable-shake-with-mouse=true
+
+[org.gnome.desktop.peripherals.mouse]
+accel-profile='adaptive'
+speed=-0.2
+natural-scroll=false
+
+[org.gnome.desktop.peripherals.touchpad]
+tap-to-click=true
+natural-scroll=true
+two-finger-scrolling-enabled=true
+click-method='fingers'
+speed=0.0
+

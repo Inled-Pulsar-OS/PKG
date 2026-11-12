@@ -205,7 +205,21 @@ if [ "$DRY_RUN" -eq 0 ]; then
     gsettings set org.gnome.shell.extensions.dash-to-dock intellihide-mode 'ALL_WINDOWS' 2>/dev/null || true
 
     if [ "$has_liquid_glass" -eq 1 ]; then
-        log "Modo Liquid Glass detectado: sincronizando ajustes..."
+        log "Modo Liquid Glass detectado: desactivando Blur My Shell y sincronizando ajustes..."
+        filtered_arr=()
+        bms_removed=0
+        for ext in "${NEW_ARR[@]}"; do
+            if [ "$ext" = "blur-my-shell@aunetx" ]; then
+                bms_removed=1
+            else
+                filtered_arr+=("$ext")
+            fi
+        done
+        if [ "$bms_removed" -eq 1 ]; then
+            NEW_ARR=("${filtered_arr[@]}")
+            NEW_VARIANT="$(build_list "${NEW_ARR[@]}")"
+            gsettings set "$SCHEMA" "$KEY_ENABLED" "$NEW_VARIANT" 2>/dev/null || true
+        fi
         gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur false 2>/dev/null || true
         gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme true 2>/dev/null || true
         gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' 2>/dev/null || true
@@ -243,6 +257,34 @@ if [ "$DRY_RUN" -eq 0 ]; then
         gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock unblur-in-overview true 2>/dev/null || true
         gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock static-blur true 2>/dev/null || true
     fi
+
+    # ==============================================================================
+    # Pulsar OS Lite - Limpieza de procesos en segundo plano y optimización
+    # ==============================================================================
+    # 1. Eliminar autostart persistente de pulsar-windows (arranque solo bajo demanda)
+    rm -f "$HOME/.config/autostart/pulsar-windows.desktop" 2>/dev/null || true
+
+    # 2. Desactivar indexación pesada de archivos (localsearch / tracker)
+    systemctl --user mask localsearch-3.service localsearch-control-3.service localsearch-extractor-3.service tracker-miner-fs-3.service tracker-extract-3.service 2>/dev/null || true
+    gsettings set org.freedesktop.Tracker3.Miner.Files index-recursive-directories '[]' 2>/dev/null || true
+    gsettings set org.freedesktop.Tracker3.Miner.Files crawling-interval -2 2>/dev/null || true
+
+    # 3. Desactivar daemons en segundo plano de Evolution
+    systemctl --user mask evolution-calendar-factory.service evolution-addressbook-factory.service evolution-source-registry.service evolution-alarm-notify.service evolution-user-prompter.service 2>/dev/null || true
+
+    # 4. Desactivar IBus en entornos con teclado latino/europeo (libera 6 procesos y ~170MB de RAM)
+    gsettings set org.gnome.desktop.interface enable-ibus false 2>/dev/null || true
+    systemctl --user mask org.freedesktop.IBus.session.GNOME.service 2>/dev/null || true
+    systemctl --user stop org.freedesktop.IBus.session.GNOME.service 2>/dev/null || true
+    pkill -9 -f ibus- 2>/dev/null || true
+
+    # 5. Desactivar daemons auxiliares no utilizados de GNOME SettingsDaemon
+    systemctl --user mask org.gnome.SettingsDaemon.Smartcard.service \
+                           org.gnome.SettingsDaemon.Wwan.service \
+                           org.gnome.SettingsDaemon.PrintNotifications.service 2>/dev/null || true
+    systemctl --user stop org.gnome.SettingsDaemon.Smartcard.service \
+                          org.gnome.SettingsDaemon.Wwan.service \
+                          org.gnome.SettingsDaemon.PrintNotifications.service 2>/dev/null || true
 fi
 
 exit 0
