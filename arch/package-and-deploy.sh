@@ -34,9 +34,10 @@ BRANCH="stable"
 
 # Packages that must be uploaded manually from a trusted machine (for example
 # because their build downloads external assets, like EGO GNOME Shell
-# extensions, which rate-limit CI runner IPs). The "all" build skips them and
-# warns that they must be uploaded by hand with --upload.
-MANUAL_UPLOAD_ONLY=("pulsaros-gnome")
+# Packages that must be uploaded manually from a trusted machine.
+# Previously pulsaros-gnome was excluded due to external EGO downloads, but now
+# uses local Git submodules without external network queries during build.
+MANUAL_UPLOAD_ONLY=()
 
 # Packages excluded from the automatic "all" build because they are not ready
 # for release or managed in their own standalone repository (appinstall).

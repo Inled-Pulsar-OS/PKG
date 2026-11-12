@@ -41,6 +41,26 @@ gi.require_version('GdkPixbuf', '2.0')
 
 from gi.repository import Gtk, Gdk, GLib, Adw, Gio, GdkPixbuf
 
+
+def _safe_console_print(*args, **kwargs):
+    """Print to stdout without ever raising.
+
+    The installer runs for many minutes and its stdout can die at any moment:
+    a terminal window closed by the user (EPIPE), a hung-up serial console
+    (EIO), a closed journal/stdout pipe... An unguarded print() — specially
+    one inside an ``except:`` handler — then raises a SECOND exception that
+    escapes the error path and aborts a perfectly good installation (observed
+    live: "INSTALLATION FAILED: [Errno 5] Input/output error" right after a
+    successful system extraction, caused by exactly this). Every print in the
+    install path must go through here so console failures can never kill an
+    install.
+    """
+    try:
+        print(*args, **kwargs)
+    except Exception:
+        pass
+
+
 # Granular catalogs for extra packages and hardware drivers (in English)
 #
 # The first block ("required") is the Pulsar OS extras: they are deliberately
@@ -199,14 +219,6 @@ EXTRA_PACKAGES_ITEMS = [
         "arch_pkgs": ["flatpak"],
         "debian_pkgs": ["flatpak"],
         "is_flatpak_onlyoffice": True,
-    },
-    {
-        "id": "localsend",
-        "name": "LocalSend",
-        "desc": "Cross-platform local network file sharing across nearby devices (AirDrop alternative).",
-        "arch_aur_pkgs": ["localsend-bin"],
-        "debian_pkgs": [],
-        "is_localsend": True,
     },
     {
         "id": "vlc",
@@ -914,7 +926,7 @@ def get_system_disks():
                         "name": f"/dev/{name} - {model} ({size})"
                     })
     except Exception as e:
-        print(f"Error parsing lsblk: {e}")
+        _safe_console_print(f"Error parsing lsblk: {e}")
         try:
             with open("/proc/partitions", "r") as f:
                 for line in f:
@@ -927,7 +939,7 @@ def get_system_disks():
                                 "name": f"/dev/{name} (Unknown)"
                             })
         except Exception as ex:
-            print(f"Fallback reading /proc/partitions failed: {ex}")
+            _safe_console_print(f"Fallback reading /proc/partitions failed: {ex}")
             
     if not disks:
         disks.append({"path": "/dev/sda", "name": "/dev/sda - Simulated Disk (30 GB)"})
@@ -955,7 +967,7 @@ def get_system_partitions(disk_path):
                     
         collect_parts(devices)
     except Exception as e:
-        print(f"Error parsing partitions with lsblk for {disk_path}: {e}")
+        _safe_console_print(f"Error parsing partitions with lsblk for {disk_path}: {e}")
         try:
             disk_base = os.path.basename(disk_path)
             with open("/proc/partitions", "r") as f:
@@ -976,7 +988,7 @@ def get_system_partitions(disk_path):
                                 "uuid": None
                             })
         except Exception as ex:
-            print(f"Fallback reading /proc/partitions failed: {ex}")
+            _safe_console_print(f"Fallback reading /proc/partitions failed: {ex}")
 
     return partitions
 
@@ -1000,7 +1012,7 @@ def detect_efi_partition(disk_path=None):
                     
         collect_parts(data.get("blockdevices", []))
     except Exception as e:
-        print(f"Error detecting EFI partition: {e}")
+        _safe_console_print(f"Error detecting EFI partition: {e}")
         
     def is_live_usb(p):
         lbl = (p.get("label") or "").upper()
@@ -1086,15 +1098,29 @@ def resolve_recovery_boot_paths(esp_root="/mnt/boot/efi", target="/mnt",
 
     # (volume, loader en refind.conf, initrd en refind.conf, kernel en host, initrd en host)
     candidates = []
-    # 1. En dual-boot o con /boot separado (PULSAR_BOOT), rEFInd carga mediante ext4_x64.efi
+    # 1. Partición dedicada PULSAR_RECOVERY (la fuente primaria cuando existe partición de recovery)
+    if rec_is_mounted:
+        candidates.extend([
+            (rec_vol, "/boot/vmlinuz-recovery", "/boot/initramfs-recovery.img",
+             os.path.join(target, "recovery", "boot", "vmlinuz-recovery"),
+             os.path.join(target, "recovery", "boot", "initramfs-recovery.img")),
+            (rec_vol, "/vmlinuz-recovery", "/initramfs-recovery.img",
+             os.path.join(target, "recovery", "vmlinuz-recovery"),
+             os.path.join(target, "recovery", "initramfs-recovery.img")),
+        ])
+
+    # 2. En dual-boot o con /boot separado (PULSAR_BOOT), rEFInd carga mediante ext4_x64.efi
     if boot_is_mounted:
-        candidates.append(
+        candidates.extend([
             (boot_label, "/recovery/vmlinuz-recovery", "/recovery/initramfs-recovery.img",
              os.path.join(target, "boot", "recovery", "vmlinuz-recovery"),
-             os.path.join(target, "boot", "recovery", "initramfs-recovery.img"))
-        )
+             os.path.join(target, "boot", "recovery", "initramfs-recovery.img")),
+            (boot_label, "/vmlinuz-recovery", "/initramfs-recovery.img",
+             os.path.join(target, "boot", "vmlinuz-recovery"),
+             os.path.join(target, "boot", "initramfs-recovery.img")),
+        ])
 
-    # 2. volume None = mismo volumen que el refind.conf que se está escribiendo (la ESP)
+    # 3. ESP: volumen de la propia ESP (None)
     candidates.extend([
         (None, "/EFI/recovery/vmlinuz-recovery", "/EFI/recovery/initramfs-recovery.img",
          os.path.join(esp_root, "EFI", "recovery", "vmlinuz-recovery"),
@@ -1102,20 +1128,21 @@ def resolve_recovery_boot_paths(esp_root="/mnt/boot/efi", target="/mnt",
         (None, "/EFI/recovery/vmlinuz-recovery.efi", "/EFI/recovery/initramfs-recovery.img",
          os.path.join(esp_root, "EFI", "recovery", "vmlinuz-recovery.efi"),
          os.path.join(esp_root, "EFI", "recovery", "initramfs-recovery.img")),
-
-        # 3. Partición PULSAR_RECOVERY (o /@/recovery si dual boot sin partición boot)
-        (rec_vol, f"{rec_prefix}/recovery/boot/vmlinuz-recovery" if not rec_is_mounted else "/boot/vmlinuz-recovery",
-         f"{rec_prefix}/recovery/boot/initramfs-recovery.img" if not rec_is_mounted else "/boot/initramfs-recovery.img",
-         os.path.join(target, "recovery", "boot", "vmlinuz-recovery"),
-         os.path.join(target, "recovery", "boot", "initramfs-recovery.img")),
-        (rec_vol, f"{rec_prefix}/recovery/vmlinuz-recovery" if not rec_is_mounted else "/vmlinuz-recovery",
-         f"{rec_prefix}/recovery/initramfs-recovery.img" if not rec_is_mounted else "/initramfs-recovery.img",
-         os.path.join(target, "recovery", "vmlinuz-recovery"),
-         os.path.join(target, "recovery", "initramfs-recovery.img")),
-        (os_label, "/@/boot/vmlinuz-recovery", "/@/boot/initramfs-recovery.img",
-         os.path.join(target, "boot", "vmlinuz-recovery"),
-         os.path.join(target, "boot", "initramfs-recovery.img")),
     ])
+
+    # 4. Partición PULSAR_OS (@/recovery si dual boot sin partición boot ni recovery dedicada)
+    if not rec_is_mounted:
+        candidates.extend([
+            (os_label, "/@/recovery/boot/vmlinuz-recovery", "/@/recovery/boot/initramfs-recovery.img",
+             os.path.join(target, "recovery", "boot", "vmlinuz-recovery"),
+             os.path.join(target, "recovery", "boot", "initramfs-recovery.img")),
+            (os_label, "/@/recovery/vmlinuz-recovery", "/@/recovery/initramfs-recovery.img",
+             os.path.join(target, "recovery", "vmlinuz-recovery"),
+             os.path.join(target, "recovery", "initramfs-recovery.img")),
+            (os_label, "/@/boot/vmlinuz-recovery", "/@/boot/initramfs-recovery.img",
+             os.path.join(target, "boot", "vmlinuz-recovery"),
+             os.path.join(target, "boot", "initramfs-recovery.img")),
+        ])
     for volume, loader, initrd, host_k, host_i in candidates:
         try:
             k_ok = os.path.isfile(host_k) and os.path.getsize(host_k) > 1024 * 1024
@@ -1125,11 +1152,132 @@ def resolve_recovery_boot_paths(esp_root="/mnt/boot/efi", target="/mnt",
         if k_ok and i_ok:
             return volume, loader, initrd, True
 
-    # Nada desplegado: se mantiene la ruta histórica para no cambiar el
-    # comportamiento, pero el fallo queda registrado en el log del instalador.
-    print("WARNING: recovery kernel/initramfs not found for rEFInd entry; "
+    # Nada desplegado: fallback con aviso explícito en el log del instalador.
+    if boot_is_mounted:
+        _safe_console_print(f"WARNING: recovery kernel/initramfs not found for rEFInd entry; "
+              f"falling back to {boot_label} /recovery/vmlinuz-recovery")
+        return boot_label, "/recovery/vmlinuz-recovery", "/recovery/initramfs-recovery.img", False
+    _safe_console_print("WARNING: recovery kernel/initramfs not found for rEFInd entry; "
           "falling back to /@/boot/vmlinuz-recovery")
     return os_label, "/@/boot/vmlinuz-recovery", "/@/boot/initramfs-recovery.img", False
+
+
+class PartitionSplitFatalError(RuntimeError):
+    """El split de la partición objetivo ya modificó (o pudo modificar) la
+    tabla de particiones, por lo que NO es seguro volver al estado anterior
+    (la partición original puede haber desaparecido). La instalación debe
+    abortar con un mensaje claro en lugar de 'seguir con la partición original',
+    que apuntaría a un nodo inexistente o a la partición equivocada."""
+
+
+def ensure_device_node(dev_path, disk_path=None, log_fn=None, attempts=12):
+    """Espera a que el nodo de dispositivo de una partición exista y sea un
+    bloque accesible.
+
+    POR QUÉ: tras reparticionar (parted rm/mkpart, sgdisk, sfdisk o partprobe)
+    el kernel re-registra las particiones y devtmpfs/udev pueden eliminar y
+    recrear los nodos de forma transitoria y desordenada. En esa ventana,
+    wipefs / cryptsetup / mkfs fallan con ENOENT ("probing initialization
+    failed: No such file or directory") aunque la partición SÍ exista en la
+    tabla. Eso abortaba instalaciones perfectamente válidas (p.ej. dual boot
+    con cifrado justo después de partir la partición objetivo).
+
+    Qué hace: si el nodo no aparece, fuerza la re-lectura de la tabla
+    (partprobe / BLKRRPART) y re-dispara los uevents (udevadm trigger --add)
+    para que el kernel y udev reconstruyan el nodo, hasta `attempts` veces.
+
+    Devuelve True si el nodo existe y es un dispositivo de bloque."""
+    import stat as _stat
+
+    log = log_fn or (lambda msg: print(msg))
+    if not dev_path:
+        return False
+
+    if "TEST_MODE" in os.environ:
+        # Demo/test flow: simulated devices (e.g. /dev/vda99) never exist on
+        # the host; pretend the node is fine so the simulated install proceeds.
+        log(f"[TEST_MODE] Simulating: ensure device node {dev_path}")
+        return True
+
+    for attempt in range(attempts):
+        try:
+            if os.path.exists(dev_path) and _stat.S_ISBLK(os.stat(dev_path).st_mode):
+                return True
+        except OSError:
+            pass
+
+        if attempt == 0 and attempts > 1:
+            log(f"Device node {dev_path} not present yet; forcing partition table re-read...")
+
+        # Releer la tabla de particiones (BLKRRPART) y re-disparar uevents de
+        # disco + particiones para que devtmpfs/udev reconstruyan los nodos.
+        try:
+            if disk_path and os.path.exists(disk_path):
+                subprocess.run(["udevadm", "settle"], capture_output=True, timeout=30)
+                subprocess.run(["partprobe", disk_path], capture_output=True, timeout=60)
+                subprocess.run(["blockdev", "--rereadpt", disk_path], capture_output=True, timeout=60)
+                try:
+                    subprocess.run(
+                        ["udevadm", "trigger", "--action=add", f"--sysname-match={os.path.basename(disk_path)}*"],
+                        capture_output=True, timeout=30,
+                    )
+                except Exception:
+                    pass
+                subprocess.run(["udevadm", "settle"], capture_output=True, timeout=30)
+            else:
+                subprocess.run(["udevadm", "settle"], capture_output=True, timeout=30)
+        except Exception:
+            # udevadm/partprobe timeouts or missing binaries must not abort
+            # the wait loop; the final existence check decides the outcome.
+            pass
+        time.sleep(0.5)
+
+    try:
+        return os.path.exists(dev_path) and _stat.S_ISBLK(os.stat(dev_path).st_mode)
+    except OSError:
+        return False
+
+
+def wipefs_partition_safe(part, disk_path=None, log_fn=None, exec_fn=None):
+    """wipefs -a -f sobre una partición, tolerante a la carrera de re-registro
+    de nodos tras reparticionar (ver ensure_device_node).
+
+    - Reintenta con re-trigger de udev si falla con ENOENT.
+    - NO es fatal: si el wipe definitivamente no puede ejecutarse, se registra
+      un aviso y se continúa. Los mkfs.* de este instalador siempre se lanzan
+      con -f, y en el flujo dual boot las firmas de la partición original ya se
+      borraron antes de partir la tabla, así que un wipefs fallido no deja
+      estado inconsistente. Antes, un ENOENT transitorio abortaba toda la
+      instalación en un paso puramente cosmético.
+    """
+    log = log_fn or (lambda msg: print(msg))
+    if "TEST_MODE" in os.environ:
+        log(f"[TEST_MODE] Simulating: wipefs -a -f {part}")
+        return
+
+    if not ensure_device_node(part, disk_path, log):
+        log(f"Warning: {part} node not present after retries; skipping signature wipe (mkfs -F will overwrite).")
+        return
+
+    last_err = ""
+    for attempt in range(3):
+        try:
+            res = subprocess.run(["wipefs", "-a", "-f", part], capture_output=True, text=True, timeout=120)
+        except Exception as wipefs_err:
+            last_err = str(wipefs_err)
+            break
+        if res.returncode == 0:
+            return
+        last_err = ((res.stderr or "") + (res.stdout or "")).strip()
+        # ENOENT transitorio: el nodo desapareció entre el open() de wipefs y
+        # el probe. Re-forzar la creación del nodo y reintentar.
+        ensure_device_node(part, disk_path, log)
+        try:
+            subprocess.run(["udevadm", "settle"], capture_output=True, timeout=30)
+        except Exception:
+            pass
+
+    log(f"Warning: wipefs on {part} failed (non-fatal): {last_err[:200]}")
 
 
 def format_partition_display(part):
@@ -1440,7 +1588,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 img.set_from_paintable(texture)
                 return True
             except Exception as e:
-                print(f"Failed to load icon {path}: {e}")
+                _safe_console_print(f"Failed to load icon {path}: {e}")
                 return False
 
         if icon_name == "logo":
@@ -1502,7 +1650,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 texture = Gdk.Texture.new_from_file(gfile)
                 image.set_from_paintable(texture)
             except Exception as e:
-                print(f"Failed to load logo {path_to_load}: {e}")
+                _safe_console_print(f"Failed to load logo {path_to_load}: {e}")
                 image.set_from_icon_name("system-software-install")
         else:
             image.set_from_icon_name("system-software-install")
@@ -1773,7 +1921,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 "install_onlyoffice": False,
                 "install_hidamari": False,
                 "install_macos": False,
-                "install_localsend": False,
                 "install_cups": False,
                 "install_pulsar_windows": False,
             }
@@ -1783,7 +1930,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
         install_onlyoffice = False
         install_hidamari = False
         install_macos = False
-        install_localsend = False
         install_cups = False
         install_pulsar_windows = False
 
@@ -1796,8 +1942,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     install_hidamari = True
                 if item.get("is_install_macos"):
                     install_macos = True
-                if item.get("is_localsend"):
-                    install_localsend = True
                 if item.get("is_cups"):
                     install_cups = True
                 if item.get("is_pulsar_windows"):
@@ -1821,7 +1965,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
             "install_onlyoffice": install_onlyoffice,
             "install_hidamari": install_hidamari,
             "install_macos": install_macos,
-            "install_localsend": install_localsend,
             "install_cups": install_cups,
             "install_pulsar_windows": install_pulsar_windows,
         }
@@ -1888,7 +2031,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         tf.write(line + "\n")
                 except Exception:
                     pass
-                print(msg)
+                _safe_console_print(msg)
                 GLib.idle_add(self.append_log, line)
 
             # ── Detect distro ──
@@ -1990,7 +2133,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
             GLib.idle_add(self.on_installation_completed)
 
         except Exception as err:
-            log_msg(f"FAILED: {err}")
+            # Report failures without ever raising from the handler itself
+            # (an unwritable console/log must not mask the real error).
+            try:
+                log_msg(f"FAILED: {err}")
+            except Exception:
+                pass
             GLib.idle_add(self.on_installation_failed, str(err))
 
     def _packages_installation_backend(self):
@@ -2022,7 +2170,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         tf.write(line + "\n")
                 except Exception:
                     pass
-                print(msg)
+                _safe_console_print(msg)
                 GLib.idle_add(self.append_log, line)
 
             # ── Detect distro ──
@@ -2186,13 +2334,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     else:
                         log_msg("Selected extra packages installed successfully.")
 
-                if pkg_info["install_localsend"]:
-                    self._install_localsend_debian(
-                        log_msg,
-                        ["pkexec", "apt-get"],
-                        "/tmp/LocalSend-latest-linux-x86-64.deb",
-                    )
-
                 if pkg_info.get("install_pulsar_windows") and not os.path.isfile("/usr/bin/pulsar-windows"):
                     self._install_pulsar_windows_debian(
                         log_msg,
@@ -2223,7 +2364,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
             GLib.idle_add(self.on_installation_completed)
 
         except Exception as err:
-            log_msg(f"FAILED: {err}")
+            # Report failures without ever raising from the handler itself
+            # (an unwritable console/log must not mask the real error).
+            try:
+                log_msg(f"FAILED: {err}")
+            except Exception:
+                pass
             GLib.idle_add(self.on_installation_failed, str(err))
 
     def _install_onlyoffice_flatpak(self, log_msg, chroot_target=None):
@@ -2409,60 +2555,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
             log_msg("ultimate-macOS-KVM setup completed.")
         except Exception as e:
             log_msg(f"Notice: could not setup ultimate-macOS-KVM: {e}")
-
-    def _install_localsend_debian(self, log_msg, apt_prefix, deb_install_path, deb_host_path=None):
-        """Install LocalSend from its official x86-64 .deb (best-effort).
-
-        LocalSend is NOT packaged in Debian stable, so `apt-get install
-        localsend` would fail and abort the whole extra-packages batch. We
-        instead download the latest linux-x86-64 .deb from the official
-        GitHub releases and install it with `apt-get install ./...deb` so any
-        dependencies are resolved automatically. Never raises: a LocalSend
-        failure must not fail the whole install (e.g. when offline).
-
-        - apt_prefix: list that prefixes apt (e.g. ["pkexec","apt-get"] for
-          the live system, or ["chroot","/mnt","apt-get"] inside the chroot).
-        - deb_install_path: path apt will operate on as seen from apt's root
-          (e.g. "/tmp/LocalSend-...deb" inside the chroot).
-        - deb_host_path: host filesystem location to write the .deb. Defaults
-          to deb_install_path (correct for the live system); for a chroot at
-          /mnt it must be "/mnt" + deb_install_path.
-        """
-        import json
-        import urllib.request
-        if deb_host_path is None:
-            deb_host_path = deb_install_path
-        try:
-            req = urllib.request.Request(
-                "https://api.github.com/repos/localsend/localsend/releases/latest",
-                headers={"User-Agent": "PulsarOS-Recovery/1.0"},
-            )
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                data = json.load(resp)
-            asset = next(
-                (a for a in data.get("assets", [])
-                 if a.get("name", "").endswith("linux-x86-64.deb")),
-                None,
-            )
-            if not asset:
-                raise RuntimeError("No linux-x86-64.deb asset found in latest release")
-            tag = data.get("tag_name", "latest")
-            os.makedirs(os.path.dirname(deb_host_path) or "/tmp", exist_ok=True)
-            log_msg(f"Downloading LocalSend {tag} .deb ...")
-            urllib.request.urlretrieve(asset["browser_download_url"], deb_host_path)
-            if not os.path.isfile(deb_host_path) or os.path.getsize(deb_host_path) == 0:
-                raise RuntimeError("Downloaded .deb is missing or empty")
-            log_msg(f"Installing LocalSend {tag} ...")
-            res = subprocess.run(
-                apt_prefix + ["install", "-y", "./" + deb_install_path],
-                capture_output=True, text=True,
-            )
-            if res.returncode != 0:
-                log_msg(f"WARNING: LocalSend install failed: {res.stderr.strip()}")
-            else:
-                log_msg("LocalSend installed successfully.")
-        except Exception as loc_err:
-            log_msg(f"WARNING: could not install LocalSend: {loc_err}")
 
     def _install_pulsar_windows_debian(self, log_msg, apt_prefix, deb_install_path, deb_host_path=None):
         """Install Pulsar Windows from its official x86-64 .deb (best-effort)."""
@@ -4369,12 +4461,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 )
                 output = (res.stdout + "\n" + res.stderr).strip()
             except Exception as e:
-                print(f"WARP enable failed: {e}")
+                _safe_console_print(f"WARP enable failed: {e}")
                 GLib.idle_add(self._warp_failed, "WARP could not be enabled.")
                 return
 
             if "Error" in output:
-                print(f"WARP output had an error:\n{output}")
+                _safe_console_print(f"WARP output had an error:\n{output}")
 
             # Re-test the repository a few times; WARP needs a moment to connect
             for _ in range(12):
@@ -4441,7 +4533,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
         if btn.get_label() == "Restart System":
             if "TEST_MODE" in os.environ:
-                print("[TEST_MODE] Simulating systemctl reboot...")
+                _safe_console_print("[TEST_MODE] Simulating systemctl reboot...")
                 self.close()
             else:
                 subprocess.Popen(["systemctl", "reboot"])
@@ -4582,7 +4674,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
             line = f"[{ts}] {msg}"
             with open(log_file, "a") as lf:
                 lf.write(line + "\n")
-            print(msg)
+            _safe_console_print(msg)
             GLib.idle_add(self.append_log, line)
 
         def demo_sleep(secs=0.15):
@@ -4661,7 +4753,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 "docker", "linux-firmware", "sof-firmware",
                 "open-vm-tools", "vlc", "totem", "imagemagick",
                 "geary", "gnome-music", "nvidia-open", "dkms", "linux-headers",
-                "localsend-bin", "flatpak", "onlyoffice-desktopeditors (flathub)",
+                "flatpak", "onlyoffice-desktopeditors (flathub)",
             ]
             GLib.idle_add(self.update_progress, 0.83, f"[DEMO] Installing {len(demo_pkgs)} packages...")
             for i, pkg in enumerate(demo_pkgs, 1):
@@ -4749,12 +4841,16 @@ class RecoveryWindow(Adw.ApplicationWindow):
     def _split_target_partition_for_boot(self, disk_path, target_partition, log_msg):
         """
         In Dual Boot with encryption enabled, split target_partition into:
-        1. A 1024MB unencrypted ext4 partition for /boot (PULSAR_BOOT) so GRUB loads
-           its boot menu and kernel without prompting for a password, leaving the single
+        1. An unencrypted ext4 partition for /boot (PULSAR_BOOT) so GRUB/rEFInd load
+           their boot menu and kernel without prompting for a password, leaving the single
            graphical unlock prompt to Plymouth splash.
         2. The remaining space as the root partition for LUKS2 + Btrfs.
         Returns (boot_part_path, root_part_path). If splitting cannot be safely
-        performed (e.g. partition too small or MBR table limit), returns (None, target_partition).
+        performed BEFORE modifying anything (e.g. partition too small or not found),
+        returns (None, target_partition) and the caller keeps the original partition.
+        Once the partition table has been modified (parted rm/mkpart), any failure
+        raises PartitionSplitFatalError: falling back to the original partition would
+        be dangerous because it may no longer exist.
         """
         import re
 
@@ -4824,18 +4920,59 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
         start_sec = target_info["start"]
         end_sec = target_info["end"]
-        # Determine boot partition size:
-        # Default to 1536MB (1.5GiB) so there is ample room for /boot kernels (~200MB)
-        # plus the dedicated recovery SquashFS (~570MB). If target partition >= 25GB, use 2048MB.
-        if target_info["size_bytes"] >= 25 * 1024 * 1024 * 1024:
-            boot_bytes = 2048 * 1024 * 1024
-        elif target_info["size_bytes"] >= 12 * 1024 * 1024 * 1024:
-            boot_bytes = 1536 * 1024 * 1024
-        else:
-            boot_bytes = 1024 * 1024 * 1024
+        # Determine boot partition size.
+        # The unencrypted /boot partition must hold, when there is no dedicated
+        # recovery partition (Dual Boot + encryption): the recovery SquashFS
+        # (the recovery entry points at PULSAR_BOOT with live-media-path=recovery),
+        # kernels + initramfs and GRUB/rEFInd files. Sizing it from fixed tiers
+        # while the recovery image grew (~1GB) made the recovery SquashFS copy
+        # get silently skipped for space, and the recovery entry then booted the
+        # live ISO instead of the installed recovery. Base the size on the
+        # REAL squashfs size present in the live medium.
+        rec_squash_bytes = 0
+        for rec_cand in (
+            "/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
+            "/mnt/usr/share/pulsaros-recovery/recovery-filesystem.squashfs",
+            "/recovery/filesystem.squashfs",
+            "/recovery/live/filesystem.squashfs",
+            "/run/live/medium/recovery/filesystem.squashfs",
+            "/run/live/medium/recovery/live/filesystem.squashfs",
+            "/lib/live/mount/medium/recovery/filesystem.squashfs",
+            "/lib/live/mount/medium/recovery/live/filesystem.squashfs",
+            "/run/archiso/bootmnt/recovery/filesystem.squashfs",
+            "/run/archiso/bootmnt/recovery/live/filesystem.squashfs",
+        ):
+            try:
+                if os.path.isfile(rec_cand) and os.path.getsize(rec_cand) > 50 * 1024 * 1024:
+                    rec_squash_bytes = os.path.getsize(rec_cand)
+                    break
+            except Exception:
+                continue
+
+        # If rec_squash_bytes was not found in static paths, default to 1100MB
+        if rec_squash_bytes == 0:
+            rec_squash_bytes = 1100 * 1024 * 1024
+
+        # The unencrypted /boot partition must hold:
+        # - Recovery SquashFS (~1000 MB)
+        # - Regular installed kernel + initramfs (~150 MB)
+        # - Recovery kernel + initramfs (~75 MB)
+        # - Ext4 filesystem journal & metadata overhead (~150 MB)
+        # - Headroom for future kernel updates & APT operations (~500 MB)
+        needed = rec_squash_bytes + 1536 * 1024 * 1024
+        # Size boot to at least 2560MB (2.5GB), up to 4GB, but not more than 1/3 of target partition
+        boot_bytes = max(2560 * 1024 * 1024, min(needed, 4 * 1024 * 1024 * 1024, target_info["size_bytes"] // 3))
+        log_msg(f"Recovery SquashFS detected ({rec_squash_bytes // (1024*1024)} MB); boot partition sized to {boot_bytes // (1024*1024)} MB")
         boot_sec = boot_bytes // sec_size
         boot_end_sec = start_sec + boot_sec - 1
         root_start_sec = boot_end_sec + 1
+        if pttype in ("dos", "msdos") and partn >= 5:
+            # Logical (msdos) partitions need an EBR sector before their data
+            # start: parted rejects a logical mkpart starting exactly at
+            # boot_end_sec + 1 ("closest location we can manage"). Reserve a
+            # 1MiB gap (EBR + alignment) for the root logical partition.
+            root_start_sec += 2048
+            log_msg(f"MSDOS logical partition: reserved 1MiB EBR gap; root starts at sector {root_start_sec}")
 
         log_msg(f"Splitting partition {partn} on {disk_path} ({pttype}):")
         log_msg(f"  PulsarBoot sectors: {start_sec}..{boot_end_sec} ({boot_bytes // (1024*1024)} MB)")
@@ -4844,8 +4981,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
         # Ensure target partition is not mounted and unmap any leftover cryptroot
         subprocess.run(["umount", "-l", target_partition], capture_output=True)
         subprocess.run(["cryptsetup", "close", "pulsar_cryptroot"], capture_output=True)
-        subprocess.run(["wipefs", "-a", "-f", target_partition], capture_output=True)
+        # Signature wipe with retry: a transient node disappearance here must
+        # not abort the installation (see wipefs_partition_safe).
+        wipefs_partition_safe(target_partition, disk_path, log_msg)
 
+        # ── From this point on the partition table gets modified ──────────────
         # Remove existing partition
         res_rm = subprocess.run(["parted", "-s", disk_path, "rm", str(partn)], capture_output=True, text=True)
         if res_rm.returncode != 0:
@@ -4857,22 +4997,26 @@ class RecoveryWindow(Adw.ApplicationWindow):
             part_type = "logical" if partn >= 5 else "primary"
             res_b = subprocess.run(["parted", "-s", "-a", "none", disk_path, "unit", "s", "mkpart", part_type, "ext4", f"{start_sec}s", f"{boot_end_sec}s"], capture_output=True, text=True)
             if res_b.returncode != 0:
-                log_msg(f"parted mkpart boot failed: {res_b.stderr}")
-                return None, target_partition
+                raise PartitionSplitFatalError(
+                    f"parted mkpart (boot) failed on {disk_path} after removing partition {partn}: {res_b.stderr}"
+                )
             res_r = subprocess.run(["parted", "-s", "-a", "none", disk_path, "unit", "s", "mkpart", part_type, "btrfs", f"{root_start_sec}s", f"{end_sec}s"], capture_output=True, text=True)
             if res_r.returncode != 0:
-                log_msg(f"parted mkpart root failed: {res_r.stderr}")
-                return None, target_partition
+                raise PartitionSplitFatalError(
+                    f"parted mkpart (root) failed on {disk_path} after removing partition {partn}: {res_r.stderr}"
+                )
         else:
             # GPT
             res_b = subprocess.run(["parted", "-s", "-a", "none", disk_path, "unit", "s", "mkpart", "PulsarBoot", "ext4", f"{start_sec}s", f"{boot_end_sec}s"], capture_output=True, text=True)
             if res_b.returncode != 0:
-                log_msg(f"parted mkpart boot failed: {res_b.stderr}")
-                return None, target_partition
+                raise PartitionSplitFatalError(
+                    f"parted mkpart (boot) failed on {disk_path} after removing partition {partn}: {res_b.stderr}"
+                )
             res_r = subprocess.run(["parted", "-s", "-a", "none", disk_path, "unit", "s", "mkpart", "PulsarOS", "btrfs", f"{root_start_sec}s", f"{end_sec}s"], capture_output=True, text=True)
             if res_r.returncode != 0:
-                log_msg(f"parted mkpart root failed: {res_r.stderr}")
-                return None, target_partition
+                raise PartitionSplitFatalError(
+                    f"parted mkpart (root) failed on {disk_path} after removing partition {partn}: {res_r.stderr}"
+                )
 
         subprocess.run(["sync"])
         subprocess.run(["udevadm", "settle"])
@@ -4909,15 +5053,30 @@ class RecoveryWindow(Adw.ApplicationWindow):
         new_root_part = f"{disk_path}{p_sep}{root_partn}" if root_partn else None
 
         if not new_boot_part or not new_root_part:
-            log_msg(f"Could not resolve new partition device nodes (boot={boot_partn}, root={root_partn})")
-            return None, target_partition
+            raise PartitionSplitFatalError(
+                f"Could not resolve new partition device nodes after split on {disk_path} "
+                f"(boot={boot_partn}, root={root_partn}). The partition table was already modified; "
+                "please reboot and retry the installation."
+            )
 
-        # Wait for device nodes to appear in /dev
-        for _ in range(10):
-            if os.path.exists(new_boot_part) and os.path.exists(new_root_part):
-                break
-            subprocess.run(["udevadm", "settle"], capture_output=True)
-            time.sleep(0.5)
+        # Wait for device nodes to appear in /dev. After the rm + mkpart +
+        # partprobe sequence the kernel re-registers partitions and the nodes
+        # can transiently disappear (udev/devtmpfs race): a plain existence
+        # poll was not enough — wipefs failed with ENOENT right after a
+        # successful split. If the nodes disappear, force a table re-read and
+        # a uevent re-trigger. If they truly never come back this is fatal:
+        # the table is already split, so falling back to the original
+        # partition would be unsafe.
+        if not ensure_device_node(new_boot_part, disk_path, log_msg):
+            raise PartitionSplitFatalError(
+                f"Boot partition node {new_boot_part} did not appear after split on {disk_path}. "
+                "The partition table was already modified; please reboot and retry the installation."
+            )
+        if not ensure_device_node(new_root_part, disk_path, log_msg):
+            raise PartitionSplitFatalError(
+                f"Root partition node {new_root_part} did not appear after split on {disk_path}. "
+                "The partition table was already modified; please reboot and retry the installation."
+            )
 
         return new_boot_part, new_root_part
 
@@ -4959,7 +5118,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         )
                     subprocess.run(["udevadm", "control", "--reload"], capture_output=True)
                 except Exception as rule_err:
-                    print(f"Notice: could not install live udisks hide rule: {rule_err}")
+                    _safe_console_print(f"Notice: could not install live udisks hide rule: {rule_err}")
 
             def log_msg(msg):
                 ts = datetime.datetime.now().strftime("%H:%M:%S")
@@ -4971,7 +5130,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         tf.write(line + "\n")
                 except Exception:
                     pass
-                print(msg)
+                _safe_console_print(msg)
                 GLib.idle_add(self.append_log, line)
 
             def exec_cmd(cmd, shell=False):
@@ -5136,6 +5295,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
             def setup_and_mount_root(raw_part):
                 nonlocal root_part_dev, luks_raw_part
                 luks_raw_part = raw_part
+                # The node of a freshly created/split partition can transiently
+                # disappear after partition table churn (udev/devtmpfs race);
+                # cryptsetup luksFormat / mkfs.btrfs would then fail with
+                # ENOENT. Make sure it exists and is a block device first.
+                if raw_part and not raw_part.startswith("/dev/mapper/"):
+                    if not ensure_device_node(raw_part, disk_path, log_msg):
+                        raise Exception(f"Root partition device node {raw_part} is not available; aborting.")
                 if self.install_encryption:
                     GLib.idle_add(self.update_progress, 0.08, f"Setting up LUKS2 encryption on {raw_part}...")
                     log_msg(f"Setting up LUKS2 encryption on {raw_part}...")
@@ -5168,7 +5334,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     root_part_dev = raw_part
 
                 GLib.idle_add(self.update_progress, 0.10, f"Formatting {root_part_dev} as Btrfs...")
-                exec_cmd(["wipefs", "-a", "-f", root_part_dev] if not self.install_encryption else ["true"])
+                # Non-fatal signature wipe (freshly created / already wiped when
+                # the dual boot split ran); mkfs.btrfs -f overwrites anyway.
+                if not self.install_encryption:
+                    wipefs_partition_safe(root_part_dev, disk_path, log_msg)
                 exec_cmd(["mkfs.btrfs", "-f", "-L", "PULSAR_OS", root_part_dev])
                 exec_cmd(["sync"])
                 exec_cmd(["udevadm", "settle"])
@@ -5242,14 +5411,24 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                 log_msg(f"Dual Boot partition split successful: boot={boot_part}, root={root_part}")
                             else:
                                 log_msg(f"Dual Boot partition split not possible; proceeding with single partition {root_part}")
+                        except PartitionSplitFatalError:
+                            # The partition table was already modified by the split;
+                            # falling back to the original partition is NOT safe.
+                            # Abort the installation with a clear message instead.
+                            raise
                         except Exception as split_err:
                             log_msg(f"Warning: Failed to split partition for unencrypted /boot: {split_err}. Proceeding with single encrypted partition.")
 
                 if boot_part:
-                    exec_cmd(["wipefs", "-a", "-f", boot_part])
+                    wipefs_partition_safe(boot_part, disk_path, log_msg)
+                    ensure_device_node(boot_part, disk_path, log_msg)
                     exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PULSAR_BOOT", boot_part])
+                    try:
+                        exec_cmd(["tune2fs", "-m", "1", boot_part])
+                    except Exception:
+                        pass
 
-                exec_cmd(["wipefs", "-a", "-f", root_part])
+                wipefs_partition_safe(root_part, disk_path, log_msg)
                 setup_and_mount_root(root_part)
 
                 if boot_part:
@@ -5326,20 +5505,27 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     boot_part = f"{disk_path}{p_sep}2"
                     recovery_part = f"{disk_path}{p_sep}3"
                     root_part = f"{disk_path}{p_sep}4"
-                    exec_cmd(["wipefs", "-a", "-f", boot_part])
+                    wipefs_partition_safe(boot_part, disk_path, log_msg)
                 else:
                     efi_part = f"{disk_path}{p_sep}1"
                     recovery_part = f"{disk_path}{p_sep}2"
                     root_part = f"{disk_path}{p_sep}3"
                     
-                exec_cmd(["wipefs", "-a", "-f", efi_part])
-                exec_cmd(["wipefs", "-a", "-f", recovery_part])
-                exec_cmd(["wipefs", "-a", "-f", root_part])
+                wipefs_partition_safe(efi_part, disk_path, log_msg)
+                wipefs_partition_safe(recovery_part, disk_path, log_msg)
+                wipefs_partition_safe(root_part, disk_path, log_msg)
                 
                 GLib.idle_add(self.update_progress, 0.10, "Formatting partitions (EFI, Recovery, Btrfs)...")
+                for fresh_part in (efi_part, boot_part, recovery_part, root_part):
+                    if fresh_part and not ensure_device_node(fresh_part, disk_path, log_msg):
+                        raise Exception(f"Partition device node {fresh_part} is not available after partitioning; aborting.")
                 exec_cmd(["mkfs.vfat", "-F32", "-n", "EFI", efi_part])
                 if boot_part:
                     exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PULSAR_BOOT", boot_part])
+                    try:
+                        exec_cmd(["tune2fs", "-m", "1", boot_part])
+                    except Exception:
+                        pass
                 exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PULSAR_RECOVERY", recovery_part])
                 
                 setup_and_mount_root(root_part)
@@ -5382,7 +5568,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     else:
                         sfdisk_script = f"label: dos\nsize={rec_size_mbr_mb}M, type=83\nsize=+, type=83, bootable\n"
                     if "TEST_MODE" in os.environ:
-                        print(f"[TEST_MODE] Simulating sfdisk partitioning script:\n{sfdisk_script}")
+                        _safe_console_print(f"[TEST_MODE] Simulating sfdisk partitioning script:\n{sfdisk_script}")
                     else:
                         res_sf = subprocess.run([sfdisk_bin, disk_path], input=sfdisk_script, capture_output=True, text=True)
                         if res_sf.returncode != 0:
@@ -5420,16 +5606,23 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     boot_part = f"{disk_path}{p_sep}1"
                     recovery_part = f"{disk_path}{p_sep}2"
                     root_part = f"{disk_path}{p_sep}3"
-                    exec_cmd(["wipefs", "-a", "-f", boot_part])
+                    wipefs_partition_safe(boot_part, disk_path, log_msg)
                 else:
                     recovery_part = f"{disk_path}{p_sep}1"
                     root_part = f"{disk_path}{p_sep}2"
                     
-                exec_cmd(["wipefs", "-a", "-f", recovery_part])
-                exec_cmd(["wipefs", "-a", "-f", root_part])
+                wipefs_partition_safe(recovery_part, disk_path, log_msg)
+                wipefs_partition_safe(root_part, disk_path, log_msg)
                 GLib.idle_add(self.update_progress, 0.10, "Formatting Recovery and Btrfs partitions...")
+                for fresh_part in (boot_part, recovery_part, root_part):
+                    if fresh_part and not ensure_device_node(fresh_part, disk_path, log_msg):
+                        raise Exception(f"Partition device node {fresh_part} is not available after partitioning; aborting.")
                 if boot_part:
                     exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PULSAR_BOOT", boot_part])
+                    try:
+                        exec_cmd(["tune2fs", "-m", "1", boot_part])
+                    except Exception:
+                        pass
                 exec_cmd(["mkfs.ext4", "-F", "-F", "-L", "PULSAR_RECOVERY", recovery_part])
                 
                 setup_and_mount_root(root_part)
@@ -5723,8 +5916,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                     except Exception:
                                         pass
                                     GLib.idle_add(self.update_progress, 0.83, "Syncing package databases...")
-                                    exec_cmd(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"])
-                                    has_network = True
+                                    res_sync = subprocess.run(["chroot", "/mnt", "pacman", "-Sy", "--noconfirm"], capture_output=True, text=True, timeout=120)
+                                    if res_sync.returncode == 0 or glob.glob("/mnt/var/lib/pacman/sync/*.db"):
+                                        has_network = True
+                                        log_msg("Pacman databases synchronized.")
+                                    else:
+                                        log_msg(f"Notice: pacman -Sy returned {res_sync.returncode}: {res_sync.stderr.strip()[:150]}")
                                 except Exception as net_err:
                                     log_msg(f"Notice: Network sync skipped (offline or unreachable): {net_err}")
 
@@ -5733,7 +5930,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                     if has_network:
                                         GLib.idle_add(self.update_progress, 0.84, f"Installing {len(extra_packages)} extra packages...")
                                         pacman_cmd = [
-                                            "chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
+                                            "chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed", "--overwrite", "*",
                                             *extra_packages
                                         ]
                                         pacman_proc = subprocess.Popen(
@@ -5770,7 +5967,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                         if pacman_proc.returncode != 0:
                                             log_msg(f"Notice: Batch pacman -S exited with code {pacman_proc.returncode}. Attempting individual package installation...")
                                             for pkg in extra_packages:
-                                                res_single = subprocess.run(["chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed", pkg], capture_output=True, text=True)
+                                                res_single = subprocess.run(["chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed", "--overwrite", "*", pkg], capture_output=True, text=True)
                                                 if res_single.returncode == 0:
                                                     log_msg(f"  pacman: Installed {pkg}")
                                                 else:
@@ -5826,7 +6023,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     if want_extras:
                         pkg_info = self._get_selected_packages_info(is_arch=False)
                         extra_packages = list(pkg_info["pkgs"])
-                        if extra_packages or pkg_info["install_onlyoffice"] or pkg_info["install_localsend"]:
+                        if extra_packages or pkg_info["install_onlyoffice"]:
                             GLib.idle_add(self.update_progress, 0.80, "Installing selected packages and apps...")
                             log_msg(f"Post-install: preparing {len(extra_packages)} selected packages via apt...")
                             try:
@@ -5859,17 +6056,21 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                                     'APT::Get::allow-downgrades "true";\n'
                                                     'APT::Get::Assume-Yes "true";\n'
                                                     'APT::Get::Fix-Broken "true";\n'
-                                                    'Dpkg::Options { "--force-confdef"; "--force-confold"; };\n')
+                                                    'Dpkg::Options { "--force-confdef"; "--force-confold"; "--force-overwrite"; };\n')
 
                                     # Ensure inled pinning priority does not cause downgrades to abort APT transactions
                                     os.makedirs("/mnt/etc/apt/preferences.d", exist_ok=True)
                                     with open("/mnt/etc/apt/preferences.d/99inled", "w") as f_pin:
                                         f_pin.write('Package: *\nPin: origin "apt.inled.es"\nPin-Priority: 990\n')
 
-                                    exec_cmd(["chroot", "/mnt", "apt-get", "update"])
-                                    has_network_deb = True
+                                    res_upd = subprocess.run(["chroot", "/mnt", "apt-get", "update"], capture_output=True, text=True, timeout=180)
+                                    if res_upd.returncode == 0 or glob.glob("/mnt/var/lib/apt/lists/*Packages*"):
+                                        has_network_deb = True
+                                        log_msg("Debian package repositories updated.")
+                                    else:
+                                        log_msg(f"Notice: apt-get update returned {res_upd.returncode}: {res_upd.stderr.strip()[:150]}")
                                     # Fix any broken dependencies from squashfs before installing new packages
-                                    subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades"], capture_output=True)
+                                    subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades", "-o", "Dpkg::Options::=--force-overwrite"], capture_output=True)
                                 except Exception as deb_net_err:
                                     log_msg(f"Notice: Debian repository update skipped: {deb_net_err}")
 
@@ -5913,15 +6114,15 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                             log_msg(f"Warning copying {ldeb}: {cp_err}")
                                     if staged_deb_paths:
                                         res_inst_local = subprocess.run(
-                                            ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "--allow-downgrades"] + staged_deb_paths,
+                                            ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "--allow-downgrades", "-o", "Dpkg::Options::=--force-overwrite"] + staged_deb_paths,
                                             capture_output=True, text=True
                                         )
                                         if res_inst_local.returncode == 0:
                                             log_msg(f"✅ Successfully installed {len(staged_deb_paths)} local Debian packages.")
                                         else:
-                                            subprocess.run(["chroot", "/mnt", "dpkg", "-i"] + staged_deb_paths, capture_output=True)
+                                            subprocess.run(["chroot", "/mnt", "dpkg", "-i", "--force-overwrite"] + staged_deb_paths, capture_output=True)
                                             res_fix = subprocess.run(
-                                                ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades"],
+                                                ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades", "-o", "Dpkg::Options::=--force-overwrite"],
                                                 capture_output=True, text=True
                                             )
                                             if res_fix.returncode == 0:
@@ -5931,7 +6132,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                     shutil.rmtree(chroot_deb_dir, ignore_errors=True)
 
                                 # Always ensure dpkg has no broken dependencies before batch installs
-                                subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades"], capture_output=True)
+                                subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades", "-o", "Dpkg::Options::=--force-overwrite"], capture_output=True)
 
                                 if extra_packages:
                                     if has_network_deb:
@@ -5949,7 +6150,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                             log_msg(f"Warning checking Debian package availability: {chk_e}")
 
                                         apt_cmd = [
-                                            "chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "--allow-downgrades",
+                                            "chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "--allow-downgrades", "-o", "Dpkg::Options::=--force-overwrite",
                                             *extra_packages,
                                         ]
                                         apt_proc = subprocess.Popen(
@@ -5981,11 +6182,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                         if apt_proc.returncode != 0:
                                             log_msg(f"Notice: Batch apt-get install exited with code {apt_proc.returncode}. Attempting individual installs...")
                                             subprocess.run(["fuser", "-k", "-9", "/mnt/var/lib/dpkg/lock-frontend", "/mnt/var/lib/dpkg/lock", "/mnt/var/lib/apt/lists/lock"], capture_output=True)
-                                            subprocess.run(["chroot", "/mnt", "dpkg", "--configure", "-a"], capture_output=True)
-                                            subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades"], capture_output=True)
+                                            subprocess.run(["chroot", "/mnt", "dpkg", "--configure", "-a", "--force-overwrite"], capture_output=True)
+                                            subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades", "-o", "Dpkg::Options::=--force-overwrite"], capture_output=True)
                                             for dpkg in extra_packages:
                                                 res_d = subprocess.run(
-                                                    ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "--allow-downgrades", dpkg],
+                                                    ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "--allow-downgrades", "-o", "Dpkg::Options::=--force-overwrite", dpkg],
                                                     capture_output=True,
                                                     text=True
                                                 )
@@ -5994,11 +6195,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                                 else:
                                                     err_line = res_d.stderr.strip().splitlines()[-1] if res_d.stderr.strip() else "error"
                                                     log_msg(f"  apt: Skipping {dpkg} ({err_line})")
-                                                    subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades"], capture_output=True)
-                                            subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades"], capture_output=True)
+                                                    subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades", "-o", "Dpkg::Options::=--force-overwrite"], capture_output=True)
+                                            subprocess.run(["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "--fix-broken", "install", "-y", "--allow-downgrades", "-o", "Dpkg::Options::=--force-overwrite"], capture_output=True)
                                         else:
                                             log_msg("Post-install: extra packages installed successfully (apt).")
                                             extra_packages_installed = True
+                                        subprocess.run(["chroot", "/mnt", "apt-get", "clean"], capture_output=True)
                                     else:
                                         log_msg(f"Notice: Offline mode active. Skipping {len(extra_packages)} online packages.")
 
@@ -6011,14 +6213,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                         log_msg("CUPS print service enabled on installed system.")
                                     except Exception as cups_err:
                                         log_msg(f"Notice: could not enable CUPS: {cups_err}")
-
-                                if pkg_info["install_localsend"]:
-                                    self._install_localsend_debian(
-                                        log_msg,
-                                        ["chroot", "/mnt", "apt-get"],
-                                        "/tmp/LocalSend-latest-linux-x86-64.deb",
-                                        "/mnt/tmp/LocalSend-latest-linux-x86-64.deb",
-                                    )
 
                                 if pkg_info.get("install_pulsar_windows") and not os.path.isfile("/mnt/usr/bin/pulsar-windows"):
                                     self._install_pulsar_windows_debian(
@@ -6090,36 +6284,21 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 ]
                 found_rec_squash = next((p for p in rec_sources if os.path.isfile(p) and os.path.getsize(p) > 50 * 1024 * 1024), None)
                 if found_rec_squash and "TEST_MODE" not in os.environ:
-                    primary_rec_dst = "/mnt/recovery/live/filesystem.squashfs"
-                    if not os.path.isfile(primary_rec_dst) or os.path.getsize(primary_rec_dst) == 0:
-                        shutil.copy2(found_rec_squash, primary_rec_dst)
-                        log_msg(f"Recovery Environment SquashFS deployed from {found_rec_squash} -> {primary_rec_dst}")
-
-                    for alias in ["/mnt/recovery/filesystem.squashfs", "/mnt/recovery/recovery/filesystem.squashfs", "/mnt/live/filesystem.squashfs"]:
-                        try:
-                            os.makedirs(os.path.dirname(alias), exist_ok=True)
-                            if not os.path.isfile(alias):
-                                os.link(primary_rec_dst, alias)
-                        except Exception:
-                            try:
-                                shutil.copy2(primary_rec_dst, alias)
-                            except Exception:
-                                pass
-
+                    rec_sz = os.path.getsize(found_rec_squash)
                     # If an unencrypted boot partition exists AND there is NO dedicated recovery partition
-                    # (e.g. Dual Boot with encryption), deploy the recovery SquashFS onto the unencrypted /boot
-                    # partition ONLY if sufficient free space exists, leaving ample room for kernels & GRUB.
-                    boot_rec_dst = "/mnt/boot/live/filesystem.squashfs"
-                    try:
-                        if not recovery_part and boot_part and os.path.ismount("/mnt/boot"):
+                    # (e.g. Dual Boot with encryption), deploy the recovery SquashFS directly onto the unencrypted /boot
+                    # partition (PULSAR_BOOT). Do NOT duplicate it on the encrypted root filesystem!
+                    if not recovery_part and boot_part and os.path.ismount("/mnt/boot"):
+                        boot_rec_dst = "/mnt/boot/live/filesystem.squashfs"
+                        try:
                             stat_b = os.statvfs("/mnt/boot")
                             avail_b = stat_b.f_bavail * stat_b.f_frsize
-                            rec_sz = os.path.getsize(primary_rec_dst)
-                            if avail_b > (rec_sz + 350 * 1024 * 1024):
+                            if avail_b > (rec_sz + 150 * 1024 * 1024):
                                 os.makedirs("/mnt/boot/live", exist_ok=True)
+                                os.makedirs("/mnt/boot/recovery", exist_ok=True)
                                 os.makedirs("/mnt/boot/recovery/live", exist_ok=True)
                                 if not os.path.isfile(boot_rec_dst) or os.path.getsize(boot_rec_dst) == 0:
-                                    shutil.copy2(primary_rec_dst, boot_rec_dst)
+                                    shutil.copy2(found_rec_squash, boot_rec_dst)
                                     log_msg(f"Recovery Environment SquashFS deployed to unencrypted /boot ({boot_part}) -> {boot_rec_dst}")
                                 for b_alias in ["/mnt/boot/recovery/live/filesystem.squashfs", "/mnt/boot/recovery/filesystem.squashfs", "/mnt/boot/filesystem.squashfs"]:
                                     try:
@@ -6129,21 +6308,35 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                     except Exception:
                                         pass
                             else:
-                                log_msg(f"Notice: /boot has only {avail_b / (1024*1024):.1f} MB free; skipping recovery SquashFS copy to /boot to prevent partition overflow.")
-                        elif recovery_part and os.path.ismount("/mnt/boot"):
-                            # Dedicated recovery partition exists; ensure /boot does not hold redundant squashfs files
-                            for sq_f in glob.glob("/mnt/boot/**/*.squashfs", recursive=True):
-                                try:
-                                    os.remove(sq_f)
-                                except Exception:
-                                    pass
-                    except Exception as b_rec_err:
+                                log_msg(
+                                    f"ERROR: /boot has only {avail_b / (1024*1024):.1f} MB free but the recovery "
+                                    f"SquashFS needs {rec_sz / (1024*1024):.1f} MB + 150 MB headroom; skipping the "
+                                    "copy to /boot. The installed Recovery entry will NOT find its image on "
+                                    "PULSAR_BOOT (it must then boot from the live medium or fail explicitly)."
+                                )
+                        except Exception as b_rec_err:
+                            log_msg(f"Notice: /boot recovery SquashFS setup: {b_rec_err}")
+                    else:
+                        # Dedicated recovery partition exists OR single unencrypted root
+                        primary_rec_dst = "/mnt/recovery/live/filesystem.squashfs"
                         try:
-                            if os.path.isfile(boot_rec_dst):
-                                os.remove(boot_rec_dst)
-                        except Exception:
-                            pass
-                        log_msg(f"Notice: /boot recovery SquashFS setup: {b_rec_err}")
+                            os.makedirs("/mnt/recovery/live", exist_ok=True)
+                            if not os.path.isfile(primary_rec_dst) or os.path.getsize(primary_rec_dst) == 0:
+                                shutil.copy2(found_rec_squash, primary_rec_dst)
+                                log_msg(f"Recovery Environment SquashFS deployed from {found_rec_squash} -> {primary_rec_dst}")
+
+                            for alias in ["/mnt/recovery/filesystem.squashfs", "/mnt/recovery/recovery/filesystem.squashfs", "/mnt/live/filesystem.squashfs"]:
+                                try:
+                                    os.makedirs(os.path.dirname(alias), exist_ok=True)
+                                    if not os.path.isfile(alias):
+                                        os.link(primary_rec_dst, alias)
+                                except Exception:
+                                    try:
+                                        shutil.copy2(primary_rec_dst, alias)
+                                    except Exception:
+                                        pass
+                        except Exception as rec_p_err:
+                            log_msg(f"Notice: recovery partition SquashFS setup: {rec_p_err}")
 
                     # If /mnt is a Btrfs subvolume (@), ensure top-level subvolume 5 also has finder symlinks for live-boot
                     try:
@@ -6176,35 +6369,54 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 ]
                 found_base_squash = next((p for p in base_os_sources if os.path.isfile(p) and os.path.getsize(p) > 200 * 1024 * 1024), None)
                 if found_base_squash and "TEST_MODE" not in os.environ:
-                    base_dst = "/mnt/recovery/images/pulsaros-base.squashfs"
-                    if not os.path.isfile(base_dst) or os.path.getsize(base_dst) == 0:
-                        total_sz = os.path.getsize(found_base_squash)
-                        copied_sz = 0
-                        chunk_sz = 8 * 1024 * 1024
-                        GLib.idle_add(self.update_progress, 0.83, "Deploying recovery base image: 0%")
-                        with open(found_base_squash, "rb") as fsrc, open(base_dst, "wb") as fdst:
-                            while True:
-                                chunk = fsrc.read(chunk_sz)
-                                if not chunk:
-                                    break
-                                fdst.write(chunk)
-                                copied_sz += len(chunk)
-                                pct = int((copied_sz / total_sz) * 100)
-                                frac = 0.83 + (copied_sz / total_sz) * 0.02
-                                GLib.idle_add(self.update_progress, frac, f"Deploying recovery base image: {pct}%")
-                        log_msg(f"Pulsar OS Base Image deployed from {found_base_squash} -> {base_dst}")
-
-                    alias_arch = "/mnt/recovery/images/x86_64/airootfs.sfs"
-                    try:
-                        if not os.path.isfile(alias_arch):
-                            os.link(base_dst, alias_arch)
-                    except Exception:
+                    total_sz = os.path.getsize(found_base_squash)
+                    should_deploy_base = False
+                    if recovery_part and os.path.ismount("/mnt/recovery"):
+                        # Dedicated recovery partition exists
+                        should_deploy_base = True
+                    else:
+                        # Shared root filesystem: only deploy if ample free disk space exists (15 GB headroom)
                         try:
-                            shutil.copy2(base_dst, alias_arch)
+                            stat_m = os.statvfs("/mnt")
+                            avail_m = stat_m.f_bavail * stat_m.f_frsize
+                            if avail_m > (total_sz + 15 * 1024 * 1024 * 1024):
+                                should_deploy_base = True
+                            else:
+                                log_msg(f"Notice: Skipping deployment of recovery base image ({total_sz // (1024*1024)}MB) "
+                                        f"to root filesystem: requires 15GB free headroom, only {avail_m // (1024*1024)}MB available. "
+                                        "Factory reset / restoration will use live installation media.")
+                        except Exception as st_err:
+                            log_msg(f"Notice: Could not check free space for base image: {st_err}")
+
+                    if should_deploy_base:
+                        base_dst = "/mnt/recovery/images/pulsaros-base.squashfs"
+                        if not os.path.isfile(base_dst) or os.path.getsize(base_dst) == 0:
+                            copied_sz = 0
+                            chunk_sz = 8 * 1024 * 1024
+                            GLib.idle_add(self.update_progress, 0.83, "Deploying recovery base image: 0%")
+                            with open(found_base_squash, "rb") as fsrc, open(base_dst, "wb") as fdst:
+                                while True:
+                                    chunk = fsrc.read(chunk_sz)
+                                    if not chunk:
+                                        break
+                                    fdst.write(chunk)
+                                    copied_sz += len(chunk)
+                                    pct = int((copied_sz / total_sz) * 100)
+                                    frac = 0.83 + (copied_sz / total_sz) * 0.02
+                                    GLib.idle_add(self.update_progress, frac, f"Deploying recovery base image: {pct}%")
+                            log_msg(f"Pulsar OS Base Image deployed from {found_base_squash} -> {base_dst}")
+
+                        alias_arch = "/mnt/recovery/images/x86_64/airootfs.sfs"
+                        try:
+                            if not os.path.isfile(alias_arch):
+                                os.link(base_dst, alias_arch)
                         except Exception:
-                            pass
+                            try:
+                                shutil.copy2(base_dst, alias_arch)
+                            except Exception:
+                                pass
             except Exception as rec_copy_err:
-                print(f"Notice: Recovery squashfs setup: {rec_copy_err}")
+                _safe_console_print(f"Notice: Recovery squashfs setup: {rec_copy_err}")
 
             GLib.idle_add(self.update_progress, 0.85, "Configuring bootloader (fstab)...")
             def get_partition_uuid(part):
@@ -6234,9 +6446,9 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 try:
                     st = os.statvfs("/mnt")
                     free_gb = (st.f_bavail * st.f_frsize) // (1024 ** 3)
-                    # Keep 2 GB of headroom for the system itself
-                    if free_gb < (swap_gb + 2):
-                        swap_gb = max(0, free_gb - 2)
+                    # Keep at least 6 GB of headroom on the target filesystem for system operation
+                    if free_gb < (swap_gb + 6):
+                        swap_gb = max(0, free_gb - 6)
                 except Exception:
                     pass
                 return swap_gb
@@ -6394,19 +6606,38 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     if not src:
                         log_msg("WARNING: dedicated recovery initramfs not found.")
                     else:
-                        # NOTE: nunca copiar el initramfs de recovery al /boot del
-                        # sistema instalado (/mnt/boot): grub-mkconfig (10_linux) lo
-                        # elegiría como kernel/inicramfs por defecto y arrancaría el
-                        # kernel Debian de recovery sobre el rootfs Arch (sin entrada
-                        # de teclado/ratón — Bug #1). Solo se despliega en la
-                        # partición/directorio de recovery y en la ESP.
-                        os.makedirs("/mnt/recovery/boot", exist_ok=True)
-                        os.makedirs("/mnt/recovery", exist_ok=True)
-                        shutil.copy2(src, "/mnt/recovery/boot/initramfs-recovery.img")
-                        shutil.copy2(src, "/mnt/recovery/initramfs-recovery.img")
-                        if not recovery_part and boot_part and os.path.ismount("/mnt/boot"):
-                            os.makedirs("/mnt/boot/recovery", exist_ok=True)
-                            shutil.copy2(src, "/mnt/boot/recovery/initramfs-recovery.img")
+                        # 1. Deploy to PULSAR_BOOT (/mnt/boot/recovery) FIRST if /boot partition exists
+                        if boot_part and os.path.ismount("/mnt/boot"):
+                            try:
+                                os.makedirs("/mnt/boot/recovery", exist_ok=True)
+                                shutil.copy2(src, "/mnt/boot/recovery/initramfs-recovery.img")
+                                try:
+                                    if not os.path.isfile("/mnt/boot/initramfs-recovery.img"):
+                                        os.link("/mnt/boot/recovery/initramfs-recovery.img", "/mnt/boot/initramfs-recovery.img")
+                                except Exception:
+                                    pass
+                                log_msg("Recovery initramfs deployed to PULSAR_BOOT (/mnt/boot/recovery/)")
+                            except Exception as b_err:
+                                log_msg(f"ERROR deploying recovery initramfs to /boot: {b_err}")
+
+                        # 2. Deploy to dedicated recovery partition OR root directory
+                        if recovery_part and os.path.ismount("/mnt/recovery"):
+                            try:
+                                os.makedirs("/mnt/recovery/boot", exist_ok=True)
+                                shutil.copy2(src, "/mnt/recovery/boot/initramfs-recovery.img")
+                                shutil.copy2(src, "/mnt/recovery/initramfs-recovery.img")
+                                log_msg("Recovery initramfs deployed to dedicated PULSAR_RECOVERY")
+                            except Exception as rec_err:
+                                log_msg(f"ERROR deploying recovery initramfs to PULSAR_RECOVERY: {rec_err}")
+                        elif not boot_part:
+                            try:
+                                os.makedirs("/mnt/recovery/boot", exist_ok=True)
+                                shutil.copy2(src, "/mnt/recovery/boot/initramfs-recovery.img")
+                                shutil.copy2(src, "/mnt/recovery/initramfs-recovery.img")
+                            except Exception as r_err:
+                                log_msg(f"ERROR deploying recovery initramfs to rootfs: {r_err}")
+
+                        # 3. ESP staging
                         if is_efi:
                             esp_root = "/mnt/boot/efi"
                             try:
@@ -6420,7 +6651,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             except Exception as esp_i_err:
                                 log_msg(f"Notice: ESP recovery initramfs staging skipped: {esp_i_err}")
                         subprocess.run(["sync"])
-                        log_msg(f"Recovery initramfs deployed to PULSAR_OS, PULSAR_RECOVERY, and ESP from {src}")
+                        log_msg(f"Recovery initramfs deployment completed from {src}")
                 except Exception as p_err:
                     log_msg(f"ERROR preserving live initramfs for recovery: {p_err}")
 
@@ -6459,16 +6690,39 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     if not found_k:
                         log_msg("WARNING: dedicated recovery kernel not found.")
                         return
-                    # NOTE: igual que el initramfs — mantener el kernel de recovery
-                    # FUERA del /boot del sistema instalado (/mnt/boot) para que
-                    # grub-mkconfig no lo haga la entrada por defecto (Bug #1).
-                    os.makedirs("/mnt/recovery/boot", exist_ok=True)
-                    os.makedirs("/mnt/recovery", exist_ok=True)
-                    shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-recovery")
-                    shutil.copy2(found_k, "/mnt/recovery/vmlinuz-recovery")
-                    if not recovery_part and boot_part and os.path.ismount("/mnt/boot"):
-                        os.makedirs("/mnt/boot/recovery", exist_ok=True)
-                        shutil.copy2(found_k, "/mnt/boot/recovery/vmlinuz-recovery")
+
+                    # 1. Deploy to PULSAR_BOOT (/mnt/boot/recovery) FIRST if /boot partition exists
+                    if boot_part and os.path.ismount("/mnt/boot"):
+                        try:
+                            os.makedirs("/mnt/boot/recovery", exist_ok=True)
+                            shutil.copy2(found_k, "/mnt/boot/recovery/vmlinuz-recovery")
+                            try:
+                                if not os.path.isfile("/mnt/boot/vmlinuz-recovery"):
+                                    os.link("/mnt/boot/recovery/vmlinuz-recovery", "/mnt/boot/vmlinuz-recovery")
+                            except Exception:
+                                pass
+                            log_msg("Recovery kernel deployed to PULSAR_BOOT (/mnt/boot/recovery/)")
+                        except Exception as b_err:
+                            log_msg(f"ERROR deploying recovery kernel to /boot: {b_err}")
+
+                    # 2. Deploy to dedicated recovery partition OR root directory
+                    if recovery_part and os.path.ismount("/mnt/recovery"):
+                        try:
+                            os.makedirs("/mnt/recovery/boot", exist_ok=True)
+                            shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-recovery")
+                            shutil.copy2(found_k, "/mnt/recovery/vmlinuz-recovery")
+                            log_msg("Recovery kernel deployed to dedicated PULSAR_RECOVERY")
+                        except Exception as rec_err:
+                            log_msg(f"ERROR deploying recovery kernel to PULSAR_RECOVERY: {rec_err}")
+                    elif not boot_part:
+                        try:
+                            os.makedirs("/mnt/recovery/boot", exist_ok=True)
+                            shutil.copy2(found_k, "/mnt/recovery/boot/vmlinuz-recovery")
+                            shutil.copy2(found_k, "/mnt/recovery/vmlinuz-recovery")
+                        except Exception as r_err:
+                            log_msg(f"ERROR deploying recovery kernel to rootfs: {r_err}")
+
+                    # 3. ESP staging
                     if is_efi:
                         esp_root = "/mnt/boot/efi"
                         try:
@@ -6487,6 +6741,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         rec_media = f"live-media=/dev/disk/by-uuid/{rec_uuid}"
                     elif recovery_part:
                         rec_media = "live-media=/dev/disk/by-label/PULSAR_RECOVERY"
+                    elif boot_part and boot_uuid:
+                        rec_media = f"live-media=/dev/disk/by-uuid/{boot_uuid}"
                     elif boot_part:
                         rec_media = "live-media=/dev/disk/by-label/PULSAR_BOOT"
                     elif root_uuid:
@@ -6627,6 +6883,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     rec_media_opt = f"live-media=/dev/disk/by-uuid/{rec_uuid}"
                 elif recovery_part:
                     rec_media_opt = "live-media=/dev/disk/by-label/PULSAR_RECOVERY"
+                elif boot_part and boot_uuid:
+                    rec_media_opt = f"live-media=/dev/disk/by-uuid/{boot_uuid}"
                 elif boot_part:
                     rec_media_opt = "live-media=/dev/disk/by-label/PULSAR_BOOT"
                 elif root_uuid:
@@ -7017,29 +7275,33 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 grub_d = "/mnt/etc/grub.d"
                 os.makedirs(grub_d, exist_ok=True)
 
-                if boot_part and boot_uuid:
-                    primary_rec_search = f"""    # 1. Dedicated unencrypted /boot partition (PULSAR_BOOT)
-    if search --no-floppy --fs-uuid --set=root {boot_uuid}; then
-        if [ -f /recovery/vmlinuz-recovery ]; then
-            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_BOOT live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-            initrd /recovery/initramfs-recovery.img
-            set rec_found=1
-        elif [ -f /vmlinuz-recovery ]; then
-            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-label/PULSAR_BOOT live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
-            initrd /initramfs-recovery.img
-            set rec_found=1
-        fi
-    fi"""
-                elif recovery_part and rec_uuid:
+                if recovery_part and rec_uuid:
                     primary_rec_search = f"""    # 1. Dedicated PULSAR_RECOVERY partition
     if search --no-floppy --fs-uuid --set=root {rec_uuid}; then
         if [ -f /boot/vmlinuz-recovery ]; then
             linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-uuid/{rec_uuid} live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /boot/initramfs-recovery.img
             set rec_found=1
-        elif [ -f /recovery/vmlinuz-recovery ]; then
-            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-uuid/{rec_uuid} live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+        elif [ -f /vmlinuz-recovery ]; then
+            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-uuid/{rec_uuid} live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd /initramfs-recovery.img
+            set rec_found=1
+        fi
+    fi"""
+                elif boot_part and boot_uuid:
+                    primary_rec_search = f"""    # 1. Dedicated unencrypted /boot partition (PULSAR_BOOT)
+    if search --no-floppy --fs-uuid --set=root {boot_uuid}; then
+        if [ -f /recovery/vmlinuz-recovery ]; then
+            linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-uuid/{boot_uuid} live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /recovery/initramfs-recovery.img
+            set rec_found=1
+        elif [ -f /vmlinuz-recovery ]; then
+            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-uuid/{boot_uuid} live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd /initramfs-recovery.img
+            set rec_found=1
+        elif [ -f /boot/vmlinuz-recovery ]; then
+            linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media=/dev/disk/by-uuid/{boot_uuid} live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd /boot/initramfs-recovery.img
             set rec_found=1
         fi
     fi"""
@@ -7085,7 +7347,15 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
 
     # 2. Fallback device search by file
     if [ "$rec_found" = "0" ]; then
-        if search --no-floppy --file --set=root /recovery/vmlinuz-recovery; then
+        if search --no-floppy --file --set=root /boot/vmlinuz-recovery; then
+            linux /boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd /boot/initramfs-recovery.img
+            set rec_found=1
+        elif search --no-floppy --file --set=root /vmlinuz-recovery; then
+            linux /vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd /initramfs-recovery.img
+            set rec_found=1
+        elif search --no-floppy --file --set=root /recovery/vmlinuz-recovery; then
             linux /recovery/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /recovery/initramfs-recovery.img
             set rec_found=1
@@ -7096,6 +7366,10 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
         elif search --no-floppy --file --set=root /@/recovery/boot/vmlinuz-recovery; then
             linux /@/recovery/boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
             initrd /@/recovery/boot/initramfs-recovery.img
+            set rec_found=1
+        elif search --no-floppy --file --set=root /@/boot/vmlinuz-recovery; then
+            linux /@/boot/vmlinuz-recovery boot=live components locales=en_US.UTF-8 username=live autologin cow_spacesize=4G live-media-path=recovery module_blacklist=pcspkr i915.modeset=1 amdgpu.modeset=1 nvme_load=yes fsck.mode=skip quiet splash loglevel=3 noprompt --
+            initrd /@/boot/initramfs-recovery.img
             set rec_found=1
         fi
     fi
@@ -7201,7 +7475,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                         exec_cmd([live_refind_install, "--root", "/mnt", "--yes", "--usedefault", efi_part or disk_path])
                     refind_installed = True
                 except Exception as ref_err:
-                    print(f"Warning: refind-install failed: {ref_err}. Falling back to GRUB.")
+                    _safe_console_print(f"Warning: refind-install failed: {ref_err}. Falling back to GRUB.")
                     if efi_part:
                         try:
                             exec_cmd(["chroot", "/mnt", "grub-install", "--target=x86_64-efi", "--efi-directory=/boot/efi", "--bootloader-id=PulsarOS", "--recheck"])
@@ -7441,17 +7715,17 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                                     except Exception:
                                         pass
                     except Exception as theme_err:
-                        print(f"Warning: rEFInd theme configuration failed: {theme_err}")
+                        _safe_console_print(f"Warning: rEFInd theme configuration failed: {theme_err}")
             elif is_efi and efi_part:
                 GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader (UEFI)...")
                 try:
                     exec_cmd(["chroot", "/mnt", "grub-install", "--target=x86_64-efi", "--efi-directory=/boot/efi", "--bootloader-id=PulsarOS", "--recheck"])
                 except Exception as g_err:
-                    print(f"Warning: Standard grub-install failed: {g_err}. Proceeding with removable fallback...")
+                    _safe_console_print(f"Warning: Standard grub-install failed: {g_err}. Proceeding with removable fallback...")
                 try:
                     exec_cmd(["chroot", "/mnt", "grub-install", "--target=x86_64-efi", "--efi-directory=/boot/efi", "--removable", "--recheck"])
                 except Exception as g_rem_err:
-                    print(f"Warning: Removable fallback grub-install: {g_rem_err}")
+                    _safe_console_print(f"Warning: Removable fallback grub-install: {g_rem_err}")
             else:
                 GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader (BIOS/MBR)...")
                 log_msg(f"Installing BIOS/MBR GRUB onto {disk_path}...")
@@ -7469,7 +7743,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                 # On Apple hardware the open-source brcmfmac driver is the one
                 # that works; the Broadcom STA driver + brcmfmac blacklist would
                 # kill Wi-Fi, so the STA install path is skipped entirely.
-                print("Apple hardware detected — skipping Broadcom STA driver to keep brcmfmac Wi-Fi working.")
+                _safe_console_print("Apple hardware detected — skipping Broadcom STA driver to keep brcmfmac Wi-Fi working.")
             if self.install_broadcom and not self._is_apple_hardware():
                 policy_file = "/mnt/usr/sbin/policy-rc.d"
                 try:
@@ -7483,7 +7757,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                     ).returncode == 0
 
                     if not has_net:
-                        print("Notice: No active Internet connection. Broadcom driver installation skipped. Install later with Driver Manager.")
+                        _safe_console_print("Notice: No active Internet connection. Broadcom driver installation skipped. Install later with Driver Manager.")
                     elif is_arch:
                         # Arch Linux path
                         GLib.idle_add(self.update_progress, 0.91, "Installing Broadcom drivers...")
@@ -7492,7 +7766,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                             exec_cmd(["chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed",
                                       "broadcom-wl-dkms", "linux-headers"])
                         except Exception as arch_net_err:
-                            print(f"Notice: Broadcom install error: {arch_net_err}")
+                            _safe_console_print(f"Notice: Broadcom install error: {arch_net_err}")
 
                         # blacklist conflicting open-source drivers
                         blacklist = (
@@ -7538,7 +7812,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                                         with open(sources_file, "w") as f:
                                             f.write("\n".join(lines) + "\n")
                                 except Exception as list_err:
-                                    print(f"Warning: Failed to update sources.list: {list_err}")
+                                    _safe_console_print(f"Warning: Failed to update sources.list: {list_err}")
 
                             # Run apt update to fetch package indices and install broadcom-sta-dkms
                             GLib.idle_add(self.update_progress, 0.91, "Installing Broadcom drivers...")
@@ -7566,7 +7840,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                                 with open("/mnt/etc/modprobe.d/broadcom-sta-blacklist.conf", "w") as f:
                                     f.write(blacklist)
                         except Exception as deb_err:
-                            print(f"Warning: Non-fatal driver step: {deb_err}")
+                            _safe_console_print(f"Warning: Non-fatal driver step: {deb_err}")
                         finally:
                             if "TEST_MODE" not in os.environ and os.path.exists(policy_file):
                                 try:
@@ -7574,7 +7848,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                                 except Exception:
                                     pass
                 except Exception as drv_err:
-                    print(f"Notice: Driver configuration step completed: {drv_err}")
+                    _safe_console_print(f"Notice: Driver configuration step completed: {drv_err}")
 
             if is_arch:
                 for f_live in [
@@ -7636,12 +7910,15 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
             else:
                 # Debian path
                 # 1. Configure resume in initramfs-tools
-                if root_uuid and "TEST_MODE" not in os.environ:
+                if "TEST_MODE" not in os.environ:
                     try:
                         os.makedirs("/mnt/etc/initramfs-tools/conf.d", exist_ok=True)
                         with open("/mnt/etc/initramfs-tools/conf.d/resume", "w") as rf:
-                            rf.write(f"RESUME=UUID={root_uuid}\n")
-                        log_msg(f"✅ Configurado /etc/initramfs-tools/conf.d/resume con RESUME=UUID={root_uuid}")
+                            # Swap is a swapfile on Btrfs or non-existent partition; RESUME=none prevents
+                            # initramfs-tools from checking for a swap signature on the root partition.
+                            # Hibernation resume is managed directly by kernel parameters (resume=UUID=... resume_offset=...).
+                            rf.write("RESUME=none\n")
+                        log_msg("✅ Configurado /etc/initramfs-tools/conf.d/resume con RESUME=none")
                     except Exception as deb_res_err:
                         log_msg(f"Warning: Failed to write Debian resume conf: {deb_res_err}")
 
@@ -7676,16 +7953,17 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                             pass
 
                 preserve_live_initramfs_for_recovery()
+                deploy_kernel_to_recovery()
 
                 # 4. Update initramfs on Debian so resume and cryptsetup are included
                 try:
+                    subprocess.run(["chroot", "/mnt", "rm", "-rf", "/var/tmp/mkinitramfs*"], capture_output=True)
                     exec_cmd(["chroot", "/mnt", "update-initramfs", "-u", "-k", "all"])
                     subprocess.run(["sync"])
                     log_msg("✅ initramfs actualizado en Debian con soporte de hibernación/resume y cryptsetup.")
                 except Exception as deb_init_err:
                     log_msg(f"Warning: update-initramfs -u -k all failed (non-fatal): {deb_init_err}")
 
-                deploy_kernel_to_recovery()
                 if refind_installed:
                     configure_refind_menus()
                 configure_grub_menus()
@@ -7809,7 +8087,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                 except Exception as opt_err:
                     log_msg(f"Notice: optimizer service setup: {opt_err}")
             except Exception as dconf_err:
-                print(f"Warning: dconf/schema update failed (non-fatal): {dconf_err}")
+                _safe_console_print(f"Warning: dconf/schema update failed (non-fatal): {dconf_err}")
 
             # ──────────────────────────────────────────────────────────
             
@@ -7821,7 +8099,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                     with open("/mnt/etc/pulsar-need-setup", "w") as f:
                         pass
                 except Exception as touch_err:
-                    print(f"Warning: Failed to create setup flag: {touch_err}")
+                    _safe_console_print(f"Warning: Failed to create setup flag: {touch_err}")
 
             # 2. Copy installation logs to target filesystem for persistence
             if "TEST_MODE" not in os.environ:
@@ -7840,7 +8118,7 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                             pass
                     log_msg("Installation logs saved to /mnt/var/log/pulsaros/")
                 except Exception as log_copy_err:
-                    print(f"Notice: Failed to copy installation logs to target: {log_copy_err}")
+                    _safe_console_print(f"Notice: Failed to copy installation logs to target: {log_copy_err}")
 
             # 2b. Purge package manager caches to free gigabytes of space on target filesystem
             if "TEST_MODE" not in os.environ:
@@ -7887,8 +8165,23 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
             GLib.idle_add(self.on_installation_completed)
             
         except Exception as err:
-            log_msg(f"INSTALLATION FAILED: {err}")
-            cleanup_mounts(is_efi)
+            # The failure handler itself must be failure-proof: if reporting or
+            # cleanup raise (unwritable console/log, busy mounts...), the user
+            # must still see the real installation error and the mounts must
+            # still be cleaned up. (Observed live: an EIO from print() inside
+            # log_msg skipped cleanup_mounts entirely and left the target
+            # mounted after a false "INSTALLATION FAILED".)
+            try:
+                log_msg(f"INSTALLATION FAILED: {err}")
+            except Exception:
+                pass
+            try:
+                cleanup_mounts(is_efi)
+            except Exception as cleanup_err:
+                try:
+                    log_msg(f"Warning: cleanup after failed install reported: {cleanup_err}")
+                except Exception:
+                    pass
             GLib.idle_add(self.on_installation_failed, str(err))
         finally:
             # Restart udisks2 automount daemon so the system goes back to normal state

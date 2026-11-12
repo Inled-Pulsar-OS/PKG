@@ -283,6 +283,18 @@
 }
 
 /* --- About Pulsar OS Dialog Styles (Apple Liquid Glass HIG - Adaptive Dark/Light) --- */
+.pulsaros-about-dialog.liquid-glass-transparent,
+.pulsaros-about-dialog.pulsaros-about-dark.liquid-glass-transparent,
+.pulsaros-about-dialog.pulsaros-about-light.liquid-glass-transparent {
+    background-color: transparent !important;
+    box-shadow: none !important;
+}
+
+.pulsaros-power-dialog.liquid-glass-transparent {
+    background-color: transparent !important;
+    box-shadow: none !important;
+}
+
 .pulsaros-about-dialog {
     border-radius: 18px !important;
     padding: 24px !important;
