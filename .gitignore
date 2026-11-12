@@ -44,3 +44,10 @@ AGENTS.md
 CLAUDE.md
 docs/
 skills-lock.json
+
+.claude/
+
+# agent docs
+CLAUDE.md
+AGENTS.md
+GLOSSARY.md
