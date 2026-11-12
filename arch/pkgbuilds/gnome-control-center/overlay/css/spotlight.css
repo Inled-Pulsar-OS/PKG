@@ -1,0 +1,9 @@
+/* Spotlight (search) panel: app result rows as icon rows in a card */
+.pulsar-spotlight row image.lowres-icon {
+  -gtk-icon-size: 24px;
+  border-radius: 6px;
+}
+
+.pulsar-spotlight row .drag-handle {
+  opacity: 0.35;
+}

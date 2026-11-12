@@ -1,0 +1,18 @@
+/* Wi-Fi panel (#87): network rows as in the macOS reference: lock and
+ * signal icons on the right, gray "Connected" subtitle, round option buttons. */
+navigation-split-view > .content-pane list.boxed-list > row > box.header > image {
+  color: alpha(currentColor, 0.85);
+  margin-left: 6px;
+}
+
+navigation-split-view > .content-pane list.boxed-list > row > box.header > box.title label.subtitle {
+  color: alpha(currentColor, 0.6);
+}
+
+navigation-split-view > .content-pane list.boxed-list > row button#options_button,
+navigation-split-view > .content-pane list.boxed-list > row button#qr_code_button {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: 99px;
+}

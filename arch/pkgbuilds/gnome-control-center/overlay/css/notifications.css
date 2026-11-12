@@ -1,0 +1,12 @@
+/* Notifications panel (#82): app rows with a 32px rounded icon, gray
+ * subtitle and a chevron, as in the macOS reference. */
+navigation-split-view > .content-pane list.boxed-list > row image.lowres-icon {
+  -gtk-icon-size: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 8px;
+}
+
+navigation-split-view > .content-pane list.boxed-list > row > box.header > box.title label.subtitle {
+  color: alpha(currentColor, 0.6);
+}

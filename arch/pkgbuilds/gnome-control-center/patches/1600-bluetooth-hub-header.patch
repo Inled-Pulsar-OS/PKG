@@ -1,0 +1,54 @@
+--- a/panels/bluetooth/cc-bluetooth-panel.blp	2026-11-09 23:30:21.113166769 -0400
++++ b/panels/bluetooth/cc-bluetooth-panel.blp	2026-11-09 23:31:01.521674235 -0400
+@@ -76,9 +76,30 @@
+       StackPage {
+         name: "bluetooth-page";
+ 
+-        child: $BluetoothSettingsWidget settings_widget {
+-          panel-changed => $panel_changed_cb(template);
+-          adapter-status-changed => $adapter_status_changed_cb(template);
++        child: Box {
++          orientation: vertical;
++
++          Adw.Clamp {
++            maximum-size: 600;
++            margin-top: 24;
++            margin-start: 12;
++            margin-end: 12;
++
++            $CcHubHeader {
++              icon-name: "bluetooth-active-symbolic";
++              icon-color: "#0088FF";
++              title: _("Bluetooth");
++              description: _("Connect to accessories you can use for activities such as streaming music, typing, and gaming.");
++              link-label: _("Learn more…");
++              link-uri: "help:gnome-help/bluetooth";
++            }
++          }
++
++          $BluetoothSettingsWidget settings_widget {
++            vexpand: true;
++            panel-changed => $panel_changed_cb(template);
++            adapter-status-changed => $adapter_status_changed_cb(template);
++          }
+         };
+       }
+     };
+--- a/panels/bluetooth/cc-bluetooth-panel.c	2026-11-09 23:30:21.113188039 -0400
++++ b/panels/bluetooth/cc-bluetooth-panel.c	2026-11-09 23:31:01.521741882 -0400
+@@ -25,6 +25,7 @@
+ #include <adwaita.h>
+ 
+ #include <bluetooth-settings-widget.h>
++#include <shell/cc-hub-header.h>
+ #include <shell/cc-object-storage.h>
+ #include <shell/cc-window.h>
+ 
+@@ -214,6 +215,7 @@
+     panel_class->get_help_uri = cc_bluetooth_panel_get_help_uri;
+ 
+     g_type_ensure (BLUETOOTH_TYPE_SETTINGS_WIDGET);
++    g_type_ensure (CC_TYPE_HUB_HEADER);
+ 
+     gtk_widget_class_set_template_from_resource (widget_class,
+                                                  "/org/gnome/control-center/bluetooth/cc-bluetooth-panel.ui");

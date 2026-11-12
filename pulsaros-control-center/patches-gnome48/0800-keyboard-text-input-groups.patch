@@ -1,0 +1,43 @@
+--- a/panels/keyboard/cc-keyboard-panel.ui
++++ b/panels/keyboard/cc-keyboard-panel.ui
+@@ -11,9 +11,22 @@
+             </child>
+             <property name="content">
+               <object class="AdwPreferencesPage">
++                <style>
++                  <class name="pulsar-keyboard"/>
++                </style>
+                 <child>
+                   <object class="AdwPreferencesGroup">
+-                    <property name="title" translatable="yes">Input Sources</property>
++                    <property name="title" translatable="yes">Keyboard Shortcuts</property>
++                    <child>
++                      <object class="CcListRow" id="common_shortcuts_row">
++                        <property name="title" translatable="yes">_View and Customize Shortcuts</property>
++                        <property name="show-arrow">True</property>
++                        <signal name="activated" handler="keyboard_shortcuts_activated" object="CcKeyboardPanel" swapped="yes"/>
++                      </object>
++                    </child>
++                <child>
++                  <object class="AdwPreferencesGroup">
++                    <property name="title" translatable="yes">Text Input</property>
+                     <property name="description" translatable="yes">Includes keyboard layouts and input methods</property>
+                     <child>
+                       <object class="CcInputListBox" id="input_list">
+@@ -75,16 +88,6 @@
+                   </object>
+                 </child>
+ 
+-                <child>
+-                  <object class="AdwPreferencesGroup">
+-                    <property name="title" translatable="yes">Keyboard Shortcuts</property>
+-                    <child>
+-                      <object class="CcListRow" id="common_shortcuts_row">
+-                        <property name="title" translatable="yes">_View and Customize Shortcuts</property>
+-                        <property name="show-arrow">True</property>
+-                        <signal name="activated" handler="keyboard_shortcuts_activated" object="CcKeyboardPanel" swapped="yes"/>
+-                      </object>
+-                    </child>
+                   </object>
+                 </child>
+               </object>

@@ -1,0 +1,14 @@
+
+/* Keyboard panel (#84): rows end in a round gray chevron badge, gray values. */
+.pulsar-keyboard row > box.header > box.suffixes > image {
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 14px;
+  background-color: alpha(currentColor, 0.1);
+  color: alpha(currentColor, 0.6);
+  -gtk-icon-size: 14px;
+}
+
+.pulsar-keyboard row > box.header > box.suffixes > label.dim-label {
+  color: alpha(currentColor, 0.6);
+}

@@ -1,0 +1,32 @@
+/* Printers panel (#94): the default printer card gets an accent outline, the
+ * status text gets a colored dot (same palette as network.css; classes set in
+ * pp-printer-entry.c) and the add button is a gray pill. */
+navigation-split-view > .content-pane list.boxed-list-separate > row.pulsar-default-printer {
+  box-shadow: inset 0 0 0 2px alpha(#0a84ff, 0.6);
+}
+
+navigation-split-view > .content-pane label.pulsar-printer-status {
+  padding-left: 16px;
+  background-repeat: no-repeat;
+  background-size: 10px 10px;
+  background-position: 0 center;
+}
+
+navigation-split-view > .content-pane label.pulsar-printer-status.pulsar-status-on {
+  background-image: radial-gradient(circle closest-side, #34c759 0, #34c759 100%, transparent 100%);
+}
+
+navigation-split-view > .content-pane label.pulsar-printer-status.pulsar-status-off {
+  background-image: radial-gradient(circle closest-side, #ff3b30 0, #ff3b30 100%, transparent 100%);
+}
+
+navigation-split-view > .content-pane label.pulsar-printer-status.pulsar-status-idle {
+  background-image: radial-gradient(circle closest-side, #8e8e93 0, #8e8e93 100%, transparent 100%);
+}
+
+navigation-split-view > .content-pane button.pulsar-pill {
+  border-radius: 999px;
+  padding: 4px 16px;
+  background-color: alpha(currentColor, 0.1);
+  box-shadow: none;
+}

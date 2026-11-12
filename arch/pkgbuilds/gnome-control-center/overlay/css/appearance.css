@@ -1,0 +1,37 @@
+
+/* Appearance and Wallpaper (#86). Loaded after pulsar.css. */
+
+/* Auto/Light/Dark previews: thick accent outline when selected, dim captions. */
+.background-preview-button {
+  border-radius: 12px;
+  padding: 4px;
+}
+
+.background-preview-button:checked {
+  box-shadow: 0 0 0 3px var(--accent-bg-color);
+}
+
+.background-preview-button:checked:focus:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-bg-color), 0 0 0 6px alpha(var(--accent-bg-color), 0.3);
+}
+
+.background-preview-button + label.caption,
+grid > label.caption {
+  opacity: 0.7;
+  font-size: 13px;
+}
+
+/* Wallpaper chooser: plain rounded tiles, accent outline on the selected one. */
+.background-flowbox > flowboxchild {
+  padding: 3px;
+  border-radius: 10px;
+}
+
+.background-flowbox > flowboxchild:selected {
+  background: none;
+  box-shadow: 0 0 0 3px var(--accent-bg-color);
+}
+
+.background-thumbnail {
+  border-radius: 8px;
+}

@@ -1,0 +1,45 @@
+
+/* Desktop & Dock / Multitasking panel (#85). Scoped by the pulsar-multitasking
+ * class added in patches/0900. Card, row and heading metrics are shared (#75). */
+
+/* Gray help text under rows. */
+navigation-split-view > .content-pane preferencespage.pulsar-multitasking row > box.header > box.title label.subtitle {
+  font-size: 13px;
+  color: alpha(currentColor, 0.6);
+}
+
+/* Toggles: wide pill, accent when on, white knob. */
+navigation-split-view > .content-pane preferencespage.pulsar-multitasking switch {
+  min-width: 46px;
+  min-height: 28px;
+  border-radius: 14px;
+  background-color: alpha(currentColor, 0.12);
+  border: none;
+}
+
+navigation-split-view > .content-pane preferencespage.pulsar-multitasking switch:checked {
+  background-color: @accent_bg_color;
+}
+
+navigation-split-view > .content-pane preferencespage.pulsar-multitasking switch slider {
+  min-width: 24px;
+  min-height: 24px;
+  margin: 2px;
+  border-radius: 12px;
+  background-color: #ffffff;
+  border: none;
+}
+
+/* Radio and check prefixes: accent when selected. */
+navigation-split-view > .content-pane preferencespage.pulsar-multitasking row checkbutton radio:checked,
+navigation-split-view > .content-pane preferencespage.pulsar-multitasking row checkbutton check:checked {
+  background-color: @accent_bg_color;
+  border-color: @accent_bg_color;
+  color: #ffffff;
+}
+
+/* Spin row: number kept in the row, no frame around the field. */
+navigation-split-view > .content-pane preferencespage.pulsar-multitasking row.spin spinbutton {
+  background: none;
+  box-shadow: none;
+}

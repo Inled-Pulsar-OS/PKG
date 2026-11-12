@@ -1,0 +1,28 @@
+--- a/shell/gnome-control-center.gresource.xml.in
++++ b/shell/gnome-control-center.gresource.xml.in
+@@ -1,6 +1,7 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <gresources>
+   <gresource prefix="/org/gnome/Settings/gtk">
++    <file preprocess="xml-stripblanks">cc-hub-header.ui</file>
+     <file preprocess="xml-stripblanks">cc-panel.ui</file>
+     <file preprocess="xml-stripblanks">cc-panel-list.ui</file>
+     <file preprocess="xml-stripblanks">cc-window.ui</file>
+--- a/shell/meson.build
++++ b/shell/meson.build
+@@ -36,6 +36,7 @@
+ cflags = ['-DGNOMELOCALEDIR="@0@"'.format(control_center_localedir)]
+ 
+ ui_sources = files(
++  'cc-hub-header.blp',
+   'cc-panel-list.blp',
+   'cc-panel.blp',
+   'cc-window.blp',
+@@ -57,6 +58,7 @@
+ # libtestshell.
+ common_sources = files(
+   'cc-application.c',
++  'cc-hub-header.c',
+   'cc-log.c',
+   'cc-object-storage.c',
+   'cc-panel-loader.c',

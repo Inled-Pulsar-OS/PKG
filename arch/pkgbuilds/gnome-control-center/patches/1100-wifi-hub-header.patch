@@ -1,0 +1,67 @@
+--- a/panels/network/cc-wifi-panel.blp
++++ b/panels/network/cc-wifi-panel.blp
+@@ -22,6 +22,17 @@
+ 
+     content: Adw.PreferencesPage {
+       Adw.PreferencesGroup {
++        $CcHubHeader {
++          icon-name: "network-wireless-symbolic";
++          icon-color: "#0088FF";
++          title: _("Wi-Fi");
++          description: _("Set up Wi-Fi to wirelessly connect your computer to the internet. Turn on Wi-Fi, then choose a network to join.");
++          link-label: _("Learn more…");
++          link-uri: "help:gnome-help/net-wireless";
++        }
++      }
++
++      Adw.PreferencesGroup {
+         Stack device_stack {}
+       }
+ 
+--- a/panels/network/cc-wifi-connection-row.blp
++++ b/panels/network/cc-wifi-connection-row.blp
+@@ -11,16 +11,17 @@
+       valign: center;
+       margin-end: 6;
+     }
++  }
+ 
+-    Image strength_icon {
+-      icon-name: "network-wireless-signal-excellent-symbolic";
+-      icon-size: normal;
+-    }
++  [suffix]
++  Image encrypted_icon {
++    pixel-size: 16;
++  }
+ 
+-    Image encrypted_icon {
+-      valign: end;
+-      pixel-size: 8;
+-    }
++  [suffix]
++  Image strength_icon {
++    icon-name: "network-wireless-signal-excellent-symbolic";
++    icon-size: normal;
+   }
+ 
+   [suffix]
+--- a/panels/network/cc-wifi-panel.c
++++ b/panels/network/cc-wifi-panel.c
+@@ -27,6 +27,7 @@
+ #include "shell/cc-application.h"
+ #include "shell/cc-log.h"
+ #include "shell/cc-object-storage.h"
++#include "shell/cc-hub-header.h"
+ #include "shell/cc-window.h"
+ 
+ #include <NetworkManager.h>
+@@ -735,6 +736,8 @@
+     CcPanelClass *panel_class = CC_PANEL_CLASS (klass);
+     GParamSpec *pspec;
+ 
++    g_type_ensure (CC_TYPE_HUB_HEADER);
++
+     panel_class->get_help_uri = cc_wifi_panel_get_help_uri;
+ 
+     object_class->finalize = cc_wifi_panel_finalize;

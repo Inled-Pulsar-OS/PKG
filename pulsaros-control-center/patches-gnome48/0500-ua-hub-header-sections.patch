@@ -1,0 +1,146 @@
+--- a/panels/universal-access/cc-ua-panel.c
++++ b/panels/universal-access/cc-ua-panel.c
+@@ -26,6 +26,7 @@
+  * SPDX-License-Identifier: GPL-2.0-or-later
+  */
+ 
++#include "shell/cc-hub-header.h"
+ #include <config.h>
+ 
+ #include <math.h>
+@@ -87,6 +88,9 @@
+ 
+   g_type_ensure (CC_TYPE_LIST_ROW);
+ 
++  g_type_ensure (CC_TYPE_HUB_HEADER);
++
++
+   gtk_widget_class_set_template_from_resource (widget_class, "/org/gnome/control-center/universal-access/cc-ua-panel.ui");
+ 
+   gtk_widget_class_bind_template_child (widget_class, CcUaPanel, show_ua_menu_row);
+--- a/panels/universal-access/cc-ua-panel.ui
++++ b/panels/universal-access/cc-ua-panel.ui
+@@ -11,6 +11,20 @@
+             </child>
+             <property name="content">
+               <object class="AdwPreferencesPage">
++                <child>
++                  <object class="AdwPreferencesGroup">
++                    <child>
++                      <object class="CcHubHeader">
++                        <property name="icon-name">org.gnome.Settings-accessibility-symbolic</property>
++                        <property name="icon-color">#0088FF</property>
++                        <property name="title" translatable="yes">Accessibility</property>
++                        <property name="description" translatable="yes">Personalize your computer in ways that work best for you with accessibility features for seeing, hearing, typing and pointing.</property>
++                        <property name="link-label" translatable="yes">Learn more…</property>
++                        <property name="link-uri">help:gnome-help/a11y</property>
++                      </object>
++                    </child>
++                  </object>
++                </child>
+ 
+                 <!-- Accessibility menu row -->
+                 <child>
+@@ -27,7 +41,7 @@
+ 
+                 <child>
+                   <object class="AdwPreferencesGroup">
+-                    <!-- Seeing row -->
++                    <property name="title" translatable="yes">Vision</property>
+                     <child>
+                       <object class="CcListRow" id="seeing_row">
+                         <property name="title" translatable="yes">_Seeing</property>
+@@ -35,10 +49,31 @@
+                         <property name="show-arrow">True</property>
+                         <property name="action-name">navigation.push</property>
+                         <property name="action-target">'seeing'</property>
++                        <style>
++                          <class name="pulsar-ua-row"/>
++                          <class name="pulsar-ua-dark"/>
++                        </style>
+                       </object>
+                     </child>
++                    <child>
++                      <object class="CcListRow" id="zoom_row">
++                        <property name="title" translatable="yes">_Zoom</property>
++                        <property name="icon-name">org.gnome.Settings-accessibility-zoom-symbolic</property>
++                        <property name="show-arrow">True</property>
++                        <property name="action-name">navigation.push</property>
++                        <property name="action-target">'zoom'</property>
++                        <style>
++                          <class name="pulsar-ua-row"/>
++                          <class name="pulsar-ua-dark"/>
++                        </style>
++                      </object>
++                    </child>
++                  </object>
++                </child>
+ 
+-                    <!-- Hearing row -->
++                <child>
++                  <object class="AdwPreferencesGroup">
++                    <property name="title" translatable="yes">Hearing</property>
+                     <child>
+                       <object class="CcListRow" id="hearing_row">
+                         <property name="title" translatable="yes">_Hearing</property>
+@@ -46,10 +81,18 @@
+                         <property name="show-arrow">True</property>
+                         <property name="action-name">navigation.push</property>
+                         <property name="action-target">'hearing'</property>
++                        <style>
++                          <class name="pulsar-ua-row"/>
++                          <class name="pulsar-ua-red"/>
++                        </style>
+                       </object>
+                     </child>
++                  </object>
++                </child>
+ 
+-                    <!-- Typing row -->
++                <child>
++                  <object class="AdwPreferencesGroup">
++                    <property name="title" translatable="yes">Motor</property>
+                     <child>
+                       <object class="CcListRow" id="typing_row">
+                         <property name="title" translatable="yes">_Typing</property>
+@@ -57,10 +100,12 @@
+                         <property name="show-arrow">True</property>
+                         <property name="action-name">navigation.push</property>
+                         <property name="action-target">'typing'</property>
++                        <style>
++                          <class name="pulsar-ua-row"/>
++                          <class name="pulsar-ua-blue"/>
++                        </style>
+                       </object>
+                     </child>
+-
+-                    <!-- Mouse and clicking row -->
+                     <child>
+                       <object class="CcListRow" id="mouse_row">
+                         <property name="title" translatable="yes">_Pointing and Clicking</property>
+@@ -68,20 +113,13 @@
+                         <property name="show-arrow">True</property>
+                         <property name="action-name">navigation.push</property>
+                         <property name="action-target">'mouse'</property>
++                        <style>
++                          <class name="pulsar-ua-row"/>
++                          <class name="pulsar-ua-blue"/>
++                        </style>
+                       </object>
+                     </child>
+-
+-                    <!-- Zoom row -->
+-                    <child>
+-                      <object class="CcListRow" id="zoom_row">
+-                        <property name="title" translatable="yes">_Zoom</property>
+-                        <property name="icon-name">org.gnome.Settings-accessibility-zoom-symbolic</property>
+-                        <property name="show-arrow">True</property>
+-                        <property name="action-name">navigation.push</property>
+-                        <property name="action-target">'zoom'</property>
+-                      </object>
+-                    </child>
+-                  </object> <!-- ./AdwPreferencesGroup -->
++                  </object>
+                 </child>
+               </object> <!-- ./AdwPreferencesPage main_page -->
+             </property>
