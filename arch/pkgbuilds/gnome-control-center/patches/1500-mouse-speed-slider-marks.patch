@@ -1,0 +1,56 @@
+--- a/panels/mouse/cc-mouse-panel.blp
++++ b/panels/mouse/cc-mouse-panel.blp
+@@ -99,10 +99,17 @@
+                 [suffix]
+                 Scale mouse_speed_scale {
+                   hexpand: true;
++                  width-request: 300;
+ 
+                   marks [
+                     mark (-1, bottom, _("Slow")),
++                    mark (-0.75),
++                    mark (-0.5),
++                    mark (-0.25),
+                     mark (0),
++                    mark (0.25),
++                    mark (0.5),
++                    mark (0.75),
+                     mark (1, bottom, _("Fast")),
+                   ]
+ 
+@@ -192,10 +199,17 @@
+                 [suffix]
+                 Scale touchpad_speed_scale {
+                   hexpand: true;
++                  width-request: 300;
+ 
+                   marks [
+                     mark (-1, bottom, _("Slow")),
++                    mark (-0.75),
++                    mark (-0.5),
++                    mark (-0.25),
+                     mark (0),
++                    mark (0.25),
++                    mark (0.5),
++                    mark (0.75),
+                     mark (1, bottom, _("Fast")),
+                   ]
+ 
+@@ -300,10 +314,17 @@
+                 [suffix]
+                 Scale pointingstick_speed_scale {
+                   hexpand: true;
++                  width-request: 300;
+ 
+                   marks [
+                     mark (-1, bottom, _("Slow")),
++                    mark (-0.75),
++                    mark (-0.5),
++                    mark (-0.25),
+                     mark (0),
++                    mark (0.25),
++                    mark (0.5),
++                    mark (0.75),
+                     mark (1, bottom, _("Fast")),
+                   ]
+ 

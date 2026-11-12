@@ -53,7 +53,6 @@ struct _CcWindow {
     AdwNavigationView *navigation;
     AdwNavigationSplitView *split_view;
     CcPanelList *panel_list;
-    GtkSearchBar *search_bar;
     GtkSearchEntry *search_entry;
 
   AdwAvatar         *user_avatar;
@@ -64,6 +63,19 @@ struct _CcWindow {
   GtkWidget  *current_panel;
   char       *current_panel_id;
   GQueue     *previous_panels;
+  GQueue     *next_panels;
+  GtkWidget  *content_header;
+  GtkWidget  *back_button;
+  GtkWidget  *forward_button;
+  GtkWidget  *capsule;
+  GtkWidget  *main_menu_button;
+
+  /* Header bar of the visible page that currently hosts the capsule, the menu
+   * and the title (weak pointers, the bar can go away with its panel). */
+  GtkWidget  *adopted_bar;
+  GtkWidget  *adopted_title;
+  GBinding   *adopted_layout_binding;
+  gboolean    adopted_show_title;
   gboolean    single_panel_mode;
 
     GtkWidget *custom_titlebar;
@@ -173,7 +185,16 @@ add_current_panel_to_history (CcWindow *self, const char *start_id)
         return;
 
     g_queue_push_head (self->previous_panels, g_strdup (self->current_panel_id));
+    /* A new user navigation drops the forward history */
+    g_queue_clear_full (self->next_panels, g_free);
     g_debug ("Added '%s' to the previous panels", self->current_panel_id);
+}
+
+static void
+update_nav_buttons (CcWindow *self)
+{
+    gtk_widget_set_sensitive (self->back_button, !g_queue_is_empty (self->previous_panels));
+    gtk_widget_set_sensitive (self->forward_button, !g_queue_is_empty (self->next_panels));
 }
 
 static gboolean
@@ -361,6 +382,8 @@ set_active_panel_from_id (CcWindow *self, const gchar *start_id, GVariant *param
 
     CC_TRACE_MSG ("Current panel id: %s", start_id);
 
+    update_nav_buttons (self);
+
     /* Don't activate the panel list in single panel mode. */
     if (!self->single_panel_mode)
         cc_panel_list_set_active_panel (self->panel_list, start_id);
@@ -403,6 +426,8 @@ switch_to_previous_panel (CcWindow *self)
         CC_RETURN ();
 
     previous_panel_id = g_queue_pop_head (self->previous_panels);
+    if (self->current_panel_id)
+        g_queue_push_head (self->next_panels, g_strdup (self->current_panel_id));
 
     g_debug ("Going to previous panel (%s)", previous_panel_id);
 
@@ -411,7 +436,153 @@ switch_to_previous_panel (CcWindow *self)
     CC_EXIT;
 }
 
+static void
+switch_to_next_panel (CcWindow *self)
+{
+    g_autofree gchar *next_panel_id = NULL;
+
+    if (g_queue_is_empty (self->next_panels))
+        return;
+
+    next_panel_id = g_queue_pop_head (self->next_panels);
+    if (self->current_panel_id)
+        g_queue_push_head (self->previous_panels, g_strdup (self->current_panel_id));
+
+    set_active_panel_from_id (self, next_panel_id, NULL, FALSE, FALSE, NULL);
+}
+
 /* Callbacks */
+
+static void
+on_back_button_clicked_cb (CcWindow *self)
+{
+    switch_to_previous_panel (self);
+}
+
+static void
+on_forward_button_clicked_cb (CcWindow *self)
+{
+    switch_to_next_panel (self);
+}
+
+/* One header row (#76): the panel's own AdwHeaderBar hosts the capsule, a
+ * left-aligned title and the main menu; the shell bar is hidden meanwhile. */
+static GtkWidget *
+find_header_bar (GtkWidget *widget)
+{
+    GtkWidget *child;
+
+    if (ADW_IS_HEADER_BAR (widget))
+        return gtk_widget_get_visible (widget) ? widget : NULL;
+
+    for (child = gtk_widget_get_first_child (widget); child; child = gtk_widget_get_next_sibling (child)) {
+        GtkWidget *found = find_header_bar (child);
+
+        if (found)
+            return found;
+    }
+
+    return NULL;
+}
+
+static void
+move_to_header_bar (GtkWidget *widget, GtkWidget *bar, gboolean at_end)
+{
+    GtkWidget *old = gtk_widget_get_ancestor (widget, ADW_TYPE_HEADER_BAR);
+
+    if (old == bar)
+        return;
+    if (old)
+        adw_header_bar_remove (ADW_HEADER_BAR (old), widget);
+
+    if (at_end)
+        adw_header_bar_pack_end (ADW_HEADER_BAR (bar), widget);
+    else
+        adw_header_bar_pack_start (ADW_HEADER_BAR (bar), widget);
+}
+
+static void
+release_header (CcWindow *self)
+{
+    if (self->adopted_layout_binding) {
+        g_binding_unbind (self->adopted_layout_binding);
+        g_clear_object (&self->adopted_layout_binding);
+    }
+
+    if (self->adopted_title) {
+        GtkWidget *bar = gtk_widget_get_ancestor (self->adopted_title, ADW_TYPE_HEADER_BAR);
+
+        if (bar)
+            adw_header_bar_remove (ADW_HEADER_BAR (bar), self->adopted_title);
+        g_object_remove_weak_pointer (G_OBJECT (self->adopted_title), (gpointer *) &self->adopted_title);
+        self->adopted_title = NULL;
+    }
+
+    if (self->adopted_bar) {
+        adw_header_bar_set_show_title (ADW_HEADER_BAR (self->adopted_bar), self->adopted_show_title);
+        g_object_remove_weak_pointer (G_OBJECT (self->adopted_bar), (gpointer *) &self->adopted_bar);
+        self->adopted_bar = NULL;
+    }
+
+    /* Back to the shell bar, which is the fallback when no panel bar exists */
+    move_to_header_bar (self->capsule, self->content_header, FALSE);
+    move_to_header_bar (self->main_menu_button, self->content_header, TRUE);
+    gtk_widget_set_visible (self->content_header, TRUE);
+}
+
+static void
+update_header (CcWindow *self)
+{
+    AdwNavigationPage *page;
+    GtkWidget *bar;
+    gboolean is_subpage;
+
+    release_header (self);
+
+    page = adw_navigation_view_get_visible_page (self->navigation);
+    if (!page)
+        return;
+
+    bar = find_header_bar (GTK_WIDGET (page));
+    if (!bar)
+        return;
+
+    is_subpage = adw_navigation_view_get_previous_page (self->navigation, page) != NULL;
+
+    self->adopted_bar = bar;
+    g_object_add_weak_pointer (G_OBJECT (bar), (gpointer *) &self->adopted_bar);
+    self->adopted_show_title = adw_header_bar_get_show_title (ADW_HEADER_BAR (bar));
+
+    /* Subpages keep their native back button, so they only get title and menu */
+    if (!is_subpage)
+        move_to_header_bar (self->capsule, bar, FALSE);
+
+    /* Panels with a switcher or custom title keep it */
+    if (!adw_header_bar_get_title_widget (ADW_HEADER_BAR (bar))) {
+        self->adopted_title = gtk_label_new (NULL);
+        g_object_add_weak_pointer (G_OBJECT (self->adopted_title), (gpointer *) &self->adopted_title);
+        gtk_widget_add_css_class (self->adopted_title, "pulsar-page-title");
+        gtk_widget_set_halign (self->adopted_title, GTK_ALIGN_START);
+        gtk_label_set_xalign (GTK_LABEL (self->adopted_title), 0.0);
+        gtk_label_set_ellipsize (GTK_LABEL (self->adopted_title), PANGO_ELLIPSIZE_END);
+        g_object_bind_property (page, "title", self->adopted_title, "label", G_BINDING_SYNC_CREATE);
+        adw_header_bar_pack_start (ADW_HEADER_BAR (bar), self->adopted_title);
+        adw_header_bar_set_show_title (ADW_HEADER_BAR (bar), FALSE);
+    }
+
+    move_to_header_bar (self->main_menu_button, bar, TRUE);
+
+    /* Window buttons follow the shell bar (none, or close when collapsed) */
+    self->adopted_layout_binding = g_object_ref (g_object_bind_property (self->content_header, "decoration-layout", bar,
+                                                                          "decoration-layout", G_BINDING_SYNC_CREATE));
+    gtk_widget_set_visible (self->content_header, FALSE);
+}
+
+static void
+on_visible_page_changed_cb (CcWindow *self)
+{
+    update_header (self);
+}
 
 static void
 on_split_view_collapsed_changed_cb (CcWindow *self)
@@ -454,14 +625,10 @@ show_panel_cb (CcWindow *self, const gchar *panel_id, const gchar *parent_id)
 static void
 search_entry_activate_cb (CcWindow *self)
 {
-    gboolean changed;
-
     if (cc_panel_list_get_view (self->panel_list) != CC_PANEL_LIST_SEARCH)
         return;
 
-    changed = cc_panel_list_activate (self->panel_list);
-
-    gtk_search_bar_set_search_mode (self->search_bar, !changed);
+    cc_panel_list_activate (self->panel_list);
 }
 
 static gboolean
@@ -486,7 +653,6 @@ search_shortcut_cb (GtkWidget *widget, GVariant *args, gpointer user_data)
     if (view != CC_PANEL_LIST_MAIN && view != CC_PANEL_LIST_SEARCH)
         return GDK_EVENT_PROPAGATE;
 
-    gtk_search_bar_set_search_mode (self->search_bar, TRUE);
     gtk_widget_grab_focus (GTK_WIDGET (self->search_entry));
 
     return GDK_EVENT_STOP;
@@ -656,6 +822,12 @@ cc_window_dispose (GObject *object)
 {
     CcWindow *self = CC_WINDOW (object);
 
+    if (self->capsule) {
+        release_header (self);
+        g_clear_object (&self->capsule);
+        g_clear_object (&self->main_menu_button);
+    }
+
     g_clear_pointer (&self->current_panel_id, g_free);
     g_clear_object (&self->store);
     g_clear_object (&self->active_panel);
@@ -671,6 +843,11 @@ cc_window_finalize (GObject *object)
     if (self->previous_panels) {
         g_queue_free_full (self->previous_panels, g_free);
         self->previous_panels = NULL;
+    }
+
+    if (self->next_panels) {
+        g_queue_free_full (self->next_panels, g_free);
+        self->next_panels = NULL;
     }
 
     g_clear_object (&self->settings);
@@ -725,9 +902,7 @@ setup_user_account_banner (CcWindow *self)
 {
   const gchar *real_name;
   const gchar *user_name;
-  g_autofree gchar *email = NULL;
   g_autofree gchar *face_path = NULL;
-  g_autoptr(GKeyFile) keyfile = NULL;
 
   if (!self->user_avatar || !self->user_name_label || !self->user_email_label)
     return;
@@ -738,33 +913,13 @@ setup_user_account_banner (CcWindow *self)
   if (!real_name || real_name[0] == '\0' || g_strcmp0 (real_name, "Unknown") == 0)
     real_name = user_name;
 
-  /* Check GOA online accounts config for email */
-  keyfile = g_key_file_new ();
-  {
-    g_autofree gchar *goa_conf = g_build_filename (g_get_user_config_dir (), "goa-1.0", "accounts.conf", NULL);
-    if (g_key_file_load_from_file (keyfile, goa_conf, G_KEY_FILE_NONE, NULL))
-      {
-        g_auto(GStrv) groups = g_key_file_get_groups (keyfile, NULL);
-        if (groups && groups[0])
-          {
-            email = g_key_file_get_string (keyfile, groups[0], "PresentationIdentity", NULL);
-            if (!email || email[0] == '\0')
-              email = g_key_file_get_string (keyfile, groups[0], "Identity", NULL);
-          }
-      }
-  }
-
   /* Set Name */
   if (real_name && real_name[0] != '\0')
     gtk_label_set_text (self->user_name_label, real_name);
   else
-    gtk_label_set_text (self->user_name_label, "Apple ID & Cuentas");
+    gtk_label_set_text (self->user_name_label, user_name);
 
-  /* Set Email or Apple ID subtitle */
-  if (email && email[0] != '\0')
-    gtk_label_set_text (self->user_email_label, email);
-  else
-    gtk_label_set_text (self->user_email_label, _("Local Account"));
+  gtk_label_set_text (self->user_email_label, _("Local Account"));
 
   /* Set Avatar initials */
   adw_avatar_set_text (self->user_avatar, real_name ? real_name : "Pulsar OS");
@@ -794,7 +949,7 @@ setup_user_account_banner (CcWindow *self)
 static void
 on_user_account_banner_clicked_cb (CcWindow *self)
 {
-  set_active_panel_from_id (self, "online-accounts", NULL, TRUE, TRUE, NULL);
+  set_active_panel_from_id (self, "users", NULL, TRUE, TRUE, NULL);
 }
 
 static void
@@ -831,9 +986,13 @@ cc_window_class_init (CcWindowClass *klass)
 
     gtk_widget_class_bind_template_child (widget_class, CcWindow, break_point);
     gtk_widget_class_bind_template_child (widget_class, CcWindow, navigation);
+    gtk_widget_class_bind_template_child (widget_class, CcWindow, content_header);
+    gtk_widget_class_bind_template_child (widget_class, CcWindow, back_button);
+    gtk_widget_class_bind_template_child (widget_class, CcWindow, forward_button);
+    gtk_widget_class_bind_template_child (widget_class, CcWindow, capsule);
+    gtk_widget_class_bind_template_child (widget_class, CcWindow, main_menu_button);
     gtk_widget_class_bind_template_child (widget_class, CcWindow, split_view);
     gtk_widget_class_bind_template_child (widget_class, CcWindow, panel_list);
-    gtk_widget_class_bind_template_child (widget_class, CcWindow, search_bar);
     gtk_widget_class_bind_template_child (widget_class, CcWindow, search_entry);
 
     gtk_widget_class_bind_template_child (widget_class, CcWindow, user_avatar);
@@ -841,7 +1000,10 @@ cc_window_class_init (CcWindowClass *klass)
     gtk_widget_class_bind_template_child (widget_class, CcWindow, user_email_label);
 
     gtk_widget_class_bind_template_callback (widget_class, on_split_view_collapsed_changed_cb);
+    gtk_widget_class_bind_template_callback (widget_class, on_visible_page_changed_cb);
     gtk_widget_class_bind_template_callback (widget_class, search_entry_activate_cb);
+    gtk_widget_class_bind_template_callback (widget_class, on_back_button_clicked_cb);
+    gtk_widget_class_bind_template_callback (widget_class, on_forward_button_clicked_cb);
     gtk_widget_class_bind_template_callback (widget_class, show_panel_cb);
     gtk_widget_class_bind_template_callback (widget_class, search_entry_key_pressed_cb);
     gtk_widget_class_bind_template_callback (widget_class, on_user_account_banner_clicked_cb);
@@ -862,13 +1024,18 @@ cc_window_init (CcWindow *self)
 {
     gtk_widget_init_template (GTK_WIDGET (self));
 
+    /* Own refs: these move between header bars and must outlive panel bars */
+    g_object_ref (self->capsule);
+    g_object_ref (self->main_menu_button);
+
     setup_user_account_banner (self);
 
     self->settings = g_settings_new ("org.gnome.Settings");
     self->previous_panels = g_queue_new ();
+    self->next_panels = g_queue_new ();
     self->previous_list_view = cc_panel_list_get_view (self->panel_list);
 
-    gtk_search_bar_set_key_capture_widget (self->search_bar, GTK_WIDGET (self));
+    gtk_search_entry_set_key_capture_widget (self->search_entry, GTK_WIDGET (self));
 }
 
 CcWindow *
@@ -884,7 +1051,6 @@ cc_window_new (GtkApplication *application, CcShellModel *model)
 void
 cc_window_set_search_item (CcWindow *window, const char *search)
 {
-    gtk_search_bar_set_search_mode (window->search_bar, TRUE);
     gtk_editable_set_text (GTK_EDITABLE (window->search_entry), search);
     gtk_editable_set_position (GTK_EDITABLE (window->search_entry), -1);
 }

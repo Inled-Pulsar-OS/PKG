@@ -219,7 +219,7 @@ row_data_free (RowData *data)
 
 static RowData *
 row_data_new (CcPanelCategory category, const gchar *id, const gchar *name, const gchar *description,
-              const GStrv keywords, const gchar *icon, CcPanelVisibility visibility)
+              const GStrv keywords, const gchar *icon, CcPanelVisibility visibility, gboolean squircle)
 {
   GtkWidget *label, *grid, *image;
   RowData *data;
@@ -241,71 +241,19 @@ row_data_new (CcPanelCategory category, const gchar *id, const gchar *name, cons
   gtk_widget_set_margin_end (grid, 6);
   gtk_grid_set_column_spacing (GTK_GRID (grid), 12);
 
-  /* Icon */
-  image = gtk_image_new ();
-  gtk_image_set_pixel_size (GTK_IMAGE (image), 24);
+  /* Icon: main list gets a squircle with a white glyph (colors in pulsar.css) */
+  image = gtk_image_new_from_icon_name (icon);
+  gtk_image_set_pixel_size (GTK_IMAGE (image), squircle ? 16 : 24);
   gtk_widget_set_valign (image, GTK_ALIGN_CENTER);
 
-  const gchar *apple_icon = NULL;
-  if (g_strcmp0 (id, "wifi") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-system-network.svg";
-  else if (g_strcmp0 (id, "network") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-system-network-ethernet.svg";
-  else if (g_strcmp0 (id, "bluetooth") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-system-bluetooth.svg";
-  else if (g_strcmp0 (id, "display") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-desktop-display.svg";
-  else if (g_strcmp0 (id, "sound") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-sound.svg";
-  else if (g_strcmp0 (id, "power") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-system-power.svg";
-  else if (g_strcmp0 (id, "multitasking") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/window-duplicate.svg";
-  else if (g_strcmp0 (id, "background") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-desktop-theme.svg";
-  else if (g_strcmp0 (id, "applications") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/applications-system.svg";
-  else if (g_strcmp0 (id, "notifications") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-system-notifications.svg";
-  else if (g_strcmp0 (id, "search") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-system-search.svg";
-  else if (g_strcmp0 (id, "online-accounts") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-online-accounts.svg";
-  else if (g_strcmp0 (id, "privacy") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-system-privacy.svg";
-  else if (g_strcmp0 (id, "keyboard") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-desktop-keyboard.svg";
-  else if (g_strcmp0 (id, "mouse") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-desktop-peripherals.svg";
-  else if (g_strcmp0 (id, "printers") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-devices-printer.svg";
-  else if (g_strcmp0 (id, "color") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-color.svg";
-  else if (g_strcmp0 (id, "universal-access") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-desktop-accessibility.svg";
-  else if (g_strcmp0 (id, "system") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences.svg";
-  else if (g_strcmp0 (id, "about") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/computer.svg";
-  else if (g_strcmp0 (id, "users") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/system-users.svg";
-  else if (g_strcmp0 (id, "sharing") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-sharing.svg";
-  else if (g_strcmp0 (id, "wellbeing") == 0)
-    apple_icon = "/usr/share/icons/hicolor/scalable/apps/preferences-wellbeing.svg";
+  if (squircle)
+    {
+      g_autofree gchar *css_class = g_strconcat ("pulsar-icon-", id, NULL);
 
-  if (apple_icon && g_file_test (apple_icon, G_FILE_TEST_EXISTS))
-    {
-      gtk_image_set_from_file (GTK_IMAGE (image), apple_icon);
-    }
-  else
-    {
-      g_autofree gchar *custom_icon = NULL;
-      if (icon && g_str_has_suffix (icon, "-symbolic"))
-        custom_icon = g_strndup (icon, strlen (icon) - strlen ("-symbolic"));
-      else
-        custom_icon = g_strdup (icon);
-      gtk_image_set_from_icon_name (GTK_IMAGE (image), custom_icon);
+      gtk_widget_set_halign (image, GTK_ALIGN_CENTER);
+      gtk_widget_set_size_request (image, 24, 24);
+      gtk_widget_add_css_class (image, "pulsar-squircle");
+      gtk_widget_add_css_class (image, css_class);
     }
 
   gtk_grid_attach (GTK_GRID (grid), image, 0, 0, 1, 1);
@@ -408,54 +356,46 @@ filter_func (GtkListBoxRow *row, gpointer user_data)
     return retval;
 }
 
+/* Pulsar groups (#52). "separator" marks a group boundary: spacing only. */
 static const gchar * const panel_order[] = {
-  /* 1. Conectividad y Redes */
+  /* 1. Connectivity */
   "wifi",
   "bluetooth",
   "network",
   "wwan",
   "mobile-broadband",
-
-  "separator",
-
-  /* 2. Notificaciones y Sonido */
-  "notifications",
-  "sound",
-  "multitasking",
   "power",
-
   "separator",
 
-  /* 3. General y Sistema */
+  /* 2. General and looks */
   "system",
-  "about",
-  "sharing",
-
-  "separator",
-
-  /* 4. Apariencia y Pantallas */
+  "universal-access",
   "background",
   "display",
   "color",
-  "universal-access",
-
+  "multitasking",
+  "search",
+  "applications",
+  "sharing",
   "separator",
 
-  /* 5. Cuentas y Privacidad */
-  "online-accounts",
+  /* 3. Alerts */
+  "notifications",
+  "sound",
+  "wellbeing",
+  "separator",
+
+  /* 4. Security and accounts */
   "privacy",
   "users",
-  "applications",
-  "search",
-
+  "online-accounts",
   "separator",
 
-  /* 6. Periféricos y Hardware */
+  /* 5. Hardware */
   "keyboard",
   "mouse",
   "printers",
   "wacom",
-  "wellbeing",
   "reset-settings",
 };
 
@@ -530,22 +470,31 @@ search_sort_function (GtkListBoxRow *a, GtkListBoxRow *b, gpointer user_data)
     return a_distance - b_distance;
 }
 
+/* Group = number of "separator" markers before the panel's slot */
+static guint
+get_panel_group (const gchar *panel_id)
+{
+    guint i, group = 0, idx = get_panel_id_index (panel_id);
+
+    for (i = 0; i < idx; i++) {
+        if (g_str_equal (panel_order[i], "separator"))
+            group++;
+    }
+
+    return group;
+}
+
 static void
 header_func (GtkListBoxRow *row, GtkListBoxRow *before, gpointer user_data)
 {
-    guint pid;
+    if (before &&
+        get_panel_group (get_panel_id_from_row (user_data, row)) !=
+        get_panel_group (get_panel_id_from_row (user_data, before))) {
+        /* Spacing only: an empty header, sized by .pulsar-group-gap */
+        GtkWidget *gap = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
 
-    if (!before)
-        return;
-
-    pid = get_panel_id_index (get_panel_id_from_row (user_data, row));
-    if (pid > 0 && g_str_equal (panel_order[pid - 1], "separator")) {
-        GtkWidget *separator;
-
-        separator = gtk_separator_new (GTK_ORIENTATION_HORIZONTAL);
-        gtk_widget_set_hexpand (separator, TRUE);
-
-        gtk_list_box_row_set_header (row, separator);
+        gtk_widget_add_css_class (gap, "pulsar-group-gap");
+        gtk_list_box_row_set_header (row, gap);
     } else {
         gtk_list_box_row_set_header (row, NULL);
     }
@@ -746,6 +695,8 @@ cc_panel_list_init (CcPanelList *self)
 {
     gtk_widget_init_template (GTK_WIDGET (self));
 
+    gtk_widget_add_css_class (self->main_listbox, "cc-sidebar");
+
     self->id_to_data = g_hash_table_new (g_str_hash, g_str_equal);
     self->id_to_search_data = g_hash_table_new (g_str_hash, g_str_equal);
     self->view = CC_PANEL_LIST_MAIN;
@@ -872,13 +823,23 @@ cc_panel_list_add_panel (CcPanelList *self, CcPanelCategory category, const gcha
     g_return_if_fail (CC_IS_PANEL_LIST (self));
 
     /* Add the panel to the proper listbox */
-    data = row_data_new (category, id, title, description, keywords, icon, visibility);
+    data = row_data_new (category, id, title, description, keywords, icon, visibility, TRUE);
     gtk_widget_set_visible (data->row, visibility == CC_PANEL_VISIBLE);
+
+    /* Sidebar metrics (decision #53): 32px row (24px icon + 4px margins), 10px icon gap.
+     * Main list only; search rows keep the stock metrics. */
+    {
+        GtkWidget *grid = gtk_list_box_row_get_child (GTK_LIST_BOX_ROW (data->row));
+
+        gtk_widget_set_margin_top (grid, 4);
+        gtk_widget_set_margin_bottom (grid, 4);
+        gtk_grid_set_column_spacing (GTK_GRID (grid), 10);
+    }
 
     gtk_list_box_append (GTK_LIST_BOX (self->main_listbox), data->row);
 
     /* And add to the search listbox too */
-    search_data = row_data_new (category, id, title, description, keywords, icon, visibility);
+    search_data = row_data_new (category, id, title, description, keywords, icon, visibility, FALSE);
     gtk_widget_set_visible (search_data->row, visibility != CC_PANEL_HIDDEN);
 
     gtk_list_box_append (GTK_LIST_BOX (self->search_listbox), search_data->row);

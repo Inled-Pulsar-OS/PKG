@@ -1,0 +1,26 @@
+diff --git a/panels/power/cc-power-panel.blp b/panels/power/cc-power-panel.blp
+index 63f2b73..1152a6b 100644
+--- a/panels/power/cc-power-panel.blp
++++ b/panels/power/cc-power-panel.blp
+@@ -50,6 +50,10 @@ template $CcPowerPanel: $CcPanel {
+           icon-name: "org.gnome.Settings-power-symbolic";
+ 
+           child: Adw.PreferencesPage general_page {
++            styles [
++              "pulsar-power",
++            ]
++
+             Adw.PreferencesGroup battery_section {
+               ListBox battery_listbox {
+                 selection-mode: none;
+@@ -175,6 +179,10 @@ template $CcPowerPanel: $CcPanel {
+           icon-name: "power-saving-symbolic";
+ 
+           child: Adw.PreferencesPage power_saving_page {
++            styles [
++              "pulsar-power",
++            ]
++
+             Adw.PreferencesGroup power_saving_group {
+               Adw.SwitchRow als_row {
+                 title: _("A_utomatic Screen Brightness");

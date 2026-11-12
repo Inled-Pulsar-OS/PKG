@@ -1,0 +1,17 @@
+
+/* Users panel (#95): account rows with a 40px avatar, name, role line and a
+ * round info button at the right (rows built in cc-users-page.c). */
+navigation-split-view > .content-pane row.pulsar-user-row {
+  min-height: 64px;
+}
+
+navigation-split-view > .content-pane row.pulsar-user-row > box.header > box.title label.subtitle {
+  color: alpha(currentColor, 0.6);
+}
+
+navigation-split-view > .content-pane row.pulsar-user-row button.circular {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  color: alpha(currentColor, 0.55);
+}

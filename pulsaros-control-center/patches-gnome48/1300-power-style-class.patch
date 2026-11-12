@@ -1,0 +1,22 @@
+--- a/panels/power/cc-power-panel.ui
++++ b/panels/power/cc-power-panel.ui
+@@ -57,6 +57,9 @@
+                     <property name="icon-name">org.gnome.Settings-power-symbolic</property>
+                     <property name="child">
+                       <object class="AdwPreferencesPage" id="general_page">
++                        <style>
++                          <class name="pulsar-power"/>
++                        </style>
+                         <child>
+                           <object class="AdwPreferencesGroup" id="battery_section">
+                             <child>
+@@ -189,6 +192,9 @@
+                     <property name="icon-name">power-saving-symbolic</property>
+                     <property name="child">
+                       <object class="AdwPreferencesPage" id="power_saving_page">
++                        <style>
++                          <class name="pulsar-power"/>
++                        </style>
+                         <child>
+                           <object class="AdwPreferencesGroup" id="power_saving_group">
+                             <child>

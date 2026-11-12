@@ -1,0 +1,12 @@
+--- a/panels/multitasking/cc-multitasking-panel.ui
++++ b/panels/multitasking/cc-multitasking-panel.ui
+@@ -9,6 +9,9 @@
+ 
+         <property name="content">
+           <object class="AdwPreferencesPage">
++            <style>
++              <class name="pulsar-multitasking"/>
++            </style>
+ 
+             <child>
+               <object class="AdwPreferencesGroup">

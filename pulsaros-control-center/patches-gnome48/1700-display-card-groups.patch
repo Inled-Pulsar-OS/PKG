@@ -1,0 +1,96 @@
+--- a/panels/display/cc-display-settings.ui
++++ b/panels/display/cc-display-settings.ui
+@@ -2,6 +2,9 @@
+ <!-- Generated with glade 3.22.0 -->
+ <interface>
+   <template class="CcDisplaySettings" parent="GtkBox">
++    <style>
++      <class name="pulsar-display"/>
++    </style>
+     <property name="spacing">18</property>
+     <property name="orientation">vertical</property>
+ 
+@@ -27,14 +30,6 @@
+         <style>
+           <class name="boxed-list" />
+         </style>
+-        <child>
+-          <object class="AdwComboRow" id="orientation_row">
+-            <property name="width_request">100</property>
+-            <property name="title" translatable="yes" context="display setting">_Orientation</property>
+-            <property name="use-underline">True</property>
+-            <signal name="notify::selected-item" handler="on_orientation_selection_changed_cb" swapped="yes"/>
+-          </object>
+-        </child>
+         <child>
+           <object class="AdwComboRow" id="resolution_row">
+             <property name="width_request">100</property>
+@@ -79,14 +74,6 @@
+           </object>
+         </child>
+         <child>
+-          <object class="AdwSwitchRow" id="hdr_row">
+-            <property name="width_request">100</property>
+-            <property name="title" translatable="yes">_HDR (High Dynamic Range)</property>
+-            <property name="use-underline">True</property>
+-            <signal name="notify::active" handler="on_hdr_row_active_changed_cb" swapped="yes"/>
+-          </object>
+-        </child>
+-        <child>
+           <object class="AdwActionRow" id="luminance_row">
+             <property name="width_request">100</property>
+             <property name="title" translatable="yes">HDR _Brightness</property>
+@@ -106,14 +93,6 @@
+                 </property>
+               </object>
+             </child>
+-          </object>
+-        </child>
+-        <child>
+-          <object class="AdwSwitchRow" id="underscanning_row">
+-            <property name="width_request">100</property>
+-            <property name="title" translatable="yes">Adjust for _TV</property>
+-            <property name="use-underline">True</property>
+-            <signal name="notify::active" handler="on_underscanning_row_active_changed_cb" swapped="yes"/>
+           </object>
+         </child>
+         <child>
+@@ -140,5 +119,38 @@
+         </child>
+       </object>
+     </child>
++    <child>
++      <object class="GtkListBox" id="other_listbox">
++        <property name="hexpand">True</property>
++        <property name="selection-mode">none</property>
++        <style>
++          <class name="boxed-list"/>
++        </style>
++        <child>
++          <object class="AdwComboRow" id="orientation_row">
++            <property name="width_request">100</property>
++            <property name="title" translatable="yes" context="display setting">_Orientation</property>
++            <property name="use-underline">True</property>
++            <signal name="notify::selected-item" handler="on_orientation_selection_changed_cb" swapped="yes"/>
++          </object>
++        </child>
++        <child>
++          <object class="AdwSwitchRow" id="hdr_row">
++            <property name="width_request">100</property>
++            <property name="title" translatable="yes">_HDR (High Dynamic Range)</property>
++            <property name="use-underline">True</property>
++            <signal name="notify::active" handler="on_hdr_row_active_changed_cb" swapped="yes"/>
++          </object>
++        </child>
++        <child>
++          <object class="AdwSwitchRow" id="underscanning_row">
++            <property name="width_request">100</property>
++            <property name="title" translatable="yes">Adjust for _TV</property>
++            <property name="use-underline">True</property>
++            <signal name="notify::active" handler="on_underscanning_row_active_changed_cb" swapped="yes"/>
++          </object>
++        </child>
++      </object>
++    </child>
+   </template>
+ </interface>

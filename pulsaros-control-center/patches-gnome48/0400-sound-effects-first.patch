@@ -1,0 +1,34 @@
+--- a/panels/sound/cc-sound-panel.ui
++++ b/panels/sound/cc-sound-panel.ui
+@@ -11,6 +11,15 @@
+             </child>
+             <property name="content">
+               <object class="AdwPreferencesPage">
++                <child>
++                  <object class="AdwPreferencesGroup">
++                    <property name="title" translatable="yes">Sound Effects</property>
++                    <child>
++                      <object class="AdwSwitchRow" id="startup_sound_switch_row">
++                        <property name="title" translatable="yes">Startup Sound</property>
++                        <property name="subtitle" translatable="yes">Play startup melody when the system turns on</property>
++                      </object>
++                    </child>
+                 <child>
+                   <object class="AdwPreferencesGroup" id="output_group">
+                     <property name="title" translatable="yes">Output</property>
+@@ -358,15 +367,6 @@
+                     </child>
+                   </object>
+                 </child>
+-                <child>
+-                  <object class="AdwPreferencesGroup">
+-                    <property name="title" translatable="yes">Sounds</property>
+-                    <child>
+-                      <object class="AdwSwitchRow" id="startup_sound_switch_row">
+-                        <property name="title" translatable="yes">Startup Sound</property>
+-                        <property name="subtitle" translatable="yes">Play startup melody when the system turns on</property>
+-                      </object>
+-                    </child>
+                     <child>
+                       <object class="CcListRow">
+                         <property name="title" translatable="yes">Vo_lume Levels</property>

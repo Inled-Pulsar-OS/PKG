@@ -1,0 +1,25 @@
+--- a/panels/universal-access/cc-ua-typing-page.blp
++++ b/panels/universal-access/cc-ua-typing-page.blp
+@@ -93,7 +93,10 @@
+ 
+               marks [
+                 mark (-0.5, bottom, _("Fast")),
+-                mark (-30),
++                mark (-88),
++                mark (-66),
++                mark (-44),
++                mark (-22),
+                 mark (-110.0, bottom, _("Slow")),
+               ]
+ 
+@@ -116,7 +119,9 @@
+ 
+               marks [
+                 mark (100, bottom, _("Short")),
+-                mark (500),
++                mark (575),
++                mark (1050),
++                mark (1525),
+                 mark (2000, bottom, _("Long")),
+               ]
+ 

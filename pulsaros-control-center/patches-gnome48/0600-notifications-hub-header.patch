@@ -1,0 +1,54 @@
+--- a/panels/notifications/cc-notifications-panel.c
++++ b/panels/notifications/cc-notifications-panel.c
+@@ -17,6 +17,7 @@
+  *
+  */
+ 
++#include "shell/cc-hub-header.h"
+ #include "config.h"
+ 
+ #include <adwaita.h>
+@@ -169,6 +170,9 @@
+   object_class->dispose = cc_notifications_panel_dispose;
+   object_class->finalize = cc_notifications_panel_finalize;
+ 
++  g_type_ensure (CC_TYPE_HUB_HEADER);
++
++
+   gtk_widget_class_set_template_from_resource (widget_class, "/org/gnome/control-center/notifications/cc-notifications-panel.ui");
+ 
+   gtk_widget_class_bind_template_child (widget_class, CcNotificationsPanel, app_listbox);
+--- a/panels/notifications/cc-notifications-panel.ui
++++ b/panels/notifications/cc-notifications-panel.ui
+@@ -14,6 +14,22 @@
+                 <child>
+                   <object class="AdwPreferencesGroup">
+                     <child>
++                      <object class="CcHubHeader">
++                        <property name="icon-name">org.gnome.Settings-notifications-symbolic</property>
++                        <property name="icon-color">#ED5F5D</property>
++                        <property name="title" translatable="yes">Notifications</property>
++                        <property name="description" translatable="yes">Customize when and how notifications appear, and which apps can send them.</property>
++                        <property name="link-label" translatable="yes">Learn more…</property>
++                        <property name="link-uri">help:gnome-help/shell-notifications</property>
++                      </object>
++                    </child>
++                  </object>
++                </child>
++                <child>
++                  <object class="AdwPreferencesGroup">
++                    <property name="title" translatable="yes">Notification Center</property>
++                    <property name="description" translatable="yes">Notification Center shows your notifications at the top of the screen.</property>
++                    <child>
+                       <object class="AdwSwitchRow" id="dnd_row">
+                         <property name="title" translatable="yes">_Do Not Disturb</property>
+                         <property name="use-underline">True</property>
+@@ -29,7 +45,7 @@
+                 </child>
+                 <child>
+                   <object class="AdwPreferencesGroup" id="app_group">
+-                    <property name="title" translatable="yes" comments="List of apps.">App Notifications</property>
++                    <property name="title" translatable="yes" comments="List of apps.">Application Notifications</property>
+                     <child>
+                       <object class="GtkListBox" id="app_listbox">
+                         <property name="selection_mode">none</property>

@@ -1,0 +1,92 @@
+--- a/panels/network/net-device-ethernet.c
++++ b/panels/network/net-device-ethernet.c
+@@ -219,7 +219,10 @@
+                 }
+         }
+         status = panel_device_status_to_localized_string (self->device, speed_text);
+-        adw_preferences_row_set_title (ADW_PREFERENCES_ROW (self->details_row), status);
++        adw_preferences_row_set_title (ADW_PREFERENCES_ROW (self->details_row), _("Wired"));
++        adw_action_row_set_subtitle (ADW_ACTION_ROW (self->details_row), status);
++        panel_set_status_dot (GTK_WIDGET (self->details_row),
++                              state == NM_DEVICE_STATE_ACTIVATED ? "on" : device_state_to_off_switch (state) ? "idle" : "off");
+ 
+         populate_ui (self);
+ }
+--- a/panels/network/net-vpn.c
++++ b/panels/network/net-vpn.c
+@@ -107,6 +107,9 @@
+                 }
+         }
+ 
++        adw_action_row_set_subtitle (ADW_ACTION_ROW (self), disconnected ? _("Not connected") : _("Connected"));
++        panel_set_status_dot (GTK_WIDGET (self), disconnected ? "off" : "on");
++
+         self->updating_device = TRUE;
+         gtk_switch_set_active (self->device_off_switch, !disconnected);
+         self->updating_device = FALSE;
+--- a/panels/network/network-ethernet.ui
++++ b/panels/network/network-ethernet.ui
+@@ -36,6 +36,11 @@
+             <child>
+               <object class="AdwActionRow" id="details_row">
+                 <property name="activatable-widget">device_off_switch</property>
++                <child type="prefix">
++                  <object class="GtkImage">
++                    <property name="icon-name">network-wired-symbolic</property>
++                  </object>
++                </child>
+                 <child>
+                   <object class="GtkSwitch" id="device_off_switch">
+                     <property name="valign">center</property>
+--- a/panels/network/network-vpn.ui
++++ b/panels/network/network-vpn.ui
+@@ -3,6 +3,11 @@
+   <!-- interface-requires gtk+ 3.0 -->
+   <template class="NetVpn" parent="AdwActionRow">
+     <property name="activatable-widget">device_off_switch</property>
++    <child type="prefix">
++      <object class="GtkImage">
++        <property name="icon-name">network-vpn-symbolic</property>
++      </object>
++    </child>
+     <child type="suffix">
+       <object class="GtkSwitch" id="device_off_switch">
+         <property name="valign">center</property>
+--- a/panels/network/panel-common.c
++++ b/panels/network/panel-common.c
+@@ -359,6 +359,21 @@
+         return g_string_free (string, FALSE);
+ }
+ 
++/* Colored status dot (CSS) on a row: state is "on", "off" or "idle". */
++void
++panel_set_status_dot (GtkWidget *widget, const gchar *state)
++{
++  gtk_widget_add_css_class (widget, "pulsar-status-dot");
++  gtk_widget_remove_css_class (widget, "pulsar-status-on");
++  gtk_widget_remove_css_class (widget, "pulsar-status-off");
++  gtk_widget_remove_css_class (widget, "pulsar-status-idle");
++  if (state)
++    {
++      g_autofree gchar *cls = g_strconcat ("pulsar-status-", state, NULL);
++      gtk_widget_add_css_class (widget, cls);
++    }
++}
++
+ NMConnection *
+ net_device_get_find_connection (NMClient *client, NMDevice *device)
+ {
+--- a/panels/network/panel-common.h
++++ b/panels/network/panel-common.h
+@@ -22,8 +22,11 @@
+ #pragma once
+ 
+ #include <NetworkManager.h>
++#include <gtk/gtk.h>
+ 
+ G_BEGIN_DECLS
++
++void panel_set_status_dot (GtkWidget *widget, const gchar *state);
+ 
+ gchar           *panel_device_status_to_localized_string       (NMDevice *nm_device,
+                                                                 const gchar *speed);

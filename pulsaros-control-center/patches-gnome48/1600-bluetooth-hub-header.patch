@@ -1,0 +1,59 @@
+--- a/panels/bluetooth/cc-bluetooth-panel.c
++++ b/panels/bluetooth/cc-bluetooth-panel.c
+@@ -27,6 +27,7 @@
+ #include <shell/cc-shell.h>
+ #include <shell/cc-object-storage.h>
+ #include <bluetooth-settings-widget.h>
++#include "shell/cc-hub-header.h"
+ 
+ #include "cc-bluetooth-panel.h"
+ #include "cc-bluetooth-resources.h"
+@@ -226,6 +227,9 @@
+ 	panel_class->get_help_uri = cc_bluetooth_panel_get_help_uri;
+ 
+ 	g_type_ensure (BLUETOOTH_TYPE_SETTINGS_WIDGET);
++
++	g_type_ensure (CC_TYPE_HUB_HEADER);
++
+ 
+ 	gtk_widget_class_set_template_from_resource (widget_class, "/org/gnome/control-center/bluetooth/cc-bluetooth-panel.ui");
+ 
+--- a/panels/bluetooth/cc-bluetooth-panel.ui
++++ b/panels/bluetooth/cc-bluetooth-panel.ui
+@@ -88,9 +88,33 @@
+               <object class="GtkStackPage">
+                 <property name="name">bluetooth-page</property>
+                 <property name="child">
+-                  <object class="BluetoothSettingsWidget" id="settings_widget">
+-                    <signal name="panel-changed" handler="panel_changed_cb" object="CcBluetoothPanel" swapped="yes"/>
+-                    <signal name="adapter-status-changed" handler="adapter_status_changed_cb" object="CcBluetoothPanel" swapped="yes"/>
++                  <object class="GtkBox">
++                    <property name="orientation">vertical</property>
++                    <child>
++                      <object class="AdwClamp">
++                        <property name="maximum-size">600</property>
++                        <property name="margin-top">24</property>
++                        <property name="margin-start">12</property>
++                        <property name="margin-end">12</property>
++                        <child>
++                          <object class="CcHubHeader">
++                            <property name="icon-name">bluetooth-active-symbolic</property>
++                            <property name="icon-color">#0088FF</property>
++                            <property name="title" translatable="yes">Bluetooth</property>
++                            <property name="description" translatable="yes">Connect to accessories you can use for activities such as streaming music, typing, and gaming.</property>
++                            <property name="link-label" translatable="yes">Learn more…</property>
++                            <property name="link-uri">help:gnome-help/bluetooth</property>
++                          </object>
++                        </child>
++                      </object>
++                    </child>
++                    <child>
++                      <object class="BluetoothSettingsWidget" id="settings_widget">
++                        <property name="vexpand">True</property>
++                        <signal name="panel-changed" handler="panel_changed_cb" object="CcBluetoothPanel" swapped="yes"/>
++                        <signal name="adapter-status-changed" handler="adapter_status_changed_cb" object="CcBluetoothPanel" swapped="yes"/>
++                      </object>
++                    </child>
+                   </object>
+                 </property>
+               </object>

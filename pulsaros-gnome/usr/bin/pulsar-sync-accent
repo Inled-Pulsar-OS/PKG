@@ -9,16 +9,16 @@
 get_accent_hex() {
     local color_name="$1"
     case "$color_name" in
-        blue)   echo "#3584e4" ;;
+        blue)   echo "#0088FF" ;;
         teal)   echo "#2190a4" ;;
-        green)  echo "#3a944a" ;;
-        yellow) echo "#e5a50a" ;;
-        orange) echo "#e66100" ;;
-        red)    echo "#e01b24" ;;
-        pink)   echo "#d56199" ;;
-        purple) echo "#9141ac" ;;
-        slate)  echo "#6f8396" ;;
-        *)      echo "#3584e4" ;;
+        green)  echo "#79B757" ;;
+        yellow) echo "#F3BA4B" ;;
+        orange) echo "#E9873A" ;;
+        red)    echo "#ED5F5D" ;;
+        pink)   echo "#E55E9C" ;;
+        purple) echo "#9A57A3" ;;
+        slate)  echo "#8C8C8C" ;;
+        *)      echo "#0088FF" ;;
     esac
 }
 

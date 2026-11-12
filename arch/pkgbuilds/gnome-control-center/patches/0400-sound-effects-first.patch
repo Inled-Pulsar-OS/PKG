@@ -1,0 +1,58 @@
+--- a/panels/sound/cc-sound-panel.blp
++++ b/panels/sound/cc-sound-panel.blp
+@@ -9,6 +9,27 @@
+     Adw.HeaderBar {}
+ 
+     content: Adw.PreferencesPage {
++      Adw.PreferencesGroup {
++        title: _("Sound Effects");
++
++        $CcListRow {
++          title: _("Vo_lume Levels");
++          show-arrow: true;
++          activated => $volume_levels_activated_cb(template);
++        }
++
++        $CcListRow alert_sound_row {
++          title: _("_Alert Sound");
++          show-arrow: true;
++          activated => $alert_sound_activated_cb(template);
++        }
++
++        Adw.SwitchRow startup_sound_switch_row {
++          title: _("Startup Sound");
++          subtitle: _("Play startup melody when the system turns on");
++        }
++      }
++
+       Adw.PreferencesGroup output_group {
+         title: _("Output");
+         visible: false;
+@@ -197,27 +218,6 @@
+           activatable: false;
+         }
+       }
+-
+-      Adw.PreferencesGroup {
+-        title: _("Sounds");
+-
+-        $CcListRow {
+-          title: _("Vo_lume Levels");
+-          show-arrow: true;
+-          activated => $volume_levels_activated_cb(template);
+-        }
+-
+-        $CcListRow alert_sound_row {
+-          title: _("_Alert Sound");
+-          show-arrow: true;
+-          activated => $alert_sound_activated_cb(template);
+-        }
+-
+-        Adw.SwitchRow startup_sound_switch_row {
+-          title: _("Startup Sound");
+-          subtitle: _("Play startup melody when the system turns on");
+-        }
+-      }
+     };
+   };
+ }

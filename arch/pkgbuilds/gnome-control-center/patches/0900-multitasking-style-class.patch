@@ -1,0 +1,13 @@
+--- a/panels/multitasking/cc-multitasking-panel.blp
++++ b/panels/multitasking/cc-multitasking-panel.blp
+@@ -7,6 +7,10 @@
+     Adw.HeaderBar {}
+ 
+     content: Adw.PreferencesPage {
++      styles [
++        "pulsar-multitasking",
++      ]
++
+       Adw.PreferencesGroup {
+         title: _("Screen Edges");
+         separate-rows: true;
