@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# Pulsar OS - rimette il semaforo macOS 27 dove manca.
+# Gira al login e poi ogni 60 s: se un cambio tema o un aggiornamento sovrascrive
+# i CSS, li rimette da solo. Sorgente dei blocchi: ~/.local/share/pulsar-dots/blocks
+#
+# Pensato per essere leggerissimo: un solo grep per capire cosa manca e nessun
+# processo esterno quando e' gia' tutto a posto.
+set -uo pipefail
+
+H="${HOME:?}"
+DATA="$H/.local/share/pulsar-dots"
+if [ ! -d "$DATA/blocks" ] && [ -d "/usr/share/pulsar-dots/blocks" ]; then
+    mkdir -p "$DATA"
+    cp -rf /usr/share/pulsar-dots/* "$DATA/" 2>/dev/null || true
+fi
+BLOCKS="$DATA/blocks"
+MARK='semaforo macOS 27 liquido'
+n=0
+
+[ -d "$BLOCKS" ] || exit 0
+
+targets=()
+kinds=()
+add() { targets+=("$1"); kinds+=("$2"); }
+
+# 1) temi scuri MacTahoe: la copia da cui il sistema rigenera ~/.config
+for root in "$H/.local/share/themes" "$H/.themes"; do
+    [ -d "$root" ] || continue
+    for t in "$root"/*; do
+        [ -d "$t" ] || continue
+        case "$(basename "$t")" in
+            *MacTahoe-Dark*) ;;
+            *) continue ;;
+        esac
+        for v in 3 4; do
+            b="$BLOCKS/gtk$v.css"
+            c="$t/gtk-$v.0/gtk.css"
+            add "$c" "$b"
+            d="$t/gtk-$v.0/gtk-dark.css"
+            if [ -f "$d" ] && ! [ "$d" -ef "$c" ]; then add "$d" "$b"; fi
+        done
+    done
+done
+
+# 2) copie di lavoro in ~/.config: quelle che le app caricano davvero
+for v in 3 4; do
+    add "$H/.config/gtk-$v.0/gtk.css" "$BLOCKS/gtk$v.css"
+    add "$H/.config/gtk-$v.0/gtk-dark.css" "$BLOCKS/gtk$v.css"
+done
+
+# un solo grep su tutti i file: l'elenco di chi ha gia' il blocco
+have="$(grep -l -- "$MARK" "${targets[@]}" 2>/dev/null || true)"
+
+for i in "${!targets[@]}"; do
+    f="${targets[$i]}"
+    case $'\n'"$have"$'\n' in
+        *$'\n'"$f"$'\n'*) continue ;;
+    esac
+    mkdir -p "$(dirname "$f")" 2>/dev/null
+    if [ -s "$f" ]; then printf '\n' >> "$f"; fi
+    sed "s|@HOME@|$H|g" "${kinds[$i]}" >> "$f" || continue
+    n=$((n + 1))
+done
+
+# 3) Seafari/Firefox: rimette il foglio e l'aggancio se sono spariti
+for prof in "$H"/.mozilla/*seafari*/; do
+    [ -d "$prof" ] || continue
+    prof="${prof%/}"
+    css="$prof/chrome/pulsar-dots.css"
+    uc="$prof/chrome/userChrome.css"
+    if [ ! -f "$css" ] || ! grep -q 'pulsar-dots' "$uc" 2>/dev/null; then
+        mkdir -p "$prof/chrome"
+        sed "s|@HOME@|$H|g" "$BLOCKS/seafari.css" > "$css" || continue
+        for name in userChrome.css customChrome.css; do
+            f="$prof/chrome/$name"
+            grep -q 'pulsar-dots.css' "$f" 2>/dev/null && continue
+            if [ -f "$f" ]; then cp -f "$f" "$f.bak-pulsar"; fi
+            { echo '@import "pulsar-dots.css";'; if [ -f "$f" ]; then cat "$f"; fi; } > "$f.new"
+            mv -f "$f.new" "$f"
+        done
+        n=$((n + 1))
+    fi
+done
+
+# 4) Metacity / Mutter Server-Side Decorations (SSD for non-native / X11 / un-themed apps)
+theme_cur="$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d "'" || true)"
+[ -z "$theme_cur" ] && theme_cur="MacTahoe-Dark"
+gsettings set org.gnome.desktop.wm.preferences theme "$theme_cur" 2>/dev/null || true
+gsettings set org.gnome.desktop.wm.preferences button-layout 'close,minimize,maximize:' 2>/dev/null || true
+
+# 5) VS Code / Electron titlebar style
+if [ -d "$H/.config/Code/User" ]; then
+    vsc_conf="$H/.config/Code/User/settings.json"
+    if [ ! -f "$vsc_conf" ]; then
+        echo '{"window.titleBarStyle": "native"}' > "$vsc_conf"
+    elif ! grep -q '"window.titleBarStyle"' "$vsc_conf" 2>/dev/null; then
+        sed -i 's/^{\s*/{\n  "window.titleBarStyle": "native",\n/' "$vsc_conf" 2>/dev/null || true
+    fi
+fi
+
+# 6) Chrome / Chromium: force native system titlebar & borders for traffic lights
+for c_pref in "$H"/.config/google-chrome*/**/Preferences "$H"/.config/chromium/**/Preferences; do
+    [ -f "$c_pref" ] || continue
+    if ! grep -q '"custom_chrome_frame":\s*false' "$c_pref" 2>/dev/null; then
+        python3 -c "
+import json, sys
+p = sys.argv[1]
+try:
+    with open(p, 'r') as f:
+        d = json.load(f)
+    if 'browser' not in d:
+        d['browser'] = {}
+    d['browser']['custom_chrome_frame'] = False
+    with open(p, 'w') as f:
+        json.dump(d, f)
+except Exception:
+    pass
+" "$c_pref" 2>/dev/null || true
+    fi
+done
+
+if [ "$n" -eq 0 ]; then
+    exit 0
+fi
+echo "  ripristinati $n file"
+exit 0

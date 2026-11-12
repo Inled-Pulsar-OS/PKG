@@ -199,6 +199,10 @@ def main():
         print(f"pulsaros-whatsnew-watch: GTK/GLib not available: {exc}", file=sys.stderr)
         return 0
 
+    if "--once" in sys.argv:
+        Watcher().evaluate()
+        return 0
+
     # Single instance per user session.
     lock = _acquire_lock()
     if lock is None:

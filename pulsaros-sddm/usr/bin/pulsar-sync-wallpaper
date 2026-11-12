@@ -159,6 +159,10 @@ sync_wallpaper() {
 echo "Running initial sync..."
 sync_wallpaper
 
+if [ "$1" = "--once" ]; then
+    exit 0
+fi
+
 # Event monitor with 1-second debounce
 LAST_SYNC=0
 gsettings monitor org.gnome.desktop.background 2>/dev/null | while read -r line; do

@@ -383,6 +383,12 @@ window label.theme-card-title {
     margin-top: 8px;
     color: var(--text-color);
 }
+window label.theme-card-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: #0071e3;
+    margin-top: 2px;
+}
 window .theme-preview-light {
     min-width: 140px;
     min-height: 90px;
@@ -397,11 +403,21 @@ window .theme-preview-dark {
     background-color: #1e1e1f;
     border: 1px solid #424242;
 }
+window .theme-preview-glass {
+    min-width: 140px;
+    min-height: 90px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(45, 45, 58, 0.88) 0%, rgba(20, 20, 26, 0.95) 100%);
+    border: 1.5px solid rgba(255, 255, 255, 0.35);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
 /* ── Misc ─────────────────────────────────────────────────────────── */
 .search-box    { margin-bottom: 6px; }
 .symbolic-blue { color: #0071e3; }
-.input-label   { font-size: 13px; font-weight: 600; color: #1d1d1f; }
-.input-subtext { font-size: 11px; color: #86868b; }
+.input-label   { font-size: 13px; font-weight: 600; color: var(--text-color, #1d1d1f); }
+.dark-theme .input-label { color: #f5f5f7; }
+.input-subtext { font-size: 11px; color: var(--text-secondary, #86868b); }
+.dark-theme .input-subtext { color: #a1a1a6; }
 .error-text    { font-size: 11px; font-weight: bold; margin-top: 2px; }
 .wifi-badge {
     background-color: rgba(0, 113, 227, 0.08);
@@ -810,11 +826,16 @@ class OOTBWindow(Adw.ApplicationWindow):
         self.selected_keymap = None
         self.selected_timezone = None
         self.selected_avatar_path = self.face_images[0] if self.face_images else None
-        self.selected_theme = "light"
+        self.selected_theme = "dark"
 
     def apply_css(self):
-        # Force light palette so Adw never overrides our white/blue colours
-        Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_LIGHT)
+        # Apply dark theme by default matching self.selected_theme
+        if getattr(self, "selected_theme", "dark") in ["dark", "liquid_glass"]:
+            self.add_css_class("dark-theme")
+            Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_DARK)
+        else:
+            self.remove_css_class("dark-theme")
+            Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_LIGHT)
         display = Gdk.Display.get_default()
         if not display:
             return
@@ -897,16 +918,16 @@ class OOTBWindow(Adw.ApplicationWindow):
         theme_box.set_margin_bottom(8)
         theme_box.add_css_class("linked")
 
-        self.btn_light = Gtk.ToggleButton(label="Light Mode")
-        self.btn_light.set_active(True)
-        self.btn_light.connect("toggled", self.on_theme_toggled, False)
-        theme_box.append(self.btn_light)
-
-        self.btn_dark = Gtk.ToggleButton(label="Dark Mode")
+        self.btn_dark = Gtk.ToggleButton(label="Dark Mode (Recommended)")
+        self.btn_dark.set_active(True)
         self.btn_dark.connect("toggled", self.on_theme_toggled, True)
         theme_box.append(self.btn_dark)
 
-        self.btn_dark.set_group(self.btn_light)
+        self.btn_light = Gtk.ToggleButton(label="Light Mode")
+        self.btn_light.connect("toggled", self.on_theme_toggled, False)
+        theme_box.append(self.btn_light)
+
+        self.btn_light.set_group(self.btn_dark)
         box.append(theme_box)
 
         # Search Entry for filtering countries
@@ -1863,36 +1884,17 @@ class OOTBWindow(Adw.ApplicationWindow):
         desc.add_css_class("welcome-subtitle")
         box.append(desc)
 
-        # Horizontal Box for Light / Dark options
-        cards_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=24)
+        # Horizontal Box for Dark (Recommended) / Liquid Glass / Light options
+        cards_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
         cards_box.set_halign(Gtk.Align.CENTER)
         box.append(cards_box)
 
-        # Light Theme Card
-        self.light_card = Gtk.Button()
-        self.light_card.add_css_class("theme-card")
-        self.light_card.add_css_class("selected") # default
-        
-        light_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        light_vbox.set_halign(Gtk.Align.CENTER)
-        
-        light_preview = Gtk.Frame()
-        light_preview.add_css_class("theme-preview-light")
-        light_vbox.append(light_preview)
-        
-        light_lbl = Gtk.Label(label="Light")
-        light_lbl.add_css_class("theme-card-title")
-        light_vbox.append(light_lbl)
-        
-        self.light_card.set_child(light_vbox)
-        self.light_card.connect("clicked", self.on_light_theme_selected)
-        cards_box.append(self.light_card)
-
-        # Dark Theme Card
+        # 1. Dark Theme Card (RECOMMENDED - default)
         self.dark_card = Gtk.Button()
         self.dark_card.add_css_class("theme-card")
+        self.dark_card.add_css_class("selected") # default recommended
         
-        dark_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        dark_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         dark_vbox.set_halign(Gtk.Align.CENTER)
         
         dark_preview = Gtk.Frame()
@@ -1902,32 +1904,157 @@ class OOTBWindow(Adw.ApplicationWindow):
         dark_lbl = Gtk.Label(label="Dark")
         dark_lbl.add_css_class("theme-card-title")
         dark_vbox.append(dark_lbl)
+
+        dark_badge = Gtk.Label(label="(Recommended)")
+        dark_badge.add_css_class("theme-card-badge")
+        dark_vbox.append(dark_badge)
         
         self.dark_card.set_child(dark_vbox)
         self.dark_card.connect("clicked", self.on_dark_theme_selected)
         cards_box.append(self.dark_card)
 
+        # 2. Liquid Glass Theme Card (Dark + Liquid Glass)
+        self.glass_card = Gtk.Button()
+        self.glass_card.add_css_class("theme-card")
+        
+        glass_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        glass_vbox.set_halign(Gtk.Align.CENTER)
+        
+        glass_preview = Gtk.Frame()
+        glass_preview.add_css_class("theme-preview-glass")
+        glass_vbox.append(glass_preview)
+        
+        glass_lbl = Gtk.Label(label="Liquid Glass")
+        glass_lbl.add_css_class("theme-card-title")
+        glass_vbox.append(glass_lbl)
+
+        glass_badge = Gtk.Label(label="(Dark + Glass)")
+        glass_badge.add_css_class("theme-card-badge")
+        glass_vbox.append(glass_badge)
+        
+        self.glass_card.set_child(glass_vbox)
+        self.glass_card.connect("clicked", self.on_glass_theme_selected)
+        cards_box.append(self.glass_card)
+
+        # 3. Light Theme Card
+        self.light_card = Gtk.Button()
+        self.light_card.add_css_class("theme-card")
+        
+        light_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        light_vbox.set_halign(Gtk.Align.CENTER)
+        
+        light_preview = Gtk.Frame()
+        light_preview.add_css_class("theme-preview-light")
+        light_vbox.append(light_preview)
+        
+        light_lbl = Gtk.Label(label="Light")
+        light_lbl.add_css_class("theme-card-title")
+        light_vbox.append(light_lbl)
+
+        light_spacer = Gtk.Label(label="")
+        light_spacer.add_css_class("theme-card-badge")
+        light_vbox.append(light_spacer)
+        
+        self.light_card.set_child(light_vbox)
+        self.light_card.connect("clicked", self.on_light_theme_selected)
+        cards_box.append(self.light_card)
+
         self.stack.add_named(box, "theme_select")
+
+    def on_dark_theme_selected(self, btn):
+        self.dark_card.add_css_class("selected")
+        self.glass_card.remove_css_class("selected")
+        self.light_card.remove_css_class("selected")
+        self.set_theme_mode("dark")
+
+    def on_glass_theme_selected(self, btn):
+        self.glass_card.add_css_class("selected")
+        self.dark_card.remove_css_class("selected")
+        self.light_card.remove_css_class("selected")
+        self.set_theme_mode("liquid_glass")
 
     def on_light_theme_selected(self, btn):
         self.light_card.add_css_class("selected")
         self.dark_card.remove_css_class("selected")
-        self.set_theme_dark(False)
+        self.glass_card.remove_css_class("selected")
+        self.set_theme_mode("light")
 
-    def on_dark_theme_selected(self, btn):
-        self.dark_card.add_css_class("selected")
-        self.light_card.remove_css_class("selected")
-        self.set_theme_dark(True)
-
-    def set_theme_dark(self, is_dark):
-        if is_dark:
+    def set_theme_mode(self, mode):
+        self.selected_theme = mode
+        if mode in ["dark", "liquid_glass"]:
             self.add_css_class("dark-theme")
             Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_DARK)
-            self.selected_theme = "dark"
         else:
             self.remove_css_class("dark-theme")
             Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_LIGHT)
-            self.selected_theme = "light"
+
+        # Apply live effect immediately if running in an active GNOME user session
+        try:
+            if mode == "liquid_glass":
+                subprocess.Popen(
+                    ["/bin/sh", "-c",
+                     "gnome-extensions enable liquid-glass@thinkingcoding1231.gmail.com 2>/dev/null; "
+                     "gnome-extensions disable blur-my-shell@aunetx 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.applications blur false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.overview blur false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.panel blur false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme true 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.0 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock custom-theme-shrink true 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface gtk-theme 'MacTahoe-Dark' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface icon-theme 'MacTahoe-blue-dark' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.user-theme name 'MacTahoe-Dark' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-application-glass 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/application-glass-all-windows 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/application-content-opacity '0.85' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-dock-glass 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-menu-glass 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-notification-glass 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-osd-glass 'true' 2>/dev/null; "
+                     "dconf write /org/gnome/shell/extensions/liquid-glass/enable-quick-settings-glass 'true' 2>/dev/null"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+            elif mode == "dark":
+                subprocess.Popen(
+                    ["/bin/sh", "-c",
+                     "gnome-extensions disable liquid-glass@thinkingcoding1231.gmail.com 2>/dev/null; "
+                     "gnome-extensions enable blur-my-shell@aunetx 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur true 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur true 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface gtk-theme 'MacTahoe-Dark' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface icon-theme 'MacTahoe-blue-dark' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.user-theme name 'MacTahoe-Dark' 2>/dev/null"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+            elif mode == "light":
+                subprocess.Popen(
+                    ["/bin/sh", "-c",
+                     "gnome-extensions disable liquid-glass@thinkingcoding1231.gmail.com 2>/dev/null; "
+                     "gnome-extensions enable blur-my-shell@aunetx 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.dash-to-dock blur true 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur true 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme false 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock transparency-mode 'FIXED' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface color-scheme 'prefer-light' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface gtk-theme 'MacTahoe-Light' 2>/dev/null; "
+                     "gsettings set org.gnome.desktop.interface icon-theme 'MacTahoe-blue-light' 2>/dev/null; "
+                     "gsettings set org.gnome.shell.extensions.user-theme name 'MacTahoe-Light' 2>/dev/null"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+        except Exception:
+            pass
+
+    def set_theme_dark(self, is_dark):
+        self.set_theme_mode("dark" if is_dark else "light")
     def build_progress_page(self):
         self.progress_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         self.progress_box.set_valign(Gtk.Align.CENTER)
@@ -2762,7 +2889,8 @@ class OOTBWindow(Adw.ApplicationWindow):
 
                 # ── Apply chosen appearance theme for user ───────
                 log_msg("Applying theme and desktop settings...", fraction=0.95)
-                is_dark = (getattr(self, 'selected_theme', 'light') == 'dark')
+                is_dark = (getattr(self, 'selected_theme', 'dark') in ['dark', 'liquid_glass'])
+                is_liquid_glass = (getattr(self, 'selected_theme', 'dark') == 'liquid_glass')
                 theme_scheme = "'prefer-dark'" if is_dark else "'prefer-light'"
                 gtk_theme_name = "'MacTahoe-Dark'" if is_dark else "'MacTahoe-Light'"
                 icon_theme_name = "'MacTahoe-blue-dark'" if is_dark else "'MacTahoe-blue-light'"
@@ -2773,12 +2901,102 @@ class OOTBWindow(Adw.ApplicationWindow):
                     ("org.gnome.desktop.interface", "gtk-theme", gtk_theme_name),
                     ("org.gnome.desktop.interface", "icon-theme", icon_theme_name),
                     ("org.gnome.shell.extensions.user-theme", "name", shell_theme_name),
+                    ("org.gnome.desktop.wm.preferences", "theme", gtk_theme_name),
+                    ("org.gnome.desktop.wm.preferences", "button-layout", "'close,minimize,maximize:'"),
                 ]
                 for schema, key, value in theme_settings:
                     run_cmd([
                         "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
                         schema, key, value
                     ], check=False)
+
+                if is_liquid_glass:
+                    # Enable Liquid Glass GNOME Shell extension
+                    run_cmd([
+                        "sudo", "-u", username, "dbus-run-session", "gnome-extensions", "enable",
+                        "liquid-glass@thinkingcoding1231.gmail.com"
+                    ], check=False)
+                    # Turn off blur-my-shell completely: disable extension and disable blur on all components
+                    run_cmd([
+                        "sudo", "-u", username, "dbus-run-session", "gnome-extensions", "disable",
+                        "blur-my-shell@aunetx"
+                    ], check=False)
+                    for bms_schema, bms_key, bms_val in [
+                        ("org.gnome.shell.extensions.blur-my-shell.applications", "blur", "false"),
+                        ("org.gnome.shell.extensions.blur-my-shell.overview", "blur", "false"),
+                        ("org.gnome.shell.extensions.blur-my-shell.dash-to-dock", "blur", "false"),
+                        ("org.gnome.shell.extensions.blur-my-shell.popup", "blur", "false"),
+                        ("org.gnome.shell.extensions.blur-my-shell.panel", "blur", "false"),
+                    ]:
+                        run_cmd([
+                            "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
+                            bms_schema, bms_key, bms_val
+                        ], check=False)
+                    # Configure Dash to Dock transparency and shrink wrap
+                    for d2d_key, d2d_val in [
+                        ("apply-custom-theme", "true"),
+                        ("transparency-mode", "'FIXED'"),
+                        ("background-opacity", "0.0"),
+                        ("customize-alphas", "false"),
+                        ("custom-theme-shrink", "true"),
+                        ("height-fraction", "0.9"),
+                    ]:
+                        run_cmd([
+                            "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
+                            "org.gnome.shell.extensions.dash-to-dock", d2d_key, d2d_val
+                        ], check=False)
+                    # Write full Liquid Glass dconf settings with macOS appearance & drop animations
+                    lg_dconf = (
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-dock-glass 'true' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/dock-corner-radius '16.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/dock-glass-expand '3' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/dock-tint-color \"'#000000'\" ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-application-glass 'true' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/application-glass-all-windows 'true' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/application-content-opacity '0.85' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-menu-glass 'true' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-notification-glass 'true' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-osd-glass 'true' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/enable-quick-settings-glass 'true' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/menu-corner-radius '14.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/menu-glass-expand '4' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/panel-menu-corner-radius '14.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/panel-menu-glass-expand '4' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/desktop-menu-corner-radius '14.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/notification-corner-radius '16.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/osd-corner-radius '16.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/quick-settings-corner-radius '18.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-chroma-strength '0.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-displacement-scale '188.37209302325581' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-edge-smoothing '0.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-ior '2.0175438596491229' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-max-z '16.981132075471699' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-profile-shape-n '20.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-rim-width '4.8' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/glass-specular-intensity '0.0' ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/menu-tint-color \"'#000000'\" ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/notification-tint-color \"'#000000'\" ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/osd-tint-color \"'#000000'\" ; "
+                        "dconf write /org/gnome/shell/extensions/liquid-glass/output-logs 'false'"
+                    )
+                    run_cmd(["sudo", "-u", username, "dbus-run-session", "bash", "-c", lg_dconf], check=False)
+                else:
+                    run_cmd([
+                        "sudo", "-u", username, "dbus-run-session", "gnome-extensions", "disable",
+                        "liquid-glass@thinkingcoding1231.gmail.com"
+                    ], check=False)
+                    run_cmd([
+                        "sudo", "-u", username, "dbus-run-session", "gnome-extensions", "enable",
+                        "blur-my-shell@aunetx"
+                    ], check=False)
+                    for bms_schema, bms_key, bms_val in [
+                        ("org.gnome.shell.extensions.blur-my-shell.dash-to-dock", "blur", "true"),
+                        ("org.gnome.shell.extensions.blur-my-shell.popup", "blur", "true"),
+                    ]:
+                        run_cmd([
+                            "sudo", "-u", username, "dbus-run-session", "gsettings", "set",
+                            bms_schema, bms_key, bms_val
+                        ], check=False)
 
                 # Physically copy correct theme files to the newly created user's .config
                 user_home = f"/home/{username}"
@@ -2876,70 +3094,83 @@ class OOTBWindow(Adw.ApplicationWindow):
                 self.close()
                 sys.exit(0)
             else:
-                username = self.username_entry.get_text().strip()
+                username = getattr(self, "saved_username", None) or self.username_entry.get_text().strip()
+                if not username:
+                    try:
+                        out = subprocess.check_output(
+                            ["awk", "-F:", "$3 >= 1000 && $3 != 65534 && $1 != \"live\" {print $1; exit}", "/etc/passwd"],
+                            universal_newlines=True
+                        ).strip()
+                        if out:
+                            username = out
+                    except Exception:
+                        username = "pulsar"
+
                 log_path = "/tmp/pulsar-ootb.log"
 
                 def log_msg(msg):
-                    with open(log_path, "a") as log:
-                        log.write(f"{msg}\n")
-
-                # 1. Remove temporary sudoers grants for live user
-                log_msg("Cleaning up temporary sudoers for live user...")
-                for live_grant in (
-                    "/etc/sudoers.d/pulsar-ootb-live",
-                    "/etc/sudoers.d/pulsar-live-nopasswd",
-                    "/etc/polkit-1/rules.d/50-pulsar-live-nopasswd.rules",
-                ):
                     try:
-                        os.remove(live_grant)
-                    except FileNotFoundError:
+                        with open(log_path, "a") as log:
+                            log.write(f"{msg}\n")
+                    except Exception:
                         pass
 
-                # 2. Remove residual display manager config files
-                try:
-                    subprocess.run(
-                        "rm -f /etc/sddm.conf /etc/sddm.conf.d/live"
-                        " /etc/lightdm/lightdm.conf.d/* 2>/dev/null",
-                        shell=True
-                    )
-                except Exception:
-                    pass
-
-                # 3. Configure SDDM autologin for the new real user
+                # 1. Configure SDDM autologin for the new real user
                 os.makedirs("/etc/sddm.conf.d", exist_ok=True)
                 with open("/etc/sddm.conf.d/autologin.conf", "w") as f:
                     f.write(f"[Autologin]\nUser={username}\nSession=gnome\nRelogin=false\n")
                 os.chmod("/etc/sddm.conf.d/autologin.conf", 0o644)
                 log_msg(f"SDDM autologin configured for '{username}'")
 
-                # 4. Delete OOTB witness file
+                # 2. Update SDDM state so the greeter also defaults to the new user
+                try:
+                    os.makedirs("/var/lib/sddm", exist_ok=True)
+                    with open("/var/lib/sddm/state.conf", "w") as sf:
+                        sf.write(f"[Last]\nSession=/usr/share/wayland-sessions/gnome.desktop\nUser={username}\n")
+                    subprocess.run(["chown", "-R", "sddm:sddm", "/var/lib/sddm"], check=False)
+                except Exception as ex_sddm_st:
+                    log_msg(f"Notice writing sddm state: {ex_sddm_st}")
+
+                # 3. Delete OOTB witness file
                 if os.path.exists("/etc/pulsar-need-setup"):
-                    os.remove("/etc/pulsar-need-setup")
-                    log_msg("Removed /etc/pulsar-need-setup")
+                    try:
+                        os.remove("/etc/pulsar-need-setup")
+                        log_msg("Removed /etc/pulsar-need-setup")
+                    except Exception:
+                        pass
 
-                # 5. Create cleanup sentinel (will be picked up on first login)
-                with open("/etc/pulsar-need-cleanup", "w") as f:
-                    f.write(username)
-                log_msg("Created /etc/pulsar-need-cleanup")
+                # 4. Create cleanup sentinel for first login of the created user
+                try:
+                    with open("/etc/pulsar-need-cleanup", "w") as f:
+                        f.write(username)
+                    log_msg("Created /etc/pulsar-need-cleanup")
+                except Exception as ex_sc:
+                    log_msg(f"Notice creating cleanup sentinel: {ex_sc}")
 
-                # 6. Disable pulsar-ootb service (no longer needed)
+                # 5. Disable pulsar-ootb service (no longer needed)
                 subprocess.run(
-                    ["systemctl", "disable", "pulsar-ootb.service"],
-                    capture_output=True
+                    ["sudo", "systemctl", "disable", "pulsar-ootb.service"],
+                    capture_output=True, check=False
                 )
                 log_msg("Disabled pulsar-ootb.service")
 
-                # 7. Restart SDDM / Display Manager so it logs into the new user
+                # 6. Restart SDDM so it immediately autologs into the new user session
+                # NOTE: pulsar-cleanup-live.sh is triggered on first login of the new user by
+                # pulsar-cleanup-user (avoiding pkill -u live killing this script prematurely)
                 log_msg("Restarting display manager to enter user session...")
                 res = subprocess.run(
-                    ["systemctl", "restart", "sddm"],
+                    ["sudo", "systemctl", "restart", "sddm"],
                     capture_output=True, text=True
                 )
                 if res.returncode != 0:
-                    subprocess.run(["systemctl", "restart", "display-manager"], capture_output=True)
+                    subprocess.run(["sudo", "systemctl", "restart", "display-manager"], capture_output=True)
 
                 self.close()
                 sys.exit(0)
+        except Exception as e:
+            with open("/tmp/pulsar-ootb.log", "a") as log:
+                log.write(f"Exception during final cleanup: {e}\n")
+            self.show_error(f"Error during cleanup:\n{e}")
         except Exception as e:
             with open("/tmp/pulsar-ootb.log", "a") as log:
                 log.write(f"Exception during final cleanup: {e}\n")

@@ -854,6 +854,14 @@ for theme_dir in "$STAGE_DIR/usr/share/icons/"MacTahoe-blue*; do
     fi
 done
 
+# 2.2 Clonar e instalar macOS-27-Icons theme
+echo "Instalando tema de iconos macOS-27-Icons..."
+git -c http.version=HTTP/1.1 clone --depth=1 "https://github.com/Agnell02010/macOS-27-Icons-theme" "$TEMP_BUILD/macos27" || true
+if [ -d "$TEMP_BUILD/macos27/theme" ]; then
+    rm -rf "$STAGE_DIR/usr/share/icons/macOS-27-Icons"
+    cp -rf "$TEMP_BUILD/macos27/theme" "$STAGE_DIR/usr/share/icons/macOS-27-Icons"
+fi
+
 # 3. Limpiar compilación temporal
 rm -rf "$TEMP_BUILD"
 echo "✅ Temas e iconos posicionados correctamente."

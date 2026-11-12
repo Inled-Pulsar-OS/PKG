@@ -47,6 +47,7 @@ package() {
     if [ -d appinstall/etc ]; then
         mkdir -p "$pkgdir/etc"
         cp -r appinstall/etc/* "$pkgdir/etc/"
+        rm -f "$pkgdir/etc/xdg/autostart/appinstall-daemon.desktop"
     fi
 
     chmod -R a+rX "$pkgdir/usr"

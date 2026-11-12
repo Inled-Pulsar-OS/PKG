@@ -53,6 +53,9 @@ purge_source() {
 build_frontend() {
     echo "📦 Compilando frontend de producción (vite)..."
     cd "$SRC_DIR"
+    if [ -d "$SRC_DIR/dist" ]; then
+        rm -rf "$SRC_DIR/dist" 2>/dev/null || sudo rm -rf "$SRC_DIR/dist" 2>/dev/null || chmod -R u+rwX "$SRC_DIR/dist" 2>/dev/null || true
+    fi
     if [ -d node_modules ] || command -v pnpm >/dev/null 2>&1; then
         command -v pnpm >/dev/null 2>&1 && pnpm install --frozen-lockfile 2>/dev/null || pnpm install || npm install
     else

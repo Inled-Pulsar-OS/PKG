@@ -21,11 +21,11 @@ package() {
     fi
     
     # Write Arch-specific os-release
-    local os_ver="${PULSAR_VERSION:-1.1-unstable}"
+    local os_ver="${PULSAR_VERSION:-2.0-preview}"
     mkdir -p "$pkgdir/etc" "$pkgdir/usr/lib"
     cat <<EOF > "$pkgdir/etc/os-release"
 NAME="Pulsar OS"
-PRETTY_NAME="Pulsar OS Bitten Fruit Arch Based $os_ver"
+PRETTY_NAME="Pulsar OS Bitten Fruit $os_ver (Arch Based)"
 VERSION_ID="$os_ver"
 VERSION="$os_ver"
 ID=pulsaros

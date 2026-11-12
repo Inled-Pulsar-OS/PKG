@@ -86,6 +86,22 @@ export default class ShotzyExtension extends Extension {
         this._overlayMessage = null;
         this._overlayMessageTimeoutId = 0;
         this._areaSelectorSetCursorTypeOriginal = null;
+        this._capturedEventId = 0;
+        this._lastPointerDeviceType = null;
+
+        try {
+            this._capturedEventId = global.stage.connect('captured-event', (_stage, event) => {
+                if (event.type() === Clutter.EventType.MOTION) {
+                    const dev = event.get_source_device() || event.get_device();
+                    if (dev) {
+                        this._lastPointerDeviceType = dev.get_device_type();
+                    }
+                }
+                return Clutter.EVENT_PROPAGATE;
+            });
+        } catch (e) {
+            console.warn('[CircleToSearch] captured-event listener warning:', e);
+        }
 
         this._setupShakeDetector();
         this._hookScreenshotUI();
@@ -93,7 +109,7 @@ export default class ShotzyExtension extends Extension {
         this._settingsChangedId = this._settings.connect('changed', (_settings, key) => {
             if (key === 'show-google-lens-button' || key === 'show-qr-button')
                 this._syncActionButtons();
-            else if (key === 'shake-enabled' || key === 'shake-sensitivity')
+            else if (key === 'shake-enabled' || key === 'shake-sensitivity' || key === 'disable-shake-with-mouse')
                 this._setupShakeDetector();
         });
     }
@@ -147,6 +163,24 @@ export default class ShotzyExtension extends Extension {
 
             this._shakeWatch = this._pointerWatcher.addWatch(16, (x, y) => {
                 const now = Date.now();
+
+                // If disable-shake-with-mouse is enabled, ignore shakes from mouse peripherals
+                if (this._settings.get_boolean('disable-shake-with-mouse')) {
+                    if (this._lastPointerDeviceType === Clutter.InputDeviceType.POINTER_DEVICE) {
+                        return;
+                    }
+                    if (this._lastPointerDeviceType === null) {
+                        try {
+                            const seat = Clutter.get_default_backend().get_default_seat();
+                            const devices = seat ? seat.list_devices() : [];
+                            const hasTouchpad = devices.some(d => d.get_device_type() === Clutter.InputDeviceType.TOUCHPAD_DEVICE);
+                            if (!hasTouchpad) {
+                                return;
+                            }
+                        } catch (e) {}
+                    }
+                }
+
                 // 1. Startup Warmup: Ignore cursor coordinates during first 1.5s
                 if (now - startTime < 1500) {
                     lastX = x;
@@ -219,6 +253,13 @@ export default class ShotzyExtension extends Extension {
     }
 
     disable() {
+        if (this._capturedEventId) {
+            try {
+                global.stage.disconnect(this._capturedEventId);
+            } catch (e) {}
+            this._capturedEventId = 0;
+        }
+
         if (this._shakeWatch) {
             try {
                 this._shakeWatch.remove();

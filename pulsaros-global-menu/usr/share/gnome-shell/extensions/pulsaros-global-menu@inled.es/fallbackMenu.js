@@ -208,7 +208,7 @@ function toSpecs(items) {
 
 const MENU_DATA = [
 	{
-		label: 'Desktop',
+		label: 'Finder',
 		appName: true,
 		items: [
 			{label: 'Open Files', action: 'open-files'},
@@ -292,7 +292,7 @@ export class FallbackMenu {
 
 	updateAppName() {
 		const app = Shell.WindowTracker.get_default().focus_app;
-		this._appButton?.setLabel(app?.get_name() ?? 'Desktop');
+		this._appButton?.setLabel(app?.get_name() ?? 'Finder');
 	}
 
 	setNativeMenusPresent(present) {

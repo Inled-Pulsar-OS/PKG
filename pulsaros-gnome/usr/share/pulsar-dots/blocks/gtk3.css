@@ -1,0 +1,243 @@
+/* Pulsar OS - semaforo macOS 27 liquido (GTK3) */
+headerbar button.titlebutton.close.close.close,
+.titlebar button.titlebutton.close.close.close,
+headerbar button.close.close.close,
+.titlebar button.close.close.close {
+    background-color: transparent;
+    background-image: url("@HOME@/.local/share/pulsar-dots/close.png");
+    background-size: 15px 15px;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+    color: transparent;
+    padding: 0;
+    margin: 0 4px;
+    transition: background-size 150ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+headerbar button.titlebutton.close.close.close:hover,
+.titlebar button.titlebutton.close.close.close:hover,
+headerbar button.close.close.close:hover,
+.titlebar button.close.close.close:hover {
+    background-color: transparent;
+    background-image: url("@HOME@/.local/share/pulsar-dots/close-hover.png");
+    background-size: 15px 15px;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+    color: transparent;
+    padding: 0;
+    margin: 0 4px;
+}
+
+headerbar button.titlebutton.close.close.close:active,
+.titlebar button.titlebutton.close.close.close:active,
+headerbar button.close.close.close:active,
+.titlebar button.close.close.close:active {
+    background-color: transparent;
+    background-image: url("@HOME@/.local/share/pulsar-dots/close-hover.png");
+    background-size: 17px 17px;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+    color: transparent;
+    padding: 0;
+    margin: 0 4px;
+}
+
+headerbar button.titlebutton.close.close.close:backdrop,
+.titlebar button.titlebutton.close.close.close:backdrop,
+headerbar button.close.close.close:backdrop,
+.titlebar button.close.close.close:backdrop {
+    background-color: transparent;
+    background-image: url("@HOME@/.local/share/pulsar-dots/close-backdrop.png");
+    background-size: 15px 15px;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+    color: transparent;
+    padding: 0;
+    margin: 0 4px;
+}
+
+headerbar button.titlebutton.close.close.close:backdrop:hover,
+.titlebar button.titlebutton.close.close.close:backdrop:hover,
+headerbar button.close.close.close:backdrop:hover,
+.titlebar button.close.close.close:backdrop:hover {
+    background-color: transparent;
+    background-image: url("@HOME@/.local/share/pulsar-dots/close-hover.png");
+    background-size: 15px 15px;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+    color: transparent;
+    padding: 0;
+    margin: 0 4px;
+}
+
+headerbar button.titlebutton.minimize.minimize.minimize,
+.titlebar button.titlebutton.minimize.minimize.minimize,
+headerbar button.minimize.minimize.minimize,
+.titlebar button.minimize.minimize.minimize {
+    background-color: transparent;
+    background-image: url("@HOME@/.local/share/pulsar-dots/minimize.png");
+    background-size: 15px 15px;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+    color: transparent;
+    padding: 0;
+    margin: 0 4px;
+    transition: background-size 150ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+headerbar button.titlebutton.minimize.minimize.minimize:hover,
+.titlebar button.titlebutton.minimize.minimize.minimize:hover,
+headerbar button.minimize.minimize.minimize:hover,
+.titlebar button.minimize.minimize.minimize:hover {
+    background-color: transparent;
+    background-image: url("@HOME@/.local/share/pulsar-dots/minimize-hover.png");
+    background-size: 15px 15px;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+    color: transparent;
+    padding: 0;
+    margin: 0 4px;
+}
+
+headerbar button.titlebutton.minimize.minimize.minimize:active,
+.titlebar button.titlebutton.minimize.minimize.minimize:active,
+headerbar button.minimize.minimize.minimize:active,
+.titlebar button.minimize.minimize.minimize:active {
+    background-color: transparent;
+    background-image: url("@HOME@/.local/share/pulsar-dots/minimize-hover.png");
+    background-size: 17px 17px;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+    color: transparent;
+    padding: 0;
+    margin: 0 4px;
+}
+
+headerbar button.titlebutton.minimize.minimize.minimize:backdrop,
+.titlebar button.titlebutton.minimize.minimize.minimize:backdrop,
+headerbar button.minimize.minimize.minimize:backdrop,
+.titlebar button.minimize.minimize.minimize:backdrop {
+    background-color: transparent;
+    background-image: url("@HOME@/.local/share/pulsar-dots/minimize-backdrop.png");
+    background-size: 15px 15px;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+    color: transparent;
+    padding: 0;
+    margin: 0 4px;
+}
+
+headerbar button.titlebutton.minimize.minimize.minimize:backdrop:hover,
+.titlebar button.titlebutton.minimize.minimize.minimize:backdrop:hover,
+headerbar button.minimize.minimize.minimize:backdrop:hover,
+.titlebar button.minimize.minimize.minimize:backdrop:hover {
+    background-color: transparent;
+    background-image: url("@HOME@/.local/share/pulsar-dots/minimize-hover.png");
+    background-size: 15px 15px;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+    color: transparent;
+    padding: 0;
+    margin: 0 4px;
+}
+
+headerbar button.titlebutton.maximize.maximize.maximize,
+.titlebar button.titlebutton.maximize.maximize.maximize,
+headerbar button.maximize.maximize.maximize,
+.titlebar button.maximize.maximize.maximize {
+    background-color: transparent;
+    background-image: url("@HOME@/.local/share/pulsar-dots/maximize.png");
+    background-size: 15px 15px;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+    color: transparent;
+    padding: 0;
+    margin: 0 4px;
+    transition: background-size 150ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+headerbar button.titlebutton.maximize.maximize.maximize:hover,
+.titlebar button.titlebutton.maximize.maximize.maximize:hover,
+headerbar button.maximize.maximize.maximize:hover,
+.titlebar button.maximize.maximize.maximize:hover {
+    background-color: transparent;
+    background-image: url("@HOME@/.local/share/pulsar-dots/maximize-hover.png");
+    background-size: 15px 15px;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+    color: transparent;
+    padding: 0;
+    margin: 0 4px;
+}
+
+headerbar button.titlebutton.maximize.maximize.maximize:active,
+.titlebar button.titlebutton.maximize.maximize.maximize:active,
+headerbar button.maximize.maximize.maximize:active,
+.titlebar button.maximize.maximize.maximize:active {
+    background-color: transparent;
+    background-image: url("@HOME@/.local/share/pulsar-dots/maximize-hover.png");
+    background-size: 17px 17px;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+    color: transparent;
+    padding: 0;
+    margin: 0 4px;
+}
+
+headerbar button.titlebutton.maximize.maximize.maximize:backdrop,
+.titlebar button.titlebutton.maximize.maximize.maximize:backdrop,
+headerbar button.maximize.maximize.maximize:backdrop,
+.titlebar button.maximize.maximize.maximize:backdrop {
+    background-color: transparent;
+    background-image: url("@HOME@/.local/share/pulsar-dots/maximize-backdrop.png");
+    background-size: 15px 15px;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+    color: transparent;
+    padding: 0;
+    margin: 0 4px;
+}
+
+headerbar button.titlebutton.maximize.maximize.maximize:backdrop:hover,
+.titlebar button.titlebutton.maximize.maximize.maximize:backdrop:hover,
+headerbar button.maximize.maximize.maximize:backdrop:hover,
+.titlebar button.maximize.maximize.maximize:backdrop:hover {
+    background-color: transparent;
+    background-image: url("@HOME@/.local/share/pulsar-dots/maximize-hover.png");
+    background-size: 15px 15px;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+    color: transparent;
+    padding: 0;
+    margin: 0 4px;
+}

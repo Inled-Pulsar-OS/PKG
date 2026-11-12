@@ -570,7 +570,14 @@ const AboutDialog = GObject.registerClass({
     GTypeName: 'PulsarosAboutDialog'
 }, class AboutDialog extends ModalDialog.ModalDialog {
     _init(osName, osVersion, hostName, cpuModel, memTotal, gpuModel, diskInfo) {
-        super._init({ styleClass: 'pulsaros-about-dialog' });
+        let isDark = true;
+        try {
+            let ifaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
+            isDark = ifaceSettings.get_string('color-scheme') === 'prefer-dark';
+        } catch (e) {}
+
+        let themeClass = isDark ? 'pulsaros-about-dark' : 'pulsaros-about-light';
+        super._init({ styleClass: `pulsaros-about-dialog ${themeClass}` });
 
         let mainBox = new St.BoxLayout({
             orientation: Clutter.Orientation.VERTICAL,
@@ -599,6 +606,9 @@ const AboutDialog = GObject.registerClass({
             style_class: 'pulsaros-about-title',
             x_align: Clutter.ActorAlign.CENTER
         });
+        titleLabel.clutter_text.line_wrap = true;
+        titleLabel.clutter_text.line_wrap_mode = Pango.WrapMode.WORD;
+        titleLabel.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
         titleLabel.clutter_text.selectable = true;
         mainBox.add_child(titleLabel);
 
@@ -1192,8 +1202,8 @@ export const PulsarLogoButton = GObject.registerClass({
                 }
             } catch (e) {}
 
-            let osName = 'Pulsar OS Bitten Fruit';
-            let osVersion = '1.0';
+            let osName = 'Pulsar OS Bitten Fruit 2.0-preview';
+            let osVersion = '2.0-preview';
             try {
                 let [ok, content] = GLib.file_get_contents('/etc/os-release');
                 if (ok) {

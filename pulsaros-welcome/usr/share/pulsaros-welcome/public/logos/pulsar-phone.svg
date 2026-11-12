@@ -13,16 +13,14 @@
   <!-- Background rounded rectangle (Pulsar squircle) -->
   <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#pulsarGrad)" filter="url(#shadow)"/>
 
-  <!-- Lucide Wi-Fi Icon -->
-  <g transform="translate(24, 24) scale(3.333)"
+  <!-- Pulsar Phone (Smartphone Icon) -->
+  <g transform="translate(64, 64) scale(1.4) translate(-54, -54)"
      fill="none"
      stroke="#FFFFFF"
-     stroke-width="2.3"
      stroke-linecap="round"
      stroke-linejoin="round">
-    <path d="M12 20h.01" stroke-width="3.2"/>
-    <path d="M2 8.82a15 15 0 0 1 20 0"/>
-    <path d="M5 12.86a10 10 0 0 1 14 0"/>
-    <path d="M8.5 16.43a5 5 0 0 1 7 0"/>
+    <path stroke-width="3.5" d="M46,32 L62,32 A5,5 0 0,1 67,37 L67,71 A5,5 0 0,1 62,76 L46,76 A5,5 0 0,1 41,71 L41,37 A5,5 0 0,1 46,32 Z"/>
+    <path stroke-width="2.5" d="M51,37 L57,37"/>
+    <path stroke-width="3.5" d="M54,71 L54.01,71"/>
   </g>
 </svg>

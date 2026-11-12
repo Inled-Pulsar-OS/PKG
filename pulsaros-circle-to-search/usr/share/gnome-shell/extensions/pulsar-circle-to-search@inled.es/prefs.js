@@ -199,6 +199,13 @@ export default class ShotzyPreferences extends ExtensionPreferences {
         settings.bind('shake-enabled', shakeEnabledRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         shakeGroup.add(shakeEnabledRow);
 
+        const disableWithMouseRow = new Adw.SwitchRow({
+            title: 'Disable with external mouse',
+            subtitle: 'Only allow shaking with a touchpad to prevent accidental triggers with physical mice.',
+        });
+        settings.bind('disable-shake-with-mouse', disableWithMouseRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+        shakeGroup.add(disableWithMouseRow);
+
         shakeGroup.add(this._createSpinRow(settings, {
             key: 'shake-sensitivity',
             title: 'Sensitivity',

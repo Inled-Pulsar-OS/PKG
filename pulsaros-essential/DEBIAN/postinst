@@ -39,6 +39,7 @@ echo "👤 Configurando cuentas de usuario y contraseñas..."
 # English: Ensure critical groups exist
 # Español: Asegurar que existan los grupos críticos
 groupadd -f sudo || true
+groupadd -f wheel || true
 groupadd -f docker || true
 groupadd -f input || true
 
@@ -46,9 +47,9 @@ groupadd -f input || true
 # Create user 'live' if it does not exist
 if ! id -u live >/dev/null 2>&1; then
     echo "Creando usuario 'live'..."
-    useradd -m -s /bin/bash -G sudo,docker,input live || true
+    useradd -m -s /bin/bash -G sudo,wheel,docker,input live || true
 else
-    usermod -aG docker,input live || true
+    usermod -aG sudo,wheel,docker,input live || true
 fi
 echo "live:live" | chpasswd || echo "⚠️ Advertencia: No se pudo cambiar la contraseña de live"
 
@@ -171,17 +172,42 @@ if command -v systemctl >/dev/null 2>&1; then
     systemctl enable pulsaros-optimizer.service 2>/dev/null || true
 fi
 
-# Desactivar y enmascarar indexadores pesados localsearch y tracker-miner-fs
-echo "🛑 Desactivando servicios de indexación pesada localsearch / tracker..."
+# Desactivar y enmascarar indexadores pesados y servicios de Evolution, IBus y GNOME daemons
+echo "🛑 Desactivando servicios pesados (localsearch / tracker, evolution, ibus, smartcard, wwan)..."
 mkdir -p /etc/systemd/user
-for srv in localsearch-3.service localsearch-control-3.service localsearch-extractor-3.service tracker-miner-fs-3.service tracker-extract-3.service; do
+for srv in localsearch-3.service localsearch-control-3.service localsearch-extractor-3.service \
+           tracker-miner-fs-3.service tracker-extract-3.service \
+           evolution-calendar-factory.service evolution-addressbook-factory.service \
+           evolution-source-registry.service evolution-alarm-notify.service evolution-user-prompter.service \
+           org.freedesktop.IBus.session.GNOME.service \
+           org.gnome.SettingsDaemon.Smartcard.service org.gnome.SettingsDaemon.Wwan.service \
+           org.gnome.SettingsDaemon.PrintNotifications.service; do
     ln -sf /dev/null "/etc/systemd/user/$srv" 2>/dev/null || true
 done
 if command -v systemctl >/dev/null 2>&1; then
-    systemctl --global mask localsearch-3.service localsearch-control-3.service localsearch-extractor-3.service tracker-miner-fs-3.service tracker-extract-3.service 2>/dev/null || true
+    systemctl --global mask localsearch-3.service localsearch-control-3.service localsearch-extractor-3.service \
+                           tracker-miner-fs-3.service tracker-extract-3.service \
+                           evolution-calendar-factory.service evolution-addressbook-factory.service \
+                           evolution-source-registry.service evolution-alarm-notify.service evolution-user-prompter.service \
+                           org.freedesktop.IBus.session.GNOME.service \
+                           org.gnome.SettingsDaemon.Smartcard.service org.gnome.SettingsDaemon.Wwan.service \
+                           org.gnome.SettingsDaemon.PrintNotifications.service 2>/dev/null || true
+    # Activar CUPS bajo demanda (socket-activation) en lugar de demonio fijo
+    systemctl disable cups.service 2>/dev/null || true
+    systemctl enable cups.socket 2>/dev/null || true
 fi
 pkill -f localsearch 2>/dev/null || true
 pkill -f tracker-miner 2>/dev/null || true
 pkill -f tracker-extract 2>/dev/null || true
+pkill -f evolution- 2>/dev/null || true
+pkill -9 -f ibus- 2>/dev/null || true
+
+# Ocultar autostart de localsearch si existe
+if [ -f "/etc/xdg/autostart/localsearch-3.desktop" ]; then
+    if ! grep -q "^Hidden=" /etc/xdg/autostart/localsearch-3.desktop; then
+        echo "Hidden=true" >> /etc/xdg/autostart/localsearch-3.desktop
+    fi
+fi
+rm -f /etc/xdg/autostart/pulsar-windows.desktop 2>/dev/null || true
 
 exit 0

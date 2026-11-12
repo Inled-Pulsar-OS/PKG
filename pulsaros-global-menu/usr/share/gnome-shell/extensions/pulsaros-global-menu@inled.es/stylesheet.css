@@ -89,9 +89,9 @@
 .popup-menu-item:focus,
 .popup-menu-item:active,
 .popup-menu-item.selected {
-    background-color: -st-accent-color !important;
-    color: -st-accent-fg-color !important;
-    box-shadow: 0 2px 6px st-transparentize(-st-accent-color, 0.6) !important;
+    background-color: #007aff !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(0, 122, 255, 0.45) !important;
 }
 
 .popup-menu-item:hover StLabel,
@@ -101,8 +101,12 @@
 .popup-menu-item:hover StIcon,
 .popup-menu-item:focus StIcon,
 .popup-menu-item:active StIcon,
-.popup-menu-item.selected StIcon {
-    color: -st-accent-fg-color !important;
+.popup-menu-item.selected StIcon,
+.popup-menu-item:hover *,
+.popup-menu-item:focus *,
+.popup-menu-item:active *,
+.popup-menu-item.selected * {
+    color: #ffffff !important;
 }
 
 .popup-separator-menu-item {
@@ -278,14 +282,12 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
-/* --- About Pulsar OS Dialog Styles (Apple Liquid Glass HIG) --- */
+/* --- About Pulsar OS Dialog Styles (Apple Liquid Glass HIG - Adaptive Dark/Light) --- */
 .pulsaros-about-dialog {
-    background-color: rgba(30, 30, 34, 0.90);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 18px;
-    padding: 24px;
-    width: 480px;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+    border-radius: 18px !important;
+    padding: 24px !important;
+    width: 520px !important;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45) !important;
 }
 
 .pulsaros-about-mainbox {
@@ -297,26 +299,21 @@
 }
 
 .pulsaros-about-title {
-    font-size: 20pt;
+    font-size: 19pt;
     font-weight: bold;
-    color: #ffffff;
     text-align: center;
 }
 
 .pulsaros-about-subtitle {
     font-size: 11pt;
-    color: #aaaaaa;
     text-align: center;
     margin-bottom: 16px;
 }
 
 .pulsaros-about-details {
-    background-color: rgba(0, 0, 0, 0.25);
-    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     padding: 16px;
     spacing: 8px;
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
 }
 
 .pulsaros-about-row {
@@ -325,11 +322,105 @@
 
 .pulsaros-about-row-label {
     font-weight: bold;
-    color: #888888;
 }
 
 .pulsaros-about-row-value {
-    color: #dddddd;
+    font-weight: 500;
+}
+
+/* === DARK THEME ABOUT DIALOG === */
+.pulsaros-about-dialog.pulsaros-about-dark,
+.pulsaros-about-dark {
+    background-color: rgba(30, 30, 34, 0.94) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    color: #ffffff !important;
+}
+
+.pulsaros-about-dark .pulsaros-about-title {
+    color: #ffffff !important;
+}
+
+.pulsaros-about-dark .pulsaros-about-subtitle {
+    color: #a1a1a6 !important;
+}
+
+.pulsaros-about-dark .pulsaros-about-details {
+    background-color: rgba(0, 0, 0, 0.35) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+.pulsaros-about-dark .pulsaros-about-row-label {
+    color: #8e8e93 !important;
+}
+
+.pulsaros-about-dark .pulsaros-about-row-value {
+    color: #f5f5f7 !important;
+}
+
+.pulsaros-about-dark .modal-dialog-button {
+    background-color: rgba(255, 255, 255, 0.12) !important;
+    border: 1px solid rgba(255, 255, 255, 0.22) !important;
+    border-radius: 9999px !important;
+    padding: 6px 18px !important;
+    color: #ffffff !important;
+    font-size: 10pt !important;
+    font-weight: 500 !important;
+    min-height: 28px !important;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.25), 0 2px 6px rgba(0, 0, 0, 0.2) !important;
+}
+
+.pulsaros-about-dark .modal-dialog-button:hover {
+    background-color: rgba(255, 255, 255, 0.24) !important;
+    color: #ffffff !important;
+}
+
+/* === LIGHT THEME ABOUT DIALOG === */
+.pulsaros-about-dialog.pulsaros-about-light,
+.pulsaros-about-light {
+    background-color: rgba(246, 246, 248, 0.96) !important;
+    border: 1px solid rgba(0, 0, 0, 0.15) !important;
+    color: #1d1d1f !important;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.25) !important;
+}
+
+.pulsaros-about-light .pulsaros-about-title {
+    color: #1d1d1f !important;
+}
+
+.pulsaros-about-light .pulsaros-about-subtitle {
+    color: #636366 !important;
+}
+
+.pulsaros-about-light .pulsaros-about-details {
+    background-color: rgba(0, 0, 0, 0.05) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.6) !important;
+}
+
+.pulsaros-about-light .pulsaros-about-row-label {
+    color: #636366 !important;
+}
+
+.pulsaros-about-light .pulsaros-about-row-value {
+    color: #1d1d1f !important;
+}
+
+.pulsaros-about-light .modal-dialog-button {
+    background-color: rgba(0, 0, 0, 0.06) !important;
+    border: 1px solid rgba(0, 0, 0, 0.12) !important;
+    border-radius: 9999px !important;
+    padding: 6px 18px !important;
+    color: #1d1d1f !important;
+    font-size: 10pt !important;
+    font-weight: 500 !important;
+    min-height: 28px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+}
+
+.pulsaros-about-light .modal-dialog-button:hover {
+    background-color: rgba(0, 0, 0, 0.12) !important;
+    color: #1d1d1f !important;
 }
 
 .pulsaros-about-dialog .modal-dialog-button-box {
@@ -338,31 +429,9 @@
     margin-top: 16px;
 }
 
-.pulsaros-about-dialog .modal-dialog-button {
-    background-color: rgba(255, 255, 255, 0.12);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 9999px;
-    padding: 6px 18px;
-    color: #ffffff;
-    font-size: 10pt;
-    font-weight: 500;
-    min-height: 28px;
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.3), 0 2px 6px rgba(0, 0, 0, 0.2);
-    transition: all 120ms ease;
-}
-
-.pulsaros-about-dialog .modal-dialog-button:hover {
-    background-color: rgba(255, 255, 255, 0.22);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.45), 0 4px 10px rgba(0, 0, 0, 0.3);
-}
-
-.pulsaros-about-dialog .modal-dialog-button:active {
-    background-color: rgba(255, 255, 255, 0.15);
-}
-
 .pulsaros-about-dialog .modal-dialog-button:focus {
-    border: 1px solid #0071e3;
-    box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.5);
+    border: 1px solid #0071e3 !important;
+    box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.5) !important;
 }
 
 /* --- Pulsar OS Power Confirmation Dialog Styles (Liquid Glass HIG) --- */
