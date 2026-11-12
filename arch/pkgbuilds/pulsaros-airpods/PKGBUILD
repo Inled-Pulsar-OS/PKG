@@ -1,0 +1,41 @@
+# Maintainer: Victor Rosario <hello@victorrosario.dev>
+pkgname=pulsaros-airpods
+pkgver=0.2.0
+pkgrel=1
+pkgdesc="AirPods in the GNOME top bar for Pulsar OS (Shell extension + daemon)"
+arch=(x86_64)
+url="https://inled.es"
+# The extension is MIT; daemon/ is a modified copy of omarchy-pods / librepods, GPL-3.0.
+license=(MIT GPL-3.0-or-later)
+depends=(gnome-shell bluez qt6-base qt6-declarative qt6-connectivity libpulse openssl)
+makedepends=(cmake ninja qt6-tools)
+optdepends=('pipewire-pulse: audio profile handling')
+install=pulsaros-airpods.install
+options=(!debug)
+
+_src() { cd "$startdir"/../../../pulsaros-airpods && pwd; }
+
+build() {
+    cd "$(_src)"
+    cmake -S daemon -B "$srcdir/build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=OFF
+    cmake --build "$srcdir/build"
+}
+
+package() {
+    cd "$(_src)"
+    DESTDIR="$pkgdir" cmake --install "$srcdir/build"
+
+    # Headless service only: no launcher entry for the tray app, and the unit goes to the system unit dir
+    rm -f "$pkgdir/usr/share/applications/me.kavishdevar.librepods.desktop"
+    rm -f "$pkgdir/usr/share/systemd/user/librepods.service"
+    rmdir -p --ignore-fail-on-non-empty "$pkgdir/usr/share/systemd/user" 2>/dev/null || true
+    install -Dm644 daemon/packaging/librepods.service "$pkgdir/usr/lib/systemd/user/librepods.service"
+    install -d "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants"
+    ln -s ../librepods.service "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants/librepods.service"
+    install -Dm644 daemon/LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE.librepods"
+    install -Dm644 daemon/UPSTREAM.md "$pkgdir/usr/share/doc/$pkgname/librepods/UPSTREAM.md"
+
+    install -d "$pkgdir/usr/share/gnome-shell/extensions/airpods@pulsaros.org"
+    cp -r gnome-shell-extension/. "$pkgdir/usr/share/gnome-shell/extensions/airpods@pulsaros.org/"
+    chmod -R a+rX "$pkgdir/usr"
+}

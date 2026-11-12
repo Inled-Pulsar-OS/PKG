@@ -1,0 +1,23 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: pulsaros-airpods
+Upstream-Contact: Victor Rosario <hello@victorrosario.dev>
+Source: https://github.com/Inled-Pulsar-OS/PKG
+
+Files: *
+Copyright: 2026 Victor Rosario <hello@victorrosario.dev>
+License: MIT-INLED
+
+Files: daemon/*
+Copyright: Kavish Devar, GM, and the librepods contributors
+License: GPL-3
+Comment: Modified copy of the daemon/ directory of https://github.com/thisisgm/omarchy-pods (GM),
+ a fork of https://github.com/kavishdevar/librepods (Kavish Devar). Installed as /usr/bin/librepods
+ and /usr/bin/librepods-ctl. The extension talks to it through a JSON file and a command line only.
+ See /usr/share/doc/pulsaros-airpods/librepods/UPSTREAM.md.
+
+License: GPL-3
+ This program is free software: you can redistribute it and/or modify it under the
+ terms of the GNU General Public License version 3 as published by the Free
+ Software Foundation.
+ .
+ On Debian systems the full text is in /usr/share/common-licenses/GPL-3.

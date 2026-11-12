@@ -38,3 +38,9 @@ arch/pkgbuilds/*/pulsaros-spotlight
 arch/pkgbuilds/*/src/
 arch/pkgbuilds/*/pkg/
 arch/pkgbuilds/*/*.pkg.tar.*
+
+# Agent/board tooling files (local only)
+AGENTS.md
+CLAUDE.md
+docs/
+skills-lock.json
