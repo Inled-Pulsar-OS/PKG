@@ -21,9 +21,29 @@
 
 set -e
 
+if [ -z "${1:-}" ]; then
+    echo "❌ Usage: bash prepare-assets.sh <STAGE_DIR>" >&2
+    exit 1
+fi
+
 STAGE_DIR="$(realpath -m "$1")"
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 DISTRIBUTOR_LOGO="${DISTRIBUTOR_LOGO:-pulsar-logo}"
+
+# Safety: this script deletes files under STAGE_DIR. Refuse the filesystem root,
+# the package source folder (or anything inside it) and any parent of it.
+case "$STAGE_DIR" in
+    /|"$SCRIPT_DIR"|"$SCRIPT_DIR"/*)
+        echo "❌ Unsafe STAGE_DIR: $STAGE_DIR (must be a staging copy, not the source folder)" >&2
+        exit 1
+        ;;
+esac
+case "$SCRIPT_DIR/" in
+    "$STAGE_DIR"/*)
+        echo "❌ Unsafe STAGE_DIR: $STAGE_DIR contains the package source folder" >&2
+        exit 1
+        ;;
+esac
 
 # ==============================================================================
 # 0. Detect the gnome-control-center version matching the target Debian suite
