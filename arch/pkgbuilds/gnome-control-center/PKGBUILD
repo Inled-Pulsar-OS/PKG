@@ -1,6 +1,6 @@
 # Maintainer: Jaime <info@inled.es>
-# Maintaner: Victor Rosario <hello@victorrosario.dev>
-# Maintainer: Fabian Bornschein <fabiscafe@archlinux.org>
+# Maintainer: Victor Rosario <hello@victorrosario.dev>
+# Contributor: Fabian Bornschein <fabiscafe@archlinux.org>
 
 pkgbase=gnome-control-center
 _upstream_ver=51.1
@@ -10,7 +10,7 @@ pkgname=(
 )
 epoch=1
 pkgver=51.1
-pkgrel=12
+pkgrel=35
 pkgdesc="GNOME Settings with Pulsar OS macOS customization and Live Wallpaper engine"
 url="https://inled.es"
 license=(GPL-2.0-or-later)
@@ -71,7 +71,19 @@ depends=(
   udisks2
   upower
   wayland
+  pulsaros-branding
   pulsaros-live-wallpaper
+)
+optdepends=(
+  'fwupd: device security panel'
+  'gnome-remote-desktop: screen sharing'
+  'gnome-user-share: WebDAV file sharing'
+  'malcontent: application permission control'
+  'networkmanager: network settings'
+  'openssh: remote login'
+  'power-profiles-daemon: power profiles'
+  'rygel: media sharing'
+  'system-config-printer: printer settings'
 )
 makedepends=(
   blueprint-compiler
@@ -83,7 +95,7 @@ makedepends=(
 )
 source=(
   "git+https://gitlab.gnome.org/GNOME/gnome-control-center.git#tag=${_upstream_ver:-${pkgver/[a-z]/.&}}"
-  "git+https://gitlab.gnome.org/GNOME/libgnome-volume-control.git"
+  "git+https://gitlab.gnome.org/GNOME/libgnome-volume-control.git#commit=d2442f455844e5292cb4a74ffc66ecc8d7595a9f"
   "git+https://gitlab.gnome.org/GNOME/libgxdp.git#commit=df896e3412b749947bc6f62a91a1aac8e6b6d19b"
   "pulsar-macos-style.patch"
 )
@@ -140,8 +152,6 @@ _pick() {
 }
 
 package_gnome-control-center() {
-  provides=("gnome-control-center=$pkgver")
-  conflicts=("gnome-control-center")
   depends+=(gnome-keybindings)
   groups=(gnome)
 
@@ -163,8 +173,6 @@ package_gnome-control-center() {
 
 package_gnome-keybindings() {
   pkgdesc="Keybindings configuration for GNOME applications"
-  provides=("gnome-keybindings=$pkgver")
-  conflicts=("gnome-keybindings")
   depends=()
 
   mv gkb/* "$pkgdir"
