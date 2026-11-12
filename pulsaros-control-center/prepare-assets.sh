@@ -434,5 +434,9 @@ fi
 # 7. Cleanup build artifacts
 # ==============================================================================
 rm -rf "$BUILD_ROOT"
+
+# Build inputs live in the package folder that package-and-deploy.sh copies into
+# staging; they must not ship in the .deb.
+rm -rf "$STAGE_DIR/overlay-gnome48" "$STAGE_DIR/patches-gnome48"
 echo "✅ [ES] pulsaros-control-center preparado con éxito."
 echo "✅ [EN] pulsaros-control-center prepared successfully."
