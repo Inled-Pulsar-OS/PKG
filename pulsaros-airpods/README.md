@@ -57,8 +57,10 @@ LC_ALL=C.UTF-8 QT_QPA_PLATFORM=offscreen ctest --test-dir build
 ```
 
 The JavaScript is specified by `gjs` scripts in `tests/*_check.js`, run by `tests/test_*.py`. They skip
-when `gjs` is not installed. `tests/fixtures/` holds hand-written status files for AirPods 4 (ANC),
+when `gjs` is not installed. `tests/fixtures/` holds hand-written status files for AirPods 4 (ANC), a plain AirPods 4 (also a low-battery one),
 Pro 3, Max 2 and a pair in the case; replace them with captures from real hardware when you have them.
+
+For the VM test see `docs/vm-test-plan.md` (checklist, `vm-test/vm-baseline.sh`).
 
 ## Try it without AirPods
 
