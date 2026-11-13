@@ -109,7 +109,7 @@ same('non-boolean for a switch is refused', controlVerb('ca', 'on'), null);
 
 // -- fixtures shipped for the extension and docs ----------------------------------------------------
 const here = GLib.path_get_dirname(Gio.File.new_for_uri(import.meta.url).get_path());
-for (const name of ['airpods4-anc', 'pro3', 'max2', 'in-case']) {
+for (const name of ['airpods4', 'airpods4-low', 'airpods4-anc', 'pro3', 'max2', 'in-case']) {
     const path = GLib.build_filenamev([here, 'fixtures', `${name}.json`]);
     try {
         const [ok, bytes] = GLib.file_get_contents(path);
@@ -117,6 +117,21 @@ for (const name of ['airpods4-anc', 'pro3', 'max2', 'in-case']) {
         same(`fixture ${name} parses`, ok && s.state, 'ok');
     } catch (e) {
         failures.push(`fixture ${name}: ${e.message}`);
+    }
+}
+
+// plain AirPods 4 (no ANC): what the VM test plan expects the popover to show
+{
+    const path = GLib.build_filenamev([here, 'fixtures', 'airpods4.json']);
+    try {
+        const plain = parseStatus(new TextDecoder().decode(GLib.file_get_contents(path)[1]));
+        same('plain AirPods 4 has no modes', availableModes(plain), []);
+        same('plain AirPods 4 has no noise control, adaptive, CA or one-bud ANC',
+            [plain.supportsNoiseControl, plain.supportsAdaptive, plain.supportsConversationalAwareness, plain.supportsOneBudAnc],
+            [false, false, false, false]);
+        same('plain AirPods 4 is not a headset and has a case', [plain.isHeadset, plain.case.available], [false, true]);
+    } catch (e) {
+        failures.push(`plain AirPods 4 fixture: ${e.message}`);
     }
 }
 

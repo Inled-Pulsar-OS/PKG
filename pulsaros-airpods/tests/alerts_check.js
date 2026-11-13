@@ -101,6 +101,7 @@ const fresh = () => new BatteryAlerts();
     same('daemon down re-arms', [n.update(parseStatus(null)), n.update(pro)?.name], [null, 'AirPods Pro 3']);
     same('transient invalid does not re-notify', [n.update(parseStatus('')), n.update(pro)], [null, null]);
     same('headset', new ConnectNotice().update(fx('max2')).levels.map(l => l[0]), ['headphones']);
+    same('plain AirPods 4 low fixture alerts the low bud only', new BatteryAlerts().update(fx('airpods4-low')), [{which: 'left', level: 15}]);
 }
 
 if (failures.length > 0) {
