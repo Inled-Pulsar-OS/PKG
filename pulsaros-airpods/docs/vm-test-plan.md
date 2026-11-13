@@ -96,7 +96,7 @@ No noise commands (`librepods-ctl noise:*`) are sent in this layer.
 - Mode buttons may show briefly while the model is still unknown.
 - `librepods-ctl noise:*` is not gated by model (not exercised here).
 - The daemon writes `status.json` at start with nothing connected, and removes it on exit.
-- What `librepods.service` does with no Bluetooth adapter (the baseline script prints its state).
+- With no Bluetooth adapter `librepods.service` stays `active (running)` and logs "Cannot find a compatible running Bluez" (observed 2026-11-13). It also logs "Missing CAP_NET_ADMIN permission. Cannot determine whether a found address is of random or public type." The unit's empty capability set may matter for BLE with real AirPods: check in R1 to R5.
 
 ## Not testable on a non-ANC AirPods 4
 
@@ -114,4 +114,4 @@ Copy one row per run.
 
 | Date | ISO / package version | B1 | B2 | B3 | B4 | B5 | B6 | R1 | R2 | R3 | R4 | R5 | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| | | | | | | | | | | | | | |
+| | 2026-11-13 | stable Arch minimal ISO built 2026-11-13, pulsaros-airpods 0.2.0-1 | pass | pass | pass | FAIL | pass (file check; icon not confirmed) | not run | not run | not run | not run | not run | not run | B4: extension State ERROR, `No property vertical on StBoxLayout` (issue: extension fails to load on GNOME Shell 51). |
