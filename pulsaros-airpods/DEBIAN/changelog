@@ -1,3 +1,10 @@
+pulsaros-airpods (0.2.1) unstable; urgency=medium
+
+  * Fix the extension failing to load on GNOME Shell 51: St.BoxLayout no longer has a
+    vertical property, use orientation
+
+ -- Victor Rosario <hello@victorrosario.dev>  Fri, 13 Nov 2026 10:30:00 -0400
+
 pulsaros-airpods (0.2.0) unstable; urgency=medium
 
   * The extension reads the state of a bundled daemon (Apple Accessory Protocol):

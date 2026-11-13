@@ -38,7 +38,7 @@ function makeRow(iconFile, title) {
     });
     box.add_child(icon);
 
-    const text = new St.BoxLayout({vertical: true, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
+    const text = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
     const name = new St.Label({text: title, style_class: 'airpods-row-title'});
     const state = new St.Label({text: '', style_class: 'airpods-row-state'});
     text.add_child(name);
@@ -120,7 +120,7 @@ class AirPodsIndicator extends PanelMenu.Button {
 
     _buildMenu() {
         const header = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-        const headerBox = new St.BoxLayout({vertical: true, x_expand: true});
+        const headerBox = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true});
         this._title = new St.Label({style_class: 'airpods-title'});
         this._subtitle = new St.Label({style_class: 'airpods-subtitle'});
         headerBox.add_child(this._title);
@@ -129,7 +129,7 @@ class AirPodsIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(header);
 
         const rowsItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-        const rows = new St.BoxLayout({vertical: true, x_expand: true, style_class: 'airpods-rows'});
+        const rows = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true, style_class: 'airpods-rows'});
         this._rows = {
             left: makeRow(this._iconFile('airpods-symbolic'), _('Left')),
             right: makeRow(this._iconFile('airpods-symbolic'), _('Right')),

@@ -22,6 +22,12 @@ class ExtensionContractTests(unittest.TestCase):
                 with self.subTest(importer=name, target=target):
                     self.assertTrue(os.path.exists(os.path.join(EXT, target)), target)
 
+    def test_no_actor_uses_the_vertical_property_gnome_shell_51_removed(self):
+        # St.BoxLayout {vertical: true} throws "No property vertical" on Shell 51; orientation works on 48 and 51.
+        for name in sorted(n for n in os.listdir(EXT) if n.endswith(".js")):
+            with self.subTest(file=name):
+                self.assertNotRegex(self.js(name), r"\bvertical\s*:")
+
     def test_indicator_no_longer_uses_the_v1_dbus_service(self):
         source = self.js("indicator.js")
         self.assertNotIn("interface.js", source)

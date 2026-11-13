@@ -1,6 +1,6 @@
 # Maintainer: Victor Rosario <hello@victorrosario.dev>
 pkgname=pulsaros-airpods
-pkgver=0.2.0
+pkgver=0.2.1
 pkgrel=1
 pkgdesc="AirPods in the GNOME top bar for Pulsar OS (Shell extension + daemon)"
 arch=(x86_64)
