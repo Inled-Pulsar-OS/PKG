@@ -543,6 +543,7 @@ class BluetoothService {
         this._refreshId = 0;
         this._destroyed = false;
         this._ready = false;
+        this._discovering = false;
 
         this._subscribe();
         this.refresh();
@@ -570,6 +571,20 @@ class BluetoothService {
         this._setProperty(this._adapterPath, ADAPTER_IFACE, 'Powered', enabled);
     }
 
+    startDiscovery() {
+        if (!this._adapterPath || !this.powered || this._discovering)
+            return;
+        this._discovering = true;
+        this._call(this._adapterPath, ADAPTER_IFACE, 'StartDiscovery');
+    }
+
+    stopDiscovery() {
+        if (!this._adapterPath || !this._discovering)
+            return;
+        this._discovering = false;
+        this._call(this._adapterPath, ADAPTER_IFACE, 'StopDiscovery');
+    }
+
     toggleDevice(path, connect) {
         this._call(path, DEVICE_IFACE, connect ? 'Connect' : 'Disconnect');
     }
@@ -588,7 +603,10 @@ class BluetoothService {
 
                 let objects = {};
                 try {
-                    objects = bus.call_finish(result).deepUnpack()[0];
+                    const res = bus.call_finish(result);
+                    objects = typeof res.recursiveUnpack === 'function'
+                        ? res.recursiveUnpack()[0]
+                        : res.deepUnpack()[0];
                 } catch (e) {
                     // BlueZ may be restarting; NameOwnerChanged will retry.
                     objects = {};
@@ -610,7 +628,7 @@ class BluetoothService {
                     const device = interfaces[DEVICE_IFACE];
                     if (!device)
                         continue;
-                    if (!device.Paired && !device.Connected)
+                    if (!device.Paired && !device.Connected && !device.Name && !device.Alias)
                         continue;
 
                     const name = device.Name || device.Alias || device.Address || path;
@@ -718,6 +736,9 @@ class BluetoothService {
         if (this._destroyed)
             return;
         this._destroyed = true;
+        if (this._discovering) {
+            this.stopDiscovery();
+        }
 
         if (this._refreshId) {
             GLib.Source.remove(this._refreshId);
@@ -1465,8 +1486,11 @@ class MenuBarIcons {
         this._ids.push([button.menu,
             button.menu.connect('open-state-changed', (_menu, open) => {
                 if (open) {
+                    this._btService?.startDiscovery();
                     this._btService?.refresh();
                     this._syncBluetooth(true);
+                } else {
+                    this._btService?.stopDiscovery();
                 }
             })]);
 

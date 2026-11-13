@@ -2,10 +2,651 @@ use crate::demo::is_demo_mode;
 use crate::models::{AppType, BtrfsTarget, InstalledApp, PreservedSettings, RecoveryMode};
 use crate::system::{detect_local_squashfs, exec_cmd, exec_cmd_stream, is_valid_base_squashfs};
 use regex::Regex;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::BufReader;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 use std::thread;
+
+// Temporary live-session accounts must never survive a restore. `root` is not
+// preserved either (the new image has its own), but it is a valid member of
+// system groups and must not be stripped from them.
+const EXCLUDED_USERS: &[&str] = &["live", "pulsar-live", "archiso", "root", "nobody"];
+const EXCLUDED_GROUP_MEMBERS: &[&str] = &["live", "pulsar-live", "archiso", "nobody"];
+const EXCLUDED_GROUPS: &[&str] = &["live", "pulsar-live", "archiso"];
+
+// Every restored user gets these. Missing groups are created with a free GID.
+const BASE_ADMIN_GROUPS: &[&str] = &[
+    "wheel", "sudo", "video", "audio", "input", "storage", "network", "optical",
+    "power", "rfkill", "autologin", "users", "lp", "scanner", "kvm",
+];
+
+#[derive(Clone, Debug)]
+struct AccountRecord {
+    name: String,
+    uid: u32,
+    gid: u32,
+    gecos: String,
+    home: String,
+    shell: String,
+}
+
+#[derive(Clone, Debug)]
+struct GroupRecord {
+    name: String,
+    passwd: String,
+    gid: u32,
+    members: BTreeSet<String>,
+}
+
+#[derive(Default)]
+struct PreservedAccounts {
+    users: Vec<AccountRecord>,
+    shadow: BTreeMap<String, String>,
+    groups: Vec<GroupRecord>,
+    gshadow: BTreeMap<String, String>,
+    user_groups: HashMap<String, BTreeSet<String>>,
+    usernames: Vec<String>,
+}
+
+fn is_excluded_user(name: &str) -> bool {
+    EXCLUDED_USERS.iter().any(|n| *n == name)
+}
+
+fn is_excluded_group(name: &str) -> bool {
+    EXCLUDED_GROUPS.iter().any(|n| *n == name)
+}
+
+fn is_excluded_member(name: &str) -> bool {
+    EXCLUDED_GROUP_MEMBERS.iter().any(|n| *n == name)
+}
+
+fn parse_passwd(content: &str) -> Vec<AccountRecord> {
+    let mut users = Vec::new();
+    for line in content.lines() {
+        let parts: Vec<&str> = line.split(':').collect();
+        if parts.len() < 7 {
+            continue;
+        }
+        let Ok(uid) = parts[2].parse::<u32>() else { continue };
+        let Ok(gid) = parts[3].parse::<u32>() else { continue };
+        users.push(AccountRecord {
+            name: parts[0].to_string(),
+            uid,
+            gid,
+            gecos: parts[4].to_string(),
+            home: parts[5].to_string(),
+            shell: parts[6].to_string(),
+        });
+    }
+    users
+}
+
+fn passwd_line(user: &AccountRecord) -> String {
+    format!(
+        "{}:x:{}:{}:{}:{}:{}",
+        user.name, user.uid, user.gid, user.gecos, user.home, user.shell
+    )
+}
+
+fn parse_groups(content: &str) -> Vec<GroupRecord> {
+    let mut groups = Vec::new();
+    for line in content.lines() {
+        let parts: Vec<&str> = line.split(':').collect();
+        if parts.len() < 4 {
+            continue;
+        }
+        let Ok(gid) = parts[2].parse::<u32>() else { continue };
+        let members = parts[3]
+            .split(',')
+            .map(str::trim)
+            .filter(|m| !m.is_empty())
+            .map(str::to_string)
+            .collect();
+        groups.push(GroupRecord {
+            name: parts[0].to_string(),
+            passwd: parts[1].to_string(),
+            gid,
+            members,
+        });
+    }
+    groups
+}
+
+// One entry per name: the first GID/password wins, members are merged. This
+// also repairs files that a previous restore already left with duplicates.
+fn merge_group_records(records: Vec<GroupRecord>) -> BTreeMap<String, GroupRecord> {
+    let mut groups: BTreeMap<String, GroupRecord> = BTreeMap::new();
+    for record in records {
+        if let Some(existing) = groups.get_mut(&record.name) {
+            existing.members.extend(record.members);
+        } else {
+            groups.insert(record.name.clone(), record);
+        }
+    }
+    groups
+}
+
+// name -> raw line. Duplicate names keep the first line.
+fn parse_name_map(content: &str) -> BTreeMap<String, String> {
+    let mut map = BTreeMap::new();
+    for line in content.lines() {
+        let name = line.split(':').next().unwrap_or_default();
+        if name.is_empty() {
+            continue;
+        }
+        map.entry(name.to_string()).or_insert_with(|| line.to_string());
+    }
+    map
+}
+
+fn next_free_uid(used: &HashSet<u32>, start: u32) -> u32 {
+    let mut candidate = start.max(1000);
+    while used.contains(&candidate) || (65534..=65535).contains(&candidate) {
+        candidate += 1;
+    }
+    candidate
+}
+
+fn next_free_gid(used: &HashMap<u32, String>, start: u32) -> u32 {
+    let mut candidate = start.max(100);
+    while used.contains_key(&candidate) || (65534..=65535).contains(&candidate) {
+        candidate += 1;
+    }
+    candidate
+}
+
+fn collect_accounts<L>(old_root: &str, home_dir: &str, log: &L) -> PreservedAccounts
+where
+    L: Fn(&str) + Send + Sync + 'static,
+{
+    let mut preserved = PreservedAccounts::default();
+
+    if Path::new(old_root).exists() {
+        if let Ok(passwd_raw) = fs::read_to_string(format!("{}/etc/passwd", old_root)) {
+            for user in parse_passwd(&passwd_raw) {
+                if is_excluded_user(&user.name) {
+                    continue;
+                }
+                if user.uid < 1000 || user.uid >= 65534 {
+                    continue;
+                }
+                if preserved.usernames.iter().any(|n| *n == user.name) {
+                    continue;
+                }
+                preserved.usernames.push(user.name.clone());
+                preserved.users.push(user);
+            }
+        }
+
+        if let Ok(shadow_raw) = fs::read_to_string(format!("{}/etc/shadow", old_root)) {
+            preserved.shadow = parse_name_map(&shadow_raw);
+        }
+
+        if let Ok(group_raw) = fs::read_to_string(format!("{}/etc/group", old_root)) {
+            for group in merge_group_records(parse_groups(&group_raw)).into_values() {
+                if is_excluded_group(&group.name) {
+                    continue;
+                }
+                for member in &group.members {
+                    if is_excluded_member(member) {
+                        continue;
+                    }
+                    preserved
+                        .user_groups
+                        .entry(member.clone())
+                        .or_default()
+                        .insert(group.name.clone());
+                }
+                preserved.groups.push(group);
+            }
+        }
+
+        if let Ok(gshadow_raw) = fs::read_to_string(format!("{}/etc/gshadow", old_root)) {
+            preserved.gshadow = parse_name_map(&gshadow_raw);
+        }
+    }
+
+    // Homes are authoritative when /etc/passwd was already lost. Use the
+    // directory owner instead of a hardcoded 1000:1000, which would both
+    // duplicate an existing UID and leave the home owned by another user.
+    if let Ok(entries) = fs::read_dir(home_dir) {
+        for entry in entries.flatten() {
+            let Ok(file_type) = entry.file_type() else { continue };
+            if !file_type.is_dir() {
+                continue;
+            }
+            let uname = entry.file_name().to_string_lossy().to_string();
+            if is_excluded_user(&uname) || uname == "lost+found" {
+                continue;
+            }
+            if preserved.usernames.iter().any(|n| *n == uname) {
+                continue;
+            }
+
+            let (owner_uid, owner_gid) = fs::metadata(entry.path())
+                .map(|meta| (meta.uid(), meta.gid()))
+                .unwrap_or((0, 0));
+            let uid = if owner_uid >= 1000 && owner_uid < 65534 { owner_uid } else { 0 };
+            let gid = if owner_gid >= 1000 && owner_gid < 65534 { owner_gid } else { 0 };
+
+            log(&format!(
+                "Discovered existing user home directory in @home: /home/{} (owner {}:{})",
+                uname, owner_uid, owner_gid
+            ));
+            preserved.usernames.push(uname.clone());
+            preserved.users.push(AccountRecord {
+                name: uname.clone(),
+                uid,
+                gid,
+                gecos: uname.clone(),
+                home: format!("/home/{}", uname),
+                shell: "/bin/bash".to_string(),
+            });
+        }
+    }
+
+    preserved
+}
+
+fn set_mode(path: &str, mode: u32) {
+    let _ = fs::set_permissions(path, fs::Permissions::from_mode(mode));
+}
+
+fn gshadow_line(name: &str, groups: &BTreeMap<String, GroupRecord>, fallback: Option<&String>) -> String {
+    let members = groups
+        .get(name)
+        .map(|group| group.members.iter().cloned().collect::<Vec<_>>().join(","))
+        .unwrap_or_default();
+    let password = fallback
+        .and_then(|line| line.split(':').nth(1))
+        .unwrap_or("!");
+    let admins = fallback
+        .and_then(|line| line.split(':').nth(2))
+        .unwrap_or("");
+    format!("{}:{}:{}:{}", name, password, admins, members)
+}
+
+/// Rebuilds the account databases of `new_root` from the base image plus the
+/// accounts collected from the old system and @home.
+///
+/// The base image is merged instead of appended to: duplicate names and GIDs,
+/// stale live-session memberships and repeated usernames are removed, so the
+/// resulting files are valid for `getpwnam()`/`getgrnam()` and for the input
+/// device groups the desktop session needs.
+fn restore_accounts<L>(
+    preserved: &PreservedAccounts,
+    old_root: &str,
+    new_root: &str,
+    home_dir: &str,
+    log: &L,
+) -> Result<(), String>
+where
+    L: Fn(&str) + Send + Sync + 'static,
+{
+    let etc = format!("{}/etc", new_root);
+    fs::create_dir_all(&etc).map_err(|e| format!("No se pudo crear {}: {}", etc, e))?;
+
+    let base_passwd = fs::read_to_string(format!("{}/passwd", etc)).unwrap_or_default();
+    let base_shadow = fs::read_to_string(format!("{}/shadow", etc)).unwrap_or_default();
+    let base_group = fs::read_to_string(format!("{}/group", etc)).unwrap_or_default();
+    let base_gshadow = fs::read_to_string(format!("{}/gshadow", etc)).unwrap_or_default();
+
+    let base_users = parse_passwd(&base_passwd);
+    let base_order: Vec<String> = base_users.iter().map(|user| user.name.clone()).collect();
+    let base_group_records = parse_groups(&base_group);
+    let base_group_order: Vec<String> = base_group_records.iter().map(|group| group.name.clone()).collect();
+    let base_shadow_map = parse_name_map(&base_shadow);
+    let base_gshadow_map = parse_name_map(&base_gshadow);
+
+    let mut users_by_name: BTreeMap<String, AccountRecord> = BTreeMap::new();
+    for user in base_users {
+        if !is_excluded_user(&user.name) {
+            users_by_name.insert(user.name.clone(), user);
+        }
+    }
+
+    let mut used_uids: HashSet<u32> = users_by_name.values().map(|user| user.uid).collect();
+    for user in &preserved.users {
+        let mut user = user.clone();
+        if user.name.is_empty() {
+            continue;
+        }
+        // Never reuse a UID that another account still holds.
+        let same_account = users_by_name
+            .get(&user.name)
+            .map(|existing| existing.uid == user.uid)
+            .unwrap_or(false);
+        if user.uid < 1000
+            || user.uid >= 65534
+            || (!same_account && used_uids.contains(&user.uid))
+        {
+            user.uid = next_free_uid(&used_uids, 1000);
+            log(&format!(
+                "Assigned free UID {} to preserved user '{}'",
+                user.uid, user.name
+            ));
+        }
+        used_uids.insert(user.uid);
+        users_by_name.insert(user.name.clone(), user);
+    }
+
+    // Merge groups by name. A base group keeps its GID; a preserved group
+    // whose GID is already taken gets a free one instead of creating a
+    // duplicate GID.
+    let mut groups = merge_group_records(base_group_records);
+    groups.retain(|name, _| !is_excluded_group(name));
+    for group in groups.values_mut() {
+        group.members.retain(|member| !is_excluded_member(member));
+    }
+
+    let mut used_gids: HashMap<u32, String> = groups
+        .iter()
+        .map(|(name, group)| (group.gid, name.clone()))
+        .collect();
+
+    for group in &preserved.groups {
+        if is_excluded_group(&group.name) {
+            continue;
+        }
+        if let Some(existing) = groups.get_mut(&group.name) {
+            existing.members.extend(group.members.iter().cloned());
+            continue;
+        }
+        let mut group = group.clone();
+        group.members.retain(|member| !is_excluded_member(member));
+        if used_gids.contains_key(&group.gid) {
+            group.gid = next_free_gid(&used_gids, 1000);
+            log(&format!(
+                "Group '{}' remapped to free GID {}",
+                group.name, group.gid
+            ));
+        }
+        used_gids.insert(group.gid, group.name.clone());
+        groups.insert(group.name.clone(), group);
+    }
+
+    // Keep each user's primary GID, creating the private group at that GID
+    // when needed. Home ownership and file permissions depend on it.
+    for uname in &preserved.usernames {
+        let Some(user) = users_by_name.get_mut(uname) else { continue };
+        let mut gid = user.gid;
+
+        let group_at_gid = groups
+            .values()
+            .find(|group| group.gid == gid)
+            .map(|group| group.name.clone());
+        if gid < 1000 || gid >= 65534 || group_at_gid.is_none() {
+            if gid >= 1000 && gid < 65534 && !used_gids.contains_key(&gid) {
+                // The old primary GID is free: use it for the user's group.
+                if let Some(group) = groups.get_mut(uname) {
+                    used_gids.remove(&group.gid);
+                    group.gid = gid;
+                    used_gids.insert(gid, uname.clone());
+                } else {
+                    groups.insert(
+                        uname.clone(),
+                        GroupRecord {
+                            name: uname.clone(),
+                            passwd: "x".to_string(),
+                            gid,
+                            members: BTreeSet::new(),
+                        },
+                    );
+                    used_gids.insert(gid, uname.clone());
+                }
+            } else if let Some(group) = groups.get(uname) {
+                gid = group.gid;
+            } else {
+                gid = next_free_gid(&used_gids, 1000);
+                groups.insert(
+                    uname.clone(),
+                    GroupRecord {
+                        name: uname.clone(),
+                        passwd: "x".to_string(),
+                        gid,
+                        members: BTreeSet::new(),
+                    },
+                );
+                used_gids.insert(gid, uname.clone());
+                log(&format!(
+                    "Created private group '{}' with GID {}",
+                    uname, gid
+                ));
+            }
+        }
+
+        user.gid = gid;
+    }
+
+    // Re-apply the old supplementary memberships, then the desktop groups
+    // every restored user needs. Everything is merged in sets, so a user is
+    // listed exactly once.
+    for (uname, memberships) in &preserved.user_groups {
+        if !users_by_name.contains_key(uname) {
+            continue;
+        }
+        let primary_gid = users_by_name[uname].gid;
+        for group_name in memberships {
+            if is_excluded_group(group_name) {
+                continue;
+            }
+            if let Some(group) = groups.get_mut(group_name) {
+                if group.gid == primary_gid {
+                    group.members.remove(uname);
+                } else {
+                    group.members.insert(uname.clone());
+                }
+            }
+        }
+    }
+
+    for uname in &preserved.usernames {
+        let Some(user) = users_by_name.get(uname) else { continue };
+        for group_name in BASE_ADMIN_GROUPS {
+            if !groups.contains_key(*group_name) {
+                let gid = next_free_gid(&used_gids, 900);
+                groups.insert(
+                    (*group_name).to_string(),
+                    GroupRecord {
+                        name: (*group_name).to_string(),
+                        passwd: "x".to_string(),
+                        gid,
+                        members: BTreeSet::new(),
+                    },
+                );
+                used_gids.insert(gid, (*group_name).to_string());
+                log(&format!(
+                    "Created missing desktop group '{}' with GID {}",
+                    group_name, gid
+                ));
+            }
+            let group = groups.get_mut(*group_name).unwrap();
+            if group.gid == user.gid {
+                group.members.remove(uname);
+            } else {
+                group.members.insert(uname.clone());
+            }
+        }
+    }
+
+    // Drop members that no longer have an account (live session leftovers)
+    // and explicit primary-group memberships, which are implicit.
+    for group in groups.values_mut() {
+        let gid = group.gid;
+        group.members.retain(|member| {
+            users_by_name
+                .get(member)
+                .map(|user| user.gid != gid)
+                .unwrap_or(false)
+        });
+    }
+
+    // /etc/passwd: base order first, then restored users by UID.
+    let mut ordered_users: Vec<String> = Vec::new();
+    let mut seen_users: HashSet<String> = HashSet::new();
+    for name in &base_order {
+        if users_by_name.contains_key(name) && seen_users.insert(name.clone()) {
+            ordered_users.push(name.clone());
+        }
+    }
+    let mut restored: Vec<&AccountRecord> = preserved
+        .usernames
+        .iter()
+        .filter_map(|name| users_by_name.get(name))
+        .collect();
+    restored.sort_by_key(|user| user.uid);
+    for user in restored {
+        if seen_users.insert(user.name.clone()) {
+            ordered_users.push(user.name.clone());
+        }
+    }
+    let mut remaining: Vec<&AccountRecord> = users_by_name
+        .values()
+        .filter(|user| !seen_users.contains(&user.name))
+        .collect();
+    remaining.sort_by_key(|user| user.uid);
+    for user in remaining {
+        ordered_users.push(user.name.clone());
+    }
+
+    let mut passwd_out = String::new();
+    let mut shadow_out = String::new();
+    let mut missing_shadow: Vec<String> = Vec::new();
+    for name in &ordered_users {
+        let Some(user) = users_by_name.get(name) else { continue };
+        passwd_out.push_str(&passwd_line(user));
+        passwd_out.push('\n');
+
+        let line = preserved
+            .shadow
+            .get(name)
+            .or_else(|| base_shadow_map.get(name))
+            .cloned();
+        match line {
+            Some(line) => {
+                shadow_out.push_str(&line);
+                shadow_out.push('\n');
+            }
+            None => {
+                // No hash was preserved: lock the account instead of leaving
+                // it with an empty password.
+                shadow_out.push_str(&format!("{}:!:19700:0:99999:7:::", name));
+                shadow_out.push('\n');
+                missing_shadow.push(name.clone());
+            }
+        }
+    }
+    if !missing_shadow.is_empty() {
+        log(&format!(
+            "WARNING: no shadow entry preserved for {:?}; the accounts were locked. Set a new password with passwd.",
+            missing_shadow
+        ));
+    }
+
+    // /etc/group: base order first, then restored groups by GID.
+    let mut ordered_groups: Vec<String> = Vec::new();
+    let mut seen_groups: HashSet<String> = HashSet::new();
+    for name in &base_group_order {
+        if groups.contains_key(name) && seen_groups.insert(name.clone()) {
+            ordered_groups.push(name.clone());
+        }
+    }
+    let mut restored_groups: Vec<&GroupRecord> = groups
+        .values()
+        .filter(|group| !seen_groups.contains(&group.name))
+        .collect();
+    restored_groups.sort_by_key(|group| group.gid);
+    for group in restored_groups {
+        if seen_groups.insert(group.name.clone()) {
+            ordered_groups.push(group.name.clone());
+        }
+    }
+
+    let mut group_out = String::new();
+    let mut gshadow_out = String::new();
+    for name in &ordered_groups {
+        let Some(group) = groups.get(name) else { continue };
+        let passwd = if group.passwd.is_empty() { "x" } else { &group.passwd };
+        let members = group.members.iter().cloned().collect::<Vec<_>>().join(",");
+        group_out.push_str(&format!("{}:{}:{}:{}\n", group.name, passwd, group.gid, members));
+
+        let fallback = preserved
+            .gshadow
+            .get(name)
+            .or_else(|| base_gshadow_map.get(name));
+        gshadow_out.push_str(&gshadow_line(name, &groups, fallback));
+        gshadow_out.push('\n');
+    }
+
+    fs::write(format!("{}/passwd", etc), passwd_out)
+        .map_err(|e| format!("No se pudo escribir /etc/passwd: {}", e))?;
+    fs::write(format!("{}/shadow", etc), shadow_out)
+        .map_err(|e| format!("No se pudo escribir /etc/shadow: {}", e))?;
+    fs::write(format!("{}/group", etc), group_out)
+        .map_err(|e| format!("No se pudo escribir /etc/group: {}", e))?;
+    fs::write(format!("{}/gshadow", etc), gshadow_out)
+        .map_err(|e| format!("No se pudo escribir /etc/gshadow: {}", e))?;
+
+    set_mode(&format!("{}/passwd", etc), 0o644);
+    set_mode(&format!("{}/group", etc), 0o644);
+    set_mode(&format!("{}/shadow", etc), 0o600);
+    set_mode(&format!("{}/gshadow", etc), 0o600);
+
+    // Preserve the AccountsService record and avatar so GDM, the lock screen
+    // and Settings show the same user instead of a blank/default account.
+    let old_accounts = format!("{}/var/lib/AccountsService", old_root);
+    if Path::new(&old_accounts).exists() {
+        let new_accounts = format!("{}/var/lib/AccountsService", new_root);
+        let _ = fs::create_dir_all(format!("{}/users", new_accounts));
+        let _ = fs::create_dir_all(format!("{}/icons", new_accounts));
+        for uname in &preserved.usernames {
+            let src_user = format!("{}/users/{}", old_accounts, uname);
+            if Path::new(&src_user).exists() {
+                let _ = fs::copy(&src_user, format!("{}/users/{}", new_accounts, uname));
+            }
+            let src_icon = format!("{}/icons/{}", old_accounts, uname);
+            if Path::new(&src_icon).exists() {
+                let _ = fs::copy(&src_icon, format!("{}/icons/{}", new_accounts, uname));
+            }
+            for ext in ["png", "jpg", "jpeg"] {
+                let src = format!("{}/icons/{}.{}", old_accounts, uname, ext);
+                if Path::new(&src).exists() {
+                    let _ = fs::copy(&src, format!("{}/icons/{}.{}", new_accounts, uname, ext));
+                }
+            }
+        }
+    }
+
+    // The accounts keep their old UID/GID, so a mismatch here means the home
+    // files were already owned by another identity. Make them readable again.
+    for uname in &preserved.usernames {
+        let Some(user) = users_by_name.get(uname) else { continue };
+        let home = format!("{}/{}", home_dir, uname);
+        if let Ok(meta) = fs::metadata(&home) {
+            if meta.uid() != user.uid || meta.gid() != user.gid {
+                log(&format!(
+                    "Fixing ownership of {} ({}:{} -> {}:{})",
+                    home, meta.uid(), meta.gid(), user.uid, user.gid
+                ));
+                let _ = std::process::Command::new("chown")
+                    .arg("-R")
+                    .arg(format!("{}:{}", user.uid, user.gid))
+                    .arg(&home)
+                    .status();
+            }
+        }
+    }
+
+    log(&format!(
+        "Restored {} user account(s): {:?}",
+        preserved.usernames.len(),
+        preserved.usernames
+    ));
+    Ok(())
+}
+
 pub(crate) fn run_restoration<F, L>(
     target: &BtrfsTarget,
     mode: RecoveryMode,
@@ -69,79 +710,20 @@ where
     log("Mounting Btrfs root pool without subvolume...");
     exec_cmd(&format!("mount -t btrfs {} {}", target.part_path, btrfs_mnt))?;
 
-    // 2. Backup existing user accounts from old @ subvolume and discover users from @home
+    // 2. Collect existing user accounts from the old @ subvolume and @home.
+    // The account databases are rebuilt after unpacking (see
+    // `restore_accounts`) instead of appended to, so duplicate names/GIDs and
+    // stale live-session memberships cannot survive a restore.
     progress(0.20, "Preserving user accounts and identities...");
-    log("Backing up /etc/passwd, /etc/shadow, /etc/group for real users (UID >= 1000)...");
+    log("Collecting user accounts from old /etc and @home (UID >= 1000)...");
     let old_root = format!("{}/@", btrfs_mnt);
-    let mut preserved_passwd: Vec<String> = Vec::new();
-    let mut preserved_shadow: Vec<String> = Vec::new();
-    let mut preserved_group: Vec<String> = Vec::new();
-    let mut preserved_gshadow: Vec<String> = Vec::new();
-    let mut preserved_usernames: Vec<String> = Vec::new();
-    let mut user_group_memberships: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
-
-    if Path::new(&old_root).exists() {
-        if let Ok(passwd_raw) = exec_cmd(&format!("cat {}/etc/passwd 2>/dev/null || true", old_root)) {
-            for line in passwd_raw.lines() {
-                let parts: Vec<&str> = line.split(':').collect();
-                if parts.len() >= 3 {
-                    let uname = parts[0].to_string();
-                    // NEVER preserve temporary live session users
-                    if uname == "live" || uname == "root" || uname == "pulsar-live" || uname == "archiso" || uname == "nobody" {
-                        continue;
-                    }
-                    if let Ok(uid) = parts[2].parse::<u32>() {
-                        if uid >= 1000 && uid < 65534 {
-                            preserved_usernames.push(uname);
-                            preserved_passwd.push(line.to_string());
-                        }
-                    }
-                }
-            }
-        }
-        if let Ok(shadow_raw) = exec_cmd(&format!("cat {}/etc/shadow 2>/dev/null || true", old_root)) {
-            for line in shadow_raw.lines() {
-                let uname = line.split(':').next().unwrap_or_default();
-                if preserved_usernames.iter().any(|u| u == uname) {
-                    preserved_shadow.push(line.to_string());
-                }
-            }
-        }
-        if let Ok(group_raw) = exec_cmd(&format!("cat {}/etc/group 2>/dev/null || true", old_root)) {
-            for line in group_raw.lines() {
-                let parts: Vec<&str> = line.split(':').collect();
-                if parts.len() >= 4 {
-                    let gname = parts[0].to_string();
-                    let members = parts[3].split(',');
-                    for m in members {
-                        let m_trim = m.trim().to_string();
-                        if !m_trim.is_empty() && m_trim != "live" && m_trim != "root" && m_trim != "archiso" {
-                            user_group_memberships.entry(m_trim).or_default().push(gname.clone());
-                        }
-                    }
-                }
-                if parts.len() >= 3 {
-                    let gname = parts[0];
-                    if gname == "live" || gname == "root" || gname == "archiso" {
-                        continue;
-                    }
-                    if let Ok(gid) = parts[2].parse::<u32>() {
-                        if gid >= 1000 && gid < 65534 {
-                            preserved_group.push(line.to_string());
-                        }
-                    }
-                }
-            }
-        }
-        if let Ok(gshadow_raw) = exec_cmd(&format!("cat {}/etc/gshadow 2>/dev/null || true", old_root)) {
-            for line in gshadow_raw.lines() {
-                let gname = line.split(':').next().unwrap_or_default();
-                if gname != "live" && gname != "root" && gname != "archiso" {
-                    preserved_gshadow.push(line.to_string());
-                }
-            }
-        }
-    }
+    let home_dir = format!("{}/@home", btrfs_mnt);
+    let preserved = collect_accounts(&old_root, &home_dir, &log);
+    log(&format!(
+        "Preserved {} real user account(s): {:?}",
+        preserved.usernames.len(),
+        preserved.usernames
+    ));
 
     // Also check for existing /etc/crypttab to preserve LUKS configuration
     let mut preserved_crypttab: Option<String> = None;
@@ -213,25 +795,6 @@ where
         }
     }
 
-    // Also inspect @home in case /@/etc/passwd was already corrupted or missing
-    let home_dir = format!("{}/@home", btrfs_mnt);
-    if let Ok(entries) = fs::read_dir(&home_dir) {
-        for entry in entries.flatten() {
-            if let Ok(file_type) = entry.file_type() {
-                if file_type.is_dir() {
-                    let uname = entry.file_name().to_string_lossy().to_string();
-                    if uname != "live" && uname != "root" && uname != "lost+found" && !preserved_usernames.contains(&uname) {
-                        log(&format!("Discovered existing user home directory in @home: /home/{}", uname));
-                        preserved_passwd.push(format!("{}:x:1000:1000::{}:/bin/bash", uname, format!("/home/{}", uname)));
-                        preserved_group.push(format!("{}:x:1000:", uname));
-                        preserved_usernames.push(uname);
-                    }
-                }
-            }
-        }
-    }
-    log(&format!("Preserved {} real user account(s): {:?}", preserved_usernames.len(), preserved_usernames));
-
     // 3. Resolve and verify SquashFS source BEFORE wiping anything
     let squashfs_path = match mode {
         RecoveryMode::Local => {
@@ -284,104 +847,32 @@ where
     log(&format!("Unsquashing {} into {}/@...", squashfs_path, btrfs_mnt));
     exec_cmd_stream(&format!("unsquashfs -f -d {}/@ {}", btrfs_mnt, squashfs_path), &log)?;
 
-    // 6. Re-inject preserved users and clean out any temporary live user
+    // 6. Rebuild the account databases from the clean image plus the accounts
+    // collected from the old system. Merging (instead of appending) removes
+    // duplicate names/GIDs and stale live-session memberships, which otherwise
+    // leave users without a valid primary group and break input device access,
+    // GDM sessions and the lock screen after a restore.
     progress(0.85, "Re-injecting user credentials and settings...");
     log("Restoring user accounts into clean /etc...");
     let new_root = format!("{}/@", btrfs_mnt);
 
-    // Remove any live user artifact from new rootfs
-    let _ = exec_cmd(&format!("sed -i '/^live:/d' {}/etc/passwd {}/etc/shadow {}/etc/group {}/etc/gshadow 2>/dev/null || true", new_root, new_root, new_root, new_root));
+    restore_accounts(&preserved, &old_root, &new_root, &home_dir, &log)?;
 
-    if !preserved_passwd.is_empty() {
-        for l in &preserved_passwd {
-            let uname = l.split(':').next().unwrap_or_default();
-            let _ = exec_cmd(&format!("sed -i '/^{}:/d' {}/etc/passwd 2>/dev/null || true", uname, new_root));
-        }
-        let mut tmp_users = String::new();
-        for l in &preserved_passwd {
-            tmp_users.push_str(&format!("{}\n", l));
-        }
-        let _ = fs::write("/tmp/pulsar_preserved_passwd", &tmp_users);
-        let _ = exec_cmd(&format!("cat /tmp/pulsar_preserved_passwd >> {}/etc/passwd", new_root));
-
-        for l in &preserved_shadow {
-            let uname = l.split(':').next().unwrap_or_default();
-            let _ = exec_cmd(&format!("sed -i '/^{}:/d' {}/etc/shadow 2>/dev/null || true", uname, new_root));
-        }
-        let mut tmp_shadow = String::new();
-        for l in &preserved_shadow {
-            tmp_shadow.push_str(&format!("{}\n", l));
-        }
-        // Guarantee that every preserved user has a valid line in /etc/shadow
-        for uname in &preserved_usernames {
-            if !preserved_shadow.iter().any(|s| s.starts_with(&format!("{}:", uname))) {
-                log(&format!("Adding fallback shadow entry for user: {}", uname));
-                tmp_shadow.push_str(&format!("{}::19700:0:99999:7:::\n", uname));
-            }
-        }
-        let _ = fs::write("/tmp/pulsar_preserved_shadow", &tmp_shadow);
-        let _ = exec_cmd(&format!("cat /tmp/pulsar_preserved_shadow >> {}/etc/shadow", new_root));
-
-        let mut tmp_group = String::new();
-        for l in &preserved_group {
-            tmp_group.push_str(&format!("{}\n", l));
-        }
-        let _ = fs::write("/tmp/pulsar_preserved_group", &tmp_group);
-        let _ = exec_cmd(&format!("cat /tmp/pulsar_preserved_group >> {}/etc/group", new_root));
-
-        let mut tmp_gshadow = String::new();
-        for l in &preserved_gshadow {
-            tmp_gshadow.push_str(&format!("{}\n", l));
-        }
-        let _ = fs::write("/tmp/pulsar_preserved_gshadow", &tmp_gshadow);
-        let _ = exec_cmd(&format!("cat /tmp/pulsar_preserved_gshadow >> {}/etc/gshadow", new_root));
-
-        // Add each preserved user to essential desktop/admin groups and preserved groups
-        let base_admin_groups = [
-            "wheel", "sudo", "video", "audio", "input", "storage", "network", "optical",
-            "power", "rfkill", "autologin", "users", "lp", "scanner", "kvm"
-        ];
-
-        let sudoers_d = format!("{}/etc/sudoers.d", new_root);
-        let _ = fs::create_dir_all(&sudoers_d);
-        let _ = exec_cmd(&format!("chmod 750 {}", sudoers_d));
-
-        let wheel_rule = format!("{}/10-admin-wheel", sudoers_d);
-        let _ = fs::write(&wheel_rule, "%wheel ALL=(ALL:ALL) ALL\n%sudo ALL=(ALL:ALL) ALL\n");
-        let _ = exec_cmd(&format!("chmod 0440 {}", wheel_rule));
-
-        for uname in &preserved_usernames {
-            let mut target_groups: Vec<String> = base_admin_groups.iter().map(|s| s.to_string()).collect();
-            if let Some(custom_grps) = user_group_memberships.get(uname) {
-                for cg in custom_grps {
-                    if !target_groups.contains(cg) {
-                        target_groups.push(cg.clone());
-                    }
-                }
-            }
-
-            for grp in &target_groups {
-                let _ = exec_cmd(&format!(
-                    "grep -q '^{}:' {}/etc/group || echo '{}:x:999:' >> {}/etc/group",
-                    grp, new_root, grp, new_root
-                ));
-                let _ = exec_cmd(&format!(
-                    "sed -i -E 's/^({}:[^:]*:[^:]*:)(.*)$/\\1\\2,{}/' {}/etc/group 2>/dev/null || true",
-                    grp, uname, new_root
-                ));
-                let _ = exec_cmd(&format!(
-                    "sed -i -E 's/,+/,/g; s/:,/:/g; s/,$//' {}/etc/group 2>/dev/null || true",
-                    new_root
-                ));
-            }
-
-            // Drop explicit sudoers rule for the user
-            let user_rule = format!("{}/pulsaros-user-{}", sudoers_d, uname);
-            let _ = fs::write(&user_rule, format!("{} ALL=(ALL:ALL) ALL\n", uname));
-            let _ = exec_cmd(&format!("chmod 0440 {}", user_rule));
-            log(&format!("Granted full sudo privileges to user '{}' via sudoers and wheel group", uname));
-        }
+    // Keep sudo usable even if the image's /etc/sudoers does not reference the
+    // wheel/sudo groups.
+    let sudoers_d = format!("{}/etc/sudoers.d", new_root);
+    let _ = fs::create_dir_all(&sudoers_d);
+    let _ = set_mode(&sudoers_d, 0o750);
+    let wheel_rule = format!("{}/10-admin-wheel", sudoers_d);
+    let _ = fs::write(&wheel_rule, "%wheel ALL=(ALL:ALL) ALL\n%sudo ALL=(ALL:ALL) ALL\n");
+    let _ = set_mode(&wheel_rule, 0o440);
+    for uname in &preserved.usernames {
+        let user_rule = format!("{}/pulsaros-user-{}", sudoers_d, uname);
+        let _ = fs::write(&user_rule, format!("{} ALL=(ALL:ALL) ALL\n", uname));
+        let _ = set_mode(&user_rule, 0o440);
     }
+    log("Rebuilt /etc/passwd, /etc/shadow, /etc/group and /etc/gshadow.");
+
 
     // Restore timezone, locale, language and keyboard configuration
     log("Restoring system timezone, language, and keyboard configuration...");
