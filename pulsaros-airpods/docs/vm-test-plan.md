@@ -15,7 +15,9 @@ The baseline layer must fully pass before the real-AirPods layer starts.
 
 Sign-off run (a dedicated test ISO that contains the package):
 
-1. Add `pulsaros-airpods` to the Arch minimal package list in the ISO project.
+1. Nothing to add to a package list: with `--local`, `build-iso.sh` builds every directory under
+   `arch/pkgbuilds` (except the excluded ones) and installs all resulting packages with `pacman -U`,
+   so `pulsaros-airpods` is included when the branch you build from contains it.
 2. From the repo root: `./build-iso-docker.sh` (default flags: `--arch --local --incremental --grub --minimal`).
 3. Boot it: `ISO/run-qemu.sh ISO/build/pulsaros-stable-arch-grub.iso`. Every run is a live session, so a reboot
    from the ISO is a clean reset.
