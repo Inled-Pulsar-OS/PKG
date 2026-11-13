@@ -51,9 +51,9 @@ check "B5 no data: no status.json, or it says connected:false" no_connected_data
 echo
 echo "Observations (recorded, not asserted):"
 echo "  librepods.service: $(systemctl --user show librepods.service -p ActiveState,SubState,Result,NRestarts --value 2>/dev/null | tr '\n' ' ')"
-echo "  GNOME Shell: $(gnome-shell --version 2>/dev/null)   BlueZ: $(bluetoothd --version 2>/dev/null)"
+echo "  GNOME Shell: $(gnome-shell --version 2>/dev/null)   BlueZ: $(pacman -Q bluez 2>/dev/null)"
 echo "  status.json: $(cat "$STATUS" 2>/dev/null || echo absent)"
-echo "  Bluetooth controllers: $(bluetoothctl list 2>/dev/null | wc -l)"
+echo "  Bluetooth controllers: $(timeout 5 bluetoothctl list 2>/dev/null | wc -l)"
 echo
 echo "MANUAL B5: confirm there is no AirPods icon in the top bar."
 echo "MANUAL B6: follow docs/vm-test-plan.md (fixture UI), then the real-AirPods layer R1-R5."
