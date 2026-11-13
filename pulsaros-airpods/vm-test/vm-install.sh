@@ -10,7 +10,8 @@ PKG=$(curl -fsS "$H/vm-test/" | grep -o 'pulsaros-airpods-[^"<>]*\.pkg\.tar\.zst
 echo "installing $PKG"
 curl -fsS -o "/tmp/$PKG" "$H/vm-test/$PKG"
 sudo pacman -U --noconfirm "/tmp/$PKG"
-echo "installed. Logging out in 5 s; after you are back at the desktop run:"
+echo "installed. Rebooting in 5 s (logout can land on a lock screen with no known password);"
+echo "SDDM autologin brings you straight back to the desktop. Then run:"
 echo "  curl -fsS 10.0.2.2:8000/vm-test/vm-report.sh | bash"
 sleep 5
-gnome-session-quit --logout --no-prompt
+systemctl reboot
