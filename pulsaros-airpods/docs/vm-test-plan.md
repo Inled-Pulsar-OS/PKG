@@ -44,11 +44,11 @@ curl -fsS http://10.0.2.2:8000/vm-test/vm-baseline.sh | bash
 
 | ID | Check | Pass when | How |
 |---|---|---|---|
-| B1 | Install | package installed, `pacman -Qk` clean | script |
+| B1 | Install | package installed, `pacman -Qk` reports no missing file outside `/usr/share/doc` (the ISO build deletes everything under it) | script |
 | B2 | Binaries | `/usr/bin/librepods` and `librepods-ctl` executable, no missing shared library | script |
 | B3 | Unit | `librepods.service` enabled for the graphical session; with no adapter it may exit but `NRestarts` stays at 2 or less after 16 s | script |
 | B4 | Extension | listed, enables and is active, no errors from it in the Shell journal, `metadata.json` lists Shell 51 | script |
-| B5 | Hidden with no data | no `status.json` exists and no AirPods icon in the top bar | script checks the file, **you confirm the icon by eye** (the Shell does not expose panel contents to a script) |
+| B5 | Hidden with no data | `status.json` is absent or says `connected:false` (the daemon writes it as soon as it runs), and no AirPods icon in the top bar | script checks the file, **you confirm the icon by eye** (the Shell does not expose panel contents to a script) |
 | B6 | Fixture UI | see below | manual |
 
 The ISO sets `disable-extension-version-validation=true`, so the Shell does not enforce the `shell-version` list.
@@ -95,6 +95,7 @@ No noise commands (`librepods-ctl noise:*`) are sent in this layer.
 - `status.json` reports `noise_mode: 2` for a model with no noise control (stale default).
 - Mode buttons may show briefly while the model is still unknown.
 - `librepods-ctl noise:*` is not gated by model (not exercised here).
+- The daemon writes `status.json` at start with nothing connected, and removes it on exit.
 - What `librepods.service` does with no Bluetooth adapter (the baseline script prints its state).
 
 ## Not testable on a non-ANC AirPods 4

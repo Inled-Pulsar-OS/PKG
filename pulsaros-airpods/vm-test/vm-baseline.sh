@@ -28,10 +28,15 @@ no_crash_loop() { # restart interval is 5 s: wait for ~3 restarts' worth, then a
 ext_active() { gnome-extensions enable "$UUID" 2>/dev/null; gnome-extensions info "$UUID" | grep -Eq 'State: +(ACTIVE|ENABLED)'; }
 ext_no_shell_errors() { ! journalctl --user -b --no-pager _COMM=gnome-shell 2>/dev/null \
     | grep -i "$UUID" | grep -Eiq 'error|exception|failed'; }
-no_status_file() { [ ! -e "$STATUS" ]; }
+# The daemon writes status.json as soon as it runs, even with nothing connected, so "no data" means
+# either no file or a file that says connected:false (the extension hides the icon in both cases).
+no_connected_data() { [ ! -e "$STATUS" ] || grep -q '"connected":false' "$STATUS"; }
+# The ISO build deletes everything under /usr/share/doc, so pacman -Qk reports those files as missing.
+# Only a missing file outside /usr/share/doc counts as a failure.
+integrity_ok() { ! pacman -Qk "$PKG" 2>&1 | grep -E '^warning: ' | grep -v '/usr/share/doc/' | grep -q .; }
 
 check "B1 install: $PKG installed"                  pacman -Q "$PKG"
-check "B1 install: pacman -Qk file integrity"       pacman -Qk "$PKG"
+check "B1 install: file integrity (ignoring /usr/share/doc)" integrity_ok
 check "B2 binaries: /usr/bin/librepods executable"  test -x /usr/bin/librepods
 check "B2 binaries: /usr/bin/librepods-ctl executable" test -x /usr/bin/librepods-ctl
 check "B2 binaries: no missing shared libraries"    no_missing_libs
@@ -41,12 +46,13 @@ check "B4 extension: listed by gnome-extensions"    bash -c "gnome-extensions li
 check "B4 extension: metadata lists Shell 51"       grep -q '"51"' "$EXT/metadata.json"
 check "B4 extension: enabled and active"            ext_active
 check "B4 extension: no errors in the Shell journal" ext_no_shell_errors
-check "B5 no data: no status.json before any fixture" no_status_file
+check "B5 no data: no status.json, or it says connected:false" no_connected_data
 
 echo
 echo "Observations (recorded, not asserted):"
 echo "  librepods.service: $(systemctl --user show librepods.service -p ActiveState,SubState,Result,NRestarts --value 2>/dev/null | tr '\n' ' ')"
 echo "  GNOME Shell: $(gnome-shell --version 2>/dev/null)   BlueZ: $(bluetoothd --version 2>/dev/null)"
+echo "  status.json: $(cat "$STATUS" 2>/dev/null || echo absent)"
 echo "  Bluetooth controllers: $(bluetoothctl list 2>/dev/null | wc -l)"
 echo
 echo "MANUAL B5: confirm there is no AirPods icon in the top bar."
