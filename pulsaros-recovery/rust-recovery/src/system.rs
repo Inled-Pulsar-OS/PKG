@@ -323,8 +323,26 @@ pub(crate) fn is_valid_base_squashfs(path: &str) -> bool {
         || p_lower.contains("recovery.squashfs")
         || p_lower.contains("pulsar_recovery/filesystem.squashfs")
         || p_lower.contains("pulsar_recovery/live/filesystem.squashfs")
+        || p_lower.contains("/boot/live/filesystem.squashfs")
+        || p_lower.contains("/boot/recovery")
+        || p_lower.contains("/boot/filesystem.squashfs")
     {
         return false;
+    }
+
+    // Inspect the squashfs: confirm it contains gnome-shell (desktop OS).
+    // The recovery squashfs is a minimal Openbox rescue system and has NO gnome-shell.
+    if let Ok(out) = Command::new("unsquashfs").args(&["-l", path, "usr/bin/gnome-shell"]).output() {
+        if String::from_utf8_lossy(&out.stdout).contains("gnome-shell") {
+            // Definite desktop OS
+        } else {
+            // Reject if it contains openbox rescue environment
+            if let Ok(out_ob) = Command::new("unsquashfs").args(&["-l", path, "etc/xdg/openbox"]).output() {
+                if String::from_utf8_lossy(&out_ob.stdout).contains("openbox") {
+                    return false;
+                }
+            }
+        }
     }
 
     // Must not be a kernel or initramfs file
@@ -512,9 +530,6 @@ where
         "images/x86_64/airootfs.sfs",
         "images/airootfs.sfs",
         "airootfs.sfs",
-        "live/filesystem.squashfs",
-        "live/rootfs.squashfs",
-        "rootfs.squashfs",
     ];
 
     let search_roots = [

@@ -1949,6 +1949,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
                 if is_arch:
                     for p in item.get("arch_pkgs", []):
+                        if item.get("is_pulsar_windows"):
+                            continue
                         if p not in pkgs:
                             pkgs.append(p)
                     for ap in item.get("arch_aur_pkgs", []):
@@ -1956,6 +1958,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             aur_pkgs.append(ap)
                 else:
                     for p in item.get("debian_pkgs", []):
+                        if item.get("is_pulsar_windows"):
+                            continue
                         if p not in pkgs:
                             pkgs.append(p)
 
@@ -2299,6 +2303,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     else:
                         log_msg("Selected extra packages installed successfully.")
 
+                if pkg_info.get("install_pulsar_windows") and not os.path.isfile("/usr/bin/pulsar-windows"):
+                    self._install_pulsar_windows_arch(
+                        log_msg,
+                        ["pkexec", "pacman"],
+                        "/tmp/pulsar-windows.pkg.tar.zst",
+                    )
+
             elif is_debian:
                 # Update and install with streaming progress
                 GLib.idle_add(self.update_progress, 0.10, "Updating package lists...")
@@ -2579,7 +2590,7 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 capture_output=True, text=True,
             )
             if res.returncode != 0:
-                log_msg(f"WARNING: Pulsar Windows install failed: {res.stderr.strip()}")
+                log_msg(f"WARNING: Pulsar Windows install failed: {res.stderr.strip() or res.stdout.strip()}")
             else:
                 log_msg("Pulsar Windows installed successfully.")
         except Exception as pw_err:
@@ -2588,6 +2599,41 @@ class RecoveryWindow(Adw.ApplicationWindow):
             if os.path.exists(deb_host_path):
                 try:
                     os.remove(deb_host_path)
+                except Exception:
+                    pass
+
+    def _install_pulsar_windows_arch(self, log_msg, pacman_prefix, pkg_install_path, pkg_host_path=None):
+        """Install Pulsar Windows from its official x86-64 Arch package (best-effort)."""
+        import urllib.request
+        if pkg_host_path is None:
+            pkg_host_path = pkg_install_path
+        pkg_url = "https://github.com/Inled-Pulsar-OS/pulsar-windows/releases/download/v1.0.0/pulsar-windows-1.0.0-1-x86_64.pkg.tar.zst"
+        try:
+            os.makedirs(os.path.dirname(pkg_host_path) or "/tmp", exist_ok=True)
+            log_msg("Downloading Pulsar Windows (Windows container support) package from GitHub...")
+            req = urllib.request.Request(
+                pkg_url,
+                headers={"User-Agent": "PulsarOS-Recovery/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=180) as resp, open(pkg_host_path, "wb") as f_out:
+                shutil.copyfileobj(resp, f_out)
+            if not os.path.isfile(pkg_host_path) or os.path.getsize(pkg_host_path) == 0:
+                raise RuntimeError("Downloaded pulsar-windows package is missing or empty")
+            log_msg("Installing Pulsar Windows via pacman -U...")
+            res = subprocess.run(
+                pacman_prefix + ["-U", "--noconfirm", "--needed", "--overwrite", "*", pkg_install_path],
+                capture_output=True, text=True,
+            )
+            if res.returncode != 0:
+                log_msg(f"WARNING: Pulsar Windows install failed: {res.stderr.strip() or res.stdout.strip()}")
+            else:
+                log_msg("Pulsar Windows installed successfully.")
+        except Exception as pw_err:
+            log_msg(f"WARNING: could not install Pulsar Windows: {pw_err}")
+        finally:
+            if os.path.exists(pkg_host_path):
+                try:
+                    os.remove(pkg_host_path)
                 except Exception:
                     pass
 
@@ -5650,6 +5696,44 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     time.sleep(0.08)
             else:
                 # ── Fast multi-threaded installation via unsquashfs (Omarchy/Calamares method) ──
+                def _is_valid_desktop_squashfs(cand_path):
+                    """Ensure candidate is the real desktop OS and NEVER the minimal recovery environment."""
+                    if not cand_path or not os.path.isfile(cand_path):
+                        return False
+                    try:
+                        sz = os.path.getsize(cand_path)
+                        if sz < 200 * 1024 * 1024:
+                            return False
+                        p_low = cand_path.lower()
+                        if any(k in p_low for k in [
+                            "recovery/filesystem.squashfs",
+                            "recovery/live/filesystem.squashfs",
+                            "recovery-filesystem.squashfs",
+                            "recovery.squashfs",
+                            "pulsar_recovery/filesystem.squashfs",
+                            "/boot/live/filesystem.squashfs",
+                            "/boot/recovery",
+                            "/boot/filesystem.squashfs",
+                        ]):
+                            return False
+                        # Inspect the squashfs: confirm it is a full desktop OS (contains gnome-shell)
+                        res_rec = subprocess.run(
+                            ["unsquashfs", "-l", cand_path, "usr/bin/gnome-shell"],
+                            capture_output=True, text=True, timeout=10
+                        )
+                        if "gnome-shell" in res_rec.stdout:
+                            return True
+                        # If gnome-shell was not found, reject if it is the minimal openbox recovery environment
+                        res_ob = subprocess.run(
+                            ["unsquashfs", "-l", cand_path, "etc/xdg/openbox"],
+                            capture_output=True, text=True, timeout=10
+                        )
+                        if "openbox" in res_ob.stdout:
+                            return False
+                        return True
+                    except Exception:
+                        return False
+
                 squash_candidates = [
                     # Arch live ISO paths
                     "/run/archiso/bootmnt/live/x86_64/airootfs.sfs",
@@ -5665,20 +5749,17 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     "/recovery/images/pulsaros-base.squashfs",
                     "/run/archiso/airootfs",
                 ]
-                found_squash = next((p for p in squash_candidates if os.path.isfile(p) and os.path.getsize(p) > 100 * 1024 * 1024), None)
+                found_squash = next((p for p in squash_candidates if _is_valid_desktop_squashfs(p)), None)
                 if not found_squash:
-                    for base_dir in ("/run/archiso/bootmnt", "/run/live/medium", "/lib/live/mount/medium"):
+                    for base_dir in ("/run/archiso/bootmnt", "/run/live/medium", "/lib/live/mount/medium", "/media", "/run/media"):
                         if os.path.isdir(base_dir):
                             for root_d, _, files in os.walk(base_dir):
                                 for f in files:
                                     if (f.endswith(".sfs") or f.endswith(".squashfs")) and "recovery" not in f.lower():
                                         full_p = os.path.join(root_d, f)
-                                        try:
-                                            if os.path.getsize(full_p) > 200 * 1024 * 1024:
-                                                found_squash = full_p
-                                                break
-                                        except Exception:
-                                            pass
+                                        if _is_valid_desktop_squashfs(full_p):
+                                            found_squash = full_p
+                                            break
                                 if found_squash:
                                     break
                         if found_squash:
@@ -5714,6 +5795,27 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         raise Exception(f"Fast system extraction failed (unsquashfs exited with code {proc.returncode})")
                     log_msg("✅ Fast system extraction completed successfully.")
                 else:
+                    # Detect if we are running in the recovery environment
+                    is_rec_boot = False
+                    try:
+                        with open("/proc/cmdline", "r") as f_cmd:
+                            c = f_cmd.read()
+                            if "live-media-path=recovery" in c or "vmlinuz-recovery" in c:
+                                is_rec_boot = True
+                    except Exception:
+                        pass
+                    # Recovery environment runs under Openbox without GNOME Shell installed
+                    if not os.path.isfile("/usr/bin/gnome-shell") and os.path.isdir("/etc/xdg/openbox"):
+                        is_rec_boot = True
+
+                    if is_rec_boot:
+                        raise RuntimeError(
+                            "Cannot restore: No valid Pulsar OS desktop base image (pulsaros-base.squashfs or airootfs.sfs) "
+                            "was found on your drive.\n\n"
+                            "To restore Pulsar OS without losing personal files, please plug in the Pulsar OS installation USB "
+                            "or use Internet Recovery."
+                        )
+
                     log_msg("Notice: base squashfs not found directly; falling back to rsync replication...")
                     rsync_cmd = [
                         "rsync", "-aAXxW",
@@ -5985,6 +6087,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
                                         log_msg("CUPS print service enabled on installed system.")
                                     except Exception as cups_err:
                                         log_msg(f"Notice: could not enable CUPS: {cups_err}")
+
+                                if pkg_info.get("install_pulsar_windows") and not os.path.isfile("/mnt/usr/bin/pulsar-windows"):
+                                    self._install_pulsar_windows_arch(
+                                        log_msg,
+                                        ["chroot", "/mnt", "pacman"],
+                                        "/tmp/pulsar-windows.pkg.tar.zst",
+                                        "/mnt/tmp/pulsar-windows.pkg.tar.zst",
+                                    )
 
                                 # Install ONLYOFFICE via Flatpak from Flathub if selected
                                 if pkg_info["install_onlyoffice"]:
@@ -6375,15 +6485,16 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         # Dedicated recovery partition exists
                         should_deploy_base = True
                     else:
-                        # Shared root filesystem: only deploy if ample free disk space exists (15 GB headroom)
+                        # Shared root filesystem: only deploy if ample free disk space exists (4 GB headroom)
                         try:
+                            subprocess.run(["sync"])
                             stat_m = os.statvfs("/mnt")
                             avail_m = stat_m.f_bavail * stat_m.f_frsize
-                            if avail_m > (total_sz + 15 * 1024 * 1024 * 1024):
+                            if avail_m > (total_sz + 4 * 1024 * 1024 * 1024):
                                 should_deploy_base = True
                             else:
                                 log_msg(f"Notice: Skipping deployment of recovery base image ({total_sz // (1024*1024)}MB) "
-                                        f"to root filesystem: requires 15GB free headroom, only {avail_m // (1024*1024)}MB available. "
+                                        f"to root filesystem: requires 4GB free headroom, only {avail_m // (1024*1024)}MB available. "
                                         "Factory reset / restoration will use live installation media.")
                         except Exception as st_err:
                             log_msg(f"Notice: Could not check free space for base image: {st_err}")
