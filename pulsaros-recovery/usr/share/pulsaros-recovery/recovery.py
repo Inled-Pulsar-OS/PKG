@@ -6722,11 +6722,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             try:
                                 os.makedirs("/mnt/boot/recovery", exist_ok=True)
                                 shutil.copy2(src, "/mnt/boot/recovery/initramfs-recovery.img")
-                                try:
-                                    if not os.path.isfile("/mnt/boot/initramfs-recovery.img"):
-                                        os.link("/mnt/boot/recovery/initramfs-recovery.img", "/mnt/boot/initramfs-recovery.img")
-                                except Exception:
-                                    pass
+                                # Nunca dejar initramfs-recovery.img en la raíz de /boot:
+                                # 10_linux lo empareja con vmlinuz-recovery y genera una
+                                # entrada "normal" (root=UUID=<raíz instalada>) que arranca
+                                # el initramfs live SIN el crypttab del sistema instalado,
+                                # provocando "ALERT! UUID=... does not exist".
                                 log_msg("Recovery initramfs deployed to PULSAR_BOOT (/mnt/boot/recovery/)")
                             except Exception as b_err:
                                 log_msg(f"ERROR deploying recovery initramfs to /boot: {b_err}")
@@ -6807,11 +6807,10 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         try:
                             os.makedirs("/mnt/boot/recovery", exist_ok=True)
                             shutil.copy2(found_k, "/mnt/boot/recovery/vmlinuz-recovery")
-                            try:
-                                if not os.path.isfile("/mnt/boot/vmlinuz-recovery"):
-                                    os.link("/mnt/boot/recovery/vmlinuz-recovery", "/mnt/boot/vmlinuz-recovery")
-                            except Exception:
-                                pass
+                            # Nunca dejar vmlinuz-recovery en la raíz de /boot: 10_linux
+                            # lo detecta y lo convierte en el kernel por defecto (ordena
+                            # "recovery" por delante de "6.x"), arrancando el initramfs
+                            # de recovery con el root= del sistema instalado.
                             log_msg("Recovery kernel deployed to PULSAR_BOOT (/mnt/boot/recovery/)")
                         except Exception as b_err:
                             log_msg(f"ERROR deploying recovery kernel to /boot: {b_err}")
@@ -7499,10 +7498,15 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                 # el kernel Debian de recovery sobre el rootfs Arch (sin input). Solo se
                 # eliminan si existe una copia válida en el directorio/partición de
                 # recovery, para nunca dejar el sistema sin arranque posible.
-                for _stray in ("/mnt/boot/vmlinuz-recovery", "/mnt/boot/initramfs-recovery.img"):
+                for _stray in (
+                    "/mnt/boot/vmlinuz-recovery",
+                    "/mnt/boot/initramfs-recovery.img",
+                    "/mnt/boot/initrd.img-recovery",
+                ):
                     _stray_base = os.path.basename(_stray)
                     if os.path.isfile(_stray) and (
-                        os.path.isfile(f"/mnt/recovery/boot/{_stray_base}")
+                        os.path.isfile(f"/mnt/boot/recovery/{_stray_base}")
+                        or os.path.isfile(f"/mnt/recovery/boot/{_stray_base}")
                         or os.path.isfile(f"/mnt/recovery/{_stray_base}")
                     ):
                         try:
@@ -7514,19 +7518,72 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                 # Ensure VFS is mounted for grub-probe / grub-mkconfig
                 mount_vfs()
 
-                GLib.idle_add(self.update_progress, 0.94, "Generating GRUB multi-boot configuration...")
-                try:
+                grub_cfg_path = "/mnt/boot/grub/grub.cfg"
+
+                def _generate_grub_cfg():
                     os.makedirs("/mnt/boot/grub", exist_ok=True)
                     if is_arch:
                         exec_cmd(["chroot", "/mnt", "grub-mkconfig", "-o", "/boot/grub/grub.cfg"])
+                    elif os.path.exists("/mnt/usr/sbin/update-grub") or os.path.exists("/mnt/usr/bin/update-grub"):
+                        exec_cmd(["chroot", "/mnt", "update-grub"])
                     else:
-                        if os.path.exists("/mnt/usr/sbin/update-grub") or os.path.exists("/mnt/usr/bin/update-grub"):
-                            exec_cmd(["chroot", "/mnt", "update-grub"])
-                        else:
-                            exec_cmd(["chroot", "/mnt", "grub-mkconfig", "-o", "/boot/grub/grub.cfg"])
-                    log_msg("GRUB configuration updated with dual-boot (os-prober) and recovery support.")
-                except Exception as g_cfg_err:
-                    log_msg(f"Warning: GRUB config generation error: {g_cfg_err}")
+                        exec_cmd(["chroot", "/mnt", "grub-mkconfig", "-o", "/boot/grub/grub.cfg"])
+
+                def _grub_cfg_problems():
+                    """Devuelve la lista de problemas que harían el grub.cfg no arrancable.
+
+                    Detecta los dos fallos que dejaban sistemas dual-boot sin bootear:
+                      * grub-probe mockeado o fallido -> 10_linux escribe root=/dev/sda
+                      * vmlinuz-recovery suelto en /boot -> 10_linux crea una entrada
+                        normal que empareja el kernel del initramfs de recovery con el
+                        root=UUID= del sistema instalado (sin crypttab -> sin LUKS).
+                    """
+                    if not os.path.isfile(grub_cfg_path):
+                        return ["grub.cfg no fue generado"]
+                    try:
+                        with open(grub_cfg_path, "r", errors="ignore") as _gf:
+                            _cfg = _gf.read()
+                    except Exception as _v_err:
+                        return [f"no se pudo leer grub.cfg: {_v_err}"]
+                    _problems = []
+                    if "root=/dev/sda" in _cfg or "insmod /dev/sda" in _cfg:
+                        _problems.append("grub-probe devolvió un dispositivo inválido (root=/dev/sda)")
+                    if root_uuid and f"root=UUID={root_uuid}" not in _cfg \
+                            and "root=/dev/mapper/pulsar_cryptroot" not in _cfg:
+                        _problems.append(f"root=UUID={root_uuid} ausente en grub.cfg")
+                    for _line in _cfg.splitlines():
+                        _s = _line.strip()
+                        if _s.startswith("linux") and "vmlinuz-recovery" in _s and "boot=live" not in _s:
+                            _problems.append("10_linux generó una entrada vmlinuz-recovery con el root= instalado")
+                            break
+                    return _problems
+
+                GLib.idle_add(self.update_progress, 0.94, "Generating GRUB multi-boot configuration...")
+                grub_cfg_error = None
+                for _attempt in (1, 2):
+                    try:
+                        _generate_grub_cfg()
+                        _problems = _grub_cfg_problems()
+                        if _problems:
+                            raise RuntimeError("; ".join(_problems))
+                        grub_cfg_error = None
+                        log_msg("GRUB configuration updated with dual-boot (os-prober) and recovery support.")
+                        break
+                    except Exception as g_cfg_err:
+                        grub_cfg_error = g_cfg_err
+                        log_msg(f"Warning: GRUB config generation error (attempt {_attempt}/2): {g_cfg_err}")
+                        time.sleep(1)
+
+                if grub_cfg_error is not None:
+                    if refind_installed:
+                        # rEFInd es el bootloader elegido y no consume grub.cfg: un grub.cfg
+                        # imperfecto NO debe abortar una instalación rEFInd que funciona.
+                        log_msg(f"Warning: grub.cfg inválido, pero rEFInd es el bootloader (non-fatal): {grub_cfg_error}")
+                    else:
+                        raise RuntimeError(
+                            f"GRUB configuration is invalid after 2 attempts: {grub_cfg_error}. "
+                            "Se aborta para no reportar como exitosa una instalación que no arrancaría."
+                        )
 
             # Early write /etc/default/grub with GRUB_ENABLE_CRYPTODISK=y before grub-install runs
             configure_grub_default()
@@ -7592,7 +7649,13 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                             exec_cmd(["chroot", "/mnt", "grub-install", "--target=x86_64-efi", "--efi-directory=/boot/efi", "--bootloader-id=PulsarOS", "--recheck"])
                         except Exception:
                             pass
-                        exec_cmd(["chroot", "/mnt", "grub-install", "--target=x86_64-efi", "--efi-directory=/boot/efi", "--removable", "--recheck"])
+                        # No pisar un EFI/BOOT/BOOTX64.EFI preexistente (típicamente el
+                        # loader de respaldo de rEFInd): el fallback removable podría
+                        # destruir un arranque que sí funcionaba.
+                        if os.path.exists("/mnt/boot/efi/EFI/BOOT/BOOTX64.EFI"):
+                            log_msg("Preserving existing EFI/BOOT/BOOTX64.EFI: se omite 'grub-install --removable'.")
+                        else:
+                            exec_cmd(["chroot", "/mnt", "grub-install", "--target=x86_64-efi", "--efi-directory=/boot/efi", "--removable", "--recheck"])
                     else:
                         exec_cmd(["chroot", "/mnt", "grub-install", "--target=i386-pc", "--recheck", "--force", disk_path])
                 else:
@@ -7833,10 +7896,20 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                     exec_cmd(["chroot", "/mnt", "grub-install", "--target=x86_64-efi", "--efi-directory=/boot/efi", "--bootloader-id=PulsarOS", "--recheck"])
                 except Exception as g_err:
                     _safe_console_print(f"Warning: Standard grub-install failed: {g_err}. Proceeding with removable fallback...")
-                try:
-                    exec_cmd(["chroot", "/mnt", "grub-install", "--target=x86_64-efi", "--efi-directory=/boot/efi", "--removable", "--recheck"])
-                except Exception as g_rem_err:
-                    _safe_console_print(f"Warning: Removable fallback grub-install: {g_rem_err}")
+                # NO sobrescribir EFI/BOOT/BOOTX64.EFI si ya existe: es el loader de
+                # respaldo del firmware y puede ser rEFInd (u otro gestor) ya instalado
+                # en la ESP. --removable lo reemplaza por GRUB y rompería ese arranque.
+                removable_loader = "/mnt/boot/efi/EFI/BOOT/BOOTX64.EFI"
+                if os.path.exists(removable_loader):
+                    log_msg(
+                        "Preserving existing EFI/BOOT/BOOTX64.EFI (rEFInd u otro loader de respaldo): "
+                        "se omite 'grub-install --removable' para no sobrescribir el gestor actual."
+                    )
+                else:
+                    try:
+                        exec_cmd(["chroot", "/mnt", "grub-install", "--target=x86_64-efi", "--efi-directory=/boot/efi", "--removable", "--recheck"])
+                    except Exception as g_rem_err:
+                        _safe_console_print(f"Warning: Removable fallback grub-install: {g_rem_err}")
             else:
                 GLib.idle_add(self.update_progress, 0.90, "Installing GRUB bootloader (BIOS/MBR)...")
                 log_msg(f"Installing BIOS/MBR GRUB onto {disk_path}...")
@@ -8067,13 +8140,66 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                 deploy_kernel_to_recovery()
 
                 # 4. Update initramfs on Debian so resume and cryptsetup are included
+                deb_init_error = None
+                for _attempt in (1, 2):
+                    try:
+                        subprocess.run(["chroot", "/mnt", "rm", "-rf", "/var/tmp/mkinitramfs*"], capture_output=True)
+                        exec_cmd(["chroot", "/mnt", "update-initramfs", "-u", "-k", "all"])
+                        subprocess.run(["sync"])
+                        log_msg("✅ initramfs actualizado en Debian con soporte de hibernación/resume y cryptsetup.")
+                        deb_init_error = None
+                        break
+                    except Exception as deb_init_err:
+                        deb_init_error = deb_init_err
+                        log_msg(f"Warning: update-initramfs -u -k all failed (attempt {_attempt}/2): {deb_init_err}")
+                        time.sleep(1)
+
+                if deb_init_error is not None:
+                    # Sin un initramfs válido el sistema no arranca ni con GRUB ni con
+                    # rEFInd: es un fallo crítico, nunca una simple advertencia.
+                    raise RuntimeError(
+                        f"update-initramfs -u -k all falló tras 2 intentos: {deb_init_error}. "
+                        "Se aborta para no reportar como exitosa una instalación que no arrancaría."
+                    )
+
+                # 4b. Si el sistema va cifrado, verificar que el initramfs contiene el
+                # hook cryptroot. Sin él, initramfs-tools no abre el contenedor LUKS y
+                # termina en "ALERT! UUID=... does not exist" pese a que el UUID existe.
+                _crypt_problem = None
                 try:
-                    subprocess.run(["chroot", "/mnt", "rm", "-rf", "/var/tmp/mkinitramfs*"], capture_output=True)
-                    exec_cmd(["chroot", "/mnt", "update-initramfs", "-u", "-k", "all"])
-                    subprocess.run(["sync"])
-                    log_msg("✅ initramfs actualizado en Debian con soporte de hibernación/resume y cryptsetup.")
-                except Exception as deb_init_err:
-                    log_msg(f"Warning: update-initramfs -u -k all failed (non-fatal): {deb_init_err}")
+                    _crypttab = "/mnt/etc/crypttab"
+                    if os.path.isfile(_crypttab) and os.path.getsize(_crypttab) > 0:
+                        _lsinit = "/usr/bin/lsinitramfs" if os.path.exists("/mnt/usr/bin/lsinitramfs") else "/usr/sbin/lsinitramfs"
+                        if os.path.exists(f"/mnt{_lsinit}"):
+                            _kvers = sorted(
+                                p[len("initrd.img-"):]
+                                for p in os.listdir("/mnt/boot")
+                                if p.startswith("initrd.img-") and "recovery" not in p and "fallback" not in p
+                            )
+                            for _kv in _kvers:
+                                _res = subprocess.run(
+                                    ["chroot", "/mnt", _lsinit, f"/boot/initrd.img-{_kv}"],
+                                    capture_output=True, text=True,
+                                )
+                                if _res.returncode == 0 and "cryptroot" not in _res.stdout:
+                                    _crypt_problem = (
+                                        f"el initramfs /boot/initrd.img-{_kv} no incluye cryptroot "
+                                        "aunque /etc/crypttab tiene entradas"
+                                    )
+                                    break
+                            if _kvers and not _crypt_problem:
+                                log_msg(f"✅ Verificado: cryptroot presente en el initramfs ({', '.join(_kvers)}).")
+                        else:
+                            log_msg("Notice: lsinitramfs no está disponible; no se pudo verificar cryptroot en el initramfs.")
+                except Exception as _ck_err:
+                    log_msg(f"Warning: no se pudo verificar cryptroot en el initramfs: {_ck_err}")
+
+                if _crypt_problem:
+                    raise RuntimeError(
+                        f"{_crypt_problem}. Revisa que cryptsetup-initramfs esté instalado y que "
+                        "/etc/cryptsetup-initramfs/conf-hook tenga CRYPTSETUP=y. "
+                        "Se aborta para no reportar como exitosa una instalación sin desbloqueo LUKS."
+                    )
 
                 if refind_installed:
                     configure_refind_menus()

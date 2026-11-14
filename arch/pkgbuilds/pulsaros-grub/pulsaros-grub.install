@@ -1,25 +1,26 @@
 _install_theme() {
-    # Mock de grub-probe temporal en ruta absoluta para evitar fallos si no hay dispositivo de disco real (ej. chroots)
-    if [ -f "/usr/bin/grub-probe" ]; then
-        mv /usr/bin/grub-probe /usr/bin/grub-probe.bak
+    # ── Instalación del tema SIN regenerar grub.cfg ───────────────────────────
+    # core.sh ejecuta 'update-grub'/'grub-mkconfig' al final. En un chroot
+    # (build de ISO o instalación) grub-probe no resuelve el dispositivo real y
+    # dejaba un grub.cfg corrupto (root=/dev/sda), impidiendo el arranque.
+    # Neutralizamos SOLO esos dos comandos durante el tema.
+    PULSAR_THEME_SHIM_DIR="$(mktemp -d)"
+    printf '#!/bin/sh\nexit 0\n' > "$PULSAR_THEME_SHIM_DIR/update-grub"
+    printf '#!/bin/sh\nexit 0\n' > "$PULSAR_THEME_SHIM_DIR/grub-mkconfig"
+    chmod +x "$PULSAR_THEME_SHIM_DIR/update-grub" "$PULSAR_THEME_SHIM_DIR/grub-mkconfig"
+
+    # Si una versión anterior dejó el grub-probe real en .bak, restaurarlo
+    if [ ! -f /usr/bin/grub-probe ] && [ -f /usr/bin/grub-probe.bak ]; then
+        mv /usr/bin/grub-probe.bak /usr/bin/grub-probe
     fi
-    echo '#!/bin/sh' > /usr/bin/grub-probe
-    echo 'echo "/dev/sda"' >> /usr/bin/grub-probe
-    echo 'exit 0' >> /usr/bin/grub-probe
-    chmod +x /usr/bin/grub-probe
 
     PULSAR_GRUB_THEME_SRC="/boot/grub/themes/grub-theme"
     PULSAR_GRUB_THEME_DIR="/boot/grub/themes/Particle-circle-window"
     if [ -f "$PULSAR_GRUB_THEME_SRC/install.sh" ]; then
         cd "$PULSAR_GRUB_THEME_SRC"
-        ./install.sh -b -t window -s 1080p || echo "Aviso: El instalador de GRUB reportó errores, pero continuamos..."
+        PATH="$PULSAR_THEME_SHIM_DIR:$PATH" ./install.sh -b -t window -s 1080p || echo "Aviso: El instalador de GRUB reportó errores, pero continuamos..."
     fi
-
-    # Eliminar el mock temporal y restaurar el original
-    rm -f /usr/bin/grub-probe
-    if [ -f "/usr/bin/grub-probe.bak" ]; then
-        mv /usr/bin/grub-probe.bak /usr/bin/grub-probe
-    fi
+    rm -rf "$PULSAR_THEME_SHIM_DIR"
 
     # Crear script de GRUB para cargar las fuentes del tema en el arranque
     mkdir -p /etc/grub.d
@@ -43,7 +44,12 @@ GRUBSCRIPT
         sed -i 's/^#*GRUB_GFXMODE=.*/GRUB_GFXMODE=1920x1080x32/' /etc/default/grub
         sed -i 's/^#*GRUB_GFXPAYLOAD_LINUX=.*/GRUB_GFXPAYLOAD_LINUX=keep/' /etc/default/grub
     fi
-    grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
+    # Regenerar grub.cfg SOLO en un sistema real (no en chroots de build/instalación).
+    # En un chroot grub-probe puede resolver el dispositivo equivocado y dejar un
+    # grub.cfg que no arranca; el instalador lo regenera y valida al final.
+    if [ -d /run/systemd/system ] && command -v grub-mkconfig >/dev/null 2>&1; then
+        grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
+    fi
 }
 
 post_install() {
