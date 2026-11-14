@@ -29,6 +29,29 @@ const ADAPTER_IFACE = 'org.bluez.Adapter1';
 const DEVICE_IFACE = 'org.bluez.Device1';
 const BATTERY_IFACE = 'org.bluez.Battery1';
 
+const UPOWER = 'org.freedesktop.UPower';
+const UPOWER_PATH = '/org/freedesktop/UPower';
+const UPOWER_DISPLAY_DEVICE = '/org/freedesktop/UPower/devices/DisplayDevice';
+const UPOWER_DEVICE_IFACE = 'org.freedesktop.UPower.Device';
+const SYSTEMD = 'org.freedesktop.systemd1';
+const OPTIMIZER_UNIT = '/org/freedesktop/systemd1/unit/pulsaros_2doptimizer_2eservice';
+const UNIT_IFACE = 'org.freedesktop.systemd1.Unit';
+
+function pget(dict, key, fallback = null) {
+    if (!dict)
+        return fallback;
+    const v = dict[key];
+    if (v === undefined || v === null)
+        return fallback;
+    try {
+        if (typeof v.deepUnpack === 'function')
+            return v.deepUnpack();
+        if (typeof v.unpack === 'function')
+            return v.unpack();
+    } catch (e) {}
+    return v;
+}
+
 const BLUE = '#0a84ff';
 const LANG = (GLib.get_language_names()[0] ?? '').slice(0, 2);
 const ITALIAN = LANG === 'it';
@@ -558,7 +581,11 @@ class BluetoothService {
     }
 
     get powered() {
-        return Boolean(this._adapter?.Powered);
+        return Boolean(pget(this._adapter, 'Powered', false));
+    }
+
+    get discovering() {
+        return Boolean(pget(this._adapter, 'Discovering', false)) || this._discovering;
     }
 
     get devices() {
@@ -568,7 +595,10 @@ class BluetoothService {
     setPowered(enabled) {
         if (!this._adapterPath)
             return;
+        if (this._adapter)
+            this._adapter.Powered = enabled;
         this._setProperty(this._adapterPath, ADAPTER_IFACE, 'Powered', enabled);
+        this._scheduleRefresh(80);
     }
 
     startDiscovery() {
@@ -621,26 +651,37 @@ class BluetoothService {
                     const adapterProps = interfaces[ADAPTER_IFACE];
                     if (adapterProps && !adapterPath) {
                         adapterPath = path;
-                        adapter = adapterProps;
+                        adapter = {
+                            Powered: Boolean(pget(adapterProps, 'Powered', false)),
+                            Discovering: Boolean(pget(adapterProps, 'Discovering', false)),
+                        };
                         continue;
                     }
 
                     const device = interfaces[DEVICE_IFACE];
                     if (!device)
                         continue;
-                    if (!device.Paired && !device.Connected && !device.Name && !device.Alias)
+
+                    const isPaired = Boolean(pget(device, 'Paired', false));
+                    const isConnected = Boolean(pget(device, 'Connected', false));
+                    const rawName = pget(device, 'Name', null);
+                    const rawAlias = pget(device, 'Alias', null);
+                    const rawAddr = pget(device, 'Address', null);
+
+                    // Skip anonymous BLE MAC beacons without an advertised name unless paired/connected
+                    if (!isPaired && !isConnected && !rawName)
                         continue;
 
-                    const name = device.Name || device.Alias || device.Address || path;
-                    const icon = normalizeBluetoothIcon(device.Icon);
-                    const battery = interfaces[BATTERY_IFACE]?.Percentage;
+                    const name = String(rawAlias || rawName || rawAddr || path.split('/').pop());
+                    const icon = normalizeBluetoothIcon(pget(device, 'Icon'));
+                    const battery = pget(interfaces[BATTERY_IFACE], 'Percentage', null);
 
                     devices.push({
                         path,
                         name,
                         icon,
-                        connected: Boolean(device.Connected),
-                        paired: Boolean(device.Paired),
+                        connected: isConnected,
+                        paired: isPaired,
                         battery: Number.isFinite(Number(battery))
                             ? Number(battery) : null,
                     });
@@ -648,7 +689,8 @@ class BluetoothService {
 
                 devices.sort((a, b) =>
                     Number(b.connected) - Number(a.connected) ||
-                    GLib.utf8_collate(a.name, b.name));
+                    Number(b.paired) - Number(a.paired) ||
+                    a.name.localeCompare(b.name));
 
                 this._adapterPath = adapterPath;
                 this._adapter = adapter;
@@ -755,6 +797,233 @@ class BluetoothService {
         this._devices = [];
         this._adapter = null;
         this._adapterPath = null;
+        this._onChanged = null;
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ * Battery model (UPower over D-Bus) + Optimizer service & stats
+ * ------------------------------------------------------------------ */
+
+class BatteryService {
+    constructor(onChanged) {
+        this._onChanged = onChanged;
+        this._bus = Gio.DBus.system;
+        this._signals = [];
+        this._hasBattery = false;
+        this._percentage = 100;
+        this._state = 0;
+        this._iconName = 'battery-full-symbolic';
+        this._optimizerActive = false;
+        this._batterySaverActive = false;
+        this._optimizerStats = null;
+        this._destroyed = false;
+
+        this._subscribe();
+        this.refresh();
+        this.refreshOptimizer();
+    }
+
+    get hasBattery() {
+        return this._hasBattery;
+    }
+
+    get percentage() {
+        return this._percentage;
+    }
+
+    get state() {
+        return this._state;
+    }
+
+    get isCharging() {
+        return this._state === 1 || this._state === 5;
+    }
+
+    get iconName() {
+        return this._iconName;
+    }
+
+    get optimizerActive() {
+        return this._optimizerActive;
+    }
+
+    get batterySaverActive() {
+        return this._batterySaverActive;
+    }
+
+    get optimizerStats() {
+        return this._optimizerStats;
+    }
+
+    refresh() {
+        if (this._destroyed)
+            return;
+
+        this._bus.call(
+            UPOWER, UPOWER_DISPLAY_DEVICE, 'org.freedesktop.DBus.Properties', 'GetAll',
+            new GLib.Variant('(s)', [UPOWER_DEVICE_IFACE]),
+            null, Gio.DBusCallFlags.NONE, -1, null, (bus, result) => {
+                if (this._destroyed)
+                    return;
+                try {
+                    const res = bus.call_finish(result);
+                    const props = typeof res.deepUnpack === 'function'
+                        ? res.deepUnpack()[0]
+                        : {};
+
+                    const isPresent = Boolean(pget(props, 'IsPresent', false));
+                    const type = Number(pget(props, 'Type', 0));
+                    this._hasBattery = isPresent && (type === 2 || type === 3);
+                    this._percentage = Math.round(Number(pget(props, 'Percentage', 100)));
+                    this._state = Number(pget(props, 'State', 0));
+                    this._iconName = String(pget(props, 'IconName', 'battery-full-symbolic'));
+                } catch (e) {
+                    this._hasBattery = false;
+                }
+                this._checkBatterySaver();
+                this._changed();
+            });
+    }
+
+    refreshOptimizer() {
+        if (this._destroyed)
+            return;
+
+        this._bus.call(
+            SYSTEMD, OPTIMIZER_UNIT, 'org.freedesktop.DBus.Properties', 'Get',
+            new GLib.Variant('(ss)', [UNIT_IFACE, 'ActiveState']),
+            null, Gio.DBusCallFlags.NONE, -1, null, (bus, result) => {
+                if (this._destroyed)
+                    return;
+                try {
+                    const res = bus.call_finish(result);
+                    const val = res.deepUnpack()[0];
+                    const stateStr = typeof val.unpack === 'function' ? val.unpack() : val;
+                    this._optimizerActive = stateStr === 'active';
+                } catch (e) {
+                    this._optimizerActive = false;
+                }
+                this._readOptimizerStats();
+                this._changed();
+            });
+    }
+
+    _readOptimizerStats() {
+        let zramSavedStr = null;
+        try {
+            const [ok, bytes] = GLib.file_get_contents('/sys/block/zram0/mm_stat');
+            if (ok) {
+                const parts = new TextDecoder().decode(bytes).trim().split(/\s+/);
+                const orig = parseInt(parts[0], 10) || 0;
+                const total = parseInt(parts[2], 10) || 0;
+                if (orig > 0 && total > 0) {
+                    const savedMb = Math.round((orig - total) / (1024 * 1024));
+                    const ratio = (orig / (parseInt(parts[1], 10) || total)).toFixed(1);
+                    zramSavedStr = `${savedMb} MB (${ratio}:1)`;
+                }
+            }
+        } catch (e) {}
+
+        let focusedApp = null;
+        try {
+            const paths = [`/run/user/${GLib.get_uid()}/pulsaros-focused.json`];
+            for (const p of paths) {
+                if (GLib.file_test(p, GLib.FileTest.EXISTS)) {
+                    const [ok, content] = GLib.file_get_contents(p);
+                    if (ok) {
+                        const data = JSON.parse(new TextDecoder().decode(content));
+                        focusedApp = data.wm_class || data.app_id || (data.pid ? `PID ${data.pid}` : null);
+                        break;
+                    }
+                }
+            }
+        } catch (e) {}
+
+        let loadStr = null;
+        try {
+            const [ok, content] = GLib.file_get_contents('/proc/loadavg');
+            if (ok) {
+                const parts = new TextDecoder().decode(content).trim().split(' ');
+                loadStr = `${parts[0]}`;
+            }
+        } catch (e) {}
+
+        this._optimizerStats = {
+            zramSaved: zramSavedStr || T('Active', 'Attivo', 'Activo'),
+            focusedApp: focusedApp || T('Normal', 'Normale', 'Normal'),
+            load: loadStr || '0.0',
+        };
+    }
+
+    _checkBatterySaver() {
+        try {
+            const [ok, content] = GLib.file_get_contents('/sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference');
+            if (ok) {
+                const epp = new TextDecoder().decode(content).trim();
+                this._batterySaverActive = epp === 'power' || epp === 'balance_power';
+            }
+        } catch (e) {}
+    }
+
+    setBatterySaver(enabled) {
+        this._batterySaverActive = enabled;
+        const epp = enabled ? 'power' : 'balance_performance';
+        const cmd = `sudo -n bash -c 'for f in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do echo ${epp} > "$f" 2>/dev/null; done'`;
+        try {
+            GLib.spawn_command_line_async(cmd);
+        } catch (e) {
+            console.warn(`pulsar-bar: setBatterySaver failed: ${e}`);
+        }
+        later(350, () => {
+            this._checkBatterySaver();
+            this._changed();
+        });
+    }
+
+    setOptimizer(enabled) {
+        this._optimizerActive = enabled;
+        const action = enabled ? 'start' : 'stop';
+        const cmd = `sudo -n systemctl ${action} pulsaros-optimizer.service`;
+        try {
+            GLib.spawn_command_line_async(cmd);
+        } catch (e) {
+            console.warn(`pulsar-bar: setOptimizer failed: ${e}`);
+        }
+        later(600, () => {
+            this.refreshOptimizer();
+        });
+    }
+
+    _subscribe() {
+        try {
+            const id = this._bus.signal_subscribe(
+                UPOWER, 'org.freedesktop.DBus.Properties', 'PropertiesChanged',
+                null, null, Gio.DBusSignalFlags.NONE, () => this.refresh());
+            this._signals.push(id);
+        } catch (e) {}
+
+        try {
+            const id = this._bus.signal_subscribe(
+                SYSTEMD, 'org.freedesktop.DBus.Properties', 'PropertiesChanged',
+                OPTIMIZER_UNIT, null, Gio.DBusSignalFlags.NONE, () => this.refreshOptimizer());
+            this._signals.push(id);
+        } catch (e) {}
+    }
+
+    _changed() {
+        if (!this._destroyed)
+            this._onChanged?.();
+    }
+
+    destroy() {
+        if (this._destroyed)
+            return;
+        this._destroyed = true;
+        for (const id of this._signals) {
+            try { this._bus.signal_unsubscribe(id); } catch (e) {}
+        }
+        this._signals = [];
         this._onChanged = null;
     }
 }
@@ -935,6 +1204,19 @@ class MenuBarIcons {
         this._btSignature = null;
         this._btSyncing = false;
 
+        this._batteryService = null;
+        this._batteryButton = null;
+        this._batteryIcon = null;
+        this._batteryLabel = null;
+        this._batteryHeaderLabel = null;
+        this._batteryStatusLabel = null;
+        this._batteryProgressFill = null;
+        this._batteryProgressBox = null;
+        this._batterySaverToggle = null;
+        this._optimizerToggle = null;
+        this._optimizerStatsSection = null;
+        this._batterySyncing = false;
+
         this._ccButton = null;
         this._island = null;
     }
@@ -954,14 +1236,17 @@ class MenuBarIcons {
 
         this._wifiService = new WifiService(() => this._syncWifi());
         this._btService = new BluetoothService(() => this._syncBluetooth());
+        this._batteryService = new BatteryService(() => this._syncBattery());
 
         this._wifiButton = this._buildWifi();
         this._btButton = this._buildBluetooth();
+        this._batteryButton = this._buildBattery();
         this._ccButton = this._buildControlCenter();
 
         this._add(this._wifiButton, 'pulsar-wifi', 0);
         this._add(this._btButton, 'pulsar-bluetooth', 1);
-        this._add(this._ccButton, 'pulsar-control-center', 2);
+        this._add(this._batteryButton, 'pulsar-battery', 2);
+        this._add(this._ccButton, 'pulsar-control-center', 3);
 
         this._repositionButtons();
         later(50, () => this._repositionButtons());
@@ -993,6 +1278,7 @@ class MenuBarIcons {
 
         this._syncWifi(true);
         this._syncBluetooth(true);
+        this._syncBattery();
     }
 
     disable() {
@@ -1009,8 +1295,10 @@ class MenuBarIcons {
 
         this._wifiService?.destroy();
         this._btService?.destroy();
+        this._batteryService?.destroy();
         this._wifiService = null;
         this._btService = null;
+        this._batteryService = null;
 
         /* If the Quick Settings popup is open it is anchored to the CC button
          * we are about to remove: close it and put the original anchor back. */
@@ -1059,6 +1347,17 @@ class MenuBarIcons {
         this._btSection = null;
         this._btRows.clear();
         this._btSignature = null;
+
+        this._batteryButton = null;
+        this._batteryIcon = null;
+        this._batteryLabel = null;
+        this._batteryHeaderLabel = null;
+        this._batteryStatusLabel = null;
+        this._batteryProgressFill = null;
+        this._batteryProgressBox = null;
+        this._batterySaverToggle = null;
+        this._optimizerToggle = null;
+        this._optimizerStatsSection = null;
 
         this._ccButton = null;
         this._qs = null;
@@ -1152,25 +1451,40 @@ class MenuBarIcons {
                 }
             }
 
-            // 2. Move Bluetooth immediately before Control Center
+            // 2. Move Battery immediately before Control Center
+            const battDirectChild = getDirectChild(this._batteryButton, box);
+            if (battDirectChild) {
+                children = box.get_children();
+                const currentCcIdx = children.indexOf(ccDirectChild);
+                const battIdx = children.indexOf(battDirectChild);
+                if (battIdx >= 0 && currentCcIdx > 0) {
+                    const targetBattIdx = battIdx < currentCcIdx ? currentCcIdx - 1 : currentCcIdx;
+                    if (battIdx !== targetBattIdx && targetBattIdx >= 0) {
+                        box.set_child_at_index(battDirectChild, targetBattIdx);
+                    }
+                }
+            }
+
+            // 3. Move Bluetooth immediately before Battery (or Control Center if no Battery)
             const btDirectChild = getDirectChild(this._btButton, box);
             if (btDirectChild) {
                 children = box.get_children();
-                const currentCcIdx = children.indexOf(ccDirectChild);
+                const anchorChild = battDirectChild || ccDirectChild;
+                const anchorIdx = children.indexOf(anchorChild);
                 const btIdx = children.indexOf(btDirectChild);
-                if (btIdx >= 0 && currentCcIdx > 0) {
-                    const targetBtIdx = btIdx < currentCcIdx ? currentCcIdx - 1 : currentCcIdx;
+                if (btIdx >= 0 && anchorIdx > 0) {
+                    const targetBtIdx = btIdx < anchorIdx ? anchorIdx - 1 : anchorIdx;
                     if (btIdx !== targetBtIdx && targetBtIdx >= 0) {
                         box.set_child_at_index(btDirectChild, targetBtIdx);
                     }
                 }
             }
 
-            // 3. Move Wi-Fi immediately before Bluetooth
+            // 4. Move Wi-Fi immediately before Bluetooth
             const wifiDirectChild = getDirectChild(this._wifiButton, box);
             if (wifiDirectChild) {
                 children = box.get_children();
-                const anchorChild = btDirectChild || ccDirectChild;
+                const anchorChild = btDirectChild || battDirectChild || ccDirectChild;
                 const anchorIdx = children.indexOf(anchorChild);
                 const wifiIdx = children.indexOf(wifiDirectChild);
                 if (wifiIdx >= 0 && anchorIdx > 0) {
@@ -1506,8 +1820,8 @@ class MenuBarIcons {
         const powered = service.powered;
         const connected = service.devices.find(device => device.connected);
 
-        /* macOS: voce presente solo con Bluetooth acceso. */
-        this._btButton.visible = Boolean(powered);
+        // Keep visible in the menu bar as long as an adapter is available
+        this._btButton.visible = Boolean(service.available);
 
         this._btIcon.icon_name = powered
             ? 'bluetooth-active-symbolic'
@@ -1555,9 +1869,10 @@ class MenuBarIcons {
         const signature = [
             service.available,
             service.powered,
+            service.discovering,
             devices.map(device => [
                 device.path, device.name, device.icon,
-                device.connected ? 1 : 0, device.battery ?? '',
+                device.connected ? 1 : 0, device.paired ? 1 : 0, device.battery ?? '',
             ].join('\u0001')).join('\u0002'),
         ].join('\u0003');
 
@@ -1571,22 +1886,27 @@ class MenuBarIcons {
         if (!service.powered)
             return;
 
-        this._btSection.addMenuItem(this._heading(T('Devices', 'Dispositivi', 'Dispositivos')));
+        const saved = devices.filter(d => d.paired || d.connected);
+        const discovered = devices.filter(d => !d.paired && !d.connected);
 
-        if (!devices.length) {
-            const pair = new PopupMenu.PopupImageMenuItem(
-                T('Pair a Device…', 'Associa un dispositivo…', 'Enlazar un dispositivo…'),
-                'list-add-symbolic');
-            pair.connect('activate', () => {
-                openSettingsPanel('gnome-bluetooth-panel.desktop',
-                    'gnome-control-center bluetooth');
-            });
-            this._btSection.addMenuItem(pair);
-            return;
+        if (saved.length > 0) {
+            this._btSection.addMenuItem(this._heading(
+                T('Saved Devices', 'Dispositivi salvati', 'Dispositivos guardados')));
+            for (const device of saved)
+                this._btSection.addMenuItem(this._bluetoothRow(device));
         }
 
-        for (const device of devices)
-            this._btSection.addMenuItem(this._bluetoothRow(device));
+        if (discovered.length > 0) {
+            this._btSection.addMenuItem(this._heading(
+                T('Nearby Devices', 'Dispositivi vicini', 'Dispositivos cercanos')));
+            for (const device of discovered)
+                this._btSection.addMenuItem(this._bluetoothRow(device));
+        } else if (saved.length === 0) {
+            this._btSection.addMenuItem(this._emptyRow(
+                service.discovering
+                    ? T('Searching for devices…', 'Ricerca dispositivi…', 'Buscando dispositivos…')
+                    : T('No devices found', 'Nessun dispositivo', 'No se encontraron dispositivos')));
+        }
     }
 
     _bluetoothRow(device) {
@@ -1619,6 +1939,215 @@ class MenuBarIcons {
 
         this._btRows.set(device.path, {item});
         return item;
+    }
+
+    /* ---------- Battery & Optimizer ---------- */
+
+    _buildBattery() {
+        const button = createBarButton(T('Battery', 'Batteria', 'Batería'), false, 1.0);
+
+        const box = new St.BoxLayout({
+            style_class: 'pulsar-bar-button-box',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._batteryIcon = createStatusIcon('battery-full-symbolic');
+        this._batteryLabel = new St.Label({
+            text: '100%',
+            style_class: 'pulsar-bar-label',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        box.add_child(this._batteryIcon);
+        box.add_child(this._batteryLabel);
+        button.add_child(box);
+
+        styleStatusMenu(button.menu, 'pulsar-battery-menu-content');
+
+        // Header with percentage & status
+        this._batteryHeaderLabel = new St.Label({
+            text: '100%',
+            style_class: 'pulsar-battery-title',
+        });
+        this._batteryStatusLabel = new St.Label({
+            text: T('Fully Charged', 'Carica completa', 'Carga completa'),
+            style_class: 'pulsar-status-note',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+
+        this._batteryProgressBox = new St.BoxLayout({
+            style_class: 'pulsar-battery-bar-trough',
+            x_expand: true,
+        });
+        this._batteryProgressFill = new St.Widget({
+            style_class: 'pulsar-battery-bar-fill',
+            width: 100,
+        });
+        this._batteryProgressBox.add_child(this._batteryProgressFill);
+
+        const headerBox = new St.BoxLayout({
+            orientation: Clutter.Orientation.VERTICAL,
+            style_class: 'pulsar-battery-header-box',
+            x_expand: true,
+        });
+        const titleRow = new St.BoxLayout({
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        titleRow.add_child(this._batteryHeaderLabel);
+        const spacer = new St.Widget({x_expand: true});
+        titleRow.add_child(spacer);
+        titleRow.add_child(this._batteryStatusLabel);
+
+        headerBox.add_child(titleRow);
+        headerBox.add_child(this._batteryProgressBox);
+
+        const headerItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        headerItem.add_child(headerBox);
+        button.menu.addMenuItem(headerItem);
+
+        // Power Saver switch
+        this._batterySaverToggle = new PopupMenu.PopupSwitchMenuItem(
+            T('Battery Saver', 'Risparmio energetico', 'Ahorro de batería'), false);
+        this._batterySaverToggle.add_style_class_name('pulsar-status-toggle');
+        this._batterySaverToggle.connect('toggled', (_item, state) => {
+            if (this._batterySyncing) return;
+            this._batteryService?.setBatterySaver(state);
+        });
+        button.menu.addMenuItem(this._batterySaverToggle);
+
+        button.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+        // Optimizer Section
+        this._optimizerToggle = new PopupMenu.PopupSwitchMenuItem(
+            T('Pulsar OS Optimizer', 'Ottimizzatore Pulsar OS', 'Optimizador de Pulsar OS'), false);
+        this._optimizerToggle.add_style_class_name('pulsar-status-toggle');
+        this._optimizerToggle.connect('toggled', (_item, state) => {
+            if (this._batterySyncing) return;
+            this._batteryService?.setOptimizer(state);
+        });
+        button.menu.addMenuItem(this._optimizerToggle);
+
+        this._optimizerStatsSection = new PopupMenu.PopupMenuSection();
+        button.menu.addMenuItem(this._optimizerStatsSection);
+
+        button.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+        const optSettings = new PopupMenu.PopupImageMenuItem(
+            T('Open Optimizer Panel…', 'Apri pannello ottimizzatore…', 'Abrir panel de optimizador…'),
+            'emblem-system-symbolic');
+        optSettings.connect('activate', () => {
+            try {
+                GLib.spawn_command_line_async('pulsaros-optimizer-gui');
+            } catch (e) {
+                console.warn(`pulsar-bar: launch optimizer gui failed: ${e}`);
+            }
+        });
+        button.menu.addMenuItem(optSettings);
+
+        const powerSettings = new PopupMenu.PopupImageMenuItem(
+            T('Power Settings…', 'Impostazioni batteria…', 'Ajustes de energía…'),
+            'preferences-system-symbolic');
+        powerSettings.connect('activate', () => {
+            openSettingsPanel('gnome-power-panel.desktop', 'gnome-control-center power');
+        });
+        button.menu.addMenuItem(powerSettings);
+
+        this._ids.push([button.menu,
+            button.menu.connect('open-state-changed', (_menu, open) => {
+                if (open) {
+                    this._batteryService?.refresh();
+                    this._batteryService?.refreshOptimizer();
+                    this._syncBattery();
+                }
+            })]);
+
+        return button;
+    }
+
+    _syncBattery() {
+        if (!this._alive || !this._batteryService || !this._batteryButton)
+            return;
+
+        const s = this._batteryService;
+        this._batteryButton.visible = Boolean(s.hasBattery);
+        if (!s.hasBattery)
+            return;
+
+        const pct = Math.max(0, Math.min(100, s.percentage));
+        if (this._batteryLabel)
+            this._batteryLabel.text = `${pct}%`;
+
+        let iconName = s.iconName;
+        if (!iconName || iconName === 'battery-missing-symbolic') {
+            const level = pct >= 88 ? 100 : pct >= 63 ? 75 : pct >= 38 ? 50 : pct >= 13 ? 25 : 0;
+            iconName = `battery-level-${level}-symbolic`;
+        }
+        if (this._batteryIcon)
+            this._batteryIcon.icon_name = iconName;
+
+        if (this._batteryHeaderLabel)
+            this._batteryHeaderLabel.text = `${pct}%`;
+
+        const stateText = s.isCharging
+            ? T('Charging', 'In carica', 'Cargando')
+            : (pct === 100 ? T('Fully Charged', 'Carica completa', 'Carga completa')
+                           : T('On Battery', 'A batteria', 'En uso'));
+        if (this._batteryStatusLabel)
+            this._batteryStatusLabel.text = stateText;
+
+        if (this._batteryProgressFill) {
+            const fillWidth = Math.max(4, Math.round(260 * (pct / 100)));
+            this._batteryProgressFill.width = fillWidth;
+            if (s.isCharging) {
+                this._batteryProgressFill.style = 'background-color: #0a84ff;';
+            } else if (pct <= 20) {
+                this._batteryProgressFill.style = 'background-color: #ff9f0a;';
+            } else {
+                this._batteryProgressFill.style = 'background-color: #30d158;';
+            }
+        }
+
+        this._batterySyncing = true;
+        try {
+            this._batterySaverToggle?.setToggleState(s.batterySaverActive);
+            this._optimizerToggle?.setToggleState(s.optimizerActive);
+        } finally {
+            this._batterySyncing = false;
+        }
+
+        this._updateOptimizerStats();
+    }
+
+    _updateOptimizerStats() {
+        if (!this._optimizerStatsSection)
+            return;
+        this._optimizerStatsSection.removeAll();
+
+        const s = this._batteryService;
+        const stats = s?.optimizerStats;
+        if (!stats) return;
+
+        this._optimizerStatsSection.addMenuItem(this._heading(
+            T('Optimizer Status & Performance', 'Stato e prestazioni ottimizzatore', 'Estado y rendimiento del optimizador')));
+
+        const mkStatRow = (label, val) => {
+            const item = new PopupMenu.PopupMenuItem(label, {reactive: false, can_focus: false});
+            item.add_style_class_name('pulsar-stat-row');
+            const vLabel = new St.Label({
+                text: String(val),
+                style_class: 'pulsar-status-note',
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+            item.insert_child_at_index(vLabel, 2);
+            return item;
+        };
+
+        const stateLabel = s.optimizerActive
+            ? T('Active (zero-lag governor)', 'Attivo (governor zero-lag)', 'Activo (protección fluidez)')
+            : T('Stopped', 'Fermo', 'Detenido');
+        this._optimizerStatsSection.addMenuItem(mkStatRow(T('Governor', 'Governor', 'Gobernador'), stateLabel));
+        this._optimizerStatsSection.addMenuItem(mkStatRow(T('zRAM Memory Saved', 'RAM risparmiata zRAM', 'RAM ahorrada con zRAM'), stats.zramSaved));
+        this._optimizerStatsSection.addMenuItem(mkStatRow(T('Focused App', 'App in primo piano', 'App en primer plano'), stats.focusedApp));
+        this._optimizerStatsSection.addMenuItem(mkStatRow(T('CPU Load Avg', 'Carico CPU medio', 'Carga CPU media'), stats.load));
     }
 
     /* ---------- shared menu pieces ---------- */

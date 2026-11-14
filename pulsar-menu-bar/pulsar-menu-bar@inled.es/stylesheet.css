@@ -216,3 +216,45 @@
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.28);
     transition-duration: 180ms;
 }
+
+/* ── Battery bar & stats ──────────────────────────────────────────────── */
+.pulsar-bar-button-box {
+    spacing: 5px;
+}
+
+.pulsar-bar-label {
+    font-size: 9.5pt;
+    font-weight: 600;
+    font-feature-settings: "tnum";
+    color: #f2f2f7;
+}
+
+.pulsar-battery-title {
+    font-size: 13pt;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.pulsar-battery-header-box {
+    padding: 8px 10px 4px 10px;
+    spacing: 6px;
+}
+
+.pulsar-battery-bar-trough {
+    height: 8px;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.15);
+    margin-top: 4px;
+}
+
+.pulsar-battery-bar-fill {
+    height: 8px;
+    border-radius: 4px;
+    background-color: #30d158;
+}
+
+.pulsar-stat-row {
+    min-height: 22px !important;
+    padding: 2px 9px !important;
+    font-size: 9.5pt !important;
+}
