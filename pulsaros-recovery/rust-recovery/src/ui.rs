@@ -11,10 +11,12 @@ use crate::network::{
 };
 use crate::restore::run_restoration;
 use crate::system::{
-    copy_folder_with_progress, detect_system_base, detect_system_bootloader, exec_cmd,
-    find_btrfs_targets, find_encrypted_targets, format_file_size, is_root, is_valid_base_squashfs,
-    launch_chroot_terminal, launch_terminal_with_command, log_msg, open_system_logs, scan_external_drives,
-    scan_installed_applications, scan_usb_devices, set_keyboard_layout, unlock_luks_partition,
+    collect_installation_logs, copy_folder_with_progress, detect_system_base,
+    detect_system_bootloader, exec_cmd, find_btrfs_targets, find_encrypted_targets,
+    format_file_size, is_root, is_valid_base_squashfs,
+    launch_chroot_terminal, launch_terminal_with_command, log_msg,
+    scan_external_drives, scan_installed_applications, scan_usb_devices,
+    send_logs_via_flydrop, set_keyboard_layout, unlock_luks_partition,
 };
 use crate::theme::APP_CSS;
 use glib::clone;
@@ -27,6 +29,8 @@ use gtk4::{
 };
 use libadwaita::prelude::*;
 use libadwaita::ApplicationWindow;
+use webkit6::prelude::*;
+use webkit6::WebView;
 use std::cell::RefCell;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -963,6 +967,23 @@ pub(crate) fn build_ui(app: &Application) {
         stack.set_visible_child_name("utilities");
     }));
     err_btn_box.append(&btn_err_back);
+
+    let btn_err_view_logs = Button::with_label("View Logs");
+    btn_err_view_logs.add_css_class("secondary-action");
+    let win_err_c = window.clone();
+    btn_err_view_logs.connect_clicked(move |_| {
+        show_logs_dialog(&win_err_c, None);
+    });
+    err_btn_box.append(&btn_err_view_logs);
+
+    let btn_err_share = Button::with_label("Share Logs...");
+    btn_err_share.add_css_class("secondary-action");
+    let win_err_s = window.clone();
+    btn_err_share.connect_clicked(move |_| {
+        let text = collect_installation_logs(None);
+        show_share_logs_dialog(&win_err_s, &text);
+    });
+    err_btn_box.append(&btn_err_share);
 
     let btn_try_usb = Button::with_label("Try USB Image");
     btn_try_usb.add_css_class("suggested-action");
@@ -2494,6 +2515,7 @@ pub(crate) fn build_ui(app: &Application) {
 
                 let sender_l = sender.clone();
                 let append_log = move |text: &str| {
+                    log_msg(text);
                     let _ = sender_l.send(RecoveryUpdate::Log(text.to_string()));
                 };
 
@@ -2536,6 +2558,7 @@ pub(crate) fn build_ui(app: &Application) {
     }));
 
     btn_util_continue.connect_clicked(clone!(
+        @weak window,
         @weak stack,
         @strong selected_action,
         @strong recovery_mode,
@@ -2569,57 +2592,62 @@ pub(crate) fn build_ui(app: &Application) {
             }
             "chroot_terminal" => {
                 log_msg("Initiating 1-Click Chroot Terminal session...");
+                // Check if any encrypted partition needs to be unlocked first
+                let enc = find_encrypted_targets();
+                if let Some(first_enc) = enc.into_iter().find(|e| !e.is_unlocked) {
+                    log_msg(&format!("Encrypted partition detected ({}). Prompting for passphrase...", first_enc.part_path));
+                    prompt_unlock(first_enc, UnlockCaller::Chroot);
+                    return;
+                }
+
+                let unlocked_enc = find_encrypted_targets().into_iter().find(|e| e.is_unlocked);
                 let targets = find_btrfs_targets();
-                if let Some(first) = targets.first() {
-                    let part = first.part_path.clone();
+                let chosen_part = if let Some(unlocked) = unlocked_enc {
+                    Some(format!("/dev/mapper/{}", unlocked.mapper_name))
+                } else if let Some(first) = targets.first() {
+                    Some(first.part_path.clone())
+                } else {
+                    None
+                };
+
+                if let Some(part) = chosen_part {
                     std::thread::spawn(move || {
                         if let Err(e) = launch_chroot_terminal(&part) {
                             log_msg(&format!("Error opening chroot terminal: {}", e));
                         }
                     });
                 } else {
-                    let enc = find_encrypted_targets();
-                    if let Some(first_enc) = enc.into_iter().find(|e| !e.is_unlocked) {
-                        prompt_unlock(first_enc, UnlockCaller::Chroot);
-                    } else if let Some(unlocked_enc) = find_encrypted_targets().into_iter().find(|e| e.is_unlocked) {
-                        let part = format!("/dev/mapper/{}", unlocked_enc.mapper_name);
-                        std::thread::spawn(move || {
-                            let _ = launch_chroot_terminal(&part);
-                        });
-                    } else {
-                        log_msg("No Pulsar OS system partition detected to chroot into.");
-                    }
+                    log_msg("No Pulsar OS system partition detected to chroot into.");
                 }
             }
             "rescue_files" => {
                 log_msg("Opening File Rescue utility...");
-                let targets = find_btrfs_targets();
-                if targets.is_empty() {
-                    let enc = find_encrypted_targets();
-                    if let Some(first_enc) = enc.into_iter().find(|e| !e.is_unlocked) {
-                        prompt_unlock(first_enc, UnlockCaller::RescueFiles);
-                        return;
-                    }
+                let enc = find_encrypted_targets();
+                if let Some(first_enc) = enc.into_iter().find(|e| !e.is_unlocked) {
+                    prompt_unlock(first_enc, UnlockCaller::RescueFiles);
+                    return;
                 }
                 populate_rescue_options();
                 stack.set_visible_child_name("rescue_files");
             }
             "logs" => {
                 log_msg("Opening Pulsar OS logs utility...");
-                let targets = find_btrfs_targets();
-                if let Some(first) = targets.first() {
-                    open_system_logs(Some(&first.part_path));
-                } else {
-                    let enc = find_encrypted_targets();
-                    if let Some(first_enc) = enc.into_iter().find(|e| !e.is_unlocked) {
-                        prompt_unlock(first_enc, UnlockCaller::Logs);
-                    } else if let Some(unlocked_enc) = find_encrypted_targets().into_iter().find(|e| e.is_unlocked) {
-                        let mapper_dev = format!("/dev/mapper/{}", unlocked_enc.mapper_name);
-                        open_system_logs(Some(&mapper_dev));
-                    } else {
-                        open_system_logs(None);
-                    }
+                let enc = find_encrypted_targets();
+                if let Some(first_enc) = enc.into_iter().find(|e| !e.is_unlocked) {
+                    log_msg(&format!("Encrypted partition detected ({}). Prompting for passphrase before reading logs...", first_enc.part_path));
+                    prompt_unlock(first_enc, UnlockCaller::Logs);
+                    return;
                 }
+
+                let unlocked_enc = find_encrypted_targets().into_iter().find(|e| e.is_unlocked);
+                let targets = find_btrfs_targets();
+                let chosen_part = if let Some(unlocked) = unlocked_enc {
+                    Some(format!("/dev/mapper/{}", unlocked.mapper_name))
+                } else {
+                    targets.first().map(|t| t.part_path.clone())
+                };
+
+                show_logs_dialog(&window, chosen_part.as_deref());
             }
             "internet_info" => {
                 stack.set_visible_child_name("internet_info");
@@ -2723,6 +2751,7 @@ pub(crate) fn build_ui(app: &Application) {
         let current_source_desc = current_source_desc.clone();
         let populate_rescue_options = populate_rescue_options.clone();
         let stack = stack.clone();
+        let window = window.clone();
 
         Rc::new(move || {
             let enc_opt = selected_encrypted_target.borrow().clone();
@@ -2766,6 +2795,7 @@ pub(crate) fn build_ui(app: &Application) {
             let unlock_caller_c = unlock_caller.clone();
             let populate_rescue_c = populate_rescue_options.clone();
             let stack_c = stack.clone();
+            let window_c = window.clone();
 
             glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
                 match rx.try_recv() {
@@ -2795,7 +2825,8 @@ pub(crate) fn build_ui(app: &Application) {
                                         stack_c.set_visible_child_name("rescue_files");
                                     }
                                     Some(UnlockCaller::Logs) => {
-                                        open_system_logs(Some(&mapper_dev));
+                                        let dev = mapper_dev.clone();
+                                        show_logs_dialog(&window_c, Some(&dev));
                                         stack_c.set_visible_child_name("utilities");
                                     }
                                     Some(UnlockCaller::TargetSelect(ref src)) => {
@@ -2844,4 +2875,217 @@ pub(crate) fn build_ui(app: &Application) {
 
     stack.set_visible_child_name("utilities");
     window.present();
+}
+
+pub(crate) fn show_logs_dialog(parent: &impl IsA<gtk4::Window>, part_path: Option<&str>) {
+    let log_text = collect_installation_logs(part_path);
+
+    let win = gtk4::Window::builder()
+        .title("Pulsar OS — Installation & Recovery Logs")
+        .default_width(860)
+        .default_height(600)
+        .modal(true)
+        .transient_for(parent)
+        .build();
+
+    let root = GtkBox::new(Orientation::Vertical, 10);
+    root.set_margin_start(16);
+    root.set_margin_end(16);
+    root.set_margin_top(16);
+    root.set_margin_bottom(16);
+
+    // Header title row
+    let header_box = GtkBox::new(Orientation::Horizontal, 12);
+    header_box.set_margin_bottom(6);
+
+    let title_vbox = GtkBox::new(Orientation::Vertical, 2);
+    title_vbox.set_hexpand(true);
+    let title_lbl = Label::new(Some("Installation & Recovery Logs"));
+    title_lbl.add_css_class("welcome-title");
+    title_lbl.set_halign(Align::Start);
+    let sub_lbl = Label::new(Some("Detailed installer, partitioning, and system events history"));
+    sub_lbl.add_css_class("welcome-subtitle");
+    sub_lbl.set_halign(Align::Start);
+    title_vbox.append(&title_lbl);
+    title_vbox.append(&sub_lbl);
+    header_box.append(&title_vbox);
+
+    let btn_share = Button::with_label("Share Logs...");
+    btn_share.add_css_class("suggested-action");
+    header_box.append(&btn_share);
+
+    root.append(&header_box);
+
+    // Monospace Text View in ScrolledWindow
+    let scrolled = ScrolledWindow::builder()
+        .hscrollbar_policy(gtk4::PolicyType::Automatic)
+        .vscrollbar_policy(gtk4::PolicyType::Automatic)
+        .vexpand(true)
+        .hexpand(true)
+        .build();
+    scrolled.add_css_class("live-log-view");
+
+    let text_view = TextView::new();
+    text_view.set_editable(false);
+    text_view.set_monospace(true);
+    text_view.set_wrap_mode(WrapMode::WordChar);
+    text_view.add_css_class("live-log-text");
+    text_view.set_left_margin(12);
+    text_view.set_right_margin(12);
+    text_view.set_top_margin(10);
+    text_view.set_bottom_margin(10);
+
+    let buffer = text_view.buffer();
+    buffer.set_text(&log_text);
+
+    // Auto scroll to bottom
+    let scrolled_c = scrolled.clone();
+    glib::idle_add_local(move || {
+        let adj = scrolled_c.vadjustment();
+        adj.set_value(adj.upper());
+        glib::ControlFlow::Break
+    });
+
+    scrolled.set_child(Some(&text_view));
+    root.append(&scrolled);
+
+    // Bottom action bar
+    let bottom_box = GtkBox::new(Orientation::Horizontal, 12);
+    bottom_box.set_margin_top(8);
+
+    let btn_copy = Button::with_label("Copy to Clipboard");
+    btn_copy.add_css_class("secondary-action");
+    let log_text_clone = log_text.clone();
+    let btn_copy_c = btn_copy.clone();
+    btn_copy.connect_clicked(move |_| {
+        if let Some(display) = gtk4::gdk::Display::default() {
+            display.clipboard().set_text(&log_text_clone);
+            btn_copy_c.set_label("Copied!");
+            let btn_revert = btn_copy_c.clone();
+            glib::timeout_add_local_once(std::time::Duration::from_millis(1500), move || {
+                btn_revert.set_label("Copy to Clipboard");
+            });
+        }
+    });
+    bottom_box.append(&btn_copy);
+
+    let status_spacer = Label::new(None);
+    status_spacer.set_hexpand(true);
+    bottom_box.append(&status_spacer);
+
+    let btn_close = Button::with_label("Close");
+    btn_close.add_css_class("secondary-action");
+    let win_c = win.clone();
+    btn_close.connect_clicked(move |_| {
+        win_c.close();
+    });
+    bottom_box.append(&btn_close);
+
+    root.append(&bottom_box);
+
+    let log_text_for_share = log_text.clone();
+    let win_for_share = win.clone();
+    btn_share.connect_clicked(move |_| {
+        show_share_logs_dialog(&win_for_share, &log_text_for_share);
+    });
+
+    win.set_child(Some(&root));
+    win.present();
+}
+
+pub(crate) fn show_share_logs_dialog(parent: &impl IsA<gtk4::Window>, log_text: &str) {
+    let win = gtk4::Window::builder()
+        .title("Share Logs")
+        .default_width(480)
+        .default_height(530)
+        .modal(true)
+        .transient_for(parent)
+        .resizable(false)
+        .build();
+
+    let root = GtkBox::new(Orientation::Vertical, 8);
+    root.set_margin_start(16);
+    root.set_margin_end(16);
+    root.set_margin_top(16);
+    root.set_margin_bottom(14);
+
+    // Header
+    let title_lbl = Label::new(Some("Share Logs"));
+    title_lbl.add_css_class("welcome-title");
+    title_lbl.set_halign(Align::Center);
+    root.append(&title_lbl);
+
+    let desc_lbl = Label::new(Some("Transfer logs to your mobile device or across your local network."));
+    desc_lbl.add_css_class("welcome-subtitle");
+    desc_lbl.set_halign(Align::Center);
+    desc_lbl.set_wrap(true);
+    desc_lbl.set_justify(gtk4::Justification::Center);
+    root.append(&desc_lbl);
+
+    // WebView for Fountain QR Player (dark background, matching window)
+    let webview = WebView::new();
+    let dark_bg = gtk4::gdk::RGBA::new(0.118, 0.118, 0.125, 1.0);
+    webview.set_background_color(&dark_bg);
+    let fountain_html = crate::qr_fountain::generate_fountain_html(log_text, "pulsaros-recovery.log");
+    webview.load_html(&fountain_html, Some("https://qrs.inled.es/"));
+    webview.set_size_request(440, 345);
+    webview.set_hexpand(true);
+    webview.set_vexpand(false);
+    root.append(&webview);
+
+    let sep = gtk4::Separator::new(Orientation::Horizontal);
+    sep.set_margin_top(4);
+    sep.set_margin_bottom(4);
+    root.append(&sep);
+
+    // FlyDrop Action Row (Flat, clean, no inner card)
+    let fd_row = GtkBox::new(Orientation::Horizontal, 10);
+    fd_row.set_halign(Align::Fill);
+
+    let fd_info = Label::new(Some("Local Network:"));
+    fd_info.add_css_class("welcome-subtitle");
+    fd_info.set_hexpand(true);
+    fd_info.set_halign(Align::Start);
+    fd_row.append(&fd_info);
+
+    let btn_flydrop = Button::with_label("Send via FlyDrop");
+    btn_flydrop.add_css_class("suggested-action");
+    fd_row.append(&btn_flydrop);
+
+    root.append(&fd_row);
+
+    let fd_status = Label::new(None);
+    fd_status.add_css_class("badge-net-ok");
+    fd_status.set_halign(Align::Center);
+    fd_status.set_visible(false);
+    root.append(&fd_status);
+
+    let log_text_owned = log_text.to_string();
+    let fd_status_c = fd_status.clone();
+    btn_flydrop.connect_clicked(move |_| {
+        match send_logs_via_flydrop(&log_text_owned) {
+            Ok(_) => {
+                fd_status_c.set_text("✓ Opening FlyDrop to select device...");
+                fd_status_c.set_visible(true);
+            }
+            Err(err) => {
+                fd_status_c.set_text(&format!("Error: {}", err));
+                fd_status_c.set_visible(true);
+            }
+        }
+    });
+
+    // Close button
+    let btn_close = Button::with_label("Close");
+    btn_close.add_css_class("secondary-action");
+    btn_close.set_halign(Align::Center);
+    btn_close.set_margin_top(4);
+    let win_c = win.clone();
+    btn_close.connect_clicked(move |_| {
+        win_c.close();
+    });
+    root.append(&btn_close);
+
+    win.set_child(Some(&root));
+    win.present();
 }

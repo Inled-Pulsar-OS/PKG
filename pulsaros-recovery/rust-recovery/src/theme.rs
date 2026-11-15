@@ -175,6 +175,11 @@ listboxrow:selected .utility-desc-lbl,
 }
 .suggested-action:hover, button.suggested-action:hover {
     background-color: #007bf5;
+    color: #ffffff;
+}
+.suggested-action:active, button.suggested-action:active {
+    background-color: #005bb5;
+    color: #ffffff;
 }
 .suggested-action:disabled, button.suggested-action:disabled {
     background-color: #38383a;
@@ -194,6 +199,11 @@ listboxrow:selected .utility-desc-lbl,
 .secondary-action:hover, button.secondary-action:hover {
     background-color: rgba(255, 255, 255, 0.18);
     border-color: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+}
+.secondary-action:active, button.secondary-action:active {
+    background-color: rgba(255, 255, 255, 0.28);
+    color: #ffffff;
 }
 .destructive-action, button.destructive-action {
     background-color: rgba(255, 69, 58, 0.15);

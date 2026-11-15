@@ -8,6 +8,7 @@ mod restore;
 mod system;
 mod theme;
 mod ui;
+mod qr_fountain;
 
 use crate::demo::set_demo_mode;
 use crate::ui::build_ui;

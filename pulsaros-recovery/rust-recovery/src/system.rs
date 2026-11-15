@@ -142,12 +142,18 @@ pub(crate) fn find_btrfs_targets() -> Vec<BtrfsTarget> {
     if let Ok(out) = cmd_res {
         let text = String::from_utf8_lossy(&out.stdout);
         for line in text.lines() {
+            if line.contains("FSTYPE=\"crypto_LUKS\"") {
+                continue;
+            }
             if line.contains("FSTYPE=\"btrfs\"") || line.contains("PULSAR_OS") || line.contains("PulsarOS") {
                 let get_val = |key: &str| -> String {
                     let re = Regex::new(&format!(r#"{}=\"([^\"]*)\""#, key)).unwrap();
                     re.captures(line).and_then(|c| c.get(1)).map(|m| m.as_str().to_string()).unwrap_or_default()
                 };
                 let name = get_val("NAME");
+                if name.starts_with("loop") || name.starts_with("zram") {
+                    continue;
+                }
                 let label = get_val("LABEL");
                 let uuid = get_val("UUID");
                 let size = get_val("SIZE");
@@ -625,12 +631,49 @@ pub(crate) fn mount_chroot_environment(part_path: &str) -> Result<String, String
     let mnt_root = "/mnt/pulsar";
     let _ = fs::create_dir_all(mnt_root);
 
-    log_msg(&format!("Mounting Pulsar OS (@) from {} at {}...", part_path, mnt_root));
-    let _ = exec_cmd(&format!("mountpoint -q {} || mount -t btrfs -o subvol=@,noatime,compress=zstd:1 {} {}", mnt_root, part_path, mnt_root));
+    // If the partition is encrypted with LUKS, verify if it is unlocked or redirect to the mapper
+    let is_luks = exec_cmd(&format!("cryptsetup isLuks {} 2>/dev/null", part_path)).is_ok()
+        || exec_cmd(&format!("blkid -t TYPE=crypto_LUKS -o device {} 2>/dev/null", part_path)).map(|o| !o.trim().is_empty()).unwrap_or(false);
+
+    let target_dev = if is_luks {
+        let clean = part_path.trim_start_matches("/dev/").replace('/', "_");
+        let holders_dir = format!("/sys/class/block/{}/holders", clean);
+        let mut mapped = None;
+        if let Ok(entries) = fs::read_dir(&holders_dir) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if !name.is_empty() {
+                    mapped = Some(format!("/dev/mapper/{}", name));
+                    break;
+                }
+            }
+        }
+        match mapped {
+            Some(dev) => dev,
+            None => {
+                return Err(format!(
+                    "La partición {} está cifrada con LUKS y debe ser desbloqueada antes de montar el entorno chroot.",
+                    part_path
+                ));
+            }
+        }
+    } else {
+        part_path.to_string()
+    };
+
+    log_msg(&format!("Mounting Pulsar OS (@) from {} at {}...", target_dev, mnt_root));
+    let mount_res = exec_cmd(&format!("mountpoint -q {} || mount -t btrfs -o subvol=@,noatime,compress=zstd:1 {} {}", mnt_root, target_dev, mnt_root));
+    if mount_res.is_err() {
+        let _ = exec_cmd(&format!("mountpoint -q {} || mount -t btrfs -o noatime,compress=zstd:1 {} {} 2>/dev/null || true", mnt_root, target_dev, mnt_root));
+    }
+
+    if exec_cmd(&format!("mountpoint -q {}", mnt_root)).is_err() {
+        return Err(format!("No se pudo montar el sistema raíz de Pulsar OS desde {}. ¿Es una partición Btrfs válida?", target_dev));
+    }
 
     let home_path = format!("{}/home", mnt_root);
     let _ = fs::create_dir_all(&home_path);
-    let _ = exec_cmd(&format!("mountpoint -q {} || mount -t btrfs -o subvol=@home,noatime,compress=zstd:1 {} {}", home_path, part_path, home_path));
+    let _ = exec_cmd(&format!("mountpoint -q {} || mount -t btrfs -o subvol=@home,noatime,compress=zstd:1 {} {} 2>/dev/null || true", home_path, target_dev, home_path));
 
     // Mount EFI partition if present
     if let Ok(out) = exec_cmd("blkid -t TYPE=vfat -o device | head -n 1") {
@@ -779,6 +822,168 @@ pub(crate) fn open_system_logs(part_path: Option<&str>) {
     if spawned.is_err() {
         let _ = launch_terminal_with_command("Pulsar OS Logs", "echo === Pulsar OS Logs ===; ls -la /var/log/pulsaros; echo; bash");
     }
+}
+
+pub(crate) fn collect_installation_logs(part_path: Option<&str>) -> String {
+    let mut out = String::new();
+
+    out.push_str("═══════════════════════════════════════════════════════════════════════════════\n");
+    out.push_str("              PULSAR OS — REGISTROS DE INSTALACIÓN Y RECUPERACIÓN              \n");
+    out.push_str("═══════════════════════════════════════════════════════════════════════════════\n\n");
+
+    let mut found_any = false;
+
+    // 1. Live Recovery Log (/tmp/pulsaros-recovery.log)
+    if let Ok(c) = fs::read_to_string("/tmp/pulsaros-recovery.log") {
+        if !c.trim().is_empty() {
+            found_any = true;
+            out.push_str("── [1] Registro del Asistente de Recuperación (/tmp/pulsaros-recovery.log) ──\n");
+            out.push_str(&c);
+            out.push_str("\n\n");
+        }
+    }
+
+    // 2. Local /var/log/pulsaros/installer.log
+    for p in &[
+        "/var/log/pulsaros/installer.log",
+        "/var/log/pulsaros/recovery.log",
+        "/tmp/pulsaros-installation-log.txt",
+    ] {
+        if let Ok(c) = fs::read_to_string(p) {
+            if !c.trim().is_empty() {
+                found_any = true;
+                out.push_str(&format!("── [2] Registro de Instalador Local ({}) ──\n", p));
+                out.push_str(&c);
+                out.push_str("\n\n");
+            }
+        }
+    }
+
+    // 3. Calamares logs if present
+    for path in &[
+        "/var/log/Calamares.log",
+        "/root/.cache/calamares/calamares.log",
+        "/home/live/.cache/calamares/calamares.log",
+    ] {
+        if let Ok(c) = fs::read_to_string(path) {
+            if !c.trim().is_empty() {
+                found_any = true;
+                out.push_str(&format!("── [3] Registro de Calamares ({}) ──\n", path));
+                let lines: Vec<&str> = c.lines().collect();
+                if lines.len() > 1500 {
+                    out.push_str(&format!("... [Mostrando las últimas 1500 líneas de {}] ...\n", lines.len()));
+                    out.push_str(&lines[lines.len() - 1500..].join("\n"));
+                } else {
+                    out.push_str(&c);
+                }
+                out.push_str("\n\n");
+                break;
+            }
+        }
+    }
+
+    // 4. Target system partition logs
+    let target_dev = part_path.map(|p| p.to_string()).or_else(|| {
+        let unlocked = find_encrypted_targets().into_iter().find(|e| e.is_unlocked);
+        if let Some(u) = unlocked {
+            Some(format!("/dev/mapper/{}", u.mapper_name))
+        } else {
+            find_btrfs_targets().first().map(|t| t.part_path.clone())
+        }
+    });
+
+    if let Some(part) = target_dev {
+        let log_mnt = "/tmp/pulsar_log_root";
+        let _ = fs::create_dir_all(log_mnt);
+        let _ = exec_cmd(&format!("mountpoint -q {} || mount -t btrfs -o ro,subvol=@ {} {} 2>/dev/null || true", log_mnt, part, log_mnt));
+
+        let candidate_target_logs = [
+            (format!("{}/var/log/pulsaros/installer.log", log_mnt), "Instalador en Disco Objetivo"),
+            (format!("{}/var/log/pulsaros/recovery.log", log_mnt), "Recuperación en Disco Objetivo"),
+            (format!("{}/var/log/Calamares.log", log_mnt), "Calamares en Disco Objetivo"),
+            (format!("{}/var/log/pacman.log", log_mnt), "Historial Pacman en Disco Objetivo"),
+        ];
+
+        for (tpath, label) in &candidate_target_logs {
+            if let Ok(c) = fs::read_to_string(tpath) {
+                if !c.trim().is_empty() {
+                    found_any = true;
+                    out.push_str(&format!("── [4] {} ({}) ──\n", label, tpath));
+                    let lines: Vec<&str> = c.lines().collect();
+                    if lines.len() > 1000 {
+                        out.push_str(&format!("... [Mostrando las últimas 1000 líneas de {}] ...\n", lines.len()));
+                        out.push_str(&lines[lines.len() - 1000..].join("\n"));
+                    } else {
+                        out.push_str(&c);
+                    }
+                    out.push_str("\n\n");
+                }
+            }
+        }
+    }
+
+    if !found_any {
+        if let Ok(journal) = exec_cmd("journalctl -n 250 --no-pager 2>/dev/null") {
+            out.push_str("── [5] Registro del Diario del Sistema (journalctl) ──\n");
+            out.push_str(&journal);
+        } else {
+            out.push_str("No se han encontrado archivos de registro previos en /var/log/pulsaros ni en /tmp.\n");
+        }
+    }
+
+    out
+}
+
+pub(crate) fn generate_qr_code_image(text: &str) -> Result<String, String> {
+    let qr_png = "/tmp/pulsaros_log_qr.png";
+    let _ = fs::remove_file(qr_png);
+
+    let payload = if text.len() > 1600 {
+        let lines: Vec<&str> = text.lines().collect();
+        let mut chunk = String::new();
+        chunk.push_str("=== PULSAR OS RESUMEN REGISTROS ===\n");
+        let head_count = 8.min(lines.len());
+        let head = lines[..head_count].join("\n");
+        chunk.push_str(&head);
+        chunk.push_str("\n\n... [Log truncado para código QR. Registro completo vía FlyDrop] ...\n\n");
+        let tail_count = 30.min(lines.len());
+        let tail = lines[lines.len() - tail_count..].join("\n");
+        chunk.push_str(&tail);
+        if chunk.len() > 1600 {
+            chunk.truncate(1600);
+        }
+        chunk
+    } else {
+        text.to_string()
+    };
+
+    let status = Command::new("qrencode")
+        .args(&["-s", "6", "-m", "2", "-l", "M", "-o", qr_png, &payload])
+        .status()
+        .map_err(|e| format!("Error al ejecutar qrencode: {}", e))?;
+
+    if status.success() && Path::new(qr_png).exists() {
+        Ok(qr_png.to_string())
+    } else {
+        Err("qrencode no pudo generar la imagen del código QR.".to_string())
+    }
+}
+
+pub(crate) fn send_logs_via_flydrop(log_text: &str) -> Result<(), String> {
+    let log_file = "/tmp/pulsaros-installation-log.txt";
+    fs::write(log_file, log_text).map_err(|e| format!("Failed to save temporary log file: {}", e))?;
+
+    let is_installed = Command::new("which").arg("flydrop").status().map(|s| s.success()).unwrap_or(false);
+    if !is_installed && !Path::new("/usr/bin/flydrop").exists() {
+        return Err("FlyDrop is not installed on this system.".to_string());
+    }
+
+    Command::new("flydrop")
+        .args(&["send", log_file])
+        .spawn()
+        .map_err(|e| format!("Failed to launch FlyDrop: {}", e))?;
+
+    Ok(())
 }
 
 pub(crate) fn scan_external_drives() -> Vec<ExternalDrive> {
@@ -1119,5 +1324,12 @@ mod tests {
         assert_eq!(apps[0].app_type, AppType::Application);
 
         let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_collect_installation_logs() {
+        let logs = collect_installation_logs(None);
+        assert!(!logs.is_empty());
+        assert!(logs.contains("PULSAR OS — REGISTROS DE INSTALACIÓN Y RECUPERACIÓN"));
     }
 }

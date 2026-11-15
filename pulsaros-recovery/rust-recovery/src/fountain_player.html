@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Pulsar OS - Fountain QR Logs</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #1e1e20;
+      --text-main: #f5f5f7;
+      --text-sub: #a1a1a6;
+      --accent: #35bdf5;
+      --seg-bg: rgba(255, 255, 255, 0.08);
+      --seg-active: #0071e3;
+      --seg-active-text: #ffffff;
+      --border: rgba(255, 255, 255, 0.12);
+      --pulse-color: #30d158;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      background-color: #1e1e20;
+      color: var(--text-main);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+    }
+
+    body {
+      padding: 6px 12px 10px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .fountain-root {
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .instructions-bar {
+      width: 100%;
+      text-align: center;
+      font-size: 12.5px;
+      line-height: 1.4;
+      color: var(--text-sub);
+    }
+
+    .instructions-bar strong {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .qr-frame {
+      background: #ffffff;
+      padding: 6px;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+    }
+
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+      border-radius: 4px;
+      width: 220px;
+      height: 220px;
+    }
+
+    .meta-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      font-size: 12px;
+      color: var(--text-sub);
+      padding: 0 4px;
+    }
+
+    .file-tag {
+      font-weight: 600;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .segmented-bar {
+      display: flex;
+      background: var(--seg-bg);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 3px;
+      width: 100%;
+    }
+
+    .seg-item {
+      flex: 1;
+      border: none;
+      background: transparent;
+      color: var(--text-sub);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 2px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: center;
+    }
+
+    .seg-item:hover {
+      color: #ffffff;
+    }
+
+    .seg-item.active {
+      background: var(--seg-active) !important;
+      color: #ffffff !important;
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    }
+
+    .live-status {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      font-size: 11.5px;
+      color: var(--text-sub);
+      padding: 0 4px;
+    }
+
+    .live-dot-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      background-color: var(--pulse-color);
+      border-radius: 50%;
+      animation: pulse 1.6s infinite;
+      box-shadow: 0 0 5px var(--pulse-color);
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.6; }
+      50% { transform: scale(1.2); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.6; }
+    }
+  </style>
+</head>
+<body>
+  <div class="fountain-root">
+    <div class="instructions-bar">
+      Open <strong>qrs.inled.es</strong> on your phone &bull; Tap <strong>Scan QR</strong> &bull; Point camera here
+    </div>
+
+    <div class="qr-frame">
+      <canvas id="qrCanvas" width="220" height="220"></canvas>
+    </div>
+
+    <div class="meta-bar">
+      <span class="file-tag">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+        </svg>
+        <span id="lblFileName">pulsaros-recovery.log</span>
+      </span>
+      <span id="lblFileSize">0 B &bull; 0 blocks</span>
+    </div>
+
+    <div class="segmented-bar" role="group">
+      <button type="button" class="seg-item" data-speed="slow">Slow</button>
+      <button type="button" class="seg-item active" data-speed="normal">Normal</button>
+      <button type="button" class="seg-item" data-speed="fast">Fast</button>
+      <button type="button" class="seg-item" data-speed="turbo">Turbo</button>
+    </div>
+
+    <div class="live-status">
+      <div class="live-dot-wrap">
+        <span class="live-dot"></span>
+        <span id="lblTxInfo">Streaming at 8 fps</span>
+      </div>
+      <span id="lblFrameCount">Frame #0</span>
+    </div>
+  </div>
+
+  <script>
+(function(){var e=(()=>{let e=new Uint32Array(256);for(let t=0;t<256;t++){let n=t;for(let e=0;e<8;e++)n=n&1?3988292384^n>>>1:n>>>1;e[t]=n>>>0}return e})();function t(t){let n=4294967295;for(let r=0;r<t.length;r++)n=e[(n^t[r])&255]^n>>>8;return(n^4294967295)>>>0}function n(e,t,n){e[t]=n&255,e[t+1]=n>>>8&255,e[t+2]=n>>>16&255,e[t+3]=n>>>24&255}function r(e){let t=e>>>0;return t===0&&(t=2654435769),function(){return t^=t<<13,t>>>=0,t^=t>>>17,t^=t<<5,t>>>=0,t}}var i=.05,a=1,o=.05;function s(e){let t=new Float64Array(e+1);if(e<=1)return t[e]=1,t;let n=i,r=a,o=Math.max(1,n*Math.log(e/r)*Math.sqrt(e)),s=Math.max(1,Math.min(e,Math.floor(e/o))),c=new Float64Array(e+1);c[1]+=1/e;for(let t=2;t<=e;t++)c[t]+=1/(t*(t-1));for(let t=1;t<s;t++)c[t]+=o/(t*e);c[s]+=Math.max(0,o*Math.log(o/r)/e);let l=0;for(let n=1;n<=e;n++)l+=c[n],t[n]=l;for(let n=1;n<=e;n++)t[n]/=l;return t[e]=1,t}function c(e,t){let n=e()/4294967296,r=1,i=t.length-1;for(;r<i;){let e=r+i>>1;t[e]<=n?r=e+1:i=e}return r}function l(e,t,n,i){let a=r((n^i)>>>0),s=a()/4294967296<o?1:c(a,t),l=[],u=new Set;for(;l.length<s&&l.length<e;){let t=a()%e;u.has(t)||(u.add(t),l.push(t))}return l}var u=class{constructor(e,t,n){this.id=n>>>0,this.meta=t,this.blockSize=t.b,this.k=t.k,this.cdf=s(this.k),this.blocks=new Uint8Array(this.k*this.blockSize),this.blocks.set(e.subarray(0,this.blocks.length)),this.seq=0,this.frameIndex=0,this.header=this.#e()}#e(){let e=new TextEncoder().encode(JSON.stringify(this.meta)),t=Math.max(7+e.length,17+this.blockSize),r=new Uint8Array(t);return r[0]=70,r[1]=81,r[2]=1,n(r,3,this.id),r.set(e,7),r}nextFrame(){if(this.frameIndex%10==0)return this.frameIndex++,this.header;this.frameIndex++;let e=this.seq++&65535,t=Math.random()*4294967289+7>>>0,n=new Uint8Array(this.blockSize);for(let e of l(this.k,this.cdf,t,this.id)){let t=e*this.blockSize;for(let e=0;e<this.blockSize;e++)n[e]^=this.blocks[t+e]}return this.#t(e,t,n)}#t(e,r,i){let a=new Uint8Array(17+i.length);return a[0]=70,a[1]=81,a[2]=2,n(a,3,this.id),a[7]=e&255,a[8]=e>>>8&255,n(a,9,r),n(a,13,t(i)),a.set(i,17),a}},d=(e=>(e[e.Border=-1]=`Border`,e[e.Data=0]=`Data`,e[e.Function=1]=`Function`,e[e.Position=2]=`Position`,e[e.Timing=3]=`Timing`,e[e.Alignment=4]=`Alignment`,e))(d||{}),f=[0,1],p=[1,0],m=[2,3],h=[3,2],g={L:f,M:p,Q:m,H:h},_=/^\d*$/,v=/^[A-Z0-9 $%*+./:-]*$/,y=`0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:`,b=1,x=40,S=3,C=3,w=40,ee=10,T=[[-1,7,10,15,20,26,18,20,24,30,18,20,24,26,30,22,24,28,30,28,28,28,28,30,30,26,28,30,30,30,30,30,30,30,30,30,30,30,30,30,30],[-1,10,16,26,18,24,16,18,22,22,26,30,22,22,24,24,28,28,26,26,26,26,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28],[-1,13,22,18,26,18,24,18,22,20,24,28,26,24,20,30,24,28,28,26,30,28,30,30,30,30,28,30,30,30,30,30,30,30,30,30,30,30,30,30,30],[-1,17,28,22,16,22,28,26,26,24,28,24,28,22,24,24,30,28,28,26,28,30,24,30,30,30,30,30,30,30,30,30,30,30,30,30,30,30,30,30,30]],E=[[-1,1,1,1,1,1,2,2,2,2,4,4,4,4,4,6,6,6,6,7,8,8,9,9,10,12,12,12,13,14,15,16,17,18,19,19,20,21,22,24,25],[-1,1,1,1,2,2,4,4,4,5,5,5,8,9,9,10,10,11,13,14,16,17,17,18,20,21,23,25,26,28,29,31,33,35,37,38,40,43,45,47,49],[-1,1,1,2,2,4,4,6,6,8,8,8,10,12,16,12,17,16,18,21,20,23,23,25,27,29,34,34,35,38,40,43,45,48,51,53,56,59,62,65,68],[-1,1,1,2,4,4,4,5,6,8,8,11,11,16,16,18,16,19,21,25,25,25,34,30,32,35,37,40,42,45,48,51,54,57,60,63,66,70,74,77,81]],te=class{constructor(e,t,n,r){if(this.version=e,this.ecc=t,e<b||e>x)throw RangeError(`Version value out of range`);if(r<-1||r>7)throw RangeError(`Mask value out of range`);this.size=e*4+17;let i=Array.from({length:this.size}).fill(!1);for(let e=0;e<this.size;e++)this.modules.push(i.slice()),this.types.push(i.map(()=>0));this.drawFunctionPatterns();let a=this.addEccAndInterleave(n);if(this.drawCodewords(a),r===-1){let e=1e9;for(let t=0;t<8;t++){this.applyMask(t),this.drawFormatBits(t);let n=this.getPenaltyScore();n<e&&(r=t,e=n),this.applyMask(t)}}this.mask=r,this.applyMask(r),this.drawFormatBits(r)}size;mask;modules=[];types=[];getModule(e,t){return e>=0&&e<this.size&&t>=0&&t<this.size&&this.modules[t][e]}drawFunctionPatterns(){for(let e=0;e<this.size;e++)this.setFunctionModule(6,e,e%2==0,d.Timing),this.setFunctionModule(e,6,e%2==0,d.Timing);this.drawFinderPattern(3,3),this.drawFinderPattern(this.size-4,3),this.drawFinderPattern(3,this.size-4);let e=this.getAlignmentPatternPositions(),t=e.length;for(let n=0;n<t;n++)for(let r=0;r<t;r++)n===0&&r===0||n===0&&r===t-1||n===t-1&&r===0||this.drawAlignmentPattern(e[n],e[r]);this.drawFormatBits(0),this.drawVersion()}drawFormatBits(e){let t=this.ecc[1]<<3|e,n=t;for(let e=0;e<10;e++)n=n<<1^(n>>>9)*1335;let r=(t<<10|n)^21522;for(let e=0;e<=5;e++)this.setFunctionModule(8,e,O(r,e));this.setFunctionModule(8,7,O(r,6)),this.setFunctionModule(8,8,O(r,7)),this.setFunctionModule(7,8,O(r,8));for(let e=9;e<15;e++)this.setFunctionModule(14-e,8,O(r,e));for(let e=0;e<8;e++)this.setFunctionModule(this.size-1-e,8,O(r,e));for(let e=8;e<15;e++)this.setFunctionModule(8,this.size-15+e,O(r,e));this.setFunctionModule(8,this.size-8,!0)}drawVersion(){if(this.version<7)return;let e=this.version;for(let t=0;t<12;t++)e=e<<1^(e>>>11)*7973;let t=this.version<<12|e;for(let e=0;e<18;e++){let n=O(t,e),r=this.size-11+e%3,i=Math.floor(e/3);this.setFunctionModule(r,i,n),this.setFunctionModule(i,r,n)}}drawFinderPattern(e,t){for(let n=-4;n<=4;n++)for(let r=-4;r<=4;r++){let i=Math.max(Math.abs(r),Math.abs(n)),a=e+r,o=t+n;a>=0&&a<this.size&&o>=0&&o<this.size&&this.setFunctionModule(a,o,i!==2&&i!==4,d.Position)}}drawAlignmentPattern(e,t){for(let n=-2;n<=2;n++)for(let r=-2;r<=2;r++)this.setFunctionModule(e+r,t+n,Math.max(Math.abs(r),Math.abs(n))!==1,d.Alignment)}setFunctionModule(e,t,n,r=d.Function){this.modules[t][e]=n,this.types[t][e]=r}addEccAndInterleave(e){let t=this.version,n=this.ecc;if(e.length!==B(t,n))throw RangeError(`Invalid argument`);let r=E[n[0]][t],i=T[n[0]][t],a=Math.floor(z(t)/8),o=r-a%r,s=Math.floor(a/r),c=[],l=V(i);for(let t=0,n=0;t<r;t++){let r=e.slice(n,n+s-i+(t<o?0:1));n+=r.length;let a=H(r,l);t<o&&r.push(0),c.push(r.concat(a))}let u=[];for(let e=0;e<c[0].length;e++)c.forEach((t,n)=>{(e!==s-i||n>=o)&&u.push(t[e])});return u}drawCodewords(e){if(e.length!==Math.floor(z(this.version)/8))throw RangeError(`Invalid argument`);let t=0;for(let n=this.size-1;n>=1;n-=2){n===6&&(n=5);for(let r=0;r<this.size;r++)for(let i=0;i<2;i++){let a=n-i,o=n+1&2?r:this.size-1-r;!this.types[o][a]&&t<e.length*8&&(this.modules[o][a]=O(e[t>>>3],7-(t&7)),t++)}}}applyMask(e){if(e<0||e>7)throw RangeError(`Mask value out of range`);for(let t=0;t<this.size;t++)for(let n=0;n<this.size;n++){let r;switch(e){case 0:r=(n+t)%2==0;break;case 1:r=t%2==0;break;case 2:r=n%3==0;break;case 3:r=(n+t)%3==0;break;case 4:r=(Math.floor(n/3)+Math.floor(t/2))%2==0;break;case 5:r=n*t%2+n*t%3==0;break;case 6:r=(n*t%2+n*t%3)%2==0;break;case 7:r=((n+t)%2+n*t%3)%2==0;break;default:throw Error(`Unreachable`)}!this.types[t][n]&&r&&(this.modules[t][n]=!this.modules[t][n])}}getPenaltyScore(){let e=0;for(let t=0;t<this.size;t++){let n=!1,r=0,i=[0,0,0,0,0,0,0];for(let a=0;a<this.size;a++)this.modules[t][a]===n?(r++,r===5?e+=S:r>5&&e++):(this.finderPenaltyAddHistory(r,i),n||(e+=this.finderPenaltyCountPatterns(i)*w),n=this.modules[t][a],r=1);e+=this.finderPenaltyTerminateAndCount(n,r,i)*w}for(let t=0;t<this.size;t++){let n=!1,r=0,i=[0,0,0,0,0,0,0];for(let a=0;a<this.size;a++)this.modules[a][t]===n?(r++,r===5?e+=S:r>5&&e++):(this.finderPenaltyAddHistory(r,i),n||(e+=this.finderPenaltyCountPatterns(i)*w),n=this.modules[a][t],r=1);e+=this.finderPenaltyTerminateAndCount(n,r,i)*w}for(let t=0;t<this.size-1;t++)for(let n=0;n<this.size-1;n++){let r=this.modules[t][n];r===this.modules[t][n+1]&&r===this.modules[t+1][n]&&r===this.modules[t+1][n+1]&&(e+=C)}let t=0;for(let e of this.modules)t=e.reduce((e,t)=>e+ +!!t,t);let n=this.size*this.size,r=Math.ceil(Math.abs(t*20-n*10)/n)-1;return e+=r*ee,e}getAlignmentPatternPositions(){if(this.version===1)return[];{let e=Math.floor(this.version/7)+2,t=this.version===32?26:Math.ceil((this.version*4+4)/(e*2-2))*2,n=[6];for(let r=this.size-7;n.length<e;r-=t)n.splice(1,0,r);return n}}finderPenaltyCountPatterns(e){let t=e[1],n=t>0&&e[2]===t&&e[3]===t*3&&e[4]===t&&e[5]===t;return(n&&e[0]>=t*4&&e[6]>=t?1:0)+(n&&e[6]>=t*4&&e[0]>=t?1:0)}finderPenaltyTerminateAndCount(e,t,n){return e&&(this.finderPenaltyAddHistory(t,n),t=0),t+=this.size,this.finderPenaltyAddHistory(t,n),this.finderPenaltyCountPatterns(n)}finderPenaltyAddHistory(e,t){t[0]===0&&(e+=this.size),t.pop(),t.unshift(e)}};function D(e,t,n){if(t<0||t>31||e>>>t)throw RangeError(`Value out of range`);for(let r=t-1;r>=0;r--)n.push(e>>>r&1)}function O(e,t){return!!(e>>>t&1)}var k=class{constructor(e,t,n){if(this.mode=e,this.numChars=t,this.bitData=n,t<0)throw RangeError(`Invalid argument`);this.bitData=n.slice()}getData(){return this.bitData.slice()}},A=[1,10,12,14],j=[2,9,11,13],M=[4,8,16,16];function N(e,t){return e[Math.floor((t+7)/17)+1]}function P(e){let t=[];for(let n of e)D(n,8,t);return new k(M,e.length,t)}function ne(e){if(!F(e))throw RangeError(`String contains non-numeric characters`);let t=[];for(let n=0;n<e.length;){let r=Math.min(e.length-n,3);D(Number.parseInt(e.substring(n,n+r),10),r*3+1,t),n+=r}return new k(A,e.length,t)}function re(e){if(!I(e))throw RangeError(`String contains unencodable characters in alphanumeric mode`);let t=[],n=0;for(;n+2<=e.length;n+=2){let r=y.indexOf(e.charAt(n))*45;r+=y.indexOf(e.charAt(n+1)),D(r,11,t)}return n<e.length&&D(y.indexOf(e.charAt(n)),6,t),new k(j,e.length,t)}function ie(e){return e===``?[]:F(e)?[ne(e)]:I(e)?[re(e)]:[P(R(e))]}function F(e){return _.test(e)}function I(e){return v.test(e)}function L(e,t){let n=0;for(let r of e){let e=N(r.mode,t);if(r.numChars>=1<<e)return 1/0;n+=4+e+r.bitData.length}return n}function R(e){e=encodeURI(e);let t=[];for(let n=0;n<e.length;n++)e.charAt(n)===`%`?(t.push(Number.parseInt(e.substring(n+1,n+3),16)),n+=2):t.push(e.charCodeAt(n));return t}function z(e){if(e<b||e>x)throw RangeError(`Version number out of range`);let t=(16*e+128)*e+64;if(e>=2){let n=Math.floor(e/7)+2;t-=(25*n-10)*n-55,e>=7&&(t-=36)}return t}function B(e,t){return Math.floor(z(e)/8)-T[t[0]][e]*E[t[0]][e]}function V(e){if(e<1||e>255)throw RangeError(`Degree out of range`);let t=[];for(let n=0;n<e-1;n++)t.push(0);t.push(1);let n=1;for(let r=0;r<e;r++){for(let e=0;e<t.length;e++)t[e]=U(t[e],n),e+1<t.length&&(t[e]^=t[e+1]);n=U(n,2)}return t}function H(e,t){let n=t.map(e=>0);for(let r of e){let e=r^n.shift();n.push(0),t.forEach((t,r)=>n[r]^=U(t,e))}return n}function U(e,t){if(e>>>8||t>>>8)throw RangeError(`Byte out of range`);let n=0;for(let r=7;r>=0;r--)n=n<<1^(n>>>7)*285,n^=(t>>>r&1)*e;return n}function W(e,t,n=1,r=40,i=-1,a=!0){if(!(b<=n&&n<=r&&r<=x)||i<-1||i>7)throw RangeError(`Invalid value`);let o,s;for(o=n;;o++){let n=B(o,t)*8,i=L(e,o);if(i<=n){s=i;break}if(o>=r)throw RangeError(`Data too long`)}for(let e of[p,m,h])a&&s<=B(o,e)*8&&(t=e);let c=[];for(let t of e){D(t.mode[0],4,c),D(t.numChars,N(t.mode,o),c);for(let e of t.getData())c.push(e)}let l=B(o,t)*8;D(0,Math.min(4,l-c.length),c),D(0,(8-c.length%8)%8,c);for(let e=236;c.length<l;e^=253)D(e,8,c);let u=Array.from({length:Math.ceil(c.length/8)},()=>0);return c.forEach((e,t)=>u[t>>>3]|=e<<7-(t&7)),new te(o,t,u,i)}function G(e,t){let{ecc:n=`L`,boostEcc:r=!1,minVersion:i=1,maxVersion:a=40,maskPattern:o=-1,border:s=1}=t||{},c=typeof e==`string`?ie(e):Array.isArray(e)?[P(e)]:void 0;if(!c)throw Error(`uqr only supports encoding string and binary data, but got: ${typeof e}`);let l=W(c,g[n],i,a,o,r),u=K({version:l.version,maskPattern:l.mask,size:l.size,data:l.modules,types:l.types},s);return t?.invert&&(u.data=u.data.map(e=>e.map(e=>!e))),t?.onEncoded?.(u),u}function K(e,t=1){if(!t)return e;let{size:n}=e,r=n+t*2;e.size=r,e.data.forEach(e=>{for(let n=0;n<t;n++)e.unshift(!1),e.push(!1)});for(let n=0;n<t;n++)e.data.unshift(Array.from({length:r},e=>!1)),e.data.push(Array.from({length:r},e=>!1));let i=d.Border;e.types.forEach(e=>{for(let n=0;n<t;n++)e.unshift(i),e.push(i)});for(let n=0;n<t;n++)e.types.unshift(Array.from({length:r},e=>i)),e.types.push(Array.from({length:r},e=>i));return e}var q=3;function J(e){return G(Array.from(e),{ecc:`L`,border:q})}var Y=new WeakMap;function ae(e){let t=Y.get(e);if(t)return t;let n=e.size,r=document.createElement(`canvas`);r.width=n,r.height=n;let i=r.getContext(`2d`),a=i.createImageData(n,n),o=a.data;for(let t=0;t<n;t++){let r=e.data[t];for(let e=0;e<n;e++){let i=(t*n+e)*4,a=r[e]?0:255;o[i]=a,o[i+1]=a,o[i+2]=a,o[i+3]=255}}return i.putImageData(a,0,0),Y.set(e,r),r}function oe(){return Math.min(window.devicePixelRatio||1,2.5)}function se(e,t,n,r){(e.width!==t||e.height!==n)&&(e.width=t,e.height=n),e.style.width=`${t/r}px`,e.style.height=`${n/r}px`}function ce(e,t,n){let r=oe(),i=t.size,a=Math.max(120,Math.floor(n*r)),o=Math.max(1,Math.floor(a/i))*i;se(e,o,o,r);let s=e.getContext(`2d`);s.imageSmoothingEnabled=!1,s.fillStyle=`#ffffff`,s.fillRect(0,0,o,o),s.drawImage(ae(t),0,0,o,o)}var le=new Uint32Array([1116352408,1899447441,3049323471,3921009573,961987163,1508970993,2453635748,2870763221,3624381080,310598401,607225278,1426881987,1925078388,2162078206,2614888103,3248222580,3835390401,4022224774,264347078,604807628,770255983,1249150122,1555081692,1996064986,2554220882,2821834349,2952996808,3210313671,3336571891,3584528711,113926993,338241895,666307205,773529912,1294757372,1396182291,1695183700,1986661051,2177026350,2456956037,2730485921,2820302411,3259730800,3345764771,3516065817,3600352804,4094571909,275423344,430227734,506948616,659060556,883997877,958139571,1322822218,1537002063,1747873779,1955562222,2024104815,2227730452,2361852424,2428436474,2756734187,3204031479,3329325298]),X=(e,t)=>(e>>>t|e<<32-t)>>>0;function ue(e){let t=e.length,n=t+9+63>>6<<6>>>0,r=new Uint8Array(n);r.set(e),r[t]=128;let i=new DataView(r.buffer);i.setUint32(n-8,Math.floor(t/536870912)),i.setUint32(n-4,t*8>>>0);let a=1779033703,o=3144134277,s=1013904242,c=2773480762,l=1359893119,u=2600822924,d=528734635,f=1541459225,p=new Uint32Array(64);for(let e=0;e<n;e+=64){for(let t=0;t<16;t++)p[t]=i.getUint32(e+t*4);for(let e=16;e<64;e++){let t=p[e-15],n=p[e-2],r=X(t,7)^X(t,18)^t>>>3,i=X(n,17)^X(n,19)^n>>>10;p[e]=p[e-16]+r+p[e-7]+i>>>0}let t=a,n=o,r=s,m=c,h=l,g=u,_=d,v=f;for(let e=0;e<64;e++){let i=X(h,6)^X(h,11)^X(h,25),a=h&g^~h&_,o=v+i+a+le[e]+p[e]>>>0,s=(X(t,2)^X(t,13)^X(t,22))+(t&n^t&r^n&r)>>>0;v=_,_=g,g=h,h=m+o>>>0,m=r,r=n,n=t,t=o+s>>>0}a=a+t>>>0,o=o+n>>>0,s=s+r>>>0,c=c+m>>>0,l=l+h>>>0,u=u+g>>>0,d=d+_>>>0,f=f+v>>>0}let m=new Uint8Array(32),h=new DataView(m.buffer);return h.setUint32(0,a),h.setUint32(4,o),h.setUint32(8,s),h.setUint32(12,c),h.setUint32(16,l),h.setUint32(20,u),h.setUint32(24,d),h.setUint32(28,f),m}var Z={es:{"meta.title":`QRS · Compartir archivos por QR`,"meta.description":`Comparte archivos entre dos dispositivos con códigos QR animados. Sin servidores, sin conexión: los datos viajan de una pantalla a una cámara.`,"meta.home":`QRS, inicio`,"meta.footer":`Licenciado bajo MIT-QRS`,"meta.noscript":`Activa JavaScript para usar el intercambio de archivos por QR.`,"common.back":`Volver`,"common.change":`Cambiar`,"common.block":`bloques`,"common.file":`Archivo`,"common.qrPerSecond":`QR/s`,"home.title":`Pasa archivos con la cámara`,"home.sub":`Un dispositivo muestra un QR animado y el otro lo escanea. Los datos viajan por la pantalla: nada se sube a internet.`,"home.create":`Crear un QR`,"home.createHint":`Envía un archivo desde este dispositivo`,"home.scan":`Escanear un QR`,"home.scanHint":`Recibe un archivo con la cámara`,"home.note":`Funciona con cualquier tipo de archivo y no necesita cuenta, servidor ni conexión a internet.`,"create.pickTitle":`Elige un archivo`,"create.pickSub":`Se convertirá en un QR animado que el otro dispositivo puede escanear con la cámara.`,"create.drop":`Selecciona o arrastra un archivo`,"create.dropHint":`Cualquier tipo de archivo · se queda en tu dispositivo`,"create.note":`El QR lleva los datos del archivo, no un enlace. Cuanto más pequeño sea el archivo, antes terminará.`,"create.preparing":`Preparando el QR…`,"create.reading":`Leyendo el archivo en este dispositivo.`,"create.preparingFile":`Preparando {name}…`,"create.readError":`No se ha podido leer el archivo. Prueba con otro.`,"create.prepareError":`No se pudo preparar el archivo`,"create.retry":`Elegir otro archivo`,"create.playerTitle":`Escanea este QR`,"create.playerSub":`En el otro dispositivo, abre esta web, pulsa «Escanear» y apunta a esta pantalla.`,"create.fileMeta":`{size} · {blocks} bloques · {speed}`,"create.transmitting":`Transmitiendo · {detail} · {rate}/s`,"create.transmittingSingle":`{fps} QR/s`,"create.transmittingGrid":`{codes} QR × {fps}/s`,"create.keepVisible":`Deja esta pantalla visible y con brillo alto. El QR cambia constantemente: es normal.`,"create.bigFile":`El archivo es grande, la transferencia puede tardar varios minutos.`,"create.fullscreen":`Pantalla completa`,"create.exitFullscreen":`Salir de pantalla completa`,"create.speedChanged":`Velocidad cambiada: reinicia el escaneo en el otro dispositivo.`,"create.speedGroup":`Velocidad del QR`,"create.speedNote":`<strong>{label}:</strong> {note}`,"create.speed.slow":`Lenta`,"create.speed.normal":`Normal`,"create.speed.fast":`Rápida`,"create.speed.turbo":`Turbo`,"create.speed.slow.note":`QR grande y cambios lentos. Es la opción que mejor funciona si el otro dispositivo no avanza o la cámara es de baja calidad.`,"create.speed.normal.note":`Equilibrio entre velocidad y facilidad de lectura. Recomendada para empezar.`,"create.speed.fast.note":`Lo más rápido con un código del tamaño de siempre. Conviene pantalla completa y buena luz.`,"create.speed.turbo.note":`Máxima densidad: el QR llena la pantalla con mucha más información. Solo para pantallas grandes y bien enfocadas; si no avanza, baja a Rápida.`,"scan.title":`Recibe un archivo`,"scan.sub":`Activa la cámara y encuadra el QR animado que muestra el otro dispositivo.`,"scan.cameraOff":`La cámara está apagada`,"scan.start":`Activar cámara`,"scan.starting":`Activando cámara…`,"scan.stop":`Detener cámara`,"scan.permissionNote":`El navegador te pedirá permiso para usar la cámara. Nada se sube a internet.`,"scan.blocksEmpty":`{solved} de {total} bloques`,"scan.blocks":`{solved} de {total} bloques · {size}`,"scan.blocksSpeed":`{solved} de {total} bloques · {size} · {speed}`,"scan.checking":`Comprobando el archivo…`,"scan.verifying":`Verificando la huella SHA-256`,"scan.errorDenied":`Has denegado el permiso de cámara. Actívalo en los ajustes del navegador para esta página y vuelve a intentarlo.`,"scan.errorNotFound":`No se ha encontrado ninguna cámara disponible en este dispositivo.`,"scan.errorBusy":`La cámara está siendo usada por otra aplicación. Ciérrala y vuelve a intentarlo.`,"scan.errorGeneric":`No se ha podido abrir la cámara.`,"scan.errorNoMedia":`Este navegador no permite usar la cámara. Prueba con Chrome, Safari o Firefox actualizados.`,"scan.errorInsecure":` Los navegadores solo dan acceso a la cámara en páginas https:// (o en localhost), no por la IP de tu red. Arranca el servidor con «npm run dev:https», abre esa dirección y acepta el aviso del certificado.`,"scan.errorIntegrity":`El archivo ha llegado incompleto o dañado. Vuelve a escanear para intentarlo de nuevo.`,"scan.retry":`Volver a escanear`,"scan.hint.slow.title":`El escaneo va lento`,"scan.hint.slow.body":`En el otro dispositivo, pulsa <strong>Pantalla completa</strong>: el QR se hace mucho más grande y se lee mejor. Si aun así no avanza, pulsa <strong>Compartir</strong> y elige <strong>Lenta</strong>. También ayuda acercar el móvil y buscar buena luz.`,"scan.hint.slowSender.title":`El QR ya va en velocidad lenta`,"scan.hint.slowSender.body":`El otro dispositivo ya está en la opción más lenta, así que el problema es de cámara: sube el brillo de esa pantalla al máximo, acerca el móvil hasta que el QR ocupe el recuadro, evita reflejos y mantén la mano quieta.`,"scan.hint.none.title":`No encuentro el QR`,"scan.hint.none.body":`Acerca el móvil hasta que el QR ocupe el recuadro y comprueba que se ve completo en la pantalla del otro dispositivo. Si sigue sin avanzar, pulsa allí <strong>Compartir</strong> y baja la velocidad a <strong>Lenta</strong>.`,"scan.hint.close":`Cerrar aviso`,"scan.success.title":`Archivo recibido`,"scan.success.sub":`Huella SHA-256 verificada: el archivo ha llegado íntegro.`,"scan.success.download":`Descargar archivo`,"scan.success.share":`Compartir`,"scan.success.again":`Escanear otro archivo`,"scan.toast.downloading":`Descargando {name}`,"scan.toast.noShare":`Este navegador no permite compartir archivos: se ha descargado.`,"scan.speed.slow":`lenta`,"scan.speed.normal":`normal`,"scan.speed.fast":`rápida`,"scan.speed.turbo":`turbo`},en:{"meta.title":`QRS · Share files by QR`,"meta.description":`Share files between two devices with animated QR codes. No servers, no connection: the data travels from a screen to a camera.`,"meta.home":`QRS, home`,"meta.footer":`Licensed under MIT-QRS`,"meta.noscript":`Enable JavaScript to use QR file transfer.`,"common.back":`Back`,"common.change":`Change`,"common.block":`blocks`,"common.file":`File`,"common.qrPerSecond":`QR/s`,"home.title":`Move files with your camera`,"home.sub":`One device shows an animated QR and the other scans it. The data travels through the screen: nothing is uploaded to the internet.`,"home.create":`Create a QR`,"home.createHint":`Send a file from this device`,"home.scan":`Scan a QR`,"home.scanHint":`Receive a file with the camera`,"home.note":`Works with any file type and needs no account, server or internet connection.`,"create.pickTitle":`Choose a file`,"create.pickSub":`It becomes an animated QR the other device can scan with its camera.`,"create.drop":`Pick or drop a file`,"create.dropHint":`Any file type · it stays on your device`,"create.note":`The QR carries the file data, not a link. The smaller the file, the sooner it finishes.`,"create.preparing":`Preparing the QR…`,"create.reading":`Reading the file on this device.`,"create.preparingFile":`Preparing {name}…`,"create.readError":`Could not read that file. Try another one.`,"create.prepareError":`Could not prepare the file`,"create.retry":`Choose another file`,"create.playerTitle":`Scan this QR`,"create.playerSub":`On the other device, open this site, tap “Scan” and point at this screen.`,"create.fileMeta":`{size} · {blocks} blocks · {speed}`,"create.transmitting":`Transmitting · {detail} · {rate}/s`,"create.transmittingSingle":`{fps} QR/s`,"create.transmittingGrid":`{codes} QR × {fps}/s`,"create.keepVisible":`Keep this screen visible and bright. The QR changes constantly: that is expected.`,"create.bigFile":`This file is large, the transfer may take several minutes.`,"create.fullscreen":`Full screen`,"create.exitFullscreen":`Exit full screen`,"create.speedChanged":`Speed changed: restart the scan on the other device.`,"create.speedGroup":`QR speed`,"create.speedNote":`<strong>{label}:</strong> {note}`,"create.speed.slow":`Slow`,"create.speed.normal":`Normal`,"create.speed.fast":`Fast`,"create.speed.turbo":`Turbo`,"create.speed.slow.note":`Large QR, slow changes. The best option when the other device stalls or the camera is low quality.`,"create.speed.normal.note":`Balance between speed and readability. Recommended to start.`,"create.speed.fast.note":`The fastest with a code of the usual size. Full screen and good light help.`,"create.speed.turbo.note":`Maximum density: the QR fills the screen with much more information. Only for large, well-focused screens; if it stalls, go back to Fast.`,"scan.title":`Receive a file`,"scan.sub":`Turn on the camera and frame the animated QR shown on the other device.`,"scan.cameraOff":`Camera is off`,"scan.start":`Turn on camera`,"scan.starting":`Starting camera…`,"scan.stop":`Stop camera`,"scan.permissionNote":`The browser will ask for camera permission. Nothing is uploaded.`,"scan.blocksEmpty":`{solved} of {total} blocks`,"scan.blocks":`{solved} of {total} blocks · {size}`,"scan.blocksSpeed":`{solved} of {total} blocks · {size} · {speed}`,"scan.checking":`Checking the file…`,"scan.verifying":`Verifying the SHA-256 fingerprint`,"scan.errorDenied":`Camera permission was denied. Allow it in the browser settings for this page and try again.`,"scan.errorNotFound":`No camera was found on this device.`,"scan.errorBusy":`Another application is using the camera. Close it and try again.`,"scan.errorGeneric":`The camera could not be opened.`,"scan.errorNoMedia":`This browser cannot use the camera. Try an up-to-date Chrome, Safari or Firefox.`,"scan.errorInsecure":` Browsers only allow camera access on https:// pages (or localhost), not over your network IP. Start the server with “npm run dev:https”, open that address and accept the certificate warning.`,"scan.errorIntegrity":`The file arrived incomplete or damaged. Scan again to retry.`,"scan.retry":`Scan again`,"scan.hint.slow.title":`Scanning is slow`,"scan.hint.slow.body":`On the other device, tap <strong>Full screen</strong>: the QR gets much larger and easier to read. If it still stalls, tap <strong>Share</strong> and pick <strong>Slow</strong>. Moving closer and adding light also helps.`,"scan.hint.slowSender.title":`The QR is already on the slow setting`,"scan.hint.slowSender.body":`The other device is already on the slowest option, so the problem is the camera: raise that screen’s brightness to maximum, move closer until the QR fills the frame, avoid glare and keep your hand steady.`,"scan.hint.none.title":`Can’t find the QR`,"scan.hint.none.body":`Move closer until the QR fills the frame, and check that the whole code is visible on the other screen. If it still does not move, tap <strong>Share</strong> there and lower the speed to <strong>Slow</strong>.`,"scan.hint.close":`Dismiss`,"scan.success.title":`File received`,"scan.success.sub":`SHA-256 fingerprint verified: the file arrived intact.`,"scan.success.download":`Download file`,"scan.success.share":`Share`,"scan.success.again":`Scan another file`,"scan.toast.downloading":`Downloading {name}`,"scan.toast.noShare":`This browser cannot share files: the file was downloaded instead.`,"scan.speed.slow":`slow`,"scan.speed.normal":`normal`,"scan.speed.fast":`fast`,"scan.speed.turbo":`turbo`}};function Q(){if(typeof navigator>`u`)return`en`;let e=Array.isArray(navigator.languages)&&navigator.languages.length?navigator.languages:[navigator.language];for(let t of e){if(typeof t!=`string`)continue;let e=t.toLowerCase().split(`-`)[0];if(e===`es`)return`es`;if(e===`en`)return`en`}return`en`}var $=Q();Z[$]||Z.en;function de(e,t=1){let n=Number(e).toFixed(t);return $===`es`?n.replace(`.`,`,`):n}function fe(e){if(!Number.isFinite(e)||e<0)return`—`;if(e<1024)return`${e} B`;let t=[`KB`,`MB`,`GB`,`TB`],n=e/1024,r=0;for(;n>=1024&&r<t.length-1;)n/=1024,r++;return`${de(n,n>=10?0:1)} ${t[r]}`}function pe(e){let t=``,n=32768;for(let r=0;r<e.length;r+=n)t+=String.fromCharCode.apply(null,e.subarray(r,r+n));return btoa(t).replace(/\+/g,`-`).replace(/\//g,`_`).replace(/=+$/,``)}window.QRFountain={FountainEncoder:u,encodeFrameToQR:J,drawQR:ce,sha256Sync:ue,bytesToBase64Url:pe,formatBytes:fe}})();
+  </script>
+
+  <script>
+    (function() {
+      const RAW_LOG = __LOG_DATA_JSON__;
+      const FILE_NAME = __FILE_NAME_JSON__;
+
+      const SPEEDS = {
+        slow: { label: 'Slow', blockSize: 280, fps: 4 },
+        normal: { label: 'Normal', blockSize: 520, fps: 8 },
+        fast: { label: 'Fast', blockSize: 850, fps: 12 },
+        turbo: { label: 'Turbo', blockSize: 1500, fps: 10 },
+      };
+
+      const canvas = document.getElementById('qrCanvas');
+      const lblFileName = document.getElementById('lblFileName');
+      const lblFileSize = document.getElementById('lblFileSize');
+      const lblTxInfo = document.getElementById('lblTxInfo');
+      const lblFrameCount = document.getElementById('lblFrameCount');
+      const segButtons = document.querySelectorAll('.seg-item');
+
+      lblFileName.textContent = FILE_NAME || 'pulsaros-recovery.log';
+
+      const logBytes = new TextEncoder().encode(RAW_LOG || '');
+      const sha = window.QRFountain.sha256Sync(logBytes);
+      const hash = window.QRFountain.bytesToBase64Url(sha);
+
+      let currentSpeed = logBytes.length > 200 * 1024 ? 'fast' : 'normal';
+      let encoder = null;
+      let timer = 0;
+      let lastQR = null;
+      let frameSeq = 0;
+
+      function buildEncoder() {
+        const preset = SPEEDS[currentSpeed];
+        const size = logBytes.length;
+        const k = Math.max(1, Math.ceil(size / preset.blockSize));
+        const meta = {
+          n: FILE_NAME || 'pulsaros-recovery.log',
+          m: 'text/plain',
+          s: size,
+          b: preset.blockSize,
+          k: k,
+          h: hash,
+          sp: currentSpeed,
+          fps: preset.fps,
+        };
+        encoder = new window.QRFountain.FountainEncoder(logBytes, meta, (Math.random() * 4294967296) >>> 0);
+        lastQR = null;
+        frameSeq = 0;
+      }
+
+      function updateUI() {
+        const preset = SPEEDS[currentSpeed];
+        const formattedSize = window.QRFountain.formatBytes(logBytes.length);
+        lblFileSize.textContent = formattedSize + ' • ' + encoder.k + ' blocks';
+        const rate = window.QRFountain.formatBytes(Math.round(preset.blockSize * preset.fps));
+        lblTxInfo.textContent = 'Streaming at ' + preset.fps + ' fps (' + rate + '/s)';
+        lblFrameCount.textContent = 'Frame #' + frameSeq;
+      }
+
+      function updateButtons() {
+        segButtons.forEach(function(b) {
+          if (b.dataset.speed === currentSpeed) {
+            b.classList.add('active');
+          } else {
+            b.classList.remove('active');
+          }
+        });
+      }
+
+      segButtons.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var next = btn.dataset.speed;
+          if (next === currentSpeed) return;
+          currentSpeed = next;
+          buildEncoder();
+          updateButtons();
+          updateUI();
+          startLoop();
+        });
+      });
+
+      function drawCurrent() {
+        if (!canvas || !lastQR) return;
+        window.QRFountain.drawQR(canvas, lastQR, 220);
+      }
+
+      function startLoop() {
+        stopLoop();
+        if (!encoder || !canvas) return;
+        var preset = SPEEDS[currentSpeed];
+        var interval = 1000 / preset.fps;
+        var target = performance.now();
+
+        function tick() {
+          if (!encoder || !canvas) return;
+          frameSeq++;
+          var frame = encoder.nextFrame();
+          lastQR = window.QRFountain.encodeFrameToQR(frame);
+          drawCurrent();
+          lblFrameCount.textContent = 'Frame #' + frameSeq;
+          target += interval;
+          timer = setTimeout(tick, Math.max(0, target - performance.now()));
+        }
+
+        tick();
+      }
+
+      function stopLoop() {
+        if (timer) {
+          clearTimeout(timer);
+          timer = 0;
+        }
+      }
+
+      buildEncoder();
+      updateButtons();
+      updateUI();
+      startLoop();
+    })();
+  </script>
+</body>
+</html>
