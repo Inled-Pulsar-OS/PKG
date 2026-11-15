@@ -34,11 +34,10 @@ UPLOAD_FLAG=""
 ONLY_UPLOAD_FLAG=""
 BRANCH="stable"
 
-# Packages that must be uploaded manually from a trusted machine (for example
-# because their build downloads external assets, like EGO GNOME Shell
-# extensions, which rate-limit CI runner IPs). The "all" build skips them and
-# warns that they must be uploaded by hand with --upload.
-MANUAL_UPLOAD_ONLY=("pulsaros-gnome")
+# Packages that must be uploaded manually from a trusted machine.
+# Previously pulsaros-gnome was excluded due to external EGO downloads, but now
+# uses local Git submodules without external network queries during build.
+MANUAL_UPLOAD_ONLY=()
 
 is_manual_upload_only() {
     local name="$1"
@@ -379,6 +378,13 @@ build_single_package() {
 
     # Limpiar cualquier resto de compiladores (target de rust, caches, git) para evitar paquetes gigantescos
     rm -rf "$STAGING_DIR/$name/target" "$STAGING_DIR/$name/.cargo" "$STAGING_DIR/$name/.git" "$STAGING_DIR/$name/.github" "$STAGING_DIR/$name/.idea" 2>/dev/null || true
+
+    # Limpiar archivos de documentación, test y metadatos de la raíz de staging
+    # para evitar que se empaqueten en la raíz del sistema (/) y provoquen colisiones dpkg
+    rm -f "$STAGING_DIR/$name/README"* "$STAGING_DIR/$name/PORTING"* "$STAGING_DIR/$name/LICENSE"* \
+          "$STAGING_DIR/$name/Cargo."* "$STAGING_DIR/$name/package.json" "$STAGING_DIR/$name/pnpm-lock.yaml" \
+          "$STAGING_DIR/$name/tsconfig.json" "$STAGING_DIR/$name/prepare-assets.sh" 2>/dev/null || true
+    rm -rf "$STAGING_DIR/$name/docs" "$STAGING_DIR/$name/tests" "$STAGING_DIR/$name/web" 2>/dev/null || true
 
     # Ejecutar dpkg-deb
     local deb_file=""
