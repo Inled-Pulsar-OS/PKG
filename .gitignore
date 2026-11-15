@@ -39,15 +39,11 @@ arch/pkgbuilds/*/src/
 arch/pkgbuilds/*/pkg/
 arch/pkgbuilds/*/*.pkg.tar.*
 
-# Agent/board tooling files (local only)
+# Agent
 AGENTS.md
 CLAUDE.md
+GLOSSARY.md
 docs/
 skills-lock.json
 
 .claude/
-
-# agent docs
-CLAUDE.md
-AGENTS.md
-GLOSSARY.md
