@@ -65,10 +65,7 @@ package() {
     local _ext="$pkgdir/usr/share/gnome-shell/extensions/pulsaros-spotlight-launcher@inled.es"
     install -d "$_ext"
     cp -r gnome-shell-extension/. "$_ext/"
-    # cp -r preserves the source tree's exact file modes, which can drift from what's
-    # committed (git only tracks the executable bit, not full perms) and silently ship an
-    # unreadable file: gnome-shell then fails to load the extension with a Permission
-    # denied ImportError, with no indication from `git status` that anything changed.
+    
     find "$_ext" -type f -exec chmod 644 {} +
     find "$_ext" -type d -exec chmod 755 {} +
 }
