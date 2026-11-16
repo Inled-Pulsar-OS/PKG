@@ -1,0 +1,4 @@
+# Build dependencies of pulsaros-airpods, one line per distro (installed by /install-build-deps.sh).
+# CI and pulsaros-airpods/build-local.sh both read this file; edit it here only.
+debian: build-essential cmake ninja-build pkg-config ca-certificates qt6-base-dev qt6-declarative-dev qt6-connectivity-dev qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools libqt6opengl6-dev libpulse-dev libssl-dev
+arch: cmake ninja qt6-base qt6-declarative qt6-connectivity qt6-tools libpulse openssl
