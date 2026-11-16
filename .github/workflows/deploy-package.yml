@@ -191,18 +191,22 @@ jobs:
         if: steps.parse-package.outputs.is_debian == 'true'
         env:
           PULSAR_VERSION: "${{ steps.parse-package.outputs.pulsar_version }}"
+          PACKAGE_NAME: ${{ steps.parse-package.outputs.package_name }}
+          TARGET_BRANCH: ${{ steps.parse-package.outputs.branch }}
         run: |
-          TARGET_BRANCH="${{ steps.parse-package.outputs.branch }}"
+          DEBIAN_IMAGE="$(./ci-image.sh debian)"
           docker run --rm \
             -v "$PWD:/workspace" \
             -w /workspace \
             -e PULSAR_VERSION="$PULSAR_VERSION" \
+            -e PACKAGE_NAME="$PACKAGE_NAME" \
+            -e TARGET_BRANCH="$TARGET_BRANCH" \
             -e DEBIAN_FRONTEND=noninteractive \
             -e GITHUB_ACTIONS="true" \
             -e CI="true" \
             -e USER=root \
             -e HOME=/root \
-            debian:trixie bash -c "
+            "$DEBIAN_IMAGE" bash -c "
               set -eo pipefail
               apt-get update
               apt-get install -y --no-install-recommends \
@@ -231,16 +235,18 @@ jobs:
                 libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base desktop-file-utils \
                 nodejs npm
 
+              /workspace/install-build-deps.sh debian \"\$PACKAGE_NAME\"
+
               curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
               export PATH="/root/.cargo/bin:$PATH"
 
               chmod +x /workspace/package-and-deploy.sh
-              if [ '$TARGET_BRANCH' = 'all' ]; then
+              if [ \"\$TARGET_BRANCH\" = all ]; then
                 for b in stable unstable; do
-                  ./package-and-deploy.sh '${{ steps.parse-package.outputs.package_name }}' --branch "$b"
+                  ./package-and-deploy.sh \"\$PACKAGE_NAME\" --branch \"\$b\"
                 done
               else
-                ./package-and-deploy.sh '${{ steps.parse-package.outputs.package_name }}' --branch '$TARGET_BRANCH'
+                ./package-and-deploy.sh \"\$PACKAGE_NAME\" --branch \"\$TARGET_BRANCH\"
               fi
 
               chmod -R a+rwX /workspace/build /workspace/PKG 2>/dev/null || true
@@ -251,18 +257,23 @@ jobs:
         if: steps.parse-package.outputs.is_arch == 'true'
         env:
           PULSAR_VERSION: "${{ steps.parse-package.outputs.pulsar_version }}"
+          PACKAGE_NAME: ${{ steps.parse-package.outputs.package_name }}
+          TARGET_BRANCH: ${{ steps.parse-package.outputs.branch }}
         run: |
-          TARGET_BRANCH="${{ steps.parse-package.outputs.branch }}"
           docker run --rm \
             -v "$PWD:/workspace" \
             -w /workspace \
             -e PULSAR_VERSION="$PULSAR_VERSION" \
+            -e PACKAGE_NAME="$PACKAGE_NAME" \
+            -e TARGET_BRANCH="$TARGET_BRANCH" \
             -e GITHUB_ACTIONS="true" \
             -e CI="true" \
             archlinux:latest bash -c "
               pacman-key --init
               pacman-key --populate archlinux
               pacman -Syu --noconfirm base-devel git sudo jq curl wget gtk-update-icon-cache cmake meson ninja blueprint-compiler glib2-devel docbook-xsl rust webkit2gtk-4.1
+
+              /workspace/install-build-deps.sh arch \"\$PACKAGE_NAME\"
 
               useradd -m builder
               echo 'builder ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
@@ -272,14 +283,14 @@ jobs:
               # sudo resets the environment by default (env_reset), so pass
               # PULSAR_VERSION through with 'sudo -u builder env'. The package
               # and branch are passed as positional args so no value is re-parsed.
-              if [ '$TARGET_BRANCH' = 'all' ]; then
+              if [ \"\$TARGET_BRANCH\" = all ]; then
                 for b in stable unstable; do
                   sudo -u builder env PULSAR_VERSION=\"\$PULSAR_VERSION\" \
-                    bash -c 'cd /workspace/arch && ./package-and-deploy.sh \"\$0\" --branch \"\$1\"' '${{ steps.parse-package.outputs.package_name }}' \"\$b\"
+                    bash -c 'cd /workspace/arch && ./package-and-deploy.sh \"\$0\" --branch \"\$1\"' \"\$PACKAGE_NAME\" \"\$b\"
                 done
               else
                 sudo -u builder env PULSAR_VERSION=\"\$PULSAR_VERSION\" \
-                  bash -c 'cd /workspace/arch && ./package-and-deploy.sh \"\$0\" --branch \"\$1\"' '${{ steps.parse-package.outputs.package_name }}' '$TARGET_BRANCH'
+                  bash -c 'cd /workspace/arch && ./package-and-deploy.sh \"\$0\" --branch \"\$1\"' \"\$PACKAGE_NAME\" \"\$TARGET_BRANCH\"
               fi
             "
 
