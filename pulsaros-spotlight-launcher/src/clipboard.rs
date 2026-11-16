@@ -23,42 +23,72 @@ pub struct ClipboardManager {
 struct ClipboardManagerInner {
     items: Vec<ClipboardItem>,
     config: SpotlightConfig,
+    /// Resolved data directory for this session; `None` means the platform
+    /// data-directory lookup failed, so history stays in-memory only.
+    data_dir: Option<PathBuf>,
 }
 
 impl ClipboardManager {
-    fn data_dir() -> PathBuf {
-        dirs::data_dir()
-            .unwrap_or_else(|| PathBuf::from("/home/jaime/.local/share"))
-            .join("pulsaros-spotlight")
+    fn data_dir() -> Option<PathBuf> {
+        dirs::data_dir().map(|d| d.join("pulsaros-spotlight"))
     }
 
-    fn clipboard_file() -> PathBuf {
-        Self::data_dir().join("clipboard_history.json")
+    fn clipboard_file_in(dir: &PathBuf) -> PathBuf {
+        dir.join("clipboard_history.json")
     }
 
     pub fn new(config: SpotlightConfig) -> Self {
+        Self::new_internal(config, Self::data_dir())
+    }
+
+    /// Test-only constructor that pins the data directory instead of resolving
+    /// the real platform one, so tests never touch the user's actual files.
+    #[cfg(test)]
+    fn new_for_test(config: SpotlightConfig, dir: PathBuf) -> Self {
+        Self::new_internal(config, Some(dir))
+    }
+
+    fn new_internal(config: SpotlightConfig, dir: Option<PathBuf>) -> Self {
         let mut items = Vec::new();
-        let file = Self::clipboard_file();
-        if file.exists() {
-            if let Ok(content) = fs::read_to_string(&file) {
-                if let Ok(loaded) = serde_json::from_str::<Vec<ClipboardItem>>(&content) {
-                    items = loaded;
+        match &dir {
+            Some(dir) => {
+                let file = Self::clipboard_file_in(dir);
+                if file.exists() {
+                    if let Ok(content) = fs::read_to_string(&file) {
+                        if let Ok(loaded) = serde_json::from_str::<Vec<ClipboardItem>>(&content) {
+                            items = loaded;
+                        }
+                    }
                 }
+            }
+            None => {
+                eprintln!(
+                    "pulsaros-spotlight: could not resolve data directory; clipboard history will not persist this session"
+                );
             }
         }
 
-        let inner = Arc::new(Mutex::new(ClipboardManagerInner { items, config }));
+        let inner = Arc::new(Mutex::new(ClipboardManagerInner { items, config, data_dir: dir }));
         Self { inner }
     }
 
     pub fn save(&self) {
         let inner = self.inner.lock().unwrap();
-        let dir = Self::data_dir();
+        let Some(dir) = inner.data_dir.clone() else { return };
         let _ = fs::create_dir_all(&dir);
-        let file = Self::clipboard_file();
+        let file = Self::clipboard_file_in(&dir);
         if let Ok(content) = serde_json::to_string_pretty(&inner.items) {
-            let _ = fs::write(&file, content);
+            if fs::write(&file, content).is_ok() {
+                Self::set_owner_only_permissions(&file);
+            }
         }
+    }
+
+    /// Locks the clipboard-history file to owner read/write only (0600),
+    /// regardless of the process umask, so other local accounts can't read it.
+    fn set_owner_only_permissions(path: &std::path::Path) {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
     }
 
     pub fn record_clip(&self, text: &str) {
@@ -221,3 +251,7 @@ impl ClipboardManager {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/clipboard_tests.rs"]
+mod tests;

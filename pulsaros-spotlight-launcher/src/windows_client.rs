@@ -29,9 +29,14 @@ pub fn list_windows() -> Vec<WindowEntry> {
             Ok(r) => r,
             Err(_) => return Vec::new(),
         };
-    rows.into_iter()
-        .map(|(id, title, wm_class, app_id, workspace)| WindowEntry { id, title, wm_class, app_id, workspace })
-        .collect()
+    rows.into_iter().map(row_to_entry).collect()
+}
+
+/// Pure mapping from a raw D-Bus row to `WindowEntry`, kept separate from
+/// `list_windows` so it's directly unit-testable without a session bus.
+fn row_to_entry(row: (u32, String, String, String, String)) -> WindowEntry {
+    let (id, title, wm_class, app_id, workspace) = row;
+    WindowEntry { id, title, wm_class, app_id, workspace }
 }
 
 pub fn activate(id: u32) -> zbus::Result<()> {
@@ -41,3 +46,7 @@ pub fn activate(id: u32) -> zbus::Result<()> {
 pub fn close(id: u32) -> zbus::Result<()> {
     proxy(&Connection::session()?)?.call("Close", &(id,))
 }
+
+#[cfg(test)]
+#[path = "tests/windows_client_tests.rs"]
+mod tests;
