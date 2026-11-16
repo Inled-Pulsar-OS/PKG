@@ -52,6 +52,24 @@ const WIN_INFO = Gio.DBusNodeInfo.new_for_xml(`
 </node>
 `).lookup_interface(WIN_NAME);
 
+// The Rust binary runs this as a tiny D-Bus *server* of its own (see
+// pulsaros-spotlight-launcher/src/control_service.rs) purely so the extension can report
+// "a click landed outside your window" — the one thing the compositor can see that the
+// app process can't. Direction is inverted from the other interfaces above, which the
+// extension serves and the Rust binary calls into.
+const CONTROL_NAME = 'es.inled.PulsarosSpotlight.Control';
+const CONTROL_PATH = '/es/inled/PulsarosSpotlight/Control';
+
+/**
+ * Pure geometry: is point (px, py) outside rect {x, y, width, height}?
+ * A point exactly on an edge counts as inside (not outside), so clicking the window's
+ * border pixel never dismisses it. Exported on the module object below for reuse/testing.
+ */
+function isPointOutsideRect(px, py, rect) {
+    return px < rect.x || px > rect.x + rect.width ||
+           py < rect.y || py > rect.y + rect.height;
+}
+
 function _windowList() {
     return global.get_window_actors()
         .map(a => a.meta_window)
@@ -137,6 +155,7 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
         this._nameId = 0;
         this._winRegistrationId = 0;
         this._winNameId = 0;
+        this._capturedEventId = 0;
 
         // Initialize virtual keyboard device for injecting keystrokes into any Wayland window
         try {
@@ -269,6 +288,14 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
             }
         });
 
+        // Global click observer: the app process can't see clicks on other windows or the
+        // desktop under Wayland, only the compositor can, so this is the one place that can
+        // detect "clicked outside the Spotlight window" (desktop/wallpaper included).
+        this._capturedEventId = global.stage.connect('captured-event', (actor, event) => {
+            this._onCapturedEvent(event);
+            return Clutter.EVENT_PROPAGATE;
+        });
+
         // Add the button to the right box of the panel, next to the system menu (index 0)
         Main.panel.addToStatusArea('pulsaros-spotlight-launcher', this._button, 0, 'right');
     }
@@ -285,6 +312,11 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
             }
             this._button.destroy();
             this._button = null;
+        }
+
+        if (this._capturedEventId) {
+            global.stage.disconnect(this._capturedEventId);
+            this._capturedEventId = 0;
         }
 
         if (this._windowCreatedId) {
@@ -336,6 +368,58 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
             }
             return GLib.SOURCE_REMOVE;
         });
+    }
+
+    /**
+     * Handles every button press seen by the stage. Only acts while a Spotlight window is
+     * currently on screen; checks the press point against that window's live frame rect
+     * (never a cached one) and, if the point is outside, asks the Rust binary to hide —
+     * routed through its one existing hide path (see control_service.rs / window.rs).
+     */
+    _onCapturedEvent(event) {
+        if (event.type() !== Clutter.EventType.BUTTON_PRESS) return;
+
+        const win = this._findVisibleSpotlightWindow();
+        if (!win) return;
+
+        const rect = win.get_frame_rect();
+        const [x, y] = event.get_coords();
+        if (isPointOutsideRect(x, y, rect)) {
+            this._requestHide();
+        }
+    }
+
+    _findVisibleSpotlightWindow() {
+        try {
+            const wins = global.display.get_tab_list(Meta.TabList.NORMAL, null);
+            return wins.find(w => this._isSpotlightWindow(w) && !w.minimized) || null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Fire-and-forget call into the Rust binary's `Hide` method (control_service.rs). The
+     * Rust side re-checks `hide_on_focus_loss` / `--keep-open` itself, so this only needs to
+     * report "a qualifying click happened" — it never decides whether to hide.
+     */
+    _requestHide() {
+        try {
+            Gio.DBus.session.call(
+                CONTROL_NAME, CONTROL_PATH, CONTROL_NAME, 'Hide',
+                null, null, Gio.DBusCallFlags.NONE, -1, null,
+                (connection, res) => {
+                    try {
+                        connection.call_finish(res);
+                    } catch (e) {
+                        // Expected when the Rust binary isn't running or hasn't claimed the
+                        // name yet; nothing to do.
+                    }
+                }
+            );
+        } catch (e) {
+            console.error('[SpotlightLauncher] Failed to request hide:', e);
+        }
     }
 
     _isSpotlightWindow(win) {
