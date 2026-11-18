@@ -233,6 +233,7 @@ jobs:
                 libgnome-autoar-0-dev libportal-dev libportal-gtk4-dev libtinysparql-dev \
                 libgexiv2-dev libcloudproviders-dev libgraphene-1.0-dev \
                 libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base desktop-file-utils \
+                libsdl3-dev libfreetype-dev libgl-dev libvulkan-dev glslc \
                 nodejs npm
 
               /workspace/install-build-deps.sh debian \"\$PACKAGE_NAME\"
@@ -271,7 +272,7 @@ jobs:
             archlinux:latest bash -c "
               pacman-key --init
               pacman-key --populate archlinux
-              pacman -Syu --noconfirm base-devel git sudo jq curl wget gtk-update-icon-cache cmake meson ninja blueprint-compiler glib2-devel docbook-xsl rust webkit2gtk-4.1
+              pacman -Syu --noconfirm base-devel git sudo jq curl wget gtk-update-icon-cache cmake meson ninja blueprint-compiler glib2-devel docbook-xsl rust webkit2gtk-4.1 sdl3 freetype2 vulkan-headers shaderc
 
               /workspace/install-build-deps.sh arch \"\$PACKAGE_NAME\"
 

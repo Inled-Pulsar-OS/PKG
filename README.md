@@ -87,6 +87,8 @@ The following packages are marked as **deprecated** or have been completely **de
 | `pulsaros-flydrop` | **FlyDrop: AirDrop-style local file sharing.** Self-contained Python daemon speaking the LocalSend v2 protocol on LAN with GTK4 UI, dynamic shelf GNOME extension, and Nautilus right-click integration. |
 | `sayri` | **Siri-like AI assistant**: floating orb (GTK4 layer-shell), local speech-to-text with whisper.cpp, Piper TTS, and agentic integrations. |
 | `pulsaros-update` | Graphical system update assistant for scheduled and on-demand maintenance of Arch and Debian packages. |
+| `mayo-calculator` | **Calculator**: a macOS-style calculator written in C++20 on the **Mayonnaise** toolkit (SDL3, Vulkan/OpenGL). Basic and scientific keypads, operator precedence and parentheses, memory, 2nd functions, degrees/radians, macOS-style percentages (`50 + 10 % = 55`), repeated `=`, keyboard/numpad input and locale-grouped numbers. |
+| `mayo-finder` | **Mayo Finder**: a macOS Finder-style file manager written in C++20 on the **Mayonnaise** toolkit. Icons, List and Columns views, preview pane with picture thumbnails and text page previews, Quick Look, Get Info, inline rename, drag and drop between folders, copy/cut/paste, Duplicate, Trash with Put Back and Undo, recursive search, Go to Folder, path bar and live-updating folders. |
 
 ### Tube OS (NAS / home-server line)
 
@@ -149,6 +151,7 @@ maintains in its own repositories are noted as such.
 | `sayri` | Original **Python/GTK4** assistant by Inled. Speech stack: **whisper.cpp** (STT) and **Piper** (TTS); designed as a lighter, sandboxed alternative to OpenClaw-style agents for any OpenAI-compatible API. |
 | `pulsaros-global-menu`, `pulsaros-control-center-button`, `pulsaros-recovery`, `driverman`, `pulsaros-island`, `pulsaros-update`, `dockermigrate`, `tubeos-installer`, `tubeos-plymouth`, `tubeos-branding`, `tubeos-ui`, `pulsaros-branding`, `pulsaros-bootsound`, `pulsar-pear-sound-theme`, `pulsar-boot-icons`, `pulsaros-emoji-fonts`, `pulsaros-meta` | **Original Inled / Pulsar OS work** — no third-party upstream (content may be inspired by macOS visuals, but the code is original). |
 | `scrcpy` | **scrcpy** (Genymobile) — repackaged as-is for Pulsar OS. |
+| `mayo-calculator`, `mayo-finder` | **Mayonnaise** by *egely* (`egely1337/mayonnaise`) — the two apps are built from the toolkit at a pinned commit; the toolkit is linked statically, so the packages only carry the binaries and their desktop assets. GPL-3.0. |
 | `apple-hello/` | The Apple-style "hello" animation by **steef** (CodePen: steefmaster/MWvdyGb), MIT — the same animation the Welcome app embeds. |
 
 ---
@@ -176,6 +179,8 @@ of their upstream, as required by it. Notable examples:
   it implements the **LocalSend** v2 protocol specification to interoperate with
   other LocalSend apps. LocalSend itself (© Tien Do Nam) is **Apache-2.0** and
   its source is *not* redistributed inside this package.
+- `mayo-calculator`, `mayo-finder` — from **Mayonnaise**, **GPL-3.0** (the toolkit
+  embeds the OFL-1.1 licensed Inter font; its OFL text ships with both packages).
 - `pulsaros-spotlight-launcher`, `sayri` and the rest of the in-house apps —
   original Inled code, **MIT-INLED**.
 
