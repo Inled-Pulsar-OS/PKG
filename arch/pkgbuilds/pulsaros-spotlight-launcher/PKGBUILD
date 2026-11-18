@@ -65,7 +65,10 @@ package() {
     local _ext="$pkgdir/usr/share/gnome-shell/extensions/pulsaros-spotlight-launcher@inled.es"
     install -d "$_ext"
     cp -r gnome-shell-extension/. "$_ext/"
-    
-    find "$_ext" -type f -exec chmod 644 {} +
-    find "$_ext" -type d -exec chmod 755 {} +
+
+    local _tree
+    for _tree in "$_ext" "$pkgdir/usr/share/pulsaros-spotlight/icons"; do
+        find "$_tree" -type f -exec chmod 644 {} +
+        find "$_tree" -type d -exec chmod 755 {} +
+    done
 }
