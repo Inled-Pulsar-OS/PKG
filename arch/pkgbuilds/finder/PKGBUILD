@@ -10,9 +10,8 @@ pkgdesc="Finder file manager for Pulsar OS"
 arch=('x86_64')
 url="https://github.com/egely1337/mayonnaise"
 license=('GPL-3.0-only' 'OFL-1.1')
-depends=('glibc' 'gcc-libs' 'sdl3' 'freetype2' 'fontconfig' 'dbus' 'hicolor-icon-theme' 'xdg-utils' 'zip')
+depends=('glibc' 'gcc-libs' 'sdl3' 'freetype2' 'fontconfig' 'dbus' 'hicolor-icon-theme' 'xdg-utils' 'zip' 'unzip' 'ffmpeg')
 optdepends=('vulkan-icd-loader: Vulkan renderer (OpenGL otherwise)'
-            'ffmpeg: video poster generation for Quick Look and thumbnails'
             'poppler: PDF thumbnail and preview rendering'
             'pulsaros-flydrop: share files over AirDrop-compatible FlyDrop')
 provides=('mayo-finder')

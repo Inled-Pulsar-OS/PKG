@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <map>
 #include <set>
@@ -581,6 +582,44 @@ int main(int argc, char** argv) {
             ->show(*page->host());
     };
 
+    auto isArchive = [](const std::string& path) {
+        std::string s = path;
+        for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        for (const char* ext : {".zip", ".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.bz2", ".tbz2", ".tar.zst", ".tar", ".7z"}) {
+            if (s.size() >= std::strlen(ext) && s.rfind(ext) == s.size() - std::strlen(ext)) return true;
+        }
+        return false;
+    };
+
+    auto archiveBaseName = [](const std::string& path) {
+        std::string fn = fs::path(path).filename().string();
+        for (const char* ext : {".tar.gz", ".tar.xz", ".tar.bz2", ".tar.zst", ".tgz", ".txz", ".tbz2", ".zip", ".tar", ".7z"}) {
+            if (fn.size() >= std::strlen(ext)) {
+                size_t pos = fn.size() - std::strlen(ext);
+                std::string sub = fn.substr(pos);
+                for (auto& c : sub) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                if (sub == ext) return fn.substr(0, pos);
+            }
+        }
+        return fs::path(path).stem().string();
+    };
+
+    auto extractArchiveTo = [](const std::string& archivePath, const std::string& destDir) {
+        std::error_code ec;
+        fs::create_directories(destDir, ec);
+        std::string s = archivePath;
+        for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        std::vector<std::string> cmd;
+        if (s.size() >= 4 && s.rfind(".zip") == s.size() - 4) {
+            cmd = {"unzip", "-q", "-o", archivePath, "-d", destDir};
+        } else if (s.size() >= 3 && s.rfind(".7z") == s.size() - 3) {
+            cmd = {"7z", "x", "-y", "-o" + destDir, archivePath};
+        } else {
+            cmd = {"tar", "-xf", archivePath, "-C", destDir};
+        }
+        spawnDetached(cmd, destDir);
+    };
+
     browser->open = [&](const FileEntry& e) {
         if (pickerMode && !e.isDir && !saveMode) {
             std::cout << e.path << std::endl;
@@ -590,6 +629,16 @@ int main(int argc, char** argv) {
             navigateTo(e.path, {}, true);
         } else if (isInTrash(e.path)) {
             showAlert("“" + e.name + "” is in the Trash.", "To use this item, first drag it out of the Trash or use Put Back.");
+        } else if (isArchive(e.path)) {
+            std::string parent = isRealFolder() ? browser->path : parentPath(e.path);
+            std::string target = uniqueName(parent, archiveBaseName(e.path));
+            extractArchiveTo(e.path, target);
+            app.after(0.6, [&, parent, target] {
+                if (browser->path == parent) {
+                    reload();
+                    navigateTo(parent, target, false);
+                }
+            });
         } else if (!demo) {
             openWithDefaultApp(e.path);
         }
@@ -1099,6 +1148,38 @@ int main(int argc, char** argv) {
         return items;
     };
 
+    auto extractHere = [&] {
+        auto paths = browser->selectedPaths();
+        if (paths.empty() || !isRealFolder()) return;
+        std::string parent = browser->path;
+        for (const auto& p : paths) {
+            if (isArchive(p)) extractArchiveTo(p, parent);
+        }
+        app.after(0.5, [&, parent] {
+            if (browser->path == parent) reload();
+        });
+    };
+
+    auto extractToSubfolder = [&] {
+        auto paths = browser->selectedPaths();
+        if (paths.empty() || !isRealFolder()) return;
+        std::string parent = browser->path;
+        std::string firstTarget;
+        for (const auto& p : paths) {
+            if (isArchive(p)) {
+                std::string target = uniqueName(parent, archiveBaseName(p));
+                extractArchiveTo(p, target);
+                if (firstTarget.empty()) firstTarget = target;
+            }
+        }
+        app.after(0.6, [&, parent, firstTarget] {
+            if (browser->path == parent) {
+                reload();
+                if (!firstTarget.empty()) navigateTo(parent, firstTarget, false);
+            }
+        });
+    };
+
     auto compressSelection = [&] {
         auto paths = browser->selectedPaths();
         if (paths.empty() || !isRealFolder()) return;
@@ -1158,6 +1239,15 @@ int main(int argc, char** argv) {
         items.push_back(MenuItem("Cut", [&] { copySelection(true); }).withShortcut("Ctrl+X").disabled(trashed));
         items.push_back(MenuItem("Copy Path", copyPath).withShortcut("Ctrl+Alt+C"));
         items.push_back(MenuItem::separator());
+        bool hasArchive = false;
+        for (const auto& p : paths) {
+            if (isArchive(p)) { hasArchive = true; break; }
+        }
+        if (hasArchive && isRealFolder() && !trashed) {
+            items.push_back(MenuItem("Extract Here", extractHere).withIcon(Icon::Import));
+            items.push_back(MenuItem(single ? "Extract to “" + archiveBaseName(paths.front()) + "/”" : "Extract to Subfolders",
+                                     extractToSubfolder).withIcon(Icon::FolderPlus));
+        }
         items.push_back(MenuItem(single ? "Compress “" + fs::path(paths.front()).filename().string() + "”"
                                         : "Compress " + std::to_string(paths.size()) + " Items",
                                  compressSelection)
@@ -1172,10 +1262,10 @@ int main(int argc, char** argv) {
                             .withIcon(Icon::Share).disabled(paths.empty() || trashed));
         items.push_back(MenuItem::separator());
         for (const auto& tag : TagManager::instance().allTags()) {
-            items.push_back(MenuItem("Tag: " + tag.name, [&, t = tag.name] {
+            items.push_back(MenuItem(tag.name, [&, t = tag.name] {
                 for (const auto& p : browser->selectedPaths()) TagManager::instance().toggleTag(p, t);
                 refreshViews(false);
-            }));
+            }).withDot(tag.color));
         }
         items.push_back(MenuItem("Clear Tags", [&] {
             for (const auto& p : browser->selectedPaths()) TagManager::instance().clearTags(p);
@@ -1231,7 +1321,7 @@ int main(int argc, char** argv) {
         items.emplace_back(trashFilesDirectory(), Icon::Trash, "Trash");
         items.push_back(SidebarItem::header("Tags"));
         for (const auto& tag : TagManager::instance().allTags()) {
-            items.push_back(SidebarItem("tag:" + tag.name, Icon::Tag, tag.name).withTile(tag.color));
+            items.push_back(SidebarItem("tag:" + tag.name, tag.name).withDot(tag.color));
         }
         sidebar.setItems(std::move(items));
     };

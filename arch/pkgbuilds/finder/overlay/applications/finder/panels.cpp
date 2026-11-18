@@ -3,10 +3,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
+#include <mayonnaise/app.hpp>
 
 #include "file_icons.hpp"
 
+namespace fs = std::filesystem;
 using namespace mayo;
 
 namespace finder {
@@ -93,26 +96,124 @@ constexpr float kTextLine = 17;
 QuickLookView::QuickLookView(std::shared_ptr<Browser> browser)
     : CenteredPanel(Material::Popover), m_browser(std::move(browser)) {}
 
+QuickLookView::~QuickLookView() {
+    if (m_player) {
+        m_player->close();
+        m_player.reset();
+    }
+    if (!m_pdfTempDir.empty()) {
+        std::error_code ec;
+        fs::remove_all(m_pdfTempDir, ec);
+        m_pdfTempDir.clear();
+    }
+}
+
 void QuickLookView::setEntry(const FileEntry& e) {
     const bool same = e.path == m_entry.path && e.modified == m_entry.modified;
     m_entry = e;
     if (same) return;
+
+    if (m_player) {
+        m_player->close();
+        m_player.reset();
+    }
+    m_videoTexture.reset();
+    m_shownFrame = {};
+    m_isVideo = false;
+    m_videoPaused = false;
+
+    if (!m_pdfTempDir.empty()) {
+        std::error_code ec;
+        fs::remove_all(m_pdfTempDir, ec);
+        m_pdfTempDir.clear();
+    }
+    m_pdfPages.clear();
+    m_isPdf = false;
+
     m_image.reset();
     m_lines.clear();
     m_scroll = 0;
     m_physics.setOffset({});
     m_isText = false;
     m_childCount = 0;
+
     if (e.isDir) {
         if (m_browser->listing) m_childCount = m_browser->listing(e.path).size();
-    } else if (isImageExtension(e.ext) || e.kind == FileKind::Pdf || e.kind == FileKind::Video) {
+    } else if (e.kind == FileKind::Video) {
+        m_isVideo = true;
+        m_videoPaused = false;
+        m_player = std::make_unique<MediaPlayer>();
+        std::string err;
+        if (m_player->open(e.path, err)) {
+            m_player->play();
+        }
+        if (m_browser->previews) {
+            std::weak_ptr<Widget> weak = weak_from_this();
+            m_browser->previews->loadLarge(e.path, 1920, [this, weak, path = e.path](std::shared_ptr<ImageData> img) {
+                if (!weak.lock() || m_entry.path != path) return;
+                m_image = std::move(img);
+                invalidateLayout();
+            }, FileKind::Video);
+        }
+    } else if (e.kind == FileKind::Pdf) {
+        m_isPdf = true;
+        if (m_browser->previews) {
+            std::weak_ptr<Widget> weak = weak_from_this();
+            m_browser->previews->loadLarge(e.path, 1600, [this, weak, path = e.path](std::shared_ptr<ImageData> img) {
+                if (!weak.lock() || m_entry.path != path) return;
+                if (m_pdfPages.empty() && img) {
+                    m_pdfPages.push_back(img);
+                    invalidateLayout();
+                }
+            }, FileKind::Pdf);
+        }
+        std::string pdfPath = e.path;
+        char tempPattern[] = "/tmp/finder_pdf_XXXXXX";
+        if (char* d = mkdtemp(tempPattern)) {
+            m_pdfTempDir = d;
+            std::string tempDir = m_pdfTempDir;
+            std::weak_ptr<Widget> weak = weak_from_this();
+            std::thread([this, weak, pdfPath, tempDir] {
+                std::string cmd = "pdftoppm -png -r 140 -f 1 -l 40 \"" + pdfPath + "\" \"" + tempDir + "/p\" 2>/dev/null";
+                (void)std::system(cmd.c_str());
+
+                std::vector<std::string> pagePaths;
+                for (int page = 1; page <= 60; ++page) {
+                    std::string p1 = tempDir + "/p-" + std::to_string(page) + ".png";
+                    char buf[64];
+                    std::snprintf(buf, sizeof(buf), "%s/p-%02d.png", tempDir.c_str(), page);
+                    std::string p2 = buf;
+                    std::snprintf(buf, sizeof(buf), "%s/p-%03d.png", tempDir.c_str(), page);
+                    std::string p3 = buf;
+                    std::error_code ec;
+                    if (fs::exists(p1, ec)) pagePaths.push_back(p1);
+                    else if (fs::exists(p2, ec)) pagePaths.push_back(p2);
+                    else if (fs::exists(p3, ec)) pagePaths.push_back(p3);
+                    else break;
+                }
+
+                std::vector<std::shared_ptr<ImageData>> loaded;
+                for (const auto& pp : pagePaths) {
+                    if (auto img = ImageData::load(pp)) loaded.push_back(img);
+                }
+
+                if (!loaded.empty()) {
+                    App::current().post([this, weak, loaded = std::move(loaded), pdfPath] {
+                        if (!weak.lock() || m_entry.path != pdfPath) return;
+                        m_pdfPages = std::move(loaded);
+                        invalidateLayout();
+                    });
+                }
+            }).detach();
+        }
+    } else if (isImageExtension(e.ext)) {
         std::weak_ptr<Widget> weak = weak_from_this();
         if (m_browser->previews) {
             m_browser->previews->loadLarge(e.path, 2560, [this, weak, path = e.path](std::shared_ptr<ImageData> img) {
                 if (!weak.lock() || m_entry.path != path) return;
                 m_image = std::move(img);
                 invalidateLayout();
-            }, e.kind);
+            }, FileKind::Image);
         }
     } else if (isTextLike(e) || e.size < 256 * 1024) {
         std::ifstream in(e.path, std::ios::binary);
@@ -144,6 +245,19 @@ Size QuickLookView::measureContent(Size /*available*/) {
     Size window = host() ? host()->windowSize() : Size{1000, 700};
     const float maxW = std::max(320.0f, window.width * 0.82f);
     const float maxH = std::max(260.0f, window.height * 0.84f);
+    if (m_isVideo) {
+        float aspect = (m_player && m_player->isOpen() && m_player->aspect() > 0.1) ? static_cast<float>(m_player->aspect()) : (16.0f / 9.0f);
+        float w = std::min(maxW, 800.0f);
+        float h = w / aspect + kHeader;
+        if (h > maxH) {
+            h = maxH;
+            w = (h - kHeader) * aspect;
+        }
+        return {std::max(360.0f, w), std::max(260.0f, h)};
+    }
+    if (m_isPdf) {
+        return {std::min(maxW, 760.0f), std::min(maxH, 680.0f)};
+    }
     if (m_image && m_image->width() > 0) {
         const float iw = static_cast<float>(m_image->originalWidth());
         const float ih = static_cast<float>(m_image->originalHeight());
@@ -183,20 +297,123 @@ void QuickLookView::drawPanel(Painter& p) {
 
     const Rect b = body();
     p.pushClip(b);
-    if (m_image && m_image->width() > 0) {
+
+    if (m_isVideo) {
+        if (m_player && m_player->isOpen()) {
+            MediaPlayer::Frame f;
+            if (m_player->takeFrame(f)) {
+                if (!m_videoTexture) m_videoTexture = VideoTexture::create();
+                if (f.uploadTo(*m_videoTexture)) {
+                    m_shownFrame = std::move(f);
+                } else {
+                    m_player->disableZeroCopy();
+                }
+            }
+        }
+        p.fillRect(b, Color::black());
+        if (m_videoTexture && !m_videoTexture->isEmpty()) {
+            float aspect = (m_player && m_player->aspect() > 0.1) ? static_cast<float>(m_player->aspect()) : (16.0f / 9.0f);
+            float vw = b.width;
+            float vh = vw / aspect;
+            if (vh > b.height) {
+                vh = b.height;
+                vw = vh * aspect;
+            }
+            Rect videoRect{b.center().x - vw * 0.5f, b.center().y - vh * 0.5f, vw, vh};
+            p.drawVideo(videoRect, *m_videoTexture, 0.0f, 1.0f);
+        } else if (m_image && m_image->width() > 0) {
+            const float iw = static_cast<float>(m_image->width());
+            const float ih = static_cast<float>(m_image->height());
+            const float k = std::min(b.width / iw, b.height / ih);
+            Rect pic{b.center().x - iw * k * 0.5f, b.center().y - ih * k * 0.5f, iw * k, ih * k};
+            p.drawImage(pic, *m_image);
+        }
+
+        // Floating Liquid Glass video HUD controls
+        Rect hudRect{b.center().x - 170.0f, b.bottom() - 48.0f, 340.0f, 36.0f};
+        p.drawShadow(hudRect, 18.0f, Color::black(0.4f), 12.0f, {0, 4});
+        p.fillVerticalGradient(hudRect, 18.0f, Color::white(0.24f), Color::white(0.08f));
+        p.strokeRoundedRect(hudRect, 18.0f, Color::white(0.30f), 0.75f);
+        p.strokeRoundedRect({hudRect.x + 0.5f, hudRect.y + 0.5f, hudRect.width - 1.0f, 1.0f}, 0.5f, Color::white(0.5f), 1.0f);
+
+        // Play/Pause button
+        Icon playIcon = m_videoPaused ? Icon::Play : Icon::Pause;
+        Rect playBtn{hudRect.x + 12.0f, hudRect.center().y - 8.0f, 16.0f, 16.0f};
+        p.drawIcon(playIcon, playBtn, Color::white(), 1.2f);
+
+        // Scrub track
+        double pos = m_player ? m_player->position() : 0;
+        double dur = m_player ? m_player->duration() : 0;
+        Rect track{hudRect.x + 38.0f, hudRect.center().y - 2.5f, 205.0f, 5.0f};
+        p.fillRoundedRect(track, 2.5f, Color::white(0.22f));
+        if (dur > 0) {
+            float progress = static_cast<float>(pos / dur);
+            Rect filled{track.x, track.y, track.width * std::clamp(progress, 0.0f, 1.0f), track.height};
+            p.fillRoundedRect(filled, 2.5f, c.accent);
+            Point knob{filled.right(), track.center().y};
+            p.fillCircle(knob, 5.5f, Color::white());
+        }
+
+        // Time text
+        int pMin = static_cast<int>(pos) / 60, pSec = static_cast<int>(pos) % 60;
+        int dMin = static_cast<int>(dur) / 60, dSec = static_cast<int>(dur) % 60;
+        char timeBuf[32];
+        std::snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d / %02d:%02d", pMin, pSec, dMin, dSec);
+        p.drawText(timeBuf, {hudRect.right() - 86.0f, hudRect.y, 80.0f, hudRect.height}, t.font(TextStyle::Caption), Color::white(), TextAlign::Trailing);
+
+        requestAnimationFrame();
+    } else if (m_isPdf) {
+        if (m_physics.isAnimating()) {
+            if (m_physics.step(now())) requestAnimationFrame();
+            else if (host() && m_physics.deadline() >= 0) host()->scheduleFrame(m_physics.deadline());
+            m_scroll = m_physics.offset().y;
+        }
+        p.fillRect(b, c.contentBackground);
+
+        float targetW = std::min(b.width - 48.0f, 620.0f);
+        float targetH = targetW * 1.35f;
+        if (!m_pdfPages.empty() && m_pdfPages[0] && m_pdfPages[0]->width() > 0) {
+            float aspect = static_cast<float>(m_pdfPages[0]->height()) / static_cast<float>(m_pdfPages[0]->width());
+            targetH = targetW * aspect;
+        }
+
+        const float pageSpacing = 16.0f;
+        const float totalH = std::max(1.0f, static_cast<float>(m_pdfPages.size())) * (targetH + pageSpacing) + 32.0f;
+        const float maxScroll = std::max(0.0f, totalH - b.height);
+        m_physics.setLimits({0, maxScroll}, b.size());
+
+        float top = b.y + 16.0f - m_scroll;
+        int curPage = 1;
+        for (size_t i = 0; i < m_pdfPages.size(); ++i) {
+            float y = top + static_cast<float>(i) * (targetH + pageSpacing);
+            if (y + targetH >= b.y && y <= b.bottom()) {
+                Rect pageRect{b.center().x - targetW * 0.5f, y, targetW, targetH};
+                p.drawShadow(pageRect, 4.0f, Color::black(0.25f), 10.0f, {0, 3});
+                p.fillRoundedRect(pageRect, 2.0f, Color::white());
+                if (m_pdfPages[i]) {
+                    p.drawImage(pageRect, *m_pdfPages[i]);
+                }
+            }
+            if (y <= b.center().y && y + targetH >= b.center().y) {
+                curPage = static_cast<int>(i + 1);
+            }
+        }
+
+        if (m_pdfPages.size() > 1) {
+            std::string pageStr = std::to_string(curPage) + " / " + std::to_string(m_pdfPages.size());
+            Font pf = t.font(TextStyle::Caption);
+            float pw = p.measureText(pageStr, pf) + 20.0f;
+            Rect pill{b.center().x - pw * 0.5f, b.bottom() - 32.0f, pw, 24.0f};
+            p.drawShadow(pill, 12.0f, Color::black(0.35f), 8.0f, {0, 2});
+            p.fillRoundedRect(pill, 12.0f, Color::black(0.70f));
+            p.drawText(pageStr, pill, pf, Color::white(), TextAlign::Center);
+        }
+    } else if (m_image && m_image->width() > 0) {
         const float iw = static_cast<float>(m_image->width());
         const float ih = static_cast<float>(m_image->height());
         const float k = std::min(b.width / iw, b.height / ih);
         Rect pic{b.center().x - iw * k * 0.5f, b.center().y - ih * k * 0.5f, iw * k, ih * k};
         p.drawImage(pic, *m_image);
-        if (m_entry.kind == FileKind::Video) {
-            const float ps = 60.0f;
-            Rect pb{pic.center().x - ps * 0.5f, pic.center().y - ps * 0.5f, ps, ps};
-            p.drawShadow(pb, ps * 0.5f, Color::black(0.5f), 10.0f, {0, 3});
-            p.fillCircle(pb.center(), ps * 0.5f, Color::white(0.25f));
-            p.strokeCircle(pb.center(), ps * 0.5f, Color::white(0.75f), 1.0f);
-            p.drawIcon(Icon::Play, pb.inset(ps * 0.28f), Color::white(), 1.5f);
-        }
     } else if (m_isText) {
         if (m_physics.isAnimating()) {
             if (m_physics.step(now())) requestAnimationFrame();
@@ -240,6 +457,19 @@ void QuickLookView::drawPanel(Painter& p) {
 bool QuickLookView::onKeyDown(const KeyEvent& e) {
     switch (e.key) {
         case Key::Space:
+            if (m_isVideo && m_player && m_player->isOpen()) {
+                if (m_videoPaused) {
+                    m_player->play();
+                    m_videoPaused = false;
+                } else {
+                    m_player->pause();
+                    m_videoPaused = true;
+                }
+                invalidate();
+                return true;
+            }
+            dismiss();
+            return true;
         case Key::Escape:
             dismiss();
             return true;
@@ -255,7 +485,7 @@ bool QuickLookView::onKeyDown(const KeyEvent& e) {
         case Key::PageDown:
         case Key::PageUp: {
             ScrollEvent s;
-            s.delta = {0, (e.key == Key::PageDown ? 1.0f : -1.0f) * body().height * 0.9f};
+            s.delta = {0, (e.key == Key::PageDown ? 1.0f : -1.0f) * body().height * 0.85f};
             onScroll(s);
             return true;
         }
@@ -266,10 +496,27 @@ bool QuickLookView::onKeyDown(const KeyEvent& e) {
 bool QuickLookView::onPointerDown(const PointerEvent& e) {
     if (closeRect().outset(4).contains(e.position)) {
         dismiss();
+        return true;
     } else if (openRect().contains(e.position)) {
         if (onOpen) onOpen(m_entry);
-    } else if ((e.clickCount == 2 || (m_entry.kind == FileKind::Video && e.button == MouseButton::Left)) && body().contains(e.position)) {
+        return true;
+    }
+    if (m_isVideo && body().contains(e.position)) {
+        if (m_player && m_player->isOpen()) {
+            if (m_videoPaused) {
+                m_player->play();
+                m_videoPaused = false;
+            } else {
+                m_player->pause();
+                m_videoPaused = true;
+            }
+            invalidate();
+        }
+        return true;
+    }
+    if (e.clickCount == 2 && body().contains(e.position)) {
         if (onOpen) onOpen(m_entry);
+        return true;
     }
     return true;
 }
@@ -283,15 +530,34 @@ void QuickLookView::onPointerMove(const PointerEvent& e) {
 }
 
 bool QuickLookView::onScroll(const ScrollEvent& e) {
-    if (!m_isText) return true;
-    const float content = static_cast<float>(m_lines.size()) * kTextLine + 24;
-    const float maxScroll = std::max(0.0f, content - body().height);
-    m_physics.setLimits({0, maxScroll}, body().size());
-    if (!m_physics.handle(e, now())) return true;
-    m_scroll = m_physics.offset().y;
-    if (m_physics.isAnimating()) requestAnimationFrame();
-    if (host() && m_physics.deadline() >= 0) host()->scheduleFrame(m_physics.deadline());
-    invalidate();
+    if (m_isText) {
+        const float content = static_cast<float>(m_lines.size()) * kTextLine + 24;
+        const float maxScroll = std::max(0.0f, content - body().height);
+        m_physics.setLimits({0, maxScroll}, body().size());
+        if (!m_physics.handle(e, now())) return true;
+        m_scroll = m_physics.offset().y;
+        if (m_physics.isAnimating()) requestAnimationFrame();
+        if (host() && m_physics.deadline() >= 0) host()->scheduleFrame(m_physics.deadline());
+        invalidate();
+        return true;
+    }
+    if (m_isPdf) {
+        float targetW = std::min(body().width - 48.0f, 620.0f);
+        float targetH = targetW * 1.35f;
+        if (!m_pdfPages.empty() && m_pdfPages[0] && m_pdfPages[0]->width() > 0) {
+            float aspect = static_cast<float>(m_pdfPages[0]->height()) / static_cast<float>(m_pdfPages[0]->width());
+            targetH = targetW * aspect;
+        }
+        const float totalH = std::max(1.0f, static_cast<float>(m_pdfPages.size())) * (targetH + 16.0f) + 32.0f;
+        const float maxScroll = std::max(0.0f, totalH - body().height);
+        m_physics.setLimits({0, maxScroll}, body().size());
+        if (!m_physics.handle(e, now())) return true;
+        m_scroll = m_physics.offset().y;
+        if (m_physics.isAnimating()) requestAnimationFrame();
+        if (host() && m_physics.deadline() >= 0) host()->scheduleFrame(m_physics.deadline());
+        invalidate();
+        return true;
+    }
     return true;
 }
 

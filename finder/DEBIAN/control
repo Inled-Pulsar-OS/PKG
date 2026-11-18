@@ -4,7 +4,7 @@ Section: utils
 Priority: optional
 Architecture: amd64
 Maintainer: Jaime <info@inled.es>
-Depends: libc6, libstdc++6, libsdl3-0, libfreetype6, libgl1, libfontconfig1, libdbus-1-3, hicolor-icon-theme, xdg-utils, zip
+Depends: libc6, libstdc++6, libsdl3-0, libfreetype6, libgl1, libfontconfig1, libdbus-1-3, hicolor-icon-theme, xdg-utils, zip, unzip, libavformat61 | libavformat60 | libavformat59, libavcodec61 | libavcodec60 | libavcodec59, libswscale8 | libswscale7, libswresample5 | libswresample4, libavutil59 | libavutil58
 Recommends: libvulkan1, ffmpeg, poppler-utils
 Suggests: pulsaros-flydrop
 Provides: mayo-finder

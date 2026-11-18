@@ -624,7 +624,14 @@ void emptyTrash() {
     }
 }
 
-void openWithDefaultApp(const std::string& path) { spawnDetached({"xdg-open", path}); }
+void openWithDefaultApp(const std::string& path) {
+    std::error_code ec;
+    if (fs::is_directory(path, ec)) {
+        spawnDetached({"finder", path});
+        return;
+    }
+    spawnDetached({"xdg-open", path});
+}
 
 void openTerminal(const std::string& folder) {
     // Our own Terminal first, like Finder opens Terminal.app. It ships next to us in /usr/bin; when running from
