@@ -2,6 +2,7 @@ mod apps;
 mod calculator;
 mod clipboard;
 mod config;
+mod control_service;
 mod core;
 mod search;
 mod ui;
@@ -15,6 +16,7 @@ use crate::ui::window::SpotlightWindow;
 use crate::utils::get_local_icon_dir;
 use gtk4::gdk;
 use gtk4::gio;
+use gtk4::glib;
 use gtk4::prelude::*;
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -121,6 +123,18 @@ fn main() -> gtk4::glib::ExitCode {
                 backend,
                 Some(clipboard_mgr),
             );
+
+            // The Shell extension can see pointer clicks outside our window (desktop,
+            // other apps) that we can't; it reports them over D-Bus so we can route
+            // them through the same hide path as focus-loss. See control_service.rs.
+            let hide_rx = crate::control_service::spawn();
+            let hide_win = spotlight_win.clone();
+            glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
+                while hide_rx.try_recv().is_ok() {
+                    hide_win.handle_outside_click();
+                }
+                glib::ControlFlow::Continue
+            });
 
             *win_borrow = Some(spotlight_win);
         }

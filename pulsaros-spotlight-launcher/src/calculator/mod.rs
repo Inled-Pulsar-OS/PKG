@@ -18,6 +18,7 @@ mod tz;
 mod units;
 
 #[cfg(test)]
+#[path = "../tests/calculator_tests.rs"]
 mod tests;
 
 #[allow(unused_imports)]

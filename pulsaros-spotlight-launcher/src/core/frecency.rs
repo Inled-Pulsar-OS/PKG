@@ -1,12 +1,15 @@
 //! Frecency: +100 per launch, 10-day half-life. Learned terms: query -> id launch counts.
 //! Time is injected (`now` = unix seconds) so tests use a fake clock.
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 
 use super::store::Store;
 
 pub const LAUNCH_BONUS: f64 = 100.0;
 pub const HALF_LIFE_SECS: f64 = 10.0 * 86400.0;
+/// Cap on distinct `learned` queries kept; least-recently-used ones are
+/// evicted beyond this so ranking-pass latency stays flat over time.
+pub const LEARNED_CAP: usize = 500;
 const FILE: &str = "frecency";
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -22,6 +25,9 @@ pub struct Frecency {
     /// normalized query -> (id -> times chosen)
     #[serde(default)]
     pub learned: BTreeMap<String, BTreeMap<String, u32>>,
+    /// `learned` keys ordered oldest-to-most-recently-used, for LRU eviction.
+    #[serde(default)]
+    learned_recency: VecDeque<String>,
 }
 
 fn norm(q: &str) -> String {
@@ -50,7 +56,37 @@ impl Frecency {
         self.items.insert(id.to_string(), Entry { score: s, ts: now });
         let q = norm(query);
         if !q.is_empty() {
-            *self.learned.entry(q).or_default().entry(id.to_string()).or_insert(0) += 1;
+            *self.learned.entry(q.clone()).or_default().entry(id.to_string()).or_insert(0) += 1;
+            self.touch_learned(q);
+        }
+    }
+
+    /// Marks `q` as most-recently-used and evicts the least-recently-used
+    /// `learned` entries beyond `LEARNED_CAP`.
+    ///
+    /// `learned_recency` can be shorter than `learned` right after loading a
+    /// file persisted before this field existed (it deserializes to an empty
+    /// queue via `#[serde(default)]` while `learned` already holds legacy
+    /// keys). In that case every legacy key not yet in the queue is backfilled
+    /// first, so eviction below treats them as real LRU candidates instead of
+    /// leaving them permanently un-evictable while freshly-typed queries get
+    /// evicted immediately.
+    fn touch_learned(&mut self, q: String) {
+        if self.learned_recency.len() < self.learned.len() {
+            let present: std::collections::HashSet<&String> = self.learned_recency.iter().collect();
+            let missing: Vec<String> = self
+                .learned
+                .keys()
+                .filter(|k| *k != &q && !present.contains(k))
+                .cloned()
+                .collect();
+            self.learned_recency.extend(missing);
+        }
+        self.learned_recency.retain(|k| k != &q);
+        self.learned_recency.push_back(q);
+        while self.learned.len() > LEARNED_CAP {
+            let Some(oldest) = self.learned_recency.pop_front() else { break };
+            self.learned.remove(&oldest);
         }
     }
 
@@ -82,85 +118,5 @@ impl Frecency {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::core::store::temp_store;
-
-    const DAY: i64 = 86400;
-
-    #[test]
-    fn launch_adds_100() {
-        let mut f = Frecency::default();
-        f.record_launch("a", "", 1000);
-        assert_eq!(f.score("a", 1000), 100.0);
-        f.record_launch("a", "", 1000);
-        assert_eq!(f.score("a", 1000), 200.0);
-    }
-
-    #[test]
-    fn half_life_ten_days() {
-        let mut f = Frecency::default();
-        f.record_launch("a", "", 0);
-        assert!((f.score("a", 10 * DAY) - 50.0).abs() < 1e-9);
-        assert!((f.score("a", 20 * DAY) - 25.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn decay_applied_before_adding() {
-        let mut f = Frecency::default();
-        f.record_launch("a", "", 0);
-        f.record_launch("a", "", 10 * DAY);
-        assert!((f.score("a", 10 * DAY) - 150.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn unknown_is_zero_and_clock_backwards_safe() {
-        let mut f = Frecency::default();
-        assert_eq!(f.score("x", 5), 0.0);
-        f.record_launch("a", "", 100);
-        assert_eq!(f.score("a", 50), 100.0);
-    }
-
-    #[test]
-    fn learned_prefix_and_exact() {
-        let mut f = Frecency::default();
-        f.record_launch("ff", "ff", 0);
-        f.record_launch("ff", "ff", 0);
-        assert_eq!(f.learned("ff", "ff"), 4);
-        assert_eq!(f.learned("f", "ff"), 2);
-        assert_eq!(f.learned("fi", "ff"), 0);
-        assert_eq!(f.learned("", "ff"), 0);
-        assert_eq!(f.learned("ff", "other"), 0);
-    }
-
-    #[test]
-    fn learned_is_case_insensitive_and_skips_empty_query() {
-        let mut f = Frecency::default();
-        f.record_launch("a", " FF ", 0);
-        f.record_launch("a", "", 0);
-        assert_eq!(f.learned("ff", "a"), 2);
-        assert_eq!(f.learned.len(), 1);
-    }
-
-    #[test]
-    fn top_filters_and_sorts() {
-        let mut f = Frecency::default();
-        f.record_launch("a", "", 0);
-        f.record_launch("b", "", 0);
-        f.record_launch("b", "", 0);
-        f.record_launch("old", "", -100 * DAY);
-        assert_eq!(f.top(0, 50.0, 6), vec!["b", "a"]);
-        assert_eq!(f.top(0, 50.0, 1), vec!["b"]);
-    }
-
-    #[test]
-    fn persists() {
-        let s = temp_store("frec");
-        let mut f = Frecency::default();
-        f.record_launch("a", "q", 7);
-        f.save(&s).unwrap();
-        let g = Frecency::load(&s);
-        assert_eq!(g.score("a", 7), 100.0);
-        assert_eq!(g.learned("q", "a"), 2);
-    }
-}
+#[path = "../tests/frecency_tests.rs"]
+mod tests;

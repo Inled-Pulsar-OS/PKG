@@ -1,0 +1,16 @@
+Package: calculator
+Version: 0.1.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: Jaime <info@inled.es>
+Depends: libc6, libstdc++6, libsdl3-0, libfreetype6, libgl1, libfontconfig1, libdbus-1-3, hicolor-icon-theme
+Recommends: libvulkan1
+Provides: gnome-calculator, mayo-calculator
+Conflicts: gnome-calculator, mayo-calculator
+Replaces: gnome-calculator, mayo-calculator
+Description: Calculator for Pulsar OS
+ macOS-style calculator with basic and scientific keypads, operator
+ precedence, parentheses, memory, 2nd functions, degrees/radians,
+ percentages, repeated equals, keyboard/numpad input and locale-grouped
+ numbers. Features Liquid Glass styling.

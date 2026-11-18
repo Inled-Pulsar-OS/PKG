@@ -672,6 +672,31 @@ impl SpotlightWindow {
         spotlight
     }
 
+    /// Same two checks the focus-loss handler has always used: the `--keep-open` debug
+    /// escape hatch and the `hide_on_focus_loss` config toggle. Any path that wants to hide
+    /// the window because of an "outside" interaction (focus-loss today, click-outside via
+    /// the Shell extension) must gate on this first, so the two paths can never drift apart.
+    fn may_hide_on_outside_event(&self) -> bool {
+        let keep_open = std::env::args().any(|a| a == "--keep-open");
+        !keep_open && self.config.borrow().hide_on_focus_loss
+    }
+
+    /// The one place that actually hides the window and cleans up. Called by both the
+    /// focus-loss handler and the click-outside D-Bus request from the Shell extension.
+    fn hide_window(self: &Rc<Self>) {
+        self.window.set_visible(false);
+        self.stop_indexing_timer();
+    }
+
+    /// Entry point for the Shell extension's "click landed outside the window" report
+    /// (see `src/control_service.rs`). Routes through the exact same gating and hide logic
+    /// as the existing focus-loss path — no separate hide implementation.
+    pub fn handle_outside_click(self: &Rc<Self>) {
+        if self.window.is_visible() && self.may_hide_on_outside_event() {
+            self.hide_window();
+        }
+    }
+
     pub fn present_with_focus(self: &Rc<Self>) {
         // Follow the Liquid Glass switch from Pulsar Settings.
         if pulsar_liquid_glass_enabled() {
@@ -894,17 +919,15 @@ impl SpotlightWindow {
 
         // Window focus out -> hide
         let s = self.clone();
-        let keep_open = std::env::args().any(|a| a == "--keep-open");
         let focus_ctrl = gtk4::EventControllerFocus::new();
         focus_ctrl.connect_leave(move |_| {
-            if keep_open || !s.config.borrow().hide_on_focus_loss {
+            if !s.may_hide_on_outside_event() {
                 return;
             }
             let s = s.clone();
             glib::timeout_add_local(Duration::from_millis(100), move || {
                 if s.window.is_visible() && !s.window.is_active() {
-                    s.window.set_visible(false);
-                    s.stop_indexing_timer();
+                    s.hide_window();
                 }
                 glib::ControlFlow::Break
             });
@@ -2195,30 +2218,5 @@ fn browse_directory_plain(path_str: &str, filter: &str) -> Vec<SearchResult> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn calc_result_becomes_calc_row() {
-        let r = row_from_result(&SearchResult {
-            url: "calc://4".into(),
-            title: "4".into(),
-            mime: "application/x-calculator".into(),
-            snippet: "2+2".into(),
-            app: None,
-        });
-        assert_eq!(r.row.kind, RowKind::Calc);
-        assert_eq!(primary_title(&r), "Copy Answer");
-    }
-
-    #[test]
-    fn uninstall_message_is_cleaned() {
-        assert!(clean_uninstall_message("foo\nerror: bar baz", "X").contains("bar baz"));
-        assert!(clean_uninstall_message("unmet dependencies", "X").starts_with("Cannot remove X"));
-    }
-
-    #[test]
-    fn zoom_css_scales() {
-        assert!(zoom_css(1.5).contains("min-height: 84px"));
-    }
-}
+#[path = "../tests/window_tests.rs"]
+mod tests;
