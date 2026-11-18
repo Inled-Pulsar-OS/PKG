@@ -1,14 +1,21 @@
 [Desktop Entry]
 Type=Application
 Name=Finder
+Name[es]=Finder
+Name[it]=Finder
+Name[fr]=Finder
 GenericName=File Manager
 GenericName[es]=Gestor de archivos
+GenericName[it]=Gestore di file
+GenericName[fr]=Gestionnaire de fichiers
 Comment=Browse and manage files
-Comment[es]=Explora y gestiona tus archivos
-Exec=finder %U
+Comment[es]=Explorar y gestionar archivos
+Comment[it]=Sfoglia e gestisci file
+Comment[fr]=Parcourir et gérer les fichiers
+Exec=finder %f
 Icon=finder
 Terminal=false
 StartupNotify=true
 Categories=System;FileTools;FileManager;
-Keywords=files;folders;browser;trash;finder;archivos;carpetas;
+Keywords=files;folders;browser;trash;archivos;carpetas;
 MimeType=inode/directory;

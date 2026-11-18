@@ -22,7 +22,6 @@ struct IconStyle {
     const Preview* preview = nullptr;
     mayo::Icon folderGlyph = mayo::Icon::None;  ///< embossed on special folders (Downloads, Music...)
     bool dimmed = false;                         ///< cut items
-    std::vector<std::string> tags;
 };
 
 /// Draws the icon for `e` centred in the square `r`.

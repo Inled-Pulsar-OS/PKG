@@ -5,12 +5,15 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <thread>
 #include <mayonnaise/app.hpp>
+#include <mayonnaise/i18n.hpp>
 
 #include "file_icons.hpp"
 
 namespace fs = std::filesystem;
 using namespace mayo;
+using namespace mayo::i18n;
 
 namespace finder {
 
@@ -37,7 +40,7 @@ Rect CenteredPanel::placePopup(Size window, Size measured) {
 
 AlertView::AlertView(std::string title, std::string message, std::vector<AlertButton> buttons, bool caution)
     : CenteredPanel(Material::Popover), m_buttons(std::move(buttons)) {
-    setPadding(Insets(20, 20, 18, 20));
+    setPadding(Insets(24, 24, 22, 24));
     auto icon = Canvas([caution](Painter& p, const Rect& r) {
         const auto& c = theme().colors;
         if (caution) {
@@ -48,19 +51,19 @@ AlertView::AlertView(std::string title, std::string message, std::vector<AlertBu
             drawFolderIcon(p, r);
         }
     });
-    icon.frame(52, 52);
-    auto titleLabel = Label(std::move(title)).font(TextStyle::Headline).textAlign(TextAlign::Center).maxWidth(250);
-    auto messageLabel = Label(std::move(message)).font(TextStyle::Subheadline).textAlign(TextAlign::Center).maxWidth(250);
+    icon.frame(40, 40);
+    auto titleLabel = Label(std::move(title)).font(TextStyle::Headline).textAlign(TextAlign::Center).maxWidth(304);
+    auto messageLabel = Label(std::move(message)).font(TextStyle::Subheadline).textAlign(TextAlign::Center).maxWidth(304);
     std::vector<Element> row;
     for (size_t i = 0; i < m_buttons.size(); ++i) {
         auto b = Button(m_buttons[i].title).style(m_buttons[i].style).onClick([this, i] { choose(i); });
         b.fillWidth();
         row.emplace_back(b);
     }
-    auto buttonRow = HStack(row).spacing(8);
+    auto buttonRow = VStack(row).spacing(8);
     buttonRow.fillWidth();
     auto stack = VStack({icon, titleLabel, messageLabel, Spacer(4), buttonRow}).spacing(8).align(Alignment::Top);
-    stack.width(250);
+    stack.width(304);
     addChild(stack.node());
 }
 
@@ -85,6 +88,91 @@ bool AlertView::onKeyDown(const KeyEvent& e) {
 }
 
 void AlertView::drawPanel(Painter& p) { paintChildren(p); }
+
+// --- OperationProgressPanel ----------------------------------------------------------------------------
+
+OperationProgressPanel::OperationProgressPanel(std::function<void()> onCancel)
+    : CenteredPanel(Material::Glass), m_onCancel(std::move(onCancel)) {}
+
+void OperationProgressPanel::setOperation(std::string title, std::string item, double fraction, std::string detail) {
+    m_title = std::move(title);
+    m_item = std::move(item);
+    m_fraction = std::clamp(fraction, 0.0, 1.0);
+    m_detail = std::move(detail);
+    invalidate();
+}
+
+Size OperationProgressPanel::measureContent(Size /*available*/) {
+    return {420.0f, 115.0f};
+}
+
+void OperationProgressPanel::cancel() {
+    if (m_onCancel) m_onCancel();
+    dismiss();
+}
+
+bool OperationProgressPanel::onPointerDown(const PointerEvent& e) {
+    float barX = frame().x + 60.0f;
+    float barY = frame().y + 48.0f;
+    float barW = frame().width - 100.0f;
+    Rect cancelRect{barX + barW + 10.0f, barY - 7.0f, 20.0f, 20.0f};
+    if (cancelRect.contains(e.position)) {
+        cancel();
+        return true;
+    }
+    return true;
+}
+
+void OperationProgressPanel::onPointerMove(const PointerEvent& e) {
+    float barX = frame().x + 60.0f;
+    float barY = frame().y + 48.0f;
+    float barW = frame().width - 100.0f;
+    Rect cancelRect{barX + barW + 10.0f, barY - 7.0f, 20.0f, 20.0f};
+    bool hover = cancelRect.contains(e.position);
+    if (hover != m_hoverCancel) {
+        m_hoverCancel = hover;
+        invalidate();
+    }
+}
+
+void OperationProgressPanel::drawPanel(Painter& p) {
+    const Theme& t = theme();
+    const auto& c = t.colors;
+    const Rect r = frame();
+
+    p.drawMaterial(r, 12.0f, Material::Glass);
+    p.drawShadow(r, 12.0f, c.shadow.multipliedAlpha(0.6f), 20.0f, {0, 8});
+
+    Rect iconRect{r.x + 18.0f, r.y + 20.0f, 28.0f, 28.0f};
+    p.drawIcon(Icon::DocOnDoc, iconRect, c.accent);
+
+    Font titleFont = t.font(TextStyle::Headline);
+    titleFont.weight = FontWeight::Semibold;
+    Rect titleRect{r.x + 60.0f, r.y + 18.0f, r.width - 90.0f, 20.0f};
+    p.drawText(m_title, titleRect, titleFont, c.label);
+
+    float barX = r.x + 60.0f;
+    float barY = r.y + 48.0f;
+    float barW = r.width - 100.0f;
+    float barH = 6.0f;
+    Rect trackRect{barX, barY, barW, barH};
+    p.fillRoundedRect(trackRect, 3.0f, c.control);
+
+    if (m_fraction > 0.001) {
+        float fillW = std::max(6.0f, static_cast<float>(barW * m_fraction));
+        Rect fillRect{barX, barY, fillW, barH};
+        p.fillRoundedRect(fillRect, 3.0f, c.accent);
+    }
+
+    Rect cancelRect{barX + barW + 10.0f, barY - 7.0f, 20.0f, 20.0f};
+    if (m_hoverCancel) p.fillCircle(cancelRect.center(), 9.5f, c.hover);
+    p.strokeCircle(cancelRect.center(), 9.0f, c.secondaryLabel.multipliedAlpha(0.4f), 1.0f);
+    p.drawIcon(Icon::Xmark, cancelRect.inset(4.5f), c.secondaryLabel, 1.2f);
+
+    Font detailFont = t.font(TextStyle::Subheadline);
+    Rect detailRect{barX, barY + 16.0f, barW, 20.0f};
+    p.drawText(m_detail.empty() ? m_item : m_detail, detailRect, detailFont, c.secondaryLabel);
+}
 
 // --- QuickLookView -------------------------------------------------------------------------------------
 
@@ -153,7 +241,7 @@ void QuickLookView::setEntry(const FileEntry& e) {
                 if (!weak.lock() || m_entry.path != path) return;
                 m_image = std::move(img);
                 invalidateLayout();
-            }, FileKind::Video);
+            });
         }
     } else if (e.kind == FileKind::Pdf) {
         m_isPdf = true;
@@ -165,7 +253,7 @@ void QuickLookView::setEntry(const FileEntry& e) {
                     m_pdfPages.push_back(img);
                     invalidateLayout();
                 }
-            }, FileKind::Pdf);
+            });
         }
         std::string pdfPath = e.path;
         char tempPattern[] = "/tmp/finder_pdf_XXXXXX";
@@ -178,9 +266,10 @@ void QuickLookView::setEntry(const FileEntry& e) {
                 (void)std::system(cmd.c_str());
 
                 std::vector<std::string> pagePaths;
-                for (int page = 1; page <= 60; ++page) {
-                    std::string p1 = tempDir + "/p-" + std::to_string(page) + ".png";
+                for (int page = 1; page <= 40; ++page) {
                     char buf[64];
+                    std::snprintf(buf, sizeof(buf), "%s/p-%d.png", tempDir.c_str(), page);
+                    std::string p1 = buf;
                     std::snprintf(buf, sizeof(buf), "%s/p-%02d.png", tempDir.c_str(), page);
                     std::string p2 = buf;
                     std::snprintf(buf, sizeof(buf), "%s/p-%03d.png", tempDir.c_str(), page);
@@ -213,29 +302,23 @@ void QuickLookView::setEntry(const FileEntry& e) {
                 if (!weak.lock() || m_entry.path != path) return;
                 m_image = std::move(img);
                 invalidateLayout();
-            }, FileKind::Image);
+            });
         }
     } else if (isTextLike(e) || e.size < 256 * 1024) {
-        std::ifstream in(e.path, std::ios::binary);
-        std::string data(64 * 1024, '\0');
-        in.read(data.data(), static_cast<std::streamsize>(data.size()));
-        data.resize(static_cast<size_t>(in.gcount()));
-        if (!data.empty() && std::memchr(data.data(), 0, data.size()) == nullptr) {
-            m_isText = true;
-            size_t start = 0;
-            while (start <= data.size() && m_lines.size() < 3000) {
-                size_t end = data.find('\n', start);
-                if (end == std::string::npos) end = data.size();
-                std::string line = data.substr(start, end - start);
-                if (!line.empty() && line.back() == '\r') line.pop_back();
-                std::string expanded;
-                for (char ch : line) {
-                    if (ch == '\t') expanded += "    ";
-                    else expanded.push_back(ch);
-                }
-                m_lines.push_back(std::move(expanded));
-                start = end + 1;
+        m_isText = true;
+        std::ifstream file(e.path);
+        std::string line;
+        int count = 0;
+        constexpr int kMaxLines = 300;
+        while (count < kMaxLines && std::getline(file, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            std::string expanded;
+            for (char ch : line) {
+                if (ch == '\t') expanded += "    ";
+                else expanded.push_back(ch);
             }
+            m_lines.push_back(std::move(expanded));
+            ++count;
         }
     }
     invalidateLayout();
@@ -292,7 +375,7 @@ void QuickLookView::drawPanel(Painter& p) {
     const Rect open = openRect();
     if (m_hover == 1) p.fillRoundedRect(open, open.height * 0.5f, c.hover);
     p.drawIcon(Icon::ArrowUpRight, {open.x + 10, open.center().y - 7, 14, 14}, c.label);
-    p.drawText("Open", {open.x + 30, open.y, open.width - 30, open.height}, t.font(TextStyle::Body), c.label);
+    p.drawText(tr("Open"), {open.x + 30, open.y, open.width - 30, open.height}, t.font(TextStyle::Body), c.label);
     p.fillRect({r.x, p.snap(r.y + kHeader) - px, r.width, px}, c.separator);
 
     const Rect b = body();
@@ -370,47 +453,51 @@ void QuickLookView::drawPanel(Painter& p) {
         }
         p.fillRect(b, c.contentBackground);
 
-        float targetW = std::min(b.width - 48.0f, 620.0f);
-        float targetH = targetW * 1.35f;
-        if (!m_pdfPages.empty() && m_pdfPages[0] && m_pdfPages[0]->width() > 0) {
-            float aspect = static_cast<float>(m_pdfPages[0]->height()) / static_cast<float>(m_pdfPages[0]->width());
-            targetH = targetW * aspect;
-        }
-
-        const float pageSpacing = 16.0f;
-        const float totalH = std::max(1.0f, static_cast<float>(m_pdfPages.size())) * (targetH + pageSpacing) + 32.0f;
-        const float maxScroll = std::max(0.0f, totalH - b.height);
-        m_physics.setLimits({0, maxScroll}, b.size());
-
-        float top = b.y + 16.0f - m_scroll;
-        int curPage = 1;
-        for (size_t i = 0; i < m_pdfPages.size(); ++i) {
-            float y = top + static_cast<float>(i) * (targetH + pageSpacing);
-            if (y + targetH >= b.y && y <= b.bottom()) {
-                Rect pageRect{b.center().x - targetW * 0.5f, y, targetW, targetH};
-                p.drawShadow(pageRect, 4.0f, Color::black(0.25f), 10.0f, {0, 3});
-                p.fillRoundedRect(pageRect, 2.0f, Color::white());
-                if (m_pdfPages[i]) {
-                    p.drawImage(pageRect, *m_pdfPages[i]);
+        if (!m_pdfPages.empty()) {
+            float availableW = b.width - 40.0f;
+            float y = b.y + 20.0f - m_scroll;
+            int pageIdx = 0;
+            int visiblePage = 1;
+            for (const auto& pageImg : m_pdfPages) {
+                ++pageIdx;
+                if (!pageImg) continue;
+                float pw = static_cast<float>(pageImg->originalWidth());
+                float ph = static_cast<float>(pageImg->originalHeight());
+                if (pw <= 0 || ph <= 0) continue;
+                float scale = std::min(availableW / pw, 1.0f);
+                float renderW = pw * scale;
+                float renderH = ph * scale;
+                Rect pageRect{b.center().x - renderW * 0.5f, y, renderW, renderH};
+                if (pageRect.bottom() >= b.y && pageRect.y <= b.bottom()) {
+                    p.drawShadow(pageRect, 4.0f, Color::black(0.12f), 8.0f, {0, 2});
+                    p.fillRoundedRect(pageRect, 4.0f, Color::white());
+                    p.drawImage(pageRect, *pageImg);
+                    visiblePage = pageIdx;
                 }
+                y += renderH + 20.0f;
             }
-            if (y <= b.center().y && y + targetH >= b.center().y) {
-                curPage = static_cast<int>(i + 1);
-            }
-        }
 
-        if (m_pdfPages.size() > 1) {
-            std::string pageStr = std::to_string(curPage) + " / " + std::to_string(m_pdfPages.size());
-            Font pf = t.font(TextStyle::Caption);
-            float pw = p.measureText(pageStr, pf) + 20.0f;
-            Rect pill{b.center().x - pw * 0.5f, b.bottom() - 32.0f, pw, 24.0f};
-            p.drawShadow(pill, 12.0f, Color::black(0.35f), 8.0f, {0, 2});
-            p.fillRoundedRect(pill, 12.0f, Color::black(0.70f));
-            p.drawText(pageStr, pill, pf, Color::white(), TextAlign::Center);
+            // Floating page indicator pill
+            char pagePill[32];
+            std::snprintf(pagePill, sizeof(pagePill), "%d / %d", visiblePage, static_cast<int>(m_pdfPages.size()));
+            Font pillFont = t.font(TextStyle::Caption);
+            pillFont.weight = FontWeight::Medium;
+            float pillW = p.measureText(pagePill, pillFont) + 20.0f;
+            Rect pillRect{b.center().x - pillW * 0.5f, b.bottom() - 32.0f, pillW, 22.0f};
+            p.fillRoundedRect(pillRect, 11.0f, Color::black(0.6f));
+            p.drawText(pagePill, pillRect, pillFont, Color::white(), TextAlign::Center);
+        } else if (m_image) {
+            const float iw = static_cast<float>(m_image->originalWidth());
+            const float ih = static_cast<float>(m_image->originalHeight());
+            const float k = std::min({(b.width - 40) / iw, (b.height - 40) / ih, 1.0f});
+            Rect pic{b.center().x - iw * k * 0.5f, b.center().y - ih * k * 0.5f, iw * k, ih * k};
+            p.drawShadow(pic, 4.0f, Color::black(0.12f), 8.0f, {0, 2});
+            p.fillRoundedRect(pic, 4.0f, Color::white());
+            p.drawImage(pic, *m_image);
         }
     } else if (m_image && m_image->width() > 0) {
-        const float iw = static_cast<float>(m_image->width());
-        const float ih = static_cast<float>(m_image->height());
+        const float iw = static_cast<float>(m_image->originalWidth());
+        const float ih = static_cast<float>(m_image->originalHeight());
         const float k = std::min(b.width / iw, b.height / ih);
         Rect pic{b.center().x - iw * k * 0.5f, b.center().y - ih * k * 0.5f, iw * k, ih * k};
         p.drawImage(pic, *m_image);
@@ -420,136 +507,109 @@ void QuickLookView::drawPanel(Painter& p) {
             else if (host() && m_physics.deadline() >= 0) host()->scheduleFrame(m_physics.deadline());
             m_scroll = m_physics.offset().y;
         }
-        p.fillRect(b, c.contentBackground);
         const Font f = t.font(TextStyle::Callout);
-        const float top = b.y + 12 - m_scroll;
-        const int first = std::max(0, static_cast<int>((b.y - top) / kTextLine) - 1);
-        const int last = std::min(static_cast<int>(m_lines.size()), static_cast<int>((b.bottom() - top) / kTextLine) + 1);
-        const Font gutter = t.font(TextStyle::Caption);
-        for (int i = first; i < last; ++i) {
-            const float y = top + static_cast<float>(i) * kTextLine;
-            p.drawText(std::to_string(i + 1), {b.x, y, 38, kTextLine}, gutter, c.tertiaryLabel, TextAlign::Trailing);
-            p.drawText(m_lines[static_cast<size_t>(i)], {b.x + 50, y, b.width - 60, kTextLine}, f, c.label);
+        const float pad = 16;
+        float y = b.y + pad - m_scroll;
+        for (const auto& line : m_lines) {
+            if (y + kTextLine >= b.y && y <= b.bottom()) {
+                p.drawText(line, {b.x + pad, y, b.width - pad * 2, kTextLine}, f, c.label);
+            }
+            y += kTextLine;
         }
     } else {
-        // Large icon with the essentials, like Quick Look for files it can't render.
-        const float s = std::min(160.0f, b.height * 0.45f);
-        const Rect icon{b.center().x - s * 0.5f, b.y + b.height * 0.12f, s, s};
-        IconStyle style;
-        style.preview = m_browser->previews ? m_browser->previews->get(m_entry, s * p.scale()) : nullptr;
-        style.folderGlyph = m_entry.isDir ? folderGlyphFor(m_entry.path) : Icon::None;
-        drawFileIcon(p, icon, m_entry, style);
-        float y = icon.bottom() + 18;
-        const Font big = t.font(TextStyle::Title3);
-        p.drawText(truncateMiddle(p, m_entry.name, big, b.width - 40), {b.x + 20, y, b.width - 40, 24}, big, c.label,
-                   TextAlign::Center);
-        y += 28;
-        const Font small = t.font(TextStyle::Body);
-        std::string line = kindDescription(m_entry) + " – " + (m_entry.isDir ? itemCount(m_childCount) : formatSize(m_entry.size));
-        p.drawText(line, {b.x, y, b.width, 18}, small, c.secondaryLabel, TextAlign::Center);
-        y += 20;
-        p.drawText("Modified " + formatDate(m_entry.modified), {b.x, y, b.width, 18}, small, c.secondaryLabel,
-                   TextAlign::Center);
+        float y = b.center().y - 60;
+        Rect ic{b.center().x - 32, y, 64, 64};
+        if (m_entry.isDir) drawFolderIcon(p, ic);
+        else p.drawIcon(Icon::Document, ic, c.secondaryLabel);
+        y += 74;
+        const Font sub = t.font(TextStyle::Headline);
+        p.drawText(m_entry.name, {b.x + 20, y, b.width - 40, 22}, sub, c.label, TextAlign::Center);
+        y += 24;
+        std::string detail;
+        if (m_entry.isDir) {
+            detail = std::to_string(m_childCount) + " " + tr("items");
+        } else {
+            detail = formatSize(m_entry.size);
+            detail += " · " + kindDescription(m_entry);
+        }
+        const Font small = t.font(TextStyle::Subheadline);
+        p.drawText(detail, {b.x + 20, y, b.width - 40, 18}, small, c.secondaryLabel, TextAlign::Center);
     }
     p.popClip();
 }
 
 bool QuickLookView::onKeyDown(const KeyEvent& e) {
-    switch (e.key) {
-        case Key::Space:
-            if (m_isVideo && m_player && m_player->isOpen()) {
-                if (m_videoPaused) {
-                    m_player->play();
-                    m_videoPaused = false;
-                } else {
-                    m_player->pause();
-                    m_videoPaused = true;
-                }
-                invalidate();
-                return true;
-            }
-            dismiss();
-            return true;
-        case Key::Escape:
-            dismiss();
-            return true;
-        case Key::Up:
-        case Key::Down:
-        case Key::Left:
-        case Key::Right:
-            if (onArrow) onArrow(e.key);
-            return true;
-        case Key::Enter:
-            if (onOpen) onOpen(m_entry);
-            return true;
-        case Key::PageDown:
-        case Key::PageUp: {
-            ScrollEvent s;
-            s.delta = {0, (e.key == Key::PageDown ? 1.0f : -1.0f) * body().height * 0.85f};
-            onScroll(s);
-            return true;
-        }
-        default: return false;
+    if (e.key == Key::Space || e.key == Key::Escape) {
+        dismiss();
+        return true;
     }
+    if (m_isVideo && e.key == Key::Space) {
+        m_videoPaused = !m_videoPaused;
+        if (m_player) {
+            if (m_videoPaused) m_player->pause();
+            else m_player->play();
+        }
+        invalidate();
+        return true;
+    }
+    if (e.key == Key::Left || e.key == Key::Right || e.key == Key::Up || e.key == Key::Down) {
+        if (onArrow) onArrow(e.key);
+        return true;
+    }
+    if (e.key == Key::Enter) {
+        if (onOpen) onOpen(m_entry);
+        return true;
+    }
+    return false;
 }
 
 bool QuickLookView::onPointerDown(const PointerEvent& e) {
-    if (closeRect().outset(4).contains(e.position)) {
+    if (e.button != MouseButton::Left) return false;
+    if (closeRect().contains(e.position)) {
         dismiss();
         return true;
-    } else if (openRect().contains(e.position)) {
+    }
+    if (openRect().contains(e.position)) {
         if (onOpen) onOpen(m_entry);
         return true;
     }
-    if (m_isVideo && body().contains(e.position)) {
-        if (m_player && m_player->isOpen()) {
-            if (m_videoPaused) {
-                m_player->play();
-                m_videoPaused = false;
-            } else {
-                m_player->pause();
-                m_videoPaused = true;
+    if (m_isVideo) {
+        Rect hudRect{body().center().x - 170.0f, body().bottom() - 48.0f, 340.0f, 36.0f};
+        if (hudRect.contains(e.position)) {
+            m_videoPaused = !m_videoPaused;
+            if (m_player) {
+                if (m_videoPaused) m_player->pause();
+                else m_player->play();
             }
             invalidate();
+            return true;
         }
-        return true;
-    }
-    if (e.clickCount == 2 && body().contains(e.position)) {
-        if (onOpen) onOpen(m_entry);
-        return true;
     }
     return true;
 }
 
 void QuickLookView::onPointerMove(const PointerEvent& e) {
-    int h = closeRect().outset(4).contains(e.position) ? 0 : openRect().contains(e.position) ? 1 : -1;
-    if (h != m_hover) {
-        m_hover = h;
+    int next = closeRect().contains(e.position) ? 0 : openRect().contains(e.position) ? 1 : -1;
+    if (next != m_hover) {
+        m_hover = next;
         invalidate();
     }
 }
 
 bool QuickLookView::onScroll(const ScrollEvent& e) {
-    if (m_isText) {
-        const float content = static_cast<float>(m_lines.size()) * kTextLine + 24;
-        const float maxScroll = std::max(0.0f, content - body().height);
-        m_physics.setLimits({0, maxScroll}, body().size());
-        if (!m_physics.handle(e, now())) return true;
-        m_scroll = m_physics.offset().y;
-        if (m_physics.isAnimating()) requestAnimationFrame();
-        if (host() && m_physics.deadline() >= 0) host()->scheduleFrame(m_physics.deadline());
-        invalidate();
-        return true;
-    }
     if (m_isPdf) {
-        float targetW = std::min(body().width - 48.0f, 620.0f);
-        float targetH = targetW * 1.35f;
-        if (!m_pdfPages.empty() && m_pdfPages[0] && m_pdfPages[0]->width() > 0) {
-            float aspect = static_cast<float>(m_pdfPages[0]->height()) / static_cast<float>(m_pdfPages[0]->width());
-            targetH = targetW * aspect;
+        float totalH = 0;
+        float availableW = body().width - 40.0f;
+        for (const auto& pageImg : m_pdfPages) {
+            if (!pageImg) continue;
+            float pw = static_cast<float>(pageImg->originalWidth());
+            float ph = static_cast<float>(pageImg->originalHeight());
+            if (pw > 0 && ph > 0) {
+                float scale = std::min(availableW / pw, 1.0f);
+                totalH += ph * scale + 20.0f;
+            }
         }
-        const float totalH = std::max(1.0f, static_cast<float>(m_pdfPages.size())) * (targetH + 16.0f) + 32.0f;
-        const float maxScroll = std::max(0.0f, totalH - body().height);
+        float maxScroll = std::max(0.0f, totalH - body().height + 40.0f);
         m_physics.setLimits({0, maxScroll}, body().size());
         if (!m_physics.handle(e, now())) return true;
         m_scroll = m_physics.offset().y;
@@ -558,6 +618,15 @@ bool QuickLookView::onScroll(const ScrollEvent& e) {
         invalidate();
         return true;
     }
+    if (!m_isText) return false;
+    const float contentH = static_cast<float>(m_lines.size()) * kTextLine + 32;
+    const float maxScroll = std::max(0.0f, contentH - body().height);
+    m_physics.setLimits({0, maxScroll}, body().size());
+    if (!m_physics.handle(e, now())) return true;
+    m_scroll = m_physics.offset().y;
+    if (m_physics.isAnimating()) requestAnimationFrame();
+    if (host() && m_physics.deadline() >= 0) host()->scheduleFrame(m_physics.deadline());
+    invalidate();
     return true;
 }
 

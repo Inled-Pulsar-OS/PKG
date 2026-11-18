@@ -1,0 +1,28 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=video-player
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="QuickTime video player for Pulsar OS"
+arch=('x86_64')
+url="https://github.com/skjsbsnq/Forma"
+license=('GPL-3.0-only')
+depends=('glibc' 'gcc-libs' 'sdl3' 'freetype2' 'fontconfig' 'dbus' 'hicolor-icon-theme' 'ffmpeg')
+provides=('totem' 'mayo-video-player')
+conflicts=('totem' 'mayo-video-player')
+replaces=('totem' 'mayo-video-player')
+options=('!strip')
+
+package() {
+    install -Dm755 /tmp/forma/build/applications/video_player/video_player "$pkgdir/usr/bin/video_player"
+    mkdir -p "$pkgdir/usr/share/applications"
+    install -Dm644 /tmp/forma/applications/video_player/data/io.github.egely1337.Mayonnaise.VideoPlayer.desktop \
+        "$pkgdir/usr/share/applications/video-player.desktop"
+    ln -sf video-player.desktop "$pkgdir/usr/share/applications/io.github.egely1337.Mayonnaise.VideoPlayer.desktop"
+    ln -sf video-player.desktop "$pkgdir/usr/share/applications/org.gnome.Totem.desktop"
+
+    mkdir -p "$pkgdir/usr/share/icons/hicolor/scalable/apps"
+    install -Dm644 /tmp/forma/applications/video_player/data/io.github.egely1337.Mayonnaise.VideoPlayer.svg \
+        "$pkgdir/usr/share/icons/hicolor/scalable/apps/video-player.svg"
+    install -Dm644 /tmp/forma/applications/video_player/data/io.github.egely1337.Mayonnaise.VideoPlayer.svg \
+        "$pkgdir/usr/share/icons/hicolor/scalable/apps/io.github.egely1337.Mayonnaise.VideoPlayer.svg"
+}

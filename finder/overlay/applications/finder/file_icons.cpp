@@ -1,5 +1,4 @@
 #include "file_icons.hpp"
-#include "tag_manager.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -125,22 +124,6 @@ void drawFileIcon(Painter& p, const Rect& r, const FileEntry& e, const IconStyle
         drawFolderIcon(p, sq, style.folderGlyph);
     } else if (preview && preview->image && preview->image->width() > 0) {
         drawImageThumbnail(p, sq, *preview->image);
-        if (e.kind == FileKind::Video && s >= 24) {
-            const float bs = std::clamp(s * 0.32f, 14.0f, 32.0f);
-            Rect badge{sq.center().x - bs * 0.5f, sq.center().y - bs * 0.5f, bs, bs};
-            p.drawShadow(badge, bs * 0.5f, Color::black(0.45f), 4, {0, 1});
-            p.fillCircle(badge.center(), bs * 0.5f, Color::black(0.65f));
-            p.strokeCircle(badge.center(), bs * 0.5f, Color::white(0.65f), 0.75f);
-            p.drawIcon(Icon::Play, badge.inset(bs * 0.22f), Color::white(), 1.2f);
-        } else if (e.kind == FileKind::Pdf && s >= 28) {
-            const float bw = std::clamp(s * 0.38f, 20.0f, 34.0f);
-            const float bh = bw * 0.52f;
-            Rect badge{sq.right() - bw - s * 0.04f, sq.bottom() - bh - s * 0.04f, bw, bh};
-            p.drawShadow(badge, 3, Color::black(0.35f), 2, {0, 1});
-            p.fillRoundedRect(badge, 3, Color::hex(0xE02424));
-            Font bf{bh * 0.7f, FontWeight::Bold, bh};
-            p.drawText("PDF", badge, bf, Color::white(), TextAlign::Center);
-        }
     } else if (e.kind == FileKind::Executable && e.ext.empty()) {
         drawExecutable(p, sq);
     } else {
@@ -203,26 +186,10 @@ void drawFileIcon(Painter& p, const Rect& r, const FileEntry& e, const IconStyle
         }
     }
     if (e.isLink && s >= 16) drawAliasBadge(p, sq);
-    if (!style.tags.empty() && s >= 20) {
-        float dotSize = std::clamp(s * 0.16f, 6.0f, 13.0f);
-        float startX = sq.right() - dotSize - 2;
-        float dotY = sq.top() + 2;
-        for (const auto& tag : style.tags) {
-            Color tc = TagManager::instance().colorForTag(tag);
-            Point c{startX + dotSize * 0.5f, dotY + dotSize * 0.5f};
-            p.drawShadow({c.x - dotSize * 0.5f, c.y - dotSize * 0.5f, dotSize, dotSize}, dotSize * 0.5f, Color::black(0.35f), 2, {0, 0.5f});
-            p.fillCircle(c, dotSize * 0.5f, tc);
-            p.strokeCircle(c, dotSize * 0.5f, Color::white(0.85f), 0.75f);
-            startX -= dotSize + 2;
-            if (startX < sq.x) break;
-        }
-    }
     p.popOpacity();
 }
 
 Icon folderGlyphFor(const std::string& path) {
-    if (path == "apps:") return Icon::Grid;
-    if (path.rfind("tag:", 0) == 0) return Icon::Circle;
     // Resolved once: this runs for every folder icon drawn.
     static const std::vector<std::pair<std::string, Icon>> places = [] {
         std::vector<std::pair<std::string, Icon>> v{
@@ -245,8 +212,6 @@ Icon folderGlyphFor(const std::string& path) {
 }
 
 Icon placeIcon(const std::string& path) {
-    if (path == "apps:") return Icon::Grid;
-    if (path.rfind("tag:", 0) == 0) return Icon::Circle;
     if (path == kRecents) return Icon::Clock;
     if (path == "/") return Icon::HardDrive;
     if (path == trashFilesDirectory()) return Icon::Trash;

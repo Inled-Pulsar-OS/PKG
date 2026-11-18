@@ -1,61 +1,27 @@
 # Maintainer: Jaime <info@inled.es>
-# Built from the Mayonnaise toolkit with Pulsar OS Liquid Glass styling.
-# Replaces GNOME Calculator with a macOS-style calculator.
 pkgname=calculator
 pkgver=0.1.0
 pkgrel=1
 pkgdesc="macOS-style calculator with basic and scientific keypads for Pulsar OS"
 arch=('x86_64')
-url="https://github.com/egely1337/mayonnaise"
-license=('GPL-3.0-only' 'OFL-1.1')
+url="https://github.com/skjsbsnq/Forma"
+license=('GPL-3.0-only')
 depends=('glibc' 'gcc-libs' 'sdl3' 'freetype2' 'fontconfig' 'dbus' 'hicolor-icon-theme')
-optdepends=('vulkan-icd-loader: Vulkan renderer (OpenGL otherwise)')
 provides=('gnome-calculator' 'mayo-calculator')
 conflicts=('gnome-calculator' 'mayo-calculator')
 replaces=('gnome-calculator' 'mayo-calculator')
-makedepends=('git' 'cmake' 'vulkan-headers' 'shaderc')
 options=('!strip')
-source=("mayonnaise::git+https://github.com/egely1337/mayonnaise.git#commit=9eccbfe2f4411ea8766305ef76eaa23afdd112be")
-sha256sums=('SKIP')
-
-prepare() {
-    if [ -d "$startdir/overlay" ]; then
-        echo "🎨 Applying Pulsar OS customizations from overlay..."
-        cp -rf "$startdir/overlay/"* mayonnaise/
-    fi
-}
-
-build() {
-    CFLAGS+=" -ffile-prefix-map=$srcdir=."
-    CXXFLAGS+=" -ffile-prefix-map=$srcdir=."
-    cmake -S mayonnaise -B build \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX=/usr \
-        -DMAYONNAISE_BUILD_APPS=ON \
-        -DMAYONNAISE_BUILD_TESTS=OFF \
-        -DMAYONNAISE_USE_SYSTEM_DEPS=ON \
-        -Wno-dev
-    cmake --build build --target calculator -j"$(nproc)"
-}
 
 package() {
-    DESTDIR="$pkgdir" cmake --install build --component calculator
-
+    install -Dm755 /tmp/forma/build/applications/calculator/calculator "$pkgdir/usr/bin/calculator"
     mkdir -p "$pkgdir/usr/share/applications"
-    if [ -f "$pkgdir/usr/share/applications/io.github.egely1337.Mayonnaise.Calculator.desktop" ]; then
-        mv "$pkgdir/usr/share/applications/io.github.egely1337.Mayonnaise.Calculator.desktop" \
-           "$pkgdir/usr/share/applications/calculator.desktop"
-        ln -sf calculator.desktop "$pkgdir/usr/share/applications/org.gnome.Calculator.desktop"
-        ln -sf calculator.desktop "$pkgdir/usr/share/applications/io.github.egely1337.Mayonnaise.Calculator.desktop"
-    fi
+    install -Dm644 /tmp/forma/applications/calculator/data/io.github.egely1337.Mayonnaise.Calculator.desktop \
+        "$pkgdir/usr/share/applications/calculator.desktop"
+    ln -sf calculator.desktop "$pkgdir/usr/share/applications/io.github.egely1337.Mayonnaise.Calculator.desktop"
 
     mkdir -p "$pkgdir/usr/share/icons/hicolor/scalable/apps"
-    if [ -f "$pkgdir/usr/share/icons/hicolor/scalable/apps/io.github.egely1337.Mayonnaise.Calculator.svg" ]; then
-        cp "$pkgdir/usr/share/icons/hicolor/scalable/apps/io.github.egely1337.Mayonnaise.Calculator.svg" \
-           "$pkgdir/usr/share/icons/hicolor/scalable/apps/calculator.svg"
-        ln -sf calculator.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/org.gnome.Calculator.svg"
-    fi
-
-    install -Dm644 mayonnaise/assets/fonts/Inter-LICENSE.txt \
-        "$pkgdir/usr/share/licenses/$pkgname/Inter-LICENSE.txt"
+    install -Dm644 /tmp/forma/applications/calculator/data/io.github.egely1337.Mayonnaise.Calculator.svg \
+        "$pkgdir/usr/share/icons/hicolor/scalable/apps/calculator.svg"
+    install -Dm644 /tmp/forma/applications/calculator/data/io.github.egely1337.Mayonnaise.Calculator.svg \
+        "$pkgdir/usr/share/icons/hicolor/scalable/apps/io.github.egely1337.Mayonnaise.Calculator.svg"
 }

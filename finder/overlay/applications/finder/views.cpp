@@ -1,13 +1,14 @@
 #include "views.hpp"
-#include "tag_manager.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <mayonnaise/i18n.hpp>
 
 #include "file_icons.hpp"
 
 using namespace mayo;
+using namespace mayo::i18n;
 
 namespace finder {
 
@@ -34,7 +35,6 @@ IconStyle styleFor(const Browser& b, const FileEntry& e, float pixels) {
     s.preview = b.previews ? b.previews->get(e, pixels) : nullptr;
     s.folderGlyph = e.isDir ? folderGlyphFor(e.path) : Icon::None;
     s.dimmed = b.cut.count(e.path) > 0 || e.isHidden;
-    s.tags = TagManager::instance().tagsFor(e.path);
     return s;
 }
 
@@ -48,6 +48,7 @@ void drawRowIcon(Painter& p, const Browser& b, const Rect& r, const FileEntry& e
 // --- IconGridView ----------------------------------------------------------------------------------
 
 void IconGridView::reload() {
+    resetClickSequence();
     m_index.clear();
     for (size_t i = 0; i < m_browser->entries.size(); ++i) m_index[m_browser->entries[i].path] = static_cast<int>(i);
     m_labels.clear();
@@ -295,7 +296,7 @@ void ListHeaderView::draw(Painter& p) {
         const bool numeric = i == 2;
         Rect text = cell.inset(Insets(0, i == 0 ? 40 : 10, 0, active ? 24 : 10));
         p.pushClip(cell);
-        const char* title = i == 3 && m_browser->searching ? "Where" : kColumnTitles[i];
+        std::string title = tr(i == 3 && m_browser->searching ? "Where" : kColumnTitles[i]);
         p.drawText(title, text, f, active ? c.label : c.secondaryLabel,
                    numeric ? TextAlign::Trailing : TextAlign::Leading);
         if (active) {
@@ -363,6 +364,7 @@ void ListHeaderView::onPointerLeave() {
 }
 
 void ListRowsView::reload() {
+    resetClickSequence();
     // Forget expanded folders that are gone.
     std::erase_if(m_expanded, [](const std::string& p) {
         std::error_code ec;
@@ -560,6 +562,11 @@ void ListRowsView::draw(Painter& p) {
 // --- Columns ---------------------------------------------------------------------------------------
 
 void ColumnListView::setEntries(std::vector<FileEntry> entries, std::string chainChild) {
+    const bool same = m_entries.size() == entries.size() &&
+                      std::equal(m_entries.begin(), m_entries.end(), entries.begin(), [](const auto& a, const auto& b) {
+                          return a.path == b.path && a.modified == b.modified && a.size == b.size;
+                      });
+    if (!same) resetClickSequence();
     m_entries = std::move(entries);
     m_chainChild = std::move(chainChild);
     invalidateLayout();
@@ -665,7 +672,7 @@ void ColumnListView::draw(Painter& p) {
         }
     }
     if (m_entries.empty()) {
-        p.drawText("Empty", {frame().x, frame().y + 10, frame().width, 20}, t.font(TextStyle::Callout), c.tertiaryLabel,
+        p.drawText(tr("Empty"), {frame().x, frame().y + 10, frame().width, 20}, t.font(TextStyle::Callout), c.tertiaryLabel,
                    TextAlign::Center);
     }
     paintChildren(p);
@@ -717,17 +724,17 @@ void PreviewPaneView::draw(Painter& p) {
     p.drawText(truncateEnd(p, sub, small, r.width), {r.x, y, r.width, 16}, small, c.secondaryLabel, TextAlign::Center);
     y += 34;
 
-    p.drawText("Information", {r.x, y, r.width, 16}, t.font(TextStyle::Subheadline).withWeight(FontWeight::Semibold),
+    p.drawText(tr("Information"), {r.x, y, r.width, 16}, t.font(TextStyle::Subheadline).withWeight(FontWeight::Semibold),
                c.label);
     y += 22;
     std::vector<std::pair<std::string, std::string>> rows;
-    if (m_entry.created > 0) rows.emplace_back("Created", formatDate(m_entry.created));
-    rows.emplace_back("Modified", formatDate(m_entry.modified));
+    if (m_entry.created > 0) rows.emplace_back(tr("Created"), formatDate(m_entry.created));
+    rows.emplace_back(tr("Modified"), formatDate(m_entry.modified));
     if (m_large) {
-        rows.emplace_back("Dimensions",
+        rows.emplace_back(tr("Dimensions"),
                           std::to_string(m_large->originalWidth()) + " × " + std::to_string(m_large->originalHeight()));
     }
-    rows.emplace_back("Permissions", formatPermissions(m_entry.mode, m_entry.isDir));
+    rows.emplace_back(tr("Permissions"), formatPermissions(m_entry.mode, m_entry.isDir));
     const float px = 1.0f / p.scale();
     for (const auto& [label, value] : rows) {
         Rect line{r.x, y, r.width, 22};
@@ -744,6 +751,7 @@ ColumnBrowserView::Column ColumnBrowserView::columnFor(const std::string& folder
     Column col;
     col.list = std::make_shared<ColumnListView>(m_browser, folder);
     col.scroll = std::make_shared<ScrollViewView>(col.list);
+    col.scroll->setScrollEdge(ScrollEdgeStyle::Soft, theme().metrics.spacingLarge);
     col.list->setScroller(col.scroll.get());
     m_cache[folder] = col;
     return col;
@@ -861,7 +869,7 @@ std::vector<PathBarView::Segment> PathBarView::segments(Painter* p) const {
     std::vector<Segment> out;
     const Browser& b = *m_browser;
     if (b.path == kRecents) {
-        out.push_back({kRecents, "Recents", {}, true});
+        out.push_back({kRecents, tr("Recents"), {}, true});
     } else {
         const std::string home = homeDirectory();
         const std::string root = isInside(b.path, home) ? home : "/";

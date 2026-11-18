@@ -1,5 +1,8 @@
 #include "file_model.hpp"
+#include "applications.hpp"
 #include "tag_manager.hpp"
+#include "file_transaction.hpp"
+#include <mayonnaise/i18n.hpp>
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -21,6 +24,7 @@
 namespace fs = std::filesystem;
 
 namespace finder {
+using mayo::i18n::tr;
 
 namespace {
 
@@ -509,6 +513,59 @@ std::vector<Volume> mountedVolumes() {
     return out;
 }
 
+std::vector<Volume> cloudVolumes() {
+    std::vector<Volume> out;
+    std::error_code ec;
+
+    // 1. Check /run/user/<uid>/gvfs/
+    std::string gvfsDir = "/run/user/" + std::to_string(getuid()) + "/gvfs";
+    if (fs::exists(gvfsDir, ec)) {
+        for (const auto& entry : fs::directory_iterator(gvfsDir, ec)) {
+            if (entry.is_directory(ec)) {
+                std::string name = entry.path().filename().string();
+                std::string displayName = name;
+                if (name.rfind("google-drive:", 0) == 0) {
+                    displayName = "Google Drive";
+                    size_t hostPos = name.find("host=");
+                    if (hostPos != std::string::npos) {
+                        std::string host = name.substr(hostPos + 5);
+                        size_t comma = host.find(',');
+                        if (comma != std::string::npos) host = host.substr(0, comma);
+                        if (!host.empty()) displayName = "Google Drive (" + host + ")";
+                    }
+                } else if (name.rfind("dav:", 0) == 0 || name.rfind("davs:", 0) == 0) {
+                    displayName = "Nextcloud";
+                } else if (name.rfind("smb-share:", 0) == 0) {
+                    displayName = "Windows Share (SMB)";
+                } else if (name.rfind("mtp:", 0) == 0) {
+                    displayName = "Mobile Device (MTP)";
+                }
+                out.push_back({displayName, entry.path().string(), false});
+            }
+        }
+    }
+
+    // 2. Check ~/Cloud/*
+    std::string cloudDir = homeDirectory() + "/Cloud";
+    if (fs::exists(cloudDir, ec)) {
+        for (const auto& entry : fs::directory_iterator(cloudDir, ec)) {
+            if (entry.is_directory(ec)) {
+                out.push_back({entry.path().filename().string(), entry.path().string(), false});
+            }
+        }
+    }
+
+    // 3. Check ~/Google Drive, ~/Nextcloud, etc.
+    for (const auto& name : {"Google Drive", "Nextcloud", "OwnCloud", "Dropbox"}) {
+        std::string p = homeDirectory() + "/" + name;
+        if (fs::exists(p, ec)) {
+            out.push_back({name, p, false});
+        }
+    }
+
+    return out;
+}
+
 std::string uniqueName(const std::string& folder, const std::string& name) {
     std::error_code ec;
     if (!fs::exists(fs::path(folder) / name, ec)) return name;
@@ -624,6 +681,89 @@ void emptyTrash() {
     }
 }
 
+std::string kindLabel(FileKind kind, bool link) {
+    if (link) return tr("Symbolic Link");
+    switch (kind) {
+        case FileKind::Folder: return tr("Folder");
+        case FileKind::Image: return tr("Image");
+        case FileKind::Video: return tr("Video");
+        case FileKind::Audio: return tr("Audio");
+        case FileKind::Pdf: return tr("PDF Document");
+        case FileKind::Text: return tr("Plain Text");
+        case FileKind::Code: return tr("Source Code");
+        case FileKind::Archive: return tr("Archive");
+        case FileKind::Executable: return tr("Unix Executable");
+        case FileKind::Document: return tr("Document");
+        case FileKind::Spreadsheet: return tr("Spreadsheet");
+        case FileKind::Presentation: return tr("Presentation");
+        case FileKind::DiskImage: return tr("Disk Image");
+        case FileKind::Font: return tr("Font");
+        case FileKind::Web: return tr("Web Page");
+        case FileKind::Unknown: return tr("Document");
+    }
+    return tr("Document");
+}
+
+bool isExecutableType(const std::string& mimeType) {
+    static const char* const types[] = {"application/x-executable", "application/x-sharedlib",
+                                        "application/x-pie-executable", "application/x-msdos-program",
+                                        "application/vnd.microsoft.portable-executable", "application/x-msi",
+                                        "application/x-shared-library-launcher", "application/x-iso9660-appimage",
+                                        "application/vnd.appimage", "application/x-appimage"};
+    for (const char* t : types) {
+        if (mimeType == t) return true;
+    }
+    return false;
+}
+
+std::string setExecutable(const std::string& path) {
+    struct stat st {};
+    if (::stat(path.c_str(), &st) != 0) return tr("Item not found:") + " " + std::strerror(errno) + ".";
+    const mode_t mode = (st.st_mode & 07777) | 0111;
+    if (::chmod(path.c_str(), mode) != 0) {
+        if (errno == EPERM) return tr("Only the owner can add execute permission.");
+        return tr("Cannot change permissions:") + " " + std::strerror(errno) + ".";
+    }
+    return {};
+}
+
+OpenResult launchWithDefaultApp(const std::string& path) {
+    OpenResult result;
+    struct stat st {};
+    if (::stat(path.c_str(), &st) != 0) {
+        result.error = tr("Cannot find this item. It may have been moved or deleted.");
+        return result;
+    }
+    const std::string type = mimeTypeFor(path);
+    const bool isProgram = (st.st_mode & 0111) != 0;
+    if (S_ISREG(st.st_mode) && !isProgram && (isExecutableType(type) || lower(fs::path(path).extension().string()) == ".appimage")) {
+        result.needsExecutableBit = true;
+        return result;
+    }
+    const std::string id = defaultApplicationId(path);
+    if (!id.empty()) {
+        const Application* app = findApplication(id);
+        result.application = app ? app->name : id;
+        if (launchApplication(id, path, &result.error)) {
+            result.launched = true;
+            return result;
+        }
+        if (!result.error.empty()) return result;
+    }
+    if (S_ISREG(st.st_mode) && isProgram) {
+        if (spawnDetachedProcess({path}, &result.error)) {
+            result.launched = true;
+            result.application = displayName(path);
+            return result;
+        }
+        if (result.error.empty()) result.error = tr("Cannot run") + " “" + displayName(path) + "”.";
+        return result;
+    }
+    result.noDefaultApp = true;
+    result.type = type;
+    return result;
+}
+
 void openWithDefaultApp(const std::string& path) {
     std::error_code ec;
     if (fs::is_directory(path, ec)) {
@@ -633,16 +773,25 @@ void openWithDefaultApp(const std::string& path) {
     spawnDetached({"xdg-open", path});
 }
 
-void openTerminal(const std::string& folder) {
+std::string openTerminal(const std::string& folder) {
     // Our own Terminal first, like Finder opens Terminal.app. It ships next to us in /usr/bin; when running from
     // a build tree, look for the sibling build directory.
     std::error_code ec;
     const fs::path self = fs::read_symlink("/proc/self/exe", ec);
     for (const fs::path& own : {self.parent_path() / "terminal", self.parent_path().parent_path() / "terminal" / "terminal"}) {
-        if (!ec && fs::exists(own, ec) && own != self) return spawnDetached({own.string(), folder}, folder);
+        if (!ec && fs::exists(own, ec) && own != self) {
+            spawnDetached({own.string(), folder}, folder);
+            return {};
+        }
     }
-    if (onPath("terminal")) return spawnDetached({"terminal", folder}, folder);
-    if (const char* t = std::getenv("TERMINAL"); t && *t && onPath(t)) return spawnDetached({t}, folder);
+    if (onPath("terminal")) {
+        spawnDetached({"terminal", folder}, folder);
+        return {};
+    }
+    if (const char* t = std::getenv("TERMINAL"); t && *t && onPath(t)) {
+        spawnDetached({t}, folder);
+        return {};
+    }
     // Most terminals run as a single process per user, so a new window starts in *that* process's directory
     // unless it's passed explicitly; the working directory of the child alone isn't enough.
     const std::vector<std::vector<std::string>> known = {
@@ -661,8 +810,12 @@ void openTerminal(const std::string& folder) {
         {"xterm"},
     };
     for (const auto& cmd : known) {
-        if (onPath(cmd[0])) return spawnDetached(cmd, folder);
+        if (onPath(cmd[0])) {
+            spawnDetached(cmd, folder);
+            return {};
+        }
     }
+    return "No terminal found.";
 }
 
 }  // namespace finder

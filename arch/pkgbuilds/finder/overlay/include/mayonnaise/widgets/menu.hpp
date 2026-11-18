@@ -1,3 +1,4 @@
+#include "mayonnaise/ui_translation.hpp"
 #pragma once
 
 #include <functional>
@@ -10,19 +11,24 @@
 
 namespace mayo {
 
+class ImageData;
+
 struct MenuItem {
     std::string title;
     std::function<void()> action;
     Icon icon = Icon::None;
     std::optional<Color> dot;
     std::string shortcut;  ///< display only, e.g. "Ctrl+C"
+    std::string detail;    ///< second text column after the title ("推荐"), unlike the shortcut it isn't pushed right
+    std::vector<MenuItem> subitems;  ///< submenu on hover; the item's action is ignored
+    std::shared_ptr<ImageData> image;  ///< drawn like `icon`, 16 pt, when set
     bool enabled = true;
     bool checked = false;
     bool destructive = false;
     bool isSeparator = false;
 
     MenuItem() = default;
-    MenuItem(std::string t, std::function<void()> a = {}) : title(std::move(t)), action(std::move(a)) {}  // NOLINT
+    MenuItem(std::string t, std::function<void()> a = {}) : title(uiText(t)), action(std::move(a)) {}  // NOLINT
     static MenuItem separator() {
         MenuItem m;
         m.isSeparator = true;
@@ -40,6 +46,20 @@ struct MenuItem {
         shortcut = std::move(s);
         return *this;
     }
+    MenuItem& withDetail(std::string d) {
+        detail = std::move(d);
+        return *this;
+    }
+    /// A themed icon image shown before the title (an application's icon, as macOS does in "Open With").
+    MenuItem& withImage(std::shared_ptr<ImageData> i) {
+        image = std::move(i);
+        return *this;
+    }
+    MenuItem& withSubmenu(std::vector<MenuItem> items) {
+        subitems = std::move(items);
+        return *this;
+    }
+    [[nodiscard]] bool hasSubmenu() const { return !subitems.empty(); }
     MenuItem& disabled(bool d = true) {
         enabled = !d;
         return *this;
@@ -65,6 +85,7 @@ public:
     Size measureContent(Size available) override;
     [[nodiscard]] bool acceptsFocus() const override { return true; }
     [[nodiscard]] bool isInteractive() const override { return true; }
+    [[nodiscard]] const Widget* focusScopeOwner() const override;
     bool onPointerDown(const PointerEvent& e) override;
     void onPointerMove(const PointerEvent& e) override;
     void onPointerUp(const PointerEvent& e) override;
@@ -73,22 +94,31 @@ public:
 
 protected:
     void drawPanel(Painter& painter) override;
+    void willDismiss() override;
 
 private:
     [[nodiscard]] int itemAt(Point p) const;
     [[nodiscard]] Rect rowRect(int index) const;
     void activate(int index);
     void moveHighlight(int delta);
+    void showSubmenu(int index);
+    void closeSubmenu();
 
     std::vector<MenuItem> m_items;
     int m_highlighted = -1;
     int m_pressed = -1;
+    std::shared_ptr<MenuView> m_submenu;
+    std::weak_ptr<MenuView> m_parentMenu;
+    int m_submenuIndex = -1;
 };
 
 /// Pull-down menu button: a button with a chevron that opens a list of actions.
 class MenuButtonView : public ControlView {
 public:
     MenuButtonView(std::string title, std::vector<MenuItem> items);
+    [[nodiscard]] const std::string& title() const { return m_title; }
+    [[nodiscard]] Icon icon() const { return m_icon; }
+    [[nodiscard]] const std::vector<MenuItem>& items() const { return m_items; }
     void setItems(std::vector<MenuItem> items) { m_items = std::move(items); }
     void setBorderless(bool b);
     void setIcon(Icon icon);
@@ -111,6 +141,7 @@ private:
 class PickerView : public ControlView {
 public:
     explicit PickerView(std::vector<std::string> options, int selected);
+    [[nodiscard]] const std::vector<std::string>& options() const { return m_options; }
     void setSelected(int index, bool notify = false);
     [[nodiscard]] int selected() const { return m_selected; }
     void setOptions(std::vector<std::string> options);

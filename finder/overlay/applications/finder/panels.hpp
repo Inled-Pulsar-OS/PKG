@@ -1,6 +1,6 @@
 #pragma once
 
-// Floating panels: Quick Look (Space) and alerts (confirmations, errors).
+// Floating panels: Quick Look (Space), alerts (confirmations, errors), and file operations progress.
 
 #include <mayonnaise/mayonnaise.hpp>
 
@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "browser.hpp"
-#include "media_player.hpp"
+#include "../video_player/media_player.hpp"
 
 namespace finder {
 
@@ -42,6 +42,30 @@ protected:
 private:
     void choose(size_t index);
     std::vector<AlertButton> m_buttons;
+};
+
+/// Apple-style floating operation progress sheet (copy, move, compress, extract).
+class OperationProgressPanel : public CenteredPanel {
+public:
+    explicit OperationProgressPanel(std::function<void()> onCancel);
+    void setOperation(std::string title, std::string item, double fraction, std::string detail);
+    mayo::Size measureContent(mayo::Size available) override;
+    [[nodiscard]] bool acceptsFocus() const override { return true; }
+    [[nodiscard]] bool isInteractive() const override { return true; }
+    bool onPointerDown(const mayo::PointerEvent& e) override;
+    void onPointerMove(const mayo::PointerEvent& e) override;
+    void cancel();
+
+protected:
+    void drawPanel(mayo::Painter& p) override;
+
+private:
+    std::string m_title;
+    std::string m_item;
+    double m_fraction = 0.0;
+    std::string m_detail;
+    std::function<void()> m_onCancel;
+    bool m_hoverCancel = false;
 };
 
 class QuickLookView : public CenteredPanel {

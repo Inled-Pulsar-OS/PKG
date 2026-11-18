@@ -35,8 +35,7 @@ public:
     const Preview* get(const FileEntry& e, float pixels);
     /// Decodes a large version (Quick Look, preview column). `done` runs on the UI thread.
     void loadLarge(const std::string& path, int maxDimension,
-                   std::function<void(std::shared_ptr<mayo::ImageData>)> done,
-                   FileKind kind = FileKind::Image);
+                   std::function<void(std::shared_ptr<mayo::ImageData>)> done);
     /// Drops queued work (the user left the folder); finished results still land in the cache.
     void cancelPending();
 
@@ -46,9 +45,8 @@ private:
     struct Job {
         std::string key;
         std::string path;
-        FileKind kind = FileKind::Unknown;
         bool text = false;
-        int pixels = 0;   // < 0: large image job (-pixels = maxDimension)
+        int pixels = 0;   // 0 = large image job
         std::function<void(std::shared_ptr<mayo::ImageData>)> done;
     };
     struct Entry {
