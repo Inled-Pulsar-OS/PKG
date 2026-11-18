@@ -1,6 +1,6 @@
 [package]
 name = "pulsaros-spotlight"
-version = "2.0.35"
+version = "2.0.43"
 edition = "2021"
 authors = ["Jaime <info@inled.es>"]
 license = "GPL-3.0-or-later"
