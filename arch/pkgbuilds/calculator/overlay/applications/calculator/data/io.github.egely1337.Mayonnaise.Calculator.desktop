@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Calculator
+Name[es]=Calculadora
+GenericName=Calculator
+GenericName[es]=Calculadora
+Comment=Perform arithmetic and scientific calculations
+Comment[es]=Realiza cálculos aritméticos y científicos
+Exec=calculator
+Icon=calculator
+Terminal=false
+StartupNotify=true
+Categories=Utility;Calculator;
+Keywords=calculation;arithmetic;scientific;math;calculadora;

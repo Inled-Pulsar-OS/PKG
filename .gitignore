@@ -12,6 +12,7 @@ tube-os-dash/usr/bin/
 # Arch PKGBUILD build directories and cloned sources
 arch/**/src/
 arch/**/pkg/
+!arch/**/overlay/**
 arch/**/gnome-control-center/gnome-control-center/
 arch/**/gnome-control-center/libgnome-volume-control/
 arch/**/gnome-control-center/libgxdp/

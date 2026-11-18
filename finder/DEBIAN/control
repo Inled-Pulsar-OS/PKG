@@ -1,0 +1,19 @@
+Package: finder
+Version: 0.1.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: Jaime <info@inled.es>
+Depends: libc6, libstdc++6, libsdl3-0, libfreetype6, libgl1, libfontconfig1, libdbus-1-3, hicolor-icon-theme, xdg-utils, zip
+Recommends: libvulkan1, ffmpeg, poppler-utils
+Suggests: pulsaros-flydrop
+Provides: mayo-finder
+Conflicts: mayo-finder
+Replaces: mayo-finder
+Description: Finder file manager for Pulsar OS
+ macOS Finder-style file manager with Icons, List and Columns views,
+ spacebar Quick Look preview and thumbnail generation for images,
+ videos and PDFs, sidebar with Applications shortcut and color tags,
+ context menu with ZIP compression, Move to, FlyDrop sharing and color tags,
+ file chooser/picker mode for browser and application file dialogs,
+ and Liquid Glass styled controls.
