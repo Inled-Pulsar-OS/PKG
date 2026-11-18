@@ -1,30 +1,57 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=finder
 pkgver=0.1.0
-pkgrel=1
-pkgdesc="Finder file manager for Pulsar OS"
+pkgrel=2
+pkgdesc="Finder file manager and native file chooser portal for Pulsar OS"
 arch=('x86_64')
 url="https://github.com/skjsbsnq/Forma"
 license=('GPL-3.0-only')
-depends=('glibc' 'gcc-libs' 'sdl3' 'freetype2' 'fontconfig' 'dbus' 'hicolor-icon-theme' 'xdg-utils' 'zip' 'unzip' 'ffmpeg')
+depends=('glibc' 'gcc-libs' 'sdl3' 'freetype2' 'fontconfig' 'dbus' 'hicolor-icon-theme' 'xdg-utils' 'zip' 'unzip' 'ffmpeg' 'python' 'python-gobject')
 optdepends=('vulkan-icd-loader: Vulkan renderer (OpenGL otherwise)'
             'poppler: PDF thumbnail and preview rendering'
-            'pulsaros-flydrop: share files over AirDrop-compatible FlyDrop')
+            'pulsaros-flydrop: share files over AirDrop-compatible FlyDrop'
+            'pulsaros-cloud: cloud drive manager via rclone')
 provides=('mayo-finder')
 conflicts=('mayo-finder')
 replaces=('mayo-finder')
 options=('!strip')
 
 package() {
+    # Binary
     install -Dm755 /tmp/forma/build/applications/finder/finder "$pkgdir/usr/bin/finder"
+
+    # Desktop entry
     mkdir -p "$pkgdir/usr/share/applications"
     install -Dm644 /tmp/forma/applications/finder/data/io.github.egely1337.Mayonnaise.Finder.desktop \
         "$pkgdir/usr/share/applications/finder.desktop"
     ln -sf finder.desktop "$pkgdir/usr/share/applications/io.github.egely1337.Mayonnaise.Finder.desktop"
 
-    mkdir -p "$pkgdir/usr/share/icons/hicolor/scalable/apps"
-    install -Dm644 /tmp/forma/applications/finder/data/io.github.egely1337.Mayonnaise.Finder.svg \
-        "$pkgdir/usr/share/icons/hicolor/scalable/apps/finder.svg"
-    install -Dm644 /tmp/forma/applications/finder/data/io.github.egely1337.Mayonnaise.Finder.svg \
-        "$pkgdir/usr/share/icons/hicolor/scalable/apps/io.github.egely1337.Mayonnaise.Finder.svg"
+    # Default file manager associations
+    mkdir -p "$pkgdir/usr/share/applications"
+    install -Dm644 /tmp/forma/applications/finder/portal/mimeapps.list \
+        "$pkgdir/usr/share/applications/mimeapps.list"
+
+    # XDG Desktop Portal backend
+    install -Dm755 /tmp/forma/applications/finder/portal/pulsar-finder-portal \
+        "$pkgdir/usr/lib/pulsar-finder-portal/pulsar-finder-portal"
+    install -Dm644 /tmp/forma/applications/finder/portal/org.freedesktop.impl.portal.desktop.finder.service \
+        "$pkgdir/usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.finder.service"
+    install -Dm644 /tmp/forma/applications/finder/portal/finder.portal \
+        "$pkgdir/usr/share/xdg-desktop-portal/portals/finder.portal"
+    mkdir -p "$pkgdir/etc/xdg/xdg-desktop-portal"
+    install -Dm644 /tmp/forma/applications/finder/portal/portals.conf \
+        "$pkgdir/etc/xdg/xdg-desktop-portal/portals.conf"
+    mkdir -p "$pkgdir/usr/share/xdg-desktop-portal"
+    install -Dm644 /tmp/forma/applications/finder/portal/portals.conf \
+        "$pkgdir/usr/share/xdg-desktop-portal/pulsar-portals.conf"
+
+    # Icons across all standard resolutions
+    for sz in 16x16 24x24 32x32 48x48 64x64 96x96 128x128 256x256 512x512; do
+        if [ -f "/tmp/forma/applications/finder/data/icons/${sz}/finder.png" ]; then
+            install -Dm644 "/tmp/forma/applications/finder/data/icons/${sz}/finder.png" \
+                "$pkgdir/usr/share/icons/hicolor/${sz}/apps/finder.png"
+            install -Dm644 "/tmp/forma/applications/finder/data/icons/${sz}/finder.png" \
+                "$pkgdir/usr/share/icons/hicolor/${sz}/apps/io.github.egely1337.Mayonnaise.Finder.png"
+        fi
+    done
 }

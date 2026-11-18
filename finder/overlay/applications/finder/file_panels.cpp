@@ -67,9 +67,11 @@ std::shared_ptr<ImageData> iconForThemeNameImpl(const std::string& name) {
     while (std::getline(ss, dir, ':')) {
         if (!dir.empty()) roots.push_back(dir + "/icons");
     }
-    std::string theme;
+    static std::string theme;
+    static bool themeChecked = false;
     // GSettings is the only record of the desktop's icon theme when the environment doesn't say.
-    if (!std::getenv("MAYO_DEMO")) {
+    if (!themeChecked && !std::getenv("MAYO_DEMO")) {
+        themeChecked = true;
         if (FILE* pipe = ::popen("gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null", "r")) {
             char buf[256] = {};
             if (std::fgets(buf, sizeof buf, pipe)) {

@@ -11,15 +11,19 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <mutex>
 #include <set>
 #include <sstream>
+#include <thread>
 
 namespace fs = std::filesystem;
 
@@ -513,7 +517,12 @@ std::vector<Volume> mountedVolumes() {
     return out;
 }
 
-std::vector<Volume> cloudVolumes() {
+static std::vector<Volume> s_cachedCloudVolumes;
+static std::mutex s_cloudMutex;
+static std::atomic<bool> s_cloudScanning{false};
+static std::chrono::steady_clock::time_point s_lastCloudScan{};
+
+static void scanCloudVolumesInternal() {
     std::vector<Volume> out;
     std::error_code ec;
 
@@ -563,7 +572,28 @@ std::vector<Volume> cloudVolumes() {
         }
     }
 
-    return out;
+    {
+        std::lock_guard lock(s_cloudMutex);
+        s_cachedCloudVolumes = std::move(out);
+    }
+    s_cloudScanning = false;
+}
+
+std::vector<Volume> cloudVolumes() {
+    auto now = std::chrono::steady_clock::now();
+    bool shouldScan = false;
+    {
+        std::lock_guard lock(s_cloudMutex);
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - s_lastCloudScan).count() >= 5) {
+            shouldScan = true;
+            s_lastCloudScan = now;
+        }
+    }
+    if (shouldScan && !s_cloudScanning.exchange(true)) {
+        std::thread([] { scanCloudVolumesInternal(); }).detach();
+    }
+    std::lock_guard lock(s_cloudMutex);
+    return s_cachedCloudVolumes;
 }
 
 std::string uniqueName(const std::string& folder, const std::string& name) {

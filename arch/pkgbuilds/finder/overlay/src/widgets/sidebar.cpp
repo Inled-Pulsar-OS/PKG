@@ -106,7 +106,11 @@ Rect SidebarView::rowRect(int index) const {
 int SidebarView::rowAt(Point p) const {
     if (p.y < listTop()) return -1;
     for (int i = 0; i < static_cast<int>(m_items.size()); ++i) {
-        if (m_items[static_cast<size_t>(i)].isHeader) continue;
+        if (m_items[static_cast<size_t>(i)].isHeader) {
+            if (m_items[static_cast<size_t>(i)].actionIcon != Icon::None && actionRect(i).contains(p))
+                return i;
+            continue;
+        }
         if (rowRect(i).contains(p)) return i;
     }
     return -1;
@@ -179,6 +183,12 @@ void SidebarView::draw(Painter& p) {
         if (row.bottom() < listTop() || row.y > frame().bottom()) continue;
         if (item.isHeader) {
             p.drawText(item.title, {row.x + 8, row.y + 4, row.width - 8, row.height - 4}, headerFont, c.tertiaryLabel);
+            if (item.actionIcon != Icon::None) {
+                const auto action = actionRect(i);
+                if (i == m_hovered && m_actionHovered)
+                    p.fillRoundedRect(action, 7, c.fill);
+                p.drawIcon(item.actionIcon, action.inset(6), c.secondaryLabel);
+            }
             continue;
         }
         const bool isSel = i == selected;
@@ -261,7 +271,8 @@ void SidebarView::onPointerMove(const PointerEvent& e) {
         m_actionHovered = action;
         if (r >= 0) {
             const auto& item = m_items[static_cast<size_t>(r)];
-            setTooltip(action && item.actionIcon != Icon::None ? "安全弹出“" + item.title + "”" :
+            setTooltip(action && item.actionIcon != Icon::None ?
+                       (item.actionIcon == Icon::Plus ? uiText("Add Cloud Account") : uiText("Safely eject “") + item.title + "”") :
                        item.subtitle.empty() ? std::string() : item.title + " · " + item.subtitle);
         } else setTooltip({});
         invalidate();

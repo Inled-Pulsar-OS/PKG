@@ -1626,12 +1626,14 @@ int main(int argc, char** argv) {
             items.push_back(std::move(item));
         }
         auto clouds = cloudVolumes();
-        if (!clouds.empty()) {
-            items.push_back(SidebarItem::header(tr("Cloud")));
-            for (const auto& c : clouds) {
-                items.emplace_back(c.mountPoint, Icon::Globe, c.name);
-            }
+        auto cloudHeader = SidebarItem::header(tr("Cloud"));
+        cloudHeader.id = "cloud_header_add";
+        cloudHeader.actionIcon = Icon::Plus;
+        items.push_back(std::move(cloudHeader));
+        for (const auto& c : clouds) {
+            items.emplace_back(c.mountPoint, Icon::Globe, c.name);
         }
+        items.push_back(SidebarItem("pulsar-cloud://choose", Icon::Plus, tr("Add Cloud Account…")));
         items.push_back(SidebarItem::header(tr("Tags")));
         for (const auto& tag : TagManager::instance().allTags()) {
             SidebarItem item("tag:" + tag.name, tag.name);
@@ -1720,12 +1722,22 @@ int main(int argc, char** argv) {
             if (!result.error.empty()) showAlert(tr("Cannot eject") + " “" + name + "”", result.error);
         });
     };
-    sidebar.node()->setOnAction([&](const std::string& id) { removeVolume(id); });
+    sidebar.node()->setOnAction([&](const std::string& id) {
+        if (id == "pulsar-cloud://choose" || id == "cloud_header_add") {
+            spawnDetached({"pulsar-cloud", "choose"});
+            return;
+        }
+        removeVolume(id);
+    });
     ejectButton.onClick([&] { if (const auto* v = deviceForPath(browser->path)) removeVolume(v->id); });
     sidebar.onSelect([&](std::string id) {
         if (id.empty()) return;
         if (id == "applications://pulsar") {
             spawnDetached({"pulsar-apps-viewer"});
+            return;
+        }
+        if (id == "pulsar-cloud://choose" || id == "cloud_header_add") {
+            spawnDetached({"pulsar-cloud", "choose"});
             return;
         }
         if (id.starts_with("tag:")) {

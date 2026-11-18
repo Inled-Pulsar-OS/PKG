@@ -18,4 +18,4 @@ Terminal=false
 StartupNotify=true
 Categories=System;FileTools;FileManager;
 Keywords=files;folders;browser;trash;archivos;carpetas;
-MimeType=inode/directory;
+MimeType=inode/directory;x-scheme-handler/trash;

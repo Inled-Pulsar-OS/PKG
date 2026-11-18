@@ -2,7 +2,7 @@
 disable-user-extensions=false
 enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'pulsar-dock@inled.es', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'pulsaros-ui-tweaks@inled.es', 'pulsaros-global-menu@inled.es', 'notchnux@adityasah.programs', 'pulsaros-spotlight-launcher@inled.es', 'pulsar-circle-to-search@inled.es', 'pulsaros-focus@inled.es', 'pulsaros-idle-guard@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'wiggle@mechtifs', 'no-overview@fthx', 'macos-control-centre-lg@pulsar.local', 'macos-notification-center@pulsar.local', 'liquid-glass@thinkingcoding1231.gmail.com', 'pulsar-menu-bar@inled.es', 'flydrop@pulsaros.org', 'pulsar-desktop-icons@inled.es', 'pulsar-trafficlights@local']
 disabled-extensions=@as []
-favorite-apps=['org.gnome.Nautilus.desktop', 'pulsaros-recovery.desktop', 'pulsaros-spotlight.desktop', 'brave-browser.desktop', 'seafari.desktop', 'org.gnome.Terminal.desktop', 'org.gnome.Geary.desktop', 'org.gnome.Calendar.desktop', 'org.gnome.Calculator.desktop', 'com.github.xournalpp.xournalpp.desktop', 'org.gnome.Loupe.desktop', 'io.bassi.Amberol.desktop', 'org.gnome.clocks.desktop', 'org.gnome.Weather.desktop', 'es.inled.PulsarStore.desktop', 'es.inled.AppInstall.desktop']
+favorite-apps=['finder.desktop', 'pulsaros-recovery.desktop', 'pulsaros-spotlight.desktop', 'brave-browser.desktop', 'seafari.desktop', 'org.gnome.Terminal.desktop', 'org.gnome.Geary.desktop', 'org.gnome.Calendar.desktop', 'calculator.desktop', 'com.github.xournalpp.xournalpp.desktop', 'org.gnome.Loupe.desktop', 'io.bassi.Amberol.desktop', 'org.gnome.clocks.desktop', 'org.gnome.Weather.desktop', 'es.inled.PulsarStore.desktop', 'es.inled.AppInstall.desktop']
 disable-extension-version-validation=true
 
 [org.gnome.shell.extensions.pulsaros-ui-tweaks]
@@ -161,7 +161,8 @@ enable-desktop-menu-glass=false
 enable-desktop-widgets=false
 enable-dock-glass=true
 enable-extra-menu-glass=true
-enable-glass-clock=true
+enable-glass-clock=false
+profile-style='new'
 enable-launcher=true
 enable-menu-glass=true
 enable-menu-animation=true
@@ -225,4 +226,21 @@ natural-scroll=true
 two-finger-scrolling-enabled=true
 click-method='fingers'
 speed=0.0
+
+[org.gnome.shell.extensions.liquidglass-widgets]
+clock-glass-text-enabled=true
+clock-glass-text-size=240
+clock-analog-enabled=false
+clock-analog-2-enabled=false
+clock-analog-3-enabled=false
+clock-digital-enabled=false
+calendar-enabled=false
+weather-enabled=false
+music-enabled=false
+timer-enabled=false
+city-1-enabled=false
+city-2-enabled=false
+city-3-enabled=false
+city-digital-enabled=false
+
 

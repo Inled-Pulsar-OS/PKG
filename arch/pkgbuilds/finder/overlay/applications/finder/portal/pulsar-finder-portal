@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+"""
+Pulsar OS Finder - XDG Desktop Portal FileChooser Backend
+Integrates Finder natively with browsers (Chrome, Brave, Seafari, Firefox) and apps.
+"""
+
+import sys
+import os
+import subprocess
+import urllib.parse
+import gi
+
+gi.require_version('Gio', '2.0')
+gi.require_version('GLib', '2.0')
+from gi.repository import Gio, GLib
+
+INTROSPECTION_XML = """<node>
+  <interface name="org.freedesktop.impl.portal.FileChooser">
+    <method name="OpenFile">
+      <arg type="o" name="handle" direction="in"/>
+      <arg type="s" name="app_id" direction="in"/>
+      <arg type="s" name="parent_window" direction="in"/>
+      <arg type="s" name="title" direction="in"/>
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/>
+      <arg type="a{sv}" name="results" direction="out"/>
+    </method>
+    <method name="SaveFile">
+      <arg type="o" name="handle" direction="in"/>
+      <arg type="s" name="app_id" direction="in"/>
+      <arg type="s" name="parent_window" direction="in"/>
+      <arg type="s" name="title" direction="in"/>
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/>
+      <arg type="a{sv}" name="results" direction="out"/>
+    </method>
+    <method name="SaveFiles">
+      <arg type="o" name="handle" direction="in"/>
+      <arg type="s" name="app_id" direction="in"/>
+      <arg type="s" name="parent_window" direction="in"/>
+      <arg type="s" name="title" direction="in"/>
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/>
+      <arg type="a{sv}" name="results" direction="out"/>
+    </method>
+  </interface>
+</node>"""
+
+class FileChooserPortal:
+    def __init__(self):
+        self.node_info = Gio.DBusNodeInfo.new_for_xml(INTROSPECTION_XML)
+        self.interface_info = self.node_info.interfaces[0]
+
+    def handle_method_call(self, connection, sender, object_path, interface_name, method_name, parameters, invocation):
+        try:
+            handle, app_id, parent_window, title, options = parameters.unpack()
+            cmd = ["/usr/bin/finder"]
+
+            if method_name == "OpenFile":
+                is_dir = options.get("directory", False)
+                is_multi = options.get("multiple", False)
+                if is_dir:
+                    cmd.append("--choose-folder")
+                elif is_multi:
+                    cmd.append("--choose-files")
+                else:
+                    cmd.append("--choose-file")
+                if title:
+                    cmd.extend(["--title", str(title)])
+                if "current_folder" in options:
+                    folder = options["current_folder"]
+                    if isinstance(folder, (bytes, bytearray)):
+                        folder = folder.decode("utf-8", errors="ignore").rstrip('\x00')
+                    if folder and os.path.exists(folder):
+                        cmd.append(folder)
+
+            elif method_name in ("SaveFile", "SaveFiles"):
+                cmd.append("--save-file")
+                if title:
+                    cmd.extend(["--title", str(title)])
+                if "current_name" in options:
+                    cmd.extend(["--filename", str(options["current_name"])])
+                if "current_folder" in options:
+                    folder = options["current_folder"]
+                    if isinstance(folder, (bytes, bytearray)):
+                        folder = folder.decode("utf-8", errors="ignore").rstrip('\x00')
+                    if folder and os.path.exists(folder):
+                        cmd.append(folder)
+            else:
+                invocation.return_error_literal(Gio.dbus_error_quark(), Gio.DBusError.UNKNOWN_METHOD, f"Unknown method {method_name}")
+                return
+
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+            if proc.returncode == 0:
+                lines = [l.strip() for l in proc.stdout.splitlines() if l.strip()]
+                uris = []
+                for p in lines:
+                    if p.startswith("file://"):
+                        uris.append(p)
+                    else:
+                        uris.append("file://" + urllib.parse.quote(os.path.abspath(p)))
+                
+                results = {"uris": GLib.Variant("as", uris)}
+                invocation.return_value(GLib.Variant("(ua{sv})", (0, results)))
+            else:
+                invocation.return_value(GLib.Variant("(ua{sv})", (1, {})))
+        except Exception as e:
+            sys.stderr.write(f"Portal error: {e}\n")
+            invocation.return_value(GLib.Variant("(ua{sv})", (2, {})))
+
+def on_bus_acquired(connection, name):
+    portal = FileChooserPortal()
+    connection.register_object(
+        "/org/freedesktop/portal/desktop",
+        portal.interface_info,
+        portal.handle_method_call,
+        None,
+        None
+    )
+
+def main():
+    loop = GLib.MainLoop()
+    Gio.bus_own_name(
+        Gio.BusType.SESSION,
+        "org.freedesktop.impl.portal.desktop.finder",
+        Gio.BusNameOwnerFlags.REPLACE,
+        on_bus_acquired,
+        None,
+        None
+    )
+    loop.run()
+
+if __name__ == "__main__":
+    main()

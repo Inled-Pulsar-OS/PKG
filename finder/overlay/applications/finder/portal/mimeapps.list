@@ -1,0 +1,7 @@
+[Default Applications]
+inode/directory=finder.desktop
+x-scheme-handler/trash=finder.desktop
+
+[Added Associations]
+inode/directory=finder.desktop;
+x-scheme-handler/trash=finder.desktop;

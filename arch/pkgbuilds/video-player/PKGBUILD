@@ -1,7 +1,7 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=video-player
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="QuickTime video player for Pulsar OS"
 arch=('x86_64')
 url="https://github.com/skjsbsnq/Forma"
@@ -20,9 +20,14 @@ package() {
     ln -sf video-player.desktop "$pkgdir/usr/share/applications/io.github.egely1337.Mayonnaise.VideoPlayer.desktop"
     ln -sf video-player.desktop "$pkgdir/usr/share/applications/org.gnome.Totem.desktop"
 
-    mkdir -p "$pkgdir/usr/share/icons/hicolor/scalable/apps"
-    install -Dm644 /tmp/forma/applications/video_player/data/io.github.egely1337.Mayonnaise.VideoPlayer.svg \
-        "$pkgdir/usr/share/icons/hicolor/scalable/apps/video-player.svg"
-    install -Dm644 /tmp/forma/applications/video_player/data/io.github.egely1337.Mayonnaise.VideoPlayer.svg \
-        "$pkgdir/usr/share/icons/hicolor/scalable/apps/io.github.egely1337.Mayonnaise.VideoPlayer.svg"
+    for sz in 16x16 24x24 32x32 48x48 64x64 96x96 128x128 256x256 512x512; do
+        if [ -f "/tmp/forma/applications/video_player/data/icons/${sz}/quicktime-player.png" ]; then
+            install -Dm644 "/tmp/forma/applications/video_player/data/icons/${sz}/quicktime-player.png" \
+                "$pkgdir/usr/share/icons/hicolor/${sz}/apps/quicktime-player.png"
+            install -Dm644 "/tmp/forma/applications/video_player/data/icons/${sz}/quicktime-player.png" \
+                "$pkgdir/usr/share/icons/hicolor/${sz}/apps/video-player.png"
+            install -Dm644 "/tmp/forma/applications/video_player/data/icons/${sz}/quicktime-player.png" \
+                "$pkgdir/usr/share/icons/hicolor/${sz}/apps/io.github.egely1337.Mayonnaise.VideoPlayer.png"
+        fi
+    done
 }

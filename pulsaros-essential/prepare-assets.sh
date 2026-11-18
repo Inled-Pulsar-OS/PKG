@@ -101,11 +101,18 @@ EOF
 mkdir -p "$STAGE_DIR/etc/xdg"
 cat <<EOF > "$STAGE_DIR/etc/xdg/mimeapps.list"
 [Default Applications]
+inode/directory=finder.desktop
+x-scheme-handler/trash=finder.desktop
 text/html=seafari.desktop
 x-scheme-handler/http=seafari.desktop
 x-scheme-handler/https=seafari.desktop
 x-scheme-handler/about=seafari.desktop
 x-scheme-handler/unknown=seafari.desktop
+video/mp4=video-player.desktop
+video/x-matroska=video-player.desktop
+video/webm=video-player.desktop
+video/quicktime=video-player.desktop
+video/x-msvideo=video-player.desktop
 application/vnd.debian.binary-package=es.inled.AppInstall.desktop
 application/x-debian-package=es.inled.AppInstall.desktop
 application/x-zstd=es.inled.AppInstall.desktop
