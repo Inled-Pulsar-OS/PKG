@@ -2636,7 +2636,7 @@ class OOTBWindow(Adw.ApplicationWindow):
                 # Some groups are distro/package specific (plugdev exists on
                 # Debian but not Arch; docker only if docker is installed), so
                 # only add secondary groups that actually exist.
-                desired_groups = ["sudo", "wheel", "audio", "video", "plugdev", "docker"]
+                desired_groups = ["sudo", "wheel", "audio", "video", "input", "plugdev", "docker"]
                 existing_groups = get_existing_groups()
                 extra_groups = ",".join(g for g in desired_groups if g in existing_groups)
 

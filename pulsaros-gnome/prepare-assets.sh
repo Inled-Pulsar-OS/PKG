@@ -222,5 +222,7 @@ find "$SCHEMA_DIR" -type f -exec chmod 644 {} \; 2>/dev/null || true
 [ -f "$STAGE_DIR/usr/bin/pulsaros-restore-shell-layout" ] && chmod 755 "$STAGE_DIR/usr/bin/pulsaros-restore-shell-layout"
 [ -f "$STAGE_DIR/usr/bin/pulsaros-hide-overview" ] && chmod 755 "$STAGE_DIR/usr/bin/pulsaros-hide-overview"
 [ -f "$STAGE_DIR/usr/bin/pulsar-sync-accent" ] && chmod 755 "$STAGE_DIR/usr/bin/pulsar-sync-accent"
+[ -f "$STAGE_DIR/usr/bin/pulsaros-set-liquid-glass-style" ] && chmod 755 "$STAGE_DIR/usr/bin/pulsaros-set-liquid-glass-style"
+[ -f "$STAGE_DIR/usr/bin/pulsaros-live-check-gpu" ] && chmod 755 "$STAGE_DIR/usr/bin/pulsaros-live-check-gpu"
 
 echo "✅ [Pulsar OS] Todas las extensiones procesadas con éxito desde fuentes oficiales."

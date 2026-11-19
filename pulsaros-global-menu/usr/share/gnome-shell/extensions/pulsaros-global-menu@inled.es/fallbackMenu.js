@@ -267,6 +267,76 @@ const MENU_DATA = [
 	},
 ];
 
+function appMenuSpecs() {
+	const winTracker = Shell.WindowTracker.get_default();
+	const focusApp = winTracker.focus_app;
+	const win = focusApp?.get_windows()[0] || global.display.focus_window;
+	let appName = focusApp?.get_name();
+	if (!appName && win) {
+		appName = win.get_wm_class_instance() || win.get_wm_class();
+	}
+	if (appName && appName.includes('.')) {
+		const parts = appName.split('.');
+		appName = parts[parts.length - 1];
+	}
+	if (!appName)
+		appName = 'Finder';
+
+	if (!win || appName === 'Finder') {
+		return [
+			{label: 'Acerca de Finder', onActivate: () => executeFallbackAction('open-settings')},
+			{separator: true},
+			{label: 'Ajustes...', onActivate: () => executeFallbackAction('open-settings')},
+			{separator: true},
+			{label: 'Vaciar papelera', onActivate: () => executeFallbackAction('empty-trash')},
+		];
+	}
+
+	return [
+		{label: `Acerca de ${appName}`, onActivate: () => {
+			const activeWin = global.display.focus_window;
+			GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+				if (activeWin && !activeWin.is_destroyed?.() && typeof activeWin.activate === 'function')
+					activeWin.activate(global.get_current_time());
+				sendShortcut('<Ctrl>I');
+				return GLib.SOURCE_REMOVE;
+			});
+		}},
+		{separator: true},
+		{label: 'Configuración...', onActivate: () => {
+			const activeWin = global.display.focus_window;
+			GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+				if (activeWin && !activeWin.is_destroyed?.() && typeof activeWin.activate === 'function')
+					activeWin.activate(global.get_current_time());
+				sendShortcut('<Ctrl>comma');
+				return GLib.SOURCE_REMOVE;
+			});
+		}},
+		{separator: true},
+		{label: `Ocultar ${appName}`, onActivate: () => {
+			new WindowActions().doAction('Minimize');
+		}},
+		{label: 'Ocultar otros', onActivate: () => {
+			const ws = global.workspace_manager.get_active_workspace();
+			ws.list_windows().forEach(w => {
+				if (w !== win && !w.minimized && !w.is_skip_taskbar())
+					w.minimize();
+			});
+		}},
+		{label: 'Mostrar todo', onActivate: () => {
+			const ws = global.workspace_manager.get_active_workspace();
+			ws.list_windows().forEach(w => {
+				if (w.minimized && !w.is_skip_taskbar())
+					w.unminimize();
+			});
+		}},
+		{separator: true},
+		{label: `Salir de ${appName}`, onActivate: () => {
+			new WindowActions().doAction('Close');
+		}},
+	];
+}
+
 /**
  * The first button always shows the focused app's name. The generic ones are
  * hidden by MenuBar whenever the app has a menu of its own.
@@ -279,7 +349,12 @@ export class FallbackMenu {
 
 		MENU_DATA.forEach((entry, index) => {
 			const btn = new MenuBarButton(entry.label, entry.appName ? {appName: true} : {});
-			btn.setItems(entry.windowActions ? windowMenuSpecs : toSpecs(entry.items));
+			if (entry.appName)
+				btn.setItems(appMenuSpecs);
+			else if (entry.windowActions)
+				btn.setItems(windowMenuSpecs);
+			else
+				btn.setItems(toSpecs(entry.items));
 			// MENU_DATA[0] is the app name, so the index doubles as the rank
 			addBarButton(`${uuid}-fallback-${index}`, btn, index);
 			this._buttons.push(btn);
@@ -291,8 +366,18 @@ export class FallbackMenu {
 	}
 
 	updateAppName() {
-		const app = Shell.WindowTracker.get_default().focus_app;
-		this._appButton?.setLabel(app?.get_name() ?? 'Finder');
+		const winTracker = Shell.WindowTracker.get_default();
+		const focusApp = winTracker.focus_app;
+		const win = focusApp?.get_windows()[0] || global.display.focus_window;
+		let name = focusApp?.get_name();
+		if (!name && win) {
+			name = win.get_wm_class_instance() || win.get_wm_class();
+		}
+		if (name && name.includes('.')) {
+			const parts = name.split('.');
+			name = parts[parts.length - 1];
+		}
+		this._appButton?.setLabel(name || 'Finder');
 	}
 
 	setNativeMenusPresent(present) {

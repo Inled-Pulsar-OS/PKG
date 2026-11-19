@@ -160,6 +160,13 @@ function getClutter() {
 	return clutterPromise;
 }
 
+let metaPromise = null;
+
+function getMeta() {
+	metaPromise ??= import('gi://Meta').then(mod => mod.default).catch(() => null);
+	return metaPromise;
+}
+
 /**
  * Parse and synthesize an accelerator. Returns false and logs a warning if
  * the accelerator is unparseable, true if synthesis was dispatched.
@@ -171,48 +178,106 @@ export function sendShortcut(accel) {
 		return false;
 	}
 	logDebug(`Synthesizing ${accel}`);
-	getClutter()
-		.then(Clutter => synthesize(Clutter, chords))
+	Promise.all([getClutter(), getMeta()])
+		.then(([Clutter, Meta]) => synthesize(Clutter, Meta, chords))
 		.catch(e => console.error(`[global-menu-keysynth] Synthesis failed for "${accel}": ${e}`));
 	return true;
 }
 
 // GNOME 51 removed Clutter.get_default_backend(); the shell now exposes its
-// backend through global.backend. Keep the old API as a fallback for GNOME
-// 45-50 and Meta for completeness. See the module comment.
-function getDefaultSeat(Clutter) {
-	const seatOf = backend =>
-		backend && typeof backend.get_default_seat === 'function'
-			? backend.get_default_seat()
-			: null;
+// backend through global.stage context. Keep all fallbacks for GNOME
+// 45-51 and Meta for completeness. See the module comment.
+function getDefaultSeat(Clutter, Meta) {
+	const seatOf = backend => {
+		try {
+			if (!backend) return null;
+			if (typeof backend.get_default_seat === 'function')
+				return backend.get_default_seat();
+			if (typeof backend.get_seat === 'function')
+				return backend.get_seat();
+		} catch (e) {
+			console.warn(`[global-menu-keysynth] seatOf error: ${e.message}`);
+		}
+		return null;
+	};
 
+	// 1. GNOME 48-51: Stage context backend
 	try {
-		const seat = seatOf(global.backend);
-		if (seat)
-			return seat;
+		if (typeof global !== 'undefined' && global.stage) {
+			const ctx = typeof global.stage.get_context === 'function'
+				? global.stage.get_context()
+				: global.stage.context;
+			const backend = ctx && typeof ctx.get_backend === 'function' ? ctx.get_backend() : null;
+			const seat = seatOf(backend);
+			if (seat)
+				return seat;
+		}
+	} catch (e) {
+		console.warn(`[global-menu-keysynth] stage backend error: ${e.message}`);
+	}
+
+	// 2. GNOME Shell global.context backend
+	try {
+		if (typeof global !== 'undefined' && global.context && typeof global.context.get_backend === 'function') {
+			const seat = seatOf(global.context.get_backend());
+			if (seat)
+				return seat;
+		}
 	} catch (e) {}
 
+	// 3. GNOME Shell global.backend
 	try {
-		if (typeof Clutter.get_default_backend === 'function') {
+		if (typeof global !== 'undefined' && global.backend) {
+			const seat = seatOf(global.backend);
+			if (seat)
+				return seat;
+		}
+	} catch (e) {}
+
+	// 4. Meta.get_backend()
+	try {
+		if (Meta && typeof Meta.get_backend === 'function') {
+			const seat = seatOf(Meta.get_backend());
+			if (seat)
+				return seat;
+		}
+	} catch (e) {}
+
+	// 5. Meta.Context.get_default() backend
+	try {
+		if (Meta && Meta.Context && typeof Meta.Context.get_default === 'function') {
+			const metaCtx = Meta.Context.get_default();
+			const backend = metaCtx && typeof metaCtx.get_backend === 'function' ? metaCtx.get_backend() : null;
+			const seat = seatOf(backend);
+			if (seat)
+				return seat;
+		}
+	} catch (e) {}
+
+	// 6. Legacy Clutter.get_default_backend() (GNOME 45-47)
+	try {
+		if (Clutter && typeof Clutter.get_default_backend === 'function') {
 			const seat = seatOf(Clutter.get_default_backend());
 			if (seat)
 				return seat;
 		}
 	} catch (e) {}
 
-	try {
-		if (typeof Meta !== 'undefined' && typeof Meta.get_backend === 'function')
-			return seatOf(Meta.get_backend());
-	} catch (e) {}
-
 	return null;
 }
 
-function synthesize(Clutter, chords) {
-	const seat = getDefaultSeat(Clutter);
+let cachedVirtualDevice = null;
+
+function synthesize(Clutter, Meta, chords) {
+	const seat = getDefaultSeat(Clutter, Meta);
 	if (!seat)
 		throw new Error('No Clutter seat available');
-	const dev = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+
+	if (!cachedVirtualDevice) {
+		cachedVirtualDevice = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+	}
+	const dev = cachedVirtualDevice;
+
 	let t = GLib.get_monotonic_time();
 	for (const {modifiers, keyval} of chords) {
 		for (const mod of modifiers)

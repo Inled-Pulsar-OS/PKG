@@ -75,8 +75,12 @@ export class ShortcutMenu {
 	}
 
 	_fireShortcut(accel) {
+		const win = global.display.focus_window;
 		const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, SYNTH_DELAY_MS, () => {
 			this._timeoutIds.delete(id);
+			if (win && !win.is_destroyed?.() && typeof win.activate === 'function') {
+				win.activate(global.get_current_time());
+			}
 			sendShortcut(accel);
 			return GLib.SOURCE_REMOVE;
 		});

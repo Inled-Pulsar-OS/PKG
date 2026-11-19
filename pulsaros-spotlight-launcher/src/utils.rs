@@ -69,13 +69,60 @@ lazy_static! {
 }
 
 pub fn open_file(url: &str) -> bool {
+    let clean_url = url.trim_end_matches('/');
+
+    // Handle macOS .app bundles (e.g. app://CotEditor.app, file:///path/to/CotEditor.app, /path/to/CotEditor.app)
+    if clean_url.ends_with(".app") {
+        let path_str = if clean_url.starts_with("file://") {
+            &clean_url[7..]
+        } else if clean_url.starts_with("app://") {
+            &clean_url[6..]
+        } else {
+            clean_url
+        };
+
+        let pbuf = PathBuf::from(path_str);
+        let app_path = if pbuf.is_absolute() && pbuf.exists() {
+            pbuf
+        } else {
+            let mut found = None;
+            if let Ok(home) = std::env::var("HOME") {
+                let h = PathBuf::from(home).join("Applications").join(path_str);
+                if h.exists() {
+                    found = Some(h);
+                }
+            }
+            if found.is_none() {
+                let a = PathBuf::from("/Applications").join(path_str);
+                if a.exists() {
+                    found = Some(a);
+                }
+            }
+            found.unwrap_or(pbuf)
+        };
+
+        if app_path.exists() {
+            return std::process::Command::new("/usr/bin/pulsar-appexec")
+                .arg(&app_path)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .is_ok();
+        }
+        return false;
+    }
+
     if url.starts_with("app://") {
         let desktop_filename = &url[6..];
+
         if let Some(app_info) = gio::DesktopAppInfo::new(desktop_filename) {
             return app_info.launch(&[], None::<&gio::AppLaunchContext>).is_ok();
         }
         // Fallback search
-        for dir in &["/usr/share/applications", "/home/jaime/.local/share/applications"] {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/home/jaime".into());
+        let user_apps = format!("{}/.local/share/applications", home);
+        for dir in &["/usr/share/applications", user_apps.as_str()] {
             let path = Path::new(dir).join(desktop_filename);
             if path.exists() {
                 if let Some(app_info) = gio::DesktopAppInfo::from_filename(path) {

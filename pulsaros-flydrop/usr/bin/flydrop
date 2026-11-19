@@ -29,13 +29,31 @@ def get_dbus_iface():
         bus = dbus.SessionBus()
         proxy = bus.get_object("es.pulsaros.FlyDrop", "/es/pulsaros/FlyDrop")
         return dbus.Interface(proxy, "es.pulsaros.FlyDrop")
-    except Exception as e:
-        print(f"Error: FlyDrop Daemon is not running ({e})")
-        print("Inicia el servicio ejecutando: systemctl --user start flydrop.service")
+    except Exception:
         return None
 
 
 def main():
+    # If invoked under sudo with a real user session, re-exec as that user to inherit their desktop D-Bus
+    if os.geteuid() == 0 and os.environ.get("SUDO_USER") and os.environ.get("SUDO_USER") != "root":
+        sudo_user = os.environ.get("SUDO_USER")
+        import pwd
+        try:
+            pw = pwd.getpwnam(sudo_user)
+            uid = pw.pw_uid
+            user_runtime = f"/run/user/{uid}"
+            user_bus = f"unix:path={user_runtime}/bus"
+            env = os.environ.copy()
+            if os.path.exists(f"{user_runtime}/bus"):
+                env["DBUS_SESSION_BUS_ADDRESS"] = user_bus
+                env["XDG_RUNTIME_DIR"] = user_runtime
+            env["USER"] = sudo_user
+            env["HOME"] = pw.pw_dir
+            cmd = ["sudo", "-u", sudo_user, "-E", sys.executable, os.path.abspath(__file__)] + sys.argv[1:]
+            os.execvpe("sudo", cmd, env)
+        except Exception:
+            pass
+
     parser = argparse.ArgumentParser(description="FlyDrop - LocalSend & AirDrop para Pulsar OS")
     subparsers = parser.add_subparsers(dest="command")
 
@@ -65,6 +83,14 @@ def main():
 
     if not args.command or args.command == "settings":
         iface = get_dbus_iface()
+        if not iface:
+            try:
+                subprocess.Popen(["flydrop-daemon"])
+                import time
+                time.sleep(0.5)
+                iface = get_dbus_iface()
+            except Exception:
+                pass
         if iface:
             iface.OpenSettingsDialog()
         else:
@@ -85,6 +111,14 @@ def main():
     if args.command == "send":
         if not args.files:
             iface = get_dbus_iface()
+            if not iface:
+                try:
+                    subprocess.Popen(["flydrop-daemon"])
+                    import time
+                    time.sleep(0.5)
+                    iface = get_dbus_iface()
+                except Exception:
+                    pass
             if iface:
                 iface.OpenSendDialog("")
             else:
@@ -101,7 +135,20 @@ def main():
 
         iface = get_dbus_iface()
         if not iface:
-            sys.exit(1)
+            try:
+                subprocess.Popen(["flydrop-daemon"])
+                import time
+                time.sleep(0.5)
+                iface = get_dbus_iface()
+            except Exception:
+                pass
+
+        if not iface:
+            ui_script = os.path.join(pkg_root, "ui", "send_dialog.py")
+            if not os.path.exists(ui_script):
+                ui_script = "/usr/share/flydrop/ui/send_dialog.py"
+            subprocess.Popen([sys.executable, ui_script, "--files", json.dumps(valid_files)])
+            return
 
         if args.to:
             print(f"Enviando {len(valid_files)} archivo(s) a {args.to}...")

@@ -1635,7 +1635,10 @@ impl SpotlightWindow {
             }
             return true;
         }
-        let clean_path = res.url.trim_start_matches("file://");
+        let clean_path = res.url.trim_start_matches("file://").trim_end_matches('/');
+        if clean_path.ends_with(".app") {
+            return open_file(&format!("file://{clean_path}"));
+        }
         if Path::new(clean_path).is_dir() && (res.mime == "inode/directory" || res.mime == "folder") {
             *self.current_dir.borrow_mut() = Some(clean_path.to_string());
             self.search_entry.set_text("");

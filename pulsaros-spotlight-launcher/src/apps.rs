@@ -27,6 +27,10 @@ pub fn get_desktop_dirs() -> Vec<PathBuf> {
         dirs_list.push(PathBuf::from(format!("{}/.local/share/applications", home)));
         dirs_list.push(PathBuf::from(format!("{}/.local/share/flatpak/exports/share/applications", home)));
     }
+    if let Ok(home) = std::env::var("HOME") {
+        dirs_list.push(PathBuf::from(format!("{}/Applications", home)));
+    }
+    dirs_list.push(PathBuf::from("/Applications"));
     dirs_list.push(PathBuf::from("/var/lib/flatpak/exports/share/applications"));
     dirs_list.push(PathBuf::from("/var/lib/snapd/desktop/applications"));
     dirs_list
@@ -233,5 +237,155 @@ pub fn load_apps() -> Vec<DesktopApp> {
         }
     }
 
+    // Scan ~/Applications and /Applications for native macOS .app bundles
+    let mut mac_search_dirs = Vec::new();
+    if let Ok(home) = std::env::var("HOME") {
+        mac_search_dirs.push(PathBuf::from(format!("{}/Applications", home)));
+    }
+    mac_search_dirs.push(PathBuf::from("/Applications"));
+
+    for dir in mac_search_dirs {
+        if !dir.is_dir() {
+            continue;
+        }
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.is_dir() && p.extension().map_or(false, |ext| ext == "app") {
+                    let app_id = p.file_name().unwrap_or_default().to_string_lossy().into_owned();
+                    if !seen_ids.contains(&app_id) {
+                        if let Some(app) = parse_mac_app(&p) {
+                            seen_ids.insert(app_id);
+                            apps.push(app);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     apps
 }
+
+fn extract_png_from_icns(icns_path: &Path, out_png: &Path) -> bool {
+    if let Ok(bytes) = std::fs::read(icns_path) {
+        let png_header = b"\x89PNG\r\n\x1a\n";
+        let iend_marker = b"IEND";
+        let mut best_png: Option<&[u8]> = None;
+        let mut pos = 0;
+
+        while let Some(start_offset) = bytes[pos..].windows(8).position(|w| w == png_header) {
+            let actual_start = pos + start_offset;
+            if let Some(end_offset) = bytes[actual_start..].windows(4).position(|w| w == iend_marker) {
+                let actual_end = actual_start + end_offset + 8;
+                let slice = &bytes[actual_start..actual_end];
+                if best_png.map_or(true, |b| slice.len() > b.len()) {
+                    best_png = Some(slice);
+                }
+                pos = actual_end;
+            } else {
+                break;
+            }
+        }
+
+        if let Some(png) = best_png {
+            if let Some(parent) = out_png.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if std::fs::write(out_png, png).is_ok() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn parse_mac_app(path: &Path) -> Option<DesktopApp> {
+    if !path.is_dir() {
+        return None;
+    }
+    let folder_name = path.file_name()?.to_string_lossy();
+    if !folder_name.ends_with(".app") {
+        return None;
+    }
+    let clean_name = folder_name.strip_suffix(".app").unwrap_or(&folder_name);
+
+    let mut display_name = clean_name.to_string();
+    let mut icon_path = String::new();
+
+    let plist_path = path.join("Contents/Info.plist");
+    if let Ok(content) = std::fs::read_to_string(&plist_path) {
+        if let Some(pos) = content.find("<key>CFBundleDisplayName</key>") {
+            if let Some(str_start) = content[pos..].find("<string>") {
+                if let Some(str_end) = content[pos + str_start..].find("</string>") {
+                    display_name = content[pos + str_start + 8..pos + str_start + str_end].trim().to_string();
+                }
+            }
+        } else if let Some(pos) = content.find("<key>CFBundleName</key>") {
+            if let Some(str_start) = content[pos..].find("<string>") {
+                if let Some(str_end) = content[pos + str_start..].find("</string>") {
+                    display_name = content[pos + str_start + 8..pos + str_start + str_end].trim().to_string();
+                }
+            }
+        }
+
+        let mut raw_icon = String::new();
+        if let Some(pos) = content.find("<key>CFBundleIconFile</key>") {
+            if let Some(str_start) = content[pos..].find("<string>") {
+                if let Some(str_end) = content[pos + str_start..].find("</string>") {
+                    raw_icon = content[pos + str_start + 8..pos + str_start + str_end].trim().to_string();
+                }
+            }
+        }
+        if !raw_icon.is_empty() && !raw_icon.ends_with(".icns") {
+            raw_icon.push_str(".icns");
+        }
+
+        let mut icns_file = if !raw_icon.is_empty() {
+            path.join("Contents/Resources").join(raw_icon)
+        } else {
+            path.join("Contents/Resources/AppIcon.icns")
+        };
+
+        if !icns_file.exists() {
+            if let Ok(res_entries) = std::fs::read_dir(path.join("Contents/Resources")) {
+                for r in res_entries.flatten() {
+                    if r.path().extension().map_or(false, |ext| ext == "icns") {
+                        icns_file = r.path();
+                        break;
+                    }
+                }
+            }
+        }
+
+        if icns_file.exists() {
+            if let Ok(home) = std::env::var("HOME") {
+                let cache_icon = PathBuf::from(format!("{}/.cache/pulsar-icons/{}.png", home, clean_name));
+                if cache_icon.exists() || extract_png_from_icns(&icns_file, &cache_icon) {
+                    icon_path = cache_icon.to_string_lossy().into_owned();
+                }
+            }
+        }
+    }
+
+    if icon_path.is_empty() {
+        icon_path = "application-x-executable".to_string();
+    }
+
+    let exec = format!("pulsar-appexec \"{}\"", path.display());
+    let comment = "macOS Application".to_string();
+
+    Some(DesktopApp {
+        lower_name: display_name.to_lowercase(),
+        lower_comment: comment.to_lowercase(),
+        lower_keywords: clean_name.to_lowercase(),
+        name: display_name,
+        exec,
+        icon: icon_path,
+        comment,
+        keywords: format!("macos apple app {}", clean_name),
+        categories: "macOS;Utility;Application;".to_string(),
+        filename: folder_name.to_string(),
+    })
+}
+

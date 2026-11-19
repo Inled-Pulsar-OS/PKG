@@ -129,6 +129,9 @@ stamp_git_commit() {
 
 is_deb_up_to_date() {
     local name="$1"
+    # Always rebuild pulsaros-gnome so extension changes are always synced into builds
+    [ "$name" = "pulsaros-gnome" ] && return 1
+
     local pkg_src_dir="$PKG_DIR/$name"
     if [ ! -d "$pkg_src_dir" ]; then
         for ctrl in "$PKG_DIR"/*/DEBIAN/control; do

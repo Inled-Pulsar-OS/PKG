@@ -182,7 +182,7 @@ if [ "$CHANGED" -eq 1 ]; then
 fi
 
 # 4. Sincronizar el estado de los efectos de escritorio (Liquid Glass vs Blur My Shell)
-# Mantiene el modo exacto que aplica gnome-control-center entre sesiones
+# Mantiene el modo exacto que aplica gnome-control-center o el usuario entre sesiones
 has_liquid_glass=0
 for ext in "${NEW_ARR[@]}"; do
     if [ "$ext" = "liquid-glass@thinkingcoding1231.gmail.com" ]; then

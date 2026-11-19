@@ -1,6 +1,7 @@
 {
   "format": 1,
   "apps": [
+    "coteditor.json",
     "nautilus.json",
     "decibels.json",
     "showtime.json",

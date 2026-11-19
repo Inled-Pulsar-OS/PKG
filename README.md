@@ -89,6 +89,8 @@ The following packages are marked as **deprecated** or have been completely **de
 | `pulsaros-update` | Graphical system update assistant for scheduled and on-demand maintenance of Arch and Debian packages. |
 | `calculator` | **Calculator**: a macOS-style calculator written in C++20 on the **Mayonnaise** toolkit (SDL3, Vulkan/OpenGL) with Liquid Glass styling. Basic and scientific keypads, operator precedence and parentheses, memory, 2nd functions, degrees/radians, macOS-style percentages (`50 + 10 % = 55`), repeated `=`, keyboard/numpad input and locale-grouped numbers. Replaces `gnome-calculator`. |
 | `finder` | **Finder**: macOS Finder-style file manager written in C++20 on the **Mayonnaise** toolkit with Pulsar OS customizations. Icons, List and Columns views, spacebar Quick Look + thumbnails for images, videos and PDFs, sidebar with Applications shortcut and color tags, right-click menu with ZIP compression, Move to, FlyDrop sharing and color tags, file picker mode for system file dialogs, and Liquid Glass controls. |
+| `system-monitor` | **System Monitor**: macOS Activity Monitor-style process and resource monitor (CPU, memory, disk, network, per-process icons from the system icon theme), translated into English, Spanish, French and Italian. |
+| `system-settings` | **Settings**: macOS System Settings-style control center for the desktop, network, display, sound, power, keyboard, users and privacy, translated into English, Spanish, French and Italian. |
 
 ### Tube OS (NAS / home-server line)
 

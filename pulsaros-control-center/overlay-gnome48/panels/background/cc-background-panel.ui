@@ -128,6 +128,35 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                             <signal name="notify::active" handler="on_liquid_glass_active_changed_cb" object="CcBackgroundPanel"/>
                           </object>
                         </child>
+                        <child>
+                          <object class="AdwComboRow" id="liquid_glass_style_row">
+                            <property name="title" translatable="yes">Liquid Glass Style</property>
+                            <property name="subtitle" translatable="yes">Choose between the new enhanced look or classic Liquid Glass</property>
+                            <signal name="notify::selected" handler="on_liquid_glass_style_selected_cb" object="CcBackgroundPanel"/>
+                            <property name="model">
+                              <object class="GtkStringList">
+                                <items>
+                                  <item translatable="yes">New Liquid Glass (Angelo Tuning / Sayri)</item>
+                                  <item translatable="yes">Classic Liquid Glass (Original ryohsuke)</item>
+                                </items>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwActionRow">
+                            <property name="title" translatable="yes">Extension Settings</property>
+                            <property name="subtitle" translatable="yes">Configure advanced shader parameters, blur and glass radius</property>
+                            <child type="suffix">
+                              <object class="GtkButton">
+                                <property name="valign">3</property>
+                                <property name="icon-name">emblem-system-symbolic</property>
+                                <property name="label" translatable="yes">Settings…</property>
+                                <signal name="clicked" handler="on_open_liquid_glass_prefs_clicked_cb" object="CcBackgroundPanel"/>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
                       </object>
                     </child>
                     <child>

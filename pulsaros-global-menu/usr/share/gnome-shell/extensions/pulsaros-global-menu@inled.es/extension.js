@@ -113,7 +113,7 @@ class MenuBar {
 		}
 
 		const candidates = this._shortcutCandidates(focusApp, win);
-		const mapping = this._store.resolveMapping(candidates);
+		const mapping = this._store.resolveMapping(candidates, win, focusApp);
 		this._shortcutMapping = mapping && this._shortcutsEnabledForApp(mapping) ? mapping : null;
 		if (this._settings.get_boolean('debug-shortcut-menus')) {
 			console.log(`[global-menu-shortcuts] resolution: candidates=[${candidates}] ` +
@@ -306,6 +306,25 @@ class DaemonProxy {
 
 export default class PulsarosGlobalMenuExtension extends Extension {
 	enable() {
+		// Ensure global.backend provides get_default_seat for virtual keyboard synthesis (GNOME 51 compatibility)
+		try {
+			const stageContext = (typeof global !== 'undefined' && global.stage)
+				? (typeof global.stage.get_context === 'function' ? global.stage.get_context() : global.stage.context)
+				: null;
+			const realBackend = stageContext && typeof stageContext.get_backend === 'function'
+				? stageContext.get_backend()
+				: null;
+			if (realBackend) {
+				if (!global.backend) {
+					global.backend = realBackend;
+				} else if (typeof global.backend.get_default_seat !== 'function') {
+					global.backend.get_default_seat = () => realBackend.get_default_seat();
+				}
+			}
+		} catch (e) {
+			console.error('[GlobalMenu] Failed to initialize backend seat provider:', e);
+		}
+
 		this._settings = this.getSettings();
 		this._settingsHandlerIds = [];
 		this._activePowerDialog = null;

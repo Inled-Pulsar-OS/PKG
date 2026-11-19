@@ -9,6 +9,7 @@
 // Mapping file format: docs/shortcut-mappings.md
 
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 
 import {parseAccelerator} from './keySynth.js';
 
@@ -142,6 +143,100 @@ function collectDuplicateShortcuts(mapping, warnings) {
 	}
 }
 
+export function isMacApp(win, focusApp) {
+	if (!win) return false;
+	const wmClass = (win.get_wm_class?.() || '').toLowerCase();
+	const instance = (win.get_wm_class_instance?.() || '').toLowerCase();
+	const appId = (focusApp?.get_id?.() || '').toLowerCase();
+
+	if (wmClass.includes('.app') || instance.includes('.app') || appId.includes('.app'))
+		return true;
+
+	const pid = win.get_pid?.() || 0;
+	if (pid > 0) {
+		try {
+			const [ok, bytes] = GLib.file_get_contents(`/proc/${pid}/cmdline`);
+			if (ok) {
+				const cmd = new TextDecoder().decode(bytes);
+				if (cmd.includes('.app/') || cmd.includes('pulsar-appexec') || cmd.includes('appexec'))
+					return true;
+			}
+		} catch (e) {}
+	}
+	return false;
+}
+
+export function makeMacAppMapping(win, focusApp) {
+	let appName = focusApp?.get_name() || win?.get_wm_class_instance() || win?.get_wm_class() || 'Application';
+	if (appName.includes('.')) {
+		const parts = appName.split('.');
+		appName = parts[parts.length - 1];
+	}
+
+	return {
+		format: 1,
+		app: appName.toLowerCase(),
+		name: appName,
+		identifiers: [appName.toLowerCase()],
+		menus: [
+			{
+				label: 'Archivo',
+				items: [
+					{label: 'Nuevo', shortcut: '<Ctrl>N'},
+					{label: 'Abrir...', shortcut: '<Ctrl>O'},
+					{separator: true},
+					{label: 'Cerrar ventana', shortcut: '<Ctrl>W'},
+					{label: 'Guardar', shortcut: '<Ctrl>S'},
+					{label: 'Guardar como...', shortcut: '<Ctrl><Shift>S'},
+					{separator: true},
+					{label: 'Imprimir...', shortcut: '<Ctrl>P'}
+				]
+			},
+			{
+				label: 'Edición',
+				items: [
+					{label: 'Deshacer', shortcut: '<Ctrl>Z'},
+					{label: 'Rehacer', shortcut: '<Ctrl><Shift>Z'},
+					{separator: true},
+					{label: 'Cortar', shortcut: '<Ctrl>X'},
+					{label: 'Copiar', shortcut: '<Ctrl>C'},
+					{label: 'Pegar', shortcut: '<Ctrl>V'},
+					{label: 'Seleccionar todo', shortcut: '<Ctrl>A'},
+					{separator: true},
+					{label: 'Buscar...', shortcut: '<Ctrl>F'},
+					{label: 'Buscar siguiente', shortcut: '<Ctrl>G'},
+					{label: 'Buscar anterior', shortcut: '<Ctrl><Shift>G'}
+				]
+			},
+			{
+				label: 'Ver',
+				items: [
+					{label: 'Pantalla completa', shortcut: '<Ctrl><Super>F'},
+					{separator: true},
+					{label: 'Acercar', shortcut: '<Ctrl>plus'},
+					{label: 'Alejar', shortcut: '<Ctrl>minus'},
+					{label: 'Tamaño real', shortcut: '<Ctrl>0'}
+				]
+			},
+			{
+				label: 'Ventana',
+				items: [
+					{label: 'Minimizar', shortcut: '<Ctrl>M'},
+					{label: 'Zoom', shortcut: '<Ctrl><Alt>Return'},
+					{separator: true},
+					{label: 'Traer todo al frente', shortcut: '<Super>Tab'}
+				]
+			},
+			{
+				label: 'Ayuda',
+				items: [
+					{label: `Ayuda de ${appName}`, shortcut: 'F1'}
+				]
+			}
+		]
+	};
+}
+
 export class ShortcutStore {
 	constructor(builtinDir /* Gio.File: <ext>/shortcuts */,
 	            userDir /* Gio.File: ~/.config/global-menu/shortcuts */) {
@@ -210,10 +305,13 @@ export class ShortcutStore {
 	 * candidates: lowercased identifier candidates for the focused app
 	 * (desktop id, WM class, app name). Returns the matching mapping or null.
 	 */
-	resolveMapping(candidates) {
+	resolveMapping(candidates, win = null, focusApp = null) {
 		for (const mapping of this._ordered) {
 			if (mapping.identifiers.some(id => candidates.includes(id)))
 				return mapping;
+		}
+		if (isMacApp(win, focusApp)) {
+			return makeMacAppMapping(win, focusApp);
 		}
 		return null;
 	}

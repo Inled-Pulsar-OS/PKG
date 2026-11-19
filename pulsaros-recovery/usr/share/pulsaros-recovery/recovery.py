@@ -1925,11 +1925,11 @@ class RecoveryWindow(Adw.ApplicationWindow):
             heading="Install Pulsar Next Apps",
             body=(
                 "This will install the native Pulsar Next desktop suite:\n\n"
-                "• <b>Finder</b> (macOS-style file manager & native file chooser)\n"
+                "• <b>Finder</b> (macOS-style file manager &amp; native file chooser)\n"
                 "• <b>QuickTime Video Player</b> (hardware accelerated player)\n"
                 "• <b>System Settings</b> (macOS System Settings control panel)\n"
                 "• <b>Activity Monitor</b> (native macOS-style process monitor)\n"
-                "• <b>Calculator</b> (macOS scientific & basic calculator)\n\n"
+                "• <b>Calculator</b> (macOS scientific &amp; basic calculator)\n\n"
                 "Classic GNOME applications (Nautilus, Totem, Control Center, System Monitor) "
                 "will be replaced. Internet connection or local installation media required."
             ),

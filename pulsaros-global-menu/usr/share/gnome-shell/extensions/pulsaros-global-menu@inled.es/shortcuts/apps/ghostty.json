@@ -4,6 +4,7 @@
   "name": "Ghostty",
   "identifiers": [
     "com.mitchellh.ghostty.desktop",
+    "com.mitchellh.ghostty",
     "ghostty",
     "Ghostty"
   ],

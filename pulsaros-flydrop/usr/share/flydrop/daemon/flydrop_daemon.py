@@ -20,7 +20,12 @@ if BASE_DIR not in sys.path:
 import gi
 gi.require_version("GLib", "2.0")
 gi.require_version("Gio", "2.0")
-gi.require_version("Gtk", "3.0")
+
+try:
+    gi.require_version("Gtk", "3.0")
+    from gi.repository import Gtk
+except (ValueError, ImportError):
+    Gtk = None
 
 try:
     gi.require_version("AyatanaAppIndicator3", "0.1")
@@ -32,7 +37,7 @@ except (ValueError, ImportError):
     except (ValueError, ImportError):
         AppIndicator = None
 
-from gi.repository import GLib, Gio, Gtk
+from gi.repository import GLib, Gio
 
 import dbus
 import dbus.service
@@ -271,8 +276,8 @@ class FlyDropDaemon:
         self.client = LocalSendClient()
 
     def _setup_indicator(self):
-        if not AppIndicator:
-            logger.warning("AyatanaAppIndicator3 / AppIndicator3 not available, skipping panel tray indicator")
+        if not AppIndicator or not Gtk:
+            logger.warning("AyatanaAppIndicator3 / AppIndicator3 / Gtk not available, skipping panel tray indicator")
             return
 
         # GTK widget creation segfaults without a screen, and Gtk.init_check()

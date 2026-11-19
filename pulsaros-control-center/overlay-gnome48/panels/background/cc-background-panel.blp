@@ -123,6 +123,32 @@ template $CcBackgroundPanel: $CcPanel {
               subtitle: _("Apply translucent blurs and reflective borders to active windows in macOS style");
               notify::active => $on_liquid_glass_active_changed_cb(template);
             }
+
+            Adw.ComboRow liquid_glass_style_row {
+              title: _("Liquid Glass Style");
+              subtitle: _("Choose between the new enhanced look or classic Liquid Glass");
+              notify::selected => $on_liquid_glass_style_selected_cb(template);
+
+              model: StringList {
+                strings [
+                  _("New Liquid Glass (Angelo Tuning / Sayri)"),
+                  _("Classic Liquid Glass (Original ryohsuke)"),
+                ]
+              };
+            }
+
+            Adw.ActionRow {
+              title: _("Extension Settings");
+              subtitle: _("Configure advanced shader parameters, blur and glass radius");
+
+              [suffix]
+              Button {
+                valign: center;
+                icon-name: "emblem-system-symbolic";
+                label: _("Settings…");
+                clicked => $on_open_liquid_glass_prefs_clicked_cb(template);
+              }
+            }
           }
 
           Adw.PreferencesGroup {

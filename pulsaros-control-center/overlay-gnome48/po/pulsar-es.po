@@ -17,6 +17,24 @@ msgstr "Efecto Liquid Glass"
 msgid "Apply translucent blurs and reflective borders to active windows in macOS style"
 msgstr "Aplica desenfoques translúcidos y bordes reflectantes a las ventanas activas estilo macOS"
 
+msgid "Liquid Glass Style"
+msgstr "Estilo de Liquid Glass"
+
+msgid "Choose between the new enhanced look or classic Liquid Glass"
+msgstr "Elige entre el nuevo aspecto mejorado o el Liquid Glass clásico"
+
+msgid "New Liquid Glass (Angelo Tuning / Sayri)"
+msgstr "Nuevo Liquid Glass (Angelo Tuning / Sayri)"
+
+msgid "Classic Liquid Glass (Original ryohsuke)"
+msgstr "Liquid Glass Clásico (Original ryohsuke)"
+
+msgid "Extension Settings"
+msgstr "Ajustes de la extensión"
+
+msgid "Configure advanced shader parameters, blur and glass radius"
+msgstr "Configura parámetros avanzados de shader, desenfoque y radio de cristal"
+
 msgid "Window Transparency Mode"
 msgstr "Modo de transparencia de ventanas"
 

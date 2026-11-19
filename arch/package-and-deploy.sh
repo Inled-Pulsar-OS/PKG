@@ -233,6 +233,9 @@ find_package_output() {
 
 is_pkg_up_to_date() {
     local name="$1"
+    # Always rebuild pulsaros-gnome so extension changes are always synced into builds
+    [ "$name" = "pulsaros-gnome" ] && return 1
+
     local pkgbuild_dir="$PKGBUILDS_DIR/$name"
     local existing_pkg=$(find_package_output "$name")
     [ -z "$existing_pkg" ] && return 1

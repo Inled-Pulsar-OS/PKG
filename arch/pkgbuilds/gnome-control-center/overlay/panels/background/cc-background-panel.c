@@ -72,6 +72,7 @@ struct _CcBackgroundPanel {
   AdwSwitchRow *macos_remap_switch_row;
   AdwSwitchRow *macos_fullscreen_switch_row;
   AdwSwitchRow *liquid_glass_switch_row;
+  AdwComboRow *liquid_glass_style_row;
   AdwComboRow *icon_theme_row;
   AdwSwitchRow *notch_switch_row;
   AdwSwitchRow *cc_switch_row;
@@ -291,6 +292,17 @@ set_color_scheme (CcBackgroundPanel *self, GDesktopColorScheme color_scheme)
     transition_screen (self);
 
     g_settings_set_enum (self->interface_settings, INTERFACE_COLOR_SCHEME_KEY, color_scheme);
+
+    if (color_scheme == G_DESKTOP_COLOR_SCHEME_PREFER_DARK)
+      {
+        g_settings_set_string (self->interface_settings, "gtk-theme", "MacTahoe-Dark");
+        g_spawn_command_line_async ("/usr/bin/pulsar-sync-accent --once", NULL);
+      }
+    else
+      {
+        g_settings_set_string (self->interface_settings, "gtk-theme", "MacTahoe-Light");
+        g_spawn_command_line_async ("/usr/bin/pulsar-sync-accent --once", NULL);
+      }
 }
 
 /* Color schemes */
@@ -960,6 +972,27 @@ on_liquid_glass_active_changed_cb (CcBackgroundPanel *self)
 }
 
 static void
+on_liquid_glass_style_selected_cb (CcBackgroundPanel *self)
+{
+  guint selected;
+
+  if (!self->liquid_glass_style_row)
+    return;
+
+  selected = adw_combo_row_get_selected (self->liquid_glass_style_row);
+  if (selected == 0)
+    g_spawn_command_line_async ("/usr/bin/pulsaros-set-liquid-glass-style new", NULL);
+  else
+    g_spawn_command_line_async ("/usr/bin/pulsaros-set-liquid-glass-style classic", NULL);
+}
+
+static void
+on_open_liquid_glass_prefs_clicked_cb (CcBackgroundPanel *self)
+{
+  g_spawn_command_line_async ("gnome-extensions prefs liquid-glass@thinkingcoding1231.gmail.com", NULL);
+}
+
+static void
 on_icon_theme_selected_cb (CcBackgroundPanel *self)
 {
   guint selected;
@@ -1260,6 +1293,7 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_remap_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, macos_fullscreen_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, liquid_glass_switch_row);
+  gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, liquid_glass_style_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, icon_theme_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, notch_switch_row);
   gtk_widget_class_bind_template_child (widget_class, CcBackgroundPanel, cc_switch_row);
@@ -1276,6 +1310,8 @@ cc_background_panel_class_init (CcBackgroundPanelClass *klass)
   gtk_widget_class_bind_template_callback (widget_class, on_apply_cursor_tahoe_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_apply_cursor_adwaita_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_liquid_glass_active_changed_cb);
+  gtk_widget_class_bind_template_callback (widget_class, on_liquid_glass_style_selected_cb);
+  gtk_widget_class_bind_template_callback (widget_class, on_open_liquid_glass_prefs_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_icon_theme_selected_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_activate_spotlight_python_clicked_cb);
   gtk_widget_class_bind_template_callback (widget_class, on_activate_gnome_overview_clicked_cb);
@@ -1354,6 +1390,21 @@ cc_background_panel_init (CcBackgroundPanel *self)
       g_signal_handlers_block_by_func (self->liquid_glass_switch_row, on_liquid_glass_active_changed_cb, self);
       adw_switch_row_set_active (self->liquid_glass_switch_row, lg_active);
       g_signal_handlers_unblock_by_func (self->liquid_glass_switch_row, on_liquid_glass_active_changed_cb, self);
+    }
+
+  if (self->liquid_glass_style_row)
+    {
+      g_autofree gchar *out = NULL;
+      guint initial_idx = 0;
+      if (g_spawn_command_line_sync ("/usr/bin/pulsaros-set-liquid-glass-style status", &out, NULL, NULL, NULL) && out)
+        {
+          g_strstrip (out);
+          if (g_strcmp0 (out, "classic") == 0)
+            initial_idx = 1;
+        }
+      g_signal_handlers_block_by_func (self->liquid_glass_style_row, on_liquid_glass_style_selected_cb, self);
+      adw_combo_row_set_selected (self->liquid_glass_style_row, initial_idx);
+      g_signal_handlers_unblock_by_func (self->liquid_glass_style_row, on_liquid_glass_style_selected_cb, self);
     }
 
   if (self->icon_theme_row)
