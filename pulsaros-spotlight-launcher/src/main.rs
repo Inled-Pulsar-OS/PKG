@@ -109,9 +109,10 @@ fn main() -> gtk4::glib::ExitCode {
                 let clipboard = display.clipboard();
                 clipboard.connect_changed(move |cb| {
                     let cb_c2 = cb_c.clone();
+                    let mimes: Vec<String> = cb.formats().mime_types().iter().map(|m| m.to_string()).collect();
                     cb.read_text_async(None::<&gio::Cancellable>, move |result| {
                         if let Ok(Some(text)) = result {
-                            cb_c2.record_clip(&text);
+                            cb_c2.record_clip_with_formats(&text, &mimes);
                         }
                     });
                 });

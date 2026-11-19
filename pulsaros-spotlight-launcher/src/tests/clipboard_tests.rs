@@ -70,3 +70,40 @@ fn save_writes_file_with_owner_only_permissions() {
     let mode = fs::metadata(&file).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o600);
 }
+
+#[test]
+fn save_creates_private_dir_and_tightens_existing_loose_file() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = temp_dir("loose");
+    fs::create_dir_all(&dir).unwrap();
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o750)).unwrap();
+    let file = ClipboardManager::clipboard_file_in(&dir);
+    fs::write(&file, "[]").unwrap();
+    fs::set_permissions(&file, fs::Permissions::from_mode(0o640)).unwrap();
+
+    let mgr = ClipboardManager::new_for_test(SpotlightConfig::default(), dir.clone());
+    mgr.record_clip("x");
+
+    assert_eq!(fs::metadata(&dir).unwrap().permissions().mode() & 0o777, 0o700);
+    assert_eq!(fs::metadata(&file).unwrap().permissions().mode() & 0o777, 0o600);
+}
+
+#[test]
+fn record_clip_truncates_oversized_item_on_char_boundary() {
+    let mgr = manager_with_max(50);
+    let big = "é".repeat(MAX_ITEM_BYTES); // 2 bytes per char
+    mgr.record_clip(&big);
+    let stored = mgr.get_items().remove(0).text;
+    assert!(stored.len() <= MAX_ITEM_BYTES);
+    assert!(stored.chars().all(|c| c == 'é'));
+}
+
+#[test]
+fn password_manager_hint_is_not_recorded() {
+    let mgr = manager_with_max(50);
+    mgr.record_clip_with_formats("hunter2", &["text/plain", "x-kde-passwordManagerHint"]);
+    assert!(mgr.get_items().is_empty());
+    mgr.record_clip_with_formats("ordinary", &["text/plain"]);
+    assert_eq!(mgr.get_items().len(), 1);
+}
