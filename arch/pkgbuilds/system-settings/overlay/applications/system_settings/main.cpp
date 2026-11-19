@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
         if (it == built.end()) it = built.emplace(id, info->build(ctx)).first;
         split.setDetail(it->second);
         titleLabel.setText(info->title);
-        window.setTitle(std::string(info->title) + " — Forma 系统设置");
+        window.setTitle(std::string(info->title) + " — System Settings");
         sidebar.selection(id);
         backButton.setDisabled(back.empty());
         forwardButton.setDisabled(forward.empty());

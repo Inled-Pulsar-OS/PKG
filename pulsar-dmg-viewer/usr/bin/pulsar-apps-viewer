@@ -1,0 +1,457 @@
+#!/usr/bin/env python3
+# ==============================================================================
+# Pulsar Apps Viewer - Native Applications Grid Viewer for Pulsar OS
+# (c) Inled Group / Pulsar OS Project
+# ==============================================================================
+
+import os
+import sys
+import glob
+import plistlib
+import subprocess
+import shutil
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Gtk, Adw, Gio, GLib, Gdk, Pango
+
+
+def extract_best_png_from_icns(icns_path, output_png_path):
+    try:
+        with open(icns_path, "rb") as fp:
+            data = fp.read()
+        pngs = []
+        pos = 0
+        while True:
+            idx = data.find(b"\x89PNG\r\n\x1a\n", pos)
+            if idx == -1:
+                break
+            iend = data.find(b"IEND", idx)
+            if iend != -1:
+                png_bytes = data[idx : iend + 8]
+                pngs.append(png_bytes)
+                pos = iend + 8
+            else:
+                break
+        if pngs:
+            pngs.sort(key=len, reverse=True)
+            os.makedirs(os.path.dirname(output_png_path), exist_ok=True)
+            with open(output_png_path, "wb") as out:
+                out.write(pngs[0])
+            return True
+    except Exception as e:
+        print(f"Error extracting icon: {e}")
+    return False
+
+
+def get_app_info(app_dir):
+    app_name = os.path.basename(app_dir)
+    clean_name = app_name[:-4] if app_name.endswith(".app") else app_name
+    plist_path = os.path.join(app_dir, "Contents", "Info.plist")
+    display_name = clean_name
+    icon_png = None
+
+    if os.path.exists(plist_path):
+        try:
+            with open(plist_path, "rb") as fp:
+                info = plistlib.load(fp)
+            display_name = (
+                info.get("CFBundleDisplayName")
+                or info.get("CFBundleName")
+                or clean_name
+            )
+            raw_icon = info.get("CFBundleIconFile", "")
+            if raw_icon and not raw_icon.endswith(".icns"):
+                raw_icon += ".icns"
+            icns_path = os.path.join(app_dir, "Contents", "Resources", raw_icon)
+            if not os.path.exists(icns_path):
+                candidates = glob.glob(
+                    os.path.join(app_dir, "Contents", "Resources", "*.icns")
+                )
+                if candidates:
+                    icns_path = candidates[0]
+
+            if os.path.exists(icns_path):
+                cache_icon = os.path.expanduser(
+                    f"~/.cache/pulsar-icons/{clean_name}.png"
+                )
+                if os.path.exists(cache_icon) or extract_best_png_from_icns(
+                    icns_path, cache_icon
+                ):
+                    icon_png = cache_icon
+        except Exception as e:
+            print(f"Error parsing Info.plist: {e}")
+
+    return {
+        "name": display_name,
+        "clean_name": clean_name,
+        "path": app_dir,
+        "icon": icon_png,
+    }
+
+
+class AppsViewerWindow(Adw.ApplicationWindow):
+    def __init__(self, app):
+        super().__init__(application=app)
+        self.set_title("Aplicaciones")
+        self.set_default_size(680, 440)
+
+        self.apps_data = []
+        self._active_popover = None
+        self._setup_css()
+        self._build_ui()
+        self.reload_apps()
+
+    def _setup_css(self):
+        css_provider = Gtk.CssProvider()
+        css = """
+        .app-item {
+            padding: 4px;
+            border-radius: 8px;
+            transition: all 140ms ease-in-out;
+        }
+        .app-item:hover {
+            background: alpha(currentColor, 0.08);
+        }
+        .app-label {
+            font-size: 10.5px;
+            font-weight: 500;
+            color: alpha(currentColor, 0.9);
+            line-height: 1.15;
+            margin-top: 2px;
+        }
+        .context-menu-box {
+            padding: 6px;
+        }
+        .context-btn {
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        """
+        css_provider.load_from_data(css.encode("utf-8"))
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(),
+            css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+        )
+
+    def _build_ui(self):
+        toolbar_view = Adw.ToolbarView()
+        self.set_content(toolbar_view)
+
+        # Toast overlay for notifications
+        self.toast_overlay = Adw.ToastOverlay()
+        toolbar_view.set_content(self.toast_overlay)
+
+        # HeaderBar
+        header = Adw.HeaderBar()
+        title_label = Gtk.Label(label="Aplicaciones", css_classes=["title"])
+        header.set_title_widget(title_label)
+
+        add_btn = Gtk.Button(icon_name="list-add-symbolic", tooltip_text="Instalar nueva aplicación (.dmg / .app)...")
+        add_btn.connect("clicked", self._on_add_clicked)
+        header.pack_start(add_btn)
+
+        toolbar_view.add_top_bar(header)
+
+        # Main Layout
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.toast_overlay.set_child(main_box)
+
+        # Search Bar
+        search_box = Gtk.Box(spacing=8)
+        search_box.set_margin_start(16)
+        search_box.set_margin_end(16)
+        search_box.set_margin_top(6)
+
+        self.search_entry = Gtk.SearchEntry()
+        self.search_entry.set_hexpand(True)
+        self.search_entry.set_placeholder_text("Buscar aplicaciones...")
+        self.search_entry.connect("search-changed", self._on_search_changed)
+        search_box.append(self.search_entry)
+        main_box.append(search_box)
+
+        # Scrolled FlowBox
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_vexpand(True)
+        scrolled.set_hexpand(True)
+        main_box.append(scrolled)
+
+        self.flowbox = Gtk.FlowBox()
+        self.flowbox.set_valign(Gtk.Align.START)
+        self.flowbox.set_max_children_per_line(24)
+        self.flowbox.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.flowbox.set_homogeneous(True)
+        self.flowbox.set_min_children_per_line(3)
+        self.flowbox.set_row_spacing(10)
+        self.flowbox.set_column_spacing(10)
+        self.flowbox.set_margin_start(16)
+        self.flowbox.set_margin_end(16)
+        self.flowbox.set_margin_top(8)
+        self.flowbox.set_margin_bottom(16)
+        scrolled.set_child(self.flowbox)
+
+    def reload_apps(self):
+        self.apps_data = []
+        search_dirs = [
+            os.path.expanduser("~/Applications"),
+            "/Applications",
+        ]
+
+        seen = set()
+        for sdir in search_dirs:
+            if not os.path.isdir(sdir):
+                continue
+            for item in os.listdir(sdir):
+                if item.endswith(".app"):
+                    full = os.path.join(sdir, item)
+                    if full not in seen and os.path.isdir(full):
+                        seen.add(full)
+                        self.apps_data.append(get_app_info(full))
+
+        self.apps_data.sort(key=lambda a: a["name"].lower())
+        self._refresh_grid(self.search_entry.get_text() if hasattr(self, "search_entry") else "")
+
+    def _refresh_grid(self, query=""):
+        # Clear flowbox
+        while True:
+            child = self.flowbox.get_first_child()
+            if child is None:
+                break
+            self.flowbox.remove(child)
+
+        query = query.lower().strip()
+        matched = [a for a in self.apps_data if query in a["name"].lower()]
+
+        GRID_ICON_SIZE = 40
+
+        for app in matched:
+            card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, halign=Gtk.Align.CENTER)
+            card.add_css_class("app-item")
+            card.set_size_request(72, 76)
+
+            # Strict icon container ensuring exact identical dimensions
+            icon_container = Gtk.Box(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+            icon_container.set_size_request(GRID_ICON_SIZE, GRID_ICON_SIZE)
+
+            if app["icon"] and os.path.exists(app["icon"]):
+                img = Gtk.Image.new_from_file(app["icon"])
+            else:
+                img = Gtk.Image.new_from_icon_name("application-x-executable")
+            img.set_pixel_size(GRID_ICON_SIZE)
+
+            icon_container.append(img)
+            card.append(icon_container)
+
+            label = Gtk.Label(label=app["name"], css_classes=["app-label"])
+            label.set_wrap(True)
+            label.set_lines(2)
+            label.set_justify(Gtk.Justification.CENTER)
+            label.set_max_width_chars(9)
+            label.set_ellipsize(Pango.EllipsizeMode.END)
+
+            card.append(label)
+
+            # Left click (double click to open)
+            gesture = Gtk.GestureClick(button=1)
+            gesture.connect("released", self._on_card_clicked, app["path"])
+            card.add_controller(gesture)
+
+            # Right click (context menu with uninstall)
+            right_gesture = Gtk.GestureClick(button=3)
+            right_gesture.connect("pressed", self._on_card_right_click, app, card)
+            card.add_controller(right_gesture)
+
+            # Long press support
+            long_press = Gtk.GestureLongPress()
+            long_press.connect("pressed", self._on_card_long_press, app, card)
+            card.add_controller(long_press)
+
+            card.set_cursor(Gdk.Cursor.new_from_name("pointer"))
+            self.flowbox.append(card)
+
+    def _on_card_clicked(self, gesture, n_press, x, y, app_path):
+        if n_press == 2:
+            subprocess.Popen(["/usr/bin/pulsar-appexec", app_path])
+
+    def _on_card_right_click(self, gesture, n_press, x, y, app, card):
+        self._show_app_context_menu(app, card, x, y)
+
+    def _on_card_long_press(self, gesture, x, y, app, card):
+        self._show_app_context_menu(app, card, x, y)
+
+    def _show_app_context_menu(self, app, card, x, y):
+        if self._active_popover:
+            self._active_popover.popdown()
+            self._active_popover = None
+
+        popover = Gtk.Popover()
+        popover.set_parent(card)
+        rect = Gdk.Rectangle()
+        rect.x = int(x)
+        rect.y = int(y)
+        rect.width = 1
+        rect.height = 1
+        popover.set_pointing_to(rect)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        box.add_css_class("context-menu-box")
+
+        # Title
+        title_lbl = Gtk.Label(label=app["name"], css_classes=["heading"])
+        title_lbl.set_halign(Gtk.Align.START)
+        title_lbl.set_margin_start(8)
+        title_lbl.set_margin_end(8)
+        title_lbl.set_margin_top(4)
+        title_lbl.set_margin_bottom(4)
+        box.append(title_lbl)
+
+        # Open button
+        open_btn = Gtk.Button(label="Abrir aplicación")
+        open_btn.set_icon_name("media-playback-start-symbolic")
+        open_btn.add_css_class("flat")
+        open_btn.add_css_class("context-btn")
+        open_btn.set_halign(Gtk.Align.FILL)
+        def on_open_click(b):
+            popover.popdown()
+            subprocess.Popen(["/usr/bin/pulsar-appexec", app["path"]])
+        open_btn.connect("clicked", on_open_click)
+        box.append(open_btn)
+
+        # Show in files
+        files_btn = Gtk.Button(label="Mostrar en Archivos")
+        files_btn.set_icon_name("folder-open-symbolic")
+        files_btn.add_css_class("flat")
+        files_btn.add_css_class("context-btn")
+        files_btn.set_halign(Gtk.Align.FILL)
+        def on_files_click(b):
+            popover.popdown()
+            parent_dir = os.path.dirname(app["path"])
+            subprocess.Popen(["nautilus", parent_dir])
+        files_btn.connect("clicked", on_files_click)
+        box.append(files_btn)
+
+        # Separator
+        box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+
+        # Uninstall button
+        del_btn = Gtk.Button(label="Desinstalar...")
+        del_btn.set_icon_name("user-trash-symbolic")
+        del_btn.add_css_class("flat")
+        del_btn.add_css_class("destructive-action")
+        del_btn.add_css_class("context-btn")
+        del_btn.set_halign(Gtk.Align.FILL)
+        def on_uninstall_click(b):
+            popover.popdown()
+            self._confirm_uninstall(app)
+        del_btn.connect("clicked", on_uninstall_click)
+        box.append(del_btn)
+
+        popover.set_child(box)
+        self._active_popover = popover
+        popover.popup()
+
+    def _confirm_uninstall(self, app):
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading=f"¿Desinstalar «{app['name']}»?",
+            body=f"Esta acción eliminará por completo la aplicación de {app['path']}."
+        )
+        dialog.add_response("cancel", "Cancelar")
+        dialog.add_response("uninstall", "Desinstalar")
+        dialog.set_response_appearance("uninstall", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+
+        def on_response(d, response):
+            if response == "uninstall":
+                self._execute_uninstall(app)
+
+        dialog.connect("response", on_response)
+        dialog.present()
+
+    def _execute_uninstall(self, app):
+        path = app["path"]
+        success = False
+        err_msg = ""
+
+        try:
+            # First try sending to user trash via Gio
+            gfile = Gio.File.new_for_path(path)
+            try:
+                gfile.trash(None)
+                success = True
+            except Exception:
+                # If trash not supported or cross-filesystem, remove directory
+                if os.access(os.path.dirname(path), os.W_OK):
+                    shutil.rmtree(path)
+                    success = True
+                else:
+                    # System directory /Applications requiring root
+                    res = subprocess.run(["pkexec", "rm", "-rf", path], capture_output=True)
+                    if res.returncode == 0:
+                        success = True
+                    else:
+                        err_msg = res.stderr.decode("utf-8", errors="ignore")
+        except Exception as e:
+            err_msg = str(e)
+
+        if success:
+            # Clean up cached icon
+            cache_icon = os.path.expanduser(f"~/.cache/pulsar-icons/{app['clean_name']}.png")
+            if os.path.exists(cache_icon):
+                try:
+                    os.remove(cache_icon)
+                except Exception:
+                    pass
+            toast = Adw.Toast.new(f"«{app['name']}» se ha desinstalado.")
+            self.toast_overlay.add_toast(toast)
+            self.reload_apps()
+        else:
+            toast = Adw.Toast.new(f"No se pudo desinstalar: {err_msg or 'Permiso denegado'}")
+            self.toast_overlay.add_toast(toast)
+
+    def _on_search_changed(self, entry):
+        self._refresh_grid(entry.get_text())
+
+    def _on_add_clicked(self, btn):
+        dialog = Gtk.FileDialog(title="Seleccionar instalador (.dmg o .app)")
+        f_dmg = Gtk.FileFilter()
+        f_dmg.set_name("Archivos macOS (*.dmg, *.app)")
+        f_dmg.add_pattern("*.dmg")
+        f_dmg.add_pattern("*.app")
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(f_dmg)
+        dialog.set_filters(filters)
+
+        def on_selected(d, res):
+            try:
+                f = d.open_finish(res)
+                if f:
+                    path = f.get_path()
+                    if path.endswith(".dmg"):
+                        subprocess.Popen(["/usr/bin/pulsar-dmg-viewer", path])
+                    elif path.endswith(".app"):
+                        dest = os.path.expanduser(f"~/Applications/{os.path.basename(path)}")
+                        shutil.copytree(path, dest, symlinks=True)
+                        self.reload_apps()
+            except Exception:
+                pass
+
+        dialog.open(self, None, on_selected)
+
+
+class AppsViewerApp(Adw.Application):
+    def __init__(self):
+        super().__init__(application_id="es.pulsaros.AppsViewer")
+
+    def do_activate(self):
+        win = AppsViewerWindow(self)
+        win.present()
+
+
+if __name__ == "__main__":
+    app = AppsViewerApp()
+    app.run(sys.argv)

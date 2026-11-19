@@ -192,7 +192,7 @@ void AccentPickerView::draw(Painter& p) {
         p.pushOpacity(i == m_pressed && isPressed() ? 0.7f : 1.0f);
         p.drawShadow(dot, kDot * 0.5f, Color::black(0.15f), 2, {0, 0.5f});
         if (i == 0) {
-            // "跟随系统": a ring of every palette colour.
+            // Follow system: a ring of every palette colour.
             const float step = 2 * std::numbers::pi_v<float> / static_cast<float>(choices.size());
             for (size_t k = 0; k < choices.size(); ++k) {
                 p.drawArc(ctr, kDot * 0.25f, -std::numbers::pi_v<float> / 2 + step * static_cast<float>(k), step * 1.05f,

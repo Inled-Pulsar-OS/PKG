@@ -1,0 +1,60 @@
+#!/bin/bash
+# ==============================================================================
+# Pulsar AppExec - macOS Application Runtime Launcher for Pulsar OS
+# (c) Inled Group / Pulsar OS Project
+# ==============================================================================
+
+set -e
+
+APPEXEC_LIB_DIR="/usr/lib/pulsar-appexec"
+REAL_BIN="$APPEXEC_LIB_DIR/bin/appexec"
+
+if [ ! -x "$REAL_BIN" ]; then
+    if [ -x "/usr/bin/pulsar-appexec.real" ]; then
+        REAL_BIN="/usr/bin/pulsar-appexec.real"
+    fi
+fi
+
+if [ ! -x "$REAL_BIN" ]; then
+    if [ -x "/usr/bin/pulsar-runtime-downloader" ]; then
+        exec /usr/bin/pulsar-runtime-downloader "$@"
+    else
+        echo "Error: Pulsar macOS runtime is not installed." >&2
+        echo "Run 'sudo pacman -S pulsar-appexec' or 'sudo apt install pulsar-appexec' to install it." >&2
+        exit 1
+    fi
+fi
+
+export LD_LIBRARY_PATH="$APPEXEC_LIB_DIR/compat:$APPEXEC_LIB_DIR/host:$LD_LIBRARY_PATH"
+
+show_help() {
+    echo "=========================================================="
+    echo " Pulsar AppExec - macOS Application Execution Engine"
+    echo " Pulsar OS (Bitten Fruit Edition)"
+    echo "=========================================================="
+    echo "Usage: pulsar-appexec [options] <application.app | binary> [arguments...]"
+    echo ""
+    echo "Options:"
+    echo "  --stub-missing       Stub missing symbols gracefully"
+    echo "  --launch-items       Launch bundled login items"
+    echo "  -h, --help           Show this message"
+    echo ""
+    echo "Examples:"
+    echo "  pulsar-appexec /Applications/CotEditor.app"
+    echo "  pulsar-appexec ~/Applications/Ghostty.app"
+}
+
+if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_help
+    exit 0
+fi
+
+# Resolve application path if wrapped in URL format (e.g. file://)
+TARGET="$1"
+if [[ "$TARGET" =~ ^file:// ]]; then
+    TARGET="$(python3 -c "import urllib.parse, sys; print(urllib.parse.unquote(sys.argv[1][7:]))" "$TARGET")"
+    shift
+    set -- "$TARGET" "$@"
+fi
+
+exec "$REAL_BIN" "$@"

@@ -1,0 +1,11 @@
+Package: pulsar-dmg-viewer
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: Jaime <info@inled.es>
+Depends: p7zip-full, python3, python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, python3-pil
+Suggests: pulsar-appexec
+Description: Native DMG viewer, Applications visualizer and macOS runtime manager for Pulsar OS
+ Provides full graphical DMG mounting and visual inspection, Applications grid
+ viewer for macOS apps, and on-demand installation of the macOS compatibility runtime.

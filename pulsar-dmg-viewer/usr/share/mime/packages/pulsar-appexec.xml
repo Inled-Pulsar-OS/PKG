@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-apple-app">
+    <comment>macOS Application</comment>
+    <comment xml:lang="es">Aplicación de macOS</comment>
+    <glob pattern="*.app"/>
+  </mime-type>
+  <mime-type type="application/x-apple-diskimage">
+    <comment>macOS Disk Image</comment>
+    <comment xml:lang="es">Imagen de disco de macOS (.dmg)</comment>
+    <glob pattern="*.dmg"/>
+  </mime-type>
+</mime-info>

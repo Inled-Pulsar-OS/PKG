@@ -1,0 +1,23 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=pulsar-dmg-viewer
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Native DMG viewer, Applications visualizer and macOS runtime manager for Pulsar OS"
+arch=('any')
+url="https://inled.es"
+license=('GPL-3.0-or-later')
+depends=('p7zip' 'python' 'python-gobject' 'gtk4' 'libadwaita' 'python-pillow')
+optdepends=('pulsar-appexec: macOS application compatibility runtime (downloadable on-demand)')
+options=('!strip')
+install=pulsar-dmg-viewer.install
+
+package() {
+    _src="$(cd "$startdir"/../../../pulsar-dmg-viewer && pwd)"
+    cd "$_src"
+
+    mkdir -p "${pkgdir}"
+    [ -d usr ] && cp -r usr "${pkgdir}/"
+
+    # Ensure executable permissions on binaries and scripts
+    find "${pkgdir}/usr/bin" -type f -exec chmod 755 {} \;
+}

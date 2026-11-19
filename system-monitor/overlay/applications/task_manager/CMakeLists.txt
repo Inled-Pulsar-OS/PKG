@@ -13,5 +13,5 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 if(TARGET taskmanager)
-  set_target_properties(taskmanager PROPERTIES OUTPUT_NAME forma-taskmanager)
+  set_target_properties(taskmanager PROPERTIES OUTPUT_NAME system-monitor)
 endif()

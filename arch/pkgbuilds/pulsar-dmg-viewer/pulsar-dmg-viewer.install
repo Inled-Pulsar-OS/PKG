@@ -1,0 +1,47 @@
+post_install() {
+    mkdir -p /Applications
+    chmod 1777 /Applications 2>/dev/null || true
+
+    mkdir -p /etc/skel/Applications
+
+    # System-wide default MIME associations for DMGs
+    mkdir -p /etc/xdg
+    if [ -f /etc/xdg/mimeapps.list ]; then
+        if ! grep -q "application/x-apple-diskimage" /etc/xdg/mimeapps.list; then
+            sed -i '/\[Default Applications\]/a application\/x-apple-diskimage=pulsar-dmg-viewer.desktop\napplication\/x-dmg=pulsar-dmg-viewer.desktop' /etc/xdg/mimeapps.list
+        fi
+    else
+        cat << 'EOF' > /etc/xdg/mimeapps.list
+[Default Applications]
+application/x-apple-diskimage=pulsar-dmg-viewer.desktop
+application/x-dmg=pulsar-dmg-viewer.desktop
+EOF
+    fi
+
+    update-desktop-database -q /usr/share/applications || true
+    update-mime-database /usr/share/mime || true
+
+    if command -v xdg-mime >/dev/null 2>&1; then
+        xdg-mime default pulsar-dmg-viewer.desktop application/x-apple-diskimage 2>/dev/null || true
+        xdg-mime default pulsar-dmg-viewer.desktop application/x-dmg 2>/dev/null || true
+        xdg-mime default pulsar-appexec.desktop application/x-apple-app 2>/dev/null || true
+    fi
+
+    # Set up user ~/Applications if running in active user session
+    if [ -n "$SUDO_USER" ]; then
+        user_home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+        if [ -d "$user_home" ]; then
+            mkdir -p "$user_home/Applications"
+            chown "$SUDO_USER:" "$user_home/Applications" 2>/dev/null || true
+        fi
+    fi
+}
+
+post_upgrade() {
+    post_install
+}
+
+post_remove() {
+    update-desktop-database -q /usr/share/applications || true
+    update-mime-database /usr/share/mime || true
+}

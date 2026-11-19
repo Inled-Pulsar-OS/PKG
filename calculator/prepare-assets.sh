@@ -55,8 +55,15 @@ mkdir -p "$STAGE_DIR/usr/share/applications"
 if [ -f "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.Calculator.desktop" ]; then
     mv "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.Calculator.desktop" \
        "$STAGE_DIR/usr/share/applications/calculator.desktop"
-    ln -sf calculator.desktop "$STAGE_DIR/usr/share/applications/org.gnome.Calculator.desktop"
-    ln -sf calculator.desktop "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.Calculator.desktop"
+    cat << 'EOF' > "$STAGE_DIR/usr/share/applications/org.gnome.Calculator.desktop"
+[Desktop Entry]
+Type=Application
+Name=Calculator
+Exec=calculator %U
+Icon=calculator
+Terminal=false
+NoDisplay=true
+EOF
 fi
 
 # Ensure icons are available under standard names

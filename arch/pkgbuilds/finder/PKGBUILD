@@ -11,9 +11,9 @@ optdepends=('vulkan-icd-loader: Vulkan renderer (OpenGL otherwise)'
             'poppler: PDF thumbnail and preview rendering'
             'pulsaros-flydrop: share files over AirDrop-compatible FlyDrop'
             'pulsaros-cloud: cloud drive manager via rclone')
-provides=('mayo-finder')
-conflicts=('mayo-finder')
-replaces=('mayo-finder')
+provides=('nautilus' 'mayo-finder')
+conflicts=('nautilus' 'mayo-finder')
+replaces=('nautilus' 'mayo-finder')
 options=('!strip')
 
 prepare() {

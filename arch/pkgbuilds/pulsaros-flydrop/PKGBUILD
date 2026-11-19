@@ -6,8 +6,9 @@ pkgdesc="AirDrop & LocalSend v2 integration with Dynamic Island Drop Shelf for P
 arch=(any)
 url="https://inled.es"
 license=(GPL3)
-depends=(python python-gobject gtk3 python-cryptography python-dbus python-requests nautilus-python gnome-shell libayatana-appindicator gtk4 libadwaita)
+depends=(python python-gobject gtk3 python-cryptography python-dbus python-requests gnome-shell libayatana-appindicator gtk4 libadwaita)
 optdepends=(
+    'nautilus-python: optional extension for classic Nautilus context menus'
     'localsend: optional external LocalSend app'
 )
 install=pulsaros-flydrop.install

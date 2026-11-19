@@ -44,15 +44,30 @@ echo "🚀 Installing $APP_COMPONENT into staging..."
 DESTDIR="$STAGE_DIR" cmake --install "$WORK_DIR/build" --component "$APP_COMPONENT"
 
 mkdir -p "$STAGE_DIR/usr/bin"
-if [ -f "$STAGE_DIR/usr/bin/forma-taskmanager" ]; then
-    ln -sf forma-taskmanager "$STAGE_DIR/usr/bin/system-monitor"
+if [ -f "$STAGE_DIR/usr/bin/system-monitor" ]; then
+    ln -sf system-monitor "$STAGE_DIR/usr/bin/forma-taskmanager"
+elif [ -f "$STAGE_DIR/usr/bin/forma-taskmanager" ]; then
+    mv "$STAGE_DIR/usr/bin/forma-taskmanager" "$STAGE_DIR/usr/bin/system-monitor"
+    ln -sf system-monitor "$STAGE_DIR/usr/bin/forma-taskmanager"
 fi
 
 mkdir -p "$STAGE_DIR/usr/share/applications"
 if [ -f "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.TaskManager.desktop" ]; then
-    cp "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.TaskManager.desktop" \
+    mv "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.TaskManager.desktop" \
        "$STAGE_DIR/usr/share/applications/system-monitor.desktop"
-    ln -sf system-monitor.desktop "$STAGE_DIR/usr/share/applications/gnome-system-monitor.desktop"
 fi
+rm -f "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.TaskManager.desktop"
+
+# Compatibility desktop entry with NoDisplay=true so GNOME Shell shortcuts work without duplicate icon
+cat << 'EOF_GSM' > "$STAGE_DIR/usr/share/applications/gnome-system-monitor.desktop"
+[Desktop Entry]
+Type=Application
+Name=Activity Monitor
+Exec=system-monitor
+Icon=utilities-system-monitor
+Terminal=false
+NoDisplay=true
+Categories=System;Monitor;
+EOF_GSM
 
 echo "✅ system-monitor prepared in staging."

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Aplicaciones
+GenericName=macOS Applications Viewer
+Comment=Visualizador de aplicaciones instaladas en Pulsar OS
+Exec=pulsar-apps-viewer
+TryExec=pulsar-apps-viewer
+Terminal=false
+NoDisplay=false
+Icon=folder-applications
+Categories=System;Utility;
+StartupNotify=true

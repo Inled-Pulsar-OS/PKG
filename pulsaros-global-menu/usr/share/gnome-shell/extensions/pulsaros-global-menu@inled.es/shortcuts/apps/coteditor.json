@@ -1,0 +1,90 @@
+{
+  "format": 1,
+  "app": "coteditor",
+  "name": "CotEditor",
+  "identifiers": [
+    "com.coteditor.coteditor",
+    "com.coteditor.CotEditor",
+    "coteditor",
+    "CotEditor",
+    "com.coteditor.coteditor.desktop"
+  ],
+  "menus": [
+    {
+      "label": "File",
+      "items": [
+        {"label": "New", "shortcut": "<Ctrl>N"},
+        {"label": "Open...", "shortcut": "<Ctrl>O"},
+        {"separator": true},
+        {"label": "Close", "shortcut": "<Ctrl>W"},
+        {"label": "Save", "shortcut": "<Ctrl>S"},
+        {"label": "Save As...", "shortcut": "<Ctrl><Shift>S"},
+        {"separator": true},
+        {"label": "Page Setup...", "shortcut": "<Ctrl><Shift>P"},
+        {"label": "Print...", "shortcut": "<Ctrl>P"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "items": [
+        {"label": "Undo", "shortcut": "<Ctrl>Z"},
+        {"label": "Redo", "shortcut": "<Ctrl><Shift>Z"},
+        {"separator": true},
+        {"label": "Cut", "shortcut": "<Ctrl>X"},
+        {"label": "Copy", "shortcut": "<Ctrl>C"},
+        {"label": "Paste", "shortcut": "<Ctrl>V"},
+        {"label": "Select All", "shortcut": "<Ctrl>A"},
+        {"separator": true},
+        {"label": "Find...", "shortcut": "<Ctrl>F"},
+        {"label": "Find Next", "shortcut": "<Ctrl>G"},
+        {"label": "Find Previous", "shortcut": "<Ctrl><Shift>G"}
+      ]
+    },
+    {
+      "label": "Format",
+      "items": [
+        {"label": "Bigger Font", "shortcut": "<Ctrl>plus"},
+        {"label": "Smaller Font", "shortcut": "<Ctrl>minus"},
+        {"label": "Reset Font Size", "shortcut": "<Ctrl>0"},
+        {"separator": true},
+        {"label": "Wrap Lines", "shortcut": "<Ctrl><Alt>W"}
+      ]
+    },
+    {
+      "label": "View",
+      "items": [
+        {"label": "Toggle Line Numbers", "shortcut": "<Ctrl><Alt>L"},
+        {"label": "Toggle Navigation Bar", "shortcut": "<Ctrl><Alt>N"},
+        {"label": "Toggle Inspector", "shortcut": "<Ctrl><Alt>I"},
+        {"separator": true},
+        {"label": "Toggle Full Screen", "shortcut": "<Ctrl><Super>F"}
+      ]
+    },
+    {
+      "label": "Find",
+      "items": [
+        {"label": "Find...", "shortcut": "<Ctrl>F"},
+        {"label": "Find Next", "shortcut": "<Ctrl>G"},
+        {"label": "Find Previous", "shortcut": "<Ctrl><Shift>G"},
+        {"label": "Use Selection for Find", "shortcut": "<Ctrl>E"},
+        {"separator": true},
+        {"label": "Jump to Line...", "shortcut": "<Ctrl>L"}
+      ]
+    },
+    {
+      "label": "Window",
+      "items": [
+        {"label": "Minimize", "shortcut": "<Ctrl>M"},
+        {"label": "Zoom", "shortcut": "<Ctrl><Alt>Return"},
+        {"separator": true},
+        {"label": "Bring All to Front"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"label": "CotEditor Help", "shortcut": "F1"}
+      ]
+    }
+  ]
+}

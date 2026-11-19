@@ -13,7 +13,7 @@ depends=(
   gnome-keybindings
   gnome-macos-remap-wayland
   gnome-rounded-blur
-  pulsar-appexec
+  pulsar-dmg-viewer
   pulsar-pear-sound-theme
   pulsaros-boot-icons
   pulsaros-bootsound

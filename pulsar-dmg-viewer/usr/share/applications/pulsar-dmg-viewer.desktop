@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Pulsar DMG Viewer
+GenericName=macOS Disk Image Viewer
+Comment=Open and view macOS .dmg disk images on Pulsar OS
+Exec=pulsar-dmg-viewer %f
+TryExec=pulsar-dmg-viewer
+Terminal=false
+MimeType=application/x-apple-diskimage;application/x-dmg;
+NoDisplay=false
+Icon=drive-removable-media
+Categories=System;Utility;
+StartupNotify=true

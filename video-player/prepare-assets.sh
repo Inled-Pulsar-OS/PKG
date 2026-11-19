@@ -51,8 +51,17 @@ mkdir -p "$STAGE_DIR/usr/share/applications"
 if [ -f "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.VideoPlayer.desktop" ]; then
     mv "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.VideoPlayer.desktop" \
        "$STAGE_DIR/usr/share/applications/video-player.desktop"
-    ln -sf video-player.desktop "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.VideoPlayer.desktop"
-    ln -sf video-player.desktop "$STAGE_DIR/usr/share/applications/org.gnome.Totem.desktop"
+    rm -f "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.VideoPlayer.desktop"
+    cat << 'EOF_TOTEM' > "$STAGE_DIR/usr/share/applications/org.gnome.Totem.desktop"
+[Desktop Entry]
+Type=Application
+Name=QuickTime Player
+Exec=video_player %F
+Icon=quicktime-player
+Terminal=false
+NoDisplay=true
+Categories=AudioVideo;Player;Video;
+EOF_TOTEM
 fi
 
 # Install icons

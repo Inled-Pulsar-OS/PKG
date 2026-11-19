@@ -314,20 +314,20 @@ int main() {
     StatRow swapActivity("Swap Activity");
     auto memBar = std::make_shared<UsageBar>();
     auto swapBar = std::make_shared<UsageBar>();
-    StatRow memPressure("等待时间占比", pressureColor);
-    memPressure.value.tooltip("过去10秒至少一个任务等待内存的时间占比（PSI some avg10），不是内存占用率。");
-    StatRow legendUsed("已用（总量−可用）", [&] { return colors().blue; });
-    StatRow legendCached("可用缓存（估算）", [&] { return colors().purple; });
-    StatRow legendFree("其他可用", [&] { return colors().fill.withAlpha(0.6f); });
+    StatRow memPressure("Memory Pressure", pressureColor);
+    memPressure.value.tooltip("Percentage of time tasks waited for memory over the last 10 seconds (PSI avg10).");
+    StatRow legendUsed("App Memory", [&] { return colors().blue; });
+    StatRow legendCached("Cached Files", [&] { return colors().purple; });
+    StatRow legendFree("Free Memory", [&] { return colors().fill.withAlpha(0.6f); });
     StatRow legendSwap("In use");
     auto memPanel =
         HStack({
-                   card(VStack({caption("内存压力（PSI · 10秒）"), Element(memGraph), memPressure.row}).spacing(6)),
+                   card(VStack({caption("MEMORY PRESSURE (10s)"), Element(memGraph), memPressure.row}).spacing(6)),
                    card(VStack({caption("MEMORY"), memPhysical.row, memUsed.row, memCached.row, memFree.row, Divider(),
                                 swapUsed.row, swapActivity.row})
                             .spacing(5))
                        .width(280),
-                   card(VStack({caption("内存占用率"), Element(memBar), legendUsed.row, legendCached.row,
+                   card(VStack({caption("MEMORY USAGE"), Element(memBar), legendUsed.row, legendCached.row,
                                 legendFree.row, Spacer(4), caption("SWAP"), Element(swapBar), legendSwap.row})
                             .spacing(6))
                        .width(260),
@@ -400,11 +400,11 @@ int main() {
         pressure = s.memoryPressure;
         pressureKnown = s.memoryPressureKnown;
         memGraph->push({pressureKnown ? pressure : std::numeric_limits<double>::quiet_NaN()});
-        memPressure.set(pressureKnown ? std::string(pressure < 0.4    ? "正常"
-                                                    : pressure < 0.75 ? "升高"
-                                                                      : "严重") +
+        memPressure.set(pressureKnown ? std::string(pressure < 0.4    ? "Normal"
+                                                    : pressure < 0.75 ? "Elevated"
+                                                                      : "Critical") +
                                             " · " + percent(pressure)
-                                      : "不可用（无法读取 PSI）");
+                                      : "Unavailable (PSI unreadable)");
         const double total = static_cast<double>(std::max<std::uint64_t>(1, s.memTotal));
         auto bytes = [&](std::uint64_t value) { return s.memoryKnown ? formatBytes(static_cast<double>(value)) : "—"; };
         memPhysical.set(bytes(s.memTotal));
@@ -414,7 +414,7 @@ int main() {
         swapUsed.set(s.swapKnown ? formatBytes(static_cast<double>(s.swapUsed)) + " / " +
                                        formatBytes(static_cast<double>(s.swapTotal), 0)
                                  : "—");
-        std::snprintf(buf, sizeof buf, "每秒换入 %.0f · 换出 %.0f", s.swapInRate, s.swapOutRate);
+        std::snprintf(buf, sizeof buf, "In: %.0f/s · Out: %.0f/s", s.swapInRate, s.swapOutRate);
         swapActivity.set(buf);
         // Available already includes reclaimable cache. Limit the cache segment to available memory
         // rather than drawing an overlapping breakdown whose fractions can exceed 100%.
@@ -460,11 +460,11 @@ int main() {
             bar->setSegments({{used, used > 0.9 ? colors().red : colors().accent}});
             volumes.add(VStack({HStack({Label(fs.mountPoint).font(TextStyle::Callout).weight(FontWeight::Medium),
                                         Label(fs.type).font(TextStyle::Caption).tertiary(), Spacer(),
-                                        Label(formatBytes(static_cast<double>(fs.available)) + " 可用").font(TextStyle::Caption).secondary()})
+                                        Label(formatBytes(static_cast<double>(fs.available)) + " free").font(TextStyle::Caption).secondary()})
                                     .spacing(6)
                                     .align(Alignment::Center),
                                 Element(bar),
-                                Label(formatBytes(static_cast<double>(fs.total - fs.available)) + " 已用 / " +
+                                Label(formatBytes(static_cast<double>(fs.total - fs.available)) + " used of " +
                                       formatBytes(static_cast<double>(fs.total)) + " · " + fs.device)
                                     .font(TextStyle::Caption)
                                     .tertiary()
@@ -544,7 +544,7 @@ int main() {
             }
         }
         if (!p) {
-            inspName.setText(inspName.text().find("（已退出）") == std::string::npos ? inspName.text() + "（已退出）" : inspName.text());
+            inspName.setText(inspName.text().find(" (Exited)") == std::string::npos ? inspName.text() + " (Exited)" : inspName.text());
             return;
         }
         char buf[64];
@@ -605,18 +605,18 @@ int main() {
         quitForce.setDisabled(true);
         std::string message;
         switch (result.status) {
-            case ProcessStatus::Exited: message = "目标进程已退出，未发送信号。"; break;
+            case ProcessStatus::Exited: message = "Target process has exited; no signal sent."; break;
             case ProcessStatus::IdentityChanged:
-                message = "进程身份已改变（PID 已复用），已拒绝发送信号。请重新选择。";
+                message = "Process identity changed (PID reused); signal refused. Please re-select.";
                 break;
             case ProcessStatus::Unsupported:
-                message = "内核不支持安全的 pidfd 操作，已拒绝结束进程；不会回退到 PID。";
+                message = "Kernel does not support safe pidfd operations; operation refused.";
                 break;
-            case ProcessStatus::PermissionDenied: message = "没有权限安全绑定或结束此进程。"; break;
-            case ProcessStatus::NotBound: message = "没有已验证的进程绑定，请重新确认。"; break;
+            case ProcessStatus::PermissionDenied: message = "Permission denied to operate on this process."; break;
+            case ProcessStatus::NotBound: message = "No verified process binding."; break;
             default:
-                message = "无法安全操作目标进程，未发送信号";
-                if (result.error) message += std::string("：") + std::strerror(result.error);
+                message = "Cannot safely operate on target process";
+                if (result.error) message += std::string(": ") + std::strerror(result.error);
                 break;
         }
         quitError.setText(message);
@@ -630,7 +630,7 @@ int main() {
         if (!p) return;
         // Dismissing an older confirmation releases its binding before opening the new one.
         quitPopover.dismiss();
-        quitQuestion.setText("确定要" + std::string(force ? "强制结束" : "结束") + "进程“" + p->name + "”吗？");
+        quitQuestion.setText("Do you want to " + std::string(force ? "force quit" : "quit") + " process \"" + p->name + "\"?");
         quitError.setHidden(true);
         const auto bound = quitting.bind({p->pid, p->startTicks});
         quitButton.setDisabled(!bound);

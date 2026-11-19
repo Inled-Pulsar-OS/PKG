@@ -44,15 +44,30 @@ echo "🚀 Installing $APP_COMPONENT into staging..."
 DESTDIR="$STAGE_DIR" cmake --install "$WORK_DIR/build" --component "$APP_COMPONENT"
 
 mkdir -p "$STAGE_DIR/usr/bin"
-if [ -f "$STAGE_DIR/usr/bin/forma-settings" ]; then
-    ln -sf forma-settings "$STAGE_DIR/usr/bin/system-settings"
+if [ -f "$STAGE_DIR/usr/bin/system-settings" ]; then
+    ln -sf system-settings "$STAGE_DIR/usr/bin/forma-settings"
+elif [ -f "$STAGE_DIR/usr/bin/forma-settings" ]; then
+    mv "$STAGE_DIR/usr/bin/forma-settings" "$STAGE_DIR/usr/bin/system-settings"
+    ln -sf system-settings "$STAGE_DIR/usr/bin/forma-settings"
 fi
 
 mkdir -p "$STAGE_DIR/usr/share/applications"
 if [ -f "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.Settings.desktop" ]; then
-    cp "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.Settings.desktop" \
+    mv "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.Settings.desktop" \
        "$STAGE_DIR/usr/share/applications/system-settings.desktop"
-    ln -sf system-settings.desktop "$STAGE_DIR/usr/share/applications/gnome-control-center.desktop"
 fi
+rm -f "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.Settings.desktop"
+
+# Compatibility desktop entry with NoDisplay=true so DBus/GNOME Shell shortcuts work without duplicate icon
+cat << 'EOF_GCC' > "$STAGE_DIR/usr/share/applications/gnome-control-center.desktop"
+[Desktop Entry]
+Type=Application
+Name=System Settings
+Exec=system-settings
+Icon=org.gnome.Settings
+Terminal=false
+NoDisplay=true
+Categories=Settings;DesktopSettings;
+EOF_GCC
 
 echo "✅ system-settings prepared in staging."

@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Pulsar OS - Live ISO GPU Acceleration & Capabilities Detection
+# ==============================================================================
+# Detects whether the device running the Live ISO has 3D graphics acceleration.
+# If not (e.g. running under llvmpipe/swrast/nomodeset/VM without 3D), switches
+# the session configuration to Blur Mode before GNOME starts.
+# Runs ONLY in the Live ISO, never in an installed system.
+# ==============================================================================
+
+set -u
+
+# Strictly Live ISO only
+is_live_environment() {
+    [ -f /etc/pulsaros-live ] && return 0
+    [ -d /run/archiso ] && return 0
+    [ -d /run/live ] && return 0
+    grep -qE "boot=live|archiso|live-media" /proc/cmdline 2>/dev/null && return 0
+    return 1
+}
+
+if ! is_live_environment; then
+    exit 0
+fi
+
+if [ -f /run/pulsaros-gpu-checked ]; then
+    exit 0
+fi
+touch /run/pulsaros-gpu-checked
+
+has_liquid_glass_gpu_support() {
+    # 1. nomodeset
+    if grep -q "nomodeset" /proc/cmdline 2>/dev/null; then
+        return 1
+    fi
+
+    # 2. Dri nodes
+    if [ ! -d /dev/dri ] || [ -z "$(ls /dev/dri/card* 2>/dev/null)" ]; then
+        return 1
+    fi
+
+    # 3. Check DRM driver in sysfs
+    local has_hw_drm=0
+    for card in /sys/class/drm/card[0-9]; do
+        [ -d "$card/device/driver" ] || continue
+        local drv
+        drv=$(basename "$(readlink -f "$card/device/driver" 2>/dev/null)" 2>/dev/null || true)
+        case "$drv" in
+            simpledrm|bochs-drm|vkms|cirrus|mgag200|ast|qxl|vboxvideo)
+                ;;
+            *)
+                has_hw_drm=1
+                ;;
+        esac
+    done
+    [ "$has_hw_drm" -eq 0 ] && return 1
+
+    # 4. Check renderer via eglinfo (GBM/surfaceless works without display server) or glxinfo
+    local renderer=""
+    if command -v eglinfo >/dev/null 2>&1; then
+        renderer="$(eglinfo -B -p gbm 2>/dev/null | grep -iE 'OpenGL (core profile )?renderer:' || true)"
+        if [ -z "$renderer" ]; then
+            renderer="$(eglinfo -B -p surfaceless 2>/dev/null | grep -iE 'OpenGL (core profile )?renderer:' || true)"
+        fi
+    fi
+    if [ -z "$renderer" ] && command -v glxinfo >/dev/null 2>&1; then
+        renderer="$(glxinfo -B 2>/dev/null | grep -iE 'OpenGL renderer string|Device:' || true)"
+    fi
+    if [ -z "$renderer" ]; then
+        # No OpenGL renderer could be initialized over DRM/GBM
+        return 1
+    fi
+    if echo "$renderer" | grep -qiE "llvmpipe|softpipe|swrast|software"; then
+        return 1
+    fi
+
+    return 0
+}
+
+if ! has_liquid_glass_gpu_support; then
+    echo "⚠️ Pulsar OS Live: No hardware 3D GPU acceleration detected. Preconfiguring Blur Mode..."
+    touch /run/pulsaros-force-blur-mode 2>/dev/null || true
+
+    # 1. System-wide live dconf database override (applies immediately before user session starts)
+    mkdir -p /etc/dconf/db/local.d
+    cat > /etc/dconf/db/local.d/99-pulsaros-live-blur << 'EOF'
+[org/gnome/shell]
+enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'pulsar-dock@inled.es', 'compiz-alike-magic-lamp-effect@hermes83.github.com', 'pulsaros-ui-tweaks@inled.es', 'pulsaros-global-menu@inled.es', 'notchnux@adityasah.programs', 'pulsaros-spotlight-launcher@inled.es', 'pulsar-circle-to-search@inled.es', 'pulsaros-focus@inled.es', 'pulsaros-idle-guard@inled.es', 'appindicatorsupport@rgcjonas.gmail.com', 'wiggle@mechtifs', 'no-overview@fthx', 'macos-control-centre-lg@pulsar.local', 'macos-notification-center@pulsar.local', 'blur-my-shell@aunetx', 'pulsar-menu-bar@inled.es', 'flydrop@pulsaros.org', 'pulsar-desktop-icons@inled.es', 'pulsar-trafficlights@local']
+disabled-extensions=['liquid-glass@thinkingcoding1231.gmail.com']
+
+[org/gnome/shell/extensions/blur-my-shell/panel]
+blur=false
+
+[org/gnome/shell/extensions/blur-my-shell/appfolder]
+blur=true
+
+[org/gnome/shell/extensions/dash-to-dock]
+apply-custom-theme=false
+background-opacity=0.15
+EOF
+    dconf update 2>/dev/null || true
+
+    # 2. Preconfigure live user dconf / gsettings if user live exists
+    if id -u live >/dev/null 2>&1; then
+        su - live -c "dbus-run-session -- bash -c '
+            gsettings set org.gnome.shell enabled-extensions \"['\''user-theme@gnome-shell-extensions.gcampax.github.com'\'', '\''pulsar-dock@inled.es'\'', '\''compiz-alike-magic-lamp-effect@hermes83.github.com'\'', '\''pulsaros-ui-tweaks@inled.es'\'', '\''pulsaros-global-menu@inled.es'\'', '\''notchnux@adityasah.programs'\'', '\''pulsaros-spotlight-launcher@inled.es'\'', '\''pulsar-circle-to-search@inled.es'\'', '\''pulsaros-focus@inled.es'\'', '\''pulsaros-idle-guard@inled.es'\'', '\''appindicatorsupport@rgcjonas.gmail.com'\'', '\''wiggle@mechtifs'\'', '\''no-overview@fthx'\'', '\''macos-control-centre-lg@pulsar.local'\'', '\''macos-notification-center@pulsar.local'\'', '\''blur-my-shell@aunetx'\'', '\''pulsar-menu-bar@inled.es'\'', '\''flydrop@pulsaros.org'\'', '\''pulsar-desktop-icons@inled.es'\'', '\''pulsar-trafficlights@local'\'']\" 2>/dev/null || true
+            gsettings set org.gnome.shell disabled-extensions \"['\''liquid-glass@thinkingcoding1231.gmail.com'\'']\" 2>/dev/null || true
+            gsettings set org.gnome.shell.extensions.blur-my-shell.panel blur false 2>/dev/null || true
+            gsettings set org.gnome.shell.extensions.blur-my-shell.popup blur true 2>/dev/null || true
+            gsettings set org.gnome.shell.extensions.dash-to-dock apply-custom-theme false 2>/dev/null || true
+            gsettings set org.gnome.shell.extensions.dash-to-dock background-opacity 0.15 2>/dev/null || true
+        '" 2>/dev/null || true
+    fi
+fi
+
+exit 0

@@ -16,7 +16,7 @@ constexpr float kPanelPad = 5;
 constexpr float kSeparatorH = 11;
 constexpr float kTextPad = 10;
 constexpr float kColumn = 18;
-constexpr float kDetailGap = 8;  // space between a title and its detail ("推荐")
+constexpr float kDetailGap = 8;  // space between a title and its detail ("Recommended")
 constexpr float kSubmenuWidth = 13;  // room for the submenu chevron
 
 /// Shared bezel for pop-up / pull-down buttons (matches ButtonStyle::Default).

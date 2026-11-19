@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=macOS Application Support
+Comment=Download and manage the macOS compatibility runtime
+Exec=/usr/bin/pulsar-runtime-downloader
+Icon=system-software-install
+Terminal=false
+Type=Application
+Categories=System;Settings;
+NoDisplay=true

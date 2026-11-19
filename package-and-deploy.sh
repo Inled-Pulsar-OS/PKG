@@ -387,7 +387,7 @@ build_single_package() {
     rm -f "$STAGING_DIR/$name/README"* "$STAGING_DIR/$name/PORTING"* "$STAGING_DIR/$name/LICENSE"* \
           "$STAGING_DIR/$name/Cargo."* "$STAGING_DIR/$name/package.json" "$STAGING_DIR/$name/pnpm-lock.yaml" \
           "$STAGING_DIR/$name/tsconfig.json" "$STAGING_DIR/$name/prepare-assets.sh" 2>/dev/null || true
-    rm -rf "$STAGING_DIR/$name/docs" "$STAGING_DIR/$name/tests" "$STAGING_DIR/$name/web" 2>/dev/null || true
+    rm -rf "$STAGING_DIR/$name/docs" "$STAGING_DIR/$name/tests" "$STAGING_DIR/$name/web" "$STAGING_DIR/$name/overlay" 2>/dev/null || true
 
     # Ejecutar dpkg-deb
     local deb_file=""

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Pulsar AppExec
+GenericName=macOS Application Runner
+Comment=Run macOS applications natively on Pulsar OS
+Exec=pulsar-appexec %f
+TryExec=pulsar-appexec
+Terminal=false
+MimeType=application/x-apple-app;
+NoDisplay=true
+Icon=pulsar-logo
+Categories=System;Utility;
+StartupNotify=true

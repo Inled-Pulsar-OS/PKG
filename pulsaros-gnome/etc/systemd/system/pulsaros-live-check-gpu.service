@@ -1,0 +1,12 @@
+[Unit]
+Description=Pulsar OS Live - GPU Acceleration and Capabilities Detection
+Before=display-manager.service sddm.service gdm.service
+ConditionPathExists=/etc/pulsaros-live
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/pulsaros-live-check-gpu
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -16,5 +16,5 @@ mayonnaise_app(systemsettings ID io.github.egely1337.Mayonnaise.Settings
           kconfig.cpp json.cpp)
 target_link_libraries(systemsettings PRIVATE PkgConfig::MAYO_GIO)
 
-# Keep Forma alongside the desktop's own terminal and KDE System Settings.
-set_target_properties(systemsettings PROPERTIES OUTPUT_NAME forma-settings)
+# Keep System Settings output binary named system-settings.
+set_target_properties(systemsettings PROPERTIES OUTPUT_NAME system-settings)

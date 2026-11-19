@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+# ==============================================================================
+# Pulsar OS - macOS Runtime Component Downloader
+# (c) Inled Group / Pulsar OS Project
+# ==============================================================================
+
+import os
+import sys
+import subprocess
+import threading
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Gtk, Adw, GLib, Gio
+
+
+RUNTIME_PATH = "/usr/lib/pulsar-appexec/bin/appexec"
+
+
+class DownloaderWindow(Adw.ApplicationWindow):
+    def __init__(self, app, target_arg=None):
+        super().__init__(application=app, title="macOS Support")
+        self.target_arg = target_arg
+
+        self.set_default_size(440, 360)
+        self.set_resizable(False)
+
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.set_content(main_box)
+
+        header = Adw.HeaderBar()
+        header.set_show_end_title_buttons(True)
+        main_box.append(header)
+
+        self.status_page = Adw.StatusPage()
+        self.status_page.set_icon_name("system-software-install")
+        self.status_page.set_title("macOS Runtime Required")
+        self.status_page.set_description(
+            "To open macOS disk images (.dmg) and applications (.app), "
+            "Pulsar OS requires additional compatibility components (~38 MB).\n\n"
+            "Would you like to download and install them now?"
+        )
+        self.status_page.set_vexpand(True)
+        main_box.append(self.status_page)
+
+        # Action Box (Buttons)
+        self.action_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self.action_box.set_halign(Gtk.Align.CENTER)
+        self.action_box.set_margin_bottom(24)
+
+        cancel_btn = Gtk.Button(label="Cancel")
+        cancel_btn.connect("clicked", lambda b: self.close())
+        cancel_btn.set_size_request(120, 36)
+        self.action_box.append(cancel_btn)
+
+        install_btn = Gtk.Button(label="Download & Install")
+        install_btn.add_css_class("suggested-action")
+        install_btn.set_size_request(160, 36)
+        install_btn.connect("clicked", self.start_installation)
+        self.action_box.append(install_btn)
+
+        # Progress Box
+        self.progress_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.progress_box.set_halign(Gtk.Align.CENTER)
+        self.progress_box.set_margin_bottom(24)
+        self.progress_box.set_margin_start(40)
+        self.progress_box.set_margin_end(40)
+
+        self.progress_bar = Gtk.ProgressBar()
+        self.progress_bar.set_size_request(300, 8)
+        self.progress_box.append(self.progress_bar)
+
+        self.status_label = Gtk.Label(label="Connecting to repository...")
+        self.status_label.add_css_class("dim-label")
+        self.progress_box.append(self.status_label)
+
+        self.bottom_stack = Gtk.Stack()
+        self.bottom_stack.add_named(self.action_box, "actions")
+        self.bottom_stack.add_named(self.progress_box, "progress")
+        self.bottom_stack.set_visible_child_name("actions")
+        main_box.append(self.bottom_stack)
+
+        self.pulse_timer = None
+
+    def start_installation(self, btn):
+        self.bottom_stack.set_visible_child_name("progress")
+        self.status_page.set_description(
+            "Downloading and installing macOS compatibility runtime.\n"
+            "Please authenticate if prompted."
+        )
+        self.pulse_timer = GLib.timeout_add(100, self.do_pulse)
+        threading.Thread(target=self.run_install, daemon=True).start()
+
+    def do_pulse(self):
+        self.progress_bar.pulse()
+        return True
+
+    def run_install(self):
+        GLib.idle_add(self.status_label.set_text, "Downloading components from Inled repo...")
+
+        success = False
+        error_msg = ""
+
+        if os.path.exists("/etc/arch-release"):
+            cmd = ["pkexec", "pacman", "-Sy", "--noconfirm", "pulsar-appexec"]
+        else:
+            cmd = [
+                "pkexec",
+                "bash",
+                "-c",
+                "apt-get update -qq && apt-get install -y pulsar-appexec",
+            ]
+
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            if res.returncode == 0:
+                success = True
+            else:
+                error_msg = res.stderr or res.stdout or f"Exit code {res.returncode}"
+        except Exception as e:
+            error_msg = str(e)
+
+        GLib.idle_add(self.on_install_finished, success, error_msg)
+
+    def on_install_finished(self, success, error_msg):
+        if self.pulse_timer:
+            GLib.source_remove(self.pulse_timer)
+            self.pulse_timer = None
+
+        if success:
+            self.progress_bar.set_fraction(1.0)
+            self.status_label.set_text("Installation complete!")
+            self.status_page.set_title("Runtime Ready")
+            self.status_page.set_description(
+                "The macOS compatibility runtime was installed successfully."
+            )
+            GLib.timeout_add(800, self.finish_and_launch)
+        else:
+            self.status_page.set_icon_name("dialog-error-symbolic")
+            self.status_page.set_title("Installation Failed")
+            self.status_page.set_description(
+                f"Could not install the runtime components:\n{error_msg[:200]}"
+            )
+            for child in list(self.action_box):
+                self.action_box.remove(child)
+            close_btn = Gtk.Button(label="Close")
+            close_btn.connect("clicked", lambda b: self.close())
+            close_btn.set_size_request(120, 36)
+            self.action_box.append(close_btn)
+            self.bottom_stack.set_visible_child_name("actions")
+
+    def finish_and_launch(self):
+        self.close()
+        if self.target_arg:
+            if self.target_arg.endswith(".dmg"):
+                subprocess.Popen(["/usr/bin/pulsar-dmg-viewer", self.target_arg])
+            else:
+                subprocess.Popen(["/usr/bin/pulsar-appexec", self.target_arg])
+        return False
+
+
+class DownloaderApp(Adw.Application):
+    def __init__(self, target_arg=None):
+        super().__init__(
+            application_id="es.inled.PulsarRuntimeDownloader",
+            flags=Gio.ApplicationFlags.FLAGS_NONE,
+        )
+        self.target_arg = target_arg
+
+    def do_activate(self):
+        win = DownloaderWindow(self, self.target_arg)
+        win.present()
+
+
+def main():
+    target = sys.argv[1] if len(sys.argv) > 1 else None
+    app = DownloaderApp(target)
+    return app.run(None)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,584 @@
+#!/usr/bin/env python3
+# ==============================================================================
+# Pulsar DMG Viewer - Native macOS Disk Image Visualizer for Pulsar OS
+# (c) Inled Group / Pulsar OS Project
+# ==============================================================================
+
+import os
+import sys
+import glob
+import plistlib
+import subprocess
+import shutil
+import struct
+import re
+from PIL import Image, ImageStat
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Gtk, Adw, Gio, GLib, Gdk, GObject, Pango
+
+
+def parse_ds_store(ds_path):
+    if not os.path.exists(ds_path):
+        return None
+    try:
+        with open(ds_path, "rb") as f:
+            data = f.read()
+    except Exception:
+        return None
+
+    result = {
+        "icon_size": None,
+        "window_bounds": None,
+        "positions": {},
+    }
+
+    # 1. Search for bplist in .DS_Store (icvp / bwsp)
+    idx = data.find(b"bplist00")
+    while idx != -1:
+        for end in range(idx + 32, min(len(data), idx + 2048)):
+            try:
+                pl = plistlib.loads(data[idx:end])
+                if isinstance(pl, dict):
+                    if "iconSize" in pl and result["icon_size"] is None:
+                        val = int(pl["iconSize"])
+                        if 32 <= val <= 256:
+                            result["icon_size"] = val
+                    if "WindowBounds" in pl and result["window_bounds"] is None:
+                        m = re.findall(r"\d+", pl["WindowBounds"])
+                        if len(m) >= 4:
+                            result["window_bounds"] = (int(m[2]), int(m[3]))
+            except Exception:
+                pass
+        idx = data.find(b"bplist00", idx + 1)
+
+    # 2. Search for Iloc records (file icon locations)
+    for m in re.finditer(b"Ilocblob", data):
+        start = m.start()
+        try:
+            blob_len = struct.unpack(">I", data[start + 8 : start + 12])[0]
+            blob = data[start + 12 : start + 12 + blob_len]
+            if len(blob) >= 8:
+                x, y = struct.unpack(">II", blob[:8])
+                # Backtrack to find UTF-16BE filename
+                for back in range(4, 256, 2):
+                    p = start - back
+                    if p < 4:
+                        break
+                    clen = struct.unpack(">I", data[p - 4 : p])[0]
+                    if clen * 2 == back:
+                        try:
+                            name = data[p:start].decode("utf-16be")
+                            if name:
+                                result["positions"][name] = (x, y)
+                            break
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+    return result
+
+
+def get_folder_app_icon_name():
+    try:
+        display = Gdk.Display.get_default()
+        if display:
+            theme = Gtk.IconTheme.get_for_display(display)
+            for name in ["folder-mac", "folder-apple", "folder-blue", "folder"]:
+                if theme.has_icon(name):
+                    return name
+    except Exception:
+        pass
+    return "folder"
+
+
+def extract_best_png_from_icns(icns_path, output_png_path):
+    try:
+        with open(icns_path, "rb") as fp:
+            data = fp.read()
+        pngs = []
+        pos = 0
+        while True:
+            idx = data.find(b"\x89PNG\r\n\x1a\n", pos)
+            if idx == -1:
+                break
+            iend = data.find(b"IEND", idx)
+            if iend != -1:
+                png_bytes = data[idx : iend + 8]
+                pngs.append(png_bytes)
+                pos = iend + 8
+            else:
+                break
+        if pngs:
+            pngs.sort(key=len, reverse=True)
+            os.makedirs(os.path.dirname(output_png_path), exist_ok=True)
+            with open(output_png_path, "wb") as out:
+                out.write(pngs[0])
+            return True
+    except Exception as e:
+        print(f"Error extracting icon: {e}")
+    return False
+
+
+def get_app_info(app_dir):
+    app_name = os.path.basename(app_dir)
+    clean_name = app_name[:-4] if app_name.endswith(".app") else app_name
+    plist_path = os.path.join(app_dir, "Contents", "Info.plist")
+    display_name = clean_name
+    icon_png = None
+
+    if os.path.exists(plist_path):
+        try:
+            with open(plist_path, "rb") as fp:
+                info = plistlib.load(fp)
+            display_name = (
+                info.get("CFBundleDisplayName")
+                or info.get("CFBundleName")
+                or clean_name
+            )
+            raw_icon = info.get("CFBundleIconFile", "")
+            if raw_icon and not raw_icon.endswith(".icns"):
+                raw_icon += ".icns"
+            icns_path = os.path.join(app_dir, "Contents", "Resources", raw_icon)
+            if not os.path.exists(icns_path):
+                candidates = glob.glob(
+                    os.path.join(app_dir, "Contents", "Resources", "*.icns")
+                )
+                if candidates:
+                    icns_path = candidates[0]
+
+            if os.path.exists(icns_path):
+                tmp_icon = os.path.expanduser(
+                    f"~/.cache/pulsar-icons/{clean_name}.png"
+                )
+                if os.path.exists(tmp_icon) or extract_best_png_from_icns(icns_path, tmp_icon):
+                    icon_png = tmp_icon
+        except Exception as e:
+            print(f"Error parsing Info.plist: {e}")
+
+    return {
+        "name": display_name,
+        "path": app_dir,
+        "icon": icon_png,
+    }
+
+
+class DmgViewerWindow(Adw.ApplicationWindow):
+    def __init__(self, app, dmg_path):
+        super().__init__(application=app)
+        self.dmg_path = dmg_path
+        self.dmg_name = os.path.basename(dmg_path)
+        self.mount_dir = None
+        self.apps = []
+        self.ds_info = None
+        self.bg_image_path = None
+        self.bg_width = 0
+        self.bg_height = 0
+        self.is_light_bg = False
+
+        self.set_title(self.dmg_name.replace(".dmg", ""))
+        self.set_resizable(False)
+
+        self._mount_dmg()
+        self._setup_css()
+        self._build_ui()
+
+    def _setup_css(self):
+        css_provider = Gtk.CssProvider()
+        title_color = "#1c1c1e" if self.is_light_bg else "#ffffff"
+        title_bg = "rgba(255, 255, 255, 0.80)" if self.is_light_bg else "rgba(0, 0, 0, 0.60)"
+
+        bg_css = ""
+        if self.bg_image_path and os.path.exists(self.bg_image_path):
+            bg_css = f"""
+            .dmg-stage {{
+                background-image: url('file://{self.bg_image_path}');
+                background-repeat: no-repeat;
+                background-position: center;
+                background-size: 100% 100%;
+            }}
+            """
+        else:
+            bg_css = """
+            .dmg-stage {
+                background-color: @theme_bg_color;
+            }
+            """
+
+        css = f"""
+        {bg_css}
+        .dmg-card {{
+            padding: 4px;
+            border-radius: 8px;
+            transition: all 150ms ease-in-out;
+            border: 2px solid transparent;
+        }}
+        .dmg-card:hover {{
+            background: alpha(currentColor, 0.08);
+        }}
+        .drop-active {{
+            background: alpha(@accent_color, 0.25);
+            border: 2px dashed @accent_color;
+            border-radius: 10px;
+        }}
+        .dmg-title {{
+            font-size: 11px;
+            font-weight: 600;
+            color: {title_color};
+            background: {title_bg};
+            padding: 2px 6px;
+            border-radius: 5px;
+            margin-top: 3px;
+        }}
+        .arrow-label {{
+            font-size: 11px;
+            opacity: 0.75;
+            font-weight: 500;
+        }}
+        """
+        css_provider.load_from_data(css.encode("utf-8"))
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(),
+            css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+        )
+
+    def _mount_dmg(self):
+        base_name = self.dmg_name.replace(".dmg", "")
+        uid = os.getuid()
+        self.mount_dir = f"/run/user/{uid}/pulsar-mounts/{base_name}"
+        os.makedirs(self.mount_dir, exist_ok=True)
+
+        # Check if already mounted / extracted
+        has_apps = any(
+            f.endswith(".app") for f in os.listdir(self.mount_dir)
+        ) if os.path.isdir(self.mount_dir) else False
+
+        if not has_apps:
+            # Extract DMG using 7z
+            subprocess.run(
+                ["7z", "x", self.dmg_path, f"-o{self.mount_dir}", "-y"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            # If there is a nested .apfs container
+            for apfs in glob.glob(f"{self.mount_dir}/*.apfs"):
+                subprocess.run(
+                    ["7z", "x", apfs, f"-o{self.mount_dir}", "-y"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                try:
+                    os.remove(apfs)
+                except Exception:
+                    pass
+
+        # Check for .DS_Store or extract explicitly from DMG
+        ds_file = os.path.join(self.mount_dir, ".DS_Store")
+        if not os.path.exists(ds_file):
+            subprocess.run(
+                ["7z", "e", self.dmg_path, ".DS_Store", f"-o{self.mount_dir}", "-y"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        if os.path.exists(ds_file):
+            self.ds_info = parse_ds_store(ds_file)
+
+        # Look for background image
+        bg_candidates = glob.glob(f"{self.mount_dir}/.background/*") + glob.glob(
+            f"{self.mount_dir}/*.png"
+        )
+        for bg in bg_candidates:
+            if not bg.endswith(".app") and os.path.isfile(bg) and not bg.endswith(".DS_Store"):
+                try:
+                    im = Image.open(bg)
+                    im.seek(0)
+                    w, h = im.size
+                    self.bg_width = w
+                    self.bg_height = h
+
+                    rgb = im.convert("RGB")
+                    stat = ImageStat.Stat(rgb)
+                    lum = stat.mean[0] * 0.299 + stat.mean[1] * 0.587 + stat.mean[2] * 0.114
+                    self.is_light_bg = lum > 128
+
+                    clean_png = os.path.join(self.mount_dir, ".pulsar_bg.png")
+                    im.convert("RGBA").save(clean_png)
+                    self.bg_image_path = clean_png
+                    break
+                except Exception as e:
+                    print(f"Error reading background {bg}: {e}")
+
+        # Look for .app folders
+        for item in os.listdir(self.mount_dir):
+            full_path = os.path.join(self.mount_dir, item)
+            if item.endswith(".app") and os.path.isdir(full_path):
+                self.apps.append(get_app_info(full_path))
+
+    def _build_ui(self):
+        # Configure icon size and stage dimensions from DMG configuration
+        configured_icon_size = 110
+        if self.ds_info and self.ds_info.get("icon_size"):
+            configured_icon_size = self.ds_info["icon_size"]
+        ICON_SIZE = max(48, min(180, int(configured_icon_size)))
+
+        wb = self.ds_info.get("window_bounds") if self.ds_info else None
+        stage_width = self.bg_width or (wb[0] if wb else 560)
+        stage_height = self.bg_height or ((wb[1] - 40) if wb else 340)
+
+        # Window dimensions
+        self.set_default_size(stage_width, stage_height + 46)
+
+        toolbar_view = Adw.ToolbarView()
+        self.set_content(toolbar_view)
+
+        # HeaderBar
+        header = Adw.HeaderBar()
+        header.set_title_widget(Gtk.Label(label=self.dmg_name.replace(".dmg", ""), css_classes=["title"]))
+
+        eject_btn = Gtk.Button(icon_name="media-eject-symbolic", tooltip_text="Expulsar imagen")
+        eject_btn.connect("clicked", self._on_eject)
+        header.pack_end(eject_btn)
+        toolbar_view.add_top_bar(header)
+
+        # Main Layout
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        toolbar_view.set_content(main_box)
+
+        # Stage area with CSS background-size: 100% 100%
+        stage_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        stage_box.add_css_class("dmg-stage")
+        stage_box.set_vexpand(True)
+        stage_box.set_hexpand(True)
+        stage_box.set_size_request(stage_width, stage_height)
+        main_box.append(stage_box)
+
+        # Fixed layout container to place icons at exact DMG configured coordinates
+        fixed_stage = Gtk.Fixed()
+        fixed_stage.set_vexpand(True)
+        fixed_stage.set_hexpand(True)
+        fixed_stage.set_size_request(stage_width, stage_height)
+        stage_box.append(fixed_stage)
+
+        card_w = max(int(ICON_SIZE * 1.3), 130)
+
+        # Target App coordinates
+        target_app = self.apps[0] if self.apps else None
+        app_pos = None
+        if target_app and self.ds_info and self.ds_info.get("positions"):
+            positions = self.ds_info["positions"]
+            for k, pos in positions.items():
+                if k.lower() == target_app["name"].lower() + ".app" or k.lower() == os.path.basename(target_app["path"]).lower():
+                    app_pos = pos
+                    break
+            if not app_pos:
+                for k, pos in positions.items():
+                    if k.endswith(".app"):
+                        app_pos = pos
+                        break
+        if not app_pos:
+            app_pos = (int(stage_width * 0.28), int(stage_height * 0.45))
+
+        # Applications folder coordinates
+        apps_pos = None
+        if self.ds_info and self.ds_info.get("positions"):
+            positions = self.ds_info["positions"]
+            for k, pos in positions.items():
+                if k.lower() in ["applications", "aplicaciones", "applications.localized"]:
+                    apps_pos = pos
+                    break
+        if not apps_pos:
+            apps_pos = (int(stage_width * 0.72), int(stage_height * 0.45))
+
+        # App item
+        if target_app:
+            app_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, halign=Gtk.Align.CENTER)
+            app_card.add_css_class("dmg-card")
+            app_card.set_size_request(card_w, -1)
+
+            app_icon_box = Gtk.Box(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+            app_icon_box.set_size_request(ICON_SIZE, ICON_SIZE)
+
+            if target_app["icon"] and os.path.exists(target_app["icon"]):
+                app_img = Gtk.Image.new_from_file(target_app["icon"])
+            else:
+                app_img = Gtk.Image.new_from_icon_name("application-x-executable")
+            app_img.set_pixel_size(ICON_SIZE)
+
+            app_icon_box.append(app_img)
+            app_card.append(app_icon_box)
+
+            app_label = Gtk.Label(label=target_app["name"], css_classes=["dmg-title"])
+            app_label.set_justify(Gtk.Justification.CENTER)
+            app_label.set_max_width_chars(15)
+            app_label.set_ellipsize(Pango.EllipsizeMode.END)
+            app_card.append(app_label)
+
+            # Double click gesture on app to run directly
+            click_gesture = Gtk.GestureClick()
+            click_gesture.connect("released", self._on_app_clicked, target_app["path"])
+            app_card.add_controller(click_gesture)
+            app_card.set_cursor(Gdk.Cursor.new_from_name("grab"))
+
+            # Drag Source for App
+            drag_source = Gtk.DragSource.new()
+            drag_source.set_actions(Gdk.DragAction.COPY)
+            file_obj = Gio.File.new_for_path(target_app["path"])
+            val = GObject.Value(Gio.File, file_obj)
+            cp_val = Gdk.ContentProvider.new_for_value(val)
+            uri_bytes = GLib.Bytes.new((file_obj.get_uri() + "\r\n").encode("utf-8"))
+            cp_bytes = Gdk.ContentProvider.new_for_bytes("text/uri-list", uri_bytes)
+            drag_source.set_content(Gdk.ContentProvider.new_union([cp_val, cp_bytes]))
+
+            if target_app["icon"] and os.path.exists(target_app["icon"]):
+                try:
+                    tex = Gdk.Texture.new_from_filename(target_app["icon"])
+                    drag_source.connect("drag-begin", lambda s, d: s.set_icon(tex, ICON_SIZE // 2, ICON_SIZE // 2))
+                except Exception:
+                    pass
+
+            app_card.add_controller(drag_source)
+
+            app_x = max(0, int(app_pos[0] - card_w / 2))
+            app_y = max(0, int(app_pos[1] - ICON_SIZE / 2))
+            fixed_stage.put(app_card, app_x, app_y)
+
+        # Applications folder item
+        apps_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, halign=Gtk.Align.CENTER)
+        apps_card.add_css_class("dmg-card")
+        apps_card.set_size_request(card_w, -1)
+
+        apps_icon_box = Gtk.Box(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+        apps_icon_box.set_size_request(ICON_SIZE, ICON_SIZE)
+
+        folder_icon_name = get_folder_app_icon_name()
+        apps_img = Gtk.Image.new_from_icon_name(folder_icon_name)
+        apps_img.set_pixel_size(ICON_SIZE)
+        apps_icon_box.append(apps_img)
+        apps_card.append(apps_icon_box)
+
+        apps_label = Gtk.Label(label="Aplicaciones", css_classes=["dmg-title"])
+        apps_label.set_justify(Gtk.Justification.CENTER)
+        apps_label.set_max_width_chars(15)
+        apps_label.set_ellipsize(Pango.EllipsizeMode.END)
+        apps_card.append(apps_label)
+
+        # Drop Target on Applications folder
+        drop_target = Gtk.DropTarget.new(Gio.File, Gdk.DragAction.COPY)
+
+        def on_drop_enter(t, x, y):
+            apps_card.add_css_class("drop-active")
+            return Gdk.DragAction.COPY
+
+        def on_drop_leave(t):
+            apps_card.remove_css_class("drop-active")
+
+        def on_drop(t, file_val, x, y):
+            apps_card.remove_css_class("drop-active")
+            if target_app:
+                self._install_app(target_app)
+                return True
+            return False
+
+        drop_target.connect("enter", on_drop_enter)
+        drop_target.connect("leave", on_drop_leave)
+        drop_target.connect("drop", on_drop)
+        apps_card.add_controller(drop_target)
+
+        # Click gesture to open Applications folder
+        apps_click = Gtk.GestureClick()
+        apps_click.connect("released", lambda g, n, x, y: subprocess.Popen(["/usr/bin/pulsar-apps-viewer"]))
+        apps_card.add_controller(apps_click)
+        apps_card.set_cursor(Gdk.Cursor.new_from_name("pointer"))
+
+        apps_x = max(0, int(apps_pos[0] - card_w / 2))
+        apps_y = max(0, int(apps_pos[1] - ICON_SIZE / 2))
+        fixed_stage.put(apps_card, apps_x, apps_y)
+
+        # If there is no custom background artwork, render the guidance arrow
+        if not self.bg_image_path and target_app:
+            arrow_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, valign=Gtk.Align.CENTER)
+            arrow_icon = Gtk.Image.new_from_icon_name("go-next-symbolic")
+            arrow_icon.set_pixel_size(24)
+            arrow_label = Gtk.Label(label="Arrastrar a Aplicaciones", css_classes=["arrow-label"])
+            arrow_box.append(arrow_icon)
+            arrow_box.append(arrow_label)
+            arrow_x = int((app_pos[0] + apps_pos[0]) / 2 - 60)
+            arrow_y = int((app_pos[1] + apps_pos[1]) / 2 - 15)
+            fixed_stage.put(arrow_box, arrow_x, arrow_y)
+
+    def _on_app_clicked(self, gesture, n_press, x, y, app_path):
+        if n_press == 2:
+            self._run_app(app_path)
+
+    def _run_app(self, app_path):
+        subprocess.Popen(["/usr/bin/pulsar-appexec", app_path])
+
+    def _install_app(self, app_info):
+        target_dir = os.path.expanduser("~/Applications")
+        os.makedirs(target_dir, exist_ok=True)
+        dest = os.path.join(target_dir, os.path.basename(app_info["path"]))
+
+        if os.path.exists(dest):
+            shutil.rmtree(dest)
+
+        shutil.copytree(app_info["path"], dest, symlinks=True)
+
+        subprocess.run(["notify-send", "-a", "Pulsar OS", "-i", app_info["icon"] or "pulsar-logo",
+                        "Aplicación instalada", f"“{app_info['name']}” se ha instalado en Aplicaciones."])
+
+        # Close window upon successful installation
+        self.close()
+
+    def _on_eject(self, button):
+        if self.mount_dir and os.path.exists(self.mount_dir):
+            shutil.rmtree(self.mount_dir, ignore_errors=True)
+        self.close()
+
+
+class DmgViewerApp(Adw.Application):
+    def __init__(self, dmg_file=None):
+        super().__init__(application_id="es.pulsaros.DmgViewer", flags=Gio.ApplicationFlags.HANDLES_OPEN)
+        self.dmg_file = dmg_file
+
+    def do_activate(self):
+        if self.dmg_file:
+            win = DmgViewerWindow(self, self.dmg_file)
+            win.present()
+        else:
+            dialog = Gtk.FileDialog(title="Abrir imagen de disco (.dmg)")
+            dmg_filter = Gtk.FileFilter()
+            dmg_filter.set_name("Imágenes de disco macOS (*.dmg)")
+            dmg_filter.add_pattern("*.dmg")
+            filters = Gio.ListStore.new(Gtk.FileFilter)
+            filters.append(dmg_filter)
+            dialog.set_filters(filters)
+
+            def on_file_selected(d, res):
+                try:
+                    f = d.open_finish(res)
+                    if f:
+                        win = DmgViewerWindow(self, f.get_path())
+                        win.present()
+                except Exception:
+                    self.quit()
+
+            dialog.open(None, None, on_file_selected)
+
+    def do_open(self, files, n_files, hint):
+        for f in files:
+            win = DmgViewerWindow(self, f.get_path())
+            win.present()
+
+
+if __name__ == "__main__":
+    if not os.path.exists("/usr/lib/pulsar-appexec/bin/appexec"):
+        subprocess.Popen(["/usr/bin/pulsar-runtime-downloader"] + sys.argv[1:])
+        sys.exit(0)
+
+    dmg_arg = sys.argv[1] if len(sys.argv) > 1 else None
+    app = DmgViewerApp(dmg_arg)
+    app.run(sys.argv)

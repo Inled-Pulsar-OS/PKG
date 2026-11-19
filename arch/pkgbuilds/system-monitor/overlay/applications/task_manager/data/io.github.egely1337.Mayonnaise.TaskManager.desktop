@@ -1,12 +1,14 @@
 [Desktop Entry]
 Type=Application
-Name=Forma Task Manager
-Name[zh_CN]=Forma 任务管理器
-GenericName=System Monitor
+Name=Activity Monitor
+Name[es]=Monitor de Actividad
+GenericName=Activity Monitor
+GenericName[es]=Monitor de Actividad
 Comment=See processes and CPU, memory, disk and network activity
-Exec=forma-taskmanager
-Icon=forma-taskmanager
+Comment[es]=Consulta los procesos y la actividad de CPU, memoria, disco y red
+Exec=system-monitor
+Icon=utilities-system-monitor
 Terminal=false
 StartupNotify=true
 Categories=System;Monitor;
-Keywords=process;cpu;memory;network;activity;monitor;kill;
+Keywords=process;cpu;memory;network;activity;monitor;kill;proceso;memoria;actividad;

@@ -7,7 +7,7 @@ arch=(x86_64 aarch64)
 url="https://inled.es"
 license=(GPL-3.0-or-later)
 install=pulsaros-spotlight-launcher.install
-depends=(gtk4 libadwaita glib2 sqlite json-glib curl wl-clipboard gnome-shell nautilus)
+depends=(gtk4 libadwaita glib2 sqlite json-glib curl wl-clipboard gnome-shell)
 makedepends=(cargo pkgconf)
 optdepends=(
     'ydotool: paste fallback when the Shell extension is unavailable'

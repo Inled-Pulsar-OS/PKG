@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+echo "$(date): [$$] invoked with: $@" >> /tmp/pulsaros-liquid-glass.log
+set -euo pipefail
+
+PROFILE="${1:-new}"
+UUID="liquid-glass@thinkingcoding1231.gmail.com"
+USER_HOME="${HOME:-/home/$(logname 2>/dev/null || whoami)}"
+
+if [ -d "${XDG_DATA_HOME:-$USER_HOME/.local/share}/gnome-shell/extensions/$UUID" ]; then
+    EXT_DIR="${XDG_DATA_HOME:-$USER_HOME/.local/share}/gnome-shell/extensions/$UUID"
+elif [ -d "/usr/share/gnome-shell/extensions/$UUID" ]; then
+    EXT_DIR="/usr/share/gnome-shell/extensions/$UUID"
+else
+    EXT_DIR="${XDG_DATA_HOME:-$USER_HOME/.local/share}/gnome-shell/extensions/$UUID"
+fi
+
+if [ ! -d "$EXT_DIR" ]; then
+    echo "Liquid Glass extension not found in $EXT_DIR" >&2
+    exit 1
+fi
+
+case "$PROFILE" in
+    new|sayri|angelo)
+        echo "Switching to New Liquid Glass (Angelo Tuning / Sayri)..."
+        if [ -f "$EXT_DIR/shaders/glass.frag.new" ]; then
+            cp -f "$EXT_DIR/shaders/glass.frag.new" "$EXT_DIR/shaders/glass.frag" 2>/dev/null || true
+        fi
+        if [ -f "$EXT_DIR/profiles/settings-new.dconf" ]; then
+            dconf load /org/gnome/shell/extensions/liquid-glass/ < "$EXT_DIR/profiles/settings-new.dconf" 2>/dev/null || true
+        fi
+        dconf write /org/gnome/shell/extensions/liquid-glass/enable-application-glass true
+        dconf write /org/gnome/shell/extensions/liquid-glass/application-glass-all-windows true
+        dconf write /org/gnome/shell/extensions/liquid-glass/glass-cursor-light true
+        dconf write /org/gnome/shell/extensions/liquid-glass/enable-glass-clock false
+        dconf write /org/gnome/shell/extensions/liquid-glass/enable-desktop-widgets false
+        dconf write /org/gnome/shell/extensions/liquid-glass/quick-settings-enable-adaptive-text-color true
+        dconf write /org/gnome/shell/extensions/liquid-glass/quick-settings-adaptive-text-preference "'auto'"
+        dconf write /org/gnome/shell/extensions/liquid-glass/notification-enable-adaptive-text-color true
+        dconf write /org/gnome/shell/extensions/liquid-glass/notification-adaptive-text-preference "'auto'"
+        dconf write /org/gnome/shell/extensions/liquid-glass/menu-enable-adaptive-text-color true
+        dconf write /org/gnome/shell/extensions/liquid-glass/panel-menu-enable-adaptive-text-color true
+        dconf write /org/gnome/shell/extensions/liquid-glass/dock-corner-radius 16.0
+        dconf write /org/gnome/shell/extensions/liquid-glass/dock-glass-shape-n 4.5
+        dconf write /org/gnome/shell/extensions/liquid-glass/profile-style "'new'"
+        gsettings set org.gnome.shell.extensions.liquid-glass profile-style 'new' 2>/dev/null || true
+
+        # Only Apple-style Glass Text clock enabled, all other widgets disabled
+        dconf write /org/gnome/shell/extensions/liquidglass-widgets/clock-glass-text-enabled true
+        dconf write /org/gnome/shell/extensions/liquidglass-widgets/clock-glass-text-size 240
+        for kw in clock-analog-enabled clock-analog-2-enabled clock-analog-3-enabled clock-digital-enabled calendar-enabled weather-enabled music-enabled timer-enabled city-1-enabled city-2-enabled city-3-enabled city-digital-enabled; do
+            dconf write /org/gnome/shell/extensions/liquidglass-widgets/$kw false 2>/dev/null || true
+        done
+        echo "new" > /tmp/pulsaros-liquid-glass-profile 2>/dev/null || true
+        ;;
+    classic|original|ryohsuke)
+        echo "Switching to Classic Liquid Glass (Original Angelo Preset)..."
+        if [ -f "$EXT_DIR/shaders/glass.frag.classic" ]; then
+            cp -f "$EXT_DIR/shaders/glass.frag.classic" "$EXT_DIR/shaders/glass.frag" 2>/dev/null || true
+        fi
+        if [ -f "$EXT_DIR/profiles/settings-classic.dconf" ]; then
+            dconf load /org/gnome/shell/extensions/liquid-glass/ < "$EXT_DIR/profiles/settings-classic.dconf" 2>/dev/null || true
+        fi
+        dconf write /org/gnome/shell/extensions/liquid-glass/enable-application-glass true
+        dconf write /org/gnome/shell/extensions/liquid-glass/application-glass-all-windows true
+        dconf write /org/gnome/shell/extensions/liquid-glass/glass-cursor-light false
+
+        # Semi-opaque frosted background tuning
+        dconf write /org/gnome/shell/extensions/liquid-glass/application-tint-color "'#000000'"
+        dconf write /org/gnome/shell/extensions/liquid-glass/application-tint-strength 0.25
+        dconf write /org/gnome/shell/extensions/liquid-glass/application-blur-radius 10
+        dconf write /org/gnome/shell/extensions/liquid-glass/menu-tint-color "'#000000'"
+        dconf write /org/gnome/shell/extensions/liquid-glass/menu-tint-strength 0.25
+        dconf write /org/gnome/shell/extensions/liquid-glass/menu-blur-radius 10
+        dconf write /org/gnome/shell/extensions/liquid-glass/panel-menu-tint-color "'#000000'"
+        dconf write /org/gnome/shell/extensions/liquid-glass/panel-menu-tint-strength 0.25
+        dconf write /org/gnome/shell/extensions/liquid-glass/panel-menu-blur-radius 10
+        dconf write /org/gnome/shell/extensions/liquid-glass/desktop-menu-tint-color "'#000000'"
+        dconf write /org/gnome/shell/extensions/liquid-glass/desktop-menu-tint-strength 0.25
+        dconf write /org/gnome/shell/extensions/liquid-glass/desktop-menu-blur-radius 10
+        dconf write /org/gnome/shell/extensions/liquid-glass/dock-tint-color "'#000000'"
+        dconf write /org/gnome/shell/extensions/liquid-glass/dock-tint-strength 0.22
+        dconf write /org/gnome/shell/extensions/liquid-glass/dock-blur-radius 10
+        dconf write /org/gnome/shell/extensions/liquid-glass/dock-corner-radius 16.0
+        dconf write /org/gnome/shell/extensions/liquid-glass/dock-glass-shape-n 4.5
+        dconf write /org/gnome/shell/extensions/liquid-glass/quick-settings-tint-color "'#000000'"
+        dconf write /org/gnome/shell/extensions/liquid-glass/quick-settings-tint-strength 0.28
+        dconf write /org/gnome/shell/extensions/liquid-glass/quick-settings-toggle-tint-strength 0.28
+        dconf write /org/gnome/shell/extensions/liquid-glass/quick-settings-blur-radius 10
+        dconf write /org/gnome/shell/extensions/liquid-glass/notification-tint-color "'#000000'"
+        dconf write /org/gnome/shell/extensions/liquid-glass/notification-tint-strength 0.28
+        dconf write /org/gnome/shell/extensions/liquid-glass/notification-blur-radius 10
+        dconf write /org/gnome/shell/extensions/liquid-glass/osd-tint-color "'#000000'"
+        dconf write /org/gnome/shell/extensions/liquid-glass/osd-tint-strength 0.25
+        dconf write /org/gnome/shell/extensions/liquid-glass/osd-blur-radius 10
+        dconf write /org/gnome/shell/extensions/liquid-glass/glass-displacement-scale 75.0
+        dconf write /org/gnome/shell/extensions/liquid-glass/glass-ior 1.52
+
+        # Adaptive text contrast
+        dconf write /org/gnome/shell/extensions/liquid-glass/quick-settings-enable-adaptive-text-color true
+        dconf write /org/gnome/shell/extensions/liquid-glass/quick-settings-adaptive-text-preference "'auto'"
+        dconf write /org/gnome/shell/extensions/liquid-glass/notification-enable-adaptive-text-color true
+        dconf write /org/gnome/shell/extensions/liquid-glass/notification-adaptive-text-preference "'auto'"
+        dconf write /org/gnome/shell/extensions/liquid-glass/menu-enable-adaptive-text-color true
+        dconf write /org/gnome/shell/extensions/liquid-glass/panel-menu-enable-adaptive-text-color true
+
+        dconf write /org/gnome/shell/extensions/liquid-glass/enable-glass-clock false
+        dconf write /org/gnome/shell/extensions/liquid-glass/enable-desktop-widgets false
+
+        dconf write /org/gnome/shell/extensions/liquid-glass/profile-style "'classic'"
+        gsettings set org.gnome.shell.extensions.liquid-glass profile-style 'classic' 2>/dev/null || true
+
+        # Only Apple-style Glass Text clock enabled, all other widgets disabled
+        dconf write /org/gnome/shell/extensions/liquidglass-widgets/clock-glass-text-enabled true
+        dconf write /org/gnome/shell/extensions/liquidglass-widgets/clock-glass-text-size 240
+        for kw in clock-analog-enabled clock-analog-2-enabled clock-analog-3-enabled clock-digital-enabled calendar-enabled weather-enabled music-enabled timer-enabled city-1-enabled city-2-enabled city-3-enabled city-digital-enabled; do
+            dconf write /org/gnome/shell/extensions/liquidglass-widgets/$kw false 2>/dev/null || true
+        done
+        echo "classic" > /tmp/pulsaros-liquid-glass-profile 2>/dev/null || true
+        ;;
+    status|get)
+        STYLE=$(dconf read /org/gnome/shell/extensions/liquid-glass/profile-style 2>/dev/null | tr -d "'\"" || true)
+        if [ "$STYLE" = "classic" ]; then
+            echo "classic"
+        else
+            echo "new"
+        fi
+        exit 0
+        ;;
+    *)
+        echo "Usage: pulsaros-set-liquid-glass-style [new|classic|status]" >&2
+        exit 1
+        ;;
+esac
+
+# Sync to /usr/share if present
+if [ -d "/usr/share/gnome-shell/extensions/$UUID/shaders" ]; then
+    cp -f "$EXT_DIR/shaders/glass.frag" "/usr/share/gnome-shell/extensions/$UUID/shaders/glass.frag" 2>/dev/null || true
+fi
+
+# Reload extension via D-Bus / CLI
+busctl --user call org.gnome.Shell.Extensions /org/gnome/Shell/Extensions org.gnome.Shell.Extensions DisableExtension s "$UUID" >/dev/null 2>&1 || gnome-extensions disable "$UUID" >/dev/null 2>&1 || true
+sleep 0.6
+busctl --user call org.gnome.Shell.Extensions /org/gnome/Shell/Extensions org.gnome.Shell.Extensions EnableExtension s "$UUID" >/dev/null 2>&1 || gnome-extensions enable "$UUID" >/dev/null 2>&1 || true

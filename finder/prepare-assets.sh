@@ -51,8 +51,22 @@ mkdir -p "$STAGE_DIR/usr/share/applications"
 if [ -f "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.Finder.desktop" ]; then
     mv "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.Finder.desktop" \
        "$STAGE_DIR/usr/share/applications/finder.desktop"
-    ln -sf finder.desktop "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.Finder.desktop"
 fi
+rm -f "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.Finder.desktop"
+
+# Symlink nautilus binary and compatibility desktop entry to finder
+mkdir -p "$STAGE_DIR/usr/bin"
+ln -sf finder "$STAGE_DIR/usr/bin/nautilus"
+cat << 'EOF_NAUT' > "$STAGE_DIR/usr/share/applications/org.gnome.Nautilus.desktop"
+[Desktop Entry]
+Type=Application
+Name=Finder
+Exec=finder %U
+Icon=finder
+Terminal=false
+NoDisplay=true
+MimeType=inode/directory;
+EOF_NAUT
 
 # Default file manager associations
 if [ -f "$FORMA_DIR/applications/finder/portal/mimeapps.list" ]; then
