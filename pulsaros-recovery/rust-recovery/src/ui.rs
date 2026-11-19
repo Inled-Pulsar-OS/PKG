@@ -1,6 +1,6 @@
 //! Construcción de la interfaz GTK4.
 use crate::demo::is_demo_mode;
-use crate::icons::{create_button_with_icon, create_icon_widget, get_lucide_icon_path};
+use crate::icons::{create_button_with_icon, create_icon_widget, get_lucide_icon_path, get_sf_symbol_path};
 use crate::manifest::{fetch_release_manifest, local_manifest_fallback};
 use crate::models::{
     AppType, BtrfsTarget, DownloadMsg, EncryptedTarget, ExternalDrive, InstalledApp, ManifestData,
@@ -22,15 +22,15 @@ use crate::theme::APP_CSS;
 use glib::clone;
 use gtk4::prelude::*;
 use gtk4::{
-    Align, Application, Box as GtkBox, Button, CenterBox, CheckButton, CssProvider, DropDown,
-    GestureClick, Label, ListBox, ListBoxRow, Orientation, PasswordEntry, ProgressBar,
-    ScrolledWindow, SelectionMode, Spinner, Stack, StackTransitionType, StringList, TextView,
-    WrapMode,
+    cairo, Align, Application, Box as GtkBox, Button, CenterBox, CheckButton, CssProvider,
+    DrawingArea, DropDown, GestureClick, HeaderBar, Label, ListBox, ListBoxRow, Orientation,
+    PasswordEntry, ProgressBar, ScrolledWindow, SelectionMode, Spinner, Stack,
+    StackTransitionType, StringList, TextView, WrapMode,
 };
 use libadwaita::prelude::*;
 use libadwaita::ApplicationWindow;
-use webkit6::prelude::*;
-use webkit6::WebView;
+use crate::qr_fountain::FountainEncoder;
+use qrcode::QrCode;
 use std::cell::RefCell;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -85,6 +85,106 @@ pub(crate) fn build_ui(app: &Application) {
     card_box.append(&stack);
 
     center_box.set_center_widget(Some(&card_box));
+
+    // ─────────────────────────────────────────────────────────────
+    // Top Apple-Style Menu Bar
+    // ─────────────────────────────────────────────────────────────
+    let top_bar = GtkBox::new(Orientation::Horizontal, 10);
+    top_bar.add_css_class("apple-menu-bar");
+
+    // Left: Logo + "PulsarOS Recovery"
+    let top_left = GtkBox::new(Orientation::Horizontal, 8);
+    top_left.set_halign(Align::Start);
+    top_left.set_valign(Align::Center);
+    let logo_img = create_icon_widget("", "pulsar-white-sf", 20);
+    let top_title_lbl = Label::new(Some("PulsarOS Recovery"));
+    top_title_lbl.add_css_class("apple-menu-title");
+    top_left.append(&logo_img);
+    top_left.append(&top_title_lbl);
+    top_bar.append(&top_left);
+
+    // Center spacer
+    let top_spacer = GtkBox::new(Orientation::Horizontal, 0);
+    top_spacer.set_hexpand(true);
+    top_bar.append(&top_spacer);
+
+    // Right: Battery, Wi-Fi button, Keyboard dropdown, Clock
+    let top_right = GtkBox::new(Orientation::Horizontal, 12);
+    top_right.set_halign(Align::End);
+    top_right.set_valign(Align::Center);
+
+    // Battery indicator (white SF symbol)
+    let battery_box = GtkBox::new(Orientation::Horizontal, 4);
+    battery_box.set_valign(Align::Center);
+    battery_box.add_css_class("apple-menu-battery");
+    let battery_icon = create_icon_widget("", "battery-100", 20);
+    let battery_lbl = Label::new(None);
+    battery_lbl.add_css_class("apple-menu-item");
+    battery_box.append(&battery_icon);
+    battery_box.append(&battery_lbl);
+    top_right.append(&battery_box);
+
+    // Wi-Fi top button (white SF symbol, navigates directly to Wi-Fi settings)
+    let btn_top_wifi = Button::new();
+    btn_top_wifi.add_css_class("apple-menu-btn");
+    btn_top_wifi.set_tooltip_text(Some("Configure Wi-Fi and Network connections"));
+    let wifi_btn_box = GtkBox::new(Orientation::Horizontal, 6);
+    wifi_btn_box.set_valign(Align::Center);
+    let wifi_top_icon = create_icon_widget("", "wifi-off", 18);
+    let wifi_top_lbl = Label::new(Some("Wi-Fi"));
+    wifi_top_lbl.add_css_class("apple-menu-item");
+    wifi_btn_box.append(&wifi_top_icon);
+    wifi_btn_box.append(&wifi_top_lbl);
+    btn_top_wifi.set_child(Some(&wifi_btn_box));
+    top_right.append(&btn_top_wifi);
+
+    // Keyboard selector
+    let current_kb_code = Rc::new(RefCell::new("es".to_string()));
+    let kb_box = GtkBox::new(Orientation::Horizontal, 6);
+    kb_box.add_css_class("keyboard-selector-box");
+    let kb_icon = create_icon_widget("", "keyboard", 16);
+    let kb_layouts = [
+        "Spanish (ES)",
+        "English (US)",
+        "Spanish (Latin America)",
+        "English (UK)",
+        "French (FR)",
+        "German (DE)",
+        "Italian (IT)",
+        "Portuguese (PT)",
+    ];
+    let kb_list = StringList::new(&kb_layouts);
+    let combo_kb = DropDown::new(Some(kb_list), gtk4::Expression::NONE);
+    combo_kb.add_css_class("keyboard-dropdown");
+    let current_kb_code_cb = current_kb_code.clone();
+    combo_kb.connect_selected_notify(move |dd| {
+        let code = match dd.selected() {
+            0 => "es",
+            1 => "us",
+            2 => "latam",
+            3 => "gb",
+            4 => "fr",
+            5 => "de",
+            6 => "it",
+            7 => "pt",
+            _ => "es",
+        };
+        *current_kb_code_cb.borrow_mut() = code.to_string();
+        let _ = set_keyboard_layout(code);
+    });
+    kb_box.append(&kb_icon);
+    kb_box.append(&combo_kb);
+    top_right.append(&kb_box);
+
+    // Live Clock
+    let clock_lbl = Label::new(None);
+    clock_lbl.add_css_class("apple-menu-clock");
+    top_right.append(&clock_lbl);
+
+    top_bar.append(&top_right);
+
+    // Append top_bar and center_box to root container
+    root_box.append(&top_bar);
     root_box.append(&center_box);
 
     // Bottom center control buttons: Restart & Shut Down
@@ -122,43 +222,59 @@ pub(crate) fn build_ui(app: &Application) {
     bottom_bar.append(&btn_restart);
     bottom_bar.append(&btn_shutdown);
 
-    let kb_box = GtkBox::new(Orientation::Horizontal, 6);
-    kb_box.add_css_class("keyboard-selector-box");
-    let kb_icon = create_icon_widget("", "keyboard", 16);
-    let kb_layouts = [
-        "Spanish (ES)",
-        "English (US)",
-        "Spanish (Latin America)",
-        "English (UK)",
-        "French (FR)",
-        "German (DE)",
-        "Italian (IT)",
-        "Portuguese (PT)",
-    ];
-    let kb_list = StringList::new(&kb_layouts);
-    let combo_kb = DropDown::new(Some(kb_list), gtk4::Expression::NONE);
-    combo_kb.add_css_class("keyboard-dropdown");
-    combo_kb.connect_selected_notify(|dd| {
-        let code = match dd.selected() {
-            0 => "es",
-            1 => "us",
-            2 => "latam",
-            3 => "gb",
-            4 => "fr",
-            5 => "de",
-            6 => "it",
-            7 => "pt",
-            _ => "es",
-        };
-        let _ = set_keyboard_layout(code);
-    });
-    kb_box.append(&kb_icon);
-    kb_box.append(&combo_kb);
-    bottom_bar.append(&kb_box);
-
     root_box.append(&bottom_bar);
 
     window.set_content(Some(&root_box));
+
+    // Live clock ticker
+    let clock_lbl_c = clock_lbl.clone();
+    let current_kb_code_c = current_kb_code.clone();
+    let update_clock = move || {
+        let now = glib::DateTime::now_local().unwrap_or_else(|_| glib::DateTime::from_unix_local(0).unwrap());
+        let kb = current_kb_code_c.borrow().clone();
+        let fmt = if kb == "us" || kb == "gb" {
+            "%a %b %e  %l:%M %p"
+        } else {
+            "%a %e %b  %H:%M"
+        };
+        let formatted = now.format(fmt).unwrap_or_else(|_| now.format("%H:%M").unwrap());
+        clock_lbl_c.set_text(&formatted);
+    };
+    update_clock();
+    let update_clock_tick = update_clock.clone();
+    glib::timeout_add_seconds_local(1, move || {
+        update_clock_tick();
+        glib::ControlFlow::Continue
+    });
+
+    // Battery updater
+    let battery_box_c = battery_box.clone();
+    let battery_icon_c = battery_icon.clone();
+    let battery_lbl_c = battery_lbl.clone();
+    let update_battery = move || {
+        if let Some((cap, is_charging)) = crate::system::get_battery_info() {
+            battery_box_c.set_visible(true);
+            battery_lbl_c.set_text(&format!("{}%", cap));
+            let icon_name = if is_charging {
+                "battery-charging"
+            } else if cap > 60 {
+                "battery-100"
+            } else if cap > 25 {
+                "battery-50"
+            } else {
+                "battery-25"
+            };
+            battery_icon_c.set_from_file(Some(&get_sf_symbol_path(icon_name)));
+        } else {
+            battery_box_c.set_visible(false);
+        }
+    };
+    update_battery();
+    let update_battery_tick = update_battery.clone();
+    glib::timeout_add_seconds_local(5, move || {
+        update_battery_tick();
+        glib::ControlFlow::Continue
+    });
 
     // Shared state
     let selected_action: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
@@ -1601,6 +1717,8 @@ pub(crate) fn build_ui(app: &Application) {
         let img_badge = img_net_badge.clone();
         let btn_dl = btn_net_download.clone();
         let lbl_status = lbl_net_status.clone();
+        let top_wifi_icon = wifi_top_icon.clone();
+        let top_wifi_lbl = wifi_top_lbl.clone();
         Rc::new(move || {
             let st = get_network_status();
             lbl_badge.remove_css_class("badge-net-ok");
@@ -1616,13 +1734,17 @@ pub(crate) fn build_ui(app: &Application) {
                 };
                 let icon_p = get_lucide_icon_path(icon_name);
                 img_badge.set_from_file(Some(&icon_p));
+                top_wifi_icon.set_from_file(Some(&get_sf_symbol_path("wifi")));
                 lbl_badge.set_text(&st.conn_name);
+                top_wifi_lbl.set_text(if st.conn_name.is_empty() { "Connected" } else { &st.conn_name });
                 btn_dl.set_sensitive(true);
             } else {
                 lbl_badge.add_css_class("badge-net-warn");
                 let icon_p = get_lucide_icon_path("wifi-off");
                 img_badge.set_from_file(Some(&icon_p));
+                top_wifi_icon.set_from_file(Some(&get_sf_symbol_path("wifi-off")));
                 lbl_badge.set_text("Offline / Disconnected");
+                top_wifi_lbl.set_text("Offline");
                 if !is_demo_mode() {
                     btn_dl.set_sensitive(false);
                     lbl_status.set_text("No internet connection detected. Please connect to Wi-Fi or Ethernet.");
@@ -1885,9 +2007,14 @@ pub(crate) fn build_ui(app: &Application) {
         stack.set_visible_child_name("wifi_select");
     }));
 
+    btn_top_wifi.connect_clicked(clone!(@weak stack, @strong populate_wifi_list => move |_| {
+        populate_wifi_list();
+        stack.set_visible_child_name("wifi_select");
+    }));
+
     btn_wifi_back.connect_clicked(clone!(@weak stack, @strong update_network_badge => move |_| {
         update_network_badge();
-        stack.set_visible_child_name("internet_info");
+        stack.set_visible_child_name("utilities");
     }));
 
     // Initial check and periodic polling every 3 seconds
@@ -2888,6 +3015,10 @@ pub(crate) fn show_logs_dialog(parent: &impl IsA<gtk4::Window>, part_path: Optio
         .transient_for(parent)
         .build();
 
+    let header_bar = HeaderBar::new();
+    header_bar.set_show_title_buttons(true);
+    win.set_titlebar(Some(&header_bar));
+
     let root = GtkBox::new(Orientation::Vertical, 10);
     root.set_margin_start(16);
     root.set_margin_end(16);
@@ -2995,50 +3126,245 @@ pub(crate) fn show_logs_dialog(parent: &impl IsA<gtk4::Window>, part_path: Optio
 
 pub(crate) fn show_share_logs_dialog(parent: &impl IsA<gtk4::Window>, log_text: &str) {
     let win = gtk4::Window::builder()
-        .title("Share Logs")
-        .default_width(480)
-        .default_height(530)
+        .title("Share Logs — Fountain QR")
+        .default_width(500)
+        .default_height(640)
         .modal(true)
         .transient_for(parent)
         .resizable(false)
         .build();
 
+    let header_bar = HeaderBar::new();
+    header_bar.set_show_title_buttons(true);
+    win.set_titlebar(Some(&header_bar));
+
     let root = GtkBox::new(Orientation::Vertical, 8);
     root.set_margin_start(16);
     root.set_margin_end(16);
-    root.set_margin_top(16);
+    root.set_margin_top(12);
     root.set_margin_bottom(14);
 
-    // Header
-    let title_lbl = Label::new(Some("Share Logs"));
+    let title_lbl = Label::new(Some("Transfer Logs via Animated QR"));
     title_lbl.add_css_class("welcome-title");
     title_lbl.set_halign(Align::Center);
     root.append(&title_lbl);
 
-    let desc_lbl = Label::new(Some("Transfer logs to your mobile device or across your local network."));
+    let desc_lbl = Label::new(Some("To read it, go to qrs.inled.es"));
     desc_lbl.add_css_class("welcome-subtitle");
     desc_lbl.set_halign(Align::Center);
     desc_lbl.set_wrap(true);
     desc_lbl.set_justify(gtk4::Justification::Center);
     root.append(&desc_lbl);
 
-    // WebView for Fountain QR Player (dark background, matching window)
-    let webview = WebView::new();
-    let dark_bg = gtk4::gdk::RGBA::new(0.118, 0.118, 0.125, 1.0);
-    webview.set_background_color(&dark_bg);
-    let fountain_html = crate::qr_fountain::generate_fountain_html(log_text, "pulsaros-recovery.log");
-    webview.load_html(&fountain_html, Some("https://qrs.inled.es/"));
-    webview.set_size_request(440, 345);
-    webview.set_hexpand(true);
-    webview.set_vexpand(false);
-    root.append(&webview);
+    // Native Fountain QR Drawing Area
+    let qr_box = GtkBox::new(Orientation::Vertical, 4);
+    qr_box.add_css_class("qr-fountain-box");
+    qr_box.set_halign(Align::Center);
+
+    let drawing_area = DrawingArea::new();
+    drawing_area.set_content_width(300);
+    drawing_area.set_content_height(300);
+    drawing_area.set_halign(Align::Center);
+    drawing_area.set_valign(Align::Center);
+
+    let current_qr: Rc<RefCell<Option<QrCode>>> = Rc::new(RefCell::new(None));
+    let frame_count = Rc::new(RefCell::new(0usize));
+    let current_speed = Rc::new(RefCell::new("medium".to_string()));
+    let encoder = Rc::new(RefCell::new(FountainEncoder::new(
+        log_text.as_bytes(),
+        "pulsaros-recovery.log",
+        "medium",
+    )));
+
+    // Generate initial frame
+    {
+        let mut enc = encoder.borrow_mut();
+        if let Ok(qr) = enc.next_qr() {
+            *current_qr.borrow_mut() = Some(qr);
+            *frame_count.borrow_mut() = 1;
+        }
+    }
+
+    let current_qr_draw = current_qr.clone();
+    drawing_area.set_draw_func(move |_area, cr, width, height| {
+        // Deep dark background for canvas
+        cr.set_source_rgb(0.094, 0.094, 0.106);
+        let _ = cr.paint();
+
+        if let Some(ref qr) = *current_qr_draw.borrow() {
+            let modules = qr.width() as i32;
+            let size = width.min(height);
+            let margin = 12;
+            let module_px = ((size - margin * 2) / modules).max(1);
+            let qr_size = module_px * modules;
+            let offset_x = (width - qr_size) as f64 / 2.0;
+            let offset_y = (height - qr_size) as f64 / 2.0;
+
+            // Draw white quiet-zone card for standard QR camera scanners
+            let quiet = 10.0;
+            cr.set_source_rgb(1.0, 1.0, 1.0);
+            cr.rectangle(
+                offset_x - quiet,
+                offset_y - quiet,
+                qr_size as f64 + quiet * 2.0,
+                qr_size as f64 + quiet * 2.0,
+            );
+            let _ = cr.fill();
+
+            // Draw dark QR modules
+            cr.set_source_rgb(0.0, 0.0, 0.0);
+            for y in 0..qr.width() {
+                for x in 0..qr.width() {
+                    if qr[(x, y)] == qrcode::Color::Dark {
+                        cr.rectangle(
+                            offset_x + (x as i32 * module_px) as f64,
+                            offset_y + (y as i32 * module_px) as f64,
+                            module_px as f64,
+                            module_px as f64,
+                        );
+                    }
+                }
+            }
+            let _ = cr.fill();
+        }
+    });
+
+    qr_box.append(&drawing_area);
+    root.append(&qr_box);
+
+    // Frame status label
+    let total_blocks = encoder.borrow().k;
+    let lbl_status = Label::new(Some(&format!("Streaming frame #1 • {} blocks • 8 fps", total_blocks)));
+    lbl_status.add_css_class("apple-menu-item");
+    lbl_status.set_halign(Align::Center);
+    root.append(&lbl_status);
+
+    // Speed options
+    let speed_box = GtkBox::new(Orientation::Horizontal, 8);
+    speed_box.set_halign(Align::Center);
+    speed_box.set_margin_top(2);
+
+    let btn_slow = Button::with_label("Slow (4 fps)");
+    btn_slow.add_css_class("speed-pill-btn");
+    let btn_med = Button::with_label("Normal (8 fps)");
+    btn_med.add_css_class("speed-pill-btn");
+    btn_med.add_css_class("active");
+    let btn_fast = Button::with_label("Fast (12 fps)");
+    btn_fast.add_css_class("speed-pill-btn");
+
+    speed_box.append(&btn_slow);
+    speed_box.append(&btn_med);
+    speed_box.append(&btn_fast);
+    root.append(&speed_box);
+
+    // Animation loop
+    let is_open = Rc::new(AtomicBool::new(true));
+    let is_open_win = is_open.clone();
+    win.connect_close_request(move |_| {
+        is_open_win.store(false, Ordering::SeqCst);
+        glib::Propagation::Proceed
+    });
+
+    let interval_ms = Rc::new(RefCell::new(125u64)); // 8 fps default
+
+    let log_bytes = log_text.as_bytes().to_vec();
+    let reconfigure_speed = {
+        let encoder = encoder.clone();
+        let log_bytes = log_bytes.clone();
+        let interval_ms = interval_ms.clone();
+        let btn_slow = btn_slow.clone();
+        let btn_med = btn_med.clone();
+        let btn_fast = btn_fast.clone();
+        let current_speed = current_speed.clone();
+        move |speed: &str| {
+            *current_speed.borrow_mut() = speed.to_string();
+            btn_slow.remove_css_class("active");
+            btn_med.remove_css_class("active");
+            btn_fast.remove_css_class("active");
+            match speed {
+                "low" => {
+                    *interval_ms.borrow_mut() = 250;
+                    btn_slow.add_css_class("active");
+                }
+                "fast" => {
+                    *interval_ms.borrow_mut() = 83;
+                    btn_fast.add_css_class("active");
+                }
+                _ => {
+                    *interval_ms.borrow_mut() = 125;
+                    btn_med.add_css_class("active");
+                }
+            }
+            *encoder.borrow_mut() = FountainEncoder::new(&log_bytes, "pulsaros-recovery.log", speed);
+        }
+    };
+
+    let re_slow = reconfigure_speed.clone();
+    btn_slow.connect_clicked(move |_| re_slow("low"));
+    let re_med = reconfigure_speed.clone();
+    btn_med.connect_clicked(move |_| re_med("medium"));
+    let re_fast = reconfigure_speed.clone();
+    btn_fast.connect_clicked(move |_| re_fast("fast"));
+
+    // Tick loop using glib timeout
+    fn schedule_next_tick(
+        encoder: Rc<RefCell<FountainEncoder>>,
+        current_qr: Rc<RefCell<Option<QrCode>>>,
+        frame_count: Rc<RefCell<usize>>,
+        lbl_status: Label,
+        drawing_area: DrawingArea,
+        is_open: Rc<AtomicBool>,
+        interval: Rc<RefCell<u64>>,
+    ) {
+        let ms = *interval.borrow();
+        glib::timeout_add_local_once(std::time::Duration::from_millis(ms), move || {
+            if !is_open.load(Ordering::SeqCst) {
+                return;
+            }
+            let next_result = {
+                let mut enc = encoder.borrow_mut();
+                enc.next_qr().ok().map(|qr| (qr, enc.k))
+            };
+            if let Some((qr, k)) = next_result {
+                *current_qr.borrow_mut() = Some(qr);
+                let count = *frame_count.borrow() + 1;
+                *frame_count.borrow_mut() = count;
+                let fps = match ms {
+                    250 => 4,
+                    83 => 12,
+                    _ => 8,
+                };
+                lbl_status.set_text(&format!("Streaming frame #{} • {} blocks • {} fps", count, k, fps));
+                drawing_area.queue_draw();
+            }
+            schedule_next_tick(
+                encoder,
+                current_qr,
+                frame_count,
+                lbl_status,
+                drawing_area,
+                is_open,
+                interval,
+            );
+        });
+    }
+
+    schedule_next_tick(
+        encoder.clone(),
+        current_qr.clone(),
+        frame_count.clone(),
+        lbl_status.clone(),
+        drawing_area.clone(),
+        is_open.clone(),
+        interval_ms.clone(),
+    );
 
     let sep = gtk4::Separator::new(Orientation::Horizontal);
     sep.set_margin_top(4);
     sep.set_margin_bottom(4);
     root.append(&sep);
 
-    // FlyDrop Action Row (Flat, clean, no inner card)
+    // FlyDrop Action Row
     let fd_row = GtkBox::new(Orientation::Horizontal, 10);
     fd_row.set_halign(Align::Fill);
 
@@ -3051,7 +3377,6 @@ pub(crate) fn show_share_logs_dialog(parent: &impl IsA<gtk4::Window>, log_text: 
     let btn_flydrop = Button::with_label("Send via FlyDrop");
     btn_flydrop.add_css_class("suggested-action");
     fd_row.append(&btn_flydrop);
-
     root.append(&fd_row);
 
     let fd_status = Label::new(None);

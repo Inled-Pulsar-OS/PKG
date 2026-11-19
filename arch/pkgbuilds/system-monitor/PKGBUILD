@@ -1,0 +1,27 @@
+# Maintainer: Jaime <info@inled.es>
+pkgname=system-monitor
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="macOS-style Activity Monitor for Pulsar OS"
+arch=('x86_64')
+url="https://github.com/skjsbsnq/Forma"
+license=('GPL-3.0-only')
+depends=('glibc' 'gcc-libs' 'sdl3' 'freetype2' 'fontconfig' 'dbus' 'hicolor-icon-theme' 'glib2' 'gdk-pixbuf2')
+optdepends=('vulkan-icd-loader: Vulkan renderer (OpenGL otherwise)'
+            'zenity: fallback file dialogs')
+provides=('gnome-system-monitor' 'mayo-task-manager-git')
+conflicts=('gnome-system-monitor' 'mayo-task-manager-git' 'forma-taskmanager')
+replaces=('forma-taskmanager')
+options=('!strip')
+
+prepare() {
+    _src="$(cd "$startdir"/../../../system-monitor && pwd)"
+    mkdir -p "$srcdir/staging"
+    bash "$_src/prepare-assets.sh" "$srcdir/staging"
+}
+
+package() {
+    if [ -d "$srcdir/staging" ]; then
+        cp -r "$srcdir/staging"/* "$pkgdir/"
+    fi
+}

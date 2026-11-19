@@ -972,15 +972,30 @@ pub(crate) fn generate_qr_code_image(text: &str) -> Result<String, String> {
 pub(crate) fn send_logs_via_flydrop(log_text: &str) -> Result<(), String> {
     let log_file = "/tmp/pulsaros-installation-log.txt";
     fs::write(log_file, log_text).map_err(|e| format!("Failed to save temporary log file: {}", e))?;
+    let _ = Command::new("chmod").args(&["666", log_file]).status();
 
     let is_installed = Command::new("which").arg("flydrop").status().map(|s| s.success()).unwrap_or(false);
     if !is_installed && !Path::new("/usr/bin/flydrop").exists() {
         return Err("FlyDrop is not installed on this system.".to_string());
     }
 
-    Command::new("flydrop")
-        .args(&["send", log_file])
-        .spawn()
+    let mut cmd = if let Ok(sudo_user) = std::env::var("SUDO_USER") {
+        if !sudo_user.is_empty() && sudo_user != "root" {
+            let mut c = Command::new("sudo");
+            c.args(&["-u", &sudo_user, "-E", "flydrop", "send", log_file]);
+            c
+        } else {
+            let mut c = Command::new("flydrop");
+            c.args(&["send", log_file]);
+            c
+        }
+    } else {
+        let mut c = Command::new("flydrop");
+        c.args(&["send", log_file]);
+        c
+    };
+
+    cmd.spawn()
         .map_err(|e| format!("Failed to launch FlyDrop: {}", e))?;
 
     Ok(())
@@ -1067,6 +1082,20 @@ pub(crate) fn scan_installed_applications(old_root: &str) -> Vec<InstalledApp> {
     // 1. Arch Linux (pacman local database)
     let pacman_local = old_root_p.join("var/lib/pacman/local");
     if pacman_local.exists() {
+        let mut base_pkgs = std::collections::HashSet::new();
+        let base_list_p = old_root_p.join("etc/pulsaros-base.list");
+        let has_base_list = base_list_p.exists();
+        if has_base_list {
+            if let Ok(content) = fs::read_to_string(&base_list_p) {
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if !trimmed.is_empty() && !trimmed.starts_with('#') {
+                        base_pkgs.insert(trimmed.to_string());
+                    }
+                }
+            }
+        }
+
         if let Ok(entries) = fs::read_dir(&pacman_local) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -1076,7 +1105,9 @@ pub(crate) fn scan_installed_applications(old_root: &str) -> Vec<InstalledApp> {
                         let mut name = String::new();
                         let mut version = String::new();
                         let mut desc = String::new();
-                        let mut reason = 1;
+                        // In ALPM/pacman, explicitly installed packages omit %REASON% entirely,
+                        // while dependency packages have %REASON%\n1\n. Default must be 0 (explicit).
+                        let mut reason = 0;
 
                         let lines: Vec<&str> = content.lines().collect();
                         let mut i = 0;
@@ -1097,11 +1128,19 @@ pub(crate) fn scan_installed_applications(old_root: &str) -> Vec<InstalledApp> {
 
                         if reason == 0 && !name.is_empty() {
                             let core_system = [
-                                "base", "linux", "linux-firmware", "glibc", "systemd", "coreutils", "bash",
+                                "base", "base-devel", "linux", "linux-firmware", "glibc", "systemd", "coreutils", "bash",
                                 "pacman", "btrfs-progs", "e2fsprogs", "dosfstools", "shadow", "util-linux",
-                                "grub", "refind", "sudo", "pulsaros-recovery"
+                                "grub", "refind", "sudo", "pulsaros-recovery", "filesystem", "archlinux-keyring",
+                                "mkinitcpio", "pulsar-recovery-assistant", "udev", "procps-ng", "dhcpcd",
+                                "iproute2", "dbus", "pam", "licenses", "pciutils", "usbutils", "which"
                             ];
                             if core_system.contains(&name.as_str()) {
+                                continue;
+                            }
+                            if has_base_list && base_pkgs.contains(&name) {
+                                continue;
+                            }
+                            if name.starts_with("pulsaros-") || name.starts_with("pulsar-") {
                                 continue;
                             }
 
@@ -1111,22 +1150,41 @@ pub(crate) fn scan_installed_applications(old_root: &str) -> Vec<InstalledApp> {
                                 || name.starts_with("xf86-video")
                                 || name.starts_with("vulkan-")
                                 || name.ends_with("-dkms")
-                                || name.ends_with("-firmware");
+                                || name.ends_with("-firmware")
+                                || name.contains("ucode");
 
-                            let app_type = if is_driver {
-                                AppType::Driver
-                            } else {
-                                AppType::Application
-                            };
+                            let mut has_desktop = old_root_p.join(format!("usr/share/applications/{}.desktop", name)).exists();
+                            if !has_desktop {
+                                let files_file = path.join("files");
+                                if files_file.exists() {
+                                    if let Ok(fc) = fs::read_to_string(&files_file) {
+                                        if fc.contains("usr/share/applications/") {
+                                            has_desktop = true;
+                                        }
+                                    }
+                                } else if !has_base_list {
+                                    has_desktop = true;
+                                }
+                            }
 
-                            apps.push(InstalledApp {
-                                id: name.clone(),
-                                name,
-                                version,
-                                description: desc,
-                                app_type,
-                                selected: true,
-                            });
+                            // If we have base.list, any non-base explicit package is a user app/driver.
+                            // If we don't have base.list, require desktop entry or driver to avoid listing system libraries.
+                            if has_base_list || has_desktop || is_driver {
+                                let app_type = if is_driver {
+                                    AppType::Driver
+                                } else {
+                                    AppType::Application
+                                };
+
+                                apps.push(InstalledApp {
+                                    id: name.clone(),
+                                    name,
+                                    version,
+                                    description: desc,
+                                    app_type,
+                                    selected: true,
+                                });
+                            }
                         }
                     }
                 }
@@ -1252,6 +1310,33 @@ where
     Ok(())
 }
 
+/// Reads the first detected battery from `/sys/class/power_supply/`.
+/// Returns `Some((percentage, is_charging))` or `None` if no battery is present (e.g. desktop).
+pub(crate) fn get_battery_info() -> Option<(u32, bool)> {
+    let power_path = Path::new("/sys/class/power_supply");
+    if !power_path.exists() {
+        return None;
+    }
+    if let Ok(entries) = fs::read_dir(power_path) {
+        for entry in entries.flatten() {
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            if file_name.starts_with("BAT") {
+                let cap_file = entry.path().join("capacity");
+                let status_file = entry.path().join("status");
+                if let Ok(cap_str) = fs::read_to_string(&cap_file) {
+                    if let Ok(cap) = cap_str.trim().parse::<u32>() {
+                        let is_charging = fs::read_to_string(&status_file)
+                            .map(|s| s.trim() == "Charging")
+                            .unwrap_or(false);
+                        return Some((cap.min(100), is_charging));
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1321,6 +1406,24 @@ mod tests {
         let apps = scan_installed_applications(&temp_dir.to_string_lossy());
         assert_eq!(apps.len(), 1);
         assert_eq!(apps[0].id, "firefox");
+        assert_eq!(apps[0].app_type, AppType::Application);
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_scan_installed_applications_arch_default_reason() {
+        let temp_dir = std::env::temp_dir().join("pulsar_test_mock_arch_default");
+        let pacman_dir = temp_dir.join("var/lib/pacman/local/chrome-130.0-1");
+        let _ = fs::create_dir_all(&pacman_dir);
+
+        // Real ALPM desc file: no %REASON% tag when explicitly installed
+        let desc_content = "%NAME%\nchrome\n\n%VERSION%\n130.0-1\n\n%DESC%\nWeb Browser\n";
+        let _ = fs::write(pacman_dir.join("desc"), desc_content);
+
+        let apps = scan_installed_applications(&temp_dir.to_string_lossy());
+        assert_eq!(apps.len(), 1);
+        assert_eq!(apps[0].id, "chrome");
         assert_eq!(apps[0].app_type, AppType::Application);
 
         let _ = fs::remove_dir_all(&temp_dir);

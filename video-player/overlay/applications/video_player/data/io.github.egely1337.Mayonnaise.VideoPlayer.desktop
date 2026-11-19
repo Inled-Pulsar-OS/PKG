@@ -1,0 +1,21 @@
+[Desktop Entry]
+Type=Application
+Name=QuickTime Player
+Name[es]=QuickTime Player
+Name[it]=QuickTime Player
+Name[fr]=QuickTime Player
+GenericName=Video Player
+GenericName[es]=Reproductor de vídeo
+GenericName[it]=Riproduttore video
+GenericName[fr]=Lecteur vidéo
+Comment=Play movies and media files
+Comment[es]=Reproduce películas y archivos multimedia
+Comment[it]=Riproduce filmati e file multimediali
+Comment[fr]=Lire des films et des fichiers multimédias
+Exec=video_player %F
+Icon=quicktime-player
+Terminal=false
+StartupNotify=true
+Categories=AudioVideo;Player;Video;
+Keywords=video;movie;media;player;reproductor;video;quicktime;
+MimeType=video/mp4;video/x-matroska;video/webm;video/quicktime;video/x-msvideo;video/x-flv;video/ogg;

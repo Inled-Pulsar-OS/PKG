@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Forma Task Manager
+Name[zh_CN]=Forma 任务管理器
+GenericName=System Monitor
+Comment=See processes and CPU, memory, disk and network activity
+Exec=forma-taskmanager
+Icon=forma-taskmanager
+Terminal=false
+StartupNotify=true
+Categories=System;Monitor;
+Keywords=process;cpu;memory;network;activity;monitor;kill;

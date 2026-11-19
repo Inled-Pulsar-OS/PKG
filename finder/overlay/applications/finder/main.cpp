@@ -93,7 +93,7 @@ public:
     [[nodiscard]] float bottomHeight() const {
         float h = 0.0f;
         if (pathBar && pathBar->isVisible()) h += kPathBarHeight;
-        if (pickerBar && pickerBar->isVisible()) h += 52.0f;
+        if (pickerBar && pickerBar->isVisible()) h += 56.0f;
         else if (statusBar && statusBar->isVisible()) h += kStatusBarHeight;
         return h;
     }
@@ -360,7 +360,7 @@ int main(int argc, char** argv) {
     auto statusBar = ZStack(
         {HStack({opSpinner, opLabel, cancelOperation, Spacer(), sizeSlider}).spacing(6).padding(0, 12), statusLabel});
     statusBar.height(kStatusBarHeight);
-    auto pickerCancel = Button(tr("Cancel")).minWidth(96).height(32).onClick([&] {
+    auto pickerCancel = Button(tr("Cancel")).minWidth(100).height(34).onClick([&] {
         std::exit(1);
     });
     auto pickerFilenameField = TextField(tr("File name:")).width(260);
@@ -389,21 +389,21 @@ int main(int argc, char** argv) {
     };
     auto pickerSelect = Button(saveMode ? tr("Save") : tr("Open"))
                             .style(ButtonStyle::Prominent)
-                            .minWidth(96)
-                            .height(32)
+                            .minWidth(100)
+                            .height(34)
                             .onClick(submitPicker);
     HStack pickerBar;
     if (saveMode) {
         auto saveStack = HStack({Element(Label(tr("File name:"))), Element(pickerFilenameField.node())}).spacing(8);
         pickerBar = HStack({Element(saveStack.node()), Element(Spacer().node()), Element(pickerCancel.node()), Element(pickerSelect.node())})
-                        .spacing(12)
-                        .padding(10, 20);
+                        .spacing(14)
+                        .padding(Insets(8, 24, 14, 24));
     } else {
         pickerBar = HStack({Element(Spacer().node()), Element(pickerCancel.node()), Element(pickerSelect.node())})
-                        .spacing(12)
-                        .padding(10, 20);
+                        .spacing(14)
+                        .padding(Insets(8, 24, 14, 24));
     }
-    pickerBar.height(52);
+    pickerBar.height(56);
 
     VStack bottom;
     if (pickerMode) {

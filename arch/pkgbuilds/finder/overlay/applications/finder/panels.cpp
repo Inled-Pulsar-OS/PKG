@@ -274,38 +274,55 @@ void QuickLookView::setEntry(const FileEntry& e) {
             std::thread([this, weak, pdfPath, tempDir] {
                 std::string escPdf = shellEscape(pdfPath);
                 std::string escOut = shellEscape(tempDir + "/p");
-                std::string cmd = "pdftoppm -png -r 140 -f 1 -l 100 " + escPdf + " " + escOut + " 2>/dev/null";
-                (void)std::system(cmd.c_str());
 
-                std::vector<std::pair<int, std::string>> pagesWithNum;
-                std::error_code ec;
-                for (const auto& entry : fs::directory_iterator(tempDir, ec)) {
-                    if (entry.is_regular_file(ec)) {
-                        std::string fn = entry.path().filename().string();
-                        if (fn.rfind("p-", 0) == 0 && fn.ends_with(".png")) {
-                            std::string numStr = fn.substr(2, fn.size() - 6);
-                            try {
-                                int pNum = std::stoi(numStr);
-                                pagesWithNum.emplace_back(pNum, entry.path().string());
-                            } catch (...) {}
+                auto loadPages = [&tempDir]() {
+                    std::vector<std::pair<int, std::string>> pagesWithNum;
+                    std::error_code ec;
+                    for (const auto& entry : fs::directory_iterator(tempDir, ec)) {
+                        if (entry.is_regular_file(ec)) {
+                            std::string fn = entry.path().filename().string();
+                            if (fn.rfind("p-", 0) == 0 && fn.ends_with(".png")) {
+                                std::string numStr = fn.substr(2, fn.size() - 6);
+                                try {
+                                    int pNum = std::stoi(numStr);
+                                    pagesWithNum.emplace_back(pNum, entry.path().string());
+                                } catch (...) {}
+                            }
                         }
                     }
-                }
-                std::sort(pagesWithNum.begin(), pagesWithNum.end(), [](const auto& a, const auto& b) {
-                    return a.first < b.first;
-                });
-
-                std::vector<std::shared_ptr<ImageData>> loaded;
-                for (const auto& item : pagesWithNum) {
-                    if (auto img = ImageData::load(item.second)) {
-                        loaded.push_back(img);
+                    std::sort(pagesWithNum.begin(), pagesWithNum.end(), [](const auto& a, const auto& b) {
+                        return a.first < b.first;
+                    });
+                    std::vector<std::shared_ptr<ImageData>> loaded;
+                    for (const auto& item : pagesWithNum) {
+                        if (auto img = ImageData::load(item.second)) {
+                            loaded.push_back(img);
+                        }
                     }
+                    return loaded;
+                };
+
+                // Fast initial batch: render first 5 pages immediately
+                std::string cmd1 = "pdftoppm -png -r 110 -f 1 -l 5 " + escPdf + " " + escOut + " 2>/dev/null";
+                (void)std::system(cmd1.c_str());
+                auto initialPages = loadPages();
+                if (!initialPages.empty()) {
+                    App::current().post([this, weak, pages = std::move(initialPages), pdfPath] {
+                        if (!weak.lock() || m_entry.path != pdfPath) return;
+                        m_pdfPages = std::move(pages);
+                        invalidateLayout();
+                        invalidate();
+                    });
                 }
 
-                if (!loaded.empty()) {
-                    App::current().post([this, weak, loaded = std::move(loaded), pdfPath] {
+                // Batch 2: remaining pages up to 100
+                std::string cmd2 = "pdftoppm -png -r 110 -f 6 -l 100 " + escPdf + " " + escOut + " 2>/dev/null";
+                (void)std::system(cmd2.c_str());
+                auto allPages = loadPages();
+                if (allPages.size() > 5) {
+                    App::current().post([this, weak, pages = std::move(allPages), pdfPath] {
                         if (!weak.lock() || m_entry.path != pdfPath) return;
-                        m_pdfPages = std::move(loaded);
+                        m_pdfPages = std::move(pages);
                         invalidateLayout();
                         invalidate();
                     });
@@ -430,13 +447,14 @@ void QuickLookView::drawPanel(Painter& p) {
         }
 
         // Floating Liquid Glass video HUD controls (QuickTime Player design)
-        const float hudW = 400.0f;
-        const float hudH = 46.0f;
-        const float hudR = 23.0f;
+        const float hudW = 420.0f;
+        const float hudH = 50.0f;
+        const float hudR = 25.0f;
         Rect hudRect{b.center().x - hudW * 0.5f, b.bottom() - 56.0f, hudW, hudH};
         p.drawShadow(hudRect, hudR, Color::black(0.45f), 24.0f, {0, 8});
         MaterialStyle ms = t.material(Material::Popover);
         ms.tint = Color::rgb8(28, 28, 32, 0.70f);
+        ms.saturation = 1.4f;
         ms.highlight = Color::white(0.20f);
         ms.border = Color::white(0.12f);
         p.drawMaterial(hudRect, hudR, ms);
@@ -445,34 +463,54 @@ void QuickLookView::drawPanel(Painter& p) {
         double dur = m_player ? m_player->duration() : 0;
 
         // Skip back (-10s) button
-        Rect backBtn{hudRect.x + 14.0f, hudRect.center().y - 12.0f, 24.0f, 24.0f};
-        p.drawIcon(Icon::ChevronLeft, backBtn.inset(3.0f), Color::white(0.9f), 1.5f);
+        Rect backBtn{hudRect.x + 16.0f, hudRect.center().y - 14.0f, 28.0f, 28.0f};
+        if (backBtn.contains(m_pointerPos)) p.fillCircle(backBtn.center(), 14.0f, Color::white(0.12f));
+        p.drawIcon(Icon::SkipBack, {backBtn.center().x - 9.0f, backBtn.center().y - 9.0f, 18.0f, 18.0f}, Color::white(0.95f), 1.15f);
 
         // Play / Pause button
         Icon playIcon = m_videoPaused ? Icon::Play : Icon::Pause;
-        Rect playBtn{hudRect.x + 44.0f, hudRect.center().y - 14.0f, 28.0f, 28.0f};
-        p.drawIcon(playIcon, playBtn.inset(4.0f), Color::white(), 1.4f);
+        Rect playBtn{hudRect.x + 52.0f, hudRect.center().y - 16.0f, 32.0f, 32.0f};
+        if (playBtn.contains(m_pointerPos)) p.fillCircle(playBtn.center(), 16.0f, Color::white(0.14f));
+        p.drawIcon(playIcon, {playBtn.center().x - 11.0f, playBtn.center().y - 11.0f, 22.0f, 22.0f}, Color::white(), 1.15f);
 
         // Skip forward (+10s) button
-        Rect fwdBtn{hudRect.x + 78.0f, hudRect.center().y - 12.0f, 24.0f, 24.0f};
-        p.drawIcon(Icon::ChevronRight, fwdBtn.inset(3.0f), Color::white(0.9f), 1.5f);
+        Rect fwdBtn{hudRect.x + 92.0f, hudRect.center().y - 14.0f, 28.0f, 28.0f};
+        if (fwdBtn.contains(m_pointerPos)) p.fillCircle(fwdBtn.center(), 14.0f, Color::white(0.12f));
+        p.drawIcon(Icon::SkipForward, {fwdBtn.center().x - 9.0f, fwdBtn.center().y - 9.0f, 18.0f, 18.0f}, Color::white(0.95f), 1.15f);
 
         // Elapsed time
         int pMin = static_cast<int>(pos) / 60, pSec = static_cast<int>(pos) % 60;
         char elapsedBuf[16];
         std::snprintf(elapsedBuf, sizeof(elapsedBuf), "%d:%02d", pMin, pSec);
-        Rect elapsedRect{hudRect.x + 108.0f, hudRect.center().y - 8.0f, 40.0f, 16.0f};
+        Rect elapsedRect{hudRect.x + 128.0f, hudRect.center().y - 8.0f, 40.0f, 16.0f};
         p.drawText(elapsedBuf, elapsedRect, t.font(TextStyle::Caption), Color::white(0.85f), TextAlign::Center);
 
         // TrackBar timeline
-        Rect track{hudRect.x + 152.0f, hudRect.center().y - 2.5f, 180.0f, 5.0f};
-        p.fillRoundedRect(track, 2.5f, Color::white(0.22f));
+        Rect track{hudRect.x + 174.0f, hudRect.center().y - 2.5f, 180.0f, 5.0f};
+        float th = (track.contains(m_pointerPos) || m_videoDragging) ? 7.0f : 4.0f;
+        Rect trackBar{track.x, track.center().y - th * 0.5f, track.width, th};
+        p.fillRoundedRect(trackBar, th * 0.5f, Color::white(0.22f));
         if (dur > 0) {
             float progress = static_cast<float>(pos / dur);
-            Rect filled{track.x, track.y, track.width * std::clamp(progress, 0.0f, 1.0f), track.height};
-            p.fillRoundedRect(filled, 2.5f, c.accent);
+            Rect filled{trackBar.x, trackBar.y, trackBar.width * std::clamp(progress, 0.0f, 1.0f), trackBar.height};
+            p.fillRoundedRect(filled, th * 0.5f, Color::white(0.95f));
             Point knob{filled.right(), track.center().y};
-            p.fillCircle(knob, 5.5f, Color::white());
+            p.fillCircle(knob, (th > 5.0f) ? 6.0f : 4.5f, Color::white());
+        }
+
+        // Time bubble tooltip over timeline on hover
+        if (m_videoHoverX >= track.x && m_videoHoverX <= track.right() && dur > 0) {
+            float f = std::clamp((m_videoHoverX - track.x) / track.width, 0.0f, 1.0f);
+            int bSec = static_cast<int>(f * dur);
+            char bBuf[16];
+            std::snprintf(bBuf, sizeof(bBuf), "%d:%02d", bSec / 60, bSec % 60);
+            Font bFont = t.font(TextStyle::Caption);
+            bFont.weight = FontWeight::Medium;
+            float bw = p.measureText(bBuf, bFont) + 16.0f;
+            Rect bRect{std::clamp(m_videoHoverX - bw * 0.5f, hudRect.x, hudRect.right() - bw), hudRect.y - 28.0f, bw, 22.0f};
+            p.drawShadow(bRect, 6.0f, Color::black(0.4f), 8.0f, {0, 2});
+            p.fillRoundedRect(bRect, 6.0f, Color::rgb8(36, 36, 40, 0.95f));
+            p.drawText(bBuf, bRect, bFont, Color::white(), TextAlign::Center);
         }
 
         // Remaining time
@@ -483,20 +521,16 @@ void QuickLookView::drawPanel(Painter& p) {
         Rect remRect{hudRect.right() - 56.0f, hudRect.center().y - 8.0f, 44.0f, 16.0f};
         p.drawText(remBuf, remRect, t.font(TextStyle::Caption), Color::white(0.85f), TextAlign::Leading);
 
-        if (m_player && m_player->isPlaying()) {
+        if (m_player && (m_player->isPlaying() || m_player->isSeeking())) {
             requestAnimationFrame();
         }
     } else if (m_isPdf) {
-        if (m_physics.isAnimating()) {
-            if (m_physics.step(now())) requestAnimationFrame();
-            else if (host() && m_physics.deadline() >= 0) host()->scheduleFrame(m_physics.deadline());
-            m_scroll = m_physics.offset().y;
-        }
         p.fillRect(b, c.contentBackground);
 
         if (!m_pdfPages.empty()) {
             float availableW = b.width - 40.0f;
             float y = b.y + 20.0f - m_scroll;
+            float totalH = 20.0f;
             int pageIdx = 0;
             int visiblePage = 1;
             for (const auto& pageImg : m_pdfPages) {
@@ -516,6 +550,7 @@ void QuickLookView::drawPanel(Painter& p) {
                     visiblePage = pageIdx;
                 }
                 y += renderH + 20.0f;
+                totalH += renderH + 20.0f;
             }
 
             // Floating page indicator pill
@@ -527,6 +562,16 @@ void QuickLookView::drawPanel(Painter& p) {
             Rect pillRect{b.center().x - pillW * 0.5f, b.bottom() - 32.0f, pillW, 22.0f};
             p.fillRoundedRect(pillRect, 11.0f, Color::black(0.6f));
             p.drawText(pagePill, pillRect, pillFont, Color::white(), TextAlign::Center);
+
+            // Sleek vertical scrollbar
+            float maxScroll = std::max(0.0f, totalH - b.height + 40.0f);
+            if (maxScroll > 0) {
+                float viewH = b.height;
+                float thumbH = std::clamp(viewH * (viewH / totalH), 36.0f, viewH - 20.0f);
+                float thumbY = b.y + (m_scroll / maxScroll) * (viewH - thumbH);
+                Rect scrollbarRect{b.right() - 8.0f, thumbY, 4.0f, thumbH};
+                p.fillRoundedRect(scrollbarRect, 2.0f, Color::white(0.40f));
+            }
         } else if (m_image) {
             const float iw = static_cast<float>(m_image->originalWidth());
             const float ih = static_cast<float>(m_image->originalHeight());
@@ -638,14 +683,14 @@ bool QuickLookView::onPointerDown(const PointerEvent& e) {
         return true;
     }
     if (m_isVideo) {
-        const float hudW = 400.0f;
-        const float hudH = 46.0f;
+        const float hudW = 420.0f;
+        const float hudH = 50.0f;
         Rect hudRect{body().center().x - hudW * 0.5f, body().bottom() - 56.0f, hudW, hudH};
         if (hudRect.contains(e.position)) {
-            Rect backBtn{hudRect.x + 14.0f, hudRect.center().y - 12.0f, 24.0f, 24.0f};
-            Rect playBtn{hudRect.x + 44.0f, hudRect.center().y - 14.0f, 28.0f, 28.0f};
-            Rect fwdBtn{hudRect.x + 78.0f, hudRect.center().y - 12.0f, 24.0f, 24.0f};
-            Rect track{hudRect.x + 152.0f, hudRect.center().y - 10.0f, 180.0f, 20.0f};
+            Rect backBtn{hudRect.x + 16.0f, hudRect.center().y - 14.0f, 28.0f, 28.0f};
+            Rect playBtn{hudRect.x + 52.0f, hudRect.center().y - 16.0f, 32.0f, 32.0f};
+            Rect fwdBtn{hudRect.x + 92.0f, hudRect.center().y - 14.0f, 28.0f, 28.0f};
+            Rect track{hudRect.x + 174.0f, hudRect.center().y - 10.0f, 180.0f, 20.0f};
 
             if (playBtn.contains(e.position)) {
                 m_videoPaused = !m_videoPaused;
@@ -653,14 +698,23 @@ bool QuickLookView::onPointerDown(const PointerEvent& e) {
                     if (m_videoPaused) m_player->pause();
                     else m_player->play();
                 }
+                requestAnimationFrame();
             } else if (backBtn.contains(e.position)) {
-                if (m_player) m_player->seek(std::max(0.0, m_player->position() - 10.0));
+                if (m_player) {
+                    m_player->seek(std::max(0.0, m_player->position() - 10.0));
+                    requestAnimationFrame();
+                }
             } else if (fwdBtn.contains(e.position)) {
-                if (m_player) m_player->seek(std::min(m_player->duration(), m_player->position() + 10.0));
+                if (m_player) {
+                    m_player->seek(std::min(m_player->duration(), m_player->position() + 10.0));
+                    requestAnimationFrame();
+                }
             } else if (track.contains(e.position)) {
                 if (m_player && m_player->duration() > 0) {
+                    m_videoDragging = true;
                     float frac = std::clamp((e.position.x - track.x) / track.width, 0.0f, 1.0f);
                     m_player->seek(frac * m_player->duration());
+                    requestAnimationFrame();
                 }
             }
             invalidate();
@@ -670,12 +724,37 @@ bool QuickLookView::onPointerDown(const PointerEvent& e) {
     return true;
 }
 
+void QuickLookView::onPointerUp(const PointerEvent& e) {
+    if (m_videoDragging) {
+        m_videoDragging = false;
+        invalidate();
+    }
+}
+
 void QuickLookView::onPointerMove(const PointerEvent& e) {
+    m_pointerPos = e.position;
+    m_videoHoverX = e.position.x;
+    if (m_videoDragging && m_isVideo && m_player && m_player->duration() > 0) {
+        const float hudW = 420.0f;
+        Rect hudRect{body().center().x - hudW * 0.5f, body().bottom() - 56.0f, hudW, 50.0f};
+        Rect track{hudRect.x + 174.0f, hudRect.center().y - 10.0f, 180.0f, 20.0f};
+        float frac = std::clamp((e.position.x - track.x) / track.width, 0.0f, 1.0f);
+        m_player->seek(frac * m_player->duration());
+        requestAnimationFrame();
+    }
     int next = closeRect().contains(e.position) ? 0 : openRect().contains(e.position) ? 1 : -1;
     if (next != m_hover) {
         m_hover = next;
-        invalidate();
     }
+    invalidate();
+}
+
+void QuickLookView::onPointerLeave() {
+    m_pointerPos = {-1, -1};
+    m_videoHoverX = -1.0f;
+    m_videoDragging = false;
+    m_hover = -1;
+    invalidate();
 }
 
 bool QuickLookView::onScroll(const ScrollEvent& e) {
@@ -692,11 +771,11 @@ bool QuickLookView::onScroll(const ScrollEvent& e) {
             }
         }
         float maxScroll = std::max(0.0f, totalH - body().height + 40.0f);
-        m_physics.setLimits({0, maxScroll}, body().size());
-        if (!m_physics.handle(e, now())) return true;
-        m_scroll = m_physics.offset().y;
-        if (m_physics.isAnimating()) requestAnimationFrame();
-        if (host() && m_physics.deadline() >= 0) host()->scheduleFrame(m_physics.deadline());
+        float delta = e.delta.y;
+        if (!e.precise) {
+            delta *= 40.0f;
+        }
+        m_scroll = std::clamp(m_scroll + delta, 0.0f, maxScroll);
         invalidate();
         return true;
     }

@@ -445,6 +445,32 @@ DRIVER_ITEMS = [
         "arch_pkgs": ["xf86-video-ati"],
         "debian_pkgs": [],
     },
+    {
+        "id": "apple-macbook",
+        "name": "Apple Intel MacBook Hardware Drivers",
+        "desc": "FaceTime HD camera, audio/mic DSP array, Bluetooth, Wi-Fi, and trackpad for Intel MacBooks.",
+        "arch_pkgs": [
+            "sof-firmware",
+            "alsa-firmware",
+            "alsa-utils",
+            "alsa-ucm-conf",
+            "bluez",
+            "bluez-utils",
+            "linux-firmware-broadcom",
+            "v4l-utils",
+            "brightnessctl",
+        ],
+        "debian_pkgs": [
+            "firmware-sof-signed",
+            "alsa-utils",
+            "bluez",
+            "bluez-firmware",
+            "firmware-brcm80211",
+            "firmware-misc-nonfree",
+            "v4l-utils",
+            "brightnessctl",
+        ],
+    },
 ]
 
 # Custom CSS for Apple macOS Recovery and Installer Look-and-Feel
@@ -1530,10 +1556,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
         self.selected_disk_card = None
         self.selected_install_mode = None
         self.selected_bootloader = "refind"
+        self.selected_app_suite = "pulsar_next"
         
         # Package & Driver selection state
         self.packages_selected = {item["id"]: True for item in EXTRA_PACKAGES_ITEMS}
-        self.drivers_selected = {item["id"]: True for item in DRIVER_ITEMS}
+        self.drivers_selected = {
+            item["id"]: (self._is_intel_mac() if item["id"] == "apple-macbook" else True)
+            for item in DRIVER_ITEMS
+        }
         self.packages_select_return_screen = "install_options"
         self.drivers_select_return_screen = "install_options"
         self._updating_master_checkbox = False
@@ -1709,6 +1739,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                              "Browse the web to get help with your computer.", "safari")
         self.add_utility_row(self.listbox, "disk", "Disk Utility", 
                              "Repair or manage storage drives using Disk Utility.", "disk")
+        self.add_utility_row(self.listbox, "upgrade_next_apps", "Install Pulsar Next Apps",
+                             "Upgrade to Finder, QuickTime, System Settings, and Activity Monitor on an existing installation.", "logo")
         self.add_utility_row(self.listbox, "packages", "Install Extra Packages",
                              "Install productivity apps, ONLYOFFICE, and media tools.", "logo")
         self.add_utility_row(self.listbox, "drivers", "Install Hardware Drivers",
@@ -1873,6 +1905,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
             self._popen_as_user("seafari || epiphany || firefox")
         elif self.selected_action == "disk":
             subprocess.Popen("gparted || pkexec gparted || gnome-disks || gnome-disk-utility", shell=True)
+        elif self.selected_action == "upgrade_next_apps":
+            self._show_upgrade_next_dialog()
         elif self.selected_action == "packages":
             self.install_extra_packages = True
             self.install_broadcom = False
@@ -1883,6 +1917,176 @@ class RecoveryWindow(Adw.ApplicationWindow):
             self._show_drivers_selection_screen(return_screen="utilities")
         elif self.selected_action == "logs":
             self._open_logs_viewer()
+
+    def _show_upgrade_next_dialog(self):
+        """Show a confirmation dialog before upgrading to Next suite apps."""
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Install Pulsar Next Apps",
+            body=(
+                "This will install the native Pulsar Next desktop suite:\n\n"
+                "• <b>Finder</b> (macOS-style file manager & native file chooser)\n"
+                "• <b>QuickTime Video Player</b> (hardware accelerated player)\n"
+                "• <b>System Settings</b> (macOS System Settings control panel)\n"
+                "• <b>Activity Monitor</b> (native macOS-style process monitor)\n"
+                "• <b>Calculator</b> (macOS scientific & basic calculator)\n\n"
+                "Classic GNOME applications (Nautilus, Totem, Control Center, System Monitor) "
+                "will be replaced. Internet connection or local installation media required."
+            ),
+        )
+        dialog.set_body_use_markup(True)
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("upgrade", "Install Next Apps")
+        dialog.set_response_appearance("upgrade", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_response_appearance("cancel", Adw.ResponseAppearance.DEFAULT)
+
+        def on_response(d, resp):
+            d.destroy()
+            if resp == "upgrade":
+                self.progress_subtitle.set_label("Installing Pulsar Next applications...")
+                self.target_disk_name_lbl.set_label("Pulsar Next Experience")
+                self.image.set_visible(True)
+                self.title_label.set_visible(True)
+                self.stack.set_visible_child_name("install_progress")
+                threading.Thread(target=self._upgrade_next_apps_backend, daemon=True).start()
+
+        dialog.connect("response", on_response)
+        dialog.present()
+
+    def _upgrade_next_apps_backend(self):
+        """Install Pulsar Next apps on an existing system or running installation."""
+        import datetime
+        os.makedirs("/var/log/pulsaros", exist_ok=True)
+        log_file = "/var/log/pulsaros/next_apps.log"
+        try:
+            with open(log_file, "w") as lf:
+                lf.write(f"{datetime.datetime.now()} - Pulsar Next suite upgrade started\n")
+
+            def log_msg(msg):
+                ts = datetime.datetime.now().strftime("%H:%M:%S")
+                line = f"[{ts}] {msg}"
+                with open(log_file, "a") as lf:
+                    lf.write(line + "\n")
+                _safe_console_print(msg)
+                GLib.idle_add(self.append_log, line)
+
+            GLib.idle_add(self.update_progress, 0.05, "Detecting target system...")
+
+            # Check if running in live ISO or directly on installed system
+            is_live = os.path.exists("/run/archiso") or os.path.exists("/live") or os.path.exists("/opt/pulsar-pkgs")
+            target_root = ""
+            mounted_here = False
+
+            if is_live:
+                candidate_parts = []
+                for p in ["/dev/disk/by-label/PULSAR_OS", "/dev/disk/by-label/root"]:
+                    if os.path.exists(p):
+                        candidate_parts.append(os.path.realpath(p))
+                if not candidate_parts:
+                    res = subprocess.run(["lsblk", "-rno", "PATH,FSTYPE,LABEL"], capture_output=True, text=True)
+                    for line in res.stdout.splitlines():
+                        parts = line.split()
+                        if len(parts) >= 2 and parts[1] in ("ext4", "btrfs", "xfs"):
+                            if "PULSAR" in line.upper() or "ARCH" in line.upper() or len(parts) < 3:
+                                candidate_parts.append(parts[0])
+
+                if candidate_parts:
+                    target_part = candidate_parts[0]
+                    log_msg(f"Target system partition found: {target_part}")
+                    os.makedirs("/mnt", exist_ok=True)
+                    if not os.path.ismount("/mnt"):
+                        subprocess.run(["mount", target_part, "/mnt"], check=True)
+                        mounted_here = True
+                    target_root = "/mnt"
+                else:
+                    log_msg("Running directly on host system.")
+                    target_root = ""
+            else:
+                target_root = ""
+
+            prefix = ["chroot", target_root] if target_root else []
+
+            is_arch = os.path.exists(os.path.join(target_root, "etc/pacman.conf")) if target_root else os.path.exists("/etc/pacman.conf")
+            is_debian = os.path.exists(os.path.join(target_root, "etc/apt/sources.list")) if target_root else os.path.exists("/etc/apt/sources.list")
+
+            next_pkgs = ["finder", "video-player", "system-settings", "system-monitor", "calculator"]
+            gnome_pkgs = ["nautilus", "totem", "gnome-control-center", "gnome-system-monitor"]
+
+            if is_arch:
+                log_msg("Removing classic GNOME applications...")
+                GLib.idle_add(self.update_progress, 0.20, "Removing classic GNOME applications...")
+                subprocess.run(prefix + ["pacman", "-Rdd", "--noconfirm"] + gnome_pkgs, capture_output=True)
+
+                GLib.idle_add(self.update_progress, 0.40, "Checking for local packages...")
+                candidate_dirs = [
+                    "/run/archiso/bootmnt/packages",
+                    "/opt/pulsar-pkgs",
+                    "/live/image/packages",
+                    "/tmp/packages",
+                    "/var/cache/pacman/pkg",
+                ]
+                local_files = []
+                for cd in candidate_dirs:
+                    if os.path.isdir(cd):
+                        for f in glob.glob(f"{cd}/*.pkg.tar.zst"):
+                            bname = os.path.basename(f)
+                            for np in next_pkgs:
+                                if bname.startswith(f"{np}-"):
+                                    local_files.append(f)
+
+                if local_files:
+                    GLib.idle_add(self.update_progress, 0.60, f"Installing {len(local_files)} local package(s)...")
+                    if target_root:
+                        staged_dir = "/mnt/tmp/pulsar-next-pkgs"
+                        os.makedirs(staged_dir, exist_ok=True)
+                        chroot_paths = []
+                        for lf in local_files:
+                            dst = os.path.join(staged_dir, os.path.basename(lf))
+                            shutil.copy2(lf, dst)
+                            chroot_paths.append(f"/tmp/pulsar-next-pkgs/{os.path.basename(lf)}")
+                        subprocess.run(["chroot", "/mnt", "pacman", "-U", "--noconfirm", "--needed", "--overwrite", "*"] + chroot_paths, capture_output=True)
+                        shutil.rmtree(staged_dir, ignore_errors=True)
+                    else:
+                        subprocess.run(["pacman", "-U", "--noconfirm", "--needed", "--overwrite", "*"] + local_files, capture_output=True)
+
+                GLib.idle_add(self.update_progress, 0.80, "Ensuring all Next apps installed from repository...")
+                subprocess.run(prefix + ["pacman", "-Sy", "--noconfirm", "--needed", "--overwrite", "*"] + next_pkgs, capture_output=True)
+
+            elif is_debian:
+                log_msg("Removing classic GNOME applications via apt...")
+                GLib.idle_add(self.update_progress, 0.20, "Removing classic GNOME applications...")
+                subprocess.run(prefix + ["apt-get", "remove", "-y", "--purge"] + gnome_pkgs, capture_output=True)
+
+                GLib.idle_add(self.update_progress, 0.60, "Installing Next applications via apt...")
+                subprocess.run(prefix + ["apt-get", "update"], capture_output=True)
+                subprocess.run(prefix + ["apt-get", "install", "-y"] + next_pkgs, capture_output=True)
+
+            # Ensure portal environment variables
+            log_msg("Configuring GTK_USE_PORTAL=1...")
+            env_file = os.path.join(target_root, "etc/environment") if target_root else "/etc/environment"
+            try:
+                content = ""
+                if os.path.exists(env_file):
+                    with open(env_file, "r") as ef:
+                        content = ef.read()
+                if "GTK_USE_PORTAL=1" not in content:
+                    with open(env_file, "a") as ef:
+                        ef.write("\nGTK_USE_PORTAL=1\n")
+            except Exception as e:
+                log_msg(f"Notice: {e}")
+
+            if mounted_here:
+                log_msg("Unmounting target system...")
+                subprocess.run(["sync"])
+                subprocess.run(["umount", "-R", "/mnt"], capture_output=True)
+
+            log_msg("✅ Pulsar Next applications installed successfully!")
+            GLib.idle_add(self.update_progress, 1.0, "Upgrade completed successfully!")
+            GLib.idle_add(self.on_installation_completed)
+
+        except Exception as err:
+            log_msg(f"ERROR: Upgrade failed: {err}")
+            GLib.idle_add(self.on_installation_failed, f"Upgrade failed: {err}")
 
     def _show_install_packages_dialog(self):
         """Show a confirmation dialog before installing extra packages."""
@@ -1962,6 +2166,20 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             continue
                         if p not in pkgs:
                             pkgs.append(p)
+
+        # Desktop Application Suite selection:
+        suite = getattr(self, "selected_app_suite", "pulsar_next")
+        if suite == "pulsar_next":
+            for next_app in ["finder", "video-player", "system-settings", "system-monitor", "calculator"]:
+                if next_app not in pkgs:
+                    pkgs.append(next_app)
+            for gnome_app in ["gnome-system-monitor", "totem", "nautilus", "gnome-control-center"]:
+                if gnome_app in pkgs:
+                    pkgs.remove(gnome_app)
+        elif suite == "gnome_classic":
+            for next_app in ["finder", "video-player", "system-settings", "system-monitor"]:
+                if next_app in pkgs:
+                    pkgs.remove(next_app)
 
         return {
             "pkgs": pkgs,
@@ -2131,6 +2349,33 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     log_msg(f"WARNING: apt finished with code {proc.returncode}")
                 else:
                     log_msg("All selected driver packages installed successfully.")
+
+            if self._is_intel_mac() and self.drivers_selected.get("apple-macbook", False):
+                try:
+                    log_msg("Configuring Apple Intel MacBook kernel modules and audio/input quirks...")
+                    os.makedirs("/etc/modules-load.d", exist_ok=True)
+                    os.makedirs("/etc/modprobe.d", exist_ok=True)
+                    mac_modules = (
+                        "# Apple Intel MacBook core hardware modules\n"
+                        "facetimehd\nuvcvideo\nvideobuf2_core\nvideobuf2_v4l2\nvideobuf2_dma_sg\n"
+                        "snd-hda-intel\nsnd-hda-codec-cirrus\nsnd-hda-codec-realtek\n"
+                        "btusb\nbcm203x\n"
+                        "applesmc\nbcm5974\napplespi\nspi_pxa2xx_platform\nintel_lpss_pci\napple-gmux\n"
+                    )
+                    with open("/etc/modules-load.d/apple-macbook.conf", "w") as f:
+                        f.write(mac_modules)
+                    with open("/etc/modprobe.d/50-apple-audio.conf", "w") as f:
+                        f.write("options snd-hda-intel model=auto\noptions snd-hda-intel power_save=0\noptions snd-hda-intel power_save_controller=N\noptions snd-hda-intel probe_mask=1\n")
+                    with open("/etc/modprobe.d/50-apple-bluetooth.conf", "w") as f:
+                        f.write("options btusb enable_autosuspend=0\n")
+                    with open("/etc/modprobe.d/50-apple-input.conf", "w") as f:
+                        f.write("options hid_apple fnmode=2\noptions hid_apple swap_opt_cmd=1\noptions applespi fnmode=2\n")
+                    with open("/etc/modprobe.d/50-apple-camera.conf", "w") as f:
+                        f.write("options facetimehd\n")
+                    subprocess.run(["systemctl", "enable", "bluetooth.service"], capture_output=True)
+                    log_msg("Apple MacBook hardware configuration written.")
+                except Exception as m_err:
+                    log_msg(f"Notice: Apple MacBook configuration notice: {m_err}")
 
             GLib.idle_add(self.update_progress, 1.0, "Hardware drivers installed successfully!")
             log_msg("Done! Hardware drivers have been installed.")
@@ -3193,6 +3438,47 @@ class RecoveryWindow(Adw.ApplicationWindow):
         opt_group = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         opt_group.add_css_class("options-group")
         opt_group.set_size_request(440, -1)
+
+        # Row 0: Desktop Application Experience (Pulsar Next vs Classic GNOME)
+        row_suite = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        row_suite.add_css_class("option-row")
+
+        txt_suite = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        lbl_suite_title = Gtk.Label()
+        lbl_suite_title.set_markup("<b>Desktop Application Experience</b> <span foreground='#3584e4' size='smaller'>● Select Default</span>")
+        lbl_suite_title.add_css_class("option-title")
+        lbl_suite_title.set_halign(Gtk.Align.START)
+        txt_suite.append(lbl_suite_title)
+        lbl_suite_desc = Gtk.Label(label="Choose your preferred system apps for file browsing, video playback, settings, and activity monitoring.")
+        lbl_suite_desc.add_css_class("option-desc")
+        lbl_suite_desc.set_halign(Gtk.Align.START)
+        lbl_suite_desc.set_wrap(True)
+        lbl_suite_desc.set_max_width_chars(42)
+        txt_suite.append(lbl_suite_desc)
+        row_suite.append(txt_suite)
+
+        suite_choices = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        suite_choices.set_margin_start(8)
+
+        self.radio_suite_next = Gtk.CheckButton.new_with_label("Pulsar Next Experience (Finder, QuickTime, Settings, Activity Monitor)")
+        self.radio_suite_next.set_active(True)
+        self.radio_suite_gnome = Gtk.CheckButton.new_with_label("Classic GNOME Desktop (Nautilus, Totem, Control Center, System Monitor)")
+        self.radio_suite_gnome.set_group(self.radio_suite_next)
+
+        def _on_suite_changed(rb):
+            if self.radio_suite_next.get_active():
+                self.selected_app_suite = "pulsar_next"
+            else:
+                self.selected_app_suite = "gnome_classic"
+
+        self.radio_suite_next.connect("toggled", _on_suite_changed)
+        suite_choices.append(self.radio_suite_next)
+        suite_choices.append(self.radio_suite_gnome)
+        row_suite.append(suite_choices)
+
+        opt_group.append(row_suite)
+        sep0 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        opt_group.append(sep0)
 
         # Row 1: Broadcom / Hardware drivers
         row_broadcom = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
@@ -4647,6 +4933,333 @@ class RecoveryWindow(Adw.ApplicationWindow):
             pass
         return False
 
+    def _is_intel_mac(self):
+        """Returns True if the system is an Apple MacBook (or Intel Mac) with an x86 CPU.
+
+        Distinguishes Intel MacBooks from Apple Silicon Macs (M1/M2/M3/M4 which are ARM64/aarch64).
+        """
+        import platform
+        arch = platform.machine().lower()
+        if arch not in ("x86_64", "amd64", "i686", "i386"):
+            return False
+        try:
+            for path in (
+                "/sys/class/dmi/id/product_name",
+                "/sys/class/dmi/id/sys_vendor",
+                "/sys/devices/virtual/dmi/id/product_name",
+                "/sys/devices/virtual/dmi/id/sys_vendor",
+            ):
+                if os.path.exists(path):
+                    with open(path, "r") as f:
+                        val = f.read().strip().lower()
+                    if "macbook" in val:
+                        return True
+        except Exception:
+            pass
+        return self._is_apple_hardware()
+
+    def _install_intel_mac_drivers(self, log_msg, is_arch):
+        """Install drivers and configure subsystems for Apple Intel MacBooks.
+
+        Handles:
+          - FaceTime HD camera (PCIe 14e4:1570 / bcwc-pcie or USB iSight)
+          - Audio & Microphone array (snd-hda-intel quirks, Cirrus/Realtek, SOF DSP firmware)
+          - Bluetooth (Broadcom BCM firmware, bluez, btusb)
+          - Wi-Fi (brcmfmac firmware or broadcom-wl STA when required)
+          - Keyboard, Trackpad & Sensors (applespi, bcm5974, applesmc, fnmode)
+          - Display & Keyboard Backlight (brightnessctl)
+          - Fan control (mbpfan if available)
+        Works on both Arch Linux (pacman) and Debian (apt).
+        """
+        try:
+            log_msg("🍎 Apple Intel MacBook detected — configuring specialized hardware drivers...")
+            GLib.idle_add(self.update_progress, 0.915, "Configuring Intel MacBook drivers...")
+
+            # ── 1. Configure Kernel Modules Autoload ──
+            if "TEST_MODE" not in os.environ:
+                os.makedirs("/mnt/etc/modules-load.d", exist_ok=True)
+                mac_modules = (
+                    "# Apple Intel MacBook core hardware modules\n"
+                    "# FaceTime HD / iSight Camera\n"
+                    "facetimehd\n"
+                    "uvcvideo\n"
+                    "videobuf2_core\n"
+                    "videobuf2_v4l2\n"
+                    "videobuf2_dma_sg\n"
+                    "# Audio & Microphones\n"
+                    "snd-hda-intel\n"
+                    "snd-hda-codec-cirrus\n"
+                    "snd-hda-codec-realtek\n"
+                    "# Bluetooth\n"
+                    "btusb\n"
+                    "bcm203x\n"
+                    "# Keyboard, Trackpad, Ambient Light & Sensors\n"
+                    "applesmc\n"
+                    "bcm5974\n"
+                    "applespi\n"
+                    "spi_pxa2xx_platform\n"
+                    "intel_lpss_pci\n"
+                    "apple-gmux\n"
+                )
+                try:
+                    with open("/mnt/etc/modules-load.d/apple-macbook.conf", "w") as f:
+                        f.write(mac_modules)
+                    log_msg("Configured kernel modules autoload for Apple hardware.")
+                except Exception as mod_err:
+                    log_msg(f"Notice: Failed to write apple-macbook.conf modules: {mod_err}")
+
+                # ── 2. Configure Modprobe Quirks ──
+                os.makedirs("/mnt/etc/modprobe.d", exist_ok=True)
+
+                # Audio and internal dual-microphone
+                audio_conf = (
+                    "# Intel MacBook audio & dual-microphone quirks\n"
+                    "options snd-hda-intel model=auto\n"
+                    "options snd-hda-intel power_save=0\n"
+                    "options snd-hda-intel power_save_controller=N\n"
+                    "options snd-hda-intel probe_mask=1\n"
+                )
+                try:
+                    with open("/mnt/etc/modprobe.d/50-apple-audio.conf", "w") as f:
+                        f.write(audio_conf)
+                except Exception as c_err:
+                    log_msg(f"Notice: Could not write 50-apple-audio.conf: {c_err}")
+
+                # Camera
+                camera_conf = (
+                    "# Intel MacBook FaceTime HD camera driver options\n"
+                    "options facetimehd\n"
+                )
+                try:
+                    with open("/mnt/etc/modprobe.d/50-apple-camera.conf", "w") as f:
+                        f.write(camera_conf)
+                except Exception as c_err:
+                    log_msg(f"Notice: Could not write 50-apple-camera.conf: {c_err}")
+
+                # Bluetooth
+                bt_conf = (
+                    "# Intel MacBook Bluetooth stability (disable autosuspend)\n"
+                    "options btusb enable_autosuspend=0\n"
+                )
+                try:
+                    with open("/mnt/etc/modprobe.d/50-apple-bluetooth.conf", "w") as f:
+                        f.write(bt_conf)
+                except Exception as c_err:
+                    log_msg(f"Notice: Could not write 50-apple-bluetooth.conf: {c_err}")
+
+                # Keyboard and Trackpad
+                input_conf = (
+                    "# Apple SPI keyboard & trackpad options\n"
+                    "# fnmode=2: F1-F12 act as media/brightness keys by default\n"
+                    "# swap_opt_cmd=1: Match native Mac keyboard layout\n"
+                    "options hid_apple fnmode=2\n"
+                    "options hid_apple swap_opt_cmd=1\n"
+                    "options applespi fnmode=2\n"
+                )
+                try:
+                    with open("/mnt/etc/modprobe.d/50-apple-input.conf", "w") as f:
+                        f.write(input_conf)
+                except Exception as c_err:
+                    log_msg(f"Notice: Could not write 50-apple-input.conf: {c_err}")
+
+            # ── 3. Detect PCI hardware ──
+            pci_data = ""
+            try:
+                pci_data = subprocess.check_output(["lspci", "-nn"], text=True, stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
+
+            if "14e4:1570" in pci_data:
+                log_msg("Broadcom 1570 PCIe FaceTime HD camera detected.")
+
+            needs_bcm_sta = any(chip_id in pci_data for chip_id in ("14e4:43a0", "14e4:4331", "14e4:432b", "14e4:4328"))
+            if needs_bcm_sta:
+                log_msg("Broadcom Wi-Fi chip requires proprietary STA driver (BCM4360/BCM4331).")
+
+            # ── 4. Check Internet Connectivity ──
+            has_net = False
+            try:
+                has_net = (
+                    subprocess.run(["ping", "-c", "1", "-W", "3", "1.1.1.1"], capture_output=True).returncode == 0
+                    or subprocess.run(["curl", "-s", "-I", "-m", "3", "https://archlinux.org"], capture_output=True).returncode == 0
+                )
+            except Exception:
+                pass
+
+            # ── 5. Install Packages for Arch or Debian ──
+            if is_arch:
+                if has_net:
+                    log_msg("Installing Apple Intel MacBook driver packages via pacman...")
+                    arch_pkgs = [
+                        # Audio DSP & internal microphones
+                        "sof-firmware",
+                        "alsa-firmware",
+                        "alsa-utils",
+                        "alsa-ucm-conf",
+                        # Bluetooth & Broadcom firmware
+                        "bluez",
+                        "bluez-utils",
+                        "linux-firmware-broadcom",
+                        # Wi-Fi & Linux firmware
+                        "linux-firmware",
+                        "wireless-regdb",
+                        # Camera / Video utilities
+                        "v4l-utils",
+                        # Screen & Keyboard Backlight
+                        "brightnessctl",
+                    ]
+                    if needs_bcm_sta:
+                        arch_pkgs.extend(["broadcom-wl-dkms", "linux-headers", "dkms"])
+
+                    # Batch install core packages
+                    res_core = subprocess.run(
+                        ["chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed", "--overwrite", "*"] + arch_pkgs,
+                        capture_output=True,
+                        text=True,
+                    )
+                    if res_core.returncode == 0:
+                        log_msg("✅ Core MacBook driver packages installed via pacman.")
+                    else:
+                        log_msg("Notice: Batch pacman driver install had notices. Installing package by package...")
+                        for pkg in arch_pkgs:
+                            sub_res = subprocess.run(
+                                ["chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed", "--overwrite", "*", pkg],
+                                capture_output=True,
+                                text=True,
+                            )
+                            if sub_res.returncode == 0:
+                                log_msg(f"  pacman: Installed {pkg}")
+
+                    # Attempt optional/driver packages (facetimehd, mbpfan)
+                    for opt_pkg in ["facetimehd-dkms", "facetimehd-firmware", "mbpfan"]:
+                        opt_res = subprocess.run(
+                            ["chroot", "/mnt", "pacman", "-S", "--noconfirm", "--needed", "--overwrite", "*", opt_pkg],
+                            capture_output=True,
+                            text=True,
+                        )
+                        if opt_res.returncode == 0:
+                            log_msg(f"  pacman: Installed {opt_pkg}")
+                else:
+                    log_msg("Notice: Offline install — kernel modules and hardware quirks configured for MacBook.")
+            else:
+                # Debian
+                if has_net:
+                    log_msg("Installing Apple Intel MacBook driver packages via apt...")
+                    deb_pkgs = [
+                        # Audio & Micro DSP
+                        "firmware-sof-signed",
+                        "alsa-utils",
+                        # Bluetooth & Broadcom firmware
+                        "bluez",
+                        "bluez-firmware",
+                        "firmware-brcm80211",
+                        "firmware-misc-nonfree",
+                        # Linux wireless & firmware
+                        "firmware-linux-free",
+                        "firmware-linux-nonfree",
+                        "wireless-regdb",
+                        # Camera / Video utilities
+                        "v4l-utils",
+                        "isight-firmware-tools",
+                        # Screen & Keyboard Backlight
+                        "brightnessctl",
+                    ]
+                    if needs_bcm_sta:
+                        deb_pkgs.extend(["broadcom-sta-dkms", "linux-headers-amd64", "dkms"])
+
+                    policy_file = "/mnt/usr/sbin/policy-rc.d"
+                    if "TEST_MODE" not in os.environ:
+                        try:
+                            os.makedirs(os.path.dirname(policy_file), exist_ok=True)
+                            with open(policy_file, "w") as f:
+                                f.write("#!/bin/sh\nexit 101\n")
+                            os.chmod(policy_file, 0o755)
+                        except Exception:
+                            pass
+
+                    try:
+                        sources_file = "/mnt/etc/apt/sources.list"
+                        if "TEST_MODE" not in os.environ and os.path.exists(sources_file):
+                            try:
+                                with open(sources_file, "r") as f:
+                                    s_content = f.read()
+                                s_mod = False
+                                s_lines = []
+                                for s_line in s_content.splitlines():
+                                    sl = s_line.strip()
+                                    if sl and not sl.startswith("#") and "main" in sl:
+                                        for comp in ["contrib", "non-free", "non-free-firmware"]:
+                                            if comp not in sl:
+                                                s_line += f" {comp}"
+                                                s_mod = True
+                                    s_lines.append(s_line)
+                                if s_mod:
+                                    with open(sources_file, "w") as f:
+                                        f.write("\n".join(s_lines) + "\n")
+                            except Exception as deb_src_err:
+                                log_msg(f"Notice: Updating sources.list: {deb_src_err}")
+
+                        subprocess.run(["chroot", "/mnt", "apt-get", "update"], capture_output=True)
+                        res_deb = subprocess.run(
+                            ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "--no-install-recommends"] + deb_pkgs,
+                            capture_output=True,
+                            text=True,
+                        )
+                        if res_deb.returncode == 0:
+                            log_msg("✅ Core MacBook driver packages installed via apt.")
+                        else:
+                            log_msg("Notice: Batch apt driver install had notices. Installing package by package...")
+                            for dpkg in deb_pkgs:
+                                sub_res = subprocess.run(
+                                    ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "--no-install-recommends", dpkg],
+                                    capture_output=True,
+                                    text=True,
+                                )
+                                if sub_res.returncode == 0:
+                                    log_msg(f"  apt: Installed {dpkg}")
+
+                        # Attempt optional packages (facetimehd, mbpfan)
+                        for opt_pkg in ["facetimehd-dkms", "mbpfan"]:
+                            opt_res = subprocess.run(
+                                ["chroot", "/mnt", "env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "--no-install-recommends", opt_pkg],
+                                capture_output=True,
+                                text=True,
+                            )
+                            if opt_res.returncode == 0:
+                                log_msg(f"  apt: Installed {opt_pkg}")
+                    finally:
+                        if "TEST_MODE" not in os.environ and os.path.exists(policy_file):
+                            try:
+                                os.remove(policy_file)
+                            except Exception:
+                                pass
+                else:
+                    log_msg("Notice: Offline install — kernel modules and hardware quirks configured for MacBook.")
+
+            # ── 6. Enable Target Services ──
+            subprocess.run(["chroot", "/mnt", "systemctl", "enable", "bluetooth.service"], capture_output=True)
+            subprocess.run(["chroot", "/mnt", "systemctl", "enable", "mbpfan.service"], capture_output=True)
+
+            # ── 7. Initialize Audio & Micro Channels ──
+            for alsa_cmd in [
+                ["chroot", "/mnt", "amixer", "-c", "0", "sset", "Master", "unmute"],
+                ["chroot", "/mnt", "amixer", "-c", "0", "sset", "Master", "100%"],
+                ["chroot", "/mnt", "amixer", "-c", "0", "sset", "Capture", "unmute"],
+                ["chroot", "/mnt", "amixer", "-c", "0", "sset", "Capture", "100%"],
+                ["chroot", "/mnt", "amixer", "-c", "0", "sset", "Internal Mic", "unmute"],
+                ["chroot", "/mnt", "amixer", "-c", "0", "sset", "Mic", "unmute"],
+                ["chroot", "/mnt", "alsactl", "store"],
+            ]:
+                try:
+                    subprocess.run(alsa_cmd, capture_output=True)
+                except Exception:
+                    pass
+
+            log_msg("✅ Apple Intel MacBook drivers and hardware configuration completed.")
+        except Exception as err:
+            _safe_console_print(f"Warning: MacBook driver configuration notice: {err}")
+            log_msg(f"Notice: MacBook driver configuration completed with notice: {err}")
+
     def _start_installation(self):
         if self._is_uefi_grub_incompatible():
             self.stack.set_visible_child_name("install_uefi_incompatible")
@@ -5942,6 +6555,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
                 if is_arch:
                     # ── Arch: install via pacman (local bundled packages first, then online sync) ──
+                    if getattr(self, "selected_app_suite", "pulsar_next") == "pulsar_next":
+                        log_msg("Desktop Suite: Pulsar Next Experience selected — removing GNOME duplicate apps...")
+                        try:
+                            subprocess.run(["chroot", "/mnt", "pacman", "-Rdd", "--noconfirm", "nautilus", "totem", "gnome-control-center", "gnome-system-monitor"], capture_output=True)
+                        except Exception:
+                            pass
                     if want_extras:
                         pkg_info = self._get_selected_packages_info(is_arch=True)
                         extra_packages = list(pkg_info["pkgs"])
@@ -6130,6 +6749,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
                 else:
                     # ── Debian: install via apt (local bundled packages first, then online sync) ──
+                    if getattr(self, "selected_app_suite", "pulsar_next") == "pulsar_next":
+                        log_msg("Desktop Suite: Pulsar Next Experience selected — removing GNOME duplicate apps...")
+                        try:
+                            subprocess.run(["chroot", "/mnt", "apt-get", "remove", "-y", "--purge", "nautilus", "totem", "gnome-control-center", "gnome-system-monitor"], capture_output=True)
+                        except Exception:
+                            pass
                     if want_extras:
                         pkg_info = self._get_selected_packages_info(is_arch=False)
                         extra_packages = list(pkg_info["pkgs"])
@@ -8033,6 +8658,12 @@ menuentry "Pulsar OS Recovery (Emergency & Bootloader Repair)" --class recovery 
                                     pass
                 except Exception as drv_err:
                     _safe_console_print(f"Notice: Driver configuration step completed: {drv_err}")
+
+            if self._is_intel_mac():
+                try:
+                    self._install_intel_mac_drivers(log_msg, is_arch)
+                except Exception as mac_err:
+                    _safe_console_print(f"Warning: Non-fatal Intel Mac driver error: {mac_err}")
 
             if is_arch:
                 for f_live in [

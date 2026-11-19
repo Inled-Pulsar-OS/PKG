@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Forma Settings
+Name[zh_CN]=Forma 系统设置
+GenericName=System Settings
+Comment=Change your desktop, network, display, sound and other settings
+Exec=forma-settings
+Icon=forma-settings
+Terminal=false
+StartupNotify=true
+Categories=Settings;DesktopSettings;
+Keywords=preferences;settings;wifi;bluetooth;display;sound;power;keyboard;mouse;

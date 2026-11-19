@@ -338,11 +338,11 @@ listboxrow:selected .utility-desc-lbl,
 .keyboard-dropdown > button,
 .keyboard-selector-box dropdown,
 .keyboard-selector-box dropdown > button {
-    background: transparent !important;
-    background-color: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    outline: none !important;
+    background: transparent;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    outline: none;
     padding: 0px 4px;
     min-height: 20px;
     color: #ffffff;
@@ -352,9 +352,9 @@ listboxrow:selected .utility-desc-lbl,
 .keyboard-dropdown button:hover,
 .keyboard-dropdown > button:hover,
 .keyboard-selector-box dropdown > button:hover {
-    background: transparent !important;
-    background-color: transparent !important;
-    box-shadow: none !important;
+    background: transparent;
+    background-color: transparent;
+    box-shadow: none;
 }
 .badge-driver {
     background-color: rgba(255, 159, 10, 0.2);
@@ -392,5 +392,78 @@ listboxrow:selected .utility-desc-lbl,
 }
 .app-item-row:hover {
     background-color: rgba(255, 255, 255, 0.08);
+}
+/* Apple Style Top Menu Bar */
+.apple-menu-bar {
+    background-color: rgba(30, 30, 32, 0.96);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+    padding: 4px 16px;
+    min-height: 32px;
+}
+.apple-menu-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.2px;
+}
+.apple-menu-item {
+    font-size: 12px;
+    color: #e5e5ea;
+}
+.apple-menu-btn {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 2px 8px;
+    color: #e5e5ea;
+    box-shadow: none;
+    transition: background-color 0.15s ease;
+}
+.apple-menu-btn:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+}
+.apple-menu-btn:active {
+    background-color: rgba(255, 255, 255, 0.22);
+    color: #ffffff !important;
+}
+.apple-menu-clock {
+    font-size: 12px;
+    font-weight: 500;
+    color: #ffffff;
+    padding: 0 4px;
+}
+.apple-menu-battery {
+    font-size: 12px;
+    font-weight: 500;
+    color: #ffffff;
+}
+/* QR Fountain Styling */
+.qr-fountain-box {
+    background-color: #18181b;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 12px;
+}
+.speed-pill-btn {
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    padding: 3px 12px;
+    font-size: 11px;
+    color: #c7c7cc;
+}
+.speed-pill-btn:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+}
+.speed-pill-btn:active,
+.speed-pill-btn.active {
+    background-color: #0071e3;
+    border-color: #0071e3;
+    color: #ffffff !important;
+}
+button:active {
+    color: #ffffff !important;
 }
 "#;

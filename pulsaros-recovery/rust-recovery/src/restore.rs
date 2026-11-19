@@ -941,16 +941,34 @@ where
             let pkg_chunk = native_pkgs.join(" ");
             if is_arch {
                 log(&format!("Reinstalling Arch packages via pacman: {}", pkg_chunk));
-                let _ = exec_cmd_stream(
+                let res = exec_cmd_stream(
                     &format!("chroot {} pacman -Sy --noconfirm --needed {}", new_root, pkg_chunk),
                     &log,
                 );
+                if res.is_err() {
+                    log("Batch pacman installation had missing targets. Retrying package by package...");
+                    for pkg in &native_pkgs {
+                        let _ = exec_cmd_stream(
+                            &format!("chroot {} pacman -S --noconfirm --needed {}", new_root, pkg),
+                            &log,
+                        );
+                    }
+                }
             } else if is_debian {
                 log(&format!("Reinstalling Debian packages via apt: {}", pkg_chunk));
-                let _ = exec_cmd_stream(
+                let res = exec_cmd_stream(
                     &format!("chroot {} apt-get update -y && chroot {} apt-get install -y --no-install-recommends {}", new_root, new_root, pkg_chunk),
                     &log,
                 );
+                if res.is_err() {
+                    log("Batch apt installation had missing targets. Retrying package by package...");
+                    for pkg in &native_pkgs {
+                        let _ = exec_cmd_stream(
+                            &format!("chroot {} apt-get install -y --no-install-recommends {}", new_root, pkg),
+                            &log,
+                        );
+                    }
+                }
             }
         }
 
@@ -1047,6 +1065,13 @@ where
                 {}/usr/share/gnome-shell/extensions/search-light@icedman.github.com 2>/dev/null || true",
         new_root, new_root, new_root
     ));
+
+    // Clean up live environment leftovers on target rootfs
+    log("Cleaning up live environment leftovers on target rootfs...");
+    let _ = fs::remove_file(format!("{}/etc/sddm.conf.d/autologin.conf", new_root));
+    let _ = fs::remove_file(format!("{}/etc/pulsaros-live", new_root));
+    let _ = fs::remove_file(format!("{}/run/pulsaros-force-blur-mode", new_root));
+    let _ = fs::remove_file(format!("{}/etc/sudoers.d/live", new_root));
 
     // 8. Deploy boot kernels, recovery kernel, and align rEFInd
     progress(0.95, "Deploying OS & Recovery kernels to @/boot and aligning bootloader...");

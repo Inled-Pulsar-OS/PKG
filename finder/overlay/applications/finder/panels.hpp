@@ -83,7 +83,9 @@ public:
     [[nodiscard]] bool isInteractive() const override { return true; }
     bool onKeyDown(const mayo::KeyEvent& e) override;
     bool onPointerDown(const mayo::PointerEvent& e) override;
+    void onPointerUp(const mayo::PointerEvent& e) override;
     void onPointerMove(const mayo::PointerEvent& e) override;
+    void onPointerLeave() override;
     bool onScroll(const mayo::ScrollEvent& e) override;
 
 protected:
@@ -104,6 +106,7 @@ private:
     float m_scroll = 0;  // follows m_physics
     mayo::ScrollPhysics m_physics;
     int m_hover = -1;  // 0 close, 1 open
+    mayo::Point m_pointerPos{-1, -1};
 
     bool m_isPdf = false;
     std::vector<std::shared_ptr<mayo::ImageData>> m_pdfPages;
@@ -111,6 +114,8 @@ private:
 
     bool m_isVideo = false;
     bool m_videoPaused = false;
+    float m_videoHoverX = -1.0f;
+    bool m_videoDragging = false;
     std::unique_ptr<MediaPlayer> m_player;
     std::shared_ptr<mayo::VideoTexture> m_videoTexture;
     MediaPlayer::Frame m_shownFrame;

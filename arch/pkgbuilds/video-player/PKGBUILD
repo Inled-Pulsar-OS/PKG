@@ -12,32 +12,14 @@ conflicts=('totem' 'mayo-video-player')
 replaces=('totem' 'mayo-video-player')
 options=('!strip')
 
+prepare() {
+    _src="$(cd "$startdir"/../../../video-player && pwd)"
+    mkdir -p "$srcdir/staging"
+    bash "$_src/prepare-assets.sh" "$srcdir/staging"
+}
+
 package() {
-    if [ -f "$startdir/overlay/bin/video_player" ]; then
-        install -Dm755 "$startdir/overlay/bin/video_player" "$pkgdir/usr/bin/video_player"
-    elif [ -f /tmp/forma/build/applications/video_player/video_player ]; then
-        install -Dm755 /tmp/forma/build/applications/video_player/video_player "$pkgdir/usr/bin/video_player"
+    if [ -d "$srcdir/staging" ]; then
+        cp -r "$srcdir/staging"/* "$pkgdir/"
     fi
-    mkdir -p "$pkgdir/usr/share/applications"
-    install -Dm644 /tmp/forma/applications/video_player/data/io.github.egely1337.Mayonnaise.VideoPlayer.desktop \
-        "$pkgdir/usr/share/applications/video-player.desktop"
-    ln -sf video-player.desktop "$pkgdir/usr/share/applications/io.github.egely1337.Mayonnaise.VideoPlayer.desktop"
-    ln -sf video-player.desktop "$pkgdir/usr/share/applications/org.gnome.Totem.desktop"
-
-    for sz in 16x16 24x24 32x32 48x48 64x64 96x96 128x128 256x256 512x512; do
-        if [ -f "/tmp/forma/applications/video_player/data/icons/${sz}/quicktime-player.png" ]; then
-            install -Dm644 "/tmp/forma/applications/video_player/data/icons/${sz}/quicktime-player.png" \
-                "$pkgdir/usr/share/icons/hicolor/${sz}/apps/quicktime-player.png"
-            install -Dm644 "/tmp/forma/applications/video_player/data/icons/${sz}/quicktime-player.png" \
-                "$pkgdir/usr/share/icons/hicolor/${sz}/apps/video-player.png"
-            install -Dm644 "/tmp/forma/applications/video_player/data/icons/${sz}/quicktime-player.png" \
-                "$pkgdir/usr/share/icons/hicolor/${sz}/apps/io.github.egely1337.Mayonnaise.VideoPlayer.png"
-        fi
-    done
-
-    # Ensure icon in MacTahoe theme for Spotlight
-    mkdir -p "$pkgdir/usr/share/icons/MacTahoe-blue/apps/scalable"
-    install -Dm644 /tmp/forma/applications/video_player/data/icons/512x512/quicktime-player.png \
-        "$pkgdir/usr/share/icons/MacTahoe-blue/apps/scalable/quicktime-player.png"
-    ln -sf quicktime-player.png "$pkgdir/usr/share/icons/MacTahoe-blue/apps/scalable/video-player.png"
 }

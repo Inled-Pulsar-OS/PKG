@@ -1,8 +1,58 @@
-//! Iconos Lucide materializados en SVG y widgets con icono.
+//! Iconos Lucide y Apple SF Symbols en PNG/SVG para PulsarOS Recovery.
 use gtk4::prelude::*;
 use gtk4::{Align, Box as GtkBox, Button, Image, Label, Orientation};
 use std::fs;
 use std::path::Path;
+
+const PULSAR_WHITE_SF_PNG: &[u8] = include_bytes!("../assets/sf-symbols/pulsar-white-sf.png");
+const SF_WIFI_PNG: &[u8] = include_bytes!("../assets/sf-symbols/wifi.png");
+const SF_WIFI_SLASH_PNG: &[u8] = include_bytes!("../assets/sf-symbols/wifi.slash.png");
+const SF_BATTERY_100_PNG: &[u8] = include_bytes!("../assets/sf-symbols/battery.100percent.png");
+const SF_BATTERY_50_PNG: &[u8] = include_bytes!("../assets/sf-symbols/battery.50percent.png");
+const SF_BATTERY_25_PNG: &[u8] = include_bytes!("../assets/sf-symbols/battery.25percent.png");
+const SF_BATTERY_BOLT_PNG: &[u8] = include_bytes!("../assets/sf-symbols/battery.100percent.bolt.png");
+const SF_KEYBOARD_PNG: &[u8] = include_bytes!("../assets/sf-symbols/keyboard.png");
+
+pub(crate) fn ensure_binary_icon(name: &str, data: &[u8]) -> String {
+    let dir = "/tmp/pulsar_recovery_icons";
+    let _ = fs::create_dir_all(dir);
+    let p = format!("{}/{}.png", dir, name);
+    if !Path::new(&p).exists() {
+        let _ = fs::write(&p, data);
+    }
+    p
+}
+
+pub(crate) fn get_sf_symbol_path(name: &str) -> String {
+    match name {
+        "pulsar-white-sf" | "pulsar-logo" | "pulsar" => {
+            ensure_binary_icon("pulsar-white-sf", PULSAR_WHITE_SF_PNG)
+        }
+        "wifi" | "wifi-full" | "network-wireless" => {
+            ensure_binary_icon("sf-wifi", SF_WIFI_PNG)
+        }
+        "wifi-off" | "wifi-slash" | "wifi.slash" => {
+            ensure_binary_icon("sf-wifi-slash", SF_WIFI_SLASH_PNG)
+        }
+        "battery-100" | "battery" => {
+            ensure_binary_icon("sf-battery-100", SF_BATTERY_100_PNG)
+        }
+        "battery-50" => {
+            ensure_binary_icon("sf-battery-50", SF_BATTERY_50_PNG)
+        }
+        "battery-25" => {
+            ensure_binary_icon("sf-battery-25", SF_BATTERY_25_PNG)
+        }
+        "battery-charging" | "battery-bolt" => {
+            ensure_binary_icon("sf-battery-bolt", SF_BATTERY_BOLT_PNG)
+        }
+        "keyboard" => {
+            ensure_binary_icon("sf-keyboard", SF_KEYBOARD_PNG)
+        }
+        _ => get_lucide_icon_path(name),
+    }
+}
+
 pub(crate) fn ensure_lucide_icon(name: &str, svg_data: &str) -> String {
     let dir = "/tmp/pulsar_recovery_icons";
     let _ = fs::create_dir_all(dir);
@@ -15,6 +65,18 @@ pub(crate) fn ensure_lucide_icon(name: &str, svg_data: &str) -> String {
 
 pub(crate) fn get_lucide_icon_path(name: &str) -> String {
     match name {
+        "pulsar-logo" | "pulsar" => ensure_lucide_icon(
+            "pulsar-logo",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" fill="#38bdf8"/><circle cx="12" cy="12" r="8" stroke-dasharray="2 3"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M2 12h2"/><path d="M20 12h2"/></svg>"##,
+        ),
+        "battery" => ensure_lucide_icon(
+            "battery",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="10" x="2" y="7" rx="2" ry="2"/><line x1="22" x2="22" y1="11" y2="13"/><rect x="4" y="9" width="10" height="6" fill="#34d399" rx="1"/></svg>"##,
+        ),
+        "battery-charging" => ensure_lucide_icon(
+            "battery-charging",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m11 7-3 5h4l-1 5 5-6h-4l2-4Z" fill="#34d399"/><rect width="16" height="10" x="2" y="7" rx="2" ry="2"/><line x1="22" x2="22" y1="11" y2="13"/></svg>"##,
+        ),
         "restore" | "timemachine" | "rotate-ccw" => ensure_lucide_icon(
             "restore",
             r##"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>"##,
@@ -128,8 +190,19 @@ pub(crate) fn create_icon_widget(file_path: &str, fallback_icon_name: &str, size
         img.set_pixel_size(size);
         img
     } else {
-        let svg_p = get_lucide_icon_path(fallback_icon_name);
-        let img = Image::from_file(&svg_p);
+        let icon_p = if fallback_icon_name.starts_with("sf-")
+            || fallback_icon_name == "pulsar-white-sf"
+            || fallback_icon_name == "pulsar-logo"
+            || fallback_icon_name == "pulsar"
+            || fallback_icon_name == "keyboard"
+            || fallback_icon_name.starts_with("battery")
+            || fallback_icon_name.starts_with("wifi")
+        {
+            get_sf_symbol_path(fallback_icon_name)
+        } else {
+            get_lucide_icon_path(fallback_icon_name)
+        };
+        let img = Image::from_file(&icon_p);
         img.set_pixel_size(size);
         img
     }
