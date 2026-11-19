@@ -47,11 +47,178 @@ namespace {
 constexpr float kPathBarHeight = 28;
 constexpr float kStatusBarHeight = 26;
 
+struct HistoryItem {
+    std::string path;
+    std::string select;
+};
+
+struct FinderTab {
+    std::string path;
+    std::string title;
+    ViewMode mode = ViewMode::Icons;
+    std::vector<HistoryItem> back;
+    std::vector<HistoryItem> forward;
+    std::set<std::string> selection;
+    std::string lead;
+    std::string anchor;
+    std::string searchQuery;
+    bool searching = false;
+};
+
+class TabBarView : public Widget {
+public:
+    std::function<const std::vector<FinderTab>&()> getTabs;
+    std::function<size_t()> getActiveTab;
+    std::function<void(size_t index)> onSelectTab;
+    std::function<void(size_t index)> onCloseTab;
+    std::function<void()> onNewTab;
+
+    [[nodiscard]] bool expandsContent(Axis a) const override { return a == Axis::Horizontal; }
+    [[nodiscard]] bool isInteractive() const override { return true; }
+    Size measureContent(Size available) override { return {available.width, 30.0f}; }
+
+    void draw(Painter& p) override {
+        const Theme& t = theme();
+        const auto& c = t.colors;
+        const Rect f = frame();
+        p.fillRect(f, c.windowBackground);
+        const float px = 1.0f / p.scale();
+        p.fillRect({f.x, p.snap(f.bottom() - px), f.width, px}, c.separator);
+
+        if (!getTabs) return;
+        const auto& tabs = getTabs();
+        if (tabs.empty()) return;
+        const size_t active = getActiveTab ? getActiveTab() : 0;
+
+        const float leftMargin = 6.0f;
+        const float rightReserve = 34.0f;
+        const float availableW = std::max(60.0f, f.width - leftMargin - rightReserve);
+        const float count = static_cast<float>(tabs.size());
+        const float tabW = std::clamp(availableW / count, 80.0f, 210.0f);
+        const float tabH = 24.0f;
+        const float tabY = f.y + (f.height - tabH) * 0.5f;
+
+        m_layout.clear();
+        for (size_t i = 0; i < tabs.size(); ++i) {
+            float x = f.x + leftMargin + static_cast<float>(i) * (tabW + 2.0f);
+            Rect tabRect{x, tabY, tabW, tabH};
+            LayoutTab lt;
+            lt.index = i;
+            lt.rect = tabRect;
+            lt.closeRect = {tabRect.x + 5, tabRect.center().y - 6, 13, 13};
+            lt.iconRect = {tabRect.x + 22, tabRect.center().y - 7, 14, 14};
+            lt.textRect = {lt.iconRect.right() + 5, tabRect.y, std::max(0.0f, tabRect.right() - lt.iconRect.right() - 6), tabRect.height};
+            m_layout.push_back(lt);
+        }
+
+        float plusX = f.x + leftMargin + count * (tabW + 2.0f) + 4.0f;
+        if (plusX + 22.0f > f.right() - 4.0f) plusX = f.right() - 26.0f;
+        m_plusRect = {plusX, tabY + 1, 22, 22};
+
+        const Font font = t.font(TextStyle::Subheadline);
+        for (const auto& lt : m_layout) {
+            const bool isActive = (lt.index == active);
+            const bool isHovered = (static_cast<int>(lt.index) == m_hoverTab);
+            const auto& tab = tabs[lt.index];
+
+            if (isActive) {
+                p.fillRoundedRect(lt.rect, 5.0f, c.contentBackground);
+                p.strokeRoundedRect(lt.rect, 5.0f, c.separator.multipliedAlpha(0.6f), 1.0f);
+            } else {
+                if (isHovered) {
+                    p.fillRoundedRect(lt.rect, 5.0f, c.hover);
+                } else {
+                    p.fillRoundedRect(lt.rect, 5.0f, c.control.multipliedAlpha(0.25f));
+                }
+                p.strokeRoundedRect(lt.rect, 5.0f, c.separator.multipliedAlpha(0.35f), 1.0f);
+            }
+
+            const bool hoverClose = (static_cast<int>(lt.index) == m_hoverClose);
+            if (hoverClose) {
+                p.fillCircle(lt.closeRect.center(), 6.5f, c.hover);
+            }
+            if (isActive || isHovered || hoverClose) {
+                p.drawIcon(Icon::Xmark, {lt.closeRect.x + 2, lt.closeRect.y + 2, 9, 9}, hoverClose ? c.label : c.secondaryLabel, 1.5f);
+            }
+
+            Icon tabIcon = tab.searching ? Icon::Magnifier : placeIcon(tab.path);
+            p.drawIcon(tabIcon, lt.iconRect, isActive ? c.accent : c.secondaryLabel);
+
+            std::string title = tab.title.empty() ? displayName(tab.path) : tab.title;
+            std::string truncated = truncateEnd(p, title, font, lt.textRect.width);
+            p.drawText(truncated, lt.textRect, font, isActive ? c.label : c.secondaryLabel);
+        }
+
+        if (m_hoverPlus) p.fillRoundedRect(m_plusRect, 4.0f, c.hover);
+        p.drawIcon(Icon::Plus, {m_plusRect.center().x - 6, m_plusRect.center().y - 6, 12, 12}, m_hoverPlus ? c.label : c.secondaryLabel, 1.5f);
+    }
+
+    bool onPointerDown(const PointerEvent& e) override {
+        if (m_plusRect.contains(e.position)) {
+            if (e.button == MouseButton::Left && onNewTab) onNewTab();
+            return true;
+        }
+        for (const auto& lt : m_layout) {
+            if (lt.rect.contains(e.position)) {
+                if (lt.closeRect.contains(e.position) || e.button == MouseButton::Middle) {
+                    if (onCloseTab) onCloseTab(lt.index);
+                    return true;
+                }
+                if (e.button == MouseButton::Left) {
+                    if (onSelectTab) onSelectTab(lt.index);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    void onPointerMove(const PointerEvent& e) override {
+        int oldTab = m_hoverTab, oldClose = m_hoverClose;
+        bool oldPlus = m_hoverPlus;
+        m_hoverTab = -1;
+        m_hoverClose = -1;
+        m_hoverPlus = m_plusRect.contains(e.position);
+        for (const auto& lt : m_layout) {
+            if (lt.rect.contains(e.position)) {
+                m_hoverTab = static_cast<int>(lt.index);
+                if (lt.closeRect.contains(e.position)) m_hoverClose = static_cast<int>(lt.index);
+                break;
+            }
+        }
+        if (oldTab != m_hoverTab || oldClose != m_hoverClose || oldPlus != m_hoverPlus) {
+            invalidate();
+        }
+    }
+
+    void onPointerLeave() override {
+        m_hoverTab = -1;
+        m_hoverClose = -1;
+        m_hoverPlus = false;
+        invalidate();
+    }
+
+private:
+    struct LayoutTab {
+        size_t index = 0;
+        Rect rect;
+        Rect closeRect;
+        Rect iconRect;
+        Rect textRect;
+    };
+    std::vector<LayoutTab> m_layout;
+    Rect m_plusRect;
+    int m_hoverTab = -1;
+    int m_hoverClose = -1;
+    bool m_hoverPlus = false;
+};
+
 /// Detail area. Icons scroll under the toolbar glass; list and columns start below it. Path bar and
 /// status bar sit along the bottom.
 class FinderPage : public Widget {
 public:
     std::shared_ptr<Widget> iconScroll, listHeader, listScroll, columnScroll, empty, bottom, pathBar, statusBar, pickerBar;
+    std::shared_ptr<Widget> tabBar;
     std::shared_ptr<Widget> menuAnchor = std::make_shared<Widget>();
     ViewMode mode = ViewMode::Icons;
 
@@ -60,15 +227,19 @@ public:
 
     void arrangeContent(const Rect& c) override {
         const float bar = host() ? host()->titleBarHeight() : 52.0f;
+        const float tabH = (tabBar && tabBar->isVisible()) ? 30.0f : 0.0f;
         const float bottomH = bottomHeight();
         const Rect area{c.x, c.y, c.width, c.height - bottomH};
-        const Rect below{c.x, c.y + bar, c.width, area.height - bar};
+        const Rect below{c.x, c.y + bar + tabH, c.width, area.height - (bar + tabH)};
         auto place = [](const std::shared_ptr<Widget>& w, const Rect& r) {
             w->measure(r.size());
             w->arrange(r);
         };
-        static_cast<ScrollViewView*>(iconScroll.get())->setContentInsetTop(bar);
+        static_cast<ScrollViewView*>(iconScroll.get())->setContentInsetTop(bar + tabH);
         place(iconScroll, area);
+        if (tabBar && tabBar->isVisible()) {
+            place(tabBar, {c.x, c.y + bar, c.width, tabH});
+        }
         place(listHeader, {below.x, below.y, below.width, 28});
         place(listScroll, {below.x, below.y + 28, below.width, below.height - 28});
         place(columnScroll, below);
@@ -289,15 +460,23 @@ int main(int argc, char** argv) {
     };
     ViewMode mode = ViewMode::Icons;
 
-    struct HistoryItem {
-        std::string path;
-        std::string select;
-    };
     std::vector<HistoryItem> back, forward;
     FileClipboard clipboard;
     std::map<std::string, std::vector<FileEntry>> listingCache;
     std::string searchQuery;
     int searchGeneration = 0;
+
+    std::vector<FinderTab> tabs;
+    size_t activeTab = 0;
+    auto tabBar = std::make_shared<TabBarView>();
+    tabBar->setHidden(true);
+    tabBar->getTabs = [&]() -> const std::vector<FinderTab>& { return tabs; };
+    tabBar->getActiveTab = [&]() -> size_t { return activeTab; };
+    FinderTab initialTab;
+    initialTab.path = homeDirectory();
+    initialTab.title = displayName(homeDirectory());
+    initialTab.mode = mode;
+    tabs.push_back(std::move(initialTab));
 
     // Places ------------------------------------------------------------------------------------
     const std::string home = homeDirectory();
@@ -352,13 +531,16 @@ int main(int argc, char** argv) {
 
     auto pathBar = std::make_shared<PathBarView>(browser);
     auto opSpinner = ProgressSpinner();
+    auto opProgressBar = ProgressBar();
+    opProgressBar.width(130).height(6);
+    opProgressBar.setHidden(true);
     auto opLabel = Label("").font(TextStyle::Subheadline).secondary().lineLimit(1).maxWidth(420);
     auto cancelOperation = Button(tr("Cancel")).style(ButtonStyle::Borderless).tooltip(tr("Cancel queued tasks and safely stop operation"));
     cancelOperation.setHidden(true);
     auto statusLabel = Label("").font(TextStyle::Subheadline).secondary().textAlign(TextAlign::Center);
     auto sizeSlider = Slider(64, 32, 128).width(110).tooltip(tr("Icon size (Ctrl+scroll)"));
     auto statusBar = ZStack(
-        {HStack({opSpinner, opLabel, cancelOperation, Spacer(), sizeSlider}).spacing(6).padding(0, 12), statusLabel});
+        {HStack({opSpinner, Element(opProgressBar.node()), opLabel, cancelOperation, Spacer(), sizeSlider}).spacing(8).padding(0, 12).align(Alignment::Center), statusLabel});
     statusBar.height(kStatusBarHeight);
     auto pickerCancel = Button(tr("Cancel")).minWidth(100).height(34).onClick([&] {
         std::exit(1);
@@ -422,9 +604,10 @@ int main(int argc, char** argv) {
     page->pathBar = pathBar;
     page->statusBar = statusBar.node();
     if (pickerMode) page->pickerBar = pickerBar.node();
+    page->tabBar = tabBar;
     for (auto& w : {page->iconScroll, page->listHeader, page->listScroll, page->columnScroll, page->empty, page->bottom,
-                    page->menuAnchor}) {
-        page->addChild(w);
+                    page->tabBar, page->menuAnchor}) {
+        if (w) page->addChild(w);
     }
 
     auto sidebar = Sidebar(std::vector<SidebarItem>{});
@@ -494,7 +677,21 @@ int main(int argc, char** argv) {
         statusLabel.setText(text);
         const bool busy = ops.busy() || diskBusy;
         opSpinner.setHidden(!busy);
+        opProgressBar.setHidden(!busy);
         statusLabel.setHidden(busy);
+        if (ops.busy()) {
+            const auto& progress = ops.progress();
+            if (progress.total > 0) {
+                float frac = static_cast<float>(progress.bytes) / static_cast<float>(progress.total);
+                opProgressBar.setValue(std::clamp(frac, 0.0f, 1.0f));
+            } else {
+                opProgressBar.setValue(std::nullopt);
+            }
+        } else if (diskBusy) {
+            opProgressBar.setValue(std::nullopt);
+        } else {
+            opProgressBar.setValue(0.0f);
+        }
         std::string operation = ops.status();
         if (ops.busy() && !ops.progress().item.empty()) {
             const auto& progress = ops.progress();
@@ -531,6 +728,10 @@ int main(int argc, char** argv) {
         const std::string name = browser->searching ? tr("Searching for ") + "“" + searchQuery + "”" : displayName(browser->path);
         titleLabel.setText(name);
         window.setTitle(browser->searching ? name : displayName(browser->path));
+        if (activeTab < tabs.size()) {
+            tabs[activeTab].title = name;
+            if (tabBar) tabBar->invalidate();
+        }
         backButton.setDisabled(back.empty());
         forwardButton.setDisabled(forward.empty());
         std::string sel;
@@ -719,6 +920,14 @@ int main(int argc, char** argv) {
         else focusView();
         browser->notifySelection();
         updateChrome();
+        if (activeTab < tabs.size()) {
+            tabs[activeTab].path = browser->path;
+            tabs[activeTab].title = browser->searching ? (tr("Searching for ") + "“" + searchQuery + "”") : displayName(browser->path);
+            tabs[activeTab].mode = mode;
+            tabs[activeTab].searching = browser->searching;
+            tabs[activeTab].searchQuery = searchQuery;
+            if (tabBar) tabBar->invalidate();
+        }
     };
 
     browser->navigate = [&](const std::string& folder, const std::string& select) { navigateTo(folder, select, true); };
@@ -748,6 +957,9 @@ int main(int argc, char** argv) {
     auto setMode = [&](ViewMode m) {
         if (auto* v = currentView(); v && v->isRenaming()) focusView();
         mode = m;
+        if (activeTab < tabs.size()) {
+            tabs[activeTab].mode = m;
+        }
         iconScroll.setHidden(m != ViewMode::Icons);
         listHeader->setHidden(m != ViewMode::List);
         listScroll.setHidden(m != ViewMode::List);
@@ -1217,6 +1429,11 @@ int main(int argc, char** argv) {
     quickLook->setOnDismiss([&] { app.post([&] { focusView(); }); });
 
     browser->selectionChanged = [&] {
+        if (activeTab < tabs.size()) {
+            tabs[activeTab].selection = browser->selection;
+            tabs[activeTab].lead = browser->lead;
+            tabs[activeTab].anchor = browser->anchor;
+        }
         updateStatus();
         if (mode == ViewMode::Columns) columnBrowser->rebuild(false);
         if (quickLook->isShown()) {
@@ -1287,6 +1504,131 @@ int main(int argc, char** argv) {
         });
     });
     searchField.onSubmit([&](const std::string&) { focusView(); });
+
+    auto saveCurrentTab = [&] {
+        if (activeTab < tabs.size()) {
+            auto& cur = tabs[activeTab];
+            cur.path = browser->path;
+            cur.title = browser->searching ? (tr("Searching for ") + "“" + searchQuery + "”") : displayName(browser->path);
+            cur.mode = mode;
+            cur.back = back;
+            cur.forward = forward;
+            cur.selection = browser->selection;
+            cur.lead = browser->lead;
+            cur.anchor = browser->anchor;
+            cur.searching = browser->searching;
+            cur.searchQuery = searchQuery;
+        }
+    };
+
+    std::function<void(size_t index)> switchToTab;
+    std::function<void(std::string folder)> newTab;
+    std::function<void(size_t index)> closeTab;
+    std::function<void()> nextTab;
+    std::function<void()> prevTab;
+
+    switchToTab = [&](size_t index) {
+        if (pickerMode) return;
+        if (index >= tabs.size()) return;
+        saveCurrentTab();
+
+        activeTab = index;
+        const auto& target = tabs[activeTab];
+        mode = target.mode;
+        back = target.back;
+        forward = target.forward;
+        searchQuery = target.searchQuery;
+
+        if (target.searching && !searchQuery.empty()) {
+            searchField.setText(searchQuery);
+            startSearch(searchQuery);
+        } else {
+            if (browser->searching) {
+                searcher.cancel();
+                browser->searching = false;
+                searchQuery.clear();
+                searchField.setText("");
+            }
+            navigateTo(target.path.empty() ? home : target.path, target.lead, false);
+            browser->selection = target.selection;
+            browser->lead = target.lead;
+            browser->anchor = target.anchor;
+            refreshViews(false);
+        }
+        setMode(target.mode);
+        updateChrome();
+        tabBar->setHidden(pickerMode || tabs.size() <= 1);
+        page->invalidateLayout();
+        tabBar->invalidate();
+    };
+
+    newTab = [&](std::string folder) {
+        if (pickerMode) return;
+        if (folder.empty()) folder = (isRealFolder() && !browser->path.empty()) ? browser->path : home;
+        saveCurrentTab();
+
+        FinderTab t;
+        t.path = folder;
+        t.title = displayName(folder);
+        t.mode = mode;
+        tabs.push_back(std::move(t));
+
+        switchToTab(tabs.size() - 1);
+    };
+
+    closeTab = [&](size_t index) {
+        if (pickerMode) return;
+        if (index >= tabs.size()) return;
+        if (tabs.size() <= 1) {
+            if (allowClose()) window.close();
+            return;
+        }
+        const bool wasActive = (index == activeTab);
+        tabs.erase(tabs.begin() + index);
+        if (wasActive) {
+            if (activeTab >= tabs.size()) activeTab = tabs.size() - 1;
+            const auto target = tabs[activeTab];
+            mode = target.mode;
+            back = target.back;
+            forward = target.forward;
+            searchQuery = target.searchQuery;
+            if (target.searching && !searchQuery.empty()) {
+                searchField.setText(searchQuery);
+                startSearch(searchQuery);
+            } else {
+                if (browser->searching) {
+                    searcher.cancel();
+                    browser->searching = false;
+                    searchQuery.clear();
+                    searchField.setText("");
+                }
+                navigateTo(target.path.empty() ? home : target.path, target.lead, false);
+                browser->selection = target.selection;
+                browser->lead = target.lead;
+                browser->anchor = target.anchor;
+                refreshViews(false);
+            }
+            setMode(target.mode);
+            updateChrome();
+        } else if (index < activeTab) {
+            activeTab--;
+        }
+        tabBar->setHidden(pickerMode || tabs.size() <= 1);
+        page->invalidateLayout();
+        tabBar->invalidate();
+    };
+
+    nextTab = [&] {
+        if (tabs.size() > 1) switchToTab((activeTab + 1) % tabs.size());
+    };
+
+    prevTab = [&] {
+        if (tabs.size() > 1) switchToTab((activeTab + tabs.size() - 1) % tabs.size());
+    };
+
+    tabBar->onSelectTab = [&](size_t i) { switchToTab(i); };
+    tabBar->onCloseTab = [&](size_t i) { closeTab(i); };
+    tabBar->onNewTab = [&]() { newTab(""); };
 
     auto goToFolder = [&] {
         if (!page->host()) return;
@@ -1461,6 +1803,7 @@ int main(int argc, char** argv) {
             items.push_back(MenuItem(tr("Empty Trash"), emptyTrash).asDestructive().disabled(browser->entries.empty()));
             items.push_back(MenuItem::separator());
         }
+        items.push_back(MenuItem(tr("New Tab"), [&] { newTab(""); }).withIcon(Icon::Plus).withShortcut("Ctrl+T"));
         items.push_back(MenuItem(tr("New Folder"), newFolder).withIcon(Icon::FolderPlus).withShortcut("Ctrl+Shift+N")
                             .disabled(!isRealFolder() || inTrash()));
         const size_t clip = clipboard.paths.size();
@@ -1604,7 +1947,10 @@ int main(int argc, char** argv) {
         }
         items.push_back(MenuItem::separator());
         if (!isRealFolder()) items.push_back(MenuItem(tr("Show in Enclosing Folder"), showInEnclosingFolder).withShortcut("Ctrl+R").disabled(!single));
-        if (first && first->isDir) items.push_back(MenuItem(tr("Open in Terminal"), openTerminalHere).withIcon(Icon::Terminal));
+        if (first && first->isDir) {
+            items.push_back(MenuItem(tr("Open in New Tab"), [&, p = first->path] { newTab(p); }).withIcon(Icon::FolderPlus));
+            items.push_back(MenuItem(tr("Open in Terminal"), openTerminalHere).withIcon(Icon::Terminal));
+        }
         if (!isRealFolder() || (first && first->isDir)) items.push_back(MenuItem::separator());
         items.push_back(MenuItem(trashed ? tr("Delete Immediately…") : tr("Move to Trash"), moveToTrashSelected)
                             .withIcon(Icon::Trash).withShortcut("Del").asDestructive());
@@ -1629,6 +1975,13 @@ int main(int argc, char** argv) {
     std::function<void(const std::string&)> removeVolume;
     refreshActionMenu = [&] {
         std::vector<MenuItem> items{
+            MenuItem(tr("New Tab"), [&] { newTab(""); }).withIcon(Icon::Plus).withShortcut("Ctrl+T"),
+            MenuItem(tr("Close Tab"), [&] { closeTab(activeTab); }).withIcon(Icon::Xmark).withShortcut("Ctrl+W").disabled(tabs.size() <= 1),
+            MenuItem(tabBar->isVisible() ? tr("Hide Tab Bar") : tr("Show Tab Bar"), [&] {
+                tabBar->setHidden(tabBar->isVisible());
+                page->invalidateLayout();
+            }).withShortcut("Ctrl+Shift+T"),
+            MenuItem::separator(),
             MenuItem(tr("New Folder"), newFolder).withIcon(Icon::FolderPlus).withShortcut("Ctrl+Shift+N").disabled(!isRealFolder() || inTrash()),
             MenuItem(tr("Go to Folder…"), goToFolder).withShortcut("Ctrl+Shift+G"),
             MenuItem(tr("Settings…"), openSettings).withIcon(Icon::Gear).withShortcut("Ctrl+,"),
@@ -1870,11 +2223,17 @@ int main(int argc, char** argv) {
                 case Key::O: navigateTo(userDirectory("DOCUMENTS", "Documents"), {}, true); return true;
                 case Key::Backspace:
                 case Key::Delete: emptyTrash(); return true;
+                case Key::Tab: prevTab(); return true;
+                case Key::T: tabBar->setHidden(tabBar->isVisible()); page->invalidateLayout(); return true;
                 default: break;
             }
         }
         if (ctrl && !shift) {
             switch (e.key) {
+                case Key::T: newTab(""); return true;
+                case Key::Tab: nextTab(); return true;
+                case Key::PageDown: nextTab(); return true;
+                case Key::PageUp: prevTab(); return true;
                 case Key::E:
                     if (const auto* v = deviceForPath(browser->path); v && v->canRemove()) removeVolume(v->id);
                     return true;
@@ -1900,7 +2259,11 @@ int main(int argc, char** argv) {
                     searchField->selectAll();
                     return true;
                 case Key::W:
-                    if (allowClose()) window.close();
+                    if (tabs.size() > 1) {
+                        closeTab(activeTab);
+                    } else {
+                        if (allowClose()) window.close();
+                    }
                     return true;
                 case Key::Comma: openSettings(); return true;
                 default: break;
@@ -1994,6 +2357,11 @@ int main(int argc, char** argv) {
             start = fs::absolute(start, ec).lexically_normal().string();
         }
         if (start.size() > 1 && start.back() == '/') start.pop_back();
+    }
+    if (!tabs.empty()) {
+        tabs[0].path = start;
+        tabs[0].title = displayName(start);
+        tabs[0].mode = mode;
     }
     navigateTo(start, initialSelect, false);
 
@@ -2133,6 +2501,10 @@ int main(int argc, char** argv) {
                     goUp();
                 } else if (what == "newfolder") {
                     newFolder();
+                } else if (what == "newtab") {
+                    newTab(arg);
+                } else if (what == "closetab") {
+                    closeTab(activeTab);
                 } else if (what == "trash") {
                     selectNamed(arg);
                     moveToTrashSelected();
