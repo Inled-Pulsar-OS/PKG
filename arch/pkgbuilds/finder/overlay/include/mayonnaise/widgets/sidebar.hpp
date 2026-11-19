@@ -63,6 +63,7 @@ public:
     void setSelectionStyle(SidebarSelectionStyle s);
     /// Optional widget shown above the list (search field, account card).
     void setHeader(std::shared_ptr<Widget> header);
+    [[nodiscard]] std::string itemIdAt(Point p) const;
 
     Size measureContent(Size available) override;
     void arrangeContent(const Rect& content) override;

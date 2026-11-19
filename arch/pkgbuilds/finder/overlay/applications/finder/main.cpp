@@ -724,6 +724,8 @@ int main(int argc, char** argv) {
         forward.pop_back();
         navigateTo(h.path, h.select, false);
     };
+    browser->goBack = goBack;
+    browser->goForward = goForward;
     auto goUp = [&] {
         if (!isRealFolder()) return;
         const std::string parent = parentPath(browser->path);
@@ -858,6 +860,10 @@ int main(int argc, char** argv) {
         } else if (isInTrash(e.path)) {
             showAlert("“" + e.name + "” " + tr("is in the Trash."), tr("To use this item, please drag it out of the Trash or select Put Back."));
         } else {
+            if (pickerMode && !saveMode) {
+                std::cout << e.path << std::endl;
+                std::exit(0);
+            }
             openPath(e.path);  // itself a no-op for real launches in demo mode
         }
     };
@@ -1486,21 +1492,33 @@ int main(int argc, char** argv) {
         if (canCompress) {
             items.push_back(MenuItem(tr("Compress…"), [&, paths] {
                 if (demo) return;
-                if (const auto error = compressFiles(paths); !error.empty()) showAlert(tr("Cannot compress."), error);
+                ops.compress(paths, {}, selectAfterOp);
             }));
         }
         if (canExtract) {
             items.push_back(MenuItem(tr("Extract Here"), [&, paths] {
                 if (demo) return;
-                if (const auto error = extractArchives(paths); !error.empty()) showAlert(tr("Cannot extract."), error);
+                ops.extract(paths, {}, selectAfterOp);
             }));
             items.push_back(MenuItem(tr("Extract to…"), [&, paths] {
                 if (demo) return;
-                app.openFolder([&, paths](std::vector<std::string> folders) {
-                    if (folders.empty()) return;
-                    if (const auto error = extractArchives(paths, folders.front()); !error.empty())
-                        showAlert(tr("Cannot extract."), error);
-                }, &window);
+                std::thread([&, paths] {
+                    FILE* fp = popen("/usr/bin/finder --choose-folder --title \"Choose Extraction Destination\"", "r");
+                    if (fp) {
+                        char buf[4096];
+                        std::string chosen;
+                        if (fgets(buf, sizeof(buf), fp)) {
+                            chosen = buf;
+                            while (!chosen.empty() && (chosen.back() == '\n' || chosen.back() == '\r')) chosen.pop_back();
+                        }
+                        pclose(fp);
+                        if (!chosen.empty()) {
+                            app.post([&, paths, chosen] {
+                                ops.extract(paths, chosen, selectAfterOp);
+                            });
+                        }
+                    }
+                }).detach();
             }));
         }
         if (trashed) items.push_back(MenuItem(tr("Put Back"), putBack));
@@ -1533,7 +1551,31 @@ int main(int argc, char** argv) {
             for (const auto& p : paths) args.push_back(p);
             spawnDetached(args);
         }).withIcon(Icon::Share).disabled(trashed));
+        auto moveSelectedToFolder = [&, paths] {
+            std::thread([&, paths] {
+                FILE* fp = popen("/usr/bin/finder --choose-folder --title \"Choose Destination\"", "r");
+                if (fp) {
+                    char buf[4096];
+                    std::string chosen;
+                    if (fgets(buf, sizeof(buf), fp)) {
+                        chosen = buf;
+                        while (!chosen.empty() && (chosen.back() == '\n' || chosen.back() == '\r')) chosen.pop_back();
+                    }
+                    pclose(fp);
+                    if (!chosen.empty()) {
+                        std::error_code ec;
+                        if (fs::is_directory(chosen, ec)) {
+                            app.post([&, paths, chosen] {
+                                ops.move(paths, chosen);
+                            });
+                        }
+                    }
+                }
+            }).detach();
+        };
         std::vector<MenuItem> moveToSubmenu;
+        moveToSubmenu.push_back(MenuItem(tr("Choose Location…"), moveSelectedToFolder).withIcon(Icon::Folder));
+        moveToSubmenu.push_back(MenuItem::separator());
         moveToSubmenu.push_back(MenuItem(tr("Desktop"), [&, paths] { ops.move(paths, userDirectory("DESKTOP", "Desktop")); }));
         moveToSubmenu.push_back(MenuItem(tr("Documents"), [&, paths] { ops.move(paths, userDirectory("DOCUMENTS", "Documents")); }));
         moveToSubmenu.push_back(MenuItem(tr("Downloads"), [&, paths] { ops.move(paths, userDirectory("DOWNLOAD", "Downloads")); }));
@@ -1920,13 +1962,27 @@ int main(int argc, char** argv) {
         const std::string last = prefs.getString("lastFolder");
         if (last == kRecents || (!last.empty() && fs::is_directory(last, ec))) start = last;
     }
-    if (argc > 1) start = expandUser(argv[1]);
+    if (!startFolder.empty()) {
+        std::error_code ec;
+        if (fs::is_directory(startFolder, ec)) start = startFolder;
+    }
+    std::string initialSelect;
+    if (!selectItem.empty()) {
+        std::error_code ec;
+        if (fs::exists(selectItem, ec)) {
+            start = parentPath(selectItem);
+            initialSelect = selectItem;
+        }
+    }
     {
         std::error_code ec;
-        if (start != kRecents) start = fs::absolute(start, ec).lexically_normal().string();
+        if (start != kRecents) {
+            if (!fs::is_directory(start, ec)) start = home;
+            start = fs::absolute(start, ec).lexically_normal().string();
+        }
         if (start.size() > 1 && start.back() == '/') start.pop_back();
     }
-    navigateTo(start, {}, false);
+    navigateTo(start, initialSelect, false);
 
     // MAYO_DEMO=<step>[,<step>...] drives the window for screenshots and smoke tests. Steps: list, columns,
     // select:<name>, shiftselect:<name> (list mode, no expanded folders; Shift double-click regression),

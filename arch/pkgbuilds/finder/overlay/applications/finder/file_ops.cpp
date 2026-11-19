@@ -302,6 +302,89 @@ void FileOps::deleteImmediately(std::vector<std::string> paths, Done done) {
         },
         std::move(done));
 }
+
+void FileOps::compress(std::vector<std::string> sources, std::string destinationZip, Done done) {
+    if (sources.empty()) return;
+    std::string parentDir = fs::path(sources.front()).parent_path().string();
+    if (destinationZip.empty()) {
+        std::string zipName;
+        if (sources.size() == 1) {
+            std::string stem = fs::path(sources.front()).stem().string();
+            zipName = uniqueName(parentDir, stem + ".zip");
+        } else {
+            zipName = uniqueName(parentDir, "Archive.zip");
+        }
+        destinationZip = (fs::path(parentDir) / zipName).string();
+    }
+
+    run(
+        tr("Compressing…"),
+        [sources, destinationZip, parentDir](transaction::Control& control) {
+            Result result;
+            std::uintmax_t totalBytes = 0;
+            for (const auto& s : sources) {
+                std::error_code ec;
+                totalBytes += fs::is_directory(s, ec) ? 1048576 : fs::file_size(s, ec);
+            }
+            control.progress.total = totalBytes;
+            control.progress.bytes = 0;
+            control.progress.item = fs::path(destinationZip).filename().string();
+            if (control.onProgress) control.onProgress(control.progress);
+
+            std::string cmd = "bsdtar -acf \"" + destinationZip + "\" -C \"" + parentDir + "\"";
+            for (const auto& s : sources) {
+                cmd += " \"" + fs::path(s).filename().string() + "\"";
+            }
+            cmd += " >/dev/null 2>&1";
+            int rc = std::system(cmd.c_str());
+            if (rc == 0) {
+                control.progress.bytes = totalBytes;
+                if (control.onProgress) control.onProgress(control.progress);
+                result.paths.push_back(destinationZip);
+            } else {
+                result.errors.push_back(tr("Failed to compress: archive tool returned error"));
+            }
+            return result;
+        },
+        std::move(done));
+}
+
+void FileOps::extract(std::vector<std::string> archives, std::string destinationFolder, Done done) {
+    if (archives.empty()) return;
+    run(
+        tr("Extracting…"),
+        [archives, destinationFolder](transaction::Control& control) {
+            Result result;
+            std::uintmax_t totalBytes = 0;
+            for (const auto& a : archives) {
+                std::error_code ec;
+                totalBytes += fs::file_size(a, ec);
+            }
+            control.progress.total = totalBytes;
+            control.progress.bytes = 0;
+
+            for (const auto& a : archives) {
+                if (control.cancel) break;
+                control.progress.item = fs::path(a).filename().string();
+                if (control.onProgress) control.onProgress(control.progress);
+
+                std::string dest = destinationFolder.empty() ? fs::path(a).parent_path().string() : destinationFolder;
+                std::string cmd = "bsdtar -xf \"" + a + "\" -C \"" + dest + "\" >/dev/null 2>&1";
+                int rc = std::system(cmd.c_str());
+                if (rc == 0) {
+                    std::error_code ec;
+                    control.progress.bytes += fs::file_size(a, ec);
+                    if (control.onProgress) control.onProgress(control.progress);
+                    result.paths.push_back(dest);
+                } else {
+                    result.errors.push_back(tr("Failed to extract: ") + fs::path(a).filename().string());
+                }
+            }
+            return result;
+        },
+        std::move(done));
+}
+
 std::string FileOps::rename(const std::string& path, const std::string& newName) {
     if (busy()) {
         if (m_onError) m_onError(tr("Please wait for the current file operation to complete."));

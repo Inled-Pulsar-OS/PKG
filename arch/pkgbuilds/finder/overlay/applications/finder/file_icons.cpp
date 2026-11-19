@@ -80,13 +80,18 @@ void drawImageThumbnail(Painter& p, const Rect& r, const ImageData& img) {
 
 }  // namespace
 
-void drawFolderIcon(Painter& p, const Rect& r, Icon glyph, float opacity) {
+void drawFolderIcon(Painter& p, const Rect& r, Icon glyph, float opacity, Color tagColor) {
     const float s = std::min(r.width, r.height);
     const Rect sq{r.center().x - s * 0.5f, r.center().y - s * 0.5f, s, s};
     const bool dark = theme().isDark();
-    const Color back = dark ? Color::hex(0x2F8FE0) : Color::hex(0x3E9CEC);
-    const Color frontTop = dark ? Color::hex(0x5BB2F7) : Color::hex(0x78C3FB);
-    const Color frontBottom = dark ? Color::hex(0x3E9DEE) : Color::hex(0x55AEF6);
+    Color back = dark ? Color::hex(0x2F8FE0) : Color::hex(0x3E9CEC);
+    Color frontTop = dark ? Color::hex(0x5BB2F7) : Color::hex(0x78C3FB);
+    Color frontBottom = dark ? Color::hex(0x3E9DEE) : Color::hex(0x55AEF6);
+    if (tagColor.a > 0.05f) {
+        back = back.mix(tagColor, 0.65f);
+        frontTop = frontTop.mix(tagColor, 0.65f);
+        frontBottom = frontBottom.mix(tagColor, 0.65f);
+    }
     const float radius = std::max(1.5f, s * 0.055f);
     p.pushOpacity(opacity);
 
@@ -121,7 +126,7 @@ void drawFileIcon(Painter& p, const Rect& r, const FileEntry& e, const IconStyle
     p.pushOpacity(style.dimmed ? 0.45f : 1.0f);
     const Preview* preview = style.preview;
     if (e.isDir) {
-        drawFolderIcon(p, sq, style.folderGlyph);
+        drawFolderIcon(p, sq, style.folderGlyph, 1.0f, style.tagColor);
     } else if (preview && preview->image && preview->image->width() > 0) {
         drawImageThumbnail(p, sq, *preview->image);
     } else if (e.kind == FileKind::Executable && e.ext.empty()) {
@@ -184,6 +189,13 @@ void drawFileIcon(Painter& p, const Rect& r, const FileEntry& e, const IconStyle
             Rect band{page.x, page.bottom() - h * 0.24f, page.width, h * 0.16f};
             p.drawText(label, band, f, art.color.mix(Color::black(), 0.1f), TextAlign::Center);
         }
+    }
+    if (!e.isDir && style.tagColor.a > 0.05f && s >= 16) {
+        const float dotR = std::max(2.5f, s * 0.075f);
+        Point dotCtr{sq.right() - dotR - s * 0.03f, sq.y + dotR + s * 0.03f};
+        p.drawShadow({dotCtr.x - dotR, dotCtr.y - dotR, dotR * 2, dotR * 2}, dotR, Color::black(0.35f), 2.0f, {0, 0.5f});
+        p.fillCircle(dotCtr, dotR, style.tagColor);
+        p.strokeCircle(dotCtr, dotR, Color::white(0.85f), 1.0f);
     }
     if (e.isLink && s >= 16) drawAliasBadge(p, sq);
     p.popOpacity();

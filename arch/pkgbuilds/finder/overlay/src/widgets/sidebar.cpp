@@ -116,6 +116,14 @@ int SidebarView::rowAt(Point p) const {
     return -1;
 }
 
+std::string SidebarView::itemIdAt(Point p) const {
+    int r = rowAt(p);
+    if (r >= 0 && static_cast<size_t>(r) < m_items.size() && !m_items[static_cast<size_t>(r)].isHeader) {
+        return m_items[static_cast<size_t>(r)].id;
+    }
+    return {};
+}
+
 Rect SidebarView::actionRect(int index) const {
     const auto row = rowRect(index);
     return {row.right() - 30, row.center().y - 13, 26, 26};

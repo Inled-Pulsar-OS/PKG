@@ -7,6 +7,7 @@ Integrates Finder natively with browsers (Chrome, Brave, Seafari, Firefox) and a
 import sys
 import os
 import subprocess
+import threading
 import urllib.parse
 import gi
 
@@ -46,67 +47,87 @@ INTROSPECTION_XML = """<node>
   </interface>
 </node>"""
 
+def sanitize_folder_path(raw):
+    if not raw:
+        return ""
+    if isinstance(raw, (bytes, bytearray)):
+        s = raw.decode("utf-8", errors="ignore").rstrip('\x00')
+    elif isinstance(raw, (list, tuple)):
+        s = bytes(raw).decode("utf-8", errors="ignore").rstrip('\x00')
+    elif isinstance(raw, str):
+        s = raw.rstrip('\x00')
+    else:
+        try:
+            s = str(raw).rstrip('\x00')
+        except Exception:
+            return ""
+    if s.startswith("file://"):
+        s = urllib.parse.unquote(urllib.parse.urlparse(s).path)
+    return s if os.path.exists(s) else ""
+
 class FileChooserPortal:
     def __init__(self):
         self.node_info = Gio.DBusNodeInfo.new_for_xml(INTROSPECTION_XML)
         self.interface_info = self.node_info.interfaces[0]
 
     def handle_method_call(self, connection, sender, object_path, interface_name, method_name, parameters, invocation):
-        try:
-            handle, app_id, parent_window, title, options = parameters.unpack()
-            cmd = ["/usr/bin/finder"]
+        def worker():
+            try:
+                handle, app_id, parent_window, title, options = parameters.unpack()
+                cmd = ["/usr/bin/finder"]
 
-            if method_name == "OpenFile":
-                is_dir = options.get("directory", False)
-                is_multi = options.get("multiple", False)
-                if is_dir:
-                    cmd.append("--choose-folder")
-                elif is_multi:
-                    cmd.append("--choose-files")
-                else:
-                    cmd.append("--choose-file")
-                if title:
-                    cmd.extend(["--title", str(title)])
-                if "current_folder" in options:
-                    folder = options["current_folder"]
-                    if isinstance(folder, (bytes, bytearray)):
-                        folder = folder.decode("utf-8", errors="ignore").rstrip('\x00')
-                    if folder and os.path.exists(folder):
-                        cmd.append(folder)
-
-            elif method_name in ("SaveFile", "SaveFiles"):
-                cmd.append("--save-file")
-                if title:
-                    cmd.extend(["--title", str(title)])
-                if "current_name" in options:
-                    cmd.extend(["--filename", str(options["current_name"])])
-                if "current_folder" in options:
-                    folder = options["current_folder"]
-                    if isinstance(folder, (bytes, bytearray)):
-                        folder = folder.decode("utf-8", errors="ignore").rstrip('\x00')
-                    if folder and os.path.exists(folder):
-                        cmd.append(folder)
-            else:
-                invocation.return_error_literal(Gio.dbus_error_quark(), Gio.DBusError.UNKNOWN_METHOD, f"Unknown method {method_name}")
-                return
-
-            proc = subprocess.run(cmd, capture_output=True, text=True)
-            if proc.returncode == 0:
-                lines = [l.strip() for l in proc.stdout.splitlines() if l.strip()]
-                uris = []
-                for p in lines:
-                    if p.startswith("file://"):
-                        uris.append(p)
+                if method_name == "OpenFile":
+                    is_dir = options.get("directory", False)
+                    is_multi = options.get("multiple", False)
+                    if is_dir:
+                        cmd.append("--choose-folder")
+                    elif is_multi:
+                        cmd.append("--choose-files")
                     else:
-                        uris.append("file://" + urllib.parse.quote(os.path.abspath(p)))
-                
-                results = {"uris": GLib.Variant("as", uris)}
-                invocation.return_value(GLib.Variant("(ua{sv})", (0, results)))
-            else:
-                invocation.return_value(GLib.Variant("(ua{sv})", (1, {})))
-        except Exception as e:
-            sys.stderr.write(f"Portal error: {e}\n")
-            invocation.return_value(GLib.Variant("(ua{sv})", (2, {})))
+                        cmd.append("--choose-file")
+
+                    if title:
+                        cmd.extend(["--title", str(title)])
+
+                    folder = sanitize_folder_path(options.get("current_folder"))
+                    if folder:
+                        cmd.append(folder)
+
+                elif method_name in ("SaveFile", "SaveFiles"):
+                    cmd.append("--save-file")
+                    if title:
+                        cmd.extend(["--title", str(title)])
+                    if "current_name" in options:
+                        cmd.extend(["--filename", str(options["current_name"])])
+
+                    folder = sanitize_folder_path(options.get("current_folder"))
+                    if folder:
+                        cmd.append(folder)
+                else:
+                    GLib.idle_add(lambda: invocation.return_error_literal(
+                        Gio.dbus_error_quark(), Gio.DBusError.UNKNOWN_METHOD, f"Unknown method {method_name}"))
+                    return
+
+                proc = subprocess.run(cmd, capture_output=True, text=True)
+                if proc.returncode == 0:
+                    lines = [l.strip() for l in proc.stdout.splitlines() if l.strip()]
+                    uris = []
+                    for p in lines:
+                        if p.startswith("file://"):
+                            uris.append(p)
+                        else:
+                            uris.append("file://" + urllib.parse.quote(os.path.abspath(p)))
+
+                    results = {"uris": GLib.Variant("as", uris)}
+                    GLib.idle_add(lambda: invocation.return_value(GLib.Variant("(ua{sv})", (0, results))))
+                else:
+                    GLib.idle_add(lambda: invocation.return_value(GLib.Variant("(ua{sv})", (1, {}))))
+            except Exception as e:
+                sys.stderr.write(f"Portal error: {e}\n")
+                GLib.idle_add(lambda: invocation.return_value(GLib.Variant("(ua{sv})", (2, {}))))
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
 
 def on_bus_acquired(connection, name):
     portal = FileChooserPortal()

@@ -6,6 +6,7 @@
 #include <mayonnaise/i18n.hpp>
 
 #include "file_icons.hpp"
+#include "tag_manager.hpp"
 
 using namespace mayo;
 using namespace mayo::i18n;
@@ -35,6 +36,10 @@ IconStyle styleFor(const Browser& b, const FileEntry& e, float pixels) {
     s.preview = b.previews ? b.previews->get(e, pixels) : nullptr;
     s.folderGlyph = e.isDir ? folderGlyphFor(e.path) : Icon::None;
     s.dimmed = b.cut.count(e.path) > 0 || e.isHidden;
+    auto tags = TagManager::instance().tagsFor(e.path);
+    if (!tags.empty()) {
+        s.tagColor = TagManager::instance().colorForTag(tags.front());
+    }
     return s;
 }
 
@@ -234,6 +239,7 @@ void IconGridView::draw(Painter& p) {
         const Label& l = label(p, e);
         float y = ic.bottom() + 6;
         const float cx = cellRect(i).center().x;
+        if (isRenamingPath(e.path)) continue;
         for (int k = 0; k < l.count; ++k) {
             Rect pill{std::round(cx - l.widths[k] * 0.5f - 5), y, l.widths[k] + 10, kLabelLine + 1};
             if (sel || drop) {
@@ -541,7 +547,9 @@ void ListRowsView::draw(Painter& p) {
         drawRowIcon(p, *m_browser, {x, rr.center().y - 8, 16, 16}, e);
         x += 22;
         const float nameRight = rr.x + cols[0].width - 8;
-        p.drawText(truncateMiddle(p, e.name, font, nameRight - x), {x, rr.y, nameRight - x, rr.height}, font, primary);
+        if (!isRenamingPath(e.path)) {
+            p.drawText(truncateMiddle(p, e.name, font, nameRight - x), {x, rr.y, nameRight - x, rr.height}, font, primary);
+        }
 
         auto cell = [&](int k) {
             const auto& s = cols[static_cast<size_t>(k)];
@@ -664,8 +672,10 @@ void ColumnListView::draw(Painter& p) {
         const Color text = onAccent ? c.onAccent : (e.isHidden ? c.secondaryLabel : c.label);
         drawRowIcon(p, *m_browser, {row.x + 8, row.center().y - 8, 16, 16}, e);
         const float right = row.right() - (e.isDir ? 24 : 8);
-        p.drawText(truncateMiddle(p, e.name, font, right - row.x - 32), {row.x + 32, row.y, right - row.x - 32, row.height},
-                   font, text);
+        if (!isRenamingPath(e.path)) {
+            p.drawText(truncateMiddle(p, e.name, font, right - row.x - 32), {row.x + 32, row.y, right - row.x - 32, row.height},
+                       font, text);
+        }
         if (e.isDir) {
             p.drawIcon(Icon::ChevronRight, {row.right() - 18, row.center().y - 5, 10, 10},
                        onAccent ? c.onAccent : c.secondaryLabel, 1.5f);

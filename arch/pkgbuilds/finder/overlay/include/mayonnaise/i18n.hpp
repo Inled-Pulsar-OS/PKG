@@ -114,7 +114,29 @@ inline std::string tr(std::string_view key) {
         {"Volume", "Volumen"},
         {"Subtitles", "Subtítulos"},
         {"Enter Fullscreen", "Pantalla completa"},
-        {"Exit Fullscreen", "Salir de pantalla completa"}
+        {"Exit Fullscreen", "Salir de pantalla completa"},
+        {"Appearance", "Aspecto"},
+        {"Accent Color", "Color de realce"},
+        {"Auto", "Automático"},
+        {"Light", "Claro"},
+        {"Dark", "Oscuro"},
+        {"Multicolor", "Multicolor"},
+        {"Blue", "Azul"},
+        {"Purple", "Morado"},
+        {"Pink", "Rosa"},
+        {"Red", "Rojo"},
+        {"Orange", "Naranja"},
+        {"Yellow", "Amarillo"},
+        {"Green", "Verde"},
+        {"Graphite", "Grafito"},
+        {"More Actions", "Más acciones"},
+        {"Folder not found.", "Carpeta no encontrada."},
+        {"does not exist.", "no existe."},
+        {"Move To", "Mover a"},
+        {"Move To…", "Mover a…"},
+        {"Choose Location…", "Elegir ubicación…"},
+        {"Save", "Guardar"},
+        {"File name:", "Nombre del archivo:"}
     };
 
     static const std::unordered_map<std::string_view, const char*> map_it = {
@@ -201,7 +223,29 @@ inline std::string tr(std::string_view key) {
         {"Volume", "Volume"},
         {"Subtitles", "Sottotitoli"},
         {"Enter Fullscreen", "Schermo intero"},
-        {"Exit Fullscreen", "Esci da schermo intero"}
+        {"Exit Fullscreen", "Esci da schermo intero"},
+        {"Appearance", "Aspetto"},
+        {"Accent Color", "Colore accento"},
+        {"Auto", "Automatico"},
+        {"Light", "Chiaro"},
+        {"Dark", "Scuro"},
+        {"Multicolor", "Multicolore"},
+        {"Blue", "Blu"},
+        {"Purple", "Viola"},
+        {"Pink", "Rosa"},
+        {"Red", "Rosso"},
+        {"Orange", "Arancione"},
+        {"Yellow", "Giallo"},
+        {"Green", "Verde"},
+        {"Graphite", "Grafite"},
+        {"More Actions", "Altre azioni"},
+        {"Folder not found.", "Cartella non trovata."},
+        {"does not exist.", "non esiste."},
+        {"Move To", "Sposta in"},
+        {"Move To…", "Sposta in…"},
+        {"Choose Location…", "Scegli posizione…"},
+        {"Save", "Salva"},
+        {"File name:", "Nome del file:"}
     };
 
     static const std::unordered_map<std::string_view, const char*> map_fr = {
@@ -288,7 +332,29 @@ inline std::string tr(std::string_view key) {
         {"Volume", "Volume"},
         {"Subtitles", "Sous-titres"},
         {"Enter Fullscreen", "Plein écran"},
-        {"Exit Fullscreen", "Quitter le plein écran"}
+        {"Exit Fullscreen", "Quitter le plein écran"},
+        {"Appearance", "Apparence"},
+        {"Accent Color", "Couleur d'accentuation"},
+        {"Auto", "Automatique"},
+        {"Light", "Clair"},
+        {"Dark", "Sombre"},
+        {"Multicolor", "Multicolore"},
+        {"Blue", "Bleu"},
+        {"Purple", "Violet"},
+        {"Pink", "Rose"},
+        {"Red", "Rouge"},
+        {"Orange", "Orange"},
+        {"Yellow", "Jaune"},
+        {"Green", "Vert"},
+        {"Graphite", "Graphite"},
+        {"More Actions", "Autres actions"},
+        {"Folder not found.", "Dossier introuvable."},
+        {"does not exist.", "n'existe pas."},
+        {"Move To", "Déplacer vers"},
+        {"Move To…", "Déplacer vers…"},
+        {"Choose Location…", "Choisir un emplacement…"},
+        {"Save", "Enregistrer"},
+        {"File name:", "Nom du fichier :"}
     };
 
     if (lang == Language::Spanish) {

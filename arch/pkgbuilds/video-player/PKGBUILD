@@ -13,7 +13,11 @@ replaces=('totem' 'mayo-video-player')
 options=('!strip')
 
 package() {
-    install -Dm755 /tmp/forma/build/applications/video_player/video_player "$pkgdir/usr/bin/video_player"
+    if [ -f "$startdir/overlay/bin/video_player" ]; then
+        install -Dm755 "$startdir/overlay/bin/video_player" "$pkgdir/usr/bin/video_player"
+    elif [ -f /tmp/forma/build/applications/video_player/video_player ]; then
+        install -Dm755 /tmp/forma/build/applications/video_player/video_player "$pkgdir/usr/bin/video_player"
+    fi
     mkdir -p "$pkgdir/usr/share/applications"
     install -Dm644 /tmp/forma/applications/video_player/data/io.github.egely1337.Mayonnaise.VideoPlayer.desktop \
         "$pkgdir/usr/share/applications/video-player.desktop"
@@ -30,4 +34,10 @@ package() {
                 "$pkgdir/usr/share/icons/hicolor/${sz}/apps/io.github.egely1337.Mayonnaise.VideoPlayer.png"
         fi
     done
+
+    # Ensure icon in MacTahoe theme for Spotlight
+    mkdir -p "$pkgdir/usr/share/icons/MacTahoe-blue/apps/scalable"
+    install -Dm644 /tmp/forma/applications/video_player/data/icons/512x512/quicktime-player.png \
+        "$pkgdir/usr/share/icons/MacTahoe-blue/apps/scalable/quicktime-player.png"
+    ln -sf quicktime-player.png "$pkgdir/usr/share/icons/MacTahoe-blue/apps/scalable/video-player.png"
 }

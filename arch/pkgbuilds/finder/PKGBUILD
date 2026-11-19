@@ -18,7 +18,11 @@ options=('!strip')
 
 package() {
     # Binary
-    install -Dm755 /tmp/forma/build/applications/finder/finder "$pkgdir/usr/bin/finder"
+    if [ -f "$startdir/overlay/bin/finder" ]; then
+        install -Dm755 "$startdir/overlay/bin/finder" "$pkgdir/usr/bin/finder"
+    elif [ -f /tmp/forma/build/applications/finder/finder ]; then
+        install -Dm755 /tmp/forma/build/applications/finder/finder "$pkgdir/usr/bin/finder"
+    fi
 
     # Desktop entry
     mkdir -p "$pkgdir/usr/share/applications"
@@ -41,9 +45,29 @@ package() {
     mkdir -p "$pkgdir/etc/xdg/xdg-desktop-portal"
     install -Dm644 /tmp/forma/applications/finder/portal/portals.conf \
         "$pkgdir/etc/xdg/xdg-desktop-portal/portals.conf"
+    cat << "EOF" > "$pkgdir/etc/xdg/xdg-desktop-portal/gnome-portals.conf"
+[preferred]
+default=gnome;gtk;
+org.freedesktop.impl.portal.FileChooser=finder;gnome;gtk;
+org.freedesktop.impl.portal.Secret=oo7-portal;gnome-keyring;
+EOF
     mkdir -p "$pkgdir/usr/share/xdg-desktop-portal"
     install -Dm644 /tmp/forma/applications/finder/portal/portals.conf \
         "$pkgdir/usr/share/xdg-desktop-portal/pulsar-portals.conf"
+
+    # Systemd user service
+    mkdir -p "$pkgdir/usr/lib/systemd/user"
+    cat << "EOF" > "$pkgdir/usr/lib/systemd/user/pulsar-finder-portal.service"
+[Unit]
+Description=Pulsar OS Finder Portal Backend
+PartOf=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=org.freedesktop.impl.portal.desktop.finder
+ExecStart=/usr/lib/pulsar-finder-portal/pulsar-finder-portal
+Restart=on-failure
+EOF
 
     # Icons across all standard resolutions
     for sz in 16x16 24x24 32x32 48x48 64x64 96x96 128x128 256x256 512x512; do
@@ -54,4 +78,10 @@ package() {
                 "$pkgdir/usr/share/icons/hicolor/${sz}/apps/io.github.egely1337.Mayonnaise.Finder.png"
         fi
     done
+
+    # Ensure icon in MacTahoe theme for Spotlight
+    mkdir -p "$pkgdir/usr/share/icons/MacTahoe-blue/apps/scalable"
+    install -Dm644 /tmp/forma/applications/finder/data/icons/512x512/finder.png \
+        "$pkgdir/usr/share/icons/MacTahoe-blue/apps/scalable/finder.png"
+    ln -sf finder.png "$pkgdir/usr/share/icons/MacTahoe-blue/apps/scalable/io.github.egely1337.Mayonnaise.Finder.png"
 }

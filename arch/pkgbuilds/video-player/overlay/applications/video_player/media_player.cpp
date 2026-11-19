@@ -288,9 +288,8 @@ bool MediaPlayer::setupHardware(const AVCodec*& codec, int codecId) {
         codec = candidate;
         m_hwFormat = hwFormatFor(candidate, type);
         m_hwName = av_hwdevice_get_type_name(type);
-        // Zero-copy display needs VAAPI surfaces exported as dma-bufs and EGL to import them.
-        m_zeroCopy = type == AV_HWDEVICE_TYPE_VAAPI && mayo::VideoTexture::dmaBufSupported() &&
-                     !std::getenv("MAYO_NO_ZEROCOPY");
+        // Hardware decoding via VAAPI with synchronized NV12 frame upload avoids DMA-BUF tearing/glitches.
+        m_zeroCopy = false;
         return true;
     }
     return false;
